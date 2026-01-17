@@ -66,7 +66,7 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 	case RedisCacheType:
 		var options RedisCacheOptions
 		if config.Redis != nil {
-			logging.Debugf("(Deprecated) Creating Redis cache backend - Config: %v, TTL: %ds, Threshold: %.3f",
+			logging.Debugf("Creating Redis cache backend - Config: %v, TTL: %ds, Threshold: %.3f",
 				config.Redis, config.TTLSeconds, config.SimilarityThreshold)
 			options = RedisCacheOptions{
 				Enabled:             config.Enabled,
@@ -136,25 +136,32 @@ func ValidateCacheConfig(config CacheConfig) error {
 			return fmt.Errorf("unsupported eviction_policy: %s", config.EvictionPolicy)
 		}
 	case MilvusCacheType:
-		if config.BackendConfigPath == "" {
-			return fmt.Errorf("backend_config_path is required for Milvus cache backend")
-		}
-		// Ensure the Milvus configuration file exists
-		if _, err := os.Stat(config.BackendConfigPath); os.IsNotExist(err) {
-			logging.Debugf("Milvus config file not found: %s", config.BackendConfigPath)
-			return fmt.Errorf("milvus config file not found: %s", config.BackendConfigPath)
-		}
-		logging.Debugf("Milvus config file found: %s", config.BackendConfigPath)
+    if config.Milvus == nil {
+      logging.Debugf("Milvus configuration not provided. Using backend_config_path: %s", config.BackendConfigPath)
+      if config.BackendConfigPath == "" {
+        return fmt.Errorf("backend_config_path is required for Milvus cache backend")
+      }
+      // Ensure the Milvus configuration file exists
+      if _, err := os.Stat(config.BackendConfigPath); os.IsNotExist(err) {
+        logging.Debugf("Milvus config file not found: %s", config.BackendConfigPath)
+        return fmt.Errorf("milvus config file not found: %s", config.BackendConfigPath)
+      }
+      logging.Debugf("Milvus config file found: %s", config.BackendConfigPath)
+    }
+    logging.Debugf("Milvus configuration: %+v", config.Milvus)
 	case RedisCacheType:
-		if config.BackendConfigPath == "" {
-			return fmt.Errorf("backend_config_path is required for Redis cache backend")
-		}
-		// Ensure the Redis configuration file exists
-		if _, err := os.Stat(config.BackendConfigPath); os.IsNotExist(err) {
-			logging.Debugf("Redis config file not found: %s", config.BackendConfigPath)
-			return fmt.Errorf("redis config file not found: %s", config.BackendConfigPath)
-		}
-		logging.Debugf("Redis config file found: %s", config.BackendConfigPath)
+    if config.Redis == nil {
+      logging.Debugf("Redis configuration not provided. Using backend_config_path: %s", config.BackendConfigPath)
+      if config.BackendConfigPath == "" {
+        return fmt.Errorf("backend_config_path is required for Redis cache backend")
+      }
+      // Ensure the Redis configuration file exists
+      if _, err := os.Stat(config.BackendConfigPath); os.IsNotExist(err) {
+        logging.Debugf("Redis config file not found: %s", config.BackendConfigPath)
+        return fmt.Errorf("redis config file not found: %s", config.BackendConfigPath)
+      }
+      logging.Debugf("Redis config file found: %s", config.BackendConfigPath)
+    }
 	}
 
 	return nil
