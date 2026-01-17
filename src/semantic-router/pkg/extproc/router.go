@@ -16,6 +16,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responsestore"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/pii"
@@ -31,6 +32,9 @@ type OpenAIRouter struct {
 	ToolsDatabase        *tools.ToolsDatabase
 	ResponseAPIFilter    *ResponseAPIFilter
 	ReplayRecorder       *routerreplay.Recorder
+	// ModelSelector is the registry of advanced model selection algorithms
+	// Initialized from config.IntelligentRouting.ModelSelection
+	ModelSelector *selection.Registry
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls
@@ -196,6 +200,66 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	}
 	replayRecorder := routerreplay.NewRecorder(replayMax)
 
+	// Initialize model selection registry with default configs
+	// Actual selection method is determined per-decision via algorithm config (aligned with looper)
+	modelSelectionCfg := &selection.ModelSelectionConfig{
+		Method: "static", // Default; per-decision algorithm overrides this
+	}
+	// Copy Elo config from config package to selection package format
+	eloCfg := cfg.IntelligentRouting.ModelSelection.Elo
+	modelSelectionCfg.Elo = &selection.EloConfig{
+		InitialRating:     eloCfg.InitialRating,
+		KFactor:           eloCfg.KFactor,
+		CategoryWeighted:  eloCfg.CategoryWeighted,
+		DecayFactor:       eloCfg.DecayFactor,
+		MinComparisons:    eloCfg.MinComparisons,
+		CostScalingFactor: eloCfg.CostScalingFactor,
+	}
+
+	// Copy RouterDC config
+	routerDCCfg := cfg.IntelligentRouting.ModelSelection.RouterDC
+	modelSelectionCfg.RouterDC = &selection.RouterDCConfig{
+		Temperature:         routerDCCfg.Temperature,
+		DimensionSize:       routerDCCfg.DimensionSize,
+		MinSimilarity:       routerDCCfg.MinSimilarity,
+		UseQueryContrastive: routerDCCfg.UseQueryContrastive,
+		UseModelContrastive: routerDCCfg.UseModelContrastive,
+	}
+
+	// Copy AutoMix config
+	autoMixCfg := cfg.IntelligentRouting.ModelSelection.AutoMix
+	modelSelectionCfg.AutoMix = &selection.AutoMixConfig{
+		VerificationThreshold:  autoMixCfg.VerificationThreshold,
+		MaxEscalations:         autoMixCfg.MaxEscalations,
+		CostAwareRouting:       autoMixCfg.CostAwareRouting,
+		CostQualityTradeoff:    autoMixCfg.CostQualityTradeoff,
+		DiscountFactor:         autoMixCfg.DiscountFactor,
+		UseLogprobVerification: autoMixCfg.UseLogprobVerification,
+	}
+
+	// Copy Hybrid config
+	hybridCfg := cfg.IntelligentRouting.ModelSelection.Hybrid
+	modelSelectionCfg.Hybrid = &selection.HybridConfig{
+		EloWeight:           hybridCfg.EloWeight,
+		RouterDCWeight:      hybridCfg.RouterDCWeight,
+		AutoMixWeight:       hybridCfg.AutoMixWeight,
+		CostWeight:          hybridCfg.CostWeight,
+		QualityGapThreshold: hybridCfg.QualityGapThreshold,
+		NormalizeScores:     hybridCfg.NormalizeScores,
+	}
+
+	// Create selection factory and initialize all selectors
+	selectionFactory := selection.NewFactory(modelSelectionCfg)
+	if cfg.BackendModels.ModelConfig != nil {
+		selectionFactory = selectionFactory.WithModelConfig(cfg.BackendModels.ModelConfig)
+	}
+	if len(cfg.Categories) > 0 {
+		selectionFactory = selectionFactory.WithCategories(cfg.Categories)
+	}
+	modelSelectorRegistry := selectionFactory.CreateAll()
+
+	logging.Infof("[Router] Initialized model selection registry (per-decision algorithm config)")
+
 	router := &OpenAIRouter{
 		Config:               cfg,
 		CategoryDescriptions: categoryDescriptions,
@@ -205,6 +269,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		ToolsDatabase:        toolsDatabase,
 		ResponseAPIFilter:    responseAPIFilter,
 		ReplayRecorder:       replayRecorder,
+		ModelSelector:        modelSelectorRegistry,
 	}
 
 	return router, nil
