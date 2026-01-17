@@ -10,8 +10,8 @@ import (
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
-  "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-  "github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
@@ -104,8 +104,8 @@ type HybridCacheOptions struct {
 	HNSWM              int // HNSW M parameter
 	HNSWEfConstruction int // HNSW efConstruction parameter
 
-  // Milvus settings
-  Milvus *config.MilvusConfig
+	// Milvus settings
+	Milvus *config.MilvusConfig
 
 	// (Deprecated) Milvus settings configuration path
 	MilvusConfigPath string
@@ -127,22 +127,22 @@ func NewHybridCache(options HybridCacheOptions) (*HybridCache, error) {
 	}
 
 	// Initialize Milvus backend
-  var milvusOptions MilvusCacheOptions
-  if options.Milvus != nil {
-    milvusOptions = MilvusCacheOptions{
-      Enabled:             true,
-      SimilarityThreshold: options.SimilarityThreshold,
-      TTLSeconds:          options.TTLSeconds,
-      Config:              options.Milvus,
-    }
-  } else {
-    milvusOptions = MilvusCacheOptions{
-      Enabled:             true,
-      SimilarityThreshold: options.SimilarityThreshold,
-      TTLSeconds:          options.TTLSeconds,
-      ConfigPath:          options.MilvusConfigPath,
-    }
-  }
+	var milvusOptions MilvusCacheOptions
+	if options.Milvus != nil {
+		milvusOptions = MilvusCacheOptions{
+			Enabled:             true,
+			SimilarityThreshold: options.SimilarityThreshold,
+			TTLSeconds:          options.TTLSeconds,
+			Config:              options.Milvus,
+		}
+	} else {
+		milvusOptions = MilvusCacheOptions{
+			Enabled:             true,
+			SimilarityThreshold: options.SimilarityThreshold,
+			TTLSeconds:          options.TTLSeconds,
+			ConfigPath:          options.MilvusConfigPath,
+		}
+	}
 
 	milvusCache, err := NewMilvusCache(milvusOptions)
 	if err != nil {

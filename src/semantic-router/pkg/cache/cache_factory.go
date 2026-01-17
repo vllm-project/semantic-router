@@ -87,32 +87,32 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 		return NewRedisCache(options)
 
 	case HybridCacheType:
-    var options HybridCacheOptions
-    if config.Milvus != nil {
-      logging.Debugf("Creating Hybrid cache backend - Config: %v, TTL: %ds, Threshold: %.3f",
-        config.Milvus, config.TTLSeconds, config.SimilarityThreshold)
-      options = HybridCacheOptions{
-        Enabled:             config.Enabled,
-        SimilarityThreshold: config.SimilarityThreshold,
-        TTLSeconds:          config.TTLSeconds,
-        MaxMemoryEntries:    config.MaxMemoryEntries,
-        HNSWM:               config.HNSWM,
-        HNSWEfConstruction:  config.HNSWEfConstruction,
-        Milvus: config.Milvus,
-      }
-    } else {
-      logging.Debugf("(Deprecated) Creating Hybrid cache backend - MaxMemory: %d, TTL: %ds, Threshold: %.3f",
-        config.MaxMemoryEntries, config.TTLSeconds, config.SimilarityThreshold)
-      options = HybridCacheOptions{
-        Enabled:             config.Enabled,
-        SimilarityThreshold: config.SimilarityThreshold,
-        TTLSeconds:          config.TTLSeconds,
-        MaxMemoryEntries:    config.MaxMemoryEntries,
-        HNSWM:               config.HNSWM,
-        HNSWEfConstruction:  config.HNSWEfConstruction,
-        MilvusConfigPath:    config.BackendConfigPath,
-      }
-    }
+		var options HybridCacheOptions
+		if config.Milvus != nil {
+			logging.Debugf("Creating Hybrid cache backend - Config: %v, TTL: %ds, Threshold: %.3f",
+				config.Milvus, config.TTLSeconds, config.SimilarityThreshold)
+			options = HybridCacheOptions{
+				Enabled:             config.Enabled,
+				SimilarityThreshold: config.SimilarityThreshold,
+				TTLSeconds:          config.TTLSeconds,
+				MaxMemoryEntries:    config.MaxMemoryEntries,
+				HNSWM:               config.HNSWM,
+				HNSWEfConstruction:  config.HNSWEfConstruction,
+				Milvus:              config.Milvus,
+			}
+		} else {
+			logging.Debugf("(Deprecated) Creating Hybrid cache backend - MaxMemory: %d, TTL: %ds, Threshold: %.3f",
+				config.MaxMemoryEntries, config.TTLSeconds, config.SimilarityThreshold)
+			options = HybridCacheOptions{
+				Enabled:             config.Enabled,
+				SimilarityThreshold: config.SimilarityThreshold,
+				TTLSeconds:          config.TTLSeconds,
+				MaxMemoryEntries:    config.MaxMemoryEntries,
+				HNSWM:               config.HNSWM,
+				HNSWEfConstruction:  config.HNSWEfConstruction,
+				MilvusConfigPath:    config.BackendConfigPath,
+			}
+		}
 		return NewHybridCache(options)
 
 	default:
@@ -151,32 +151,32 @@ func ValidateCacheConfig(config CacheConfig) error {
 			return fmt.Errorf("unsupported eviction_policy: %s", config.EvictionPolicy)
 		}
 	case MilvusCacheType:
-    if config.Milvus == nil {
-      logging.Debugf("Milvus configuration not provided. Using backend_config_path: %s", config.BackendConfigPath)
-      if config.BackendConfigPath == "" {
-        return fmt.Errorf("backend_config_path is required for Milvus cache backend")
-      }
-      // Ensure the Milvus configuration file exists
-      if _, err := os.Stat(config.BackendConfigPath); os.IsNotExist(err) {
-        logging.Debugf("Milvus config file not found: %s", config.BackendConfigPath)
-        return fmt.Errorf("milvus config file not found: %s", config.BackendConfigPath)
-      }
-      logging.Debugf("Milvus config file found: %s", config.BackendConfigPath)
-    }
-    logging.Debugf("Milvus configuration: %+v", config.Milvus)
+		if config.Milvus == nil {
+			logging.Debugf("Milvus configuration not provided. Using backend_config_path: %s", config.BackendConfigPath)
+			if config.BackendConfigPath == "" {
+				return fmt.Errorf("backend_config_path is required for Milvus cache backend")
+			}
+			// Ensure the Milvus configuration file exists
+			if _, err := os.Stat(config.BackendConfigPath); os.IsNotExist(err) {
+				logging.Debugf("Milvus config file not found: %s", config.BackendConfigPath)
+				return fmt.Errorf("milvus config file not found: %s", config.BackendConfigPath)
+			}
+			logging.Debugf("Milvus config file found: %s", config.BackendConfigPath)
+		}
+		logging.Debugf("Milvus configuration: %+v", config.Milvus)
 	case RedisCacheType:
-    if config.Redis == nil {
-      logging.Debugf("Redis configuration not provided. Using backend_config_path: %s", config.BackendConfigPath)
-      if config.BackendConfigPath == "" {
-        return fmt.Errorf("backend_config_path is required for Redis cache backend")
-      }
-      // Ensure the Redis configuration file exists
-      if _, err := os.Stat(config.BackendConfigPath); os.IsNotExist(err) {
-        logging.Debugf("Redis config file not found: %s", config.BackendConfigPath)
-        return fmt.Errorf("redis config file not found: %s", config.BackendConfigPath)
-      }
-      logging.Debugf("Redis config file found: %s", config.BackendConfigPath)
-    }
+		if config.Redis == nil {
+			logging.Debugf("Redis configuration not provided. Using backend_config_path: %s", config.BackendConfigPath)
+			if config.BackendConfigPath == "" {
+				return fmt.Errorf("backend_config_path is required for Redis cache backend")
+			}
+			// Ensure the Redis configuration file exists
+			if _, err := os.Stat(config.BackendConfigPath); os.IsNotExist(err) {
+				logging.Debugf("Redis config file not found: %s", config.BackendConfigPath)
+				return fmt.Errorf("redis config file not found: %s", config.BackendConfigPath)
+			}
+			logging.Debugf("Redis config file found: %s", config.BackendConfigPath)
+		}
 	}
 
 	return nil
