@@ -78,7 +78,10 @@ class ConversationSample:
     """Training sample pairing a conversation with a routed policy."""
 
     conversation: List[ConversationMessage]
-    route_policies: List[RoutePolicy]
+    ground_truth_policy: RoutePolicy
+    # ground truth policy for this conversation
+    all_policies: List[RoutePolicy]
+    # All candidate policies for this conversation, possibly not include ground truth policy
     ground_truth_label: str
     phase: str  # "clean" or "augmented"
     augmentations: List[str] = field(default_factory=list)
@@ -239,7 +242,10 @@ class RoutePolicyGenerator:
                             seed="seed:" + ",".join(seed_batch),
                         )
                     )
-
+        for candidate in candidates:
+            logging.debug(
+                f"[RoutePolicyGenerator] Proposed policy: {candidate.label} - {candidate.description} - {candidate.seed}"
+            )
         return self._refine(candidates, policies_per_seed=policies_per_seed)
 
     def _refine(
@@ -296,6 +302,9 @@ class RoutePolicyGenerator:
             seen.add(policy.label)
             per_seed[seed_key] = per_seed.get(seed_key, 0) + 1
             output.append(policy)
+            logging.debug(
+                f"[RoutePolicyRefiner] Refined to {policy.label} - {policy.description} - {policy.seed}"
+            )
         return output
 
 
@@ -312,27 +321,50 @@ class ConversationSynthesizer:
     def synthesize(
         self,
         policies: List[RoutePolicy],
-        target_samples: int,
+        target_samples: int,  # total samples to generate
         turns: Tuple[int, int] = (4, 8),
     ) -> List[ConversationSample]:
         samples: List[ConversationSample] = []
         policies_cycle = policies * ((target_samples // len(policies)) + 1)
+        # number of samples for this policy
         policies_cycle = policies_cycle[:target_samples]
 
         for policy in policies_cycle:
             intent = self._draft_intent(policy)
+            logging.debug(
+                f"[ConversationSynthesizer] Drafted intent for policy {policy.label}: {intent}"
+            )
             conversation = self._draft_dialogue(intent, policy, turns=turns)
-            verified, score = self._verify(conversation, policy)
+            logging.debug(
+                f"[ConversationSynthesizer] Drafted conversation for policy {policy.label}"
+            )
+            verified, score = self._verify(conversation, policy, policies=policies)
+            logging.debug(
+                f"[ConversationSynthesizer] Verified conversation for policy {policy.label}: {verified} (score={score})"
+            )
             if not verified:
+                logging.warning(
+                    f"[ConversationSynthesizer] Verification failed for policy {policy.label}, regenerating conversation."
+                )
                 # Regenerate once; if it still fails, skip to keep dataset clean.
                 conversation = self._draft_dialogue(intent, policy, turns=turns)
                 verified, score = self._verify(conversation, policy)
                 if not verified:
+                    logging.warning(
+                        f"[ConversationSynthesizer] Skipping policy {policy.label} after failed re-verification."
+                    )
                     continue
 
+            # pick random candidate policies including ground truth
+            # this is in theory part of data augmentation, but we do it here for simplicity
+            all_policies = [policy] + random.sample(
+                [p for p in policies if p.label != policy.label],
+                k=random.randint(5, min(20, len(policies) - 1)),
+            )
             sample = ConversationSample(
                 conversation=conversation,
-                route_policies=[policy],
+                ground_truth_policy=policy,
+                all_policies=all_policies,
                 ground_truth_label=policy.label,
                 phase="clean",
                 meta={"policy_seed": policy.seed, "verification": {"score": score}},
@@ -342,7 +374,7 @@ class ConversationSynthesizer:
 
     def _draft_intent(self, policy: RoutePolicy) -> str:
         prompt = (
-            "Generate a specific user intent that clearly requires the policy. "
+            "Generate a specific user intent that clearly matches the policy. The user intent will be used to start a conversation."
             "Keep it one sentence. Policy label: {label}. Description: {desc}."
         ).format(label=policy.label, desc=policy.description or "")
         return self.intent_model.chat(
@@ -359,7 +391,7 @@ class ConversationSynthesizer:
     ) -> List[ConversationMessage]:
         min_turns, max_turns = turns
         prompt = (
-            "Write a natural multi-turn dialogue that starts from the user intent and naturally leads to the policy. "
+            "Write a natural multi-turn dialogue that starts from the user intent and naturally leads to the routing policy. "
             f"Use between {min_turns} and {max_turns} turns total. Keep the assistant concise and actionable. "
             f"Policy: {policy.label} - {policy.description or 'no description provided'}. Intent: {intent}"
         )
@@ -384,10 +416,13 @@ class ConversationSynthesizer:
         return conversation
 
     def _verify(
-        self, conversation: List[ConversationMessage], policy: RoutePolicy
+        self,
+        conversation: List[ConversationMessage],
+        policy: RoutePolicy,
+        policies: List[RoutePolicy],
     ) -> Tuple[bool, float]:
         prompt = (
-            "Given a conversation and a candidate policy, rate alignment 0-1 where 1 means the policy is the "
+            "Given a conversation and a candidate policy for intent routing, rate alignment 0-1 where 1 means the selected policy is the "
             'only reasonable routing choice. Respond with JSON {"score": float, "reason": str}.'
         )
         convo_text = "\n".join(f"{m.role}: {m.content}" for m in conversation)
@@ -399,7 +434,7 @@ class ConversationSynthesizer:
                 },
                 {
                     "role": "user",
-                    "content": f"{prompt}\nConversation:\n{convo_text}\nPolicy: {policy.label} - {policy.description}",
+                    "content": f"{prompt}\nConversation:\n{convo_text}\nSelected Policy: {policy.label} - {policy.description}\nAll Policies: {', '.join(p.label for p in policies)}",
                 },
             ],
             temperature=0.1,
@@ -422,7 +457,9 @@ class AugmentationEngine:
         self.available_policies = available_policies
 
     def augment(
-        self, samples: List[ConversationSample], target_size: int
+        self,
+        samples: List[ConversationSample],
+        target_size: int,  # total samples to generate
     ) -> List[ConversationSample]:
         augmented: List[ConversationSample] = []
         rng = random.Random(1337)
@@ -447,6 +484,7 @@ class AugmentationEngine:
         convo = list(sample.conversation)
         if not convo:
             return None
+        # TODO: agument with LLM-generated irrelevant content
         injection = ConversationMessage(
             role="user",
             content=rng.choice(
@@ -460,14 +498,15 @@ class AugmentationEngine:
         insertion_idx = rng.randrange(0, len(convo) + 1)
         convo.insert(insertion_idx, injection)
 
-        policies = [p for p in sample.route_policies]
+        policies = [p for p in sample.all_policies]
         # Optionally drop the ground truth to simulate missing label
         if rng.random() < 0.3:
             policies = [p for p in policies if p.label != sample.ground_truth_label]
 
         return ConversationSample(
             conversation=convo,
-            route_policies=policies or sample.route_policies,
+            all_policies=policies,
+            ground_truth_policy=sample.ground_truth_policy,
             ground_truth_label=sample.ground_truth_label,
             phase="augmented",
             augmentations=sample.augmentations + ["irrelevance_injection"],
@@ -477,16 +516,19 @@ class AugmentationEngine:
     def _policy_modification(
         self, sample: ConversationSample, rng: random.Random
     ) -> Optional[ConversationSample]:
-        policies = list(sample.route_policies)
+        policies = list(sample.all_policies)
+        # TODO: augment with LLM-generated misleading policies
         distractors = rng.sample(
             self.available_policies, k=min(3, len(self.available_policies))
         )
         for d in distractors:
-            if d.label != sample.ground_truth_label:
+            if d.label not in [p.label for p in sample.all_policies]:
                 policies.append(d)
+
         return ConversationSample(
             conversation=sample.conversation,
-            route_policies=policies,
+            all_policies=policies,
+            ground_truth_policy=sample.ground_truth_policy,
             ground_truth_label=sample.ground_truth_label,
             phase="augmented",
             augmentations=sample.augmentations + ["policy_modification"],
@@ -498,6 +540,7 @@ class AugmentationEngine:
     ) -> Optional[ConversationSample]:
         if len(sample.conversation) < 2:
             return None
+        # TODO: augment with LLM-generated scenario mixing content
         mix_with = rng.choice(self.available_policies)
         mixed_turn = ConversationMessage(
             role="user",
@@ -507,7 +550,8 @@ class AugmentationEngine:
         convo.insert(rng.randrange(1, len(convo)), mixed_turn)
         return ConversationSample(
             conversation=convo,
-            route_policies=sample.route_policies + [mix_with],
+            all_policies=sample.all_policies + [mix_with],
+            ground_truth_policy=sample.ground_truth_policy,
             ground_truth_label=sample.ground_truth_label,
             phase="augmented",
             augmentations=sample.augmentations + ["scenario_mixing"],
@@ -568,9 +612,7 @@ class PreferenceModelDataPipeline:
             logging.info("Generated %d clean samples", len(clean))
             if self.phase1_checkpoint:
                 logging.info(
-                    "Writing phase-1 checkpoint with %d clean samples to %s",
-                    len(clean),
-                    self.phase1_checkpoint,
+                    f"Writing phase-1 checkpoint with {len(clean)} clean samples to {self.phase1_checkpoint}"
                 )
                 self._write_jsonl(clean, path=self.phase1_checkpoint)
 
@@ -581,17 +623,15 @@ class PreferenceModelDataPipeline:
             augmented = self.augmentation_engine.augment(
                 clean, target_size=self.augmented_samples
             )
-            logging.info("Generated %d augmented samples", len(augmented))
+            logging.info(f"Generated {len(augmented)} augmented samples")
             if self.phase2_checkpoint:
                 logging.info(
-                    "Writing phase-2 checkpoint with %d augmented samples to %s",
-                    len(augmented),
-                    self.phase2_checkpoint,
+                    f"Writing phase-2 checkpoint with {len(augmented)} augmented samples to {self.phase2_checkpoint}"
                 )
                 self._write_jsonl(augmented, path=self.phase2_checkpoint)
 
         all_samples = clean + augmented
-        logging.info("Writing %d samples to %s", len(all_samples), self.output_path)
+        logging.info(f"Writing {len(all_samples)} samples to {self.output_path}")
         self._write_jsonl(all_samples, path=self.output_path)
 
     def _write_jsonl(self, samples: List[ConversationSample], path: Path) -> None:
@@ -629,9 +669,7 @@ class PreferenceModelDataPipeline:
                 )
             )
         logging.info(
-            "Loaded %d policies from checkpoint %s",
-            len(policies),
-            self.policy_checkpoint,
+            f"Loaded {len(policies)} policies from checkpoint {self.policy_checkpoint}"
         )
         return policies
 
@@ -667,7 +705,7 @@ class PreferenceModelDataPipeline:
                         meta=obj.get("meta", {}),
                     )
                 )
-        logging.info("Loaded %d samples from %s", len(samples), checkpoint)
+        logging.info(f"Loaded {len(samples)} samples from {checkpoint}")
         return samples
 
 
