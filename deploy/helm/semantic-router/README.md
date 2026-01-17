@@ -6,7 +6,6 @@ A Helm chart for deploying Semantic Router - an intelligent routing system for L
 
 **Homepage:** <https://github.com/vllm-project/semantic-router>
 
-
 ## 依赖与一键部署
 
 这个 Helm Chart 支持通过依赖一键部署完整的 semantic-router 栈，包括语义缓存与可观测性组件。默认不启用依赖，按需开启即可。
