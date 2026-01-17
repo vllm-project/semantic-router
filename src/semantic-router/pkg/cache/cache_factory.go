@@ -87,17 +87,32 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 		return NewRedisCache(options)
 
 	case HybridCacheType:
-		logging.Debugf("Creating Hybrid cache backend - MaxMemory: %d, TTL: %ds, Threshold: %.3f",
-			config.MaxMemoryEntries, config.TTLSeconds, config.SimilarityThreshold)
-		options := HybridCacheOptions{
-			Enabled:             config.Enabled,
-			SimilarityThreshold: config.SimilarityThreshold,
-			TTLSeconds:          config.TTLSeconds,
-			MaxMemoryEntries:    config.MaxMemoryEntries,
-			HNSWM:               config.HNSWM,
-			HNSWEfConstruction:  config.HNSWEfConstruction,
-			MilvusConfigPath:    config.BackendConfigPath,
-		}
+    var options HybridCacheOptions
+    if config.Milvus != nil {
+      logging.Debugf("Creating Hybrid cache backend - Config: %v, TTL: %ds, Threshold: %.3f",
+        config.Milvus, config.TTLSeconds, config.SimilarityThreshold)
+      options = HybridCacheOptions{
+        Enabled:             config.Enabled,
+        SimilarityThreshold: config.SimilarityThreshold,
+        TTLSeconds:          config.TTLSeconds,
+        MaxMemoryEntries:    config.MaxMemoryEntries,
+        HNSWM:               config.HNSWM,
+        HNSWEfConstruction:  config.HNSWEfConstruction,
+        Milvus: config.Milvus,
+      }
+    } else {
+      logging.Debugf("(Deprecated) Creating Hybrid cache backend - MaxMemory: %d, TTL: %ds, Threshold: %.3f",
+        config.MaxMemoryEntries, config.TTLSeconds, config.SimilarityThreshold)
+      options = HybridCacheOptions{
+        Enabled:             config.Enabled,
+        SimilarityThreshold: config.SimilarityThreshold,
+        TTLSeconds:          config.TTLSeconds,
+        MaxMemoryEntries:    config.MaxMemoryEntries,
+        HNSWM:               config.HNSWM,
+        HNSWEfConstruction:  config.HNSWEfConstruction,
+        MilvusConfigPath:    config.BackendConfigPath,
+      }
+    }
 		return NewHybridCache(options)
 
 	default:
