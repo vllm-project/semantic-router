@@ -196,6 +196,7 @@ The label should be ideally consist of "domain"(e.g. legal, finance) + "action"(
         policy_label_response = self.policy_label_model.chat(
             messages=[{"role": "user", "content": policy_label_prompt}],
             temperature=0.3,
+            response_format={"type": "json"},
         )
         policy_label_candidates: List[RoutePolicySample] = safe_json_loads(
             policy_label_response
