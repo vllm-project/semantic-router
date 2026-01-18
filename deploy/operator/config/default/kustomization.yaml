@@ -1,0 +1,28 @@
+# Adds namespace to all resources.
+namespace: semantic-router-operator-system
+
+# Value of this field is prepended to the
+# names of all resources, e.g. a deployment named
+# "wordpress" becomes "alices-wordpress".
+# Note that it should also match with the prefix (text before '-') of the namespace
+# field above.
+namePrefix: semantic-router-operator-
+
+# Labels to add to all resources and selectors.
+labels:
+- includeSelectors: true
+  pairs:
+    app.kubernetes.io/name: semantic-router-operator
+    app.kubernetes.io/component: manager
+    app.kubernetes.io/part-of: semantic-router
+
+resources:
+- ../crd
+- ../rbac
+- ../manager
+
+patchesStrategicMerge:
+# Protect the /metrics endpoint by putting it behind auth.
+# If you want your controller-manager to expose the /metrics
+# endpoint w/o any authn/z, please comment the following line.
+# - manager_auth_proxy_patch.yaml
