@@ -2,7 +2,7 @@
 translation:
   source_commit: "bac2743"
   source_file: "docs/tutorials/intelligent-route/embedding-routing.md"
-  outdated: false
+  outdated: true
 ---
 
 # 基于嵌入的路由 (Embedding Based Routing)

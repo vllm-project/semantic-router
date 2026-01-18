@@ -2,7 +2,7 @@
 translation:
   source_commit: "bac2743"
   source_file: "docs/installation/configuration.md"
-  outdated: false
+  outdated: true
 sidebar_position: 4
 ---
 
