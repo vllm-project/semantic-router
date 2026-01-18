@@ -9,9 +9,10 @@ import (
 
 // ID prefixes following OpenAI conventions
 const (
-	ResponseIDPrefix = "resp_"
-	ItemIDPrefix     = "item_"
-	MessageIDPrefix  = "msg_"
+	ResponseIDPrefix     = "resp_"
+	ItemIDPrefix         = "item_"
+	MessageIDPrefix      = "msg_"
+	ConversationIDPrefix = "conv_"
 )
 
 // GenerateResponseID generates a new response ID with the resp_ prefix.
@@ -22,6 +23,11 @@ func GenerateResponseID() string {
 // GenerateItemID generates a new item ID with the item_ prefix.
 func GenerateItemID() string {
 	return ItemIDPrefix + generateRandomID(24)
+}
+
+// GenerateConversationID generates a new conversation ID with the conv_ prefix.
+func GenerateConversationID() string {
+	return ConversationIDPrefix + generateRandomID(24)
 }
 
 // generateRandomID generates a random hex string of the specified length.

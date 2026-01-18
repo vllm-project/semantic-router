@@ -54,6 +54,10 @@ type ResponseAPIContext struct {
 	// GeneratedResponseID is the ID generated for this response
 	GeneratedResponseID string
 
+	// GeneratedConversationID is the ConversationID generated for memory extraction
+	// if the request didn't provide one. This will be used in the response.
+	GeneratedConversationID string
+
 	// TranslatedBody is the Chat Completions request body after translation
 	TranslatedBody []byte
 }
@@ -153,6 +157,14 @@ func (f *ResponseAPIFilter) TranslateResponse(ctx context.Context, respCtx *Resp
 
 	// Override ID with pre-generated ID
 	responseAPIResp.ID = respCtx.GeneratedResponseID
+
+	// Use generated ConversationID if request didn't provide one
+	// This ensures that new conversations get a ConversationID that can be used
+	// for turnCounts tracking in subsequent requests
+	if responseAPIResp.ConversationID == "" && respCtx.GeneratedConversationID != "" {
+		responseAPIResp.ConversationID = respCtx.GeneratedConversationID
+		logging.Infof("Response API: Using generated ConversationID in response: %s", respCtx.GeneratedConversationID)
+	}
 
 	// Store response if enabled
 	shouldStore := respCtx.OriginalRequest.Store == nil || *respCtx.OriginalRequest.Store

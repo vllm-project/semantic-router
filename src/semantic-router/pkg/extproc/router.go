@@ -43,6 +43,7 @@ type OpenAIRouter struct {
 	ModelSelector        *selection.Registry
 	ReplayRecorders      map[string]*routerreplay.Recorder
 	MemoryStore          *memory.MilvusStore
+	MemoryExtractor      *memory.MemoryExtractor
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls
@@ -369,6 +370,16 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		}
 	}
 
+	// Create memory extractor if memory and extraction are enabled
+	var memoryExtractor *memory.MemoryExtractor
+	if cfg.Memory.Enabled && cfg.Memory.Extraction.Enabled {
+		if memoryStore != nil {
+			memoryExtractor = memory.NewMemoryExtractorWithStore(&cfg.Memory.Extraction, memoryStore)
+			logging.Infof("Memory extractor enabled with extraction endpoint: %s", cfg.Memory.Extraction.Endpoint)
+		} else {
+			logging.Warnf("Memory extraction enabled but memory store not available, extraction will be disabled")
+		}
+	}
 
 	router := &OpenAIRouter{
 		Config:               cfg,
@@ -382,6 +393,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		ModelSelector:        modelSelectorRegistry,
 		ReplayRecorders:      replayRecorders,
 		MemoryStore:          memoryStore,
+		MemoryExtractor:      memoryExtractor,
 	}
 
 	return router, nil

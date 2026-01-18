@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -213,6 +214,32 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		} else {
 			logging.Infof("Cache updated for request ID: %s", ctx.RequestID)
 		}
+	}
+
+	// Memory Extraction (async, if auto_store enabled)
+	// Runs in background, does NOT add latency to response
+	if r.MemoryExtractor != nil && extractAutoStore(ctx) {
+		go func() {
+			// Use a background context for the goroutine to ensure it runs to completion
+			// even if the original request context is cancelled.
+			bgCtx := context.Background()
+			sessionID, userID, history, err := extractMemoryInfo(ctx)
+
+			// extractMemoryInfo returns error if userID is missing (required for memory extraction)
+			if err != nil {
+				logging.Errorf("Memory extraction failed: %v", err)
+				return
+			}
+
+			// Only extract if we have history (not relevant for first request)
+			if len(history) == 0 {
+				return // No history to extract from
+			}
+
+			if err := r.MemoryExtractor.ProcessResponse(bgCtx, sessionID, userID, history); err != nil {
+				logging.Warnf("Memory extraction failed: %v", err)
+			}
+		}()
 	}
 
 	// Translate response for Response API requests

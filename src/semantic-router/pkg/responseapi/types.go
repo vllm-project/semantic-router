@@ -49,6 +49,27 @@ type ResponseAPIRequest struct {
 
 	// ConversationID links to a conversation object (optional)
 	ConversationID string `json:"conversation_id,omitempty"`
+
+	// MemoryConfig configures memory extraction behavior
+	MemoryConfig *MemoryConfig `json:"memory_config,omitempty"`
+
+	// MemoryContext provides context for memory operations
+	MemoryContext *MemoryContext `json:"memory_context,omitempty"`
+}
+
+// MemoryConfig configures memory extraction behavior for Response API requests
+type MemoryConfig struct {
+	// Enabled enables memory features
+	Enabled bool `json:"enabled"`
+
+	// AutoStore enables automatic memory extraction from conversation history
+	AutoStore bool `json:"auto_store,omitempty"`
+}
+
+// MemoryContext provides context for memory operations
+type MemoryContext struct {
+	// UserID is the user identifier for memory isolation
+	UserID string `json:"user_id"`
 }
 
 // ResponseAPIResponse represents the response from the Response API.
