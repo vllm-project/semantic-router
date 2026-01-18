@@ -1,0 +1,65 @@
+# Redis Store Configuration for Response API - Cluster Mode
+# This configuration is for distributed Redis deployments using Redis Cluster.
+# Redis Cluster provides automatic sharding and high availability.
+# To use this configuration:
+# 1. Set store_backend: "redis" in your main config.yaml
+# 2. Set redis.config_path: "config/response-api/redis-cluster.yaml" in response_api section
+# 3. Ensure Redis Cluster is running and accessible
+
+# Cluster mode (REQUIRED for Redis Cluster)
+cluster_mode: true
+
+# Cluster node addresses
+# List all cluster nodes (or a subset - the client will discover others)
+cluster_addresses:
+  - "redis-node-1.example.com:6379"
+  - "redis-node-2.example.com:6379"
+  - "redis-node-3.example.com:6379"
+  - "redis-node-4.example.com:6379"
+  - "redis-node-5.example.com:6379"
+  - "redis-node-6.example.com:6379"
+
+# Authentication
+password: ""  # Set your Redis password here or use environment variable
+
+# Database number (MUST be 0 for cluster mode)
+# Redis Cluster only supports DB 0
+db: 0
+
+# Key management
+key_prefix: "sr:"  # Base prefix - creates keys like: sr:response:xxx, sr:conversation:xxx
+
+# Connection pooling (higher values for cluster)
+pool_size: 20        # More connections for distributed system
+min_idle_conns: 5    # Keep more idle connections ready
+max_retries: 5       # More retries for cluster (handles redirects)
+
+# Timeouts (in seconds) - longer for cluster
+dial_timeout: 10     # Cluster connection can take longer
+read_timeout: 5      # Account for network latency
+write_timeout: 5     # Account for network latency
+
+# TLS (recommended for production clusters)
+tls_enabled: false   # Set to true if your cluster uses TLS
+# tls_cert_path: "/etc/ssl/certs/redis-client.crt"
+# tls_key_path: "/etc/ssl/private/redis-client.key"
+# tls_ca_path: "/etc/ssl/certs/redis-ca.crt"
+
+# Kubernetes Example:
+# cluster_addresses:
+#   - "redis-cluster.redis-system.svc.cluster.local:6379"
+# password: "${REDIS_PASSWORD}"  # From Secret
+
+# Docker Swarm Example:
+# cluster_addresses:
+#   - "redis-node-1:6379"
+#   - "redis-node-2:6379"
+#   - "redis-node-3:6379"
+
+# Production Notes:
+# - Redis Cluster requires at least 3 master nodes for proper operation
+# - Each master should have at least 1 replica for high availability
+# - The client will automatically discover all cluster nodes
+# - Keys are automatically sharded across nodes using hash slots
+# - Some operations (like GetConversationChain) may require multiple node queries
+
