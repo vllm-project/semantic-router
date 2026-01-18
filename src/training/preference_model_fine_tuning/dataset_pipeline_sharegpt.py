@@ -107,10 +107,33 @@ class ShareGPTPreferencePipeline:
         logging.info(f"Loaded {len(policies)} existing policies from {path}")
         return policies
 
+    def _load_policy_label_candidates(self, path: Path) -> List[RoutePolicySample]:
+        """Load existing policy label candidates from a JSONL file."""
+        candidates: List[RoutePolicySample] = []
+        if not path.exists():
+            logging.info(
+                f"No existing candidates file found at {path}, starting fresh."
+            )
+            return candidates
+        with open(path, "r") as f:
+            for line in f:
+                item = json.loads(line)
+                sample_id = item.get("sample_id", "").strip()
+                label = item.get("label", "").strip()
+                description = item.get("description", "").strip()
+                if sample_id and label:
+                    candidates.append(
+                        RoutePolicySample(
+                            sample_id=sample_id, label=label, description=description
+                        )
+                    )
+        logging.info(f"Loaded {len(candidates)} existing candidates from {path}")
+        return candidates
+
     def run(
         self,
         existing_policy_label_path: Path,
-        dataset_path: Path,
+        raw_dataset_path: Path,
         output_path: Path,
     ) -> Path:
         """Execute the full pipeline and return the output path."""
@@ -119,7 +142,7 @@ class ShareGPTPreferencePipeline:
         )
         batch_count = 0
         start_index = self.start_sample_index
-        for batch in self._get_one_batch(dataset_path, start_index):
+        for batch in self._get_one_batch(raw_dataset_path, start_index):
             batch_count += 1
             logging.info(f"Processing batch {batch_count} of size {len(batch)}")
             added_policies, policy_label_candidates = (
@@ -144,9 +167,9 @@ class ShareGPTPreferencePipeline:
     # --------------------------- dataset utilities -------------------------
 
     def _get_one_batch(
-        self, dataset_path: Path, start_index: int
+        self, raw_dataset_path: Path, start_index: int
     ) -> Generator[ShareGPTConversation]:
-        raw = json.loads(dataset_path.read_text())
+        raw = json.loads(raw_dataset_path.read_text())
         current_batch: List[ShareGPTConversation] = []
         seen_sample_id_hashes = set()
         for idx, item in enumerate(raw):
@@ -211,7 +234,6 @@ The label should be ideally consist of "domain"(e.g. legal, finance) + "action"(
         policy_label_response = self.policy_label_model.chat(
             messages=[{"role": "user", "content": policy_label_prompt}],
             temperature=0.3,
-            response_format={"type": "json"},
         )
         policy_label_candidates: List[RoutePolicySample] = safe_json_loads(
             policy_label_response
@@ -243,15 +265,97 @@ The label should be ideally consist of "domain"(e.g. legal, finance) + "action"(
             new_policies.append(RoutePolicy(label=label, description=description))
         return new_policies, valid_policy_label_candidates
 
+    def refine(self, refined_dataset_path: Path) -> None:
+        """Refine policy labels for the entire dataset."""
+        refined_sample_labels = self._refine_sample_labels()
+        # save refined labels to file
+        with open(refined_dataset_path, "w") as f:
+            for sample_id, policy in refined_sample_labels.items():
+                f.write(
+                    json.dumps(
+                        {
+                            "sample_id": sample_id,
+                            "label": policy.label,
+                            "description": policy.description,
+                        }
+                    )
+                    + "\n"
+                )
+
+    def _refine_sample_labels(
+        self,
+    ) -> Dict[str, RoutePolicy]:
+        """Refine sample labels for a batch of conversations."""
+        raw_policies = self._load_existing_policies()
+        policy_label_candidates = self._load_policy_label_candidates()
+        refined_policies = self._refine_policies(raw_policies)
+
+        # remmap sample labels to refined labels
+        sample_id_to_refined_policy: Dict[str, RoutePolicy] = {}
+        for candidate in policy_label_candidates:
+            sample_id = candidate.sample_id
+            original_label = candidate.label
+            if original_label not in refined_policies:
+                logging.warning(
+                    f"Original label {original_label} not found in refined policies"
+                )
+                continue
+            refined_policy = refined_policies[original_label]
+            sample_id_to_refined_policy[sample_id] = refined_policy
+        return sample_id_to_refined_policy
+
+    def _refine_policies(
+        self,
+        raw_policies: List[RoutePolicy],
+    ) -> List[RoutePolicy]:
+        """Refine and deduplicate policies using the refine LLM."""
+        refine_prompt = f"""You are an expert at refining and deduplicating routing policies.
+### Instructions
+Given the following list of routing policies, identify and merge duplicates or highly similar policies into a single canonical policy.
+For each policy, map it to a refined label and description. The refined label should be more general and concise, suitable for routing purposes. Represent the refined label in snake case.
+Return a JSON array for each policy in the format:
+{{"original_label": <original_label>, "refined_label": <refined_label>, "description": <refined_description>}}
+### Policies
+{json.dumps([{"label": p.label, "description": p.description} for p in raw_policies], indent=2)}
+"""
+        refine_response = self.policy_refine_model.chat(
+            messages=[{"role": "user", "content": refine_prompt}],
+            temperature=0.3,
+        )
+        refined_policy_mappings: List[Dict[str, str]] = safe_json_loads(refine_response)
+        assert len(refined_policy_mappings) == len(
+            raw_policies
+        ), "Refined policies count must match raw policies count"
+        raw_policies_to_refined: Dict[str, RoutePolicy] = {}
+        for mapping in refined_policy_mappings:
+            original_label = mapping.get("original_label", "").strip()
+            refined_label = mapping.get("refined_label", "").strip()
+            description = mapping.get("description", "").strip()
+            if not original_label or not refined_label:
+                logging.warning(f"Skipping invalid mapping: {json.dumps(mapping)}")
+                continue
+            raw_policies_to_refined[original_label] = RoutePolicy(
+                label=refined_label, description=description
+            )
+        return raw_policies_to_refined
+
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
-    policy_label_model = LLMClient(model="gpt-4o-mini")
-    policy_refine_model = LLMClient(model="gpt-4o-mini")
+    policy_label_model = LLMClient(
+        model="Qwen/Qwen3-8B",
+        api_key="token-abc123",
+        base_url="http://localhost:8000/v1",
+    )
+    policy_refine_model = LLMClient(
+        model="Qwen/Qwen3-8B",
+        api_key="token-abc123",
+        base_url="http://localhost:8000/v1",
+    )
     pipeline = ShareGPTPreferencePipeline(
         policy_label_model=policy_label_model,
         policy_refine_model=policy_refine_model,
-        batch_size=50,
+        batch_size=10,
         max_sample_counts=50000,
         start_sample_index=0,
     )
@@ -259,11 +363,14 @@ def main() -> None:
     existing_policy_label_path = Path("existing_sharegpt_policies.jsonl")
     dataset_path = Path("ShareGPT_V3_unfiltered_cleaned_split.json")
     output_path = Path("sharegpt_preference_labeled.jsonl")
+    refined_dataset_path = Path("refined_sharegpt_policy_labels.jsonl")
     pipeline.run(
         existing_policy_label_path=existing_policy_label_path,
-        dataset_path=dataset_path,
+        raw_dataset_path=dataset_path,
         output_path=output_path,
+        refined_dataset_path=refined_dataset_path,
     )
+    pipeline.refine(refined_dataset_path=refined_dataset_path)
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry point
