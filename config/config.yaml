@@ -18,6 +18,37 @@ response_api:
   ttl_seconds: 86400       # 24 hours
   max_responses: 1000
 
+# Router Replay Configuration
+# Records routing decisions for debugging and analysis
+# Automatically creates isolated storage per decision (collection/table/keyspace)
+router_replay:
+  enabled: false
+  store_backend: "memory"           # Options: "memory", "redis", "postgres", "milvus"
+  ttl_seconds: 2592000             # 30 days
+  capture_request_body: true
+  capture_response_body: true
+  max_body_bytes: 4096
+  async_writes: true
+  # Memory backend settings
+  max_records: 1000
+  # Redis backend settings (uncomment if using Redis)
+  # redis:
+  #   address: "redis:6379"
+  #   db: 0
+  #   key_prefix: "router_replay"
+  # PostgreSQL backend settings (uncomment if using PostgreSQL)
+  # postgres:
+  #   host: "postgres"
+  #   port: 5432
+  #   database: "semantic_router"
+  #   user: "router"
+  #   password: "router_password"
+  #   table_name: "replay_records"
+  # Milvus backend settings (uncomment if using Milvus)
+  # milvus:
+  #   address: "milvus:19530"
+  #   collection_name: "replay_records"
+
 semantic_cache:
   enabled: true
   backend_type: "memory"  # Options: "memory", "milvus", or "hybrid"

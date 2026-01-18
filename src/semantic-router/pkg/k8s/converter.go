@@ -264,7 +264,7 @@ func validatePluginConfiguration(pluginType string, rawConfig []byte) error {
 		}
 
 	case "router_replay":
-		var cfg config.RouterReplayPluginConfig
+		var cfg config.RouterReplayConfig
 		decoder := json.NewDecoder(bytes.NewReader(rawConfig))
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(&cfg); err != nil {

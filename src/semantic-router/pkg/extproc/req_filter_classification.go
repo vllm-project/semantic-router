@@ -88,8 +88,9 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	// This is critical for hallucination detection and other per-decision plugins
 	ctx.VSRSelectedDecision = result.Decision
 
-	if replayCfg := result.Decision.GetRouterReplayConfig(); replayCfg != nil && replayCfg.Enabled {
-		cfgCopy := *replayCfg
+	// Set router replay config from system-level configuration if enabled
+	if r.Config.RouterReplay.Enabled {
+		cfgCopy := r.Config.RouterReplay
 		ctx.RouterReplayConfig = &cfgCopy
 	}
 

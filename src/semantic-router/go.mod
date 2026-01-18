@@ -15,6 +15,7 @@ require (
 	github.com/abadojack/whatlanggo v1.0.1
 	github.com/envoyproxy/go-control-plane/envoy v1.32.4
 	github.com/fsnotify/fsnotify v1.9.0
+	github.com/lib/pq v1.10.9
 	github.com/mark3labs/mcp-go v0.42.0-beta.1
 	github.com/milvus-io/milvus-sdk-go/v2 v2.4.2
 	github.com/onsi/ginkgo/v2 v2.23.4
@@ -22,7 +23,7 @@ require (
 	github.com/openai/openai-go v1.12.0
 	github.com/prometheus/client_golang v1.23.0
 	github.com/prometheus/client_model v0.6.2
-	github.com/redis/go-redis/v9 v9.17.0
+	github.com/redis/go-redis/v9 v9.17.2
 	github.com/stretchr/testify v1.11.1
 	github.com/vllm-project/semantic-router/candle-binding v0.0.0-00010101000000-000000000000
 	go.opentelemetry.io/otel v1.38.0

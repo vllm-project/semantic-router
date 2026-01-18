@@ -64,6 +64,8 @@ type RouterConfig struct {
 	SemanticCache `yaml:"semantic_cache"`
 	// Response API configuration for stateful conversations
 	ResponseAPI ResponseAPIConfig `yaml:"response_api"`
+	// Router Replay configuration for recording routing decisions
+	RouterReplay RouterReplayConfig `yaml:"router_replay"`
 	// Looper configuration for multi-model execution strategies
 	Looper LooperConfig `yaml:"looper,omitempty"`
 	// LLMObservability for LLM tracing, metrics, and logging
@@ -1389,14 +1391,15 @@ type HallucinationPluginConfig struct {
 	IncludeHallucinationDetails bool `json:"include_hallucination_details,omitempty" yaml:"include_hallucination_details,omitempty"`
 }
 
-// RouterReplayPluginConfig configures the router_replay plugin that captures
+// RouterReplayConfig configures the router replay system for recording
 // routing decisions and payload snippets for later debugging and replay.
-
-type RouterReplayPluginConfig struct {
+// This is a system-level configuration with automatic per-decision isolation
+// (separate collection/table/keyspace per decision).
+type RouterReplayConfig struct {
 	Enabled bool `json:"enabled" yaml:"enabled"`
 
 	// MaxRecords controls the maximum number of replay records kept in memory.
-	// Defaults to 200 when omitted or set to a non-positive value.
+	// Only applies when StoreBackend is "memory". Defaults to 200.
 	MaxRecords int `json:"max_records,omitempty" yaml:"max_records,omitempty"`
 
 	// CaptureRequestBody controls whether the original request body should be stored.
@@ -1410,6 +1413,64 @@ type RouterReplayPluginConfig struct {
 	// MaxBodyBytes caps how many bytes of request/response body are recorded.
 	// Defaults to 4096 bytes.
 	MaxBodyBytes int `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
+
+	// StoreBackend specifies the storage backend to use.
+	// Options: "memory", "redis", "postgres", "milvus". Defaults to "memory".
+	StoreBackend string `json:"store_backend,omitempty" yaml:"store_backend,omitempty"`
+
+	// TTLSeconds specifies how long records should be kept (in seconds).
+	// Only applies to persistent backends (redis, postgres, milvus).
+	// 0 means no expiration. Example: 2592000 for 30 days.
+	TTLSeconds int `json:"ttl_seconds,omitempty" yaml:"ttl_seconds,omitempty"`
+
+	// AsyncWrites enables asynchronous writes to the storage backend.
+	// Improves performance but may result in data loss if the process crashes.
+	AsyncWrites bool `json:"async_writes,omitempty" yaml:"async_writes,omitempty"`
+
+	// Redis configuration (required if StoreBackend is "redis")
+	Redis *RouterReplayRedisConfig `json:"redis,omitempty" yaml:"redis,omitempty"`
+
+	// Postgres configuration (required if StoreBackend is "postgres")
+	Postgres *RouterReplayPostgresConfig `json:"postgres,omitempty" yaml:"postgres,omitempty"`
+
+	// Milvus configuration (required if StoreBackend is "milvus")
+	Milvus *RouterReplayMilvusConfig `json:"milvus,omitempty" yaml:"milvus,omitempty"`
+}
+
+// RouterReplayRedisConfig holds Redis-specific configuration for router replay.
+type RouterReplayRedisConfig struct {
+	Address       string `json:"address" yaml:"address"`
+	DB            int    `json:"db,omitempty" yaml:"db,omitempty"`
+	Password      string `json:"password,omitempty" yaml:"password,omitempty"`
+	UseTLS        bool   `json:"use_tls,omitempty" yaml:"use_tls,omitempty"`
+	TLSSkipVerify bool   `json:"tls_skip_verify,omitempty" yaml:"tls_skip_verify,omitempty"`
+	MaxRetries    int    `json:"max_retries,omitempty" yaml:"max_retries,omitempty"`
+	PoolSize      int    `json:"pool_size,omitempty" yaml:"pool_size,omitempty"`
+	KeyPrefix     string `json:"key_prefix,omitempty" yaml:"key_prefix,omitempty"`
+}
+
+// RouterReplayPostgresConfig holds PostgreSQL-specific configuration for router replay.
+type RouterReplayPostgresConfig struct {
+	Host            string `json:"host" yaml:"host"`
+	Port            int    `json:"port,omitempty" yaml:"port,omitempty"`
+	Database        string `json:"database" yaml:"database"`
+	User            string `json:"user" yaml:"user"`
+	Password        string `json:"password,omitempty" yaml:"password,omitempty"`
+	SSLMode         string `json:"ssl_mode,omitempty" yaml:"ssl_mode,omitempty"`
+	MaxOpenConns    int    `json:"max_open_conns,omitempty" yaml:"max_open_conns,omitempty"`
+	MaxIdleConns    int    `json:"max_idle_conns,omitempty" yaml:"max_idle_conns,omitempty"`
+	ConnMaxLifetime int    `json:"conn_max_lifetime,omitempty" yaml:"conn_max_lifetime,omitempty"`
+	TableName       string `json:"table_name,omitempty" yaml:"table_name,omitempty"`
+}
+
+// RouterReplayMilvusConfig holds Milvus-specific configuration for router replay.
+type RouterReplayMilvusConfig struct {
+	Address          string `json:"address" yaml:"address"`
+	Username         string `json:"username,omitempty" yaml:"username,omitempty"`
+	Password         string `json:"password,omitempty" yaml:"password,omitempty"`
+	CollectionName   string `json:"collection_name,omitempty" yaml:"collection_name,omitempty"`
+	ConsistencyLevel string `json:"consistency_level,omitempty" yaml:"consistency_level,omitempty"`
+	ShardNum         int    `json:"shard_num,omitempty" yaml:"shard_num,omitempty"`
 }
 
 // Helper methods for Decision to access plugin configurations
@@ -1580,21 +1641,6 @@ func (d *Decision) GetHallucinationConfig() *HallucinationPluginConfig {
 	result := &HallucinationPluginConfig{}
 	if err := unmarshalPluginConfig(config, result); err != nil {
 		logging.Errorf("Failed to unmarshal hallucination config: %v", err)
-		return nil
-	}
-	return result
-}
-
-// GetRouterReplayConfig returns the router_replay plugin configuration
-func (d *Decision) GetRouterReplayConfig() *RouterReplayPluginConfig {
-	config := d.GetPluginConfig("router_replay")
-	if config == nil {
-		return nil
-	}
-
-	result := &RouterReplayPluginConfig{}
-	if err := unmarshalPluginConfig(config, result); err != nil {
-		logging.Errorf("Failed to unmarshal router_replay config: %v", err)
 		return nil
 	}
 	return result
