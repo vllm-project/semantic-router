@@ -110,12 +110,14 @@ class LLMClient:
     def chat(
         self,
         messages: List[Dict[str, str]],
+        response_format: Dict[str, object] = None,
         temperature: float = 0.7,
     ) -> str:
         response = self.client.chat.completions.create(
             model=self.model,
             messages=messages,
             temperature=temperature,
+            response_format=response_format,
         )
         return response.choices[0].message.content or ""
 

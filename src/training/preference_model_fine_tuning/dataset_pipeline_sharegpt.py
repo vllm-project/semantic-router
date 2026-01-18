@@ -284,6 +284,7 @@ class ShareGPTPreferencePipeline:
         response_payload = self.policy_label_model.chat(
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
+            response_format={"type": "json"},
         )
         parsed_payload = safe_json_loads(response_payload)
         candidate: Optional[Dict[str, str]] = None
