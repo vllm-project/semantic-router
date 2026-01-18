@@ -22,11 +22,12 @@ or reuse components for other datasets.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Generator, List
+from typing import Dict, Generator, List, Optional, Tuple
 from dataset_pipeline import LLMClient, safe_json_loads
 
 
@@ -212,58 +213,115 @@ class ShareGPTPreferencePipeline:
         if current_batch:
             yield current_batch
 
-    def generate_policy_label_for_batch(
+    async def generate_policy_label_for_batch(
         self,
         batch: List[ShareGPTConversation],
         existing_policies: List[RoutePolicy],
-    ) -> List[RoutePolicy]:
-        """Generate policy labels for a batch of conversations."""
-        policy_label_prompt = f"""You are an expert at summarizing user intents into concise routing policy labels.
-Given the following conversations(samples), generate a short generalized label for each conversation(sample) that best describes the user's intent of that conversation for routing purposes.
+    ) -> Tuple[List[RoutePolicy], List[Dict[str, str]]]:
+        """Generate policy labels by querying each conversation concurrently."""
 
-### Instructions
-Return a JSON array where each element has the following format:
-{{"sample_id": <sample_id>, "label": <label>, "description": <brief description on the generalized label, not on the specific conversation>}}
-Copy the sample_id faithfully from the input conversations.
-The label should be ideally consist of "domain"(e.g. legal, finance) + "action"(e.g. summarization, inquiry, code_generation) and general enough to be used as a routing target for similar conversations.
+        tasks = [
+            asyncio.to_thread(self._request_policy_label, conversation)
+            for conversation in batch
+        ]
+        raw_candidates = await asyncio.gather(*tasks, return_exceptions=True)
 
-### Conversations
-{json.dumps([convo.to_dict() for convo in batch], indent=2)}
-"""
+        policy_label_candidates: List[Dict[str, str]] = []
+        for conversation, candidate in zip(batch, raw_candidates):
+            if isinstance(candidate, Exception):
+                logging.error(
+                    "Policy label generation failed for sample %s: %s",
+                    conversation.sample_id,
+                    candidate,
+                )
+                continue
+            if candidate is None:
+                logging.warning(
+                    "Policy label model returned no candidate for sample %s",
+                    conversation.sample_id,
+                )
+                continue
+            policy_label_candidates.append(candidate)
 
-        policy_label_response = self.policy_label_model.chat(
-            messages=[{"role": "user", "content": policy_label_prompt}],
-            temperature=0.3,
-        )
-        policy_label_candidates: List[RoutePolicySample] = safe_json_loads(
-            policy_label_response
-        )
-        new_policies: List[RoutePolicy] = []
         logging.info(
-            f"Received policy label candidates: {json.dumps(policy_label_candidates)}"
+            "Received policy label candidates: %s",
+            json.dumps(policy_label_candidates),
         )
+
         all_valid_sample_ids = {convo.sample_id for convo in batch}
-        valid_policy_label_candidates = []
+        valid_policy_label_candidates: List[Dict[str, str]] = []
+        new_policies: List[RoutePolicy] = []
         for candidate in policy_label_candidates:
             sample_id = candidate.get("sample_id", "").strip()
             label = candidate.get("label", "").strip()
             description = candidate.get("description", "").strip()
             if sample_id not in all_valid_sample_ids:
                 logging.warning(
-                    f"Skipping unknown sample_id in candidate: {json.dumps(candidate)}"
+                    "Skipping unknown sample_id in candidate: %s",
+                    json.dumps(candidate),
                 )
                 continue
             if not label:
                 logging.warning(
-                    f"Skipping empty label in candidate: {json.dumps(candidate)}"
+                    "Skipping empty label in candidate: %s",
+                    json.dumps(candidate),
                 )
                 continue
             valid_policy_label_candidates.append(candidate)
             if any(p.label == label for p in existing_policies + new_policies):
-                logging.info(f"Skipping duplicate label: {label}")
+                logging.info("Skipping duplicate label: %s", label)
                 continue
             new_policies.append(RoutePolicy(label=label, description=description))
         return new_policies, valid_policy_label_candidates
+
+    def _request_policy_label(
+        self, conversation: ShareGPTConversation
+    ) -> Optional[Dict[str, str]]:
+        """Issue a single policy label request for one conversation."""
+
+        prompt = self._build_policy_label_prompt(conversation)
+        response_payload = self.policy_label_model.chat(
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+        )
+        parsed_payload = safe_json_loads(response_payload)
+        candidate: Optional[Dict[str, str]] = None
+        if isinstance(parsed_payload, dict):
+            candidate = parsed_payload
+        elif isinstance(parsed_payload, list):
+            candidate = next(
+                (item for item in parsed_payload if isinstance(item, dict)), None
+            )
+        if candidate is None:
+            logging.warning(
+                "Policy label model returned unexpected payload for sample %s: %s",
+                conversation.sample_id,
+                response_payload,
+            )
+            return None
+        if candidate.get("sample_id", "").strip() != conversation.sample_id:
+            logging.warning(
+                "Mismatched sample_id in candidate for sample %s: %s",
+                conversation.sample_id,
+                json.dumps(candidate),
+            )
+            return None
+        return candidate
+
+    def _build_policy_label_prompt(self, conversation: ShareGPTConversation) -> str:
+        conversation_json = json.dumps(conversation.to_dict(), indent=2)
+        return f"""You are an expert at summarizing user intents into concise routing policy labels.
+Given the following single conversation, generate a short generalized label that best describes the user's intent for routing purposes.
+
+### Instructions
+Return exactly one JSON object in the format:
+{{"sample_id": <sample_id>, "label": <label>, "description": <brief description on the generalized label, not on the specific conversation>}}
+Copy the sample_id faithfully from the input conversation.
+The label should consist of a "domain" (e.g. legal, finance) plus an "action" (e.g. summarization, inquiry, code_generation) so it can generalize to similar conversations.
+
+### Conversation
+{conversation_json}
+"""
 
     def refine(self, refined_dataset_path: Path) -> None:
         """Refine policy labels for the entire dataset."""
