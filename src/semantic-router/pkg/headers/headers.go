@@ -82,6 +82,14 @@ const (
 	// VSRMatchedPreference contains comma-separated list of matched preference signals.
 	// Example: "creative_writing,technical_analysis"
 	VSRMatchedPreference = "x-vsr-matched-preference"
+
+	// VSRMatchedContext contains comma-separated list of matched context rule names.
+	// Example: "low_token_count,high_token_count"
+	VSRMatchedContext = "x-vsr-matched-context"
+
+	// VSRContextTokenCount contains the actual token count for the request.
+	// Example: "1500"
+	VSRContextTokenCount = "x-vsr-context-token-count"
 )
 
 // Security Headers

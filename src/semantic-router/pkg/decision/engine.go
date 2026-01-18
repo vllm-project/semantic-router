@@ -63,6 +63,7 @@ type SignalMatches struct {
 	UserFeedbackRules []string // "need_clarification", "satisfied", "want_different", "wrong_answer"
 	PreferenceRules   []string // Route preference names matched via external LLM
 	LanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
+	ContextRules      []string // Context rule names matched (e.g. "low_token_count")
 }
 
 // DecisionResult represents the result of decision evaluation
@@ -166,6 +167,8 @@ func (e *DecisionEngine) evaluateRuleCombinationWithSignals(
 			conditionMatched = slices.Contains(signals.PreferenceRules, condition.Name)
 		case "language":
 			conditionMatched = slices.Contains(signals.LanguageRules, condition.Name)
+		case "context":
+			conditionMatched = slices.Contains(signals.ContextRules, condition.Name)
 		default:
 			continue
 		}
