@@ -361,6 +361,175 @@ func TestMilvusStore_Retrieve_FilterByThreshold(t *testing.T) {
 	assert.Equal(t, float32(0.85), results[0].Score)
 }
 
+func TestMilvusStore_Retrieve_DefaultThreshold(t *testing.T) {
+	store, mockClient := setupTestStore()
+	ctx := context.Background()
+
+	// DefaultMemoryConfig has DefaultSimilarityThreshold: 0.6
+	mockResults := []client.SearchResult{
+		{
+			ResultCount: 3,
+			Scores:      []float32{0.85, 0.65, 0.45}, // 0.45 should be dropped with default 0.6
+			Fields: []entity.Column{
+				entity.NewColumnVarChar("id", []string{"id1", "id2", "id3"}),
+				entity.NewColumnVarChar("content", []string{"c1", "c2", "c3"}),
+				entity.NewColumnVarChar("memory_type", []string{"semantic", "semantic", "semantic"}),
+			},
+		},
+	}
+
+	mockClient.SearchFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
+		return mockResults, nil
+	}
+
+	// Test with Threshold = 0 (should use default 0.6)
+	results, err := store.Retrieve(ctx, RetrieveOptions{
+		Query: "test", UserID: "u1", Threshold: 0,
+	})
+	require.NoError(t, err)
+	require.Len(t, results, 2, "Should filter out score 0.45 with default threshold 0.6")
+	
+	// Verify all results meet default threshold
+	for _, result := range results {
+		assert.GreaterOrEqual(t, result.Score, float32(0.6),
+			"Result score %.4f should be >= default threshold 0.6", result.Score)
+	}
+}
+
+func TestMilvusStore_Retrieve_ThresholdBoundary(t *testing.T) {
+	store, mockClient := setupTestStore()
+	ctx := context.Background()
+
+	mockResults := []client.SearchResult{
+		{
+			ResultCount: 3,
+			Scores:      []float32{0.85, 0.60, 0.59}, // Test boundary at 0.6
+			Fields: []entity.Column{
+				entity.NewColumnVarChar("id", []string{"id1", "id2", "id3"}),
+				entity.NewColumnVarChar("content", []string{"c1", "c2", "c3"}),
+				entity.NewColumnVarChar("memory_type", []string{"semantic", "semantic", "semantic"}),
+			},
+		},
+	}
+
+	mockClient.SearchFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
+		return mockResults, nil
+	}
+
+	// Test with threshold exactly at 0.6
+	results, err := store.Retrieve(ctx, RetrieveOptions{
+		Query: "test", UserID: "u1", Threshold: 0.6,
+	})
+	require.NoError(t, err)
+	
+	// Should include 0.85 and 0.60, exclude 0.59
+	require.Len(t, results, 2, "Should include scores >= 0.6")
+	
+	// Verify all results meet threshold
+	for _, result := range results {
+		assert.GreaterOrEqual(t, result.Score, float32(0.6),
+			"Result score %.4f should be >= 0.6 threshold", result.Score)
+	}
+	
+	// Verify specific scores
+	scores := make([]float32, len(results))
+	for i, r := range results {
+		scores[i] = r.Score
+	}
+	assert.Contains(t, scores, float32(0.85), "Should include high score")
+	assert.Contains(t, scores, float32(0.60), "Should include boundary score")
+	assert.NotContains(t, scores, float32(0.59), "Should exclude score below threshold")
+}
+
+func TestMilvusStore_Retrieve_DifferentThresholdValues(t *testing.T) {
+	store, mockClient := setupTestStore()
+	ctx := context.Background()
+
+	mockResults := []client.SearchResult{
+		{
+			ResultCount: 4,
+			Scores:      []float32{0.95, 0.75, 0.55, 0.35},
+			Fields: []entity.Column{
+				entity.NewColumnVarChar("id", []string{"id1", "id2", "id3", "id4"}),
+				entity.NewColumnVarChar("content", []string{"c1", "c2", "c3", "c4"}),
+				entity.NewColumnVarChar("memory_type", []string{"semantic", "semantic", "semantic", "semantic"}),
+			},
+		},
+	}
+
+	mockClient.SearchFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
+		return mockResults, nil
+	}
+
+	// Test with low threshold (0.3)
+	resultsLow, err := store.Retrieve(ctx, RetrieveOptions{
+		Query: "test", UserID: "u1", Threshold: 0.3,
+	})
+	require.NoError(t, err)
+
+	// Test with default threshold (0.6)
+	resultsDefault, err := store.Retrieve(ctx, RetrieveOptions{
+		Query: "test", UserID: "u1", Threshold: 0.6,
+	})
+	require.NoError(t, err)
+
+	// Test with high threshold (0.8)
+	resultsHigh, err := store.Retrieve(ctx, RetrieveOptions{
+		Query: "test", UserID: "u1", Threshold: 0.8,
+	})
+	require.NoError(t, err)
+
+	// Verify threshold ordering: more results with lower threshold
+	assert.GreaterOrEqual(t, len(resultsLow), len(resultsDefault),
+		"Lower threshold (0.3) should return more or equal results than default (0.6)")
+	assert.GreaterOrEqual(t, len(resultsDefault), len(resultsHigh),
+		"Default threshold (0.6) should return more or equal results than high (0.8)")
+
+	// Verify all results meet their respective thresholds
+	for _, result := range resultsLow {
+		assert.GreaterOrEqual(t, result.Score, float32(0.3))
+	}
+	for _, result := range resultsDefault {
+		assert.GreaterOrEqual(t, result.Score, float32(0.6))
+	}
+	for _, result := range resultsHigh {
+		assert.GreaterOrEqual(t, result.Score, float32(0.8))
+	}
+}
+
+func TestMilvusStore_Retrieve_ThresholdVeryHigh(t *testing.T) {
+	store, mockClient := setupTestStore()
+	ctx := context.Background()
+
+	mockResults := []client.SearchResult{
+		{
+			ResultCount: 2,
+			Scores:      []float32{0.95, 0.85}, // Both above 0.9
+			Fields: []entity.Column{
+				entity.NewColumnVarChar("id", []string{"id1", "id2"}),
+				entity.NewColumnVarChar("content", []string{"c1", "c2"}),
+				entity.NewColumnVarChar("memory_type", []string{"semantic", "semantic"}),
+			},
+		},
+	}
+
+	mockClient.SearchFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
+		return mockResults, nil
+	}
+
+	// Test with very high threshold (0.9)
+	results, err := store.Retrieve(ctx, RetrieveOptions{
+		Query: "test", UserID: "u1", Threshold: 0.9,
+	})
+	require.NoError(t, err)
+
+	// All results should meet the high threshold
+	for _, result := range results {
+		assert.GreaterOrEqual(t, result.Score, float32(0.9),
+			"Result score %.4f should be >= 0.9 threshold", result.Score)
+	}
+}
+
 func TestMilvusStore_Retrieve_EmptyResults(t *testing.T) {
 	store, mockClient := setupTestStore()
 	ctx := context.Background()
