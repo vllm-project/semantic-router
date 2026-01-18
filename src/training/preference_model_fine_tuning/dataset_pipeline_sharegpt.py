@@ -77,11 +77,13 @@ class ShareGPTPreferencePipeline:
         policy_refine_model: LLMClient,
         batch_size: int,
         max_sample_counts: int,
+        start_sample_index: int,
     ):
         self.policy_label_model = policy_label_model
         self.policy_refine_model = policy_refine_model
         self.batch_size = batch_size
         self.max_sample_counts = max_sample_counts
+        self.start_sample_index = start_sample_index
 
     def _load_existing_policies(self, path: Path) -> List[RoutePolicy]:
         """Load existing route policies from a JSONL file."""
@@ -109,8 +111,11 @@ class ShareGPTPreferencePipeline:
         all_policy_candidates: List[RoutePolicy] = self._load_existing_policies(
             existing_policy_label_path
         )
-        for batch in self._get_one_batch(dataset_path):
-            logging.info(f"Processing batch of size {len(batch)}")
+        batch_count = 0
+        start_index = self.start_sample_index
+        for batch in self._get_one_batch(dataset_path, start_index):
+            batch_count += 1
+            logging.info(f"Processing batch {batch_count} of size {len(batch)}")
             added_policies, policy_label_candidates = (
                 self.generate_policy_label_for_batch(batch, all_policy_candidates)
             )
@@ -119,23 +124,27 @@ class ShareGPTPreferencePipeline:
             with open(output_path, "a") as f:
                 for candidate in policy_label_candidates:
                     f.write(json.dumps(candidate) + "\n")
-        # write all policies to to existing_policy_label_path
-        with open(existing_policy_label_path, "w") as f:
-            for policy in all_policy_candidates:
-                f.write(
-                    json.dumps(
-                        {"label": policy.label, "description": policy.description}
+            # write all policies to to existing_policy_label_path
+            with open(existing_policy_label_path, "w") as f:
+                for policy in all_policy_candidates:
+                    f.write(
+                        json.dumps(
+                            {"label": policy.label, "description": policy.description}
+                        )
+                        + "\n"
                     )
-                    + "\n"
-                )
         return output_path
 
     # --------------------------- dataset utilities -------------------------
 
-    def _get_one_batch(self, dataset_path: Path) -> Generator[ShareGPTConversation]:
+    def _get_one_batch(
+        self, dataset_path: Path, start_index: int
+    ) -> Generator[ShareGPTConversation]:
         raw = json.loads(dataset_path.read_text())
         current_batch: List[ShareGPTConversation] = []
         for idx, item in enumerate(raw):
+            if idx < start_index:
+                continue
             convo = item.get("conversations") or []
             normalized_messages: List[Turn] = []
             for turn in convo:
@@ -174,25 +183,20 @@ class ShareGPTPreferencePipeline:
         """Generate policy labels for a batch of conversations."""
         policy_label_prompt = f"""You are an expert at summarizing user intents into concise routing policy labels.
 Given the following conversations(samples), generate a short generalized label for each conversation(sample) that best describes the user's intent of that conversation for routing purposes.
-Example labels include "code_generation", "writing_emails", "text_summarization", "academic_qa", "translation", etc.
-
-Here's a list of existing policy labels. If a new label is similar to an existing one, reuse the existing label.
-### Existing Policy Labels
-{json.dumps([{"label": p.label, "description": p.description} for p in existing_policies], indent=2)}
-
 ### Conversations
 {json.dumps([convo.to_dict() for convo in batch], indent=2)}
 
+### Instructions
 Return a JSON array where each element has the following format:
 {{"sample_id": <sample_id>, "label": <label>, "description": <brief description on the generalized label, not on the specific conversation>}}
-The label should be concise (ideally 3 words or fewer) and accurately reflect the user's intent.
+Copy the sample_id faithfully from the input conversations.
+The label should be ideally consist of "domain"(e.g. legal, finance) + "action"(e.g. summarization, inquiry, code_generation) and general enough to be used as a routing target for similar conversations.
 """
 
         policy_label_response = self.policy_label_model.chat(
             messages=[{"role": "user", "content": policy_label_prompt}],
             temperature=0.3,
         )
-        logging.info(f"Policy label response: {policy_label_response}")
         policy_label_candidates: List[RoutePolicySample] = safe_json_loads(
             policy_label_response
         )
@@ -200,20 +204,28 @@ The label should be concise (ideally 3 words or fewer) and accurately reflect th
         logging.info(
             f"Received policy label candidates: {json.dumps(policy_label_candidates)}"
         )
+        all_valid_sample_ids = {convo.sample_id for convo in batch}
+        valid_policy_label_candidates = []
         for candidate in policy_label_candidates:
-            logging.info(f"Processing candidate: {json.dumps(candidate)}")
+            sample_id = candidate.get("sample_id", "").strip()
             label = candidate.get("label", "").strip()
             description = candidate.get("description", "").strip()
+            if sample_id not in all_valid_sample_ids:
+                logging.warning(
+                    f"Skipping unknown sample_id in candidate: {json.dumps(candidate)}"
+                )
+                continue
             if not label:
                 logging.warning(
                     f"Skipping empty label in candidate: {json.dumps(candidate)}"
                 )
                 continue
+            valid_policy_label_candidates.append(candidate)
             if any(p.label == label for p in existing_policies + new_policies):
                 logging.info(f"Skipping duplicate label: {label}")
                 continue
             new_policies.append(RoutePolicy(label=label, description=description))
-        return new_policies, policy_label_candidates
+        return new_policies, valid_policy_label_candidates
 
 
 def main() -> None:
@@ -223,8 +235,9 @@ def main() -> None:
     pipeline = ShareGPTPreferencePipeline(
         policy_label_model=policy_label_model,
         policy_refine_model=policy_refine_model,
-        batch_size=5,
-        max_sample_counts=11,
+        batch_size=50,
+        max_sample_counts=50000,
+        start_sample_index=0,
     )
 
     existing_policy_label_path = Path("existing_sharegpt_policies.jsonl")
