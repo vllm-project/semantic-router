@@ -1,9 +1,8 @@
 """Init command implementation."""
 
-import os
 import shutil
-import sys
 from pathlib import Path
+
 from cli.utils import getLogger
 
 log = getLogger(__name__)
@@ -57,14 +56,20 @@ def init_command(force: bool = False):
         return False
 
     if config_file.exists():
-        log.warning(f"config.yaml already exists, overwriting...")
+        if not force:
+            log.error("config.yaml already exists. Use --force to overwrite.")
+            return False
+        log.warning("config.yaml already exists, overwriting...")
 
     shutil.copy2(template_config, config_file)
     log.info(f"✓ Created config.yaml")
 
     # Create .vllm-sr directory
     if vllm_sr_dir.exists():
-        log.warning(f".vllm-sr/ directory already exists, overwriting...")
+        if not force:
+            log.error(".vllm-sr/ directory already exists. Use --force to overwrite.")
+            return False
+        log.warning(".vllm-sr/ directory already exists, overwriting...")
         shutil.rmtree(vllm_sr_dir)
 
     vllm_sr_dir.mkdir(exist_ok=True)
