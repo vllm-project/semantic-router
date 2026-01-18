@@ -128,6 +128,10 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	// Metrics endpoints
 	mux.HandleFunc("GET /metrics/classification", s.handleClassificationMetrics)
 
+	// Model selection feedback endpoints
+	mux.HandleFunc("POST /api/v1/feedback", s.handleFeedback)
+	mux.HandleFunc("GET /api/v1/ratings", s.handleGetRatings)
+
 	// Configuration endpoints
 	mux.HandleFunc("GET /config/classification", s.handleGetConfig)
 	mux.HandleFunc("PUT /config/classification", s.handleUpdateConfig)

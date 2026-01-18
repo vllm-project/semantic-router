@@ -207,7 +207,23 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	modelSelectionCfg := &selection.ModelSelectionConfig{
 		Method: "static", // Default; per-decision algorithm overrides this
 	}
-	// Copy Elo config from config package to selection package format
+
+	// Scan decisions for per-decision algorithm configs (aligned with PR #1089)
+	// Per-decision config takes precedence over global config
+	var eloFromDecision *config.EloSelectionConfig
+	var routerDCFromDecision *config.RouterDCSelectionConfig
+	for _, decision := range cfg.IntelligentRouting.Decisions {
+		if decision.Algorithm != nil {
+			if decision.Algorithm.Type == "elo" && decision.Algorithm.Elo != nil && eloFromDecision == nil {
+				eloFromDecision = decision.Algorithm.Elo
+			}
+			if decision.Algorithm.Type == "router_dc" && decision.Algorithm.RouterDC != nil && routerDCFromDecision == nil {
+				routerDCFromDecision = decision.Algorithm.RouterDC
+			}
+		}
+	}
+
+	// Build Elo config: per-decision takes precedence, then global, then defaults
 	eloCfg := cfg.IntelligentRouting.ModelSelection.Elo
 	modelSelectionCfg.Elo = &selection.EloConfig{
 		InitialRating:     eloCfg.InitialRating,
@@ -216,9 +232,27 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		DecayFactor:       eloCfg.DecayFactor,
 		MinComparisons:    eloCfg.MinComparisons,
 		CostScalingFactor: eloCfg.CostScalingFactor,
+		StoragePath:       eloCfg.StoragePath,
+		AutoSaveInterval:  eloCfg.AutoSaveInterval,
+	}
+	// Override with per-decision config if present
+	if eloFromDecision != nil {
+		if eloFromDecision.StoragePath != "" {
+			modelSelectionCfg.Elo.StoragePath = eloFromDecision.StoragePath
+		}
+		if eloFromDecision.AutoSaveInterval != "" {
+			modelSelectionCfg.Elo.AutoSaveInterval = eloFromDecision.AutoSaveInterval
+		}
+		if eloFromDecision.KFactor != 0 {
+			modelSelectionCfg.Elo.KFactor = eloFromDecision.KFactor
+		}
+		if eloFromDecision.InitialRating != 0 {
+			modelSelectionCfg.Elo.InitialRating = eloFromDecision.InitialRating
+		}
+		modelSelectionCfg.Elo.CategoryWeighted = eloFromDecision.CategoryWeighted
 	}
 
-	// Copy RouterDC config
+	// Build RouterDC config: per-decision takes precedence
 	routerDCCfg := cfg.IntelligentRouting.ModelSelection.RouterDC
 	modelSelectionCfg.RouterDC = &selection.RouterDCConfig{
 		Temperature:         routerDCCfg.Temperature,
@@ -226,6 +260,16 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		MinSimilarity:       routerDCCfg.MinSimilarity,
 		UseQueryContrastive: routerDCCfg.UseQueryContrastive,
 		UseModelContrastive: routerDCCfg.UseModelContrastive,
+		RequireDescriptions: routerDCCfg.RequireDescriptions,
+		UseCapabilities:     routerDCCfg.UseCapabilities,
+	}
+	// Override with per-decision config if present
+	if routerDCFromDecision != nil {
+		if routerDCFromDecision.Temperature != 0 {
+			modelSelectionCfg.RouterDC.Temperature = routerDCFromDecision.Temperature
+		}
+		modelSelectionCfg.RouterDC.RequireDescriptions = routerDCFromDecision.RequireDescriptions
+		modelSelectionCfg.RouterDC.UseCapabilities = routerDCFromDecision.UseCapabilities
 	}
 
 	// Copy AutoMix config
@@ -258,6 +302,10 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	if len(cfg.Categories) > 0 {
 		selectionFactory = selectionFactory.WithCategories(cfg.Categories)
 	}
+	// Wire embedding function for RouterDC to convert model descriptions to vectors
+	selectionFactory = selectionFactory.WithEmbeddingFunc(func(text string) ([]float32, error) {
+		return candle_binding.GetEmbedding(text, 0)
+	})
 	modelSelectorRegistry := selectionFactory.CreateAll()
 
 	logging.Infof("[Router] Initialized model selection registry (per-decision algorithm config)")

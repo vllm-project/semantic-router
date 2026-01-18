@@ -22,6 +22,7 @@ import (
 	"math"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -59,6 +60,15 @@ type EloConfig struct {
 
 	// CostScalingFactor scales cost consideration (0 = ignore cost)
 	CostScalingFactor float64 `yaml:"cost_scaling_factor"`
+
+	// StoragePath is the file path for persisting Elo ratings (optional)
+	// If set, ratings are loaded on startup and saved after each feedback update
+	// Example: "/var/lib/vsr/elo_ratings.json"
+	StoragePath string `yaml:"storage_path,omitempty"`
+
+	// AutoSaveInterval is the interval for automatic saves (default: 30s)
+	// Only used when StoragePath is set
+	AutoSaveInterval string `yaml:"auto_save_interval,omitempty"`
 }
 
 // DefaultEloConfig returns the default Elo configuration
@@ -99,6 +109,9 @@ type EloSelector struct {
 	// Model costs for cost-aware selection (model -> cost per 1M tokens)
 	modelCosts map[string]float64
 	costMu     sync.RWMutex
+
+	// Storage backend for persisting ratings (optional)
+	storage EloStorage
 }
 
 // NewEloSelector creates a new Elo-based selector
@@ -106,12 +119,116 @@ func NewEloSelector(cfg *EloConfig) *EloSelector {
 	if cfg == nil {
 		cfg = DefaultEloConfig()
 	}
-	return &EloSelector{
+	selector := &EloSelector{
 		config:          cfg,
 		globalRatings:   make(map[string]*ModelRating),
 		categoryRatings: make(map[string]map[string]*ModelRating),
 		modelCosts:      make(map[string]float64),
 	}
+
+	// Initialize storage if path is configured
+	if cfg.StoragePath != "" {
+		storage, err := NewFileEloStorage(cfg.StoragePath)
+		if err != nil {
+			logging.Errorf("[EloSelector] Failed to initialize storage: %v", err)
+		} else {
+			selector.storage = storage
+
+			// Load existing ratings from storage
+			if err := selector.loadFromStorage(); err != nil {
+				logging.Warnf("[EloSelector] Failed to load ratings from storage: %v", err)
+			}
+
+			// Start auto-save with configurable interval
+			interval := 30 * time.Second
+			if cfg.AutoSaveInterval != "" {
+				if parsed, err := time.ParseDuration(cfg.AutoSaveInterval); err == nil {
+					interval = parsed
+				}
+			}
+
+			storage.StartAutoSave(interval, selector.getAllRatingsForStorage)
+			logging.Infof("[EloSelector] Storage initialized with auto-save interval: %v", interval)
+		}
+	}
+
+	return selector
+}
+
+// SetStorage sets a custom storage backend (useful for testing)
+func (e *EloSelector) SetStorage(storage EloStorage) {
+	e.storage = storage
+}
+
+// loadFromStorage loads ratings from the storage backend
+func (e *EloSelector) loadFromStorage() error {
+	if e.storage == nil {
+		return nil
+	}
+
+	allRatings, err := e.storage.LoadAllRatings()
+	if err != nil {
+		return err
+	}
+
+	e.globalMu.Lock()
+	e.categoryMu.Lock()
+	defer e.globalMu.Unlock()
+	defer e.categoryMu.Unlock()
+
+	for category, ratings := range allRatings {
+		if category == "_global" {
+			for model, rating := range ratings {
+				e.globalRatings[model] = rating
+			}
+		} else {
+			if e.categoryRatings[category] == nil {
+				e.categoryRatings[category] = make(map[string]*ModelRating)
+			}
+			for model, rating := range ratings {
+				e.categoryRatings[category][model] = rating
+			}
+		}
+	}
+
+	logging.Infof("[EloSelector] Loaded %d categories from storage", len(allRatings))
+	return nil
+}
+
+// getAllRatingsForStorage returns all ratings in a format suitable for storage
+func (e *EloSelector) getAllRatingsForStorage() map[string]map[string]*ModelRating {
+	e.globalMu.RLock()
+	e.categoryMu.RLock()
+	defer e.globalMu.RUnlock()
+	defer e.categoryMu.RUnlock()
+
+	result := make(map[string]map[string]*ModelRating)
+
+	// Add global ratings
+	if len(e.globalRatings) > 0 {
+		result["_global"] = make(map[string]*ModelRating)
+		for k, v := range e.globalRatings {
+			result["_global"][k] = v
+		}
+	}
+
+	// Add category ratings
+	for cat, ratings := range e.categoryRatings {
+		result[cat] = make(map[string]*ModelRating)
+		for k, v := range ratings {
+			result[cat][k] = v
+		}
+	}
+
+	return result
+}
+
+// Close stops storage operations and persists final state
+func (e *EloSelector) Close() error {
+	if e.storage != nil {
+		return e.storage.Close()
+	}
+	return nil
 }
 
 // Method returns the selection method type
@@ -263,10 +380,14 @@ func (e *EloSelector) Select(ctx context.Context, selCtx *SelectionContext) (*Se
 	}, nil
 }
 
-// UpdateFeedback updates Elo ratings based on user preference feedback
+// UpdateFeedback updates Elo ratings based on user preference feedback.
+// Supports three modes:
+// 1. Comparison: Both WinnerModel and LoserModel set - standard Elo update
+// 2. Positive self-feedback: Only WinnerModel set - small rating boost
+// 3. Negative self-feedback: Only LoserModel set - small rating penalty
 func (e *EloSelector) UpdateFeedback(ctx context.Context, feedback *Feedback) error {
-	if feedback.WinnerModel == "" {
-		return fmt.Errorf("winner model is required")
+	if feedback.WinnerModel == "" && feedback.LoserModel == "" {
+		return fmt.Errorf("either winner_model or loser_model is required")
 	}
 
 	// Update global ratings
@@ -286,6 +407,18 @@ func (e *EloSelector) UpdateFeedback(ctx context.Context, feedback *Feedback) er
 	logging.Infof("[EloSelector] Updated ratings: winner=%s, loser=%s, tie=%v",
 		feedback.WinnerModel, feedback.LoserModel, feedback.Tie)
 
+	// Mark storage as dirty for auto-save, or save immediately for single updates
+	if e.storage != nil {
+		if fileStorage, ok := e.storage.(*FileEloStorage); ok {
+			fileStorage.MarkDirty()
+		} else {
+			// For non-file storage, save immediately
+			if err := e.storage.SaveAllRatings(e.getAllRatingsForStorage()); err != nil {
+				logging.Warnf("[EloSelector] Failed to save ratings to storage: %v", err)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -294,18 +427,45 @@ func (e *EloSelector) updateRating(feedback *Feedback,
 	getRating func(string) *ModelRating,
 	setRating func(string, *ModelRating),
 ) {
-	winnerRating := getRating(feedback.WinnerModel)
-	if winnerRating == nil {
-		winnerRating = &ModelRating{Model: feedback.WinnerModel, Rating: e.config.InitialRating}
-	}
-
-	// Handle single feedback (no loser)
-	if feedback.LoserModel == "" {
-		// Just record the comparison without rating change
+	// Handle self-feedback (single model, no comparison)
+	// This is used for automatic signal-based feedback where we only know
+	// if one model did well or poorly, not compared to another
+	if feedback.LoserModel == "" && feedback.WinnerModel != "" {
+		// Positive self-feedback: model did well
+		winnerRating := getRating(feedback.WinnerModel)
+		if winnerRating == nil {
+			winnerRating = &ModelRating{Model: feedback.WinnerModel, Rating: e.config.InitialRating}
+		}
+		// Apply small positive adjustment (reward)
+		winnerRating.Rating += e.config.KFactor * 0.1 // 10% of K-factor for self-feedback
 		winnerRating.Comparisons++
 		winnerRating.Wins++
 		setRating(feedback.WinnerModel, winnerRating)
 		return
+	}
+
+	if feedback.WinnerModel == "" && feedback.LoserModel != "" {
+		// Negative self-feedback: model did poorly
+		loserRating := getRating(feedback.LoserModel)
+		if loserRating == nil {
+			loserRating = &ModelRating{Model: feedback.LoserModel, Rating: e.config.InitialRating}
+		}
+		// Apply small negative adjustment (penalty)
+		loserRating.Rating -= e.config.KFactor * 0.1 // 10% of K-factor for self-feedback
+		loserRating.Comparisons++
+		loserRating.Losses++
+		setRating(feedback.LoserModel, loserRating)
+		return
+	}
+
+	// Standard two-model comparison
+	if feedback.WinnerModel == "" {
+		return // No valid feedback
+	}
+
+	winnerRating := getRating(feedback.WinnerModel)
+	if winnerRating == nil {
+		winnerRating = &ModelRating{Model: feedback.WinnerModel, Rating: e.config.InitialRating}
 	}
 
 	loserRating := getRating(feedback.LoserModel)

@@ -211,6 +211,14 @@ type EloSelectionConfig struct {
 
 	// CostScalingFactor scales cost consideration (0 = ignore cost)
 	CostScalingFactor float64 `yaml:"cost_scaling_factor,omitempty"`
+
+	// StoragePath is the file path for persisting Elo ratings (optional)
+	// If set, ratings are loaded on startup and saved after each feedback update
+	StoragePath string `yaml:"storage_path,omitempty"`
+
+	// AutoSaveInterval is how often to auto-save ratings (e.g., "5m", "30s")
+	// Only used when StoragePath is set. Default: "1m"
+	AutoSaveInterval string `yaml:"auto_save_interval,omitempty"`
 }
 
 // RouterDCSelectionConfig configures dual-contrastive learning selection
@@ -229,6 +237,14 @@ type RouterDCSelectionConfig struct {
 
 	// UseModelContrastive enables model-side contrastive learning
 	UseModelContrastive bool `yaml:"use_model_contrastive,omitempty"`
+
+	// RequireDescriptions enforces that all models have descriptions
+	// When true, validation will fail if any model lacks a description
+	RequireDescriptions bool `yaml:"require_descriptions,omitempty"`
+
+	// UseCapabilities enables using structured capability tags for matching
+	// When true, capabilities are included in the embedding text
+	UseCapabilities bool `yaml:"use_capabilities,omitempty"`
 }
 
 // AutoMixSelectionConfig configures POMDP-based cascaded routing
@@ -1132,6 +1148,22 @@ type ModelParams struct {
 	// When set to "anthropic", the router will translate OpenAI-format requests to Anthropic
 	// Messages API format and convert responses back to OpenAI format
 	APIFormat string `yaml:"api_format,omitempty"`
+
+	// Description provides a natural language description of the model's capabilities
+	// Used by RouterDC to compute model embeddings for query-model matching
+	// Example: "Fast, efficient model for simple queries and basic code generation"
+	Description string `yaml:"description,omitempty"`
+
+	// Capabilities is a list of structured capability tags for the model
+	// Used by RouterDC and hybrid selection methods for capability matching
+	// Example: ["chat", "code", "reasoning", "math", "creative"]
+	Capabilities []string `yaml:"capabilities,omitempty"`
+
+	// QualityScore is the estimated quality/capability score for the model (0.0-1.0)
+	// Used by AutoMix and hybrid selection for quality-cost tradeoff calculations
+	// Default: 0.8 if not specified
+	// Example: 0.95 for a high-quality model, 0.6 for a fast but less capable model
+	QualityScore float64 `yaml:"quality_score,omitempty"`
 }
 
 // LoRAAdapter represents a LoRA adapter configuration for a model
@@ -1258,6 +1290,7 @@ type ConfidenceAlgorithmConfig struct {
 	// - "avg_logprob": Use average logprob across all tokens (default)
 	// - "margin": Use average margin between top-1 and top-2 logprobs (more accurate)
 	// - "hybrid": Use weighted combination of both methods
+	// - "self_verify": AutoMix self-verification - model evaluates its own answer (arXiv:2310.12963)
 	ConfidenceMethod string `yaml:"confidence_method,omitempty"`
 
 	// Threshold is the confidence threshold for escalation
@@ -1279,6 +1312,17 @@ type ConfidenceAlgorithmConfig struct {
 	// - "skip": Skip the failed model and try the next one (default)
 	// - "fail": Return error immediately
 	OnError string `yaml:"on_error,omitempty"`
+
+	// EscalationOrder determines how models are ordered for cascaded execution
+	// - "size": Order by param_size (smallest first) - default behavior
+	// - "cost": Order by pricing (cheapest first) - AutoMix-style cost optimization
+	// - "automix": Use POMDP-optimized ordering based on cost-quality tradeoff
+	EscalationOrder string `yaml:"escalation_order,omitempty"`
+
+	// CostQualityTradeoff controls the balance when escalation_order is "automix"
+	// 0.0 = pure quality (ignore cost), 1.0 = pure cost (ignore quality)
+	// Default: 0.3 (favor quality but consider cost)
+	CostQualityTradeoff float64 `yaml:"cost_quality_tradeoff,omitempty"`
 }
 
 // HybridWeightsConfig configures weights for hybrid confidence method

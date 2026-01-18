@@ -66,6 +66,10 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
 		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules, signals.MatchedLanguageRules)
 
+	// Process user feedback signals to automatically update Elo ratings
+	// This implements "automatic scoring by signals" as requested
+	r.processUserFeedbackForElo(signals.MatchedUserFeedbackRules, originalModel, ctx)
+
 	// Perform decision evaluation using pre-computed signals
 	// This is ALWAYS done when decisions are configured, regardless of model type,
 	// because plugins (e.g., hallucination detection) depend on the matched decision
@@ -281,4 +285,78 @@ func (r *OpenAIRouter) getSelectionWeights(algorithm *config.AlgorithmConfig) (f
 
 	// Default: equal weighting (0.5 cost, 0.5 quality)
 	return 0.5, 0.5
+}
+
+// processUserFeedbackForElo automatically updates Elo ratings based on detected user feedback signals.
+// This implements "automatic scoring by signals" - when the FeedbackDetector classifies user
+// follow-up messages as "satisfied" or "wrong_answer", we automatically update Elo ratings.
+//
+// Signal mapping:
+// - "satisfied" → Model performed well, record as implicit win
+// - "wrong_answer" → Model performed poorly, record as implicit loss
+// - "need_clarification" / "want_different" → Neutral, no Elo update
+//
+// For single-model feedback (no comparison), we use a "virtual opponent" approach:
+// - The model competes against an expected baseline (rating 1500)
+// - "satisfied" = win against baseline
+// - "wrong_answer" = loss against baseline
+func (r *OpenAIRouter) processUserFeedbackForElo(userFeedbackSignals []string, model string, ctx *RequestContext) {
+	if len(userFeedbackSignals) == 0 || model == "" {
+		return
+	}
+
+	// Get Elo selector from registry
+	if r.ModelSelector == nil {
+		return
+	}
+
+	eloSelector, ok := r.ModelSelector.Get(selection.MethodElo)
+	if !ok || eloSelector == nil {
+		return
+	}
+
+	// Process each feedback signal
+	// Get decision name safely
+	decisionName := ""
+	if ctx.VSRSelectedDecision != nil {
+		decisionName = ctx.VSRSelectedDecision.Name
+	}
+
+	for _, signal := range userFeedbackSignals {
+		var feedback *selection.Feedback
+
+		switch signal {
+		case "satisfied":
+			// Model performed well - record as win against virtual baseline
+			feedback = &selection.Feedback{
+				Query:        ctx.RequestQuery,
+				WinnerModel:  model,
+				LoserModel:   "", // Empty = self-feedback mode
+				DecisionName: decisionName,
+				Tie:          false,
+			}
+			logging.Infof("[AutoFeedback] User satisfied with %s, recording positive Elo feedback", model)
+
+		case "wrong_answer":
+			// Model performed poorly - record as loss against virtual baseline
+			feedback = &selection.Feedback{
+				Query:        ctx.RequestQuery,
+				WinnerModel:  "", // Empty = model loses
+				LoserModel:   model,
+				DecisionName: decisionName,
+				Tie:          false,
+			}
+			logging.Infof("[AutoFeedback] User reported wrong answer from %s, recording negative Elo feedback", model)
+
+		default:
+			// "need_clarification" and "want_different" are neutral - no Elo update
+			logging.Debugf("[AutoFeedback] Neutral feedback signal %s, no Elo update", signal)
+			continue
+		}
+
+		// Submit feedback to Elo selector
+		if err := eloSelector.UpdateFeedback(context.Background(), feedback); err != nil {
+			logging.Warnf("[AutoFeedback] Failed to update Elo: %v", err)
+		}
+	}
 }
