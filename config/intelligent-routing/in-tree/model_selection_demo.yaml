@@ -1,0 +1,129 @@
+---
+# Demo: Advanced Model Selection Methods
+# Algorithms: Elo, RouterDC, AutoMix, Hybrid
+#
+# Reference papers:
+#   - Elo: RouteLLM (arXiv:2406.18665)
+#   - RouterDC: arXiv:2409.19886
+#   - AutoMix: arXiv:2310.12963
+#   - Hybrid: arXiv:2404.14618
+
+bert_model:
+  model_id: sentence-transformers/all-MiniLM-L12-v2
+  threshold: 0.6
+  use_cpu: true
+
+classifier:
+  category_model:
+    model_id: "models/mom-domain-classifier"
+    use_modernbert: true
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
+
+# Backend models with pricing info for cost-aware selection
+backend_models:
+  model_config:
+    "llama3.2:3b":
+      pricing:
+        prompt_per_1m: 0.05
+        completion_per_1m: 0.10
+    "llama3.2:8b":
+      pricing:
+        prompt_per_1m: 0.15
+        completion_per_1m: 0.30
+    "phi4":
+      pricing:
+        prompt_per_1m: 0.10
+        completion_per_1m: 0.20
+    "gemma3:27b":
+      pricing:
+        prompt_per_1m: 0.50
+        completion_per_1m: 1.00
+    "mistral-small3.1":
+      pricing:
+        prompt_per_1m: 0.25
+        completion_per_1m: 0.50
+
+# Categories for domain classification
+categories:
+  - name: tech
+    mmlu_categories: ["computer science", "engineering"]
+  - name: finance
+    mmlu_categories: ["economics"]
+  - name: general
+
+# Decisions with PER-DECISION algorithm (aligned with looper pattern)
+# Each decision specifies its own algorithm. No global model_selection needed.
+decisions:
+  - name: tech
+    description: "Tech queries using Elo ratings"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "tech"
+    modelRefs:
+      - model: "llama3.2:3b"
+        use_reasoning: false
+      - model: "phi4"
+        use_reasoning: true
+      - model: "gemma3:27b"
+        use_reasoning: true
+    algorithm:
+      type: "elo"
+      elo:
+        k_factor: 32
+        category_weighted: true
+        cost_scaling_factor: 0.2
+
+  - name: finance
+    description: "Finance queries using AutoMix"
+    priority: 10
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "finance"
+    modelRefs:
+      - model: "llama3.2:8b"
+        use_reasoning: false
+      - model: "mistral-small3.1"
+        use_reasoning: true
+      - model: "gemma3:27b"
+        use_reasoning: true
+    algorithm:
+      type: "automix"
+      automix:
+        cost_quality_tradeoff: 0.4
+        cost_aware_routing: true
+
+  - name: general
+    description: "General queries using hybrid approach"
+    priority: 5
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "general"
+    modelRefs:
+      - model: "llama3.2:3b"
+        use_reasoning: false
+      - model: "llama3.2:8b"
+        use_reasoning: false
+      - model: "mistral-small3.1"
+        use_reasoning: true
+    algorithm:
+      type: "hybrid"
+      hybrid:
+        elo_weight: 0.3
+        router_dc_weight: 0.3
+        automix_weight: 0.2
+        cost_weight: 0.2
+
+default_model: llama3.2:3b
+
+metrics:
+  enabled: true
+  path: /metrics

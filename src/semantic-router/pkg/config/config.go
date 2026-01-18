@@ -151,8 +151,118 @@ type IntelligentRouting struct {
 	// "confidence" - select decision with highest confidence score
 	Strategy string `yaml:"strategy,omitempty"`
 
+	// ModelSelection configures the algorithm used for model selection
+	// Supported methods: "static", "elo", "router_dc", "automix", "hybrid"
+	ModelSelection ModelSelectionConfig `yaml:"model_selection,omitempty"`
+
 	// Reasoning mode configuration
 	ReasoningConfig `yaml:",inline"`
+}
+
+// ModelSelectionConfig represents configuration for advanced model selection algorithms
+// Reference papers:
+//   - Elo: RouteLLM (arXiv:2406.18665) - Weighted Elo using Bradley-Terry model
+//   - RouterDC: Query-Based Router by Dual Contrastive Learning (arXiv:2409.19886)
+//   - AutoMix: Automatically Mixing Language Models (arXiv:2310.12963)
+//   - Hybrid: Cost-Efficient Quality-Aware Query Routing (arXiv:2404.14618)
+type ModelSelectionConfig struct {
+	// Method specifies the selection algorithm to use
+	// Options: "static", "elo", "router_dc", "automix", "hybrid"
+	// Default: "static" (uses static scores from configuration)
+	Method string `yaml:"method,omitempty"`
+
+	// Elo configuration for Elo rating-based selection
+	Elo EloSelectionConfig `yaml:"elo,omitempty"`
+
+	// RouterDC configuration for dual-contrastive learning selection
+	RouterDC RouterDCSelectionConfig `yaml:"router_dc,omitempty"`
+
+	// AutoMix configuration for POMDP-based cascaded routing
+	AutoMix AutoMixSelectionConfig `yaml:"automix,omitempty"`
+
+	// Hybrid configuration for combined selection methods
+	Hybrid HybridSelectionConfig `yaml:"hybrid,omitempty"`
+}
+
+// EloSelectionConfig configures Elo rating-based model selection
+type EloSelectionConfig struct {
+	// InitialRating is the starting Elo rating for new models (default: 1500)
+	InitialRating float64 `yaml:"initial_rating,omitempty"`
+
+	// KFactor controls rating volatility (default: 32)
+	KFactor float64 `yaml:"k_factor,omitempty"`
+
+	// CategoryWeighted enables per-category Elo ratings (default: true)
+	CategoryWeighted bool `yaml:"category_weighted,omitempty"`
+
+	// DecayFactor applies time decay to old comparisons (0-1, default: 0)
+	DecayFactor float64 `yaml:"decay_factor,omitempty"`
+
+	// MinComparisons before rating is considered stable (default: 5)
+	MinComparisons int `yaml:"min_comparisons,omitempty"`
+
+	// CostScalingFactor scales cost consideration (0 = ignore cost)
+	CostScalingFactor float64 `yaml:"cost_scaling_factor,omitempty"`
+}
+
+// RouterDCSelectionConfig configures dual-contrastive learning selection
+type RouterDCSelectionConfig struct {
+	// Temperature for softmax scaling (default: 0.07)
+	Temperature float64 `yaml:"temperature,omitempty"`
+
+	// DimensionSize for embeddings (default: 768)
+	DimensionSize int `yaml:"dimension_size,omitempty"`
+
+	// MinSimilarity threshold for valid matches (default: 0.3)
+	MinSimilarity float64 `yaml:"min_similarity,omitempty"`
+
+	// UseQueryContrastive enables query-side contrastive learning
+	UseQueryContrastive bool `yaml:"use_query_contrastive,omitempty"`
+
+	// UseModelContrastive enables model-side contrastive learning
+	UseModelContrastive bool `yaml:"use_model_contrastive,omitempty"`
+}
+
+// AutoMixSelectionConfig configures POMDP-based cascaded routing
+type AutoMixSelectionConfig struct {
+	// VerificationThreshold for self-verification (default: 0.7)
+	VerificationThreshold float64 `yaml:"verification_threshold,omitempty"`
+
+	// MaxEscalations limits escalation count (default: 2)
+	MaxEscalations int `yaml:"max_escalations,omitempty"`
+
+	// CostAwareRouting enables cost-quality tradeoff (default: true)
+	CostAwareRouting bool `yaml:"cost_aware_routing,omitempty"`
+
+	// CostQualityTradeoff balance (0 = quality, 1 = cost, default: 0.3)
+	CostQualityTradeoff float64 `yaml:"cost_quality_tradeoff,omitempty"`
+
+	// DiscountFactor for POMDP value iteration (default: 0.95)
+	DiscountFactor float64 `yaml:"discount_factor,omitempty"`
+
+	// UseLogprobVerification uses logprobs for confidence (default: true)
+	UseLogprobVerification bool `yaml:"use_logprob_verification,omitempty"`
+}
+
+// HybridSelectionConfig configures combined selection methods
+type HybridSelectionConfig struct {
+	// EloWeight for Elo rating contribution (0-1, default: 0.3)
+	EloWeight float64 `yaml:"elo_weight,omitempty"`
+
+	// RouterDCWeight for embedding similarity (0-1, default: 0.3)
+	RouterDCWeight float64 `yaml:"router_dc_weight,omitempty"`
+
+	// AutoMixWeight for POMDP value (0-1, default: 0.2)
+	AutoMixWeight float64 `yaml:"automix_weight,omitempty"`
+
+	// CostWeight for cost consideration (0-1, default: 0.2)
+	CostWeight float64 `yaml:"cost_weight,omitempty"`
+
+	// QualityGapThreshold triggers escalation (default: 0.1)
+	QualityGapThreshold float64 `yaml:"quality_gap_threshold,omitempty"`
+
+	// NormalizeScores before combination (default: true)
+	NormalizeScores bool `yaml:"normalize_scores,omitempty"`
 }
 
 type Signals struct {
@@ -935,14 +1045,33 @@ type Decision struct {
 
 // AlgorithmConfig defines how multiple models should be executed and aggregated
 type AlgorithmConfig struct {
-	// Type specifies the algorithm type: "confidence", "ratings"
+	// Type specifies the algorithm type:
+	// Looper algorithms (multi-model execution):
 	// - "confidence": Try smaller models first, escalate to larger models if confidence is low
 	// - "ratings": Execute all models concurrently and return multiple choices for comparison
+	// Selection algorithms (single model selection from candidates):
+	// - "static": Use static scores from configuration (default)
+	// - "elo": Use Elo rating system with Bradley-Terry model
+	// - "router_dc": Use dual-contrastive learning for query-model matching
+	// - "automix": Use POMDP-based cost-quality optimization
+	// - "hybrid": Combine multiple selection methods with configurable weights
 	Type string `yaml:"type"`
 
-	// Algorithm-specific configurations (only one should be set based on Type)
+	// Looper algorithm configurations (for multi-model execution)
 	Confidence *ConfidenceAlgorithmConfig `yaml:"confidence,omitempty"`
 	Ratings    *RatingsAlgorithmConfig    `yaml:"ratings,omitempty"`
+
+	// Selection algorithm configurations (for single model selection)
+	// These align with the global ModelSelectionConfig but can be overridden per-decision
+	Elo      *EloSelectionConfig      `yaml:"elo,omitempty"`
+	RouterDC *RouterDCSelectionConfig `yaml:"router_dc,omitempty"`
+	AutoMix  *AutoMixSelectionConfig  `yaml:"automix,omitempty"`
+	Hybrid   *HybridSelectionConfig   `yaml:"hybrid,omitempty"`
+
+	// OnError defines behavior when algorithm fails: "skip" or "fail"
+	// - "skip": Skip and use fallback (default)
+	// - "fail": Return error immediately
+	OnError string `yaml:"on_error,omitempty"`
 }
 
 // ConfidenceAlgorithmConfig configures the confidence algorithm
