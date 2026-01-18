@@ -68,6 +68,12 @@ class Turn:
         return {"role": self.role, "content": self.content}
 
 
+def get_sample_id_hash(sample_id: str) -> str:
+    """Get a hash for a sample ID."""
+    # example: "QWJhYvA_0" -> "QWJhYvA"
+    return sample_id.split("_")[0]
+
+
 class ShareGPTPreferencePipeline:
     """Two-pass ShareGPT preference labeling pipeline."""
 
@@ -142,6 +148,7 @@ class ShareGPTPreferencePipeline:
     ) -> Generator[ShareGPTConversation]:
         raw = json.loads(dataset_path.read_text())
         current_batch: List[ShareGPTConversation] = []
+        seen_sample_id_hashes = set()
         for idx, item in enumerate(raw):
             if idx < start_index:
                 continue
@@ -160,7 +167,14 @@ class ShareGPTPreferencePipeline:
             if not normalized_messages:
                 logging.info(f"Skipping sample {item.get('id')} with no valid messages")
                 continue
-            sample_id = str(item.get("id") or f"sample_{idx}")
+            sample_id = str(item.get("id"))
+
+            # note: here we assume that all sample_ids with the same hash have the same preference label to boost performance
+            sample_id_hash = get_sample_id_hash(sample_id)
+            if sample_id_hash in seen_sample_id_hashes:
+                logging.info(f"Skipping duplicate sample_id {sample_id}")
+                continue
+            seen_sample_id_hashes.add(sample_id_hash)
             current_batch.append(
                 ShareGPTConversation(
                     sample_id=sample_id,
