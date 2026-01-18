@@ -1243,6 +1243,47 @@ type RouterReplayPluginConfig struct {
 	// MaxBodyBytes caps how many bytes of request/response body are recorded.
 	// Defaults to 4096 bytes.
 	MaxBodyBytes int `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
+
+	// StoreBackend specifies the storage backend to use.
+	// Supported values: "memory" (default), "redis"
+	StoreBackend string `json:"store_backend,omitempty" yaml:"store_backend,omitempty"`
+
+	// TTLSeconds is the time-to-live for stored records in seconds.
+	// Defaults to 2592000 (30 days). Set to 0 to use the default.
+	TTLSeconds int `json:"ttl_seconds,omitempty" yaml:"ttl_seconds,omitempty"`
+
+	// AsyncWrites enables asynchronous writes to the storage backend.
+	// When true, records are written via a buffered channel to avoid blocking request processing.
+	// Defaults to false for backward compatibility.
+	AsyncWrites bool `json:"async_writes,omitempty" yaml:"async_writes,omitempty"`
+
+	// WriteBufferSize is the channel buffer size for async writes.
+	// Defaults to 1000. Only used when AsyncWrites is true.
+	WriteBufferSize int `json:"write_buffer_size,omitempty" yaml:"write_buffer_size,omitempty"`
+
+	// WriteWorkers is the number of worker goroutines for async writes.
+	// Defaults to 2. Only used when AsyncWrites is true.
+	WriteWorkers int `json:"write_workers,omitempty" yaml:"write_workers,omitempty"`
+
+	// Redis contains Redis-specific configuration.
+	// Only used when StoreBackend is "redis".
+	Redis ReplayRedisConfig `json:"redis,omitempty" yaml:"redis,omitempty"`
+}
+
+// ReplayRedisConfig contains Redis-specific configuration for the router replay store.
+type ReplayRedisConfig struct {
+	// Address is the Redis server address (e.g., "localhost:6379").
+	Address string `json:"address" yaml:"address"`
+
+	// DB is the Redis database number. Defaults to 0.
+	// Accepts both "db" and "database" in YAML for compatibility.
+	DB int `json:"db,omitempty" yaml:"db,omitempty"`
+
+	// Password is the Redis password. Leave empty for no authentication.
+	Password string `json:"password,omitempty" yaml:"password,omitempty"`
+
+	// KeyPrefix is the prefix for all keys. Defaults to "replay:".
+	KeyPrefix string `json:"key_prefix,omitempty" yaml:"key_prefix,omitempty"`
 }
 
 // Helper methods for Decision to access plugin configurations
