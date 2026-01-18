@@ -131,7 +131,7 @@ class ShareGPTPreferencePipeline:
         logging.info(f"Loaded {len(candidates)} existing candidates from {path}")
         return candidates
 
-    def run(
+    async def run(
         self,
         existing_policy_label_path: Path,
         raw_dataset_path: Path,
@@ -146,9 +146,10 @@ class ShareGPTPreferencePipeline:
         for batch in self._get_one_batch(raw_dataset_path, start_index):
             batch_count += 1
             logging.info(f"Processing batch {batch_count} of size {len(batch)}")
-            added_policies, policy_label_candidates = (
-                self.generate_policy_label_for_batch(batch, all_policy_candidates)
-            )
+            (
+                added_policies,
+                policy_label_candidates,
+            ) = await self.generate_policy_label_for_batch(batch, all_policy_candidates)
             all_policy_candidates.extend(added_policies)
             # store the policy_label_candidate to local
             with open(output_path, "a") as f:
@@ -422,11 +423,12 @@ def main() -> None:
     dataset_path = Path("ShareGPT_V3_unfiltered_cleaned_split.json")
     output_path = Path("sharegpt_preference_labeled.jsonl")
     refined_dataset_path = Path("refined_sharegpt_policy_labels.jsonl")
-    pipeline.run(
-        existing_policy_label_path=existing_policy_label_path,
-        raw_dataset_path=dataset_path,
-        output_path=output_path,
-        refined_dataset_path=refined_dataset_path,
+    asyncio.run(
+        pipeline.run(
+            existing_policy_label_path=existing_policy_label_path,
+            raw_dataset_path=dataset_path,
+            output_path=output_path,
+        )
     )
     pipeline.refine(refined_dataset_path=refined_dataset_path)
 
