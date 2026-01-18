@@ -22,7 +22,7 @@ require (
 	github.com/openai/openai-go v1.12.0
 	github.com/prometheus/client_golang v1.23.0
 	github.com/prometheus/client_model v0.6.2
-	github.com/redis/go-redis/v9 v9.17.0
+	github.com/redis/go-redis/v9 v9.17.2
 	github.com/stretchr/testify v1.11.1
 	github.com/vllm-project/semantic-router/candle-binding v0.0.0-00010101000000-000000000000
 	go.opentelemetry.io/otel v1.38.0
@@ -78,6 +78,7 @@ require (
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
+	github.com/lib/pq v1.10.9 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/milvus-io/milvus-proto/go-api/v2 v2.4.10-0.20240819025435-512e3b98866a // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect

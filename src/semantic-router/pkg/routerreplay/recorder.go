@@ -1,11 +1,10 @@
 package routerreplay
 
 import (
-	"crypto/rand"
-	"encoding/hex"
-	"fmt"
-	"sync"
+	"context"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
 const (
@@ -13,64 +12,29 @@ const (
 	DefaultMaxBodyBytes = 4096 // 4KB
 )
 
-type Signal struct {
-	Keyword      []string `json:"keyword,omitempty"`
-	Embedding    []string `json:"embedding,omitempty"`
-	Domain       []string `json:"domain,omitempty"`
-	FactCheck    []string `json:"fact_check,omitempty"`
-	UserFeedback []string `json:"user_feedback,omitempty"`
-	Preference   []string `json:"preference,omitempty"`
-}
-
-type RoutingRecord struct {
-	ID                    string    `json:"id"`
-	Timestamp             time.Time `json:"timestamp"`
-	RequestID             string    `json:"request_id,omitempty"`
-	Decision              string    `json:"decision,omitempty"`
-	Category              string    `json:"category,omitempty"`
-	OriginalModel         string    `json:"original_model,omitempty"`
-	SelectedModel         string    `json:"selected_model,omitempty"`
-	ReasoningMode         string    `json:"reasoning_mode,omitempty"`
-	Signals               Signal    `json:"signals"`
-	RequestBody           string    `json:"request_body,omitempty"`
-	ResponseBody          string    `json:"response_body,omitempty"`
-	ResponseStatus        int       `json:"response_status,omitempty"`
-	FromCache             bool      `json:"from_cache,omitempty"`
-	Streaming             bool      `json:"streaming,omitempty"`
-	RequestBodyTruncated  bool      `json:"request_body_truncated,omitempty"`
-	ResponseBodyTruncated bool      `json:"response_body_truncated,omitempty"`
-}
+type (
+	Signal        = store.Signal
+	RoutingRecord = store.Record
+)
 
 type Recorder struct {
-	mu sync.Mutex
+	storage store.Storage
 
-	records []*RoutingRecord
-	byID    map[string]*RoutingRecord
-
-	maxRecords   int
 	maxBodyBytes int
 
 	captureRequestBody  bool
 	captureResponseBody bool
 }
 
-func NewRecorder(maxRecords int) *Recorder {
-	if maxRecords <= 0 {
-		maxRecords = DefaultMaxRecords
-	}
-
+// NewRecorder creates a new Recorder with the specified storage backend.
+func NewRecorder(storage store.Storage) *Recorder {
 	return &Recorder{
-		records:      make([]*RoutingRecord, 0, maxRecords),
-		byID:         make(map[string]*RoutingRecord),
-		maxRecords:   maxRecords,
+		storage:      storage,
 		maxBodyBytes: DefaultMaxBodyBytes,
 	}
 }
 
 func (r *Recorder) SetCapturePolicy(captureRequest, captureResponse bool, maxBodyBytes int) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	r.captureRequestBody = captureRequest
 	r.captureResponseBody = captureResponse
 
@@ -82,45 +46,20 @@ func (r *Recorder) SetCapturePolicy(captureRequest, captureResponse bool, maxBod
 }
 
 func (r *Recorder) ShouldCaptureRequest() bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	return r.captureRequestBody
 }
 
 func (r *Recorder) ShouldCaptureResponse() bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	return r.captureResponseBody
 }
 
 func (r *Recorder) SetMaxRecords(max int) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if max <= 0 {
-		max = DefaultMaxRecords
-	}
-	r.maxRecords = max
-
-	for len(r.records) > r.maxRecords {
-		oldest := r.records[0]
-		delete(r.byID, oldest.ID)
-		r.records = r.records[1:]
+	if memStore, ok := r.storage.(*store.MemoryStore); ok {
+		memStore.SetMaxRecords(max)
 	}
 }
 
 func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if rec.ID == "" {
-		id, err := generateID()
-		if err != nil {
-			return "", err
-		}
-		rec.ID = id
-	}
-
 	if rec.Timestamp.IsZero() {
 		rec.Timestamp = time.Now().UTC()
 	}
@@ -135,107 +74,57 @@ func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
 		rec.ResponseBodyTruncated = true
 	}
 
-	if len(r.records) >= r.maxRecords {
-		oldest := r.records[0]
-		delete(r.byID, oldest.ID)
-		r.records = r.records[1:]
-	}
-
-	copyRec := rec
-	r.records = append(r.records, &copyRec)
-	r.byID[copyRec.ID] = &copyRec
-
-	return copyRec.ID, nil
+	ctx := context.Background()
+	return r.storage.Add(ctx, rec)
 }
 
 func (r *Recorder) UpdateStatus(id string, status int, fromCache bool, streaming bool) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	rec, ok := r.byID[id]
-	if !ok {
-		return fmt.Errorf("record with ID %s not found", id)
-	}
-
-	if status != 0 {
-		rec.ResponseStatus = status
-	}
-	rec.FromCache = rec.FromCache || fromCache
-	rec.Streaming = rec.Streaming || streaming
-
-	return nil
+	ctx := context.Background()
+	return r.storage.UpdateStatus(ctx, id, status, fromCache, streaming)
 }
 
 func (r *Recorder) AttachRequest(id string, requestBody []byte) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	rec, ok := r.byID[id]
-	if !ok {
-		return fmt.Errorf("record with ID %s not found", id)
-	}
-
 	if !r.captureRequestBody {
 		return nil
 	}
 
 	body, truncated := truncateBody(requestBody, r.maxBodyBytes)
-	rec.RequestBody = body
-	rec.RequestBodyTruncated = rec.RequestBodyTruncated || truncated
-
-	return nil
+	ctx := context.Background()
+	return r.storage.AttachRequest(ctx, id, body, truncated)
 }
 
 func (r *Recorder) AttachResponse(id string, responseBody []byte) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	rec, ok := r.byID[id]
-	if !ok {
-		return fmt.Errorf("record with ID %s not found", id)
-	}
-
 	if !r.captureResponseBody {
 		return nil
 	}
 
 	body, truncated := truncateBody(responseBody, r.maxBodyBytes)
-	rec.ResponseBody = body
-	rec.ResponseBodyTruncated = rec.ResponseBodyTruncated || truncated
-
-	return nil
+	ctx := context.Background()
+	return r.storage.AttachResponse(ctx, id, body, truncated)
 }
 
 // GetRecord returns a copy of the record with the given ID.
 func (r *Recorder) GetRecord(id string) (RoutingRecord, bool) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	rec, ok := r.byID[id]
-	if !ok {
+	ctx := context.Background()
+	rec, found, err := r.storage.Get(ctx, id)
+	if err != nil {
 		return RoutingRecord{}, false
 	}
-
-	return *rec, true
+	return rec, found
 }
 
 func (r *Recorder) ListAllRecords() []RoutingRecord {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	out := make([]RoutingRecord, 0, len(r.records))
-	for _, rec := range r.records {
-		out = append(out, *rec)
+	ctx := context.Background()
+	records, err := r.storage.List(ctx)
+	if err != nil {
+		return []RoutingRecord{}
 	}
-	return out
+	return records
 }
 
-func generateID() (string, error) {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b), nil
+// Releases resources held by the storage backend.
+func (r *Recorder) Close() error {
+	return r.storage.Close()
 }
 
 func truncateBody(body []byte, maxBytes int) (string, bool) {
@@ -245,7 +134,7 @@ func truncateBody(body []byte, maxBytes int) (string, bool) {
 	return string(body[:maxBytes]), true
 }
 
-func (r *RoutingRecord) LogFields(event string) map[string]interface{} {
+func LogFields(r RoutingRecord, event string) map[string]interface{} {
 	fields := map[string]interface{}{
 		"event":           event,
 		"replay_id":       r.ID,
