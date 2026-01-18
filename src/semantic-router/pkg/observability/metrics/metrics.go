@@ -415,6 +415,16 @@ var (
 		},
 		[]string{"fallback_reason", "fallback_strategy"},
 	)
+
+	// ContextTokenCount tracks the distribution of input token counts for context-based routing
+	ContextTokenCount = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "llm_context_token_count",
+			Help:    "Distribution of input token counts for context-based routing",
+			Buckets: []float64{100, 500, 1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000},
+		},
+		[]string{"model", "context_level"},
+	)
 )
 
 // RecordModelRequest increments the counter for requests to a specific model
@@ -928,4 +938,15 @@ func RecordEntropyClassificationMetrics(
 	if latencySeconds > 0 {
 		RecordEntropyClassificationLatency(latencySeconds)
 	}
+}
+
+// RecordContextTokenCount records the input token count with context level
+func RecordContextTokenCount(model string, tokenCount int, contextLevel string) {
+	if model == "" {
+		model = consts.UnknownLabel
+	}
+	if contextLevel == "" {
+		contextLevel = consts.UnknownLabel
+	}
+	ContextTokenCount.WithLabelValues(model, contextLevel).Observe(float64(tokenCount))
 }
