@@ -197,14 +197,15 @@ class ShareGPTPreferencePipeline:
         """Generate policy labels for a batch of conversations."""
         policy_label_prompt = f"""You are an expert at summarizing user intents into concise routing policy labels.
 Given the following conversations(samples), generate a short generalized label for each conversation(sample) that best describes the user's intent of that conversation for routing purposes.
-### Conversations
-{json.dumps([convo.to_dict() for convo in batch], indent=2)}
 
 ### Instructions
 Return a JSON array where each element has the following format:
 {{"sample_id": <sample_id>, "label": <label>, "description": <brief description on the generalized label, not on the specific conversation>}}
 Copy the sample_id faithfully from the input conversations.
 The label should be ideally consist of "domain"(e.g. legal, finance) + "action"(e.g. summarization, inquiry, code_generation) and general enough to be used as a routing target for similar conversations.
+
+### Conversations
+{json.dumps([convo.to_dict() for convo in batch], indent=2)}
 """
 
         policy_label_response = self.policy_label_model.chat(
