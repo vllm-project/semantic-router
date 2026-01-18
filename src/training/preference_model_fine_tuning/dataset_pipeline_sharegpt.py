@@ -284,7 +284,22 @@ class ShareGPTPreferencePipeline:
         response_payload = self.policy_label_model.chat(
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
-            response_format={"type": "json"},
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "RoutePolicySample",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "sample_id": {"type": "string"},
+                            "label": {"type": "string"},
+                            "description": {"type": "string"},
+                        },
+                        "required": ["sample_id", "label", "description"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
         )
         parsed_payload = safe_json_loads(response_payload)
         candidate: Optional[Dict[str, str]] = None
