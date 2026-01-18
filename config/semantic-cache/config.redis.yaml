@@ -8,7 +8,72 @@ semantic_cache:
   backend_type: "redis"  # Using Redis vector database for semantic cache
   similarity_threshold: 0.80  # Global threshold (lowered for better matching)
   ttl_seconds: 3600
-  backend_config_path: "config/semantic-cache/redis.yaml"
+
+  # Redis configuration example
+  redis:
+    # Connection Settings
+    connection:
+      # Redis server host (change for production deployment)
+      host: "localhost"  # For production: use your Redis cluster endpoint
+      # Redis server port
+      port: 6379  # Standard Redis port
+      # Database number (0-15 for standard Redis)
+      database: 0
+      # Password for authentication (leave empty if no auth required)
+      password: ""
+      # Connection timeout in seconds
+      timeout: 30
+      # TLS/SSL configuration (recommended for production)
+      tls:
+        enabled: false      # Set to true for secure connections
+        cert_file: ""       # Path to client certificate
+        key_file: ""        # Path to client private key
+        ca_file: ""         # Path to CA certificate
+    # Index settings for vector search
+    index:
+      # Name of the search index
+      name: "semantic_cache_idx"
+      # Key prefix for documents in this index
+      prefix: "doc:"
+      # Vector field configuration
+      vector_field:
+        # Name of the vector field
+        name: "embedding"
+        # Dimension of the embeddings (auto-detected from model at runtime)
+        dimension: 384  # This value is ignored - dimension is auto-detected from the embedding model
+        # Distance metric for similarity calculation
+        # Options: COSINE (cosine similarity), L2 (Euclidean distance), IP (inner product)
+        metric_type: "COSINE"  # COSINE is recommended for semantic similarity
+      # Index type and parameters
+      # Options: HNSW (Hierarchical Navigable Small World) or FLAT (brute force)
+      index_type: "HNSW"  # HNSW is recommended for performance
+      # Index parameters (only used when index_type is HNSW)
+      params:
+        M: 16              # Number of bi-directional links per node (default: 16)
+        efConstruction: 64  # Size of dynamic candidate list during construction (default: 64)
+    # Search configuration
+    search:
+      # Number of top results to retrieve for similarity comparison
+      topk: 1  # We only need the most similar entry for cache lookup
+    # Logging and monitoring
+    logging:
+      # Log level for Redis client operations (debug, info, warn, error)
+      level: "info"
+      # Enable query/search logging for debugging
+      enable_query_log: false
+      # Enable performance metrics collection
+      enable_metrics: true
+    # Development and debugging settings
+    development:
+      # Drop index on startup (WARNING: This will delete all cached data)
+      drop_index_on_startup: true  # Enable for development to test dynamic dimensions
+      # Create index if it doesn't exist
+      auto_create_index: true
+      # Print detailed error messages
+      verbose_errors: true
+  # (Deprecated) Or you can set up the redis connection using the below config:
+  # backend_config_path: "config/semantic-cache/redis.yaml"
+
   # Embedding model for semantic similarity matching
   # Options: "bert" (fast, 384-dim), "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
   # Default: "bert" (fastest, lowest memory)

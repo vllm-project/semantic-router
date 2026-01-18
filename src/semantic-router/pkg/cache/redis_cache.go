@@ -16,58 +16,15 @@ import (
 	"sigs.k8s.io/yaml"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
-// RedisConfig defines the complete configuration structure for Redis cache backend.
-type RedisConfig struct {
-	Connection struct {
-		Host     string `json:"host" yaml:"host"`
-		Port     int    `json:"port" yaml:"port"`
-		Database int    `json:"database" yaml:"database"`
-		Password string `json:"password" yaml:"password"`
-		Timeout  int    `json:"timeout" yaml:"timeout"`
-		TLS      struct {
-			Enabled  bool   `json:"enabled" yaml:"enabled"`
-			CertFile string `json:"cert_file" yaml:"cert_file"`
-			KeyFile  string `json:"key_file" yaml:"key_file"`
-			CAFile   string `json:"ca_file" yaml:"ca_file"`
-		} `json:"tls" yaml:"tls"`
-	} `json:"connection" yaml:"connection"`
-	Index struct {
-		Name        string `json:"name" yaml:"name"`
-		Prefix      string `json:"prefix" yaml:"prefix"`
-		VectorField struct {
-			Name       string `json:"name" yaml:"name"`
-			Dimension  int    `json:"dimension" yaml:"dimension"`
-			MetricType string `json:"metric_type" yaml:"metric_type"` // L2, IP, COSINE
-		} `json:"vector_field" yaml:"vector_field"`
-		IndexType string `json:"index_type" yaml:"index_type"` // HNSW or FLAT
-		Params    struct {
-			M              int `json:"M" yaml:"M"`
-			EfConstruction int `json:"efConstruction" yaml:"efConstruction"`
-		} `json:"params" yaml:"params"`
-	} `json:"index" yaml:"index"`
-	Search struct {
-		TopK int `json:"topk" yaml:"topk"`
-	} `json:"search" yaml:"search"`
-	Development struct {
-		DropIndexOnStartup bool `json:"drop_index_on_startup" yaml:"drop_index_on_startup"`
-		AutoCreateIndex    bool `json:"auto_create_index" yaml:"auto_create_index"`
-		VerboseErrors      bool `json:"verbose_errors" yaml:"verbose_errors"`
-	} `json:"development" yaml:"development"`
-	Logging struct {
-		Level          string `json:"level" yaml:"level"`
-		EnableQueryLog bool   `json:"enable_query_log" yaml:"enable_query_log"`
-		EnableMetrics  bool   `json:"enable_metrics" yaml:"enable_metrics"`
-	} `json:"logging" yaml:"logging"`
-}
-
 // RedisCache provides a scalable semantic cache implementation using Redis with vector search
 type RedisCache struct {
 	client              *redis.Client
-	config              *RedisConfig
+	config              *config.RedisConfig
 	indexName           string
 	similarityThreshold float32
 	ttlSeconds          int
@@ -83,6 +40,7 @@ type RedisCacheOptions struct {
 	SimilarityThreshold float32
 	TTLSeconds          int
 	Enabled             bool
+	Config              *config.RedisConfig
 	ConfigPath          string
 }
 
@@ -95,30 +53,36 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 		}, nil
 	}
 
-	// Load Redis configuration from file
-	logging.Debugf("RedisCache: loading config from %s", options.ConfigPath)
-	config, err := loadRedisConfig(options.ConfigPath)
-	if err != nil {
-		logging.Debugf("RedisCache: failed to load config: %v", err)
-		return nil, fmt.Errorf("failed to load Redis config: %w", err)
+	// (Fallback) Load Redis configuration from a separated configuration file
+	var err error
+	var redisConfig *config.RedisConfig
+	if options.Config == nil {
+		logging.Warnf("(Deprecated) RedisCache: loading config from %s", options.ConfigPath)
+		redisConfig, err = loadRedisConfig(options.ConfigPath)
+		if err != nil {
+			logging.Debugf("RedisCache: failed to load config: %v", err)
+			return nil, fmt.Errorf("failed to load Redis config: %w", err)
+		}
+	} else {
+		redisConfig = options.Config
 	}
 	logging.Debugf("RedisCache: config loaded - host=%s:%d, index=%s, dimension=auto-detect",
-		config.Connection.Host, config.Connection.Port, config.Index.Name)
+		redisConfig.Connection.Host, redisConfig.Connection.Port, redisConfig.Index.Name)
 
 	// Establish connection to Redis server
-	logging.Debugf("RedisCache: connecting to Redis at %s:%d", config.Connection.Host, config.Connection.Port)
+	logging.Debugf("RedisCache: connecting to Redis at %s:%d", redisConfig.Connection.Host, redisConfig.Connection.Port)
 
 	redisClient := redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("%s:%d", config.Connection.Host, config.Connection.Port),
-		Password: config.Connection.Password,
-		DB:       config.Connection.Database,
+		Addr:     fmt.Sprintf("%s:%d", redisConfig.Connection.Host, redisConfig.Connection.Port),
+		Password: redisConfig.Connection.Password,
+		DB:       redisConfig.Connection.Database,
 		Protocol: 2, // Use RESP2 protocol for compatibility
 	})
 
 	cache := &RedisCache{
 		client:              redisClient,
-		config:              config,
-		indexName:           config.Index.Name,
+		config:              redisConfig,
+		indexName:           redisConfig.Index.Name,
 		similarityThreshold: options.SimilarityThreshold,
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
@@ -132,7 +96,7 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 	logging.Debugf("RedisCache: successfully connected to Redis")
 
 	// Set up the index for vector search
-	logging.Debugf("RedisCache: initializing index '%s'", config.Index.Name)
+	logging.Debugf("RedisCache: initializing index '%s'", redisConfig.Index.Name)
 	if err := cache.initializeIndex(); err != nil {
 		logging.Debugf("RedisCache: failed to initialize index: %v", err)
 		redisClient.Close()
@@ -143,8 +107,8 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 	return cache, nil
 }
 
-// loadRedisConfig reads and parses the Redis configuration from file
-func loadRedisConfig(configPath string) (*RedisConfig, error) {
+// loadRedisConfig reads and parses the Redis configuration from a file (Deprecated)
+func loadRedisConfig(configPath string) (*config.RedisConfig, error) {
 	if configPath == "" {
 		return nil, fmt.Errorf("redis config path is required")
 	}
@@ -156,42 +120,42 @@ func loadRedisConfig(configPath string) (*RedisConfig, error) {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	var config RedisConfig
-	if err := yaml.Unmarshal(data, &config); err != nil {
+	var redisConfig *config.RedisConfig
+	if err := yaml.Unmarshal(data, &redisConfig); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
 	logging.Debugf("Redis config loaded: index=%s, dimension=%d, metric=%s",
-		config.Index.Name, config.Index.VectorField.Dimension, config.Index.VectorField.MetricType)
+		redisConfig.Index.Name, redisConfig.Index.VectorField.Dimension, redisConfig.Index.VectorField.MetricType)
 
 	// Apply defaults
-	if config.Index.VectorField.Name == "" {
-		config.Index.VectorField.Name = "embedding"
+	if redisConfig.Index.VectorField.Name == "" {
+		redisConfig.Index.VectorField.Name = "embedding"
 		logging.Warnf("VectorField.Name not specified, using default: embedding")
 	}
-	if config.Index.VectorField.MetricType == "" {
-		config.Index.VectorField.MetricType = "COSINE"
+	if redisConfig.Index.VectorField.MetricType == "" {
+		redisConfig.Index.VectorField.MetricType = "COSINE"
 	}
-	if config.Index.IndexType == "" {
-		config.Index.IndexType = "HNSW"
+	if redisConfig.Index.IndexType == "" {
+		redisConfig.Index.IndexType = "HNSW"
 	}
-	if config.Index.Prefix == "" {
-		config.Index.Prefix = "doc:"
+	if redisConfig.Index.Prefix == "" {
+		redisConfig.Index.Prefix = "doc:"
 	}
 	// Validate index params for HNSW
-	if config.Index.IndexType == "HNSW" {
-		if config.Index.Params.M == 0 {
-			config.Index.Params.M = 16
+	if redisConfig.Index.IndexType == "HNSW" {
+		if redisConfig.Index.Params.M == 0 {
+			redisConfig.Index.Params.M = 16
 		}
-		if config.Index.Params.EfConstruction == 0 {
-			config.Index.Params.EfConstruction = 64
+		if redisConfig.Index.Params.EfConstruction == 0 {
+			redisConfig.Index.Params.EfConstruction = 64
 		}
 	}
-	if config.Search.TopK == 0 {
-		config.Search.TopK = 1
+	if redisConfig.Search.TopK == 0 {
+		redisConfig.Search.TopK = 1
 	}
 
-	return &config, nil
+	return redisConfig, nil
 }
 
 // initializeIndex sets up the Redis index for vector search

@@ -1,6 +1,10 @@
 package cache
 
-import "time"
+import (
+	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+)
 
 // CacheEntry represents a complete cached request-response pair with associated metadata
 type CacheEntry struct {
@@ -112,7 +116,13 @@ type CacheConfig struct {
 	// EvictionPolicy defines the eviction policy for in-memory cache ("fifo", "lru", "lfu")
 	EvictionPolicy EvictionPolicyType `yaml:"eviction_policy,omitempty"`
 
-	// BackendConfigPath points to backend-specific configuration files
+	// Redis specific settings
+	Redis *config.RedisConfig `yaml:"redis,omitempty"`
+
+	// Milvus specific settings
+	Milvus *config.MilvusConfig `yaml:"milvus,omitempty"`
+
+	// BackendConfigPath points to backend-specific configuration files (Deprecated)
 	BackendConfigPath string `yaml:"backend_config_path,omitempty"`
 
 	// UseHNSW enables HNSW index for faster search in memory backend

@@ -457,6 +457,128 @@ func (l *LooperConfig) GetTimeout() int {
 	return l.TimeoutSeconds
 }
 
+// RedisConfig defines the complete configuration structure for Redis cache backend.
+type RedisConfig struct {
+	Connection struct {
+		Host     string `json:"host" yaml:"host"`
+		Port     int    `json:"port" yaml:"port"`
+		Database int    `json:"database" yaml:"database"`
+		Password string `json:"password" yaml:"password"`
+		Timeout  int    `json:"timeout" yaml:"timeout"`
+		TLS      struct {
+			Enabled  bool   `json:"enabled" yaml:"enabled"`
+			CertFile string `json:"cert_file" yaml:"cert_file"`
+			KeyFile  string `json:"key_file" yaml:"key_file"`
+			CAFile   string `json:"ca_file" yaml:"ca_file"`
+		} `json:"tls" yaml:"tls"`
+	} `json:"connection" yaml:"connection"`
+	Index struct {
+		Name        string `json:"name" yaml:"name"`
+		Prefix      string `json:"prefix" yaml:"prefix"`
+		VectorField struct {
+			Name       string `json:"name" yaml:"name"`
+			Dimension  int    `json:"dimension" yaml:"dimension"`
+			MetricType string `json:"metric_type" yaml:"metric_type"` // L2, IP, COSINE
+		} `json:"vector_field" yaml:"vector_field"`
+		IndexType string `json:"index_type" yaml:"index_type"` // HNSW or FLAT
+		Params    struct {
+			M              int `json:"M" yaml:"M"`
+			EfConstruction int `json:"efConstruction" yaml:"efConstruction"`
+		} `json:"params" yaml:"params"`
+	} `json:"index" yaml:"index"`
+	Search struct {
+		TopK int `json:"topk" yaml:"topk"`
+	} `json:"search" yaml:"search"`
+	Development struct {
+		DropIndexOnStartup bool `json:"drop_index_on_startup" yaml:"drop_index_on_startup"`
+		AutoCreateIndex    bool `json:"auto_create_index" yaml:"auto_create_index"`
+		VerboseErrors      bool `json:"verbose_errors" yaml:"verbose_errors"`
+	} `json:"development" yaml:"development"`
+	Logging struct {
+		Level          string `json:"level" yaml:"level"`
+		EnableQueryLog bool   `json:"enable_query_log" yaml:"enable_query_log"`
+		EnableMetrics  bool   `json:"enable_metrics" yaml:"enable_metrics"`
+	} `json:"logging" yaml:"logging"`
+}
+
+// MilvusConfig defines the complete configuration structure for Milvus cache backend.
+// Fields use both json/yaml tags because sigs.k8s.io/yaml converts YAML→JSON before decoding,
+// so json tags ensure snake_case keys map correctly without switching parsers.
+type MilvusConfig struct {
+	Connection struct {
+		Host     string `json:"host" yaml:"host"`
+		Port     int    `json:"port" yaml:"port"`
+		Database string `json:"database" yaml:"database"`
+		Timeout  int    `json:"timeout" yaml:"timeout"`
+		Auth     struct {
+			Enabled  bool   `json:"enabled" yaml:"enabled"`
+			Username string `json:"username" yaml:"username"`
+			Password string `json:"password" yaml:"password"`
+		} `json:"auth" yaml:"auth"`
+		TLS struct {
+			Enabled  bool   `json:"enabled" yaml:"enabled"`
+			CertFile string `json:"cert_file" yaml:"cert_file"`
+			KeyFile  string `json:"key_file" yaml:"key_file"`
+			CAFile   string `json:"ca_file" yaml:"ca_file"`
+		} `json:"tls" yaml:"tls"`
+	} `json:"connection" yaml:"connection"`
+	Collection struct {
+		Name        string `json:"name" yaml:"name"`
+		Description string `json:"description" yaml:"description"`
+		VectorField struct {
+			Name       string `json:"name" yaml:"name"`
+			Dimension  int    `json:"dimension" yaml:"dimension"`
+			MetricType string `json:"metric_type" yaml:"metric_type"`
+		} `json:"vector_field" yaml:"vector_field"`
+		Index struct {
+			Type   string `json:"type" yaml:"type"`
+			Params struct {
+				M              int `json:"M" yaml:"M"`
+				EfConstruction int `json:"efConstruction" yaml:"efConstruction"`
+			} `json:"params" yaml:"params"`
+		} `json:"index" yaml:"index"`
+	} `json:"collection" yaml:"collection"`
+	Search struct {
+		Params struct {
+			Ef int `json:"ef" yaml:"ef"`
+		} `json:"params" yaml:"params"`
+		TopK             int    `json:"topk" yaml:"topk"`
+		ConsistencyLevel string `json:"consistency_level" yaml:"consistency_level"`
+	} `json:"search" yaml:"search"`
+	Performance struct {
+		ConnectionPool struct {
+			MaxConnections     int `json:"max_connections" yaml:"max_connections"`
+			MaxIdleConnections int `json:"max_idle_connections" yaml:"max_idle_connections"`
+			AcquireTimeout     int `json:"acquire_timeout" yaml:"acquire_timeout"`
+		} `json:"connection_pool" yaml:"connection_pool"`
+		Batch struct {
+			InsertBatchSize int `json:"insert_batch_size" yaml:"insert_batch_size"`
+			Timeout         int `json:"timeout" yaml:"timeout"`
+		} `json:"batch" yaml:"batch"`
+	} `json:"performance" yaml:"performance"`
+	DataManagement struct {
+		TTL struct {
+			Enabled         bool   `json:"enabled" yaml:"enabled"`
+			TimestampField  string `json:"timestamp_field" yaml:"timestamp_field"`
+			CleanupInterval int    `json:"cleanup_interval" yaml:"cleanup_interval"`
+		} `json:"ttl" yaml:"ttl"`
+		Compaction struct {
+			Enabled  bool `json:"enabled" yaml:"enabled"`
+			Interval int  `json:"interval" yaml:"interval"`
+		} `json:"compaction" yaml:"compaction"`
+	} `json:"data_management" yaml:"data_management"`
+	Logging struct {
+		Level          string `json:"level" yaml:"level"`
+		EnableQueryLog bool   `json:"enable_query_log" yaml:"enable_query_log"`
+		EnableMetrics  bool   `json:"enable_metrics" yaml:"enable_metrics"`
+	} `json:"logging" yaml:"logging"`
+	Development struct {
+		DropCollectionOnStartup bool `json:"drop_collection_on_startup" yaml:"drop_collection_on_startup"`
+		AutoCreateCollection    bool `json:"auto_create_collection" yaml:"auto_create_collection"`
+		VerboseErrors           bool `json:"verbose_errors" yaml:"verbose_errors"`
+	} `json:"development" yaml:"development"`
+}
+
 type SemanticCache struct {
 	// Type of cache backend to use
 	BackendType string `yaml:"backend_type,omitempty"`
@@ -477,7 +599,13 @@ type SemanticCache struct {
 	// Eviction policy for in-memory cache ("fifo", "lru", "lfu")
 	EvictionPolicy string `yaml:"eviction_policy,omitempty"`
 
-	// Path to backend-specific configuration file
+	// Redis configuration
+	Redis *RedisConfig `yaml:"redis,omitempty"`
+
+	// Milvus configuration
+	Milvus *MilvusConfig `yaml:"milvus,omitempty"`
+
+	// BackendConfigPath is a path to the backend-specific configuration file (Deprecated)
 	BackendConfigPath string `yaml:"backend_config_path,omitempty"`
 
 	// Embedding model to use for semantic similarity ("bert", "qwen3", "gemma")

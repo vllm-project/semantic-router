@@ -113,6 +113,8 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		MaxEntries:          cfg.SemanticCache.MaxEntries,
 		TTLSeconds:          cfg.SemanticCache.TTLSeconds,
 		EvictionPolicy:      cache.EvictionPolicyType(cfg.SemanticCache.EvictionPolicy),
+		Redis:               cfg.SemanticCache.Redis,
+		Milvus:              cfg.SemanticCache.Milvus,
 		BackendConfigPath:   cfg.SemanticCache.BackendConfigPath,
 		EmbeddingModel:      cfg.SemanticCache.EmbeddingModel,
 	}
