@@ -111,13 +111,11 @@ class LLMClient:
         self,
         messages: List[Dict[str, str]],
         temperature: float = 0.7,
-        max_tokens: int = 512,
     ) -> str:
         response = self.client.chat.completions.create(
             model=self.model,
             messages=messages,
             temperature=temperature,
-            max_tokens=max_tokens,
         )
         return response.choices[0].message.content or ""
 
@@ -135,6 +133,14 @@ def safe_json_loads(payload: str) -> object:
     try:
         return json.loads(payload)
     except json.JSONDecodeError:
+        if payload.strip().startswith("```json"):
+            # Try to recover by stripping code fences.
+            try:
+                snippet = payload.strip().strip("```json").strip("```").strip()
+                return json.loads(snippet)
+            except json.JSONDecodeError:
+                return {}
+
         # Try to recover by trimming to first/last brace.
         first = payload.find("[")
         last = payload.rfind("]")
@@ -196,10 +202,14 @@ class TopicPool:
         "code_debugging",
         "data_analysis",
         "image_generation",
+        "video_generation",
+        "image_editing",
         "text_summarization",
         "translation",
         "email_composition",
         "web_search",
+        "deep_research",
+        "fact_checking",
     ]
 
     @classmethod
@@ -215,15 +225,16 @@ class RoutePolicyGenerator:
         self.validator = validator
 
     def generate(
-        self, seeds: List[str], policies_per_seed: int = 4
+        self, seeds: List[str], max_policies_per_seed: int
     ) -> List[RoutePolicy]:
         candidates = []
-        for seed_batch in batched(seeds, batch_size=6):
+        for seed_batch in batched(seeds, batch_size=10):
             prompt = (
-                "Generate concise routing policies for the following topics. "
-                "Each policy must have a unique `label` (snake_case) and a 1-2 sentence `description`. "
-                "Return JSON list with objects {label, description}. Topics: "
-                + ", ".join(seed_batch)
+                f"Generate concise routing policies from the following topics. For each topic, yield at least one policy. One policy should only map to one topic. Each topic may yield multiple policies, upto {max_policies_per_seed}."
+                "Each policy must have a unique `label` (snake_case) and a 1-2 sentence `description`. The 'seed' field should be the original topic used to generate this policy. "
+                "Return JSON list with objects {label, description, seed}. "
+                'For example: {"label": "finance_risk_management", "description": "Questions and discussions related to managing financial risks.", "seed": "finance_risk"}'
+                "Topics: " + ", ".join(seed_batch)
             )
             raw = self.proposer.chat(
                 [
@@ -240,23 +251,31 @@ class RoutePolicyGenerator:
                         RoutePolicy(
                             label=label,
                             description=desc,
-                            seed="seed:" + ",".join(seed_batch),
+                            seed=item.get("seed"),
                         )
                     )
+                else:
+                    logging.info(
+                        f"[RoutePolicyGenerator] Skipping invalid policy item: {item}"
+                    )
         for candidate in candidates:
-            logging.debug(
+            logging.info(
                 f"[RoutePolicyGenerator] Proposed policy: {candidate.label} - {candidate.description} - {candidate.seed}"
             )
-        return self._refine(candidates, policies_per_seed=policies_per_seed)
+
+        # disable refinement for now, prompt not good enough
+        # return self._refine(candidates, max_policies_per_seed=max_policies_per_seed)
+        return candidates
 
     def _refine(
-        self, candidates: List[RoutePolicy], policies_per_seed: int
+        self, candidates: List[RoutePolicy], max_policies_per_seed: int
     ) -> List[RoutePolicy]:
         refined: List[RoutePolicy] = []
         prompt_base = (
-            "You are a gatekeeper ensuring routing policies are atomic, clear, and non-overlapping. "
+            "You are a gatekeeper ensuring routing policies are atomic, clear, and non-overlapping. The routing policies may fall in these categories: industry use-cases, academic topics, or tool functionalities. "
             "Given policies, keep only those with distinct intent boundaries, rewrite labels to snake_case, "
-            "and trim descriptions to <=35 words. Return JSON list {label, description}."
+            "and trim descriptions to <=35 words. Don't need to be too strict on refinement: only remove the apparently overlapping or unclear ones. "
+            "Return JSON list {label, description, seed}."
         )
         for batch in batched(candidates, batch_size=10):
             policies_json = json.dumps(
@@ -289,21 +308,20 @@ class RoutePolicyGenerator:
                             label=label, description=desc, seed=item.get("seed")
                         )
                     )
+                else:
+                    logging.info(
+                        f"[RoutePolicyRefiner] Skipping invalid refined policy item: {item}"
+                    )
 
-        # Deduplicate and cap per seed
+        # Deduplicate
         seen = set()
-        per_seed: Dict[str, int] = {}
         output: List[RoutePolicy] = []
         for policy in refined:
             if policy.label in seen:
                 continue
-            seed_key = policy.seed or "generic"
-            if per_seed.get(seed_key, 0) >= policies_per_seed:
-                continue
             seen.add(policy.label)
-            per_seed[seed_key] = per_seed.get(seed_key, 0) + 1
             output.append(policy)
-            logging.debug(
+            logging.info(
                 f"[RoutePolicyRefiner] Refined to {policy.label} - {policy.description} - {policy.seed}"
             )
         return output
@@ -332,15 +350,15 @@ class ConversationSynthesizer:
 
         for policy in policies_cycle:
             intent = self._draft_intent(policy)
-            logging.debug(
+            logging.info(
                 f"[ConversationSynthesizer] Drafted intent for policy {policy.label}: {intent}"
             )
             conversation = self._draft_dialogue(intent, policy, turns=turns)
-            logging.debug(
+            logging.info(
                 f"[ConversationSynthesizer] Drafted conversation for policy {policy.label}"
             )
             verified, score = self._verify(conversation, policy, policies=policies)
-            logging.debug(
+            logging.info(
                 f"[ConversationSynthesizer] Verified conversation for policy {policy.label}: {verified} (score={score})"
             )
             if not verified:
@@ -454,14 +472,16 @@ class ConversationSynthesizer:
 class AugmentationEngine:
     """Applies augmentation strategies to clean samples."""
 
-    def __init__(self, available_policies: List[RoutePolicy]):
-        self.available_policies = available_policies
+    def __init__(self):
+        self.available_policies = []
 
     def augment(
         self,
         samples: List[ConversationSample],
         target_size: int,  # total samples to generate
     ) -> List[ConversationSample]:
+        if not self.available_policies:
+            raise ValueError("Available policies must be set before augmentation.")
         augmented: List[ConversationSample] = []
         rng = random.Random(1337)
 
@@ -576,6 +596,7 @@ class PreferenceModelDataPipeline:
         output_path: Path,
         clean_samples: int = 30000,
         augmented_samples: int = 20000,
+        max_policies_per_seed: int = 4,
         policy_checkpoint: Optional[Path] = None,
         phase1_checkpoint: Optional[Path] = None,
         phase2_checkpoint: Optional[Path] = None,
@@ -594,13 +615,16 @@ class PreferenceModelDataPipeline:
         self.policy_checkpoint = policy_checkpoint
         self.phase1_checkpoint = phase1_checkpoint
         self.phase2_checkpoint = phase2_checkpoint
+        self.max_policies_per_seed = max_policies_per_seed
 
     def run(self) -> None:
         policies = self._maybe_load_policies()
         if policies is None:
             logging.info("Starting policy synthesis")
             seeds = TopicPool.all()
-            policies = self.policy_generator.generate(seeds, policies_per_seed=4)
+            policies = self.policy_generator.generate(
+                seeds, max_policies_per_seed=self.max_policies_per_seed
+            )
             logging.info("Curated %d policies", len(policies))
             self._maybe_write_policies(policies)
 
@@ -636,6 +660,7 @@ class PreferenceModelDataPipeline:
         self._write_jsonl(all_samples, path=self.output_path)
 
     def _write_jsonl(self, samples: List[ConversationSample], path: Path) -> None:
+        logging.info(f"Writing {len(samples)} samples to {path}")
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", encoding="utf-8") as f:
             for sample in samples:
@@ -643,12 +668,16 @@ class PreferenceModelDataPipeline:
 
     def _maybe_write_policies(self, policies: List[RoutePolicy]) -> None:
         if not self.policy_checkpoint:
+            logging.info("No policy checkpoint path provided; skipping write.")
             return
         self.policy_checkpoint.parent.mkdir(parents=True, exist_ok=True)
         payload = [
             {"label": p.label, "description": p.description, "seed": p.seed}
             for p in policies
         ]
+        logging.info(
+            f"Writing {len(policies)} policies to checkpoint {self.policy_checkpoint}"
+        )
         with self.policy_checkpoint.open("w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
 
@@ -756,10 +785,13 @@ def sample_to_dict(sample: ConversationSample) -> Dict[str, object]:
 
 
 def build_default_pipeline(
+    clean_samples: int,
+    augmented_samples: int,
+    max_policies_per_seed: int,
     output_path: str,
-    policy_checkpoint: Optional[str] = None,
-    phase1_checkpoint: Optional[str] = None,
-    phase2_checkpoint: Optional[str] = None,
+    policy_checkpoint: str,
+    phase1_checkpoint: str,
+    phase2_checkpoint: str,
 ) -> PreferenceModelDataPipeline:
     """Factory with sensible defaults for quick runs."""
 
@@ -775,17 +807,19 @@ def build_default_pipeline(
     )
 
     # Policies are unknown until generated; instantiate AugmentationEngine after policies exist
-    dummy_policies = [RoutePolicy(label="placeholder")]
-    augmentation_engine = AugmentationEngine(available_policies=dummy_policies)
+    augmentation_engine = AugmentationEngine()
 
     pipeline = PreferenceModelDataPipeline(
         policy_generator=policy_generator,
         conversation_synthesizer=synthesizer,
         augmentation_engine=augmentation_engine,
+        clean_samples=clean_samples,
+        augmented_samples=augmented_samples,
         output_path=Path(output_path),
-        policy_checkpoint=Path(policy_checkpoint) if policy_checkpoint else None,
-        phase1_checkpoint=Path(phase1_checkpoint) if phase1_checkpoint else None,
-        phase2_checkpoint=Path(phase2_checkpoint) if phase2_checkpoint else None,
+        max_policies_per_seed=max_policies_per_seed,
+        policy_checkpoint=Path(policy_checkpoint),
+        phase1_checkpoint=Path(phase1_checkpoint),
+        phase2_checkpoint=Path(phase2_checkpoint),
     )
     return pipeline
 
@@ -795,15 +829,16 @@ if __name__ == "__main__":
         level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
     )
 
-    pipeline = build_default_pipeline(output_path="./preference_router_dataset.jsonl")
+    pipeline = build_default_pipeline(
+        clean_samples=5000,
+        augmented_samples=1,
+        max_policies_per_seed=4,
+        output_path="./preference_router_dataset.jsonl",
+        policy_checkpoint="./checkpoints/policies.json",
+        phase1_checkpoint="./checkpoints/phase1_clean.jsonl",
+        phase2_checkpoint="./checkpoints/phase2_augmented.jsonl",
+    )
     # Run in steps so we can attach the real policy list to augmentation
     seeds = TopicPool.all()
-    policies = pipeline.policy_generator.generate(seeds, policies_per_seed=4)
-    pipeline.augmentation_engine.available_policies = policies
-    clean = pipeline.conversation_synthesizer.synthesize(
-        policies, target_samples=pipeline.clean_samples
-    )
-    augmented = pipeline.augmentation_engine.augment(
-        clean, target_size=pipeline.augmented_samples
-    )
-    pipeline._write_jsonl(clean + augmented)
+    pipeline.run()
+    # pipeline._write_jsonl(clean + augmented, path=pipeline.output_path)
