@@ -101,6 +101,12 @@ func (f *Factory) Create() Selector {
 		if f.embeddingFunc != nil {
 			routerDCSelector.SetEmbeddingFunc(f.embeddingFunc)
 		}
+		// Initialize model embeddings from descriptions in model config
+		if f.modelConfig != nil {
+			if err := routerDCSelector.InitializeFromConfig(f.modelConfig); err != nil {
+				logging.Errorf("[SelectionFactory] RouterDC initialization failed: %v", err)
+			}
+		}
 		selector = routerDCSelector
 
 	case MethodAutoMix:
@@ -163,6 +169,12 @@ func (f *Factory) CreateAll() *Registry {
 	routerDCSelector := NewRouterDCSelector(routerDCCfg)
 	if f.embeddingFunc != nil {
 		routerDCSelector.SetEmbeddingFunc(f.embeddingFunc)
+	}
+	// Initialize model embeddings from descriptions in model config
+	if f.modelConfig != nil {
+		if err := routerDCSelector.InitializeFromConfig(f.modelConfig); err != nil {
+			logging.Errorf("[SelectionFactory] RouterDC initialization failed: %v", err)
+		}
 	}
 	registry.Register(MethodRouterDC, routerDCSelector)
 

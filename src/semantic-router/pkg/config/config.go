@@ -955,6 +955,16 @@ type ModelParams struct {
 	// Used by confidence algorithm to determine model order.
 	// Larger parameter count typically means more capable but slower/costlier model.
 	ParamSize string `yaml:"param_size,omitempty"`
+
+	// Description provides a natural language description of the model's capabilities
+	// Used by RouterDC to compute model embeddings for query-model matching
+	// Example: "Fast, efficient model for simple queries and basic code generation"
+	Description string `yaml:"description,omitempty"`
+
+	// Capabilities is a list of structured capability tags for the model
+	// Used by RouterDC and hybrid selection methods for capability matching
+	// Example: ["chat", "code", "reasoning", "math", "creative"]
+	Capabilities []string `yaml:"capabilities,omitempty"`
 }
 
 // LoRAAdapter represents a LoRA adapter configuration for a model
@@ -1102,6 +1112,17 @@ type ConfidenceAlgorithmConfig struct {
 	// - "skip": Skip the failed model and try the next one (default)
 	// - "fail": Return error immediately
 	OnError string `yaml:"on_error,omitempty"`
+
+	// EscalationOrder determines how models are ordered for cascaded execution
+	// - "size": Order by param_size (smallest first) - default behavior
+	// - "cost": Order by pricing (cheapest first) - AutoMix-style cost optimization
+	// - "automix": Use POMDP-optimized ordering based on cost-quality tradeoff
+	EscalationOrder string `yaml:"escalation_order,omitempty"`
+
+	// CostQualityTradeoff controls the balance when escalation_order is "automix"
+	// 0.0 = pure quality (ignore cost), 1.0 = pure cost (ignore quality)
+	// Default: 0.3 (favor quality but consider cost)
+	CostQualityTradeoff float64 `yaml:"cost_quality_tradeoff,omitempty"`
 }
 
 // HybridWeightsConfig configures weights for hybrid confidence method

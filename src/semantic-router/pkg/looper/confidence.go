@@ -110,6 +110,118 @@ func sortModelRefsBySize(refs []config.ModelRef, modelParams map[string]config.M
 	return sorted
 }
 
+// sortModelRefsByCost sorts ModelRefs by their pricing (cheapest first)
+// Uses prompt_per_1m from ModelParams.Pricing
+func sortModelRefsByCost(refs []config.ModelRef, modelParams map[string]config.ModelParams) []config.ModelRef {
+	sorted := make([]config.ModelRef, len(refs))
+	copy(sorted, refs)
+
+	// Helper function to get cost for a model ref
+	getCost := func(ref config.ModelRef) float64 {
+		if modelParams != nil {
+			if params, ok := modelParams[ref.Model]; ok {
+				return params.Pricing.PromptPer1M
+			}
+		}
+		return math.MaxFloat64 // Unknown cost goes last
+	}
+
+	sort.SliceStable(sorted, func(i, j int) bool {
+		return getCost(sorted[i]) < getCost(sorted[j])
+	})
+
+	return sorted
+}
+
+// sortModelRefsByAutoMix sorts ModelRefs using POMDP-inspired cost-quality optimization
+// Models are scored by: value = (1 - tradeoff) * quality + tradeoff * (1 - normalized_cost)
+// Lower tradeoff values favor quality; higher values favor cost savings
+func sortModelRefsByAutoMix(refs []config.ModelRef, modelParams map[string]config.ModelParams, tradeoff float64) []config.ModelRef {
+	sorted := make([]config.ModelRef, len(refs))
+	copy(sorted, refs)
+
+	// First, compute min/max cost for normalization
+	minCost, maxCost := math.MaxFloat64, 0.0
+	for _, ref := range refs {
+		if modelParams != nil {
+			if params, ok := modelParams[ref.Model]; ok {
+				cost := params.Pricing.PromptPer1M
+				if cost > 0 {
+					if cost < minCost {
+						minCost = cost
+					}
+					if cost > maxCost {
+						maxCost = cost
+					}
+				}
+			}
+		}
+	}
+
+	// Prevent division by zero
+	costRange := maxCost - minCost
+	if costRange <= 0 {
+		costRange = 1.0
+	}
+
+	// Helper to compute AutoMix value for a model
+	getValue := func(ref config.ModelRef) float64 {
+		quality := 0.5  // Default quality estimate
+		costScore := 0.5 // Default cost score (mid-range)
+
+		if modelParams != nil {
+			if params, ok := modelParams[ref.Model]; ok {
+				// Estimate quality from param_size (larger = higher quality)
+				size := parseParamSize(params.ParamSize)
+				if size > 0 {
+					// Normalize size: assume 1B-70B range maps to 0.3-1.0 quality
+					quality = 0.3 + 0.7*math.Min(float64(size)/70000, 1.0)
+				}
+
+				// Normalize cost: 0 = most expensive, 1 = cheapest
+				cost := params.Pricing.PromptPer1M
+				if cost > 0 && costRange > 0 {
+					costScore = 1.0 - (cost-minCost)/costRange
+				}
+			}
+		}
+
+		// POMDP-inspired value function:
+		// value = (1 - tradeoff) * quality + tradeoff * costScore
+		// When tradeoff = 0: pure quality ordering
+		// When tradeoff = 1: pure cost ordering (cheapest first)
+		// When tradeoff = 0.3: favor quality but consider cost
+		value := (1-tradeoff)*quality + tradeoff*costScore
+		return value
+	}
+
+	// Sort by value ascending (start with lower-value/cheaper models for cascading)
+	// This matches AutoMix behavior: try cheaper/smaller models first
+	sort.SliceStable(sorted, func(i, j int) bool {
+		// For cascading: we want to try "worse" (cheaper/smaller) models first
+		// So we sort by value ASCENDING to start with lower-value options
+		return getValue(sorted[i]) < getValue(sorted[j])
+	})
+
+	return sorted
+}
+
+// getEscalationOrder returns the configured escalation order, defaulting to "size"
+func getEscalationOrder(cfg *config.ConfidenceAlgorithmConfig) string {
+	if cfg == nil || cfg.EscalationOrder == "" {
+		return "size"
+	}
+	return cfg.EscalationOrder
+}
+
+// getCostQualityTradeoff returns the configured tradeoff, defaulting to 0.3
+func getCostQualityTradeoff(cfg *config.ConfidenceAlgorithmConfig) float64 {
+	if cfg == nil || cfg.CostQualityTradeoff <= 0 {
+		return 0.3
+	}
+	return cfg.CostQualityTradeoff
+}
+
 // ConfidenceEvaluator evaluates model response confidence based on configured method
 type ConfidenceEvaluator struct {
 	Method        string  // "avg_logprob", "margin", or "hybrid"
@@ -266,11 +378,28 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 		TopLogprobs: evaluator.NeedsTopLogprobs(),
 	}
 
-	// Sort models by size (smallest first)
-	sortedRefs := sortModelRefsBySize(req.ModelRefs, req.ModelParams)
+	// Sort models based on configured escalation order
+	escalationOrder := getEscalationOrder(sizeAwareCfg)
+	var sortedRefs []config.ModelRef
 
-	logging.Infof("[ConfidenceLooper] Starting with %d models, method=%s, threshold=%.4f, on_error=%s, streaming=%v",
-		len(sortedRefs), evaluator.Method, evaluator.Threshold, onError, req.IsStreaming)
+	switch escalationOrder {
+	case "cost":
+		// AutoMix-style: order by pricing (cheapest first)
+		sortedRefs = sortModelRefsByCost(req.ModelRefs, req.ModelParams)
+		logging.Infof("[ConfidenceLooper] Using cost-based escalation order (cheapest first)")
+	case "automix":
+		// POMDP-optimized: cost-quality tradeoff
+		tradeoff := getCostQualityTradeoff(sizeAwareCfg)
+		sortedRefs = sortModelRefsByAutoMix(req.ModelRefs, req.ModelParams, tradeoff)
+		logging.Infof("[ConfidenceLooper] Using AutoMix escalation order (tradeoff=%.2f)", tradeoff)
+	default:
+		// Default: order by param_size (smallest first)
+		sortedRefs = sortModelRefsBySize(req.ModelRefs, req.ModelParams)
+		logging.Infof("[ConfidenceLooper] Using size-based escalation order (smallest first)")
+	}
+
+	logging.Infof("[ConfidenceLooper] Starting with %d models, method=%s, threshold=%.4f, on_error=%s, streaming=%v, escalation=%s",
+		len(sortedRefs), evaluator.Method, evaluator.Threshold, onError, req.IsStreaming, escalationOrder)
 
 	// Helper to get param_size for logging
 	getParamSize := func(modelName string) string {
