@@ -93,7 +93,7 @@ export interface Signals {
 // =============================================================================
 
 
-export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding'
+export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'latency'
 export interface DecisionCondition {
   type: DecisionConditionType
   name: string

@@ -129,6 +129,24 @@ func validateConfigStructure(cfg *RouterConfig) error {
 		return err
 	}
 
+	// Validate latency rules
+	if err := validateLatencyRules(cfg.Signals.LatencyRules); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateLatencyRules validates latency rule configurations
+func validateLatencyRules(rules []LatencyRule) error {
+	for i, rule := range rules {
+		if rule.Name == "" {
+			return fmt.Errorf("latency_rules[%d]: name cannot be empty", i)
+		}
+		if rule.MaxTPOT <= 0 {
+			return fmt.Errorf("latency_rules[%d] (%s): max_tpot must be > 0, got: %.4f", i, rule.Name, rule.MaxTPOT)
+		}
+	}
 	return nil
 }
 
