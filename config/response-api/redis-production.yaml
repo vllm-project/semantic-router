@@ -1,0 +1,80 @@
+# Redis Store Configuration for Response API - Production Standalone
+# This configuration is for production deployments using a single Redis instance
+# with TLS encryption and optimized settings.
+# To use this configuration:
+# 1. Set store_backend: "redis" in your main config.yaml
+# 2. Set redis.config_path: "config/response-api/redis-production.yaml" in response_api section
+# 3. Ensure Redis server is running with TLS enabled
+
+# Connection
+address: "redis.production.example.com:6380"  # Production Redis endpoint (often port 6380 for TLS)
+password: ""  # IMPORTANT: Set via environment variable in production. example: password: "${REDIS_PASSWORD}"
+db: 0         # Database number
+
+# Key management
+key_prefix: "sr:"  # Base prefix - creates keys like: sr:response:xxx, sr:conversation:xxx
+
+# Connection pooling (optimized for production load)
+pool_size: 50        # Higher pool for production traffic
+min_idle_conns: 10   # Keep more connections ready
+max_retries: 3       # Retry on transient failures
+
+# Timeouts (in seconds)
+dial_timeout: 10     # Production networks may have higher latency
+read_timeout: 5      # Allow time for large responses
+write_timeout: 5     # Allow time for large writes
+
+# Cluster mode (disabled - this is standalone)
+cluster_mode: false
+
+# TLS/SSL (REQUIRED for production)
+tls_enabled: true
+tls_cert_path: "/etc/semantic-router/ssl/redis-client.crt"
+tls_key_path: "/etc/semantic-router/ssl/redis-client.key"
+tls_ca_path: "/etc/semantic-router/ssl/redis-ca.crt"
+
+# Production Deployment Examples:
+
+# AWS ElastiCache (Redis) with TLS:
+# address: "master.my-redis-cluster.abc123.use1.cache.amazonaws.com:6379"
+# password: "${REDIS_AUTH_TOKEN}"
+# tls_enabled: true
+# Note: ElastiCache in-transit encryption uses TLS
+
+# Azure Cache for Redis with TLS:
+# address: "myredis.redis.cache.windows.net:6380"
+# password: "${AZURE_REDIS_KEY}"
+# tls_enabled: true
+# Note: Azure Redis requires TLS on port 6380
+
+# Google Cloud Memorystore for Redis:
+# address: "10.0.0.3:6379"  # Private IP
+# password: "${REDIS_AUTH_STRING}"
+# tls_enabled: false  # Standard tier doesn't support TLS
+# Note: Memorystore uses VPC for security instead of TLS
+
+# Redis Enterprise Cloud:
+# address: "redis-12345.c123.us-east-1-1.ec2.cloud.redislabs.com:12345"
+# password: "${REDIS_ENTERPRISE_PASSWORD}"
+# db: 0
+# tls_enabled: true
+
+# Security Best Practices:
+# 1. Always use strong passwords (20+ characters, random)
+# 2. Store passwords in environment variables or secrets management
+# 3. Enable TLS for all production traffic
+# 4. Use firewall rules to restrict Redis access
+# 5. Regularly rotate credentials
+# 6. Monitor Redis metrics and set up alerts
+# 7. Use separate Redis instances per environment (dev/staging/prod)
+# 8. Configure Redis maxmemory and eviction policies
+# 9. Enable Redis persistence (RDB or AOF) for data durability
+# 10. Set up Redis replication for high availability
+
+# Performance Tuning:
+# - Increase pool_size if you have high concurrent request volume
+# - Adjust timeouts based on your network latency
+# - Monitor Redis slow log and optimize queries
+# - Consider using Redis pipelining for batch operations
+# - Use appropriate key expiration (TTL) to manage memory
+

@@ -4,6 +4,8 @@ package cache
 
 import (
 	"context"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // HybridCache combines in-memory HNSW index with external Milvus storage
@@ -19,6 +21,7 @@ type HybridCacheOptions struct {
 	MaxMemoryEntries        int
 	HNSWM                   int
 	HNSWEfConstruction      int
+	Milvus                  *config.MilvusConfig
 	MilvusConfigPath        string
 	DisableRebuildOnStartup bool
 }

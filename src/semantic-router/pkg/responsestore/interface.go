@@ -157,8 +157,84 @@ type MilvusStoreConfig struct {
 
 // RedisStoreConfig contains configuration for the Redis store.
 type RedisStoreConfig struct {
-	// ConfigPath is the path to Redis configuration file.
-	ConfigPath string `yaml:"config_path"`
+	// Basic connection settings (inline configuration)
+	// Address is the Redis server address (e.g., "localhost:6379").
+	// Not used in cluster mode (use ClusterAddresses instead).
+	Address string `yaml:"address,omitempty" json:"address,omitempty"`
+
+	// Password for Redis authentication (leave empty if no auth required).
+	Password string `yaml:"password,omitempty" json:"password,omitempty"`
+
+	// DB is the Redis database number (0-15 for standalone Redis).
+	// Must be 0 for cluster mode (Redis Cluster only supports DB 0).
+	DB int `yaml:"db" json:"db"`
+
+	// KeyPrefix is the base prefix for all Redis keys (e.g., "sr:").
+	// Combined with type prefixes to create keys like: sr:response:xxx, sr:conversation:xxx
+	// Default: "sr:"
+	KeyPrefix string `yaml:"key_prefix,omitempty" json:"key_prefix,omitempty"`
+
+	// Cluster support
+	// ClusterMode enables Redis Cluster mode (for distributed deployments).
+	// When true, use ClusterAddresses instead of Address.
+	ClusterMode bool `yaml:"cluster_mode,omitempty" json:"cluster_mode,omitempty"`
+
+	// ClusterAddresses is a list of Redis cluster node addresses.
+	// Only used when ClusterMode is true.
+	// Example: ["redis-node-1:6379", "redis-node-2:6379", "redis-node-3:6379"]
+	ClusterAddresses []string `yaml:"cluster_addresses,omitempty" json:"cluster_addresses,omitempty"`
+
+	// Connection pooling settings
+	// PoolSize is the maximum number of socket connections.
+	// Default: 10 per CPU as reported by runtime.GOMAXPROCS.
+	PoolSize int `yaml:"pool_size,omitempty" json:"pool_size,omitempty"`
+
+	// MinIdleConns is the minimum number of idle connections to maintain.
+	// Default: 2
+	MinIdleConns int `yaml:"min_idle_conns,omitempty" json:"min_idle_conns,omitempty"`
+
+	// MaxRetries is the maximum number of retries before giving up.
+	// Default: 3
+	// Set to -1 to disable retries.
+	MaxRetries int `yaml:"max_retries,omitempty" json:"max_retries,omitempty"`
+
+	// Timeout settings (in seconds)
+	// DialTimeout is the timeout for establishing new connections.
+	// Default: 5 seconds
+	DialTimeout int `yaml:"dial_timeout,omitempty" json:"dial_timeout,omitempty"`
+
+	// ReadTimeout is the timeout for socket reads.
+	// Default: 3 seconds
+	// Set to -1 to disable timeout.
+	ReadTimeout int `yaml:"read_timeout,omitempty" json:"read_timeout,omitempty"`
+
+	// WriteTimeout is the timeout for socket writes.
+	// Default: 3 seconds
+	// Set to -1 to disable timeout.
+	WriteTimeout int `yaml:"write_timeout,omitempty" json:"write_timeout,omitempty"`
+
+	// TLS/SSL settings
+	// TLSEnabled enables TLS/SSL for secure connections.
+	// Recommended for production environments.
+	TLSEnabled bool `yaml:"tls_enabled,omitempty" json:"tls_enabled,omitempty"`
+
+	// TLSCertPath is the path to the TLS certificate file.
+	// Required when TLSEnabled is true.
+	TLSCertPath string `yaml:"tls_cert_path,omitempty" json:"tls_cert_path,omitempty"`
+
+	// TLSKeyPath is the path to the TLS private key file.
+	// Required when TLSEnabled is true.
+	TLSKeyPath string `yaml:"tls_key_path,omitempty" json:"tls_key_path,omitempty"`
+
+	// TLSCAPath is the path to the CA certificate file for verification.
+	// Optional - if not provided, system CA pool is used.
+	TLSCAPath string `yaml:"tls_ca_path,omitempty" json:"tls_ca_path,omitempty"`
+
+	// ConfigPath is the path to an external Redis configuration file.
+	// If provided, settings from the external file take precedence over inline settings.
+	// This is useful for complex configurations or sharing config across environments.
+	// Example: "config/response-api/redis-cluster.yaml"
+	ConfigPath string `yaml:"config_path,omitempty" json:"config_path,omitempty"`
 }
 
 // DefaultTTL is the default TTL for stored responses (30 days).

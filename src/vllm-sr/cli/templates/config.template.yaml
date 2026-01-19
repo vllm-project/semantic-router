@@ -172,7 +172,7 @@ decisions:
         - type: "language"
           name: "ru"
     modelRefs:
-      - model: "russian-model"
+      - model: "openai/gpt-oss-120b"
         use_reasoning: false
 
   - name: "chinese_route"
@@ -184,7 +184,7 @@ decisions:
         - type: "language"
           name: "zh"
     modelRefs:
-      - model: "chinese-model"
+      - model: "openai/gpt-oss-120b"
         use_reasoning: false
 
   - name: "math_route"
@@ -273,7 +273,7 @@ decisions:
           name: "looper_keywords"
     modelRefs:
       - model: "openai/gpt-oss-120b"    # param_size defined in providers.models
-      - model: "openai/gpt-5.2"
+      - model: "gpt-5.2"
     algorithm:
       type: "confidence"
       confidence:
@@ -302,7 +302,7 @@ decisions:
           name: "other"
     modelRefs:
       - model: "openai/gpt-oss-120b"    # param_size defined in providers.models
-      - model: "openai/gpt-5.2"
+      - model: "gpt-5.2"
     algorithm:
       type: "ratings"
       ratings:
@@ -326,7 +326,7 @@ providers:
           endpoint: "host.docker.internal:8000"
           protocol: "http"
       access_key: "jGNm/R0CpwDQsvJoaABrymRTrGKt7B63dikib7hW8EyMISRJr"
-    - name: "openai/gpt-5.2"
+    - name: "gpt-5.2"
       param_size: "330b"  # Used for confidence routing
       endpoints:
         - name: "external_provider"

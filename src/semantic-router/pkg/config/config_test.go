@@ -1177,7 +1177,7 @@ semantic_cache:
 			})
 		})
 
-		Context("with milvus backend configuration", func() {
+		Context("(Deprecated) with file base milvus backend configuration", func() {
 			BeforeEach(func() {
 				configContent := `
 semantic_cache:
@@ -1191,7 +1191,7 @@ semantic_cache:
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("should parse milvus backend configuration correctly", func() {
+			It("should parse file base milvus backend configuration correctly", func() {
 				cfg, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -1203,6 +1203,267 @@ semantic_cache:
 
 				// MaxEntries should be ignored for Milvus backend
 				Expect(cfg.SemanticCache.MaxEntries).To(Equal(0))
+			})
+		})
+
+		Context("with inline milvus backend configuration", func() {
+			BeforeEach(func() {
+				configContent := `
+semantic_cache:
+  enabled: true
+  backend_type: "milvus"
+  similarity_threshold: 0.9
+  ttl_seconds: 7200
+  milvus:
+    connection:
+      host: "localhost"
+      port: 12345
+      database: "semantic_router_cache"
+      timeout: 99
+      auth:
+        enabled: false
+        username: "1234"
+        password: "1234"
+      tls:
+        enabled: false
+        cert_file: ""
+        key_file: ""
+        ca_file: ""
+    collection:
+      name: "semantic_cache"
+      description: "test"
+      vector_field:
+        name: "test"
+        dimension: 384
+        metric_type: "test"
+      index:
+        type: "HNSW"
+        params:
+          M: 16
+          efConstruction: 64
+    search:
+      params:
+        ef: 64
+      topk: 10
+      consistency_level: "Session"
+    performance:
+      connection_pool:
+        max_connections: 10
+        max_idle_connections: 5
+        acquire_timeout: 5
+      batch:
+        insert_batch_size: 1000
+        timeout: 30
+    data_management:
+      ttl:
+        enabled: true
+        timestamp_field: "timestamp"
+        cleanup_interval: 3600
+      compaction:
+        enabled: true
+        interval: 86400
+    logging:
+      level: "info"
+      enable_query_log: false
+      enable_metrics: true
+    development:
+      drop_collection_on_startup: true
+      auto_create_collection: true
+      verbose_errors: true
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should parse inline milvus backend connection configuration correctly", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cfg.SemanticCache.Milvus).ToNot(BeNil())
+				Expect(cfg.SemanticCache.Milvus.Connection).ToNot(BeNil())
+				Expect(cfg.SemanticCache.Milvus.Connection.Host).To(Equal("localhost"))
+				Expect(cfg.SemanticCache.Milvus.Connection.Port).To(Equal(12345))
+				Expect(cfg.SemanticCache.Milvus.Connection.Database).To(Equal("semantic_router_cache"))
+				Expect(cfg.SemanticCache.Milvus.Connection.Timeout).To(Equal(99))
+				Expect(cfg.SemanticCache.Milvus.Connection.Auth.Enabled).To(BeFalse())
+				Expect(cfg.SemanticCache.Milvus.Connection.Auth.Username).To(Equal("1234"))
+				Expect(cfg.SemanticCache.Milvus.Connection.Auth.Password).To(Equal("1234"))
+				Expect(cfg.SemanticCache.Milvus.Connection.TLS.Enabled).To(BeFalse())
+				Expect(cfg.SemanticCache.Milvus.Connection.TLS.CertFile).To(Equal(""))
+				Expect(cfg.SemanticCache.Milvus.Connection.TLS.KeyFile).To(Equal(""))
+				Expect(cfg.SemanticCache.Milvus.Connection.TLS.CAFile).To(Equal(""))
+			})
+
+			It("should parse inline milvus backend collection configuration correctly", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cfg.SemanticCache.Milvus.Collection).ToNot(BeNil())
+				Expect(cfg.SemanticCache.Milvus.Collection.Name).To(Equal("semantic_cache"))
+				Expect(cfg.SemanticCache.Milvus.Collection.Description).To(Equal("test"))
+				Expect(cfg.SemanticCache.Milvus.Collection.VectorField.Name).To(Equal("test"))
+				Expect(cfg.SemanticCache.Milvus.Collection.VectorField.Dimension).To(Equal(384))
+				Expect(cfg.SemanticCache.Milvus.Collection.VectorField.MetricType).To(Equal("test"))
+				Expect(cfg.SemanticCache.Milvus.Collection.Index.Type).To(Equal("HNSW"))
+				Expect(cfg.SemanticCache.Milvus.Collection.Index.Params.M).To(Equal(16))
+				Expect(cfg.SemanticCache.Milvus.Collection.Index.Params.EfConstruction).To(Equal(64))
+			})
+
+			It("should parse inline milvus backend search configuration correctly", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cfg.SemanticCache.Milvus.Search).ToNot(BeNil())
+				Expect(cfg.SemanticCache.Milvus.Search.Params.Ef).To(Equal(64))
+				Expect(cfg.SemanticCache.Milvus.Search.TopK).To(Equal(10))
+				Expect(cfg.SemanticCache.Milvus.Search.ConsistencyLevel).To(Equal("Session"))
+			})
+
+			It("should parse inline milvus backend performance configuration correctly", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cfg.SemanticCache.Milvus.Performance).ToNot(BeNil())
+				Expect(cfg.SemanticCache.Milvus.Performance.ConnectionPool.MaxConnections).To(Equal(10))
+				Expect(cfg.SemanticCache.Milvus.Performance.ConnectionPool.MaxIdleConnections).To(Equal(5))
+				Expect(cfg.SemanticCache.Milvus.Performance.ConnectionPool.AcquireTimeout).To(Equal(5))
+				Expect(cfg.SemanticCache.Milvus.Performance.Batch.InsertBatchSize).To(Equal(1000))
+				Expect(cfg.SemanticCache.Milvus.Performance.Batch.Timeout).To(Equal(30))
+			})
+
+			It("should parse inline milvus backend data management configuration correctly", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cfg.SemanticCache.Milvus.DataManagement).ToNot(BeNil())
+				Expect(cfg.SemanticCache.Milvus.DataManagement.TTL.Enabled).To(BeTrue())
+				Expect(cfg.SemanticCache.Milvus.DataManagement.TTL.TimestampField).To(Equal("timestamp"))
+				Expect(cfg.SemanticCache.Milvus.DataManagement.TTL.CleanupInterval).To(Equal(3600))
+				Expect(cfg.SemanticCache.Milvus.DataManagement.Compaction.Enabled).To(BeTrue())
+				Expect(cfg.SemanticCache.Milvus.DataManagement.Compaction.Interval).To(Equal(86400))
+			})
+
+			It("should parse inline milvus backend logging configuration correctly", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cfg.SemanticCache.Milvus.Logging.Level).To(Equal("info"))
+				Expect(cfg.SemanticCache.Milvus.Logging.EnableQueryLog).To(BeFalse())
+				Expect(cfg.SemanticCache.Milvus.Logging.EnableMetrics).To(BeTrue())
+			})
+
+			It("should parse inline milvus backend development configuration correctly", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cfg.SemanticCache.Milvus.Development.DropCollectionOnStartup).To(BeTrue())
+				Expect(cfg.SemanticCache.Milvus.Development.AutoCreateCollection).To(BeTrue())
+				Expect(cfg.SemanticCache.Milvus.Development.VerboseErrors).To(BeTrue())
+			})
+		})
+
+		Context("with inline redis backend configuration", func() {
+			BeforeEach(func() {
+				configContent := `
+semantic_cache:
+  enabled: true
+  backend_type: "milvus"
+  similarity_threshold: 0.9
+  ttl_seconds: 7200
+  redis:
+    connection:
+      host: "localhost"
+      port: 6379
+      database: 0
+      password: ""
+      timeout: 30
+      tls:
+        enabled: false
+        cert_file: ""
+        key_file: ""
+        ca_file: ""
+    index:
+      name: "semantic_cache_idx"
+      prefix: "doc:"
+      vector_field:
+        name: "embedding"
+        dimension: 384
+        metric_type: "COSINE"
+      index_type: "HNSW"
+      params:
+        M: 16
+        efConstruction: 64
+    search:
+      topk: 1
+    logging:
+      level: "info"
+      enable_query_log: false
+      enable_metrics: true
+    development:
+      drop_index_on_startup: true
+      auto_create_index: true
+      verbose_errors: true
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should parse inline redis backend connection configuration correctly", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cfg.SemanticCache.Redis).ToNot(BeNil())
+				Expect(cfg.SemanticCache.Redis.Connection).ToNot(BeNil())
+				Expect(cfg.SemanticCache.Redis.Connection.Host).To(Equal("localhost"))
+				Expect(cfg.SemanticCache.Redis.Connection.Port).To(Equal(6379))
+				Expect(cfg.SemanticCache.Redis.Connection.Database).To(Equal(0))
+				Expect(cfg.SemanticCache.Redis.Connection.Password).To(Equal(""))
+				Expect(cfg.SemanticCache.Redis.Connection.Timeout).To(Equal(30))
+				Expect(cfg.SemanticCache.Redis.Connection.TLS.Enabled).To(BeFalse())
+				Expect(cfg.SemanticCache.Redis.Connection.TLS.CertFile).To(Equal(""))
+				Expect(cfg.SemanticCache.Redis.Connection.TLS.KeyFile).To(Equal(""))
+				Expect(cfg.SemanticCache.Redis.Connection.TLS.CAFile).To(Equal(""))
+			})
+
+			It("should parse inline redis backend index configuration correctly", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cfg.SemanticCache.Redis.Index).ToNot(BeNil())
+				Expect(cfg.SemanticCache.Redis.Index.Name).To(Equal("semantic_cache_idx"))
+				Expect(cfg.SemanticCache.Redis.Index.Prefix).To(Equal("doc:"))
+				Expect(cfg.SemanticCache.Redis.Index.VectorField.Name).To(Equal("embedding"))
+				Expect(cfg.SemanticCache.Redis.Index.VectorField.Dimension).To(Equal(384))
+				Expect(cfg.SemanticCache.Redis.Index.VectorField.MetricType).To(Equal("COSINE"))
+				Expect(cfg.SemanticCache.Redis.Index.IndexType).To(Equal("HNSW"))
+				Expect(cfg.SemanticCache.Redis.Index.Params.M).To(Equal(16))
+				Expect(cfg.SemanticCache.Redis.Index.Params.EfConstruction).To(Equal(64))
+			})
+
+			It("should parse inline redis backend search configuration correctly", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cfg.SemanticCache.Redis.Search).ToNot(BeNil())
+				Expect(cfg.SemanticCache.Redis.Search.TopK).To(Equal(1))
+			})
+
+			It("should parse inline redis backend logging configuration correctly", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cfg.SemanticCache.Redis.Logging.Level).To(Equal("info"))
+				Expect(cfg.SemanticCache.Redis.Logging.EnableQueryLog).To(BeFalse())
+				Expect(cfg.SemanticCache.Redis.Logging.EnableMetrics).To(BeTrue())
+			})
+
+			It("should parse inline redis backend development configuration correctly", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(cfg.SemanticCache.Redis.Development.DropIndexOnStartup).To(BeTrue())
+				Expect(cfg.SemanticCache.Redis.Development.AutoCreateIndex).To(BeTrue())
+				Expect(cfg.SemanticCache.Redis.Development.VerboseErrors).To(BeTrue())
 			})
 		})
 
