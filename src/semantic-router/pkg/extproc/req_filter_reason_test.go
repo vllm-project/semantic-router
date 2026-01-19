@@ -165,24 +165,30 @@ func TestReasoningModeComprehensive(t *testing.T) {
 			expectedChatTemplateParam: "enable_thinking",
 			expectedChatTemplateValue: false,
 		},
-		// Test 5: GPT-OSS with reasoning enabled - should use reasoning_effort with HIGH
+		// Test 5: GPT-OSS with reasoning enabled - should use both chat_template_kwargs and reasoning_effort
 		{
-			name:                     "GPT-OSS - reasoning enabled with high effort",
-			model:                    "gpt-oss-model",
-			categoryName:             "math",
-			enableReasoning:          true,
-			expectReasoningEffortKey: true,
-			expectedReasoningEffort:  "medium", // Falls back to default
+			name:                      "GPT-OSS - reasoning enabled with high effort",
+			model:                     "gpt-oss-model",
+			categoryName:              "math",
+			enableReasoning:           true,
+			expectChatTemplateKwargs:  true,
+			expectedChatTemplateParam: "reasoning_effort",
+			expectedChatTemplateValue: "medium", // Falls back to default
+			expectReasoningEffortKey:  true,
+			expectedReasoningEffort:   "medium",
 		},
-		// Test 6: GPT-OSS with reasoning disabled - should preserve reasoning_effort
+		// Test 6: GPT-OSS with reasoning disabled - should preserve reasoning_effort in both places
 		{
-			name:                          "GPT-OSS - reasoning disabled preserves effort",
-			model:                         "gpt-oss-model",
-			categoryName:                  "creative",
-			enableReasoning:               false,
-			initialReasoningEffort:        "low",
-			expectReasoningEffortKey:      true,
-			expectOriginalEffortPreserved: true,
+			name:                      "GPT-OSS - reasoning disabled preserves effort",
+			model:                     "gpt-oss-model",
+			categoryName:              "creative",
+			enableReasoning:           false,
+			initialReasoningEffort:    "low",
+			expectChatTemplateKwargs:  true,
+			expectedChatTemplateParam: "reasoning_effort",
+			expectedChatTemplateValue: "low",
+			expectReasoningEffortKey:  true,
+			expectedReasoningEffort:   "low",
 		},
 		// Test 7: Claude with reasoning enabled
 		{

@@ -308,6 +308,9 @@ func (c *EmbeddingClassifier) matches(text string, rule config.EmbeddingRule) (b
 
 // matchesOptimized uses preloaded embeddings for fast similarity matching
 func (c *EmbeddingClassifier) matchesOptimized(text string, rule config.EmbeddingRule) (bool, float32, error) {
+	// Start timing
+	startTime := time.Now()
+
 	// Compute query embedding only
 	modelType := c.getModelType()
 
@@ -323,6 +326,7 @@ func (c *EmbeddingClassifier) matchesOptimized(text string, rule config.Embeddin
 
 	// Calculate similarities against preloaded candidates
 	similarities := make([]float32, 0, len(rule.Candidates))
+	searchType := "brute-force" // Default search type
 
 	hnswThreshold := *c.optimizationConfig.HNSWThreshold // Dereference pointer
 	if c.useHNSW && c.hnswIndex != nil && len(rule.Candidates) >= hnswThreshold {
@@ -355,9 +359,9 @@ func (c *EmbeddingClassifier) matchesOptimized(text string, rule config.Embeddin
 			if !ok {
 				// Candidate not preloaded, compute on the fly
 				logging.Infof("Computing embedding on-the-fly for candidate: %q (model: %s)", candidate, modelType)
-				output, err := getEmbeddingWithModelType(candidate, modelType, c.optimizationConfig.TargetDimension)
-				if err != nil {
-					return false, 0.0, fmt.Errorf("failed to compute embedding for candidate %q: %w", candidate, err)
+				output, embedErr := getEmbeddingWithModelType(candidate, modelType, c.optimizationConfig.TargetDimension)
+				if embedErr != nil {
+					return false, 0.0, fmt.Errorf("failed to compute embedding for candidate %q: %w", candidate, embedErr)
 				}
 				embedding = output.Embedding
 				c.candidateEmbeddings[candidate] = embedding // Cache for future use
@@ -367,12 +371,19 @@ func (c *EmbeddingClassifier) matchesOptimized(text string, rule config.Embeddin
 			similarities = append(similarities, sim)
 
 			// Debug: log first 3 similarities
-			logging.Infof("[Brute-force path] candidate[%d]=%q, similarity=%.4f", i, candidate, sim)
+			logging.Debugf("[Brute-force path] candidate[%d]=%q, similarity=%.4f", i, candidate, sim)
 		}
 	}
 
 	// Aggregate scores based on method
-	return c.aggregateScores(similarities, rule)
+	matched, score, err := c.aggregateScores(similarities, rule)
+
+	// Log total time taken
+	elapsed := time.Since(startTime)
+	logging.Infof("Embedding rule %q computation completed in %v (type: %s, query embedding + %d similarity calculations)",
+		rule.Name, elapsed, searchType, len(similarities))
+
+	return matched, score, err
 }
 
 // aggregateScores applies the aggregation method to compute the final score

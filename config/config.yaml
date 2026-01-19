@@ -481,7 +481,7 @@ reasoning_families:
     parameter: "reasoning_effort"
 
 # Global default reasoning effort level
-default_reasoning_effort: high
+default_reasoning_effort: low
 
 # API Configuration
 api:

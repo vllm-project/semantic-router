@@ -367,7 +367,7 @@ func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, modi
 		})
 	}
 
-	logging.Infof("createRoutingResponse: modifiedBody length=%d, model=%s, endpoint=%s", len(modifiedBody), model, endpoint)
+	logging.Infof("createRoutingResponse: modifiedBody length=%d, model=%s", len(modifiedBody), model)
 
 	// Start upstream span and inject trace context headers
 	traceContextHeaders := r.startUpstreamSpanAndInjectHeaders(model, endpoint, ctx)

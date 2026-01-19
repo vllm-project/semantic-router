@@ -90,6 +90,9 @@ class ModelRef(BaseModel):
 
     model: str
     use_reasoning: Optional[bool] = False
+    reasoning_effort: Optional[str] = (
+        None  # Model-specific reasoning effort level (low, medium, high)
+    )
     lora_name: Optional[str] = None  # LoRA adapter name (if using LoRA)
 
 
