@@ -504,7 +504,20 @@ api:
 # - EmbeddingGemma-300M: Up to 8K context, fast inference, Matryoshka support (768/512/256/128)
 embedding_models:
   qwen3_model_path: "models/mom-embedding-pro"
+  # gemma_model_path: "models/mom-embedding-flash"
   use_cpu: true  # Set to false for GPU acceleration (requires CUDA)
+  # HNSW Configuration
+  # Improves performance by preloading candidate embeddings at startup
+  # and using HNSW index for O(log n) similarity search
+  hnsw_config:
+    model_type: "qwen3"         # Which model to use: "qwen3" (high quality) or "gemma" (fast)
+    preload_embeddings: true    # Precompute candidate embeddings at startup
+    use_hnsw: true              # Enable HNSW index for fast similarity search
+    hnsw_m: 16                  # Bi-directional links per node (higher = better recall)
+    hnsw_ef_construction: 200   # Build-time search width (higher = better quality)
+    hnsw_ef_search: 50          # Query-time search width (higher = better accuracy)
+    hnsw_threshold: 20          # Min candidates to enable HNSW (set to 0 to always use HNSW)
+    target_dimension: 768       # Embedding dimension
 
 # Observability Configuration
 observability:
