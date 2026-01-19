@@ -49,7 +49,12 @@ def main(ctx, version):
 
 
 @click.command()
-def init():
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Overwrite existing config.yaml and .vllm-sr without prompting.",
+)
+def init(force):
     """
     Initialize vLLM Semantic Router configuration.
 
@@ -57,9 +62,10 @@ def init():
 
     Examples:
         vllm-sr init
+        vllm-sr init --force
     """
     try:
-        init_command()
+        init_command(force=force)
     except Exception as e:
         log.error(f"Error: {e}")
         sys.exit(1)

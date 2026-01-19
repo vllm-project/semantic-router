@@ -18,8 +18,10 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"gopkg.in/yaml.v3"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
@@ -99,7 +101,7 @@ var _ = Describe("Cache Package", func() {
 				})
 			})
 
-			Context("with Milvus backend", func() {
+			Context("(Deprecated) with file base Milvus backend", func() {
 				var milvusConfigPath string
 
 				BeforeEach(func() {
@@ -144,7 +146,7 @@ development:
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-				It("should create Milvus cache backend successfully with valid config", func() {
+				It("should create Milvus cache backend successfully with valid config (Deprecated)", func() {
 					config := CacheConfig{
 						BackendType:         MilvusCacheType,
 						Enabled:             true,
@@ -172,7 +174,7 @@ development:
 					}
 				})
 
-				It("should handle disabled Milvus cache", func() {
+				It("should handle disabled Milvus cache (Deprecated)", func() {
 					config := CacheConfig{
 						BackendType:         MilvusCacheType,
 						Enabled:             false,
@@ -189,7 +191,75 @@ development:
 				})
 			})
 
-			Context("with Redis backend", func() {
+			Context("with inline Milvus configuration", func() {
+				var milvusConfig *config.MilvusConfig
+				BeforeEach(func() {
+					// Skip Milvus tests if environment variable is set
+					if os.Getenv("SKIP_MILVUS_TESTS") == "true" {
+						Skip("Milvus tests skipped due to SKIP_MILVUS_TESTS=true")
+					}
+
+					yamlConfig := `
+connection:
+  host: "localhost"
+  port: 19530
+  database: "test_cache"
+  timeout: 30
+collection:
+  name: "test_semantic_cache"
+  description: "Test semantic cache collection"
+  vector_field:
+    name: "embedding"
+    dimension: 512
+    metric_type: "IP"
+  index:
+    type: "HNSW"
+    params:
+      M: 16
+      efConstruction: 64
+search:
+  params:
+    ef: 64
+  topk: 10
+  consistency_level: "Session"
+development:
+  auto_create_collection: true
+  verbose_errors: true
+`
+					err := yaml.Unmarshal([]byte(yamlConfig), &milvusConfig)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("should create Milvus cache backend successfully with valid config", func() {
+					config := CacheConfig{
+						BackendType:         MilvusCacheType,
+						Enabled:             true,
+						SimilarityThreshold: 0.85,
+						TTLSeconds:          7200,
+						Milvus:              milvusConfig,
+						EmbeddingModel:      "bert",
+					}
+
+					backend, err := NewCacheBackend(config)
+
+					// Skip test if Milvus is not reachable
+					if err != nil {
+						if strings.Contains(err.Error(), "failed to create Milvus client") ||
+							strings.Contains(err.Error(), "connection") ||
+							strings.Contains(err.Error(), "dial") {
+							Skip("Milvus server not available: " + err.Error())
+						}
+						// For other errors, fail the test
+						Expect(err).NotTo(HaveOccurred())
+					} else {
+						// If Milvus is available, creation should succeed
+						Expect(backend).NotTo(BeNil())
+						Expect(backend.IsEnabled()).To(BeTrue())
+					}
+				})
+			})
+
+			Context("(Deprecated) with Redis backend", func() {
 				var redisConfigPath string
 
 				BeforeEach(func() {
@@ -233,7 +303,7 @@ development:
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-				It("should create Redis cache backend successfully with valid config", func() {
+				It("should create Redis cache backend successfully with valid config (Deprecated)", func() {
 					config := CacheConfig{
 						BackendType:         RedisCacheType,
 						Enabled:             true,
@@ -259,7 +329,7 @@ development:
 					}
 				})
 
-				It("should handle disabled Redis cache", func() {
+				It("should handle disabled Redis cache (Deprecated)", func() {
 					config := CacheConfig{
 						BackendType:         RedisCacheType,
 						Enabled:             false,
@@ -274,6 +344,79 @@ development:
 					Expect(backend).NotTo(BeNil())
 					Expect(backend.IsEnabled()).To(BeFalse())
 					Expect(backend.Close()).To(Succeed())
+				})
+			})
+
+			Context("with inline Redis configuration", func() {
+				var redisConfig *config.RedisConfig
+				// Skip Milvus tests if environment variable is set
+				if os.Getenv("SKIP_REDIS_TESTS") == "true" {
+					Skip("Redis tests skipped due to SKIP_REDIS_TESTS=true")
+				}
+
+				BeforeEach(func() {
+					yamlConfig := `
+connection:
+    host: "localhost"
+    port: 6379
+    database: 0
+    password: ""
+    timeout: 30
+    tls:
+      enabled: false
+      cert_file: ""
+      key_file: ""
+      ca_file: ""
+index:
+  name: "semantic_cache_idx"
+  prefix: "doc:"
+  vector_field:
+    name: "embedding"
+    dimension: 384
+    metric_type: "COSINE"
+  index_type: "HNSW"
+  params:
+    M: 16
+    efConstruction: 64
+search:
+  topk: 1
+logging:
+  level: "info"
+  enable_query_log: false
+  enable_metrics: true
+development:
+  drop_index_on_startup: true
+  auto_create_index: true
+  verbose_errors: true
+`
+					err := yaml.Unmarshal([]byte(yamlConfig), &redisConfig)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("should create Redis cache backend successfully with valid config", func() {
+					config := CacheConfig{
+						BackendType:         RedisCacheType,
+						Enabled:             true,
+						SimilarityThreshold: 0.8,
+						TTLSeconds:          3600,
+						Redis:               redisConfig,
+						EmbeddingModel:      "bert",
+					}
+
+					backend, err := NewCacheBackend(config)
+
+					if err != nil {
+						if strings.Contains(err.Error(), "failed to connect to Redis") ||
+							strings.Contains(err.Error(), "connection refused") ||
+							strings.Contains(err.Error(), "failed to initialize index") {
+							Skip("Redis server not available: " + err.Error())
+						}
+						Expect(err).NotTo(HaveOccurred())
+					} else {
+						Expect(backend).NotTo(BeNil())
+						Expect(backend.IsEnabled()).To(BeTrue())
+						Expect(backend.Close()).To(Succeed())
+					}
 				})
 			})
 
