@@ -26,7 +26,7 @@ if (keyword_match AND domain_match) OR high_embedding_similarity:
 
 **Why this matters**: Multiple signals voting together make more accurate decisions than any single signal.
 
-## The 7 Signal Types
+## The 8 Signal Types
 
 ### 1. Keyword Signals
 
@@ -147,6 +147,28 @@ signals:
 
 - **Example 1**: "Hola, ¿cómo estás?" → Spanish (es) → Spanish model
 - **Example 2**: "你好，世界" → Chinese (zh) → Chinese model
+
+### 8. Context Signals
+
+- **What**: Token-count based routing for short/long request handling
+- **Latency**: 1ms (calculated during processing)
+- **Use Case**: Route long-context requests to models with larger context windows
+- **Metrics**: Tracks input token counts with `llm_context_token_count` histogram
+
+```yaml
+signals:
+  context_rules:
+    - name: "low_token_count"
+      min_tokens: "0"
+      max_tokens: "1K"
+      description: "Short requests"
+    - name: "high_token_count"
+      min_tokens: "1K"
+      max_tokens: "128K"
+      description: "Long requests requiring large context window"
+```
+
+**Example**: A request with 5,000 tokens → Matches "high_token_count" → Routes to `claude-3-opus`
 
 ## How Signals Combine
 

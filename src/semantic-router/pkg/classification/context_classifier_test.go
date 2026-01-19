@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 

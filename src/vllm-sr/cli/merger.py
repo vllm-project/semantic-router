@@ -119,6 +119,29 @@ def translate_preference_signals(preferences: list) -> list:
     return rules
 
 
+def translate_context_signals(context_rules: list) -> list:
+    """
+    Translate context signals to router format.
+
+    Args:
+        context_rules: List of ContextRule objects
+
+    Returns:
+        list: Router context rules
+    """
+    rules = []
+    for signal in context_rules:
+        rule = {
+            "name": signal.name,
+            "min_tokens": signal.min_tokens,
+            "max_tokens": signal.max_tokens,
+        }
+        if signal.description:
+            rule["description"] = signal.description
+        rules.append(rule)
+    return rules
+
+
 def translate_external_models(external_models: list) -> list:
     """
     Translate external models to router format.
@@ -351,6 +374,17 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
             )
             log.info(
                 f"  Added {len(user_config.signals.preferences)} preference signals"
+            )
+
+        if (
+            user_config.signals.context_rules
+            and len(user_config.signals.context_rules) > 0
+        ):
+            merged["context_rules"] = translate_context_signals(
+                user_config.signals.context_rules
+            )
+            log.info(
+                f"  Added {len(user_config.signals.context_rules)} context signals"
             )
 
         # Translate domains to categories

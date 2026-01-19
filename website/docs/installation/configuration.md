@@ -10,7 +10,7 @@ This guide covers the configuration options for the Semantic Router. The system 
 
 The configuration defines three main layers:
 
-1. **Signal Extraction Layer**: Define 7 types of signals (keyword, embedding, domain, fact_check, user_feedback, preference, language)
+1. **Signal Extraction Layer**: Define 8 types of signals (keyword, embedding, domain, fact_check, user_feedback, preference, language, context)
 2. **Decision Engine**: Combine signals using AND/OR operators to make routing decisions
 3. **Plugin Chain**: Configure plugins for caching, security, and optimization
 
@@ -291,7 +291,7 @@ Quick usage:
 
 ## Signals Configuration
 
-Signals are the foundation of intelligent routing. The system supports 7 types of signals that can be combined to make routing decisions.
+Signals are the foundation of intelligent routing. The system supports 8 types of signals that can be combined to make routing decisions.
 
 ### 1. Keyword Signals - Fast Pattern Matching
 
@@ -419,6 +419,28 @@ signals:
 - Apply language-specific policies
 - Support multilingual applications
 - Supports 100+ languages via whatlanggo library
+
+### 8. Context Signals - Token Count Routing
+
+```yaml
+signals:
+  context_rules:
+    - name: "low_token_count"
+      min_tokens: "0"
+      max_tokens: "1K"
+      description: "Short requests"
+    - name: "high_token_count"
+      min_tokens: "1K"
+      max_tokens: "128K"
+      description: "Long context requests"
+```
+
+**Use Cases:**
+
+- Route long documents to models with larger context windows
+- Send short queries to faster, smaller models
+- Optimize cost by routing based on request size
+- Supports "K" (thousand) and "M" (million) suffixes
 
 ## Decision Rules - Signal Fusion
 

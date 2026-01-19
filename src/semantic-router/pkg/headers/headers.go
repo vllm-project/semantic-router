@@ -89,6 +89,7 @@ const (
 
 	// VSRContextTokenCount contains the actual token count for the request.
 	// Example: "1500"
+	//nolint:gosec
 	VSRContextTokenCount = "x-vsr-context-token-count"
 )
 
