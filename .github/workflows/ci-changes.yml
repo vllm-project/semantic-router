@@ -37,6 +37,10 @@ on:
         value: ${{ jobs.filter.outputs.e2e_production_stack }}
       e2e_response_api:
         value: ${{ jobs.filter.outputs.e2e_response_api }}
+      e2e_response_api_redis:
+        value: ${{ jobs.filter.outputs.e2e_response_api_redis }}
+      e2e_response_api_redis_cluster:
+        value: ${{ jobs.filter.outputs.e2e_response_api_redis_cluster }}
       e2e_common:
         value: ${{ jobs.filter.outputs.e2e_common }}
 
@@ -62,6 +66,8 @@ jobs:
       e2e_routing_strategies: ${{ steps.changes.outputs.e2e_routing_strategies }}
       e2e_production_stack: ${{ steps.changes.outputs.e2e_production_stack }}
       e2e_response_api: ${{ steps.changes.outputs.e2e_response_api }}
+      e2e_response_api_redis: ${{ steps.changes.outputs.e2e_response_api_redis }}
+      e2e_response_api_redis_cluster: ${{ steps.changes.outputs.e2e_response_api_redis_cluster }}
       e2e_common: ${{ steps.changes.outputs.e2e_common }}
     steps:
       - uses: actions/checkout@v4
@@ -136,6 +142,12 @@ jobs:
               - 'e2e/profiles/production-stack/**'
             e2e_response_api:
               - 'e2e/profiles/response-api/**'
+            e2e_response_api_redis:
+              - 'e2e/profiles/response-api-redis/**'
+              - 'deploy/kubernetes/response-api/**'
+            e2e_response_api_redis_cluster:
+              - 'e2e/profiles/response-api-redis-cluster/**'
+              - 'deploy/kubernetes/response-api/redis-cluster.yaml'
             # Common e2e code that affects all profiles
             e2e_common:
               - 'e2e/pkg/**'
