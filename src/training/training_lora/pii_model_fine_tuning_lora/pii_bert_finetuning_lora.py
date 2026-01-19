@@ -761,7 +761,10 @@ def merge_lora_adapter_to_full_model(
 
     # Load base model with correct number of labels
     base_model = AutoModelForTokenClassification.from_pretrained(
-        base_model_path, num_labels=num_labels, torch_dtype=torch.float32, device_map="cpu"
+        base_model_path,
+        num_labels=num_labels,
+        torch_dtype=torch.float32,
+        device_map="cpu",
     )
 
     # Load tokenizer with model-specific configuration

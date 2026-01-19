@@ -49,29 +49,31 @@ impl IntentLoRAClassifier {
         // Detect model type and create appropriate backend
         let backend = if Self::is_modernbert(model_path) {
             // Use existing TraditionalModernBertClassifier (supports both ModernBERT and mmBERT)
-            let classifier = TraditionalModernBertClassifier::load_from_directory(model_path, use_cpu)
-                .map_err(|e| {
-                    let unified_err = model_error!(
-                        ModelErrorType::LoRA,
-                        "intent classifier creation",
-                        format!("Failed to create ModernBERT/mmBERT classifier: {}", e),
-                        model_path
-                    );
-                    candle_core::Error::from(unified_err)
-                })?;
+            let classifier = TraditionalModernBertClassifier::load_from_directory(
+                model_path, use_cpu,
+            )
+            .map_err(|e| {
+                let unified_err = model_error!(
+                    ModelErrorType::LoRA,
+                    "intent classifier creation",
+                    format!("Failed to create ModernBERT/mmBERT classifier: {}", e),
+                    model_path
+                );
+                candle_core::Error::from(unified_err)
+            })?;
             ClassifierBackend::ModernBert(classifier)
         } else {
             // Use standard BERT classifier
             let classifier = HighPerformanceBertClassifier::new(model_path, num_classes, use_cpu)
                 .map_err(|e| {
-                    let unified_err = model_error!(
-                        ModelErrorType::LoRA,
-                        "intent classifier creation",
-                        format!("Failed to create BERT classifier: {}", e),
-                        model_path
-                    );
-                    candle_core::Error::from(unified_err)
-                })?;
+                let unified_err = model_error!(
+                    ModelErrorType::LoRA,
+                    "intent classifier creation",
+                    format!("Failed to create BERT classifier: {}", e),
+                    model_path
+                );
+                candle_core::Error::from(unified_err)
+            })?;
             ClassifierBackend::Bert(classifier)
         };
 
@@ -94,7 +96,8 @@ impl IntentLoRAClassifier {
         let config_path = Path::new(model_path).join("config.json");
         if let Ok(config_str) = std::fs::read_to_string(&config_path) {
             if let Ok(config) = serde_json::from_str::<serde_json::Value>(&config_str) {
-                let model_type = config.get("model_type")
+                let model_type = config
+                    .get("model_type")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
                 return model_type == "modernbert";
@@ -107,13 +110,13 @@ impl IntentLoRAClassifier {
     pub fn is_multilingual(&self) -> bool {
         matches!(&self.backend, ClassifierBackend::ModernBert(c) if c.is_multilingual())
     }
-    
+
     /// Classify using the appropriate backend
     fn classify_with_backend(&self, text: &str) -> Result<(usize, f32)> {
         match &self.backend {
-            ClassifierBackend::Bert(c) => c.classify_text(text).map_err(|e| {
-                candle_core::Error::Msg(format!("BERT classification failed: {}", e))
-            }),
+            ClassifierBackend::Bert(c) => c
+                .classify_text(text)
+                .map_err(|e| candle_core::Error::Msg(format!("BERT classification failed: {}", e))),
             ClassifierBackend::ModernBert(c) => c.classify_text(text),
         }
     }
@@ -133,16 +136,15 @@ impl IntentLoRAClassifier {
         let start_time = Instant::now();
 
         // Use appropriate backend (BERT or ModernBERT/mmBERT) for classification
-        let (predicted_class, confidence) =
-            self.classify_with_backend(text).map_err(|e| {
-                let unified_err = model_error!(
-                    ModelErrorType::LoRA,
-                    "intent classification",
-                    format!("Classification failed: {}", e),
-                    text
-                );
-                candle_core::Error::from(unified_err)
-            })?;
+        let (predicted_class, confidence) = self.classify_with_backend(text).map_err(|e| {
+            let unified_err = model_error!(
+                ModelErrorType::LoRA,
+                "intent classification",
+                format!("Classification failed: {}", e),
+                text
+            );
+            candle_core::Error::from(unified_err)
+        })?;
 
         // Map class index to intent label - fail if class not found
         let intent = if predicted_class < self.intent_labels.len() {
@@ -173,16 +175,15 @@ impl IntentLoRAClassifier {
     /// Classify intent and return (class_index, confidence, intent_label) for FFI
     pub fn classify_with_index(&self, text: &str) -> Result<(usize, f32, String)> {
         // Use appropriate backend (BERT or ModernBERT/mmBERT) for classification
-        let (predicted_class, confidence) =
-            self.classify_with_backend(text).map_err(|e| {
-                let unified_err = model_error!(
-                    ModelErrorType::LoRA,
-                    "intent classification",
-                    format!("Classification failed: {}", e),
-                    text
-                );
-                candle_core::Error::from(unified_err)
-            })?;
+        let (predicted_class, confidence) = self.classify_with_backend(text).map_err(|e| {
+            let unified_err = model_error!(
+                ModelErrorType::LoRA,
+                "intent classification",
+                format!("Classification failed: {}", e),
+                text
+            );
+            candle_core::Error::from(unified_err)
+        })?;
 
         // Map class index to intent label - fail if class not found
         let intent = if predicted_class < self.intent_labels.len() {
