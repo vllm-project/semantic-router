@@ -38,12 +38,52 @@ signals:
 
   # Embedding-based signals (semantic similarity)
   embeddings:
-    - name: "code_debug"
+    - name: "quick_answer"
       threshold: 0.70
       candidates:
-        - "how to debug the code"
-        - "i meet a problem with my code"
-        - "need to troubleshooting steps for my code"
+        - "quick answer"
+        - "simple question"
+        - "fast response"
+        - "brief reply"
+        - "short answer"
+        - "just tell me"
+        - "answer quickly"
+        - "give me the result"
+      aggregation_method: "max"
+
+    - name: "deep_thinking"
+      threshold: 0.75
+      candidates:
+        - "think step by step"
+        - "reason through this"
+        - "analyze carefully"
+        - "deep thinking"
+        - "think thoroughly"
+        - "consider all aspects"
+        - "break down the problem"
+        - "explain your reasoning"
+        - "show logical steps"
+        - "think systematically"
+        - "analyze in detail"
+        - "work through methodically"
+        - "use critical thinking"
+        - "apply logical reasoning"
+        - "think deeply"
+        - "consider carefully"
+        - "examine thoroughly"
+        - "reason systematically"
+        - "analyze step by step"
+        - "think it through"
+        - "evaluate carefully"
+        - "assess thoroughly"
+        - "think critically"
+        - "reason logically"
+        - "analyze comprehensively"
+        - "think methodically"
+        - "examine carefully"
+        - "consider systematically"
+        - "think rationally"
+        - "analyze rigorously"
       aggregation_method: "max"
 
   # domains - Domain categories (optional, can be auto-generated)
@@ -51,17 +91,44 @@ signals:
     - name: "math"
       description: "Mathematics and quantitative reasoning"
       mmlu_categories: ["math"]
-
-    - name: "computer_science"
-      description: "Programming and computer science"
-      mmlu_categories: ["computer_science"]
-
     - name: "physics"
       description: "Physics and physical sciences"
       mmlu_categories: ["physics"]
-
+    - name: "chemistry"
+      description: "Chemistry and chemical sciences questions"
+      mmlu_categories: ["chemistry"]
+    - name: "biology"
+      description: "Biology and life sciences questions"
+      mmlu_categories: ["biology"]
+    - name: "computer_science"
+      description: "Computer science and programming"
+      mmlu_categories: ["computer_science"]
+    - name: "engineering"
+      description: "Engineering and technical problem-solving"
+      mmlu_categories: ["engineering"]
+    - name: "business"
+      description: "Business and management related queries"
+      mmlu_categories: ["business"]
+    - name: "economics"
+      description: "Economics and financial topics"
+      mmlu_categories: ["economics"]
+    - name: "law"
+      description: "Legal questions and law-related topics"
+      mmlu_categories: ["law"]
+    - name: "psychology"
+      description: "Psychology and mental health topics"
+      mmlu_categories: ["psychology"]
+    - name: "philosophy"
+      description: "Philosophy and ethical questions"
+      mmlu_categories: ["philosophy"]
+    - name: "history"
+      description: "Historical questions and cultural topics"
+      mmlu_categories: ["history"]
+    - name: "health"
+      description: "Health and medical information queries"
+      mmlu_categories: ["health"]
     - name: "other"
-      description: "General queries"
+      description: "General knowledge and miscellaneous topics"
       mmlu_categories: ["other"]
 
   # fact_check - Fact-checking signals
@@ -145,22 +212,39 @@ decisions:
         configuration:
           system_prompt: "You are an expert debugger. Analyze the issue carefully, identify the root cause, and provide a clear fix with explanation."
 
-  # High priority: Handle user feedback for wrong answers
-  - name: "wrong_answer_route"
-    description: "Handle user feedback indicating wrong answer - rethink and provide correct response"
-    priority: 150
+  # High priority: Quick answer requests
+  - name: "quick_answer_route"
+    description: "Route quick answer requests to fast model without reasoning"
+    priority: 180
     rules:
       operator: "AND"
       conditions:
-        - type: "user_feedback"
-          name: "wrong_answer"
+        - type: "embedding"
+          name: "quick_answer"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "Provide a concise and direct answer. Be brief and to the point."
+
+  # High priority: Deep thinking requests
+  - name: "deep_thinking_route"
+    description: "Route deep thinking requests with reasoning enabled"
+    priority: 180
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "embedding"
+          name: "deep_thinking"
     modelRefs:
       - model: "openai/gpt-oss-120b"
         use_reasoning: true
     plugins:
       - type: "system_prompt"
         configuration:
-          system_prompt: "The user has indicated that the previous answer was incorrect. Please carefully reconsider the question, identify what might have been wrong in the previous response, and provide a corrected and accurate answer. Think step-by-step and verify your reasoning before responding."
+          system_prompt: "Think deeply and systematically. Break down the problem, analyze each step carefully, and provide a thorough explanation of your reasoning process."
 
   # Language-based routing
   - name: "russian_route"

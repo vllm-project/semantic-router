@@ -23,6 +23,7 @@ export interface DataTableProps<T> {
   onToggleExpand?: (row: T) => void
   emptyMessage?: string
   className?: string
+  readonly?: boolean
 }
 
 export function DataTable<T>({
@@ -37,10 +38,15 @@ export function DataTable<T>({
   isRowExpanded,
   onToggleExpand,
   emptyMessage = 'No data available',
-  className = ''
+  className = '',
+  readonly = false
 }: DataTableProps<T>) {
   const [sortColumn, setSortColumn] = useState<string | null>(null)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+
+  // In readonly mode, disable edit and delete actions
+  const effectiveOnEdit = readonly ? undefined : onEdit
+  const effectiveOnDelete = readonly ? undefined : onDelete
 
   const handleSort = (columnKey: string) => {
     if (sortColumn === columnKey) {
@@ -144,18 +150,18 @@ export function DataTable<T>({
                               View
                             </button>
                           )}
-                          {onEdit && (
+                          {effectiveOnEdit && (
                             <button
                               className={`${styles.actionButton} ${styles.editButton}`}
-                              onClick={() => onEdit(row)}
+                              onClick={() => effectiveOnEdit(row)}
                             >
                               Edit
                             </button>
                           )}
-                          {onDelete && (
+                          {effectiveOnDelete && (
                             <button
                               className={`${styles.actionButton} ${styles.deleteButton}`}
-                              onClick={() => onDelete(row)}
+                              onClick={() => effectiveOnDelete(row)}
                             >
                               Delete
                             </button>

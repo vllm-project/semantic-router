@@ -11,6 +11,7 @@ import TracingPage from './pages/TracingPage'
 import StatusPage from './pages/StatusPage'
 import LogsPage from './pages/LogsPage'
 import { ConfigSection } from './components/ConfigNav'
+import { ReadonlyProvider } from './contexts/ReadonlyContext'
 
 const App: React.FC = () => {
   const [isInIframe, setIsInIframe] = useState(false)
@@ -74,95 +75,97 @@ const App: React.FC = () => {
   }
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route
-          path="/"
-          element={<LandingPage />}
-        />
-        <Route
-          path="/monitoring"
-          element={
-            <Layout
-              configSection={configSection}
-              onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-            >
-              <MonitoringPage />
-            </Layout>
-          }
-        />
-        <Route
-          path="/config"
-          element={
-            <Layout
-              configSection={configSection}
-              onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-            >
-              <ConfigPage activeSection={configSection} />
-            </Layout>
-          }
-        />
-        <Route
-          path="/playground"
-          element={
-            <Layout
-              configSection={configSection}
-              onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-            >
-              <PlaygroundPage />
-            </Layout>
-          }
-        />
-        <Route
-          path="/playground/fullscreen"
-          element={<PlaygroundFullscreenPage />}
-        />
-        <Route
-          path="/topology"
-          element={
-            <Layout
-              configSection={configSection}
-              onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-            >
-              <TopologyPage />
-            </Layout>
-          }
-        />
-        <Route
-          path="/tracing"
-          element={
-            <Layout
-              configSection={configSection}
-              onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-            >
-              <TracingPage />
-            </Layout>
-          }
-        />
-        <Route
-          path="/status"
-          element={
-            <Layout
-              configSection={configSection}
-              onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-            >
-              <StatusPage />
-            </Layout>
-          }
-        />
-        <Route
-          path="/logs"
-          element={
-            <Layout
-              configSection={configSection}
-              onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-            >
-              <LogsPage />
-            </Layout>
-          }
-        />
-      </Routes>
-    </BrowserRouter>
+    <ReadonlyProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route
+            path="/"
+            element={<LandingPage />}
+          />
+          <Route
+            path="/monitoring"
+            element={
+              <Layout
+                configSection={configSection}
+                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+              >
+                <MonitoringPage />
+              </Layout>
+            }
+          />
+          <Route
+            path="/config"
+            element={
+              <Layout
+                configSection={configSection}
+                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+              >
+                <ConfigPage activeSection={configSection} />
+              </Layout>
+            }
+          />
+          <Route
+            path="/playground"
+            element={
+              <Layout
+                configSection={configSection}
+                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+              >
+                <PlaygroundPage />
+              </Layout>
+            }
+          />
+          <Route
+            path="/playground/fullscreen"
+            element={<PlaygroundFullscreenPage />}
+          />
+          <Route
+            path="/topology"
+            element={
+              <Layout
+                configSection={configSection}
+                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+              >
+                <TopologyPage />
+              </Layout>
+            }
+          />
+          <Route
+            path="/tracing"
+            element={
+              <Layout
+                configSection={configSection}
+                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+              >
+                <TracingPage />
+              </Layout>
+            }
+          />
+          <Route
+            path="/status"
+            element={
+              <Layout
+                configSection={configSection}
+                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+              >
+                <StatusPage />
+              </Layout>
+            }
+          />
+          <Route
+            path="/logs"
+            element={
+              <Layout
+                configSection={configSection}
+                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+              >
+                <LogsPage />
+              </Layout>
+            }
+          />
+        </Routes>
+      </BrowserRouter>
+    </ReadonlyProvider>
   )
 }
 

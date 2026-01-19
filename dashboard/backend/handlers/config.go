@@ -43,10 +43,23 @@ func ConfigHandler(configPath string) http.HandlerFunc {
 }
 
 // UpdateConfigHandler updates the config.yaml file with validation
-func UpdateConfigHandler(configPath string) http.HandlerFunc {
+func UpdateConfigHandler(configPath string, readonlyMode bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost && r.Method != http.MethodPut {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Check read-only mode
+		if readonlyMode {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			if err := json.NewEncoder(w).Encode(map[string]string{
+				"error":   "readonly_mode",
+				"message": "Dashboard is in read-only mode. Configuration editing is disabled.",
+			}); err != nil {
+				log.Printf("Error encoding readonly response: %v", err)
+			}
 			return
 		}
 
@@ -191,10 +204,23 @@ func RouterDefaultsHandler(configDir string) http.HandlerFunc {
 }
 
 // UpdateRouterDefaultsHandler updates the router-defaults.yaml file
-func UpdateRouterDefaultsHandler(configDir string) http.HandlerFunc {
+func UpdateRouterDefaultsHandler(configDir string, readonlyMode bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost && r.Method != http.MethodPut {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Check read-only mode
+		if readonlyMode {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			if err := json.NewEncoder(w).Encode(map[string]string{
+				"error":   "readonly_mode",
+				"message": "Dashboard is in read-only mode. Configuration editing is disabled.",
+			}); err != nil {
+				log.Printf("Error encoding readonly response: %v", err)
+			}
 			return
 		}
 

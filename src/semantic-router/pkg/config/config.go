@@ -362,6 +362,11 @@ type EmbeddingModels struct {
 // HNSWConfig contains settings for optimizing the embedding classifier
 // by preloading candidate embeddings at startup and using HNSW for fast similarity search
 type HNSWConfig struct {
+	// ModelType specifies which embedding model to use (default: "qwen3")
+	// Options: "qwen3" (high quality, 32K context) or "gemma" (fast, 8K context)
+	// This model will be used for both preloading and runtime embedding generation
+	ModelType string `yaml:"model_type,omitempty"`
+
 	// PreloadEmbeddings enables precomputing candidate embeddings at startup (default: true)
 	// When enabled, candidate embeddings are computed once during initialization
 	// rather than on every request, significantly improving runtime performance
@@ -385,7 +390,9 @@ type HNSWConfig struct {
 
 	// HNSWThreshold is the minimum number of candidates to use HNSW (default: 20)
 	// Below this threshold, brute-force search is used as it's faster for small sets
-	HNSWThreshold int `yaml:"hnsw_threshold,omitempty"`
+	// Set to 0 to always use HNSW regardless of candidate count
+	// Use pointer to distinguish between "not set" (nil) and "set to 0"
+	HNSWThreshold *int `yaml:"hnsw_threshold,omitempty"`
 
 	// TargetDimension is the embedding dimension to use (default: 768)
 	// Supports Matryoshka dimensions: 768, 512, 256, 128
@@ -395,6 +402,10 @@ type HNSWConfig struct {
 // WithDefaults returns a copy of the config with default values applied
 func (c HNSWConfig) WithDefaults() HNSWConfig {
 	result := c
+	// ModelType defaults to "qwen3" for high quality embeddings
+	if result.ModelType == "" {
+		result.ModelType = "qwen3"
+	}
 	// PreloadEmbeddings defaults to true for better performance
 	// Note: bool zero value is false, so we need explicit check
 	// Users must explicitly set preload_embeddings: true in config
@@ -407,8 +418,11 @@ func (c HNSWConfig) WithDefaults() HNSWConfig {
 	if result.HNSWEfSearch <= 0 {
 		result.HNSWEfSearch = 50
 	}
-	if result.HNSWThreshold <= 0 {
-		result.HNSWThreshold = 20
+	// HNSWThreshold: nil means not set, use default 20
+	// 0 means always use HNSW (valid value)
+	if result.HNSWThreshold == nil {
+		defaultThreshold := 20
+		result.HNSWThreshold = &defaultThreshold
 	}
 	if result.TargetDimension <= 0 {
 		result.TargetDimension = 768
