@@ -1,0 +1,1644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ML-Based Model Selection - Complete Design & Implementation Guide</title>
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --text-primary: #c9d1d9;
+            --text-secondary: #8b949e;
+            --accent-blue: #58a6ff;
+            --accent-green: #3fb950;
+            --accent-purple: #a371f7;
+            --accent-orange: #d29922;
+            --accent-red: #f85149;
+            --accent-cyan: #39d2e5;
+            --border-color: #30363d;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 60px;
+            padding: 40px;
+            background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 16px;
+        }
+
+        header .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.2rem;
+        }
+
+        header .issue-link {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 10px 24px;
+            background: var(--accent-blue);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: opacity 0.2s;
+        }
+
+        header .issue-link:hover {
+            opacity: 0.9;
+        }
+
+        .toc {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 48px;
+            border: 1px solid var(--border-color);
+        }
+
+        .toc h2 {
+            color: var(--accent-blue);
+            margin-bottom: 16px;
+            font-size: 1.3rem;
+        }
+
+        .toc ul {
+            list-style: none;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 8px;
+        }
+
+        .toc li a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            padding: 8px 16px;
+            display: block;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .toc li a:hover {
+            background: var(--bg-tertiary);
+            color: var(--accent-blue);
+        }
+
+        .section {
+            margin-bottom: 48px;
+            padding: 32px;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        .section h2 {
+            font-size: 1.5rem;
+            color: var(--accent-blue);
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .section h3 {
+            font-size: 1.2rem;
+            color: var(--accent-purple);
+            margin: 24px 0 16px 0;
+        }
+
+        .section h4 {
+            font-size: 1.05rem;
+            color: var(--accent-cyan);
+            margin: 20px 0 12px 0;
+        }
+
+        p {
+            margin-bottom: 16px;
+            color: var(--text-secondary);
+        }
+
+        .highlight {
+            color: var(--text-primary);
+        }
+
+        /* Paper References */
+        .paper-ref {
+            background: linear-gradient(135deg, rgba(163, 113, 247, 0.1), rgba(88, 166, 255, 0.1));
+            border: 1px solid var(--accent-purple);
+            border-radius: 8px;
+            padding: 16px;
+            margin: 16px 0;
+        }
+
+        .paper-ref a {
+            color: var(--accent-blue);
+            text-decoration: none;
+        }
+
+        .paper-ref a:hover {
+            text-decoration: underline;
+        }
+
+        /* Architecture Diagram */
+        .architecture-diagram {
+            background: var(--bg-tertiary);
+            padding: 32px;
+            border-radius: 12px;
+            margin: 24px 0;
+            overflow-x: auto;
+        }
+
+        .diagram-box {
+            display: inline-block;
+            padding: 16px 24px;
+            margin: 8px;
+            border-radius: 8px;
+            font-weight: 600;
+            text-align: center;
+            min-width: 150px;
+        }
+
+        .box-request { background: var(--accent-blue); color: white; }
+        .box-signal { background: var(--accent-cyan); color: black; }
+        .box-decision { background: var(--accent-purple); color: white; }
+        .box-selector { background: var(--accent-green); color: white; }
+        .box-model { background: var(--accent-orange); color: white; }
+
+        .flow-arrow {
+            display: inline-block;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            margin: 0 8px;
+        }
+
+        /* Algorithm Cards */
+        .algo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+            gap: 24px;
+            margin-top: 24px;
+        }
+
+        .algo-card {
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            padding: 24px;
+            border: 1px solid var(--border-color);
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .algo-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--accent-blue);
+        }
+
+        .algo-card h4 {
+            font-size: 1.1rem;
+            color: var(--accent-green);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .algo-card .algo-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        .algo-card p {
+            font-size: 0.95rem;
+        }
+
+        .algo-card .formula {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 12px;
+            border-radius: 6px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.85rem;
+            margin: 12px 0;
+            color: var(--accent-cyan);
+        }
+
+        .algo-card .paper-badge {
+            display: inline-block;
+            background: var(--accent-purple);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            margin-top: 12px;
+        }
+
+        .algo-card .use-case {
+            margin-top: 16px;
+            padding: 12px;
+            background: rgba(88, 166, 255, 0.1);
+            border-radius: 8px;
+            border-left: 3px solid var(--accent-blue);
+        }
+
+        .algo-card .use-case strong {
+            color: var(--accent-blue);
+        }
+
+        /* Code Blocks */
+        .code-block {
+            background: #0d1117;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+
+        .code-header {
+            background: var(--bg-tertiary);
+            padding: 8px 16px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .code-header .lang {
+            color: var(--accent-purple);
+            font-weight: 600;
+        }
+
+        pre {
+            padding: 16px;
+            overflow-x: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        pre code {
+            color: var(--text-primary);
+        }
+
+        .keyword { color: #ff7b72; }
+        .type { color: #79c0ff; }
+        .string { color: #a5d6ff; }
+        .comment { color: #8b949e; }
+        .function { color: #d2a8ff; }
+        .number { color: #79c0ff; }
+
+        /* Flow Diagram */
+        .flow-diagram {
+            background: var(--bg-tertiary);
+            padding: 32px;
+            border-radius: 12px;
+            margin: 24px 0;
+        }
+
+        .flow-step {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 16px;
+            padding: 16px;
+            background: var(--bg-primary);
+            border-radius: 8px;
+            border-left: 4px solid var(--accent-blue);
+        }
+
+        .flow-step .step-num {
+            width: 36px;
+            height: 36px;
+            background: var(--accent-blue);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 16px;
+            flex-shrink: 0;
+        }
+
+        .flow-step .step-content h5 {
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .flow-step .step-content p {
+            margin: 0;
+            font-size: 0.9rem;
+        }
+
+        .flow-step .step-content code {
+            background: rgba(88, 166, 255, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 16px;
+            margin-top: 24px;
+        }
+
+        .stat-card {
+            background: var(--bg-tertiary);
+            padding: 24px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .stat-card .number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-card .label {
+            color: var(--text-secondary);
+            margin-top: 8px;
+        }
+
+        /* Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+        }
+
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background: var(--bg-tertiary);
+            color: var(--accent-blue);
+            font-weight: 600;
+        }
+
+        tr:hover {
+            background: rgba(88, 166, 255, 0.05);
+        }
+
+        /* File Tree */
+        .file-tree {
+            background: var(--bg-tertiary);
+            padding: 24px;
+            border-radius: 12px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+        }
+
+        .file-tree .folder {
+            color: var(--accent-blue);
+        }
+
+        .file-tree .file {
+            color: var(--accent-green);
+        }
+
+        .file-tree .new {
+            background: rgba(63, 185, 80, 0.2);
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-left: 8px;
+            font-size: 0.75rem;
+            color: var(--accent-green);
+        }
+
+        .file-tree .modified {
+            background: rgba(210, 153, 34, 0.2);
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-left: 8px;
+            font-size: 0.75rem;
+            color: var(--accent-orange);
+        }
+
+        .file-tree .lines {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            margin-left: 8px;
+        }
+
+        .file-tree ul {
+            list-style: none;
+            padding-left: 24px;
+        }
+
+        .file-tree > ul {
+            padding-left: 0;
+        }
+
+        .file-tree li {
+            padding: 4px 0;
+        }
+
+        /* Test Grid */
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .test-category {
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .test-category h5 {
+            color: var(--accent-purple);
+            margin-bottom: 12px;
+            font-size: 0.95rem;
+        }
+
+        .test-category ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .test-category li {
+            padding: 4px 0;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .test-category li::before {
+            content: "✓ ";
+            color: var(--accent-green);
+        }
+
+        /* Comparison Box */
+        .comparison-box {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin: 24px 0;
+        }
+
+        .comparison-box > div {
+            background: var(--bg-tertiary);
+            padding: 20px;
+            border-radius: 12px;
+        }
+
+        .comparison-box h4 {
+            margin-bottom: 16px;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 32px;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--border-color);
+            margin-top: 48px;
+        }
+
+        /* Gonum Badge */
+        .gonum-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: linear-gradient(135deg, #00ADD8, #00758D);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-top: 16px;
+        }
+
+        /* Warning Box */
+        .warning-box {
+            background: rgba(210, 153, 34, 0.1);
+            border: 1px solid var(--accent-orange);
+            border-radius: 8px;
+            padding: 16px;
+            margin: 16px 0;
+        }
+
+        .warning-box strong {
+            color: var(--accent-orange);
+        }
+
+        /* Info Box */
+        .info-box {
+            background: rgba(88, 166, 255, 0.1);
+            border: 1px solid var(--accent-blue);
+            border-radius: 8px;
+            padding: 16px;
+            margin: 16px 0;
+        }
+
+        .info-box strong {
+            color: var(--accent-blue);
+        }
+
+        @media (max-width: 768px) {
+            .comparison-box {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🧠 ML-Based Model Selection</h1>
+            <p class="subtitle">Complete Design & Implementation Guide for vLLM Semantic Router</p>
+            <a href="https://github.com/vllm-project/semantic-router/issues/986" class="issue-link">
+                View Issue #986 →
+            </a>
+            <div class="gonum-badge">
+                ⚡ Powered by gonum v0.15.1
+            </div>
+        </header>
+
+        <!-- Table of Contents -->
+        <nav class="toc">
+            <h2>📑 Table of Contents</h2>
+            <ul>
+                <li><a href="#overview">1. Overview & Problem Statement</a></li>
+                <li><a href="#high-level-design">2. High-Level Design</a></li>
+                <li><a href="#flow">3. Complete Request Flow</a></li>
+                <li><a href="#algorithms">4. ML Algorithms Deep Dive</a></li>
+                <li><a href="#implementation">5. Implementation Details</a></li>
+                <li><a href="#code-walkthrough">6. Code Walkthrough</a></li>
+                <li><a href="#configuration">7. Configuration Guide</a></li>
+                <li><a href="#testing">8. Testing Strategy</a></li>
+                <li><a href="#files">9. File Structure</a></li>
+                <li><a href="#papers">10. Paper References</a></li>
+            </ul>
+        </nav>
+
+        <!-- Section 1: Overview -->
+        <section id="overview" class="section">
+            <h2>1. 📋 Overview & Problem Statement</h2>
+            
+            <h3>The Problem</h3>
+            <p class="highlight">
+                When a routing decision has <strong>multiple models</strong> configured, how do we decide 
+                which model should handle each request? Previously, the router simply selected the first model 
+                in the list. This is suboptimal because different models excel at different tasks.
+            </p>
+
+            <h3>The Solution</h3>
+            <p>
+                We implement 5 machine learning algorithms that learn from historical request-response data 
+                to intelligently select the optimal model for each query. The algorithms analyze the 
+                <strong>query embedding</strong> (a numerical vector representing the query's meaning) 
+                and historical performance data to make informed decisions.
+            </p>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="number">5</div>
+                    <div class="label">ML Algorithms</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number">~3,500</div>
+                    <div class="label">Lines of Code</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number">30+</div>
+                    <div class="label">Test Cases</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number">9</div>
+                    <div class="label">Benchmarks</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number">3</div>
+                    <div class="label">Research Papers</div>
+                </div>
+            </div>
+
+            <h3>Key Concepts</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Concept</th>
+                        <th>Explanation</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Query Embedding</strong></td>
+                        <td>A numerical vector (e.g., 384 dimensions) that captures the semantic meaning of a query. 
+                            Similar queries have similar embeddings. Generated by an embedding model like sentence-transformers.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Training Record</strong></td>
+                        <td>Historical data: which model was used for which query, and how well did it perform 
+                            (latency, quality score, success/failure).</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Model Selection</strong></td>
+                        <td>Given a new query embedding, predict which model from a list will perform best, 
+                            based on patterns learned from training data.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Cold Start</strong></td>
+                        <td>When no training data exists, all algorithms gracefully fall back to selecting the first model.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Section 2: High-Level Design -->
+        <section id="high-level-design" class="section">
+            <h2>2. 🏗️ High-Level Design</h2>
+
+            <h3>System Architecture</h3>
+            <div class="architecture-diagram" style="text-align: center;">
+                <div class="diagram-box box-request">📥 HTTP Request<br><small>User Query</small></div>
+                <span class="flow-arrow">→</span>
+                <div class="diagram-box box-signal">📡 Signal Extraction<br><small>Embedding + Keywords</small></div>
+                <span class="flow-arrow">→</span>
+                <div class="diagram-box box-decision">🎯 Decision Matching<br><small>Find matching rules</small></div>
+                <span class="flow-arrow">→</span>
+                <div class="diagram-box box-selector">🧠 Model Selector<br><small>ML Algorithm</small></div>
+                <span class="flow-arrow">→</span>
+                <div class="diagram-box box-model">⚡ Selected Model<br><small>Route to backend</small></div>
+            </div>
+
+            <h3>When Does Model Selection Happen?</h3>
+            <div class="info-box">
+                <strong>Important:</strong> Model selection happens <strong>after</strong> a decision is matched, 
+                only when:
+                <ul style="margin-top: 8px; margin-left: 24px;">
+                    <li>The matched decision has <strong>multiple models</strong> in <code>modelRefs</code></li>
+                    <li>The decision has a <strong><code>modelSelectionAlgorithm</code></strong> configured</li>
+                </ul>
+            </div>
+
+            <h3>Decision Flow Diagram</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="lang">Flowchart</span>
+                    <span>Decision Logic</span>
+                </div>
+<pre><code>
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          REQUEST PROCESSING FLOW                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. Request Received                                                        │
+│         │                                                                   │
+│         ▼                                                                   │
+│  2. Signal Extraction                                                       │
+│     ├── Extract keywords from query                                         │
+│     ├── Generate query embedding (384/768/1536 dimensions)                  │
+│     └── Detect domain/category                                              │
+│         │                                                                   │
+│         ▼                                                                   │
+│  3. Decision Matching                                                       │
+│     ├── Evaluate all decision rules (keywords, embeddings, domains)         │
+│     └── Find highest priority matching decision                             │
+│         │                                                                   │
+│         ▼                                                                   │
+│  4. Model Selection Check                                                   │
+│     ├── len(decision.ModelRefs) == 1? ──────► Use that model directly       │
+│     ├── len(decision.ModelRefs) > 1 AND                                     │
+│     │   decision.ModelSelectionAlgorithm != nil? ──────► Use ML Selection   │
+│     └── else ──────► Use first model (fallback)                             │
+│         │                                                                   │
+│         ▼                                                                   │
+│  5. ML Model Selection (if applicable)                                      │
+│     ├── Create selector from config (knn/kmeans/mlp/svm/matrix_fact)        │
+│     ├── Build SelectionContext (embedding, query text, category)            │
+│     ├── Call selector.Select(ctx, modelRefs)                                │
+│     └── Return best model (or first model on error)                         │
+│         │                                                                   │
+│         ▼                                                                   │
+│  6. Route to Selected Model Backend                                         │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+            </div>
+        </section>
+
+        <!-- Section 3: Complete Request Flow -->
+        <section id="flow" class="section">
+            <h2>3. 🔄 Complete Request Flow</h2>
+
+            <p>Let's trace a request through the entire system with a concrete example.</p>
+
+            <div class="warning-box">
+                <strong>Example Query:</strong> "Calculate the derivative of sin(x) * cos(x)"
+            </div>
+
+            <div class="flow-diagram">
+                <div class="flow-step">
+                    <div class="step-num">1</div>
+                    <div class="step-content">
+                        <h5>HTTP Request Arrives</h5>
+                        <p>OpenAI-compatible request received by Envoy ExtProc filter.</p>
+                        <div class="code-block" style="margin-top: 12px;">
+<pre><code>POST /v1/chat/completions
+{
+  "model": "MoM",  // Mixture of Models - triggers auto selection
+  "messages": [{"role": "user", "content": "Calculate the derivative of sin(x) * cos(x)"}]
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flow-step">
+                    <div class="step-num">2</div>
+                    <div class="step-content">
+                        <h5>Signal Extraction</h5>
+                        <p>The <code>Classifier</code> extracts multiple signals from the query:</p>
+                        <ul style="margin-top: 8px; margin-left: 24px; color: var(--text-secondary);">
+                            <li><strong>Query Embedding:</strong> [0.23, -0.15, 0.87, ...] (384 floats) - semantic representation</li>
+                            <li><strong>Keywords:</strong> "derivative", "sin", "cos", "calculate"</li>
+                            <li><strong>Domain:</strong> "mathematics"</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="flow-step">
+                    <div class="step-num">3</div>
+                    <div class="step-content">
+                        <h5>Decision Matching</h5>
+                        <p>The <code>DecisionEngine</code> evaluates all configured decisions and finds a match:</p>
+                        <div class="code-block" style="margin-top: 12px;">
+<pre><code>Matched Decision: "math_decision"
+  - Rules: domain == "mathematics" OR keywords contain ["derivative", "integral"]
+  - Priority: 100
+  - ModelRefs: ["gpt-4-turbo", "deepseek-math", "llama-math"]
+  - ModelSelectionAlgorithm: {type: "knn", k: 5}</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flow-step">
+                    <div class="step-num">4</div>
+                    <div class="step-content">
+                        <h5>Model Selection Check</h5>
+                        <p>Code in <code>req_filter_classification.go</code> checks:</p>
+                        <div class="code-block" style="margin-top: 12px;">
+<pre><code><span class="keyword">if</span> len(result.Decision.ModelRefs) > <span class="number">1</span> && result.Decision.ModelSelectionAlgorithm != <span class="keyword">nil</span> {
+    <span class="comment">// Use ML-based model selection</span>
+    selector, err := modelselection.<span class="function">NewSelector</span>(result.Decision.ModelSelectionAlgorithm)
+    <span class="comment">// ...</span>
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flow-step">
+                    <div class="step-num">5</div>
+                    <div class="step-content">
+                        <h5>ML Model Selection</h5>
+                        <p>The KNN algorithm finds similar historical queries and votes:</p>
+                        <ul style="margin-top: 8px; margin-left: 24px; color: var(--text-secondary);">
+                            <li>Find 5 nearest neighbors (most similar past queries)</li>
+                            <li>Weight votes by similarity × quality score</li>
+                            <li>Result: "deepseek-math" wins with 0.87 confidence</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="flow-step">
+                    <div class="step-num">6</div>
+                    <div class="step-content">
+                        <h5>Route to Backend</h5>
+                        <p>Request is forwarded to the <code>deepseek-math</code> backend. Response headers include:</p>
+                        <div class="code-block" style="margin-top: 12px;">
+<pre><code>x-vsr-selected-decision: math_decision
+x-vsr-selected-model: deepseek-math</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 4: ML Algorithms Deep Dive -->
+        <section id="algorithms" class="section">
+            <h2>4. 🔬 ML Algorithms Deep Dive</h2>
+
+            <p>
+                Each algorithm is implemented based on research papers and designed for different use cases.
+                All algorithms implement the <code>Selector</code> interface.
+            </p>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="lang">Go</span>
+                    <span>Selector Interface</span>
+                </div>
+<pre><code><span class="keyword">type</span> <span class="type">Selector</span> <span class="keyword">interface</span> {
+    <span class="comment">// Select chooses the best model from refs based on the context</span>
+    <span class="function">Select</span>(ctx *<span class="type">SelectionContext</span>, refs []config.<span class="type">ModelRef</span>) (*config.<span class="type">ModelRef</span>, <span class="type">error</span>)
+    
+    <span class="comment">// Name returns the algorithm name</span>
+    <span class="function">Name</span>() <span class="type">string</span>
+    
+    <span class="comment">// Train updates the model with new training data</span>
+    <span class="function">Train</span>(data []<span class="type">TrainingRecord</span>) <span class="type">error</span>
+}</code></pre>
+            </div>
+
+            <div class="algo-grid">
+                <!-- KNN -->
+                <div class="algo-card">
+                    <h4>
+                        <span class="algo-icon" style="background: #1a73e8;">K</span>
+                        KNN (K-Nearest Neighbors)
+                    </h4>
+                    <span class="paper-badge">FusionFactory (arXiv:2507.10540)</span>
+                    
+                    <h4 style="margin-top: 16px;">How It Works</h4>
+                    <p>
+                        KNN finds the K most similar historical queries using <strong>cosine similarity</strong> 
+                        on embeddings. Each neighbor votes for its model, weighted by similarity and quality.
+                    </p>
+
+                    <div class="formula">
+                        similarity(a, b) = (a · b) / (||a|| × ||b||)<br>
+                        vote_weight = similarity × (1 + quality) × success_factor
+                    </div>
+
+                    <h4>Algorithm Steps</h4>
+                    <ol style="margin-left: 20px; color: var(--text-secondary); font-size: 0.9rem;">
+                        <li>Compute cosine similarity between query and all training records</li>
+                        <li>Sort by similarity (descending)</li>
+                        <li>Take top K neighbors</li>
+                        <li>For each neighbor, add weighted vote to its model</li>
+                        <li>Return model with highest total votes</li>
+                    </ol>
+
+                    <div class="use-case">
+                        <strong>Best for:</strong> Semantic similarity matching - "similar queries go to same model"
+                    </div>
+                </div>
+
+                <!-- KMeans -->
+                <div class="algo-card">
+                    <h4>
+                        <span class="algo-icon" style="background: #e65100;">C</span>
+                        KMeans Clustering
+                    </h4>
+                    <span class="paper-badge">Avengers-Pro (arXiv:2508.12631)</span>
+                    
+                    <h4 style="margin-top: 16px;">How It Works</h4>
+                    <p>
+                        Clusters queries into groups based on embedding similarity. Each cluster is assigned 
+                        to the best model using a <strong>performance-efficiency score</strong>.
+                    </p>
+
+                    <div class="formula">
+                        Score = (1 - ε) × Performance + ε × Efficiency<br>
+                        Performance = success_rate × avg_quality<br>
+                        Efficiency = 1 / (1 + normalized_latency)
+                    </div>
+
+                    <h4>Algorithm Steps</h4>
+                    <ol style="margin-left: 20px; color: var(--text-secondary); font-size: 0.9rem;">
+                        <li>Initialize K centroids from training data</li>
+                        <li>Iterate: assign points to nearest centroid, update centroids</li>
+                        <li>For each cluster, compute performance-efficiency score per model</li>
+                        <li>Assign best-scoring model to each cluster</li>
+                        <li>For new query: find nearest cluster, return its model</li>
+                    </ol>
+
+                    <h4>New: Efficiency Weight</h4>
+                    <p>Configure <code>efficiency_weight</code> (0-1) to balance performance vs efficiency.</p>
+
+                    <div class="use-case">
+                        <strong>Best for:</strong> Pattern-based routing with cost/latency optimization
+                    </div>
+                </div>
+
+                <!-- MLP -->
+                <div class="algo-card">
+                    <h4>
+                        <span class="algo-icon" style="background: #7b1fa2;">N</span>
+                        MLP (Multi-Layer Perceptron)
+                    </h4>
+                    <span class="paper-badge">FusionFactory (arXiv:2507.10540)</span>
+                    
+                    <h4 style="margin-top: 16px;">How It Works</h4>
+                    <p>
+                        A neural network with configurable hidden layers learns complex non-linear patterns.
+                        Uses <strong>Xavier initialization</strong>, <strong>ReLU activation</strong>, 
+                        and <strong>softmax output</strong>.
+                    </p>
+
+                    <div class="formula">
+                        hidden = ReLU(W₁ × input + b₁)<br>
+                        output = Softmax(W₂ × hidden + b₂)
+                    </div>
+
+                    <h4>Algorithm Steps</h4>
+                    <ol style="margin-left: 20px; color: var(--text-secondary); font-size: 0.9rem;">
+                        <li>Initialize weights with Xavier initialization</li>
+                        <li>SGD training: forward pass → compute error → backprop</li>
+                        <li>Train for 50 epochs with learning_rate=0.01</li>
+                        <li>For inference: forward pass through all layers</li>
+                        <li>Return model with highest softmax probability</li>
+                    </ol>
+
+                    <div class="use-case">
+                        <strong>Best for:</strong> Complex decision boundaries that simpler algorithms can't capture
+                    </div>
+                </div>
+
+                <!-- SVM -->
+                <div class="algo-card">
+                    <h4>
+                        <span class="algo-icon" style="background: #c62828;">S</span>
+                        SVM (Support Vector Machine)
+                    </h4>
+                    <span class="paper-badge">FusionFactory (arXiv:2507.10540)</span>
+                    
+                    <h4 style="margin-top: 16px;">How It Works</h4>
+                    <p>
+                        Uses <strong>one-vs-all</strong> classification with kernel functions to find optimal 
+                        decision boundaries. Supports linear, RBF, and polynomial kernels.
+                    </p>
+
+                    <div class="formula">
+                        Linear: K(a,b) = a · b<br>
+                        RBF: K(a,b) = exp(-γ × ||a-b||²)<br>
+                        Poly: K(a,b) = (1 + a·b)³
+                    </div>
+
+                    <h4>Algorithm Steps</h4>
+                    <ol style="margin-left: 20px; color: var(--text-secondary); font-size: 0.9rem;">
+                        <li>For each model, train one-vs-all classifier</li>
+                        <li>Identify support vectors (boundary points)</li>
+                        <li>Store alphas (weights) for each support vector</li>
+                        <li>For inference: compute decision score for each model</li>
+                        <li>Return model with highest score</li>
+                    </ol>
+
+                    <div class="use-case">
+                        <strong>Best for:</strong> Clear separation between model domains, smaller datasets
+                    </div>
+                </div>
+
+                <!-- Matrix Factorization -->
+                <div class="algo-card">
+                    <h4>
+                        <span class="algo-icon" style="background: #00695c;">M</span>
+                        Matrix Factorization
+                    </h4>
+                    <span class="paper-badge">RouteLLM (arXiv:2406.18665)</span>
+                    
+                    <h4 style="margin-top: 16px;">How It Works</h4>
+                    <p>
+                        Learns latent factors for queries and models. Supports both quality-based training 
+                        and <strong>preference-based training (BPR)</strong> from the RouteLLM paper.
+                    </p>
+
+                    <div class="formula">
+                        score(query, model) = global_bias + model_bias + (query_factors · model_factors)<br><br>
+                        BPR: maximize P(preferred_model > other_model | query)
+                    </div>
+
+                    <h4>Two Training Modes</h4>
+                    <ol style="margin-left: 20px; color: var(--text-secondary); font-size: 0.9rem;">
+                        <li><strong>Quality-based:</strong> Train on (query, model, quality_score) triplets</li>
+                        <li><strong>Preference-based (BPR):</strong> Train on (query, preferred_model, other_model) pairs</li>
+                    </ol>
+
+                    <div class="use-case">
+                        <strong>Best for:</strong> Learning from human preference data (RouteLLM style)
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 5: Implementation Details -->
+        <section id="implementation" class="section">
+            <h2>5. ⚙️ Implementation Details</h2>
+
+            <h3>Key Data Structures</h3>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="lang">Go</span>
+                    <span>selector.go - Core Types</span>
+                </div>
+<pre><code><span class="comment">// SelectionContext contains all info needed for model selection</span>
+<span class="keyword">type</span> <span class="type">SelectionContext</span> <span class="keyword">struct</span> {
+    QueryEmbedding []<span class="type">float64</span>  <span class="comment">// The semantic vector of the query</span>
+    QueryText      <span class="type">string</span>     <span class="comment">// Raw text of the query</span>
+    CategoryName   <span class="type">string</span>     <span class="comment">// Detected category (e.g., "math")</span>
+    DecisionName   <span class="type">string</span>     <span class="comment">// Name of matched decision</span>
+}
+
+<span class="comment">// TrainingRecord represents historical request-response data</span>
+<span class="keyword">type</span> <span class="type">TrainingRecord</span> <span class="keyword">struct</span> {
+    QueryEmbedding  []<span class="type">float64</span>      <span class="comment">// Embedding of the query</span>
+    SelectedModel   <span class="type">string</span>         <span class="comment">// Which model was used</span>
+    ResponseLatency time.<span class="type">Duration</span>  <span class="comment">// How long it took</span>
+    ResponseQuality <span class="type">float64</span>        <span class="comment">// Quality score (0-1)</span>
+    Success         <span class="type">bool</span>           <span class="comment">// Did it succeed?</span>
+}
+
+<span class="comment">// PreferenceRecord for RouteLLM-style training</span>
+<span class="keyword">type</span> <span class="type">PreferenceRecord</span> <span class="keyword">struct</span> {
+    QueryEmbedding []<span class="type">float64</span>
+    PreferredModel <span class="type">string</span>  <span class="comment">// Model that was preferred</span>
+    OtherModel     <span class="type">string</span>  <span class="comment">// Model that was NOT preferred</span>
+    Confidence     <span class="type">float64</span> <span class="comment">// Confidence in this preference (0-1)</span>
+}</code></pre>
+            </div>
+
+            <h3>Production Quality Features</h3>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Feature</th>
+                        <th>Implementation</th>
+                        <th>Why It Matters</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Numerical Stability</strong></td>
+                        <td>Softmax with max subtraction, Welford's algorithm</td>
+                        <td>Prevents overflow/underflow in large embeddings</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Thread Safety</strong></td>
+                        <td>sync.RWMutex on all selector state</td>
+                        <td>Safe concurrent training and selection</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Memory Bounds</strong></td>
+                        <td>Training data capped at 10,000 records</td>
+                        <td>Prevents unbounded memory growth</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Graceful Fallback</strong></td>
+                        <td>Returns first model on any error</td>
+                        <td>System never fails due to model selection</td>
+                    </tr>
+                    <tr>
+                        <td><strong>gonum Integration</strong></td>
+                        <td>gonum/mat for matrices, gonum/floats for vectors</td>
+                        <td>Production-quality numerical computing</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Utility Functions (using gonum)</h3>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="lang">Go</span>
+                    <span>Numerical utilities</span>
+                </div>
+<pre><code><span class="keyword">import</span> (
+    <span class="string">"gonum.org/v1/gonum/floats"</span>
+    <span class="string">"gonum.org/v1/gonum/mat"</span>
+)
+
+<span class="comment">// CosineSimilarity - measures angle between two vectors</span>
+<span class="keyword">func</span> <span class="function">CosineSimilarity</span>(a, b []<span class="type">float64</span>) <span class="type">float64</span> {
+    dot := floats.<span class="function">Dot</span>(a, b)         <span class="comment">// a · b</span>
+    normA := floats.<span class="function">Norm</span>(a, <span class="number">2</span>)      <span class="comment">// ||a||</span>
+    normB := floats.<span class="function">Norm</span>(b, <span class="number">2</span>)      <span class="comment">// ||b||</span>
+    <span class="keyword">return</span> dot / (normA * normB)
+}
+
+<span class="comment">// EuclideanDistance - straight-line distance</span>
+<span class="keyword">func</span> <span class="function">EuclideanDistance</span>(a, b []<span class="type">float64</span>) <span class="type">float64</span> {
+    <span class="keyword">return</span> floats.<span class="function">Distance</span>(a, b, <span class="number">2</span>)
+}
+
+<span class="comment">// Softmax - converts scores to probabilities (with numerical stability)</span>
+<span class="keyword">func</span> <span class="function">Softmax</span>(x []<span class="type">float64</span>) []<span class="type">float64</span> {
+    maxVal := floats.<span class="function">Max</span>(x)  <span class="comment">// Subtract max for stability</span>
+    result := <span class="keyword">make</span>([]<span class="type">float64</span>, <span class="function">len</span>(x))
+    <span class="keyword">var</span> sum <span class="type">float64</span>
+    <span class="keyword">for</span> i, v := <span class="keyword">range</span> x {
+        result[i] = math.<span class="function">Exp</span>(v - maxVal)
+        sum += result[i]
+    }
+    floats.<span class="function">Scale</span>(<span class="number">1</span>/sum, result)
+    <span class="keyword">return</span> result
+}</code></pre>
+            </div>
+        </section>
+
+        <!-- Section 6: Code Walkthrough -->
+        <section id="code-walkthrough" class="section">
+            <h2>6. 📖 Code Walkthrough</h2>
+
+            <h3>Factory Function: Creating a Selector</h3>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="lang">Go</span>
+                    <span>selector.go - NewSelector()</span>
+                </div>
+<pre><code><span class="comment">// NewSelector creates the appropriate selector based on config</span>
+<span class="keyword">func</span> <span class="function">NewSelector</span>(cfg *config.<span class="type">ModelSelectionConfig</span>) (<span class="type">Selector</span>, <span class="type">error</span>) {
+    <span class="keyword">if</span> cfg == <span class="keyword">nil</span> {
+        <span class="keyword">return</span> <span class="keyword">nil</span>, fmt.<span class="function">Errorf</span>(<span class="string">"config is nil"</span>)
+    }
+
+    <span class="keyword">switch</span> cfg.Type {
+    <span class="keyword">case</span> <span class="string">"knn"</span>:
+        k := cfg.K
+        <span class="keyword">if</span> k <= <span class="number">0</span> { k = <span class="number">3</span> }  <span class="comment">// default</span>
+        <span class="keyword">return</span> <span class="function">NewKNNSelector</span>(k), <span class="keyword">nil</span>
+
+    <span class="keyword">case</span> <span class="string">"kmeans"</span>:
+        <span class="keyword">if</span> cfg.EfficiencyWeight > <span class="number">0</span> {
+            <span class="keyword">return</span> <span class="function">NewKMeansSelectorWithEfficiency</span>(cfg.NumClusters, cfg.EfficiencyWeight), <span class="keyword">nil</span>
+        }
+        <span class="keyword">return</span> <span class="function">NewKMeansSelector</span>(cfg.NumClusters), <span class="keyword">nil</span>
+
+    <span class="keyword">case</span> <span class="string">"mlp"</span>:
+        layers := cfg.HiddenLayers
+        <span class="keyword">if</span> <span class="function">len</span>(layers) == <span class="number">0</span> { layers = []<span class="type">int</span>{<span class="number">64</span>, <span class="number">32</span>} }
+        <span class="keyword">return</span> <span class="function">NewMLPSelector</span>(layers), <span class="keyword">nil</span>
+
+    <span class="keyword">case</span> <span class="string">"svm"</span>:
+        kernel := cfg.Kernel
+        <span class="keyword">if</span> kernel == <span class="string">""</span> { kernel = <span class="string">"rbf"</span> }
+        <span class="keyword">return</span> <span class="function">NewSVMSelector</span>(kernel), <span class="keyword">nil</span>
+
+    <span class="keyword">case</span> <span class="string">"matrix_factorization"</span>:
+        factors := cfg.NumFactors
+        <span class="keyword">if</span> factors <= <span class="number">0</span> { factors = <span class="number">10</span> }
+        <span class="keyword">return</span> <span class="function">NewMatrixFactorizationSelector</span>(factors), <span class="keyword">nil</span>
+
+    <span class="keyword">default</span>:
+        <span class="keyword">return</span> <span class="keyword">nil</span>, fmt.<span class="function">Errorf</span>(<span class="string">"unknown algorithm: %s"</span>, cfg.Type)
+    }
+}</code></pre>
+            </div>
+
+            <h3>Integration Point: req_filter_classification.go</h3>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="lang">Go</span>
+                    <span>Where model selection is called</span>
+                </div>
+<pre><code><span class="comment">// In performDecisionEvaluationAndModelSelection()</span>
+<span class="keyword">if</span> <span class="function">len</span>(result.Decision.ModelRefs) > <span class="number">1</span> && result.Decision.ModelSelectionAlgorithm != <span class="keyword">nil</span> {
+    <span class="comment">// Create selector from config</span>
+    selector, err := modelselection.<span class="function">NewSelector</span>(result.Decision.ModelSelectionAlgorithm)
+    <span class="keyword">if</span> err != <span class="keyword">nil</span> {
+        logging.<span class="function">Warnf</span>(<span class="string">"Failed to create selector: %v, using first model"</span>, err)
+        selectedRef = &result.Decision.ModelRefs[<span class="number">0</span>]
+    } <span class="keyword">else</span> {
+        <span class="comment">// Build selection context with query embedding</span>
+        selectionCtx := &modelselection.<span class="type">SelectionContext</span>{
+            QueryText:    evaluationText,
+            CategoryName: categoryName,
+            DecisionName: decisionName,
+        }
+        
+        <span class="comment">// Get embedding from classifier</span>
+        <span class="keyword">if</span> r.Classifier != <span class="keyword">nil</span> {
+            embedding := r.Classifier.<span class="function">GetQueryEmbedding</span>(evaluationText)
+            selectionCtx.QueryEmbedding = embedding
+        }
+        
+        <span class="comment">// Select best model</span>
+        selected, err := selector.<span class="function">Select</span>(selectionCtx, result.Decision.ModelRefs)
+        <span class="keyword">if</span> err != <span class="keyword">nil</span> {
+            logging.<span class="function">Warnf</span>(<span class="string">"Selection failed: %v"</span>, err)
+            selectedRef = &result.Decision.ModelRefs[<span class="number">0</span>]
+        } <span class="keyword">else</span> {
+            selectedRef = selected
+        }
+    }
+}</code></pre>
+            </div>
+
+            <h3>Example: KNN Select Implementation</h3>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="lang">Go</span>
+                    <span>KNNSelector.Select()</span>
+                </div>
+<pre><code><span class="keyword">func</span> (s *<span class="type">KNNSelector</span>) <span class="function">Select</span>(ctx *<span class="type">SelectionContext</span>, refs []config.<span class="type">ModelRef</span>) (*config.<span class="type">ModelRef</span>, <span class="type">error</span>) {
+    <span class="comment">// Edge cases</span>
+    <span class="keyword">if</span> <span class="function">len</span>(refs) == <span class="number">0</span> { <span class="keyword">return</span> <span class="keyword">nil</span>, <span class="keyword">nil</span> }
+    <span class="keyword">if</span> <span class="function">len</span>(refs) == <span class="number">1</span> { <span class="keyword">return</span> &refs[<span class="number">0</span>], <span class="keyword">nil</span> }
+
+    training := s.<span class="function">getTrainingData</span>()
+    <span class="keyword">if</span> <span class="function">len</span>(training) == <span class="number">0</span> || <span class="function">len</span>(ctx.QueryEmbedding) == <span class="number">0</span> {
+        <span class="keyword">return</span> &refs[<span class="number">0</span>], <span class="keyword">nil</span>  <span class="comment">// Cold start fallback</span>
+    }
+
+    <span class="comment">// Find K nearest neighbors</span>
+    <span class="keyword">type</span> neighbor <span class="keyword">struct</span> {
+        record     <span class="type">TrainingRecord</span>
+        similarity <span class="type">float64</span>
+    }
+    
+    neighbors := <span class="keyword">make</span>([]neighbor, <span class="number">0</span>)
+    <span class="keyword">for</span> _, record := <span class="keyword">range</span> training {
+        sim := <span class="function">CosineSimilarity</span>(ctx.QueryEmbedding, record.QueryEmbedding)
+        neighbors = <span class="function">append</span>(neighbors, neighbor{record, sim})
+    }
+
+    <span class="comment">// Sort by similarity (descending)</span>
+    sort.<span class="function">Slice</span>(neighbors, <span class="keyword">func</span>(i, j <span class="type">int</span>) <span class="type">bool</span> {
+        <span class="keyword">return</span> neighbors[i].similarity > neighbors[j].similarity
+    })
+
+    <span class="comment">// Take top K and vote</span>
+    votes := <span class="keyword">make</span>(<span class="keyword">map</span>[<span class="type">string</span>]<span class="type">float64</span>)
+    <span class="keyword">for</span> i := <span class="number">0</span>; i < s.k && i < <span class="function">len</span>(neighbors); i++ {
+        n := neighbors[i]
+        weight := n.similarity * (<span class="number">1.0</span> + n.record.ResponseQuality)
+        <span class="keyword">if</span> !n.record.Success { weight *= <span class="number">0.5</span> }
+        votes[n.record.SelectedModel] += weight
+    }
+
+    <span class="comment">// Return model with highest votes</span>
+    <span class="keyword">var</span> bestModel <span class="type">string</span>
+    <span class="keyword">var</span> bestVote <span class="type">float64</span>
+    <span class="keyword">for</span> model, vote := <span class="keyword">range</span> votes {
+        <span class="keyword">if</span> vote > bestVote {
+            bestVote = vote
+            bestModel = model
+        }
+    }
+    
+    <span class="comment">// Find and return the matching ModelRef</span>
+    <span class="keyword">for</span> i, ref := <span class="keyword">range</span> refs {
+        <span class="keyword">if</span> ref.Model == bestModel {
+            <span class="keyword">return</span> &refs[i], <span class="keyword">nil</span>
+        }
+    }
+    <span class="keyword">return</span> &refs[<span class="number">0</span>], <span class="keyword">nil</span>
+}</code></pre>
+            </div>
+        </section>
+
+        <!-- Section 7: Configuration -->
+        <section id="configuration" class="section">
+            <h2>7. ⚙️ Configuration Guide</h2>
+
+            <h3>YAML Configuration</h3>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="lang">YAML</span>
+                    <span>values.yaml - Complete Example</span>
+                </div>
+<pre><code><span class="type">decisions</span>:
+  - <span class="type">name</span>: <span class="string">"math_decision"</span>
+    <span class="type">description</span>: <span class="string">"Route math queries to specialized models"</span>
+    <span class="type">priority</span>: <span class="number">100</span>
+    <span class="type">rules</span>:
+      <span class="type">operator</span>: <span class="string">"OR"</span>
+      <span class="type">conditions</span>:
+        - <span class="type">type</span>: <span class="string">"domain"</span>
+          <span class="type">name</span>: <span class="string">"mathematics"</span>
+        - <span class="type">type</span>: <span class="string">"keyword"</span>
+          <span class="type">keywords</span>: [<span class="string">"derivative"</span>, <span class="string">"integral"</span>, <span class="string">"equation"</span>]
+    
+    <span class="comment"># ML-based model selection configuration</span>
+    <span class="type">modelSelectionAlgorithm</span>:
+      <span class="type">type</span>: <span class="string">"knn"</span>           <span class="comment"># Algorithm type</span>
+      <span class="type">k</span>: <span class="number">5</span>                   <span class="comment"># Number of neighbors</span>
+    
+    <span class="comment"># Multiple models to select from</span>
+    <span class="type">modelRefs</span>:
+      - <span class="type">model</span>: <span class="string">"gpt-4-turbo"</span>
+      - <span class="type">model</span>: <span class="string">"deepseek-math"</span>
+      - <span class="type">model</span>: <span class="string">"llama-math"</span>
+
+  - <span class="type">name</span>: <span class="string">"cost_optimized_decision"</span>
+    <span class="type">description</span>: <span class="string">"Route simple queries to cheaper models"</span>
+    <span class="type">modelSelectionAlgorithm</span>:
+      <span class="type">type</span>: <span class="string">"kmeans"</span>
+      <span class="type">num_clusters</span>: <span class="number">4</span>
+      <span class="type">efficiency_weight</span>: <span class="number">0.7</span>  <span class="comment"># Prefer faster/cheaper models</span>
+    <span class="type">modelRefs</span>:
+      - <span class="type">model</span>: <span class="string">"gpt-4-turbo"</span>    <span class="comment"># Expensive but high quality</span>
+      - <span class="type">model</span>: <span class="string">"gpt-3.5-turbo"</span>  <span class="comment"># Cheap and fast</span></code></pre>
+            </div>
+
+            <h3>All Configuration Options</h3>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Algorithm</th>
+                        <th>Parameter</th>
+                        <th>Type</th>
+                        <th>Default</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>knn</strong></td>
+                        <td>k</td>
+                        <td>int</td>
+                        <td>3</td>
+                        <td>Number of nearest neighbors to consider</td>
+                    </tr>
+                    <tr>
+                        <td><strong>kmeans</strong></td>
+                        <td>num_clusters</td>
+                        <td>int</td>
+                        <td>4</td>
+                        <td>Number of clusters</td>
+                    </tr>
+                    <tr>
+                        <td><strong>kmeans</strong></td>
+                        <td>efficiency_weight</td>
+                        <td>float</td>
+                        <td>0.3</td>
+                        <td>0=pure quality, 1=pure efficiency</td>
+                    </tr>
+                    <tr>
+                        <td><strong>mlp</strong></td>
+                        <td>hidden_layers</td>
+                        <td>[]int</td>
+                        <td>[64, 32]</td>
+                        <td>Hidden layer sizes</td>
+                    </tr>
+                    <tr>
+                        <td><strong>svm</strong></td>
+                        <td>kernel</td>
+                        <td>string</td>
+                        <td>"rbf"</td>
+                        <td>Kernel type: linear, rbf, poly</td>
+                    </tr>
+                    <tr>
+                        <td><strong>matrix_factorization</strong></td>
+                        <td>num_factors</td>
+                        <td>int</td>
+                        <td>10</td>
+                        <td>Number of latent factors</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Section 8: Testing Strategy -->
+        <section id="testing" class="section">
+            <h2>8. 🧪 Testing Strategy</h2>
+
+            <h3>Two Types of Tests</h3>
+
+            <div class="comparison-box">
+                <div>
+                    <h4 style="color: var(--accent-green);">Unit Tests (selector_test.go)</h4>
+                    <p style="margin-bottom: 12px;">Tests algorithm logic directly via Go function calls</p>
+                    <ul style="margin-left: 20px; color: var(--text-secondary); font-size: 0.9rem;">
+                        <li>Fast execution (milliseconds)</li>
+                        <li>No external dependencies</li>
+                        <li>Uses synthetic training data</li>
+                        <li>Tests edge cases and numerical stability</li>
+                        <li>Run on every PR</li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 style="color: var(--accent-purple);">E2E Tests (model_selection.go)</h4>
+                    <p style="margin-bottom: 12px;">Tests full system via HTTP requests to deployed service</p>
+                    <ul style="margin-left: 20px; color: var(--text-secondary); font-size: 0.9rem;">
+                        <li>Slower execution (seconds/minutes)</li>
+                        <li>Requires Kubernetes + GPU</li>
+                        <li>Uses real embeddings</li>
+                        <li>Tests integration between components</li>
+                        <li>Run nightly or pre-release</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h3>Test Coverage Summary</h3>
+
+            <div class="test-grid">
+                <div class="test-category">
+                    <h5>Factory & Basic Tests</h5>
+                    <ul>
+                        <li>TestNewSelector (all types)</li>
+                        <li>TestSelector_EmptyRefs</li>
+                        <li>TestSelector_SingleModel</li>
+                        <li>TestSelector_NoEmbedding</li>
+                    </ul>
+                </div>
+
+                <div class="test-category">
+                    <h5>Algorithm Tests</h5>
+                    <ul>
+                        <li>TestProductionScenario_AllAlgorithms</li>
+                        <li>TestProductionScenario_ColdStart</li>
+                        <li>TestProductionScenario_IncrementalTraining</li>
+                        <li>TestProductionScenario_AllSVMKernels</li>
+                    </ul>
+                </div>
+
+                <div class="test-category">
+                    <h5>New Features</h5>
+                    <ul>
+                        <li>TestKMeans_EfficiencyWeight</li>
+                        <li>TestKMeans_PerformanceEfficiencyScore</li>
+                        <li>TestMatrixFactorization_PreferenceTraining</li>
+                        <li>TestMatrixFactorization_BackwardCompatibility</li>
+                    </ul>
+                </div>
+
+                <div class="test-category">
+                    <h5>Edge Cases</h5>
+                    <ul>
+                        <li>TestProductionScenario_NumericalStability</li>
+                        <li>TestProductionScenario_MemoryBoundedTraining</li>
+                        <li>TestProductionScenario_HighConcurrency</li>
+                        <li>TestProductionScenario_FailedRequestHandling</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="lang">Bash</span>
+                    <span>Running Tests</span>
+                </div>
+<pre><code><span class="comment"># Run unit tests</span>
+cd src/semantic-router
+go test -v ./pkg/modelselection/...
+
+<span class="comment"># Run with race detector</span>
+go test -race ./pkg/modelselection/...
+
+<span class="comment"># Run benchmarks</span>
+go test -bench=. ./pkg/modelselection/...
+
+<span class="comment"># Run E2E tests (requires K8s)</span>
+cd e2e
+go test -v -run TestModelSelection</code></pre>
+            </div>
+        </section>
+
+        <!-- Section 9: File Structure -->
+        <section id="files" class="section">
+            <h2>9. 📁 File Structure</h2>
+
+            <div class="file-tree">
+                <ul>
+                    <li><span class="folder">📂 src/semantic-router/pkg/</span>
+                        <ul>
+                            <li><span class="folder">📂 modelselection/</span> <span class="new">NEW PACKAGE</span>
+                                <ul>
+                                    <li><span class="file">📄 selector.go</span> <span class="new">NEW</span> <span class="lines">~1,560 lines</span>
+                                        <br>&nbsp;&nbsp;&nbsp;&nbsp;• Selector interface and factory
+                                        <br>&nbsp;&nbsp;&nbsp;&nbsp;• 5 algorithm implementations (KNN, KMeans, MLP, SVM, MatrixFactorization)
+                                        <br>&nbsp;&nbsp;&nbsp;&nbsp;• PreferenceRecord for RouteLLM-style training
+                                        <br>&nbsp;&nbsp;&nbsp;&nbsp;• Utility functions (CosineSimilarity, Softmax, etc.)
+                                    </li>
+                                    <li><span class="file">📄 selector_test.go</span> <span class="new">NEW</span> <span class="lines">~1,920 lines</span>
+                                        <br>&nbsp;&nbsp;&nbsp;&nbsp;• 30+ test cases
+                                        <br>&nbsp;&nbsp;&nbsp;&nbsp;• 9 benchmarks
+                                        <br>&nbsp;&nbsp;&nbsp;&nbsp;• Production scenario tests
+                                    </li>
+                                </ul>
+                            </li>
+                            <li><span class="folder">📂 config/</span>
+                                <ul>
+                                    <li><span class="file">📄 config.go</span> <span class="modified">MODIFIED</span>
+                                        <br>&nbsp;&nbsp;&nbsp;&nbsp;• Added ModelSelectionConfig struct
+                                        <br>&nbsp;&nbsp;&nbsp;&nbsp;• Added efficiency_weight parameter
+                                    </li>
+                                </ul>
+                            </li>
+                            <li><span class="folder">📂 extproc/</span>
+                                <ul>
+                                    <li><span class="file">📄 req_filter_classification.go</span> <span class="modified">MODIFIED</span>
+                                        <br>&nbsp;&nbsp;&nbsp;&nbsp;• Integration point for model selection
+                                    </li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </li>
+                    <li><span class="folder">📂 e2e/testcases/</span>
+                        <ul>
+                            <li><span class="file">📄 model_selection.go</span> <span class="new">NEW</span> <span class="lines">~370 lines</span>
+                                <br>&nbsp;&nbsp;&nbsp;&nbsp;• E2E test for full flow
+                            </li>
+                            <li><span class="folder">📂 testdata/</span>
+                                <ul>
+                                    <li><span class="file">📄 model_selection_cases.json</span> <span class="new">NEW</span>
+                                        <br>&nbsp;&nbsp;&nbsp;&nbsp;• Test cases with algorithm info
+                                    </li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </li>
+                    <li><span class="file">📄 go.mod</span> <span class="modified">MODIFIED</span> — Added gonum.org/v1/gonum v0.15.1</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Section 10: Paper References -->
+        <section id="papers" class="section">
+            <h2>10. 📚 Paper References</h2>
+
+            <div class="paper-ref">
+                <h4 style="color: var(--accent-green); margin-bottom: 8px;">FusionFactory: Fusing LLM Capabilities with Multi-LLM Log Data</h4>
+                <p style="margin-bottom: 8px;">
+                    Feng, T., Zhang, H., Lei, Z., et al. (2025). 
+                    <a href="https://arxiv.org/abs/2507.10540">arXiv:2507.10540</a>
+                </p>
+                <p>
+                    <strong>Used for:</strong> KNN, MLP, SVM algorithms<br>
+                    Proposes query-level fusion via tailored LLM routers including KNN, MLP, and SVM-based approaches.
+                </p>
+            </div>
+
+            <div class="paper-ref">
+                <h4 style="color: var(--accent-orange); margin-bottom: 8px;">Beyond GPT-5: Making LLMs Cheaper and Better via Performance-Efficiency Optimized Routing</h4>
+                <p style="margin-bottom: 8px;">
+                    Zhang, Y., Li, H., Chen, J., et al. (2025). 
+                    <a href="https://arxiv.org/abs/2508.12631">arXiv:2508.12631</a> — Accepted to DAI 2025
+                </p>
+                <p>
+                    <strong>Used for:</strong> KMeans with efficiency_weight<br>
+                    Proposes Avengers-Pro framework that clusters queries using KMeans and routes based on 
+                    performance-efficiency score. Achieves state-of-the-art on 6 benchmarks.
+                </p>
+            </div>
+
+            <div class="paper-ref">
+                <h4 style="color: var(--accent-purple); margin-bottom: 8px;">RouteLLM: Learning to Route LLMs with Preference Data</h4>
+                <p style="margin-bottom: 8px;">
+                    Ong, I., et al. (2024). 
+                    <a href="https://arxiv.org/abs/2406.18665">arXiv:2406.18665</a> — Published at ICLR 2025
+                </p>
+                <p>
+                    <strong>Used for:</strong> Matrix Factorization with BPR training<br>
+                    Proposes matrix factorization router trained on human preference data using 
+                    Bayesian Personalized Ranking (BPR).
+                </p>
+            </div>
+        </section>
+
+        <footer>
+            <p>
+                vLLM Semantic Router — ML-Based Model Selection<br>
+                <a href="https://github.com/vllm-project/semantic-router/issues/986" style="color: var(--accent-blue);">Issue #986</a> 
+                | Part of v0.2 Athena Milestone
+            </p>
+            <p style="margin-top: 16px; font-size: 0.9rem;">
+                Last updated: January 2026
+            </p>
+        </footer>
+    </div>
+</body>
+</html>
