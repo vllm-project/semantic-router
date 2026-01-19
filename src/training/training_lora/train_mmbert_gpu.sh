@@ -89,7 +89,7 @@ echo -e "${BLUE}========================================${NC}"
 
 # List trained models
 echo -e "${YELLOW}Trained Models:${NC}"
-ls -la | grep lora_ || true
+for dir in lora_*; do [ -d "$dir" ] && ls -ld "$dir"; done || true
 
 # Copy models to output
 cp -r lora_*mmbert* /workspace/models/ 2>/dev/null || true
