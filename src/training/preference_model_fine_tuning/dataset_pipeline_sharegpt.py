@@ -188,7 +188,7 @@ class ShareGPTPreferencePipeline:
     async def run(
         self,
         existing_policy_label_path: Path,
-        raw_dataset_path: Path,
+        input_dataset_path: Path,
         output_path: Path,
     ) -> Path:
         """Execute the full pipeline and return the output path."""
@@ -197,7 +197,7 @@ class ShareGPTPreferencePipeline:
         )
         batch_count = 0
         start_index = self.start_sample_index
-        for batch in self._get_one_batch(raw_dataset_path, start_index):
+        for batch in self._get_one_batch(input_dataset_path, start_index):
             batch_count += 1
             logging.info(f"Processing batch {batch_count} of size {len(batch)}")
             (
@@ -223,9 +223,9 @@ class ShareGPTPreferencePipeline:
     # --------------------------- dataset utilities -------------------------
 
     def _get_one_batch(
-        self, raw_dataset_path: Path, start_index: int
-    ) -> Generator[ShareGPTConversation]:
-        raw = json.loads(raw_dataset_path.read_text())
+        self, input_dataset_path: Path, start_index: int
+    ) -> Generator[list[ShareGPTConversation]]:
+        raw = json.loads(input_dataset_path.read_text())
         current_batch: List[ShareGPTConversation] = []
         seen_sample_id_hashes = set()
         for idx, item in enumerate(raw):
@@ -380,7 +380,6 @@ class ShareGPTPreferencePipeline:
             logging.warning(
                 "Mismatched sample_id in candidate for sample %s: %s",
                 conversation.sample_id,
-                # json.dumps(candidate),
             )
             return None
         return candidate
@@ -410,42 +409,31 @@ Try to reuse one of the existing policy labels if it fits well.
         self,
         refined_dataset_path: Path,
         existing_policy_label_path: Path,
-        raw_dataset_path: Path,
+        input_dataset_path: Path,
         batch_size: int,
     ) -> None:
-        """Refine policy labels for the entire dataset."""
-        refined_sample_labels = self._refine_sample_labels(
-            existing_policy_label_path, raw_dataset_path, batch_size
+        """
+        Refine policy labels for the entire dataset.
+        This function produces a mapping from original policy labels to refined labels.
+        """
+        refined_policy_mappings = self._refine_policies_with_preprocessing(
+            existing_policy_label_path, input_dataset_path, batch_size
         )
         with open(refined_dataset_path, "w") as f:
-            dumpable = {
-                k: {"label": v.label, "description": v.description}
-                for k, v in refined_sample_labels.items()
-            }
-            json.dump(dumpable, f)
-        # save refined labels to file
+            json.dump(refined_policy_mappings, f)
 
-        # with open(refined_dataset_path, "w") as f:
-        #     for sample_id, policy in refined_sample_labels.items():
-        #         f.write(
-        #             json.dumps(
-        #                 {
-        #                     "sample_id": sample_id,
-        #                     "label": policy.label,
-        #                     "description": policy.description,
-        #                 }
-        #             )
-        #             + "\n"
-        #         )
-
-    def _refine_sample_labels(
-        self, existing_policy_label_path: Path, raw_dataset_path: Path, batch_size: int
-    ) -> Dict[str, RoutePolicy]:
+    def _refine_policies_with_preprocessing(
+        self,
+        existing_policy_label_path: Path,
+        input_dataset_path: Path,
+        batch_size: int,
+    ) -> dict[str, str]:
         """Refine sample labels for a batch of conversations."""
         raw_policies = self._load_existing_policies(existing_policy_label_path)
-        # policy_label_candidates = self._load_policy_label_candidates(raw_dataset_path)
-        # sample_id_to_refined_policy: Dict[str, RoutePolicy] = {}
-        all_refined_policies: Dict[str, RoutePolicy] = {}
+
+        # TODO: preprocessing to filter out long tail labels
+        # input_dataset_path is used to count the occurrence of each label
+        all_refined_policies: dict[str, str] = {}
         for batch_start in range(0, len(raw_policies), batch_size):
             batched_policies = raw_policies[batch_start : batch_start + batch_size]
             logging.info(
@@ -454,16 +442,6 @@ Try to reuse one of the existing policy labels if it fits well.
             raw_policies_to_refined = self._refine_policies(batched_policies)
             all_refined_policies.update(raw_policies_to_refined)
 
-        # for candidate in policy_label_candidates:
-        #     sample_id = candidate.sample_id
-        #     original_label = candidate.label
-        #     if original_label not in all_refined_policies:
-        #         logging.warning(
-        #             f"Original label {original_label} not found in refined policies"
-        #         )
-        #         continue
-        #     refined_policy = all_refined_policies[original_label]
-        #     sample_id_to_refined_policy[sample_id] = refined_policy
         return all_refined_policies
 
     def _refine_policies(
@@ -496,23 +474,153 @@ Return a JSON dict that represents the mapping in the format:
                 },
             },
         )
-        print("Refine response:", refine_response)
+        logging.info(f"Refine response: {refine_response}")
         refined_policy_mappings = safe_json_loads(refine_response)
-        # assert len(refined_policy_mappings) == len(
-        #     raw_policies
-        # ), f"Refined policies count must match raw policies count, got {len(refined_policy_mappings)} vs {len(raw_policies)}"
-        raw_policies_to_refined: Dict[str, RoutePolicy] = {}
-        for original_label, refined_label in refined_policy_mappings.items():
-            # original_label = mapping.get("original_label", "").strip()
-            # refined_label = mapping.get("refined_label", "").strip()
-            # description = mapping.get("description", "").strip()
-            # if not original_label or not refined_label:
-            #     logging.warning(f"Skipping invalid mapping: {json.dumps(mapping)}")
-            #     continue
-            raw_policies_to_refined[original_label] = RoutePolicy(
-                label=refined_label, description=""
+        return refined_policy_mappings
+
+    async def verify_policies(
+        self,
+        original_dataset_path: Path,
+        input_dataset_path: Path,
+        refined_dataset_path: Path,  # this should actually be renamed to refined_policy_mapping_path
+        output_path: Path,
+        batch_size: int,
+        start_index: int,
+    ) -> None:
+        """
+        original_dataset_path: shareGPT dataset path
+        input_dataset_path: dataset with original labels (produced by first pass)
+
+        Verify the integrity of refined policies.
+        After refinement, we merge the semantically similar policies, so the canonical labels should be a valid label set.
+        We need to ensure that the mapping still works, which means among all labels in the canonical label set
+        The label for each sample should be the most suitable one.
+        We need this because when generating the labels, some early samples may use labels that are too general, and a more specific label may appear later.
+
+        This function produces the final sample_id to canonical label mapping.
+        """
+        # generate the mapping from sample_id to canonical label
+        # input_dataset_path is a jsonl file with each line being a json object
+        with open(input_dataset_path, "r") as f:
+            route_policy_samples = [json.loads(line) for line in f]
+
+        refined_policy_label_mappings = json.loads(refined_dataset_path.read_text())
+        # build sample_id_to_label_mapping
+        sample_id_to_canonical_label: dict[str, str] = {}
+
+        for item in route_policy_samples:
+            sample_id = item.get("id")
+            label = item.get("label")
+            if label in refined_policy_label_mappings:
+                refined_label = refined_policy_label_mappings[label]
+                sample_id_to_canonical_label[sample_id] = refined_label
+            else:
+                # if it's not in the mapping, it means it's long tail label, so we filter them out
+                continue
+        # call LLM to verify the refined label for each sample concurrently
+        batch_count = 0
+        for batch in self._get_one_batch(original_dataset_path, start_index):
+            batch_count += 1
+            logging.info(f"Verifying batch {batch_count} of size {len(batch)}")
+            # if the sample is in long tail label set, we skip it
+            batch_filtered = [
+                sample
+                for sample in batch
+                if sample.sample_id in sample_id_to_canonical_label
+            ]
+            tasks = [
+                asyncio.to_thread(
+                    self._verify_policies_for_sample,
+                    sample,
+                    sample_id_to_canonical_label[sample.sample_id],
+                    refined_policy_label_mappings,
+                )
+                for sample in batch_filtered
+            ]
+            verified_route_policy_samples = await asyncio.gather(
+                *tasks, return_exceptions=True
             )
-        return raw_policies_to_refined
+            valid_verified_route_policy_samples: List[RoutePolicySample] = []
+            for conversation, verified_route_policy_sample in zip(
+                batch, verified_route_policy_samples
+            ):
+                if isinstance(verified_route_policy_sample, Exception):
+                    logging.error(
+                        "Policy label generation failed for sample %s: %s",
+                        conversation.sample_id,
+                        verified_route_policy_sample,
+                    )
+                    continue
+                if verified_route_policy_sample is None:
+                    logging.warning(
+                        "Policy label model returned no candidate for sample %s",
+                        conversation.sample_id,
+                    )
+                    continue
+                valid_verified_route_policy_samples.append(verified_route_policy_sample)
+
+                # write verified_route_policy_samples to file
+                with open(output_path, "a") as f:
+                    for (
+                        verified_route_policy_sample
+                    ) in valid_verified_route_policy_samples:
+                        f.write(json.dumps(verified_route_policy_sample) + "\n")
+
+    def _verify_policies_for_sample(
+        self,
+        sample: ShareGPTConversation,
+        canonical_label: str,
+        refined_policy_label_mappings: dict[str, str],
+    ) -> RoutePolicySample:
+        """Verify the policy label for one conversation."""
+        verify_policy_prompt = f"""You are an expert at verifying routing policy labels.
+### Instructions
+Given the following conversation and its assigned routing policy label, determine if the label accurately reflects the user's intent.
+If the label is appropriate, return the same label.
+If the label is inappropriate or the label is too general, suggest a more suitable/specific label from the following canonical label set:
+{json.dumps(list(refined_policy_label_mappings.values()))}
+
+
+### Assigned Label
+{canonical_label}
+
+### Conversation
+{json.dumps(sample.to_dict(), indent=2)}
+"""
+        verify_response = self.policy_refine_model.chat(
+            messages=[{"role": "user", "content": verify_policy_prompt}],
+            temperature=0.3,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "RoutePolicySample",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "sample_id": {"type": "string"},
+                            "label": {"type": "string"},
+                        },
+                        "required": ["sample_id", "label"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+        )
+
+        logging.info(f"Verify response: {verify_response}")
+        verified_route_policy_sample = safe_json_loads(verify_response)
+        if verified_route_policy_sample.get("label") != canonical_label:
+            logging.warning(
+                "Sample %s: verified label %s does not match canonical label %s",
+                sample.sample_id,
+                verified_route_policy_sample.get("label"),
+                canonical_label,
+            )
+        return RoutePolicySample(
+            sample_id=verified_route_policy_sample["sample_id"],
+            label=verified_route_policy_sample["label"],
+            description="",
+        )
 
 
 def main() -> None:
@@ -538,20 +646,30 @@ def main() -> None:
     existing_policy_label_path = Path("existing_sharegpt_policies_2.jsonl")
     dataset_path = Path("ShareGPT_V3_unfiltered_cleaned_split.json")
     output_path = Path("sharegpt_preference_labeled_2.jsonl")
-    refined_dataset_path = Path("refined_sharegpt_policy_labels_2.jsonl")
-    asyncio.run(
-        pipeline.run(
-            existing_policy_label_path=existing_policy_label_path,
-            raw_dataset_path=dataset_path,
-            output_path=output_path,
-        )
-    )
+    refined_dataset_path = Path("label_canonical_map.json")
+    # asyncio.run(
+    #     pipeline.run(
+    #         existing_policy_label_path=existing_policy_label_path,
+    #         input_dataset_path=dataset_path,
+    #         output_path=output_path,
+    #     )
+    # )
     # pipeline.refine(
     #     refined_dataset_path=refined_dataset_path,
     #     existing_policy_label_path=existing_policy_label_path,
-    #     raw_dataset_path=output_path,
+    #     input_dataset_path=output_path,
     #     batch_size=1000,
     # )
+    asyncio.run(
+        pipeline.verify_policies(
+            original_dataset_path=dataset_path,
+            input_dataset_path=output_path,
+            refined_dataset_path=refined_dataset_path,
+            output_path=Path("verified_sharegpt_policy_labels_2.jsonl"),
+            batch_size=20,
+            start_index=0,
+        )
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry point
