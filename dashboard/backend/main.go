@@ -38,6 +38,9 @@ func main() {
 	}
 	log.Printf("Router API: %s → /api/router/*", cfg.RouterAPIURL)
 	log.Printf("Router Metrics: %s → /metrics/router", cfg.RouterMetrics)
+	if cfg.ReadonlyMode {
+		log.Printf("Read-only mode: ENABLED (config editing disabled)")
+	}
 
 	// Start server
 	if err := http.ListenAndServe(addr, mux); err != nil {

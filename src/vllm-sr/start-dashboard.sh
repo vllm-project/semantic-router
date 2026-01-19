@@ -21,11 +21,19 @@ except Exception as e:
 
 echo "Starting dashboard with Envoy at http://localhost:${ENVOY_PORT}"
 
+# Check for read-only mode
+READONLY_ARG=""
+if [ "${DASHBOARD_READONLY}" = "true" ]; then
+    READONLY_ARG="-readonly"
+    echo "Dashboard read-only mode: ENABLED"
+fi
+
 exec /usr/local/bin/dashboard-backend \
     -port=8700 \
     -static=/app/frontend \
     -config=/app/config.yaml \
     -router_api=http://localhost:8080 \
     -router_metrics=http://localhost:9190/metrics \
-    -envoy="http://localhost:${ENVOY_PORT}"
+    -envoy="http://localhost:${ENVOY_PORT}" \
+    ${READONLY_ARG}
 
