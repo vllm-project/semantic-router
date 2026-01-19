@@ -351,53 +351,59 @@ The label should consist of a "domain" (e.g. legal, finance) plus an "action" (e
         refined_sample_labels = self._refine_sample_labels(
             existing_policy_label_path, raw_dataset_path, batch_size
         )
-        # save refined labels to file
         with open(refined_dataset_path, "w") as f:
-            for sample_id, policy in refined_sample_labels.items():
-                f.write(
-                    json.dumps(
-                        {
-                            "sample_id": sample_id,
-                            "label": policy.label,
-                            "description": policy.description,
-                        }
-                    )
-                    + "\n"
-                )
+            dumpable = {
+                k: {"label": v.label, "description": v.description}
+                for k, v in refined_sample_labels.items()
+            }
+            json.dump(dumpable, f)
+        # save refined labels to file
+
+        # with open(refined_dataset_path, "w") as f:
+        #     for sample_id, policy in refined_sample_labels.items():
+        #         f.write(
+        #             json.dumps(
+        #                 {
+        #                     "sample_id": sample_id,
+        #                     "label": policy.label,
+        #                     "description": policy.description,
+        #                 }
+        #             )
+        #             + "\n"
+        #         )
 
     def _refine_sample_labels(
         self, existing_policy_label_path: Path, raw_dataset_path: Path, batch_size: int
     ) -> Dict[str, RoutePolicy]:
         """Refine sample labels for a batch of conversations."""
         raw_policies = self._load_existing_policies(existing_policy_label_path)
-        policy_label_candidates = self._load_policy_label_candidates(raw_dataset_path)
-        sample_id_to_refined_policy: Dict[str, RoutePolicy] = {}
-        for batch_start in range(0, len(policy_label_candidates), batch_size):
-            batch_candidates = policy_label_candidates[
-                batch_start : batch_start + batch_size
-            ]
+        # policy_label_candidates = self._load_policy_label_candidates(raw_dataset_path)
+        # sample_id_to_refined_policy: Dict[str, RoutePolicy] = {}
+        all_refined_policies: Dict[str, RoutePolicy] = {}
+        for batch_start in range(0, len(raw_policies), batch_size):
+            batched_policies = raw_policies[batch_start : batch_start + batch_size]
             logging.info(
-                f"Refining policies for batch {batch_start // batch_size + 1} of size {len(batch_candidates)}"
+                f"Refining policies for batch {batch_start // batch_size + 1} of size {len(batched_policies)}"
             )
-            refined_policies = self._refine_policies(raw_policies)
+            raw_policies_to_refined = self._refine_policies(batched_policies)
+            all_refined_policies.update(raw_policies_to_refined)
 
-            # remmap sample labels to refined labels
-            for candidate in batch_candidates:
-                sample_id = candidate.sample_id
-                original_label = candidate.label
-                if original_label not in refined_policies:
-                    logging.warning(
-                        f"Original label {original_label} not found in refined policies"
-                    )
-                    continue
-                refined_policy = refined_policies[original_label]
-                sample_id_to_refined_policy[sample_id] = refined_policy
-        return sample_id_to_refined_policy
+        # for candidate in policy_label_candidates:
+        #     sample_id = candidate.sample_id
+        #     original_label = candidate.label
+        #     if original_label not in all_refined_policies:
+        #         logging.warning(
+        #             f"Original label {original_label} not found in refined policies"
+        #         )
+        #         continue
+        #     refined_policy = all_refined_policies[original_label]
+        #     sample_id_to_refined_policy[sample_id] = refined_policy
+        return all_refined_policies
 
     def _refine_policies(
         self,
         raw_policies: List[RoutePolicy],
-    ) -> List[RoutePolicy]:
+    ) -> dict[str, RoutePolicy]:
         """Refine and deduplicate policies using the refine LLM."""
         refine_prompt = f"""You are an expert at refining and deduplicating routing policies.
 ### Instructions
@@ -454,13 +460,13 @@ def main() -> None:
     dataset_path = Path("ShareGPT_V3_unfiltered_cleaned_split.json")
     output_path = Path("sharegpt_preference_labeled.jsonl")
     refined_dataset_path = Path("refined_sharegpt_policy_labels.jsonl")
-    asyncio.run(
-        pipeline.run(
-            existing_policy_label_path=existing_policy_label_path,
-            raw_dataset_path=dataset_path,
-            output_path=output_path,
-        )
-    )
+    # asyncio.run(
+    #     pipeline.run(
+    #         existing_policy_label_path=existing_policy_label_path,
+    #         raw_dataset_path=dataset_path,
+    #         output_path=output_path,
+    #     )
+    # )
     pipeline.refine(
         refined_dataset_path=refined_dataset_path,
         existing_policy_label_path=existing_policy_label_path,
