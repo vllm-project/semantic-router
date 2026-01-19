@@ -91,17 +91,44 @@ signals:
     - name: "math"
       description: "Mathematics and quantitative reasoning"
       mmlu_categories: ["math"]
-
-    - name: "computer_science"
-      description: "Programming and computer science"
-      mmlu_categories: ["computer_science"]
-
     - name: "physics"
       description: "Physics and physical sciences"
       mmlu_categories: ["physics"]
-
+    - name: "chemistry"
+      description: "Chemistry and chemical sciences questions"
+      mmlu_categories: ["chemistry"]
+    - name: "biology"
+      description: "Biology and life sciences questions"
+      mmlu_categories: ["biology"]
+    - name: "computer_science"
+      description: "Computer science and programming"
+      mmlu_categories: ["computer_science"]
+    - name: "engineering"
+      description: "Engineering and technical problem-solving"
+      mmlu_categories: ["engineering"]
+    - name: "business"
+      description: "Business and management related queries"
+      mmlu_categories: ["business"]
+    - name: "economics"
+      description: "Economics and financial topics"
+      mmlu_categories: ["economics"]
+    - name: "law"
+      description: "Legal questions and law-related topics"
+      mmlu_categories: ["law"]
+    - name: "psychology"
+      description: "Psychology and mental health topics"
+      mmlu_categories: ["psychology"]
+    - name: "philosophy"
+      description: "Philosophy and ethical questions"
+      mmlu_categories: ["philosophy"]
+    - name: "history"
+      description: "Historical questions and cultural topics"
+      mmlu_categories: ["history"]
+    - name: "health"
+      description: "Health and medical information queries"
+      mmlu_categories: ["health"]
     - name: "other"
-      description: "General queries"
+      description: "General knowledge and miscellaneous topics"
       mmlu_categories: ["other"]
 
   # fact_check - Fact-checking signals
