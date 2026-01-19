@@ -56,6 +56,11 @@ type Signals struct {
 	// Each rule has a name that can be referenced in decision conditions
 	// +optional
 	FactCheckRules []FactCheckRule `json:"factCheckRules,omitempty" yaml:"fact_check_rules,omitempty"`
+
+	// Complexity defines task complexity signal extraction rules
+	// +optional
+	// +kubebuilder:validation:MaxItems=100
+	Complexity []ComplexitySignal `json:"complexity,omitempty" yaml:"complexity,omitempty"`
 }
 
 // FactCheckRule defines a rule for fact-check signal classification
@@ -138,6 +143,34 @@ type EmbeddingSignal struct {
 	AggregationMethod string `json:"aggregationMethod,omitempty" yaml:"aggregationMethod,omitempty"`
 }
 
+// ComplexitySignal defines a complexity-based signal extraction rule
+// The complexity regressor outputs a score between 0 and 1.
+// If min/max are set, they define the inclusive range for matching.
+type ComplexitySignal struct {
+	// Name is the unique identifier for this signal
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=100
+	Name string `json:"name" yaml:"name"`
+
+	// Description provides a human-readable description of this signal
+	// +optional
+	// +kubebuilder:validation:MaxLength=500
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+
+	// Min is the inclusive lower bound for complexity score matching
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=1
+	Min *float64 `json:"min,omitempty" yaml:"min,omitempty"`
+
+	// Max is the inclusive upper bound for complexity score matching
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=1
+	Max *float64 `json:"max,omitempty" yaml:"max,omitempty"`
+}
+
 // Decision defines a routing decision based on rule combinations
 type Decision struct {
 	// Name is the unique identifier for this decision
@@ -193,15 +226,30 @@ type SignalCombination struct {
 type SignalCondition struct {
 	// Type defines the type of signal (keyword/embedding/domain/fact_check)
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=keyword;embedding;domain;fact_check
+	// +kubebuilder:validation:Enum=keyword;embedding;domain;fact_check;complexity
 	Type string `json:"type" yaml:"type"`
 
 	// Name is the name of the signal to reference
 	// For fact_check type, use "needs_fact_check" to match queries that need fact verification
-	// +kubebuilder:validation:Required
+	// +optional
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=100
-	Name string `json:"name" yaml:"name"`
+	Name string `json:"name,omitempty" yaml:"name,omitempty"`
+
+	// Operator defines numeric comparison for signals like complexity
+	// Supported operators: "<", "<=", ">", ">=", "=="
+	// +optional
+	Operator string `json:"operator,omitempty" yaml:"operator,omitempty"`
+
+	// Value is used with Operator for numeric comparisons
+	// +optional
+	Value *float64 `json:"value,omitempty" yaml:"value,omitempty"`
+
+	// Min and Max define an inclusive range comparison when set
+	// +optional
+	Min *float64 `json:"min,omitempty" yaml:"min,omitempty"`
+	// +optional
+	Max *float64 `json:"max,omitempty" yaml:"max,omitempty"`
 }
 
 // ModelRef defines a model reference without score

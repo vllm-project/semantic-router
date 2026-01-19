@@ -205,6 +205,24 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 			})
 		}
 
+		if len(ctx.VSRMatchedComplexity) > 0 {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.VSRMatchedComplexity,
+					RawValue: []byte(strings.Join(ctx.VSRMatchedComplexity, ",")),
+				},
+			})
+		}
+
+		if ctx.VSRComplexityScore != nil {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.VSRComplexityScore,
+					RawValue: []byte(strconv.FormatFloat(*ctx.VSRComplexityScore, 'f', 4, 64)),
+				},
+			})
+		}
+
 		// Attach router replay identifier when available
 		if ctx.RouterReplayID != "" {
 			setHeaders = append(setHeaders, &core.HeaderValueOption{

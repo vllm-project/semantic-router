@@ -82,6 +82,13 @@ const (
 	// VSRMatchedPreference contains comma-separated list of matched preference signals.
 	// Example: "creative_writing,technical_analysis"
 	VSRMatchedPreference = "x-vsr-matched-preference"
+
+	// VSRMatchedComplexity contains comma-separated list of matched complexity signals.
+	// Example: "low_complexity,mid_complexity"
+	VSRMatchedComplexity = "x-vsr-matched-complexity"
+
+	// VSRComplexityScore contains the numeric complexity score (0-1).
+	VSRComplexityScore = "x-vsr-complexity-score"
 )
 
 // Security Headers

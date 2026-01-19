@@ -63,6 +63,8 @@ type SignalMatches struct {
 	UserFeedbackRules []string // "need_clarification", "satisfied", "want_different", "wrong_answer"
 	PreferenceRules   []string // Route preference names matched via external LLM
 	LanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
+	ComplexityRules   []string // Complexity rule names matched by score
+	ComplexityScore   *float64 // Complexity score between 0 and 1
 }
 
 // DecisionResult represents the result of decision evaluation
@@ -166,6 +168,8 @@ func (e *DecisionEngine) evaluateRuleCombinationWithSignals(
 			conditionMatched = slices.Contains(signals.PreferenceRules, condition.Name)
 		case "language":
 			conditionMatched = slices.Contains(signals.LanguageRules, condition.Name)
+		case "complexity":
+			conditionMatched = matchesComplexityCondition(condition, signals)
 		default:
 			continue
 		}
@@ -190,6 +194,48 @@ func (e *DecisionEngine) evaluateRuleCombinationWithSignals(
 	}
 
 	return matched, confidence, allMatchedRules
+}
+
+func matchesComplexityCondition(condition config.RuleCondition, signals *SignalMatches) bool {
+	if condition.Operator != "" || condition.Min != nil || condition.Max != nil || condition.Value != nil {
+		if signals.ComplexityScore == nil {
+			return false
+		}
+		score := *signals.ComplexityScore
+		if condition.Min != nil && score < *condition.Min {
+			return false
+		}
+		if condition.Max != nil && score > *condition.Max {
+			return false
+		}
+		if condition.Operator != "" {
+			if condition.Value == nil {
+				return false
+			}
+			value := *condition.Value
+			switch condition.Operator {
+			case "<":
+				return score < value
+			case "<=":
+				return score <= value
+			case ">":
+				return score > value
+			case ">=":
+				return score >= value
+			case "==":
+				return score == value
+			default:
+				return false
+			}
+		}
+		return condition.Min != nil || condition.Max != nil
+	}
+
+	if condition.Name == "" {
+		return false
+	}
+
+	return slices.Contains(signals.ComplexityRules, condition.Name)
 }
 
 // matchesDomainCondition checks if any of the detected domains match the given category name

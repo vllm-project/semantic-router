@@ -34,6 +34,7 @@ const (
 	SignalTypeUserFeedback = "user_feedback"
 	SignalTypePreference   = "preference"
 	SignalTypeLanguage     = "language"
+	SignalTypeComplexity   = "complexity"
 )
 
 // RouterConfig represents the main configuration for the LLM Router
@@ -290,6 +291,10 @@ type Signals struct {
 	// Language rules for multi-language detection signal classification
 	// When matched, outputs the detected language code (e.g., "en", "es", "zh", "fr")
 	LanguageRules []LanguageRule `yaml:"language_rules,omitempty"`
+
+	// Complexity rules for task complexity scoring
+	// When matched, outputs the complexity rule name (optional if using numeric conditions).
+	ComplexityRules []ComplexityRule `yaml:"complexity_rules,omitempty"`
 }
 
 // BackendModels represents the configuration for backend models
@@ -320,6 +325,8 @@ type Classifier struct {
 	MCPCategoryModel `yaml:"mcp_category_model,omitempty"`
 	// PII detection model
 	PIIModel `yaml:"pii_model"`
+	// Complexity regressor model
+	ComplexityModel ComplexityModelConfig `yaml:"complexity_model,omitempty"`
 }
 
 type BertModel struct {
@@ -344,6 +351,19 @@ type PIIModel struct {
 	Threshold      float32 `yaml:"threshold"`
 	UseCPU         bool    `yaml:"use_cpu"`
 	PIIMappingPath string  `yaml:"pii_mapping_path"`
+}
+
+// ComplexityModelConfig represents configuration for complexity regression
+// The model returns a score between 0 and 1 (higher means more complex).
+type ComplexityModelConfig struct {
+	// Hugging Face model URL or repo ID (required)
+	ModelURL string `yaml:"model_url"`
+
+	// Optional local cache path for the model
+	ModelID string `yaml:"model_id,omitempty"`
+
+	// Use CPU for inference
+	UseCPU bool `yaml:"use_cpu"`
 }
 
 type EmbeddingModels struct {
@@ -1625,12 +1645,24 @@ type RuleCombination struct {
 
 // RuleCondition references a specific rule by type and name
 type RuleCondition struct {
-	// Type specifies the rule type: "keyword", "embedding", "domain", or "fact_check"
+	// Type specifies the rule type: "keyword", "embedding", "domain", "fact_check", or "complexity"
 	Type string `yaml:"type"`
 
 	// Name is the name of the rule to reference
 	// For fact_check type, use "needs_fact_check" to match queries that need fact verification
-	Name string `yaml:"name"`
+	// For numeric signals (e.g., complexity), Name is optional when using operator/value or min/max.
+	Name string `yaml:"name,omitempty"`
+
+	// Operator defines numeric comparison for signals like complexity
+	// Supported operators: "<", "<=", ">", ">=", "=="
+	Operator string `yaml:"operator,omitempty"`
+
+	// Value is used with Operator for numeric comparisons
+	Value *float64 `yaml:"value,omitempty"`
+
+	// Min and Max define an inclusive range comparison when set
+	Min *float64 `yaml:"min,omitempty"`
+	Max *float64 `yaml:"max,omitempty"`
 }
 
 // FactCheckRule defines a rule for fact-check signal classification
@@ -1685,6 +1717,23 @@ type LanguageRule struct {
 
 	// Description provides human-readable explanation of the language
 	Description string `yaml:"description,omitempty"`
+}
+
+// ComplexityRule defines a rule for task complexity signal classification
+// The complexity regressor outputs a score between 0 and 1.
+// If Min/Max are set, they define the inclusive range for matching.
+type ComplexityRule struct {
+	// Name is the signal name that can be referenced in decision rules
+	Name string `yaml:"name"`
+
+	// Description provides human-readable explanation of when this signal is triggered
+	Description string `yaml:"description,omitempty"`
+
+	// Min is the inclusive lower bound for complexity score matching
+	Min *float64 `yaml:"min,omitempty"`
+
+	// Max is the inclusive upper bound for complexity score matching
+	Max *float64 `yaml:"max,omitempty"`
 }
 
 // ModelReasoningControl represents reasoning mode control on model level

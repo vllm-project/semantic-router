@@ -269,6 +269,9 @@ type Classifier struct {
 	// Language classifier
 	languageClassifier *LanguageClassifier
 
+	// Complexity classifier
+	complexityClassifier *ComplexityClassifier
+
 	Config           *config.RouterConfig
 	CategoryMapping  *CategoryMapping
 	PIIMapping       *PIIMapping
@@ -385,6 +388,14 @@ func initModels(classifier *Classifier) (*Classifier, error) {
 		if err := classifier.initializeLanguageClassifier(); err != nil {
 			logging.Warnf("Failed to initialize language classifier: %v", err)
 			// Non-fatal - continue without language classification
+		}
+	}
+
+	// Initialize complexity classifier
+	if classifier.IsComplexityEnabled() {
+		if err := classifier.initializeComplexityClassifier(); err != nil {
+			logging.Warnf("Failed to initialize complexity classifier: %v", err)
+			// Non-fatal - continue without complexity classification
 		}
 	}
 
@@ -673,6 +684,8 @@ type SignalResults struct {
 	MatchedUserFeedbackRules []string // "satisfied", "need_clarification", "wrong_answer", "want_different"
 	MatchedPreferenceRules   []string // Route preference names matched via external LLM
 	MatchedLanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
+	MatchedComplexityRules   []string // Complexity rule names matched by score
+	ComplexityScore          *float64 // Complexity score between 0 and 1
 }
 
 // analyzeRuleCombination recursively analyzes rule combinations to find used signals
@@ -911,10 +924,56 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 		logging.Infof("[Signal Computation] Language signal not used in any decision, skipping evaluation")
 	}
 
+	// Evaluate complexity rules in parallel (only if used in decisions)
+	if isSignalTypeUsed(usedSignals, config.SignalTypeComplexity) && c.IsComplexityEnabled() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			start := time.Now()
+			score, err := c.ClassifyComplexity(text)
+			elapsed := time.Since(start)
+			logging.Infof("[Signal Computation] Complexity signal evaluation completed in %v", elapsed)
+			if err != nil {
+				logging.Errorf("complexity evaluation failed: %v", err)
+				return
+			}
+
+			matchedRules := c.matchComplexityRules(score)
+			mu.Lock()
+			results.MatchedComplexityRules = append(results.MatchedComplexityRules, matchedRules...)
+			results.ComplexityScore = &score
+			mu.Unlock()
+		}()
+	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeComplexity) {
+		logging.Infof("[Signal Computation] Complexity signal not used in any decision, skipping evaluation")
+	}
+
 	// Wait for all signal evaluations to complete
 	wg.Wait()
 
 	return results
+}
+
+func (c *Classifier) matchComplexityRules(score float64) []string {
+	if len(c.Config.ComplexityRules) == 0 {
+		return nil
+	}
+
+	var matched []string
+	for _, rule := range c.Config.ComplexityRules {
+		if rule.Min == nil && rule.Max == nil {
+			continue
+		}
+		if rule.Min != nil && score < *rule.Min {
+			continue
+		}
+		if rule.Max != nil && score > *rule.Max {
+			continue
+		}
+		matched = append(matched, rule.Name)
+	}
+
+	return matched
 }
 
 // EvaluateDecisionWithEngine evaluates all decisions using pre-computed signals
@@ -925,10 +984,10 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		return nil, fmt.Errorf("no decisions configured")
 	}
 
-	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v",
+	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, complexity=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
 		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules,
-		signals.MatchedLanguageRules)
+		signals.MatchedLanguageRules, signals.MatchedComplexityRules)
 	// Create decision engine
 	engine := decision.NewDecisionEngine(
 		c.Config.KeywordRules,
@@ -947,6 +1006,8 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		UserFeedbackRules: signals.MatchedUserFeedbackRules,
 		PreferenceRules:   signals.MatchedPreferenceRules,
 		LanguageRules:     signals.MatchedLanguageRules,
+		ComplexityRules:   signals.MatchedComplexityRules,
+		ComplexityScore:   signals.ComplexityScore,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("decision evaluation failed: %w", err)
@@ -1662,6 +1723,11 @@ func (c *Classifier) IsLanguageEnabled() bool {
 	return len(c.Config.LanguageRules) > 0 && c.languageClassifier != nil
 }
 
+// IsComplexityEnabled checks if complexity classification is enabled
+func (c *Classifier) IsComplexityEnabled() bool {
+	return c.Config.ComplexityModel.ModelURL != ""
+}
+
 // IsPreferenceClassifierEnabled checks if preference classification is enabled and properly configured
 func (c *Classifier) IsPreferenceClassifierEnabled() bool {
 	// Need preference rules configured and external model with role="preference"
@@ -1712,6 +1778,26 @@ func (c *Classifier) initializeLanguageClassifier() error {
 	return nil
 }
 
+// initializeComplexityClassifier initializes the complexity regressor
+func (c *Classifier) initializeComplexityClassifier() error {
+	if !c.IsComplexityEnabled() {
+		return nil
+	}
+
+	classifier, err := NewComplexityClassifier(&c.Config.ComplexityModel)
+	if err != nil {
+		return fmt.Errorf("failed to create complexity classifier: %w", err)
+	}
+
+	if err := classifier.Initialize(); err != nil {
+		return fmt.Errorf("failed to initialize complexity classifier: %w", err)
+	}
+
+	c.complexityClassifier = classifier
+	logging.Infof("Complexity classifier initialized successfully")
+	return nil
+}
+
 // ClassifyFactCheck performs fact-check classification on the given text
 // Returns the classification result indicating if the prompt needs fact-checking
 func (c *Classifier) ClassifyFactCheck(text string) (*FactCheckResult, error) {
@@ -1730,6 +1816,26 @@ func (c *Classifier) ClassifyFactCheck(text string) (*FactCheckResult, error) {
 	}
 
 	return result, nil
+}
+
+// ClassifyComplexity performs complexity regression on the given text
+// Returns a score between 0 and 1 (higher means more complex)
+func (c *Classifier) ClassifyComplexity(text string) (float64, error) {
+	if c.complexityClassifier == nil || !c.complexityClassifier.IsInitialized() {
+		return 0, fmt.Errorf("complexity classifier is not initialized")
+	}
+
+	result, err := c.complexityClassifier.Classify(text)
+	if err != nil {
+		return 0, fmt.Errorf("complexity classification failed: %w", err)
+	}
+
+	if result != nil {
+		logging.Infof("Complexity classification: score=%.3f", result.Score)
+		return result.Score, nil
+	}
+
+	return 0, fmt.Errorf("complexity classifier returned no result")
 }
 
 // DetectHallucination checks if an answer contains hallucinations given the context
