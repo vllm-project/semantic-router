@@ -1,0 +1,392 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: |-
+      [
+        {
+          "apiVersion": "vllm.ai/v1alpha1",
+          "kind": "SemanticRouter",
+          "metadata": {
+            "name": "semanticrouter-sample",
+            "namespace": "default"
+          },
+          "spec": {
+            "replicas": 1,
+            "image": {
+              "repository": "ghcr.io/vllm-project/semantic-router/extproc",
+              "tag": "latest",
+              "pullPolicy": "IfNotPresent"
+            },
+            "resources": {
+              "limits": {
+                "memory": "7Gi",
+                "cpu": "2"
+              },
+              "requests": {
+                "memory": "3Gi",
+                "cpu": "1"
+              }
+            },
+            "persistence": {
+              "enabled": true,
+              "size": "10Gi"
+            }
+          }
+        }
+      ]
+    capabilities: Basic Install
+    categories: AI/Machine Learning
+    certified: "false"
+    containerImage: ghcr.io/vllm-project/semantic-router-operator:latest
+    createdAt: "2026-01-14T00:00:00Z"
+    description: Operator for deploying and managing vLLM Semantic Router instances
+    repository: https://github.com/vllm-project/semantic-router
+    support: vLLM Community
+  name: semantic-router-operator.v0.1.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: SemanticRouter is the Schema for the semanticrouters API
+      displayName: Semantic Router
+      kind: SemanticRouter
+      name: semanticrouters.vllm.ai
+      version: v1alpha1
+      resources:
+      - kind: Deployment
+        name: ""
+        version: v1
+      - kind: Service
+        name: ""
+        version: v1
+      - kind: ConfigMap
+        name: ""
+        version: v1
+      - kind: PersistentVolumeClaim
+        name: ""
+        version: v1
+      - kind: HorizontalPodAutoscaler
+        name: ""
+        version: v2
+      - kind: Ingress
+        name: ""
+        version: v1
+      specDescriptors:
+      - description: Number of replicas for the deployment
+        displayName: Replicas
+        path: replicas
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:podCount
+      - description: Image configuration
+        displayName: Image
+        path: image
+      - description: Resource requirements
+        displayName: Resources
+        path: resources
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:resourceRequirements
+      - description: Persistence configuration
+        displayName: Persistence
+        path: persistence
+      - description: Semantic router configuration
+        displayName: Configuration
+        path: config
+      statusDescriptors:
+      - description: Current number of replicas
+        displayName: Replicas
+        path: replicas
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:podCount
+      - description: Number of ready replicas
+        displayName: Ready Replicas
+        path: readyReplicas
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:podCount
+      - description: Current phase of the SemanticRouter
+        displayName: Phase
+        path: phase
+        x-descriptors:
+        - urn:alm:descriptor:io.kubernetes.phase
+  description: |
+    ## About the Semantic Router Operator
+
+    The Semantic Router Operator manages the lifecycle of vLLM Semantic Router instances on OpenShift and Kubernetes.
+
+    vLLM Semantic Router is a Mixture-of-Models (MoM) router that intelligently directs OpenAI API requests to
+    appropriate models based on semantic understanding of request intent.
+
+    ### Key Features
+
+    * **Intelligent Model Selection**: Automatically routes requests to the most appropriate model based on query complexity and category
+    * **Tool Auto-Selection**: Semantic similarity-based tool selection from a configurable database
+    * **PII Detection**: Token-level PII classification with configurable policies
+    * **Jailbreak Protection**: Detects and blocks malicious/adversarial prompts
+    * **Semantic Caching**: Reduces latency and token usage through embedding-based response caching
+    * **Category-Specific Prompts**: Inject domain-specific system prompts based on query classification
+    * **OpenTelemetry Integration**: Distributed tracing for debugging and performance analysis
+
+    ### Prerequisites
+
+    * OpenShift 4.12+ or Kubernetes 1.25+
+    * Persistent storage for ML models (10Gi recommended)
+    * HuggingFace token secret for downloading gated models (optional)
+
+    ### Quick Start
+
+    1. Create a SemanticRouter custom resource:
+
+    ```yaml
+    apiVersion: vllm.ai/v1alpha1
+    kind: SemanticRouter
+    metadata:
+      name: my-semantic-router
+    spec:
+      replicas: 1
+      persistence:
+        enabled: true
+        size: 10Gi
+    ```
+
+    2. The operator will automatically:
+       - Download required ML models from HuggingFace
+       - Create deployment, service, and configmap
+       - Configure probes for health checking
+       - Set up persistent storage for models
+
+    ### Configuration
+
+    The SemanticRouter CR supports extensive configuration options:
+
+    * **Image**: Customize container image and pull policy
+    * **Resources**: Set CPU/memory requests and limits
+    * **Persistence**: Configure storage class and size
+    * **Config**: Fine-tune BERT models, caching, classifiers, and more
+    * **Autoscaling**: Enable HPA with custom metrics
+    * **Ingress**: Expose via ingress with TLS
+
+    See the [documentation](https://vllm-semantic-router.com) for detailed configuration options.
+
+    ### Architecture
+
+    The Semantic Router runs as an Envoy ExtProc filter, processing requests through:
+
+    1. Prompt guard (jailbreak detection)
+    2. PII detection and redaction
+    3. Semantic cache lookup
+    4. Category classification
+    5. Tool selection
+    6. Model routing with optional reasoning mode
+
+    ### Support
+
+    For issues, feature requests, and contributions:
+    * GitHub: https://github.com/vllm-project/semantic-router
+    * Documentation: https://vllm-semantic-router.com
+
+  displayName: Semantic Router Operator
+  icon:
+  - base64data: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==
+    mediatype: image/png
+  install:
+    spec:
+      clusterPermissions:
+      - rules:
+        - apiGroups:
+          - vllm.ai
+          resources:
+          - semanticrouters
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - vllm.ai
+          resources:
+          - semanticrouters/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - vllm.ai
+          resources:
+          - semanticrouters/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - apps
+          resources:
+          - deployments
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - services
+          - serviceaccounts
+          - configmaps
+          - persistentvolumeclaims
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - autoscaling
+          resources:
+          - horizontalpodautoscalers
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - networking.k8s.io
+          resources:
+          - ingresses
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        serviceAccountName: semantic-router-operator-controller-manager
+      deployments:
+      - name: semantic-router-operator-controller-manager
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app.kubernetes.io/name: semantic-router-operator
+              control-plane: controller-manager
+          template:
+            metadata:
+              annotations:
+                kubectl.kubernetes.io/default-container: manager
+              labels:
+                app.kubernetes.io/name: semantic-router-operator
+                control-plane: controller-manager
+            spec:
+              containers:
+              - args:
+                - --leader-elect
+                command:
+                - /manager
+                image: ghcr.io/vllm-project/semantic-router-operator:latest
+                livenessProbe:
+                  httpGet:
+                    path: /healthz
+                    port: 8081
+                  initialDelaySeconds: 15
+                  periodSeconds: 20
+                name: manager
+                readinessProbe:
+                  httpGet:
+                    path: /readyz
+                    port: 8081
+                  initialDelaySeconds: 5
+                  periodSeconds: 10
+                resources:
+                  limits:
+                    cpu: 500m
+                    memory: 512Mi
+                  requests:
+                    cpu: 100m
+                    memory: 128Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop:
+                    - ALL
+                  readOnlyRootFilesystem: true
+                  runAsUser: 65532
+              securityContext:
+                runAsNonRoot: true
+                seccompProfile:
+                  type: RuntimeDefault
+              serviceAccountName: semantic-router-operator-controller-manager
+              terminationGracePeriodSeconds: 10
+      permissions:
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - coordination.k8s.io
+          resources:
+          - leases
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+        serviceAccountName: semantic-router-operator-controller-manager
+    strategy: deployment
+  installModes:
+  - supported: true
+    type: OwnNamespace
+  - supported: true
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - semantic-router
+  - llm
+  - vllm
+  - ai
+  - machine-learning
+  - model-router
+  links:
+  - name: Semantic Router Documentation
+    url: https://vllm-semantic-router.com
+  - name: GitHub Repository
+    url: https://github.com/vllm-project/semantic-router
+  maintainers:
+  - email: support@vllm.ai
+    name: vLLM Community
+  maturity: alpha
+  provider:
+    name: vLLM Project
+    url: https://github.com/vllm-project
+  version: 0.1.0

@@ -326,43 +326,21 @@ func (c *EmbeddingClassifier) matchesOptimized(text string, rule config.Embeddin
 
 	hnswThreshold := *c.optimizationConfig.HNSWThreshold // Dereference pointer
 	if c.useHNSW && c.hnswIndex != nil && len(rule.Candidates) >= hnswThreshold {
-		logging.Infof("Using HNSW index for %d candidates (threshold: %d, M: %d, efSearch: %d)",
-			len(rule.Candidates), hnswThreshold,
-			c.optimizationConfig.HNSWM, c.optimizationConfig.HNSWEfSearch)
+		// Use HNSW for O(log n) search
+		// Search for all candidates to get complete similarity list
+		results := c.hnswIndex.Search(queryEmbedding, len(c.candidateEmbeddings))
 
-		// IMPORTANT: We need to compute similarities for ALL candidates in this rule,
-		// not just the global top-k. HNSW.Search() returns top-k globally, which may
-		// miss some candidates from this specific rule.
-		//
-		// Solution: Use brute-force for this rule's candidates even when HNSW is enabled,
-		// OR use HNSW.SearchAll() to get all candidates and then filter.
-		// For now, we use brute-force to ensure correctness.
-
-		// Build candidate set for this rule
+		// Filter results to only include candidates from this rule
 		candidateSet := make(map[string]bool)
 		for _, candidate := range rule.Candidates {
 			candidateSet[candidate] = true
 		}
 
-		// Compute similarities for all candidates in this rule
-		for i, candidate := range rule.Candidates {
-			embedding, ok := c.candidateEmbeddings[candidate]
-			if !ok {
-				// Candidate not preloaded, compute on the fly
-				logging.Infof("Computing embedding on-the-fly for candidate: %q (model: %s)", candidate, modelType)
-				output, err := getEmbeddingWithModelType(candidate, modelType, c.optimizationConfig.TargetDimension)
-				if err != nil {
-					return false, 0.0, fmt.Errorf("failed to compute embedding for candidate %q: %w", candidate, err)
-				}
-				embedding = output.Embedding
-				c.candidateEmbeddings[candidate] = embedding // Cache for future use
+		for _, result := range results {
+			candidate := c.indexToCandidate[result.ID]
+			if candidateSet[candidate] {
+				similarities = append(similarities, result.Similarity)
 			}
-
-			sim := cosineSimilarity(queryEmbedding, embedding)
-			similarities = append(similarities, sim)
-
-			// Debug: log first 3 similarities
-			logging.Infof("[HNSW path] candidate[%d]=%q, similarity=%.4f", i, candidate, sim)
 		}
 
 		logging.Infof("Computed %d similarities for rule %q (using preloaded embeddings)",

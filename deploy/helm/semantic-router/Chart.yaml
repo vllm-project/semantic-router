@@ -18,3 +18,31 @@ maintainers:
   - name: Semantic Router Team
     url: https://github.com/vllm-project/semantic-router
 icon: https://raw.githubusercontent.com/vllm-project/semantic-router/main/website/static/img/logo.png
+dependencies:
+  - name: redis
+    alias: semantic-cache-redis
+    version: ">=0.0.0"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: dependencies.semanticCache.redis.enabled
+  - name: milvus
+    alias: semantic-cache-milvus
+    version: ">=0.0.0"
+    repository: "https://milvus-io.github.io/milvus-helm/"
+    condition: dependencies.semanticCache.milvus.enabled
+  - name: redis
+    alias: response-api-redis
+    version: ">=0.0.0"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: dependencies.responseApi.redis.enabled
+  - name: jaeger
+    version: ">=0.0.0"
+    repository: "https://jaegertracing.github.io/helm-charts"
+    condition: dependencies.observability.jaeger.enabled
+  - name: prometheus
+    version: ">=0.0.0"
+    repository: "https://prometheus-community.github.io/helm-charts"
+    condition: dependencies.observability.prometheus.enabled
+  - name: grafana
+    version: ">=0.0.0"
+    repository: "https://grafana.github.io/helm-charts"
+    condition: dependencies.observability.grafana.enabled

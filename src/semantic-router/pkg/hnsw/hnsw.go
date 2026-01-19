@@ -17,6 +17,8 @@ import (
 	"math"
 	"sync"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // Node represents a node in the HNSW graph
@@ -151,6 +153,7 @@ func (h *Index) Search(queryEmbedding []float32, k int) []SearchResult {
 				ID:         id,
 				Similarity: similarity,
 			})
+			logging.Infof("[HNSW path] candidate[%d], similarity=%.4f", id, similarity)
 		}
 	}
 
