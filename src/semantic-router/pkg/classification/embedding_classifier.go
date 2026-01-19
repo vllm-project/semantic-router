@@ -12,11 +12,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// calculateSimilarityBatch is a package-level variable that points to the
-// actual implementation in the candle_binding package. It exists so tests can
-// override it.
-var calculateSimilarityBatch = candle_binding.CalculateSimilarityBatch
-
 // getEmbeddingWithModelType is a package-level variable for computing single embeddings.
 // It exists so tests can override it.
 var getEmbeddingWithModelType = candle_binding.GetEmbeddingWithModelType
@@ -94,19 +89,6 @@ func NewEmbeddingClassifier(cfgRules []config.EmbeddingRule, optConfig config.HN
 	}
 
 	return c, nil
-}
-
-// NewEmbeddingClassifierLegacy creates a new EmbeddingClassifier without optimizations.
-// This maintains backward compatibility with existing code.
-func NewEmbeddingClassifierLegacy(cfgRules []config.EmbeddingRule) (*EmbeddingClassifier, error) {
-	return &EmbeddingClassifier{
-		rules:               cfgRules,
-		candidateEmbeddings: make(map[string][]float32),
-		candidateToIndex:    make(map[string]int),
-		indexToCandidate:    make(map[int]string),
-		preloadEnabled:      false,
-		useHNSW:             false,
-	}, nil
 }
 
 // preloadCandidateEmbeddings computes embeddings for all unique candidates across all rules
