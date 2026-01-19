@@ -97,12 +97,33 @@ class ShareGPTPreferencePipeline:
         policies: List[RoutePolicy] = []
         if not path.exists():
             logging.info(f"No existing policy file found at {path}, starting fresh.")
+
+            """
+                "business",
+                "law",
+                "psychology",
+                "biology",
+                "chemistry",
+                "history",
+                "health",
+                "economics",
+                "math",
+                "physics",
+                "computer_science",
+                "philosophy",
+                "engineering",
+                "other"
+            """
             return [
                 RoutePolicy(label="general_inquiry", description="General inquiry"),
-                RoutePolicy(label="code_generation", description="Code generation"),
-                RoutePolicy(label="creative_writing", description="Creative writing"),
                 RoutePolicy(
-                    label="text_summarization", description="Text summarization"
+                    label="general_code_generation", description="Code generation"
+                ),
+                RoutePolicy(
+                    label="general_creative_writing", description="Creative writing"
+                ),
+                RoutePolicy(
+                    label="general_text_summarization", description="Text summarization"
                 ),
                 RoutePolicy(
                     label="math_problem_solving", description="Math problem solving"
@@ -110,6 +131,26 @@ class ShareGPTPreferencePipeline:
                 RoutePolicy(label="legal_inquiry", description="Legal inquiry"),
                 RoutePolicy(label="medical_inquiry", description="Medical inquiry"),
                 RoutePolicy(label="financial_inquiry", description="Financial inquiry"),
+                RoutePolicy(label="business_inquiry", description="Business inquiry"),
+                RoutePolicy(label="history_inquiry", description="History inquiry"),
+                RoutePolicy(
+                    label="psychology_inquiry", description="Psychology inquiry"
+                ),
+                RoutePolicy(label="biology_inquiry", description="Biology inquiry"),
+                RoutePolicy(label="chemistry_inquiry", description="Chemistry inquiry"),
+                RoutePolicy(label="health_inquiry", description="Health inquiry"),
+                RoutePolicy(label="economics_inquiry", description="Economics inquiry"),
+                RoutePolicy(label="physics_inquiry", description="Physics inquiry"),
+                RoutePolicy(
+                    label="computer_science_inquiry",
+                    description="Computer science inquiry",
+                ),
+                RoutePolicy(
+                    label="philosophy_inquiry", description="Philosophy inquiry"
+                ),
+                RoutePolicy(
+                    label="engineering_inquiry", description="Engineering inquiry"
+                ),
             ]
         with open(path, "r") as f:
             for line in f:
@@ -339,7 +380,7 @@ class ShareGPTPreferencePipeline:
             logging.warning(
                 "Mismatched sample_id in candidate for sample %s: %s",
                 conversation.sample_id,
-                json.dumps(candidate),
+                # json.dumps(candidate),
             )
             return None
         return candidate
@@ -356,10 +397,10 @@ Return exactly one JSON object in the format:
 {{"sample_id": <sample_id>, "label": <label>, "description": <brief description on the generalized label, not on the specific conversation>}}
 Copy the sample_id faithfully from the input conversation.
 The label should consist of a "domain" (e.g. legal, finance) plus an "action" (e.g. summarization, inquiry, code_generation) so it can generalize to similar conversations.
-
+Try to make the label (both domain and action) general enough. If there's no specific domain, use "general" as the domain.
 ### Current Policy Labels
 Try to reuse one of the existing policy labels if it fits well.
-{json.dumps([policy.to_dict() for policy in existing_policies], indent=2)}
+{json.dumps([policy.label for policy in existing_policies])}
 
 ### Conversation
 {conversation_json}
@@ -494,10 +535,10 @@ def main() -> None:
         start_sample_index=0,
     )
 
-    existing_policy_label_path = Path("existing_sharegpt_policies.jsonl")
+    existing_policy_label_path = Path("existing_sharegpt_policies_2.jsonl")
     dataset_path = Path("ShareGPT_V3_unfiltered_cleaned_split.json")
-    output_path = Path("sharegpt_preference_labeled.jsonl")
-    refined_dataset_path = Path("refined_sharegpt_policy_labels.jsonl")
+    output_path = Path("sharegpt_preference_labeled_2.jsonl")
+    refined_dataset_path = Path("refined_sharegpt_policy_labels_2.jsonl")
     asyncio.run(
         pipeline.run(
             existing_policy_label_path=existing_policy_label_path,
