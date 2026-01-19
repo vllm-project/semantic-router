@@ -1,0 +1,454 @@
+# Model Selection Training Configuration with Ollama
+# Based on config/config.yaml format - for offline training with 4 local models
+# Setup: ollama serve && ollama pull llama3.2:1b && ollama pull llama3.2:3b && ollama pull codellama:7b && ollama pull mistral:7b
+
+# Response API Configuration
+response_api:
+  enabled: false
+  store_backend: "memory"
+  ttl_seconds: 86400
+  max_responses: 1000
+
+semantic_cache:
+  enabled: false
+  backend_type: "memory"
+  similarity_threshold: 0.8
+  max_entries: 1000
+  ttl_seconds: 3600
+  eviction_policy: "fifo"
+  embedding_model: "qwen3"
+
+tools:
+  enabled: false
+
+prompt_guard:
+  enabled: false
+
+# Classifier configuration
+classifier:
+  category_model:
+    model_id: "models/mom-domain-classifier"
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
+
+# Model Selection Configuration (global settings for ML-based model routing)
+# Models are trained offline and loaded at startup
+model_selection:
+  enabled: true
+  models_path: "src/semantic-router/pkg/modelselection/data/trained_models"
+  embedding_dim: 768  # Embedding dimension for trained models
+
+# vLLM Endpoints Configuration - Ollama for local training
+vllm_endpoints:
+  - name: "ollama"
+    address: "localhost"
+    port: 11434
+    type: "ollama"
+    weight: 1
+
+# Model configurations - 4 models for training
+model_config:
+  "llama-3.2-1b":
+    preferred_endpoints: ["ollama"]
+    external_model_ids:
+      ollama: "llama3.2:1b"
+
+  "llama-3.2-3b":
+    preferred_endpoints: ["ollama"]
+    external_model_ids:
+      ollama: "llama3.2:3b"
+
+  "codellama-7b":
+    preferred_endpoints: ["ollama"]
+    external_model_ids:
+      ollama: "codellama:7b"
+
+  "mistral-7b":
+    preferred_endpoints: ["ollama"]
+    external_model_ids:
+      ollama: "mistral:7b"
+
+# Categories define domain metadata
+categories:
+  - name: math
+    description: "Mathematics and quantitative reasoning"
+    mmlu_categories: ["math"]
+  - name: physics
+    description: "Physics and physical sciences"
+    mmlu_categories: ["physics"]
+  - name: chemistry
+    description: "Chemistry and chemical sciences questions"
+    mmlu_categories: ["chemistry"]
+  - name: biology
+    description: "Biology and life sciences questions"
+    mmlu_categories: ["biology"]
+  - name: computer_science
+    description: "Computer science and programming"
+    mmlu_categories: ["computer_science"]
+  - name: history
+    description: "Historical questions and cultural topics"
+    mmlu_categories: ["history"]
+  - name: economics
+    description: "Economics and financial topics"
+    mmlu_categories: ["economics"]
+  - name: health
+    description: "Health and medical information queries"
+    mmlu_categories: ["health"]
+  - name: psychology
+    description: "Psychology and mental health topics"
+    mmlu_categories: ["psychology"]
+  - name: law
+    description: "Legal questions and law-related topics"
+    mmlu_categories: ["law"]
+  - name: business
+    description: "Business and management related queries"
+    mmlu_categories: ["business"]
+  - name: philosophy
+    description: "Philosophy and ethical questions"
+    mmlu_categories: ["philosophy"]
+  - name: engineering
+    description: "Engineering and technical problem-solving"
+    mmlu_categories: ["engineering"]
+  - name: other
+    description: "General knowledge and miscellaneous topics"
+    mmlu_categories: ["other"]
+
+# Decisions - all categories use both models for training/inference
+strategy: "priority"
+
+decisions:
+  # ============================================================================
+  # EXAMPLE 1: KNN (K-Nearest Neighbors)
+  # Best for: Finding similar queries and using their best model
+  # ============================================================================
+  - name: "math_decision"
+    description: "Mathematics and quantitative reasoning"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "math"
+    algorithm:
+      type: "knn"
+      knn:
+        k: 5
+    modelRefs:
+      - model: "llama-3.2-1b"
+        use_reasoning: false
+      - model: "llama-3.2-3b"
+        use_reasoning: false
+      - model: "codellama-7b"
+        use_reasoning: false
+      - model: "mistral-7b"
+        use_reasoning: false
+    plugins:
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.85
+
+  # ============================================================================
+  # EXAMPLE 2: KMeans (Clustering with Performance-Efficiency Balance)
+  # Best for: Balancing quality vs latency (Avengers-Pro framework)
+  # ============================================================================
+  - name: "physics_decision"
+    description: "Physics and physical sciences"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "physics"
+    algorithm:
+      type: "kmeans"
+      kmeans:
+        num_clusters: 8
+        efficiency_weight: 0.3
+    modelRefs:
+      - model: "llama-3.2-1b"
+        use_reasoning: false
+      - model: "llama-3.2-3b"
+        use_reasoning: false
+      - model: "codellama-7b"
+        use_reasoning: false
+      - model: "mistral-7b"
+        use_reasoning: false
+    plugins:
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.85
+
+  # ============================================================================
+  # EXAMPLE 3: MLP (Multi-Layer Perceptron Neural Network)
+  # Best for: Learning complex patterns in query-model relationships
+  # ============================================================================
+  - name: "chemistry_decision"
+    description: "Chemistry and chemical sciences questions"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "chemistry"
+    algorithm:
+      type: "mlp"
+      mlp:
+        hidden_layers: [64, 32]
+    modelRefs:
+      - model: "llama-3.2-1b"
+        use_reasoning: false
+      - model: "llama-3.2-3b"
+        use_reasoning: false
+      - model: "codellama-7b"
+        use_reasoning: false
+      - model: "mistral-7b"
+        use_reasoning: false
+    plugins:
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.85
+
+  # ============================================================================
+  # EXAMPLE 4: SVM (Support Vector Machine)
+  # Best for: Clear decision boundaries between model preferences
+  # ============================================================================
+  - name: "biology_decision"
+    description: "Biology and life sciences questions"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "biology"
+    algorithm:
+      type: "svm"
+      svm:
+        kernel: "rbf"
+    modelRefs:
+      - model: "llama-3.2-1b"
+        use_reasoning: false
+      - model: "llama-3.2-3b"
+        use_reasoning: false
+      - model: "codellama-7b"
+        use_reasoning: false
+      - model: "mistral-7b"
+        use_reasoning: false
+    plugins:
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.85
+
+  # ============================================================================
+  # EXAMPLE 5: Matrix Factorization (RouteLLM-style)
+  # Best for: Learning latent query-model preferences
+  # ============================================================================
+  - name: "computer_science_decision"
+    description: "Computer science and programming"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "computer_science"
+    algorithm:
+      type: "matrix_factorization"
+      matrix_factorization:
+        num_factors: 10
+    modelRefs:
+      - model: "llama-3.2-1b"
+        use_reasoning: false
+      - model: "llama-3.2-3b"
+        use_reasoning: false
+      - model: "codellama-7b"
+        use_reasoning: false
+      - model: "mistral-7b"
+        use_reasoning: false
+    plugins:
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.85
+
+  # ============================================================================
+  # Remaining decisions (no ML selection - uses first model by default)
+  # ============================================================================
+  - name: "history_decision"
+    description: "Historical questions and cultural topics"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "history"
+    modelRefs:
+      - model: "llama-3.2-1b"
+        use_reasoning: false
+      - model: "llama-3.2-3b"
+        use_reasoning: false
+      - model: "codellama-7b"
+        use_reasoning: false
+      - model: "mistral-7b"
+        use_reasoning: false
+
+  - name: "economics_decision"
+    description: "Economics and financial topics"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "economics"
+    modelRefs:
+      - model: "llama-3.2-1b"
+        use_reasoning: false
+      - model: "llama-3.2-3b"
+        use_reasoning: false
+      - model: "codellama-7b"
+        use_reasoning: false
+      - model: "mistral-7b"
+        use_reasoning: false
+
+  - name: "health_decision"
+    description: "Health and medical information queries"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "health"
+    modelRefs:
+      - model: "llama-3.2-1b"
+        use_reasoning: false
+      - model: "llama-3.2-3b"
+        use_reasoning: false
+      - model: "codellama-7b"
+        use_reasoning: false
+      - model: "mistral-7b"
+        use_reasoning: false
+
+  - name: "psychology_decision"
+    description: "Psychology and mental health topics"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "psychology"
+    modelRefs:
+      - model: "llama-3.2-1b"
+        use_reasoning: false
+      - model: "llama-3.2-3b"
+        use_reasoning: false
+      - model: "codellama-7b"
+        use_reasoning: false
+      - model: "mistral-7b"
+        use_reasoning: false
+
+  - name: "law_decision"
+    description: "Legal questions and law-related topics"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "law"
+    modelRefs:
+      - model: "llama-3.2-1b"
+        use_reasoning: false
+      - model: "llama-3.2-3b"
+        use_reasoning: false
+      - model: "codellama-7b"
+        use_reasoning: false
+      - model: "mistral-7b"
+        use_reasoning: false
+
+  - name: "business_decision"
+    description: "Business and management related queries"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "business"
+    modelRefs:
+      - model: "llama-3.2-1b"
+        use_reasoning: false
+      - model: "llama-3.2-3b"
+        use_reasoning: false
+      - model: "codellama-7b"
+        use_reasoning: false
+      - model: "mistral-7b"
+        use_reasoning: false
+
+  - name: "philosophy_decision"
+    description: "Philosophy and ethical questions"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "philosophy"
+    modelRefs:
+      - model: "llama-3.2-1b"
+        use_reasoning: false
+      - model: "llama-3.2-3b"
+        use_reasoning: false
+      - model: "codellama-7b"
+        use_reasoning: false
+      - model: "mistral-7b"
+        use_reasoning: false
+
+  - name: "engineering_decision"
+    description: "Engineering and technical problem-solving"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "engineering"
+    modelRefs:
+      - model: "llama-3.2-1b"
+        use_reasoning: false
+      - model: "llama-3.2-3b"
+        use_reasoning: false
+      - model: "codellama-7b"
+        use_reasoning: false
+      - model: "mistral-7b"
+        use_reasoning: false
+
+  - name: "general_decision"
+    description: "General knowledge and miscellaneous topics"
+    priority: 50
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "other"
+    modelRefs:
+      - model: "llama-3.2-1b"
+        use_reasoning: false
+      - model: "llama-3.2-3b"
+        use_reasoning: false
+      - model: "codellama-7b"
+        use_reasoning: false
+      - model: "mistral-7b"
+        use_reasoning: false
+
+default_model: "mistral-7b"
+
+# Embedding Models Configuration
+embedding_models:
+  qwen3_model_path: "models/mom-embedding-pro"
+  use_cpu: true
+
+# Observability Configuration
+observability:
+  metrics:
+    enabled: false
+  tracing:
+    enabled: false
