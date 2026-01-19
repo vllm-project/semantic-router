@@ -509,7 +509,7 @@ Return a JSON dict that represents the mapping in the format:
         sample_id_to_canonical_label: dict[str, str] = {}
 
         for item in route_policy_samples:
-            sample_id = item.get("id")
+            sample_id = item.get("sample_id")
             label = item.get("label")
             if label in refined_policy_label_mappings:
                 refined_label = refined_policy_label_mappings[label]
@@ -559,12 +559,18 @@ Return a JSON dict that represents the mapping in the format:
                     continue
                 valid_verified_route_policy_samples.append(verified_route_policy_sample)
 
-                # write verified_route_policy_samples to file
-                with open(output_path, "a") as f:
-                    for (
-                        verified_route_policy_sample
-                    ) in valid_verified_route_policy_samples:
-                        f.write(json.dumps(verified_route_policy_sample) + "\n")
+            # write verified_route_policy_samples to file
+            with open(output_path, "a") as f:
+                for verified_route_policy_sample in valid_verified_route_policy_samples:
+                    f.write(
+                        json.dumps(
+                            {
+                                "sample_id": verified_route_policy_sample.sample_id,
+                                "label": verified_route_policy_sample.label,
+                            }
+                        )
+                        + "\n"
+                    )
 
     def _verify_policies_for_sample(
         self,
