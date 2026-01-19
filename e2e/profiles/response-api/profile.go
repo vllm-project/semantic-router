@@ -156,6 +156,16 @@ func (p *Profile) GetTestCases() []string {
 		"response-api-get",
 		"response-api-delete",
 		"response-api-input-items",
+
+		// Response API conversation chaining
+		"response-api-conversation-chaining",
+
+		// Response API error handling
+		"response-api-error-missing-input",
+		"response-api-error-nonexistent-previous-response-id",
+		"response-api-error-nonexistent-response-id-get",
+		"response-api-error-nonexistent-response-id-delete",
+		"response-api-error-backend-passthrough",
 	}
 }
 
