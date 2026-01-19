@@ -49,7 +49,12 @@ def main(ctx, version):
 
 
 @click.command()
-def init():
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Overwrite existing config.yaml and .vllm-sr without prompting.",
+)
+def init(force):
     """
     Initialize vLLM Semantic Router configuration.
 
@@ -57,9 +62,10 @@ def init():
 
     Examples:
         vllm-sr init
+        vllm-sr init --force
     """
     try:
-        init_command()
+        init_command(force=force)
     except Exception as e:
         log.error(f"Error: {e}")
         sys.exit(1)
@@ -89,7 +95,13 @@ def init():
     default=DEFAULT_IMAGE_PULL_POLICY,
     help=f"Image pull policy: always, ifnotpresent, never (default: {DEFAULT_IMAGE_PULL_POLICY})",
 )
-def serve(config, image, image_pull_policy):
+@click.option(
+    "--readonly-dashboard",
+    is_flag=True,
+    default=False,
+    help="Run dashboard in read-only mode (disable config editing, allow playground only)",
+)
+def serve(config, image, image_pull_policy, readonly_dashboard):
     """
     Start vLLM Semantic Router.
 
@@ -107,6 +119,9 @@ def serve(config, image, image_pull_policy):
 
         # Pull policy
         vllm-sr serve --image-pull-policy always
+
+        # Read-only dashboard (for public beta)
+        vllm-sr serve --readonly-dashboard
     """
     try:
         # Check if config file exists
@@ -131,6 +146,11 @@ def serve(config, image, image_pull_policy):
                     log.info(f"Passing environment variable: {var}=***")
                 else:
                     log.info(f"Passing environment variable: {var}={os.environ[var]}")
+
+        # Dashboard read-only mode
+        if readonly_dashboard:
+            env_vars["DASHBOARD_READONLY"] = "true"
+            log.info("Dashboard read-only mode: ENABLED")
 
         # Start container
         start_vllm_sr(

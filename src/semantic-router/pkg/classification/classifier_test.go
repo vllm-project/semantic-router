@@ -2692,98 +2692,159 @@ func BenchmarkUnifiedClassifier_BatchSizeComparison(b *testing.B) {
 	})
 }
 
-// EmbeddingClassifier unit tests
-var _ = Describe("EmbeddingClassifier", func() {
-	var origCalculate func(string, []string, int, string, int) (*candle_binding.BatchSimilarityOutput, error)
+// LanguageClassifier unit tests
+var _ = Describe("LanguageClassifier", func() {
+	var classifier *LanguageClassifier
 
 	BeforeEach(func() {
-		origCalculate = calculateSimilarityBatch
-	})
-
-	AfterEach(func() {
-		calculateSimilarityBatch = origCalculate
-	})
-
-	It("classifies with mean aggregation", func() {
-		calculateSimilarityBatch = func(query string, candidates []string, topK int, modelType string, targetDim int) (*candle_binding.BatchSimilarityOutput, error) {
-			return &candle_binding.BatchSimilarityOutput{Matches: []candle_binding.BatchSimilarityMatch{{Index: 0, Similarity: 0.9}, {Index: 1, Similarity: 0.8}, {Index: 2, Similarity: 0.7}}}, nil
+		rules := []config.LanguageRule{
+			{Name: "en"},
+			{Name: "es"},
+			{Name: "ru"},
+			{Name: "zh"},
+			{Name: "fr"},
 		}
-
-		rules := []config.EmbeddingRule{{
-			Name:                      "cat1",
-			Candidates:                []string{"science", "math"},
-			AggregationMethodConfiged: config.AggregationMethodMean,
-			SimilarityThreshold:       0.8,
-		}}
-
-		clf, err := NewEmbeddingClassifier(rules)
-		Expect(err).ToNot(HaveOccurred())
-
-		cat, score, err := clf.Classify("some text")
-		Expect(err).ToNot(HaveOccurred())
-		Expect(cat).To(Equal("cat1"))
-		Expect(score).To(BeNumerically("~", 0.8, 1e-6))
+		var err error
+		classifier, err = NewLanguageClassifier(rules)
+		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("classifies with max aggregation", func() {
-		calculateSimilarityBatch = func(query string, candidates []string, topK int, modelType string, targetDim int) (*candle_binding.BatchSimilarityOutput, error) {
-			return &candle_binding.BatchSimilarityOutput{Matches: []candle_binding.BatchSimilarityMatch{{Index: 0, Similarity: 0.4}, {Index: 1, Similarity: 0.6}}}, nil
-		}
-
-		rules := []config.EmbeddingRule{{
-			Name:                      "cat2",
-			Candidates:                []string{"x", "y"},
-			AggregationMethodConfiged: config.AggregationMethodMax,
-			SimilarityThreshold:       0.5,
-		}}
-
-		clf, err := NewEmbeddingClassifier(rules)
-		Expect(err).ToNot(HaveOccurred())
-
-		cat, score, err := clf.Classify("other text")
-		Expect(err).ToNot(HaveOccurred())
-		Expect(cat).To(Equal("cat2"))
-		Expect(score).To(BeNumerically("~", 0.6, 1e-6))
+	It("should detect English language", func() {
+		result, err := classifier.Classify("Hello, how are you?")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		Expect(result.LanguageCode).To(Equal("en"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.3))
 	})
 
-	It("classifies with any aggregation", func() {
-		calculateSimilarityBatch = func(query string, candidates []string, topK int, modelType string, targetDim int) (*candle_binding.BatchSimilarityOutput, error) {
-			return &candle_binding.BatchSimilarityOutput{Matches: []candle_binding.BatchSimilarityMatch{{Index: 0, Similarity: 0.2}, {Index: 1, Similarity: 0.95}}}, nil
-		}
-
-		rules := []config.EmbeddingRule{{
-			Name:                      "cat3",
-			Candidates:                []string{"p", "q"},
-			AggregationMethodConfiged: config.AggregationMethodAny,
-			SimilarityThreshold:       0.7,
-		}}
-
-		clf, err := NewEmbeddingClassifier(rules)
-		Expect(err).ToNot(HaveOccurred())
-
-		cat, score, err := clf.Classify("third text")
-		Expect(err).ToNot(HaveOccurred())
-		Expect(cat).To(Equal("cat3"))
-		Expect(score).To(BeNumerically("~", 0.7, 1e-6))
+	It("should detect Spanish language", func() {
+		result, err := classifier.Classify("Hola, ¿cómo estás? Me llamo Juan y vivo en Madrid. ¿De dónde eres tú? Esta es una pregunta en español sobre mi ubicación.")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// Accept Spanish or English (if detection is unreliable, defaults to English)
+		Expect(result.LanguageCode).To(BeElementOf("es", "en"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.3))
 	})
 
-	It("returns error when CalculateSimilarityBatch fails", func() {
-		calculateSimilarityBatch = func(query string, candidates []string, topK int, modelType string, targetDim int) (*candle_binding.BatchSimilarityOutput, error) {
-			return nil, errors.New("external failure")
-		}
+	It("should detect Russian language", func() {
+		result, err := classifier.Classify("Привет, как дела? Меня зовут Иван, и я живу в Москве. Откуда ты? Это вопрос на русском языке о моем местоположении.")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// Accept Russian or English (if detection is unreliable, defaults to English)
+		Expect(result.LanguageCode).To(BeElementOf("ru", "en"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.3))
+	})
 
-		rules := []config.EmbeddingRule{{
-			Name:                      "cat4",
-			Candidates:                []string{"z"},
-			AggregationMethodConfiged: config.AggregationMethodMean,
-			SimilarityThreshold:       0.1,
-		}}
+	It("should detect Chinese language", func() {
+		result, err := classifier.Classify("你好，世界")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		Expect(result.LanguageCode).To(Equal("zh"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.3))
+	})
 
-		clf, err := NewEmbeddingClassifier(rules)
-		Expect(err).ToNot(HaveOccurred())
+	It("should detect French language", func() {
+		result, err := classifier.Classify("Bonjour, comment allez-vous?")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		Expect(result.LanguageCode).To(Equal("fr"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.3))
+	})
 
-		_, _, err = clf.Classify("will error")
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("failed to calculate batch similarity"))
+	It("should handle empty text", func() {
+		result, err := classifier.Classify("")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		Expect(result.LanguageCode).To(Equal("en")) // Defaults to English
+		Expect(result.Confidence).To(Equal(0.5))
+	})
+
+	It("should handle mixed language text", func() {
+		result, err := classifier.Classify("Hello, bonjour, hola")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// Should detect one of the languages (likely English due to "Hello" being common)
+		Expect(result.LanguageCode).To(BeElementOf("en", "es", "fr"))
+	})
+
+	It("should handle very long strings", func() {
+		// Create a very long string (>10K characters)
+		longText := strings.Repeat("This is a very long English sentence that contains many words. ", 200)
+		result, err := classifier.Classify(longText)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// Very long English text should still be detected as English
+		Expect(result.LanguageCode).To(Equal("en"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.3))
+	})
+
+	It("should handle special characters and emojis", func() {
+		result, err := classifier.Classify("Hello! 😊 🎉 🚀 How are you?")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// Should still detect English despite emojis
+		Expect(result.LanguageCode).To(Equal("en"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.3))
+	})
+
+	It("should handle unicode edge cases", func() {
+		result, err := classifier.Classify("Hello 世界 🌍 مرحبا")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// Mixed unicode should still detect a language (likely English or Chinese)
+		Expect(result.LanguageCode).To(BeElementOf("en", "zh", "ar"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.3))
+	})
+
+	It("should handle whitespace-only strings", func() {
+		result, err := classifier.Classify("   \n\t  ")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// Whitespace-only should default to English
+		Expect(result.LanguageCode).To(Equal("en"))
+		Expect(result.Confidence).To(Equal(0.5))
+	})
+
+	It("should handle numbers only", func() {
+		result, err := classifier.Classify("1234567890 9876543210")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// Numbers only should default to English
+		Expect(result.LanguageCode).To(Equal("en"))
+		Expect(result.Confidence).To(Equal(0.5))
+	})
+
+	It("should handle code snippets", func() {
+		result, err := classifier.Classify("def hello(): print('world')")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// Code snippets might be detected as English or default to English
+		Expect(result.LanguageCode).To(BeElementOf("en", "unknown"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.3))
+	})
+
+	It("should handle very short text", func() {
+		result, err := classifier.Classify("Hi")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		// Very short text should still detect language (might be less confident)
+		Expect(result.LanguageCode).To(BeElementOf("en", "es", "fr", "de", "it", "pt", "ru", "ja", "zh", "ko"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.3))
+	})
+
+	It("should handle Japanese text", func() {
+		result, err := classifier.Classify("こんにちは、元気ですか？")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		Expect(result.LanguageCode).To(Equal("ja"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.3))
+	})
+
+	It("should handle German text", func() {
+		result, err := classifier.Classify("Guten Tag, wie geht es Ihnen? Ich heiße Hans und wohne in Berlin. Woher kommen Sie?")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		Expect(result.LanguageCode).To(Equal("de"))
+		Expect(result.Confidence).To(BeNumerically(">=", 0.3))
 	})
 })

@@ -35,15 +35,21 @@ func init() {
 		Tags:        []string{"response-api", "functional"},
 		Fn:          testResponseAPIInputItems,
 	})
+	pkgtestcases.Register("response-api-ttl-expiry", pkgtestcases.TestCase{
+		Description: "Response API TTL expiry - Response should disappear after TTL",
+		Tags:        []string{"response-api", "functional", "redis"},
+		Fn:          testResponseAPITTLExpiry,
+	})
 }
 
 // ResponseAPIRequest represents a Response API request
 type ResponseAPIRequest struct {
-	Model        string            `json:"model"`
-	Input        interface{}       `json:"input"`
-	Instructions string            `json:"instructions,omitempty"`
-	Store        *bool             `json:"store,omitempty"`
-	Metadata     map[string]string `json:"metadata,omitempty"`
+	Model              string            `json:"model"`
+	Input              interface{}       `json:"input"`
+	PreviousResponseID string            `json:"previous_response_id,omitempty"`
+	Instructions       string            `json:"instructions,omitempty"`
+	Store              *bool             `json:"store,omitempty"`
+	Metadata           map[string]string `json:"metadata,omitempty"`
 }
 
 // ResponseAPIResponse represents a Response API response
@@ -92,7 +98,7 @@ func testResponseAPICreate(ctx context.Context, client *kubernetes.Clientset, op
 	// Create a Response API request
 	storeTrue := true
 	reqBody := ResponseAPIRequest{
-		Model:        "MoM",
+		Model:        "openai/gpt-oss-20b",
 		Input:        "What is 2 + 2?",
 		Instructions: "You are a helpful math assistant.",
 		Store:        &storeTrue,
@@ -422,7 +428,7 @@ func testResponseAPIInputItems(ctx context.Context, client *kubernetes.Clientset
 func createTestResponse(ctx context.Context, localPort string, verbose bool) (string, error) {
 	storeTrue := true
 	reqBody := ResponseAPIRequest{
-		Model: "MoM",
+		Model: "openai/gpt-oss-20b",
 		Input: "Hello, how are you?",
 		Store: &storeTrue,
 	}
@@ -464,7 +470,7 @@ func createTestResponse(ctx context.Context, localPort string, verbose bool) (st
 func createTestResponseWithInstructions(ctx context.Context, localPort string, verbose bool) (string, error) {
 	storeTrue := true
 	reqBody := ResponseAPIRequest{
-		Model:        "MoM",
+		Model:        "openai/gpt-oss-20b",
 		Input:        "What is the capital of France?",
 		Instructions: "You are a geography expert. Answer concisely.",
 		Store:        &storeTrue,
@@ -501,4 +507,64 @@ func createTestResponseWithInstructions(ctx context.Context, localPort string, v
 	}
 
 	return apiResp.ID, nil
+}
+
+// testResponseAPITTLExpiry verifies that stored responses expire after TTL.
+func testResponseAPITTLExpiry(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+	if opts.Verbose {
+		fmt.Println("[Test] Testing Response API: TTL expiry")
+	}
+
+	localPort, stopPortForward, err := setupServiceConnection(ctx, client, opts)
+	if err != nil {
+		return err
+	}
+	defer stopPortForward()
+
+	responseID, err := createTestResponse(ctx, localPort, opts.Verbose)
+	if err != nil {
+		return fmt.Errorf("failed to create test response: %w", err)
+	}
+
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+	url := fmt.Sprintf("http://localhost:%s/v1/responses/%s", localPort, responseID)
+
+	// Confirm it exists immediately.
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("expected status 200 before TTL expiry, got %d", resp.StatusCode)
+	}
+
+	// Poll until it expires (404) or timeout.
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return fmt.Errorf("failed to create request: %w", err)
+		}
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to send request: %w", err)
+		}
+		resp.Body.Close()
+
+		if resp.StatusCode == http.StatusNotFound {
+			if opts.Verbose {
+				fmt.Printf("[Test] ✅ TTL expiry confirmed (id=%s)\n", responseID)
+			}
+			return nil
+		}
+
+		time.Sleep(1 * time.Second)
+	}
+
+	return fmt.Errorf("expected response to expire (404) within timeout, id=%s", responseID)
 }

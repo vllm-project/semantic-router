@@ -44,6 +44,7 @@ const HomepageHeader: React.FC = () => {
               <strong>
                 <Translate id="homepage.hero.mixtureOfModels">Mixture-of-Models</Translate>
               </strong>
+              {' '}
               🧠
               <span className={styles.techBadges}>
                 <span className={styles.techBadge}>

@@ -1,4 +1,5 @@
 import math
+import json
 import time
 from typing import List, Optional
 
@@ -32,11 +33,22 @@ async def models():
 
 @app.post("/v1/chat/completions")
 async def chat_completions(req: ChatRequest):
-    # Very simple echo-like behavior
-    last_user = next(
-        (m.content for m in reversed(req.messages) if m.role == "user"), ""
+    roles = [m.role for m in req.messages]
+    system_messages = [m.content for m in req.messages if m.role == "system"]
+    user_messages = [m.content for m in req.messages if m.role == "user"]
+
+    content = json.dumps(
+        {
+            "mock": "mock-vllm",
+            "model": req.model,
+            "roles": roles,
+            "system": system_messages,
+            "user": user_messages,
+            "total_messages": len(req.messages),
+        },
+        separators=(",", ":"),
+        sort_keys=True,
     )
-    content = f"[mock-{req.model}] You said: {last_user}"
 
     # Rough token estimation: ~1 token per 4 characters (ceil)
     def estimate_tokens(text: str) -> int:

@@ -20,7 +20,6 @@ sidebar_position: 2
 
 - **Python**: 3.10 或更高版本
 - **Docker**: 运行 Router 容器所需
-- **可选**: HuggingFace token（仅针对 gated models）
 
 ## 快速开始
 
@@ -119,7 +118,13 @@ Router 将：
 - 启动 Semantic Router 服务
 - 在端口 9190 上启用 metrics
 
-### 5. 测试 Router
+### 5. 启动 Dashboard
+
+```bash
+vllm-sr dashboard
+```
+
+### 6. 测试 Router
 
 ```bash
 curl http://localhost:8888/v1/chat/completions \

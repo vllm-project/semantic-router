@@ -24,6 +24,8 @@ export interface FieldConfig {
   min?: number
   max?: number
   step?: number
+  shouldHide?: (data: // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    any) => boolean
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   customRender?: (value: any, onChange: (value: any) => void) => React.ReactNode
 }
@@ -106,7 +108,7 @@ const EditModal: React.FC<EditModalProps> = ({
           )}
 
           <div className={styles.fields}>
-            {fields.map((field) => (
+            {fields.map((field) => !field.shouldHide?.(formData) && (
               <div key={field.name} className={styles.field}>
                 <label className={styles.label}>
                   {field.label}

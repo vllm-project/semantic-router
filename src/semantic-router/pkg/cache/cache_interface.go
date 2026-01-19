@@ -1,6 +1,10 @@
 package cache
 
-import "time"
+import (
+	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+)
 
 // CacheEntry represents a complete cached request-response pair with associated metadata
 type CacheEntry struct {
@@ -13,6 +17,8 @@ type CacheEntry struct {
 	Timestamp    time.Time // Creation time (when the entry was added or completed with a response)
 	LastAccessAt time.Time // Last access time
 	HitCount     int64     // Access count
+	TTLSeconds   int       // Per-entry TTL in seconds (0 = not cached, -1 = use cache default, >0 = specific TTL)
+	ExpiresAt    time.Time // Calculated expiration time based on TTL
 }
 
 // CacheBackend defines the interface for semantic cache implementations
@@ -26,13 +32,13 @@ type CacheBackend interface {
 	CheckConnection() error
 
 	// AddPendingRequest stores a request awaiting its response
-	AddPendingRequest(requestID string, model string, query string, requestBody []byte) error
+	AddPendingRequest(requestID string, model string, query string, requestBody []byte, ttlSeconds int) error
 
 	// UpdateWithResponse completes a pending request with the received response
-	UpdateWithResponse(requestID string, responseBody []byte) error
+	UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error
 
 	// AddEntry stores a complete request-response pair in the cache
-	AddEntry(requestID string, model string, query string, requestBody, responseBody []byte) error
+	AddEntry(requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error
 
 	// FindSimilar searches for semantically similar cached requests
 	// Returns the cached response, match status, and any error
@@ -110,7 +116,13 @@ type CacheConfig struct {
 	// EvictionPolicy defines the eviction policy for in-memory cache ("fifo", "lru", "lfu")
 	EvictionPolicy EvictionPolicyType `yaml:"eviction_policy,omitempty"`
 
-	// BackendConfigPath points to backend-specific configuration files
+	// Redis specific settings
+	Redis *config.RedisConfig `yaml:"redis,omitempty"`
+
+	// Milvus specific settings
+	Milvus *config.MilvusConfig `yaml:"milvus,omitempty"`
+
+	// BackendConfigPath points to backend-specific configuration files (Deprecated)
 	BackendConfigPath string `yaml:"backend_config_path,omitempty"`
 
 	// UseHNSW enables HNSW index for faster search in memory backend

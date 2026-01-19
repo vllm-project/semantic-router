@@ -59,13 +59,14 @@ type RequestContext struct {
 	TTFTSeconds  float64
 
 	// VSR decision tracking
-	VSRSelectedCategory     string           // The category from domain classification (MMLU category)
-	VSRSelectedDecisionName string           // The decision name from DecisionEngine evaluation
-	VSRReasoningMode        string           // "on" or "off" - whether reasoning mode was determined to be used
-	VSRSelectedModel        string           // The model selected by VSR
-	VSRCacheHit             bool             // Whether this request hit the cache
-	VSRInjectedSystemPrompt bool             // Whether a system prompt was injected into the request
-	VSRSelectedDecision     *config.Decision // The decision object selected by DecisionEngine (for plugins)
+	VSRSelectedCategory           string           // The category from domain classification (MMLU category)
+	VSRSelectedDecisionName       string           // The decision name from DecisionEngine evaluation
+	VSRSelectedDecisionConfidence float64          // Confidence score from DecisionEngine evaluation
+	VSRReasoningMode              string           // "on" or "off" - whether reasoning mode was determined to be used
+	VSRSelectedModel              string           // The model selected by VSR
+	VSRCacheHit                   bool             // Whether this request hit the cache
+	VSRInjectedSystemPrompt       bool             // Whether a system prompt was injected into the request
+	VSRSelectedDecision           *config.Decision // The decision object selected by DecisionEngine (for plugins)
 
 	// VSR signal tracking - stores all matched signals for response headers
 	VSRMatchedKeywords     []string // Matched keyword rule names
@@ -95,6 +96,14 @@ type RequestContext struct {
 
 	// Response API context
 	ResponseAPICtx *ResponseAPIContext // Non-nil if this is a Response API request
+
+	// Router replay context
+	RouterReplayID     string                           // ID of the router replay session, if applicable
+	RouterReplayConfig *config.RouterReplayPluginConfig // Configuration for router replay, if applicable
+
+	// Looper context
+	LooperRequest   bool // True if this request is from looper (internal request, skip plugins)
+	LooperIteration int  // The iteration number if this is a looper request
 }
 
 // handleRequestHeaders processes the request headers
@@ -137,6 +146,11 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		if strings.ToLower(h.Key) == headers.RequestID {
 			ctx.RequestID = headerValue
 		}
+		// Check for looper request header
+		if h.Key == headers.VSRLooperRequest && headerValue == "true" {
+			ctx.LooperRequest = true
+			logging.Infof("Detected looper internal request, will skip plugin processing")
+		}
 	}
 
 	// Set request metadata on span
@@ -150,6 +164,10 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	tracing.SetSpanAttributes(span,
 		attribute.String(tracing.AttrHTTPMethod, method),
 		attribute.String(tracing.AttrHTTPPath, path))
+	// Router replay API (read-only): list or fetch replay records
+	if replayResp := r.handleRouterReplayAPI(method, path); replayResp != nil {
+		return replayResp, nil
+	}
 
 	// Detect if the client expects a streaming response (SSE)
 	if accept, ok := ctx.Headers["accept"]; ok {

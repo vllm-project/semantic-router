@@ -9,6 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
 
@@ -81,4 +82,111 @@ func (r *OpenAIRouter) setClearRouteCache(response *ext_proc.ProcessingResponse)
 func (r *OpenAIRouter) recordRoutingLatency(ctx *RequestContext) {
 	routingLatency := time.Since(ctx.ProcessingStartTime)
 	metrics.RecordModelRoutingLatency(routingLatency.Seconds())
+}
+
+// startRouterReplay begins capturing a replay record if the router_replay plugin is enabled
+// for the matched decision. It is safe to call multiple times; only the first call is recorded.
+func (r *OpenAIRouter) startRouterReplay(
+	ctx *RequestContext,
+	originalModel string,
+	selectedModel string,
+	decisionName string,
+) {
+	if ctx == nil || ctx.RouterReplayConfig == nil || !ctx.RouterReplayConfig.Enabled {
+		return
+	}
+	if r.ReplayRecorder == nil || ctx.RouterReplayID != "" {
+		return
+	}
+
+	cfg := ctx.RouterReplayConfig
+	maxBodyBytes := cfg.MaxBodyBytes
+	if maxBodyBytes <= 0 {
+		maxBodyBytes = routerreplay.DefaultMaxBodyBytes
+	}
+
+	r.ReplayRecorder.SetCapturePolicy(
+		cfg.CaptureRequestBody,
+		cfg.CaptureResponseBody,
+		maxBodyBytes,
+	)
+
+	reasoningMode := ctx.VSRReasoningMode
+	if reasoningMode == "" {
+		reasoningMode = "off"
+	}
+
+	modelForRecord := selectedModel
+	if modelForRecord == "" {
+		modelForRecord = originalModel
+	}
+
+	rec := routerreplay.RoutingRecord{
+		RequestID:     ctx.RequestID,
+		Decision:      decisionName,
+		Category:      ctx.VSRSelectedCategory,
+		OriginalModel: originalModel,
+		SelectedModel: modelForRecord,
+		ReasoningMode: reasoningMode,
+		Signals: routerreplay.Signal{
+			Keyword:      ctx.VSRMatchedKeywords,
+			Embedding:    ctx.VSRMatchedEmbeddings,
+			Domain:       ctx.VSRMatchedDomains,
+			FactCheck:    ctx.VSRMatchedFactCheck,
+			UserFeedback: ctx.VSRMatchedUserFeedback,
+			Preference:   ctx.VSRMatchedPreference,
+		},
+		Streaming: ctx.ExpectStreamingResponse,
+		FromCache: ctx.VSRCacheHit,
+	}
+
+	// Attach request body directly; recorder will enforce capture + truncation
+	if len(ctx.OriginalRequestBody) > 0 {
+		rec.RequestBody = string(ctx.OriginalRequestBody)
+	}
+
+	replayID, err := r.ReplayRecorder.AddRecord(rec)
+	if err != nil {
+		return
+	}
+	ctx.RouterReplayID = replayID
+
+	if stored, ok := r.ReplayRecorder.GetRecord(replayID); ok {
+		logging.LogEvent(
+			"router_replay_start",
+			stored.LogFields("router_replay_start"),
+		)
+	}
+}
+
+// updateRouterReplayStatus updates status metadata (status code, streaming/cache flags).
+func (r *OpenAIRouter) updateRouterReplayStatus(ctx *RequestContext, status int, streaming bool) {
+	if ctx == nil || ctx.RouterReplayID == "" || r.ReplayRecorder == nil {
+		return
+	}
+	err := r.ReplayRecorder.UpdateStatus(ctx.RouterReplayID, status, ctx.VSRCacheHit, streaming)
+	if err != nil {
+		logging.Errorf("Failed to update router replay status: %v", err)
+	}
+}
+
+// attachRouterReplayResponse stores response payload (if configured) and optionally logs completion.
+func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseBody []byte, isFinal bool) {
+	if ctx == nil || ctx.RouterReplayID == "" || r.ReplayRecorder == nil {
+		return
+	}
+
+	if len(responseBody) > 0 {
+		// AttachResponse already respects capture policy internally
+		_ = r.ReplayRecorder.AttachResponse(ctx.RouterReplayID, responseBody)
+	}
+
+	if isFinal {
+		if rec, ok := r.ReplayRecorder.GetRecord(ctx.RouterReplayID); ok {
+			logging.LogEvent(
+				"router_replay_complete",
+				rec.LogFields("router_replay_complete"),
+			)
+		}
+	}
 }

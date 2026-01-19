@@ -319,8 +319,7 @@ checksum = "d71b6127be86fdcfddb610f7182ac57211d4b18a3e9c82eb2d17662f2227ad6a"
 [[package]]
 name = "candle-core"
 version = "0.9.2-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14057890649ac8068ff0460f57398f6e3c9d8d168ebec9f43fb894446b131fe3"
+source = "git+https://github.com/huggingface/candle?tag=0.9.2-alpha.1#d312da234440ca64fb64c38ba57588a692f58caf"
 dependencies = [
  "byteorder",
  "candle-kernels",
@@ -345,8 +344,7 @@ dependencies = [
 [[package]]
 name = "candle-flash-attn"
 version = "0.9.2-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd50a5c5c31eb6a39ab70cb8bbb37c06f57907e547a25ebe07ac7676c3aec33f"
+source = "git+https://github.com/huggingface/candle?tag=0.9.2-alpha.1#d312da234440ca64fb64c38ba57588a692f58caf"
 dependencies = [
  "anyhow",
  "bindgen_cuda",
@@ -357,8 +355,7 @@ dependencies = [
 [[package]]
 name = "candle-kernels"
 version = "0.9.2-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fad895887a51d1824a5d259d2303b94a28e05c15fad84f9f436bc966a9737da"
+source = "git+https://github.com/huggingface/candle?tag=0.9.2-alpha.1#d312da234440ca64fb64c38ba57588a692f58caf"
 dependencies = [
  "bindgen_cuda",
 ]
@@ -366,8 +363,7 @@ dependencies = [
 [[package]]
 name = "candle-nn"
 version = "0.9.2-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5ff267dd576a7d3e66caa8d8f4629b3aedd737400d69f7c9c599fe5aa5f51de"
+source = "git+https://github.com/huggingface/candle?tag=0.9.2-alpha.1#d312da234440ca64fb64c38ba57588a692f58caf"
 dependencies = [
  "candle-core",
  "half",
@@ -410,8 +406,7 @@ dependencies = [
 [[package]]
 name = "candle-transformers"
 version = "0.9.2-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbbb4ed0bbce963538fba5adbde9eff822690cc6fdf3fe5d36fd2e94c349cf79"
+source = "git+https://github.com/huggingface/candle?tag=0.9.2-alpha.1#d312da234440ca64fb64c38ba57588a692f58caf"
 dependencies = [
  "byteorder",
  "candle-core",

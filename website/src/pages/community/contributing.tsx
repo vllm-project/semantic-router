@@ -1,6 +1,7 @@
 import React from 'react'
 import Layout from '@theme/Layout'
 import Translate from '@docusaurus/Translate'
+import Link from '@docusaurus/Link'
 import styles from './community-page.module.css'
 
 const Contributing: React.FC = () => {
@@ -25,50 +26,83 @@ const Contributing: React.FC = () => {
             </h2>
             <div className={styles.contributeGrid}>
               <div className={styles.card}>
-                <h3>🐛 Bug Reports</h3>
+                <h3><Translate id="contributing.bugReports.title">🐛 Bug Reports</Translate></h3>
                 <p>
-                  Found a bug? Please report it on our
+                  <Translate id="contributing.bugReports.desc.prefix">Found a bug? Please report it on our</Translate>
+                  {' '}
                   <a href="https://github.com/vllm-project/semantic-router/issues" target="_blank" rel="noopener noreferrer">GitHub Issues</a>
                   .
                 </p>
                 <ul>
-                  <li>Use a clear and descriptive title</li>
-                  <li>Provide steps to reproduce</li>
-                  <li>Include system information</li>
-                  <li>Add relevant logs or error messages</li>
+                  <li>
+                    <Translate id="contributing.bugReports.list.1">Use a clear and descriptive title</Translate>
+                  </li>
+                  <li>
+                    <Translate id="contributing.bugReports.list.2">Provide steps to reproduce</Translate>
+                  </li>
+                  <li>
+                    <Translate id="contributing.bugReports.list.3">Include system information</Translate>
+                  </li>
+                  <li>
+                    <Translate id="contributing.bugReports.list.4">Add relevant logs or error messages</Translate>
+                  </li>
                 </ul>
               </div>
 
               <div className={styles.card}>
-                <h3>✨ Feature Requests</h3>
-                <p>Have an idea for a new feature? We'd love to hear it!</p>
+                <h3><Translate id="contributing.featureRequests.title">✨ Feature Requests</Translate></h3>
+                <p><Translate id="contributing.featureRequests.desc">Have an idea for a new feature? We'd love to hear it!</Translate></p>
                 <ul>
-                  <li>Check existing issues first</li>
-                  <li>Describe the problem you're solving</li>
-                  <li>Explain your proposed solution</li>
-                  <li>Consider implementation complexity</li>
+                  <li>
+                    <Translate id="contributing.featureRequests.list.1">Check existing issues first</Translate>
+                  </li>
+                  <li>
+                    <Translate id="contributing.featureRequests.list.2">Describe the problem you're solving</Translate>
+                  </li>
+                  <li>
+                    <Translate id="contributing.featureRequests.list.3">Explain your proposed solution</Translate>
+                  </li>
+                  <li>
+                    <Translate id="contributing.featureRequests.list.4">Consider implementation complexity</Translate>
+                  </li>
                 </ul>
               </div>
 
               <div className={styles.card}>
-                <h3>📝 Documentation</h3>
-                <p>Help improve our documentation and examples.</p>
+                <h3><Translate id="contributing.documentation.title">📝 Documentation</Translate></h3>
+                <p><Translate id="contributing.documentation.desc">Help improve our documentation and examples.</Translate></p>
                 <ul>
-                  <li>Fix typos and grammar</li>
-                  <li>Add missing documentation</li>
-                  <li>Create tutorials and guides</li>
-                  <li>Improve code examples</li>
+                  <li>
+                    <Translate id="contributing.documentation.list.1">Fix typos and grammar</Translate>
+                  </li>
+                  <li>
+                    <Translate id="contributing.documentation.list.2">Add missing documentation</Translate>
+                  </li>
+                  <li>
+                    <Translate id="contributing.documentation.list.3">Create tutorials and guides</Translate>
+                  </li>
+                  <li>
+                    <Translate id="contributing.documentation.list.4">Improve code examples</Translate>
+                  </li>
                 </ul>
               </div>
 
               <div className={styles.card}>
-                <h3>💻 Code Contributions</h3>
-                <p>Contribute to the core functionality.</p>
+                <h3><Translate id="contributing.code.title">💻 Code Contributions</Translate></h3>
+                <p><Translate id="contributing.code.desc">Contribute to the core functionality.</Translate></p>
                 <ul>
-                  <li>Fix bugs and issues</li>
-                  <li>Implement new features</li>
-                  <li>Optimize performance</li>
-                  <li>Add test coverage</li>
+                  <li>
+                    <Translate id="contributing.code.list.1">Fix bugs and issues</Translate>
+                  </li>
+                  <li>
+                    <Translate id="contributing.code.list.2">Implement new features</Translate>
+                  </li>
+                  <li>
+                    <Translate id="contributing.code.list.3">Optimize performance</Translate>
+                  </li>
+                  <li>
+                    <Translate id="contributing.code.list.4">Add test coverage</Translate>
+                  </li>
                 </ul>
               </div>
             </div>
@@ -84,40 +118,40 @@ const Contributing: React.FC = () => {
                 <div className={styles.step}>
                   <span className={styles.stepNumber}>1</span>
                   <div>
-                    <h4>Create an Issue</h4>
-                    <p>Discuss your idea or bug report with the community first.</p>
+                    <h4><Translate id="contributing.process.step1.title">Create an Issue</Translate></h4>
+                    <p><Translate id="contributing.process.step1.desc">Discuss your idea or bug report with the community first.</Translate></p>
                   </div>
                 </div>
 
                 <div className={styles.step}>
                   <span className={styles.stepNumber}>2</span>
                   <div>
-                    <h4>Fork & Branch</h4>
-                    <p>Create a new branch for your changes from the main branch.</p>
+                    <h4><Translate id="contributing.process.step2.title">Fork & Branch</Translate></h4>
+                    <p><Translate id="contributing.process.step2.desc">Create a new branch for your changes from the main branch.</Translate></p>
                   </div>
                 </div>
 
                 <div className={styles.step}>
                   <span className={styles.stepNumber}>3</span>
                   <div>
-                    <h4>Make Changes</h4>
-                    <p>Implement your changes following our coding standards.</p>
+                    <h4><Translate id="contributing.process.step3.title">Make Changes</Translate></h4>
+                    <p><Translate id="contributing.process.step3.desc">Implement your changes following our coding standards.</Translate></p>
                   </div>
                 </div>
 
                 <div className={styles.step}>
                   <span className={styles.stepNumber}>4</span>
                   <div>
-                    <h4>Test</h4>
-                    <p>Run tests and ensure your changes don't break existing functionality.</p>
+                    <h4><Translate id="contributing.process.step4.title">Test</Translate></h4>
+                    <p><Translate id="contributing.process.step4.desc">Run tests and ensure your changes don't break existing functionality.</Translate></p>
                     <div className={styles.stepNumberTips}>
-                      <p>1. Run precommit hooks, ensure compliance with the project submission guidelines;</p>
+                      <p><Translate id="contributing.process.step4.tip1">1. Run precommit hooks, ensure compliance with the project submission guidelines;</Translate></p>
                       <p>
-                        2. You can refer to
+                        <Translate id="contributing.process.step4.tip2.prefix">2. You can refer to</Translate>
                         {' '}
-                        <a href="/docs/installation">Install the local</a>
+                        <Link to="/docs/installation"><Translate id="contributing.process.step4.tip2.link">Install the local</Translate></Link>
                         {' '}
-                        to start semantic-router locally.
+                        <Translate id="contributing.process.step4.tip2.suffix">to start semantic-router locally.</Translate>
                       </p>
                     </div>
                   </div>
@@ -126,8 +160,8 @@ const Contributing: React.FC = () => {
                 <div className={styles.step}>
                   <span className={styles.stepNumber}>5</span>
                   <div>
-                    <h4>Submit PR</h4>
-                    <p>Create a pull request with a clear description of your changes.</p>
+                    <h4><Translate id="contributing.process.step5.title">Submit PR</Translate></h4>
+                    <p><Translate id="contributing.process.step5.desc">Create a pull request with a clear description of your changes.</Translate></p>
                   </div>
                 </div>
               </div>
@@ -139,27 +173,27 @@ const Contributing: React.FC = () => {
               ⚙️
               <Translate id="contributing.precommit.title">Precommit hooks</Translate>
             </h2>
-            <p>The Semantic-router project provides a precommit hook to standardize the entire project, including Go, Python, Rust, Markdown, and spelling error checking.</p>
-            <p>Although these measures may increase the difficulty of contributions, they are necessary. We are currently building a portable Docker precommit environment to reduce the difficulty of contributions, allowing you to focus on functional pull requests.</p>
+            <p><Translate id="contributing.precommit.desc1">The Semantic-router project provides a precommit hook to standardize the entire project, including Go, Python, Rust, Markdown, and spelling error checking.</Translate></p>
+            <p><Translate id="contributing.precommit.desc2">Although these measures may increase the difficulty of contributions, they are necessary. We are currently building a portable Docker precommit environment to reduce the difficulty of contributions, allowing you to focus on functional pull requests.</Translate></p>
 
             <div className={styles.card}>
-              <h3>Manual</h3>
+              <h3><Translate id="contributing.precommit.manual.title">Manual</Translate></h3>
 
-              <h4>Some Tips: </h4>
+              <h4><Translate id="contributing.precommit.tips.title">Some Tips: </Translate></h4>
               <div className={styles.stepNumberTips}>
-                <p>1. If the precommit check fails, don't worry. You can also get more information by executing "make help". </p>
-                <p>2. For the pip installation tool, we recommend that you use venv for installation.</p>
-                <p>3. We recommend installing pre-commit through Python's virtual environment.</p>
-                <p>4. You can also directly submit the PR and let GitHub CI test it for you, but this will take a lot of time!</p>
+                <p><Translate id="contributing.precommit.tips.1">1. If the precommit check fails, don't worry. You can also get more information by executing "make help". </Translate></p>
+                <p><Translate id="contributing.precommit.tips.2">2. For the pip installation tool, we recommend that you use venv for installation.</Translate></p>
+                <p><Translate id="contributing.precommit.tips.3">3. We recommend installing pre-commit through Python's virtual environment.</Translate></p>
+                <p><Translate id="contributing.precommit.tips.4">4. You can also directly submit the PR and let GitHub CI test it for you, but this will take a lot of time!</Translate></p>
               </div>
 
               <div className={styles.steps}>
                 <div className={styles.step}>
                   <span className={styles.stepNumber}>1</span>
                   <div>
-                    <h4>Install precommit</h4>
+                    <h4><Translate id="contributing.precommit.step1.title">Install precommit</Translate></h4>
                     <p>
-                      Run
+                      <Translate id="contributing.precommit.step1.desc">Run</Translate>
                       <code>pip install --user pre-commit</code>
                     </p>
                   </div>
@@ -167,7 +201,7 @@ const Contributing: React.FC = () => {
                 <div className={styles.step}>
                   <span className={styles.stepNumber}>2</span>
                   <div>
-                    <h4>Install check tools</h4>
+                    <h4><Translate id="contributing.precommit.step2.title">Install check tools</Translate></h4>
                     <div className={styles.stepNumberTips}>
                       <p>
                         1. Markdown:
@@ -186,7 +220,7 @@ const Contributing: React.FC = () => {
                         <code>cd website && npm lint</code>
                       </p>
                       <p>
-                        5. Shell: take Mac as an example, execute
+                        <Translate id="contributing.precommit.step2.shell">5. Shell: take Mac as an example, execute</Translate>
                         <code>brew install shellcheck</code>
                       </p>
                     </div>
@@ -195,11 +229,13 @@ const Contributing: React.FC = () => {
                 <div className={styles.step}>
                   <span className={styles.stepNumber}>3</span>
                   <div>
-                    <h4>Install precommit to git</h4>
+                    <h4><Translate id="contributing.precommit.step3.title">Install precommit to git</Translate></h4>
                     <p>
-                      Run
+                      <Translate id="contributing.precommit.step3.desc">Run</Translate>
                       <code>pre-commit install</code>
-                      , then pre-commit installed at
+                      ,
+                      <Translate id="contributing.precommit.step3.then">then pre-commit installed at</Translate>
+                      {' '}
                       <code>.git/hooks/pre-commit</code>
                     </p>
                   </div>
@@ -207,12 +243,12 @@ const Contributing: React.FC = () => {
                 <div className={styles.step}>
                   <span className={styles.stepNumber}>4</span>
                   <div>
-                    <h4>Run</h4>
+                    <h4><Translate id="contributing.precommit.step4.title">Run</Translate></h4>
                     <p>
-                      Run
+                      <Translate id="contributing.precommit.step4.desc">Run</Translate>
                       <code>make precommit-check</code>
                       {' '}
-                      to check.
+                      <Translate id="contributing.precommit.step4.check">to check.</Translate>
                     </p>
                   </div>
                 </div>
@@ -220,34 +256,33 @@ const Contributing: React.FC = () => {
                 <hr />
 
                 <h3>Docker/Podman</h3>
-                <p>From the above local running method, it can be seen that the process is very troublesome and complicated. Therefore, we have provided running methods based on Docker or Podman. There is no need to install various dependent software; all you need is a container runtime.</p>
+                <p><Translate id="contributing.docker.desc">From the above local running method, it can be seen that the process is very troublesome and complicated. Therefore, we have provided running methods based on Docker or Podman. There is no need to install various dependent software; all you need is a container runtime.</Translate></p>
 
-                <h4>Some Tips: </h4>
+                <h4><Translate id="contributing.precommit.tips.title">Some Tips: </Translate></h4>
                 <div className={styles.stepNumberTips}>
                   <p>
-                    Although Docker can help avoid installing too many detection tools locally, this does not mean that it will be automatically executed during the commit process. Therefore, when committing, you can use
+                    <Translate id="contributing.docker.tips.1">Although Docker can help avoid installing too many detection tools locally, this does not mean that it will be automatically executed during the commit process. Therefore, when committing, you can use</Translate>
                     <code>git commit -s -m -n</code>
                     {' '}
-                    to skip the detection.
-                    {' '}
+                    <Translate id="contributing.docker.tips.2">to skip the detection.</Translate>
                   </p>
                 </div>
                 <div className={styles.step}>
                   <span className={styles.stepNumber}>1</span>
                   <div>
-                    <h4>Make sure Docker/Podman is installed</h4>
+                    <h4><Translate id="contributing.docker.step1.title">Make sure Docker/Podman is installed</Translate></h4>
                     <p><code>docker --version</code></p>
                   </div>
                 </div>
                 <div className={styles.step}>
                   <span className={styles.stepNumber}>2</span>
                   <div>
-                    <h4>Run precommit by Docker/Podman</h4>
+                    <h4><Translate id="contributing.docker.step2.title">Run precommit by Docker/Podman</Translate></h4>
                     <p><code>make precommit-local</code></p>
                   </div>
                 </div>
                 <div>
-                  <p>You can also manually enter the container and perform the operation:</p>
+                  <p><Translate id="contributing.docker.manual.desc">You can also manually enter the container and perform the operation:</Translate></p>
                   <div className={styles.codeBlock}>
                     <div className={styles.codeHeader}>
                       <div className={styles.windowControls}>
@@ -255,7 +290,7 @@ const Contributing: React.FC = () => {
                         <span className={styles.controlButton}></span>
                         <span className={styles.controlButton}></span>
                       </div>
-                      <div className={styles.title}>Manual Docker Setup</div>
+                      <div className={styles.title}><Translate id="contributing.docker.manual.title">Manual Docker Setup</Translate></div>
                     </div>
                     <div className={styles.codeContent}>
                       <pre className={styles.codeText}>
@@ -285,11 +320,11 @@ pre-commit install && pre-commit run --all-files`}
               <Translate id="contributing.workGroups.title">Working Group Areas</Translate>
             </h2>
             <p>
-              Consider joining one of our
+              <Translate id="contributing.workGroups.desc.prefix">Consider joining one of our</Translate>
               {' '}
-              <a href="/community/work-groups">Working Groups</a>
+              <Link to="/community/work-groups"><Translate id="contributing.workGroups.link">Working Groups</Translate></Link>
               {' '}
-              to focus your contributions:
+              <Translate id="contributing.workGroups.desc.suffix">to focus your contributions:</Translate>
             </p>
             <div className={styles.tagGrid}>
               <span className={styles.tag}>area/document</span>
@@ -308,22 +343,28 @@ pre-commit install && pre-commit run --all-files`}
               <Translate id="contributing.getHelp.title">Get Help</Translate>
             </h2>
             <div className={styles.card}>
-              <p>Need help with your contribution? Reach out to us:</p>
+              <p><Translate id="contributing.getHelp.desc">Need help with your contribution? Reach out to us:</Translate></p>
               <ul>
                 <li>
                   <a href="https://github.com/vllm-project/semantic-router/discussions" target="_blank" rel="noopener noreferrer">GitHub Discussions</a>
                   {' '}
-                  - For general questions and discussions
+                  -
+                  {' '}
+                  <Translate id="contributing.getHelp.discussions">For general questions and discussions</Translate>
                 </li>
                 <li>
                   <a href="https://github.com/vllm-project/semantic-router/issues" target="_blank" rel="noopener noreferrer">GitHub Issues</a>
                   {' '}
-                  - For bug reports and feature requests
+                  -
+                  {' '}
+                  <Translate id="contributing.getHelp.issues">For bug reports and feature requests</Translate>
                 </li>
                 <li>
-                  <a href="/community/work-groups">Work Groups</a>
+                  <Link to="/community/work-groups"><Translate id="contributing.getHelp.workGroups.link">Work Groups</Translate></Link>
                   {' '}
-                  - Join a specific working group
+                  -
+                  {' '}
+                  <Translate id="contributing.getHelp.workGroups">Join a specific working group</Translate>
                 </li>
               </ul>
             </div>

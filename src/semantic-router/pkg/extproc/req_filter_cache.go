@@ -75,6 +75,8 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 				ctx.VSRSelectedDecisionName = categoryName
 			}
 
+			// Start router replay capture if enabled, even when serving from cache
+			r.startRouterReplay(ctx, requestModel, requestModel, categoryName)
 			// Log cache hit
 			logging.LogEvent("cache_hit", map[string]interface{}{
 				"request_id": ctx.RequestID,
@@ -85,6 +87,8 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 			})
 			// Return immediate response from cache
 			response := http.CreateCacheHitResponse(cachedResponse, ctx.ExpectStreamingResponse, categoryName, ctx.VSRSelectedDecisionName, ctx.VSRMatchedKeywords)
+			r.updateRouterReplayStatus(ctx, 200, ctx.ExpectStreamingResponse)
+			r.attachRouterReplayResponse(ctx, cachedResponse, true)
 			ctx.TraceContext = spanCtx
 			return response, true
 		}
@@ -92,7 +96,9 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 	}
 
 	// Cache miss, store the request for later
-	err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody)
+	// Get decision-specific TTL
+	ttlSeconds := r.Config.GetCacheTTLSecondsForDecision(categoryName)
+	err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody, ttlSeconds)
 	if err != nil {
 		logging.Errorf("Error adding pending request to cache: %v", err)
 		// Continue without caching

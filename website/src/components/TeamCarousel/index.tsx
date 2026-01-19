@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react'
 import Translate from '@docusaurus/Translate'
+import Link from '@docusaurus/Link'
 import styles from './styles.module.css'
 
 interface TeamMember {
@@ -35,8 +36,8 @@ const teamMembers: TeamMember[] = [
   },
   {
     name: 'Xunzhuo Liu',
-    role: 'AI Networking',
-    company: 'Tencent',
+    role: 'Intelligent Routing',
+    company: 'vLLM',
     avatar: '/img/team/xunzhuo.png',
     memberType: 'maintainer',
   },
@@ -231,11 +232,11 @@ const TeamCarousel: React.FC = () => {
         </div>
 
         <div className={styles.viewAllLink}>
-          <a href="/community/team" className={styles.viewAllButton}>
+          <Link to="/community/team" className={styles.viewAllButton}>
             <Translate id="teamCarousel.viewAll">View All Team Members</Translate>
             {' '}
             →
-          </a>
+          </Link>
         </div>
       </div>
     </section>

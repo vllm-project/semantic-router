@@ -1,5 +1,19 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import styles from './MonitoringPage.module.css'
+import ServiceNotConfigured, {
+  ServiceConfig,
+} from '../components/ServiceNotConfigured'
+
+// Grafana service configuration
+const GRAFANA_SERVICE: ServiceConfig = {
+  name: 'Grafana',
+  envVar: 'TARGET_GRAFANA_URL',
+  description:
+    'Grafana is used to display metrics and dashboards for the semantic router. Please configure the Grafana URL to enable monitoring capabilities.',
+  docsUrl:
+    'https://vllm-semantic-router.com/docs/tutorials/observability/dashboard',
+  exampleValue: 'http://localhost:3000',
+}
 
 const MonitoringPage: React.FC = () => {
   // Get theme from document attribute
@@ -10,7 +24,34 @@ const MonitoringPage: React.FC = () => {
   const [theme, setTheme] = useState(getTheme())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [serviceAvailable, setServiceAvailable] = useState<boolean | null>(
+    null
+  )
   const iframeRef = useRef<HTMLIFrameElement>(null)
+
+  // Check if Grafana service is available
+  const checkServiceAvailability = useCallback(async () => {
+    try {
+      const response = await fetch('/embedded/grafana/', {
+        method: 'HEAD',
+      })
+      // 503 means service not configured
+      if (response.status === 503) {
+        setServiceAvailable(false)
+        setLoading(false)
+        return
+      }
+      setServiceAvailable(true)
+    } catch {
+      // Network error - service might be available but request failed
+      setServiceAvailable(true)
+    }
+  }, [])
+
+  // Check service availability on mount
+  useEffect(() => {
+    checkServiceAvailability()
+  }, [checkServiceAvailability])
 
   // Listen to theme changes
   useEffect(() => {
@@ -19,7 +60,9 @@ const MonitoringPage: React.FC = () => {
       if (newTheme !== theme) {
         setTheme(newTheme)
         // Reload iframe with new theme by toggling loading state
-        setLoading(true)
+        if (serviceAvailable) {
+          setLoading(true)
+        }
       }
     })
 
@@ -29,7 +72,7 @@ const MonitoringPage: React.FC = () => {
     })
 
     return () => observer.disconnect()
-  }, [theme])
+  }, [theme, serviceAvailable])
 
   // Build Grafana dashboard URL directly
   const buildGrafanaUrl = () => {
@@ -40,8 +83,6 @@ const MonitoringPage: React.FC = () => {
     return url
   }
 
-
-
   const handleIframeLoad = () => {
     console.log('Iframe loaded')
     setLoading(false)
@@ -50,7 +91,25 @@ const MonitoringPage: React.FC = () => {
 
   const handleIframeError = () => {
     setLoading(false)
-    setError('Failed to load Grafana dashboard. Please check the dashboard path and try again.')
+    setError(
+      'Failed to load Grafana dashboard. Please check the dashboard path and try again.'
+    )
+  }
+
+  const handleRetry = () => {
+    setServiceAvailable(null)
+    setLoading(true)
+    setError(null)
+    checkServiceAvailability()
+  }
+
+  // Show service not configured page
+  if (serviceAvailable === false) {
+    return (
+      <div className={styles.container}>
+        <ServiceNotConfigured service={GRAFANA_SERVICE} onRetry={handleRetry} />
+      </div>
+    )
   }
 
   return (
@@ -69,16 +128,18 @@ const MonitoringPage: React.FC = () => {
             <p>Loading Grafana dashboard...</p>
           </div>
         )}
-        <iframe
-          ref={iframeRef}
-          key={`grafana-${theme}`}
-          src={buildGrafanaUrl()}
-          className={styles.iframe}
-          title="Grafana Dashboard"
-          allowFullScreen
-          onLoad={handleIframeLoad}
-          onError={handleIframeError}
-        />
+        {serviceAvailable && (
+          <iframe
+            ref={iframeRef}
+            key={`grafana-${theme}`}
+            src={buildGrafanaUrl()}
+            className={styles.iframe}
+            title="Grafana Dashboard"
+            allowFullScreen
+            onLoad={handleIframeLoad}
+            onError={handleIframeError}
+          />
+        )}
       </div>
     </div>
   )

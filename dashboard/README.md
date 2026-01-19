@@ -59,6 +59,16 @@ Config editing:
 - Tools DB panel loads `/api/tools-db`, which serves `tools_db.json` from the same directory as your config file.
 - Note for containers/Kubernetes: if the config is mounted from a read-only ConfigMap, updates won’t persist. Mount a writable volume or manage config externally if you need persistence.
 
+Read-only dashboard mode:
+
+- Enable via CLI: `vllm-sr serve --readonly-dashboard`
+- Or set env: `DASHBOARD_READONLY=true`
+- Effects:
+  - Frontend hides add/edit/delete actions and shows a read-only banner
+  - Backend rejects write APIs with `403 Forbidden` for:
+    - `POST /api/router/config/update`
+    - `POST /api/router/config/defaults/update`
+
 ### Backend (Go HTTP Server)
 
 - Serves static frontend (Vite production build)

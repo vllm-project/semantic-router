@@ -1,0 +1,150 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: semantic-router
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: semantic-router
+  namespace: default
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        replicas: 1
+        container:
+          resources: {}
+  logging:
+    level:
+      default: info
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: semantic-router
+  namespace: default
+spec:
+  gatewayClassName: semantic-router
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+  infrastructure:
+    parametersRef:
+      group: gateway.envoyproxy.io
+      kind: EnvoyProxy
+      name: semantic-router
+---
+# By default, Envoy Gateway sets the buffer limit to 32kiB which is not sufficient for AI workloads.
+# This ClientTrafficPolicy sets the buffer limit to 50MiB as an example.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: semantic-router
+  namespace: default
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: semantic-router
+  connection:
+    bufferLimit: 50Mi
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-default-to-semantic-router
+  namespace: vllm-semantic-router-system
+spec:
+  from:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    namespace: default
+  to:
+  - group: ""
+    kind: Service
+    name: semantic-router
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: response-api
+  namespace: default
+spec:
+  parentRefs:
+  - name: semantic-router
+    kind: Gateway
+    group: gateway.networking.k8s.io
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name: mock-vllm
+      namespace: default
+      port: 8000
+      weight: 1
+    timeouts:
+      request: 60s
+      backendRequest: 60s
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyPatchPolicy
+metadata:
+  name: response-api-extproc-patch-policy
+  namespace: default
+spec:
+  jsonPatches:
+  - name: default/semantic-router/http
+    operation:
+      op: add
+      path: /default_filter_chain/filters/0/typed_config/http_filters/0
+      value:
+        name: semantic-router-extproc
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+          allow_mode_override: true
+          grpcService:
+            envoyGrpc:
+              authority: semantic-router.vllm-semantic-router-system:50051
+              clusterName: semantic-router
+            timeout: 60s
+          message_timeout: 60s
+          processing_mode:
+            request_body_mode: BUFFERED
+            request_header_mode: SEND
+            request_trailer_mode: SKIP
+            response_body_mode: BUFFERED
+            response_header_mode: SEND
+            response_trailer_mode: SKIP
+    type: type.googleapis.com/envoy.config.listener.v3.Listener
+  - name: semantic-router
+    operation:
+      op: add
+      path: ''
+      value:
+        connect_timeout: 60s
+        http2_protocol_options: {}
+        lb_policy: ROUND_ROBIN
+        load_assignment:
+          cluster_name: semantic-router
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: semantic-router.vllm-semantic-router-system.svc.cluster.local
+                    port_value: 50051
+        name: semantic-router
+        type: STRICT_DNS
+    type: type.googleapis.com/envoy.config.cluster.v3.Cluster
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: semantic-router
+  type: JSONPatch

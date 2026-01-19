@@ -26,10 +26,6 @@ export interface ProviderModel {
     prompt_per_1m?: number
     completion_per_1m?: number
   }
-  pii_policy?: {
-    allow_by_default: boolean
-    pii_types_allowed?: string[]
-  }
 }
 
 export interface ReasoningFamily {
@@ -96,8 +92,10 @@ export interface Signals {
 // DECISIONS - Routing logic
 // =============================================================================
 
+
+export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding'
 export interface DecisionCondition {
-  type: 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding'
+  type: DecisionConditionType
   name: string
 }
 

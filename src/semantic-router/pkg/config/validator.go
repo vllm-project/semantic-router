@@ -124,6 +124,58 @@ func validateConfigStructure(cfg *RouterConfig) error {
 		return err
 	}
 
+	// Validate advanced tool filtering configuration (opt-in)
+	if err := validateAdvancedToolFilteringConfig(cfg); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateAdvancedToolFilteringConfig(cfg *RouterConfig) error {
+	if cfg == nil || cfg.Tools.AdvancedFiltering == nil {
+		return nil
+	}
+
+	advanced := cfg.Tools.AdvancedFiltering
+	if !advanced.Enabled {
+		return nil
+	}
+
+	if advanced.CandidatePoolSize != nil && *advanced.CandidatePoolSize < 0 {
+		return fmt.Errorf("tools.advanced_filtering.candidate_pool_size must be >= 0")
+	}
+
+	if advanced.MinLexicalOverlap != nil && *advanced.MinLexicalOverlap < 0 {
+		return fmt.Errorf("tools.advanced_filtering.min_lexical_overlap must be >= 0")
+	}
+
+	if advanced.MinCombinedScore != nil &&
+		(*advanced.MinCombinedScore < 0.0 || *advanced.MinCombinedScore > 1.0) {
+		return fmt.Errorf("tools.advanced_filtering.min_combined_score must be between 0.0 and 1.0")
+	}
+
+	if advanced.CategoryConfidenceThreshold != nil &&
+		(*advanced.CategoryConfidenceThreshold < 0.0 || *advanced.CategoryConfidenceThreshold > 1.0) {
+		return fmt.Errorf("tools.advanced_filtering.category_confidence_threshold must be between 0.0 and 1.0")
+	}
+
+	weightFields := []struct {
+		name  string
+		value *float32
+	}{
+		{"embed", advanced.Weights.Embed},
+		{"lexical", advanced.Weights.Lexical},
+		{"tag", advanced.Weights.Tag},
+		{"name", advanced.Weights.Name},
+		{"category", advanced.Weights.Category},
+	}
+	for _, field := range weightFields {
+		if field.value != nil && (*field.value < 0.0 || *field.value > 1.0) {
+			return fmt.Errorf("tools.advanced_filtering.weights.%s must be between 0.0 and 1.0", field.name)
+		}
+	}
+
 	return nil
 }
 

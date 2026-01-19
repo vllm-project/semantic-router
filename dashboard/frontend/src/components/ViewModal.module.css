@@ -150,6 +150,30 @@
   border: 1px solid var(--color-border);
 }
 
+.primaryFooterButton {
+  padding: 0.625rem 1.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: 1px solid var(--color-accent-cyan);
+  background: var(--color-accent-cyan);
+  color: #000000;
+  box-shadow: var(--glow-primary);
+}
+
+.primaryFooterButton:hover {
+  background: rgba(0, 212, 255, 0.85);
+  box-shadow: var(--glow-primary);
+}
+
+.primaryFooterButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .closeFooterButton {
   background: transparent;
   color: var(--color-text-secondary);
@@ -199,4 +223,3 @@
     padding: 1rem;
   }
 }
-

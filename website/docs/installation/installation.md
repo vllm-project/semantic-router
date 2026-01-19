@@ -16,42 +16,6 @@ No GPU required - the router runs efficiently on CPU using optimized BERT models
 
 - **Python**: 3.10 or higher
 - **Container Runtime**: Docker or Podman (required for running the router container)
-- **Optional**: HuggingFace token (only for gated models)
-
-:::tip Container Runtime Support
-The vLLM Semantic Router supports both **Docker** and **Podman** as container runtimes. The CLI automatically detects which one is available on your system. If both are installed, Docker is preferred by default. You can explicitly choose a runtime by setting the `CONTAINER_RUNTIME` environment variable:
-
-```bash
-export CONTAINER_RUNTIME=podman  # Use Podman
-export CONTAINER_RUNTIME=docker  # Use Docker
-```
-
-:::
-
-:::warning Podman Memory Requirements
-If you're using Podman, ensure your Podman machine has **at least 8GB of memory** allocated. The default 2GB is insufficient for loading the required models.
-
-To configure Podman machine memory:
-
-```bash
-# Stop and remove existing machine (if any)
-podman machine stop
-podman machine rm
-
-# Create new machine with 8GB memory
-podman machine init --memory 8192 --cpus 4 --disk-size 100
-
-# Start the machine
-podman machine start
-```
-
-You can verify the memory allocation with:
-
-```bash
-podman machine inspect | grep Memory
-```
-
-:::
 
 ## Quick Start
 
@@ -161,6 +125,12 @@ curl http://localhost:8888/v1/chat/completions \
   }'
 ```
 
+## 6. Launch Dashboard
+
+```bash
+vllm-sr dashboard
+```
+
 ## Common Commands
 
 ```bash
@@ -203,9 +173,52 @@ vllm-sr serve --image ghcr.io/vllm-project/semantic-router/vllm-sr:latest
 vllm-sr serve --image-pull-policy always
 ```
 
+## Kubernetes Deployment
+
+For production deployments on Kubernetes or OpenShift, use the **Kubernetes Operator**:
+
+### Quick Start with Operator
+
+```bash
+# Clone repository
+git clone https://github.com/vllm-project/semantic-router
+cd semantic-router/deploy/operator
+
+# Install CRDs and operator
+make install
+make deploy IMG=ghcr.io/vllm-project/semantic-router-operator:latest
+
+# Deploy a semantic router instance
+kubectl apply -f config/samples/vllm_v1alpha1_semanticrouter.yaml
+```
+
+**Benefits:**
+
+- ✅ Declarative configuration using Kubernetes CRDs
+- ✅ Automatic platform detection (OpenShift/Kubernetes)
+- ✅ Built-in high availability and scaling
+- ✅ Integrated monitoring and observability
+- ✅ Lifecycle management and upgrades
+
+See the **[Kubernetes Operator Guide](k8s/operator)** for complete documentation.
+
+### Other Kubernetes Deployment Options
+
+- **[Istio Integration](k8s/istio.md)** - Service mesh deployment
+- **[AI Gateway](k8s/ai-gateway.md)** - Gateway API integration
+- **[Production Stack](k8s/production-stack.md)** - Complete production setup
+- **[Dynamo](k8s/dynamo.md)** - Dynamic configuration management
+
+## Docker Compose
+
+For local development and testing:
+
+- **[Docker Compose](docker-compose.md)** - Quick local deployment
+
 ## Next Steps
 
 - **[Configuration Guide](configuration.md)** - Advanced routing and signal configuration
+- **[Kubernetes Operator](k8s/operator)** - Production Kubernetes deployment
 - **[API Documentation](../api/router.md)** - Complete API reference
 - **[Tutorials](../tutorials/intelligent-route/keyword-routing.md)** - Learn by example
 

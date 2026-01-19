@@ -3,6 +3,7 @@ package extproc
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -14,6 +15,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responsestore"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/pii"
@@ -28,6 +31,10 @@ type OpenAIRouter struct {
 	Cache                cache.CacheBackend
 	ToolsDatabase        *tools.ToolsDatabase
 	ResponseAPIFilter    *ResponseAPIFilter
+	ReplayRecorder       *routerreplay.Recorder
+	// ModelSelector is the registry of advanced model selection algorithms
+	// Initialized from config.IntelligentRouting.ModelSelection
+	ModelSelector *selection.Registry
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls
@@ -106,6 +113,8 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		MaxEntries:          cfg.SemanticCache.MaxEntries,
 		TTLSeconds:          cfg.SemanticCache.TTLSeconds,
 		EvictionPolicy:      cache.EvictionPolicyType(cfg.SemanticCache.EvictionPolicy),
+		Redis:               cfg.SemanticCache.Redis,
+		Milvus:              cfg.SemanticCache.Milvus,
 		BackendConfigPath:   cfg.SemanticCache.BackendConfigPath,
 		EmbeddingModel:      cfg.SemanticCache.EmbeddingModel,
 	}
@@ -183,6 +192,76 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		}
 	}
 
+	replayMax := routerreplay.DefaultMaxRecords
+	for _, d := range cfg.Decisions {
+		if replayCfg := d.GetRouterReplayConfig(); replayCfg != nil && replayCfg.Enabled {
+			if replayCfg.MaxRecords > replayMax {
+				replayMax = replayCfg.MaxRecords
+			}
+		}
+	}
+	replayRecorder := routerreplay.NewRecorder(replayMax)
+
+	// Initialize model selection registry with default configs
+	// Actual selection method is determined per-decision via algorithm config (aligned with looper)
+	modelSelectionCfg := &selection.ModelSelectionConfig{
+		Method: "static", // Default; per-decision algorithm overrides this
+	}
+	// Copy Elo config from config package to selection package format
+	eloCfg := cfg.IntelligentRouting.ModelSelection.Elo
+	modelSelectionCfg.Elo = &selection.EloConfig{
+		InitialRating:     eloCfg.InitialRating,
+		KFactor:           eloCfg.KFactor,
+		CategoryWeighted:  eloCfg.CategoryWeighted,
+		DecayFactor:       eloCfg.DecayFactor,
+		MinComparisons:    eloCfg.MinComparisons,
+		CostScalingFactor: eloCfg.CostScalingFactor,
+	}
+
+	// Copy RouterDC config
+	routerDCCfg := cfg.IntelligentRouting.ModelSelection.RouterDC
+	modelSelectionCfg.RouterDC = &selection.RouterDCConfig{
+		Temperature:         routerDCCfg.Temperature,
+		DimensionSize:       routerDCCfg.DimensionSize,
+		MinSimilarity:       routerDCCfg.MinSimilarity,
+		UseQueryContrastive: routerDCCfg.UseQueryContrastive,
+		UseModelContrastive: routerDCCfg.UseModelContrastive,
+	}
+
+	// Copy AutoMix config
+	autoMixCfg := cfg.IntelligentRouting.ModelSelection.AutoMix
+	modelSelectionCfg.AutoMix = &selection.AutoMixConfig{
+		VerificationThreshold:  autoMixCfg.VerificationThreshold,
+		MaxEscalations:         autoMixCfg.MaxEscalations,
+		CostAwareRouting:       autoMixCfg.CostAwareRouting,
+		CostQualityTradeoff:    autoMixCfg.CostQualityTradeoff,
+		DiscountFactor:         autoMixCfg.DiscountFactor,
+		UseLogprobVerification: autoMixCfg.UseLogprobVerification,
+	}
+
+	// Copy Hybrid config
+	hybridCfg := cfg.IntelligentRouting.ModelSelection.Hybrid
+	modelSelectionCfg.Hybrid = &selection.HybridConfig{
+		EloWeight:           hybridCfg.EloWeight,
+		RouterDCWeight:      hybridCfg.RouterDCWeight,
+		AutoMixWeight:       hybridCfg.AutoMixWeight,
+		CostWeight:          hybridCfg.CostWeight,
+		QualityGapThreshold: hybridCfg.QualityGapThreshold,
+		NormalizeScores:     hybridCfg.NormalizeScores,
+	}
+
+	// Create selection factory and initialize all selectors
+	selectionFactory := selection.NewFactory(modelSelectionCfg)
+	if cfg.BackendModels.ModelConfig != nil {
+		selectionFactory = selectionFactory.WithModelConfig(cfg.BackendModels.ModelConfig)
+	}
+	if len(cfg.Categories) > 0 {
+		selectionFactory = selectionFactory.WithCategories(cfg.Categories)
+	}
+	modelSelectorRegistry := selectionFactory.CreateAll()
+
+	logging.Infof("[Router] Initialized model selection registry (per-decision algorithm config)")
+
 	router := &OpenAIRouter{
 		Config:               cfg,
 		CategoryDescriptions: categoryDescriptions,
@@ -191,9 +270,56 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		Cache:                semanticCache,
 		ToolsDatabase:        toolsDatabase,
 		ResponseAPIFilter:    responseAPIFilter,
+		ReplayRecorder:       replayRecorder,
+		ModelSelector:        modelSelectorRegistry,
 	}
 
 	return router, nil
+}
+
+// handleRouterReplayAPI serves read-only endpoints for router replay records.
+func (r *OpenAIRouter) handleRouterReplayAPI(method string, path string) *ext_proc.ProcessingResponse {
+	// If recorder is not initialized, the feature is effectively disabled.
+	if r.ReplayRecorder == nil {
+		return nil
+	}
+
+	// Strip query string
+	if idx := strings.Index(path, "?"); idx != -1 {
+		path = path[:idx]
+	}
+
+	base := "/v1/router_replay"
+	if path == base || path == base+"/" {
+		if method != "GET" {
+			return r.createErrorResponse(405, "method not allowed")
+		}
+
+		records := r.ReplayRecorder.ListAllRecords()
+		payload := map[string]interface{}{
+			"object": "router_replay.list",
+			"count":  len(records),
+			"data":   records,
+		}
+		return r.createJSONResponse(200, payload)
+	}
+
+	if strings.HasPrefix(path, base+"/") {
+		if method != "GET" {
+			return r.createErrorResponse(405, "method not allowed")
+		}
+		replayID := strings.TrimPrefix(path, base+"/")
+		if replayID == "" {
+			return r.createErrorResponse(400, "replay id is required")
+		}
+
+		if rec, ok := r.ReplayRecorder.GetRecord(replayID); ok {
+			return r.createJSONResponse(200, rec)
+		}
+		return r.createErrorResponse(404, "replay record not found")
+	}
+
+	return nil
 }
 
 // createJSONResponseWithBody creates a direct response with pre-marshaled JSON body
@@ -272,7 +398,27 @@ func createResponseStore(cfg *config.RouterConfig) (responsestore.ResponseStore,
 			Database:           cfg.ResponseAPI.Milvus.Database,
 			ResponseCollection: cfg.ResponseAPI.Milvus.Collection,
 		},
+		Redis: responsestore.RedisStoreConfig{
+			Address:          cfg.ResponseAPI.Redis.Address,
+			Password:         cfg.ResponseAPI.Redis.Password,
+			DB:               cfg.ResponseAPI.Redis.DB,
+			KeyPrefix:        cfg.ResponseAPI.Redis.KeyPrefix,
+			ClusterMode:      cfg.ResponseAPI.Redis.ClusterMode,
+			ClusterAddresses: cfg.ResponseAPI.Redis.ClusterAddresses,
+			PoolSize:         cfg.ResponseAPI.Redis.PoolSize,
+			MinIdleConns:     cfg.ResponseAPI.Redis.MinIdleConns,
+			MaxRetries:       cfg.ResponseAPI.Redis.MaxRetries,
+			DialTimeout:      cfg.ResponseAPI.Redis.DialTimeout,
+			ReadTimeout:      cfg.ResponseAPI.Redis.ReadTimeout,
+			WriteTimeout:     cfg.ResponseAPI.Redis.WriteTimeout,
+			TLSEnabled:       cfg.ResponseAPI.Redis.TLSEnabled,
+			TLSCertPath:      cfg.ResponseAPI.Redis.TLSCertPath,
+			TLSKeyPath:       cfg.ResponseAPI.Redis.TLSKeyPath,
+			TLSCAPath:        cfg.ResponseAPI.Redis.TLSCAPath,
+			ConfigPath:       cfg.ResponseAPI.Redis.ConfigPath,
+		},
 	}
+
 	return responsestore.NewStore(storeConfig)
 }
 

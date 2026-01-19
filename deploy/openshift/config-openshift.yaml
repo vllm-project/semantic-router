@@ -4,6 +4,9 @@ bert_model:
   threshold: 0.6
   use_cpu: true
 
+# Auto-routing model trigger (client should send model: "auto")
+auto_model_name: "auto"
+
 semantic_cache:
   enabled: true
   backend_type: "memory"

@@ -9,6 +9,7 @@ repos:
         files: \.(go|rs|py|js)$
       - id: end-of-file-fixer
         files: \.(go|rs|py|js)$
+        exclude: ^website/build/
       - id: check-added-large-files
         args: ["--maxkb=500"]
         files: \.(go|rs|py|js)$

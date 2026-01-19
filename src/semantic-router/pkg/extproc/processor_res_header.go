@@ -18,6 +18,19 @@ import (
 
 // handleResponseHeaders processes the response headers
 func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_ResponseHeaders, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+	// If this is a looper internal request, skip most processing and just continue
+	if ctx.LooperRequest {
+		return &ext_proc.ProcessingResponse{
+			Response: &ext_proc.ProcessingResponse_ResponseHeaders{
+				ResponseHeaders: &ext_proc.HeadersResponse{
+					Response: &ext_proc.CommonResponse{
+						Status: ext_proc.CommonResponse_CONTINUE,
+					},
+				},
+			},
+		}, nil
+	}
+
 	var statusCode int
 	var isSuccessful bool
 
@@ -64,6 +77,9 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 			ctx.TTFTRecorded = true
 		}
 	}
+
+	// Update router replay metadata with status code and streaming flag
+	r.updateRouterReplayStatus(ctx, statusCode, ctx != nil && ctx.IsStreamingResponse)
 
 	// Prepare response headers with VSR decision tracking headers if applicable
 	var headerMutation *ext_proc.HeaderMutation
@@ -185,6 +201,16 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 				Header: &core.HeaderValue{
 					Key:      headers.VSRMatchedPreference,
 					RawValue: []byte(strings.Join(ctx.VSRMatchedPreference, ",")),
+				},
+			})
+		}
+
+		// Attach router replay identifier when available
+		if ctx.RouterReplayID != "" {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.RouterReplayID,
+					RawValue: []byte(ctx.RouterReplayID),
 				},
 			})
 		}

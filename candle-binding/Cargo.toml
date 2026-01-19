@@ -21,12 +21,13 @@ flash-attn = ["cuda", "candle-flash-attn"]
 
 [dependencies]
 anyhow = { version = "1", features = ["backtrace"] }
-candle-core = "0.9.2-alpha.1"
-candle-nn = "0.9.2-alpha.1"
-candle-transformers = "0.9.2-alpha.1"
+candle-core = { git = "https://github.com/huggingface/candle", tag = "0.9.2-alpha.1" }
+candle-nn = { git = "https://github.com/huggingface/candle", tag = "0.9.2-alpha.1" }
+candle-transformers = { git = "https://github.com/huggingface/candle", tag = "0.9.2-alpha.1" }
 # Flash Attention 2 (optional, requires CUDA)
 # Reference: https://github.com/huggingface/candle/tree/main/candle-flash-attn
-candle-flash-attn = { version = "0.9.2-alpha.1", optional = true }
+# Using git dependency to automatically fetch CUTLASS submodule
+candle-flash-attn = { git = "https://github.com/huggingface/candle", tag = "0.9.2-alpha.1", optional = true }
 tokenizers = { version = "0.21.0", features = ["http"] }
 hf-hub = "0.4.1"
 safetensors = "0.4.1"
