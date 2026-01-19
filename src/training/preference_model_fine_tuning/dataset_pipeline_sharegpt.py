@@ -340,9 +340,17 @@ The label should consist of a "domain" (e.g. legal, finance) plus an "action" (e
 {conversation_json}
 """
 
-    def refine(self, refined_dataset_path: Path) -> None:
+    def refine(
+        self,
+        refined_dataset_path: Path,
+        existing_policy_label_path: Path,
+        raw_dataset_path: Path,
+        batch_size: int,
+    ) -> None:
         """Refine policy labels for the entire dataset."""
-        refined_sample_labels = self._refine_sample_labels()
+        refined_sample_labels = self._refine_sample_labels(
+            existing_policy_label_path, raw_dataset_path, batch_size
+        )
         # save refined labels to file
         with open(refined_dataset_path, "w") as f:
             for sample_id, policy in refined_sample_labels.items():
@@ -358,25 +366,32 @@ The label should consist of a "domain" (e.g. legal, finance) plus an "action" (e
                 )
 
     def _refine_sample_labels(
-        self,
+        self, existing_policy_label_path: Path, raw_dataset_path: Path, batch_size: int
     ) -> Dict[str, RoutePolicy]:
         """Refine sample labels for a batch of conversations."""
-        raw_policies = self._load_existing_policies()
-        policy_label_candidates = self._load_policy_label_candidates()
-        refined_policies = self._refine_policies(raw_policies)
-
-        # remmap sample labels to refined labels
+        raw_policies = self._load_existing_policies(existing_policy_label_path)
+        policy_label_candidates = self._load_policy_label_candidates(raw_dataset_path)
         sample_id_to_refined_policy: Dict[str, RoutePolicy] = {}
-        for candidate in policy_label_candidates:
-            sample_id = candidate.sample_id
-            original_label = candidate.label
-            if original_label not in refined_policies:
-                logging.warning(
-                    f"Original label {original_label} not found in refined policies"
-                )
-                continue
-            refined_policy = refined_policies[original_label]
-            sample_id_to_refined_policy[sample_id] = refined_policy
+        for batch_start in range(0, len(policy_label_candidates), batch_size):
+            batch_candidates = policy_label_candidates[
+                batch_start : batch_start + batch_size
+            ]
+            logging.info(
+                f"Refining policies for batch {batch_start // batch_size + 1} of size {len(batch_candidates)}"
+            )
+            refined_policies = self._refine_policies(raw_policies)
+
+            # remmap sample labels to refined labels
+            for candidate in batch_candidates:
+                sample_id = candidate.sample_id
+                original_label = candidate.label
+                if original_label not in refined_policies:
+                    logging.warning(
+                        f"Original label {original_label} not found in refined policies"
+                    )
+                    continue
+                refined_policy = refined_policies[original_label]
+                sample_id_to_refined_policy[sample_id] = refined_policy
         return sample_id_to_refined_policy
 
     def _refine_policies(
@@ -446,7 +461,11 @@ def main() -> None:
             output_path=output_path,
         )
     )
-    pipeline.refine(refined_dataset_path=refined_dataset_path)
+    pipeline.refine(
+        refined_dataset_path=refined_dataset_path,
+        existing_policy_label_path=existing_policy_label_path,
+        raw_dataset_path=output_path,
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry point
