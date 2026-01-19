@@ -1,0 +1,103 @@
+[
+  {
+    "query": "Calculate the derivative of sin(x) * cos(x)",
+    "decision": "math_decision",
+    "expected_models": ["gpt-4-turbo", "deepseek-math", "llama-math"],
+    "description": "Calculus derivative query - should select math-specialized model",
+    "algorithm": "knn"
+  },
+  {
+    "query": "Solve the quadratic equation: x^2 + 5x + 6 = 0",
+    "decision": "math_decision",
+    "expected_models": ["gpt-4-turbo", "deepseek-math", "llama-math"],
+    "description": "Algebra equation query",
+    "algorithm": "knn"
+  },
+  {
+    "query": "What is the integral of e^x from 0 to infinity?",
+    "decision": "math_decision",
+    "expected_models": ["gpt-4-turbo", "deepseek-math", "llama-math"],
+    "description": "Advanced calculus integral query",
+    "algorithm": "knn"
+  },
+  {
+    "query": "Prove that the square root of 2 is irrational",
+    "decision": "math_decision",
+    "expected_models": ["gpt-4-turbo", "deepseek-math", "llama-math"],
+    "description": "Mathematical proof query",
+    "algorithm": "mlp"
+  },
+  {
+    "query": "Write a Python function to implement quicksort algorithm",
+    "decision": "code_decision",
+    "expected_models": ["claude-3-opus", "gpt-4-turbo", "codellama"],
+    "description": "Python algorithm implementation query",
+    "algorithm": "svm"
+  },
+  {
+    "query": "Debug this JavaScript code: const x = undefined; console.log(x.length)",
+    "decision": "code_decision",
+    "expected_models": ["claude-3-opus", "gpt-4-turbo", "codellama"],
+    "description": "JavaScript debugging query",
+    "algorithm": "svm"
+  },
+  {
+    "query": "How do I create a REST API in Go with proper error handling?",
+    "decision": "code_decision",
+    "expected_models": ["claude-3-opus", "gpt-4-turbo", "codellama"],
+    "description": "Go programming query",
+    "algorithm": "matrix_factorization"
+  },
+  {
+    "query": "Think step by step: If all roses are flowers, and some flowers fade quickly, can we conclude that some roses fade quickly?",
+    "decision": "thinking_decision",
+    "expected_models": ["deepseek-v3", "gpt-4-turbo", "llama-70b"],
+    "description": "Logical reasoning with step-by-step thinking",
+    "algorithm": "knn"
+  },
+  {
+    "query": "Analyze this complex problem carefully: A train leaves station A at 9am traveling 60mph...",
+    "decision": "thinking_decision",
+    "expected_models": ["deepseek-v3", "gpt-4-turbo", "llama-70b"],
+    "description": "Complex word problem requiring careful analysis",
+    "algorithm": "mlp"
+  },
+  {
+    "query": "Write a short poem about the beauty of autumn leaves falling",
+    "decision": "creative_decision",
+    "expected_models": ["gpt-4", "claude-3-opus"],
+    "description": "Creative poetry writing",
+    "algorithm": "matrix_factorization"
+  },
+  {
+    "query": "Create a short story about a robot learning to feel emotions",
+    "decision": "creative_decision",
+    "expected_models": ["gpt-4", "claude-3-opus"],
+    "description": "Creative story writing",
+    "algorithm": "knn"
+  },
+  {
+    "query": "What is the capital of France?",
+    "decision": "factual_decision",
+    "expected_models": ["gpt-3.5-turbo", "gpt-4"],
+    "description": "Simple factual query - efficiency optimized (fast model preferred)",
+    "algorithm": "kmeans",
+    "expect_efficient": true
+  },
+  {
+    "query": "When was the Declaration of Independence signed?",
+    "decision": "factual_decision",
+    "expected_models": ["gpt-3.5-turbo", "gpt-4"],
+    "description": "Historical factual query - efficiency optimized",
+    "algorithm": "kmeans",
+    "expect_efficient": true
+  },
+  {
+    "query": "Explain quantum entanglement in detail with mathematical formulas",
+    "decision": "science_decision",
+    "expected_models": ["gpt-4-turbo", "claude-3-opus"],
+    "description": "Complex science query - quality optimized (best model preferred)",
+    "algorithm": "kmeans",
+    "expect_efficient": false
+  }
+]

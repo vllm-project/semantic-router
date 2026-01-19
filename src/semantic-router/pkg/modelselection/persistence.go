@@ -1,0 +1,1061 @@
+/*
+Copyright 2025 vLLM Semantic Router.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package modelselection
+
+import (
+	"bufio"
+	"encoding/json"
+	"fmt"
+	"math"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"gonum.org/v1/gonum/mat"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+)
+
+// SaveableSelector interface for selectors that can persist their state
+type SaveableSelector interface {
+	Selector
+	// Save persists the trained model to a file
+	Save(path string) error
+	// Load restores a trained model from a file
+	Load(path string) error
+}
+
+// ============================================================================
+// Training Data Loading
+// ============================================================================
+
+// RoutingDataRecord represents a single training record from JSONL file
+type RoutingDataRecord struct {
+	Query       string             `json:"query"`
+	QueryType   string             `json:"query_type"`
+	BestModel   string             `json:"best_model"`
+	ModelScores map[string]float64 `json:"model_scores"`
+	EmbeddingID int                `json:"embedding_id"` // For pre-computed embedding lookup
+}
+
+// LLMCandidate represents an LLM model configuration
+type LLMCandidate struct {
+	Provider             string   `json:"provider"`
+	ModelID              string   `json:"model_id"`
+	DisplayName          string   `json:"display_name"`
+	Category             string   `json:"category"`
+	CostPerKInputTokens  float64  `json:"cost_per_1k_input_tokens"`
+	CostPerKOutputTokens float64  `json:"cost_per_1k_output_tokens"`
+	MaxContextLength     int      `json:"max_context_length"`
+	Strengths            []string `json:"strengths"`
+	AvgLatencyMs         float64  `json:"avg_latency_ms"`
+	QualityScore         float64  `json:"quality_score"`
+}
+
+// LLMCandidatesConfig holds all LLM candidates configuration
+type LLMCandidatesConfig struct {
+	LLMCandidates map[string]LLMCandidate  `json:"llm_candidates"`
+	QueryTypes    map[string]QueryTypeInfo `json:"query_types"`
+}
+
+// QueryTypeInfo defines a category of queries
+type QueryTypeInfo struct {
+	Description    string   `json:"description"`
+	BestModels     []string `json:"best_models"`
+	ExampleQueries []string `json:"example_queries"`
+}
+
+// BenchmarkRecord represents a single record from training_data_with_category.jsonl
+type BenchmarkRecord struct {
+	TaskName     string  `json:"task_name"`
+	Query        string  `json:"query"`
+	Category     string  `json:"category"`
+	ModelName    string  `json:"model_name"`
+	Performance  float64 `json:"performance"`
+	ResponseTime float64 `json:"response_time"`
+	EmbeddingID  int     `json:"embedding_id"`
+	Response     string  `json:"response"`     // Model's response
+	GroundTruth  string  `json:"ground_truth"` // Correct answer for quality scoring
+}
+
+// LoadBenchmarkData loads training data from training_data_with_category.jsonl
+// Returns records grouped by embedding_id (unique queries)
+func LoadBenchmarkData(path string) (map[int][]BenchmarkRecord, error) {
+	return LoadBenchmarkDataFiltered(path, nil)
+}
+
+// LoadBenchmarkDataFiltered loads training data filtered by specific models
+// If allowedModels is nil or empty, loads all models
+// Returns records grouped by embedding_id (unique queries)
+func LoadBenchmarkDataFiltered(path string, allowedModels []string) (map[int][]BenchmarkRecord, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open benchmark data file: %w", err)
+	}
+	defer file.Close()
+
+	// Build allowed models map for fast lookup
+	allowedMap := make(map[string]bool)
+	filterByModel := len(allowedModels) > 0
+	for _, m := range allowedModels {
+		allowedMap[m] = true
+	}
+
+	// Use larger buffer for big files
+	scanner := bufio.NewScanner(file)
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 1024*1024)
+
+	recordsByQuery := make(map[int][]BenchmarkRecord)
+	lineNum := 0
+	includedRecords := 0
+
+	for scanner.Scan() {
+		lineNum++
+		line := scanner.Text()
+		if line == "" {
+			continue
+		}
+
+		var record BenchmarkRecord
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			logging.Warnf("Failed to parse line %d: %v", lineNum, err)
+			continue
+		}
+
+		// Filter by allowed models if specified
+		if filterByModel && !allowedMap[record.ModelName] {
+			continue
+		}
+
+		recordsByQuery[record.EmbeddingID] = append(recordsByQuery[record.EmbeddingID], record)
+		includedRecords++
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading benchmark data: %w", err)
+	}
+
+	if filterByModel {
+		logging.Infof("Loaded %d unique queries (%d records from %d models) from %s",
+			len(recordsByQuery), includedRecords, len(allowedModels), path)
+	} else {
+		logging.Infof("Loaded %d unique queries (%d total records) from %s",
+			len(recordsByQuery), lineNum, path)
+	}
+	return recordsByQuery, nil
+}
+
+// ConvertBenchmarkToRoutingData converts benchmark format to RoutingDataRecord format
+// Implements RouteLLM-style scoring: quality (from correctness) + efficiency (from latency)
+// qualityWeight: 0.0 = pure speed, 1.0 = pure quality (default: 0.7)
+func ConvertBenchmarkToRoutingData(recordsByQuery map[int][]BenchmarkRecord, qualityWeight float64) []RoutingDataRecord {
+	var routingData []RoutingDataRecord
+
+	for embeddingID, records := range recordsByQuery {
+		if len(records) == 0 {
+			continue
+		}
+
+		// Get query info from first record
+		first := records[0]
+
+		// Find min/max latency for normalization
+		minLatency := math.MaxFloat64
+		maxLatency := 0.0
+		for _, r := range records {
+			if r.ResponseTime > 0 {
+				if r.ResponseTime < minLatency {
+					minLatency = r.ResponseTime
+				}
+				if r.ResponseTime > maxLatency {
+					maxLatency = r.ResponseTime
+				}
+			}
+		}
+
+		// Build model scores for this query
+		// RouteLLM approach: combine quality with efficiency
+		// Score = quality_weight * quality + efficiency_weight * (1 - normalized_latency)
+		modelScores := make(map[string]float64)
+		var bestModel string
+		bestScore := -1.0
+
+		// First pass: collect all quality scores
+		qualityScores := make(map[string]float64)
+		efficiencyScores := make(map[string]float64)
+
+		for _, r := range records {
+			// Quality score: use Performance if available, or compute from correctness
+			qualityScore := r.Performance
+			if qualityScore == 0 && r.GroundTruth != "" && r.Response != "" {
+				// Compute quality from response correctness
+				qualityScore = computeResponseQuality(r.Response, r.GroundTruth)
+			}
+			qualityScores[r.ModelName] = qualityScore
+
+			// Efficiency score: inverse normalized latency (faster = better)
+			efficiencyScore := 0.5 // Default if no latency data
+			if r.ResponseTime > 0 && maxLatency > minLatency {
+				// Normalize: 1.0 for fastest, 0.0 for slowest
+				efficiencyScore = 1.0 - (r.ResponseTime-minLatency)/(maxLatency-minLatency)
+			} else if r.ResponseTime > 0 && maxLatency == minLatency {
+				efficiencyScore = 1.0 // All same latency
+			}
+			efficiencyScores[r.ModelName] = efficiencyScore
+		}
+
+		// RouteLLM approach: Quality first, then efficiency as tiebreaker
+		// When quality is equal, faster model wins (correct behavior)
+		// qualityWeight is passed as parameter (default 0.7 = 70% quality, 30% speed)
+		efficiencyWeight := 1.0 - qualityWeight
+
+		for _, r := range records {
+			qScore := qualityScores[r.ModelName]
+			eScore := efficiencyScores[r.ModelName]
+
+			// Combined score: quality primary, efficiency tiebreaker
+			combinedScore := qualityWeight*qScore + efficiencyWeight*eScore
+
+			modelScores[r.ModelName] = combinedScore
+			if combinedScore > bestScore {
+				bestScore = combinedScore
+				bestModel = r.ModelName
+			}
+		}
+
+		// Use category as query_type, preserve embedding_id for pre-computed lookup
+		routingData = append(routingData, RoutingDataRecord{
+			Query:       first.Query,
+			QueryType:   first.Category, // Use category field
+			BestModel:   bestModel,
+			ModelScores: modelScores,
+			EmbeddingID: embeddingID, // Preserve for pre-computed embedding lookup
+		})
+	}
+
+	logging.Infof("Converted %d routing data records", len(routingData))
+	return routingData
+}
+
+// computeResponseQuality computes quality score by comparing response to ground truth
+// Returns 1.0 for correct, 0.0 for incorrect, with partial matching for text responses
+func computeResponseQuality(response, groundTruth string) float64 {
+	// Normalize strings for comparison
+	response = strings.TrimSpace(strings.ToLower(response))
+	groundTruth = strings.TrimSpace(strings.ToLower(groundTruth))
+
+	// Exact match
+	if response == groundTruth {
+		return 1.0
+	}
+
+	// For multiple choice, check if response contains the correct option letter
+	if len(groundTruth) == 1 && (groundTruth[0] >= 'a' && groundTruth[0] <= 'z') {
+		// Ground truth is a single letter (A, B, C, D)
+		if strings.HasPrefix(response, groundTruth) ||
+			strings.Contains(response, " "+groundTruth) ||
+			strings.Contains(response, groundTruth+".") ||
+			strings.Contains(response, groundTruth+")") {
+			return 1.0
+		}
+		// Check for uppercase version
+		upperGT := strings.ToUpper(groundTruth)
+		if strings.HasPrefix(strings.ToUpper(response), upperGT) ||
+			strings.Contains(strings.ToUpper(response), " "+upperGT) {
+			return 1.0
+		}
+	}
+
+	// For numeric answers, try to extract and compare numbers
+	respNum := extractFirstNumber(response)
+	gtNum := extractFirstNumber(groundTruth)
+	if respNum != "" && gtNum != "" && respNum == gtNum {
+		return 1.0
+	}
+
+	// Partial match: check if ground truth is contained in response
+	if strings.Contains(response, groundTruth) {
+		return 0.8
+	}
+
+	// Check word overlap for longer responses
+	gtWords := strings.Fields(groundTruth)
+	respWords := strings.Fields(response)
+	if len(gtWords) > 3 && len(respWords) > 3 {
+		matchCount := 0
+		for _, gtw := range gtWords {
+			for _, rw := range respWords {
+				if gtw == rw && len(gtw) > 2 {
+					matchCount++
+					break
+				}
+			}
+		}
+		overlap := float64(matchCount) / float64(len(gtWords))
+		if overlap > 0.3 {
+			return overlap * 0.5 // Partial credit
+		}
+	}
+
+	return 0.0
+}
+
+// extractFirstNumber extracts the first number from a string
+func extractFirstNumber(s string) string {
+	var num strings.Builder
+	inNumber := false
+	for _, c := range s {
+		if c >= '0' && c <= '9' || (c == '.' && inNumber) || (c == '-' && !inNumber) {
+			num.WriteRune(c)
+			inNumber = true
+		} else if inNumber {
+			break
+		}
+	}
+	return num.String()
+}
+
+// LoadRoutingData loads training data from a JSONL file
+func LoadRoutingData(path string) ([]RoutingDataRecord, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open routing data file: %w", err)
+	}
+	defer file.Close()
+
+	var records []RoutingDataRecord
+	scanner := bufio.NewScanner(file)
+	lineNum := 0
+	for scanner.Scan() {
+		lineNum++
+		line := scanner.Text()
+		if line == "" {
+			continue
+		}
+
+		var record RoutingDataRecord
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			logging.Warnf("Failed to parse line %d: %v", lineNum, err)
+			continue
+		}
+		records = append(records, record)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading routing data: %w", err)
+	}
+
+	logging.Infof("Loaded %d routing data records from %s", len(records), path)
+	return records, nil
+}
+
+// LoadLLMCandidates loads LLM candidate configurations
+func LoadLLMCandidates(path string) (*LLMCandidatesConfig, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read LLM candidates file: %w", err)
+	}
+
+	var cfg LLMCandidatesConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse LLM candidates: %w", err)
+	}
+
+	logging.Infof("Loaded %d LLM candidates from %s", len(cfg.LLMCandidates), path)
+	return &cfg, nil
+}
+
+// ============================================================================
+// Serializable Training Record (for JSON)
+// ============================================================================
+
+// SerializableTrainingRecord is a JSON-friendly version of TrainingRecord
+type SerializableTrainingRecord struct {
+	QueryEmbedding  []float64 `json:"query_embedding"`
+	SelectedModel   string    `json:"selected_model"`
+	ResponseLatency int64     `json:"response_latency_ns"` // Duration as nanoseconds
+	ResponseQuality float64   `json:"response_quality"`
+	Success         bool      `json:"success"`
+	Timestamp       int64     `json:"timestamp"` // Unix timestamp
+}
+
+func toSerializable(r TrainingRecord) SerializableTrainingRecord {
+	return SerializableTrainingRecord{
+		QueryEmbedding:  r.QueryEmbedding,
+		SelectedModel:   r.SelectedModel,
+		ResponseLatency: r.ResponseLatencyNs,
+		ResponseQuality: r.ResponseQuality,
+		Success:         r.Success,
+		Timestamp:       r.TimestampUnix,
+	}
+}
+
+func fromSerializable(s SerializableTrainingRecord) TrainingRecord {
+	return TrainingRecord{
+		QueryEmbedding:    s.QueryEmbedding,
+		SelectedModel:     s.SelectedModel,
+		ResponseLatencyNs: s.ResponseLatency,
+		ResponseQuality:   s.ResponseQuality,
+		Success:           s.Success,
+		TimestampUnix:     s.Timestamp,
+	}
+}
+
+// ============================================================================
+// KNN Model Persistence
+// ============================================================================
+
+// KNNModelData holds serializable KNN model state
+type KNNModelData struct {
+	Version   string                       `json:"version"`
+	Algorithm string                       `json:"algorithm"`
+	K         int                          `json:"k"`
+	Training  []SerializableTrainingRecord `json:"training"`
+	Metadata  map[string]string            `json:"metadata"`
+}
+
+// Save persists KNN model to file
+func (s *KNNSelector) Save(path string) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Convert training records
+	training := make([]SerializableTrainingRecord, len(s.training))
+	for i, r := range s.training {
+		training[i] = toSerializable(r)
+	}
+
+	data := KNNModelData{
+		Version:   "1.0",
+		Algorithm: "knn",
+		K:         s.k,
+		Training:  training,
+		Metadata: map[string]string{
+			"record_count": fmt.Sprintf("%d", len(s.training)),
+		},
+	}
+
+	return saveModelJSON(path, data)
+}
+
+// Load restores KNN model from file
+func (s *KNNSelector) Load(path string) error {
+	var data KNNModelData
+	if err := loadModelJSON(path, &data); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.k = data.K
+	s.training = make([]TrainingRecord, len(data.Training))
+	for i, r := range data.Training {
+		s.training[i] = fromSerializable(r)
+	}
+
+	logging.Infof("Loaded KNN model with %d training records from %s", len(s.training), path)
+	return nil
+}
+
+// ============================================================================
+// KMeans Model Persistence
+// ============================================================================
+
+// KMeansModelData holds serializable KMeans model state
+type KMeansModelData struct {
+	Version          string                       `json:"version"`
+	Algorithm        string                       `json:"algorithm"`
+	NumClusters      int                          `json:"num_clusters"`
+	Centroids        [][]float64                  `json:"centroids"`
+	ClusterModels    []string                     `json:"cluster_models"`
+	EfficiencyWeight float64                      `json:"efficiency_weight"`
+	Training         []SerializableTrainingRecord `json:"training"`
+	Trained          bool                         `json:"trained"`
+}
+
+// Save persists KMeans model to file
+func (s *KMeansSelector) Save(path string) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Convert mat.Dense centroids to [][]float64
+	var centroids [][]float64
+	if s.centroids != nil {
+		rows, cols := s.centroids.Dims()
+		centroids = make([][]float64, rows)
+		for i := 0; i < rows; i++ {
+			centroids[i] = make([]float64, cols)
+			for j := 0; j < cols; j++ {
+				centroids[i][j] = s.centroids.At(i, j)
+			}
+		}
+	}
+
+	// Convert training records
+	training := make([]SerializableTrainingRecord, len(s.training))
+	for i, r := range s.training {
+		training[i] = toSerializable(r)
+	}
+
+	data := KMeansModelData{
+		Version:          "1.0",
+		Algorithm:        "kmeans",
+		NumClusters:      s.numClusters,
+		Centroids:        centroids,
+		ClusterModels:    s.clusterModels,
+		EfficiencyWeight: s.efficiencyWeight,
+		Training:         training,
+		Trained:          s.trained,
+	}
+
+	return saveModelJSON(path, data)
+}
+
+// Load restores KMeans model from file
+func (s *KMeansSelector) Load(path string) error {
+	var data KMeansModelData
+	if err := loadModelJSON(path, &data); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.numClusters = data.NumClusters
+	s.efficiencyWeight = data.EfficiencyWeight
+	s.clusterModels = data.ClusterModels
+	s.trained = data.Trained
+
+	// Convert [][]float64 to mat.Dense
+	if len(data.Centroids) > 0 {
+		rows := len(data.Centroids)
+		cols := len(data.Centroids[0])
+		flatData := make([]float64, rows*cols)
+		for i := 0; i < rows; i++ {
+			for j := 0; j < cols; j++ {
+				flatData[i*cols+j] = data.Centroids[i][j]
+			}
+		}
+		s.centroids = mat.NewDense(rows, cols, flatData)
+	}
+
+	// Convert training records
+	s.training = make([]TrainingRecord, len(data.Training))
+	for i, r := range data.Training {
+		s.training[i] = fromSerializable(r)
+	}
+
+	logging.Infof("Loaded KMeans model with %d clusters, %d training records from %s",
+		s.numClusters, len(s.training), path)
+	return nil
+}
+
+// ============================================================================
+// MLP Model Persistence
+// ============================================================================
+
+// MLPModelData holds serializable MLP model state
+type MLPModelData struct {
+	Version      string                       `json:"version"`
+	Algorithm    string                       `json:"algorithm"`
+	InputDim     int                          `json:"input_dim"`
+	HiddenLayers []int                        `json:"hidden_layers"`
+	Weights      [][][]float64                `json:"weights"`
+	Biases       [][]float64                  `json:"biases"`
+	ModelToIdx   map[string]int               `json:"model_to_idx"`
+	IdxToModel   []string                     `json:"idx_to_model"`
+	Training     []SerializableTrainingRecord `json:"training"`
+	Trained      bool                         `json:"trained"`
+}
+
+// Save persists MLP model to file
+func (s *MLPSelector) Save(path string) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Convert mat.Dense weights to [][]float64
+	weights := make([][][]float64, len(s.weights))
+	for l, w := range s.weights {
+		if w == nil {
+			continue
+		}
+		rows, cols := w.Dims()
+		weights[l] = make([][]float64, rows)
+		for i := 0; i < rows; i++ {
+			weights[l][i] = make([]float64, cols)
+			for j := 0; j < cols; j++ {
+				weights[l][i][j] = w.At(i, j)
+			}
+		}
+	}
+
+	// Convert biases
+	biases := make([][]float64, len(s.biases))
+	for l, b := range s.biases {
+		if b == nil {
+			continue
+		}
+		rows, _ := b.Dims()
+		biases[l] = make([]float64, rows)
+		for i := 0; i < rows; i++ {
+			biases[l][i] = b.At(i, 0)
+		}
+	}
+
+	// Convert training records
+	training := make([]SerializableTrainingRecord, len(s.training))
+	for i, r := range s.training {
+		training[i] = toSerializable(r)
+	}
+
+	data := MLPModelData{
+		Version:      "1.0",
+		Algorithm:    "mlp",
+		InputDim:     s.inputDim,
+		HiddenLayers: s.hiddenLayers,
+		Weights:      weights,
+		Biases:       biases,
+		ModelToIdx:   s.modelToIdx,
+		IdxToModel:   s.idxToModel,
+		Training:     training,
+		Trained:      s.trained,
+	}
+
+	return saveModelJSON(path, data)
+}
+
+// Load restores MLP model from file
+func (s *MLPSelector) Load(path string) error {
+	var data MLPModelData
+	if err := loadModelJSON(path, &data); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.inputDim = data.InputDim
+	s.hiddenLayers = data.HiddenLayers
+	s.modelToIdx = data.ModelToIdx
+	s.idxToModel = data.IdxToModel
+	s.trained = data.Trained
+
+	// Convert weights back to mat.Dense
+	s.weights = make([]*mat.Dense, len(data.Weights))
+	for l, w := range data.Weights {
+		if len(w) == 0 {
+			continue
+		}
+		rows := len(w)
+		cols := len(w[0])
+		flatData := make([]float64, rows*cols)
+		for i := 0; i < rows; i++ {
+			for j := 0; j < cols; j++ {
+				flatData[i*cols+j] = w[i][j]
+			}
+		}
+		s.weights[l] = mat.NewDense(rows, cols, flatData)
+	}
+
+	// Convert biases back to mat.Dense
+	s.biases = make([]*mat.Dense, len(data.Biases))
+	for l, b := range data.Biases {
+		if len(b) == 0 {
+			continue
+		}
+		s.biases[l] = mat.NewDense(len(b), 1, b)
+	}
+
+	// Convert training records
+	s.training = make([]TrainingRecord, len(data.Training))
+	for i, r := range data.Training {
+		s.training[i] = fromSerializable(r)
+	}
+
+	logging.Infof("Loaded MLP model with %d layers, %d models from %s",
+		len(s.hiddenLayers), len(s.idxToModel), path)
+	return nil
+}
+
+// ============================================================================
+// SVM Model Persistence
+// ============================================================================
+
+// SVMModelData holds serializable SVM model state
+type SVMModelData struct {
+	Version        string                       `json:"version"`
+	Algorithm      string                       `json:"algorithm"`
+	Kernel         string                       `json:"kernel"`
+	Gamma          float64                      `json:"gamma"`
+	ModelToIdx     map[string]int               `json:"model_to_idx"`
+	IdxToModel     []string                     `json:"idx_to_model"`
+	SupportVectors map[int][][]float64          `json:"support_vectors"`
+	Alphas         map[int][]float64            `json:"alphas"`
+	Biases         []float64                    `json:"biases"`
+	Training       []SerializableTrainingRecord `json:"training"`
+	Trained        bool                         `json:"trained"`
+}
+
+// Save persists SVM model to file
+func (s *SVMSelector) Save(path string) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Convert training records
+	training := make([]SerializableTrainingRecord, len(s.training))
+	for i, r := range s.training {
+		training[i] = toSerializable(r)
+	}
+
+	data := SVMModelData{
+		Version:        "1.0",
+		Algorithm:      "svm",
+		Kernel:         s.kernel,
+		Gamma:          s.gamma,
+		ModelToIdx:     s.modelToIdx,
+		IdxToModel:     s.idxToModel,
+		SupportVectors: s.supportVectors,
+		Alphas:         s.alphas,
+		Biases:         s.biases,
+		Training:       training,
+		Trained:        s.trained,
+	}
+
+	return saveModelJSON(path, data)
+}
+
+// Load restores SVM model from file
+func (s *SVMSelector) Load(path string) error {
+	var data SVMModelData
+	if err := loadModelJSON(path, &data); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.kernel = data.Kernel
+	s.gamma = data.Gamma
+	s.modelToIdx = data.ModelToIdx
+	s.idxToModel = data.IdxToModel
+	s.supportVectors = data.SupportVectors
+	s.alphas = data.Alphas
+	s.biases = data.Biases
+	s.trained = data.Trained
+
+	// Convert training records
+	s.training = make([]TrainingRecord, len(data.Training))
+	for i, r := range data.Training {
+		s.training[i] = fromSerializable(r)
+	}
+
+	logging.Infof("Loaded SVM model with %d models from %s", len(s.idxToModel), path)
+	return nil
+}
+
+// ============================================================================
+// Matrix Factorization Model Persistence
+// ============================================================================
+
+// SerializablePreferenceRecord is JSON-friendly version of PreferenceRecord
+type SerializablePreferenceRecord struct {
+	QueryEmbedding []float64 `json:"query_embedding"`
+	PreferredModel string    `json:"preferred_model"`
+	OtherModel     string    `json:"other_model"`
+	Confidence     float64   `json:"confidence"`
+}
+
+// MatrixFactorizationModelData holds serializable MF model state
+type MatrixFactorizationModelData struct {
+	Version      string                         `json:"version"`
+	Algorithm    string                         `json:"algorithm"`
+	NumFactors   int                            `json:"num_factors"`
+	ModelToIdx   map[string]int                 `json:"model_to_idx"`
+	IdxToModel   []string                       `json:"idx_to_model"`
+	ModelFactors [][]float64                    `json:"model_factors"`
+	Projection   [][]float64                    `json:"projection"`
+	ModelBiases  []float64                      `json:"model_biases"`
+	GlobalBias   float64                        `json:"global_bias"`
+	InputDim     int                            `json:"input_dim"`
+	Training     []SerializableTrainingRecord   `json:"training"`
+	Preferences  []SerializablePreferenceRecord `json:"preferences"`
+	Trained      bool                           `json:"trained"`
+}
+
+// Save persists Matrix Factorization model to file
+func (s *MatrixFactorizationSelector) Save(path string) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Convert mat.Dense to [][]float64
+	var modelFactors [][]float64
+	if s.modelFactors != nil {
+		rows, cols := s.modelFactors.Dims()
+		modelFactors = make([][]float64, rows)
+		for i := 0; i < rows; i++ {
+			modelFactors[i] = make([]float64, cols)
+			for j := 0; j < cols; j++ {
+				modelFactors[i][j] = s.modelFactors.At(i, j)
+			}
+		}
+	}
+
+	var projection [][]float64
+	if s.projection != nil {
+		rows, cols := s.projection.Dims()
+		projection = make([][]float64, rows)
+		for i := 0; i < rows; i++ {
+			projection[i] = make([]float64, cols)
+			for j := 0; j < cols; j++ {
+				projection[i][j] = s.projection.At(i, j)
+			}
+		}
+	}
+
+	// Convert training records
+	training := make([]SerializableTrainingRecord, len(s.training))
+	for i, r := range s.training {
+		training[i] = toSerializable(r)
+	}
+
+	// Convert preference records
+	preferences := make([]SerializablePreferenceRecord, len(s.preferences))
+	for i, p := range s.preferences {
+		preferences[i] = SerializablePreferenceRecord(p)
+	}
+
+	data := MatrixFactorizationModelData{
+		Version:      "1.0",
+		Algorithm:    "matrix_factorization",
+		NumFactors:   s.numFactors,
+		ModelToIdx:   s.modelToIdx,
+		IdxToModel:   s.idxToModel,
+		ModelFactors: modelFactors,
+		Projection:   projection,
+		ModelBiases:  s.modelBiases,
+		GlobalBias:   s.globalBias,
+		InputDim:     s.inputDim,
+		Training:     training,
+		Preferences:  preferences,
+		Trained:      s.trained,
+	}
+
+	return saveModelJSON(path, data)
+}
+
+// Load restores Matrix Factorization model from file
+func (s *MatrixFactorizationSelector) Load(path string) error {
+	var data MatrixFactorizationModelData
+	if err := loadModelJSON(path, &data); err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.numFactors = data.NumFactors
+	s.modelToIdx = data.ModelToIdx
+	s.idxToModel = data.IdxToModel
+	s.modelBiases = data.ModelBiases
+	s.globalBias = data.GlobalBias
+	s.inputDim = data.InputDim
+	s.trained = data.Trained
+
+	// Convert modelFactors
+	if len(data.ModelFactors) > 0 {
+		rows := len(data.ModelFactors)
+		cols := len(data.ModelFactors[0])
+		flatData := make([]float64, rows*cols)
+		for i := 0; i < rows; i++ {
+			for j := 0; j < cols; j++ {
+				flatData[i*cols+j] = data.ModelFactors[i][j]
+			}
+		}
+		s.modelFactors = mat.NewDense(rows, cols, flatData)
+	}
+
+	// Convert projection
+	if len(data.Projection) > 0 {
+		rows := len(data.Projection)
+		cols := len(data.Projection[0])
+		flatData := make([]float64, rows*cols)
+		for i := 0; i < rows; i++ {
+			for j := 0; j < cols; j++ {
+				flatData[i*cols+j] = data.Projection[i][j]
+			}
+		}
+		s.projection = mat.NewDense(rows, cols, flatData)
+	}
+
+	// Convert training records
+	s.training = make([]TrainingRecord, len(data.Training))
+	for i, r := range data.Training {
+		s.training[i] = fromSerializable(r)
+	}
+
+	// Convert preference records
+	s.preferences = make([]PreferenceRecord, len(data.Preferences))
+	for i, p := range data.Preferences {
+		s.preferences[i] = PreferenceRecord(p)
+	}
+
+	logging.Infof("Loaded Matrix Factorization model with %d models, %d factors from %s",
+		len(s.idxToModel), s.numFactors, path)
+	return nil
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+// saveModelJSON saves model data to JSON file
+func saveModelJSON(path string, data interface{}) error {
+	// Ensure directory exists
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	// Marshal to JSON with pretty printing
+	jsonData, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal model data: %w", err)
+	}
+
+	// Write to file
+	if err := os.WriteFile(path, jsonData, 0o644); err != nil {
+		return fmt.Errorf("failed to write model file: %w", err)
+	}
+
+	logging.Infof("Saved model to %s (%d bytes)", path, len(jsonData))
+	return nil
+}
+
+// loadModelJSON loads model data from JSON file
+func loadModelJSON(path string, data interface{}) error {
+	jsonData, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("failed to read model file: %w", err)
+	}
+
+	if err := json.Unmarshal(jsonData, data); err != nil {
+		return fmt.Errorf("failed to unmarshal model data: %w", err)
+	}
+
+	return nil
+}
+
+// GetDefaultModelsPath returns the default path for saved models
+func GetDefaultModelsPath() string {
+	return "models/model_selection"
+}
+
+// GetDefaultDataPath returns the default path for training data
+func GetDefaultDataPath() string {
+	return "data/model_selection"
+}
+
+// GetPretrainedPath returns the path to pre-trained models
+func GetPretrainedPath() string {
+	return "pretrained"
+}
+
+// ListPretrainedModels returns a list of available pre-trained models
+func ListPretrainedModels(modelsPath string) ([]string, error) {
+	var available []string
+
+	algorithms := []string{"knn", "kmeans", "mlp", "svm", "mf"}
+	for _, alg := range algorithms {
+		fileName := alg + "_model.json"
+		modelPath := filepath.Join(modelsPath, fileName)
+		if _, err := os.Stat(modelPath); err == nil {
+			available = append(available, alg)
+		}
+	}
+
+	return available, nil
+}
+
+// PretrainedModelInfo contains metadata about a pre-trained model
+type PretrainedModelInfo struct {
+	Algorithm       string   `json:"algorithm"`
+	Version         string   `json:"version"`
+	TrainingSamples int      `json:"training_samples"`
+	Models          []string `json:"models"`
+	FilePath        string   `json:"file_path"`
+}
+
+// GetPretrainedModelInfo returns metadata about a pre-trained model
+func GetPretrainedModelInfo(algorithm, modelsPath string) (*PretrainedModelInfo, error) {
+	var fileName string
+	switch algorithm {
+	case "knn":
+		fileName = "knn_model.json"
+	case "kmeans":
+		fileName = "kmeans_model.json"
+	case "mlp":
+		fileName = "mlp_model.json"
+	case "svm":
+		fileName = "svm_model.json"
+	case "matrix_factorization", "mf":
+		fileName = "mf_model.json"
+	default:
+		return nil, fmt.Errorf("unknown algorithm: %s", algorithm)
+	}
+
+	modelPath := filepath.Join(modelsPath, fileName)
+
+	// Read the JSON file header to get metadata
+	data, err := os.ReadFile(modelPath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse just the top-level fields
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+
+	info := &PretrainedModelInfo{
+		Algorithm: algorithm,
+		FilePath:  modelPath,
+	}
+
+	// Extract version
+	if v, ok := raw["version"]; ok {
+		_ = json.Unmarshal(v, &info.Version)
+	}
+
+	// Extract training sample count
+	if t, ok := raw["training"]; ok {
+		var training []json.RawMessage
+		_ = json.Unmarshal(t, &training)
+		info.TrainingSamples = len(training)
+	}
+
+	// Extract model names from idx_to_model or cluster_models
+	if m, ok := raw["idx_to_model"]; ok {
+		_ = json.Unmarshal(m, &info.Models)
+	} else if m, ok := raw["cluster_models"]; ok {
+		_ = json.Unmarshal(m, &info.Models)
+	}
+
+	return info, nil
+}

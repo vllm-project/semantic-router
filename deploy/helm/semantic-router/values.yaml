@@ -415,6 +415,49 @@ toolsDb:
     category: "productivity"
     tags: ["calendar", "event", "meeting", "appointment", "schedule"]
 
+# ============================================================================
+# Example: Decisions with ML-based Model Selection
+# ============================================================================
+# Decisions allow you to configure intelligent routing based on rules.
+# When multiple models are specified in modelRefs, you can use
+# modelSelectionAlgorithm to determine which model handles the request.
+#
+# Supported algorithms:
+#   - knn: K-Nearest Neighbors (semantic similarity)
+#   - kmeans: KMeans clustering (pattern-based routing)
+#   - mlp: Multi-Layer Perceptron (complex patterns)
+#   - svm: Support Vector Machine (classification-based)
+#   - matrix_factorization: Collaborative filtering style
+#
+# Example configuration:
+#
+# config:
+#   decisions:
+#     - name: "multi_model_routing"
+#       description: "Route to best model using ML"
+#       priority: 100
+#       rules:
+#         operator: "OR"
+#         conditions:
+#           - type: "domain"
+#             name: "general"
+#       modelSelectionAlgorithm:
+#         type: "knn"         # Algorithm type
+#         k: 5                # KNN: number of neighbors
+#         # num_clusters: 4   # KMeans: number of clusters
+#         # hidden_layers: [64, 32]  # MLP: hidden layer sizes
+#         # kernel: "rbf"     # SVM: kernel type (linear, rbf, poly)
+#         # num_factors: 10   # Matrix Factorization: latent factors
+#       modelRefs:
+#         - model: "model-small"
+#           use_reasoning: false
+#         - model: "model-medium"
+#           use_reasoning: false
+#         - model: "model-large"
+#           use_reasoning: true
+#
+# ============================================================================
+
 # Container arguments
 args:
   - "--secure=false"
