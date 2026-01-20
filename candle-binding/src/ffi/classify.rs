@@ -12,8 +12,9 @@ use crate::ffi::memory::{
 use crate::ffi::types::BertTokenEntity;
 use crate::ffi::types::*;
 use crate::model_architectures::traditional::bert::{
-    TRADITIONAL_BERT_CLASSIFIER, TRADITIONAL_BERT_TOKEN_CLASSIFIER,
+    TRADITIONAL_BERT_CLASSIFIER, TRADITIONAL_BERT_REGRESSOR, TRADITIONAL_BERT_TOKEN_CLASSIFIER,
 };
+use crate::model_architectures::traditional::deberta_v3::TRADITIONAL_DEBERTA_V3_REGRESSOR;
 use crate::model_architectures::traditional::modernbert::{
     TRADITIONAL_MODERNBERT_CLASSIFIER, TRADITIONAL_MODERNBERT_FACT_CHECK_CLASSIFIER,
     TRADITIONAL_MODERNBERT_JAILBREAK_CLASSIFIER, TRADITIONAL_MODERNBERT_PII_CLASSIFIER,
@@ -820,6 +821,62 @@ pub extern "C" fn classify_candle_bert_text(text: *const c_char) -> Classificati
             confidence: 0.0,
             label: std::ptr::null_mut(),
         }
+    }
+}
+
+/// Regress text using Candle BERT regressor
+///
+/// # Safety
+/// - `text` must be a valid null-terminated C string
+#[no_mangle]
+pub extern "C" fn classify_candle_bert_regression_text(text: *const c_char) -> f32 {
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => return -1.0,
+        }
+    };
+
+    if let Some(regressor) = TRADITIONAL_BERT_REGRESSOR.get() {
+        let regressor = regressor.clone();
+        match regressor.regress_text(text) {
+            Ok(score) => score,
+            Err(e) => {
+                println!("Candle BERT regression failed: {}", e);
+                -1.0
+            }
+        }
+    } else {
+        println!("No regressor initialized - call init_candle_bert_regressor first");
+        -1.0
+    }
+}
+
+/// Regress text using DeBERTa v3 regressor
+///
+/// # Safety
+/// - `text` must be a valid null-terminated C string
+#[no_mangle]
+pub extern "C" fn classify_deberta_v3_regression_text(text: *const c_char) -> f32 {
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => return -1.0,
+        }
+    };
+
+    if let Some(regressor) = TRADITIONAL_DEBERTA_V3_REGRESSOR.get() {
+        let regressor = regressor.clone();
+        match regressor.regress_text(text) {
+            Ok(score) => score,
+            Err(e) => {
+                println!("DeBERTa v3 regression failed: {}", e);
+                -1.0
+            }
+        }
+    } else {
+        println!("No regressor initialized - call init_deberta_v3_regressor first");
+        -1.0
     }
 }
 

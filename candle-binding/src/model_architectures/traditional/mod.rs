@@ -10,7 +10,7 @@ pub mod deberta_v3;
 pub mod base_model;
 pub mod modernbert;
 // Re-export main traditional models
-pub use bert::TraditionalBertClassifier;
+pub use bert::{TraditionalBertClassifier, TraditionalBertRegressor};
 pub use deberta_v3::DebertaV3Classifier;
 
 // Re-export traditional models

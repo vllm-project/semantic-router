@@ -1,16 +1,13 @@
 package classification
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"time"
 
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -25,8 +22,6 @@ type ComplexityResult struct {
 // ComplexityClassifier handles task complexity regression using a Hugging Face model
 type ComplexityClassifier struct {
 	config      *config.ComplexityModelConfig
-	client      *http.Client
-	endpointURL string
 	repoID      string
 	initialized bool
 	mu          sync.RWMutex
@@ -43,7 +38,6 @@ func NewComplexityClassifier(cfg *config.ComplexityModelConfig) (*ComplexityClas
 
 	return &ComplexityClassifier{
 		config: cfg,
-		client: &http.Client{Timeout: 30 * time.Second},
 	}, nil
 }
 
@@ -56,13 +50,12 @@ func (c *ComplexityClassifier) Initialize() error {
 		return nil
 	}
 
-	repoID, endpoint, err := resolveHFEndpoint(c.config.ModelURL)
+	repoID, err := extractRepoID(c.config.ModelURL)
 	if err != nil {
 		return err
 	}
 
 	c.repoID = repoID
-	c.endpointURL = endpoint
 
 	if c.config.ModelID == "" {
 		c.config.ModelID = "models/complexity-regressor"
@@ -80,6 +73,10 @@ func (c *ComplexityClassifier) Initialize() error {
 	}
 	if err := modeldownload.DownloadModel(spec, modeldownload.GetDownloadConfig()); err != nil {
 		return fmt.Errorf("failed to download complexity model: %w", err)
+	}
+
+	if !candle_binding.InitDebertaV3Regressor(c.config.ModelID, c.config.UseCPU) {
+		return fmt.Errorf("failed to initialize complexity regressor via Candle")
 	}
 
 	c.initialized = true
@@ -101,75 +98,20 @@ func (c *ComplexityClassifier) Classify(text string) (*ComplexityResult, error) 
 		c.mu.RUnlock()
 		return nil, fmt.Errorf("complexity classifier not initialized")
 	}
-	endpoint := c.endpointURL
 	c.mu.RUnlock()
 
 	if text == "" {
 		return &ComplexityResult{Score: 0}, nil
 	}
 
-	payload := map[string]string{"inputs": text}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal complexity request: %w", err)
-	}
-
-	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create complexity request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if token := os.Getenv("HF_TOKEN"); token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-
 	start := time.Now()
-	resp, err := c.client.Do(req)
+	score, err := candle_binding.ClassifyDebertaV3RegressionText(text)
 	metrics.RecordClassifierLatency("complexity", time.Since(start).Seconds())
 	if err != nil {
-		return nil, fmt.Errorf("complexity inference request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("complexity inference request returned status %d", resp.StatusCode)
-	}
-
-	var decoded any
-	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
-		return nil, fmt.Errorf("failed to decode complexity response: %w", err)
-	}
-
-	score, ok := extractComplexityScore(decoded)
-	if !ok {
-		return nil, fmt.Errorf("complexity response did not contain a score")
-	}
-
-	if score < 0 {
-		score = 0
-	}
-	if score > 1 {
-		score = 1
+		return nil, fmt.Errorf("complexity regression failed: %w", err)
 	}
 
 	return &ComplexityResult{Score: score}, nil
-}
-
-func resolveHFEndpoint(modelURL string) (string, string, error) {
-	if strings.Contains(modelURL, "api-inference.huggingface.co/models/") {
-		repoID, err := extractRepoID(modelURL)
-		if err != nil {
-			return "", "", err
-		}
-		return repoID, modelURL, nil
-	}
-
-	repoID, err := extractRepoID(modelURL)
-	if err != nil {
-		return "", "", err
-	}
-
-	return repoID, "https://api-inference.huggingface.co/models/" + repoID, nil
 }
 
 func extractRepoID(modelURL string) (string, error) {
@@ -197,41 +139,4 @@ func extractRepoID(modelURL string) (string, error) {
 		return "", fmt.Errorf("model_url must be a Hugging Face repo id (org/model)")
 	}
 	return trimmed, nil
-}
-
-func extractComplexityScore(value any) (float64, bool) {
-	switch v := value.(type) {
-	case float64:
-		return v, true
-	case map[string]any:
-		if score, ok := extractScoreFromMap(v); ok {
-			return score, true
-		}
-	case []any:
-		for _, item := range v {
-			if score, ok := extractComplexityScore(item); ok {
-				return score, true
-			}
-		}
-	}
-	return 0, false
-}
-
-func extractScoreFromMap(data map[string]any) (float64, bool) {
-	candidates := []string{"score", "complexity", "value", "output"}
-	for _, key := range candidates {
-		if raw, ok := data[key]; ok {
-			if score, ok := raw.(float64); ok {
-				return score, true
-			}
-		}
-	}
-	if raw, ok := data["scores"]; ok {
-		if scores, ok := raw.([]any); ok && len(scores) > 0 {
-			if score, ok := scores[0].(float64); ok {
-				return score, true
-			}
-		}
-	}
-	return 0, false
 }

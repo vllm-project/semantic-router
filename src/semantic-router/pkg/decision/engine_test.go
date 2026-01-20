@@ -302,3 +302,133 @@ func TestDecisionEngine_EvaluateDecisionsWithFactCheck(t *testing.T) {
 		})
 	}
 }
+
+func TestDecisionEngine_EvaluateDecisionsWithComplexity(t *testing.T) {
+	valueMid := 0.5
+	valueHigh := 0.9
+
+	tests := []struct {
+		name             string
+		decisions        []config.Decision
+		signals          *SignalMatches
+		expectedDecision string
+	}{
+		{
+			name: "Complexity condition with operator/value matches",
+			decisions: []config.Decision{
+				{
+					Name: "mid-complexity",
+					Rules: config.RuleCombination{
+						Operator: "AND",
+						Conditions: []config.RuleCondition{
+							{
+								Type:     "complexity",
+								Operator: ">=",
+								Value:    &valueMid,
+							},
+						},
+					},
+				},
+			},
+			signals: &SignalMatches{
+				ComplexityScore: &valueMid,
+			},
+			expectedDecision: "mid-complexity",
+		},
+		{
+			name: "Complexity condition with range matches",
+			decisions: []config.Decision{
+				{
+					Name: "range-complexity",
+					Rules: config.RuleCombination{
+						Operator: "AND",
+						Conditions: []config.RuleCondition{
+							{
+								Type: "complexity",
+								Min:  &valueMid,
+								Max:  &valueHigh,
+							},
+						},
+					},
+				},
+			},
+			signals: &SignalMatches{
+				ComplexityScore: &valueHigh,
+			},
+			expectedDecision: "range-complexity",
+		},
+		{
+			name: "Complexity condition with named rule matches",
+			decisions: []config.Decision{
+				{
+					Name: "named-complexity",
+					Rules: config.RuleCombination{
+						Operator: "AND",
+						Conditions: []config.RuleCondition{
+							{
+								Type: "complexity",
+								Name: "low_complexity",
+							},
+						},
+					},
+				},
+			},
+			signals: &SignalMatches{
+				ComplexityRules: []string{"low_complexity"},
+			},
+			expectedDecision: "named-complexity",
+		},
+		{
+			name: "Complexity condition does not match without score",
+			decisions: []config.Decision{
+				{
+					Name: "no-score",
+					Rules: config.RuleCombination{
+						Operator: "AND",
+						Conditions: []config.RuleCondition{
+							{
+								Type:     "complexity",
+								Operator: ">=",
+								Value:    &valueMid,
+							},
+						},
+					},
+				},
+			},
+			signals:          &SignalMatches{},
+			expectedDecision: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			engine := NewDecisionEngine(
+				[]config.KeywordRule{},
+				[]config.EmbeddingRule{},
+				[]config.Category{},
+				tt.decisions,
+				"priority",
+			)
+
+			result, err := engine.EvaluateDecisionsWithSignals(tt.signals)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if tt.expectedDecision == "" {
+				if result != nil {
+					t.Fatalf("expected nil result, got %v", result.Decision.Name)
+				}
+				return
+			}
+
+			if result == nil {
+				t.Fatalf("expected decision %s, got nil", tt.expectedDecision)
+			}
+
+			if result.Decision.Name != tt.expectedDecision {
+				t.Fatalf("expected decision %s, got %s", tt.expectedDecision, result.Decision.Name)
+			}
+		})
+	}
+}

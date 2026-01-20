@@ -9,6 +9,10 @@ use std::sync::{Arc, OnceLock};
 
 use crate::core::similarity::BertSimilarity;
 use crate::BertClassifier;
+use crate::model_architectures::traditional::bert::TRADITIONAL_BERT_REGRESSOR;
+use crate::model_architectures::traditional::TraditionalBertRegressor;
+use crate::model_architectures::traditional::deberta_v3::TRADITIONAL_DEBERTA_V3_REGRESSOR;
+use crate::model_architectures::traditional::DebertaV3Regressor;
 
 // Global state using OnceLock for zero-cost reads after initialization
 // OnceLock<Arc<T>> pattern provides:
@@ -824,6 +828,68 @@ pub extern "C" fn init_candle_bert_classifier(
                     false
                 }
             }
+        }
+    }
+}
+
+/// Initialize Candle BERT regressor
+///
+/// # Safety
+/// - `model_path` must be a valid null-terminated C string
+#[no_mangle]
+pub extern "C" fn init_candle_bert_regressor(
+    model_path: *const c_char,
+    use_cpu: bool,
+) -> bool {
+    let model_path = unsafe {
+        match CStr::from_ptr(model_path).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
+
+    if TRADITIONAL_BERT_REGRESSOR.get().is_some() {
+        return true;
+    }
+
+    match TraditionalBertRegressor::new(model_path, use_cpu) {
+        Ok(regressor) => TRADITIONAL_BERT_REGRESSOR
+            .set(Arc::new(regressor))
+            .is_ok(),
+        Err(e) => {
+            eprintln!("Failed to initialize Candle BERT regressor: {}", e);
+            false
+        }
+    }
+}
+
+/// Initialize DeBERTa v3 regressor
+///
+/// # Safety
+/// - `model_path` must be a valid null-terminated C string
+#[no_mangle]
+pub extern "C" fn init_deberta_v3_regressor(
+    model_path: *const c_char,
+    use_cpu: bool,
+) -> bool {
+    let model_path = unsafe {
+        match CStr::from_ptr(model_path).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
+
+    if TRADITIONAL_DEBERTA_V3_REGRESSOR.get().is_some() {
+        return true;
+    }
+
+    match DebertaV3Regressor::new(model_path, use_cpu) {
+        Ok(regressor) => TRADITIONAL_DEBERTA_V3_REGRESSOR
+            .set(Arc::new(regressor))
+            .is_ok(),
+        Err(e) => {
+            eprintln!("Failed to initialize DeBERTa v3 regressor: {}", e);
+            false
         }
     }
 }

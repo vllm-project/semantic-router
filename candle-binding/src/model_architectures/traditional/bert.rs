@@ -51,6 +51,20 @@ pub struct TraditionalBertClassifier {
     config: Config,
 }
 
+/// Traditional BERT regressor for scalar outputs (0-1)
+pub struct TraditionalBertRegressor {
+    /// Core BERT model
+    bert: BertModel,
+    /// BERT pooler layer (CLS token -> pooled output)
+    pooler: Linear,
+    /// Regression head
+    regressor: Linear,
+    /// Unified tokenizer compatible with dual-path architecture
+    tokenizer: Box<dyn DualPathTokenizer>,
+    /// Computing device
+    device: Device,
+}
+
 impl TraditionalBertClassifier {
     /// Create a new traditional BERT classifier
     ///
@@ -308,6 +322,93 @@ impl TraditionalBertClassifier {
     }
 }
 
+impl TraditionalBertRegressor {
+    /// Create a new traditional BERT regressor
+    ///
+    /// ## Arguments
+    /// * `model_id` - Model identifier (HuggingFace Hub ID or local path)
+    /// * `use_cpu` - Whether to force CPU usage
+    pub fn new(model_id: &str, use_cpu: bool) -> Result<Self> {
+        let device = if use_cpu {
+            Device::Cpu
+        } else {
+            Device::cuda_if_available(0)?
+        };
+
+        println!("Initializing Traditional BERT regressor: {}", model_id);
+
+        let (config_filename, tokenizer_filename, weights_filename, use_pth) =
+            TraditionalBertClassifier::resolve_model_files(model_id)?;
+
+        let config = std::fs::read_to_string(config_filename)?;
+        let config: Config = serde_json::from_str(&config)?;
+        let base_tokenizer = Tokenizer::from_file(tokenizer_filename).map_err(E::msg)?;
+
+        let tokenizer = create_bert_compatibility_tokenizer(base_tokenizer, device.clone())?;
+
+        let vb = if use_pth {
+            VarBuilder::from_pth(&weights_filename, DType::F32, &device)?
+        } else {
+            unsafe {
+                VarBuilder::from_mmaped_safetensors(
+                    &[weights_filename.clone()],
+                    DType::F32,
+                    &device,
+                )?
+            }
+        };
+
+        let bert = BertModel::load(vb.pp("bert"), &config)?;
+
+        let pooler = {
+            let pooler_weight = vb.get(
+                (config.hidden_size, config.hidden_size),
+                "bert.pooler.dense.weight",
+            )?;
+            let pooler_bias = vb.get(config.hidden_size, "bert.pooler.dense.bias")?;
+            Linear::new(pooler_weight.t()?, Some(pooler_bias))
+        };
+
+        let regressor = {
+            let regressor_weight =
+                vb.get((1, config.hidden_size), "classifier.weight")?;
+            let regressor_bias = vb.get(1, "classifier.bias")?;
+            Linear::new(regressor_weight, Some(regressor_bias))
+        };
+
+        Ok(Self {
+            bert,
+            pooler,
+            regressor,
+            tokenizer,
+            device,
+        })
+    }
+
+    /// Perform regression and return a score between 0 and 1
+    pub fn regress_text(&self, text: &str) -> Result<f32> {
+        let encoding = self
+            .tokenizer
+            .encode(text)
+            .map_err(|e| E::msg(format!("tokenization error: {e}")))?;
+
+        let input_ids = Tensor::new(encoding.input_ids(), &self.device)?
+            .unsqueeze(0)?
+            .to_dtype(DType::I64)?;
+        let attention_mask = Tensor::new(encoding.attention_mask(), &self.device)?
+            .unsqueeze(0)?
+            .to_dtype(DType::I64)?;
+
+        let outputs = self.bert.forward(&input_ids, &attention_mask, None)?;
+        let pooled_output = self.pooler.forward(&outputs)?;
+        let logits = self.regressor.forward(&pooled_output)?;
+
+        let logit = logits.squeeze(0)?.squeeze(0)?.to_scalar::<f32>()?;
+        let score = 1.0 / (1.0 + (-logit).exp());
+        Ok(score)
+    }
+}
+
 /// Implementation of CoreModel for TraditionalBertClassifier
 ///
 /// This provides the core functionality using the new simplified interface.
@@ -455,6 +556,11 @@ pub static TRADITIONAL_BERT_CLASSIFIER: std::sync::OnceLock<
 /// Global Traditional BERT token classifier instance
 pub static TRADITIONAL_BERT_TOKEN_CLASSIFIER: std::sync::OnceLock<
     std::sync::Arc<TraditionalBertTokenClassifier>,
+> = std::sync::OnceLock::new();
+
+/// Global Traditional BERT regressor instance
+pub static TRADITIONAL_BERT_REGRESSOR: std::sync::OnceLock<
+    std::sync::Arc<TraditionalBertRegressor>,
 > = std::sync::OnceLock::new();
 
 /// Traditional BERT token classifier for token-level classification

@@ -73,6 +73,10 @@ classifier:
     threshold: 0.9
     use_cpu: true
   pii_mapping_path: "models/mom-pii-classifier/label_mapping.json"
+  complexity_model:
+    model_url: "https://huggingface.co/ilya-kolchinsky/PromptComplexityEstimator"
+    model_id: "models/complexity-regressor"
+    use_cpu: true
 
 # Hallucination mitigation configuration
 # Disabled by default - enable in decisions via hallucination plugin
