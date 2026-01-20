@@ -83,6 +83,10 @@ const (
 	// Example: "creative_writing,technical_analysis"
 	VSRMatchedPreference = "x-vsr-matched-preference"
 
+	// VSRMatchedLanguage contains comma-separated list of matched language signals.
+	// Example: "en,zh,es"
+	VSRMatchedLanguage = "x-vsr-matched-language"
+
 	// VSRMatchedComplexity contains comma-separated list of matched complexity signals.
 	// Example: "low_complexity,mid_complexity"
 	VSRMatchedComplexity = "x-vsr-matched-complexity"

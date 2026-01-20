@@ -75,6 +75,7 @@ type RequestContext struct {
 	VSRMatchedFactCheck    []string // Matched fact-check signals
 	VSRMatchedUserFeedback []string // Matched user feedback signals
 	VSRMatchedPreference   []string // Matched preference signals
+	VSRMatchedLanguage     []string // Matched language signals
 	VSRMatchedComplexity   []string // Matched complexity signals
 	VSRComplexityScore     *float64 // Complexity score (0-1)
 

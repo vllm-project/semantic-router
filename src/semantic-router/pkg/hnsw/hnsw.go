@@ -121,6 +121,13 @@ func (h *Index) AddBatch(embeddings map[int][]float32) {
 // Search finds the k most similar nodes to the query embedding
 // Returns results sorted by similarity (highest first)
 func (h *Index) Search(queryEmbedding []float32, k int) []SearchResult {
+	return h.SearchWithEf(queryEmbedding, k, 0)
+}
+
+// SearchWithEf finds the k most similar nodes with explicit ef parameter
+// If ef <= 0, uses max(efSearch, k) as default
+// Returns results sorted by similarity (highest first)
+func (h *Index) SearchWithEf(queryEmbedding []float32, k int, ef int) []SearchResult {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
@@ -137,11 +144,20 @@ func (h *Index) Search(queryEmbedding []float32, k int) []SearchResult {
 		}
 	}
 
-	// Search at layer 0 with efSearch
-	ef := h.efSearch
-	if ef < k {
-		ef = k
+	// Determine ef for layer 0 search
+	if ef <= 0 {
+		ef = h.efSearch
+		if ef < k {
+			ef = k
+		}
 	}
+
+	// For very large ef values, cap at 2x the total node count to avoid excessive computation
+	maxEf := len(h.nodes) * 2
+	if ef > maxEf {
+		ef = maxEf
+	}
+
 	candidateIDs := h.searchLayer(queryEmbedding, currentNearest, ef, 0)
 
 	// Convert to SearchResults with similarities
