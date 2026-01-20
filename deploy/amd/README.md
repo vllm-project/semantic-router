@@ -93,6 +93,9 @@ curl http://localhost:8000/v1/models
 Create a Python virtual environment and install vllm-sr:
 
 ```bash
+# Install python virtualenv if not already installed
+sudo apt-get install python3.12-venv
+
 # Create virtual environment
 python3 -m venv vsr
 
@@ -100,7 +103,7 @@ python3 -m venv vsr
 source vsr/bin/activate
 
 # Install vllm-sr
-pip install vllm-sr
+pip3 install vllm-sr
 ```
 
 ### Step 3: Download Configuration
@@ -117,9 +120,6 @@ wget https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/
 Start the semantic router with the configuration:
 
 ```bash
-# Make sure virtual environment is activated
-source vsr/bin/activate
-
 # Start vllm-sr
 vllm-sr serve
 ```
