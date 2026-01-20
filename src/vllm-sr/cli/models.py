@@ -60,6 +60,13 @@ class Preference(BaseModel):
     description: str
 
 
+class Language(BaseModel):
+    """Language detection signal configuration."""
+
+    name: str
+    description: str
+
+
 class Signals(BaseModel):
     """All signal configurations."""
 
@@ -69,6 +76,7 @@ class Signals(BaseModel):
     fact_check: Optional[List[FactCheck]] = []
     user_feedbacks: Optional[List[UserFeedback]] = []
     preferences: Optional[List[Preference]] = []
+    language: Optional[List[Language]] = []
 
 
 class Condition(BaseModel):
