@@ -255,7 +255,7 @@ func TestUpdateConfigHandler(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
-			handler := UpdateConfigHandler(configPath)
+			handler := UpdateConfigHandler(configPath, false)
 			handler(w, req)
 
 			if w.Code != tt.expectedStatus {
@@ -310,7 +310,7 @@ func TestUpdateConfigHandler_FilePersistence(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 
-		handler := UpdateConfigHandler(configPath)
+		handler := UpdateConfigHandler(configPath, false)
 		handler(w, req)
 
 		if w.Code != http.StatusOK {
@@ -362,7 +362,7 @@ func TestUpdateConfigHandler_FilePersistence(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 
-		handler := UpdateConfigHandler(configPath)
+		handler := UpdateConfigHandler(configPath, false)
 		handler(w, req)
 
 		if w.Code != http.StatusOK {
@@ -425,7 +425,7 @@ func TestUpdateConfigHandler_FilePersistence(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 
-		handler := UpdateConfigHandler(configPath)
+		handler := UpdateConfigHandler(configPath, false)
 		handler(w, req)
 
 		if w.Code != http.StatusOK {
@@ -464,7 +464,7 @@ func TestUpdateConfigHandler_ValidationIntegration(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	handler := UpdateConfigHandler(configPath)
+	handler := UpdateConfigHandler(configPath, false)
 	handler(w, req)
 
 	// Should return 400 Bad Request
@@ -482,6 +482,72 @@ func TestUpdateConfigHandler_ValidationIntegration(t *testing.T) {
 	body := w.Body.String()
 	if !contains(body, "Config validation failed") {
 		t.Errorf("Expected validation error message, got: %s", body)
+	}
+}
+
+// TestUpdateConfigHandler_ReadonlyMode verifies that readonly mode blocks write operations
+func TestUpdateConfigHandler_ReadonlyMode(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+
+	updateBody := map[string]interface{}{
+		"test_key": "test_value",
+	}
+
+	bodyBytes, _ := json.Marshal(updateBody)
+	req := httptest.NewRequest(http.MethodPost, "/api/router/config/update", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	// Enable readonly mode
+	handler := UpdateConfigHandler(configPath, true)
+	handler(w, req)
+
+	// Should return 403 Forbidden
+	if w.Code != http.StatusForbidden {
+		t.Errorf("Expected status 403, got %d. Response: %s", w.Code, w.Body.String())
+	}
+
+	// Verify error message
+	body := w.Body.String()
+	if !contains(body, "read-only mode") {
+		t.Errorf("Expected 'read-only mode' in error message, got: %s", body)
+	}
+}
+
+// TestUpdateRouterDefaultsHandler_ReadonlyMode verifies that readonly mode blocks router defaults updates
+func TestUpdateRouterDefaultsHandler_ReadonlyMode(t *testing.T) {
+	tempDir := t.TempDir()
+
+	updateBody := map[string]interface{}{
+		"test_key": "test_value",
+	}
+
+	bodyBytes, _ := json.Marshal(updateBody)
+	req := httptest.NewRequest(http.MethodPost, "/api/router/config/defaults/update", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handler := UpdateRouterDefaultsHandler(tempDir, true)
+	handler(w, req)
+
+	// Should return 403 Forbidden
+	if w.Code != http.StatusForbidden {
+		t.Errorf("Expected status 403, got %d. Response: %s", w.Code, w.Body.String())
+	}
+
+	// Verify error message
+	body := w.Body.String()
+	if !contains(body, "read-only mode") {
+		t.Errorf("Expected 'read-only mode' in error message, got: %s", body)
+	}
+
+	// Ensure router-defaults file was not created
+	routerDefaultsPath := filepath.Join(tempDir, ".vllm-sr", "router-defaults.yaml")
+	if _, err := os.Stat(routerDefaultsPath); err == nil {
+		t.Errorf("Expected router-defaults.yaml not to be created in read-only mode")
+	} else if !os.IsNotExist(err) {
+		t.Errorf("Unexpected error checking router-defaults.yaml: %v", err)
 	}
 }
 

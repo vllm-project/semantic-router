@@ -1,0 +1,93 @@
+# Docker Compose for Response API E2E Testing
+# This file provides a minimal local setup for testing Response API error handling.
+#
+# Usage:
+#   make response-api-test-up     # Start services
+#   make response-api-test-run    # Run error handling tests
+#   make response-api-test-down   # Stop services
+#
+# Or directly:
+#   docker compose -f deploy/docker-compose/docker-compose.response-api.yml up -d
+#   ./scripts/test-response-api-errors.sh
+#   docker compose -f deploy/docker-compose/docker-compose.response-api.yml down
+
+services:
+
+  # Semantic Router External Processor with Response API enabled
+  semantic-router:
+    build:
+      context: ../..
+      dockerfile: tools/docker/Dockerfile.extproc
+    image: ghcr.io/vllm-project/semantic-router/extproc:latest
+    container_name: semantic-router-response-api
+    ports:
+      - "50051:50051"  # gRPC for ExtProc
+      - "8080:8080"    # HTTP API (health, classify, metrics)
+    volumes:
+      - ../../config/testing/config.response-api.yaml:/app/config/config.yaml:ro,z
+      - ../../models:/app/models:z
+      - ~/.cache/huggingface:/root/.cache/huggingface:z
+    environment:
+      - LD_LIBRARY_PATH=/app/lib
+      - CONFIG_FILE=/app/config/config.yaml
+      - HUGGINGFACE_HUB_CACHE=/root/.cache/huggingface
+      - HF_HUB_ENABLE_HF_TRANSFER=1
+      - HF_TOKEN=${HF_TOKEN:-}
+    networks:
+      - response-api-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 600s
+
+  # Envoy Proxy Service
+  envoy:
+    image: envoyproxy/envoy:v1.31.7
+    container_name: envoy-proxy-response-api
+    security_opt:
+      - label=disable
+    ports:
+      - "8801:8801"    # Main proxy port
+      - "19000:19000"  # Admin interface
+    volumes:
+      - ./addons/envoy.yaml:/etc/envoy/envoy.yaml:ro,z
+    command: ["/usr/local/bin/envoy", "-c", "/etc/envoy/envoy.yaml", "--component-log-level", "ext_proc:debug,router:debug"]
+    depends_on:
+      semantic-router:
+        condition: service_healthy
+    networks:
+      - response-api-network
+    healthcheck:
+      test: ["CMD", "bash", "-c", "(echo -e 'GET /ready HTTP/1.1\\r\\nHost: localhost\\r\\n\\r\\n' >&3; timeout 2 cat <&3) 3<>/dev/tcp/localhost/19000 | grep -q LIVE"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Mock vLLM backend for deterministic testing
+  mock-vllm:
+    image: ghcr.io/vllm-project/semantic-router/mock-vllm:latest
+    build:
+      context: ../../tools/mock-vllm
+      dockerfile: Dockerfile
+    container_name: mock-vllm-response-api
+    ports:
+      - "8000:8000"
+    networks:
+      response-api-network:
+        ipv4_address: 172.29.0.20
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+networks:
+  response-api-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.29.0.0/16

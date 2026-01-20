@@ -255,6 +255,18 @@ func main() {
 func ensureModelsDownloaded(cfg *config.RouterConfig) error {
 	logging.Infof("Installing required models...")
 
+	// Build model specs from config
+	specs, err := modeldownload.BuildModelSpecs(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to build model specs: %w", err)
+	}
+
+	// Skip download if no local models are configured (API-only mode)
+	if len(specs) == 0 {
+		logging.Infof("No local models configured, skipping model download (API-only mode)")
+		return nil
+	}
+
 	// Calculate unique models based on RepoID
 	uniqueModels := make(map[string]bool)
 	for _, repoID := range cfg.MoMRegistry {
@@ -271,12 +283,6 @@ func ensureModelsDownloaded(cfg *config.RouterConfig) error {
 	// Check if huggingface-cli is available
 	if err := modeldownload.CheckHuggingFaceCLI(); err != nil {
 		return fmt.Errorf("huggingface-cli check failed: %w", err)
-	}
-
-	// Build model specs from config
-	specs, err := modeldownload.BuildModelSpecs(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to build model specs: %w", err)
 	}
 
 	// Get download configuration from environment

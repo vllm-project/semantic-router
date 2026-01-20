@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -143,23 +144,120 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 
 	isAutoModel := r.Config != nil && r.Config.IsAutoModelName(originalModel)
 
-	// Check if looper should be used for this decision
-	// Looper handles multi-model execution strategies (confidence, concurrent, etc.)
-	if isAutoModel && r.shouldUseLooper(ctx.VSRSelectedDecision) {
+	targetModel := originalModel
+	if isAutoModel && selectedModel != "" {
+		targetModel = selectedModel
+	}
+
+	// Anthropic model routing
+	if r.Config.GetModelAPIFormat(targetModel) == config.APIFormatAnthropic {
+		return r.handleAnthropicRouting(openAIRequest, originalModel, targetModel, decisionName, ctx)
+	}
+
+	// OpenAI-compatible routing
+	switch {
+	case !isAutoModel:
+		return r.handleSpecifiedModelRouting(openAIRequest, originalModel, ctx)
+	case r.shouldUseLooper(ctx.VSRSelectedDecision):
 		logging.Infof("Using Looper for decision %s with algorithm %s",
 			ctx.VSRSelectedDecision.Name, ctx.VSRSelectedDecision.Algorithm.Type)
 		return r.handleLooperExecution(ctx.TraceContext, openAIRequest, ctx.VSRSelectedDecision, ctx)
-	}
-
-	if isAutoModel && selectedModel != "" {
+	case selectedModel != "":
 		return r.handleAutoModelRouting(openAIRequest, originalModel, decisionName, reasoningDecision, selectedModel, ctx, response)
-	} else if !isAutoModel {
-		return r.handleSpecifiedModelRouting(openAIRequest, originalModel, ctx)
+	default:
+		// Auto model without selection - no routing needed
+		ctx.RequestModel = originalModel
+		return response, nil
+	}
+}
+
+// handleAnthropicRouting handles routing to Anthropic Claude API via Envoy.
+// Transforms the request body from OpenAI format to Anthropic format and sets
+// appropriate headers for Envoy to route to the Anthropic cluster.
+func (r *OpenAIRouter) handleAnthropicRouting(openAIRequest *openai.ChatCompletionNewParams, originalModel string, targetModel string, decisionName string, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+	logging.Infof("Routing to Anthropic API via Envoy for model: %s (original: %s)", targetModel, originalModel)
+
+	// Reject streaming requests (not yet supported for Anthropic backend)
+	if ctx.ExpectStreamingResponse {
+		logging.Warnf("Streaming not supported for Anthropic backend, rejecting request for model: %s", targetModel)
+		return r.createErrorResponse(400, "Streaming is not supported for Anthropic models. Please set stream=false in your request."), nil
 	}
 
-	// No routing needed, return default response
-	ctx.RequestModel = originalModel
-	return response, nil
+	// Get API key for the model
+	accessKey := r.Config.GetModelAccessKey(targetModel)
+	if accessKey == "" {
+		logging.Errorf("No access_key configured for Anthropic model: %s", targetModel)
+		return r.createErrorResponse(500, fmt.Sprintf("No API key configured for model: %s", targetModel)), nil
+	}
+
+	// Update model in request to target model
+	openAIRequest.Model = targetModel
+
+	// Transform request body from OpenAI format to Anthropic format
+	anthropicBody, err := anthropic.ToAnthropicRequestBody(openAIRequest)
+	if err != nil {
+		logging.Errorf("Failed to transform request to Anthropic format: %v", err)
+		return r.createErrorResponse(500, fmt.Sprintf("Request transformation error: %v", err)), nil
+	}
+
+	// Track VSR decision information
+	ctx.RequestModel = targetModel
+	ctx.VSRSelectedModel = targetModel
+	ctx.APIFormat = config.APIFormatAnthropic // Mark for response transformation
+	if decisionName != "" {
+		ctx.VSRSelectedDecision = r.Config.GetDecisionByName(decisionName)
+	}
+
+	// Build header mutations using anthropic package helpers
+	anthropicHeaders := anthropic.BuildRequestHeaders(accessKey, len(anthropicBody))
+	setHeaders := make([]*core.HeaderValueOption, 0, len(anthropicHeaders)+2)
+	for _, h := range anthropicHeaders {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      h.Key,
+				RawValue: []byte(h.Value),
+			},
+		})
+	}
+
+	// Add x-selected-model for Envoy routing
+	setHeaders = append(setHeaders, &core.HeaderValueOption{
+		Header: &core.HeaderValue{
+			Key:      headers.SelectedModel,
+			RawValue: []byte(targetModel),
+		},
+	})
+
+	// Start upstream span and inject trace context headers
+	traceContextHeaders := r.startUpstreamSpanAndInjectHeaders(targetModel, "api.anthropic.com", ctx)
+	setHeaders = append(setHeaders, traceContextHeaders...)
+
+	// Record routing latency
+	r.recordRoutingLatency(ctx)
+
+	logging.Infof("Transformed request for Anthropic API, body size: %d bytes", len(anthropicBody))
+
+	// Return response with body and header mutations - let Envoy route to Anthropic
+	// ClearRouteCache forces Envoy to re-evaluate routing after we set x-selected-model header
+	return &ext_proc.ProcessingResponse{
+		Response: &ext_proc.ProcessingResponse_RequestBody{
+			RequestBody: &ext_proc.BodyResponse{
+				Response: &ext_proc.CommonResponse{
+					Status:          ext_proc.CommonResponse_CONTINUE,
+					ClearRouteCache: true,
+					HeaderMutation: &ext_proc.HeaderMutation{
+						SetHeaders:    setHeaders,
+						RemoveHeaders: anthropic.HeadersToRemove(),
+					},
+					BodyMutation: &ext_proc.BodyMutation{
+						Mutation: &ext_proc.BodyMutation_Body{
+							Body: anthropicBody,
+						},
+					},
+				},
+			},
+		},
+	}, nil
 }
 
 // handleAutoModelRouting handles routing for auto model selection
@@ -367,7 +465,7 @@ func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, modi
 		})
 	}
 
-	logging.Infof("createRoutingResponse: modifiedBody length=%d, model=%s, endpoint=%s", len(modifiedBody), model, endpoint)
+	logging.Infof("createRoutingResponse: modifiedBody length=%d, model=%s", len(modifiedBody), model)
 
 	// Start upstream span and inject trace context headers
 	traceContextHeaders := r.startUpstreamSpanAndInjectHeaders(model, endpoint, ctx)

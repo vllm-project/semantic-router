@@ -16,8 +16,110 @@ semantic_cache:
   hnsw_m: 16  # Number of bi-directional links
   hnsw_ef_construction: 200  # Construction quality parameter
 
-  # Milvus configuration file path
-  backend_config_path: "config/semantic-cache/milvus.yaml"
+  # Milvus configuration example
+  milvus:
+    # Milvus connection settings
+    connection:
+      # Milvus server host (change for production deployment)
+      host: "localhost"  # For production: use your Milvus cluster endpoint
+      # Milvus server port
+      port: 19530  # Standard Milvus port
+      # Database name (optional, defaults to "default")
+      database: "semantic_router_cache"
+      # Connection timeout in seconds
+      timeout: 30
+      # Authentication (enable for production)
+      auth:
+        enabled: false  # Set to true for production
+        username: ""    # Your Milvus username
+        password: ""    # Your Milvus password
+      # TLS/SSL configuration (recommended for production)
+      tls:
+        enabled: false      # Set to true for secure connections
+        cert_file: ""       # Path to client certificate
+        key_file: ""        # Path to client private key
+        ca_file: ""         # Path to CA certificate
+    # Collection settings
+    collection:
+      # Name of the collection to store cache entries
+      name: "semantic_cache"
+      # Description of the collection
+      description: "Semantic cache for LLM request-response pairs"
+      # Vector field configuration
+      vector_field:
+        # Name of the vector field
+        name: "embedding"
+        # Dimension of the embeddings (auto-detected from model at runtime)
+        dimension: 384  # This value is ignored - dimension is auto-detected from the embedding model
+        # Metric type for similarity calculation
+        metric_type: "IP"  # Inner Product (cosine similarity for normalized vectors)
+      # Index configuration for the vector field
+      index:
+        # Index type (HNSW is recommended for most use cases)
+        type: "HNSW"
+        # Index parameters
+        params:
+          M: 16              # Number of bi-directional links for each node
+          efConstruction: 64  # Search scope during index construction
+    # Search configuration
+    search:
+      # Search parameters
+      params:
+        ef: 64  # Search scope during search (should be >= topk)
+      # Number of top results to retrieve for similarity comparison
+      topk: 10
+      # Consistency level for search operations
+      consistency_level: "Session"  # Options: Strong, Session, Bounded, Eventually
+    # Performance and resource settings
+    performance:
+      # Connection pool settings
+      connection_pool:
+        # Maximum number of connections in the pool
+        max_connections: 10
+        # Maximum idle connections
+        max_idle_connections: 5
+        # Connection timeout for acquiring from pool
+        acquire_timeout: 5
+      # Batch operation settings
+      batch:
+        # Maximum batch size for insert operations
+        insert_batch_size: 1000
+        # Batch timeout in seconds
+        timeout: 30
+    # Data management
+    data_management:
+      # Automatic data expiration (TTL) settings
+      ttl:
+        # Enable automatic TTL-based cleanup (requires TTL to be set in main config)
+        enabled: true
+        # Field name to store timestamp for TTL calculation
+        timestamp_field: "timestamp"
+        # Cleanup interval in seconds (how often to run cleanup)
+        cleanup_interval: 3600  # 1 hour
+      # Compaction settings
+      compaction:
+        # Enable automatic compaction
+        enabled: true
+        # Compaction interval in seconds
+        interval: 86400  # 24 hours
+    # Logging and monitoring
+    logging:
+      # Log level for Milvus client operations (debug, info, warn, error)
+      level: "info"
+      # Enable query/search logging for debugging
+      enable_query_log: false
+      # Enable performance metrics collection
+      enable_metrics: true
+    # Development and debugging settings
+    development:
+      # Drop collection on startup (WARNING: This will delete all cached data)
+      drop_collection_on_startup: true  # Enable for development to test dynamic dimensions
+      # Create collection if it doesn't exist
+      auto_create_collection: true
+      # Print detailed error messages
+      verbose_errors: true
+  # (Deprecated) Or you can set up the milvus connection using the below config:
+  # backend_config_path: "config/semantic-cache/milvus.yaml"
 
 tools:
   enabled: true

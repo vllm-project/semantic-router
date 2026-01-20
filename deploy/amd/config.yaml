@@ -1,0 +1,431 @@
+# vLLM Semantic Router Configuration for AMD ROCm
+# Demonstrates intelligent routing with keyword, domain, embedding, language, and fact_check signals
+# Simulates model selection with multiple model names pointing to the same vLLM endpoint
+
+version: v0.1
+
+# Listeners - Network configuration
+listeners:
+  - name: "http-8899"
+    address: "0.0.0.0"
+    port: 8899
+    timeout: "300s"
+
+# Signals - Classification signals for routing
+signals:
+  # Keyword-based signals
+  keywords:
+    # Jailbreak detection
+    - name: "jailbreak_attempt"
+      operator: "OR"
+      keywords:
+        - "ignore previous instructions"
+        - "disregard all rules"
+        - "bypass safety"
+        - "jailbreak"
+        - "pretend you are"
+        - "act as if"
+        - "forget your guidelines"
+      case_sensitive: false
+
+    # Creative/opinion keywords
+    - name: "creative_keywords"
+      operator: "OR"
+      keywords:
+        - "write a story"
+        - "creative writing"
+        - "brainstorm"
+        - "imagine"
+        - "what if"
+        - "your opinion"
+        - "what do you think"
+        - "in your view"
+        - "write a poem"
+        - "create a"
+        - "design a fictional"
+        - "make up"
+        - "invent"
+      case_sensitive: false
+
+  # preferences - Route preferences via external LLM
+  preferences:
+    - name: "code_generation"
+      description: "Generating new code snippets, writing functions, creating classes"
+    - name: "bug_fixing"
+      description: "Identifying and fixing errors, debugging issues, troubleshooting problems"
+    - name: "code_review"
+      description: "Reviewing code quality, suggesting improvements, best practices"
+    - name: "other"
+      description: "Irrelevant queries or already fulfilled requests"
+
+  # Embedding-based signals for intent classification
+  embeddings:
+    # Fast QA - Simple, quick questions requiring brief answers
+    - name: "fast_qa"
+      threshold: 0.72
+      aggregation_method: "max"
+      candidates:
+        - "Who are you? What is your name?"
+        - "What is the definition of machine learning and how does it differ from traditional programming approaches?"
+        - "Can you quickly explain the concept of neural networks and their basic architecture?"
+        - "What are the main differences between supervised and unsupervised learning in AI?"
+        - "Please provide a brief overview of what natural language processing entails."
+        - "What is the capital city of France and what is its population?"
+        - "How do I calculate the area of a circle given its radius?"
+        - "What are the primary colors and how do they combine?"
+        - "Can you give me a simple explanation of how photosynthesis works?"
+
+    # Deep Thinking - Complex reasoning requiring multi-step analysis
+    - name: "deep_thinking"
+      threshold: 0.75
+      aggregation_method: "max"
+      candidates:
+        - "Analyze the ethical implications of artificial general intelligence and propose a comprehensive framework for responsible development."
+        - "Design a distributed system architecture that can handle millions of concurrent users while maintaining data consistency."
+        - "Develop a step-by-step strategy for solving the traveling salesman problem using dynamic programming and explain the time complexity."
+        - "Compare and contrast different machine learning paradigms and recommend the best approach for a specific business problem."
+        - "Explain the mathematical foundations of quantum computing and how it differs from classical computing at a fundamental level."
+        - "Devise a comprehensive plan for migrating a legacy monolithic application to a microservices architecture."
+        - "Analyze the geopolitical implications of climate change and propose multi-faceted policy solutions."
+        - "Design an algorithm to detect anomalies in time-series data and explain the statistical reasoning behind it."
+
+  # Language detection signals
+  language:
+    - name: "en"
+      description: "English language queries"
+    - name: "zh"
+      description: "Chinese language queries (Simplified and Traditional)"
+
+  # Domain classification signals (using MMLU standard categories)
+  domains:
+    - name: "computer science"
+      description: "Programming, software development, and computer science"
+    - name: "math"
+      description: "Mathematics, statistics, and quantitative reasoning"
+    - name: "physics"
+      description: "Physics and physical sciences"
+    - name: "other"
+      description: "Creative writing, opinion-based, brainstorming, or general queries that don't fit specific domains"
+
+  # Fact-check signals for verification needs
+  # Strategy: Identify queries that DON'T need fact checking (creative/code/opinion)
+  # All other queries will be routed to fact-check-capable models
+  fact_check:
+    - name: "needs_fact_check"
+      description: "Query contains factual claims requiring verification"
+    - name: "no_fact_check_needed"
+      description: "Query is creative, code-related, opinion-based, or doesn't require factual verification"
+
+# Decisions - Intelligent routing rules
+decisions:
+  # Priority 200: Jailbreak detection - highest priority
+  - name: "jailbreak_blocked"
+    description: "Block jailbreak attempts with security measures"
+    priority: 200
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "keyword"
+          name: "jailbreak_attempt"
+    modelRefs:
+      - model: "openai/gpt-oss-20b"
+        use_reasoning: false
+    plugins:
+      - type: "jailbreak"
+        configuration:
+          enabled: true
+          threshold: 0.65
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a helpful AI assistant. I cannot fulfill requests that attempt to bypass safety guidelines."
+
+  # Priority 180: Deep thinking with Chinese language
+  - name: "deep_thinking_chinese"
+    description: "Complex reasoning in Chinese requiring advanced models"
+    priority: 180
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "embedding"
+          name: "deep_thinking"
+        - type: "language"
+          name: "zh"
+    modelRefs:
+      - model: "Qwen/Qwen3-235B"
+        use_reasoning: true
+        reasoning_effort: "high"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "你是一个专业的AI助手，擅长深度分析和复杂推理。请提供详细、深入的回答。"
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.88
+
+  # Priority 145: Computer science domain with deep thinking
+  - name: "code_deep_thinking"
+    description: "Complex code generation and algorithm design (only when domain is clearly computer science)"
+    priority: 145
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "computer science"
+        - type: "embedding"
+          name: "deep_thinking"
+    modelRefs:
+      - model: "DeepSeek-V3.2"
+        use_reasoning: true
+        reasoning_effort: "high"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are an expert software engineer. Provide detailed, well-structured code solutions with explanations."
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.85
+
+  # Priority 160: Creative/Opinion queries - NO fact check needed
+  - name: "creative_no_fact_check"
+    description: "Creative writing, opinion-based, or brainstorming queries that don't require factual verification"
+    priority: 160
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "keyword"
+          name: "creative_keywords"
+        - type: "fact_check"
+          name: "no_fact_check_needed"
+    modelRefs:
+      - model: "Qwen/Qwen3-235B"
+        use_reasoning: true
+        reasoning_effort: "high"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a creative and insightful assistant. Feel free to explore ideas, provide opinions, and think outside the box."
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.88
+
+  # Priority 150: Math domain
+  - name: "math_route"
+    description: "Mathematical queries with reasoning"
+    priority: 150
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "math"
+    modelRefs:
+      - model: "Qwen/Qwen3-235B"
+        use_reasoning: true
+        reasoning_effort: "high"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a mathematics expert. Provide rigorous proofs with step-by-step reasoning."
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.92
+
+  # Priority 145: Physics domain
+  - name: "physics_route"
+    description: "Physics queries with reasoning"
+    priority: 145
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "physics"
+    modelRefs:
+      - model: "GLM-4.7"
+        use_reasoning: true
+        reasoning_effort: "medium"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a physics expert. Explain concepts with mathematical derivations and verified facts."
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.90
+
+  # Priority 140: Deep thinking in English
+  - name: "deep_thinking_english"
+    description: "Complex reasoning in English"
+    priority: 140
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "embedding"
+          name: "deep_thinking"
+        - type: "language"
+          name: "en"
+    modelRefs:
+      - model: "Kimi-K2-Thinking"
+        use_reasoning: true
+        reasoning_effort: "high"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are an expert analyst. Provide comprehensive, well-reasoned responses with deep insights."
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.87
+
+  # Priority 130: Fast QA in Chinese
+  - name: "fast_qa_chinese"
+    description: "Quick answers in Chinese"
+    priority: 130
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "embedding"
+          name: "fast_qa"
+        - type: "language"
+          name: "zh"
+    modelRefs:
+      - model: "openai/gpt-oss-20b"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "你是一个高效的AI助手。请提供简洁、准确的回答。"
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.92
+
+  # Priority 120: Fast QA in English
+  - name: "fast_qa_english"
+    description: "Quick answers in English"
+    priority: 120
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "embedding"
+          name: "fast_qa"
+        - type: "language"
+          name: "en"
+    modelRefs:
+      - model: "openai/gpt-oss-20b"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are an efficient AI assistant. Provide concise, accurate answers."
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.92
+
+  # Priority 100: Default fallback
+  - name: "default_route"
+    description: "Default routing for general queries"
+    priority: 100
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "computer_science"
+        - type: "domain"
+          name: "math"
+        - type: "domain"
+          name: "physics"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false
+    plugins:
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.85
+
+# Providers - Backend model configuration
+providers:
+  # Model configuration - All models point to the same vLLM endpoint
+  # This simulates model selection with different model names
+  models:
+    - name: "openai/gpt-oss-120b"
+      reasoning_family: "gpt-oss"
+      param_size: "120b"
+      endpoints:
+        - name: "vllm_endpoint"
+          weight: 1
+          endpoint: "host.docker.internal:8000"
+          protocol: "http"
+
+    - name: "openai/gpt-oss-20b"
+      reasoning_family: "gpt-oss"
+      param_size: "20b"
+      endpoints:
+        - name: "vllm_endpoint"
+          weight: 1
+          endpoint: "host.docker.internal:8000"
+          protocol: "http"
+
+    - name: "Qwen/Qwen3-235B"
+      reasoning_family: "qwen3"
+      param_size: "235b"
+      endpoints:
+        - name: "vllm_endpoint"
+          weight: 1
+          endpoint: "host.docker.internal:8000"
+          protocol: "http"
+
+    - name: "Kimi-K2-Thinking"
+      reasoning_family: "kimi"
+      param_size: "200b"
+      endpoints:
+        - name: "vllm_endpoint"
+          weight: 1
+          endpoint: "host.docker.internal:8000"
+          protocol: "http"
+
+    - name: "GLM-4.7"
+      reasoning_family: "glm"
+      param_size: "47b"
+      endpoints:
+        - name: "vllm_endpoint"
+          weight: 1
+          endpoint: "host.docker.internal:8000"
+          protocol: "http"
+
+    - name: "DeepSeek-V3.2"
+      reasoning_family: "deepseek"
+      param_size: "320b"
+      endpoints:
+        - name: "vllm_endpoint"
+          weight: 1
+          endpoint: "host.docker.internal:8000"
+          protocol: "http"
+
+  # Default model for unmatched queries
+  default_model: "openai/gpt-oss-120b"
+
+  # Reasoning families configuration
+  reasoning_families:
+    gpt-oss:
+      type: "reasoning_effort"
+      parameter: "reasoning_effort"
+    qwen3:
+      type: "reasoning_effort"
+      parameter: "reasoning_effort"
+    kimi:
+      type: "reasoning_effort"
+      parameter: "reasoning_effort"
+    glm:
+      type: "reasoning_effort"
+      parameter: "reasoning_effort"
+    deepseek:
+      type: "reasoning_effort"
+      parameter: "reasoning_effort"
+
+  # Default reasoning effort level
+  default_reasoning_effort: "low"

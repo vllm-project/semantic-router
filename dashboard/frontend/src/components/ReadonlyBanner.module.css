@@ -1,0 +1,28 @@
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 16px;
+  background-color: #fff3cd;
+  border-bottom: 1px solid #ffc107;
+  color: #856404;
+  font-size: 14px;
+  font-weight: 500;
+  gap: 8px;
+}
+
+.icon {
+  font-size: 16px;
+}
+
+.text {
+  line-height: 1.4;
+}
+
+/* Dark mode support */
+:global(.dark) .banner,
+:global([data-theme="dark"]) .banner {
+  background-color: rgba(255, 193, 7, 0.15);
+  border-color: rgba(255, 193, 7, 0.3);
+  color: #ffc107;
+}

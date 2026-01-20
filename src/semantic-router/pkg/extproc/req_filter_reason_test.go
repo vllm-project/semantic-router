@@ -165,24 +165,28 @@ func TestReasoningModeComprehensive(t *testing.T) {
 			expectedChatTemplateParam: "enable_thinking",
 			expectedChatTemplateValue: false,
 		},
-		// Test 5: GPT-OSS with reasoning enabled - should use reasoning_effort with HIGH
+		// Test 5: GPT-OSS with reasoning enabled - should use chat_template_kwargs with reasoning_effort inside
 		{
-			name:                     "GPT-OSS - reasoning enabled with high effort",
-			model:                    "gpt-oss-model",
-			categoryName:             "math",
-			enableReasoning:          true,
-			expectReasoningEffortKey: true,
-			expectedReasoningEffort:  "medium", // Falls back to default
+			name:                      "GPT-OSS - reasoning enabled with high effort",
+			model:                     "gpt-oss-model",
+			categoryName:              "math",
+			enableReasoning:           true,
+			expectChatTemplateKwargs:  true,
+			expectedChatTemplateParam: "reasoning_effort",
+			expectedChatTemplateValue: "medium", // Falls back to default
+			expectReasoningEffortKey:  false,
 		},
-		// Test 6: GPT-OSS with reasoning disabled - should preserve reasoning_effort
+		// Test 6: GPT-OSS with reasoning disabled - should preserve reasoning_effort inside chat_template_kwargs
 		{
-			name:                          "GPT-OSS - reasoning disabled preserves effort",
-			model:                         "gpt-oss-model",
-			categoryName:                  "creative",
-			enableReasoning:               false,
-			initialReasoningEffort:        "low",
-			expectReasoningEffortKey:      true,
-			expectOriginalEffortPreserved: true,
+			name:                      "GPT-OSS - reasoning disabled preserves effort",
+			model:                     "gpt-oss-model",
+			categoryName:              "creative",
+			enableReasoning:           false,
+			initialReasoningEffort:    "low",
+			expectChatTemplateKwargs:  true,
+			expectedChatTemplateParam: "reasoning_effort",
+			expectedChatTemplateValue: "low",
+			expectReasoningEffortKey:  false,
 		},
 		// Test 7: Claude with reasoning enabled
 		{
@@ -445,8 +449,13 @@ func TestReasoningEffortLevels(t *testing.T) {
 			err = json.Unmarshal(modifiedBytes, &modifiedRequest)
 			require.NoError(t, err)
 
-			reasoningEffort, exists := modifiedRequest["reasoning_effort"]
-			require.True(t, exists, "reasoning_effort should exist")
+			// reasoning_effort should be inside chat_template_kwargs for GPT-OSS models
+			chatTemplateKwargs, exists := modifiedRequest["chat_template_kwargs"]
+			require.True(t, exists, "chat_template_kwargs should exist")
+			kwargs, ok := chatTemplateKwargs.(map[string]interface{})
+			require.True(t, ok, "chat_template_kwargs should be a map")
+			reasoningEffort, exists := kwargs["reasoning_effort"]
+			require.True(t, exists, "reasoning_effort should exist in chat_template_kwargs")
 			assert.Equal(t, tt.expectedEffort, reasoningEffort)
 		})
 	}
@@ -714,7 +723,10 @@ func TestBuildReasoningRequestFields(t *testing.T) {
 			expectEffortReturn: "low",
 			verifyFunc: func(t *testing.T, fields map[string]interface{}) {
 				require.NotNil(t, fields)
-				effort, exists := fields["reasoning_effort"]
+				chatTemplate, exists := fields["chat_template_kwargs"]
+				require.True(t, exists)
+				kwargs := chatTemplate.(map[string]interface{})
+				effort, exists := kwargs["reasoning_effort"]
 				require.True(t, exists)
 				assert.Equal(t, "low", effort)
 			},

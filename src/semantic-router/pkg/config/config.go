@@ -36,6 +36,14 @@ const (
 	SignalTypeLanguage     = "language"
 )
 
+// API format constants for model backends
+const (
+	// APIFormatOpenAI is the default OpenAI-compatible API format (used by vLLM, etc.)
+	APIFormatOpenAI = "openai"
+	// APIFormatAnthropic is the Anthropic Messages API format (used by Claude models)
+	APIFormatAnthropic = "anthropic"
+)
+
 // RouterConfig represents the main configuration for the LLM Router
 type RouterConfig struct {
 	// ConfigSource specifies where to load dynamic configuration from (file or kubernetes)
@@ -360,58 +368,55 @@ type EmbeddingModels struct {
 }
 
 // HNSWConfig contains settings for optimizing the embedding classifier
-// by preloading candidate embeddings at startup and using HNSW for fast similarity search
+// Note: Despite the name, HNSW indexing is no longer used for embedding classification.
+// The classifier always uses brute-force search to ensure complete results for all candidates.
+// This struct is kept for backward compatibility and may be renamed in a future version.
 type HNSWConfig struct {
+	// ModelType specifies which embedding model to use (default: "qwen3")
+	// Options: "qwen3" (high quality, 32K context) or "gemma" (fast, 8K context)
+	// This model will be used for both preloading and runtime embedding generation
+	ModelType string `yaml:"model_type,omitempty"`
+
 	// PreloadEmbeddings enables precomputing candidate embeddings at startup (default: true)
 	// When enabled, candidate embeddings are computed once during initialization
 	// rather than on every request, significantly improving runtime performance
 	PreloadEmbeddings bool `yaml:"preload_embeddings"`
 
-	// UseHNSW enables HNSW index for O(log n) similarity search (default: true)
-	// Only applies when PreloadEmbeddings is true
-	UseHNSW bool `yaml:"use_hnsw"`
-
-	// HNSWM is the number of bi-directional links per node (default: 16)
-	// Higher values improve recall but increase memory usage
-	HNSWM int `yaml:"hnsw_m,omitempty"`
-
-	// HNSWEfConstruction is the size of dynamic candidate list during index construction (default: 200)
-	// Higher values improve index quality but increase build time
-	HNSWEfConstruction int `yaml:"hnsw_ef_construction,omitempty"`
-
-	// HNSWEfSearch is the size of dynamic candidate list during search (default: 50)
-	// Higher values improve search accuracy but increase latency
-	HNSWEfSearch int `yaml:"hnsw_ef_search,omitempty"`
-
-	// HNSWThreshold is the minimum number of candidates to use HNSW (default: 20)
-	// Below this threshold, brute-force search is used as it's faster for small sets
-	HNSWThreshold int `yaml:"hnsw_threshold,omitempty"`
-
 	// TargetDimension is the embedding dimension to use (default: 768)
 	// Supports Matryoshka dimensions: 768, 512, 256, 128
 	TargetDimension int `yaml:"target_dimension,omitempty"`
+
+	// EnableSoftMatching enables soft matching mode (default: true)
+	// When enabled, if no rule meets its threshold, returns the rule with highest score
+	// (as long as it exceeds MinScoreThreshold)
+	// Use pointer to distinguish between "not set" (nil) and explicitly disabled (false)
+	EnableSoftMatching *bool `yaml:"enable_soft_matching,omitempty"`
+
+	// MinScoreThreshold is the minimum score required for soft matching (default: 0.5)
+	// Only used when EnableSoftMatching is true
+	// If the highest score is below this threshold, no rule will be matched
+	MinScoreThreshold float32 `yaml:"min_score_threshold,omitempty"`
 }
 
 // WithDefaults returns a copy of the config with default values applied
 func (c HNSWConfig) WithDefaults() HNSWConfig {
 	result := c
-	// PreloadEmbeddings defaults to true for better performance
-	// Note: bool zero value is false, so we need explicit check
-	// Users must explicitly set preload_embeddings: true in config
-	if result.HNSWM <= 0 {
-		result.HNSWM = 16
-	}
-	if result.HNSWEfConstruction <= 0 {
-		result.HNSWEfConstruction = 200
-	}
-	if result.HNSWEfSearch <= 0 {
-		result.HNSWEfSearch = 50
-	}
-	if result.HNSWThreshold <= 0 {
-		result.HNSWThreshold = 20
+	// ModelType defaults to "qwen3" for high quality embeddings
+	if result.ModelType == "" {
+		result.ModelType = "qwen3"
 	}
 	if result.TargetDimension <= 0 {
 		result.TargetDimension = 768
+	}
+	// EnableSoftMatching: nil means not set, use default true
+	// false means explicitly disabled (valid value)
+	if result.EnableSoftMatching == nil {
+		defaultEnabled := true
+		result.EnableSoftMatching = &defaultEnabled
+	}
+	// MinScoreThreshold defaults to 0.5 for soft matching
+	if result.MinScoreThreshold <= 0 {
+		result.MinScoreThreshold = 0.5
 	}
 	return result
 }
@@ -457,6 +462,128 @@ func (l *LooperConfig) GetTimeout() int {
 	return l.TimeoutSeconds
 }
 
+// RedisConfig defines the complete configuration structure for Redis cache backend.
+type RedisConfig struct {
+	Connection struct {
+		Host     string `json:"host" yaml:"host"`
+		Port     int    `json:"port" yaml:"port"`
+		Database int    `json:"database" yaml:"database"`
+		Password string `json:"password" yaml:"password"`
+		Timeout  int    `json:"timeout" yaml:"timeout"`
+		TLS      struct {
+			Enabled  bool   `json:"enabled" yaml:"enabled"`
+			CertFile string `json:"cert_file" yaml:"cert_file"`
+			KeyFile  string `json:"key_file" yaml:"key_file"`
+			CAFile   string `json:"ca_file" yaml:"ca_file"`
+		} `json:"tls" yaml:"tls"`
+	} `json:"connection" yaml:"connection"`
+	Index struct {
+		Name        string `json:"name" yaml:"name"`
+		Prefix      string `json:"prefix" yaml:"prefix"`
+		VectorField struct {
+			Name       string `json:"name" yaml:"name"`
+			Dimension  int    `json:"dimension" yaml:"dimension"`
+			MetricType string `json:"metric_type" yaml:"metric_type"` // L2, IP, COSINE
+		} `json:"vector_field" yaml:"vector_field"`
+		IndexType string `json:"index_type" yaml:"index_type"` // HNSW or FLAT
+		Params    struct {
+			M              int `json:"M" yaml:"M"`
+			EfConstruction int `json:"efConstruction" yaml:"efConstruction"`
+		} `json:"params" yaml:"params"`
+	} `json:"index" yaml:"index"`
+	Search struct {
+		TopK int `json:"topk" yaml:"topk"`
+	} `json:"search" yaml:"search"`
+	Development struct {
+		DropIndexOnStartup bool `json:"drop_index_on_startup" yaml:"drop_index_on_startup"`
+		AutoCreateIndex    bool `json:"auto_create_index" yaml:"auto_create_index"`
+		VerboseErrors      bool `json:"verbose_errors" yaml:"verbose_errors"`
+	} `json:"development" yaml:"development"`
+	Logging struct {
+		Level          string `json:"level" yaml:"level"`
+		EnableQueryLog bool   `json:"enable_query_log" yaml:"enable_query_log"`
+		EnableMetrics  bool   `json:"enable_metrics" yaml:"enable_metrics"`
+	} `json:"logging" yaml:"logging"`
+}
+
+// MilvusConfig defines the complete configuration structure for Milvus cache backend.
+// Fields use both json/yaml tags because sigs.k8s.io/yaml converts YAML→JSON before decoding,
+// so json tags ensure snake_case keys map correctly without switching parsers.
+type MilvusConfig struct {
+	Connection struct {
+		Host     string `json:"host" yaml:"host"`
+		Port     int    `json:"port" yaml:"port"`
+		Database string `json:"database" yaml:"database"`
+		Timeout  int    `json:"timeout" yaml:"timeout"`
+		Auth     struct {
+			Enabled  bool   `json:"enabled" yaml:"enabled"`
+			Username string `json:"username" yaml:"username"`
+			Password string `json:"password" yaml:"password"`
+		} `json:"auth" yaml:"auth"`
+		TLS struct {
+			Enabled  bool   `json:"enabled" yaml:"enabled"`
+			CertFile string `json:"cert_file" yaml:"cert_file"`
+			KeyFile  string `json:"key_file" yaml:"key_file"`
+			CAFile   string `json:"ca_file" yaml:"ca_file"`
+		} `json:"tls" yaml:"tls"`
+	} `json:"connection" yaml:"connection"`
+	Collection struct {
+		Name        string `json:"name" yaml:"name"`
+		Description string `json:"description" yaml:"description"`
+		VectorField struct {
+			Name       string `json:"name" yaml:"name"`
+			Dimension  int    `json:"dimension" yaml:"dimension"`
+			MetricType string `json:"metric_type" yaml:"metric_type"`
+		} `json:"vector_field" yaml:"vector_field"`
+		Index struct {
+			Type   string `json:"type" yaml:"type"`
+			Params struct {
+				M              int `json:"M" yaml:"M"`
+				EfConstruction int `json:"efConstruction" yaml:"efConstruction"`
+			} `json:"params" yaml:"params"`
+		} `json:"index" yaml:"index"`
+	} `json:"collection" yaml:"collection"`
+	Search struct {
+		Params struct {
+			Ef int `json:"ef" yaml:"ef"`
+		} `json:"params" yaml:"params"`
+		TopK             int    `json:"topk" yaml:"topk"`
+		ConsistencyLevel string `json:"consistency_level" yaml:"consistency_level"`
+	} `json:"search" yaml:"search"`
+	Performance struct {
+		ConnectionPool struct {
+			MaxConnections     int `json:"max_connections" yaml:"max_connections"`
+			MaxIdleConnections int `json:"max_idle_connections" yaml:"max_idle_connections"`
+			AcquireTimeout     int `json:"acquire_timeout" yaml:"acquire_timeout"`
+		} `json:"connection_pool" yaml:"connection_pool"`
+		Batch struct {
+			InsertBatchSize int `json:"insert_batch_size" yaml:"insert_batch_size"`
+			Timeout         int `json:"timeout" yaml:"timeout"`
+		} `json:"batch" yaml:"batch"`
+	} `json:"performance" yaml:"performance"`
+	DataManagement struct {
+		TTL struct {
+			Enabled         bool   `json:"enabled" yaml:"enabled"`
+			TimestampField  string `json:"timestamp_field" yaml:"timestamp_field"`
+			CleanupInterval int    `json:"cleanup_interval" yaml:"cleanup_interval"`
+		} `json:"ttl" yaml:"ttl"`
+		Compaction struct {
+			Enabled  bool `json:"enabled" yaml:"enabled"`
+			Interval int  `json:"interval" yaml:"interval"`
+		} `json:"compaction" yaml:"compaction"`
+	} `json:"data_management" yaml:"data_management"`
+	Logging struct {
+		Level          string `json:"level" yaml:"level"`
+		EnableQueryLog bool   `json:"enable_query_log" yaml:"enable_query_log"`
+		EnableMetrics  bool   `json:"enable_metrics" yaml:"enable_metrics"`
+	} `json:"logging" yaml:"logging"`
+	Development struct {
+		DropCollectionOnStartup bool `json:"drop_collection_on_startup" yaml:"drop_collection_on_startup"`
+		AutoCreateCollection    bool `json:"auto_create_collection" yaml:"auto_create_collection"`
+		VerboseErrors           bool `json:"verbose_errors" yaml:"verbose_errors"`
+	} `json:"development" yaml:"development"`
+}
+
 type SemanticCache struct {
 	// Type of cache backend to use
 	BackendType string `yaml:"backend_type,omitempty"`
@@ -477,7 +604,13 @@ type SemanticCache struct {
 	// Eviction policy for in-memory cache ("fifo", "lru", "lfu")
 	EvictionPolicy string `yaml:"eviction_policy,omitempty"`
 
-	// Path to backend-specific configuration file
+	// Redis configuration
+	Redis *RedisConfig `yaml:"redis,omitempty"`
+
+	// Milvus configuration
+	Milvus *MilvusConfig `yaml:"milvus,omitempty"`
+
+	// BackendConfigPath is a path to the backend-specific configuration file (Deprecated)
 	BackendConfigPath string `yaml:"backend_config_path,omitempty"`
 
 	// Embedding model to use for semantic similarity ("bert", "qwen3", "gemma")
@@ -496,7 +629,7 @@ type ResponseAPIConfig struct {
 	// Enable Response API endpoints
 	Enabled bool `yaml:"enabled"`
 
-	// Storage backend type: "memory", "milvus"
+	// Storage backend type: "memory", "milvus", "redis"
 	// Default: "memory"
 	StoreBackend string `yaml:"store_backend,omitempty"`
 
@@ -511,6 +644,9 @@ type ResponseAPIConfig struct {
 
 	// Milvus configuration (when store_backend is "milvus")
 	Milvus ResponseAPIMilvusConfig `yaml:"milvus,omitempty"`
+
+	// Redis configuration (when store_backend is "redis")
+	Redis ResponseAPIRedisConfig `yaml:"redis,omitempty"`
 }
 
 // ResponseAPIMilvusConfig configures Milvus storage for Response API.
@@ -523,6 +659,42 @@ type ResponseAPIMilvusConfig struct {
 
 	// Collection name for storing responses
 	Collection string `yaml:"collection,omitempty"`
+}
+
+// ResponseAPIRedisConfig configures Redis storage for Response API.
+// Supports both inline configuration and external config file.
+type ResponseAPIRedisConfig struct {
+	// Basic connection (inline)
+	Address  string `yaml:"address,omitempty" json:"address,omitempty"`
+	Password string `yaml:"password,omitempty" json:"password,omitempty"`
+	DB       int    `yaml:"db" json:"db"`
+
+	// Key management
+	// Default: "sr:" (base prefix for keys like sr:response:xxx, sr:conversation:xxx)
+	KeyPrefix string `yaml:"key_prefix,omitempty" json:"key_prefix,omitempty"`
+
+	// Cluster support
+	ClusterMode      bool     `yaml:"cluster_mode,omitempty" json:"cluster_mode,omitempty"`
+	ClusterAddresses []string `yaml:"cluster_addresses,omitempty" json:"cluster_addresses,omitempty"`
+
+	// Connection pooling
+	PoolSize     int `yaml:"pool_size,omitempty" json:"pool_size,omitempty"`
+	MinIdleConns int `yaml:"min_idle_conns,omitempty" json:"min_idle_conns,omitempty"`
+	MaxRetries   int `yaml:"max_retries,omitempty" json:"max_retries,omitempty"`
+
+	// Timeouts (seconds)
+	DialTimeout  int `yaml:"dial_timeout,omitempty" json:"dial_timeout,omitempty"`
+	ReadTimeout  int `yaml:"read_timeout,omitempty" json:"read_timeout,omitempty"`
+	WriteTimeout int `yaml:"write_timeout,omitempty" json:"write_timeout,omitempty"`
+
+	// TLS
+	TLSEnabled  bool   `yaml:"tls_enabled,omitempty" json:"tls_enabled,omitempty"`
+	TLSCertPath string `yaml:"tls_cert_path,omitempty" json:"tls_cert_path,omitempty"`
+	TLSKeyPath  string `yaml:"tls_key_path,omitempty" json:"tls_key_path,omitempty"`
+	TLSCAPath   string `yaml:"tls_ca_path,omitempty" json:"tls_ca_path,omitempty"`
+
+	// Optional external config file
+	ConfigPath string `yaml:"config_path,omitempty" json:"config_path,omitempty"`
 }
 
 // KeywordRule defines a rule for keyword-based classification.
@@ -955,6 +1127,11 @@ type ModelParams struct {
 	// Used by confidence algorithm to determine model order.
 	// Larger parameter count typically means more capable but slower/costlier model.
 	ParamSize string `yaml:"param_size,omitempty"`
+
+	// APIFormat specifies the API format for this model: "openai" (default) or "anthropic"
+	// When set to "anthropic", the router will translate OpenAI-format requests to Anthropic
+	// Messages API format and convert responses back to OpenAI format
+	APIFormat string `yaml:"api_format,omitempty"`
 }
 
 // LoRAAdapter represents a LoRA adapter configuration for a model

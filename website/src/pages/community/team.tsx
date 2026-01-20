@@ -1,17 +1,18 @@
 import React from 'react'
 import Layout from '@theme/Layout'
 import Translate from '@docusaurus/Translate'
+import Link from '@docusaurus/Link'
 import styles from './team.module.css'
 import { FaGithub, FaLinkedin } from 'react-icons/fa'
 
 interface TeamMember {
   name: string
-  role: string
+  role: React.ReactNode
   company?: string
   avatar: string
   github?: string
   linkedin?: string
-  bio: string
+  bio: React.ReactNode
   memberType: 'maintainer' | 'committer' | 'committer'
 }
 
@@ -22,202 +23,202 @@ interface TeamMemberProps {
 const allTeamMembers: TeamMember[] = [
   {
     name: 'Huamin Chen',
-    role: 'Distinguished Engineer',
+    role: <Translate id="team.members.HuaminChen.role">Distinguished Engineer</Translate>,
     company: 'Red Hat',
     avatar: '/img/team/huamin.png',
     github: 'https://github.com/rootfs',
     linkedin: 'https://www.linkedin.com/in/huaminchen',
-    bio: 'Distinguished Engineer at Red Hat, driving innovation in cloud-native and AI/LLM Inference technologies.',
+    bio: <Translate id="team.members.HuaminChen.bio">Distinguished Engineer at Red Hat, driving innovation in cloud-native and AI/LLM Inference technologies.</Translate>,
     memberType: 'maintainer',
   },
   {
     name: 'Chen Wang',
-    role: 'Senior Staff Research Scientist',
+    role: <Translate id="team.members.ChenWang.role">Senior Staff Research Scientist</Translate>,
     company: 'IBM',
     avatar: '/img/team/chen.png',
     github: 'https://github.com/wangchen615',
     linkedin: 'https://www.linkedin.com/in/chenw615/',
-    bio: 'Senior Staff Research Scientist at IBM, focusing on advanced AI systems and research.',
+    bio: <Translate id="team.members.ChenWang.bio">Senior Staff Research Scientist at IBM, focusing on advanced AI systems and research.</Translate>,
     memberType: 'maintainer',
   },
   {
     name: 'Yue Zhu',
-    role: 'Staff Research Scientist',
+    role: <Translate id="team.members.YueZhu.role">Staff Research Scientist</Translate>,
     company: 'IBM',
     avatar: '/img/team/yue.png',
     github: 'https://github.com/yuezhu1',
     linkedin: 'https://www.linkedin.com/in/yue-zhu-b26526a3/',
-    bio: 'Staff Research Scientist at IBM, specializing in AI research and LLM Inference.',
+    bio: <Translate id="team.members.YueZhu.bio">Staff Research Scientist at IBM, specializing in AI research and LLM Inference.</Translate>,
     memberType: 'maintainer',
   },
   {
     name: 'Xunzhuo Liu',
-    role: 'Intelligent Routing',
-    company: 'vLLM',
+    role: <Translate id="team.members.XunzhuoLiu.role">AI Networking</Translate>,
+    company: 'Tencent',
     avatar: '/img/team/xunzhuo.png',
     github: 'https://github.com/Xunzhuo',
     linkedin: 'https://www.linkedin.com/in/bitliu/',
-    bio: 'Intelligent Routing at Tencent, leading the development of vLLM Semantic Router and driving the project vision.',
+    bio: <Translate id="team.members.XunzhuoLiu.bio">AI Networking at Tencent, leading the development of vLLM Semantic Router and driving the project vision.</Translate>,
     memberType: 'maintainer',
   },
   {
     name: 'Senan Zedan',
     company: 'Red Hat',
-    role: 'R&D Manager',
+    role: <Translate id="team.members.SenanZedan.role">R&D Manager</Translate>,
     linkedin: 'https://www.linkedin.com/in/senan-zedan-2041855b/',
     avatar: 'https://github.com/szedan-rh.png',
     github: 'https://github.com/szedan-rh',
-    bio: 'A dynamic and hands-on Engineering Manager who thrives on building elite engineering teams and driving them to deliver exceptional results.',
+    bio: <Translate id="team.members.SenanZedan.bio">A dynamic and hands-on Engineering Manager who thrives on building elite engineering teams and driving them to deliver exceptional results.</Translate>,
     memberType: 'committer',
   },
   {
     name: 'Yossi Ovadia',
     company: 'Red Hat',
-    role: 'Senior Principal Engineer',
+    role: <Translate id="team.members.YossiOvadia.role">Senior Principal Engineer</Translate>,
     avatar: 'https://github.com/yossiovadia.png',
     github: 'https://github.com/yossiovadia',
     linkedin: 'https://www.linkedin.com/in/yossi-ovadia-336b314/',
-    bio: 'Making life easier for developers and customers through innovative tooling. From the Red Hat Office of the CTO.',
+    bio: <Translate id="team.members.YossiOvadia.bio">Making life easier for developers and customers through innovative tooling. From the Red Hat Office of the CTO.</Translate>,
     memberType: 'committer',
   },
   {
     name: 'samzong',
-    role: 'AI Infrastructure / Cloud-Native PM',
+    role: <Translate id="team.members.samzong.role">AI Infrastructure / Cloud-Native PM</Translate>,
     company: 'DaoCloud',
     avatar: 'https://github.com/samzong.png',
     github: 'https://github.com/samzong',
     linkedin: 'https://www.linkedin.com/in/samzong',
-    bio: 'Cloud-native AI infrastructure product leader. Focused on Kubernetes, GPU resource scheduling, and large-scale LLM serving platforms.',
+    bio: <Translate id="team.members.samzong.bio">Cloud-native AI infrastructure product leader. Focused on Kubernetes, GPU resource scheduling, and large-scale LLM serving platforms.</Translate>,
     memberType: 'committer',
   },
   {
     name: 'Liav Weiss',
-    role: 'Software Engineer',
+    role: <Translate id="team.members.LiavWeiss.role">Software Engineer</Translate>,
     company: 'Red Hat',
     avatar: 'https://avatars.githubusercontent.com/u/74174727?v=4',
     github: 'https://github.com/liavweiss',
     linkedin: 'https://www.linkedin.com/in/liav-weiss-2a0428208',
-    bio: 'Software engineer, focused on backend and cloud-native systems, with hands-on experience exploring AI infrastructure, LLM-based systems, and RAG architectures.',
+    bio: <Translate id="team.members.LiavWeiss.bio">Software engineer, focused on backend and cloud-native systems, with hands-on experience exploring AI infrastructure, LLM-based systems, and RAG architectures.</Translate>,
     memberType: 'committer',
   },
   {
     name: 'Asaad Balum',
-    role: 'Senior Software Engineer',
+    role: <Translate id="team.members.AsaadBalum.role">Senior Software Engineer</Translate>,
     company: 'Red Hat',
     avatar: 'https://avatars.githubusercontent.com/u/154635253?s=400&u=6e7e87cce16b88346a3e54e96aad263318a1901a&v=4',
     github: 'https://github.com/asaadbalum',
     linkedin: 'https://www.linkedin.com/in/asaad-balum-0928771a9/',
-    bio: 'Senior software engineer with a research-driven mindset, specializing in cloud-native platforms, Kubernetes-based infrastructure, and AI enablement.',
+    bio: <Translate id="team.members.AsaadBalum.bio">Senior software engineer with a research-driven mindset, specializing in cloud-native platforms, Kubernetes-based infrastructure, and AI enablement.</Translate>,
     memberType: 'committer',
   },
   {
     name: 'Yehudit',
-    role: 'Software Engineer',
+    role: <Translate id="team.members.Yehudit.role">Software Engineer</Translate>,
     company: 'Red Hat',
     avatar: 'https://avatars.githubusercontent.com/u/34643974?s=400&v=4',
     github: 'https://github.com/yehudit1987',
     linkedin: 'https://www.linkedin.com/in/yehuditkerido/',
-    bio: 'Software engineer with a research-driven mindset, focused on cloud-native platforms and AI infrastructure. Open-source contributor.',
+    bio: <Translate id="team.members.Yehudit.bio">Software engineer with a research-driven mindset, focused on cloud-native platforms and AI infrastructure. Open-source contributor.</Translate>,
     memberType: 'committer',
   },
   {
     name: 'Noa Limoy',
-    role: 'Software Engineer',
+    role: <Translate id="team.members.NoaLimoy.role">Software Engineer</Translate>,
     company: 'Red Hat',
     avatar: 'https://avatars.githubusercontent.com/noalimoy',
     github: 'https://github.com/noalimoy',
     linkedin: 'https://www.linkedin.com/in/noalimoy/',
-    bio: 'Software engineer with a research-driven mindset, focused on cloud-native platforms and AI infrastructure. Open-source contributor.',
+    bio: <Translate id="team.members.NoaLimoy.bio">Software engineer with a research-driven mindset, focused on cloud-native platforms and AI infrastructure. Open-source contributor.</Translate>,
     memberType: 'committer',
   },
   {
     name: 'JaredforReal',
     company: 'Z.ai',
-    role: 'Software Engineer',
+    role: <Translate id="team.members.JaredforReal.role">Software Engineer</Translate>,
     avatar: 'https://github.com/JaredforReal.png',
     github: 'https://github.com/JaredforReal',
-    bio: 'Open source contributor to vLLM Semantic Router.',
+    bio: <Translate id="team.members.JaredforReal.bio">Open source contributor to vLLM Semantic Router.</Translate>,
     memberType: 'committer',
   },
   {
     name: 'Abdallah Samara',
     company: 'Red Hat',
-    role: 'Senior Software Engineer',
+    role: <Translate id="team.members.AbdallahSamara.role">Senior Software Engineer</Translate>,
     avatar: 'https://github.com/abdallahsamabd.png',
     github: 'https://github.com/abdallahsamabd',
     linkedin: 'https://www.linkedin.com/in/abdallah-samara',
-    bio: 'Software engineer with a research-driven approach, focused on cloud-native platforms and AI infrastructure. Building semantic routing systems and contributing to open-source LLM orchestration projects.',
+    bio: <Translate id="team.members.AbdallahSamara.bio">Software engineer with a research-driven approach, focused on cloud-native platforms and AI infrastructure. Building semantic routing systems and contributing to open-source LLM orchestration projects.</Translate>,
     memberType: 'committer',
   },
   {
     name: 'Hen Schwartz',
     company: 'Red Hat',
-    role: 'Software Engineer',
+    role: <Translate id="team.members.HenSchwartz.role">Software Engineer</Translate>,
     avatar: 'https://github.com/henschwartz.png',
     github: 'https://github.com/henschwartz',
     linkedin: 'https://www.linkedin.com/in/henschwartz',
-    bio: 'Software engineer with a research-driven approach, focused on cloud-native platforms and AI infrastructure. Building semantic routing systems and contributing to open-source LLM orchestration projects.',
+    bio: <Translate id="team.members.HenSchwartz.bio">Software engineer with a research-driven approach, focused on cloud-native platforms and AI infrastructure. Building semantic routing systems and contributing to open-source LLM orchestration projects.</Translate>,
     memberType: 'committer',
   },
   {
     name: 'Srinivas A',
-    role: 'Software Engineer',
+    role: <Translate id="team.members.SrinivasA.role">Software Engineer</Translate>,
     company: 'Yokogawa',
     avatar: 'https://avatars.githubusercontent.com/srini-abhiram',
     github: 'https://github.com/srini-abhiram',
     linkedin: 'https://www.linkedin.com/in/sriniabhiram',
-    bio: 'Application software engineer with experience in Distributed Control Systems and Big data.',
+    bio: <Translate id="team.members.SrinivasA.bio">Application software engineer with experience in Distributed Control Systems and Big data.</Translate>,
     memberType: 'committer',
   },
   {
     name: 'carlory',
-    role: 'Open Source Engineer',
+    role: <Translate id="team.members.carlory.role">Open Source Engineer</Translate>,
     company: 'DaoCloud',
     avatar: 'https://avatars.githubusercontent.com/u/28390961?v=4',
     github: 'https://github.com/carlory',
-    bio: 'Open Source Engineer at DaoCloud, focusing on container technology and cloud-native solutions. Passionate about contributing to vllm and other open source projects.',
+    bio: <Translate id="team.members.carlory.bio">Open Source Engineer at DaoCloud, focusing on container technology and cloud-native solutions. Passionate about contributing to vllm and other open source projects.</Translate>,
     memberType: 'committer',
   },
   {
     name: 'Jintao Zhang',
     company: 'Kong',
-    role: 'Senior Software Engineer',
+    role: <Translate id="team.members.JintaoZhang.role">Senior Software Engineer</Translate>,
     avatar: 'https://github.com/tao12345666333.png',
     github: 'https://github.com/tao12345666333',
     linkedin: 'https://www.linkedin.com/in/jintao-zhang-402645193/',
-    bio: 'Senior Software Engineer @ Kong Inc. | Microsoft MVP | CNCF Ambassador | Kubernetes Ingress-NGINX maintainer | PyCon China & KCD Beijing organizer.',
+    bio: <Translate id="team.members.JintaoZhang.bio">Senior Software Engineer @ Kong Inc. | Microsoft MVP | CNCF Ambassador | Kubernetes Ingress-NGINX maintainer | PyCon China & KCD Beijing organizer.</Translate>,
     memberType: 'committer',
   },
   {
     name: 'yuluo-yx',
-    role: 'Individual Contributor',
+    role: <Translate id="team.members.yuluo-yx.role">Individual Contributor</Translate>,
     avatar: 'https://github.com/yuluo-yx.png',
     github: 'https://github.com/yuluo-yx',
-    bio: 'Open source contributor to vLLM Semantic Router.',
+    bio: <Translate id="team.members.yuluo-yx.bio">Open source contributor to vLLM Semantic Router.</Translate>,
     memberType: 'committer',
   },
   {
     name: 'cryo-zd',
-    role: 'Individual Contributor',
+    role: <Translate id="team.members.cryo-zd.role">Individual Contributor</Translate>,
     avatar: 'https://github.com/cryo-zd.png',
     github: 'https://github.com/cryo-zd',
-    bio: 'Open source contributor to vLLM Semantic Router.',
+    bio: <Translate id="team.members.cryo-zd.bio">Open source contributor to vLLM Semantic Router.</Translate>,
     memberType: 'committer',
   },
   {
     name: 'OneZero-Y',
-    role: 'Individual Contributor',
+    role: <Translate id="team.members.OneZero-Y.role">Individual Contributor</Translate>,
     avatar: 'https://github.com/OneZero-Y.png',
     github: 'https://github.com/OneZero-Y',
-    bio: 'Open source contributor to vLLM Semantic Router.',
+    bio: <Translate id="team.members.OneZero-Y.bio">Open source contributor to vLLM Semantic Router.</Translate>,
     memberType: 'committer',
   },
   {
     name: 'aeft',
-    role: 'Individual Contributor',
+    role: <Translate id="team.members.aeft.role">Individual Contributor</Translate>,
     avatar: 'https://github.com/aeft.png',
     github: 'https://github.com/aeft',
-    bio: 'Open source contributor to vLLM Semantic Router.',
+    bio: <Translate id="team.members.aeft.bio">Open source contributor to vLLM Semantic Router.</Translate>,
     memberType: 'committer',
   },
 ]
@@ -306,7 +307,9 @@ const Team: React.FC = () => {
               <Translate id="team.coreTeam.title">Our Team</Translate>
             </h2>
             <p className={styles.sectionDescription}>
-              <Translate id="team.coreTeam.description">Meet the talented people who make vLLM Semantic Router possible.</Translate>
+              <Translate id="team.coreTeam.description">
+                Meet the talented people who make vLLM Semantic Router possible.
+              </Translate>
             </p>
             <div className={styles.teamGrid}>
               {allTeamMembers.map((member, index) => (
@@ -348,7 +351,7 @@ const Team: React.FC = () => {
                       <p>
                         <Translate id="team.recognition.step2.desc">Participate actively in one of our</Translate>
                         {' '}
-                        <a href="/community/work-groups"><Translate id="team.recognition.step2.link">Working Groups</Translate></a>
+                        <Link to="/community/work-groups"><Translate id="team.recognition.step2.link">Working Groups</Translate></Link>
                       </p>
                     </div>
                   </div>
@@ -385,9 +388,9 @@ const Team: React.FC = () => {
                   <Translate id="team.getInvolved.contribute.title">Start Contributing</Translate>
                 </h3>
                 <p><Translate id="team.getInvolved.contribute.desc">Ready to make your first contribution?</Translate></p>
-                <a href="/community/contributing" className={styles.actionButton}>
+                <Link to="/community/contributing" className={styles.actionButton}>
                   <Translate id="team.getInvolved.contribute.link">Contributing Guide</Translate>
-                </a>
+                </Link>
               </div>
 
               <div className={styles.involvementCard}>
@@ -396,9 +399,9 @@ const Team: React.FC = () => {
                   <Translate id="team.getInvolved.workGroups.title">Join Working Groups</Translate>
                 </h3>
                 <p><Translate id="team.getInvolved.workGroups.desc">Find your area of expertise and connect with like-minded contributors.</Translate></p>
-                <a href="/community/work-groups" className={styles.actionButton}>
+                <Link to="/community/work-groups" className={styles.actionButton}>
                   <Translate id="team.getInvolved.workGroups.link">View Work Groups</Translate>
-                </a>
+                </Link>
               </div>
 
               <div className={styles.involvementCard}>

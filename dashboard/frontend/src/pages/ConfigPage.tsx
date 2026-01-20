@@ -6,6 +6,8 @@ import ViewModal, { ViewSection } from '../components/ViewModal'
 import { DataTable, Column } from '../components/DataTable'
 import TableHeader from '../components/TableHeader'
 import EndpointsEditor, { Endpoint } from '../components/EndpointsEditor'
+import ReadonlyBanner from '../components/ReadonlyBanner'
+import { useReadonly } from '../contexts/ReadonlyContext'
 import {
   ConfigFormat,
   detectConfigFormat,
@@ -268,6 +270,7 @@ const formatThreshold = (value: number): string => {
 // Removed maskAddress - no longer needed after removing endpoint visibility toggle
 
 const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) => {
+  const { isReadonly } = useReadonly()
   const [config, setConfig] = useState<ConfigData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -380,6 +383,11 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const saveConfig = async (updatedConfig: any) => {
+    // Prevent save in read-only mode
+    if (isReadonly) {
+      throw new Error('Dashboard is in read-only mode. Configuration editing is disabled.')
+    }
+
     try {
       const response = await fetch('/api/router/config/update', {
         method: 'POST',
@@ -640,7 +648,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
         <h3 className={styles.sectionTitle}>PII Detection (ModernBERT)</h3>
-        {routerConfig.classifier?.pii_model && (
+        {routerConfig.classifier?.pii_model && !isReadonly && (
           <button
             className={styles.sectionEditButton}
             onClick={() => {
@@ -741,7 +749,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
         <h3 className={styles.sectionTitle}>Jailbreak Detection (ModernBERT)</h3>
-        {routerConfig.prompt_guard && (
+        {routerConfig.prompt_guard && !isReadonly && (
           <button
             className={styles.sectionEditButton}
             onClick={() => {
@@ -860,7 +868,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       <div className={styles.section}>
         <div className={styles.sectionHeader}>
           <h3 className={styles.sectionTitle}>Similarity BERT Configuration</h3>
-          {routerConfig.bert_model && (
+          {routerConfig.bert_model && !isReadonly && (
             <button
               className={styles.sectionEditButton}
               onClick={() => {
@@ -936,23 +944,24 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                   <span className={`${styles.statusBadge} ${routerConfig.semantic_cache?.enabled ? styles.statusActive : styles.statusInactive}`}>
                     {routerConfig.semantic_cache?.enabled ? '✓ Enabled' : '✗ Disabled'}
                   </span>
-                  <button
-                    className={styles.sectionEditButton}
-                    onClick={() => {
-                      openEditModal(
-                        'Edit Semantic Cache Configuration',
-                        config?.semantic_cache || {},
-                        [
-                          {
-                            name: 'enabled',
-                            label: 'Enable Semantic Cache',
-                            type: 'boolean',
-                            description: 'Enable or disable semantic caching'
-                          },
-                          {
-                            name: 'backend_type',
-                            label: 'Backend Type',
-                            type: 'select',
+                  {!isReadonly && (
+                    <button
+                      className={styles.sectionEditButton}
+                      onClick={() => {
+                        openEditModal(
+                          'Edit Semantic Cache Configuration',
+                          config?.semantic_cache || {},
+                          [
+                            {
+                              name: 'enabled',
+                              label: 'Enable Semantic Cache',
+                              type: 'boolean',
+                              description: 'Enable or disable semantic caching'
+                            },
+                            {
+                              name: 'backend_type',
+                              label: 'Backend Type',
+                              type: 'select',
                             options: ['memory', 'redis', 'memcached'],
                             description: 'Cache backend storage type'
                           },
@@ -997,6 +1006,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                   >
                     Edit
                   </button>
+                  )}
                 </div>
               </div>
               {routerConfig.semantic_cache?.enabled && (
@@ -1055,13 +1065,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                   <span className={`${styles.statusBadge} ${styles.statusActive}`}>
                     {routerConfig.classifier.category_model.use_cpu ? 'CPU' : 'GPU'}
                   </span>
-                  <button
-                    className={styles.editButton}
-                    onClick={() => {
-                      openEditModal(
-                        'Edit In-tree Category Classifier',
-                        routerConfig.classifier?.category_model || {},
-                        [
+                  {!isReadonly && (
+                    <button
+                      className={styles.editButton}
+                      onClick={() => {
+                        openEditModal(
+                          'Edit In-tree Category Classifier',
+                          routerConfig.classifier?.category_model || {},
+                          [
                           {
                             name: 'model_id',
                             label: 'Model ID',
@@ -1110,6 +1121,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                   >
 
                   </button>
+                  )}
                 </div>
               </div>
               <div className={styles.modelCardBody}>
@@ -1148,13 +1160,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                 <span className={styles.modelCardTitle}>Out-tree Category Classifier (MCP)</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <span className={`${styles.statusBadge} ${styles.statusActive}`}>✓ Enabled</span>
-                  <button
-                    className={styles.editButton}
-                    onClick={() => {
-                      openEditModal(
-                        'Edit Out-tree MCP Category Classifier',
-                        routerConfig.classifier?.mcp_category_model || {},
-                        [
+                  {!isReadonly && (
+                    <button
+                      className={styles.editButton}
+                      onClick={() => {
+                        openEditModal(
+                          'Edit Out-tree MCP Category Classifier',
+                          routerConfig.classifier?.mcp_category_model || {},
+                          [
                           {
                             name: 'enabled',
                             label: 'Enable MCP Classifier',
@@ -1232,6 +1245,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                   >
 
                   </button>
+                  )}
                 </div>
               </div>
               <div className={styles.modelCardBody}>
@@ -1323,36 +1337,38 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                     <div key={index} className={styles.categoryCard}>
                       <div className={styles.categoryHeader}>
                         <span className={styles.categoryName}>{domain.name}</span>
-                        <button
-                          className={styles.editButton}
-                          onClick={() => {
-                            openEditModal(
-                              `Edit Domain: ${domain.name}`,
-                              { description: domain.description || '' },
-                              [
-                                {
-                                  name: 'description',
-                                  label: 'Description',
-                                  type: 'textarea',
-                                  placeholder: 'Describe this domain...',
-                                  description: 'What types of queries belong to this domain'
-                                }
-                              ],
-                              async (data) => {
-                                const newConfig = { ...config }
-                                if (newConfig.signals?.domains) {
-                                  newConfig.signals.domains[index] = {
-                                    ...domain,
-                                    description: data.description,
+                        {!isReadonly && (
+                          <button
+                            className={styles.editButton}
+                            onClick={() => {
+                              openEditModal(
+                                `Edit Domain: ${domain.name}`,
+                                { description: domain.description || '' },
+                                [
+                                  {
+                                    name: 'description',
+                                    label: 'Description',
+                                    type: 'textarea',
+                                    placeholder: 'Describe this domain...',
+                                    description: 'What types of queries belong to this domain'
                                   }
+                                ],
+                                async (data) => {
+                                  const newConfig = { ...config }
+                                  if (newConfig.signals?.domains) {
+                                    newConfig.signals.domains[index] = {
+                                      ...domain,
+                                      description: data.description,
+                                    }
+                                  }
+                                  await saveConfig(newConfig)
                                 }
-                                await saveConfig(newConfig)
-                              }
-                            )
-                          }}
-                        >
+                              )
+                            }}
+                          >
 
-                        </button>
+                          </button>
+                        )}
                       </div>
                       {domain.description && (
                         <p className={styles.categoryDescription}>{domain.description}</p>
@@ -1434,38 +1450,40 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                               {reasoningEffort}
                             </span>
                           )}
-                          <button
-                            className={styles.editButton}
-                            onClick={() => {
-                              openEditModal(
-                                `Edit Category: ${category.name}`,
-                                {
-                                  system_prompt: category.system_prompt || ''
-                                },
-                                [
+                          {!isReadonly && (
+                            <button
+                              className={styles.editButton}
+                              onClick={() => {
+                                openEditModal(
+                                  `Edit Category: ${category.name}`,
                                   {
-                                    name: 'system_prompt',
-                                    label: 'System Prompt',
-                                    type: 'textarea',
-                                    placeholder: 'Enter system prompt for this category...',
-                                    description: 'Instructions for the model when handling this category'
-                                  }
-                                ],
-                                async (data) => {
-                                  const newConfig = { ...config }
-                                  if (newConfig.categories) {
-                                    newConfig.categories[index] = {
-                                      ...category,
-                                      ...data
+                                    system_prompt: category.system_prompt || ''
+                                  },
+                                  [
+                                    {
+                                      name: 'system_prompt',
+                                      label: 'System Prompt',
+                                      type: 'textarea',
+                                      placeholder: 'Enter system prompt for this category...',
+                                      description: 'Instructions for the model when handling this category'
                                     }
+                                  ],
+                                  async (data) => {
+                                    const newConfig = { ...config }
+                                    if (newConfig.categories) {
+                                      newConfig.categories[index] = {
+                                        ...category,
+                                        ...data
+                                      }
+                                    }
+                                    await saveConfig(newConfig)
                                   }
-                                  await saveConfig(newConfig)
-                                }
-                              )
-                            }}
-                          >
+                                )
+                              }}
+                            >
 
-                          </button>
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -1484,63 +1502,65 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                       <div className={styles.categoryModels}>
                         <div className={styles.categoryModelsHeader}>
                           <span>Model Scores</span>
-                          <button
-                            className={styles.addModelButton}
-                            onClick={() => {
-                              // Get available models from model_config
-                              const availableModels = config?.model_config
-                                ? Object.keys(config.model_config)
-                                : []
+                          {!isReadonly && (
+                            <button
+                              className={styles.addModelButton}
+                              onClick={() => {
+                                // Get available models from model_config
+                                const availableModels = config?.model_config
+                                  ? Object.keys(config.model_config)
+                                  : []
 
-                              openEditModal(
-                                `Add Model to ${category.name}`,
-                                {
-                                  model: availableModels[0] || '',
-                                  score: 0.5,
-                                  use_reasoning: false
-                                },
-                                [
+                                openEditModal(
+                                  `Add Model to ${category.name}`,
                                   {
-                                    name: 'model',
-                                    label: 'Model',
-                                    type: 'select',
-                                    options: availableModels,
-                                    required: true,
-                                    description: 'Select from configured models'
+                                    model: availableModels[0] || '',
+                                    score: 0.5,
+                                    use_reasoning: false
                                   },
-                                  {
-                                    name: 'score',
-                                    label: 'Score',
-                                    type: 'number',
-                                    required: true,
-                                    placeholder: '0.5',
-                                    description: 'Model score (0-1)'
+                                  [
+                                    {
+                                      name: 'model',
+                                      label: 'Model',
+                                      type: 'select',
+                                      options: availableModels,
+                                      required: true,
+                                      description: 'Select from configured models'
+                                    },
+                                    {
+                                      name: 'score',
+                                      label: 'Score',
+                                      type: 'number',
+                                      required: true,
+                                      placeholder: '0.5',
+                                      description: 'Model score (0-1)'
+                                    },
+                                    {
+                                      name: 'use_reasoning',
+                                      label: 'Use Reasoning',
+                                      type: 'boolean',
+                                      description: 'Enable reasoning for this model in this category'
+                                    }
+                                  ],
+                                  async (data) => {
+                                    const newConfig = { ...config }
+                                    if (newConfig.categories) {
+                                      const updatedCategory = { ...category }
+                                      // Convert to array format if needed (Legacy uses object)
+                                      const scores = normalizeModelScores(updatedCategory.model_scores)
+                                      scores.push(data)
+                                      updatedCategory.model_scores = scores
+                                      newConfig.categories[index] = updatedCategory
+                                    }
+                                    await saveConfig(newConfig)
                                   },
-                                  {
-                                    name: 'use_reasoning',
-                                    label: 'Use Reasoning',
-                                    type: 'boolean',
-                                    description: 'Enable reasoning for this model in this category'
-                                  }
-                                ],
-                                async (data) => {
-                                  const newConfig = { ...config }
-                                  if (newConfig.categories) {
-                                    const updatedCategory = { ...category }
-                                    // Convert to array format if needed (Legacy uses object)
-                                    const scores = normalizeModelScores(updatedCategory.model_scores)
-                                    scores.push(data)
-                                    updatedCategory.model_scores = scores
-                                    newConfig.categories[index] = updatedCategory
-                                  }
-                                  await saveConfig(newConfig)
-                                },
-                                'add'
-                              )
-                            }}
-                          >
+                                  'add'
+                                )
+                              }}
+                            >
 
-                          </button>
+                            </button>
+                          )}
                         </div>
                         {normalizedScores.length > 0 ? (
                           normalizedScores.map((modelScore, modelIdx) => (
@@ -1557,78 +1577,82 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                                 <span className={styles.scoreText}>{((modelScore.score ?? 0) * 100).toFixed(0)}%</span>
                               </div>
                               <div className={styles.modelScoreActions}>
-                                <button
-                                  className={styles.editButton}
-                                  onClick={() => {
-                                    // Get available models from model_config
-                                    const availableModels = config?.model_config
-                                      ? Object.keys(config.model_config)
-                                      : []
+                                {!isReadonly && (
+                                  <>
+                                    <button
+                                      className={styles.editButton}
+                                      onClick={() => {
+                                        // Get available models from model_config
+                                        const availableModels = config?.model_config
+                                          ? Object.keys(config.model_config)
+                                          : []
 
-                                    openEditModal(
-                                      `Edit Model: ${modelScore.model}`,
-                                      { ...modelScore },
-                                      [
-                                        {
-                                          name: 'model',
-                                          label: 'Model',
-                                          type: 'select',
-                                          options: availableModels,
-                                          required: true,
-                                          description: 'Select from configured models'
-                                        },
-                                        {
-                                          name: 'score',
-                                          label: 'Score',
-                                          type: 'number',
-                                          required: true,
-                                          placeholder: '0.5',
-                                          description: 'Model score (0-1)'
-                                        },
-                                        {
-                                          name: 'use_reasoning',
-                                          label: 'Use Reasoning',
-                                          type: 'boolean',
-                                          description: 'Enable reasoning for this model in this category'
+                                        openEditModal(
+                                          `Edit Model: ${modelScore.model}`,
+                                          { ...modelScore },
+                                          [
+                                            {
+                                              name: 'model',
+                                              label: 'Model',
+                                              type: 'select',
+                                              options: availableModels,
+                                              required: true,
+                                              description: 'Select from configured models'
+                                            },
+                                            {
+                                              name: 'score',
+                                              label: 'Score',
+                                              type: 'number',
+                                              required: true,
+                                              placeholder: '0.5',
+                                              description: 'Model score (0-1)'
+                                            },
+                                            {
+                                              name: 'use_reasoning',
+                                              label: 'Use Reasoning',
+                                              type: 'boolean',
+                                              description: 'Enable reasoning for this model in this category'
+                                            }
+                                          ],
+                                          async (data) => {
+                                            // For legacy object format, we need to convert back
+                                            const newConfig = { ...config }
+                                            if (newConfig.categories) {
+                                              const updatedCategory = { ...category }
+                                              // Convert to array format for consistency
+                                              const scores = normalizeModelScores(updatedCategory.model_scores)
+                                              scores[modelIdx] = data
+                                              updatedCategory.model_scores = scores
+                                              newConfig.categories[index] = updatedCategory
+                                            }
+                                            await saveConfig(newConfig)
+                                          }
+                                        )
+                                      }}
+                                    >
+
+                                    </button>
+                                    <button
+                                      className={styles.deleteButton}
+                                      onClick={() => {
+                                        if (confirm(`Remove model "${modelScore.model}" from this category?`)) {
+                                          const newConfig = { ...config }
+                                          if (newConfig.categories) {
+                                            const updatedCategory = { ...category }
+                                            // Convert to array format for consistency
+                                            const scores = normalizeModelScores(updatedCategory.model_scores)
+                                            scores.splice(modelIdx, 1)
+                                            updatedCategory.model_scores = scores
+                                            newConfig.categories[index] = updatedCategory
+                                          }
+                                          saveConfig(newConfig)
                                         }
-                                      ],
-                                      async (data) => {
-                                        // For legacy object format, we need to convert back
-                                        const newConfig = { ...config }
-                                        if (newConfig.categories) {
-                                          const updatedCategory = { ...category }
-                                          // Convert to array format for consistency
-                                          const scores = normalizeModelScores(updatedCategory.model_scores)
-                                          scores[modelIdx] = data
-                                          updatedCategory.model_scores = scores
-                                          newConfig.categories[index] = updatedCategory
-                                        }
-                                        await saveConfig(newConfig)
-                                      }
-                                    )
-                                  }}
-                                >
+                                      }}
+                                    >
 
-                                </button>
-                                <button
-                                  className={styles.deleteButton}
-                                  onClick={() => {
-                                    if (confirm(`Remove model "${modelScore.model}" from this category?`)) {
-                                      const newConfig = { ...config }
-                                      if (newConfig.categories) {
-                                        const updatedCategory = { ...category }
-                                        // Convert to array format for consistency
-                                        const scores = normalizeModelScores(updatedCategory.model_scores)
-                                        scores.splice(modelIdx, 1)
-                                        updatedCategory.model_scores = scores
-                                        newConfig.categories[index] = updatedCategory
-                                      }
-                                      saveConfig(newConfig)
-                                    }
-                                  }}
-                                >
-
-                                </button>
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             </div>
                           ))
@@ -1659,7 +1683,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
         <h3 className={styles.sectionTitle}>Tools Configuration</h3>
-        {routerConfig.tools && (
+        {routerConfig.tools && !isReadonly && (
           <button
             className={styles.sectionEditButton}
             onClick={() => {
@@ -1846,7 +1870,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
         <h3 className={styles.sectionTitle}>Distributed Tracing</h3>
-        {routerConfig.observability?.tracing && (
+        {routerConfig.observability?.tracing && !isReadonly && (
           <button
             className={styles.sectionEditButton}
             onClick={() => {
@@ -1969,7 +1993,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
         <h3 className={styles.sectionTitle}>Batch Classification API</h3>
-        {routerConfig.api?.batch_classification && (
+        {routerConfig.api?.batch_classification && !isReadonly && (
           <button
             className={styles.sectionEditButton}
             onClick={() => {
@@ -2611,6 +2635,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           onSearchChange={setSignalsSearch}
           onAdd={() => openSignalEditor('add')}
           addButtonText="Add Signal"
+          disabled={isReadonly}
         />
 
         {isPythonCLI ? (
@@ -2622,6 +2647,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             onEdit={handleEditSignal}
             onDelete={handleDeleteSignal}
             emptyMessage={signalsSearch ? 'No signals match your search' : 'No signals configured'}
+            readonly={isReadonly}
           />
         ) : (
           <div className={styles.emptyState}>
@@ -3264,6 +3290,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           onSearchChange={setDecisionsSearch}
           onAdd={() => openDecisionEditor('add')}
           addButtonText="Add Decision"
+          disabled={isReadonly}
         />
 
         {isPythonCLI ? (
@@ -3275,6 +3302,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             onEdit={handleEditDecision}
             onDelete={handleDeleteDecision}
             emptyMessage={decisionsSearch ? 'No decisions match your search' : 'No routing decisions configured'}
+            readonly={isReadonly}
           />
         ) : (
           <div className={styles.emptyState}>
@@ -3964,6 +3992,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           onSearchChange={() => { }}
           onAdd={handleAddReasoningFamily}
           addButtonText="Add Family"
+          disabled={isReadonly}
         />
 
         <DataTable
@@ -3974,6 +4003,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           onEdit={(row) => handleEditReasoningFamily(row.name)}
           onDelete={(row) => handleDeleteReasoningFamily(row.name)}
           emptyMessage="No reasoning families configured"
+          readonly={isReadonly}
         />
 
         {/* Models Table */}
@@ -3986,6 +4016,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             onSearchChange={setModelsSearch}
             onAdd={handleAddModel}
             addButtonText="Add Model"
+            disabled={isReadonly}
           />
 
           <DataTable
@@ -4000,6 +4031,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             isRowExpanded={(row) => expandedModels.has(row.name)}
             onToggleExpand={handleToggleExpand}
             emptyMessage={modelsSearch ? 'No models match your search' : 'No models configured'}
+            readonly={isReadonly}
           />
         </div>
       </div>
@@ -4051,6 +4083,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
   return (
     <div className={styles.container}>
+      <ReadonlyBanner />
 
       <div className={styles.content}>
         {loading && (

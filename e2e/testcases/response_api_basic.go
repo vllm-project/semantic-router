@@ -35,6 +35,11 @@ func init() {
 		Tags:        []string{"response-api", "functional"},
 		Fn:          testResponseAPIInputItems,
 	})
+	pkgtestcases.Register("response-api-ttl-expiry", pkgtestcases.TestCase{
+		Description: "Response API TTL expiry - Response should disappear after TTL",
+		Tags:        []string{"response-api", "functional", "redis"},
+		Fn:          testResponseAPITTLExpiry,
+	})
 }
 
 // ResponseAPIRequest represents a Response API request
@@ -502,4 +507,64 @@ func createTestResponseWithInstructions(ctx context.Context, localPort string, v
 	}
 
 	return apiResp.ID, nil
+}
+
+// testResponseAPITTLExpiry verifies that stored responses expire after TTL.
+func testResponseAPITTLExpiry(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+	if opts.Verbose {
+		fmt.Println("[Test] Testing Response API: TTL expiry")
+	}
+
+	localPort, stopPortForward, err := setupServiceConnection(ctx, client, opts)
+	if err != nil {
+		return err
+	}
+	defer stopPortForward()
+
+	responseID, err := createTestResponse(ctx, localPort, opts.Verbose)
+	if err != nil {
+		return fmt.Errorf("failed to create test response: %w", err)
+	}
+
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+	url := fmt.Sprintf("http://localhost:%s/v1/responses/%s", localPort, responseID)
+
+	// Confirm it exists immediately.
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("expected status 200 before TTL expiry, got %d", resp.StatusCode)
+	}
+
+	// Poll until it expires (404) or timeout.
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return fmt.Errorf("failed to create request: %w", err)
+		}
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to send request: %w", err)
+		}
+		resp.Body.Close()
+
+		if resp.StatusCode == http.StatusNotFound {
+			if opts.Verbose {
+				fmt.Printf("[Test] ✅ TTL expiry confirmed (id=%s)\n", responseID)
+			}
+			return nil
+		}
+
+		time.Sleep(1 * time.Second)
+	}
+
+	return fmt.Errorf("expected response to expire (404) within timeout, id=%s", responseID)
 }

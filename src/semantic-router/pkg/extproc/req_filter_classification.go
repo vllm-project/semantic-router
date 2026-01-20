@@ -55,15 +55,16 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	ctx.VSRMatchedFactCheck = signals.MatchedFactCheckRules
 	ctx.VSRMatchedUserFeedback = signals.MatchedUserFeedbackRules
 	ctx.VSRMatchedPreference = signals.MatchedPreferenceRules
+	ctx.VSRMatchedLanguage = signals.MatchedLanguageRules
 
 	// Set fact-check context fields from signal results
 	// This replaces the old performFactCheckClassification call to avoid duplicate computation
 	r.setFactCheckFromSignals(ctx, signals.MatchedFactCheckRules)
 
 	// Log signal evaluation results
-	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v",
+	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
-		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules)
+		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules, signals.MatchedLanguageRules)
 
 	// Perform decision evaluation using pre-computed signals
 	// This is ALWAYS done when decisions are configured, regardless of model type,

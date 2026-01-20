@@ -2807,9 +2807,9 @@ func TestSetReasoningModeToRequestBody(t *testing.T) {
 			model:                      "gpt-oss-model",
 			enabled:                    false,
 			initialReasoningEffort:     "low",
-			expectReasoningEffortKey:   true,
-			expectedReasoningEffort:    "low",
-			expectedChatTemplateKwargs: false,
+			expectReasoningEffortKey:   false,
+			expectedReasoningEffort:    nil,
+			expectedChatTemplateKwargs: true,
 		},
 		{
 			name:                       "Phi4 model with reasoning disabled - remove reasoning_effort",
@@ -2843,9 +2843,9 @@ func TestSetReasoningModeToRequestBody(t *testing.T) {
 			model:                      "gpt-oss-model",
 			enabled:                    true,
 			initialReasoningEffort:     "low",
-			expectReasoningEffortKey:   true,
-			expectedReasoningEffort:    "medium",
-			expectedChatTemplateKwargs: false,
+			expectReasoningEffortKey:   false,
+			expectedReasoningEffort:    nil,
+			expectedChatTemplateKwargs: true,
 		},
 		{
 			name:                       "DeepSeek model with reasoning enabled - set chat_template_kwargs",
@@ -2939,17 +2939,32 @@ func TestSetReasoningModeToRequestBody(t *testing.T) {
 				}
 
 				// Validate the specific parameter for chat_template_kwargs families.
-				// (Different families use different parameter names, but the value should match tc.enabled.)
+				// (Different families use different parameter names)
 				if v, exists := kwargs["thinking"]; exists {
+					// DeepSeek family: thinking should be a boolean matching tc.enabled
 					if v != tc.enabled {
 						t.Fatalf("Expected chat_template_kwargs.thinking to be %v, got %v", tc.enabled, v)
 					}
 				} else if v, exists := kwargs["enable_thinking"]; exists {
+					// Qwen3 family: enable_thinking should be a boolean matching tc.enabled
 					if v != tc.enabled {
 						t.Fatalf("Expected chat_template_kwargs.enable_thinking to be %v, got %v", tc.enabled, v)
 					}
+				} else if v, exists := kwargs["reasoning_effort"]; exists {
+					// GPT-OSS family: reasoning_effort should be a string
+					// When enabled, it should be "medium" (default), when disabled it should preserve the original value
+					if tc.enabled {
+						if v != "medium" {
+							t.Fatalf("Expected chat_template_kwargs.reasoning_effort to be 'medium' when enabled, got %v", v)
+						}
+					} else {
+						// When disabled, it should preserve the original value
+						if tc.initialReasoningEffort != nil && v != tc.initialReasoningEffort {
+							t.Fatalf("Expected chat_template_kwargs.reasoning_effort to be %v when disabled, got %v", tc.initialReasoningEffort, v)
+						}
+					}
 				} else {
-					t.Fatalf("Expected chat_template_kwargs to contain either 'thinking' or 'enable_thinking', got keys=%v", mapKeys(kwargs))
+					t.Fatalf("Expected chat_template_kwargs to contain 'thinking', 'enable_thinking', or 'reasoning_effort', got keys=%v", mapKeys(kwargs))
 				}
 			}
 		})

@@ -65,6 +65,10 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Signal: Preference',
     description: 'User preference match',
   },
+  'x-vsr-matched-language': {
+    label: 'Signal: Language',
+    description: 'Detected language match',
+  },
   // Looper headers
   'x-vsr-looper-model': {
     label: 'Final Model',
