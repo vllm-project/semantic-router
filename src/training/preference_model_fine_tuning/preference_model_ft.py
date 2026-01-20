@@ -437,7 +437,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--label-map-path",
         type=Path,
-        default=Path("sample_id_to_label.json"),
+        default=Path("verified_sharegpt_policy_labels_2.jsonl"),
         help="Path to sample_id -> label mapping (JSON or JSONL).",
     )
     parser.add_argument(
@@ -599,8 +599,6 @@ def train(args: argparse.Namespace) -> None:
         mlm=False,
     )
 
-    eval_strategy = "epoch" if eval_dataset is not None else "no"
-
     training_args = TrainingArguments(
         output_dir=args.output_dir,
         num_train_epochs=args.epochs,
@@ -612,8 +610,6 @@ def train(args: argparse.Namespace) -> None:
         weight_decay=0.01,
         logging_steps=args.logging_steps,
         save_total_limit=args.save_total_limit,
-        save_strategy=eval_strategy,
-        evaluation_strategy=eval_strategy,
         report_to=[],
         fp16=args.fp16,
         bf16=args.bf16,
