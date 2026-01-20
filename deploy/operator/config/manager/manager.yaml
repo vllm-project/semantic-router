@@ -36,15 +36,13 @@ spec:
         args:
         - --leader-elect
         image: controller:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         name: manager
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
             drop:
             - ALL
-          readOnlyRootFilesystem: true
-          runAsUser: 65532
         livenessProbe:
           httpGet:
             path: /healthz
