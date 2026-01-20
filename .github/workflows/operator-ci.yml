@@ -17,7 +17,7 @@ on:
       - '.github/workflows/operator-ci.yml'
 
 env:
-  GO_VERSION: '1.23'
+  GO_VERSION: '1.24'
 
 jobs:
   lint:
@@ -231,13 +231,13 @@ jobs:
 
       - name: Install kubectl
         run: |
-          curl -LO "https://dl.k8s.io/release/v1.29.0/bin/linux/amd64/kubectl"
+          curl -LO "https://dl.k8s.io/release/v1.33.0/bin/linux/amd64/kubectl"
           chmod +x kubectl
           sudo mv kubectl /usr/local/bin/kubectl
 
       - name: Create kind cluster
         run: |
-          cat <<EOF | kind create cluster --name operator-test --config=-
+          cat <<EOF | kind create cluster --name operator-test --image kindest/node:v1.33.7@sha256:d26ef333bdb2cbe9862a0f7c3803ecc7b4303d8cea8e814b481b09949d353040 --config=-
           kind: Cluster
           apiVersion: kind.x-k8s.io/v1alpha4
           nodes:
@@ -245,6 +245,13 @@ jobs:
           EOF
           kubectl cluster-info
           kubectl get nodes
+
+      - name: Install Gateway API CRDs
+        run: |
+          echo "Installing Gateway API CRDs..."
+          kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.0.0/standard-install.yaml
+          kubectl wait --for condition=established --timeout=60s crd/gateways.gateway.networking.k8s.io
+          kubectl wait --for condition=established --timeout=60s crd/httproutes.gateway.networking.k8s.io
 
       - name: Download operator binary artifact
         uses: actions/download-artifact@v4

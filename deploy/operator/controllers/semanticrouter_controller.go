@@ -923,7 +923,7 @@ func (r *SemanticRouterReconciler) generateEnvoyContainer(sr *vllmv1alpha1.Seman
 		Name:            "envoy-proxy",
 		Image:           envoyImage,
 		ImagePullPolicy: corev1.PullIfNotPresent,
-		Command: []string{"/usr/local/bin/envoy"},
+		Command:         []string{"/usr/local/bin/envoy"},
 		Args: []string{
 			"-c",
 			"/etc/envoy/envoy.yaml",
