@@ -1,7 +1,18 @@
 """Configuration validator for vLLM Semantic Router."""
 
 from typing import Dict, Any, List
-from cli.models import UserConfig
+from cli.models import (
+    UserConfig,
+    PluginType,
+    SemanticCachePluginConfig,
+    JailbreakPluginConfig,
+    PIIPluginConfig,
+    SystemPromptPluginConfig,
+    HeaderMutationPluginConfig,
+    HallucinationPluginConfig,
+    RouterReplayPluginConfig,
+)
+from pydantic import ValidationError as PydanticValidationError
 from cli.utils import getLogger
 from cli.consts import EXTERNAL_API_MODEL_FORMATS
 
@@ -206,6 +217,69 @@ def validate_merged_config(merged_config: Dict[str, Any]) -> List[ValidationErro
     return errors
 
 
+def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
+    """
+    Validate plugin configurations match their plugin types.
+
+    Args:
+        config: User configuration
+
+    Returns:
+        list: List of validation errors
+    """
+    errors = []
+
+    # Map plugin types to their configuration models
+    config_models = {
+        PluginType.SEMANTIC_CACHE.value: SemanticCachePluginConfig,
+        PluginType.JAILBREAK.value: JailbreakPluginConfig,
+        PluginType.PII.value: PIIPluginConfig,
+        PluginType.SYSTEM_PROMPT.value: SystemPromptPluginConfig,
+        PluginType.HEADER_MUTATION.value: HeaderMutationPluginConfig,
+        PluginType.HALLUCINATION.value: HallucinationPluginConfig,
+        PluginType.ROUTER_REPLAY.value: RouterReplayPluginConfig,
+    }
+
+    for decision in config.decisions:
+        if not decision.plugins:
+            continue
+
+        for idx, plugin in enumerate(decision.plugins):
+            # plugin.type is now a PluginType enum, get its string value
+            plugin_type = (
+                plugin.type.value if hasattr(plugin.type, "value") else str(plugin.type)
+            )
+            plugin_config = plugin.configuration
+
+            # Get the appropriate config model for this plugin type
+            config_model = config_models.get(plugin_type)
+            if config_model:
+                try:
+                    # Validate configuration against the plugin-specific model
+                    config_model(**plugin_config)
+                except PydanticValidationError as e:
+                    error_messages = []
+                    for error in e.errors():
+                        field = " -> ".join(str(x) for x in error["loc"])
+                        msg = error["msg"]
+                        error_messages.append(f"{field}: {msg}")
+                    errors.append(
+                        ValidationError(
+                            f"Decision '{decision.name}' plugin #{idx + 1} ({plugin_type}) has invalid configuration: {', '.join(error_messages)}",
+                            field=f"decisions.{decision.name}.plugins[{idx}]",
+                        )
+                    )
+                except Exception as e:
+                    errors.append(
+                        ValidationError(
+                            f"Decision '{decision.name}' plugin #{idx + 1} ({plugin_type}) configuration validation failed: {e}",
+                            field=f"decisions.{decision.name}.plugins[{idx}]",
+                        )
+                    )
+
+    return errors
+
+
 def validate_user_config(config: UserConfig) -> List[ValidationError]:
     """
     Validate user configuration.
@@ -228,6 +302,9 @@ def validate_user_config(config: UserConfig) -> List[ValidationError]:
 
     # Validate model references
     errors.extend(validate_model_references(config))
+
+    # Validate plugin configurations
+    errors.extend(validate_plugin_configurations(config))
 
     if errors:
         log.warning(f"Found {len(errors)} validation error(s)")

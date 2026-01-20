@@ -3,7 +3,7 @@
 import copy
 from typing import Dict, Any, List
 
-from cli.models import UserConfig, Domain
+from cli.models import UserConfig, PluginType
 from cli.defaults import load_embedded_defaults
 from cli.utils import getLogger
 
@@ -406,7 +406,21 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
         )
 
     # Add decisions (convert to dict)
-    merged["decisions"] = [decision.model_dump() for decision in user_config.decisions]
+    # Use mode='python' to ensure proper enum handling
+    decisions_list = []
+    for decision in user_config.decisions:
+        decision_dict = decision.model_dump(mode="python")
+        # Post-process plugins to ensure PluginType enums are converted to strings
+        if "plugins" in decision_dict and decision_dict["plugins"]:
+            for plugin in decision_dict["plugins"]:
+                if "type" in plugin:
+                    # Convert PluginType enum to string value
+                    if isinstance(plugin["type"], PluginType):
+                        plugin["type"] = plugin["type"].value
+                    elif hasattr(plugin["type"], "value"):
+                        plugin["type"] = plugin["type"].value
+        decisions_list.append(decision_dict)
+    merged["decisions"] = decisions_list
     log.info(f"  Added {len(user_config.decisions)} decisions")
 
     # Translate providers
