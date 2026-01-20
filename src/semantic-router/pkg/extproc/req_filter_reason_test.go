@@ -165,7 +165,7 @@ func TestReasoningModeComprehensive(t *testing.T) {
 			expectedChatTemplateParam: "enable_thinking",
 			expectedChatTemplateValue: false,
 		},
-		// Test 5: GPT-OSS with reasoning enabled - should use both chat_template_kwargs and reasoning_effort
+		// Test 5: GPT-OSS with reasoning enabled - should use chat_template_kwargs with reasoning_effort inside
 		{
 			name:                      "GPT-OSS - reasoning enabled with high effort",
 			model:                     "gpt-oss-model",
@@ -174,10 +174,9 @@ func TestReasoningModeComprehensive(t *testing.T) {
 			expectChatTemplateKwargs:  true,
 			expectedChatTemplateParam: "reasoning_effort",
 			expectedChatTemplateValue: "medium", // Falls back to default
-			expectReasoningEffortKey:  true,
-			expectedReasoningEffort:   "medium",
+			expectReasoningEffortKey:  false,
 		},
-		// Test 6: GPT-OSS with reasoning disabled - should preserve reasoning_effort in both places
+		// Test 6: GPT-OSS with reasoning disabled - should preserve reasoning_effort inside chat_template_kwargs
 		{
 			name:                      "GPT-OSS - reasoning disabled preserves effort",
 			model:                     "gpt-oss-model",
@@ -187,8 +186,7 @@ func TestReasoningModeComprehensive(t *testing.T) {
 			expectChatTemplateKwargs:  true,
 			expectedChatTemplateParam: "reasoning_effort",
 			expectedChatTemplateValue: "low",
-			expectReasoningEffortKey:  true,
-			expectedReasoningEffort:   "low",
+			expectReasoningEffortKey:  false,
 		},
 		// Test 7: Claude with reasoning enabled
 		{
@@ -451,8 +449,13 @@ func TestReasoningEffortLevels(t *testing.T) {
 			err = json.Unmarshal(modifiedBytes, &modifiedRequest)
 			require.NoError(t, err)
 
-			reasoningEffort, exists := modifiedRequest["reasoning_effort"]
-			require.True(t, exists, "reasoning_effort should exist")
+			// reasoning_effort should be inside chat_template_kwargs for GPT-OSS models
+			chatTemplateKwargs, exists := modifiedRequest["chat_template_kwargs"]
+			require.True(t, exists, "chat_template_kwargs should exist")
+			kwargs, ok := chatTemplateKwargs.(map[string]interface{})
+			require.True(t, ok, "chat_template_kwargs should be a map")
+			reasoningEffort, exists := kwargs["reasoning_effort"]
+			require.True(t, exists, "reasoning_effort should exist in chat_template_kwargs")
 			assert.Equal(t, tt.expectedEffort, reasoningEffort)
 		})
 	}
