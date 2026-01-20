@@ -507,7 +507,7 @@ Return a JSON dict that represents the mapping in the format:
         refined_policy_label_mappings = json.loads(refined_dataset_path.read_text())
         # build sample_id_to_label_mapping
         sample_id_to_canonical_label: dict[str, str] = {}
-
+        canonical_labels_set = set(refined_policy_label_mappings.values())
         for item in route_policy_samples:
             sample_id = item.get("sample_id")
             label = item.get("label")
@@ -533,7 +533,7 @@ Return a JSON dict that represents the mapping in the format:
                     self._verify_policies_for_sample,
                     sample,
                     sample_id_to_canonical_label[sample.sample_id],
-                    refined_policy_label_mappings,
+                    canonical_labels_set,
                 )
                 for sample in batch_filtered
             ]
@@ -576,7 +576,7 @@ Return a JSON dict that represents the mapping in the format:
         self,
         sample: ShareGPTConversation,
         canonical_label: str,
-        refined_policy_label_mappings: dict[str, str],
+        canonical_labels_set: set[str],
     ) -> RoutePolicySample:
         """Verify the policy label for one conversation."""
         verify_policy_prompt = f"""You are an expert at verifying routing policy labels.
@@ -584,7 +584,7 @@ Return a JSON dict that represents the mapping in the format:
 Given the following conversation and its assigned routing policy label, determine if the label accurately reflects the user's intent.
 If the label is appropriate, return the same label.
 If the label is inappropriate or the label is too general, suggest a more suitable/specific label from the following canonical label set:
-{json.dumps(list(refined_policy_label_mappings.values()))}
+{json.dumps(list(canonical_labels_set))}
 
 
 ### Assigned Label
@@ -673,7 +673,7 @@ def main() -> None:
             refined_dataset_path=refined_dataset_path,
             output_path=Path("verified_sharegpt_policy_labels_2.jsonl"),
             batch_size=20,
-            start_index=0,
+            start_index=34066,
         )
     )
 
