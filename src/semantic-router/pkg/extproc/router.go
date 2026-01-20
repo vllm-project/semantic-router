@@ -3,7 +3,10 @@ package extproc
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strconv"
 	"strings"
+	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -16,6 +19,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responsestore"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
@@ -183,24 +187,21 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	// Create Response API filter if enabled
 	var responseAPIFilter *ResponseAPIFilter
 	if cfg.ResponseAPI.Enabled {
-		responseStore, err := createResponseStore(cfg)
-		if err != nil {
-			logging.Warnf("Failed to create response store: %v, Response API will be disabled", err)
+		responseStore, storeErr := createResponseStore(cfg)
+		if storeErr != nil {
+			logging.Warnf("Failed to create response store: %v, Response API will be disabled", storeErr)
 		} else {
 			responseAPIFilter = NewResponseAPIFilter(responseStore)
 			logging.Infof("Response API enabled with %s backend", cfg.ResponseAPI.StoreBackend)
 		}
 	}
 
-	replayMax := routerreplay.DefaultMaxRecords
-	for _, d := range cfg.Decisions {
-		if replayCfg := d.GetRouterReplayConfig(); replayCfg != nil && replayCfg.Enabled {
-			if replayCfg.MaxRecords > replayMax {
-				replayMax = replayCfg.MaxRecords
-			}
-		}
+	// Create replay recorder with store support
+	replayRecorder, err := createReplayRecorder(cfg)
+	if err != nil {
+		logging.Warnf("Failed to create replay recorder with store: %v, using in-memory fallback", err)
+		replayRecorder = routerreplay.NewRecorder(routerreplay.DefaultMaxRecords)
 	}
-	replayRecorder := routerreplay.NewRecorder(replayMax)
 
 	// Initialize model selection registry with default configs
 	// Actual selection method is determined per-decision via algorithm config (aligned with looper)
@@ -326,37 +327,101 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 }
 
 // handleRouterReplayAPI serves read-only endpoints for router replay records.
+// Supports pagination and filtering via query parameters:
+//   - limit: max records to return (default 20, max 100)
+//   - after: cursor for forward pagination (record ID)
+//   - order: sort order "asc" or "desc" (default "desc")
+//   - decision: filter by decision name
+//   - category: filter by category
+//   - model: filter by selected model
+//   - request_id: filter by request ID
+//   - start_time: filter records after this time (RFC3339)
+//   - end_time: filter records before this time (RFC3339)
+//   - from_cache: filter by cache hit status (true/false)
 func (r *OpenAIRouter) handleRouterReplayAPI(method string, path string) *ext_proc.ProcessingResponse {
 	// If recorder is not initialized, the feature is effectively disabled.
 	if r.ReplayRecorder == nil {
 		return nil
 	}
 
-	// Strip query string
+	// Parse query string
+	var queryParams url.Values
+	cleanPath := path
 	if idx := strings.Index(path, "?"); idx != -1 {
-		path = path[:idx]
+		cleanPath = path[:idx]
+		var err error
+		queryParams, err = url.ParseQuery(path[idx+1:])
+		if err != nil {
+			queryParams = url.Values{}
+		}
+	} else {
+		queryParams = url.Values{}
 	}
 
 	base := "/v1/router_replay"
-	if path == base || path == base+"/" {
+	if cleanPath == base || cleanPath == base+"/" {
 		if method != "GET" {
 			return r.createErrorResponse(405, "method not allowed")
 		}
 
-		records := r.ReplayRecorder.ListAllRecords()
-		payload := map[string]interface{}{
-			"object": "router_replay.list",
-			"count":  len(records),
-			"data":   records,
+		// Build list options from query parameters
+		opts := store.ListOptions{
+			Limit:        parseIntQueryParam(queryParams, "limit", store.DefaultListLimit),
+			After:        queryParams.Get("after"),
+			Before:       queryParams.Get("before"),
+			Order:        queryParams.Get("order"),
+			DecisionName: queryParams.Get("decision"),
+			Category:     queryParams.Get("category"),
+			Model:        queryParams.Get("model"),
+			RequestID:    queryParams.Get("request_id"),
 		}
+
+		// Parse time filters
+		if startStr := queryParams.Get("start_time"); startStr != "" {
+			if t, err := time.Parse(time.RFC3339, startStr); err == nil {
+				opts.StartTime = &t
+			}
+		}
+		if endStr := queryParams.Get("end_time"); endStr != "" {
+			if t, err := time.Parse(time.RFC3339, endStr); err == nil {
+				opts.EndTime = &t
+			}
+		}
+
+		// Parse from_cache filter
+		if fromCacheStr := queryParams.Get("from_cache"); fromCacheStr != "" {
+			fromCache := fromCacheStr == "true"
+			opts.FromCache = &fromCache
+		}
+
+		// List records with pagination
+		result, err := r.ReplayRecorder.ListRecords(opts)
+		if err != nil {
+			logging.Warnf("Failed to list replay records: %v", err)
+			return r.createErrorResponse(500, "failed to list records")
+		}
+
+		payload := map[string]interface{}{
+			"object":   "router_replay.list",
+			"count":    len(result.Records),
+			"data":     result.Records,
+			"has_more": result.HasMore,
+		}
+		if result.FirstID != "" {
+			payload["first_id"] = result.FirstID
+		}
+		if result.LastID != "" {
+			payload["last_id"] = result.LastID
+		}
+
 		return r.createJSONResponse(200, payload)
 	}
 
-	if strings.HasPrefix(path, base+"/") {
+	if strings.HasPrefix(cleanPath, base+"/") {
 		if method != "GET" {
 			return r.createErrorResponse(405, "method not allowed")
 		}
-		replayID := strings.TrimPrefix(path, base+"/")
+		replayID := strings.TrimPrefix(cleanPath, base+"/")
 		if replayID == "" {
 			return r.createErrorResponse(400, "replay id is required")
 		}
@@ -368,6 +433,16 @@ func (r *OpenAIRouter) handleRouterReplayAPI(method string, path string) *ext_pr
 	}
 
 	return nil
+}
+
+// parseIntQueryParam parses an integer query parameter with a default value.
+func parseIntQueryParam(params url.Values, key string, defaultVal int) int {
+	if val := params.Get(key); val != "" {
+		if i, err := strconv.Atoi(val); err == nil {
+			return i
+		}
+	}
+	return defaultVal
 }
 
 // createJSONResponseWithBody creates a direct response with pre-marshaled JSON body
@@ -468,6 +543,90 @@ func createResponseStore(cfg *config.RouterConfig) (responsestore.ResponseStore,
 	}
 
 	return responsestore.NewStore(storeConfig)
+}
+
+// createReplayRecorder creates a replay recorder based on configuration.
+// It examines all decisions to find router_replay plugin configurations
+// and uses the first enabled one to configure the store backend.
+func createReplayRecorder(cfg *config.RouterConfig) (*routerreplay.Recorder, error) {
+	// Find the first enabled router_replay configuration
+	var replayCfg *config.RouterReplayPluginConfig
+	maxRecords := routerreplay.DefaultMaxRecords
+
+	for _, d := range cfg.Decisions {
+		if rc := d.GetRouterReplayConfig(); rc != nil && rc.Enabled {
+			if replayCfg == nil {
+				replayCfg = rc
+			}
+			if rc.MaxRecords > maxRecords {
+				maxRecords = rc.MaxRecords
+			}
+		}
+	}
+
+	// If no router_replay config found, use legacy in-memory recorder
+	if replayCfg == nil {
+		logging.Debugf("No router_replay configuration found, using in-memory recorder")
+		return routerreplay.NewRecorder(maxRecords), nil
+	}
+
+	// Determine store backend
+	backendType := store.MemoryStoreType
+	if replayCfg.StoreBackend != "" {
+		backendType = store.StoreBackendType(replayCfg.StoreBackend)
+	}
+
+	// Build store config
+	storeConfig := store.StoreConfig{
+		BackendType: backendType,
+		Enabled:     true,
+		TTLSeconds:  replayCfg.TTLSeconds,
+		MaxRecords:  maxRecords,
+		Memory: store.MemoryStoreConfig{
+			MaxRecords: maxRecords,
+		},
+		Redis: store.RedisStoreConfig{
+			Address:    replayCfg.Redis.Address,
+			Database:   replayCfg.Redis.DB,
+			Password:   replayCfg.Redis.Password,
+			KeyPrefix:  replayCfg.Redis.KeyPrefix,
+			TTLSeconds: replayCfg.TTLSeconds,
+		},
+	}
+
+	// Validate configuration
+	if err := store.ValidateConfig(storeConfig); err != nil {
+		return nil, fmt.Errorf("invalid replay store configuration: %w", err)
+	}
+
+	// Build async writer config
+	asyncConfig := store.DefaultAsyncWriterConfig()
+	if replayCfg.WriteBufferSize > 0 {
+		asyncConfig.BufferSize = replayCfg.WriteBufferSize
+	}
+	if replayCfg.WriteWorkers > 0 {
+		asyncConfig.Workers = replayCfg.WriteWorkers
+	}
+
+	// Build recorder config
+	recorderConfig := routerreplay.RecorderConfig{
+		StoreConfig:         storeConfig,
+		AsyncConfig:         asyncConfig,
+		UseAsyncWrites:      replayCfg.AsyncWrites,
+		MaxBodyBytes:        replayCfg.MaxBodyBytes,
+		CaptureRequestBody:  replayCfg.CaptureRequestBody,
+		CaptureResponseBody: replayCfg.CaptureResponseBody,
+	}
+
+	recorder, err := routerreplay.NewRecorderWithStore(recorderConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create replay recorder: %w", err)
+	}
+
+	logging.Infof("Replay recorder created with %s backend, async_writes=%v, max_records=%d",
+		backendType, replayCfg.AsyncWrites, maxRecords)
+
+	return recorder, nil
 }
 
 // LoadToolsDatabase loads tools from file after embedding models are initialized
