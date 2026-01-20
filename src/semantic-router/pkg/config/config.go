@@ -293,7 +293,7 @@ type Signals struct {
 	LanguageRules []LanguageRule `yaml:"language_rules,omitempty"`
 
 	// Complexity rules for task complexity scoring
-	// When matched, outputs the complexity rule name (optional if using numeric conditions).
+	// When matched, outputs the name of the complexity rule representing the estimated complexity
 	ComplexityRules []ComplexityRule `yaml:"complexity_rules,omitempty"`
 }
 
@@ -326,7 +326,7 @@ type Classifier struct {
 	// PII detection model
 	PIIModel `yaml:"pii_model"`
 	// Complexity regressor model
-	ComplexityModel ComplexityModelConfig `yaml:"complexity_model,omitempty"`
+	ComplexityModel `yaml:"complexity_model,omitempty"`
 }
 
 type BertModel struct {
@@ -353,9 +353,7 @@ type PIIModel struct {
 	PIIMappingPath string  `yaml:"pii_mapping_path"`
 }
 
-// ComplexityModelConfig represents configuration for complexity regression
-// The model returns a score between 0 and 1 (higher means more complex).
-type ComplexityModelConfig struct {
+type ComplexityModel struct {
 	// Hugging Face model URL or repo ID (required)
 	ModelURL string `yaml:"model_url"`
 
@@ -1633,19 +1631,7 @@ type RuleCondition struct {
 
 	// Name is the name of the rule to reference
 	// For fact_check type, use "needs_fact_check" to match queries that need fact verification
-	// For numeric signals (e.g., complexity), Name is optional when using operator/value or min/max.
-	Name string `yaml:"name,omitempty"`
-
-	// Operator defines numeric comparison for signals like complexity
-	// Supported operators: "<", "<=", ">", ">=", "=="
-	Operator string `yaml:"operator,omitempty"`
-
-	// Value is used with Operator for numeric comparisons
-	Value *float64 `yaml:"value,omitempty"`
-
-	// Min and Max define an inclusive range comparison when set
-	Min *float64 `yaml:"min,omitempty"`
-	Max *float64 `yaml:"max,omitempty"`
+	Name string `yaml:"name"`
 }
 
 // FactCheckRule defines a rule for fact-check signal classification

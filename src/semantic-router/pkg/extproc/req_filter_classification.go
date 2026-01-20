@@ -57,7 +57,6 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	ctx.VSRMatchedPreference = signals.MatchedPreferenceRules
 	ctx.VSRMatchedLanguage = signals.MatchedLanguageRules
 	ctx.VSRMatchedComplexity = signals.MatchedComplexityRules
-	ctx.VSRComplexityScore = signals.ComplexityScore
 
 	// Set fact-check context fields from signal results
 	// This replaces the old performFactCheckClassification call to avoid duplicate computation

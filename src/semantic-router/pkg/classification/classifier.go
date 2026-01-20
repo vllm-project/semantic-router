@@ -685,7 +685,6 @@ type SignalResults struct {
 	MatchedPreferenceRules   []string // Route preference names matched via external LLM
 	MatchedLanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
 	MatchedComplexityRules   []string // Complexity rule names matched by score
-	ComplexityScore          *float64 // Complexity score between 0 and 1
 }
 
 // analyzeRuleCombination recursively analyzes rule combinations to find used signals
@@ -941,7 +940,6 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 			matchedRules := c.matchComplexityRules(score)
 			mu.Lock()
 			results.MatchedComplexityRules = append(results.MatchedComplexityRules, matchedRules...)
-			results.ComplexityScore = &score
 			mu.Unlock()
 		}()
 	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeComplexity) {
@@ -1007,7 +1005,6 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		PreferenceRules:   signals.MatchedPreferenceRules,
 		LanguageRules:     signals.MatchedLanguageRules,
 		ComplexityRules:   signals.MatchedComplexityRules,
-		ComplexityScore:   signals.ComplexityScore,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("decision evaluation failed: %w", err)

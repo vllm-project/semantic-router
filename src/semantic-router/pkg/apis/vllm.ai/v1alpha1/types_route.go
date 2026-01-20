@@ -59,7 +59,7 @@ type Signals struct {
 
 	// Complexity defines task complexity signal extraction rules
 	// +optional
-	// +kubebuilder:validation:MaxItems=100
+	// +kubebuilder:validation:MaxItems=10
 	Complexity []ComplexitySignal `json:"complexity,omitempty" yaml:"complexity,omitempty"`
 }
 
@@ -224,32 +224,17 @@ type SignalCombination struct {
 
 // SignalCondition defines a single signal condition
 type SignalCondition struct {
-	// Type defines the type of signal (keyword/embedding/domain/fact_check)
+	// Type defines the type of signal (keyword/embedding/domain/fact_check/complexity)
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=keyword;embedding;domain;fact_check;complexity
 	Type string `json:"type" yaml:"type"`
 
 	// Name is the name of the signal to reference
 	// For fact_check type, use "needs_fact_check" to match queries that need fact verification
-	// +optional
+	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=100
-	Name string `json:"name,omitempty" yaml:"name,omitempty"`
-
-	// Operator defines numeric comparison for signals like complexity
-	// Supported operators: "<", "<=", ">", ">=", "=="
-	// +optional
-	Operator string `json:"operator,omitempty" yaml:"operator,omitempty"`
-
-	// Value is used with Operator for numeric comparisons
-	// +optional
-	Value *float64 `json:"value,omitempty" yaml:"value,omitempty"`
-
-	// Min and Max define an inclusive range comparison when set
-	// +optional
-	Min *float64 `json:"min,omitempty" yaml:"min,omitempty"`
-	// +optional
-	Max *float64 `json:"max,omitempty" yaml:"max,omitempty"`
+	Name string `json:"name" yaml:"name"`
 }
 
 // ModelRef defines a model reference without score

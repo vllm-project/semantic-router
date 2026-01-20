@@ -288,32 +288,41 @@ decisions:
       - model: "openai/gpt-oss-120b"
         use_reasoning: false
 
-  # Complexity-based routing with numeric conditions
+  # Complexity-based routing
   - name: "complexity_low"
-    description: "Route low complexity tasks using numeric rule conditions"
+    description: "Route low complexity tasks"
     priority: 80
     rules:
       operator: "AND"
       conditions:
         - type: "complexity"
-          operator: "<"
-          value: 0.2
+          name: "low_complexity"
     modelRefs:
       - model: "openai/gpt-oss-120b"
         use_reasoning: false
 
   - name: "complexity_mid"
-    description: "Route medium complexity tasks using numeric ranges"
+    description: "Route medium complexity tasks"
     priority: 80
     rules:
       operator: "AND"
       conditions:
         - type: "complexity"
-          min: 0.2
-          max: 0.8
+          name: "mid_complexity"
     modelRefs:
       - model: "openai/gpt-oss-120b"
         use_reasoning: true
+
+  - name: "complexity_high"
+    description: "Route high complexity tasks"
+    priority: 80
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "complexity"
+          name: "high_complexity"
+    modelRefs:
+      - model: "gpt-5.2"
 
   - name: "math_route"
     description: "Route mathematical queries with reasoning enabled"

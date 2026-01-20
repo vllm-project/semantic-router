@@ -179,7 +179,6 @@ type MatchedSignals struct {
 	UserFeedback []string `json:"user_feedback,omitempty"`
 	Preferences  []string `json:"preferences,omitempty"`
 	Complexity   []string `json:"complexity,omitempty"`
-	Score        *float64 `json:"complexity_score,omitempty"`
 }
 
 // DecisionResult represents the result of decision evaluation
@@ -261,7 +260,6 @@ func (s *ClassificationService) buildIntentResponseFromSignals(
 			UserFeedback: signals.MatchedUserFeedbackRules,
 			Preferences:  signals.MatchedPreferenceRules,
 			Complexity:   signals.MatchedComplexityRules,
-			Score:        signals.ComplexityScore,
 		}
 	}
 

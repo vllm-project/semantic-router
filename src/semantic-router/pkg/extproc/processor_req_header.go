@@ -77,7 +77,6 @@ type RequestContext struct {
 	VSRMatchedPreference   []string // Matched preference signals
 	VSRMatchedLanguage     []string // Matched language signals
 	VSRMatchedComplexity   []string // Matched complexity signals
-	VSRComplexityScore     *float64 // Complexity score (0-1)
 
 	// Endpoint tracking for windowed metrics
 	SelectedEndpoint string // The endpoint address selected for this request

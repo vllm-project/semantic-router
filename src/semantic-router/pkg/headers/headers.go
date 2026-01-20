@@ -90,9 +90,6 @@ const (
 	// VSRMatchedComplexity contains comma-separated list of matched complexity signals.
 	// Example: "low_complexity,mid_complexity"
 	VSRMatchedComplexity = "x-vsr-matched-complexity"
-
-	// VSRComplexityScore contains the numeric complexity score (0-1).
-	VSRComplexityScore = "x-vsr-complexity-score"
 )
 
 // Security Headers
