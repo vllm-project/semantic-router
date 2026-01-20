@@ -1,5 +1,9 @@
 """Dataset loader utilities for Qwen3 preference fine-tuning on ShareGPT."""
 
+# TODO:
+# 1. Try reranking instead of classification (this is more robust and gives confidence score)
+# 2. Try DPO for better alignment
+
 from __future__ import annotations
 
 import argparse
