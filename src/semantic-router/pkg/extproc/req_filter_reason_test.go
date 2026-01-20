@@ -720,7 +720,10 @@ func TestBuildReasoningRequestFields(t *testing.T) {
 			expectEffortReturn: "low",
 			verifyFunc: func(t *testing.T, fields map[string]interface{}) {
 				require.NotNil(t, fields)
-				effort, exists := fields["reasoning_effort"]
+				chatTemplate, exists := fields["chat_template_kwargs"]
+				require.True(t, exists)
+				kwargs := chatTemplate.(map[string]interface{})
+				effort, exists := kwargs["reasoning_effort"]
 				require.True(t, exists)
 				assert.Equal(t, "low", effort)
 			},
