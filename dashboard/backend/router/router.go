@@ -174,15 +174,18 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	// Health check endpoint
 	mux.HandleFunc("/healthz", handlers.HealthCheck)
 
+	// Settings endpoint for frontend (readonly mode, etc.)
+	mux.HandleFunc("/api/settings", handlers.SettingsHandler(cfg))
+
 	// Config endpoints - MUST be registered BEFORE proxy to take precedence
 	// In Go's ServeMux, exact path matches registered first take precedence over prefix handlers
 	mux.HandleFunc("/api/router/config/all", handlers.ConfigHandler(cfg.AbsConfigPath))
-	mux.HandleFunc("/api/router/config/update", handlers.UpdateConfigHandler(cfg.AbsConfigPath))
+	mux.HandleFunc("/api/router/config/update", handlers.UpdateConfigHandler(cfg.AbsConfigPath, cfg.ReadonlyMode))
 	log.Printf("Config API endpoints registered: /api/router/config/all, /api/router/config/update")
 
 	// Router defaults endpoints (for .vllm-sr/router-defaults.yaml)
 	mux.HandleFunc("/api/router/config/defaults", handlers.RouterDefaultsHandler(cfg.ConfigDir))
-	mux.HandleFunc("/api/router/config/defaults/update", handlers.UpdateRouterDefaultsHandler(cfg.ConfigDir))
+	mux.HandleFunc("/api/router/config/defaults/update", handlers.UpdateRouterDefaultsHandler(cfg.ConfigDir, cfg.ReadonlyMode))
 	log.Printf("Router defaults API endpoints registered: /api/router/config/defaults, /api/router/config/defaults/update")
 
 	// Tools DB endpoint

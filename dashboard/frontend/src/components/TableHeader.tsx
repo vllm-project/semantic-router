@@ -10,6 +10,7 @@ interface TableHeaderProps {
   onSearchChange?: (value: string) => void
   onAdd?: () => void
   addButtonText?: string
+  disabled?: boolean
 }
 
 const TableHeader: React.FC<TableHeaderProps> = ({
@@ -20,7 +21,8 @@ const TableHeader: React.FC<TableHeaderProps> = ({
   searchValue = '',
   onSearchChange,
   onAdd,
-  addButtonText = 'Add New'
+  addButtonText = 'Add New',
+  disabled = false
 }) => {
   return (
     <div className={styles.header}>
@@ -41,7 +43,7 @@ const TableHeader: React.FC<TableHeaderProps> = ({
             onChange={(e) => onSearchChange(e.target.value)}
           />
         )}
-        {onAdd && (
+        {onAdd && !disabled && (
           <button className={styles.addButton} onClick={onAdd}>
             {addButtonText}
           </button>

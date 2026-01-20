@@ -40,7 +40,7 @@ jobs:
              [[ "${{ needs.changes.outputs.core }}" == "true" ]] || \
              [[ "${{ github.event_name }}" == "schedule" ]] || \
              [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo 'profiles=["ai-gateway", "aibrix", "routing-strategies", "dynamic-config", "llm-d", "istio", "production-stack", "response-api"]' >> $GITHUB_OUTPUT
+            echo 'profiles=["ai-gateway", "aibrix", "routing-strategies", "dynamic-config", "llm-d", "istio", "production-stack", "response-api", "response-api-redis", "response-api-redis-cluster"]' >> $GITHUB_OUTPUT                          
             echo 'should_run=true' >> $GITHUB_OUTPUT
             echo "Running all profiles due to common/core changes or push/schedule/manual trigger"
             exit 0
@@ -56,6 +56,8 @@ jobs:
           [[ "${{ needs.changes.outputs.e2e_production_stack }}" == "true" ]] && profiles+=("production-stack")
           [[ "${{ needs.changes.outputs.e2e_dynamic_config }}" == "true" ]] && profiles+=("dynamic-config")
           [[ "${{ needs.changes.outputs.e2e_response_api }}" == "true" ]] && profiles+=("response-api")
+          [[ "${{ needs.changes.outputs.e2e_response_api_redis }}" == "true" ]] && profiles+=("response-api-redis")
+          [[ "${{ needs.changes.outputs.e2e_response_api_redis_cluster }}" == "true" ]] && profiles+=("response-api-redis-cluster")
 
           # Convert to JSON array
           if [ ${#profiles[@]} -eq 0 ]; then
@@ -104,7 +106,13 @@ jobs:
 
       - name: Install Kind
         run: |
-          curl --retry 5 --retry-delay 5 --retry-all-errors -Lo ./kind https://kind.sigs.k8s.io/dl/v0.22.0/kind-linux-amd64
+          ARCH="$(uname -m)"
+          case "$ARCH" in
+            x86_64) KIND_ARCH="amd64" ;;
+            aarch64) KIND_ARCH="arm64" ;;
+            *) echo "unsupported arch: $ARCH" && exit 1 ;;
+          esac
+          curl --retry 5 --retry-delay 5 --retry-all-errors -Lo ./kind "https://kind.sigs.k8s.io/dl/v0.22.0/kind-linux-${KIND_ARCH}"
           chmod +x ./kind
           sudo mv ./kind /usr/local/bin/kind
 

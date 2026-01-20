@@ -728,9 +728,9 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 	}
 
 	// Use Milvus Search for efficient similarity search
-	// Filter by model, has response, and not expired
+	// Filter by has response and not expired (model filtering removed for cross-model cache sharing)
 	now := time.Now().Unix()
-	filterExpr := fmt.Sprintf("model == \"%s\" && response_body != \"\" && (expires_at == 0 || expires_at > %d)", model, now)
+	filterExpr := fmt.Sprintf("response_body != \"\" && (expires_at == 0 || expires_at > %d)", now)
 
 	searchResult, err := c.client.Search(
 		ctx,

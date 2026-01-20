@@ -18,7 +18,9 @@ The framework follows a **separation of concerns** design:
 - **istio**: Tests Semantic Router with Istio service mesh integration
 - **production-stack**: Tests vLLM Production Stack configurations
 - **llm-d**: Tests Semantic Router with LLM-D distributed inference
-- **response-api**: Tests Response API endpoints (POST/GET/DELETE /v1/responses)
+- **response-api**: Tests Responses API endpoints (POST/GET/DELETE /v1/responses)
+- **response-api-redis**: Tests Responses API endpoints with Redis storage backend
+- **response-api-redis-cluster**: Tests Responses API endpoints with Redis Cluster backend
 - **dynamo**: Tests with Nvidia Dynamo (future)
 
 ## Directory Structure

@@ -512,7 +512,7 @@ reasoning_families:
     parameter: "reasoning_effort"
 
 # Global default reasoning effort level
-default_reasoning_effort: high
+default_reasoning_effort: low
 
 # API Configuration
 api:
@@ -535,7 +535,17 @@ api:
 # - EmbeddingGemma-300M: Up to 8K context, fast inference, Matryoshka support (768/512/256/128)
 embedding_models:
   qwen3_model_path: "models/mom-embedding-pro"
+  # gemma_model_path: "models/mom-embedding-flash"
   use_cpu: true  # Set to false for GPU acceleration (requires CUDA)
+  # HNSW Configuration
+  # Improves performance by preloading candidate embeddings at startup
+  # and using HNSW index for O(log n) similarity search
+  hnsw_config:
+    model_type: "qwen3"         # Which model to use: "qwen3" (high quality) or "gemma" (fast)
+    preload_embeddings: true    # Precompute candidate embeddings at startup
+    target_dimension: 1024       # Embedding dimension
+    enable_soft_matching: true
+    min_score_threshold: 0.5
 
 # Observability Configuration
 observability:

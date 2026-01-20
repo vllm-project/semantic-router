@@ -253,7 +253,7 @@ func (r *Runner) buildAndLoadImages(ctx context.Context) error {
 
 	// Profiles may require additional local images beyond extproc.
 	switch r.profile.Name() {
-	case "response-api":
+	case "response-api", "response-api-redis", "response-api-redis-cluster":
 		mockOpts := docker.BuildOptions{
 			Dockerfile:   "tools/mock-vllm/Dockerfile",
 			Tag:          "ghcr.io/vllm-project/semantic-router/mock-vllm:latest",

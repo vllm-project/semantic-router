@@ -474,7 +474,7 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 		// Search using HNSW index with configured ef parameter
 		candidateIndices := c.hnswIndex.searchKNN(queryEmbedding, 10, c.hnswEfSearch, c.entries)
 
-		// Filter candidates by model and expiration, then find best match
+		// Filter candidates by expiration, then find best match
 		for _, entryIndex := range candidateIndices {
 			if entryIndex < 0 || entryIndex >= len(c.entries) {
 				continue
@@ -484,11 +484,6 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 
 			// Skip incomplete entries
 			if entry.ResponseBody == nil {
-				continue
-			}
-
-			// Only consider entries for the same model
-			if entry.Model != model {
 				continue
 			}
 
@@ -517,11 +512,6 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 		for entryIndex, entry := range c.entries {
 			// Skip incomplete entries
 			if entry.ResponseBody == nil {
-				continue
-			}
-
-			// Only consider entries for the same model
-			if entry.Model != model {
 				continue
 			}
 

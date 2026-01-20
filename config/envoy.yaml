@@ -37,7 +37,18 @@ static_resources:
             - name: local_service
               domains: ["*"]
               routes:
-              # Single route using original destination cluster
+              # Anthropic API route (matches all claude-* models)
+              - match:
+                  prefix: "/"
+                  headers:
+                  - name: x-selected-model
+                    string_match:
+                      prefix: "claude-"
+                route:
+                  cluster: anthropic_api_cluster
+                  timeout: 300s
+                  host_rewrite_literal: "api.anthropic.com"
+              # Default route using original destination cluster
               - match:
                   prefix: "/"
                 route:
@@ -111,6 +122,28 @@ static_resources:
         "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
         explicit_http_config:
           http_protocol_options: {}
+
+  # Anthropic API cluster
+  - name: anthropic_api_cluster
+    type: LOGICAL_DNS
+    dns_lookup_family: V4_ONLY
+    connect_timeout: 60s
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: anthropic_api_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: api.anthropic.com
+                port_value: 443
+            hostname: "api.anthropic.com"
+    transport_socket:
+      name: envoy.transport_sockets.tls
+      typed_config:
+        "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+        sni: api.anthropic.com
 
 admin:
   address:

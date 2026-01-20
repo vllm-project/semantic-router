@@ -49,6 +49,20 @@ static_resources:
                     substitution: "{{ model.path_prefix }}\\1"
                   {% endif %}
               {% endfor %}
+              {% for model in anthropic_models %}
+              # Route for Anthropic model: {{ model.name }}
+              - match:
+                  prefix: "/"
+                  headers:
+                  - name: x-selected-model
+                    string_match:
+                      exact: "{{ model.name }}"
+                route:
+                  cluster: anthropic_api_cluster
+                  timeout: {{ listener.timeout | default('300s') }}
+                  idleTimeout: 300s
+                  host_rewrite_literal: "api.anthropic.com"
+              {% endfor %}
               # Default route (no x-selected-model header)
               - match:
                   prefix: "/"
@@ -115,6 +129,24 @@ static_resources:
                 address: 127.0.0.1
                 port_value: {{ extproc_port }}
 
+  {% if not models %}
+  # Fallback cluster for API-only configs (not actually used, but required for valid Envoy config)
+  # When all models are API-based, the router handles requests directly without routing through Envoy clusters
+  - name: vllm_static_cluster
+    connect_timeout: 30s
+    type: STATIC
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: vllm_static_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: 127.0.0.1
+                port_value: 8080
+  {% endif %}
+
   {% for model in models %}
   # Cluster for model: {{ model.name }}
   - name: {{ model.cluster_name }}_cluster
@@ -151,6 +183,34 @@ static_resources:
             tls_maximum_protocol_version: TLSv1_3
     {% endif %}
   {% endfor %}
+
+  {% if anthropic_models %}
+  # Shared cluster for Anthropic API (all Anthropic models use this cluster)
+  - name: anthropic_api_cluster
+    type: LOGICAL_DNS
+    dns_lookup_family: V4_ONLY
+    connect_timeout: 60s
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: anthropic_api_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: api.anthropic.com
+                port_value: 443
+            hostname: "api.anthropic.com"
+    transport_socket:
+      name: envoy.transport_sockets.tls
+      typed_config:
+        "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+        sni: api.anthropic.com
+        common_tls_context:
+          tls_params:
+            tls_minimum_protocol_version: TLSv1_2
+            tls_maximum_protocol_version: TLSv1_3
+  {% endif %}
 
 # Runtime configuration
 layered_runtime:
