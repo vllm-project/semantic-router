@@ -360,7 +360,9 @@ type EmbeddingModels struct {
 }
 
 // HNSWConfig contains settings for optimizing the embedding classifier
-// by preloading candidate embeddings at startup and using HNSW for fast similarity search
+// Note: Despite the name, HNSW indexing is no longer used for embedding classification.
+// The classifier always uses brute-force search to ensure complete results for all candidates.
+// This struct is kept for backward compatibility and may be renamed in a future version.
 type HNSWConfig struct {
 	// ModelType specifies which embedding model to use (default: "qwen3")
 	// Options: "qwen3" (high quality, 32K context) or "gemma" (fast, 8K context)
@@ -372,31 +374,20 @@ type HNSWConfig struct {
 	// rather than on every request, significantly improving runtime performance
 	PreloadEmbeddings bool `yaml:"preload_embeddings"`
 
-	// UseHNSW enables HNSW index for O(log n) similarity search (default: true)
-	// Only applies when PreloadEmbeddings is true
-	UseHNSW bool `yaml:"use_hnsw"`
-
-	// HNSWM is the number of bi-directional links per node (default: 16)
-	// Higher values improve recall but increase memory usage
-	HNSWM int `yaml:"hnsw_m,omitempty"`
-
-	// HNSWEfConstruction is the size of dynamic candidate list during index construction (default: 200)
-	// Higher values improve index quality but increase build time
-	HNSWEfConstruction int `yaml:"hnsw_ef_construction,omitempty"`
-
-	// HNSWEfSearch is the size of dynamic candidate list during search (default: 50)
-	// Higher values improve search accuracy but increase latency
-	HNSWEfSearch int `yaml:"hnsw_ef_search,omitempty"`
-
-	// HNSWThreshold is the minimum number of candidates to use HNSW (default: 20)
-	// Below this threshold, brute-force search is used as it's faster for small sets
-	// Set to 0 to always use HNSW regardless of candidate count
-	// Use pointer to distinguish between "not set" (nil) and "set to 0"
-	HNSWThreshold *int `yaml:"hnsw_threshold,omitempty"`
-
 	// TargetDimension is the embedding dimension to use (default: 768)
 	// Supports Matryoshka dimensions: 768, 512, 256, 128
 	TargetDimension int `yaml:"target_dimension,omitempty"`
+
+	// EnableSoftMatching enables soft matching mode (default: true)
+	// When enabled, if no rule meets its threshold, returns the rule with highest score
+	// (as long as it exceeds MinScoreThreshold)
+	// Use pointer to distinguish between "not set" (nil) and explicitly disabled (false)
+	EnableSoftMatching *bool `yaml:"enable_soft_matching,omitempty"`
+
+	// MinScoreThreshold is the minimum score required for soft matching (default: 0.5)
+	// Only used when EnableSoftMatching is true
+	// If the highest score is below this threshold, no rule will be matched
+	MinScoreThreshold float32 `yaml:"min_score_threshold,omitempty"`
 }
 
 // WithDefaults returns a copy of the config with default values applied
@@ -406,26 +397,18 @@ func (c HNSWConfig) WithDefaults() HNSWConfig {
 	if result.ModelType == "" {
 		result.ModelType = "qwen3"
 	}
-	// PreloadEmbeddings defaults to true for better performance
-	// Note: bool zero value is false, so we need explicit check
-	// Users must explicitly set preload_embeddings: true in config
-	if result.HNSWM <= 0 {
-		result.HNSWM = 16
-	}
-	if result.HNSWEfConstruction <= 0 {
-		result.HNSWEfConstruction = 200
-	}
-	if result.HNSWEfSearch <= 0 {
-		result.HNSWEfSearch = 50
-	}
-	// HNSWThreshold: nil means not set, use default 20
-	// 0 means always use HNSW (valid value)
-	if result.HNSWThreshold == nil {
-		defaultThreshold := 20
-		result.HNSWThreshold = &defaultThreshold
-	}
 	if result.TargetDimension <= 0 {
 		result.TargetDimension = 768
+	}
+	// EnableSoftMatching: nil means not set, use default true
+	// false means explicitly disabled (valid value)
+	if result.EnableSoftMatching == nil {
+		defaultEnabled := true
+		result.EnableSoftMatching = &defaultEnabled
+	}
+	// MinScoreThreshold defaults to 0.5 for soft matching
+	if result.MinScoreThreshold <= 0 {
+		result.MinScoreThreshold = 0.5
 	}
 	return result
 }

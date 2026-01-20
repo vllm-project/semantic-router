@@ -12,60 +12,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Unit tests for HNSWConfig.WithDefaults() with pointer-based HNSWThreshold
-func TestHNSWConfig_WithDefaults_ZeroThreshold(t *testing.T) {
-	// Test that hnsw_threshold: 0 is preserved (not overridden to 20)
-	zero := 0
-	config := HNSWConfig{
-		HNSWThreshold: &zero,
-	}
-
-	result := config.WithDefaults()
-
-	if result.HNSWThreshold == nil {
-		t.Fatal("HNSWThreshold should not be nil")
-	}
-
-	if *result.HNSWThreshold != 0 {
-		t.Errorf("Expected HNSWThreshold to be 0, got %d", *result.HNSWThreshold)
-	}
-}
-
-func TestHNSWConfig_WithDefaults_NilThreshold(t *testing.T) {
-	// Test that nil threshold gets default value 20
-	config := HNSWConfig{
-		HNSWThreshold: nil,
-	}
-
-	result := config.WithDefaults()
-
-	if result.HNSWThreshold == nil {
-		t.Fatal("HNSWThreshold should not be nil after WithDefaults")
-	}
-
-	if *result.HNSWThreshold != 20 {
-		t.Errorf("Expected default HNSWThreshold to be 20, got %d", *result.HNSWThreshold)
-	}
-}
-
-func TestHNSWConfig_WithDefaults_CustomThreshold(t *testing.T) {
-	// Test that custom threshold is preserved
-	custom := 50
-	config := HNSWConfig{
-		HNSWThreshold: &custom,
-	}
-
-	result := config.WithDefaults()
-
-	if result.HNSWThreshold == nil {
-		t.Fatal("HNSWThreshold should not be nil")
-	}
-
-	if *result.HNSWThreshold != 50 {
-		t.Errorf("Expected HNSWThreshold to be 50, got %d", *result.HNSWThreshold)
-	}
-}
-
 func TestConfig(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Config Suite")
