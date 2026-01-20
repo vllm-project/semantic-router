@@ -57,6 +57,7 @@ prompt_guard:
   enabled: true  # Global default - can be overridden per category with jailbreak_enabled
   use_modernbert: false
   model_id: "models/mom-jailbreak-classifier"
+  jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
   threshold: 0.7
   use_cpu: true
 
@@ -72,7 +73,7 @@ classifier:
     use_modernbert: false
     threshold: 0.9
     use_cpu: true
-  pii_mapping_path: "models/mom-pii-classifier/label_mapping.json"
+    pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
 
 # Hallucination mitigation configuration
 # Disabled by default - enable in decisions via hallucination plugin
