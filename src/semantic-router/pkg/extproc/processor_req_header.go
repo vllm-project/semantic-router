@@ -75,6 +75,7 @@ type RequestContext struct {
 	VSRMatchedFactCheck    []string // Matched fact-check signals
 	VSRMatchedUserFeedback []string // Matched user feedback signals
 	VSRMatchedPreference   []string // Matched preference signals
+	VSRMatchedLanguage     []string // Matched language signals
 
 	// Endpoint tracking for windowed metrics
 	SelectedEndpoint string // The endpoint address selected for this request

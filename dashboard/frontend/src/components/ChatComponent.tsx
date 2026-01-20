@@ -166,6 +166,7 @@ const ChatComponent = ({
         'x-vsr-matched-fact-check',
         'x-vsr-matched-user-feedback',
         'x-vsr-matched-preference',
+        'x-vsr-matched-language',
         // Looper headers
         'x-vsr-looper-model',
         'x-vsr-looper-models-used',

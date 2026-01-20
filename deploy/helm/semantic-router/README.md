@@ -6,6 +6,37 @@ A Helm chart for deploying Semantic Router - an intelligent routing system for L
 
 **Homepage:** <https://github.com/vllm-project/semantic-router>
 
+## Dependencies and one-click deployment
+
+This Helm chart supports deploying the full semantic-router stack via dependencies, including semantic cache and observability components. Dependencies are disabled by default; enable them as needed.
+
+### Dependency toggles (`values.yaml`)
+
+- Semantic cache dependency (Redis or Milvus)
+- Response API dependency (Milvus or Redis)
+- Observability dependency (Jaeger / Prometheus / Grafana)
+
+> Note: The Redis storage backend for the Response API is not implemented yet. Enabling it will cause startup failures.
+
+### Example
+
+```
+dependencies:
+  semanticCache:
+    redis:
+      enabled: true
+  responseApi:
+    milvus:
+      enabled: true
+  observability:
+    jaeger:
+      enabled: true
+    prometheus:
+      enabled: true
+    grafana:
+      enabled: true
+```
+
 ## CRD Management
 
 This Helm chart includes Custom Resource Definitions (CRDs) in the `crds/` directory:

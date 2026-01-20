@@ -60,6 +60,13 @@ class Preference(BaseModel):
     description: str
 
 
+class Language(BaseModel):
+    """Language detection signal configuration."""
+
+    name: str
+    description: str
+
+
 class Signals(BaseModel):
     """All signal configurations."""
 
@@ -69,6 +76,7 @@ class Signals(BaseModel):
     fact_check: Optional[List[FactCheck]] = []
     user_feedbacks: Optional[List[UserFeedback]] = []
     preferences: Optional[List[Preference]] = []
+    language: Optional[List[Language]] = []
 
 
 class Condition(BaseModel):
@@ -90,6 +98,9 @@ class ModelRef(BaseModel):
 
     model: str
     use_reasoning: Optional[bool] = False
+    reasoning_effort: Optional[str] = (
+        None  # Model-specific reasoning effort level (low, medium, high)
+    )
     lora_name: Optional[str] = None  # LoRA adapter name (if using LoRA)
 
 

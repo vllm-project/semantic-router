@@ -85,6 +85,7 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 				logging.Errorf("handleRequestBody failed: %v", err)
 				return err
 			}
+			logging.Infof("Modified request body: %+v", response)
 			if err := sendResponse(stream, response, "request body"); err != nil {
 				logging.Errorf("sendResponse for body failed: %v", err)
 				return err

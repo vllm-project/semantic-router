@@ -7,14 +7,8 @@ import (
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/hnsw"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
-
-// calculateSimilarityBatch is a package-level variable that points to the
-// actual implementation in the candle_binding package. It exists so tests can
-// override it.
-var calculateSimilarityBatch = candle_binding.CalculateSimilarityBatch
 
 // getEmbeddingWithModelType is a package-level variable for computing single embeddings.
 // It exists so tests can override it.
@@ -49,16 +43,11 @@ type EmbeddingClassifier struct {
 
 	// Optimization: preloaded candidate embeddings
 	candidateEmbeddings map[string][]float32 // candidate text -> embedding vector
-	candidateToIndex    map[string]int       // candidate text -> HNSW node index
-	indexToCandidate    map[int]string       // HNSW node index -> candidate text
-
-	// HNSW index for O(log n) similarity search
-	hnswIndex *hnsw.Index
 
 	// Configuration
 	optimizationConfig config.HNSWConfig
 	preloadEnabled     bool
-	useHNSW            bool
+	modelType          string // Model type to use for embeddings ("qwen3" or "gemma")
 }
 
 // NewEmbeddingClassifier creates a new EmbeddingClassifier.
@@ -71,12 +60,12 @@ func NewEmbeddingClassifier(cfgRules []config.EmbeddingRule, optConfig config.HN
 	c := &EmbeddingClassifier{
 		rules:               cfgRules,
 		candidateEmbeddings: make(map[string][]float32),
-		candidateToIndex:    make(map[string]int),
-		indexToCandidate:    make(map[int]string),
 		optimizationConfig:  optConfig,
 		preloadEnabled:      optConfig.PreloadEmbeddings,
-		useHNSW:             optConfig.UseHNSW,
+		modelType:           optConfig.ModelType, // Use configured model type
 	}
+
+	logging.Infof("EmbeddingClassifier initialized with model type: %s", c.modelType)
 
 	// If preloading is enabled, compute all candidate embeddings at startup
 	if optConfig.PreloadEmbeddings {
@@ -84,24 +73,10 @@ func NewEmbeddingClassifier(cfgRules []config.EmbeddingRule, optConfig config.HN
 			// Log warning but don't fail - fall back to runtime computation
 			logging.Warnf("Failed to preload candidate embeddings, falling back to runtime computation: %v", err)
 			c.preloadEnabled = false
-			c.useHNSW = false
 		}
 	}
 
 	return c, nil
-}
-
-// NewEmbeddingClassifierLegacy creates a new EmbeddingClassifier without optimizations.
-// This maintains backward compatibility with existing code.
-func NewEmbeddingClassifierLegacy(cfgRules []config.EmbeddingRule) (*EmbeddingClassifier, error) {
-	return &EmbeddingClassifier{
-		rules:               cfgRules,
-		candidateEmbeddings: make(map[string][]float32),
-		candidateToIndex:    make(map[string]int),
-		indexToCandidate:    make(map[int]string),
-		preloadEnabled:      false,
-		useHNSW:             false,
-	}, nil
 }
 
 // preloadCandidateEmbeddings computes embeddings for all unique candidates across all rules
@@ -127,7 +102,6 @@ func (c *EmbeddingClassifier) preloadCandidateEmbeddings() error {
 	modelType := c.getModelType()
 
 	// Compute embeddings for each candidate
-	idx := 0
 	for candidate := range uniqueCandidates {
 		output, err := getEmbeddingWithModelType(candidate, modelType, c.optimizationConfig.TargetDimension)
 		if err != nil {
@@ -135,33 +109,11 @@ func (c *EmbeddingClassifier) preloadCandidateEmbeddings() error {
 		}
 
 		c.candidateEmbeddings[candidate] = output.Embedding
-		c.candidateToIndex[candidate] = idx
-		c.indexToCandidate[idx] = candidate
-		idx++
-	}
-
-	// Build HNSW index if enabled and we have enough candidates
-	if c.useHNSW && len(uniqueCandidates) >= c.optimizationConfig.HNSWThreshold {
-		c.hnswIndex = hnsw.NewIndex(hnsw.Config{
-			M:              c.optimizationConfig.HNSWM,
-			EfConstruction: c.optimizationConfig.HNSWEfConstruction,
-			EfSearch:       c.optimizationConfig.HNSWEfSearch,
-		})
-
-		// Add all candidates to HNSW index
-		for candidate, embedding := range c.candidateEmbeddings {
-			c.hnswIndex.Add(c.candidateToIndex[candidate], embedding)
-		}
-
-		logging.Infof("Built HNSW index with %d nodes (M=%d, efConstruction=%d)",
-			c.hnswIndex.Size(), c.optimizationConfig.HNSWM, c.optimizationConfig.HNSWEfConstruction)
-	} else {
-		c.useHNSW = false // Disable HNSW if not enough candidates
 	}
 
 	elapsed := time.Since(startTime)
-	logging.Infof("Preloaded %d candidate embeddings in %v (HNSW enabled: %v)",
-		len(c.candidateEmbeddings), elapsed, c.useHNSW)
+	logging.Infof("Preloaded %d candidate embeddings in %v",
+		len(c.candidateEmbeddings), elapsed)
 
 	return nil
 }
@@ -169,13 +121,13 @@ func (c *EmbeddingClassifier) preloadCandidateEmbeddings() error {
 // getModelType returns the model type to use for embeddings
 func (c *EmbeddingClassifier) getModelType() string {
 	// Check for test override via environment variable
-	if testModel := os.Getenv("EMBEDDING_MODEL_OVERRIDE"); testModel != "" {
-		logging.Infof("Embedding model override from env: %s", testModel)
-		return testModel
+	if model := os.Getenv("EMBEDDING_MODEL_OVERRIDE"); model != "" {
+		logging.Infof("Embedding model override from env: %s", model)
+		return model
 	}
-	// For preloading, we need a specific model type (not "auto")
-	// Default to qwen3 for consistent embeddings
-	return "qwen3"
+	// Use the configured model type from config
+	// This ensures consistency between preload and runtime
+	return c.modelType
 }
 
 // IsKeywordEmbeddingClassifierEnabled checks if Keyword embedding classification rules are properly configured
@@ -191,166 +143,211 @@ func (c *Classifier) initializeKeywordEmbeddingClassifier() error {
 	return c.keywordEmbeddingInitializer.Init(c.Config.Qwen3ModelPath, c.Config.GemmaModelPath, c.Config.EmbeddingModels.UseCPU)
 }
 
-// Classify performs keyword-based embedding similarity classification on the given text.
+// Classify performs Embedding similarity classification on the given text.
+// New implementation: computes query embedding once, searches all candidates once,
+// then distributes results to rules based on topK matches.
 func (c *EmbeddingClassifier) Classify(text string) (string, float64, error) {
-	var bestScore float32
-	var mostMatchedRule string
-	for _, rule := range c.rules {
-		matched, aggregatedScore, err := c.matches(text, rule)
-		if err != nil {
-			return "", 0.0, err
-		}
-		if matched {
-			if len(rule.Candidates) > 0 {
-				logging.Infof("Keyword-based embedding similarity classification matched rule %q with candidates: %v, confidence score %v", rule.Name, rule.Candidates, aggregatedScore)
-			} else {
-				logging.Infof("Keyword-based embedding similarity classification do not match rule %q with candidates: %v, confidence score %v", rule.Name, rule.Candidates, aggregatedScore)
-			}
-			if aggregatedScore > bestScore {
-				bestScore = aggregatedScore
-				mostMatchedRule = rule.Name
-			}
-		}
+	if len(c.rules) == 0 {
+		return "", 0.0, nil
 	}
-	return mostMatchedRule, float64(bestScore), nil
-}
 
-// matches checks if the text matches the given keyword rule.
-// Uses preloaded embeddings if available, otherwise falls back to runtime computation.
-func (c *EmbeddingClassifier) matches(text string, rule config.EmbeddingRule) (bool, float32, error) {
 	// Validate input
 	if text == "" {
-		return false, 0.0, fmt.Errorf("keyword-based embedding similarity classification: query must be provided")
-	}
-	if len(rule.Candidates) == 0 {
-		return false, 0.0, fmt.Errorf("keyword-based embedding similarity classification: candidates must be provided")
+		return "", 0.0, fmt.Errorf("embedding similarity classification: query must be provided")
 	}
 
-	// Use optimized path if preloading is enabled
-	if c.preloadEnabled {
-		return c.matchesOptimized(text, rule)
-	}
+	startTime := time.Now()
 
-	// Fall back to legacy implementation
-	return c.matchesLegacy(text, rule)
-}
-
-// matchesOptimized uses preloaded embeddings for fast similarity matching
-func (c *EmbeddingClassifier) matchesOptimized(text string, rule config.EmbeddingRule) (bool, float32, error) {
-	// Compute query embedding only
+	// Step 1: Compute query embedding once
 	modelType := c.getModelType()
 	queryOutput, err := getEmbeddingWithModelType(text, modelType, c.optimizationConfig.TargetDimension)
 	if err != nil {
-		return false, 0.0, fmt.Errorf("failed to compute query embedding: %w", err)
+		return "", 0.0, fmt.Errorf("failed to compute query embedding: %w", err)
 	}
 	queryEmbedding := queryOutput.Embedding
 
-	// Calculate similarities against preloaded candidates
-	similarities := make([]float32, 0, len(rule.Candidates))
+	logging.Infof("Computed query embedding (model: %s, dimension: %d)", modelType, len(queryEmbedding))
 
-	if c.useHNSW && c.hnswIndex != nil && len(rule.Candidates) >= c.optimizationConfig.HNSWThreshold {
-		// Use HNSW for O(log n) search
-		// Search for all candidates to get complete similarity list
-		results := c.hnswIndex.Search(queryEmbedding, len(c.candidateEmbeddings))
-
-		// Filter results to only include candidates from this rule
-		candidateSet := make(map[string]bool)
-		for _, candidate := range rule.Candidates {
-			candidateSet[candidate] = true
-		}
-
-		for _, result := range results {
-			candidate := c.indexToCandidate[result.ID]
-			if candidateSet[candidate] {
-				similarities = append(similarities, result.Similarity)
-			}
-		}
-	} else {
-		// Use brute-force for small candidate sets
-		for _, candidate := range rule.Candidates {
-			embedding, ok := c.candidateEmbeddings[candidate]
-			if !ok {
-				// Candidate not preloaded, compute on the fly
-				output, err := getEmbeddingWithModelType(candidate, modelType, c.optimizationConfig.TargetDimension)
-				if err != nil {
-					return false, 0.0, fmt.Errorf("failed to compute embedding for candidate %q: %w", candidate, err)
-				}
-				embedding = output.Embedding
-				c.candidateEmbeddings[candidate] = embedding // Cache for future use
-			}
-
-			sim := cosineSimilarity(queryEmbedding, embedding)
-			similarities = append(similarities, sim)
-		}
-	}
-
-	// Aggregate scores based on method
-	return c.aggregateScores(similarities, rule)
-}
-
-// matchesLegacy uses the original runtime computation approach
-func (c *EmbeddingClassifier) matchesLegacy(text string, rule config.EmbeddingRule) (bool, float32, error) {
-	// Determine model type
-	modelType := "auto"
-	if testModel := os.Getenv("EMBEDDING_MODEL_OVERRIDE"); testModel != "" {
-		modelType = testModel
-		logging.Infof("Embedding model override from env: %s", modelType)
-	}
-
-	result, err := calculateSimilarityBatch(
-		text,
-		rule.Candidates,
-		0,
-		modelType,
-		768,
-	)
+	// Step 2: Search all candidates once and get similarities
+	candidateSimilarities, err := c.searchAllCandidates(queryEmbedding)
 	if err != nil {
-		return false, 0.0, fmt.Errorf("keyword-based embedding similarity classification: failed to calculate batch similarity: %w", err)
+		return "", 0.0, err
 	}
 
-	// Extract similarities
-	similarities := make([]float32, len(result.Matches))
-	for i, match := range result.Matches {
-		similarities[i] = match.Similarity
+	logging.Infof("Computed %d candidate similarities in %v", len(candidateSimilarities), time.Since(startTime))
+
+	// Step 3: Aggregate scores per rule and find best match
+	bestRule, bestScore, err := c.findBestRule(candidateSimilarities)
+	if err != nil {
+		return "", 0.0, err
 	}
 
-	return c.aggregateScores(similarities, rule)
+	elapsed := time.Since(startTime)
+	logging.Infof("Classification completed in %v: rule=%q, score=%.4f", elapsed, bestRule, bestScore)
+
+	return bestRule, float64(bestScore), nil
 }
 
-// aggregateScores applies the aggregation method to compute the final score
-func (c *EmbeddingClassifier) aggregateScores(similarities []float32, rule config.EmbeddingRule) (bool, float32, error) {
-	if len(similarities) == 0 {
-		return false, 0.0, nil
+// searchAllCandidates computes similarities for all candidates in one pass
+// Always uses brute-force to ensure we get ALL candidate similarities
+func (c *EmbeddingClassifier) searchAllCandidates(queryEmbedding []float32) (map[string]float32, error) {
+	candidateSimilarities := make(map[string]float32)
+	totalCandidates := len(c.candidateEmbeddings)
+
+	// For embedding classification, we MUST compute similarities for ALL candidates
+	// to correctly aggregate scores per rule and find the best match.
+	// HNSW is an approximate algorithm designed for topK search, not exhaustive search.
+	// Even with large ef values, HNSW may miss some candidates due to graph connectivity.
+	//
+	// Brute-force is the right choice here because:
+	// 1. We need complete results (all candidates), not approximate topK
+	// 2. Candidate sets are typically small (50-200), making brute-force very fast
+	// 3. Embeddings are pre-loaded in memory, so it's just dot products (microseconds each)
+	// 4. Simpler and more reliable than tuning HNSW parameters
+
+	logging.Infof("Computing similarities for all %d candidates (brute-force)", totalCandidates)
+
+	for candidate, embedding := range c.candidateEmbeddings {
+		sim := cosineSimilarity(queryEmbedding, embedding)
+		candidateSimilarities[candidate] = sim
+		logging.Debugf("[Brute-force] candidate=%q, similarity=%.4f", candidate, sim)
 	}
 
-	switch rule.AggregationMethodConfiged {
-	case config.AggregationMethodMean:
-		var aggregatedScore float32
-		for _, sim := range similarities {
-			aggregatedScore += sim
+	return candidateSimilarities, nil
+}
+
+// ruleScore holds the aggregated score for a rule
+type ruleScore struct {
+	ruleName string
+	score    float32
+	matched  bool // whether it meets the hard threshold
+}
+
+// findBestRule aggregates candidate similarities per rule and finds the best match
+func (c *EmbeddingClassifier) findBestRule(candidateSimilarities map[string]float32) (string, float32, error) {
+	ruleScores := make([]ruleScore, 0, len(c.rules))
+
+	// Aggregate scores for each rule
+	for _, rule := range c.rules {
+		if len(rule.Candidates) == 0 {
+			continue
 		}
-		aggregatedScore /= float32(len(similarities))
-		return aggregatedScore >= rule.SimilarityThreshold, aggregatedScore, nil
+
+		// Collect similarities for this rule's candidates
+		similarities := make([]float32, 0, len(rule.Candidates))
+		for _, candidate := range rule.Candidates {
+			if sim, ok := candidateSimilarities[candidate]; ok {
+				similarities = append(similarities, sim)
+			}
+		}
+
+		if len(similarities) == 0 {
+			continue
+		}
+
+		// Aggregate based on method
+		aggregatedScore := c.aggregateScoresForRule(similarities, rule.AggregationMethodConfiged)
+		matched := aggregatedScore >= rule.SimilarityThreshold
+
+		logging.Infof("Rule %q: aggregated_score=%.4f, threshold=%.3f, matched=%v (method=%s, candidates=%d)",
+			rule.Name, aggregatedScore, rule.SimilarityThreshold, matched,
+			rule.AggregationMethodConfiged, len(similarities))
+
+		ruleScores = append(ruleScores, ruleScore{
+			ruleName: rule.Name,
+			score:    aggregatedScore,
+			matched:  matched,
+		})
+	}
+
+	if len(ruleScores) == 0 {
+		return "", 0.0, nil
+	}
+
+	// Find best match using hard threshold first
+	var bestHardMatch *ruleScore
+	for i := range ruleScores {
+		if ruleScores[i].matched {
+			if bestHardMatch == nil || ruleScores[i].score > bestHardMatch.score {
+				bestHardMatch = &ruleScores[i]
+			}
+		}
+	}
+
+	if bestHardMatch != nil {
+		logging.Infof("Hard match found: rule=%q, score=%.4f", bestHardMatch.ruleName, bestHardMatch.score)
+		return bestHardMatch.ruleName, bestHardMatch.score, nil
+	}
+
+	// No hard match - check if soft matching is enabled
+	if c.optimizationConfig.EnableSoftMatching == nil || !*c.optimizationConfig.EnableSoftMatching {
+		logging.Infof("No hard match found and soft matching is disabled")
+		return "", 0.0, nil
+	}
+
+	// Find best soft match
+	var bestSoftMatch *ruleScore
+	for i := range ruleScores {
+		if ruleScores[i].score >= c.optimizationConfig.MinScoreThreshold {
+			if bestSoftMatch == nil || ruleScores[i].score > bestSoftMatch.score {
+				bestSoftMatch = &ruleScores[i]
+			}
+		}
+	}
+
+	if bestSoftMatch != nil {
+		logging.Infof("Soft match found: rule=%q, score=%.4f (min_threshold=%.3f)",
+			bestSoftMatch.ruleName, bestSoftMatch.score, c.optimizationConfig.MinScoreThreshold)
+		return bestSoftMatch.ruleName, bestSoftMatch.score, nil
+	}
+
+	logging.Infof("No match found (best score below min_threshold=%.3f)", c.optimizationConfig.MinScoreThreshold)
+	return "", 0.0, nil
+}
+
+// aggregateScoresForRule applies the aggregation method to compute the final score
+func (c *EmbeddingClassifier) aggregateScoresForRule(similarities []float32, method config.AggregationMethod) float32 {
+	if len(similarities) == 0 {
+		return 0.0
+	}
+
+	switch method {
+	case config.AggregationMethodMean:
+		var sum float32
+		for _, sim := range similarities {
+			sum += sim
+		}
+		return sum / float32(len(similarities))
 
 	case config.AggregationMethodMax:
-		var aggregatedScore float32
+		var max float32
 		for _, sim := range similarities {
-			if sim > aggregatedScore {
-				aggregatedScore = sim
+			if sim > max {
+				max = sim
 			}
 		}
-		return aggregatedScore >= rule.SimilarityThreshold, aggregatedScore, nil
+		return max
 
 	case config.AggregationMethodAny:
+		// For "any" method, return the max similarity
+		// The threshold check will be done by the caller
+		var max float32
 		for _, sim := range similarities {
-			if sim >= rule.SimilarityThreshold {
-				return true, rule.SimilarityThreshold, nil
+			if sim > max {
+				max = sim
 			}
 		}
-		return false, 0.0, nil
+		return max
 
 	default:
-		return false, 0.0, fmt.Errorf("unsupported aggregation method: %q", rule.AggregationMethodConfiged)
+		logging.Warnf("Unsupported aggregation method: %q, using max", method)
+		var max float32
+		for _, sim := range similarities {
+			if sim > max {
+				max = sim
+			}
+		}
+		return max
 	}
 }
 
@@ -375,12 +372,6 @@ func cosineSimilarity(a, b []float32) float32 {
 }
 
 // GetPreloadStats returns statistics about preloaded embeddings
-func (c *EmbeddingClassifier) GetPreloadStats() (int, bool, int) {
-	candidateCount := len(c.candidateEmbeddings)
-	hnswEnabled := c.useHNSW
-	hnswSize := 0
-	if c.hnswIndex != nil {
-		hnswSize = c.hnswIndex.Size()
-	}
-	return candidateCount, hnswEnabled, hnswSize
+func (c *EmbeddingClassifier) GetPreloadStats() int {
+	return len(c.candidateEmbeddings)
 }
