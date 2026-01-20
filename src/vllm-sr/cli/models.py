@@ -60,6 +60,13 @@ class Preference(BaseModel):
     description: str
 
 
+class Language(BaseModel):
+    """Language detection signal configuration."""
+
+    name: str
+    description: str
+
+
 class Signals(BaseModel):
     """All signal configurations."""
 
@@ -69,6 +76,7 @@ class Signals(BaseModel):
     fact_check: Optional[List[FactCheck]] = []
     user_feedbacks: Optional[List[UserFeedback]] = []
     preferences: Optional[List[Preference]] = []
+    language: Optional[List[Language]] = []
 
 
 class Condition(BaseModel):
@@ -90,6 +98,9 @@ class ModelRef(BaseModel):
 
     model: str
     use_reasoning: Optional[bool] = False
+    reasoning_effort: Optional[str] = (
+        None  # Model-specific reasoning effort level (low, medium, high)
+    )
     lora_name: Optional[str] = None  # LoRA adapter name (if using LoRA)
 
 
@@ -202,6 +213,9 @@ class Model(BaseModel):
     # Model parameter size (e.g., "1b", "7b", "70b", "100m")
     # Used by confidence algorithm to determine model order (smallest first)
     param_size: Optional[str] = None
+    # API format: "openai" (default) or "anthropic"
+    # When set to "anthropic", the router translates requests to Anthropic Messages API
+    api_format: Optional[str] = None
 
 
 class ReasoningFamily(BaseModel):

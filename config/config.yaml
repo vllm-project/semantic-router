@@ -18,6 +18,37 @@ response_api:
   ttl_seconds: 86400       # 24 hours
   max_responses: 1000
 
+# Router Replay Configuration
+# Records routing decisions for debugging and analysis
+# Automatically creates isolated storage per decision (collection/table/keyspace)
+router_replay:
+  enabled: false
+  store_backend: "memory"           # Options: "memory", "redis", "postgres", "milvus"
+  ttl_seconds: 2592000             # 30 days
+  capture_request_body: true
+  capture_response_body: true
+  max_body_bytes: 4096
+  async_writes: true
+  # Memory backend settings
+  max_records: 1000
+  # Redis backend settings (uncomment if using Redis)
+  # redis:
+  #   address: "redis:6379"
+  #   db: 0
+  #   key_prefix: "router_replay"
+  # PostgreSQL backend settings (uncomment if using PostgreSQL)
+  # postgres:
+  #   host: "postgres"
+  #   port: 5432
+  #   database: "semantic_router"
+  #   user: "router"
+  #   password: "router_password"
+  #   table_name: "replay_records"
+  # Milvus backend settings (uncomment if using Milvus)
+  # milvus:
+  #   address: "milvus:19530"
+  #   collection_name: "replay_records"
+
 semantic_cache:
   enabled: true
   backend_type: "memory"  # Options: "memory", "milvus", or "hybrid"
@@ -481,7 +512,7 @@ reasoning_families:
     parameter: "reasoning_effort"
 
 # Global default reasoning effort level
-default_reasoning_effort: high
+default_reasoning_effort: low
 
 # API Configuration
 api:
@@ -512,12 +543,9 @@ embedding_models:
   hnsw_config:
     model_type: "qwen3"         # Which model to use: "qwen3" (high quality) or "gemma" (fast)
     preload_embeddings: true    # Precompute candidate embeddings at startup
-    use_hnsw: true              # Enable HNSW index for fast similarity search
-    hnsw_m: 16                  # Bi-directional links per node (higher = better recall)
-    hnsw_ef_construction: 200   # Build-time search width (higher = better quality)
-    hnsw_ef_search: 50          # Query-time search width (higher = better accuracy)
-    hnsw_threshold: 20          # Min candidates to enable HNSW (set to 0 to always use HNSW)
-    target_dimension: 768       # Embedding dimension
+    target_dimension: 1024       # Embedding dimension
+    enable_soft_matching: true
+    min_score_threshold: 0.5
 
 # Observability Configuration
 observability:

@@ -147,6 +147,13 @@ def serve(config, image, image_pull_policy, readonly_dashboard):
                 else:
                     log.info(f"Passing environment variable: {var}={os.environ[var]}")
 
+        # API keys for model providers
+        api_key_vars = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY"]
+        for var in api_key_vars:
+            if var in os.environ:
+                env_vars[var] = os.environ[var]
+                log.info(f"Passing environment variable: {var}=***")
+
         # Dashboard read-only mode
         if readonly_dashboard:
             env_vars["DASHBOARD_READONLY"] = "true"

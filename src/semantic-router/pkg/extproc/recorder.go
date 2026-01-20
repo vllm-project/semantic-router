@@ -95,8 +95,18 @@ func (r *OpenAIRouter) startRouterReplay(
 	if ctx == nil || ctx.RouterReplayConfig == nil || !ctx.RouterReplayConfig.Enabled {
 		return
 	}
-	if r.ReplayRecorder == nil || ctx.RouterReplayID != "" {
+	if ctx.RouterReplayID != "" {
 		return
+	}
+
+	// Get the recorder for this specific decision
+	recorder := r.ReplayRecorders[decisionName]
+	if recorder == nil {
+		// Fall back to legacy single recorder if decision-specific one not found
+		recorder = r.ReplayRecorder
+		if recorder == nil {
+			return
+		}
 	}
 
 	cfg := ctx.RouterReplayConfig
@@ -105,7 +115,7 @@ func (r *OpenAIRouter) startRouterReplay(
 		maxBodyBytes = routerreplay.DefaultMaxBodyBytes
 	}
 
-	r.ReplayRecorder.SetCapturePolicy(
+	recorder.SetCapturePolicy(
 		cfg.CaptureRequestBody,
 		cfg.CaptureResponseBody,
 		maxBodyBytes,
@@ -145,26 +155,36 @@ func (r *OpenAIRouter) startRouterReplay(
 		rec.RequestBody = string(ctx.OriginalRequestBody)
 	}
 
-	replayID, err := r.ReplayRecorder.AddRecord(rec)
+	replayID, err := recorder.AddRecord(rec)
 	if err != nil {
 		return
 	}
 	ctx.RouterReplayID = replayID
+	ctx.RouterReplayRecorder = recorder
 
-	if stored, ok := r.ReplayRecorder.GetRecord(replayID); ok {
+	if stored, ok := recorder.GetRecord(replayID); ok {
 		logging.LogEvent(
 			"router_replay_start",
-			stored.LogFields("router_replay_start"),
+			routerreplay.LogFields(stored, "router_replay_start"),
 		)
 	}
 }
 
 // updateRouterReplayStatus updates status metadata (status code, streaming/cache flags).
 func (r *OpenAIRouter) updateRouterReplayStatus(ctx *RequestContext, status int, streaming bool) {
-	if ctx == nil || ctx.RouterReplayID == "" || r.ReplayRecorder == nil {
+	if ctx == nil || ctx.RouterReplayID == "" {
 		return
 	}
-	err := r.ReplayRecorder.UpdateStatus(ctx.RouterReplayID, status, ctx.VSRCacheHit, streaming)
+
+	recorder := ctx.RouterReplayRecorder
+	if recorder == nil {
+		recorder = r.ReplayRecorder
+	}
+	if recorder == nil {
+		return
+	}
+
+	err := recorder.UpdateStatus(ctx.RouterReplayID, status, ctx.VSRCacheHit, streaming)
 	if err != nil {
 		logging.Errorf("Failed to update router replay status: %v", err)
 	}
@@ -172,20 +192,27 @@ func (r *OpenAIRouter) updateRouterReplayStatus(ctx *RequestContext, status int,
 
 // attachRouterReplayResponse stores response payload (if configured) and optionally logs completion.
 func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseBody []byte, isFinal bool) {
-	if ctx == nil || ctx.RouterReplayID == "" || r.ReplayRecorder == nil {
+	if ctx == nil || ctx.RouterReplayID == "" {
+		return
+	}
+
+	recorder := ctx.RouterReplayRecorder
+	if recorder == nil {
+		recorder = r.ReplayRecorder
+	}
+	if recorder == nil {
 		return
 	}
 
 	if len(responseBody) > 0 {
-		// AttachResponse already respects capture policy internally
-		_ = r.ReplayRecorder.AttachResponse(ctx.RouterReplayID, responseBody)
+		_ = recorder.AttachResponse(ctx.RouterReplayID, responseBody)
 	}
 
 	if isFinal {
-		if rec, ok := r.ReplayRecorder.GetRecord(ctx.RouterReplayID); ok {
+		if rec, ok := recorder.GetRecord(ctx.RouterReplayID); ok {
 			logging.LogEvent(
 				"router_replay_complete",
-				rec.LogFields("router_replay_complete"),
+				routerreplay.LogFields(rec, "router_replay_complete"),
 			)
 		}
 	}

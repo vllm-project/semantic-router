@@ -223,7 +223,8 @@ decisions:
           name: "quick_answer"
     modelRefs:
       - model: "openai/gpt-oss-120b"
-        use_reasoning: false
+        use_reasoning: true
+        reasoning_effort: "low"
     plugins:
       - type: "system_prompt"
         configuration:
@@ -241,6 +242,7 @@ decisions:
     modelRefs:
       - model: "openai/gpt-oss-120b"
         use_reasoning: true
+        reasoning_effort: "high"
     plugins:
       - type: "system_prompt"
         configuration:
@@ -284,6 +286,7 @@ decisions:
     modelRefs:
       - model: "openai/gpt-oss-120b"
         use_reasoning: true
+        reasoning_effort: "high"  # Override default reasoning effort for math queries
     plugins:
       - type: "system_prompt"
         configuration:
@@ -304,6 +307,7 @@ decisions:
     modelRefs:
       - model: "openai/gpt-oss-120b"
         use_reasoning: true
+        reasoning_effort: "medium"  # Use medium effort for physics queries
     plugins:
       - type: "system_prompt"
         configuration:
@@ -429,4 +433,4 @@ providers:
       parameter: "reasoning_effort"
 
   # Default reasoning effort level
-  default_reasoning_effort: "high"
+  default_reasoning_effort: "low"

@@ -82,6 +82,10 @@ const (
 	// VSRMatchedPreference contains comma-separated list of matched preference signals.
 	// Example: "creative_writing,technical_analysis"
 	VSRMatchedPreference = "x-vsr-matched-preference"
+
+	// VSRMatchedLanguage contains comma-separated list of matched language signals.
+	// Example: "en,zh,es"
+	VSRMatchedLanguage = "x-vsr-matched-language"
 )
 
 // Security Headers

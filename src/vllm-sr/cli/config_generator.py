@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional
 from jinja2 import Environment, FileSystemLoader
 from cli.utils import getLogger
 from cli.models import UserConfig
+from cli.consts import EXTERNAL_API_MODEL_FORMATS
 
 log = getLogger(__name__)
 
@@ -86,7 +87,18 @@ def generate_envoy_config_from_user_config(
     # Extract models and their endpoints
     # Group endpoints by model for cluster creation
     models = []
+    anthropic_models = []  # Anthropic models use a shared cluster
+
     for model in user_config.providers.models:
+        # Handle external API models (e.g., Anthropic) - they use shared clusters
+        if model.api_format and model.api_format in EXTERNAL_API_MODEL_FORMATS:
+            if model.api_format == "anthropic":
+                anthropic_models.append({"name": model.name})
+                log.info(
+                    f"  Anthropic model: {model.name} (will use shared anthropic_api_cluster)"
+                )
+            continue
+
         endpoints = []
         has_https = False
         uses_dns = False
@@ -166,19 +178,24 @@ def generate_envoy_config_from_user_config(
         "listeners": listeners,
         "extproc_port": 50051,
         "models": models,
+        "anthropic_models": anthropic_models,  # Anthropic models for shared cluster
         "use_original_dst": False,  # Use static clusters for now
     }
 
     log.info(f"  Listeners:")
     for listener in listeners:
         log.info(f"    - {listener['name']}: {listener['address']}:{listener['port']}")
-    log.info(f"  Found {len(models)} model(s):")
+    log.info(f"  Found {len(models)} vLLM model(s):")
     for model in models:
         log.info(f"    - {model['name']} (cluster: {model['cluster_name']})")
         for ep in model["endpoints"]:
             log.info(
                 f"        - {ep['name']}: {ep['address']}:{ep['port']} (weight: {ep['weight']})"
             )
+    if anthropic_models:
+        log.info(f"  Found {len(anthropic_models)} Anthropic model(s):")
+        for model in anthropic_models:
+            log.info(f"    - {model['name']} (cluster: anthropic_api_cluster)")
 
     # Check if template exists
     template_path = Path(template_root) / template_file

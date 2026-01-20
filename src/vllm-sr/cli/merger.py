@@ -119,6 +119,27 @@ def translate_preference_signals(preferences: list) -> list:
     return rules
 
 
+def translate_language_signals(languages: list) -> list:
+    """
+    Translate language signals to router format.
+
+    Args:
+        languages: List of Language objects
+
+    Returns:
+        list: Router language rules
+    """
+    rules = []
+    for signal in languages:
+        rule = {
+            "name": signal.name,
+        }
+        if signal.description:
+            rule["description"] = signal.description
+        rules.append(rule)
+    return rules
+
+
 def translate_external_models(external_models: list) -> list:
     """
     Translate external models to router format.
@@ -223,6 +244,10 @@ def translate_providers_to_router_format(providers) -> Dict[str, Any]:
             "reasoning_family": model.reasoning_family,
             "access_key": model.access_key,
         }
+
+        # Add api_format if provided
+        if model.api_format:
+            model_config[model.name]["api_format"] = model.api_format
 
         # Add pricing if provided
         if model.pricing:
@@ -352,6 +377,12 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
             log.info(
                 f"  Added {len(user_config.signals.preferences)} preference signals"
             )
+
+        if user_config.signals.language and len(user_config.signals.language) > 0:
+            merged["language_rules"] = translate_language_signals(
+                user_config.signals.language
+            )
+            log.info(f"  Added {len(user_config.signals.language)} language signals")
 
         # Translate domains to categories
         if user_config.signals.domains:

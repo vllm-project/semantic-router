@@ -460,18 +460,6 @@ func floatsToBytes(fs []float32) []byte {
 	return buf
 }
 
-// escapeRedisTagValue escapes special characters (,.-/ and space) in TAG field values for Redis queries.
-func escapeRedisTagValue(value string) string {
-	replacer := strings.NewReplacer(
-		",", "\\,",
-		".", "\\.",
-		"-", "\\-",
-		"/", "\\/",
-		" ", "\\ ",
-	)
-	return replacer.Replace(value)
-}
-
 // addEntry handles the internal logic for storing entries in Redis
 func (c *RedisCache) addEntry(id string, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
 	logging.Infof("addEntry called: id='%s', requestID='%s', requestBody_len=%d, responseBody_len=%d, ttl_seconds=%d",
@@ -579,10 +567,9 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 	// Convert embedding to bytes for Redis query
 	embeddingBytes := floatsToBytes(queryEmbedding)
 
-	// Build KNN query with model filter (TAG fields require escaped values)
-	escapedModel := escapeRedisTagValue(model)
-	knnQuery := fmt.Sprintf("(@model:{%s})=>[KNN %d @%s $vec AS vector_distance]",
-		escapedModel, c.config.Search.TopK, c.config.Index.VectorField.Name)
+	// Build KNN query without model filter (model filtering removed for cross-model cache sharing)
+	knnQuery := fmt.Sprintf("[KNN %d @%s $vec AS vector_distance]",
+		c.config.Search.TopK, c.config.Index.VectorField.Name)
 
 	// Execute vector search
 	searchResult, err := c.client.FTSearchWithArgs(ctx,

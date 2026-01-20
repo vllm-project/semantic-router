@@ -2,12 +2,15 @@ package extproc
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/openai/openai-go"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
@@ -36,6 +39,21 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 
 	// Process the response for caching
 	responseBody := v.ResponseBody.Body
+
+	// Transform Anthropic API response to OpenAI format if this is an Anthropic-routed request
+	anthropicTransformed := false
+	if ctx.APIFormat == config.APIFormatAnthropic {
+		transformedBody, err := anthropic.ToOpenAIResponseBody(responseBody, ctx.RequestModel)
+		if err != nil {
+			logging.Errorf("Failed to transform Anthropic response to OpenAI format: %v", err)
+			// Return error response to client
+			return r.createErrorResponse(502, fmt.Sprintf("Response transformation error: %v", err)), nil
+		}
+		logging.Infof("Transformed Anthropic response to OpenAI format, original size: %d, transformed size: %d",
+			len(responseBody), len(transformedBody))
+		responseBody = transformedBody
+		anthropicTransformed = true
+	}
 
 	// If this is a streaming response (e.g., SSE), record TTFT on the first body chunk
 	// and accumulate chunks for caching when stream completes.
@@ -190,7 +208,9 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	// Build response with possible body modification
 	var bodyMutation *ext_proc.BodyMutation
 	var headerMutation *ext_proc.HeaderMutation
-	if finalBody != nil && ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
+
+	// Set body mutation if response was transformed (Anthropic or Response API)
+	if anthropicTransformed || (ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest) {
 		bodyMutation = &ext_proc.BodyMutation{
 			Mutation: &ext_proc.BodyMutation_Body{
 				Body: finalBody,
