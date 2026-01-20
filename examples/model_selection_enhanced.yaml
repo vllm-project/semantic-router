@@ -1,0 +1,119 @@
+# Example configuration demonstrating the enhanced model selection features
+# This config showcases:
+# 1. Elo Persistent Storage - ratings survive restarts
+# 2. RouterDC Model Embeddings - models described with natural language
+# 3. AutoMix Confidence Cascading - cost-aware escalation
+# 4. Quality Score Config - per-model quality estimates for cost-quality tradeoffs
+# 5. Feedback REST API - submit feedback via POST /api/v1/feedback
+
+backend_models:
+  models:
+    - id: "llama3.2:3b"
+      description: "Fast, efficient model for simple queries and basic chat"
+      capabilities: ["chat", "simple-qa", "translation"]
+      param_size: "3b"
+      quality_score: 0.65  # Lower quality but fast and cheap
+      pricing:
+        prompt_per_1m: 0.05
+        completion_per_1m: 0.15
+
+    - id: "phi4"
+      description: "Code generation specialist, optimized for Python and Go programming"
+      capabilities: ["code", "code-review", "debugging", "documentation"]
+      param_size: "14b"
+      quality_score: 0.85  # Good quality for code tasks
+      pricing:
+        prompt_per_1m: 0.20
+        completion_per_1m: 0.60
+
+    - id: "llama3.3:70b"
+      description: "Large model for complex reasoning, analysis, and creative tasks"
+      capabilities: ["reasoning", "analysis", "creative", "math", "complex-qa"]
+      param_size: "70b"
+      quality_score: 0.95  # Highest quality
+      pricing:
+        prompt_per_1m: 1.00
+        completion_per_1m: 3.00
+
+  endpoints:
+    - name: "ollama-local"
+      url: "http://localhost:11434/v1/chat/completions"
+
+# Decision routing with model selection algorithms
+decisions:
+  - name: "coding"
+    classifier:
+      examples:
+        - "Write a Python function that..."
+        - "Debug this code..."
+        - "How do I implement..."
+    algorithm:
+      type: "confidence"
+      confidence:
+        # Use cost-aware cascading (AutoMix-style)
+        escalation_order: "cost"  # Options: "size", "cost", "automix"
+        confidence_method: "margin"
+        threshold: 0.6
+    targets:
+      - model: "phi4"
+      - model: "llama3.3:70b"  # Fallback for complex code
+
+  - name: "reasoning"
+    classifier:
+      examples:
+        - "Explain why..."
+        - "Analyze the implications..."
+        - "Compare and contrast..."
+    algorithm:
+      type: "confidence"
+      confidence:
+        # POMDP-optimized escalation with quality/cost tradeoff
+        escalation_order: "automix"
+        cost_quality_tradeoff: 0.3  # Favor quality (0.0) vs cost (1.0)
+        threshold: 0.7
+    targets:
+      - model: "llama3.2:3b"
+      - model: "llama3.3:70b"
+
+  - name: "general"
+    classifier:
+      examples:
+        - "Hello"
+        - "What is..."
+        - "Tell me about..."
+    algorithm:
+      # Use Elo-based selection with persistent storage
+      type: "elo"
+      elo:
+        initial_rating: 1500
+        k_factor: 32
+        category_weighted: true
+        storage_path: "/var/lib/vsr/elo_ratings.json"  # Ratings persist across restarts
+        auto_save_interval: "30s"
+    targets:
+      - model: "llama3.2:3b"
+      - model: "phi4"
+      - model: "llama3.3:70b"
+
+  - name: "embedding_match"
+    classifier:
+      examples:
+        - "Query that should match model capabilities"
+    algorithm:
+      # RouterDC uses model descriptions for embedding-based matching
+      type: "router_dc"
+      router_dc:
+        temperature: 0.07
+        min_similarity: 0.3
+        require_descriptions: true  # Fail if models lack descriptions
+        use_capabilities: true      # Include capabilities in embedding
+    targets:
+      - model: "llama3.2:3b"
+      - model: "phi4"
+      - model: "llama3.3:70b"
+
+# Default decision when no match
+default_decision:
+  name: "fallback"
+  model: "llama3.2:3b"
+

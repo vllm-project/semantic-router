@@ -21,7 +21,7 @@ def get_target_modules_for_model(model_name: str) -> List[str]:
     Get appropriate target_modules for LoRA based on model architecture.
 
     Args:
-        model_name: Name of the model (e.g., "modernbert-base", "bert-base-uncased")
+        model_name: Name of the model (e.g., "modernbert-base", "mmbert-base", "bert-base-uncased")
 
     Returns:
         List of module names to apply LoRA to
@@ -29,42 +29,46 @@ def get_target_modules_for_model(model_name: str) -> List[str]:
     Raises:
         ValueError: If model architecture is not supported
     """
+    # ModernBERT and mmBERT share the same architecture
+    modernbert_modules = [
+        "attn.Wqkv",  # Combined query, key, value projection
+        "attn.Wo",  # Attention output projection
+        "mlp.Wi",  # MLP input projection (feed-forward)
+        "mlp.Wo",  # MLP output projection
+    ]
 
-    if model_name == "modernbert-base" or model_name == "answerdotai/ModernBERT-base":
+    # BERT/RoBERTa architecture modules
+    bert_modules = [
+        "attention.self.query",
+        "attention.self.key",  # Added key projection for better attention learning
+        "attention.self.value",
+        "attention.output.dense",
+        "intermediate.dense",
+        "output.dense",
+    ]
+
+    if model_name in ["modernbert-base", "answerdotai/ModernBERT-base"]:
         # ModernBERT architecture
-        return [
-            "attn.Wqkv",  # Combined query, key, value projection
-            "attn.Wo",  # Attention output projection
-            "mlp.Wi",  # MLP input projection (feed-forward)
-            "mlp.Wo",  # MLP output projection
-        ]
+        return modernbert_modules
+    elif model_name in ["mmbert-base", "jhu-clsp/mmBERT-base"]:
+        # mmBERT (Multilingual ModernBERT) - same architecture as ModernBERT
+        # Supports 1800+ languages with 256K vocab and 8192 max length
+        return modernbert_modules
     elif model_name == "bert-base-uncased":
         # Standard BERT architecture - Enhanced for better performance
-        return [
-            "attention.self.query",
-            "attention.self.key",  # Added key projection for better attention learning
-            "attention.self.value",
-            "attention.output.dense",
-            "intermediate.dense",
-            "output.dense",
-        ]
+        return bert_modules
     elif model_name == "roberta-base":
         # RoBERTa architecture - Enhanced for better performance
-        return [
-            "attention.self.query",
-            "attention.self.key",  # Added key projection for better attention learning
-            "attention.self.value",
-            "attention.output.dense",
-            "intermediate.dense",
-            "output.dense",
-        ]
+        return bert_modules
     else:
-        # Only these 3 models are supported for LoRA training
+        # Only these models are supported for LoRA training
         supported_models = [
             "bert-base-uncased",
             "roberta-base",
             "modernbert-base",
             "answerdotai/ModernBERT-base",
+            "mmbert-base",
+            "jhu-clsp/mmBERT-base",
         ]
         raise ValueError(
             f"Unsupported model: {model_name}. "
@@ -366,6 +370,7 @@ def get_model_mapping() -> Dict[str, str]:
     return {
         "modernbert-base": "answerdotai/ModernBERT-base",
         "modernbert-large": "answerdotai/ModernBERT-large",
+        "mmbert-base": "jhu-clsp/mmBERT-base",  # Multilingual ModernBERT (1800+ languages)
         "bert-base-uncased": "bert-base-uncased",
         "bert-large-uncased": "bert-large-uncased",
         "roberta-base": "roberta-base",
@@ -374,6 +379,25 @@ def get_model_mapping() -> Dict[str, str]:
         "deberta-v3-large": "microsoft/deberta-v3-large",
         "distilbert-base-uncased": "distilbert-base-uncased",
     }
+
+
+def get_max_length_for_model(model_name: str) -> int:
+    """
+    Get the maximum sequence length for a given model.
+
+    Args:
+        model_name: Name of the model
+
+    Returns:
+        Maximum sequence length supported by the model
+    """
+    # mmBERT supports 8192 tokens, others typically 512
+    if model_name in ["mmbert-base", "jhu-clsp/mmBERT-base"]:
+        return 8192
+    elif model_name in ["modernbert-base", "answerdotai/ModernBERT-base"]:
+        return 8192  # ModernBERT also supports long context
+    else:
+        return 512
 
 
 def resolve_model_path(model_name: str) -> str:

@@ -2,6 +2,12 @@
 //!
 //! This module provides the traditional fine-tuning ModernBERT implementation
 //! that preserves all bug fixes from FixedModernBertClassifier.
+//!
+//! Supports both standard ModernBERT and mmBERT (multilingual ModernBERT) variants:
+//! - ModernBERT: Standard English-focused model, 512 max length
+//! - mmBERT: Multilingual model (1800+ languages), 256k vocab, 8192 max length
+//!
+//! The variant is auto-detected from config.json or can be explicitly specified.
 
 use crate::core::{config_errors, processing_errors, ModelErrorType, UnifiedError};
 use crate::model_error;
@@ -21,7 +27,80 @@ use crate::model_architectures::unified_interface::{
     ConfigurableModel, CoreModel, PathSpecialization,
 };
 
+/// ModernBERT model variant
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModernBertVariant {
+    /// Standard ModernBERT (English-focused, 512 max length)
+    Standard,
+    /// mmBERT - Multilingual ModernBERT (1800+ languages, 256k vocab, 8192 max length)
+    /// Reference: https://huggingface.co/jhu-clsp/mmBERT-base
+    Multilingual,
+}
+
+impl ModernBertVariant {
+    /// Get the max sequence length for this variant
+    pub fn max_length(&self) -> usize {
+        match self {
+            ModernBertVariant::Standard => 512,
+            ModernBertVariant::Multilingual => 8192,
+        }
+    }
+
+    /// Get the tokenization strategy for this variant
+    pub fn tokenization_strategy(&self) -> crate::core::tokenization::TokenizationStrategy {
+        match self {
+            ModernBertVariant::Standard => {
+                crate::core::tokenization::TokenizationStrategy::ModernBERT
+            }
+            ModernBertVariant::Multilingual => {
+                crate::core::tokenization::TokenizationStrategy::MmBERT
+            }
+        }
+    }
+
+    /// Get the pad token string for this variant
+    pub fn pad_token(&self) -> &'static str {
+        match self {
+            ModernBertVariant::Standard => "[PAD]",
+            ModernBertVariant::Multilingual => "<pad>",
+        }
+    }
+
+    /// Detect variant from config.json
+    pub fn detect_from_config(config_path: &str) -> Result<Self, candle_core::Error> {
+        let config_str = std::fs::read_to_string(config_path).map_err(|_e| {
+            let unified_err = config_errors::file_not_found(config_path);
+            candle_core::Error::from(unified_err)
+        })?;
+
+        let config_json: serde_json::Value = serde_json::from_str(&config_str).map_err(|e| {
+            let unified_err = config_errors::invalid_json(config_path, &e.to_string());
+            candle_core::Error::from(unified_err)
+        })?;
+
+        let vocab_size = config_json
+            .get("vocab_size")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+
+        let position_embedding_type = config_json
+            .get("position_embedding_type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+
+        // mmBERT has vocab_size >= 200000 and uses sans_pos (RoPE)
+        if vocab_size >= 200000 && position_embedding_type == "sans_pos" {
+            Ok(ModernBertVariant::Multilingual)
+        } else {
+            Ok(ModernBertVariant::Standard)
+        }
+    }
+}
+
 /// Traditional ModernBERT sequence classifier
+///
+/// Supports both standard ModernBERT and mmBERT (multilingual) variants.
+/// The variant is auto-detected from config.json or can be explicitly specified.
 pub struct TraditionalModernBertClassifier {
     model: ModernBert,
     head: Option<FixedModernBertHead>,
@@ -31,9 +110,12 @@ pub struct TraditionalModernBertClassifier {
     device: Device,
     config: Config,
     num_classes: usize,
+    variant: ModernBertVariant,
 }
 
 /// Traditional ModernBERT token classifier
+///
+/// Supports both standard ModernBERT and mmBERT (multilingual) variants.
 pub struct TraditionalModernBertTokenClassifier {
     model: ModernBert,
     head: Option<FixedModernBertHead>,
@@ -43,7 +125,14 @@ pub struct TraditionalModernBertTokenClassifier {
     config: Config,
     num_classes: usize,
     model_path: String,
+    variant: ModernBertVariant,
 }
+
+// Type aliases for mmBERT (multilingual ModernBERT) for API clarity
+/// mmBERT sequence classifier (alias for TraditionalModernBertClassifier with Multilingual variant)
+pub type MmBertClassifier = TraditionalModernBertClassifier;
+/// mmBERT token classifier (alias for TraditionalModernBertTokenClassifier with Multilingual variant)
+pub type MmBertTokenClassifier = TraditionalModernBertTokenClassifier;
 
 // Global static instances using OnceLock pattern for zero-cost reads after initialization
 pub static TRADITIONAL_MODERNBERT_CLASSIFIER: OnceLock<Arc<TraditionalModernBertClassifier>> =
@@ -313,6 +402,7 @@ impl candle_nn::Module for FixedModernBertTokenClassifier {
 impl std::fmt::Debug for TraditionalModernBertClassifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TraditionalModernBertClassifier")
+            .field("variant", &self.variant)
             .field("classifier_pooling", &self.classifier_pooling)
             .field("device", &self.device)
             .field("num_classes", &self.num_classes)
@@ -323,6 +413,7 @@ impl std::fmt::Debug for TraditionalModernBertClassifier {
 impl std::fmt::Debug for TraditionalModernBertTokenClassifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TraditionalModernBertTokenClassifier")
+            .field("variant", &self.variant)
             .field("device", &self.device)
             .field("num_classes", &self.num_classes)
             .finish()
@@ -340,9 +431,22 @@ impl TraditionalModernBertClassifier {
         }
     }
 
+    /// Load from directory with auto-detected variant (Standard or Multilingual/mmBERT)
     pub fn load_from_directory(
         model_path: &str,
         use_cpu: bool,
+    ) -> Result<Self, candle_core::Error> {
+        // Auto-detect variant from config.json
+        let config_path = format!("{}/config.json", model_path);
+        let variant = ModernBertVariant::detect_from_config(&config_path)?;
+        Self::load_from_directory_with_variant(model_path, use_cpu, variant)
+    }
+
+    /// Load from directory with explicit variant specification
+    pub fn load_from_directory_with_variant(
+        model_path: &str,
+        use_cpu: bool,
+        variant: ModernBertVariant,
     ) -> Result<Self, candle_core::Error> {
         // 1. Determine device
         let device = if use_cpu {
@@ -439,15 +543,15 @@ impl TraditionalModernBertClassifier {
             candle_core::Error::from(unified_err)
         })?;
 
-        // 9. Create unified tokenizer wrapper with ModernBERT-specific config
+        // 9. Create unified tokenizer wrapper with variant-specific config
         let tokenizer_config = crate::core::tokenization::TokenizationConfig {
-            max_length: 512,
+            max_length: variant.max_length(),
             add_special_tokens: true,
             truncation_strategy: tokenizers::TruncationStrategy::LongestFirst,
             truncation_direction: tokenizers::TruncationDirection::Right,
             pad_token_id: config.pad_token_id,
-            pad_token: "[PAD]".to_string(),
-            tokenization_strategy: crate::core::tokenization::TokenizationStrategy::ModernBERT,
+            pad_token: variant.pad_token().to_string(),
+            tokenization_strategy: variant.tokenization_strategy(),
             token_data_type: crate::core::tokenization::TokenDataType::U32,
         };
 
@@ -477,7 +581,27 @@ impl TraditionalModernBertClassifier {
             device,
             config,
             num_classes,
+            variant,
         })
+    }
+
+    /// Load mmBERT (multilingual) model from directory
+    /// Convenience method that explicitly loads as Multilingual variant
+    pub fn load_mmbert_from_directory(
+        model_path: &str,
+        use_cpu: bool,
+    ) -> Result<Self, candle_core::Error> {
+        Self::load_from_directory_with_variant(model_path, use_cpu, ModernBertVariant::Multilingual)
+    }
+
+    /// Get the model variant (Standard or Multilingual)
+    pub fn variant(&self) -> ModernBertVariant {
+        self.variant
+    }
+
+    /// Check if this is a multilingual (mmBERT) model
+    pub fn is_multilingual(&self) -> bool {
+        self.variant == ModernBertVariant::Multilingual
     }
 
     /// Classify text using real model inference - REAL IMPLEMENTATION
@@ -577,8 +701,21 @@ impl TraditionalModernBertClassifier {
 }
 
 impl TraditionalModernBertTokenClassifier {
-    /// Create a new traditional ModernBERT token classifier
+    /// Create a new traditional ModernBERT token classifier with auto-detected variant
     pub fn new(model_id: &str, use_cpu: bool) -> Result<Self> {
+        // Auto-detect variant from config.json
+        let config_path_str = format!("{}/config.json", model_id);
+        let variant = ModernBertVariant::detect_from_config(&config_path_str)
+            .unwrap_or(ModernBertVariant::Standard);
+        Self::new_with_variant(model_id, use_cpu, variant)
+    }
+
+    /// Create a new token classifier with explicit variant specification
+    pub fn new_with_variant(
+        model_id: &str,
+        use_cpu: bool,
+        variant: ModernBertVariant,
+    ) -> Result<Self> {
         let device = if use_cpu {
             Device::Cpu
         } else {
@@ -597,11 +734,21 @@ impl TraditionalModernBertTokenClassifier {
         let base_tokenizer = Tokenizer::from_file(&tokenizer_path)
             .map_err(|e| E::msg(format!("Failed to load tokenizer: {}", e)))?;
 
-        // Create dual-path compatible tokenizer
-        let tokenizer = crate::core::tokenization::create_modernbert_compatibility_tokenizer(
-            base_tokenizer,
-            device.clone(),
-        )?;
+        // Create dual-path compatible tokenizer based on variant
+        let tokenizer = match variant {
+            ModernBertVariant::Multilingual => {
+                crate::core::tokenization::create_mmbert_compatibility_tokenizer(
+                    base_tokenizer,
+                    device.clone(),
+                )?
+            }
+            ModernBertVariant::Standard => {
+                crate::core::tokenization::create_modernbert_compatibility_tokenizer(
+                    base_tokenizer,
+                    device.clone(),
+                )?
+            }
+        };
 
         // Load model weights
         let weights_path = std::path::Path::new(model_id).join("model.safetensors");
@@ -653,7 +800,23 @@ impl TraditionalModernBertTokenClassifier {
             config,
             num_classes,
             model_path: model_id.to_string(),
+            variant,
         })
+    }
+
+    /// Create mmBERT (multilingual) token classifier
+    pub fn new_mmbert(model_id: &str, use_cpu: bool) -> Result<Self> {
+        Self::new_with_variant(model_id, use_cpu, ModernBertVariant::Multilingual)
+    }
+
+    /// Get the model variant
+    pub fn variant(&self) -> ModernBertVariant {
+        self.variant
+    }
+
+    /// Check if this is a multilingual (mmBERT) model
+    pub fn is_multilingual(&self) -> bool {
+        self.variant == ModernBertVariant::Multilingual
     }
 
     /// Classify tokens in text

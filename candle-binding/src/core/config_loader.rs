@@ -246,6 +246,26 @@ pub struct ModernBertConfig {
     pub hidden_size: usize,
 }
 
+/// mmBERT configuration structure (multilingual ModernBERT)
+///
+/// mmBERT is a multilingual encoder built on ModernBERT architecture with:
+/// - 256k vocabulary for 1800+ language support
+/// - 8192 max position embeddings
+/// - RoPE positional embeddings (sans_pos)
+#[derive(Debug, Clone)]
+pub struct MmBertConfig {
+    pub num_classes: usize,
+    pub hidden_size: usize,
+    pub vocab_size: usize,
+    pub max_position_embeddings: usize,
+    pub num_hidden_layers: usize,
+    pub num_attention_heads: usize,
+    pub intermediate_size: usize,
+    pub local_attention: usize,
+    pub global_attn_every_n_layers: usize,
+    pub is_multilingual: bool,
+}
+
 /// Token configuration structure
 #[derive(Debug, Clone)]
 pub struct TokenConfig {
@@ -344,6 +364,98 @@ impl ConfigLoader for ModernBertConfigLoader {
             hidden_size,
         })
     }
+}
+
+/// mmBERT configuration loader (multilingual ModernBERT)
+pub struct MmBertConfigLoader;
+impl ConfigLoader for MmBertConfigLoader {
+    type Output = MmBertConfig;
+
+    fn load_from_path(path: &Path) -> Result<Self::Output, UnifiedError> {
+        let config_json = UnifiedConfigLoader::load_json_config(&path.to_string_lossy())?;
+        let num_classes = UnifiedConfigLoader::extract_num_classes(&config_json);
+        let hidden_size = UnifiedConfigLoader::extract_hidden_size(&config_json);
+
+        // Extract mmBERT-specific configuration
+        let vocab_size = config_json
+            .get("vocab_size")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(256000) as usize;
+
+        let max_position_embeddings = config_json
+            .get("max_position_embeddings")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(8192) as usize;
+
+        let num_hidden_layers = config_json
+            .get("num_hidden_layers")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(22) as usize;
+
+        let num_attention_heads = config_json
+            .get("num_attention_heads")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(12) as usize;
+
+        let intermediate_size = config_json
+            .get("intermediate_size")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(1152) as usize;
+
+        let local_attention = config_json
+            .get("local_attention")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(128) as usize;
+
+        let global_attn_every_n_layers = config_json
+            .get("global_attn_every_n_layers")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(3) as usize;
+
+        // Check if this is a multilingual model (vocab_size >= 200000)
+        let is_multilingual = vocab_size >= 200000;
+
+        Ok(MmBertConfig {
+            num_classes,
+            hidden_size,
+            vocab_size,
+            max_position_embeddings,
+            num_hidden_layers,
+            num_attention_heads,
+            intermediate_size,
+            local_attention,
+            global_attn_every_n_layers,
+            is_multilingual,
+        })
+    }
+}
+
+/// Detect if a model is mmBERT from its config.json
+pub fn is_mmbert_model(model_path: &str) -> Result<bool, UnifiedError> {
+    let config_json = UnifiedConfigLoader::load_json_config(model_path)?;
+
+    let vocab_size = config_json
+        .get("vocab_size")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+
+    let model_type = config_json
+        .get("model_type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    let position_embedding_type = config_json
+        .get("position_embedding_type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    // mmBERT has large vocab (256000) and uses modernbert architecture with sans_pos
+    Ok(vocab_size >= 200000 && model_type == "modernbert" && position_embedding_type == "sans_pos")
+}
+
+/// Load mmBERT configuration from model path
+pub fn load_mmbert_config(model_path: &str) -> Result<MmBertConfig, UnifiedError> {
+    MmBertConfigLoader::load_from_path(std::path::Path::new(model_path))
 }
 
 /// Model configuration loader

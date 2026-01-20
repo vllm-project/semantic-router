@@ -60,7 +60,7 @@ func TestToLegacyRegistry_IncludesAliases(t *testing.T) {
 	}
 
 	// Test Jailbreak/Security model paths
-	jailbreakRepo := "LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model"
+	jailbreakRepo := "LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model"
 	jailbreakTests := []string{
 		"models/mom-jailbreak-classifier",
 		"models/jailbreak_classifier_modernbert-base_model",

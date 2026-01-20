@@ -30,14 +30,10 @@ Usage:
     python jailbreak_bert_finetuning_lora.py --mode train --model bert-base-uncased --epochs 1 --max-samples 50
 
 Supported models:
+    - mmbert-base: mmBERT base model (149M parameters, 1800+ languages, RECOMMENDED)
     - bert-base-uncased: Standard BERT base model (110M parameters, most stable)
     - roberta-base: RoBERTa base model (125M parameters, better context understanding)
     - modernbert-base: ModernBERT base model (149M parameters, latest architecture)
-    - bert-large-uncased: Standard BERT large model (340M parameters, higher accuracy)
-    - roberta-large: RoBERTa large model (355M parameters, best performance)
-    - modernbert-large: ModernBERT large model (395M parameters, cutting-edge)
-    - deberta-v3-base: DeBERTa v3 base model (184M parameters, strong performance)
-    - deberta-v3-large: DeBERTa v3 large model (434M parameters, research-grade)
 
 Datasets:
     - toxic-chat: LMSYS Toxic Chat dataset for toxicity detection
@@ -638,21 +634,10 @@ def main(
     logger.info(f"  Recall: {eval_results['eval_recall']:.4f}")
     logger.info(f"LoRA Security model saved to: {output_dir}")
 
-    # Auto-merge LoRA adapter with base model for Rust compatibility
-    logger.info("Auto-merging LoRA adapter with base model for Rust inference...")
-    try:
-        # Option 1: Keep both LoRA adapter and Rust-compatible model (default)
-        merged_output_dir = f"{output_dir}_rust"
-
-        # Option 2: Replace LoRA adapter with Rust-compatible model (uncomment to use)
-        # merged_output_dir = output_dir
-
-        merge_lora_adapter_to_full_model(output_dir, merged_output_dir, model_path)
-        logger.info(f"Rust-compatible model saved to: {merged_output_dir}")
-        logger.info(f"This model can be used with Rust candle-binding!")
-    except Exception as e:
-        logger.warning(f"Auto-merge failed: {e}")
-        logger.info(f"You can manually merge using a merge script")
+    # NOTE: LoRA adapters are kept separate from base model
+    # To merge later, use: merge_lora_adapter_to_full_model(output_dir, merged_output_dir, model_path)
+    logger.info(f"LoRA adapter saved to: {output_dir}")
+    logger.info(f"Base model: {model_path} (not merged - adapters kept separate)")
 
 
 def merge_lora_adapter_to_full_model(
@@ -823,11 +808,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model",
         choices=[
+            "mmbert-base",  # mmBERT - Multilingual ModernBERT (1800+ languages, recommended)
             "modernbert-base",  # ModernBERT base model - latest architecture
             "bert-base-uncased",  # BERT base model - most stable and CPU-friendly
             "roberta-base",  # RoBERTa base model - best performance
         ],
-        default="bert-base-uncased",
+        default="mmbert-base",  # Default to mmBERT for multilingual jailbreak detection
         help="Model to use for fine-tuning",
     )
     parser.add_argument("--lora-rank", type=int, default=8)
