@@ -115,7 +115,9 @@ class ShareGPTPreferencePipeline:
                 "other"
             """
             return [
-                RoutePolicy(label="general_inquiry", description="General inquiry"),
+                RoutePolicy(
+                    label="general_inquiry", description="General inquiry"
+                ),  # general_inquiry as default
                 RoutePolicy(
                     label="general_code_generation", description="Code generation"
                 ),
