@@ -70,6 +70,10 @@ type SemanticRouterReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=autoscaling,resources=horizontalpodautoscalers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=serving.kserve.io,resources=inferenceservices,verbs=get;list;watch
+// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=gateways;httproutes,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=storage.k8s.io,resources=storageclasses,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -164,8 +168,17 @@ func (r *SemanticRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	// Reconcile Deployment
-	if err := r.reconcileDeployment(ctx, semanticrouter); err != nil {
+	// Determine gateway mode and reconcile Gateway integration
+	gatewayMode, err := reconcileGatewayIntegration(ctx, r.Client, r.Scheme, semanticrouter)
+	if err != nil {
+		logger.Error(err, "Gateway integration failed")
+		return ctrl.Result{}, err
+	}
+	semanticrouter.Status.GatewayMode = gatewayMode
+	logger.Info("Gateway mode determined", "mode", gatewayMode)
+
+	// Reconcile Deployment (pass gateway mode)
+	if err := r.reconcileDeployment(ctx, semanticrouter, gatewayMode); err != nil {
 		logger.Error(err, "Failed to reconcile Deployment")
 		return ctrl.Result{}, err
 	}
@@ -185,6 +198,16 @@ func (r *SemanticRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// Reconcile Ingress
 	if err := r.reconcileIngress(ctx, semanticrouter); err != nil {
 		logger.Error(err, "Failed to reconcile Ingress")
+		return ctrl.Result{}, err
+	}
+
+	// Reconcile OpenShift Route (if on OpenShift)
+	isOpenShift := false
+	if r.isOpenShift != nil {
+		isOpenShift = *r.isOpenShift
+	}
+	if err := reconcileRoute(ctx, r.Client, r.Scheme, semanticrouter, isOpenShift); err != nil {
+		logger.Error(err, "Route reconciliation failed")
 		return ctrl.Result{}, err
 	}
 
@@ -277,7 +300,7 @@ func (r *SemanticRouterReconciler) reconcileServiceAccount(ctx context.Context, 
 }
 
 func (r *SemanticRouterReconciler) reconcileConfigMap(ctx context.Context, sr *vllmv1alpha1.SemanticRouter) error {
-	configData, err := r.generateConfigYAML(sr)
+	configData, err := r.generateConfigYAML(ctx, sr)
 	if err != nil {
 		return err
 	}
@@ -335,6 +358,15 @@ func (r *SemanticRouterReconciler) reconcilePVC(ctx context.Context, sr *vllmv1a
 		return nil
 	}
 
+	// Validate StorageClass before creating PVC
+	validatedStorageClass, err := validateStorageClass(ctx, r.Client, sr.Spec.Persistence.StorageClassName)
+	if err != nil {
+		return fmt.Errorf("StorageClass validation failed: %w", err)
+	}
+
+	// Update the StorageClassName with validated/default value
+	sr.Spec.Persistence.StorageClassName = validatedStorageClass
+
 	pvc, err := r.generatePVC(sr)
 	if err != nil {
 		return fmt.Errorf("failed to generate PVC: %w", err)
@@ -352,8 +384,8 @@ func (r *SemanticRouterReconciler) reconcilePVC(ctx context.Context, sr *vllmv1a
 	return err
 }
 
-func (r *SemanticRouterReconciler) reconcileDeployment(ctx context.Context, sr *vllmv1alpha1.SemanticRouter) error {
-	deployment := r.generateDeployment(sr)
+func (r *SemanticRouterReconciler) reconcileDeployment(ctx context.Context, sr *vllmv1alpha1.SemanticRouter, gatewayMode string) error {
+	deployment := r.generateDeployment(sr, gatewayMode)
 	if err := controllerutil.SetControllerReference(sr, deployment, r.Scheme); err != nil {
 		return err
 	}
@@ -557,8 +589,28 @@ func (r *SemanticRouterReconciler) updateStatus(ctx context.Context, sr *vllmv1a
 	})
 }
 
-func (r *SemanticRouterReconciler) generateConfigYAML(sr *vllmv1alpha1.SemanticRouter) (string, error) {
+func (r *SemanticRouterReconciler) generateConfigYAML(ctx context.Context, sr *vllmv1alpha1.SemanticRouter) (string, error) {
 	config := map[string]interface{}{}
+
+	// Generate vLLM endpoints and model configs if specified
+	if len(sr.Spec.VLLMEndpoints) > 0 {
+		endpointsConfig, modelConfigs, err := generateVLLMEndpointsConfig(ctx, r.Client, sr.Spec.VLLMEndpoints, sr.Namespace)
+		if err != nil {
+			return "", fmt.Errorf("failed to generate vLLM endpoints config: %w", err)
+		}
+
+		// Add vllm_endpoints section
+		if endpointsConfig != nil {
+			if vllmEndpoints, ok := endpointsConfig["vllm_endpoints"]; ok {
+				config["vllm_endpoints"] = vllmEndpoints
+			}
+		}
+
+		// Add model_config section
+		if len(modelConfigs) > 0 {
+			config["model_config"] = modelConfigs
+		}
+	}
 
 	if sr.Spec.Config.BertModel != nil {
 		config["bert_model"] = r.convertToConfigMap(sr.Spec.Config.BertModel)
@@ -644,7 +696,7 @@ func (r *SemanticRouterReconciler) generatePVC(sr *vllmv1alpha1.SemanticRouter) 
 	return pvc, nil
 }
 
-func (r *SemanticRouterReconciler) generateDeployment(sr *vllmv1alpha1.SemanticRouter) *appsv1.Deployment {
+func (r *SemanticRouterReconciler) generateDeployment(sr *vllmv1alpha1.SemanticRouter, gatewayMode string) *appsv1.Deployment {
 	replicas := DefaultReplicas
 	if sr.Spec.Replicas != nil {
 		replicas = *sr.Spec.Replicas
@@ -682,7 +734,7 @@ func (r *SemanticRouterReconciler) generateDeployment(sr *vllmv1alpha1.SemanticR
 					ServiceAccountName: saName,
 					SecurityContext:    podSecurityContext,
 					ImagePullSecrets:   sr.Spec.ImagePullSecrets,
-					Containers:         r.generateContainers(sr),
+					Containers:         r.generateContainers(sr, gatewayMode),
 					Volumes:            r.generateVolumes(sr),
 					NodeSelector:       sr.Spec.NodeSelector,
 					Tolerations:        sr.Spec.Tolerations,
@@ -754,7 +806,9 @@ func (r *SemanticRouterReconciler) getContainerSecurityContext(sr *vllmv1alpha1.
 	return securityContext
 }
 
-func (r *SemanticRouterReconciler) generateContainers(sr *vllmv1alpha1.SemanticRouter) []corev1.Container {
+func (r *SemanticRouterReconciler) generateContainers(sr *vllmv1alpha1.SemanticRouter, gatewayMode string) []corev1.Container {
+	containers := make([]corev1.Container, 0)
+
 	image := DefaultImage
 	if sr.Spec.Image.Repository != "" {
 		image = sr.Spec.Image.Repository
@@ -841,7 +895,19 @@ func (r *SemanticRouterReconciler) generateContainers(sr *vllmv1alpha1.SemanticR
 		}
 	}
 
-	return []corev1.Container{container}
+	// Always add semantic-router container
+	containers = append(containers, container)
+
+	// Only add Envoy sidecar in standalone mode
+	// In gateway-integration mode, traffic is routed through an existing Gateway
+	if gatewayMode == "standalone" {
+		// TODO: Add Envoy sidecar container configuration
+		// The Envoy sidecar would typically listen on port 8801 and proxy to semantic-router on port 8080
+		// This requires Envoy configuration via ConfigMap with ExtProc filter setup
+		// For now, this is a placeholder for future implementation
+	}
+
+	return containers
 }
 
 func (r *SemanticRouterReconciler) generateVolumes(sr *vllmv1alpha1.SemanticRouter) []corev1.Volume {

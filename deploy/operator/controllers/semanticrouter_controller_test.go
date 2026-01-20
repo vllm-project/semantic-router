@@ -184,7 +184,7 @@ func TestGenerateDeployment(t *testing.T) {
 		},
 	}
 
-	deployment := r.generateDeployment(sr)
+	deployment := r.generateDeployment(sr, "standalone")
 
 	if deployment == nil {
 		t.Fatal("generateDeployment() returned nil")
@@ -565,7 +565,7 @@ func TestGenerateContainers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			containers := r.generateContainers(tt.sr)
+			containers := r.generateContainers(tt.sr, "standalone")
 
 			if len(containers) != 1 {
 				t.Fatalf("expected 1 container, got %d", len(containers))
