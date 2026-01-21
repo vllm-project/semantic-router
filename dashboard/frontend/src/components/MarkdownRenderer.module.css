@@ -209,20 +209,12 @@
   padding: 0;
 }
 
-/* Ensure code blocks work in both light and dark themes */
-[data-theme='light'] .codeBlock {
-  background-color: #f6f8fa;
-}
-
-[data-theme='light'] .codeBlock code {
-  color: #24292f;
-}
-
-[data-theme='dark'] .codeBlock {
+/* Dark theme only */
+.codeBlock {
   background-color: #0d1117;
 }
 
-[data-theme='dark'] .codeBlock code {
+.codeBlock code {
   color: #c9d1d9;
 }
 

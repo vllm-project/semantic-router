@@ -18,6 +18,7 @@ from cli.consts import (
 )
 from cli.commands.init import init_command
 from cli.commands.config import config_command
+from cli.commands.validate import validate_command
 from cli.docker_cli import docker_container_status
 
 log = getLogger(__name__)
@@ -212,6 +213,27 @@ def config(config_type, config):
 
 
 @click.command()
+@click.option(
+    "--config",
+    default="config.yaml",
+    help="Path to config file (default: config.yaml)",
+)
+def validate(config):
+    """
+    Validate configuration file.
+
+    Examples:
+        vllm-sr validate                    # Uses config.yaml
+        vllm-sr validate --config my-config.yaml  # Uses my-config.yaml
+    """
+    try:
+        validate_command(config)
+    except Exception as e:
+        log.error(f"Error: {e}")
+        sys.exit(1)
+
+
+@click.command()
 @click.argument(
     "service", type=click.Choice(["envoy", "router", "dashboard", "all"]), default="all"
 )
@@ -307,6 +329,7 @@ def dashboard(no_open):
 main.add_command(init)
 main.add_command(serve)
 main.add_command(config)
+main.add_command(validate)
 main.add_command(status)
 main.add_command(logs)
 main.add_command(stop)

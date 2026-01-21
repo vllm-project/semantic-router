@@ -78,7 +78,7 @@ export const PluginChainNode = memo<NodeProps<PluginChainNodeData>>(({ data }) =
                   </span>
                 </div>
                 {idx < plugins.length - 1 && (
-                  <span className={styles.chainArrow}>→</span>
+                  <span className={styles.chainArrow}>↓</span>
                 )}
               </React.Fragment>
             )

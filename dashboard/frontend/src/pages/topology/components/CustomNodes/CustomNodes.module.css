@@ -21,35 +21,35 @@
 
 .highlighted {
   transform: scale(1.08);
-  box-shadow: 
-    0 0 0 3px #FFD700,
-    0 0 25px rgba(255, 215, 0, 0.8),
-    0 0 50px rgba(255, 215, 0, 0.4);
+  box-shadow:
+    0 0 0 3px #76b900,
+    0 0 25px rgba(118, 185, 0, 0.8),
+    0 0 50px rgba(118, 185, 0, 0.4);
   z-index: 1000;
   animation: highlightPulse 1.5s ease-in-out infinite;
 }
 
 @keyframes highlightPulse {
   0%, 100% {
-    box-shadow: 
-      0 0 0 3px #FFD700,
-      0 0 25px rgba(255, 215, 0, 0.8),
-      0 0 50px rgba(255, 215, 0, 0.4);
+    box-shadow:
+      0 0 0 3px #76b900,
+      0 0 25px rgba(118, 185, 0, 0.8),
+      0 0 50px rgba(118, 185, 0, 0.4);
   }
   50% {
-    box-shadow: 
-      0 0 0 4px #FFA500,
-      0 0 35px rgba(255, 165, 0, 1),
-      0 0 70px rgba(255, 165, 0, 0.6);
+    box-shadow:
+      0 0 0 4px #8fd400,
+      0 0 35px rgba(143, 212, 0, 1),
+      0 0 70px rgba(143, 212, 0, 0.6);
   }
 }
 
-/* ============== Client Node ============== */
+/* ============== Client Node (NVIDIA Green) ============== */
 .clientNode {
   composes: nodeBase;
-  background: #4CAF50;
+  background: #76b900;
   color: white;
-  border: 2px solid #45a049;
+  border: 2px solid #5a8f00;
   min-width: 140px;
 }
 
@@ -70,8 +70,8 @@
 }
 
 .globalPluginNode.disabled {
-  background: #757575 !important;
-  border-color: #616161 !important;
+  background: #3d4a59 !important;
+  border-color: #2d3748 !important;
 }
 
 .pluginHeader {
@@ -383,10 +383,10 @@
 
 .pluginChain {
   display: flex;
+  flex-direction: column;  /* Changed to vertical layout */
   align-items: center;
-  gap: 4px;
+  gap: 8px;  /* Increased gap for vertical spacing */
   margin-top: 8px;
-  flex-wrap: wrap;
 }
 
 .chainPlugin {
@@ -397,6 +397,8 @@
   border-radius: 4px;
   font-size: 10px;
   color: white;
+  width: 100%;  /* Full width for vertical layout */
+  justify-content: center;
 }
 
 .chainPlugin.disabled {
@@ -411,8 +413,9 @@
 }
 
 .chainArrow {
-  font-size: 12px;
+  font-size: 14px;  /* Slightly larger for vertical arrow */
   opacity: 0.5;
+  transform: rotate(90deg);  /* Rotate arrow from → to ↓ */
 }
 
 /* ============== Model Node ============== */
