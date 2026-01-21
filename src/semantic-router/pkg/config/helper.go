@@ -425,6 +425,8 @@ func (c *RouterConfig) GetCacheTTLSecondsForDecision(decisionName string) int {
 }
 
 // IsJailbreakEnabledForDecision returns whether jailbreak detection is enabled for a specific decision
+// Returns true only if the decision has an explicit jailbreak plugin configured with enabled: true
+// This ensures per-decision scoping - decisions without jailbreak plugin won't execute jailbreak detection
 func (c *RouterConfig) IsJailbreakEnabledForDecision(decisionName string) bool {
 	decision := c.GetDecisionByName(decisionName)
 	if decision != nil {
@@ -433,8 +435,9 @@ func (c *RouterConfig) IsJailbreakEnabledForDecision(decisionName string) bool {
 			return config.Enabled
 		}
 	}
-	// Fall back to global setting
-	return c.PromptGuard.Enabled
+	// No explicit jailbreak plugin configured for this decision
+	// Return false to respect per-decision plugin scoping
+	return false
 }
 
 // GetJailbreakThresholdForDecision returns the effective jailbreak detection threshold for a decision
@@ -451,6 +454,8 @@ func (c *RouterConfig) GetJailbreakThresholdForDecision(decisionName string) flo
 }
 
 // IsPIIEnabledForDecision returns whether PII detection is enabled for a specific decision
+// Returns true only if the decision has an explicit PII plugin configured with enabled: true
+// This ensures per-decision scoping - decisions without PII plugin won't execute PII detection
 func (c *RouterConfig) IsPIIEnabledForDecision(decisionName string) bool {
 	decision := c.GetDecisionByName(decisionName)
 	if decision != nil {
@@ -459,8 +464,9 @@ func (c *RouterConfig) IsPIIEnabledForDecision(decisionName string) bool {
 			return config.Enabled
 		}
 	}
-	// Fall back to global setting
-	return c.IsPIIClassifierEnabled()
+	// No explicit PII plugin configured for this decision
+	// Return false to respect per-decision plugin scoping
+	return false
 }
 
 // GetPIIThresholdForDecision returns the effective PII detection threshold for a decision
