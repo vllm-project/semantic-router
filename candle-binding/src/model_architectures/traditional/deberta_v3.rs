@@ -41,6 +41,7 @@ use crate::model_architectures::traits::{FineTuningType, ModelType, TaskType, Tr
 use crate::model_architectures::unified_interface::{
     ConfigurableModel, CoreModel, PathSpecialization,
 };
+use std::sync::OnceLock;
 
 /// DeBERTa v3 Sequence Classification Model
 ///
@@ -58,6 +59,49 @@ struct DebertaV3SequenceClassifier {
     pooler: DebertaV2ContextPooler,
     classifier: Linear,
     dropout: StableDropout,
+}
+
+/// DeBERTa v3 Sequence Regression Model
+struct DebertaV3SequenceRegressor {
+    device: Device,
+    encoder: DebertaV2Model,
+    pooler: DebertaV2ContextPooler,
+    regressor: Linear,
+    dropout: StableDropout,
+}
+
+impl DebertaV3SequenceRegressor {
+    fn load(vb: VarBuilder, config: &Config) -> candle_core::Result<Self> {
+        let encoder = DebertaV2Model::load(vb.pp("deberta"), config)?;
+        let pooler = DebertaV2ContextPooler::load(vb.pp("pooler"), config)?;
+        let output_dim = pooler.output_dim()?;
+        let regressor = candle_nn::linear(output_dim, 1, vb.pp("classifier"))?;
+        let dropout = StableDropout::new(config.cls_dropout.unwrap_or(config.hidden_dropout_prob));
+
+        Ok(Self {
+            device: vb.device().clone(),
+            encoder,
+            pooler,
+            regressor,
+            dropout,
+        })
+    }
+
+    fn forward(
+        &self,
+        input_ids: &Tensor,
+        token_type_ids: Option<Tensor>,
+        attention_mask: Option<Tensor>,
+    ) -> candle_core::Result<Tensor> {
+        let encoder_output = self
+            .encoder
+            .forward(input_ids, token_type_ids, attention_mask)?;
+        let pooled_output = self.pooler.forward(&encoder_output)?;
+        let pooled_output = self.dropout.forward(&pooled_output)?;
+        let logits = self.regressor.forward(&pooled_output)?;
+
+        Ok(logits)
+    }
 }
 
 impl DebertaV3SequenceClassifier {
@@ -167,6 +211,17 @@ pub struct DebertaV3Classifier {
     /// Model configuration
     config: Config,
 }
+
+/// DeBERTa v3 Regressor for scalar outputs (0-1)
+pub struct DebertaV3Regressor {
+    model: DebertaV3SequenceRegressor,
+    tokenizer: Box<dyn DualPathTokenizer>,
+    device: Device,
+}
+
+/// Global DeBERTa v3 regressor instance
+pub static TRADITIONAL_DEBERTA_V3_REGRESSOR: OnceLock<std::sync::Arc<DebertaV3Regressor>> =
+    OnceLock::new();
 
 impl DebertaV3Classifier {
     /// Create a new DeBERTa v3 classifier
@@ -456,6 +511,64 @@ impl DebertaV3Classifier {
     /// Get all labels
     pub fn get_all_labels(&self) -> &HashMap<usize, String> {
         &self.id2label
+    }
+}
+
+impl DebertaV3Regressor {
+    /// Create a new DeBERTa v3 regressor
+    pub fn new(model_id: &str, use_cpu: bool) -> Result<Self> {
+        let device = if use_cpu {
+            Device::Cpu
+        } else {
+            Device::cuda_if_available(0)?
+        };
+
+        println!("Initializing DeBERTa v3 regressor: {}", model_id);
+
+        let (config_filename, tokenizer_filename, weights_filename, use_pth) =
+            DebertaV3Classifier::resolve_model_files(model_id)?;
+
+        let config = std::fs::read_to_string(config_filename)?;
+        let config: Config = serde_json::from_str(&config)?;
+        let base_tokenizer = Tokenizer::from_file(tokenizer_filename).map_err(E::msg)?;
+        let tokenizer = create_bert_compatibility_tokenizer(base_tokenizer, device.clone())?;
+
+        let vb = if use_pth {
+            VarBuilder::from_pth(&weights_filename, DType::F32, &device)?
+        } else {
+            unsafe {
+                VarBuilder::from_mmaped_safetensors(
+                    &[weights_filename.clone()],
+                    DType::F32,
+                    &device,
+                )?
+            }
+        };
+
+        let model = DebertaV3SequenceRegressor::load(vb, &config)?;
+
+        Ok(Self {
+            model,
+            tokenizer,
+            device,
+        })
+    }
+
+    /// Regress a single text and return a score between 0 and 1
+    pub fn regress_text(&self, text: &str) -> Result<f32> {
+        let result = self.tokenizer.tokenize_for_traditional(text)?;
+        let (token_ids_tensor, attention_mask_tensor) = self.tokenizer.create_tensors(&result)?;
+        let token_type_ids = token_ids_tensor.zeros_like()?;
+
+        let logits = self.model.forward(
+            &token_ids_tensor,
+            Some(token_type_ids),
+            Some(attention_mask_tensor),
+        )?;
+
+        let logit = logits.squeeze(0)?.squeeze(0)?.to_scalar::<f32>()?;
+        let score = 1.0 / (1.0 + (-logit).exp());
+        Ok(score)
     }
 }
 

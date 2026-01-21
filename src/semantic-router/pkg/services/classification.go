@@ -178,6 +178,7 @@ type MatchedSignals struct {
 	FactCheck    []string `json:"fact_check,omitempty"`
 	UserFeedback []string `json:"user_feedback,omitempty"`
 	Preferences  []string `json:"preferences,omitempty"`
+	Complexity   []string `json:"complexity,omitempty"`
 }
 
 // DecisionResult represents the result of decision evaluation
@@ -258,6 +259,7 @@ func (s *ClassificationService) buildIntentResponseFromSignals(
 			FactCheck:    signals.MatchedFactCheckRules,
 			UserFeedback: signals.MatchedUserFeedbackRules,
 			Preferences:  signals.MatchedPreferenceRules,
+			Complexity:   signals.MatchedComplexityRules,
 		}
 	}
 

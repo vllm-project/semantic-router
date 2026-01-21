@@ -177,6 +177,21 @@ signals:
     - name: "ja"
       description: "Japanese language queries"
 
+  # complexity - Task complexity signals (score 0-1)
+  complexity:
+    - name: "low_complexity"
+      description: "Simple requests with low task complexity"
+      min: 0.0
+      max: 0.2
+    - name: "mid_complexity"
+      description: "Moderate requests with medium task complexity"
+      min: 0.2
+      max: 0.8
+    - name: "high_complexity"
+      description: "Complex tasks requiring deeper reasoning"
+      min: 0.8
+      max: 1.0
+
 # Decisions - Routing logic
 decisions:
   # Highest priority: Preference-based routing via external LLM
@@ -272,6 +287,42 @@ decisions:
     modelRefs:
       - model: "openai/gpt-oss-120b"
         use_reasoning: false
+
+  # Complexity-based routing
+  - name: "complexity_low"
+    description: "Route low complexity tasks"
+    priority: 80
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "complexity"
+          name: "low_complexity"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false
+
+  - name: "complexity_mid"
+    description: "Route medium complexity tasks"
+    priority: 80
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "complexity"
+          name: "mid_complexity"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
+
+  - name: "complexity_high"
+    description: "Route high complexity tasks"
+    priority: 80
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "complexity"
+          name: "high_complexity"
+    modelRefs:
+      - model: "gpt-5.2"
 
   - name: "math_route"
     description: "Route mathematical queries with reasoning enabled"

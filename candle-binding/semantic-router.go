@@ -246,7 +246,9 @@ extern ModernBertClassificationResult classify_feedback_text(const char* text);
 // New official Candle BERT functions
 extern bool init_candle_bert_classifier(const char* model_path, int num_classes, bool use_cpu);
 extern bool init_candle_bert_token_classifier(const char* model_path, int num_classes, bool use_cpu);
+extern bool init_deberta_v3_regressor(const char* model_path, bool use_cpu);
 extern ClassificationResult classify_candle_bert_text(const char* text);
+extern float classify_deberta_v3_regression_text(const char* text);
 extern BertTokenClassificationResult classify_candle_bert_tokens(const char* text);
 extern BertTokenClassificationResult classify_candle_bert_tokens_with_labels(const char* text, const char* id2label_json);
 
@@ -2469,6 +2471,14 @@ func InitCandleBertClassifier(modelPath string, numClasses int, useCPU bool) boo
 	return bool(C.init_candle_bert_classifier(cModelPath, C.int(numClasses), C.bool(useCPU)))
 }
 
+// InitDebertaV3Regressor initializes a DeBERTa v3 regressor using official Candle implementation
+func InitDebertaV3Regressor(modelPath string, useCPU bool) bool {
+	cModelPath := C.CString(modelPath)
+	defer C.free(unsafe.Pointer(cModelPath))
+
+	return bool(C.init_deberta_v3_regressor(cModelPath, C.bool(useCPU)))
+}
+
 // InitCandleBertTokenClassifier initializes a BERT token classifier using official Candle implementation
 func InitCandleBertTokenClassifier(modelPath string, numClasses int, useCPU bool) bool {
 	cModelPath := C.CString(modelPath)
@@ -2492,6 +2502,23 @@ func ClassifyCandleBertText(text string) (ClassResult, error) {
 		Class:      int(result.class),
 		Confidence: float32(result.confidence),
 	}, nil
+}
+
+// ClassifyDebertaV3RegressionText regresses a score between 0 and 1 using DeBERTa v3
+func ClassifyDebertaV3RegressionText(text string) (float64, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	score := float64(C.classify_deberta_v3_regression_text(cText))
+	if score < 0 {
+		return 0, fmt.Errorf("failed to regress text with DeBERTa v3")
+	}
+
+	if score > 1 {
+		score = 1
+	}
+
+	return score, nil
 }
 
 // ClassifyCandleBertTokens classifies tokens using official Candle BERT token classifier

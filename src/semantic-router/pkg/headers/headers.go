@@ -86,6 +86,10 @@ const (
 	// VSRMatchedLanguage contains comma-separated list of matched language signals.
 	// Example: "en,zh,es"
 	VSRMatchedLanguage = "x-vsr-matched-language"
+
+	// VSRMatchedComplexity contains comma-separated list of matched complexity signals.
+	// Example: "low_complexity,mid_complexity"
+	VSRMatchedComplexity = "x-vsr-matched-complexity"
 )
 
 // Security Headers
