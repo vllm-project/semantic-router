@@ -21,14 +21,14 @@ type ComplexityResult struct {
 
 // ComplexityClassifier handles task complexity regression using a Hugging Face model
 type ComplexityClassifier struct {
-	config      *config.ComplexityModelConfig
+	config      *config.ComplexityModel
 	repoID      string
 	initialized bool
 	mu          sync.RWMutex
 }
 
 // NewComplexityClassifier creates a new complexity classifier
-func NewComplexityClassifier(cfg *config.ComplexityModelConfig) (*ComplexityClassifier, error) {
+func NewComplexityClassifier(cfg *config.ComplexityModel) (*ComplexityClassifier, error) {
 	if cfg == nil {
 		return nil, nil
 	}
