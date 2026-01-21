@@ -20,6 +20,7 @@ Compatible with: [llm-semantic-router/feedback-detector](https://huggingface.co/
 ## Base Model: mmBERT
 
 **mmBERT** (Multilingual ModernBERT) provides:
+
 - **1800+ languages** with 256k vocabulary
 - **8192 max context** (RoPE embeddings)
 - **Cross-lingual transfer**: train on English, works globally
