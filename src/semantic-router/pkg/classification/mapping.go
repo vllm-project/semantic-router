@@ -15,15 +15,21 @@ type CategoryMapping struct {
 }
 
 // PIIMapping holds the mapping between indices and PII types
+// Supports both label_to_idx/idx_to_label (BERT LoRA) and label_to_id/id_to_label (mmBERT) formats
 type PIIMapping struct {
 	LabelToIdx map[string]int    `json:"label_to_idx"`
 	IdxToLabel map[string]string `json:"idx_to_label"`
+	LabelToID  map[string]int    `json:"label_to_id"` // mmBERT format
+	IDToLabel  map[string]string `json:"id_to_label"` // mmBERT format
 }
 
 // JailbreakMapping holds the mapping between indices and jailbreak types
+// Supports both label_to_idx/idx_to_label (BERT LoRA) and label_to_id/id_to_label (mmBERT) formats
 type JailbreakMapping struct {
 	LabelToIdx map[string]int    `json:"label_to_idx"`
 	IdxToLabel map[string]string `json:"idx_to_label"`
+	LabelToID  map[string]int    `json:"label_to_id"` // mmBERT format
+	IDToLabel  map[string]string `json:"id_to_label"` // mmBERT format
 }
 
 // LoadCategoryMapping loads the category mapping from a JSON file
@@ -57,6 +63,14 @@ func LoadPIIMapping(path string) (*PIIMapping, error) {
 		return nil, fmt.Errorf("failed to parse PII mapping JSON: %w", err)
 	}
 
+	// Normalize: if mmBERT format (label_to_id/id_to_label) is present, copy to standard format
+	if len(mapping.LabelToID) > 0 && len(mapping.LabelToIdx) == 0 {
+		mapping.LabelToIdx = mapping.LabelToID
+	}
+	if len(mapping.IDToLabel) > 0 && len(mapping.IdxToLabel) == 0 {
+		mapping.IdxToLabel = mapping.IDToLabel
+	}
+
 	return &mapping, nil
 }
 
@@ -72,6 +86,14 @@ func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 	var mapping JailbreakMapping
 	if err := json.Unmarshal(data, &mapping); err != nil {
 		return nil, fmt.Errorf("failed to parse jailbreak mapping JSON: %w", err)
+	}
+
+	// Normalize: if mmBERT format (label_to_id/id_to_label) is present, copy to standard format
+	if len(mapping.LabelToID) > 0 && len(mapping.LabelToIdx) == 0 {
+		mapping.LabelToIdx = mapping.LabelToID
+	}
+	if len(mapping.IDToLabel) > 0 && len(mapping.IdxToLabel) == 0 {
+		mapping.IdxToLabel = mapping.IDToLabel
 	}
 
 	return &mapping, nil

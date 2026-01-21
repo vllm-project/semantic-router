@@ -115,7 +115,7 @@ classifier:
     model_id: "models/mom-mmbert-intent-classifier"
     threshold: 0.6
     use_cpu: true
-    category_mapping_path: "models/mom-mmbert-intent-classifier/category_mapping.json"
+    category_mapping_path: "models/mom-mmbert-intent-classifier/label_mapping.json"
   pii_model:
     model_id: "models/mom-mmbert-pii-detector"
     use_modernbert: true

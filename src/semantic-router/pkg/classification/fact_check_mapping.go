@@ -13,9 +13,12 @@ const (
 )
 
 // FactCheckMapping holds the mapping between indices and fact-check labels
+// Supports both label_to_idx/idx_to_label (BERT LoRA) and label_to_id/id_to_label (mmBERT) formats
 type FactCheckMapping struct {
 	LabelToIdx  map[string]int    `json:"label_to_idx"`
 	IdxToLabel  map[string]string `json:"idx_to_label"`
+	LabelToID   map[string]int    `json:"label_to_id"` // mmBERT format
+	IDToLabel   map[string]string `json:"id_to_label"` // mmBERT format
 	Description map[string]string `json:"description,omitempty"`
 }
 
@@ -35,6 +38,14 @@ func LoadFactCheckMapping(path string) (*FactCheckMapping, error) {
 	var mapping FactCheckMapping
 	if err := json.Unmarshal(data, &mapping); err != nil {
 		return nil, fmt.Errorf("failed to parse fact-check mapping JSON: %w", err)
+	}
+
+	// Normalize: if mmBERT format (label_to_id/id_to_label) is present, copy to standard format
+	if len(mapping.LabelToID) > 0 && len(mapping.LabelToIdx) == 0 {
+		mapping.LabelToIdx = mapping.LabelToID
+	}
+	if len(mapping.IDToLabel) > 0 && len(mapping.IdxToLabel) == 0 {
+		mapping.IdxToLabel = mapping.IDToLabel
 	}
 
 	// Validate the mapping has required labels
