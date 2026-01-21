@@ -1,11 +1,12 @@
 # You can override by specifying your own mappings below:
 # Uncomment and customize if you need different model mappings:
 # mom_registry:
-#   "models/mom-domain-classifier": "LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model"
-#   "models/mom-pii-classifier": "LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model"
-#   "models/mom-jailbreak-classifier": "LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model"
+#   "models/mom-mmbert-intent-classifier": "llm-semantic-router/mmbert-intent-classifier-merged"
+#   "models/mom-mmbert-pii-detector": "llm-semantic-router/mmbert-pii-detector-merged"
+#   "models/mom-mmbert-jailbreak-classifier": "llm-semantic-router/mmbert-jailbreak-detector-merged"
+#   "models/mom-mmbert-halugate-sentinel": "llm-semantic-router/mmbert-fact-check-merged"
+#   "models/mom-mmbert-feedback-detector": "llm-semantic-router/mmbert-feedback-detector-merged"
 #   "models/mom-halugate-detector": "KRLabsOrg/lettucedect-base-modernbert-en-v1"
-#   "models/mom-halugate-sentinel": "LLM-Semantic-Router/halugate-sentinel"
 #   "models/mom-halugate-explainer": "tasksource/ModernBERT-base-nli"
 #   "models/mom-embedding-pro": "Qwen/Qwen3-Embedding-0.6B"
 #   "models/mom-embedding-flash": "google/embeddinggemma-300m"
@@ -93,27 +94,34 @@ tools:
     # allow_tools: []
     # block_tools: []
 
-prompt_guard:
-  enabled: true  # Global default - can be overridden per category with jailbreak_enabled
-  use_modernbert: false
-  model_id: "models/mom-jailbreak-classifier"
+# Classifies user feedback into 4 types: satisfied, need_clarification, wrong_answer, want_different
+feedback_detector:
+  enabled: true
+  model_id: "models/mom-mmbert-feedback-detector"
   threshold: 0.7
   use_cpu: true
-jailbreak_mapping_path: "models/mom-jailbreak-classifier/label_mapping.json"
+
+prompt_guard:
+  enabled: true  # Global default - can be overridden per category with jailbreak_enabled
+  use_modernbert: true
+  model_id: "models/mom-mmbert-jailbreak-classifier"
+  threshold: 0.7
+  use_cpu: true
+jailbreak_mapping_path: "models/mom-mmbert-jailbreak-classifier/label_mapping.json"
 
 # Classifier configuration
 classifier:
   category_model:
-    model_id: "models/mom-domain-classifier"
+    model_id: "models/mom-mmbert-intent-classifier"
     threshold: 0.6
     use_cpu: true
-    category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
+    category_mapping_path: "models/mom-mmbert-intent-classifier/category_mapping.json"
   pii_model:
-    model_id: "models/mom-pii-classifier"
-    use_modernbert: false
+    model_id: "models/mom-mmbert-pii-detector"
+    use_modernbert: true
     threshold: 0.9
     use_cpu: true
-  pii_mapping_path: "models/mom-pii-classifier/label_mapping.json"
+  pii_mapping_path: "models/mom-mmbert-pii-detector/label_mapping.json"
 
 # Hallucination mitigation configuration
 # Disabled by default - enable in decisions via hallucination plugin
@@ -121,7 +129,7 @@ hallucination_mitigation:
   enabled: false
   # Fact-check classifier: determines if a prompt needs fact verification
   fact_check_model:
-    model_id: "models/mom-halugate-sentinel"
+    model_id: "models/mom-mmbert-halugate-sentinel"
     threshold: 0.6
     use_cpu: true
   # Hallucination detector: verifies if LLM response is grounded in context

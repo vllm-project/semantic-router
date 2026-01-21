@@ -56,7 +56,7 @@ type ModelSpec struct {
 // DefaultModelRegistry provides the structured model registry
 // Users can override this by specifying mom_registry in their config.yaml
 var DefaultModelRegistry = []ModelSpec{
-	// Domain/Intent Classification
+	// Domain/Intent Classification - BERT LoRA
 	{
 		LocalPath:        "models/mom-domain-classifier",
 		RepoID:           "LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model",
@@ -68,6 +68,34 @@ var DefaultModelRegistry = []ModelSpec{
 		NumClasses:       14, // MMLU categories
 		MaxContextLength: 512,
 		Tags:             []string{"classification", "lora", "mmlu", "domain", "bert"},
+	},
+
+	// Domain/Intent Classification - mmBERT LoRA
+	{
+		LocalPath:        "models/mom-mmbert-intent-classifier-lora",
+		RepoID:           "llm-semantic-router/mmbert-intent-classifier-lora",
+		Aliases:          []string{"mmbert-intent-classifier-lora"},
+		Purpose:          PurposeDomainClassification,
+		Description:      "mmBERT-based intent classifier with LoRA adapters for MMLU categories (multilingual)",
+		ParameterSize:    "149M + LoRA",
+		UsesLoRA:         true,
+		NumClasses:       14, // MMLU categories
+		MaxContextLength: 8192,
+		Tags:             []string{"classification", "lora", "mmlu", "domain", "mmbert", "modernbert", "multilingual"},
+	},
+
+	// Domain/Intent Classification - mmBERT (Full Param)
+	{
+		LocalPath:        "models/mom-mmbert-intent-classifier",
+		RepoID:           "llm-semantic-router/mmbert-intent-classifier-merged",
+		Aliases:          []string{"mmbert-intent-classifier", "mmbert-intent-classifier-merged"},
+		Purpose:          PurposeDomainClassification,
+		Description:      "mmBERT-based merged intent classifier for MMLU categories (multilingual)",
+		ParameterSize:    "149M",
+		UsesLoRA:         false,
+		NumClasses:       14, // MMLU categories
+		MaxContextLength: 8192,
+		Tags:             []string{"classification", "mmbert", "modernbert", "multilingual", "merged"},
 	},
 
 	// PII Detection - BERT LoRA
@@ -84,7 +112,21 @@ var DefaultModelRegistry = []ModelSpec{
 		Tags:             []string{"pii", "privacy", "lora", "token-classification", "bert"},
 	},
 
-	// PII Detection - ModernBERT (Token-level)
+	// PII Detection - mmBERT LoRA
+	{
+		LocalPath:        "models/mom-mmbert-pii-detector-lora",
+		RepoID:           "llm-semantic-router/mmbert-pii-detector-lora",
+		Aliases:          []string{"mmbert-pii-detector-lora"},
+		Purpose:          PurposePIIDetection,
+		Description:      "mmBERT-based PII detector with LoRA adapters for 35 PII types (multilingual)",
+		ParameterSize:    "149M + LoRA",
+		UsesLoRA:         true,
+		NumClasses:       35, // PII types
+		MaxContextLength: 8192,
+		Tags:             []string{"pii", "privacy", "lora", "token-classification", "mmbert", "modernbert", "multilingual"},
+	},
+
+	// PII Detection - mmBERT (Full Param)
 	{
 		LocalPath:        "models/mom-mmbert-pii-detector",
 		RepoID:           "llm-semantic-router/mmbert-pii-detector-merged",
@@ -98,31 +140,87 @@ var DefaultModelRegistry = []ModelSpec{
 		Tags:             []string{"pii", "privacy", "modernbert", "token-classification", "merged"},
 	},
 
-	// Jailbreak Detection
+	// Jailbreak Detection - BERT LoRA
 	{
 		LocalPath:        "models/mom-jailbreak-classifier",
-		RepoID:           "LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model",
+		RepoID:           "LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model",
 		Aliases:          []string{"jailbreak-detector", "prompt-guard", "safety-classifier", "jailbreak_classifier_modernbert-base_model", "lora_jailbreak_classifier_bert-base-uncased_model", "jailbreak_classifier_modernbert_model"},
 		Purpose:          PurposeJailbreakDetection,
-		Description:      "ModernBERT-based jailbreak/prompt injection detector",
+		Description:      "BERT-based jailbreak/prompt injection detector with LoRA adapters",
+		ParameterSize:    "110M + LoRA",
+		UsesLoRA:         true,
+		NumClasses:       2, // benign/jailbreak
+		MaxContextLength: 512,
+		Tags:             []string{"safety", "jailbreak", "prompt-injection", "bert", "lora"},
+	},
+
+	// Jailbreak Detection - mmBERT LoRA
+	{
+		LocalPath:        "models/mom-mmbert-jailbreak-classifier-lora",
+		RepoID:           "llm-semantic-router/mmbert-jailbreak-detector-lora",
+		Aliases:          []string{"mmbert-jailbreak-detector-lora"},
+		Purpose:          PurposeJailbreakDetection,
+		Description:      "mmBERT-based jailbreak/prompt injection detector with LoRA adapters (multilingual)",
+		ParameterSize:    "149M + LoRA",
+		UsesLoRA:         true,
+		NumClasses:       2, // benign/jailbreak
+		MaxContextLength: 8192,
+		Tags:             []string{"safety", "jailbreak", "prompt-injection", "lora", "mmbert", "modernbert", "multilingual"},
+	},
+
+	// Jailbreak Detection - mmBERT (Full Param)
+	{
+		LocalPath:        "models/mom-mmbert-jailbreak-classifier",
+		RepoID:           "llm-semantic-router/mmbert-jailbreak-detector-merged",
+		Aliases:          []string{"mmbert-jailbreak-detector", "mmbert-jailbreak-detector-merged"},
+		Purpose:          PurposeJailbreakDetection,
+		Description:      "mmBERT-based merged jailbreak/prompt injection detector (multilingual)",
 		ParameterSize:    "149M",
 		UsesLoRA:         false,
 		NumClasses:       2, // benign/jailbreak
-		MaxContextLength: 512,
-		Tags:             []string{"safety", "jailbreak", "prompt-injection", "modernbert"},
+		MaxContextLength: 8192,
+		Tags:             []string{"safety", "jailbreak", "prompt-injection", "mmbert", "modernbert", "multilingual", "merged"},
 	},
 
-	// Hallucination Detection - Sentinel
+	// Hallucination Detection - Sentinel (BERT)
 	{
 		LocalPath:        "models/mom-halugate-sentinel",
 		RepoID:           "LLM-Semantic-Router/halugate-sentinel",
 		Aliases:          []string{"hallucination-sentinel", "halugate-sentinel"},
 		Purpose:          PurposeHallucinationSentinel,
-		Description:      "First-stage hallucination detection sentinel for fast screening",
+		Description:      "BERT-based first-stage hallucination detection sentinel for fast screening",
 		ParameterSize:    "110M",
 		NumClasses:       2, // hallucination/no-hallucination
 		MaxContextLength: 512,
 		Tags:             []string{"hallucination", "sentinel", "screening", "bert"},
+	},
+
+	// Hallucination Detection - Sentinel (mmBERT LoRA)
+	{
+		LocalPath:        "models/mom-mmbert-halugate-sentinel-lora",
+		RepoID:           "llm-semantic-router/mmbert-fact-check-lora",
+		Aliases:          []string{"mmbert-halugate-sentinel-lora", "mmbert-fact-check-lora"},
+		Purpose:          PurposeHallucinationSentinel,
+		Description:      "mmBERT-based fact-check sentinel with LoRA adapters for hallucination screening (multilingual)",
+		ParameterSize:    "149M + LoRA",
+		UsesLoRA:         true,
+		NumClasses:       2, // hallucination/no-hallucination
+		MaxContextLength: 8192,
+		Tags:             []string{"hallucination", "sentinel", "screening", "lora", "mmbert", "modernbert", "multilingual"},
+	},
+
+	// Hallucination Detection - Sentinel (mmBERT Full Param)
+	{
+		LocalPath:        "models/mom-mmbert-halugate-sentinel",
+		RepoID:           "llm-semantic-router/mmbert-fact-check-merged",
+		Aliases:          []string{"mmbert-halugate-sentinel", "mmbert-fact-check-merged", "fact-check-sentinel"},
+		Purpose:          PurposeHallucinationSentinel,
+		Description:      "mmBERT-based merged fact-check sentinel for hallucination screening (multilingual)",
+		ParameterSize:    "149M",
+		UsesLoRA:         false,
+		NumClasses:       2, // hallucination/no-hallucination
+		MaxContextLength: 8192,
+		Tags:             []string{"hallucination", "sentinel", "screening", "mmbert", "modernbert", "multilingual", "merged"},
 	},
 
 	// Hallucination Detection - Detector
@@ -151,17 +249,45 @@ var DefaultModelRegistry = []ModelSpec{
 		Tags:             []string{"hallucination", "nli", "explainability", "modernbert"},
 	},
 
-	// Feedback Detection
+	// Feedback Detection - BERT (legacy)
 	{
 		LocalPath:        "models/mom-feedback-detector",
 		RepoID:           "llm-semantic-router/feedback-detector",
 		Aliases:          []string{"feedback-detector", "user-feedback-classifier"},
 		Purpose:          PurposeFeedbackDetection,
-		Description:      "ModernBERT-based user feedback classifier for 4 feedback types",
-		ParameterSize:    "149M",
+		Description:      "BERT-based user feedback classifier for 4 feedback types (legacy)",
+		ParameterSize:    "110M",
+		NumClasses:       4, // satisfied/need_clarification/wrong_answer/want_different
+		MaxContextLength: 512,
+		Tags:             []string{"feedback", "classification", "bert", "user-intent", "legacy"},
+	},
+
+	// Feedback Detection - mmBERT LoRA
+	{
+		LocalPath:        "models/mom-mmbert-feedback-detector-lora",
+		RepoID:           "llm-semantic-router/mmbert-feedback-detector-lora",
+		Aliases:          []string{"mmbert-feedback-detector-lora"},
+		Purpose:          PurposeFeedbackDetection,
+		Description:      "mmBERT-based user feedback classifier with LoRA adapters for 4 feedback types (multilingual)",
+		ParameterSize:    "149M + LoRA",
+		UsesLoRA:         true,
 		NumClasses:       4, // satisfied/need_clarification/wrong_answer/want_different
 		MaxContextLength: 8192,
-		Tags:             []string{"feedback", "classification", "modernbert", "user-intent"},
+		Tags:             []string{"feedback", "classification", "lora", "mmbert", "modernbert", "multilingual", "user-intent"},
+	},
+
+	// Feedback Detection - mmBERT (Full Param)
+	{
+		LocalPath:        "models/mom-mmbert-feedback-detector",
+		RepoID:           "llm-semantic-router/mmbert-feedback-detector-merged",
+		Aliases:          []string{"mmbert-feedback-detector", "mmbert-feedback-detector-merged"},
+		Purpose:          PurposeFeedbackDetection,
+		Description:      "mmBERT-based merged user feedback classifier for 4 feedback types (multilingual)",
+		ParameterSize:    "149M",
+		UsesLoRA:         false,
+		NumClasses:       4, // satisfied/need_clarification/wrong_answer/want_different
+		MaxContextLength: 8192,
+		Tags:             []string{"feedback", "classification", "mmbert", "modernbert", "multilingual", "merged", "user-intent"},
 	},
 
 	// Embedding Models - Pro (High Quality)
