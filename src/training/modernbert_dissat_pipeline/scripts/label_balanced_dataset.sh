@@ -318,7 +318,7 @@ combine_datasets() {
     log_info "Combining all labeled datasets..."
     
     combined_file="$LABELED_DIR/combined_labeled.jsonl"
-    > "$combined_file"  # Clear file
+    : > "$combined_file"  # Clear file
     
     total_lines=0
     for dataset in "${!DATASET_TARGETS[@]}"; do
