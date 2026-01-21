@@ -1,0 +1,30 @@
+# ModernBERT Dissatisfaction Classifier Pipeline
+# Core ML dependencies
+torch>=2.0.0
+transformers>=4.36.0
+datasets>=2.14.0
+accelerate>=0.24.0
+evaluate>=0.4.0
+scikit-learn>=1.3.0
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.24.0
+jsonlines>=4.0.0
+tqdm>=4.66.0
+
+# Dataset downloading
+requests>=2.31.0
+gdown>=4.7.0
+huggingface_hub>=0.19.0
+
+# Evaluation metrics
+scipy>=1.11.0
+
+# Optional: for wandb logging
+# wandb>=0.15.0
+
+# Optional: for notebook support
+# jupyter>=1.0.0
+# ipywidgets>=8.0.0
+
