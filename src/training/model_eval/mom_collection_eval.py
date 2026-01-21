@@ -33,7 +33,11 @@ from tqdm import tqdm
 from typing import Dict, List, Optional, Any, Union
 
 # Metrics
-from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix
+from sklearn.metrics import (
+    accuracy_score,
+    precision_recall_fscore_support,
+    confusion_matrix,
+)
 from seqeval.metrics import accuracy_score as seqe_accuracy_score
 from seqeval.metrics import f1_score as seq_f1_score
 from seqeval.metrics import classification_report as seq_classification_report
@@ -45,7 +49,7 @@ from transformers import (
     AutoModelForSequenceClassification,
     AutoModelForTokenClassification,
     PreTrainedTokenizer,
-    PreTrainedModel
+    PreTrainedModel,
 )
 from peft import PeftModel, PeftConfig
 
@@ -53,7 +57,7 @@ from peft import PeftModel, PeftConfig
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler()]
+    handlers=[logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
@@ -65,55 +69,89 @@ MODEL_REGISTRY = {
         "lora_id": "llm-semantic-router/mmbert-feedback-detector-lora",
         "type": "text_classification",
         "hf_dataset": "llm-semantic-router/feedback-dataset",
-        "labels": ["SATISFIED", "FRUSTRATED", "NEUTRAL"]
+        "labels": ["SATISFIED", "FRUSTRATED", "NEUTRAL"],
     },
     "jailbreak": {
         "id": "llm-semantic-router/mmbert-jailbreak-detector-merged",
         "lora_id": "llm-semantic-router/mmbert-jailbreak-detector-lora",
         "type": "text_classification",
         "hf_dataset": "llm-semantic-router/jailbreak-dataset",
-        "labels": ["BENIGN", "JAILBREAK"]
+        "labels": ["BENIGN", "JAILBREAK"],
     },
     "fact-check": {
         "id": "llm-semantic-router/mmbert-fact-check-merged",
         "lora_id": "llm-semantic-router/mmbert-fact-check-lora",
         "type": "text_classification",
         "hf_dataset": "llm-semantic-router/fact-check-dataset",
-        "labels": ["NO_FACT_CHECK", "FACT_CHECK_NEEDED"]
+        "labels": ["NO_FACT_CHECK", "FACT_CHECK_NEEDED"],
     },
     "intent": {
         "id": "llm-semantic-router/mmbert-intent-classifier-merged",
         "lora_id": "llm-semantic-router/mmbert-intent-classifier-lora",
         "type": "text_classification",
         "hf_dataset": "llm-semantic-router/intent-dataset",
-        "labels": ["biology", "business", "chemistry", "cs", "economics",
-                   "engineering", "health", "history", "law", "math", "philosophy",
-                   "physics", "psychology", "other"]
+        "labels": [
+            "biology",
+            "business",
+            "chemistry",
+            "cs",
+            "economics",
+            "engineering",
+            "health",
+            "history",
+            "law",
+            "math",
+            "philosophy",
+            "physics",
+            "psychology",
+            "other",
+        ],
     },
-
     #                 Token Classification Models
     "pii": {
         "id": "llm-semantic-router/mmbert-pii-detector-merged",
         "lora_id": "llm-semantic-router/mmbert-pii-detector-lora",
         "type": "token_classification",
         "hf_dataset": "llm-semantic-router/pii-dataset",
-        "labels": ["O", "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC"]
-    }
+        "labels": ["O", "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC"],
+    },
 }
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate MoM Collection Models")
-    parser.add_argument("--model", type=str, required=True, choices=list(MODEL_REGISTRY.keys()),
-                        help="Task type to evaluate (e.g., feedback, pii).")
-    parser.add_argument("--model_id", type=str, default=None,
-                        help="Optional: Override model path (e.g., local/path or user/repo). Defaults to official registry ID.")
+    parser.add_argument(
+        "--model",
+        type=str,
+        required=True,
+        choices=list(MODEL_REGISTRY.keys()),
+        help="Task type to evaluate (e.g., feedback, pii).",
+    )
+    parser.add_argument(
+        "--model_id",
+        type=str,
+        default=None,
+        help="Optional: Override model path (e.g., local/path or user/repo). Defaults to official registry ID.",
+    )
     parser.add_argument("--use_lora", action="store_true", help="Use the LoRA variant")
-    parser.add_argument("--batch_size", type=int, default=16, help="Inference batch size")
-    parser.add_argument("--limit", type=int, default=None, help="Max samples to evaluate")
-    parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
-    parser.add_argument("--output_dir", type=str, default="src/training/model_eval/results", help="Output directory")
-    parser.add_argument("--custom_dataset", type=str, default=None, help="Path to local dataset")
+    parser.add_argument(
+        "--batch_size", type=int, default=16, help="Inference batch size"
+    )
+    parser.add_argument(
+        "--limit", type=int, default=None, help="Max samples to evaluate"
+    )
+    parser.add_argument(
+        "--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu"
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default="src/training/model_eval/results",
+        help="Output directory",
+    )
+    parser.add_argument(
+        "--custom_dataset", type=str, default=None, help="Path to local dataset"
+    )
 
     return parser.parse_args()
 
@@ -135,7 +173,9 @@ def load_model(key: str, override_model_id: str, use_lora: bool, device: str):
     try:
         tokenizer = AutoTokenizer.from_pretrained(model_id)
     except Exception:
-        logger.warning(f"Could not load tokenizer from {model_id}. Trying base model logic...")
+        logger.warning(
+            f"Could not load tokenizer from {model_id}. Trying base model logic..."
+        )
         peft_config = PeftConfig.from_pretrained(model_id)
         tokenizer = AutoTokenizer.from_pretrained(peft_config.base_model_name_or_path)
 
@@ -146,11 +186,13 @@ def load_model(key: str, override_model_id: str, use_lora: bool, device: str):
         logger.info(f"Detected LoRA. Loading base model: {base_model_id}")
 
         if task_type == "text_classification":
-            base_model = AutoModelForSequenceClassification.from_pretrained(base_model_id,
-                                                                          num_labels=len(config["labels"]))
+            base_model = AutoModelForSequenceClassification.from_pretrained(
+                base_model_id, num_labels=len(config["labels"])
+            )
         elif task_type == "token_classification":
-            base_model = AutoModelForTokenClassification.from_pretrained(base_model_id,
-                                                                       num_labels=len(config["labels"]))
+            base_model = AutoModelForTokenClassification.from_pretrained(
+                base_model_id, num_labels=len(config["labels"])
+            )
 
         # Load Adapter
         model = PeftModel.from_pretrained(base_model, model_id)
@@ -176,10 +218,10 @@ def load_eval_data(key: str, custom_path: str = None, limit: int = None):
     # custom dataset
     if custom_path:
         logger.info(f"Loading custom dataset from: {custom_path}")
-        if custom_path.endswith('.json'):
-            dataset = load_dataset('json', data_files=custom_path, split='train')
-        elif custom_path.endswith('.csv'):
-            dataset = load_dataset('csv', data_files=custom_path, split='train')
+        if custom_path.endswith(".json"):
+            dataset = load_dataset("json", data_files=custom_path, split="train")
+        elif custom_path.endswith(".csv"):
+            dataset = load_dataset("csv", data_files=custom_path, split="train")
 
         if limit:
             dataset = dataset.select(range(min(len(dataset), limit)))
@@ -201,9 +243,9 @@ def load_eval_data(key: str, custom_path: str = None, limit: int = None):
     except Exception as e:
         # fallback to dummy data
         logger.warning(
-            f"Could not load HF dataset '{config.get('hf_dataset')}' (Error: {str(e)}).")
-        logger.warning(
-            "Falling back to GENERATED DUMMY DATA for pipeline validation.")
+            f"Could not load HF dataset '{config.get('hf_dataset')}' (Error: {str(e)})."
+        )
+        logger.warning("Falling back to GENERATED DUMMY DATA for pipeline validation.")
         return generate_dummy_data(config["type"], config["labels"], limit or 10)
 
 
@@ -211,21 +253,26 @@ def generate_dummy_data(task_type, labels, count):
     data = []
     if task_type == "text_classification":
         for i in range(count):
-            data.append({
-                "text": f"This is a test sentence number {i} for evaluation.",
-                "label": i % len(labels)
-            })
+            data.append(
+                {
+                    "text": f"This is a test sentence number {i} for evaluation.",
+                    "label": i % len(labels),
+                }
+            )
     elif task_type == "token_classification":
         for i in range(count):
-            data.append({
-                "tokens": ["This", "is", "a", "test", "sentence", "."],
-                "ner_tags": [0, 0, 0, 0, 0, 0]
-            })
+            data.append(
+                {
+                    "tokens": ["This", "is", "a", "test", "sentence", "."],
+                    "ner_tags": [0, 0, 0, 0, 0, 0],
+                }
+            )
 
     return Dataset.from_list(data)
 
 
 #      Eval Loops
+
 
 def evaluate_text_classification(model, tokenizer, dataset, device, labels, batch_size):
     predictions = []
@@ -247,7 +294,9 @@ def evaluate_text_classification(model, tokenizer, dataset, device, labels, batc
 
         start_ts = time.time()
 
-        inputs = tokenizer(texts, return_tensors="pt", padding=True, truncation=True, max_length=512).to(device)
+        inputs = tokenizer(
+            texts, return_tensors="pt", padding=True, truncation=True, max_length=512
+        ).to(device)
 
         with torch.no_grad():
             outputs = model(**inputs)
@@ -264,7 +313,9 @@ def evaluate_text_classification(model, tokenizer, dataset, device, labels, batc
     return predictions, ground_truths, latencies
 
 
-def evaluate_token_classification(model, tokenizer, dataset, device, label_map, batch_size):
+def evaluate_token_classification(
+    model, tokenizer, dataset, device, label_map, batch_size
+):
     predictions = []
     ground_truths = []
     latencies = []
@@ -289,7 +340,7 @@ def evaluate_token_classification(model, tokenizer, dataset, device, label_map, 
             is_split_into_words=True,
             return_tensors="pt",
             padding=True,
-            truncation=True
+            truncation=True,
         ).to(device)
 
         with torch.no_grad():
@@ -319,7 +370,7 @@ def evaluate_token_classification(model, tokenizer, dataset, device, label_map, 
                     if token_idx < len(pred_row):
                         aligned_preds.append(label_map[pred_row[token_idx]])
                     else:
-                        aligned_preds.append("O") # Fallback
+                        aligned_preds.append("O")  # Fallback
 
                     if word_idx < len(true_tag_ids):
                         aligned_truth.append(label_map[true_tag_ids[word_idx]])
@@ -339,14 +390,15 @@ def calculate_metrics(predictions, ground_truths, latencies, labels, task_type):
         "latency_ms": {
             "avg": np.mean(latencies),
             "p50": np.percentile(latencies, 50),
-            "p99": np.percentile(latencies, 99)
+            "p99": np.percentile(latencies, 99),
         }
     }
 
     if task_type == "text_classification":
         acc = accuracy_score(ground_truths, predictions)
-        prec, rec, f1, _ = precision_recall_fscore_support(ground_truths, predictions,
-                                                           average='weighted', zero_division=0)
+        prec, rec, f1, _ = precision_recall_fscore_support(
+            ground_truths, predictions, average="weighted", zero_division=0
+        )
         metrics["accuracy"] = acc
         metrics["precision"] = prec
         metrics["recall"] = rec
@@ -376,7 +428,7 @@ def save_report(args, metrics, labels, task_type):
 
     #         Save JSON
     json_path = output_dir / f"{args.model}_eval_{timestamp}.json"
-    with open(json_path, 'w') as f:
+    with open(json_path, "w") as f:
         json.dump(metrics, f, indent=2)
     logger.info(f"Metrics saved to {json_path}")
 
@@ -384,26 +436,35 @@ def save_report(args, metrics, labels, task_type):
     if task_type == "text_classification" and "confusion_matrix" in metrics:
         cm = np.array(metrics["confusion_matrix"])
         plt.figure(figsize=(10, 8))
-        sns.heatmap(cm, annot=True, fmt='d', cmap="Blues", xticklabels=labels, yticklabels=labels)
-        plt.xlabel('Predicted')
-        plt.ylabel('Actual')
-        plt.title(f'Confusion Matrix: {args.model}')
+        sns.heatmap(
+            cm,
+            annot=True,
+            fmt="d",
+            cmap="Blues",
+            xticklabels=labels,
+            yticklabels=labels,
+        )
+        plt.xlabel("Predicted")
+        plt.ylabel("Actual")
+        plt.title(f"Confusion Matrix: {args.model}")
 
         plot_path = output_dir / f"{args.model}_cm_{timestamp}.png"
         plt.savefig(plot_path)
         logger.info(f"Confusion matrix plot saved to {plot_path}")
 
-     # Print Summary
+    # Print Summary
     print("\n" + "=" * 40)
     print(f"EVALUATION REPORT: {args.model}")
     print("=" * 40)
     print(f"Accuracy: {metrics.get('accuracy', metrics.get('token_accuracy', 0)):.4f}")
-    if 'f1' in metrics: print(f"F1 Score: {metrics['f1']:.4f}")
+    if "f1" in metrics:
+        print(f"F1 Score: {metrics['f1']:.4f}")
     print(f"Avg Latency: {metrics['latency_ms']['avg']:.2f} ms")
     print("=" * 40 + "\n")
 
 
 #                                 --- MAIN ---
+
 
 def main():
     args = parse_args()
