@@ -303,6 +303,42 @@ def compute_token_accuracy(eval_pred: tuple) -> Dict[str, float]:
     return {"token_accuracy": float(token_accuracy)}
 
 
+class LabelPaddingCollator:
+    """Pad variable-length causal LM batches, including labels."""
+
+    def __init__(
+        self,
+        tokenizer: PreTrainedTokenizerBase,
+        pad_to_multiple_of: Optional[int] = None,
+    ) -> None:
+        self.tokenizer = tokenizer
+        self.pad_to_multiple_of = pad_to_multiple_of
+
+    def __call__(self, features: List[Dict[str, List[int]]]) -> Dict[str, torch.Tensor]:
+        # copy to avoid mutating dataset examples
+        features = [dict(feature) for feature in features]
+
+        labels = [feature.pop("labels") for feature in features]
+        batch = self.tokenizer.pad(
+            features,
+            padding="longest",
+            pad_to_multiple_of=self.pad_to_multiple_of,
+            return_tensors="pt",
+        )
+
+        max_length = batch["input_ids"].shape[1]
+        padded_labels = []
+        for label in labels:
+            pad_len = max_length - len(label)
+            if pad_len < 0:
+                label = label[:max_length]
+                pad_len = 0
+            padded_labels.append(label + [-100] * pad_len)
+
+        batch["labels"] = torch.tensor(padded_labels, dtype=torch.long)
+        return batch
+
+
 class ShareGPTPreferenceDataset(TorchDataset):
     """Torch dataset that tokenizes ShareGPT preference examples for Qwen3."""
 
@@ -594,10 +630,7 @@ def train(args: argparse.Namespace) -> None:
 
     model.config.use_cache = False
 
-    data_collator = DataCollatorForLanguageModeling(
-        tokenizer=tokenizer,
-        mlm=False,
-    )
+    data_collator = LabelPaddingCollator(tokenizer=tokenizer)
 
     training_args = TrainingArguments(
         output_dir=args.output_dir,
