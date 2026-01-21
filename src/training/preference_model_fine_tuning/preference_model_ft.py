@@ -33,7 +33,7 @@ CATCH_ALL_LABEL = "general_inquiry"
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are a routing controller that reads a conversation and outputs "
-    f"the best preference label for downstream model routing. If none of the labels apply, respond with '{CATCH_ALL_LABEL}'."
+    f"the best preference label for downstream model routing. If none of the labels apply, respond with '{CATCH_ALL_LABEL}'\n"
 )
 
 
@@ -160,44 +160,42 @@ def conversation_to_text(conversation: ShareGPTConversation) -> str:
 def build_prompt(
     conversation: ShareGPTConversation,
     label_space: Sequence[str],
+    tokenizer: PreTrainedTokenizerBase,
+    max_length: int,
     system_prompt: str = DEFAULT_SYSTEM_PROMPT,
-) -> str:
-    """Construct the natural-language prompt shown to Qwen3."""
-
+) -> list[int]:
     label_clause = ", ".join(sorted(set(label_space)))
     convo_text = conversation_to_text(conversation)
-    return (
-        f"{system_prompt}\n\n"
-        f"Valid labels: {label_clause}\n\n"
-        f"Conversation:\n{convo_text}\n\n"
-        "Answer with the single label that best matches the conversation."
-    )
+    # truncate the conversation to make sure the result fits in context window
+    system_ids = tokenizer(
+        system_prompt,
+        add_special_tokens=False,
+        truncation=False,
+    )["input_ids"]
+    instruction_ids = tokenizer(
+        "\nAnswer with the single label that best matches the conversation.\n",
+        add_special_tokens=False,
+        truncation=False,
+    )["input_ids"]
+    label_ids = tokenizer(
+        f"Valid labels:{label_clause}\n\nConversation:",
+        add_special_tokens=False,
+        truncation=False,
+    )["input_ids"]
+    reserved = (
+        len(system_ids) + len(instruction_ids) + len(label_ids) + 5
+    )  # buffer for target label
+    if reserved >= max_length:
+        raise ValueError("Instruction + system + labels exceed max_length")
+    remaining = max_length - reserved
+    conversation_ids = tokenizer(
+        convo_text,
+        add_special_tokens=False,
+        truncation=True,
+        max_length=remaining,
+    )["input_ids"]
 
-
-def format_preference_messages(
-    conversation: ShareGPTConversation,
-    label_space: Sequence[str],
-    system_prompt: str = DEFAULT_SYSTEM_PROMPT,
-    label: Optional[str] = None,
-) -> List[Dict[str, str]]:
-    """Create ChatML-style messages for preference labeling."""
-
-    label_clause = ", ".join(sorted(set(label_space)))
-    user_content = (
-        f"Valid labels: {label_clause}\n\n"
-        f"Conversation:\n{conversation_to_text(conversation)}\n\n"
-        "Answer with the single label that best matches the conversation."
-    )
-
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_content},
-    ]
-
-    if label is not None:
-        messages.append({"role": "assistant", "content": label})
-
-    return messages
+    return system_ids + label_ids + conversation_ids + instruction_ids
 
 
 def build_chat_aligned_dataset(
@@ -220,53 +218,32 @@ def build_chat_aligned_dataset(
     )
 
     for example in examples:
-        prompt_messages = format_preference_messages(
+        prompt_encoding = build_prompt(
             conversation=example.conversation,
             label_space=label_space,
-            system_prompt=DEFAULT_SYSTEM_PROMPT,
-            label=None,
-        )
-        full_messages = prompt_messages + [
-            {"role": "assistant", "content": example.label}
-        ]
-
-        prompt_text = tokenizer.apply_chat_template(
-            prompt_messages,
-            tokenize=False,
-            add_generation_prompt=True,
-            enable_thinking=False,
-        )
-        full_text = tokenizer.apply_chat_template(
-            full_messages,
-            tokenize=False,
-            add_generation_prompt=False,
-            enable_thinking=False,
-        )
-
-        prompt_encoding = tokenizer(
-            prompt_text,
-            add_special_tokens=False,
-        )
-        full_encoding = tokenizer(
-            full_text,
-            add_special_tokens=False,
-            truncation=True,
+            tokenizer=tokenizer,
             max_length=max_length,
-            padding="max_length" if pad_to_max_length else False,
         )
-
-        labels = full_encoding["input_ids"].copy()
-        prompt_len = len(prompt_encoding["input_ids"])
-
-        for i in range(min(prompt_len, len(labels))):
+        full_encoding: list[int] = (
+            prompt_encoding
+            + tokenizer(example.label, add_special_tokens=False, truncation=False)[
+                "input_ids"
+            ]
+        )
+        labels = full_encoding.copy()
+        for i in range(len(prompt_encoding)):
+            # ignore prompt tokens for label prediction loss
             labels[i] = -100
 
         for i, token_id in enumerate(full_encoding["input_ids"]):
+            # other padding tokens should also be ignored
             if token_id == pad_id:
                 labels[i] = -100
 
-        input_ids_list.append(full_encoding["input_ids"])
-        attention_mask_list.append(full_encoding["attention_mask"])
+        input_ids_list.append(full_encoding)
+        # attention mask to mask the padding in input
+        attention_mask = [1 if id != pad_id else 0 for id in full_encoding]
+        attention_mask_list.append(attention_mask)
         labels_list.append(labels)
 
     return Dataset.from_dict(
@@ -353,7 +330,9 @@ class ShareGPTPreferenceDataset(TorchDataset):
         max_samples: Optional[int] = None,
         start_index: int = 0,
         min_labels_in_prompt: int = 4,
-        max_labels_in_prompt: Optional[int] = None,
+        max_labels_in_prompt: Optional[
+            int
+        ] = 16,  # don't make it too large because otherwise it's hard to fit in memory
         random_seed: Optional[int] = None,
     ) -> None:
         self.examples = build_training_examples(
@@ -436,28 +415,6 @@ class ShareGPTPreferenceDataset(TorchDataset):
             return_tensors="pt",
         )
         return {key: value.squeeze(0) for key, value in tokenized.items()}
-
-
-def build_dataloader(
-    dataset: ShareGPTPreferenceDataset,
-    batch_size: int,
-    shuffle: bool = True,
-    collate_fn: Optional[DataCollatorForLanguageModeling] = None,
-) -> DataLoader:
-    """Create a DataLoader that mirrors Hugging Face Trainer batching behavior."""
-
-    if collate_fn is None:
-        collate_fn = DataCollatorForLanguageModeling(
-            tokenizer=dataset.tokenizer,
-            mlm=False,
-        )
-
-    return DataLoader(
-        dataset,
-        batch_size=batch_size,
-        shuffle=shuffle,
-        collate_fn=collate_fn,
-    )
 
 
 def parse_args() -> argparse.Namespace:
