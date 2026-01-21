@@ -383,10 +383,10 @@
 
 .pluginChain {
   display: flex;
+  flex-direction: column;  /* Changed to vertical layout */
   align-items: center;
-  gap: 4px;
+  gap: 8px;  /* Increased gap for vertical spacing */
   margin-top: 8px;
-  flex-wrap: wrap;
 }
 
 .chainPlugin {
@@ -397,6 +397,8 @@
   border-radius: 4px;
   font-size: 10px;
   color: white;
+  width: 100%;  /* Full width for vertical layout */
+  justify-content: center;
 }
 
 .chainPlugin.disabled {
@@ -411,8 +413,9 @@
 }
 
 .chainArrow {
-  font-size: 12px;
+  font-size: 14px;  /* Slightly larger for vertical arrow */
   opacity: 0.5;
+  transform: rotate(90deg);  /* Rotate arrow from → to ↓ */
 }
 
 /* ============== Model Node ============== */

@@ -13,15 +13,15 @@ export const SIGNAL_ICONS: Record<SignalType, string> = {
   language: '🌐',
 }
 
-// ============== Signal Colors (NVIDIA Dark Theme) ==============
+// ============== Signal Colors (Gray Nodes, Green Paths) ==============
 export const SIGNAL_COLORS: Record<SignalType, { background: string; border: string }> = {
-  keyword: { background: '#76b900', border: '#5a8f00' },      // NVIDIA Green
+  keyword: { background: '#4a5568', border: '#2d3748' },      // Dark Gray
   embedding: { background: '#4a5568', border: '#2d3748' },    // Dark Gray
-  domain: { background: '#5a6c7d', border: '#3d4a59' },       // Blue Gray
-  fact_check: { background: '#718096', border: '#4a5568' },   // Medium Gray
-  user_feedback: { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
-  preference: { background: '#556b7d', border: '#3d4a59' },   // Cool Gray
-  language: { background: '#5d6d7e', border: '#3d4a59' },     // Steel Gray
+  domain: { background: '#4a5568', border: '#2d3748' },       // Dark Gray
+  fact_check: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
+  user_feedback: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+  preference: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
+  language: { background: '#4a5568', border: '#2d3748' },     // Dark Gray
 }
 
 // ============== Signal Latency ==============
@@ -97,29 +97,29 @@ export const GLOBAL_PLUGIN_DISPLAY: Record<string, { icon: string; label: string
   'semantic_cache': { icon: '⚡', label: 'Semantic Cache', color: '#76b900' },   // NVIDIA Green
 }
 
-// ============== Node Colors (NVIDIA Dark Theme) ==============
+// ============== Node Colors (Gray Nodes, Green Paths) ==============
 export const NODE_COLORS = {
-  client: { background: '#76b900', border: '#5a8f00' },        // NVIDIA Green
+  client: { background: '#76b900', border: '#5a8f00' },        // NVIDIA Green (Client stays green)
   decision: {
     normal: { background: '#4a5568', border: '#2d3748' },      // Dark Gray
-    reasoning: { background: '#8fd400', border: '#76b900' },   // Light Green
+    reasoning: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
     unreachable: { background: '#3d4a59', border: '#2d3748' }, // Very Dark Gray
   },
   model: {
-    standard: { background: '#5a6c7d', border: '#3d4a59' },    // Blue Gray
-    reasoning: { background: '#8fd400', border: '#76b900' },   // Light Green
+    standard: { background: '#5a6c7d', border: '#3d4a59' },    // Blue Gray (Models gray)
+    reasoning: { background: '#5a6c7d', border: '#3d4a59' },   // Blue Gray (Models gray)
   },
   classification: { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
   disabled: { background: '#3d4a59', border: '#2d3748' },      // Very Dark Gray
 }
 
-// ============== Edge Colors (NVIDIA Dark Theme) ==============
+// ============== Edge Colors (Green Paths) ==============
 export const EDGE_COLORS = {
-  normal: '#4a5568',      // Dark Gray
-  reasoning: '#8fd400',   // Light Green
+  normal: '#76b900',      // NVIDIA Green (All paths green)
+  reasoning: '#76b900',   // NVIDIA Green (All paths green)
   active: '#76b900',      // NVIDIA Green
   disabled: '#3d4a59',    // Very Dark Gray
-  highlighted: '#76b900', // NVIDIA Green
+  highlighted: '#8fd400', // Light Green (Highlighted paths brighter)
 }
 
 // ============== Layout Configuration ==============
