@@ -118,7 +118,7 @@ Start the semantic router with the configuration:
 
 ```bash
 # Start vllm-sr
-vllm-sr serve
+vllm-sr serve --platform=amd
 ```
 
 **Expected output:**

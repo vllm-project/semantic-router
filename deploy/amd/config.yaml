@@ -89,6 +89,17 @@ signals:
         - "Analyze the geopolitical implications of climate change and propose multi-faceted policy solutions."
         - "Design an algorithm to detect anomalies in time-series data and explain the statistical reasoning behind it."
 
+  # user_feedbacks - User feedback signals
+  user_feedbacks:
+    - name: need_clarification
+      description: "User needs more clarification on the answer"
+    - name: satisfied
+      description: "User is satisfied with the answer"
+    - name: want_different
+      description: "User wants some other different answer"
+    - name: wrong_answer
+      description: "User is not satisfied with the answer and it is wrong"
+
   # Language detection signals
   language:
     - name: "en"
