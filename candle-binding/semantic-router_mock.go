@@ -428,11 +428,6 @@ func InitCandleBertClassifier(modelPath string, numClasses int, useCPU bool) boo
 	return true
 }
 
-// InitCandleBertRegressor initializes Candle BERT regressor
-func InitCandleBertRegressor(modelPath string, useCPU bool) bool {
-	return true
-}
-
 // InitDebertaV3Regressor initializes DeBERTa v3 regressor
 func InitDebertaV3Regressor(modelPath string, useCPU bool) bool {
 	return true
@@ -448,14 +443,9 @@ func ClassifyCandleBertText(text string) (ClassResult, error) {
 	return ClassResult{Class: 0, Confidence: 0.95}, nil
 }
 
-// ClassifyCandleBertRegressionText regresses a score using Candle BERT
-func ClassifyCandleBertRegressionText(text string) (float64, error) {
-	return 0.42, nil
-}
-
 // ClassifyDebertaV3RegressionText regresses a score using DeBERTa v3
 func ClassifyDebertaV3RegressionText(text string) (float64, error) {
-	return 0.55, nil
+	return 0.42, nil
 }
 
 // ClassifyCandleBertTokens classifies tokens using Candle BERT

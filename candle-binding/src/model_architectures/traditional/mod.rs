@@ -19,8 +19,8 @@ pub mod base_model;
 pub mod modernbert;
 
 // Re-export main traditional models
-pub use bert::{TraditionalBertClassifier, TraditionalBertRegressor};
-pub use deberta_v3::DebertaV3Classifier;
+pub use bert::TraditionalBertClassifier;
+pub use deberta_v3::{DebertaV3Classifier, DebertaV3Regressor};
 
 // Re-export ModernBERT and mmBERT (mmBERT is a type alias for ModernBERT with Multilingual variant)
 pub use modernbert::{

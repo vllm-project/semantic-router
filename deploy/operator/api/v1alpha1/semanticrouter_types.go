@@ -407,13 +407,13 @@ type PIIModelConfig struct {
 // The model returns a score between 0 and 1 (higher means more complex).
 type ComplexityModelConfig struct {
 	// Hugging Face model URL or repo ID (required)
-	ModelURL string `yaml:"model_url"`
+	ModelURL string `json:"model_url"`
 
 	// Optional local cache path for the model
-	ModelID string `yaml:"model_id,omitempty"`
+	ModelID string `json:"model_id,omitempty"`
 
 	// Use CPU for inference
-	UseCPU bool `yaml:"use_cpu"`
+	UseCPU bool `json:"use_cpu"`
 }
 
 // ReasoningFamily defines reasoning family configuration
