@@ -384,6 +384,8 @@ func (c *RouterConfig) GetDecisionByName(name string) *Decision {
 }
 
 // IsCacheEnabledForDecision returns whether semantic caching is enabled for a specific decision
+// Returns true only if the decision has an explicit semantic-cache plugin configured with enabled: true
+// This ensures per-decision scoping - decisions without semantic-cache plugin won't execute caching
 func (c *RouterConfig) IsCacheEnabledForDecision(decisionName string) bool {
 	decision := c.GetDecisionByName(decisionName)
 	if decision != nil {
@@ -392,8 +394,9 @@ func (c *RouterConfig) IsCacheEnabledForDecision(decisionName string) bool {
 			return config.Enabled
 		}
 	}
-	// Fall back to global setting
-	return c.Enabled
+	// No explicit semantic-cache plugin configured for this decision
+	// Return false to respect per-decision plugin scoping
+	return false
 }
 
 // GetCacheSimilarityThresholdForDecision returns the effective cache similarity threshold for a decision
@@ -453,6 +456,20 @@ func (c *RouterConfig) GetJailbreakThresholdForDecision(decisionName string) flo
 	return c.PromptGuard.Threshold
 }
 
+// GetJailbreakIncludeHistoryForDecision returns whether to include conversation history in jailbreak detection
+// Returns false by default (only check current user message)
+func (c *RouterConfig) GetJailbreakIncludeHistoryForDecision(decisionName string) bool {
+	decision := c.GetDecisionByName(decisionName)
+	if decision != nil {
+		config := decision.GetJailbreakConfig()
+		if config != nil {
+			return config.IncludeHistory
+		}
+	}
+	// Default to false (only check current user message)
+	return false
+}
+
 // IsPIIEnabledForDecision returns whether PII detection is enabled for a specific decision
 // Returns true only if the decision has an explicit PII plugin configured with enabled: true
 // This ensures per-decision scoping - decisions without PII plugin won't execute PII detection
@@ -480,6 +497,20 @@ func (c *RouterConfig) GetPIIThresholdForDecision(decisionName string) float32 {
 	}
 	// Fall back to global threshold
 	return c.PIIModel.Threshold
+}
+
+// GetPIIIncludeHistoryForDecision returns whether to include conversation history in PII detection
+// Returns false by default (only check current user message)
+func (c *RouterConfig) GetPIIIncludeHistoryForDecision(decisionName string) bool {
+	decision := c.GetDecisionByName(decisionName)
+	if decision != nil {
+		config := decision.GetPIIConfig()
+		if config != nil {
+			return config.IncludeHistory
+		}
+	}
+	// Default to false (only check current user message)
+	return false
 }
 
 // GetCacheSimilarityThreshold returns the effective threshold for the semantic cache

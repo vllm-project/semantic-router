@@ -1379,14 +1379,16 @@ type SemanticCachePluginConfig struct {
 
 // JailbreakPluginConfig represents configuration for jailbreak plugin
 type JailbreakPluginConfig struct {
-	Enabled   bool     `json:"enabled" yaml:"enabled"`
-	Threshold *float32 `json:"threshold,omitempty" yaml:"threshold,omitempty"`
+	Enabled        bool     `json:"enabled" yaml:"enabled"`
+	Threshold      *float32 `json:"threshold,omitempty" yaml:"threshold,omitempty"`
+	IncludeHistory bool     `json:"include_history,omitempty" yaml:"include_history,omitempty"` // Whether to include conversation history in detection (default: false)
 }
 
 // PIIPluginConfig represents configuration for pii plugin
 type PIIPluginConfig struct {
-	Enabled   bool     `json:"enabled" yaml:"enabled"`
-	Threshold *float32 `json:"threshold,omitempty" yaml:"threshold,omitempty"`
+	Enabled        bool     `json:"enabled" yaml:"enabled"`
+	Threshold      *float32 `json:"threshold,omitempty" yaml:"threshold,omitempty"`
+	IncludeHistory bool     `json:"include_history,omitempty" yaml:"include_history,omitempty"` // Whether to include conversation history in detection (default: false)
 
 	// PII Policy configuration
 	// When Enabled is true, all PII types are blocked by default unless listed in PIITypesAllowed
