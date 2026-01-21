@@ -1,0 +1,370 @@
+/* ControlPanel.module.css - Control panel styles */
+
+/* ============== Control Panel Container ============== */
+.controlPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  background: var(--bg-secondary, #141414);
+  border-right: 1px solid var(--border-color, #333);
+  width: 280px;
+  overflow-y: auto;
+}
+
+/* ============== Section ============== */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sectionTitle {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-secondary, #888);
+  letter-spacing: 0.5px;
+}
+
+/* ============== View Toggle ============== */
+.viewToggle {
+  display: flex;
+  background: var(--bg-primary, #1a1a1a);
+  border-radius: 6px;
+  padding: 3px;
+  border: 1px solid var(--border-color, #333);
+}
+
+.viewBtn {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #888);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.viewBtn:hover {
+  color: var(--text-primary, #e8e8e8);
+}
+
+.viewBtn.active {
+  background: var(--accent-color, #76b900);
+  color: white;
+}
+
+/* ============== Test Query ============== */
+.testQuery {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.testQueryHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.testQueryIcon {
+  font-size: 16px;
+}
+
+.testQueryTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #e8e8e8);
+  flex: 1;
+}
+
+.modeToggle {
+  display: flex;
+  gap: 4px;
+}
+
+.modeBtn {
+  padding: 4px 8px;
+  border: 1px solid var(--border-color, #333);
+  background: transparent;
+  color: var(--text-secondary, #888);
+  font-size: 10px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.modeBtn:hover {
+  border-color: var(--text-secondary, #888);
+  color: var(--text-primary, #e8e8e8);
+}
+
+.modeBtn.active {
+  background: var(--accent-color, #76b900);
+  border-color: var(--accent-color, #76b900);
+  color: white;
+}
+
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.queryInput {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, #333);
+  background: var(--bg-primary, #1a1a1a);
+  color: var(--text-primary, #e8e8e8);
+  font-size: 12px;
+  border-radius: 6px;
+  resize: vertical;
+  min-height: 60px;
+  font-family: inherit;
+}
+
+.queryInput:focus {
+  outline: none;
+  border-color: var(--accent-color, #76b900);
+}
+
+.queryInput::placeholder {
+  color: var(--text-secondary, #666);
+}
+
+.testBtn {
+  padding: 10px 16px;
+  background: var(--accent-color, #76b900);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.testBtn:hover:not(:disabled) {
+  background: var(--accent-hover, #8ed100);
+}
+
+.testBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============== Test Result ============== */
+.testResult {
+  background: var(--bg-primary, #1a1a1a);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.resultHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.resultTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #e8e8e8);
+}
+
+.accurateBadge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #4CAF50;
+  color: white;
+}
+
+.simulatedBadge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #FF9800;
+  color: white;
+}
+
+.latencyBadge {
+  font-size: 10px;
+  color: var(--text-secondary, #888);
+  margin-left: auto;
+}
+
+.resultSection {
+  margin-top: 8px;
+}
+
+.resultSectionTitle {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary, #888);
+  margin-bottom: 4px;
+}
+
+.signalTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.signalTag {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  color: white;
+}
+
+.signalTag.uncertain {
+  border: 1px dashed rgba(255, 255, 255, 0.5);
+}
+
+.signalScore {
+  opacity: 0.8;
+  font-size: 9px;
+}
+
+.needsVerify {
+  font-size: 10px;
+}
+
+.noMatch {
+  font-size: 11px;
+  color: var(--text-secondary, #888);
+  font-style: italic;
+}
+
+.decisionResult {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-color, #76b900);
+}
+
+.decisionResult.fallbackDecision {
+  color: #FF9800;
+}
+
+.fallbackBadge {
+  display: inline-block;
+  font-size: 9px;
+  background: #FF9800;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.fallbackReason {
+  font-size: 10px;
+  color: var(--text-secondary, #888);
+  margin-top: 4px;
+  padding: 4px 8px;
+  background: rgba(255, 152, 0, 0.1);
+  border-radius: 4px;
+  border-left: 2px solid #FF9800;
+}
+
+.modelTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.modelTag {
+  padding: 3px 8px;
+  background: var(--bg-secondary, #141414);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 4px;
+  font-size: 10px;
+  color: var(--text-primary, #e8e8e8);
+}
+
+.warningBanner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  background: rgba(255, 152, 0, 0.1);
+  border: 1px solid rgba(255, 152, 0, 0.3);
+  border-radius: 4px;
+  font-size: 11px;
+  color: #FF9800;
+  margin-top: 8px;
+}
+
+/* ============== Collapse Controls ============== */
+.collapseControls {
+  display: flex;
+  gap: 8px;
+}
+
+.collapseBtn {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color, #333);
+  background: transparent;
+  color: var(--text-secondary, #888);
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.collapseBtn:hover {
+  border-color: var(--text-secondary, #888);
+  color: var(--text-primary, #e8e8e8);
+}
+
+/* ============== Legend ============== */
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-secondary, #888);
+}
+
+.legendColor {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.legendLine {
+  width: 24px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.legendLineDashed {
+  width: 24px;
+  height: 2px;
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--text-secondary, #888) 0,
+    var(--text-secondary, #888) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+}

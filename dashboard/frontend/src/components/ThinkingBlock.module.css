@@ -1,0 +1,182 @@
+.container {
+  margin-bottom: 1rem;
+  border-radius: 8px;
+  border: 1px solid rgba(118, 185, 0, 0.4);
+  background: linear-gradient(to bottom, rgba(30, 30, 35, 0.5), rgba(25, 25, 30, 0.3));
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.container:hover {
+  border-color: rgba(118, 185, 0, 0.6);
+  box-shadow: 0 1px 3px rgba(118, 185, 0, 0.2), 0 0 12px rgba(118, 185, 0, 0.15);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background-color 0.15s ease;
+}
+
+.header:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 12px;
+}
+
+.icon {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.5);
+  transition: transform 0.2s ease;
+}
+
+.iconExpanded {
+  transform: rotate(0deg);
+}
+
+.icon:not(.iconExpanded) {
+  transform: rotate(-90deg);
+}
+
+.thinkingIcon {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.title {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.75);
+  letter-spacing: -0.01em;
+}
+
+.titleStreaming {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.time {
+  font-size: 12px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.5);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  min-width: 40px;
+  text-align: right;
+}
+
+.expandIcon {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.4);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.header:hover .expandIcon {
+  opacity: 1;
+}
+
+.progressBar {
+  height: 2px;
+  background-color: rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  position: relative;
+}
+
+.progressFill {
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(96, 165, 250, 0.5) 50%,
+    transparent 100%
+  );
+  animation: shimmer 2s infinite;
+  width: 100%;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.content {
+  padding: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  background-color: rgba(20, 20, 25, 0.4);
+  animation: expandContent 0.2s ease;
+}
+
+@keyframes expandContent {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Override markdown styles for dark mode */
+.content :global(.markdown) {
+  color: rgba(255, 255, 255, 0.5) !important;
+  font-size: 13px;
+}
+
+.content :global(.markdown) h1,
+.content :global(.markdown) h2,
+.content :global(.markdown) h3,
+.content :global(.markdown) h4,
+.content :global(.markdown) h5,
+.content :global(.markdown) h6 {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+.content :global(.markdown) p,
+.content :global(.markdown) li,
+.content :global(.markdown) span,
+.content :global(.markdown) div {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.content :global(.markdown) strong {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+.content :global(.markdown) code {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+}

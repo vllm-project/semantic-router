@@ -133,10 +133,16 @@ func (a *AutoMixSelector) InitializeFromConfig(modelConfig map[string]config.Mod
 	defer a.capMu.Unlock()
 
 	for model, params := range modelConfig {
+		// Use configured quality score if available, otherwise default to 0.8
+		qualityScore := params.QualityScore
+		if qualityScore <= 0 || qualityScore > 1.0 {
+			qualityScore = 0.8 // Default quality estimate
+		}
+
 		cap := &ModelCapability{
 			Model:            model,
 			Cost:             params.Pricing.PromptPer1M,
-			AvgQuality:       0.8,                        // Default quality estimate
+			AvgQuality:       qualityScore,
 			VerificationProb: 0.7,                        // Default verification probability
 			ParamSize:        a.estimateParamSize(model), // Estimate from model name
 		}

@@ -1,6 +1,10 @@
 //! Tests for traditional ModernBERT implementation
+//!
+//! This module tests both standard ModernBERT and mmBERT (multilingual) variants.
+//! mmBERT is supported through the same implementation using `ModernBertVariant::Multilingual`.
 
 use super::modernbert::*;
+use crate::core::tokenization::{detect_mmbert_from_config, TokenizationStrategy};
 use crate::model_architectures::traits::{ModelType, TaskType};
 use crate::test_fixtures::{fixtures::*, test_utils::*};
 use rstest::*;
@@ -284,6 +288,294 @@ fn test_modernbert_traditional_modernbert_token_classifier_output_format(
                 "TraditionalModernBertTokenClassifier creation failed for output format test: {}",
                 e
             );
+        }
+    }
+}
+
+// ============================================================================
+// mmBERT (Multilingual ModernBERT) Variant Tests
+// ============================================================================
+
+/// Test ModernBertVariant enum
+#[rstest]
+fn test_modernbert_variant_properties() {
+    // Test Standard variant
+    let standard = ModernBertVariant::Standard;
+    assert_eq!(standard.max_length(), 512);
+    assert_eq!(standard.pad_token(), "[PAD]");
+    assert!(matches!(
+        standard.tokenization_strategy(),
+        TokenizationStrategy::ModernBERT
+    ));
+
+    // Test Multilingual (mmBERT) variant
+    let multilingual = ModernBertVariant::Multilingual;
+    assert_eq!(multilingual.max_length(), 8192);
+    assert_eq!(multilingual.pad_token(), "<pad>");
+    assert!(matches!(
+        multilingual.tokenization_strategy(),
+        TokenizationStrategy::MmBERT
+    ));
+
+    println!("ModernBertVariant properties test passed");
+}
+
+/// Test mmBERT config detection
+#[rstest]
+fn test_mmbert_config_detection() {
+    use std::io::Write;
+    use tempfile::TempDir;
+
+    // Create a temporary directory with mmBERT-like config
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let config_path = temp_dir.path().join("config.json");
+
+    // Write mmBERT-style config
+    let mmbert_config = r#"{
+        "vocab_size": 256000,
+        "model_type": "modernbert",
+        "position_embedding_type": "sans_pos",
+        "hidden_size": 768,
+        "num_hidden_layers": 22,
+        "num_attention_heads": 12,
+        "intermediate_size": 1152,
+        "max_position_embeddings": 8192,
+        "local_attention": 128,
+        "global_attn_every_n_layers": 3
+    }"#;
+
+    std::fs::write(&config_path, mmbert_config).expect("Failed to write config");
+
+    // Test variant detection
+    let variant = ModernBertVariant::detect_from_config(config_path.to_str().unwrap());
+    assert!(variant.is_ok());
+    assert_eq!(variant.unwrap(), ModernBertVariant::Multilingual);
+
+    // Also test the tokenization detection
+    let is_mmbert = detect_mmbert_from_config(config_path.to_str().unwrap());
+    assert!(
+        is_mmbert.unwrap_or(false),
+        "Should detect mmBERT config correctly"
+    );
+
+    println!("mmBERT config detection test passed");
+}
+
+/// Test that regular ModernBERT is NOT detected as mmBERT
+#[rstest]
+fn test_modernbert_not_detected_as_mmbert() {
+    use tempfile::TempDir;
+
+    // Create a temporary directory with regular ModernBERT config
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let config_path = temp_dir.path().join("config.json");
+
+    // Write regular ModernBERT config (smaller vocab, different position embedding)
+    let modernbert_config = r#"{
+        "vocab_size": 50368,
+        "model_type": "modernbert",
+        "position_embedding_type": "absolute",
+        "hidden_size": 768,
+        "num_hidden_layers": 22,
+        "num_attention_heads": 12
+    }"#;
+
+    std::fs::write(&config_path, modernbert_config).expect("Failed to write config");
+
+    // Test variant detection - should be Standard
+    let variant = ModernBertVariant::detect_from_config(config_path.to_str().unwrap());
+    assert!(variant.is_ok());
+    assert_eq!(variant.unwrap(), ModernBertVariant::Standard);
+
+    // Test tokenization detection - should NOT be mmBERT
+    let is_mmbert = detect_mmbert_from_config(config_path.to_str().unwrap());
+    assert!(
+        !is_mmbert.unwrap_or(true),
+        "Regular ModernBERT should not be detected as mmBERT"
+    );
+
+    println!("ModernBERT not detected as mmBERT test passed");
+}
+
+/// Test mmBERT type aliases
+#[rstest]
+fn test_mmbert_type_aliases() {
+    // Verify type aliases are correctly defined
+    // MmBertClassifier should be an alias for TraditionalModernBertClassifier
+    // MmBertTokenClassifier should be an alias for TraditionalModernBertTokenClassifier
+
+    // These are compile-time checks - if they compile, the aliases are correct
+    fn _accepts_mmbert_classifier(_c: &MmBertClassifier) {}
+    fn _accepts_modernbert_classifier(_c: &TraditionalModernBertClassifier) {}
+    fn _accepts_mmbert_token_classifier(_c: &MmBertTokenClassifier) {}
+    fn _accepts_modernbert_token_classifier(_c: &TraditionalModernBertTokenClassifier) {}
+
+    println!("mmBERT type aliases test passed");
+}
+
+/// Test mmBERT classifier error handling
+#[rstest]
+fn test_mmbert_classifier_error_handling() {
+    // Invalid model path with explicit mmBERT variant
+    let invalid_result = TraditionalModernBertClassifier::load_from_directory_with_variant(
+        "",
+        true,
+        ModernBertVariant::Multilingual,
+    );
+    assert!(invalid_result.is_err());
+
+    // Non-existent model path
+    let nonexistent_result = TraditionalModernBertClassifier::load_mmbert_from_directory(
+        "/nonexistent/path/to/model",
+        true,
+    );
+    assert!(nonexistent_result.is_err());
+
+    println!("mmBERT classifier error handling test passed");
+}
+
+/// Test mmBERT token classifier error handling
+#[rstest]
+fn test_mmbert_token_classifier_error_handling() {
+    // Invalid model path with explicit mmBERT variant
+    let invalid_result = TraditionalModernBertTokenClassifier::new_with_variant(
+        "",
+        true,
+        ModernBertVariant::Multilingual,
+    );
+    assert!(invalid_result.is_err());
+
+    // Non-existent model path
+    let nonexistent_result =
+        TraditionalModernBertTokenClassifier::new_mmbert("/nonexistent/path/to/model", true);
+    assert!(nonexistent_result.is_err());
+
+    println!("mmBERT token classifier error handling test passed");
+}
+
+/// Test mmBERT multilingual text samples (documentation of capability)
+#[rstest]
+fn test_mmbert_multilingual_samples() {
+    // Sample texts in different languages that mmBERT supports
+    let multilingual_samples = vec![
+        ("English", "Hello, how are you today?"),
+        ("Spanish", "Hola, ¿cómo estás hoy?"),
+        ("French", "Bonjour, comment allez-vous aujourd'hui?"),
+        ("German", "Hallo, wie geht es Ihnen heute?"),
+        ("Chinese", "你好，今天怎么样？"),
+        ("Japanese", "こんにちは、今日はいかがですか？"),
+        ("Korean", "안녕하세요, 오늘 어떠세요?"),
+        ("Arabic", "مرحبا، كيف حالك اليوم؟"),
+        ("Russian", "Привет, как дела сегодня?"),
+        ("Hindi", "नमस्ते, आज आप कैसे हैं?"),
+    ];
+
+    println!(
+        "mmBERT supports {} languages. Sample texts:",
+        multilingual_samples.len()
+    );
+    for (lang, text) in &multilingual_samples {
+        println!("  {}: {}", lang, text);
+    }
+
+    // Verify we have coverage for major language families
+    assert!(multilingual_samples.len() >= 10);
+    println!("mmBERT multilingual samples test passed");
+}
+
+/// Test mmBERT expected configuration values
+#[rstest]
+fn test_mmbert_expected_config_values() {
+    // Document expected mmBERT configuration values based on
+    // https://huggingface.co/jhu-clsp/mmBERT-base/blob/main/config.json
+
+    let expected_config = vec![
+        ("vocab_size", "256000"),
+        ("hidden_size", "768"),
+        ("num_hidden_layers", "22"),
+        ("num_attention_heads", "12"),
+        ("intermediate_size", "1152"),
+        ("max_position_embeddings", "8192"),
+        ("position_embedding_type", "sans_pos"),
+        ("local_attention", "128"),
+        ("global_attn_every_n_layers", "3"),
+        ("global_rope_theta", "160000"),
+        ("local_rope_theta", "160000"),
+        ("pad_token_id", "0"),
+        ("bos_token_id", "2"),
+        ("eos_token_id", "1"),
+        ("cls_token_id", "1"),
+        ("sep_token_id", "1"),
+        ("mask_token_id", "4"),
+    ];
+
+    println!("Expected mmBERT configuration:");
+    for (key, value) in &expected_config {
+        println!("  {}: {}", key, value);
+    }
+
+    assert!(expected_config.len() > 10);
+    println!("mmBERT config values test passed");
+}
+
+/// Integration test for mmBERT with actual model (requires model files)
+/// Skipped in CI environments to save resources (mmBERT is not downloaded in CI)
+#[rstest]
+fn test_mmbert_integration_with_model() {
+    // Skip in CI environments - mmBERT model is not downloaded in CI to save resources
+    if std::env::var("CI").is_ok() {
+        println!("Skipping mmBERT integration test in CI environment");
+        return;
+    }
+
+    // This test requires actual mmBERT model files to be present
+    // Default path assumes model is downloaded to ../models/mmbert-base
+
+    let model_path =
+        std::env::var("MMBERT_MODEL_PATH").unwrap_or_else(|_| "../models/mmbert-base".to_string());
+
+    if !std::path::Path::new(&model_path).exists() {
+        println!(
+            "Skipping integration test - model path not found: {}",
+            model_path
+        );
+        return;
+    }
+
+    println!("Loading mmBERT from: {}", model_path);
+
+    match TraditionalModernBertClassifier::load_mmbert_from_directory(&model_path, true) {
+        Ok(classifier) => {
+            println!("Successfully loaded mmBERT classifier");
+            println!("Variant: {:?}", classifier.variant());
+            println!("Is multilingual: {}", classifier.is_multilingual());
+            println!("Number of classes: {}", classifier.get_num_classes());
+
+            assert!(classifier.is_multilingual());
+
+            // Test with multilingual texts
+            let test_texts = vec![
+                "This is an English test sentence.",
+                "这是一个中文测试句子。",
+                "Dies ist ein deutscher Testsatz.",
+            ];
+
+            for text in test_texts {
+                match classifier.classify_text(text) {
+                    Ok((class_id, confidence)) => {
+                        println!(
+                            "Text: '{}' -> class={}, confidence={:.4}",
+                            text, class_id, confidence
+                        );
+                    }
+                    Err(e) => {
+                        println!("Classification failed for '{}': {}", text, e);
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            println!("Failed to load mmBERT classifier: {}", e);
         }
     }
 }

@@ -83,6 +83,10 @@ const (
 	// Example: "creative_writing,technical_analysis"
 	VSRMatchedPreference = "x-vsr-matched-preference"
 
+	// VSRMatchedLanguage contains comma-separated list of matched language signals.
+	// Example: "en,zh,es"
+	VSRMatchedLanguage = "x-vsr-matched-language"
+
 	// VSRMatchedContext contains comma-separated list of matched context rule names.
 	// Example: "low_token_count,high_token_count"
 	VSRMatchedContext = "x-vsr-matched-context"

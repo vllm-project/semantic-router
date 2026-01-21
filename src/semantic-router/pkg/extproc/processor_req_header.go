@@ -13,6 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
 // EnhancedHallucinationSpan represents a hallucinated span with NLI explanation
@@ -75,6 +76,7 @@ type RequestContext struct {
 	VSRMatchedFactCheck    []string // Matched fact-check signals
 	VSRMatchedUserFeedback []string // Matched user feedback signals
 	VSRMatchedPreference   []string // Matched preference signals
+	VSRMatchedLanguage     []string // Matched language signals
 
 	// Endpoint tracking for windowed metrics
 	SelectedEndpoint string // The endpoint address selected for this request
@@ -98,12 +100,18 @@ type RequestContext struct {
 	ResponseAPICtx *ResponseAPIContext // Non-nil if this is a Response API request
 
 	// Router replay context
-	RouterReplayID     string                           // ID of the router replay session, if applicable
-	RouterReplayConfig *config.RouterReplayPluginConfig // Configuration for router replay, if applicable
+	RouterReplayID       string                     // ID of the router replay session, if applicable
+	RouterReplayConfig   *config.RouterReplayConfig // Configuration for router replay, if applicable
+	RouterReplayRecorder *routerreplay.Recorder     // The recorder instance for this decision
 
 	// Looper context
 	LooperRequest   bool // True if this request is from looper (internal request, skip plugins)
 	LooperIteration int  // The iteration number if this is a looper request
+
+	// External API routing context (for Envoy-routed external API requests)
+	// APIFormat indicates the target API format (e.g., "anthropic", "gemini")
+	// Empty string means standard OpenAI-compatible backend (no transformation needed)
+	APIFormat string
 }
 
 // handleRequestHeaders processes the request headers

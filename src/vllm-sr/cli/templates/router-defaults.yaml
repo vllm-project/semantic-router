@@ -57,6 +57,7 @@ prompt_guard:
   enabled: true  # Global default - can be overridden per category with jailbreak_enabled
   use_modernbert: false
   model_id: "models/mom-jailbreak-classifier"
+  jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
   threshold: 0.7
   use_cpu: true
 
@@ -72,7 +73,7 @@ classifier:
     use_modernbert: false
     threshold: 0.9
     use_cpu: true
-  pii_mapping_path: "models/mom-pii-classifier/label_mapping.json"
+    pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
 
 # Hallucination mitigation configuration
 # Disabled by default - enable in decisions via hallucination plugin
@@ -131,12 +132,9 @@ embedding_models:
   hnsw_config:
     model_type: "qwen3"         # Which model to use: "qwen3" (high quality) or "gemma" (fast)
     preload_embeddings: true    # Precompute candidate embeddings at startup
-    use_hnsw: true              # Enable HNSW index for fast similarity search
-    hnsw_m: 16                  # Bi-directional links per node (higher = better recall)
-    hnsw_ef_construction: 200   # Build-time search width (higher = better quality)
-    hnsw_ef_search: 50          # Query-time search width (higher = better accuracy)
-    hnsw_threshold: 10          # Min candidates to enable HNSW (below uses brute force)
-    target_dimension: 768       # Embedding dimension
+    target_dimension: 1024       # Embedding dimension
+    enable_soft_matching: true
+    min_score_threshold: 0.5
 
 # Observability Configuration
 observability:

@@ -1,0 +1,99 @@
+# Response API Redis E2E Test Profile Values
+replicaCount: 1
+
+image:
+  repository: ghcr.io/vllm-project/semantic-router/extproc
+  tag: latest
+  pullPolicy: Never
+
+config:
+  # Response API Configuration - Redis backend
+  response_api:
+    enabled: true
+    store_backend: "redis"
+    ttl_seconds: 10
+    max_responses: 1000
+    redis:
+      address: "redis.default.svc.cluster.local:6379"
+      password: ""
+      db: 0
+      key_prefix: "sr:"
+      pool_size: 10
+      min_idle_conns: 2
+      max_retries: 3
+      dial_timeout: 5
+      read_timeout: 3
+      write_timeout: 3
+
+  # vLLM Endpoints - required for Response API to forward requests
+  vllm_endpoints:
+    - name: "test-endpoint"
+      address: "mock-vllm.default.svc.cluster.local"
+      port: 8000
+      weight: 1
+
+  # Minimal model config to satisfy validation (matches mock-vllm /v1/models)
+  model_config:
+    "openai/gpt-oss-20b":
+      use_reasoning: false
+      preferred_endpoints: ["test-endpoint"]
+
+  # Minimal categories and decisions to satisfy validation
+  categories:
+    - name: other
+      description: "General knowledge and miscellaneous topics"
+      mmlu_categories: ["other"]
+
+  strategy: "priority"
+
+  decisions:
+    - name: "default_decision"
+      description: "Default catch-all decision"
+      priority: 1
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "other"
+      modelRefs:
+        - model: "openai/gpt-oss-20b"
+          use_reasoning: false
+
+  default_model: "openai/gpt-oss-20b"
+
+  # Classifier configuration - disable PII and category models for Response API
+  classifier:
+    category_model:
+      model_id: ""
+      threshold: 0.6
+      use_cpu: true
+      use_modernbert: false
+      category_mapping_path: ""
+    pii_model:
+      model_id: ""
+      threshold: 1.0
+      use_cpu: true
+      pii_mapping_path: ""
+
+  api:
+    batch_classification:
+      max_batch_size: 100
+      concurrency_threshold: 5
+      max_concurrency: 8
+      metrics:
+        enabled: true
+        detailed_goroutine_tracking: false
+        high_resolution_timing: false
+        sample_rate: 1.0
+
+  observability:
+    tracing:
+      enabled: false
+
+resources:
+  limits:
+    cpu: "2"
+    memory: "2Gi"
+  requests:
+    cpu: "500m"
+    memory: "1Gi"

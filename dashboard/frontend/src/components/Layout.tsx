@@ -17,11 +17,6 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
   const isSystemPage = isConfigPage && configSection === 'router-config'
   const isObservabilityPage = ['/status', '/logs', '/monitoring', '/tracing'].includes(location.pathname)
 
-  useEffect(() => {
-    // Always use dark theme
-    document.documentElement.setAttribute('data-theme', 'dark')
-  }, [])
-
   // Close system dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -85,6 +80,15 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
             >
               Decisions
             </button>
+
+            <NavLink
+              to="/topology"
+              className={({ isActive }) =>
+                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+              }
+            >
+              Topology
+            </NavLink>
 
             {/* System Dropdown (includes router-config and observability) */}
             <div className={styles.systemDropdown}>

@@ -169,3 +169,7 @@ FactCHD_dataset/
 *.safetensors
 
 .vllm-sr/
+
+# AWS deployment files (contain instance IPs and IDs)
+src/training/cache_embeddings/aws/vllm-instance-*.txt
+src/training/cache_embeddings/aws/vllm-inventory-*.ini

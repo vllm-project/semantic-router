@@ -18,7 +18,9 @@ The framework follows a **separation of concerns** design:
 - **istio**: Tests Semantic Router with Istio service mesh integration
 - **production-stack**: Tests vLLM Production Stack configurations
 - **llm-d**: Tests Semantic Router with LLM-D distributed inference
-- **response-api**: Tests Response API endpoints (POST/GET/DELETE /v1/responses)
+- **response-api**: Tests Responses API endpoints (POST/GET/DELETE /v1/responses)
+- **response-api-redis**: Tests Responses API endpoints with Redis storage backend
+- **response-api-redis-cluster**: Tests Responses API endpoints with Redis Cluster backend
 - **dynamo**: Tests with Nvidia Dynamo (future)
 
 ## Directory Structure
@@ -91,6 +93,12 @@ The framework includes the following test cases (all in `e2e/testcases/`):
 | `response-api-get` | GET /v1/responses/{id} - Retrieve a response | Response retrieval, ID matching |
 | `response-api-delete` | DELETE /v1/responses/{id} - Delete a response | Deletion confirmation, 404 verification |
 | `response-api-input-items` | GET /v1/responses/{id}/input_items - List input items | Input items list, pagination |
+| `response-api-conversation-chaining` | Conversation chaining with previous_response_id (3-turn chain) | History preservation, instruction inheritance |
+| `response-api-error-missing-input` | Error handling - Invalid request format (missing input field) | 400 error, error message validation |
+| `response-api-error-nonexistent-previous-response-id` | Error handling - Non-existent previous_response_id | Graceful degradation or 404 error |
+| `response-api-error-nonexistent-response-id-get` | Error handling - Non-existent response ID for GET | 404 error response |
+| `response-api-error-nonexistent-response-id-delete` | Error handling - Non-existent response ID for DELETE | 404 error response |
+| `response-api-error-backend-passthrough` | Error handling - Backend error passthrough | Error format validation, passthrough behavior |
 
 ### Signal-Decision Engine Tests
 

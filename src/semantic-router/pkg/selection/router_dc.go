@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -43,6 +44,14 @@ type RouterDCConfig struct {
 
 	// UseModelContrastive enables model-side contrastive learning
 	UseModelContrastive bool `yaml:"use_model_contrastive"`
+
+	// RequireDescriptions enforces that all models have descriptions
+	// When true, validation will fail if any model lacks a description
+	RequireDescriptions bool `yaml:"require_descriptions,omitempty"`
+
+	// UseCapabilities enables using structured capability tags for matching
+	// When true, capabilities are included in the embedding text
+	UseCapabilities bool `yaml:"use_capabilities,omitempty"`
 }
 
 // DefaultRouterDCConfig returns the default RouterDC configuration
@@ -53,6 +62,8 @@ func DefaultRouterDCConfig() *RouterDCConfig {
 		MinSimilarity:       0.3,
 		UseQueryContrastive: true,
 		UseModelContrastive: true,
+		RequireDescriptions: false,
+		UseCapabilities:     true,
 	}
 }
 
@@ -130,6 +141,101 @@ func (r *RouterDCSelector) SetModelEmbedding(model string, embedding []float32) 
 	r.embeddingMu.Lock()
 	defer r.embeddingMu.Unlock()
 	r.modelEmbeddings[model] = embedding
+}
+
+// InitializeFromConfig sets up model embeddings from ModelParams descriptions
+// This is the primary way to initialize RouterDC with model capability information
+func (r *RouterDCSelector) InitializeFromConfig(modelConfig map[string]config.ModelParams) error {
+	if r.embeddingFunc == nil {
+		logging.Warnf("[RouterDC] No embedding function set, cannot initialize model embeddings")
+		return nil
+	}
+
+	r.embeddingMu.Lock()
+	defer r.embeddingMu.Unlock()
+
+	modelsWithDescriptions := 0
+	modelsWithoutDescriptions := 0
+	var missingModels []string
+
+	for model, params := range modelConfig {
+		// Build description text from description and capabilities
+		descText := r.buildDescriptionText(model, params)
+
+		if descText == "" {
+			missingModels = append(missingModels, model)
+			modelsWithoutDescriptions++
+			continue
+		}
+
+		// Compute embedding for the model description
+		embedding, err := r.embeddingFunc(descText)
+		if err != nil {
+			logging.Warnf("[RouterDC] Failed to embed model %s: %v", model, err)
+			continue
+		}
+
+		r.modelEmbeddings[model] = embedding
+		modelsWithDescriptions++
+		logging.Debugf("[RouterDC] Initialized embedding for model %s", model)
+	}
+
+	logging.Infof("[RouterDC] Initialized embeddings: %d with descriptions, %d without",
+		modelsWithDescriptions, modelsWithoutDescriptions)
+
+	// Validate if require_descriptions is set
+	if r.config.RequireDescriptions && len(missingModels) > 0 {
+		return fmt.Errorf("router_dc requires descriptions but %d models are missing them: %v",
+			len(missingModels), missingModels)
+	}
+
+	return nil
+}
+
+// buildDescriptionText builds the text to embed for a model
+func (r *RouterDCSelector) buildDescriptionText(model string, params config.ModelParams) string {
+	var parts []string
+
+	// Add description if present
+	if params.Description != "" {
+		parts = append(parts, params.Description)
+	}
+
+	// Add capabilities if enabled and present
+	if r.config.UseCapabilities && len(params.Capabilities) > 0 {
+		capText := "Capabilities: " + strings.Join(params.Capabilities, ", ")
+		parts = append(parts, capText)
+	}
+
+	// If no description but capabilities exist, use just capabilities
+	if len(parts) == 0 && len(params.Capabilities) > 0 {
+		parts = append(parts, "Model: "+model)
+		parts = append(parts, "Capabilities: "+strings.Join(params.Capabilities, ", "))
+	}
+
+	return strings.Join(parts, ". ")
+}
+
+// ValidateConfig validates the RouterDC configuration against model config
+// Returns an error if require_descriptions is true and models lack descriptions
+func (r *RouterDCSelector) ValidateConfig(modelConfig map[string]config.ModelParams) error {
+	if !r.config.RequireDescriptions {
+		return nil
+	}
+
+	var missingModels []string
+	for model, params := range modelConfig {
+		if params.Description == "" && len(params.Capabilities) == 0 {
+			missingModels = append(missingModels, model)
+		}
+	}
+
+	if len(missingModels) > 0 {
+		return fmt.Errorf("router_dc.require_descriptions is true but models lack descriptions: %v",
+			missingModels)
+	}
+
+	return nil
 }
 
 // Select chooses the best model using dual-contrastive matching

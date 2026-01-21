@@ -18,6 +18,7 @@ from cli.consts import (
 )
 from cli.commands.init import init_command
 from cli.commands.config import config_command
+from cli.commands.validate import validate_command
 from cli.docker_cli import docker_container_status
 
 log = getLogger(__name__)
@@ -96,12 +97,17 @@ def init(force):
     help=f"Image pull policy: always, ifnotpresent, never (default: {DEFAULT_IMAGE_PULL_POLICY})",
 )
 @click.option(
-    "--readonly-dashboard",
+    "--readonly",
     is_flag=True,
     default=False,
     help="Run dashboard in read-only mode (disable config editing, allow playground only)",
 )
-def serve(config, image, image_pull_policy, readonly_dashboard):
+@click.option(
+    "--platform",
+    default=None,
+    help="Platform branding (e.g., 'amd' for AMD GPU deployments)",
+)
+def serve(config, image, image_pull_policy, readonly, platform):
     """
     Start vLLM Semantic Router.
 
@@ -121,7 +127,10 @@ def serve(config, image, image_pull_policy, readonly_dashboard):
         vllm-sr serve --image-pull-policy always
 
         # Read-only dashboard (for public beta)
-        vllm-sr serve --readonly-dashboard
+        vllm-sr serve --readonly
+
+        # Platform branding (for AMD deployments)
+        vllm-sr serve --platform amd
     """
     try:
         # Check if config file exists
@@ -147,10 +156,22 @@ def serve(config, image, image_pull_policy, readonly_dashboard):
                 else:
                     log.info(f"Passing environment variable: {var}={os.environ[var]}")
 
+        # API keys for model providers
+        api_key_vars = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY"]
+        for var in api_key_vars:
+            if var in os.environ:
+                env_vars[var] = os.environ[var]
+                log.info(f"Passing environment variable: {var}=***")
+
         # Dashboard read-only mode
-        if readonly_dashboard:
+        if readonly:
             env_vars["DASHBOARD_READONLY"] = "true"
             log.info("Dashboard read-only mode: ENABLED")
+
+        # Platform branding
+        if platform:
+            env_vars["DASHBOARD_PLATFORM"] = platform
+            log.info(f"Platform branding: {platform}")
 
         # Start container
         start_vllm_sr(
@@ -186,6 +207,27 @@ def config(config_type, config):
     """
     try:
         config_command(config_type, config)
+    except Exception as e:
+        log.error(f"Error: {e}")
+        sys.exit(1)
+
+
+@click.command()
+@click.option(
+    "--config",
+    default="config.yaml",
+    help="Path to config file (default: config.yaml)",
+)
+def validate(config):
+    """
+    Validate configuration file.
+
+    Examples:
+        vllm-sr validate                    # Uses config.yaml
+        vllm-sr validate --config my-config.yaml  # Uses my-config.yaml
+    """
+    try:
+        validate_command(config)
     except Exception as e:
         log.error(f"Error: {e}")
         sys.exit(1)
@@ -287,6 +329,7 @@ def dashboard(no_open):
 main.add_command(init)
 main.add_command(serve)
 main.add_command(config)
+main.add_command(validate)
 main.add_command(status)
 main.add_command(logs)
 main.add_command(stop)

@@ -24,6 +24,9 @@ type Config struct {
 
 	// Read-only mode for public beta deployments
 	ReadonlyMode bool
+
+	// Platform branding (e.g., "amd" for AMD GPU deployments)
+	Platform string
 }
 
 // env returns the env var or default
@@ -54,6 +57,9 @@ func LoadConfig() (*Config, error) {
 	// Read-only mode for public beta deployments
 	readonlyMode := flag.Bool("readonly", env("DASHBOARD_READONLY", "false") == "true", "enable read-only mode (disable config editing)")
 
+	// Platform branding
+	platform := flag.String("platform", env("DASHBOARD_PLATFORM", ""), "platform branding (e.g., 'amd' for AMD GPU deployments)")
+
 	flag.Parse()
 
 	cfg.Port = *port
@@ -66,6 +72,7 @@ func LoadConfig() (*Config, error) {
 	cfg.JaegerURL = *jaegerURL
 	cfg.EnvoyURL = *envoyURL
 	cfg.ReadonlyMode = *readonlyMode
+	cfg.Platform = *platform
 
 	// Resolve config file path to absolute path
 	absConfigPath, err := filepath.Abs(cfg.ConfigFile)

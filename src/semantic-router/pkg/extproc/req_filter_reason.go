@@ -63,7 +63,9 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 				reasoningApplied = true
 			case "reasoning_effort":
 				effort := r.getReasoningEffort(categoryName, model)
-				requestMap["reasoning_effort"] = effort
+				// Put reasoning_effort inside chat_template_kwargs (vLLM requirement)
+				chatTemplateKwargs[familyConfig.Parameter] = effort
+				requestMap["chat_template_kwargs"] = chatTemplateKwargs
 				appliedEffort = effort
 				reasoningApplied = true
 			default:
@@ -79,8 +81,9 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 		if familyConfig != nil {
 			switch familyConfig.Type {
 			case "reasoning_effort":
-				// Preserve original reasoning_effort for gpt-oss models (don't break upstream defaulting).
-				requestMap["reasoning_effort"] = originalReasoningEffort
+				// For reasoning_effort models, set effort in chat_template_kwargs
+				chatTemplateKwargs[familyConfig.Parameter] = originalReasoningEffort
+				requestMap["chat_template_kwargs"] = chatTemplateKwargs
 				if s, ok := originalReasoningEffort.(string); ok {
 					appliedEffort = s
 				}
@@ -207,7 +210,11 @@ func (r *OpenAIRouter) buildReasoningRequestFields(model string, useReasoning bo
 		return map[string]interface{}{"chat_template_kwargs": kwargs}, ""
 	case "reasoning_effort":
 		effort := r.getReasoningEffort(categoryName, model)
-		return map[string]interface{}{"reasoning_effort": effort}, effort
+		// Put reasoning_effort inside chat_template_kwargs (vLLM requirement)
+		kwargs := map[string]interface{}{
+			familyConfig.Parameter: effort,
+		}
+		return map[string]interface{}{"chat_template_kwargs": kwargs}, effort
 	default:
 		// Unknown reasoning syntax type - don't apply anything
 		return nil, ""

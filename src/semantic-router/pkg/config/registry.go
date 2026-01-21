@@ -101,15 +101,15 @@ var DefaultModelRegistry = []ModelSpec{
 	// Jailbreak Detection
 	{
 		LocalPath:        "models/mom-jailbreak-classifier",
-		RepoID:           "LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model",
+		RepoID:           "LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model",
 		Aliases:          []string{"jailbreak-detector", "prompt-guard", "safety-classifier", "jailbreak_classifier_modernbert-base_model", "lora_jailbreak_classifier_bert-base-uncased_model", "jailbreak_classifier_modernbert_model"},
 		Purpose:          PurposeJailbreakDetection,
-		Description:      "BERT-based jailbreak/prompt injection detector with LoRA adapters",
-		ParameterSize:    "110M + LoRA",
-		UsesLoRA:         true,
-		NumClasses:       2, // safe/jailbreak
+		Description:      "ModernBERT-based jailbreak/prompt injection detector",
+		ParameterSize:    "149M",
+		UsesLoRA:         false,
+		NumClasses:       2, // benign/jailbreak
 		MaxContextLength: 512,
-		Tags:             []string{"safety", "jailbreak", "lora", "prompt-injection", "bert"},
+		Tags:             []string{"safety", "jailbreak", "prompt-injection", "modernbert"},
 	},
 
 	// Hallucination Detection - Sentinel

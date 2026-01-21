@@ -62,6 +62,10 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
     label: 'Preference',
     type: 'info',
   },
+  'x-vsr-matched-language': {
+    label: 'Language',
+    type: 'info',
+  },
   // Looper headers
   'x-vsr-looper-models-used': {
     label: 'Collaborative Models',

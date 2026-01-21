@@ -93,8 +93,9 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 	// Extract all model paths from config
 	paths := ExtractModelPaths(cfg)
 
+	// Allow empty paths for API-only configurations
 	if len(paths) == 0 {
-		return nil, fmt.Errorf("no model paths found in configuration")
+		return []ModelSpec{}, nil
 	}
 
 	// Get model registry from config

@@ -12,60 +12,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Unit tests for HNSWConfig.WithDefaults() with pointer-based HNSWThreshold
-func TestHNSWConfig_WithDefaults_ZeroThreshold(t *testing.T) {
-	// Test that hnsw_threshold: 0 is preserved (not overridden to 20)
-	zero := 0
-	config := HNSWConfig{
-		HNSWThreshold: &zero,
-	}
-
-	result := config.WithDefaults()
-
-	if result.HNSWThreshold == nil {
-		t.Fatal("HNSWThreshold should not be nil")
-	}
-
-	if *result.HNSWThreshold != 0 {
-		t.Errorf("Expected HNSWThreshold to be 0, got %d", *result.HNSWThreshold)
-	}
-}
-
-func TestHNSWConfig_WithDefaults_NilThreshold(t *testing.T) {
-	// Test that nil threshold gets default value 20
-	config := HNSWConfig{
-		HNSWThreshold: nil,
-	}
-
-	result := config.WithDefaults()
-
-	if result.HNSWThreshold == nil {
-		t.Fatal("HNSWThreshold should not be nil after WithDefaults")
-	}
-
-	if *result.HNSWThreshold != 20 {
-		t.Errorf("Expected default HNSWThreshold to be 20, got %d", *result.HNSWThreshold)
-	}
-}
-
-func TestHNSWConfig_WithDefaults_CustomThreshold(t *testing.T) {
-	// Test that custom threshold is preserved
-	custom := 50
-	config := HNSWConfig{
-		HNSWThreshold: &custom,
-	}
-
-	result := config.WithDefaults()
-
-	if result.HNSWThreshold == nil {
-		t.Fatal("HNSWThreshold should not be nil")
-	}
-
-	if *result.HNSWThreshold != 50 {
-		t.Errorf("Expected HNSWThreshold to be 50, got %d", *result.HNSWThreshold)
-	}
-}
-
 func TestConfig(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Config Suite")
@@ -1987,17 +1933,18 @@ default_model: "test-model"
 	})
 
 	Describe("IsJailbreakEnabledForDecision", func() {
-		Context("when global jailbreak is enabled", func() {
-			It("should return true for decision without explicit setting", func() {
+		Context("per-decision plugin scoping", func() {
+			It("should return false for decision without explicit jailbreak plugin (even if global is enabled)", func() {
 				decision := Decision{
 					Name:      "test",
 					ModelRefs: []ModelRef{{Model: "test"}},
+					// No jailbreak plugin configured
 				}
 
 				cfg := &RouterConfig{
 					InlineModels: InlineModels{
 						PromptGuard: PromptGuardConfig{
-							Enabled: true,
+							Enabled: true, // Global enabled, but should not affect decisions without plugin
 						},
 					},
 					IntelligentRouting: IntelligentRouting{
@@ -2005,7 +1952,8 @@ default_model: "test-model"
 					},
 				}
 
-				Expect(cfg.IsJailbreakEnabledForDecision("test")).To(BeTrue())
+				// Per-decision scoping: no plugin = no jailbreak detection
+				Expect(cfg.IsJailbreakEnabledForDecision("test")).To(BeFalse())
 			})
 
 			It("should return false when decision explicitly disables jailbreak", func() {
@@ -2062,6 +2010,325 @@ default_model: "test-model"
 				}
 
 				Expect(cfg.IsJailbreakEnabledForDecision("test")).To(BeTrue())
+			})
+
+			It("should return false for non-existent decision", func() {
+				cfg := &RouterConfig{
+					InlineModels: InlineModels{
+						PromptGuard: PromptGuardConfig{
+							Enabled: true,
+						},
+					},
+				}
+
+				Expect(cfg.IsJailbreakEnabledForDecision("non_existent")).To(BeFalse())
+			})
+
+			It("should return false for include_history by default", func() {
+				decision := Decision{
+					Name:      "test",
+					ModelRefs: []ModelRef{{Model: "test"}},
+					Plugins: []DecisionPlugin{
+						{
+							Type: "jailbreak",
+							Configuration: map[string]interface{}{
+								"enabled": true,
+							},
+						},
+					},
+				}
+
+				cfg := &RouterConfig{
+					IntelligentRouting: IntelligentRouting{
+						Decisions: []Decision{decision},
+					},
+				}
+
+				Expect(cfg.GetJailbreakIncludeHistoryForDecision("test")).To(BeFalse())
+			})
+
+			It("should return true when include_history is explicitly enabled", func() {
+				decision := Decision{
+					Name:      "test",
+					ModelRefs: []ModelRef{{Model: "test"}},
+					Plugins: []DecisionPlugin{
+						{
+							Type: "jailbreak",
+							Configuration: map[string]interface{}{
+								"enabled":         true,
+								"include_history": true,
+							},
+						},
+					},
+				}
+
+				cfg := &RouterConfig{
+					IntelligentRouting: IntelligentRouting{
+						Decisions: []Decision{decision},
+					},
+				}
+
+				Expect(cfg.GetJailbreakIncludeHistoryForDecision("test")).To(BeTrue())
+			})
+		})
+	})
+
+	Describe("IsPIIEnabledForDecision", func() {
+		Context("per-decision plugin scoping", func() {
+			It("should return false for decision without explicit PII plugin", func() {
+				decision := Decision{
+					Name:      "test",
+					ModelRefs: []ModelRef{{Model: "test"}},
+					// No PII plugin configured
+				}
+
+				cfg := &RouterConfig{
+					IntelligentRouting: IntelligentRouting{
+						Decisions: []Decision{decision},
+					},
+				}
+
+				Expect(cfg.IsPIIEnabledForDecision("test")).To(BeFalse())
+			})
+
+			It("should return true when decision explicitly enables PII", func() {
+				decision := Decision{
+					Name:      "test",
+					ModelRefs: []ModelRef{{Model: "test"}},
+					Plugins: []DecisionPlugin{
+						{
+							Type: "pii",
+							Configuration: map[string]interface{}{
+								"enabled": true,
+							},
+						},
+					},
+				}
+
+				cfg := &RouterConfig{
+					IntelligentRouting: IntelligentRouting{
+						Decisions: []Decision{decision},
+					},
+				}
+
+				Expect(cfg.IsPIIEnabledForDecision("test")).To(BeTrue())
+			})
+
+			It("should return false when decision explicitly disables PII", func() {
+				decision := Decision{
+					Name:      "test",
+					ModelRefs: []ModelRef{{Model: "test"}},
+					Plugins: []DecisionPlugin{
+						{
+							Type: "pii",
+							Configuration: map[string]interface{}{
+								"enabled": false,
+							},
+						},
+					},
+				}
+
+				cfg := &RouterConfig{
+					IntelligentRouting: IntelligentRouting{
+						Decisions: []Decision{decision},
+					},
+				}
+
+				Expect(cfg.IsPIIEnabledForDecision("test")).To(BeFalse())
+			})
+
+			It("should return false for include_history by default", func() {
+				decision := Decision{
+					Name:      "test",
+					ModelRefs: []ModelRef{{Model: "test"}},
+					Plugins: []DecisionPlugin{
+						{
+							Type: "pii",
+							Configuration: map[string]interface{}{
+								"enabled": true,
+							},
+						},
+					},
+				}
+
+				cfg := &RouterConfig{
+					IntelligentRouting: IntelligentRouting{
+						Decisions: []Decision{decision},
+					},
+				}
+
+				Expect(cfg.GetPIIIncludeHistoryForDecision("test")).To(BeFalse())
+			})
+
+			It("should return true when include_history is explicitly enabled", func() {
+				decision := Decision{
+					Name:      "test",
+					ModelRefs: []ModelRef{{Model: "test"}},
+					Plugins: []DecisionPlugin{
+						{
+							Type: "pii",
+							Configuration: map[string]interface{}{
+								"enabled":         true,
+								"include_history": true,
+							},
+						},
+					},
+				}
+
+				cfg := &RouterConfig{
+					IntelligentRouting: IntelligentRouting{
+						Decisions: []Decision{decision},
+					},
+				}
+
+				Expect(cfg.GetPIIIncludeHistoryForDecision("test")).To(BeTrue())
+			})
+		})
+	})
+
+	Describe("IsCacheEnabledForDecision", func() {
+		Context("per-decision plugin scoping", func() {
+			It("should return false for decision without explicit semantic-cache plugin (even if global is enabled)", func() {
+				decision := Decision{
+					Name:      "test",
+					ModelRefs: []ModelRef{{Model: "test"}},
+					// No semantic-cache plugin configured
+				}
+
+				cfg := &RouterConfig{
+					SemanticCache: SemanticCache{
+						Enabled: true, // Global enabled, but should not affect decisions without plugin
+					},
+					IntelligentRouting: IntelligentRouting{
+						Decisions: []Decision{decision},
+					},
+				}
+
+				// Per-decision scoping: no plugin = no semantic caching
+				Expect(cfg.IsCacheEnabledForDecision("test")).To(BeFalse())
+			})
+
+			It("should return false when decision explicitly disables semantic-cache", func() {
+				decision := Decision{
+					Name:      "test",
+					ModelRefs: []ModelRef{{Model: "test"}},
+					Plugins: []DecisionPlugin{
+						{
+							Type: "semantic-cache",
+							Configuration: map[string]interface{}{
+								"enabled": false,
+							},
+						},
+					},
+				}
+
+				cfg := &RouterConfig{
+					SemanticCache: SemanticCache{
+						Enabled: true,
+					},
+					IntelligentRouting: IntelligentRouting{
+						Decisions: []Decision{decision},
+					},
+				}
+
+				Expect(cfg.IsCacheEnabledForDecision("test")).To(BeFalse())
+			})
+
+			It("should return true when decision explicitly enables semantic-cache", func() {
+				decision := Decision{
+					Name:      "test",
+					ModelRefs: []ModelRef{{Model: "test"}},
+					Plugins: []DecisionPlugin{
+						{
+							Type: "semantic-cache",
+							Configuration: map[string]interface{}{
+								"enabled": true,
+							},
+						},
+					},
+				}
+
+				cfg := &RouterConfig{
+					SemanticCache: SemanticCache{
+						Enabled: false, // Global disabled, but decision enables it
+					},
+					IntelligentRouting: IntelligentRouting{
+						Decisions: []Decision{decision},
+					},
+				}
+
+				Expect(cfg.IsCacheEnabledForDecision("test")).To(BeTrue())
+			})
+
+			It("should return false for non-existent decision", func() {
+				cfg := &RouterConfig{
+					SemanticCache: SemanticCache{
+						Enabled: true,
+					},
+				}
+
+				Expect(cfg.IsCacheEnabledForDecision("non_existent")).To(BeFalse())
+			})
+
+			It("should use decision-level similarity threshold when configured", func() {
+				threshold := float32(0.95)
+				decision := Decision{
+					Name:      "test",
+					ModelRefs: []ModelRef{{Model: "test"}},
+					Plugins: []DecisionPlugin{
+						{
+							Type: "semantic-cache",
+							Configuration: map[string]interface{}{
+								"enabled":              true,
+								"similarity_threshold": threshold,
+							},
+						},
+					},
+				}
+
+				globalThreshold := float32(0.80)
+				cfg := &RouterConfig{
+					SemanticCache: SemanticCache{
+						Enabled:             true,
+						SimilarityThreshold: &globalThreshold,
+					},
+					IntelligentRouting: IntelligentRouting{
+						Decisions: []Decision{decision},
+					},
+				}
+
+				// Should use decision-level threshold, not global
+				Expect(cfg.GetCacheSimilarityThresholdForDecision("test")).To(Equal(threshold))
+			})
+
+			It("should use decision-level TTL when configured", func() {
+				ttl := 7200
+				decision := Decision{
+					Name:      "test",
+					ModelRefs: []ModelRef{{Model: "test"}},
+					Plugins: []DecisionPlugin{
+						{
+							Type: "semantic-cache",
+							Configuration: map[string]interface{}{
+								"enabled":     true,
+								"ttl_seconds": ttl,
+							},
+						},
+					},
+				}
+
+				cfg := &RouterConfig{
+					SemanticCache: SemanticCache{
+						Enabled:    true,
+						TTLSeconds: 3600, // Global TTL
+					},
+					IntelligentRouting: IntelligentRouting{
+						Decisions: []Decision{decision},
+					},
+				}
+
+				// Should use decision-level TTL, not global
+				Expect(cfg.GetCacheTTLSecondsForDecision("test")).To(Equal(ttl))
 			})
 		})
 	})
