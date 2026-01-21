@@ -277,7 +277,7 @@ decisions:
       - type: "semantic-cache"
         configuration:
           enabled: true
-          similarity_threshold: 0.87
+          similarity_threshold: 0.95
 
   # Priority 130: Fast QA in Chinese
   - name: "fast_qa_chinese"
@@ -300,7 +300,7 @@ decisions:
       - type: "semantic-cache"
         configuration:
           enabled: true
-          similarity_threshold: 0.92
+          similarity_threshold: 0.80
 
   # Priority 120: Fast QA in English
   - name: "fast_qa_english"
@@ -323,7 +323,7 @@ decisions:
       - type: "semantic-cache"
         configuration:
           enabled: true
-          similarity_threshold: 0.92
+          similarity_threshold: 0.80
 
   # Priority 100: Default fallback
   - name: "default_route"
@@ -338,8 +338,14 @@ decisions:
           name: "math"
         - type: "domain"
           name: "physics"
+        - type: "domain"
+          name: "other"
+        - type: "language"
+          name: "en"
+        - type: "language"
+          name: "zh"
     modelRefs:
-      - model: "openai/gpt-oss-120b"
+      - model: "openai/gpt-oss-20b"
         use_reasoning: false
     plugins:
       - type: "semantic-cache"
