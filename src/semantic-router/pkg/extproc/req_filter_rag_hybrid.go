@@ -79,7 +79,7 @@ func (r *OpenAIRouter) retrieveSequential(traceCtx context.Context, ctx *Request
 
 	fallbackContext, fallbackErr := r.retrieveFromBackend(traceCtx, ctx, fallbackConfig)
 	if fallbackErr != nil {
-		return "", fmt.Errorf("both primary and fallback backends failed: primary=%v, fallback=%w", err, fallbackErr)
+		return "", fmt.Errorf("both primary and fallback backends failed: primary=%w, fallback=%w", err, fallbackErr)
 	}
 
 	logging.Infof("Hybrid RAG: fallback backend (%s) succeeded", hybridConfig.Fallback)
@@ -87,17 +87,40 @@ func (r *OpenAIRouter) retrieveSequential(traceCtx context.Context, ctx *Request
 }
 
 // retrieveParallel tries both backends in parallel and uses the best result
+// Uses channels for proper synchronization to avoid race conditions when
+// multiple goroutines write results. The WaitGroup ensures all goroutines
+// complete before we read from channels, and buffered channels (size 1) allow
+// goroutines to send without blocking.
 func (r *OpenAIRouter) retrieveParallel(traceCtx context.Context, ctx *RequestContext, ragConfig *config.RAGPluginConfig, hybridConfig *config.HybridRAGConfig) (string, error) {
+	type result struct {
+		context string
+		err     error
+	}
+
 	var wg sync.WaitGroup
-	var primaryContext string
-	var primaryErr error
-	var fallbackContext string
-	var fallbackErr error
+	// Buffered channels (size 1) allow goroutines to send results without blocking
+	// and provide proper synchronization according to Go's memory model
+	primaryChan := make(chan result, 1)
+	fallbackChan := make(chan result, 1)
 
 	// Try primary backend
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				primaryChan <- result{"", fmt.Errorf("panic in primary backend: %v", r)}
+			}
+		}()
+
+		// Check context cancellation
+		select {
+		case <-traceCtx.Done():
+			primaryChan <- result{"", traceCtx.Err()}
+			return
+		default:
+		}
+
 		primaryConfig := &config.RAGPluginConfig{
 			Enabled:             ragConfig.Enabled,
 			Backend:             hybridConfig.Primary,
@@ -110,7 +133,8 @@ func (r *OpenAIRouter) retrieveParallel(traceCtx context.Context, ctx *RequestCo
 			CacheResults:        ragConfig.CacheResults,
 			CacheTTLSeconds:     ragConfig.CacheTTLSeconds,
 		}
-		primaryContext, primaryErr = r.retrieveFromBackend(traceCtx, ctx, primaryConfig)
+		context, err := r.retrieveFromBackend(traceCtx, ctx, primaryConfig)
+		primaryChan <- result{context, err}
 	}()
 
 	// Try fallback backend
@@ -118,6 +142,20 @@ func (r *OpenAIRouter) retrieveParallel(traceCtx context.Context, ctx *RequestCo
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					fallbackChan <- result{"", fmt.Errorf("panic in fallback backend: %v", r)}
+				}
+			}()
+
+			// Check context cancellation
+			select {
+			case <-traceCtx.Done():
+				fallbackChan <- result{"", traceCtx.Err()}
+				return
+			default:
+			}
+
 			fallbackConfig := &config.RAGPluginConfig{
 				Enabled:             ragConfig.Enabled,
 				Backend:             hybridConfig.Fallback,
@@ -130,11 +168,26 @@ func (r *OpenAIRouter) retrieveParallel(traceCtx context.Context, ctx *RequestCo
 				CacheResults:        ragConfig.CacheResults,
 				CacheTTLSeconds:     ragConfig.CacheTTLSeconds,
 			}
-			fallbackContext, fallbackErr = r.retrieveFromBackend(traceCtx, ctx, fallbackConfig)
+			context, err := r.retrieveFromBackend(traceCtx, ctx, fallbackConfig)
+			fallbackChan <- result{context, err}
 		}()
 	}
 
+	// Wait for goroutines and collect results
 	wg.Wait()
+	close(primaryChan)
+	if hybridConfig.Fallback != "" {
+		close(fallbackChan)
+	}
+
+	primaryRes := <-primaryChan
+	primaryContext, primaryErr := primaryRes.context, primaryRes.err
+	var fallbackContext string
+	var fallbackErr error
+	if hybridConfig.Fallback != "" {
+		fallbackRes := <-fallbackChan
+		fallbackContext, fallbackErr = fallbackRes.context, fallbackRes.err
+	}
 
 	// Use the result with highest similarity score or first successful result
 	if primaryErr == nil && primaryContext != "" {
@@ -153,7 +206,7 @@ func (r *OpenAIRouter) retrieveParallel(traceCtx context.Context, ctx *RequestCo
 		return fallbackContext, nil
 	}
 
-	return "", fmt.Errorf("both backends failed: primary=%v, fallback=%v", primaryErr, fallbackErr)
+	return "", fmt.Errorf("both backends failed: primary=%w, fallback=%w", primaryErr, fallbackErr)
 }
 
 // retrieveFromBackend is a helper to retrieve from a specific backend

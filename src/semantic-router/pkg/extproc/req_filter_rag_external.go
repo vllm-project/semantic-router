@@ -8,12 +8,82 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
+	"unicode"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
+
+var (
+	// Shared HTTP client for external API requests with connection pooling
+	externalAPIClient     *http.Client
+	externalAPIClientOnce sync.Once
+)
+
+// getExternalAPIClient returns a shared HTTP client for external API requests
+func getExternalAPIClient() *http.Client {
+	externalAPIClientOnce.Do(func() {
+		externalAPIClient = &http.Client{
+			Timeout: 30 * time.Second,
+			Transport: &http.Transport{
+				MaxIdleConns:        100,
+				MaxIdleConnsPerHost: 10,
+				IdleConnTimeout:     90 * time.Second,
+			},
+		}
+	})
+	return externalAPIClient
+}
+
+// validateHeaderName validates a header name to prevent header injection
+// Header names must contain only printable ASCII characters and cannot contain
+// newlines, carriage returns, or colons (which are used as separators)
+func validateHeaderName(name string) error {
+	if name == "" {
+		return fmt.Errorf("header name cannot be empty")
+	}
+
+	for _, r := range name {
+		if r < 32 || r > 126 {
+			return fmt.Errorf("header name contains invalid character: %q", r)
+		}
+		if r == ':' || r == '\n' || r == '\r' {
+			return fmt.Errorf("header name contains forbidden character: %q", r)
+		}
+	}
+
+	return nil
+}
+
+// validateHeaderValue validates and sanitizes a header value to prevent header injection
+// Removes newlines, carriage returns, and other control characters
+func validateHeaderValue(value string) (string, error) {
+	if value == "" {
+		return "", nil
+	}
+
+	// Remove control characters (including newlines and carriage returns)
+	var sanitized strings.Builder
+	for _, r := range value {
+		if unicode.IsPrint(r) || r == '\t' {
+			sanitized.WriteRune(r)
+		} else if r == '\n' || r == '\r' {
+			// Replace newlines with spaces to prevent header injection
+			sanitized.WriteRune(' ')
+		}
+		// Other control characters are silently removed
+	}
+
+	result := strings.TrimSpace(sanitized.String())
+	if len(result) == 0 && len(value) > 0 {
+		return "", fmt.Errorf("header value contains only invalid characters")
+	}
+
+	return result, nil
+}
 
 // retrieveFromExternalAPI retrieves context from external API backend
 func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *RequestContext, ragConfig *config.RAGPluginConfig) (string, error) {
@@ -56,21 +126,50 @@ func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *Re
 		if authHeader == "" {
 			authHeader = "Authorization"
 		}
-		req.Header.Set(authHeader, fmt.Sprintf("Bearer %s", apiConfig.APIKey))
+
+		// Validate header name
+		if validateErr := validateHeaderName(authHeader); validateErr != nil {
+			return "", fmt.Errorf("invalid auth header name: %w", validateErr)
+		}
+
+		// Validate and sanitize API key to prevent header injection
+		sanitizedAPIKey, validateErr := validateHeaderValue(apiConfig.APIKey)
+		if validateErr != nil {
+			logging.Errorf("Failed to sanitize API key: %v", validateErr)
+			return "", fmt.Errorf("invalid API key format")
+		}
+
+		req.Header.Set(authHeader, fmt.Sprintf("Bearer %s", sanitizedAPIKey))
 	}
 
-	// Add custom headers
+	// Add custom headers with validation
 	for k, v := range apiConfig.Headers {
-		req.Header.Set(k, v)
+		// Validate header name
+		if validateErr := validateHeaderName(k); validateErr != nil {
+			logging.Warnf("Skipping invalid header name: %s (error: %v)", k, validateErr)
+			continue
+		}
+
+		// Validate and sanitize header value
+		sanitizedValue, validateErr := validateHeaderValue(v)
+		if validateErr != nil {
+			logging.Warnf("Skipping invalid header value for %s: %v", k, validateErr)
+			continue
+		}
+
+		req.Header.Set(k, sanitizedValue)
 	}
 
-	// Set timeout
-	timeout := 10 * time.Second
+	// Use shared HTTP client with connection pooling
+	client := getExternalAPIClient()
+
+	// Override timeout if specified in config
 	if apiConfig.TimeoutSeconds != nil {
-		timeout = time.Duration(*apiConfig.TimeoutSeconds) * time.Second
+		timeout := time.Duration(*apiConfig.TimeoutSeconds) * time.Second
+		reqCtx, cancel := context.WithTimeout(traceCtx, timeout)
+		defer cancel()
+		req = req.WithContext(reqCtx)
 	}
-
-	client := &http.Client{Timeout: timeout}
 
 	// Execute request
 	start := time.Now()
@@ -84,14 +183,17 @@ func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *Re
 	ctx.RAGRetrievalLatency = latency
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		// Limit error response body size to prevent memory exhaustion
+		const maxErrorBodySize = 1024 * 10 // 10KB limit
+		limitedReader := io.LimitReader(resp.Body, maxErrorBodySize)
+		body, _ := io.ReadAll(limitedReader)
 		return "", fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	// Parse response
 	var apiResponse map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&apiResponse); err != nil {
-		return "", fmt.Errorf("failed to parse response: %w", err)
+	if decodeErr := json.NewDecoder(resp.Body).Decode(&apiResponse); decodeErr != nil {
+		return "", fmt.Errorf("failed to parse response: %w", decodeErr)
 	}
 
 	// Extract context based on format
@@ -140,13 +242,19 @@ func (r *OpenAIRouter) buildWeaviateRequest(ctx *RequestContext, ragConfig *conf
 		topK = *ragConfig.TopK
 	}
 
-	request := map[string]interface{}{
-		"query": fmt.Sprintf(`
+	// Properly JSON-encode the vector for GraphQL query
+	embeddingJSON, err := json.Marshal(queryEmbedding)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal embedding: %w", err)
+	}
+
+	// Build GraphQL query with properly encoded vector
+	query := fmt.Sprintf(`
 		{
 			Get {
 				Document(
 					nearVector: {
-						vector: %v
+						vector: %s
 					}
 					limit: %d
 				) {
@@ -156,7 +264,10 @@ func (r *OpenAIRouter) buildWeaviateRequest(ctx *RequestContext, ragConfig *conf
 					}
 				}
 			}
-		}`, queryEmbedding, topK),
+		}`, string(embeddingJSON), topK)
+
+	request := map[string]interface{}{
+		"query": query,
 	}
 
 	return json.Marshal(request)
@@ -198,7 +309,18 @@ func (r *OpenAIRouter) buildCustomRequest(ctx *RequestContext, ragConfig *config
 		threshold = float64(*ragConfig.SimilarityThreshold)
 	}
 
-	// Replace template variables
+	// Replace template variables with basic validation
+	// Note: This is a simple substitution. For production use, consider using
+	// a proper template engine (e.g., text/template) with escaping.
+	// Basic validation: check if user content contains template markers (could indicate injection attempt)
+	if strings.Contains(query, "{{") || strings.Contains(query, "}}") || strings.Contains(query, "${") {
+		logging.Warnf("User content contains template markers, potential injection attempt")
+		// Escape the markers to prevent injection
+		query = strings.ReplaceAll(query, "{{", "\\{\\{")
+		query = strings.ReplaceAll(query, "}}", "\\}\\}")
+		query = strings.ReplaceAll(query, "${", "\\${")
+	}
+
 	replaced := strings.ReplaceAll(template, "{{.Query}}", query)
 	replaced = strings.ReplaceAll(replaced, "{{.TopK}}", fmt.Sprintf("%d", topK))
 	replaced = strings.ReplaceAll(replaced, "{{.Threshold}}", fmt.Sprintf("%.3f", threshold))

@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 )
 
 // executeRAGPlugin executes the RAG plugin if enabled for the decision
@@ -43,17 +44,21 @@ func (r *OpenAIRouter) executeRAGPlugin(ctx *RequestContext, decisionName string
 	ragCtx, ragSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanRAGRetrieval)
 	defer ragSpan.End()
 
-	tracing.SetSpanAttributes(ragSpan,
+	// Set base attributes
+	attributes := []attribute.KeyValue{
 		attribute.String("rag.backend", ragConfig.Backend),
 		attribute.String("rag.decision", decisionName),
-	)
+	}
 
+	// Add optional attributes if present
 	if ragConfig.SimilarityThreshold != nil {
-		tracing.SetSpanAttributes(ragSpan, attribute.Float64("rag.similarity_threshold", float64(*ragConfig.SimilarityThreshold)))
+		attributes = append(attributes, attribute.Float64("rag.similarity_threshold", float64(*ragConfig.SimilarityThreshold)))
 	}
 	if ragConfig.TopK != nil {
-		tracing.SetSpanAttributes(ragSpan, attribute.Int("rag.top_k", *ragConfig.TopK))
+		attributes = append(attributes, attribute.Int("rag.top_k", *ragConfig.TopK))
 	}
+
+	tracing.SetSpanAttributes(ragSpan, attributes...)
 
 	// Perform retrieval
 	start := time.Now()
@@ -195,13 +200,14 @@ func (r *OpenAIRouter) injectRAGContext(ctx *RequestContext, retrievedContext st
 		injectionMode = "tool_role" // Default
 	}
 
-	// Truncate context if needed
+	// Truncate context if needed (preserving UTF-8 character boundaries)
 	maxLength := 10000 // Default
 	if ragConfig.MaxContextLength != nil {
 		maxLength = *ragConfig.MaxContextLength
 	}
-	if len(retrievedContext) > maxLength {
-		retrievedContext = retrievedContext[:maxLength] + "..."
+	if len([]rune(retrievedContext)) > maxLength {
+		runes := []rune(retrievedContext)
+		retrievedContext = string(runes[:maxLength]) + "..."
 		logging.Infof("RAG context truncated to %d characters", maxLength)
 	}
 
@@ -235,10 +241,15 @@ func (r *OpenAIRouter) injectAsToolRole(messages []interface{}, context string, 
 		return fmt.Errorf("no user message found")
 	}
 
-	// Create tool role message
+	// Create tool role message with unique ID
+	// Use timestamp + request ID for better uniqueness
+	toolCallID := fmt.Sprintf("rag_%d", time.Now().UnixNano())
+	if ctx.RequestID != "" {
+		toolCallID = fmt.Sprintf("rag_%s_%d", ctx.RequestID, time.Now().UnixNano())
+	}
 	toolMessage := map[string]interface{}{
 		"role":         "tool",
-		"tool_call_id": fmt.Sprintf("rag_%d", time.Now().UnixNano()),
+		"tool_call_id": toolCallID,
 		"content":      context,
 	}
 
@@ -286,7 +297,20 @@ func (r *OpenAIRouter) injectAsSystemPrompt(messages []interface{}, context stri
 	contextPrefix := fmt.Sprintf("Context from knowledge base:\n\n%s\n\n", context)
 
 	if hasSystemMessage {
-		messages[0].(map[string]interface{})["content"] = contextPrefix + systemContent
+		// Clone the first system message map to avoid mutating shared state
+		origFirst, ok := messages[0].(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("expected first message to be a map when hasSystemMessage is true")
+		}
+		newFirst := make(map[string]interface{}, len(origFirst)+1)
+		for k, v := range origFirst {
+			newFirst[k] = v
+		}
+		newFirst["content"] = contextPrefix + systemContent
+		newMessages := make([]interface{}, len(messages))
+		copy(newMessages, messages)
+		newMessages[0] = newFirst
+		requestMap["messages"] = newMessages
 	} else {
 		systemMessage := map[string]interface{}{
 			"role":    "system",

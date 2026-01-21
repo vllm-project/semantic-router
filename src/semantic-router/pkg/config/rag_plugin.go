@@ -190,44 +190,64 @@ func (c *RAGPluginConfig) Validate() error {
 	// Validate backend-specific config
 	switch c.Backend {
 	case "milvus":
-		if milvusConfig, ok := c.BackendConfig.(*MilvusRAGConfig); ok {
-			if milvusConfig.Collection == "" {
-				return fmt.Errorf("Milvus collection name is required")
-			}
+		if c.BackendConfig == nil {
+			return fmt.Errorf("BackendConfig is required for backend 'milvus'")
+		}
+		milvusConfig, ok := c.BackendConfig.(*MilvusRAGConfig)
+		if !ok {
+			return fmt.Errorf("BackendConfig must be of type *MilvusRAGConfig for backend 'milvus'")
+		}
+		if milvusConfig.Collection == "" {
+			return fmt.Errorf("milvus collection name is required")
 		}
 	case "external_api":
-		if apiConfig, ok := c.BackendConfig.(*ExternalAPIRAGConfig); ok {
-			if apiConfig.Endpoint == "" {
-				return fmt.Errorf("External API endpoint is required")
-			}
-			if apiConfig.RequestFormat == "" {
-				return fmt.Errorf("Request format is required for external API")
-			}
+		if c.BackendConfig == nil {
+			return fmt.Errorf("BackendConfig is required for backend 'external_api'")
+		}
+		apiConfig, ok := c.BackendConfig.(*ExternalAPIRAGConfig)
+		if !ok {
+			return fmt.Errorf("BackendConfig must be of type *ExternalAPIRAGConfig for backend 'external_api'")
+		}
+		if apiConfig.Endpoint == "" {
+			return fmt.Errorf("external API endpoint is required")
+		}
+		if apiConfig.RequestFormat == "" {
+			return fmt.Errorf("request format is required for external API")
 		}
 	case "mcp":
-		if mcpConfig, ok := c.BackendConfig.(*MCPRAGConfig); ok {
-			if mcpConfig.ServerName == "" {
-				return fmt.Errorf("MCP server name is required")
-			}
-			if mcpConfig.ToolName == "" {
-				return fmt.Errorf("MCP tool name is required")
-			}
+		if c.BackendConfig == nil {
+			return fmt.Errorf("BackendConfig is required for backend 'mcp'")
+		}
+		mcpConfig, ok := c.BackendConfig.(*MCPRAGConfig)
+		if !ok {
+			return fmt.Errorf("BackendConfig must be of type *MCPRAGConfig for backend 'mcp'")
+		}
+		if mcpConfig.ServerName == "" {
+			return fmt.Errorf("MCP server name is required")
+		}
+		if mcpConfig.ToolName == "" {
+			return fmt.Errorf("MCP tool name is required")
 		}
 	case "hybrid":
-		if hybridConfig, ok := c.BackendConfig.(*HybridRAGConfig); ok {
-			if hybridConfig.Primary == "" {
-				return fmt.Errorf("Primary backend is required for hybrid RAG")
-			}
+		if c.BackendConfig == nil {
+			return fmt.Errorf("BackendConfig is required for backend 'hybrid'")
+		}
+		hybridConfig, ok := c.BackendConfig.(*HybridRAGConfig)
+		if !ok {
+			return fmt.Errorf("BackendConfig must be of type *HybridRAGConfig for backend 'hybrid'")
+		}
+		if hybridConfig.Primary == "" {
+			return fmt.Errorf("primary backend is required for hybrid RAG")
 		}
 	default:
-		return fmt.Errorf("Unknown RAG backend: %s", c.Backend)
+		return fmt.Errorf("unknown RAG backend: %s", c.Backend)
 	}
 
 	// Validate similarity threshold
 	if c.SimilarityThreshold != nil {
 		threshold := *c.SimilarityThreshold
 		if threshold < 0.0 || threshold > 1.0 {
-			return fmt.Errorf("Similarity threshold must be between 0.0 and 1.0, got %.2f", threshold)
+			return fmt.Errorf("similarity threshold must be between 0.0 and 1.0, got %.2f", threshold)
 		}
 	}
 
@@ -238,7 +258,7 @@ func (c *RAGPluginConfig) Validate() error {
 
 	// Validate injection mode
 	if c.InjectionMode != "" && c.InjectionMode != "tool_role" && c.InjectionMode != "system_prompt" {
-		return fmt.Errorf("Injection mode must be 'tool_role' or 'system_prompt', got %s", c.InjectionMode)
+		return fmt.Errorf("injection mode must be 'tool_role' or 'system_prompt', got %s", c.InjectionMode)
 	}
 
 	// Validate on_failure

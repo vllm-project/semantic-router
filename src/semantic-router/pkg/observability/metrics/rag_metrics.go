@@ -8,7 +8,10 @@ func RecordRAGRetrieval(backend string, decision string, status string, latency 
 	}
 }
 
-// RecordRAGSimilarityScore records the similarity score from RAG retrieval
+// RecordRAGSimilarityScore records the similarity score from RAG retrieval.
+// We intentionally use a Gauge here to expose only the latest similarity score
+// per (backend, decision) label combination, rather than tracking the full
+// distribution of scores over time (which would require a Histogram).
 func RecordRAGSimilarityScore(backend string, decision string, score float32) {
 	RAGSimilarityScore.WithLabelValues(backend, decision).Set(float64(score))
 }

@@ -1012,7 +1012,15 @@ func (c *MilvusCache) Close() error {
 
 // SearchDocuments performs vector search on a specified collection for RAG retrieval
 // This method is used by the RAG plugin to retrieve context from knowledge bases
-func (c *MilvusCache) SearchDocuments(ctx context.Context, collectionName string, queryEmbedding []float32, threshold float32, topK int, filterExpr string, contentField string) ([]string, []float32, error) {
+//
+// Parameters:
+//   - vectorFieldName: Name of the vector field in the collection (defaults to cache config)
+//   - metricType: Metric type for similarity search (defaults to cache config)
+//   - ef: HNSW search parameter ef (defaults to cache config)
+//
+// If these parameters are empty/zero, the method uses the cache collection's configuration.
+// This allows RAG collections to use different configurations when needed.
+func (c *MilvusCache) SearchDocuments(ctx context.Context, collectionName string, queryEmbedding []float32, threshold float32, topK int, filterExpr string, contentField string, vectorFieldName string, metricType string, ef int) ([]string, []float32, error) {
 	if !c.enabled {
 		return nil, nil, fmt.Errorf("milvus cache is not enabled")
 	}
@@ -1021,18 +1029,35 @@ func (c *MilvusCache) SearchDocuments(ctx context.Context, collectionName string
 		return nil, nil, fmt.Errorf("milvus client is not initialized")
 	}
 
+	// Use provided parameters or fall back to cache config defaults
+	actualVectorFieldName := vectorFieldName
+	if actualVectorFieldName == "" {
+		actualVectorFieldName = c.config.Collection.VectorField.Name
+	}
+
+	actualMetricType := metricType
+	if actualMetricType == "" {
+		actualMetricType = c.config.Collection.VectorField.MetricType
+	}
+
+	actualEf := ef
+	if actualEf == 0 {
+		actualEf = c.config.Search.Params.Ef
+	}
+
 	// Define search parameters
-	searchParam, err := entity.NewIndexHNSWSearchParam(c.config.Search.Params.Ef)
+	searchParam, err := entity.NewIndexHNSWSearchParam(actualEf)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create search parameters: %w", err)
 	}
 
 	// Build filter expression
-	if filterExpr == "" {
-		filterExpr = "response_body != \"\"" // Only get complete entries
+	// If no filter provided and contentField is specified, default to filtering for non-empty content
+	if filterExpr == "" && contentField != "" {
+		filterExpr = fmt.Sprintf("%s != \"\"", contentField)
 	}
 
-	// Use Milvus Search
+	// Use Milvus Search with collection-specific or default parameters
 	searchResult, err := c.client.Search(
 		ctx,
 		collectionName,
@@ -1040,12 +1065,11 @@ func (c *MilvusCache) SearchDocuments(ctx context.Context, collectionName string
 		filterExpr,
 		[]string{contentField},
 		[]entity.Vector{entity.FloatVector(queryEmbedding)},
-		c.config.Collection.VectorField.Name,
-		entity.MetricType(c.config.Collection.VectorField.MetricType),
+		actualVectorFieldName,
+		entity.MetricType(actualMetricType),
 		topK,
 		searchParam,
 	)
-
 	if err != nil {
 		return nil, nil, fmt.Errorf("milvus search failed: %w", err)
 	}
@@ -1065,16 +1089,39 @@ func (c *MilvusCache) SearchDocuments(ctx context.Context, collectionName string
 		}
 
 		// Extract content from result
-		if len(searchResult[0].Fields) > 0 {
-			if contentCol, ok := searchResult[0].Fields[0].(*entity.ColumnVarChar); ok {
+		// Milvus may include the primary key field even when we only request one field,
+		// so we need to find the contentField by checking field types and values.
+		// We iterate through fields to find the VarChar column that matches our contentField.
+		var content string
+		found := false
+
+		for _, field := range searchResult[0].Fields {
+			if contentCol, ok := field.(*entity.ColumnVarChar); ok {
+				// Check if this column has enough entries and get the value
 				if contentCol.Len() > i {
-					content, err := contentCol.ValueByIdx(i)
-					if err == nil && content != "" {
-						contents = append(contents, content)
-						scores = append(scores, score)
+					fieldValue, err := contentCol.ValueByIdx(i)
+					if err == nil && fieldValue != "" {
+						// If we requested only one field, assume it's the content field
+						// Otherwise, we'd need to match by field name (not available in Milvus API)
+						// For now, since we only request contentField, the first VarChar field
+						// that's not a 32-char hex string (likely an ID) should be our content
+						if len(fieldValue) != 32 || !isHexString(fieldValue) {
+							content = fieldValue
+							found = true
+							break
+						}
 					}
 				}
 			}
+		}
+
+		if found && content != "" {
+			contents = append(contents, content)
+			scores = append(scores, score)
+		} else {
+			// Fallback: if we couldn't find content, log a warning but continue
+			// This shouldn't happen if the collection is properly configured
+			logging.Warnf("SearchDocuments: could not extract content for result %d (score=%.3f)", i, score)
 		}
 	}
 
