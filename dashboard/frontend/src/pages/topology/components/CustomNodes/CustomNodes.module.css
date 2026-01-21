@@ -415,7 +415,7 @@
 .chainArrow {
   font-size: 14px;  /* Slightly larger for vertical arrow */
   opacity: 0.5;
-  transform: rotate(90deg);  /* Rotate arrow from → to ↓ */
+  /* No rotation needed - arrow is already ↓ in the component */
 }
 
 /* ============== Model Node ============== */

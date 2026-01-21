@@ -302,7 +302,7 @@ decisions:
         - type: "language"
           name: "en"
     modelRefs:
-      - model: "DeepSeek-V3.2"
+      - model: "openai/gpt-oss-120b"
         use_reasoning: true
         reasoning_effort: "low"
     plugins:
