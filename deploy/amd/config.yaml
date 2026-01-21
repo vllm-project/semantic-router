@@ -340,8 +340,12 @@ decisions:
           name: "physics"
         - type: "domain"
           name: "other"
+        - type: "language"
+          name: "en"
+        - type: "language"
+          name: "zh"
     modelRefs:
-      - model: "openai/gpt-oss-120b"
+      - model: "openai/gpt-oss-20b"
         use_reasoning: false
     plugins:
       - type: "semantic-cache"
