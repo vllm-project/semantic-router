@@ -61,7 +61,7 @@ Config editing:
 
 Read-only dashboard mode:
 
-- Enable via CLI: `vllm-sr serve --readonly-dashboard`
+- Enable via CLI: `vllm-sr serve --readonly`
 - Or set env: `DASHBOARD_READONLY=true`
 - Effects:
   - Frontend hides add/edit/delete actions and shows a read-only banner

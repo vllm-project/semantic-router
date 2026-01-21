@@ -11,7 +11,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/pii"
 )
 
 // performPIIDetection performs PII detection and policy check
@@ -58,14 +57,28 @@ func (r *OpenAIRouter) isPIIDetectionEnabled(decisionName string) bool {
 }
 
 // detectPIIWithTracing performs PII detection with tracing and logging
+// By default, only checks the current user message. Set include_history: true in plugin config to include conversation history.
 func (r *OpenAIRouter) detectPIIWithTracing(ctx *RequestContext, userContent string, nonUserMessages []string, categoryName string) []string {
-	allContent := pii.ExtractAllContent(userContent, nonUserMessages)
+	// Get decision-specific include_history setting
+	includeHistory := false
+	if categoryName != "" && r.Config != nil {
+		includeHistory = r.Config.GetPIIIncludeHistoryForDecision(categoryName)
+	}
+
+	// Build content to analyze based on include_history setting
+	contentToAnalyze := []string{}
+	if userContent != "" {
+		contentToAnalyze = append(contentToAnalyze, userContent)
+	}
+	if includeHistory {
+		contentToAnalyze = append(contentToAnalyze, nonUserMessages...)
+	}
 
 	// Start PII detection span
 	piiCtx, piiSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanPIIDetection)
 	piiStart := time.Now()
 
-	detectedPII := r.Classifier.DetectPIIInContent(allContent)
+	detectedPII := r.Classifier.DetectPIIInContent(contentToAnalyze)
 
 	piiTime := time.Since(piiStart).Milliseconds()
 	piiDetected := len(detectedPII) > 0

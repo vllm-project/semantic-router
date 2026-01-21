@@ -6,7 +6,6 @@ import ViewModal, { ViewSection } from '../components/ViewModal'
 import { DataTable, Column } from '../components/DataTable'
 import TableHeader from '../components/TableHeader'
 import EndpointsEditor, { Endpoint } from '../components/EndpointsEditor'
-import ReadonlyBanner from '../components/ReadonlyBanner'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import {
   ConfigFormat,
@@ -4083,8 +4082,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
   return (
     <div className={styles.container}>
-      <ReadonlyBanner />
-
       <div className={styles.content}>
         {loading && (
           <div className={styles.loading}>

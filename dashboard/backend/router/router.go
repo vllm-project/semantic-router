@@ -200,6 +200,11 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	mux.HandleFunc("/api/logs", handlers.LogsHandler(cfg.RouterAPIURL))
 	log.Printf("Logs API endpoint registered: /api/logs")
 
+	// Topology Test Query endpoint - for testing routing decisions
+	// dry-run mode calls real Router API, simulate mode uses local config
+	mux.HandleFunc("/api/topology/test-query", handlers.TopologyTestQueryHandler(cfg.AbsConfigPath, cfg.RouterAPIURL))
+	log.Printf("Topology Test Query API endpoint registered: /api/topology/test-query (Router API: %s)", cfg.RouterAPIURL)
+
 	// Envoy proxy for chat completions (if configured)
 	// Chat completions must go through Envoy's ext_proc pipeline
 	var envoyProxy *httputil.ReverseProxy
