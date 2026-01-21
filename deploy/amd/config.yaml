@@ -290,6 +290,30 @@ decisions:
           enabled: true
           similarity_threshold: 0.95
 
+  # Priority 135: Fast coding in English
+  - name: "fast_coding"
+    description: "Fast coding related queries in English"
+    priority: 135
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "computer science"
+        - type: "language"
+          name: "en"
+    modelRefs:
+      - model: "DeepSeek-V3.2"
+        use_reasoning: true
+        reasoning_effort: "low"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a fast coding assistant. Provide code solutions quickly."
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.95
+
   # Priority 130: Fast QA in Chinese
   - name: "fast_qa_chinese"
     description: "Quick answers in Chinese"
