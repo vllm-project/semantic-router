@@ -9,10 +9,15 @@ Supports:
 - Token Classification (PII Detection)
 - Merged Models and LoRA Adapters
 - Local Datasets and HuggingFace Hub Datasets
+- Custom Model Paths (for fine-tuned local models)
+- Batch Processing for High Performance
 
 Usage:
+    # Evaluate official model
     python src/training/model_eval/mom_collection_eval.py --model feedback --device cuda
-    python src/training/model_eval/mom_collection_eval.py --model fact-check --use_lora
+
+    # Evaluate local fine-tuned model
+    python src/training/model_eval/mom_collection_eval.py --model feedback --model_id ./my-local-model
 """
 
 import argparse
@@ -54,7 +59,7 @@ logger = logging.getLogger(__name__)
 
 
 MODEL_REGISTRY = {
-    #                          Text Classification Models
+    #               Text Classification Models
     "feedback": {
         "id": "llm-semantic-router/mmbert-feedback-detector-merged",
         "lora_id": "llm-semantic-router/mmbert-feedback-detector-lora",
@@ -86,7 +91,7 @@ MODEL_REGISTRY = {
                    "physics", "psychology", "other"]
     },
 
-    #                             Token Classification Models
+    #                 Token Classification Models
     "pii": {
         "id": "llm-semantic-router/mmbert-pii-detector-merged",
         "lora_id": "llm-semantic-router/mmbert-pii-detector-lora",
@@ -96,10 +101,13 @@ MODEL_REGISTRY = {
     }
 }
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate MoM Collection Models")
     parser.add_argument("--model", type=str, required=True, choices=list(MODEL_REGISTRY.keys()),
-                        help="Model key from registry.")
+                        help="Task type to evaluate (e.g., feedback, pii).")
+    parser.add_argument("--model_id", type=str, default=None,
+                        help="Optional: Override model path (e.g., local/path or user/repo). Defaults to official registry ID.")
     parser.add_argument("--use_lora", action="store_true", help="Use the LoRA variant")
     parser.add_argument("--batch_size", type=int, default=16, help="Inference batch size")
     parser.add_argument("--limit", type=int, default=None, help="Max samples to evaluate")
@@ -109,20 +117,28 @@ def parse_args():
 
     return parser.parse_args()
 
-def load_model(key: str, use_lora: bool, device: str):
-    config = MODEL_REGISTRY[key]
-    model_id = config["lora_id"] if use_lora else config["id"]
-    task_type = config["type"]
 
-    logger.info(f"Loading model: {model_id} (Task: {task_type}) on {device}")
-# load tokenizer
+def load_model(key: str, override_model_id: str, use_lora: bool, device: str):
+    config = MODEL_REGISTRY[key]
+
+    # Determine which model ID to use
+    if override_model_id:
+        model_id = override_model_id
+        logger.info(f"Using Custom Model ID: {model_id}")
+    else:
+        model_id = config["lora_id"] if use_lora else config["id"]
+        logger.info(f"Using Registry Model ID: {model_id}")
+
+    task_type = config["type"]
+    logger.info(f"Loading model on {device} (Task: {task_type})...")
+
     try:
         tokenizer = AutoTokenizer.from_pretrained(model_id)
     except Exception:
         logger.warning(f"Could not load tokenizer from {model_id}. Trying base model logic...")
         peft_config = PeftConfig.from_pretrained(model_id)
         tokenizer = AutoTokenizer.from_pretrained(peft_config.base_model_name_or_path)
- # load model
+
     if use_lora:
         peft_config = PeftConfig.from_pretrained(model_id)
         base_model_id = peft_config.base_model_name_or_path
@@ -130,11 +146,13 @@ def load_model(key: str, use_lora: bool, device: str):
         logger.info(f"Detected LoRA. Loading base model: {base_model_id}")
 
         if task_type == "text_classification":
-            base_model = AutoModelForSequenceClassification.from_pretrained(base_model_id, num_labels=len(config["labels"]))
+            base_model = AutoModelForSequenceClassification.from_pretrained(base_model_id,
+                                                                          num_labels=len(config["labels"]))
         elif task_type == "token_classification":
-            base_model = AutoModelForTokenClassification.from_pretrained(base_model_id, num_labels=len(config["labels"]))
+            base_model = AutoModelForTokenClassification.from_pretrained(base_model_id,
+                                                                       num_labels=len(config["labels"]))
 
-        # load adapter
+        # Load Adapter
         model = PeftModel.from_pretrained(base_model, model_id)
 
     else:
@@ -155,17 +173,19 @@ def load_eval_data(key: str, custom_path: str = None, limit: int = None):
     """
     config = MODEL_REGISTRY[key]
 
+    # custom dataset
     if custom_path:
         logger.info(f"Loading custom dataset from: {custom_path}")
         if custom_path.endswith('.json'):
             dataset = load_dataset('json', data_files=custom_path, split='train')
         elif custom_path.endswith('.csv'):
             dataset = load_dataset('csv', data_files=custom_path, split='train')
+
         if limit:
             dataset = dataset.select(range(min(len(dataset), limit)))
         return dataset
 
-
+    # hf dataset
     try:
         hf_id = config.get("hf_dataset")
         logger.info(f"Attempting to load real dataset: {hf_id}...")
@@ -175,15 +195,17 @@ def load_eval_data(key: str, custom_path: str = None, limit: int = None):
 
         if limit:
             dataset = dataset.select(range(min(len(dataset), limit)))
+
         return dataset
 
     except Exception as e:
-        # dummy data
+        # fallback to dummy data
         logger.warning(
             f"Could not load HF dataset '{config.get('hf_dataset')}' (Error: {str(e)}).")
         logger.warning(
             "Falling back to GENERATED DUMMY DATA for pipeline validation.")
         return generate_dummy_data(config["type"], config["labels"], limit or 10)
+
 
 def generate_dummy_data(task_type, labels, count):
     data = []
@@ -200,86 +222,114 @@ def generate_dummy_data(task_type, labels, count):
                 "ner_tags": [0, 0, 0, 0, 0, 0]
             })
 
-
     return Dataset.from_list(data)
 
 
-         # Eval loops
+#      Eval Loops
 
-def evaluate_text_classification(model, tokenizer, dataset, device, labels):
+def evaluate_text_classification(model, tokenizer, dataset, device, labels, batch_size):
     predictions = []
     ground_truths = []
     latencies = []
 
-    logger.info("Starting Text Classification Evaluation")
+    logger.info(f"Starting Text Classification Evaluation (Batch Size: {batch_size})")
 
-    for item in tqdm(dataset):
-        text = item.get("text", item.get("sentence"))
-        true_label = item["label"]
+    # Batched iteration
+    for i in tqdm(range(0, len(dataset), batch_size)):
+        batch = dataset[i : i + batch_size]
+
+        if isinstance(batch, dict):
+            texts = batch.get("text", batch.get("sentence"))
+            true_labels = batch["label"]
+        else:
+            texts = [item.get("text", item.get("sentence")) for item in batch]
+            true_labels = [item["label"] for item in batch]
 
         start_ts = time.time()
 
-        inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=512).to(device)
+        inputs = tokenizer(texts, return_tensors="pt", padding=True, truncation=True, max_length=512).to(device)
+
         with torch.no_grad():
             outputs = model(**inputs)
             logits = outputs.logits
-            pred_idx = torch.argmax(logits, dim=-1).item()
 
-        latencies.append((time.time() - start_ts) * 1000)
+            preds_batch = torch.argmax(logits, dim=-1).cpu().tolist()
 
-        predictions.append(pred_idx)
-        ground_truths.append(true_label)
+        batch_latency = (time.time() - start_ts) * 1000
+        latencies.extend([batch_latency / len(texts)] * len(texts))
+
+        predictions.extend(preds_batch)
+        ground_truths.extend(true_labels)
 
     return predictions, ground_truths, latencies
 
-def evaluate_token_classification(model, tokenizer, dataset, device, label_map):
+
+def evaluate_token_classification(model, tokenizer, dataset, device, label_map, batch_size):
     predictions = []
     ground_truths = []
     latencies = []
 
-    logger.info("Starting Token Classification Evaluation")
+    logger.info(f"Starting Token Classification Evaluation (Batch Size: {batch_size})")
 
-    for item in tqdm(dataset):
-        words = item["tokens"]
-        true_tag_ids = item["ner_tags"]
+    for i in tqdm(range(0, len(dataset), batch_size)):
+        batch = dataset[i : i + batch_size]
+
+        if isinstance(batch, dict):
+            batch_words = batch["tokens"]
+            batch_tags = batch["ner_tags"]
+        else:
+            batch_words = [item["tokens"] for item in batch]
+            batch_tags = [item["ner_tags"] for item in batch]
 
         start_ts = time.time()
 
-        # Tokenizing & preserving word alignment
-        tokenized_inputs = tokenizer(words, is_split_into_words=True, return_tensors="pt").to(device)
-        word_ids = tokenized_inputs.word_ids()
+        # Tokenize batch
+        tokenized_inputs = tokenizer(
+            batch_words,
+            is_split_into_words=True,
+            return_tensors="pt",
+            padding=True,
+            truncation=True
+        ).to(device)
 
         with torch.no_grad():
             outputs = model(**tokenized_inputs)
             logits = outputs.logits
-            pred_ids = torch.argmax(logits, dim=-1).squeeze().tolist()
+            pred_ids = torch.argmax(logits, dim=-1)
 
-        latencies.append((time.time() - start_ts) * 1000)
+        batch_latency = (time.time() - start_ts) * 1000
+        latencies.extend([batch_latency / len(batch_words)] * len(batch_words))
 
-        aligned_preds = []
-        aligned_truth = []
+        # Align predictions for each sample in the batch
+        pred_ids = pred_ids.cpu().tolist()
 
-        # Align predictions back to words
-        previous_word_idx = None
-        for idx, word_idx in enumerate(word_ids):
-            if word_idx is None:
-                continue
-            elif word_idx != previous_word_idx:
-                # Start of new word
-                if idx < len(pred_ids):
-                    aligned_preds.append(label_map[pred_ids[idx]])
-                else:
-                    aligned_preds.append("O")
+        for idx, pred_row in enumerate(pred_ids):
+            word_ids = tokenized_inputs.word_ids(batch_index=idx)
+            true_tag_ids = batch_tags[idx]
 
-                if word_idx < len(true_tag_ids):
-                    aligned_truth.append(label_map[true_tag_ids[word_idx]])
-                else:
-                    aligned_truth.append("O")
+            aligned_preds = []
+            aligned_truth = []
 
-            previous_word_idx = word_idx
+            previous_word_idx = None
+            for token_idx, word_idx in enumerate(word_ids):
+                if word_idx is None:
+                    continue
+                elif word_idx != previous_word_idx:
+                    # Start of new word
+                    if token_idx < len(pred_row):
+                        aligned_preds.append(label_map[pred_row[token_idx]])
+                    else:
+                        aligned_preds.append("O") # Fallback
 
-        predictions.append(aligned_preds)
-        ground_truths.append(aligned_truth)
+                    if word_idx < len(true_tag_ids):
+                        aligned_truth.append(label_map[true_tag_ids[word_idx]])
+                    else:
+                        aligned_truth.append("O")
+
+                previous_word_idx = word_idx
+
+            predictions.append(aligned_preds)
+            ground_truths.append(aligned_truth)
 
     return predictions, ground_truths, latencies
 
@@ -317,19 +367,20 @@ def calculate_metrics(predictions, ground_truths, latencies, labels, task_type):
 
     return metrics
 
+
 def save_report(args, metrics, labels, task_type):
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp = time.strftime("%Y%m%d-%H%M%S")
 
-    # save json
+    #         Save JSON
     json_path = output_dir / f"{args.model}_eval_{timestamp}.json"
     with open(json_path, 'w') as f:
         json.dump(metrics, f, indent=2)
     logger.info(f"Metrics saved to {json_path}")
 
-    #  save conf mat (text class only)
+    #       Save Confusion Matrix (Text Class only)
     if task_type == "text_classification" and "confusion_matrix" in metrics:
         cm = np.array(metrics["confusion_matrix"])
         plt.figure(figsize=(10, 8))
@@ -342,33 +393,37 @@ def save_report(args, metrics, labels, task_type):
         plt.savefig(plot_path)
         logger.info(f"Confusion matrix plot saved to {plot_path}")
 
-    # print summary
-    print("\n" + "="*40)
+     # Print Summary
+    print("\n" + "=" * 40)
     print(f"EVALUATION REPORT: {args.model}")
-    print("="*40)
+    print("=" * 40)
     print(f"Accuracy: {metrics.get('accuracy', metrics.get('token_accuracy', 0)):.4f}")
     if 'f1' in metrics: print(f"F1 Score: {metrics['f1']:.4f}")
     print(f"Avg Latency: {metrics['latency_ms']['avg']:.2f} ms")
-    print("="*40 + "\n")
+    print("=" * 40 + "\n")
 
 
-#                       main
+#                                 --- MAIN ---
 
 def main():
     args = parse_args()
     config = MODEL_REGISTRY[args.model]
 
-    model, tokenizer = load_model(args.model, args.use_lora, args.device)
+    model, tokenizer = load_model(args.model, args.model_id, args.use_lora, args.device)
     dataset = load_eval_data(args.model, args.custom_dataset, args.limit)
 
-
     if config["type"] == "text_classification":
-        preds, truths, lats = evaluate_text_classification(model, tokenizer, dataset, args.device, config["labels"])
+        preds, truths, lats = evaluate_text_classification(
+            model, tokenizer, dataset, args.device, config["labels"], args.batch_size
+        )
     else:
-        preds, truths, lats = evaluate_token_classification(model, tokenizer, dataset, args.device, config["labels"])
+        preds, truths, lats = evaluate_token_classification(
+            model, tokenizer, dataset, args.device, config["labels"], args.batch_size
+        )
 
     metrics = calculate_metrics(preds, truths, lats, config["labels"], config["type"])
     save_report(args, metrics, config["labels"], config["type"])
+
 
 if __name__ == "__main__":
     main()
