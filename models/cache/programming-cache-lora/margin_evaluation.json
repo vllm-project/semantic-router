@@ -1,0 +1,17 @@
+{
+  "num_triplets": 2000,
+  "baseline": {
+    "avg_positive_similarity": 0.8599289059638977,
+    "avg_negative_similarity": 0.6147857904434204,
+    "margin": 0.2451431155204773
+  },
+  "lora": {
+    "avg_positive_similarity": 0.8440529108047485,
+    "avg_negative_similarity": 0.5607613921165466,
+    "margin": 0.2832915186882019
+  },
+  "improvement": {
+    "absolute": 0.03814840316772461,
+    "relative_percent": 15.561686515808105
+  }
+}

@@ -1,0 +1,190 @@
+---
+- name: Launch AWS GPU instance for vLLM training
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    aws_region: us-east-2
+    # Options: g5.xlarge (1xA10G), g5.2xlarge (1xA10G), g5.12xlarge (4xA10G), g5.48xlarge (8xA10G)
+    instance_type: g5.12xlarge  # 4x A10G GPUs (recommended)
+    ami_id: ami-00f71ac70c2d6344d  # Ubuntu 22.04 with NVIDIA GPU driver
+    key_pair: router-team-us-east2
+    security_group_id: sg-0704e6bcaa5e655b1
+    root_volume_size: 200  # GB
+    instance_name: "vllm-training-{{ ansible_date_time.epoch }}"
+
+  tasks:
+    - name: Ensure boto3 and botocore are installed
+      pip:
+        name:
+          - boto3
+          - botocore
+        state: present
+      delegate_to: localhost
+
+    - name: Launch EC2 instance
+      amazon.aws.ec2_instance:
+        region: "{{ aws_region }}"
+        availability_zone: "{{ aws_region }}b"
+        name: "{{ instance_name }}"
+        image_id: "{{ ami_id }}"
+        instance_type: "{{ instance_type }}"
+        key_name: "{{ key_pair }}"
+        security_groups:
+          - "{{ security_group_id }}"
+        volumes:
+          - device_name: /dev/sda1
+            ebs:
+              volume_type: gp3
+              volume_size: "{{ root_volume_size }}"
+              delete_on_termination: true
+              encrypted: true
+        state: running
+        wait: true
+        wait_timeout: 600
+        tags:
+          Name: "{{ instance_name }}"
+          Purpose: vllm-cache-embedding-training
+          Environment: production
+          InstanceType: "{{ instance_type }}"
+          CreatedBy: ansible
+          CreatedAt: "{{ ansible_date_time.iso8601 }}"
+      register: ec2_instance
+
+    - name: Display instance information
+      debug:
+        msg:
+          - "Instance launched successfully!"
+          - "Instance ID: {{ ec2_instance.instances[0].instance_id }}"
+          - "Instance Type: {{ ec2_instance.instances[0].instance_type }}"
+          - "Public IP: {{ ec2_instance.instances[0].public_ip_address | default('N/A') }}"
+          - "Private IP: {{ ec2_instance.instances[0].private_ip_address }}"
+          - "State: {{ ec2_instance.instances[0].state.name }}"
+
+    - name: Wait for SSH to become available
+      wait_for:
+        host: "{{ ec2_instance.instances[0].public_ip_address }}"
+        port: 22
+        delay: 60
+        timeout: 300
+        state: started
+      when: ec2_instance.instances[0].public_ip_address is defined
+
+    - name: Add instance to inventory
+      add_host:
+        hostname: "{{ ec2_instance.instances[0].public_ip_address | default(ec2_instance.instances[0].private_ip_address) }}"
+        groupname: vllm_instances
+        ansible_user: ubuntu
+        ansible_ssh_private_key_file: "~/.ssh/{{ key_pair }}.pem"
+        ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+        instance_id: "{{ ec2_instance.instances[0].instance_id }}"
+      when: ec2_instance.instances[0] is defined
+
+    - name: Save instance details to file
+      copy:
+        content: |
+          vLLM Training Instance Details
+          ==============================
+          Instance ID: {{ ec2_instance.instances[0].instance_id }}
+          Instance Name: {{ instance_name }}
+          Instance Type: {{ ec2_instance.instances[0].instance_type }}
+          AMI ID: {{ ec2_instance.instances[0].image_id }}
+          Region: {{ aws_region }}
+          Public IP: {{ ec2_instance.instances[0].public_ip_address | default('N/A') }}
+          Private IP: {{ ec2_instance.instances[0].private_ip_address }}
+          Key Pair: {{ key_pair }}
+          Root Volume Size: {{ root_volume_size }}GB
+          Launch Time: {{ ec2_instance.instances[0].launch_time }}
+
+          SSH Command:
+          ssh -i ~/.ssh/{{ key_pair }}.pem ubuntu@{{ ec2_instance.instances[0].public_ip_address | default(ec2_instance.instances[0].private_ip_address) }}
+
+          SCP Upload Data:
+          scp -i ~/.ssh/{{ key_pair }}.pem -r data/cache_embeddings ubuntu@{{ ec2_instance.instances[0].public_ip_address }}:~/
+
+          SCP Download Results:
+          scp -i ~/.ssh/{{ key_pair }}.pem -r ubuntu@{{ ec2_instance.instances[0].public_ip_address }}:~/data/cache_embeddings/medical/augmented_full.jsonl data/cache_embeddings/medical/
+        dest: "./vllm-instance-{{ ec2_instance.instances[0].instance_id }}.txt"
+      delegate_to: localhost
+
+    - name: Generate inventory file
+      copy:
+        content: |
+          [vllm_instances]
+          {{ instance_name.lower().replace(' ', '-') }} ansible_host={{ ec2_instance.instances[0].public_ip_address | default(ec2_instance.instances[0].private_ip_address) }} ansible_user=ubuntu
+
+          [all:vars]
+          ansible_ssh_private_key_file=~/.ssh/{{ key_pair }}.pem
+          ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+          ansible_become=yes
+          ansible_become_method=sudo
+        dest: "./vllm-inventory-{{ ec2_instance.instances[0].instance_id }}.ini"
+      delegate_to: localhost
+
+
+- name: Configure instance for vLLM
+  hosts: vllm_instances
+  become: yes
+  gather_facts: yes
+  tasks:
+    - name: Update system packages
+      apt:
+        update_cache: yes
+        upgrade: dist
+        autoremove: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Install system dependencies
+      apt:
+        name:
+          - htop
+          - vim
+          - curl
+          - wget
+          - git
+          - python3-pip
+          - python3-venv
+          - build-essential
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Check NVIDIA driver
+      command: nvidia-smi
+      register: nvidia_smi
+      ignore_errors: yes
+
+    - name: Display NVIDIA status
+      debug:
+        msg: "{{ nvidia_smi.stdout if nvidia_smi.rc == 0 else 'NVIDIA driver not found!' }}"
+
+    - name: Install vLLM dependencies
+      become_user: ubuntu
+      pip:
+        name:
+          - vllm
+          - transformers
+          - torch
+          - peft
+          - sentence-transformers
+          - tqdm
+          - accelerate
+        state: present
+        executable: pip3
+
+    - name: Clone semantic-router repo
+      become_user: ubuntu
+      git:
+        repo: https://github.com/aurelio-labs/semantic-router.git
+        dest: /home/ubuntu/semantic-router
+        version: main
+        force: yes
+
+    - name: Display setup completion
+      debug:
+        msg: |
+          ✓ Instance configured successfully!
+
+          Next steps:
+          1. SSH to instance: ssh -i ~/.ssh/{{ hostvars[inventory_hostname].ansible_ssh_private_key_file.replace('~/.ssh/', '') }} ubuntu@{{ inventory_hostname }}
+          2. Upload data: scp -i <key> -r data/cache_embeddings ubuntu@{{ inventory_hostname }}:~/semantic-router/
+          3. Run training (see README.md for command)

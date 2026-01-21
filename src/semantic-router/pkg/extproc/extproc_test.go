@@ -587,17 +587,22 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 		return nil, fmt.Errorf("failed to initialize BERT model: %w", initErr)
 	}
 
-	// Create semantic cache
+	// Create semantic cache manager for testing
 	cacheConfig := cache.CacheConfig{
 		BackendType:         cache.InMemoryCacheType,
-		Enabled:             cfg.Enabled,
+		Enabled:             cfg.SemanticCache.Enabled,
 		SimilarityThreshold: cfg.GetCacheSimilarityThreshold(),
-		MaxEntries:          cfg.MaxEntries,
-		TTLSeconds:          cfg.TTLSeconds,
-		EvictionPolicy:      cache.EvictionPolicyType(cfg.EvictionPolicy),
-		EmbeddingModel:      cfg.EmbeddingModel,
+		MaxEntries:          cfg.SemanticCache.MaxEntries,
+		TTLSeconds:          cfg.SemanticCache.TTLSeconds,
+		EvictionPolicy:      cache.EvictionPolicyType(cfg.SemanticCache.EvictionPolicy),
+		EmbeddingModel:      cfg.SemanticCache.EmbeddingModel,
 	}
-	semanticCache, err := cache.NewCacheBackend(cacheConfig)
+
+	// Create cache manager with global config for testing
+	cacheManager, err := cache.NewCacheManager(&cache.CacheManagerConfig{
+		Domains:     make(map[string]cache.CacheConfig),
+		GlobalCache: &cacheConfig,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -642,7 +647,7 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 		CategoryDescriptions: cfg.GetCategoryDescriptions(),
 		Classifier:           classifier,
 		PIIChecker:           piiChecker,
-		Cache:                semanticCache,
+		CacheManager:         cacheManager,
 		ToolsDatabase:        toolsDatabase,
 		ResponseAPIFilter:    responseAPIFilter,
 	}

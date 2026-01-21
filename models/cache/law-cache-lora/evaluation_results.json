@@ -1,0 +1,7 @@
+{
+  "baseline_accuracy": 0.995,
+  "lora_accuracy": 0.995,
+  "absolute_improvement": 0.0,
+  "relative_margin_percent": 0.0,
+  "num_test_triplets": 200
+}
