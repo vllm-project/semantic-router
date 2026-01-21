@@ -1,0 +1,371 @@
+# Domain-specific prompts for cache embedding training
+#
+# This file defines how the LLM should generate paraphrases and hard negatives
+# for each domain to ensure high-quality triplet generation.
+#
+# Supported semantic router categories (from models/lora_intent_classifier_bert-base-uncased_model/label_mapping.json):
+# 1. biology
+# 2. business
+# 3. chemistry
+# 4. computer_science (alias: programming)
+# 5. economics
+# 6. engineering
+# 7. health (alias: medical)
+# 8. history
+# 9. law (alias: legal)
+# 10. math
+# 11. other (generic fallback)
+# 12. philosophy
+# 13. physics
+# 14. psychology
+#
+# When training a new domain that doesn't have prompts here, the script will exit
+# with an error asking you to add the prompts first. This prevents accidentally
+# using wrong prompts (like we did with programming using medical prompts!).
+
+domains:
+  # HEALTH / MEDICAL - Trained and tested: +21.4% improvement
+  health:
+    role: "helpful medical expert"
+    topic_name: "medical query"
+    recommended_model: "Qwen/Qwen2.5-7B-Instruct"  # General instruction-following model
+
+    paraphrase_guidelines: |
+      1. Preserve the original medical meaning but use different wording or sentence structure
+      2. Avoid changing medical intent or introducing new information
+      3. Be professionally written and clear
+      4. Maintain medical accuracy and terminology
+
+    paraphrase_examples:
+      - original: "What are the best ways to reduce stress?"
+        paraphrases:
+          - "How can a person effectively manage stress?"
+          - "What strategies help in reducing stress levels?"
+          - "What methods are effective for stress reduction?"
+
+    negative_guidelines: |
+      1. Generate FULL, COMPLETE medical questions (8-15 words minimum)
+      2. Questions MUST be on RELATED but DISTINCT medical topics
+      3. MUST focus on different aspects: if original is about stress management, discuss sleep disorders or exercise physiology; if about diabetes diagnosis, discuss heart disease or cancer screening
+
+      CRITICAL - DO NOT DUPLICATE THE ORIGINAL:
+      - DO NOT reword or paraphrase the original query
+      - DO NOT use the exact same medical condition (if original mentions "diabetes", use "hypertension" or "arthritis")
+      - DO NOT use the same treatment approach (if original is "medication", use "surgery" or "physical therapy")
+      - The negative MUST be medically related but clearly different
+
+      STRICTLY FORBIDDEN (DO NOT generate):
+      - Exact or near-exact rewording of the original query
+      - Questions about the same specific medical condition or treatment
+      - Placeholder text like "question 1?" or "question 2?"
+      - Single words: "diabetes", "stress", "treatment"
+      - Incomplete sentences or fragments
+      - Short phrases under 8 words: "heart disease", "mental health"
+
+    negative_examples:
+      - original: "How to reduce stress?"
+        negatives:
+          - "How can athletes manage stress during high-pressure competitions?"
+          - "What are effective stress management strategies for children with ADHD?"
+
+      - original: "What is diabetes?"
+        negatives:
+          - "How does gestational diabetes differ from type 2 diabetes?"
+          - "What are the long-term complications of uncontrolled diabetes?"
+
+  # COMPUTER SCIENCE / PROGRAMMING
+  computer_science:
+    role: "expert programming instructor"
+    topic_name: "programming query"
+    recommended_model: "Qwen/Qwen2.5-7B-Instruct"  # General-purpose model works better than coding-specialized
+
+    paraphrase_guidelines: |
+      1. Preserve the original programming intent but use different wording or sentence structure
+      2. Avoid changing the technical meaning or introducing new requirements
+      3. Be clear and professionally written
+      4. Maintain technical accuracy
+
+    paraphrase_examples:
+      - original: "How do I sort a list in Python?"
+        paraphrases:
+          - "What's the best way to sort a Python list?"
+          - "How can I order items in a Python list?"
+          - "What method should I use to arrange a list in Python?"
+
+    negative_guidelines: |
+      1. Generate FULL, COMPLETE programming questions (8-15 words minimum)
+      2. Questions MUST be on RELATED but DISTINCT programming topics
+      3. MUST focus on different aspects within the same context:
+         - If original is about matplotlib margins, ask about matplotlib fonts or layout
+         - If original is about Django ManyToMany counting, ask about Django relationships filtering or optimization
+         - If original is about Python generators, ask about Python iterators or coroutines
+         - Stay in the same library/framework but different feature
+
+      CRITICAL - DO NOT DUPLICATE THE ORIGINAL:
+      - DO NOT reword or paraphrase the original query
+      - DO NOT use the exact same feature (if original mentions "ticklabels margin", use "ticklabels fontsize" or "subplot spacing")
+      - DO NOT ask the exact same question (if original is "how to count", use "how to filter" or "how to optimize")
+      - The negative MUST be related but clearly different aspect
+
+      STRICTLY FORBIDDEN (DO NOT generate):
+      - Exact or near-exact rewording of the original query
+      - Questions about the same specific feature or method
+      - Completely unrelated topics (if original is Django, don't jump to React or Vue)
+      - Placeholder text like "question 1?" or "question 2?"
+      - Single words: "count", "Django", "list"
+      - Code snippets: "getDictionaryValue()", "myFunction()"
+      - Short phrases under 8 words: "data structures", "web development"
+      - Incomplete sentences or fragments
+
+    negative_examples:
+      - original: "How can I increase margin between ticklabels in matplotlib?"
+        negatives:
+          - "How can I adjust the fontsize of ticklabels in matplotlib?"
+          - "What is the effect of using tight_layout on subplot spacing in matplotlib?"
+
+      - original: "How to count and display objects in relation ManyToMany in Django?"
+        negatives:
+          - "How can you filter objects based on their ManyToMany relationships in Django?"
+          - "What is the recommended approach for optimizing ManyToMany queries in Django?"
+
+      - original: "How do you determine if an object is a generator in Python?"
+        negatives:
+          - "How do you create a generator function in Python?"
+          - "What methods can you use to consume a generator in Python?"
+
+  # LAW / LEGAL - Next domain to train
+  # VARIANT D: ULTRA-STRICT - Force maximum legal branch separation
+  law:
+    role: "legal expert assistant"
+    topic_name: "legal query"
+    recommended_model: "Qwen/Qwen2.5-7B-Instruct"  # General instruction-following model
+
+    paraphrase_guidelines: |
+      1. Preserve the original legal meaning but use different wording or sentence structure
+      2. Avoid changing legal intent or introducing new information
+      3. Be professionally written using appropriate legal terminology
+      4. Maintain legal accuracy and precision
+
+    paraphrase_examples:
+      - original: "What constitutes a breach of contract?"
+        paraphrases:
+          - "How is a breach of contract legally defined?"
+          - "What actions would be considered a violation of contractual obligations?"
+          - "Under what circumstances is a contract considered breached?"
+
+      - original: "What are the requirements for establishing negligence?"
+        paraphrases:
+          - "What elements must be proven to show negligence?"
+          - "How do you demonstrate negligence in a legal case?"
+          - "What are the necessary components of a negligence claim?"
+
+    negative_guidelines: |
+      ⚠️ NUCLEAR OPTION - MAXIMUM SEPARATION ⚠️
+
+      STEP 1: EXTRACT AND BLOCK
+      Before generating ANY negative, identify these in the anchor:
+      - Person/company names: [extract all proper nouns]
+      - Case names: [extract all case citations]
+      - Legal doctrines: [extract all legal concepts mentioned]
+      - Topic keywords: [extract all substantive legal topics]
+
+      ALL OF THESE ARE **PERMANENTLY BANNED** FROM YOUR NEGATIVES.
+
+      STEP 2: MANDATORY TOPIC JUMP
+      You MUST use this EXACT mapping to jump topics:
+
+      IF anchor mentions → THEN negative MUST be about
+      ================================================
+      "trade secret" OR "IP" → "Miranda rights" OR "search warrants"
+      "contract" OR "breach" → "child custody" OR "divorce proceedings"
+      "negligence" OR "tort" → "tax fraud" OR "estate planning"
+      "bomb" OR "explosive" OR "weapon" → "trademark registration" OR "patent filing"
+      "tax lien" OR "property tax" → "asylum seekers" OR "visa requirements"
+      "criminal procedure" → "corporate merger rules" OR "securities fraud"
+      "consumer protection" → "water pollution permits" OR "EPA compliance"
+      "employment discrimination" → "Chapter 11 bankruptcy" OR "creditor priority"
+
+      STEP 3: ENTITY REPLACEMENT
+      If anchor mentions "Colameta" → negative MUST mention ZERO companies/people
+      If anchor mentions "Taylor v. Mill" → negative MUST mention ZERO case names
+      If anchor mentions specific statute → negative MUST cite DIFFERENT statute from DIFFERENT legal code
+
+      STEP 4: VERIFICATION (MANDATORY)
+      Before finalizing each negative, ask:
+      1. "Does this negative share ANY word with the anchor's legal topic?" → If YES, REJECT
+      2. "Are these from the same legal branch?" → If YES, REJECT
+      3. "Would a lawyer specialize in both topics?" → If YES, REJECT
+
+      EXAMPLES OF COMPLETE FAILURE (WHAT NOT TO DO):
+      ❌ Anchor: "Colameta trade secrets" → Negative: "penalties for Colameta trade secrets"
+      ❌ Anchor: "bomb-making felony" → Negative: "sentencing for bomb offenses"
+      ❌ Anchor: "tax lien priority" → Negative: "federal vs state liens"
+
+      EXAMPLES OF SUCCESS (WHAT TO DO):
+      ✅ Anchor: "Colameta trade secrets" → Negative: "What rights do defendants have during police interrogations?"
+      ✅ Anchor: "bomb-making felony" → Negative: "How are patents evaluated for novelty and non-obviousness?"
+      ✅ Anchor: "tax lien priority" → Negative: "What criteria determine refugee status for asylum applications?"
+
+    negative_examples:
+      - original: "Colameta's use of Protégé data in creating a competing business violated trade secret protections."
+        bad_negatives:
+          - "What penalties can Colameta face for misappropriating trade secrets?"
+          - "How are trade secrets legally protected under intellectual property law?"
+        good_negatives:
+          - "What constitutional protections apply when police conduct warrantless searches?"
+          - "How is child custody determined when parents divorce in different states?"
+
+      - original: "What constitutes a breach of contract under common law?"
+        bad_negatives:
+          - "What remedies are available for breach of contract?"
+          - "How is contract formation established in commercial agreements?"
+        good_negatives:
+          - "What sentencing factors do judges consider in federal criminal cases?"
+          - "How does the estate tax exemption apply to inherited property?"
+
+      - original: "What are the elements required to prove negligence in a personal injury case?"
+        bad_negatives:
+          - "What damages can be recovered in negligence lawsuits?"
+          - "How does contributory negligence affect tort liability?"
+        good_negatives:
+          - "What are the requirements for obtaining a trademark registration?"
+          - "How do bankruptcy trustees distribute assets among creditors?"
+
+      - original: "Under what circumstances can a landlord terminate a month-to-month lease?"
+        bad_negatives:
+          - "What notice period must landlords provide for lease termination?"
+          - "How are security deposits handled in residential leases?"
+        good_negatives:
+          - "What procedures must employers follow when conducting workplace investigations?"
+          - "How does the EPA enforce violations of the Clean Water Act?"
+
+  # PSYCHOLOGY - NUCLEAR Strategy: 8 distinct subfields for mandatory topic jumps
+  psychology:
+    role: "psychology expert assistant"
+    topic_name: "psychology query"
+    recommended_model: "Qwen/Qwen2.5-7B-Instruct"
+
+    paraphrase_guidelines: |
+      1. Preserve the original psychological meaning but use different wording or sentence structure
+      2. Avoid changing the psychological concept or introducing new information
+      3. Be professionally written using appropriate psychological terminology
+      4. Maintain scientific accuracy
+
+    paraphrase_examples:
+      - original: "What are the symptoms of generalized anxiety disorder?"
+        paraphrases:
+          - "How is generalized anxiety disorder characterized?"
+          - "What signs indicate someone may have generalized anxiety disorder?"
+          - "What are the typical manifestations of GAD?"
+
+      - original: "How does working memory function?"
+        paraphrases:
+          - "What is the role of working memory in cognition?"
+          - "How does working memory operate in the brain?"
+          - "What processes are involved in working memory?"
+
+    negative_guidelines: |
+      ⚠️ NUCLEAR STRATEGY - RELATED BUT DIFFERENT ASPECT ⚠️
+
+      Generate negatives that are RELATED to the same topic but ask about DIFFERENT ASPECTS.
+      Stay within the same general area but shift the focus.
+
+      STEP 1: IDENTIFY THE TOPIC
+      Extract the core topic from the anchor:
+      - If about "anxiety disorder" → topic is "anxiety"
+      - If about "working memory" → topic is "memory systems"
+      - If about "child development milestones" → topic is "child development"
+      - If about "social influence" → topic is "social psychology phenomena"
+
+      STEP 2: SHIFT THE ASPECT (Use different question types)
+      If anchor asks about → Negative asks about
+      ================================================
+      Symptoms/Signs → Causes, Risk factors, Treatment, or Prevention
+      Diagnosis/Assessment → Treatment, Prognosis, or Epidemiology
+      Treatment → Side effects, Efficacy, Contraindications, or Alternative treatments
+      Causes/Etiology → Symptoms, Diagnosis, or Prevention
+      Development/Stages → Factors affecting development, Individual differences, or Assessment
+      Function/Process → Neural basis, Disorders affecting it, or Development of the function
+
+      STEP 3: STAY RELATED BUT DISTINCT
+      - **DO**: Keep the same disorder/concept but change the aspect
+        ✅ "symptoms of anxiety disorder" → "treatment options for anxiety disorder"
+        ✅ "symptoms of anxiety disorder" → "risk factors for developing anxiety"
+        ✅ "symptoms of anxiety disorder" → "neurobiological causes of anxiety"
+
+      - **DON'T**: Jump to completely unrelated topics
+        ❌ "symptoms of anxiety disorder" → "groupthink in decision making"
+        ❌ "working memory function" → "child development milestones"
+
+      - **DON'T**: Reword or paraphrase the anchor
+        ❌ "symptoms of anxiety disorder" → "signs of anxiety disorder"
+        ❌ "working memory function" → "how working memory works"
+
+      STEP 4: VERIFICATION (MANDATORY)
+      Before finalizing each negative, ask:
+      1. "Does the negative relate to the same core topic/entity as anchor?" → Should be YES
+      2. "Does the negative ask about a DIFFERENT aspect than anchor?" → Must be YES
+      3. "Is this just a rewording of the anchor?" → Must be NO
+
+      EXAMPLES OF COMPLETE FAILURE (WHAT NOT TO DO):
+      ❌ Anchor: "What are symptoms of anxiety disorder?" → Negative: "What are signs of anxiety disorder?" (just rewording)
+      ❌ Anchor: "What are symptoms of anxiety disorder?" → Negative: "How does groupthink affect decision making?" (completely unrelated)
+      ❌ Anchor: "How does working memory function?" → Negative: "What is working memory capacity?" (too similar)
+
+      EXAMPLES OF SUCCESS (WHAT TO DO):
+      ✅ Anchor: "What are symptoms of anxiety disorder?" → Negative: "What causes anxiety disorders to develop?"
+      ✅ Anchor: "What are symptoms of anxiety disorder?" → Negative: "How are anxiety disorders treated with CBT?"
+      ✅ Anchor: "What are symptoms of anxiety disorder?" → Negative: "What risk factors increase likelihood of anxiety disorders?"
+      ✅ Anchor: "How does working memory function?" → Negative: "What brain regions are involved in working memory?"
+      ✅ Anchor: "How does working memory function?" → Negative: "How does aging affect working memory capacity?"
+      ✅ Anchor: "What is operant conditioning?" → Negative: "How is operant conditioning applied in behavior therapy?"
+      ✅ Anchor: "What is operant conditioning?" → Negative: "What are the neural mechanisms underlying operant conditioning?"
+
+    negative_examples:
+      - original: "What are symptoms of generalized anxiety disorder?"
+        bad_negatives:
+          - "What are signs of generalized anxiety disorder?"
+          - "How does anxiety disorder present clinically?"
+        good_negatives:
+          - "What are the risk factors for developing generalized anxiety disorder?"
+          - "How is generalized anxiety disorder treated with cognitive behavioral therapy?"
+          - "What neurobiological mechanisms contribute to anxiety disorders?"
+
+      - original: "How does working memory function?"
+        bad_negatives:
+          - "How does working memory operate?"
+          - "What is the capacity of working memory?"
+        good_negatives:
+          - "What brain regions are involved in working memory processing?"
+          - "How does aging affect working memory performance?"
+          - "What disorders impair working memory function?"
+
+      - original: "What is operant conditioning?"
+        bad_negatives:
+          - "What does operant conditioning mean?"
+          - "How does operant conditioning work?"
+        good_negatives:
+          - "How is operant conditioning applied in behavior therapy?"
+          - "What are the neural mechanisms underlying operant conditioning?"
+          - "When was operant conditioning first discovered and by whom?"
+
+      - original: "What are the Big Five personality traits?"
+        bad_negatives:
+          - "What are the five major personality traits?"
+          - "Can you list the Big Five personality dimensions?"
+        good_negatives:
+          - "How is the Big Five personality model assessed in clinical settings?"
+          - "What genetic factors influence Big Five personality traits?"
+          - "How do Big Five traits predict job performance and career success?"
+
+# TODO: Add prompts for remaining 10 domains when needed:
+# - biology
+# - business
+# - chemistry
+# - economics
+# - engineering
+# - history
+# - math
+# - philosophy
+# - physics
+# - other (generic)
