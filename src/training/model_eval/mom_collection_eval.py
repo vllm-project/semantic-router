@@ -22,36 +22,30 @@ Usage:
 
 import argparse
 import json
-import time
 import logging
-import torch
+import time
+from pathlib import Path
+
+import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
-import matplotlib.pyplot as plt
-from pathlib import Path
-from tqdm import tqdm
-from typing import Dict, List, Optional, Any, Union
-
-# Metrics
+import torch
+from datasets import Dataset, load_dataset
+from peft import PeftConfig, PeftModel
+from seqeval.metrics import accuracy_score as seqe_accuracy_score
+from seqeval.metrics import classification_report as seq_classification_report
+from seqeval.metrics import f1_score as seq_f1_score
 from sklearn.metrics import (
     accuracy_score,
-    precision_recall_fscore_support,
     confusion_matrix,
+    precision_recall_fscore_support,
 )
-from seqeval.metrics import accuracy_score as seqe_accuracy_score
-from seqeval.metrics import f1_score as seq_f1_score
-from seqeval.metrics import classification_report as seq_classification_report
-
-# HF & Modeling
-from datasets import load_dataset, Dataset
+from tqdm import tqdm
 from transformers import (
-    AutoTokenizer,
     AutoModelForSequenceClassification,
     AutoModelForTokenClassification,
-    PreTrainedTokenizer,
-    PreTrainedModel,
+    AutoTokenizer,
 )
-from peft import PeftModel, PeftConfig
 
 # config logging
 logging.basicConfig(
