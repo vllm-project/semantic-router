@@ -5,6 +5,7 @@
 pub mod embedding;
 pub mod generative; // NEW: Generative/causal language models (Qwen3ForCausalLM)
 pub mod lora;
+pub mod ml_algorithms; // ML-based model selection algorithms (KNN, KMeans, SVM)
 pub mod prefix_cache; // NEW: Prefix caching for fixed prompts
 pub mod traditional; // NEW: Embedding models (Qwen3, Gemma)
 
@@ -47,6 +48,13 @@ pub use model_factory::{
 
 // Re-export embedding module pooling functions
 pub use embedding::pooling::{cls_pool, last_token_pool, mean_pool};
+
+// Re-export ML algorithm types for model selection
+pub use ml_algorithms::{
+    cosine_similarity, euclidean_distance, normalize_l2, softmax, KMeansModelData, KMeansSelector,
+    KNNModelData, KNNSelector, ModelRef as MLModelRef, ModelSelector, SVMModelData, SVMSelector,
+    SelectionContext, SelectionResult, TrainingRecord,
+};
 
 // Test modules
 #[cfg(test)]
