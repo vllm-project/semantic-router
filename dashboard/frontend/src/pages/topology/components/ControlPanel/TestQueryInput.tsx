@@ -37,8 +37,7 @@ export const TestQueryInput: React.FC<TestQueryInputProps> = ({
   return (
     <div className={styles.section}>
       <div className={styles.testQueryHeader}>
-        <span className={styles.testQueryIcon}>🔍</span>
-        <span className={styles.testQueryTitle}>Test Query</span>
+        <span className={styles.testQueryTitle}>Send Query</span>
       </div>
 
       <div className={styles.inputGroup}>
@@ -55,7 +54,7 @@ export const TestQueryInput: React.FC<TestQueryInputProps> = ({
           onClick={onTest}
           disabled={isLoading || !value.trim()}
         >
-          {isLoading ? '🔄 Testing...' : '🎯 Verify'}
+          {isLoading ? 'Testing...' : 'Verify'}
         </button>
       </div>
 

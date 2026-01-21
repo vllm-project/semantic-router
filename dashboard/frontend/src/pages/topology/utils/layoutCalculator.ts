@@ -767,11 +767,11 @@ export function calculateFullLayout(
   const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}))
 
   g.setGraph({
-    rankdir: 'LR',           // Left to Right
-    nodesep: 60,             // Vertical spacing between nodes (increased)
-    ranksep: 120,            // Horizontal spacing between ranks/columns (increased)
-    marginx: 60,
-    marginy: 60,
+    rankdir: 'TB',           // Top to Bottom (changed from LR)
+    nodesep: 80,             // Horizontal spacing between nodes in same rank
+    ranksep: 100,            // Vertical spacing between ranks/rows
+    marginx: 80,
+    marginy: 80,
     ranker: 'network-simplex', // Best for DAGs
     align: 'UL',             // Align nodes to upper-left for better distribution
   })
@@ -790,16 +790,70 @@ export function calculateFullLayout(
   // Run layout algorithm
   Dagre.layout(g)
 
-  // Apply calculated positions to nodes
-  nodes.forEach(node => {
-    const nodeWithPosition = g.node(node.id)
-    const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
+  // ============== Neural Network Layer Structure ==============
+  // Define fixed Y positions for each layer to create clear neural network structure
+  const LAYER_Y_POSITIONS = {
+    client: 0,           // Layer 1: User Query
+    signals: 200,        // Layer 2: Signals
+    decisions: 500,      // Layer 3: Decisions
+    pluginChains: 800,   // Layer 4: Plugin Chains
+    models: 1100,        // Layer 5: Models
+  }
 
-    // Dagre returns center position, convert to top-left for React Flow
-    node.position = {
-      x: nodeWithPosition.x - dim.width / 2,
-      y: nodeWithPosition.y - dim.height / 2,
+  // Group nodes by layer
+  const nodesByLayer: Record<string, Node[]> = {
+    client: [],
+    signals: [],
+    decisions: [],
+    pluginChains: [],
+    models: [],
+  }
+
+  nodes.forEach(node => {
+    if (node.id === 'client') {
+      nodesByLayer.client.push(node)
+    } else if (node.id.startsWith('signal-group-')) {
+      nodesByLayer.signals.push(node)
+    } else if (node.id.startsWith('decision-') || node.id === 'default-route' || node.id === 'fallback-decision') {
+      nodesByLayer.decisions.push(node)
+    } else if (node.id.startsWith('plugin-chain-')) {
+      nodesByLayer.pluginChains.push(node)
+    } else if (node.id.startsWith('model-')) {
+      nodesByLayer.models.push(node)
     }
+  })
+
+  // Apply positions with layer-based Y and centered X
+  Object.entries(nodesByLayer).forEach(([layerName, layerNodes]) => {
+    if (layerNodes.length === 0) return
+
+    const layerY = LAYER_Y_POSITIONS[layerName as keyof typeof LAYER_Y_POSITIONS]
+
+    // Calculate total width of all nodes in this layer
+    const totalWidth = layerNodes.reduce((sum, node) => {
+      const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
+      return sum + dim.width
+    }, 0)
+
+    // Add spacing between nodes (80px between each node)
+    const spacing = 80
+    const totalSpacing = (layerNodes.length - 1) * spacing
+    const layerTotalWidth = totalWidth + totalSpacing
+
+    // Start X position to center the layer
+    let currentX = -layerTotalWidth / 2
+
+    // Position each node in the layer
+    layerNodes.forEach(node => {
+      const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
+
+      node.position = {
+        x: currentX,
+        y: layerY,
+      }
+
+      currentX += dim.width + spacing
+    })
   })
 
   // ============== 9. Apply Highlighting ==============
