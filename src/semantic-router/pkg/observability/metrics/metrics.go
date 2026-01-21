@@ -415,6 +415,57 @@ var (
 		},
 		[]string{"fallback_reason", "fallback_strategy"},
 	)
+
+	// RAG (Retrieval-Augmented Generation) metrics
+	RAGRetrievalAttempts = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "rag_retrieval_attempts_total",
+			Help: "Total number of RAG retrieval attempts",
+		},
+		[]string{"backend", "decision", "status"}, // status: success, error
+	)
+
+	RAGRetrievalLatency = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "rag_retrieval_latency_seconds",
+			Help:    "RAG retrieval latency in seconds",
+			Buckets: []float64{0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0},
+		},
+		[]string{"backend", "decision"},
+	)
+
+	RAGSimilarityScore = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "rag_similarity_score",
+			Help: "Average similarity score of retrieved documents",
+		},
+		[]string{"backend", "decision"},
+	)
+
+	RAGContextLength = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "rag_context_length_chars",
+			Help:    "Length of retrieved context in characters",
+			Buckets: []float64{100, 500, 1000, 2000, 5000, 10000, 20000},
+		},
+		[]string{"backend", "decision"},
+	)
+
+	RAGCacheHits = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "rag_cache_hits_total",
+			Help: "Total number of RAG cache hits",
+		},
+		[]string{"backend"},
+	)
+
+	RAGCacheMisses = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "rag_cache_misses_total",
+			Help: "Total number of RAG cache misses",
+		},
+		[]string{"backend"},
+	)
 )
 
 // RecordModelRequest increments the counter for requests to a specific model

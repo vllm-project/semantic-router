@@ -1010,6 +1010,77 @@ func (c *MilvusCache) Close() error {
 	return nil
 }
 
+// SearchDocuments performs vector search on a specified collection for RAG retrieval
+// This method is used by the RAG plugin to retrieve context from knowledge bases
+func (c *MilvusCache) SearchDocuments(ctx context.Context, collectionName string, queryEmbedding []float32, threshold float32, topK int, filterExpr string, contentField string) ([]string, []float32, error) {
+	if !c.enabled {
+		return nil, nil, fmt.Errorf("milvus cache is not enabled")
+	}
+
+	if c.client == nil {
+		return nil, nil, fmt.Errorf("milvus client is not initialized")
+	}
+
+	// Define search parameters
+	searchParam, err := entity.NewIndexHNSWSearchParam(c.config.Search.Params.Ef)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create search parameters: %w", err)
+	}
+
+	// Build filter expression
+	if filterExpr == "" {
+		filterExpr = "response_body != \"\"" // Only get complete entries
+	}
+
+	// Use Milvus Search
+	searchResult, err := c.client.Search(
+		ctx,
+		collectionName,
+		[]string{},
+		filterExpr,
+		[]string{contentField},
+		[]entity.Vector{entity.FloatVector(queryEmbedding)},
+		c.config.Collection.VectorField.Name,
+		entity.MetricType(c.config.Collection.VectorField.MetricType),
+		topK,
+		searchParam,
+	)
+
+	if err != nil {
+		return nil, nil, fmt.Errorf("milvus search failed: %w", err)
+	}
+
+	if len(searchResult) == 0 || searchResult[0].ResultCount == 0 {
+		return nil, nil, nil // No results, but not an error
+	}
+
+	// Extract results
+	var contents []string
+	var scores []float32
+
+	for i := 0; i < searchResult[0].ResultCount; i++ {
+		score := searchResult[0].Scores[i]
+		if score < threshold {
+			continue // Skip results below threshold
+		}
+
+		// Extract content from result
+		if len(searchResult[0].Fields) > 0 {
+			if contentCol, ok := searchResult[0].Fields[0].(*entity.ColumnVarChar); ok {
+				if contentCol.Len() > i {
+					content, err := contentCol.ValueByIdx(i)
+					if err == nil && content != "" {
+						contents = append(contents, content)
+						scores = append(scores, score)
+					}
+				}
+			}
+		}
+	}
+
+	return contents, scores, nil
+}
+
 // GetStats provides current cache performance metrics
 func (c *MilvusCache) GetStats() CacheStats {
 	c.mu.RLock()

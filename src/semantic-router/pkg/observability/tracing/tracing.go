@@ -242,4 +242,6 @@ const (
 	SpanResponseProcessing    = "semantic_router.response.processing"
 	SpanToolSelection         = "semantic_router.tools.selection"
 	SpanSystemPromptInjection = "semantic_router.system_prompt.injection"
+	SpanRAGRetrieval          = "semantic_router.rag.retrieval"
+	SpanRAGContextInjection   = "semantic_router.rag.context_injection"
 )
