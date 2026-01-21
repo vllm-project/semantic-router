@@ -207,6 +207,14 @@ func (a *AutoMixSelector) Select(ctx context.Context, selCtx *SelectionContext) 
 	// Calculate confidence based on verification probability
 	confidence := a.getVerificationProbability(selectedModel.Model)
 
+	// Record AutoMix-specific metrics for evolution tracking
+	for _, model := range sortedCandidates {
+		if cap, ok := a.capabilities[model.Model]; ok {
+			RecordAutoMixCapability(model.Model, cap.VerificationProb, cap.AvgQuality,
+				cap.QuerySuccessCount, cap.QueryTotalCount)
+		}
+	}
+
 	logging.Infof("[AutoMix] Selected model %s (score=%.4f, confidence=%.2f, cost-aware=%v)",
 		selectedModel.Model, selectedScore, confidence, a.config.CostAwareRouting)
 
@@ -258,8 +266,20 @@ func (a *AutoMixSelector) UpdateFeedback(ctx context.Context, feedback *Feedback
 		}
 	}
 
-	// Run value iteration to update POMDP values
-	a.updateValueFunction()
+	// Run value iteration to update POMDP values (we already hold capMu.Lock)
+	a.updateValueFunctionLocked()
+
+	// Record updated metrics after feedback
+	if cap, ok := a.capabilities[feedback.WinnerModel]; ok {
+		RecordAutoMixCapability(feedback.WinnerModel, cap.VerificationProb, cap.AvgQuality,
+			cap.QuerySuccessCount, cap.QueryTotalCount)
+	}
+	if feedback.LoserModel != "" {
+		if cap, ok := a.capabilities[feedback.LoserModel]; ok {
+			RecordAutoMixCapability(feedback.LoserModel, cap.VerificationProb, cap.AvgQuality,
+				cap.QuerySuccessCount, cap.QueryTotalCount)
+		}
+	}
 
 	return nil
 }
@@ -402,10 +422,9 @@ func (a *AutoMixSelector) getVerificationProbability(model string) float64 {
 	return 0.7 // Default
 }
 
-// updateValueFunction performs one iteration of POMDP value update
-func (a *AutoMixSelector) updateValueFunction() {
-	a.capMu.RLock()
-	defer a.capMu.RUnlock()
+// updateValueFunctionLocked performs one iteration of POMDP value update
+// NOTE: Caller MUST hold capMu lock (read or write) before calling this
+func (a *AutoMixSelector) updateValueFunctionLocked() {
 	a.valueMu.Lock()
 	defer a.valueMu.Unlock()
 
