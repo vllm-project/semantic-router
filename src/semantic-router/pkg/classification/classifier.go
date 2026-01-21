@@ -33,6 +33,20 @@ func (c *CategoryInitializerImpl) Init(modelID string, useCPU bool, numClasses .
 		return nil
 	}
 
+	// Check if this is an mmBERT model (multilingual ModernBERT)
+	// mmBERT has vocab_size >= 200000 and uses sans_pos position embeddings
+	configPath := fmt.Sprintf("%s/config.json", modelID)
+	if candle_binding.IsMmBertModel(configPath) {
+		logging.Infof("Detected mmBERT model, using mmBERT-specific initializer")
+		err := candle_binding.InitMmBertClassifierAuto(modelID, useCPU)
+		if err != nil {
+			return fmt.Errorf("failed to initialize mmBERT category classifier: %w", err)
+		}
+		c.usedModernBERT = true
+		logging.Infof("Initialized mmBERT category classifier")
+		return nil
+	}
+
 	// Fallback to ModernBERT-specific init for backward compatibility
 	// This handles models with incomplete configs (missing hidden_act, etc.)
 	logging.Infof("Auto-detection failed, falling back to ModernBERT category initializer")
@@ -94,6 +108,19 @@ func (c *JailbreakInitializerImpl) Init(modelID string, useCPU bool, numClasses 
 	if err == nil {
 		c.usedModernBERT = false
 		logging.Infof("Initialized jailbreak classifier with auto-detection")
+		return nil
+	}
+
+	// Check if this is an mmBERT model (multilingual ModernBERT)
+	// mmBERT has vocab_size >= 200000 and uses sans_pos position embeddings
+	configPath := fmt.Sprintf("%s/config.json", modelID)
+	if candle_binding.IsMmBertModel(configPath) {
+		logging.Infof("Detected mmBERT model, using mmBERT-specific initializer")
+		if err = candle_binding.InitMmBertClassifierAuto(modelID, useCPU); err != nil {
+			return fmt.Errorf("failed to initialize mmBERT jailbreak classifier: %w", err)
+		}
+		c.usedModernBERT = true
+		logging.Infof("Initialized mmBERT jailbreak classifier")
 		return nil
 	}
 
@@ -179,6 +206,20 @@ func (c *PIIInitializerImpl) Init(modelID string, useCPU bool, numClasses int) e
 	if success {
 		c.usedModernBERT = false
 		logging.Infof("Initialized PII token classifier with auto-detection")
+		return nil
+	}
+
+	// Check if this is an mmBERT model (multilingual ModernBERT)
+	// mmBERT has vocab_size >= 200000 and uses sans_pos position embeddings
+	configPath := fmt.Sprintf("%s/config.json", modelID)
+	if candle_binding.IsMmBertModel(configPath) {
+		logging.Infof("Detected mmBERT model, using mmBERT-specific token classifier initializer")
+		err := candle_binding.InitMmBertTokenClassifier(modelID, useCPU)
+		if err != nil {
+			return fmt.Errorf("failed to initialize mmBERT PII token classifier: %w", err)
+		}
+		c.usedModernBERT = true
+		logging.Infof("Initialized mmBERT PII token classifier")
 		return nil
 	}
 
