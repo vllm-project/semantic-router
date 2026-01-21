@@ -3,11 +3,13 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 interface ReadonlyContextType {
   isReadonly: boolean
   isLoading: boolean
+  platform: string
 }
 
 const ReadonlyContext = createContext<ReadonlyContextType>({
   isReadonly: false,
   isLoading: true,
+  platform: '',
 })
 
 export const useReadonly = (): ReadonlyContextType => useContext(ReadonlyContext)
@@ -19,6 +21,7 @@ interface ReadonlyProviderProps {
 export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) => {
   const [isReadonly, setIsReadonly] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [platform, setPlatform] = useState('')
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -27,6 +30,7 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
         if (response.ok) {
           const data = await response.json()
           setIsReadonly(data.readonlyMode || false)
+          setPlatform(data.platform || '')
         }
       } catch (error) {
         console.warn('Failed to fetch dashboard settings:', error)
@@ -39,7 +43,7 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
   }, [])
 
   return (
-    <ReadonlyContext.Provider value={{ isReadonly, isLoading }}>
+    <ReadonlyContext.Provider value={{ isReadonly, isLoading, platform }}>
       {children}
     </ReadonlyContext.Provider>
   )

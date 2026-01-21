@@ -4,6 +4,7 @@ import HeaderDisplay from './HeaderDisplay'
 import MarkdownRenderer from './MarkdownRenderer'
 import ThinkingAnimation from './ThinkingAnimation'
 import HeaderReveal from './HeaderReveal'
+import ThinkingBlock from './ThinkingBlock'
 
 // Choice represents a single model's response in ratings mode
 interface Choice {
@@ -20,6 +21,8 @@ interface Message {
   headers?: Record<string, string>
   // For ratings mode: multiple choices from different models
   choices?: Choice[]
+  // Thinking process (content before assistantfinal tag)
+  thinkingProcess?: string
 }
 
 interface ChatComponentProps {
@@ -79,7 +82,45 @@ const ChatComponent = ({
     }
   }, [isFullscreen])
 
-  const generateId = () => `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  const generateId = () => `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
+
+  // Parse content to separate thinking process from final answer
+  const parseStreamingContent = (fullContent: string): {
+    hasAnalysis: boolean
+    thinking: string
+    hasFinal: boolean
+    final: string
+  } => {
+    // Check if content contains "analysis" tag
+    const hasAnalysis = /analysis/i.test(fullContent)
+
+    // Look for assistantfinal tag (case insensitive)
+    const finalMatch = fullContent.match(/assistantfinal(.*)$/is)
+
+    if (finalMatch) {
+      // Found assistantfinal - split content
+      const finalIndex = fullContent.search(/assistantfinal/i)
+
+      // Everything from "analysis" to "assistantfinal" is thinking
+      const analysisMatch = fullContent.match(/analysis(.*?)assistantfinal/is)
+      const thinking = analysisMatch ? analysisMatch[1].trim() : ''
+
+      // Everything after assistantfinal is the final answer
+      const final = fullContent.substring(finalIndex + 'assistantfinal'.length).trim()
+
+      return { hasAnalysis, thinking, hasFinal: true, final }
+    }
+
+    // If we have analysis but no assistantfinal yet, all content after "analysis" is thinking
+    if (hasAnalysis) {
+      const analysisMatch = fullContent.match(/analysis(.*)$/is)
+      const thinking = analysisMatch ? analysisMatch[1].trim() : ''
+      return { hasAnalysis: true, thinking, hasFinal: false, final: '' }
+    }
+
+    // No special tags - treat as final answer
+    return { hasAnalysis: false, thinking: '', hasFinal: false, final: fullContent }
+  }
 
   const handleThinkingComplete = useCallback(() => {
     // Thinking animation will be hidden when headers arrive
@@ -107,10 +148,10 @@ const ChatComponent = ({
     setInputValue('')
     setIsLoading(true)
 
-    // Reset animation states and show thinking animation
+    // Reset animation states and show initial thinking animation (no content)
     setPendingHeaders(null)
     setShowHeaderReveal(false)
-    setShowThinking(true)
+    setShowThinking(true)  // Show immediately when user sends message
 
     const assistantMessageId = generateId()
     const assistantMessage: Message = {
@@ -181,11 +222,12 @@ const ChatComponent = ({
         }
       })
 
-      // Store headers and immediately hide thinking animation
+      // Store headers and hide thinking animation, show HeaderReveal
       if (Object.keys(responseHeaders).length > 0) {
-        console.log('Headers received, hiding thinking animation')
+        console.log('Headers received, showing HeaderReveal')
         setPendingHeaders(responseHeaders)
-        setShowThinking(false)
+        setShowThinking(false)  // Hide full-screen thinking animation
+        setShowHeaderReveal(true)  // Show HeaderReveal
       }
 
       const reader = response.body?.getReader()
@@ -243,26 +285,49 @@ const ChatComponent = ({
               if (isRatingsMode) {
                 // Ratings mode: update choices array
                 const choicesArray: Choice[] = []
+
                 choiceContents.forEach((value, index) => {
-                  choicesArray[index] = { content: value.content, model: value.model }
+                  const parsed = parseStreamingContent(value.content)
+                  choicesArray[index] = { content: parsed.final, model: value.model }
                 })
+
+                // Get thinking process from first choice
+                const firstChoiceForThinking = choiceContents.get(0)
+                const thinkingProcess = firstChoiceForThinking
+                  ? parseStreamingContent(firstChoiceForThinking.content).thinking
+                  : ''
+
                 setMessages(prev =>
                   prev.map(m =>
                     m.id === assistantMessageId
-                      ? { ...m, content: choicesArray[0]?.content || '', choices: choicesArray }
+                      ? {
+                          ...m,
+                          content: choicesArray[0]?.content || '',
+                          choices: choicesArray,
+                          thinkingProcess: thinkingProcess
+                        }
                       : m
                   )
                 )
               } else {
                 // Single choice mode
                 const firstChoice = choiceContents.get(0)
-                setMessages(prev =>
-                  prev.map(m =>
-                    m.id === assistantMessageId
-                      ? { ...m, content: firstChoice?.content || '' }
-                      : m
+                if (firstChoice) {
+                  const parsed = parseStreamingContent(firstChoice.content)
+
+                  setMessages(prev =>
+                    prev.map(m =>
+                      m.id === assistantMessageId
+                        ? {
+                            ...m,
+                            content: parsed.final,
+                            thinkingProcess: parsed.thinking,
+                            isStreaming: !parsed.hasFinal  // Stop streaming when we hit assistantfinal
+                          }
+                        : m
+                    )
                   )
-                )
+                }
               }
             } catch {
               // Skip malformed JSON chunks
@@ -277,6 +342,9 @@ const ChatComponent = ({
             .sort(([a], [b]) => a - b)
             .map(([, v]) => ({ content: v.content, model: v.model }))
         : undefined
+
+      // Streaming finished - no need to control ThinkingAnimation here
+      // It was already hidden when headers arrived
 
       setMessages(prev =>
         prev.map(m =>
@@ -324,7 +392,10 @@ const ChatComponent = ({
     <>
       {/* Thinking Animation */}
       {showThinking && (
-        <ThinkingAnimation onComplete={handleThinkingComplete} />
+        <ThinkingAnimation
+          onComplete={handleThinkingComplete}
+          thinkingProcess=""
+        />
       )}
 
       {/* Header Reveal */}
@@ -418,43 +489,61 @@ const ChatComponent = ({
                   </div>
                   {/* Ratings mode: multiple choices */}
                   {message.role === 'assistant' && message.choices && message.choices.length > 1 ? (
-                    <div className={styles.ratingsChoices}>
-                      {message.choices.map((choice, idx) => (
-                        <div key={idx} className={styles.choiceCard}>
-                          <div className={styles.choiceHeader}>
-                            <span className={styles.choiceModel}>{choice.model || `Model ${idx + 1}`}</span>
-                            <span className={styles.choiceIndex}>Choice {idx + 1}</span>
+                    <>
+                      {/* Show thinking block if available */}
+                      {message.thinkingProcess && (
+                        <ThinkingBlock
+                          content={message.thinkingProcess}
+                          isStreaming={message.isStreaming}
+                        />
+                      )}
+                      <div className={styles.ratingsChoices}>
+                        {message.choices.map((choice, idx) => (
+                          <div key={idx} className={styles.choiceCard}>
+                            <div className={styles.choiceHeader}>
+                              <span className={styles.choiceModel}>{choice.model || `Model ${idx + 1}`}</span>
+                              <span className={styles.choiceIndex}>Choice {idx + 1}</span>
+                            </div>
+                            <div className={styles.choiceContent}>
+                              <MarkdownRenderer content={choice.content} />
+                              {message.isStreaming && idx === 0 && (
+                                <span className={styles.cursor}>▊</span>
+                              )}
+                            </div>
                           </div>
-                          <div className={styles.choiceContent}>
-                            <MarkdownRenderer content={choice.content} />
-                            {message.isStreaming && idx === 0 && (
-                              <span className={styles.cursor}>▊</span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    </>
                   ) : (
                     /* Single choice mode */
-                    <div className={styles.messageText}>
-                      {message.role === 'assistant' && message.content ? (
-                        <>
-                          <MarkdownRenderer content={message.content} />
-                          {message.isStreaming && (
-                            <span className={styles.cursor}>▊</span>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          {message.content || (message.isStreaming && (
-                            <span className={styles.cursor}>▊</span>
-                          ))}
-                          {message.isStreaming && message.content && (
-                            <span className={styles.cursor}>▊</span>
-                          )}
-                        </>
+                    <>
+                      {/* Show thinking block if available */}
+                      {message.role === 'assistant' && message.thinkingProcess && (
+                        <ThinkingBlock
+                          content={message.thinkingProcess}
+                          isStreaming={message.isStreaming}
+                        />
                       )}
-                    </div>
+                      <div className={styles.messageText}>
+                        {message.role === 'assistant' && message.content ? (
+                          <>
+                            <MarkdownRenderer content={message.content} />
+                            {message.isStreaming && (
+                              <span className={styles.cursor}>▊</span>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            {message.content || (message.isStreaming && (
+                              <span className={styles.cursor}>▊</span>
+                            ))}
+                            {message.isStreaming && message.content && (
+                              <span className={styles.cursor}>▊</span>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </>
                   )}
                   {message.role === 'assistant' && message.headers && (
                     <HeaderDisplay headers={message.headers} />

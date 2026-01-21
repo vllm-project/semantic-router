@@ -10,14 +10,11 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/pii"
 )
 
-// performJailbreaks performs PII and jailbreak detection with category-specific settings
+// performJailbreaks performs jailbreak detection with category-specific settings
+// By default, only checks the current user message. Set include_history: true in plugin config to include conversation history.
 func (r *OpenAIRouter) performJailbreaks(ctx *RequestContext, userContent string, nonUserMessages []string, categoryName string) (*ext_proc.ProcessingResponse, bool) {
-	// Perform PII classification on all message content
-	allContent := pii.ExtractAllContent(userContent, nonUserMessages)
-
 	// Check if jailbreak detection is enabled for this decision
 	jailbreakEnabled := r.Classifier.IsJailbreakEnabled()
 	if categoryName != "" && r.Config != nil {
@@ -31,14 +28,29 @@ func (r *OpenAIRouter) performJailbreaks(ctx *RequestContext, userContent string
 		jailbreakThreshold = r.Config.GetJailbreakThresholdForDecision(categoryName)
 	}
 
-	// Perform jailbreak detection on all message content
+	// Get decision-specific include_history setting
+	includeHistory := false
+	if categoryName != "" && r.Config != nil {
+		includeHistory = r.Config.GetJailbreakIncludeHistoryForDecision(categoryName)
+	}
+
+	// Perform jailbreak detection
 	if jailbreakEnabled {
 		// Start jailbreak detection span
 		spanCtx, span := tracing.StartSpan(ctx.TraceContext, tracing.SpanJailbreakDetection)
 		defer span.End()
 
+		// Build content to analyze based on include_history setting
+		contentToAnalyze := []string{}
+		if userContent != "" {
+			contentToAnalyze = append(contentToAnalyze, userContent)
+		}
+		if includeHistory {
+			contentToAnalyze = append(contentToAnalyze, nonUserMessages...)
+		}
+
 		startTime := time.Now()
-		hasJailbreak, jailbreakDetections, err := r.Classifier.AnalyzeContentForJailbreakWithThreshold(allContent, jailbreakThreshold)
+		hasJailbreak, jailbreakDetections, err := r.Classifier.AnalyzeContentForJailbreakWithThreshold(contentToAnalyze, jailbreakThreshold)
 		detectionTime := time.Since(startTime).Milliseconds()
 
 		tracing.SetSpanAttributes(span,

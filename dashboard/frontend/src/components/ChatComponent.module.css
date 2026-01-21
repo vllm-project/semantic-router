@@ -500,3 +500,12 @@ body.playground-fullscreen .container {
   word-break: break-word;
 }
 
+/* Footer for platform branding */
+.footer {
+  padding: 0.5rem 1rem;
+  background-color: var(--color-bg-secondary);
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}

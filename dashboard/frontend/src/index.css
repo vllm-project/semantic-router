@@ -36,6 +36,22 @@
   --glow-cyan: 0 0 20px rgba(0, 212, 255, 0.3);
   --glow-purple: 0 0 20px rgba(147, 51, 234, 0.3);
 
+  /* Topology-specific dark theme variables */
+  --bg-primary: #1a1a1a;
+  --bg-secondary: #141414;
+  --bg-hover: #222222;
+  --text-primary: #e8e8e8;
+  --text-secondary: #888888;
+  --border-color: #333333;
+  --accent-color: #76b900;
+  --accent-hover: #8ed100;
+
+  /* Flow background for dark mode */
+  --flow-bg-gradient-start: #0d0d14;
+  --flow-bg-gradient-mid: #1a1a2e;
+  --flow-bg-gradient-end: #0d0d14;
+  --flow-dot-color: rgba(255, 255, 255, 0.05);
+
   /* Typography - NVIDIA uses clean sans-serif */
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: 'SF Mono', 'Monaco', 'Menlo', 'Courier New', monospace;
@@ -70,6 +86,7 @@
 
 [data-theme='light'] {
   --color-bg: #f8f9fa;
+  --color-bg-header: #ffffff;
   --color-bg-secondary: #ffffff;
   --color-bg-tertiary: #e9ecef;
   --color-bg-elevated: #ffffff;
@@ -83,6 +100,22 @@
   --glow-primary: 0 0 20px rgba(118, 185, 0, 0.2);
   --glow-cyan: 0 0 20px rgba(0, 212, 255, 0.2);
   --glow-purple: 0 0 20px rgba(147, 51, 234, 0.2);
+
+  /* Topology-specific light theme variables */
+  --bg-primary: #f5f5f7;
+  --bg-secondary: #ffffff;
+  --bg-hover: #e8e8ea;
+  --text-primary: #1a1a1a;
+  --text-secondary: #666666;
+  --border-color: #d1d5db;
+  --accent-color: #76b900;
+  --accent-hover: #5a8f00;
+
+  /* Flow background for light mode */
+  --flow-bg-gradient-start: #e8e8ec;
+  --flow-bg-gradient-mid: #f5f5f7;
+  --flow-bg-gradient-end: #e8e8ec;
+  --flow-dot-color: rgba(0, 0, 0, 0.08);
 }
 
 * {
