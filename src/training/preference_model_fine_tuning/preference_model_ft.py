@@ -581,6 +581,11 @@ def parse_args() -> argparse.Namespace:
         default=42,
         help="Random seed for splits and initialization.",
     )
+    parser.add_argument(
+        "--eval-only",
+        action="store_true",
+        help="Run evaluation on the base model without training.",
+    )
     return parser.parse_args()
 
 
@@ -637,6 +642,7 @@ def train(args: argparse.Namespace) -> None:
         num_train_epochs=args.epochs,
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.eval_batch_size,
+        eval_strategy="epoch" if eval_dataset is not None else "no",
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         learning_rate=args.learning_rate,
         warmup_ratio=args.warmup_ratio,
@@ -663,7 +669,22 @@ def train(args: argparse.Namespace) -> None:
         len(train_dataset),
         len(eval_dataset) if eval_dataset is not None else 0,
     )
+    # If eval-only is requested, skip training and just run evaluation
+    if args.eval_only:
+        if eval_dataset is None:
+            logger.error(
+                "Eval-only requested but no eval split found. Set --eval-ratio > 0."
+            )
+            return
+        metrics = trainer.evaluate()
+        logger.info("Eval-only metrics: %s", metrics)
+        return
+
     trainer.train()
+
+    if eval_dataset is not None:
+        metrics = trainer.evaluate()
+        logger.info("Eval metrics: %s", metrics)
 
     trainer.save_model(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)
