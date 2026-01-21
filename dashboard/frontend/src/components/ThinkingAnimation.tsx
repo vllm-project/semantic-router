@@ -65,7 +65,7 @@ const ThinkingAnimation = ({ onComplete, thinkingProcess }: ThinkingAnimationPro
           ))}
         </div>
         <div className={styles.statusText}>
-          vLLM Semantic Router is Analyzing Your Request...
+          vLLM Semantic Router is Deep Thinking...
         </div>
 
         {/* Show thinking process if available */}
