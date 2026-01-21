@@ -137,7 +137,7 @@ class Jailbreak_Dataset:
         self.label2id = {}
         self.id2label = {}
 
-        # Define dataset configurations
+        # Define dataset configurations - EXPANDED with more diverse sources
         self.dataset_configs = {
             "toxic-chat": {
                 "name": "lmsys/toxic-chat",
@@ -154,6 +154,24 @@ class Jailbreak_Dataset:
                 "label_column": None,
                 "type": "jailbreak",
                 "description": "Salad-Data jailbreak attacks",
+            },
+            # NEW: AEGIS 2.0 - NVIDIA's safety dataset with 30K+ samples
+            "aegis": {
+                "name": "nvidia/Aegis-AI-Content-Safety-Dataset-2.0",
+                "config": None,
+                "text_column": "prompt",
+                "label_column": "prompt_label",  # 'safe' or 'unsafe'
+                "type": "safety",
+                "description": "AEGIS 2.0 - 30K+ safety samples with 12 hazard categories",
+            },
+            # NEW: Jailbreak classification dataset
+            "jailbreak-classification": {
+                "name": "jackhhao/jailbreak-classification",
+                "config": None,
+                "text_column": "prompt",
+                "label_column": "type",  # 'jailbreak' or 'benign'
+                "type": "jailbreak_classification",
+                "description": "Curated jailbreak classification with balanced labels",
             },
         }
 
@@ -520,6 +538,10 @@ class Jailbreak_Dataset:
                 text = sample.get(text_column, "")
                 if not text or len(text.strip()) == 0:
                     continue
+                
+                # Skip REDACTED samples
+                if text.strip() == "REDACTED":
+                    continue
 
                 # Determine label based on dataset type
                 if config["type"] == "jailbreak":
@@ -528,6 +550,14 @@ class Jailbreak_Dataset:
                     # For toxic-chat, use toxicity score
                     toxicity_score = sample.get(label_column, 0)
                     label = "jailbreak" if toxicity_score > 0 else "benign"
+                elif config["type"] == "safety" and label_column:
+                    # For AEGIS, use prompt_label ('safe' or 'unsafe')
+                    safety_label = sample.get(label_column, "safe")
+                    label = "jailbreak" if safety_label == "unsafe" else "benign"
+                elif config["type"] == "jailbreak_classification" and label_column:
+                    # For jailbreak-classification, use type field
+                    type_label = sample.get(label_column, "benign")
+                    label = "jailbreak" if type_label.lower() == "jailbreak" else "benign"
                 else:
                     label = "benign"
 
@@ -536,6 +566,9 @@ class Jailbreak_Dataset:
                 sample_count += 1
 
             logger.info(f"Loaded {len(texts)} samples from {config_key}")
+            jailbreak_count = sum(1 for l in labels if l == "jailbreak")
+            benign_count = sum(1 for l in labels if l == "benign")
+            logger.info(f"  -> Jailbreak: {jailbreak_count}, Benign: {benign_count}")
             return texts, labels
 
         except Exception as e:
@@ -543,174 +576,279 @@ class Jailbreak_Dataset:
             return [], []
 
     def load_huggingface_dataset(self, max_samples=1000):
-        """Load multiple jailbreak datasets with enhanced attack patterns and proper balancing."""
+        """Load multiple jailbreak datasets with enhanced attack patterns and proper balancing.
+        
+        Data sources and their roles:
+        - toxic-chat: Mixed toxicity data (has both jailbreak and benign)
+        - salad-data: Pure jailbreak attacks  
+        - aegis: NVIDIA safety dataset - diverse attack patterns (jailbreak heavy)
+        - jailbreak-classification: Balanced jailbreak/benign pairs
+        - enhanced patterns: Curated patterns for coverage gaps
+        - synthesized patterns: LLM-generated variations
+        
+        Balancing strategy:
+        1. Load from all sources into separate pools (jailbreak vs benign)
+        2. Deduplicate within each pool
+        3. Stratified sampling to achieve 50/50 balance
+        4. Diversity-aware selection to cover all attack categories
+        """
         import random
+        import re
+        from collections import defaultdict
 
-        all_texts = []
-        all_labels = []
+        # Pools for collecting samples
+        jailbreak_pool = []  # List of (text, source) tuples
+        benign_pool = []
+        
+        logger.info("=" * 60)
+        logger.info("LOADING DATASETS WITH BALANCED SAMPLING")
+        logger.info("=" * 60)
 
-        # Load from multiple sources
-        dataset_keys = ["toxic-chat", "salad-data"]
-
-        # Calculate sample allocation:
-        # - 40% from enhanced jailbreak patterns (CRITICAL for coverage)
-        # - 30% from salad-data (jailbreak attacks)
-        # - 30% from toxic-chat (mixed)
-        enhanced_pattern_quota = (
-            int(max_samples * 0.4)
-            if max_samples
-            else len(self.additional_jailbreak_patterns)
-        )
-        dataset_quota = int(max_samples * 0.3) if max_samples else 5000
-
-        logger.info(
-            f"Sample allocation: {enhanced_pattern_quota} enhanced patterns, {dataset_quota} per external dataset"
-        )
+        # ===========================================
+        # Step 1: Load from ALL external datasets
+        # ===========================================
+        dataset_keys = ["toxic-chat", "salad-data", "aegis", "jailbreak-classification"]
+        
+        # Smart quota allocation based on dataset characteristics
+        # - aegis is huge (30K) but jailbreak-heavy, sample strategically
+        # - jailbreak-classification is balanced, use more
+        dataset_quotas = {
+            "toxic-chat": min(3000, max_samples),       # Mixed, good benign source
+            "salad-data": min(2000, max_samples // 2),  # Pure jailbreak
+            "aegis": min(5000, max_samples),            # Sample from 30K - diverse patterns
+            "jailbreak-classification": min(1000, max_samples // 2),  # Balanced
+        }
 
         for dataset_key in dataset_keys:
-            texts, labels = self.load_single_dataset(dataset_key, dataset_quota)
+            quota = dataset_quotas.get(dataset_key, max_samples // 4)
+            logger.info(f"\n📥 Loading {dataset_key} (quota: {quota})...")
+            
+            texts, labels = self.load_single_dataset(dataset_key, quota)
             if texts:
-                all_texts.extend(texts)
-                all_labels.extend(labels)
+                for text, label in zip(texts, labels):
+                    if label == "jailbreak":
+                        jailbreak_pool.append((text, dataset_key))
+                    else:
+                        benign_pool.append((text, dataset_key))
 
         # ===========================================
-        # Add ALL enhanced jailbreak patterns - CRITICAL for coverage
+        # Step 2: Add enhanced jailbreak patterns (coverage-critical)
         # ===========================================
-        logger.info(
-            f"Adding {len(self.additional_jailbreak_patterns)} enhanced jailbreak patterns (FULL coverage)..."
-        )
-
-        # Add each pattern multiple times with variations for better learning
-        patterns_added = 0
-        while patterns_added < enhanced_pattern_quota:
-            for pattern in self.additional_jailbreak_patterns:
-                if patterns_added >= enhanced_pattern_quota:
-                    break
-                all_texts.append(pattern)
-                all_labels.append("jailbreak")
-                patterns_added += 1
-
-        logger.info(f"Added {patterns_added} enhanced jailbreak pattern instances")
+        logger.info(f"\n📝 Adding {len(self.additional_jailbreak_patterns)} enhanced jailbreak patterns...")
+        for pattern in self.additional_jailbreak_patterns:
+            jailbreak_pool.append((pattern, "enhanced"))
 
         # ===========================================
-        # Add LLM-synthesized jailbreak patterns if available
+        # Step 3: Add LLM-synthesized patterns if available
         # ===========================================
         if self.synthesized_jailbreak:
-            synth_quota = min(len(self.synthesized_jailbreak), enhanced_pattern_quota)
-            logger.info(f"Adding {synth_quota} LLM-synthesized jailbreak patterns...")
-            for pattern in self.synthesized_jailbreak[:synth_quota]:
-                all_texts.append(pattern)
-                all_labels.append("jailbreak")
-            logger.info(f"Added {synth_quota} synthesized jailbreak patterns")
-
-        # ===========================================
-        # Add benign examples for balance
-        # ===========================================
-        logger.info(f"Adding {len(self.benign_examples)} benign examples...")
-        benign_added = 0
-        benign_quota = enhanced_pattern_quota  # Match jailbreak count
-        while benign_added < benign_quota:
-            for example in self.benign_examples:
-                if benign_added >= benign_quota:
-                    break
-                all_texts.append(example)
-                all_labels.append("benign")
-                benign_added += 1
-
-        logger.info(f"Added {benign_added} benign example instances")
-
-        # ===========================================
-        # Add LLM-synthesized benign patterns if available
-        # ===========================================
+            logger.info(f"📝 Adding {len(self.synthesized_jailbreak)} synthesized jailbreak patterns...")
+            for pattern in self.synthesized_jailbreak:
+                jailbreak_pool.append((pattern, "synthesized"))
+        
         if self.synthesized_benign:
-            synth_benign_quota = min(len(self.synthesized_benign), benign_quota)
-            logger.info(
-                f"Adding {synth_benign_quota} LLM-synthesized benign patterns..."
-            )
-            for pattern in self.synthesized_benign[:synth_benign_quota]:
-                all_texts.append(pattern)
-                all_labels.append("benign")
-            logger.info(f"Added {synth_benign_quota} synthesized benign patterns")
-
-        logger.info(f"Total loaded samples: {len(all_texts)}")
+            logger.info(f"📝 Adding {len(self.synthesized_benign)} synthesized benign patterns...")
+            for pattern in self.synthesized_benign:
+                benign_pool.append((pattern, "synthesized"))
 
         # ===========================================
-        # Collect and balance samples
+        # Step 4: Add curated benign examples
         # ===========================================
-        jailbreak_samples = [
-            (t, l) for t, l in zip(all_texts, all_labels) if l == "jailbreak"
-        ]
-        benign_samples = [
-            (t, l) for t, l in zip(all_texts, all_labels) if l == "benign"
-        ]
-
-        logger.info(
-            f"Raw dataset: {len(jailbreak_samples)} jailbreak, {len(benign_samples)} benign"
-        )
+        logger.info(f"📝 Adding {len(self.benign_examples)} curated benign examples...")
+        for example in self.benign_examples:
+            benign_pool.append((example, "curated"))
 
         # ===========================================
-        # Strict 50/50 balancing
+        # Step 5: Deduplicate pools
         # ===========================================
-        target_per_class = (
-            max_samples // 2
-            if max_samples
-            else min(len(jailbreak_samples), len(benign_samples))
-        )
-        target_per_class = min(
-            target_per_class, len(jailbreak_samples), len(benign_samples)
-        )
-
-        # Ensure minimum samples
-        min_required = max(100, max_samples // 4) if max_samples else 100
-        if target_per_class < min_required:
-            logger.warning(
-                f"⚠️ Insufficient samples: {target_per_class} < {min_required} minimum"
-            )
-
-        # Shuffle for diversity
-        random.shuffle(jailbreak_samples)
-        random.shuffle(benign_samples)
-
-        # Take balanced samples
-        balanced_samples = (
-            jailbreak_samples[:target_per_class] + benign_samples[:target_per_class]
-        )
-
-        # Final shuffle
-        random.shuffle(balanced_samples)
-        all_texts = [s[0] for s in balanced_samples]
-        all_labels = [s[1] for s in balanced_samples]
+        logger.info("\n🔄 Deduplicating samples...")
+        
+        def deduplicate_pool(pool):
+            seen = set()
+            unique = []
+            for text, source in pool:
+                # Normalize for dedup (lowercase, strip whitespace)
+                normalized = text.lower().strip()[:200]  # First 200 chars for comparison
+                if normalized not in seen:
+                    seen.add(normalized)
+                    unique.append((text, source))
+            return unique
+        
+        jailbreak_pool = deduplicate_pool(jailbreak_pool)
+        benign_pool = deduplicate_pool(benign_pool)
+        
+        logger.info(f"After dedup: {len(jailbreak_pool)} jailbreak, {len(benign_pool)} benign")
 
         # ===========================================
-        # Validation and coverage check
+        # Step 6: Diversity-aware sampling for jailbreaks
+        # ===========================================
+        logger.info("\n🎯 Performing diversity-aware sampling...")
+        
+        # Attack pattern categories for stratified sampling
+        attack_categories = {
+            "DAN": [r"\bdan\b", r"do anything now", r"dan mode"],
+            "Role-play": [r"pretend you", r"act as", r"roleplay", r"you are now"],
+            "Override": [r"ignore.*instruction", r"disregard", r"override", r"bypass"],
+            "Authority": [r"developer", r"admin", r"i.?m your", r"authorized"],
+            "Educational": [r"educational", r"research", r"academic", r"thesis"],
+            "Hypothetical": [r"hypothetical", r"fictional", r"imagine", r"thought experiment"],
+            "Manipulation": [r"truly helpful", r"good ai", r"promise", r"trust me"],
+            "Obfuscation": [r"base64", r"encode", r"backward", r"cipher"],
+        }
+        
+        # Categorize jailbreaks
+        categorized_jailbreaks = defaultdict(list)
+        uncategorized = []
+        
+        for text, source in jailbreak_pool:
+            text_lower = text.lower()
+            matched = False
+            for category, patterns in attack_categories.items():
+                if any(re.search(p, text_lower) for p in patterns):
+                    categorized_jailbreaks[category].append((text, source))
+                    matched = True
+                    break
+            if not matched:
+                uncategorized.append((text, source))
+        
+        # Log category distribution
+        logger.info("\nJailbreak category distribution:")
+        for cat, items in sorted(categorized_jailbreaks.items(), key=lambda x: -len(x[1])):
+            logger.info(f"  {cat}: {len(items)}")
+        logger.info(f"  Uncategorized: {len(uncategorized)}")
+
+        # ===========================================
+        # Step 7: Balanced sampling with PRIORITY WEIGHTING
+        # Priority: enhanced > synthesized > jailbreak-classification > aegis
+        # ===========================================
+        target_per_class = max_samples // 2 if max_samples else 5000
+        
+        # Separate pools by source priority
+        priority_pools = {
+            "enhanced": [],      # 3x weight - our curated patterns
+            "synthesized": [],   # 2x weight - LLM generated
+            "curated": [],       # 2x weight - manually curated
+            "jailbreak-classification": [],  # 1.5x weight - balanced dataset
+            "other": [],         # 1x weight - AEGIS, toxic-chat, salad-data
+        }
+        
+        for text, source in jailbreak_pool:
+            if source == "enhanced":
+                priority_pools["enhanced"].append((text, source))
+            elif source == "synthesized":
+                priority_pools["synthesized"].append((text, source))
+            elif source == "curated":
+                priority_pools["curated"].append((text, source))
+            elif source == "jailbreak-classification":
+                priority_pools["jailbreak-classification"].append((text, source))
+            else:
+                priority_pools["other"].append((text, source))
+        
+        logger.info("\n📊 Source pool sizes:")
+        for src, pool in priority_pools.items():
+            logger.info(f"  {src}: {len(pool)}")
+        
+        # Weighted sampling: prioritize enhanced patterns
+        selected_jailbreaks = []
+        
+        # Step 7a: Take ALL enhanced patterns (they're critical)
+        enhanced_samples = priority_pools["enhanced"]
+        random.shuffle(enhanced_samples)
+        # Repeat enhanced patterns 3x for higher weight
+        for _ in range(3):
+            selected_jailbreaks.extend(enhanced_samples[:min(len(enhanced_samples), target_per_class // 4)])
+        logger.info(f"  Added {len(enhanced_samples) * 3} enhanced pattern instances (3x weight)")
+        
+        # Step 7b: Add synthesized patterns 2x
+        synth_samples = priority_pools["synthesized"]
+        random.shuffle(synth_samples)
+        for _ in range(2):
+            selected_jailbreaks.extend(synth_samples[:min(len(synth_samples), target_per_class // 4)])
+        logger.info(f"  Added {len(synth_samples) * 2} synthesized pattern instances (2x weight)")
+        
+        # Step 7c: Add curated benign-related patterns
+        curated_samples = priority_pools["curated"]
+        random.shuffle(curated_samples)
+        selected_jailbreaks.extend(curated_samples)
+        logger.info(f"  Added {len(curated_samples)} curated samples")
+        
+        # Step 7d: Add from jailbreak-classification (good quality)
+        jc_samples = priority_pools["jailbreak-classification"]
+        random.shuffle(jc_samples)
+        selected_jailbreaks.extend(jc_samples[:min(len(jc_samples), target_per_class // 3)])
+        logger.info(f"  Added {min(len(jc_samples), target_per_class // 3)} jailbreak-classification samples")
+        
+        # Step 7e: Fill remaining from other sources (AEGIS, etc.) - LIMIT to avoid dilution
+        remaining_quota = target_per_class - len(selected_jailbreaks)
+        if remaining_quota > 0:
+            other_samples = priority_pools["other"]
+            random.shuffle(other_samples)
+            # Limit AEGIS/other to max 30% of target to avoid dilution
+            max_other = min(remaining_quota, int(target_per_class * 0.3))
+            selected_jailbreaks.extend(other_samples[:max_other])
+            logger.info(f"  Added {min(len(other_samples), max_other)} from other sources (capped at 30%)")
+        
+        # Deduplicate and cap
+        seen = set()
+        unique_jailbreaks = []
+        for text, source in selected_jailbreaks:
+            key = text.lower().strip()[:200]
+            if key not in seen:
+                seen.add(key)
+                unique_jailbreaks.append((text, source))
+        
+        selected_jailbreaks = unique_jailbreaks[:target_per_class]
+        logger.info(f"  Final jailbreak samples after dedup: {len(selected_jailbreaks)}")
+        
+        # Sample benign to match jailbreak count (strict balance)
+        random.shuffle(benign_pool)
+        selected_benign = benign_pool[:len(selected_jailbreaks)]
+        
+        # If we need more benign samples, repeat with variations
+        while len(selected_benign) < len(selected_jailbreaks):
+            deficit = len(selected_jailbreaks) - len(selected_benign)
+            logger.warning(f"⚠️ Benign deficit: {deficit}. Repeating benign samples...")
+            random.shuffle(benign_pool)
+            selected_benign.extend(benign_pool[:deficit])
+
+        # ===========================================
+        # Step 8: Combine and final shuffle
+        # ===========================================
+        all_samples = [(t, "jailbreak") for t, _ in selected_jailbreaks] + \
+                      [(t, "benign") for t, _ in selected_benign]
+        random.shuffle(all_samples)
+        
+        all_texts = [s[0] for s in all_samples]
+        all_labels = [s[1] for s in all_samples]
+
+        # ===========================================
+        # Step 9: Validation and coverage report
         # ===========================================
         final_jailbreak = sum(1 for l in all_labels if l == "jailbreak")
         final_benign = sum(1 for l in all_labels if l == "benign")
 
-        logger.info(f"✅ Final balanced dataset: {len(all_texts)} samples")
-        logger.info(
-            f"   Jailbreak: {final_jailbreak} ({final_jailbreak/len(all_texts)*100:.1f}%)"
-        )
-        logger.info(
-            f"   Benign: {final_benign} ({final_benign/len(all_texts)*100:.1f}%)"
-        )
-
-        # Check coverage of critical attack patterns
-        critical_patterns = [
-            "DAN",
-            "pretend you",
-            "ignore all",
-            "developer",
-            "educational",
-        ]
-        for pattern in critical_patterns:
-            count = sum(1 for t in all_texts if pattern.lower() in t.lower())
-            logger.info(f"   Pattern '{pattern}' coverage: {count} samples")
-
-        if abs(final_jailbreak - final_benign) <= 10:
-            logger.info("✅ Dataset is well balanced (within 10 samples)")
+        logger.info("\n" + "=" * 60)
+        logger.info("FINAL DATASET SUMMARY")
+        logger.info("=" * 60)
+        logger.info(f"✅ Total samples: {len(all_texts)}")
+        logger.info(f"   Jailbreak: {final_jailbreak} ({final_jailbreak/len(all_texts)*100:.1f}%)")
+        logger.info(f"   Benign: {final_benign} ({final_benign/len(all_texts)*100:.1f}%)")
+        
+        # Balance check
+        imbalance = abs(final_jailbreak - final_benign)
+        if imbalance <= 10:
+            logger.info(f"✅ BALANCED: Within 10 samples (diff={imbalance})")
+        elif imbalance <= 50:
+            logger.info(f"⚠️ ACCEPTABLE: Within 50 samples (diff={imbalance})")
         else:
-            logger.warning(f"⚠️ Dataset imbalance: {final_jailbreak} vs {final_benign}")
+            logger.warning(f"❌ IMBALANCED: {final_jailbreak} vs {final_benign} (diff={imbalance})")
+
+        # Coverage check
+        logger.info("\nAttack pattern coverage in final dataset:")
+        for category, patterns in attack_categories.items():
+            count = sum(1 for t in all_texts if any(re.search(p, t.lower()) for p in patterns))
+            status = "✅" if count >= 20 else "⚠️" if count >= 10 else "❌"
+            logger.info(f"  {status} {category}: {count}")
 
         return all_texts, all_labels
 
@@ -777,10 +915,62 @@ def create_jailbreak_dataset(max_samples=1000, synthesized_patterns_file=None):
 
 
 class SecurityLoRATrainer(Trainer):
-    """Enhanced Trainer for security detection with LoRA."""
+    """Enhanced Trainer for security detection with LoRA.
+    
+    Features:
+    - Optional class weighting for imbalanced datasets
+    - Automatic class weight computation from training data
+    """
+    
+    def __init__(self, *args, class_weights=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.class_weights = class_weights
+        if class_weights is not None:
+            logger.info(f"Using class weights: {class_weights}")
+    
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
+        """Compute loss with optional class weighting."""
+        labels = inputs.get("labels")
+        outputs = model(**inputs)
+        logits = outputs.get("logits")
+        
+        # If no class weights, use default loss
+        if self.class_weights is None or labels is None:
+            loss = outputs.get("loss")
+            return (loss, outputs) if return_outputs else loss
+        
+        # Compute weighted cross-entropy loss
+        import torch.nn.functional as F
+        weight_tensor = torch.tensor(
+            self.class_weights, dtype=logits.dtype, device=logits.device
+        )
+        loss = F.cross_entropy(logits, labels, weight=weight_tensor)
+        
+        return (loss, outputs) if return_outputs else loss
 
-    # No custom compute_loss needed for sequence classification
-    # The default Trainer.compute_loss handles it correctly
+
+def compute_class_weights(labels, num_classes=2):
+    """Compute class weights inversely proportional to class frequencies.
+    
+    Returns weights such that minority classes get higher weights.
+    Formula: weight[i] = n_samples / (n_classes * n_samples_i)
+    """
+    from collections import Counter
+    
+    label_counts = Counter(labels)
+    total_samples = len(labels)
+    
+    weights = []
+    for i in range(num_classes):
+        count = label_counts.get(i, 1)  # Avoid division by zero
+        weight = total_samples / (num_classes * count)
+        weights.append(weight)
+    
+    # Normalize so max weight is 1.0
+    max_weight = max(weights)
+    weights = [w / max_weight for w in weights]
+    
+    return weights
 
 
 def create_lora_security_model(model_name: str, num_labels: int, lora_config: dict):
@@ -877,6 +1067,7 @@ def main(
     max_samples: int = 5000,  # More samples for better coverage
     output_dir: str = None,
     synthesized_patterns_file: str = None,  # Optional: LLM-synthesized patterns JSON
+    use_class_weights: bool = False,  # Use class weights for imbalance handling
 ):
     """Main training function for LoRA security detection."""
     logger.info("Starting Enhanced LoRA Security Detection Training")
@@ -954,6 +1145,14 @@ def main(
         eval_accumulation_steps=1,
     )
 
+    # Compute class weights if requested
+    class_weights = None
+    if use_class_weights:
+        # Get labels from training dataset
+        train_labels = [sample["labels"] for sample in train_dataset]
+        class_weights = compute_class_weights(train_labels, num_classes=2)
+        logger.info(f"Computed class weights: benign={class_weights[0]:.3f}, jailbreak={class_weights[1]:.3f}")
+    
     # Create trainer
     trainer = SecurityLoRATrainer(
         model=model,
@@ -961,6 +1160,7 @@ def main(
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
         compute_metrics=compute_security_metrics,
+        class_weights=class_weights,
     )
 
     logger.info("Starting training...")
@@ -1640,6 +1840,12 @@ if __name__ == "__main__":
         default=None,
         help="Path to local dataset (saved from prepare mode) to use for training",
     )
+    parser.add_argument(
+        "--use-class-weights",
+        action="store_true",
+        default=False,
+        help="Use class weights to handle any residual data imbalance (default: False, use balanced sampling)",
+    )
 
     args = parser.parse_args()
 
@@ -1655,6 +1861,7 @@ if __name__ == "__main__":
             max_samples=args.max_samples,
             output_dir=args.output_dir,
             synthesized_patterns_file=args.synthesized_patterns,
+            use_class_weights=args.use_class_weights,
         )
     elif args.mode == "test":
         demo_inference(args.model_path)
