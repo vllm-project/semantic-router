@@ -96,12 +96,17 @@ def init(force):
     help=f"Image pull policy: always, ifnotpresent, never (default: {DEFAULT_IMAGE_PULL_POLICY})",
 )
 @click.option(
-    "--readonly-dashboard",
+    "--readonly",
     is_flag=True,
     default=False,
     help="Run dashboard in read-only mode (disable config editing, allow playground only)",
 )
-def serve(config, image, image_pull_policy, readonly_dashboard):
+@click.option(
+    "--platform",
+    default=None,
+    help="Platform branding (e.g., 'amd' for AMD GPU deployments)",
+)
+def serve(config, image, image_pull_policy, readonly, platform):
     """
     Start vLLM Semantic Router.
 
@@ -121,7 +126,10 @@ def serve(config, image, image_pull_policy, readonly_dashboard):
         vllm-sr serve --image-pull-policy always
 
         # Read-only dashboard (for public beta)
-        vllm-sr serve --readonly-dashboard
+        vllm-sr serve --readonly
+
+        # Platform branding (for AMD deployments)
+        vllm-sr serve --platform amd
     """
     try:
         # Check if config file exists
@@ -155,9 +163,14 @@ def serve(config, image, image_pull_policy, readonly_dashboard):
                 log.info(f"Passing environment variable: {var}=***")
 
         # Dashboard read-only mode
-        if readonly_dashboard:
+        if readonly:
             env_vars["DASHBOARD_READONLY"] = "true"
             log.info("Dashboard read-only mode: ENABLED")
+
+        # Platform branding
+        if platform:
+            env_vars["DASHBOARD_PLATFORM"] = platform
+            log.info(f"Platform branding: {platform}")
 
         # Start container
         start_vllm_sr(

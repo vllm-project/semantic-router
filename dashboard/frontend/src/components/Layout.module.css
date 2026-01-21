@@ -231,7 +231,18 @@ button.navLink {
   right: 1.5rem;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
+}
+
+.headerBranding {
+  /* Hide on mobile to save space */
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .headerBranding {
+    display: flex;
+  }
 }
 
 .iconButton {
