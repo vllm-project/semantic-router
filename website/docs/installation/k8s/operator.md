@@ -210,11 +210,13 @@ spec:
 ```
 
 **When to use:**
+
 - Running on Red Hat OpenShift AI (RHOAI) 3.x
 - Using KServe for model serving
 - Want automatic service discovery
 
 **How it works:**
+
 - Discovers the predictor service: `{inferenceServiceName}-predictor`
 - Uses port 8443 (KServe default HTTPS port)
 - Works in the same namespace as SemanticRouter
@@ -238,11 +240,13 @@ spec:
 ```
 
 **When to use:**
+
 - Using Meta's Llama Stack for model serving
 - Multiple Llama Stack services with different models
 - Want label-based service discovery
 
 **How it works:**
+
 - Lists services matching the label selector
 - Uses first matching service if multiple found
 - Extracts port from service definition
@@ -267,12 +271,14 @@ spec:
 ```
 
 **When to use:**
+
 - Direct vLLM deployments
 - Custom model servers with OpenAI-compatible API
 - Cross-namespace service references
 - Maximum control over service endpoints
 
 **How it works:**
+
 - Connects to specified service directly
 - No discovery - uses explicit configuration
 - Supports cross-namespace references
@@ -314,16 +320,19 @@ The operator supports two deployment modes with different architectures.
 Deploys semantic router with an **Envoy sidecar container** that acts as an ingress gateway.
 
 **Architecture:**
+
 ```
 Client → Service (8080) → Envoy Sidecar → ExtProc gRPC → Semantic Router → vLLM
 ```
 
 **When to use:**
+
 - Simple deployments without existing service mesh
 - Testing and development
 - Self-contained deployment with minimal dependencies
 
 **Configuration:**
+
 ```yaml
 spec:
   # No gateway configuration - defaults to standalone mode
@@ -338,6 +347,7 @@ spec:
 ```
 
 **Operator behavior:**
+
 - Deploys pod with two containers: semantic router + Envoy sidecar
 - Envoy handles ingress and forwards to semantic router via ExtProc gRPC
 - Status shows `gatewayMode: "standalone"`
@@ -347,17 +357,20 @@ spec:
 Reuses an **existing Gateway** (Istio, Envoy Gateway, etc.) and creates an HTTPRoute.
 
 **Architecture:**
+
 ```
 Client → Gateway (Istio/Envoy) → HTTPRoute → Service (8080) → Semantic Router API → vLLM
 ```
 
 **When to use:**
+
 - Existing Istio or Envoy Gateway deployment
 - Centralized ingress management
 - Multi-tenancy with shared gateway
 - Advanced traffic management (circuit breaking, retries, rate limiting)
 
 **Configuration:**
+
 ```yaml
 spec:
   gateway:
@@ -374,6 +387,7 @@ spec:
 ```
 
 **Operator behavior:**
+
 1. Creates HTTPRoute resource pointing to the specified Gateway
 2. Skips Envoy sidecar container in pod spec
 3. Sets `status.gatewayMode: "gateway-integration"`
@@ -420,6 +434,7 @@ kubectl get semanticrouter my-router -o jsonpath='{.status.openshiftFeatures}'
 ```
 
 Output:
+
 ```json
 {
   "routesEnabled": true,
@@ -450,6 +465,7 @@ Use this decision tree to select the right configuration:
 ```
 
 **Backend choice:**
+
 ```
 ┌─ Running RHOAI 3.x or KServe?
 │  ├─ YES → Use KServe backend type
@@ -920,6 +936,7 @@ spec:
 **Symptom:** "No backends found" or "Failed to discover backend" in logs
 
 **For KServe backends:**
+
 ```bash
 # Check InferenceService exists and is ready
 kubectl get inferenceservice llama-3-8b
@@ -932,6 +949,7 @@ kubectl describe inferenceservice llama-3-8b
 ```
 
 **For Llama Stack backends:**
+
 ```bash
 # Verify services exist with correct labels
 kubectl get services -l app=llama-stack,model=llama-3.3-70b
@@ -941,6 +959,7 @@ kubectl get service <service-name> -o jsonpath='{.metadata.labels}'
 ```
 
 **For direct service backends:**
+
 ```bash
 # Verify service exists in specified namespace
 kubectl get service vllm-deepseek -n vllm-serving

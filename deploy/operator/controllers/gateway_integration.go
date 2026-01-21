@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -49,7 +48,7 @@ func reconcileGatewayIntegration(ctx context.Context, c client.Client, scheme *r
 
 	if err != nil {
 		logger.Error(err, "Gateway not found", "name", sr.Spec.Gateway.ExistingRef.Name, "namespace", sr.Spec.Gateway.ExistingRef.Namespace)
-		return "", fmt.Errorf("Gateway %s/%s not found: %w", sr.Spec.Gateway.ExistingRef.Namespace, sr.Spec.Gateway.ExistingRef.Name, err)
+		return "", fmt.Errorf("gateway %s/%s not found: %w", sr.Spec.Gateway.ExistingRef.Namespace, sr.Spec.Gateway.ExistingRef.Name, err)
 	}
 
 	logger.Info("Found Gateway, creating HTTPRoute", "gateway", gateway.Name)
@@ -189,21 +188,4 @@ func createHTTPRoute(ctx context.Context, c client.Client, scheme *runtime.Schem
 		logger.Info("Successfully created/updated HTTPRoute", "name", httproute.Name)
 		return nil
 	*/
-}
-
-// deleteHTTPRouteIfExists removes HTTPRoute if it exists
-func deleteHTTPRouteIfExists(ctx context.Context, c client.Client, sr *vllmv1alpha1.SemanticRouter) error {
-	logger := log.FromContext(ctx)
-
-	httproute := &gatewayv1.HTTPRoute{}
-	err := c.Get(ctx, types.NamespacedName{Name: sr.Name, Namespace: sr.Namespace}, httproute)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return nil // Already deleted
-		}
-		return err
-	}
-
-	logger.Info("Deleting HTTPRoute", "name", httproute.Name)
-	return c.Delete(ctx, httproute)
 }

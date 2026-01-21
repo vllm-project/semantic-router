@@ -98,6 +98,7 @@ vllmEndpoints:
 ```
 
 **When to use:**
+
 - Running on Red Hat OpenShift AI (RHOAI) 3.x
 - Using KServe for model serving
 - Want automatic service discovery
@@ -120,6 +121,7 @@ vllmEndpoints:
 ```
 
 **When to use:**
+
 - Using Meta's Llama Stack for model serving
 - Multiple Llama Stack services with different models
 - Want label-based service discovery
@@ -143,6 +145,7 @@ vllmEndpoints:
 ```
 
 **When to use:**
+
 - Direct vLLM deployments
 - Custom model servers with OpenAI-compatible API
 - Cross-namespace service references
@@ -189,16 +192,19 @@ The operator supports two deployment modes:
 Deploys semantic router with an **Envoy sidecar container** that acts as an ingress gateway. Envoy forwards requests to the semantic router via ExtProc gRPC protocol.
 
 **Architecture:**
+
 ```
 Client → Service (port 8080) → Envoy Sidecar → ExtProc (semantic router) → vLLM Backend
 ```
 
 **When to use:**
+
 - Simple deployments without existing service mesh
 - Testing and development
 - Self-contained deployment with minimal dependencies
 
 **Configuration:**
+
 ```yaml
 spec:
   # No gateway configuration - defaults to standalone mode
@@ -217,17 +223,20 @@ spec:
 Reuses an **existing Gateway** (Istio, Envoy Gateway, etc.) and creates an HTTPRoute. The operator skips deploying the Envoy sidecar container.
 
 **Architecture:**
+
 ```
 Client → Gateway → HTTPRoute → Service (port 8080) → Semantic Router API → vLLM Backend
 ```
 
 **When to use:**
+
 - Existing Istio or Envoy Gateway deployment
 - Centralized ingress management
 - Multi-tenancy with shared gateway
 - Advanced traffic management (circuit breaking, retries, rate limiting)
 
 **Configuration:**
+
 ```yaml
 spec:
   gateway:
@@ -244,6 +253,7 @@ spec:
 ```
 
 **Operator behavior in gateway mode:**
+
 1. Creates HTTPRoute resource pointing to the specified Gateway
 2. Skips Envoy sidecar container in pod spec
 3. Sets `status.gatewayMode: "gateway-integration"`
@@ -265,17 +275,20 @@ spec:
 ```
 
 **TLS termination options:**
+
 - **edge**: TLS terminates at Route, plain HTTP to backend (recommended)
 - **passthrough**: TLS passthrough to backend (requires backend TLS)
 - **reencrypt**: TLS terminates at Route, re-encrypts to backend
 
 **When to use:**
+
 - Running on OpenShift 4.x
 - Need external access without configuring Ingress
 - Want auto-generated hostnames
 - Require OpenShift-native TLS management
 
 **Operator behavior:**
+
 1. Creates OpenShift Route resource
 2. Configures TLS based on spec
 3. Sets `status.openshiftFeatures.routesEnabled: true`
