@@ -1,0 +1,286 @@
+/* TopologyPageEnhanced.module.css - Enhanced topology page styles */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 60px);
+  width: 100%;
+  background: var(--bg-primary, #1a1a1a);
+  overflow: hidden;
+}
+
+.header {
+  padding: 1rem 1.5rem;
+  background: var(--bg-secondary, #141414);
+  border-bottom: 1px solid var(--border-color, #333);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary, #e8e8e8);
+  margin: 0;
+}
+
+.subtitle {
+  font-size: 0.85rem;
+  color: var(--text-secondary, #888);
+  margin: 0.25rem 0 0 0;
+}
+
+.refreshButton {
+  padding: 0.5rem 1rem;
+  background: var(--accent-color, #76b900);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.refreshButton:hover {
+  background: var(--accent-hover, #8ed100);
+  transform: translateY(-1px);
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.controlPanel {
+  width: 280px;
+  background: var(--bg-secondary, #141414);
+  border-right: 1px solid var(--border-color, #333);
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.flowContainer {
+  flex: 1;
+  position: relative;
+  background: linear-gradient(
+    135deg, 
+    var(--flow-bg-gradient-start, #0d0d14) 0%, 
+    var(--flow-bg-gradient-mid, #1a1a2e) 50%, 
+    var(--flow-bg-gradient-end, #0d0d14) 100%
+  );
+}
+
+/* ReactFlow Custom Styling */
+.flowContainer :global(.react-flow) {
+  background: transparent;
+}
+
+.flowContainer :global(.react-flow__pane) {
+  cursor: grab;
+}
+
+.flowContainer :global(.react-flow__pane:active) {
+  cursor: grabbing;
+}
+
+.flowContainer :global(.react-flow__node) {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s ease;
+}
+
+.flowContainer :global(.react-flow__node:hover) {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.flowContainer :global(.react-flow__controls) {
+  background: var(--bg-secondary, #141414);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.flowContainer :global(.react-flow__controls-button) {
+  background: var(--bg-secondary, #141414);
+  border-bottom: 1px solid var(--border-color, #333);
+  color: var(--text-primary, #e8e8e8);
+}
+
+.flowContainer :global(.react-flow__controls-button:hover) {
+  background: var(--bg-hover, #222);
+}
+
+.flowContainer :global(.react-flow__controls-button svg) {
+  fill: currentColor;
+}
+
+.flowContainer :global(.react-flow__minimap) {
+  background: var(--bg-secondary, #141414);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Edge styling */
+.flowContainer :global(.react-flow__edge-path) {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.flowContainer :global(.react-flow__edge.animated path) {
+  stroke-dasharray: 5;
+  animation: edgeFlow 0.5s linear infinite;
+}
+
+/* Highlighted edge - flowing golden glow effect */
+.flowContainer :global(.react-flow__edge.animated.highlighted-edge path) {
+  stroke-dasharray: 12, 4;
+  stroke-width: 4px;
+  animation: highlightedEdgeFlow 0.8s linear infinite;
+  filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.9)) drop-shadow(0 0 16px rgba(255, 215, 0, 0.5));
+}
+
+/* Pulsing glow animation for highlighted edges */
+.flowContainer :global(.react-flow__edge.highlighted-edge) {
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+@keyframes edgeFlow {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+
+@keyframes highlightedEdgeFlow {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.8));
+  }
+  50% {
+    filter: drop-shadow(0 0 12px rgba(255, 215, 0, 1)) drop-shadow(0 0 20px rgba(255, 200, 0, 0.6));
+  }
+}
+
+.flowContainer :global(.react-flow__attribution) {
+  background: var(--bg-secondary, #141414);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  color: var(--text-secondary, #888);
+}
+
+/* Loading State */
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-secondary, #888);
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--border-color, #333);
+  border-top-color: var(--accent-color, #76b900);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading p {
+  font-size: 1rem;
+  margin: 0;
+}
+
+/* Error State */
+.error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-secondary, #888);
+  padding: 2rem;
+  text-align: center;
+}
+
+.errorIcon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.error p {
+  font-size: 1rem;
+  margin: 0 0 1.5rem 0;
+  color: var(--text-primary, #e8e8e8);
+}
+
+.retryButton {
+  padding: 0.75rem 1.5rem;
+  background: var(--accent-color, #76b900);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.retryButton:hover {
+  background: var(--accent-hover, #8ed100);
+  transform: translateY(-1px);
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .controlPanel {
+    width: 240px;
+  }
+}
+
+@media (max-width: 768px) {
+  .content {
+    flex-direction: column;
+  }
+
+  .controlPanel {
+    width: 100%;
+    max-height: 200px;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color, #333);
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .title {
+    font-size: 1.25rem;
+  }
+}
