@@ -13,15 +13,15 @@ export const SIGNAL_ICONS: Record<SignalType, string> = {
   language: '🌐',
 }
 
-// ============== Signal Colors ==============
+// ============== Signal Colors (Gray Nodes, Green Paths) ==============
 export const SIGNAL_COLORS: Record<SignalType, { background: string; border: string }> = {
-  keyword: { background: '#4CAF50', border: '#388E3C' },
-  embedding: { background: '#2196F3', border: '#1976D2' },
-  domain: { background: '#9C27B0', border: '#7B1FA2' },
-  fact_check: { background: '#FF9800', border: '#F57C00' },
-  user_feedback: { background: '#E91E63', border: '#C2185B' },
-  preference: { background: '#00BCD4', border: '#0097A7' },
-  language: { background: '#795548', border: '#5D4037' },
+  keyword: { background: '#4a5568', border: '#2d3748' },      // Dark Gray
+  embedding: { background: '#4a5568', border: '#2d3748' },    // Dark Gray
+  domain: { background: '#4a5568', border: '#2d3748' },       // Dark Gray
+  fact_check: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
+  user_feedback: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+  preference: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
+  language: { background: '#4a5568', border: '#2d3748' },     // Dark Gray
 }
 
 // ============== Signal Latency ==============
@@ -46,15 +46,15 @@ export const PLUGIN_ICONS: Record<PluginType, string> = {
   'router_replay': '🔄',
 }
 
-// ============== Plugin Colors ==============
+// ============== Plugin Colors (NVIDIA Dark Theme) ==============
 export const PLUGIN_COLORS: Record<PluginType, { background: string; border: string }> = {
-  'semantic-cache': { background: '#00BCD4', border: '#0097A7' },
-  'jailbreak': { background: '#FF9800', border: '#F57C00' },
-  'pii': { background: '#9C27B0', border: '#7B1FA2' },
-  'system_prompt': { background: '#4CAF50', border: '#388E3C' },
-  'header_mutation': { background: '#795548', border: '#5D4037' },
-  'hallucination': { background: '#F44336', border: '#D32F2F' },
-  'router_replay': { background: '#607D8B', border: '#455A64' },
+  'semantic-cache': { background: '#76b900', border: '#5a8f00' },  // NVIDIA Green
+  'jailbreak': { background: '#718096', border: '#4a5568' },       // Medium Gray
+  'pii': { background: '#5a6c7d', border: '#3d4a59' },             // Blue Gray
+  'system_prompt': { background: '#8fd400', border: '#76b900' },   // Light Green
+  'header_mutation': { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
+  'hallucination': { background: '#556b7d', border: '#3d4a59' },   // Cool Gray
+  'router_replay': { background: '#4a5568', border: '#2d3748' },   // Dark Gray
 }
 
 // ============== Algorithm Icons ==============
@@ -70,56 +70,56 @@ export const ALGORITHM_ICONS: Record<AlgorithmType, string> = {
   hybrid: '🔄',
 }
 
-// ============== Algorithm Colors ==============
+// ============== Algorithm Colors (NVIDIA Dark Theme) ==============
 export const ALGORITHM_COLORS: Record<AlgorithmType, { background: string; border: string }> = {
-  confidence: { background: '#FF5722', border: '#E64A19' },
-  concurrent: { background: '#673AB7', border: '#512DA8' },
-  sequential: { background: '#3F51B5', border: '#303F9F' },
-  ratings: { background: '#009688', border: '#00796B' },
-  static: { background: '#607D8B', border: '#455A64' },
-  elo: { background: '#FFC107', border: '#FFA000' },
-  router_dc: { background: '#E91E63', border: '#C2185B' },
-  automix: { background: '#00BCD4', border: '#0097A7' },
-  hybrid: { background: '#9C27B0', border: '#7B1FA2' },
+  confidence: { background: '#76b900', border: '#5a8f00' },    // NVIDIA Green
+  concurrent: { background: '#5a6c7d', border: '#3d4a59' },    // Blue Gray
+  sequential: { background: '#4a5568', border: '#2d3748' },    // Dark Gray
+  ratings: { background: '#8fd400', border: '#76b900' },       // Light Green
+  static: { background: '#606c7a', border: '#3d4a59' },        // Slate Gray
+  elo: { background: '#718096', border: '#4a5568' },           // Medium Gray
+  router_dc: { background: '#556b7d', border: '#3d4a59' },     // Cool Gray
+  automix: { background: '#5d6d7e', border: '#3d4a59' },       // Steel Gray
+  hybrid: { background: '#4a5568', border: '#2d3748' },        // Dark Gray
 }
 
-// ============== Reasoning Effort Display ==============
+// ============== Reasoning Effort Display (NVIDIA Dark Theme) ==============
 export const REASONING_EFFORT_DISPLAY: Record<string, { icon: string; label: string; color: string }> = {
-  'low': { icon: '🔋', label: 'Low', color: '#4CAF50' },
-  'medium': { icon: '⚡', label: 'Medium', color: '#FF9800' },
-  'high': { icon: '🔥', label: 'High', color: '#F44336' },
+  'low': { icon: '🔋', label: 'Low', color: '#8fd400' },       // Light Green
+  'medium': { icon: '⚡', label: 'Medium', color: '#76b900' },  // NVIDIA Green
+  'high': { icon: '🔥', label: 'High', color: '#5a8f00' },      // Dark Green
 }
 
-// ============== Global Plugin Display ==============
+// ============== Global Plugin Display (NVIDIA Dark Theme) ==============
 export const GLOBAL_PLUGIN_DISPLAY: Record<string, { icon: string; label: string; color: string }> = {
-  'prompt_guard': { icon: '🛡️', label: 'Jailbreak Guard', color: '#FF9800' },
-  'pii_detection': { icon: '🔒', label: 'PII Detection', color: '#9C27B0' },
-  'semantic_cache': { icon: '⚡', label: 'Semantic Cache', color: '#00BCD4' },
+  'prompt_guard': { icon: '🛡️', label: 'Jailbreak Guard', color: '#718096' },   // Medium Gray
+  'pii_detection': { icon: '🔒', label: 'PII Detection', color: '#5a6c7d' },     // Blue Gray
+  'semantic_cache': { icon: '⚡', label: 'Semantic Cache', color: '#76b900' },   // NVIDIA Green
 }
 
-// ============== Node Colors ==============
+// ============== Node Colors (Gray Nodes, Green Paths) ==============
 export const NODE_COLORS = {
-  client: { background: '#4CAF50', border: '#45a049' },
+  client: { background: '#76b900', border: '#5a8f00' },        // NVIDIA Green (Client stays green)
   decision: {
-    normal: { background: '#3F51B5', border: '#303F9F' },
-    reasoning: { background: '#E91E63', border: '#C2185B' },
-    unreachable: { background: '#795548', border: '#5D4037' },  // Brown/muted for unreachable
+    normal: { background: '#4a5568', border: '#2d3748' },      // Dark Gray
+    reasoning: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
+    unreachable: { background: '#3d4a59', border: '#2d3748' }, // Very Dark Gray
   },
   model: {
-    standard: { background: '#607D8B', border: '#455A64' },
-    reasoning: { background: '#E91E63', border: '#C2185B' },
+    standard: { background: '#5a6c7d', border: '#3d4a59' },    // Blue Gray (Models gray)
+    reasoning: { background: '#5a6c7d', border: '#3d4a59' },   // Blue Gray (Models gray)
   },
-  classification: { background: '#673AB7', border: '#512DA8' },
-  disabled: { background: '#757575', border: '#616161' },
+  classification: { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
+  disabled: { background: '#3d4a59', border: '#2d3748' },      // Very Dark Gray
 }
 
-// ============== Edge Colors ==============
+// ============== Edge Colors (Green Paths) ==============
 export const EDGE_COLORS = {
-  normal: '#999999',
-  reasoning: '#E91E63',
-  active: '#4CAF50',
-  disabled: '#CCCCCC',
-  highlighted: '#76b900',
+  normal: '#76b900',      // NVIDIA Green (All paths green)
+  reasoning: '#76b900',   // NVIDIA Green (All paths green)
+  active: '#76b900',      // NVIDIA Green
+  disabled: '#3d4a59',    // Very Dark Gray
+  highlighted: '#8fd400', // Light Green (Highlighted paths brighter)
 }
 
 // ============== Layout Configuration ==============

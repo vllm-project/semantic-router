@@ -84,40 +84,6 @@
   --transition-slow: 350ms ease;
 }
 
-[data-theme='light'] {
-  --color-bg: #f8f9fa;
-  --color-bg-header: #ffffff;
-  --color-bg-secondary: #ffffff;
-  --color-bg-tertiary: #e9ecef;
-  --color-bg-elevated: #ffffff;
-  --color-text: #1a1a1a;
-  --color-text-secondary: #666666;
-  --color-text-muted: #999999;
-  --color-border: #dee2e6;
-  --color-border-hover: #ced4da;
-  --color-shadow: rgba(0, 0, 0, 0.1);
-
-  --glow-primary: 0 0 20px rgba(118, 185, 0, 0.2);
-  --glow-cyan: 0 0 20px rgba(0, 212, 255, 0.2);
-  --glow-purple: 0 0 20px rgba(147, 51, 234, 0.2);
-
-  /* Topology-specific light theme variables */
-  --bg-primary: #f5f5f7;
-  --bg-secondary: #ffffff;
-  --bg-hover: #e8e8ea;
-  --text-primary: #1a1a1a;
-  --text-secondary: #666666;
-  --border-color: #d1d5db;
-  --accent-color: #76b900;
-  --accent-hover: #5a8f00;
-
-  /* Flow background for light mode */
-  --flow-bg-gradient-start: #e8e8ec;
-  --flow-bg-gradient-mid: #f5f5f7;
-  --flow-bg-gradient-end: #e8e8ec;
-  --flow-dot-color: rgba(0, 0, 0, 0.08);
-}
-
 * {
   box-sizing: border-box;
   margin: 0;

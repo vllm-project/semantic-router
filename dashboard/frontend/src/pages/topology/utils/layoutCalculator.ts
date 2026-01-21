@@ -13,7 +13,6 @@ import {
 import {
   LAYOUT_CONFIG,
   SIGNAL_TYPES,
-  SIGNAL_COLORS,
   SIGNAL_LATENCY,
   EDGE_COLORS,
 } from '../constants'
@@ -30,6 +29,15 @@ interface ModelConnection {
   sourceId: string
   hasReasoning: boolean
   reasoningEffort?: string
+}
+
+// Helper function to create edge with vertical connection points (top-to-bottom layout)
+function createVerticalEdge(baseEdge: Partial<Edge>): Edge {
+  return {
+    ...baseEdge,
+    sourceHandle: 'bottom',  // Connect from bottom of source node
+    targetHandle: 'top',     // Connect to top of target node
+  } as Edge
 }
 
 // Calculate decision node height based on content
@@ -184,19 +192,19 @@ export function calculateFullLayout(
       },
     })
 
-    edges.push({
+    edges.push(createVerticalEdge({
       id: `e-${lastSourceId}-${signalGroupId}`,
       source: lastSourceId,
       target: signalGroupId,
       style: {
-        stroke: SIGNAL_COLORS[signalType].background,
+        stroke: EDGE_COLORS.normal,
         strokeWidth: 1.5,
       },
       markerEnd: {
         type: MarkerType.ArrowClosed,
-        color: SIGNAL_COLORS[signalType].background,
+        color: EDGE_COLORS.normal,
       },
-    })
+    }))
   })
 
   // ============== 3.5. Dynamic Signal Groups from Test Result ==============
@@ -250,22 +258,21 @@ export function calculateFullLayout(
       })
       
       // Connect from client to dynamic signal group
-      const signalColor = SIGNAL_COLORS[signalType]?.background || '#FF9800'
-      edges.push({
+      edges.push(createVerticalEdge({
         id: `e-${lastSourceId}-${signalGroupId}`,
         source: lastSourceId,
         target: signalGroupId,
         animated: true,
         style: {
-          stroke: signalColor,
+          stroke: EDGE_COLORS.normal,
           strokeWidth: 2,
           strokeDasharray: '5, 5', // Dashed to indicate dynamic
         },
         markerEnd: {
           type: MarkerType.ArrowClosed,
-          color: signalColor,
+          color: EDGE_COLORS.normal,
         },
-      })
+      }))
       
       // Add to active signal types for decision routing
       activeSignalTypes.push(signalType)
@@ -286,7 +293,6 @@ export function calculateFullLayout(
 
   topology.decisions.forEach(decision => {
     const decisionId = `decision-${decision.name}`
-    const hasReasoning = decision.modelRefs.some(m => m.use_reasoning)
     const isRulesCollapsed = collapseState.decisions[decision.name]
     const nodeHeight = getDecisionNodeHeight(decision, isRulesCollapsed)
 
@@ -328,34 +334,34 @@ export function calculateFullLayout(
       const signalGroupId = `signal-group-${signalType}`
       if (nodes.find(n => n.id === signalGroupId)) {
         hasConnection = true
-        edges.push({
+        edges.push(createVerticalEdge({
           id: `e-${signalGroupId}-${decisionId}`,
           source: signalGroupId,
           target: decisionId,
           style: {
-            stroke: hasReasoning ? EDGE_COLORS.reasoning : SIGNAL_COLORS[signalType].background,
+            stroke: EDGE_COLORS.normal,
             strokeWidth: 1.5,
           },
           markerEnd: {
             type: MarkerType.ArrowClosed,
-            color: hasReasoning ? EDGE_COLORS.reasoning : SIGNAL_COLORS[signalType].background,
+            color: EDGE_COLORS.normal,
           },
           label: decision.priority ? `P${decision.priority}` : '',
           labelStyle: { fontSize: 9, fill: '#888' },
           labelBgStyle: { fill: '#1a1a2e', fillOpacity: 0.8 },
-        })
+        }))
       }
     })
 
     // If no valid signal connections found, connect from default upstream
     if (!hasConnection) {
-      edges.push({
+      edges.push(createVerticalEdge({
         id: `e-${defaultUpstream}-${decisionId}`,
         source: defaultUpstream,
         target: decisionId,
         style: { stroke: EDGE_COLORS.normal, strokeWidth: 1.5 },
         markerEnd: { type: MarkerType.ArrowClosed, color: EDGE_COLORS.normal },
-      })
+      }))
     }
 
     let currentSourceId = decisionId
@@ -376,13 +382,13 @@ export function calculateFullLayout(
         },
       })
 
-      edges.push({
+      edges.push(createVerticalEdge({
         id: `e-${currentSourceId}-${algorithmId}`,
         source: currentSourceId,
         target: algorithmId,
         style: { stroke: EDGE_COLORS.normal, strokeWidth: 2 },
         markerEnd: { type: MarkerType.ArrowClosed, color: EDGE_COLORS.normal },
-      })
+      }))
 
       currentSourceId = algorithmId
     }
@@ -411,13 +417,13 @@ export function calculateFullLayout(
         },
       })
 
-      edges.push({
+      edges.push(createVerticalEdge({
         id: `e-${currentSourceId}-${pluginChainId}`,
         source: currentSourceId,
         target: pluginChainId,
         style: { stroke: EDGE_COLORS.normal, strokeWidth: 2 },
         markerEnd: { type: MarkerType.ArrowClosed, color: EDGE_COLORS.normal },
-      })
+      }))
 
       currentSourceId = pluginChainId
     }
@@ -444,12 +450,12 @@ export function calculateFullLayout(
     })
 
     // Connect default route from client (bypasses signal matching)
-    edges.push({
+    edges.push(createVerticalEdge({
       id: `e-${clientId}-${defaultRouteId}`,
       source: clientId,
       target: defaultRouteId,
-      style: { 
-        stroke: EDGE_COLORS.normal, 
+      style: {
+        stroke: EDGE_COLORS.normal,
         strokeWidth: 1.5,
         strokeDasharray: '8, 4',  // Dashed to indicate fallback path
       },
@@ -457,7 +463,7 @@ export function calculateFullLayout(
       label: 'fallback',
       labelStyle: { fontSize: 9, fill: '#888' },
       labelBgStyle: { fill: '#1a1a2e', fillOpacity: 0.8 },
-    })
+    }))
   }
 
   // ============== 6. Fallback Decision Node (Dynamic) ==============
@@ -492,7 +498,7 @@ export function calculateFullLayout(
       const signalGroupId = `signal-group-${signalType}`
       if (nodes.find(n => n.id === signalGroupId)) {
         hasSignalConnection = true
-        edges.push({
+        edges.push(createVerticalEdge({
           id: `e-${signalGroupId}-${fallbackDecisionId}`,
           source: signalGroupId,
           target: fallbackDecisionId,
@@ -509,13 +515,13 @@ export function calculateFullLayout(
           label: 'fallback',
           labelStyle: { fontSize: 9, fill: '#fff' },
           labelBgStyle: { fill: '#FF9800', fillOpacity: 0.8 },
-        })
+        }))
       }
     })
     
     // If no signal connections, connect from client directly
     if (!hasSignalConnection) {
-      edges.push({
+      edges.push(createVerticalEdge({
         id: `e-${clientId}-${fallbackDecisionId}`,
         source: clientId,
         target: fallbackDecisionId,
@@ -529,7 +535,7 @@ export function calculateFullLayout(
           type: MarkerType.ArrowClosed,
           color: EDGE_COLORS.highlighted,
         },
-      })
+      }))
     }
     
     fallbackDecisionSourceId = fallbackDecisionId
@@ -611,35 +617,35 @@ export function calculateFullLayout(
       const configModelId = `model-${configKey.replace(/[^a-zA-Z0-9]/g, '-')}`
       const edgeHighlighted = isHighlighted(conn.sourceId) && isHighlighted(configModelId)
       
-      edges.push({
+      edges.push(createVerticalEdge({
         id: edgeId,
         source: conn.sourceId,
         target: modelId,
         animated: conn.hasReasoning || edgeHighlighted,
         style: {
-          stroke: edgeHighlighted 
-            ? EDGE_COLORS.highlighted 
+          stroke: edgeHighlighted
+            ? EDGE_COLORS.highlighted
             : (conn.hasReasoning ? EDGE_COLORS.reasoning : EDGE_COLORS.normal),
           strokeWidth: edgeHighlighted ? 3 : (conn.hasReasoning ? 2.5 : 1.5),
           strokeDasharray: conn.hasReasoning ? '0' : '5, 5',
         },
         markerEnd: {
           type: MarkerType.ArrowClosed,
-          color: edgeHighlighted 
-            ? EDGE_COLORS.highlighted 
+          color: edgeHighlighted
+            ? EDGE_COLORS.highlighted
             : (conn.hasReasoning ? EDGE_COLORS.reasoning : EDGE_COLORS.normal),
           width: 18,
           height: 18,
         },
         // Show reasoning mode on edge label
-        label: conn.hasReasoning 
-          ? `🧠${conn.reasoningEffort ? ` ${conn.reasoningEffort}` : ''}` 
+        label: conn.hasReasoning
+          ? `🧠${conn.reasoningEffort ? ` ${conn.reasoningEffort}` : ''}`
           : '',
         labelStyle: { fontSize: 9, fill: '#fff' },
         labelBgStyle: { fill: conn.hasReasoning ? '#9333ea' : 'transparent', fillOpacity: 0.8 },
         labelBgPadding: [4, 2] as [number, number],
         labelBgBorderRadius: 4,
-      })
+      }))
     })
   })
 
@@ -657,7 +663,7 @@ export function calculateFullLayout(
       // Default model already exists, just connect to it
       const edgeHighlighted = isHighlighted(defaultRouteId) && isHighlighted(defaultModelId)
       
-      edges.push({
+      edges.push(createVerticalEdge({
         id: `e-${defaultRouteId}-${defaultModelId}`,
         source: defaultRouteId,
         target: defaultModelId,
@@ -671,7 +677,7 @@ export function calculateFullLayout(
           type: MarkerType.ArrowClosed,
           color: edgeHighlighted ? EDGE_COLORS.highlighted : EDGE_COLORS.normal,
         },
-      })
+      }))
     } else {
       // Create a new model node for the default model
       nodeDimensions.set(defaultModelId, { width: 180, height: 80 })
@@ -694,7 +700,7 @@ export function calculateFullLayout(
       
       const edgeHighlighted = isHighlighted(defaultRouteId) && modelHighlighted
       
-      edges.push({
+      edges.push(createVerticalEdge({
         id: `e-${defaultRouteId}-${defaultModelId}`,
         source: defaultRouteId,
         target: defaultModelId,
@@ -708,7 +714,7 @@ export function calculateFullLayout(
           type: MarkerType.ArrowClosed,
           color: edgeHighlighted ? EDGE_COLORS.highlighted : EDGE_COLORS.normal,
         },
-      })
+      }))
     }
   }
 
@@ -724,7 +730,7 @@ export function calculateFullLayout(
     
     if (existingModelNode) {
       // Connect fallback decision to existing model
-      edges.push({
+      edges.push(createVerticalEdge({
         id: `e-${fallbackDecisionSourceId}-${matchedModelId}`,
         source: fallbackDecisionSourceId,
         target: matchedModelId,
@@ -737,15 +743,15 @@ export function calculateFullLayout(
           type: MarkerType.ArrowClosed,
           color: EDGE_COLORS.highlighted,
         },
-      })
+      }))
     } else if (topology.defaultModel) {
       // Fallback to default model connection
       const defaultModelKey = topology.defaultModel.replace(/[^a-zA-Z0-9]/g, '-')
       const defaultModelId = `model-${defaultModelKey}`
       const defaultModelNode = nodes.find(n => n.id === defaultModelId)
-      
+
       if (defaultModelNode) {
-        edges.push({
+        edges.push(createVerticalEdge({
           id: `e-${fallbackDecisionSourceId}-${defaultModelId}`,
           source: fallbackDecisionSourceId,
           target: defaultModelId,
@@ -758,7 +764,7 @@ export function calculateFullLayout(
             type: MarkerType.ArrowClosed,
             color: EDGE_COLORS.highlighted,
           },
-        })
+        }))
       }
     }
   }
@@ -767,11 +773,11 @@ export function calculateFullLayout(
   const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}))
 
   g.setGraph({
-    rankdir: 'LR',           // Left to Right
-    nodesep: 60,             // Vertical spacing between nodes (increased)
-    ranksep: 120,            // Horizontal spacing between ranks/columns (increased)
-    marginx: 60,
-    marginy: 60,
+    rankdir: 'TB',           // Top to Bottom (changed from LR)
+    nodesep: 80,             // Horizontal spacing between nodes in same rank
+    ranksep: 100,            // Vertical spacing between ranks/rows
+    marginx: 80,
+    marginy: 80,
     ranker: 'network-simplex', // Best for DAGs
     align: 'UL',             // Align nodes to upper-left for better distribution
   })
@@ -790,16 +796,78 @@ export function calculateFullLayout(
   // Run layout algorithm
   Dagre.layout(g)
 
-  // Apply calculated positions to nodes
-  nodes.forEach(node => {
-    const nodeWithPosition = g.node(node.id)
-    const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
+  // ============== Neural Network Layer Structure ==============
+  // Define fixed Y positions for each layer to create clear neural network structure
+  const LAYER_Y_POSITIONS = {
+    client: 0,           // Layer 1: User Query
+    signals: 200,        // Layer 2: Signals
+    decisions: 500,      // Layer 3: Decisions
+    pluginChains: 800,   // Layer 4: Plugin Chains
+    models: 1100,        // Layer 5: Models
+  }
 
-    // Dagre returns center position, convert to top-left for React Flow
-    node.position = {
-      x: nodeWithPosition.x - dim.width / 2,
-      y: nodeWithPosition.y - dim.height / 2,
+  // Group nodes by layer
+  const nodesByLayer: Record<string, Node[]> = {
+    client: [],
+    signals: [],
+    decisions: [],
+    pluginChains: [],
+    models: [],
+  }
+
+  nodes.forEach(node => {
+    if (node.id === 'client') {
+      nodesByLayer.client.push(node)
+    } else if (node.id.startsWith('signal-group-')) {
+      nodesByLayer.signals.push(node)
+    } else if (node.id.startsWith('decision-') || node.id === 'default-route' || node.id === 'fallback-decision') {
+      nodesByLayer.decisions.push(node)
+    } else if (node.id.startsWith('plugin-chain-')) {
+      nodesByLayer.pluginChains.push(node)
+    } else if (node.id.startsWith('model-')) {
+      nodesByLayer.models.push(node)
     }
+  })
+
+  // Apply positions with layer-based Y and centered X
+  Object.entries(nodesByLayer).forEach(([layerName, layerNodes]) => {
+    if (layerNodes.length === 0) return
+
+    const layerY = LAYER_Y_POSITIONS[layerName as keyof typeof LAYER_Y_POSITIONS]
+
+    // Calculate total width of all nodes in this layer
+    const totalWidth = layerNodes.reduce((sum, node) => {
+      const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
+      return sum + dim.width
+    }, 0)
+
+    // Different spacing for different layers
+    let spacing = 80  // Default spacing
+    if (layerName === 'pluginChains') {
+      spacing = 150  // More spacing for plugin chains
+    } else if (layerName === 'models') {
+      spacing = 120  // More spacing for models
+    } else if (layerName === 'decisions') {
+      spacing = 100  // Slightly more spacing for decisions
+    }
+
+    const totalSpacing = (layerNodes.length - 1) * spacing
+    const layerTotalWidth = totalWidth + totalSpacing
+
+    // Start X position to center the layer
+    let currentX = -layerTotalWidth / 2
+
+    // Position each node in the layer
+    layerNodes.forEach(node => {
+      const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
+
+      node.position = {
+        x: currentX,
+        y: layerY,
+      }
+
+      currentX += dim.width + spacing
+    })
   })
 
   // ============== 9. Apply Highlighting ==============

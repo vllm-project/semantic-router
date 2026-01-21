@@ -1,15 +1,15 @@
 .container {
   margin-bottom: 1rem;
   border-radius: 8px;
-  border: 1px solid rgba(118, 185, 0, 0.3);
-  background: linear-gradient(to bottom, rgba(248, 250, 252, 0.5), rgba(241, 245, 249, 0.3));
+  border: 1px solid rgba(118, 185, 0, 0.4);
+  background: linear-gradient(to bottom, rgba(30, 30, 35, 0.5), rgba(25, 25, 30, 0.3));
   overflow: hidden;
   transition: all 0.2s ease;
 }
 
 .container:hover {
-  border-color: rgba(118, 185, 0, 0.5);
-  box-shadow: 0 1px 3px rgba(118, 185, 0, 0.15);
+  border-color: rgba(118, 185, 0, 0.6);
+  box-shadow: 0 1px 3px rgba(118, 185, 0, 0.2), 0 0 12px rgba(118, 185, 0, 0.15);
 }
 
 .header {
@@ -26,7 +26,7 @@
 }
 
 .header:hover {
-  background-color: rgba(0, 0, 0, 0.02);
+  background-color: rgba(255, 255, 255, 0.03);
 }
 
 .headerLeft {
@@ -46,7 +46,7 @@
 
 .icon {
   flex-shrink: 0;
-  color: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.5);
   transition: transform 0.2s ease;
 }
 
@@ -60,13 +60,13 @@
 
 .thinkingIcon {
   flex-shrink: 0;
-  color: rgba(0, 0, 0, 0.5);
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .title {
   font-size: 13px;
   font-weight: 500;
-  color: rgba(0, 0, 0, 0.65);
+  color: rgba(255, 255, 255, 0.75);
   letter-spacing: -0.01em;
 }
 
@@ -86,7 +86,7 @@
 .time {
   font-size: 12px;
   font-weight: 400;
-  color: rgba(0, 0, 0, 0.45);
+  color: rgba(255, 255, 255, 0.5);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   min-width: 40px;
@@ -95,7 +95,7 @@
 
 .expandIcon {
   flex-shrink: 0;
-  color: rgba(0, 0, 0, 0.3);
+  color: rgba(255, 255, 255, 0.4);
   opacity: 0;
   transition: opacity 0.15s ease;
 }
@@ -106,7 +106,7 @@
 
 .progressBar {
   height: 2px;
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: rgba(255, 255, 255, 0.05);
   overflow: hidden;
   position: relative;
 }
@@ -116,7 +116,7 @@
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(59, 130, 246, 0.5) 50%,
+    rgba(96, 165, 250, 0.5) 50%,
     transparent 100%
   );
   animation: shimmer 2s infinite;
@@ -134,8 +134,8 @@
 
 .content {
   padding: 14px;
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
-  background-color: rgba(248, 250, 252, 0.6);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  background-color: rgba(20, 20, 25, 0.4);
   animation: expandContent 0.2s ease;
 }
 
@@ -150,9 +150,9 @@
   }
 }
 
-/* Override markdown styles for lighter appearance */
+/* Override markdown styles for dark mode */
 .content :global(.markdown) {
-  color: rgba(0, 0, 0, 0.55) !important;
+  color: rgba(255, 255, 255, 0.5) !important;
   font-size: 13px;
 }
 
@@ -162,183 +162,21 @@
 .content :global(.markdown) h4,
 .content :global(.markdown) h5,
 .content :global(.markdown) h6 {
-  color: rgba(0, 0, 0, 0.65) !important;
+  color: rgba(255, 255, 255, 0.65) !important;
 }
 
 .content :global(.markdown) p,
 .content :global(.markdown) li,
 .content :global(.markdown) span,
 .content :global(.markdown) div {
-  color: rgba(0, 0, 0, 0.55) !important;
+  color: rgba(255, 255, 255, 0.5) !important;
 }
 
 .content :global(.markdown) strong {
-  color: rgba(0, 0, 0, 0.65) !important;
+  color: rgba(255, 255, 255, 0.65) !important;
 }
 
 .content :global(.markdown) code {
-  background-color: rgba(0, 0, 0, 0.04) !important;
-  color: rgba(0, 0, 0, 0.6) !important;
-}
-
-/* Dark mode support - using data-theme attribute and media query */
-[data-theme='dark'] .container {
-  border-color: rgba(118, 185, 0, 0.4);
-  background: linear-gradient(to bottom, rgba(30, 30, 35, 0.5), rgba(25, 25, 30, 0.3));
-}
-
-[data-theme='dark'] .container:hover {
-  border-color: rgba(118, 185, 0, 0.6);
-  box-shadow: 0 1px 3px rgba(118, 185, 0, 0.2), 0 0 12px rgba(118, 185, 0, 0.15);
-}
-
-[data-theme='dark'] .header:hover {
-  background-color: rgba(255, 255, 255, 0.03);
-}
-
-[data-theme='dark'] .icon,
-[data-theme='dark'] .thinkingIcon {
-  color: rgba(255, 255, 255, 0.5);
-}
-
-[data-theme='dark'] .title {
-  color: rgba(255, 255, 255, 0.75);
-}
-
-[data-theme='dark'] .time {
-  color: rgba(255, 255, 255, 0.5);
-}
-
-[data-theme='dark'] .expandIcon {
-  color: rgba(255, 255, 255, 0.4);
-}
-
-[data-theme='dark'] .progressBar {
-  background-color: rgba(255, 255, 255, 0.05);
-}
-
-[data-theme='dark'] .progressFill {
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(96, 165, 250, 0.5) 50%,
-    transparent 100%
-  );
-}
-
-[data-theme='dark'] .content {
-  border-top-color: rgba(255, 255, 255, 0.05);
-  background-color: rgba(20, 20, 25, 0.4);
-}
-
-/* Override markdown styles for dark mode */
-[data-theme='dark'] .content :global(.markdown) {
-  color: rgba(255, 255, 255, 0.5) !important;
-}
-
-[data-theme='dark'] .content :global(.markdown) h1,
-[data-theme='dark'] .content :global(.markdown) h2,
-[data-theme='dark'] .content :global(.markdown) h3,
-[data-theme='dark'] .content :global(.markdown) h4,
-[data-theme='dark'] .content :global(.markdown) h5,
-[data-theme='dark'] .content :global(.markdown) h6 {
-  color: rgba(255, 255, 255, 0.65) !important;
-}
-
-[data-theme='dark'] .content :global(.markdown) p,
-[data-theme='dark'] .content :global(.markdown) li,
-[data-theme='dark'] .content :global(.markdown) span,
-[data-theme='dark'] .content :global(.markdown) div {
-  color: rgba(255, 255, 255, 0.5) !important;
-}
-
-[data-theme='dark'] .content :global(.markdown) strong {
-  color: rgba(255, 255, 255, 0.65) !important;
-}
-
-[data-theme='dark'] .content :global(.markdown) code {
   background-color: rgba(255, 255, 255, 0.05) !important;
   color: rgba(255, 255, 255, 0.6) !important;
 }
-
-/* Also support prefers-color-scheme for systems without data-theme */
-@media (prefers-color-scheme: dark) {
-  .container {
-    border-color: rgba(118, 185, 0, 0.4);
-    background: linear-gradient(to bottom, rgba(30, 30, 35, 0.5), rgba(25, 25, 30, 0.3));
-  }
-
-  .container:hover {
-    border-color: rgba(118, 185, 0, 0.6);
-    box-shadow: 0 1px 3px rgba(118, 185, 0, 0.2), 0 0 12px rgba(118, 185, 0, 0.15);
-  }
-
-  .header:hover {
-    background-color: rgba(255, 255, 255, 0.03);
-  }
-
-  .icon,
-  .thinkingIcon {
-    color: rgba(255, 255, 255, 0.5);
-  }
-
-  .title {
-    color: rgba(255, 255, 255, 0.75);
-  }
-
-  .time {
-    color: rgba(255, 255, 255, 0.5);
-  }
-
-  .expandIcon {
-    color: rgba(255, 255, 255, 0.4);
-  }
-
-  .progressBar {
-    background-color: rgba(255, 255, 255, 0.05);
-  }
-
-  .progressFill {
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(96, 165, 250, 0.5) 50%,
-      transparent 100%
-    );
-  }
-
-  .content {
-    border-top-color: rgba(255, 255, 255, 0.05);
-    background-color: rgba(20, 20, 25, 0.4);
-  }
-
-  .content :global(.markdown) {
-    color: rgba(255, 255, 255, 0.5) !important;
-  }
-
-  .content :global(.markdown) h1,
-  .content :global(.markdown) h2,
-  .content :global(.markdown) h3,
-  .content :global(.markdown) h4,
-  .content :global(.markdown) h5,
-  .content :global(.markdown) h6 {
-    color: rgba(255, 255, 255, 0.65) !important;
-  }
-
-  .content :global(.markdown) p,
-  .content :global(.markdown) li,
-  .content :global(.markdown) span,
-  .content :global(.markdown) div {
-    color: rgba(255, 255, 255, 0.5) !important;
-  }
-
-  .content :global(.markdown) strong {
-    color: rgba(255, 255, 255, 0.65) !important;
-  }
-
-  .content :global(.markdown) code {
-    background-color: rgba(255, 255, 255, 0.05) !important;
-    color: rgba(255, 255, 255, 0.6) !important;
-  }
-}
-
