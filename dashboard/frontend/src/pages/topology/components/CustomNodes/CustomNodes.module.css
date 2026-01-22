@@ -684,3 +684,158 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  /* Fallback Decision Node - fix layout on mobile */
+  .fallbackDecisionNode {
+    min-width: 160px;
+    padding: 10px 12px;
+  }
+
+  .fallbackDecisionHeader {
+    margin-bottom: 4px;
+  }
+
+  .fallbackDecisionIcon {
+    font-size: 16px;
+  }
+
+  .fallbackDecisionTitle {
+    font-size: 12px;
+  }
+
+  .fallbackDecisionBadge {
+    font-size: 8px;
+    padding: 2px 5px;
+  }
+
+  .fallbackDecisionReason {
+    font-size: 9px;
+    padding: 3px 5px;
+    margin-bottom: 4px;
+    word-break: break-word;
+    white-space: normal;
+  }
+
+  .fallbackDecisionModel {
+    font-size: 10px;
+    padding: 3px 6px;
+    word-break: break-word;
+    white-space: normal;
+  }
+
+  /* Default Route Node - fix layout on mobile */
+  .defaultRouteNode {
+    min-width: 140px;
+    padding: 10px 12px;
+  }
+
+  .defaultRouteIcon {
+    font-size: 16px;
+  }
+
+  .defaultRouteTitle {
+    font-size: 12px;
+  }
+
+  .defaultRouteLabel {
+    font-size: 9px;
+  }
+
+  .defaultRouteModel {
+    font-size: 10px;
+    padding: 3px 6px;
+    word-break: break-word;
+    white-space: normal;
+  }
+
+  /* Decision Node - optimize for mobile */
+  .decisionNode {
+    min-width: 180px;
+    padding: 10px 12px;
+  }
+
+  .decisionName {
+    font-size: 12px;
+  }
+
+  .decisionPriority {
+    font-size: 9px;
+    padding: 1px 5px;
+  }
+
+  /* Signal Group Node - optimize for mobile */
+  .signalGroupNode {
+    min-width: 140px;
+    padding: 10px 12px;
+  }
+
+  .signalGroupTitle {
+    font-size: 11px;
+  }
+
+  .signalGroupBadge {
+    font-size: 9px;
+    padding: 1px 5px;
+  }
+
+  .signalItem {
+    font-size: 10px;
+    padding: 2px 5px;
+  }
+
+  /* Model Node - optimize for mobile */
+  .modelNode {
+    min-width: 140px;
+    padding: 10px 12px;
+  }
+
+  .modelName {
+    font-size: 11px;
+    max-width: 100px;
+  }
+
+  .modeBadge {
+    font-size: 9px;
+    padding: 2px 6px;
+  }
+
+  .effortTag {
+    font-size: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Further reduce sizes on very small screens */
+  .fallbackDecisionNode,
+  .defaultRouteNode,
+  .decisionNode,
+  .signalGroupNode,
+  .modelNode {
+    min-width: 120px;
+    padding: 8px 10px;
+  }
+
+  .fallbackDecisionTitle,
+  .defaultRouteTitle,
+  .decisionName {
+    font-size: 11px;
+  }
+
+  .fallbackDecisionReason,
+  .fallbackDecisionModel,
+  .defaultRouteModel {
+    font-size: 9px;
+    padding: 2px 5px;
+  }
+
+  .signalGroupTitle {
+    font-size: 10px;
+  }
+
+  .modelName {
+    font-size: 10px;
+    max-width: 80px;
+  }
+}

@@ -380,4 +380,51 @@
   .legend {
     display: none;
   }
+
+  /* Fix signal summary font size on mobile */
+  .resultSectionTitle {
+    font-size: 9px;
+  }
+
+  .signalTag {
+    font-size: 9px;
+    padding: 2px 6px;
+  }
+
+  .signalScore {
+    font-size: 8px;
+  }
+
+  .decisionResult {
+    font-size: 11px;
+  }
+
+  .fallbackBadge {
+    font-size: 8px;
+    padding: 2px 5px;
+  }
+
+  .fallbackReason {
+    font-size: 9px;
+    padding: 3px 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  .resultSectionTitle {
+    font-size: 8px;
+  }
+
+  .signalTag {
+    font-size: 8px;
+    padding: 2px 5px;
+  }
+
+  .signalScore {
+    font-size: 7px;
+  }
+
+  .decisionResult {
+    font-size: 10px;
+  }
 }
