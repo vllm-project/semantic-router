@@ -59,6 +59,8 @@ from transformers import (
     ModernBertForSequenceClassification,
     ModernBertForTokenClassification,
 )
+
+from .constants import BASE_MODEL_ID, LANGUAGE_CODES, MODEL_REGISTRY
 import warnings
 from sklearn.metrics._classification import _check_targets
 
@@ -80,127 +82,6 @@ def setup_logging(output_dir: Path):
     )
     return logging.getLogger("MoMEval")
 
-    # Lan codes and Registry
-
-
-LANGUAGE_CODES = {
-    "en": "English",
-    "es": "Spanish",
-    "fr": "French",
-    "de": "German",
-    "zh": "Chinese",
-    "ja": "Japanese",
-    "ar": "Arabic",
-    "hi": "Hindi",
-    "pt": "Portuguese",
-    "it": "Italian",
-}
-
-MODEL_REGISTRY = {
-    "feedback": {
-        "id": "llm-semantic-router/mmbert-feedback-detector-merged",
-        "lora_id": "llm-semantic-router/mmbert-feedback-detector-lora",
-        "type": "text_classification",
-        "hf_dataset": "llm-semantic-router/feedback-detector-dataset",
-        "labels": ["SAT", "NEED_CLARIFICATION", "WRONG_ANSWER", "WANT_DIFFERENT"],
-        "text_col": "text",
-        "label_col": "label",
-        "split": "validation",
-    },
-    "jailbreak": {
-        "id": "llm-semantic-router/mmbert-jailbreak-detector-merged",
-        "lora_id": "llm-semantic-router/mmbert-jailbreak-detector-lora",
-        "type": "text_classification",
-        "hf_dataset": "llm-semantic-router/jailbreak-detection-dataset",
-        "labels": ["safe", "unsafe"],
-        "text_col": "text",
-        "label_col": "label",
-        "split": "test",
-    },
-    "fact-check": {
-        "id": "llm-semantic-router/mmbert-fact-check-merged",
-        "lora_id": "llm-semantic-router/mmbert-fact-check-lora",
-        "type": "text_classification",
-        "hf_dataset": "llm-semantic-router/fact-check-classification-dataset",
-        "labels": ["NO_FACT_CHECK_NEEDED", "FACT_CHECK_NEEDED"],
-        "text_col": "text",
-        "label_col": "label_id",
-        "split": "test",
-    },
-    "intent": {
-        "id": "llm-semantic-router/mmbert-intent-classifier-merged",
-        "lora_id": "llm-semantic-router/mmbert-intent-classifier-lora",
-        "type": "text_classification",
-        "hf_dataset": "TIGER-Lab/MMLU-Pro",
-        "labels": [
-            "biology",
-            "business",
-            "chemistry",
-            "computer science",
-            "economics",
-            "engineering",
-            "health",
-            "history",
-            "law",
-            "math",
-            "philosophy",
-            "physics",
-            "psychology",
-            "other",
-        ],
-        "text_col": "question",
-        "label_col": "category",
-        "split": "test",
-    },
-    "pii": {
-        "id": "llm-semantic-router/mmbert-pii-detector-merged",
-        "lora_id": "llm-semantic-router/mmbert-pii-detector-lora",
-        "type": "token_classification",
-        "hf_dataset": "presidio",
-        "labels": [
-            "O",
-            "B-AGE",
-            "I-AGE",
-            "B-CREDIT_CARD",
-            "I-CREDIT_CARD",
-            "B-DATE_TIME",
-            "I-DATE_TIME",
-            "B-DOMAIN_NAME",
-            "I-DOMAIN_NAME",
-            "B-EMAIL_ADDRESS",
-            "I-EMAIL_ADDRESS",
-            "B-GPE",
-            "I-GPE",
-            "B-IBAN_CODE",
-            "I-IBAN_CODE",
-            "B-IP_ADDRESS",
-            "I-IP_ADDRESS",
-            "B-NRP",
-            "I-NRP",
-            "B-ORGANIZATION",
-            "I-ORGANIZATION",
-            "B-PERSON",
-            "I-PERSON",
-            "B-PHONE_NUMBER",
-            "I-PHONE_NUMBER",
-            "B-STREET_ADDRESS",
-            "I-STREET_ADDRESS",
-            "B-TITLE",
-            "I-TITLE",
-            "B-US_DRIVER_LICENSE",
-            "I-US_DRIVER_LICENSE",
-            "B-US_SSN",
-            "I-US_SSN",
-            "B-ZIP_CODE",
-            "I-ZIP_CODE",
-        ],
-        "text_col": "tokens",
-        "label_col": "labels",
-        "split": "test",
-    },
-}
-
-BASE_MODEL_ID = "jhu-clsp/mmBERT-base"
 
 #                                                                     CORE Functions
 
