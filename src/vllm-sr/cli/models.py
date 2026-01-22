@@ -72,7 +72,8 @@ class Latency(BaseModel):
     """Latency signal configuration."""
 
     name: str
-    max_tpot: float
+    tpot_percentile: Optional[int] = None
+    ttft_percentile: Optional[int] = None
     description: str
 
 
