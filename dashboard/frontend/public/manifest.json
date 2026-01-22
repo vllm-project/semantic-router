@@ -1,0 +1,19 @@
+{
+  "name": "vLLM Semantic Router",
+  "short_name": "vLLM Router",
+  "description": "Manage your AI-powered Intelligent Router",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#76b900",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/vllm.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
+
