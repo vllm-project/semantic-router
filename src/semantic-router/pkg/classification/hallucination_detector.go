@@ -3,12 +3,10 @@ package classification
 import (
 	"fmt"
 	"sync"
-	"time"
 
 	candle "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // NLILabel is an alias for candle.NLILabel
@@ -141,15 +139,10 @@ func (d *HallucinationDetector) Detect(context, question, answer string) (*Hallu
 		threshold = 0.5
 	}
 
-	start := time.Now()
-
 	// Call hallucination detection via candle bindings with threshold
 	// Threshold is applied at token level in Rust - only tokens with confidence >= threshold
 	// are considered hallucinated and included in spans
 	candleResult, err := candle.DetectHallucinations(context, question, answer, threshold)
-
-	metrics.RecordClassifierLatency("hallucination_detect", time.Since(start).Seconds())
-
 	if err != nil {
 		return nil, fmt.Errorf("hallucination detection error: %w", err)
 	}
@@ -231,11 +224,7 @@ func (d *HallucinationDetector) ClassifyNLI(premise, hypothesis string) (*NLIRes
 		return nil, fmt.Errorf("NLI model not initialized")
 	}
 
-	start := time.Now()
 	candleResult, err := candle.ClassifyNLI(premise, hypothesis)
-
-	metrics.RecordClassifierLatency("nli_classify", time.Since(start).Seconds())
-
 	if err != nil {
 		return nil, fmt.Errorf("NLI classification error: %w", err)
 	}
@@ -284,14 +273,9 @@ func (d *HallucinationDetector) DetectWithNLI(context, question, answer string) 
 		nliThreshold = d.nliConfig.Threshold
 	}
 
-	start := time.Now()
-
 	// Call enhanced detection (hallucination model + NLI) via candle bindings
 	// Hallucination threshold is applied at token level in Rust
 	candleResult, err := candle.DetectHallucinationsWithNLI(context, question, answer, hallucinationThreshold)
-
-	metrics.RecordClassifierLatency("hallucination_detect_with_nli", time.Since(start).Seconds())
-
 	if err != nil {
 		return nil, fmt.Errorf("enhanced hallucination detection error: %w", err)
 	}

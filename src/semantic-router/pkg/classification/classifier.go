@@ -568,10 +568,7 @@ func (c *Classifier) CheckForJailbreakWithThreshold(text string, threshold float
 	var result candle_binding.ClassResult
 	var err error
 
-	start := time.Now()
 	result, err = c.jailbreakInference.Classify(text)
-	metrics.RecordClassifierLatency("jailbreak", time.Since(start).Seconds())
-
 	if err != nil {
 		return false, "", 0.0, fmt.Errorf("jailbreak classification failed: %w", err)
 	}
@@ -733,10 +730,18 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 			start := time.Now()
 			category, keywords, err := c.keywordClassifier.ClassifyWithKeywords(text)
 			elapsed := time.Since(start)
+			latencySeconds := elapsed.Seconds()
+
+			// Record signal extraction metrics
+			metrics.RecordSignalExtraction(config.SignalTypeKeyword, category, latencySeconds)
+
 			logging.Infof("[Signal Computation] Keyword signal evaluation completed in %v", elapsed)
 			if err != nil {
 				logging.Errorf("keyword rule evaluation failed: %v", err)
 			} else if category != "" {
+				// Record signal match
+				metrics.RecordSignalMatch(config.SignalTypeKeyword, category)
+
 				mu.Lock()
 				results.MatchedKeywordRules = append(results.MatchedKeywordRules, category)
 				results.MatchedKeywords = append(results.MatchedKeywords, keywords...)
@@ -755,10 +760,18 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 			start := time.Now()
 			category, _, err := c.keywordEmbeddingClassifier.Classify(text)
 			elapsed := time.Since(start)
+			latencySeconds := elapsed.Seconds()
+
+			// Record signal extraction metrics
+			metrics.RecordSignalExtraction(config.SignalTypeEmbedding, category, latencySeconds)
+
 			logging.Infof("[Signal Computation] Embedding signal evaluation completed in %v", elapsed)
 			if err != nil {
 				logging.Errorf("embedding rule evaluation failed: %v", err)
 			} else if category != "" {
+				// Record signal match
+				metrics.RecordSignalMatch(config.SignalTypeEmbedding, category)
+
 				mu.Lock()
 				results.MatchedEmbeddingRules = append(results.MatchedEmbeddingRules, category)
 				mu.Unlock()
@@ -776,22 +789,33 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 			start := time.Now()
 			result, err := c.categoryInference.Classify(text)
 			elapsed := time.Since(start)
+			latencySeconds := elapsed.Seconds()
+
+			var categoryName string
+			if err == nil {
+				// Map class index to category name
+				if name, ok := c.CategoryMapping.GetCategoryFromIndex(result.Class); ok {
+					categoryName = name
+				}
+			}
+
+			// Record signal extraction metrics
+			metrics.RecordSignalExtraction(config.SignalTypeDomain, categoryName, latencySeconds)
+
 			logging.Infof("[Signal Computation] Domain signal evaluation completed in %v", elapsed)
 			if err != nil {
 				logging.Errorf("domain rule evaluation failed: %v", err)
-			} else {
-				// Map class index to category name
-				if categoryName, ok := c.CategoryMapping.GetCategoryFromIndex(result.Class); ok {
-					// Only add domain if confidence meets threshold
-					// Without this check, low-confidence misclassifications can still match decisions,
-					// causing incorrect routing for typo-laden text
-					if result.Confidence >= c.Config.CategoryModel.Threshold {
-						if categoryName != "" {
-							mu.Lock()
-							results.MatchedDomainRules = append(results.MatchedDomainRules, categoryName)
-							mu.Unlock()
-						}
-					}
+			} else if result.Confidence >= c.Config.CategoryModel.Threshold {
+				// Only add domain if confidence meets threshold
+				// Without this check, low-confidence misclassifications can still match decisions,
+				// causing incorrect routing for typo-laden text
+				if categoryName != "" {
+					// Record signal match
+					metrics.RecordSignalMatch(config.SignalTypeDomain, categoryName)
+
+					mu.Lock()
+					results.MatchedDomainRules = append(results.MatchedDomainRules, categoryName)
+					mu.Unlock()
 				}
 			}
 		}()
@@ -808,20 +832,27 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 			start := time.Now()
 			factCheckResult, err := c.ClassifyFactCheck(text)
 			elapsed := time.Since(start)
+			latencySeconds := elapsed.Seconds()
+
+			// Determine which signal to output based on classification result
+			signalName := "no_fact_check_needed"
+			if err == nil && factCheckResult != nil && factCheckResult.NeedsFactCheck {
+				signalName = "needs_fact_check"
+			}
+
+			// Record signal extraction metrics
+			metrics.RecordSignalExtraction(config.SignalTypeFactCheck, signalName, latencySeconds)
+
 			logging.Infof("[Signal Computation] Fact-check signal evaluation completed in %v", elapsed)
 			if err != nil {
 				logging.Errorf("fact-check rule evaluation failed: %v", err)
 			} else if factCheckResult != nil {
-				// Determine which signal to output based on classification result
-				// Threshold is already applied in ClassifyFactCheck using fact_check_model.threshold
-				signalName := "no_fact_check_needed"
-				if factCheckResult.NeedsFactCheck {
-					signalName = "needs_fact_check"
-				}
-
 				// Check if this signal is defined in fact_check_rules
 				for _, rule := range c.Config.FactCheckRules {
 					if rule.Name == signalName {
+						// Record signal match
+						metrics.RecordSignalMatch(config.SignalTypeFactCheck, rule.Name)
+
 						mu.Lock()
 						results.MatchedFactCheckRules = append(results.MatchedFactCheckRules, rule.Name)
 						mu.Unlock()
@@ -843,16 +874,27 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 			start := time.Now()
 			feedbackResult, err := c.ClassifyFeedback(text)
 			elapsed := time.Since(start)
+			latencySeconds := elapsed.Seconds()
+
+			// Use the feedback type directly as the signal name
+			signalName := ""
+			if err == nil && feedbackResult != nil {
+				signalName = feedbackResult.FeedbackType
+			}
+
+			// Record signal extraction metrics
+			metrics.RecordSignalExtraction(config.SignalTypeUserFeedback, signalName, latencySeconds)
+
 			logging.Infof("[Signal Computation] User feedback signal evaluation completed in %v", elapsed)
 			if err != nil {
 				logging.Errorf("user feedback rule evaluation failed: %v", err)
 			} else if feedbackResult != nil {
-				// Use the feedback type directly as the signal name
-				signalName := feedbackResult.FeedbackType
-
 				// Check if this signal is defined in user_feedback_rules
 				for _, rule := range c.Config.UserFeedbackRules {
 					if rule.Name == signalName {
+						// Record signal match
+						metrics.RecordSignalMatch(config.SignalTypeUserFeedback, rule.Name)
+
 						mu.Lock()
 						results.MatchedUserFeedbackRules = append(results.MatchedUserFeedbackRules, rule.Name)
 						mu.Unlock()
@@ -877,16 +919,27 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 
 			preferenceResult, err := c.preferenceClassifier.Classify(conversationJSON)
 			elapsed := time.Since(start)
+			latencySeconds := elapsed.Seconds()
+
+			// Use the preference name directly as the signal name
+			preferenceName := ""
+			if err == nil && preferenceResult != nil {
+				preferenceName = preferenceResult.Preference
+			}
+
+			// Record signal extraction metrics
+			metrics.RecordSignalExtraction(config.SignalTypePreference, preferenceName, latencySeconds)
+
 			logging.Infof("[Signal Computation] Preference signal evaluation completed in %v", elapsed)
 			if err != nil {
 				logging.Errorf("preference rule evaluation failed: %v", err)
 			} else if preferenceResult != nil {
-				// Use the preference name directly as the signal name
-				preferenceName := preferenceResult.Preference
-
 				// Check if this preference is defined in preference_rules
 				for _, rule := range c.Config.PreferenceRules {
 					if rule.Name == preferenceName {
+						// Record signal match
+						metrics.RecordSignalMatch(config.SignalTypePreference, rule.Name)
+
 						mu.Lock()
 						results.MatchedPreferenceRules = append(results.MatchedPreferenceRules, rule.Name)
 						mu.Unlock()
@@ -909,16 +962,27 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 			start := time.Now()
 			languageResult, err := c.languageClassifier.Classify(text)
 			elapsed := time.Since(start)
+			latencySeconds := elapsed.Seconds()
+
+			// Use the language code directly as the signal name
+			languageCode := ""
+			if err == nil && languageResult != nil {
+				languageCode = languageResult.LanguageCode
+			}
+
+			// Record signal extraction metrics
+			metrics.RecordSignalExtraction(config.SignalTypeLanguage, languageCode, latencySeconds)
+
 			logging.Infof("[Signal Computation] Language signal evaluation completed in %v", elapsed)
 			if err != nil {
 				logging.Errorf("language rule evaluation failed: %v", err)
 			} else if languageResult != nil {
-				// Use the language code directly as the signal name
-				languageCode := languageResult.LanguageCode
-
 				// Check if this language code is defined in language_rules
 				for _, rule := range c.Config.LanguageRules {
 					if rule.Name == languageCode {
+						// Record signal match
+						metrics.RecordSignalMatch(config.SignalTypeLanguage, rule.Name)
+
 						mu.Lock()
 						results.MatchedLanguageRules = append(results.MatchedLanguageRules, rule.Name)
 						mu.Unlock()
@@ -945,6 +1009,19 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 			if len(availableModels) > 0 {
 				latencyResult, err := c.latencyClassifier.Classify(availableModels)
 				elapsed := time.Since(start)
+				latencySeconds := elapsed.Seconds()
+
+				// Record signal extraction metrics for each matched latency rule
+				if err == nil && latencyResult != nil {
+					for _, ruleName := range latencyResult.MatchedRules {
+						metrics.RecordSignalExtraction(config.SignalTypeLatency, ruleName, latencySeconds)
+						metrics.RecordSignalMatch(config.SignalTypeLatency, ruleName)
+					}
+				} else {
+					// Record extraction even if no match
+					metrics.RecordSignalExtraction(config.SignalTypeLatency, "", latencySeconds)
+				}
+
 				logging.Infof("[Signal Computation] Latency signal evaluation completed in %v", elapsed)
 				if err != nil {
 					logging.Errorf("latency rule evaluation failed: %v", err)
@@ -1109,10 +1186,7 @@ func (c *Classifier) classifyCategoryWithEntropyInTree(text string) (string, flo
 	var result candle_binding.ClassResultWithProbs
 	var err error
 
-	start := time.Now()
 	result, err = c.categoryInference.ClassifyWithProbabilities(text)
-	metrics.RecordClassifierLatency("category", time.Since(start).Seconds())
-
 	if err != nil {
 		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("classification error: %w", err)
 	}
@@ -1217,8 +1291,8 @@ func (c *Classifier) classifyCategoryWithEntropyInTree(text string) (string, flo
 		logging.Infof("Classification confidence (%.4f) below threshold (%.4f), falling back to category: %s",
 			result.Confidence, c.Config.CategoryModel.Threshold, fallbackCategory)
 
-		// Record the fallback category classification metric
-		metrics.RecordCategoryClassification(fallbackCategory)
+		// Record the fallback category as a signal match
+		metrics.RecordSignalMatch(config.SignalTypeKeyword, fallbackCategory)
 
 		// Return fallback category instead of empty string to enable proper decision routing
 		return fallbackCategory, float64(result.Confidence), reasoningDecision, nil
@@ -1234,13 +1308,13 @@ func (c *Classifier) classifyCategoryWithEntropyInTree(text string) (string, flo
 		}
 
 		logging.Warnf("Class index %d not found in category mapping, falling back to: %s", result.Class, fallbackCategory)
-		metrics.RecordCategoryClassification(fallbackCategory)
+		metrics.RecordSignalMatch(config.SignalTypeKeyword, fallbackCategory)
 		return fallbackCategory, float64(result.Confidence), reasoningDecision, nil
 	}
 	genericCategory := c.translateMMLUToGeneric(categoryName)
 
-	// Record the category classification metric
-	metrics.RecordCategoryClassification(genericCategory)
+	// Record the category as a signal match
+	metrics.RecordSignalMatch(config.SignalTypeKeyword, genericCategory)
 
 	logging.Infof("Classified as category: %s (mmlu=%s), reasoning_decision: use=%t, confidence=%.3f, reason=%s",
 		genericCategory, categoryName, reasoningDecision.UseReasoning, reasoningDecision.Confidence, reasoningDecision.DecisionReason)
@@ -1265,9 +1339,7 @@ func (c *Classifier) ClassifyPIIWithThreshold(text string, threshold float32) ([
 
 	// Use ModernBERT PII token classifier for entity detection
 	configPath := fmt.Sprintf("%s/config.json", c.Config.PIIModel.ModelID)
-	start := time.Now()
 	tokenResult, err := c.piiInference.ClassifyTokens(text, configPath)
-	metrics.RecordClassifierLatency("pii", time.Since(start).Seconds())
 	if err != nil {
 		return nil, fmt.Errorf("PII token classification error: %w", err)
 	}
@@ -1319,9 +1391,7 @@ func (c *Classifier) ClassifyPIIWithDetailsAndThreshold(text string, threshold f
 
 	// Use PII token classifier for entity detection
 	configPath := fmt.Sprintf("%s/config.json", c.Config.PIIModel.ModelID)
-	start := time.Now()
 	tokenResult, err := c.piiInference.ClassifyTokens(text, configPath)
-	metrics.RecordClassifierLatency("pii", time.Since(start).Seconds())
 	if err != nil {
 		return nil, fmt.Errorf("PII token classification error: %w", err)
 	}
@@ -1419,9 +1489,7 @@ func (c *Classifier) AnalyzeContentForPIIWithThreshold(contentList []string, thr
 
 		// Use ModernBERT PII token classifier for detailed analysis
 		configPath := fmt.Sprintf("%s/config.json", c.Config.PIIModel.ModelID)
-		start := time.Now()
 		tokenResult, err := c.piiInference.ClassifyTokens(content, configPath)
-		metrics.RecordClassifierLatency("pii", time.Since(start).Seconds())
 		if err != nil {
 			logging.Errorf("Error analyzing content %d: %v", i, err)
 			continue

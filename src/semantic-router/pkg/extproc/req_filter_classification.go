@@ -3,9 +3,12 @@ package extproc
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
@@ -45,8 +48,14 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 		return "", 0.0, entropy.ReasoningDecision{}, ""
 	}
 
+	// Start signal evaluation span (Layer 1)
+	signalStart := time.Now()
+	signalCtx, signalSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanSignalEvaluation)
+
 	// Evaluate all signals first to get detailed signal information
 	signals := r.Classifier.EvaluateAllSignals(evaluationText)
+
+	signalLatency := time.Since(signalStart).Milliseconds()
 
 	// Store signal results in context for response headers
 	ctx.VSRMatchedKeywords = signals.MatchedKeywordRules
@@ -67,6 +76,21 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
 		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules, signals.MatchedLanguageRules, signals.MatchedLatencyRules)
 
+	// Set signal span attributes
+	allMatchedRules := []string{}
+	allMatchedRules = append(allMatchedRules, signals.MatchedKeywordRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedEmbeddingRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedDomainRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedFactCheckRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedUserFeedbackRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedPreferenceRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedLanguageRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedLatencyRules...)
+
+	// End signal evaluation span
+	tracing.EndSignalSpan(signalSpan, allMatchedRules, 1.0, signalLatency)
+	ctx.TraceContext = signalCtx
+
 	// Process user feedback signals to automatically update Elo ratings
 	// This implements "automatic scoring by signals" as requested
 	r.processUserFeedbackForElo(signals.MatchedUserFeedbackRules, originalModel, ctx)
@@ -74,9 +98,22 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	// Perform decision evaluation using pre-computed signals
 	// This is ALWAYS done when decisions are configured, regardless of model type,
 	// because plugins (e.g., hallucination detection) depend on the matched decision
+
+	// Start decision evaluation span (Layer 2)
+	decisionStart := time.Now()
+	decisionCtx, decisionSpan := tracing.StartDecisionSpan(ctx.TraceContext, "decision_evaluation")
+
 	result, err := r.Classifier.EvaluateDecisionWithEngine(signals)
+	decisionLatency := time.Since(decisionStart).Seconds()
+
+	// Record decision evaluation metrics
+	metrics.RecordDecisionEvaluation(decisionLatency)
+
 	if err != nil {
 		logging.Errorf("Decision evaluation error: %v", err)
+		// End decision span with error
+		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, r.Config.Strategy)
+		ctx.TraceContext = decisionCtx
 		if r.Config.IsAutoModelName(originalModel) {
 			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel
 		}
@@ -84,11 +121,21 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	}
 
 	if result == nil || result.Decision == nil {
+		// End decision span with no match
+		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, r.Config.Strategy)
+		ctx.TraceContext = decisionCtx
 		if r.Config.IsAutoModelName(originalModel) {
 			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel
 		}
 		return "", 0.0, entropy.ReasoningDecision{}, ""
 	}
+
+	// Record decision match with confidence
+	metrics.RecordDecisionMatch(result.Decision.Name, result.Confidence)
+
+	// End decision span with success
+	tracing.EndDecisionSpan(decisionSpan, result.Confidence, result.MatchedRules, r.Config.Strategy)
+	ctx.TraceContext = decisionCtx
 
 	// Store the selected decision in context for later use (e.g., plugins, header mutations)
 	// This is critical for hallucination detection and other per-decision plugins

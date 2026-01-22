@@ -57,7 +57,7 @@ func (r *OpenAIRouter) performHallucinationDetection(ctx *RequestContext, respon
 
 	if err != nil {
 		logging.Errorf("Hallucination detection failed: %v", err)
-		metrics.RecordHallucinationDetection("error")
+		metrics.RecordPluginError("hallucination", "detection_error")
 		return nil // Don't block on error
 	}
 
@@ -71,8 +71,13 @@ func (r *OpenAIRouter) performHallucinationDetection(ctx *RequestContext, respon
 	ctx.HallucinationSpans = result.UnsupportedSpans
 	ctx.HallucinationConfidence = result.Confidence
 
+	decisionName := ""
+	if ctx.VSRSelectedDecision != nil {
+		decisionName = ctx.VSRSelectedDecision.Name
+	}
+
 	if result.HallucinationDetected {
-		metrics.RecordHallucinationDetection("hallucination_detected")
+		metrics.RecordPluginExecution("hallucination", decisionName, "detected", latency)
 		logging.Warnf("Hallucination detected: confidence=%.3f, unsupported_spans=%d",
 			result.Confidence, len(result.UnsupportedSpans))
 
@@ -83,7 +88,7 @@ func (r *OpenAIRouter) performHallucinationDetection(ctx *RequestContext, respon
 		// Warning will be handled in processor_res_body.go
 		logging.Infof("Hallucination detected, action is '%s'", action)
 	} else {
-		metrics.RecordHallucinationDetection("no_hallucination")
+		metrics.RecordPluginExecution("hallucination", decisionName, "not_detected", latency)
 		logging.Debugf("No hallucination detected: confidence=%.3f", result.Confidence)
 	}
 
@@ -105,7 +110,7 @@ func (r *OpenAIRouter) performHallucinationDetectionWithNLI(ctx *RequestContext,
 
 	if err != nil {
 		logging.Errorf("Hallucination detection with NLI failed: %v", err)
-		metrics.RecordHallucinationDetection("error")
+		metrics.RecordPluginError("hallucination", "detection_nli_error")
 		return nil // Don't block on error
 	}
 
@@ -139,8 +144,13 @@ func (r *OpenAIRouter) performHallucinationDetectionWithNLI(ctx *RequestContext,
 		}
 	}
 
+	decisionName := ""
+	if ctx.VSRSelectedDecision != nil {
+		decisionName = ctx.VSRSelectedDecision.Name
+	}
+
 	if result.HallucinationDetected {
-		metrics.RecordHallucinationDetection("hallucination_detected_nli")
+		metrics.RecordPluginExecution("hallucination", decisionName, "detected_nli", latency)
 		logging.Warnf("Hallucination detected (NLI): confidence=%.3f, spans=%d",
 			result.Confidence, len(result.Spans))
 
@@ -151,7 +161,7 @@ func (r *OpenAIRouter) performHallucinationDetectionWithNLI(ctx *RequestContext,
 		// Warning will be handled in processor_res_body.go
 		logging.Infof("Hallucination detected (NLI), action is '%s'", action)
 	} else {
-		metrics.RecordHallucinationDetection("no_hallucination")
+		metrics.RecordPluginExecution("hallucination", decisionName, "not_detected", latency)
 		logging.Debugf("No hallucination detected (NLI): confidence=%.3f", result.Confidence)
 	}
 

@@ -74,8 +74,8 @@ func (r *OpenAIRouter) detectPIIWithTracing(ctx *RequestContext, userContent str
 		contentToAnalyze = append(contentToAnalyze, nonUserMessages...)
 	}
 
-	// Start PII detection span
-	piiCtx, piiSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanPIIDetection)
+	// Start PII plugin span
+	piiCtx, piiSpan := tracing.StartPluginSpan(ctx.TraceContext, "pii", categoryName)
 	piiStart := time.Now()
 
 	detectedPII := r.Classifier.DetectPIIInContent(contentToAnalyze)
@@ -83,18 +83,27 @@ func (r *OpenAIRouter) detectPIIWithTracing(ctx *RequestContext, userContent str
 	piiTime := time.Since(piiStart).Milliseconds()
 	piiDetected := len(detectedPII) > 0
 
-	tracing.SetSpanAttributes(piiSpan,
-		attribute.Bool(tracing.AttrPIIDetected, piiDetected),
-		attribute.Int64(tracing.AttrPIIDetectionTimeMs, piiTime))
-
+	// Determine plugin status and result
+	var status, result string
 	if piiDetected {
 		piiTypesStr := strings.Join(detectedPII, ",")
-		tracing.SetSpanAttributes(piiSpan,
-			attribute.String(tracing.AttrPIITypes, piiTypesStr))
+		status = "detected"
+		result = "pii_detected:" + piiTypesStr
 		logging.Infof("Detected PII types: %s", piiTypesStr)
+
+		// Keep legacy attributes for backward compatibility
+		tracing.SetSpanAttributes(piiSpan,
+			attribute.Bool(tracing.AttrPIIDetected, true),
+			attribute.String(tracing.AttrPIITypes, piiTypesStr))
+	} else {
+		status = "success"
+		result = "no_pii_detected"
+		tracing.SetSpanAttributes(piiSpan,
+			attribute.Bool(tracing.AttrPIIDetected, false))
 	}
 
-	piiSpan.End()
+	// End plugin span with new architecture
+	tracing.EndPluginSpan(piiSpan, status, piiTime, result)
 	ctx.TraceContext = piiCtx
 
 	return detectedPII

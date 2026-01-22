@@ -136,9 +136,10 @@ func (c *LatencyClassifier) Classify(availableModels []string) (*LatencyResult, 
 			tpot, exists := GetTPOT(model)
 			if !exists {
 				// No TPOT data for this model, skip
-				logging.Debugf("Latency evaluation: no TPOT data for model %q, skipping", model)
+				logging.Infof("Latency evaluation: no TPOT data for model %q, skipping", model)
 				continue
 			}
+			logging.Infof("Latency evaluation: model=%s, TPOT=%.4fs", model, tpot)
 
 			// Check if model meets the latency threshold
 			if rule.MaxTPOT > 0 && tpot <= rule.MaxTPOT {
