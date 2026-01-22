@@ -129,9 +129,10 @@ def build_training_examples(
         if idx < start_index:
             continue
         # find matching label by label hash
-        sample_id_hash = get_sample_id_hash(conversation.sample_id)
+        # sample_id_hash = get_sample_id_hash(conversation.sample_id)
         # TODO: make this less ugly
-        label = label_mapping.get(f"{sample_id_hash}_0")
+        # label = label_mapping.get(f"{sample_id_hash}_0")
+        label = label_mapping.get(conversation.sample_id)
         if not label:
             continue
         examples.append(
@@ -665,13 +666,22 @@ def train(args: argparse.Namespace) -> None:
         remove_unused_columns=False,
     )
 
+    def preprocess_logits_for_metrics(logits, labels):
+        return logits.argmax(dim=-1)
+
+    def compute_metrics(eval_pred):
+        preds, labels = eval_pred
+        return {"accuracy": (preds == labels).mean()}
+
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         data_collator=data_collator,
-        compute_metrics=compute_token_accuracy if eval_dataset is not None else None,
+        compute_metrics=compute_metrics,
+        preprocess_logits_for_metrics=preprocess_logits_for_metrics,
+        # compute_metrics=compute_token_accuracy if eval_dataset is not None else None,
     )
 
     logger.info(
