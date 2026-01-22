@@ -273,7 +273,8 @@ def synthesize_category(
     print(f"{'='*60}")
     
     # Format the synthesis prompt with examples
-    examples = "\n".join(f"- {p}" for p in seed_patterns)
+    # Escape curly braces in examples to avoid format() conflicts
+    examples = "\n".join(f"- {p.replace('{', '{{').replace('}', '}}')}" for p in seed_patterns)
     prompt = synthesis_prompt_template.replace("{examples}", examples)
     
     # Generate samples

@@ -73,6 +73,7 @@ import sys
 from pathlib import Path
 from typing import Dict, List
 
+import numpy as np
 import torch
 import torch.nn as nn
 from datasets import Dataset, load_dataset
@@ -1497,20 +1498,39 @@ def tokenize_security_data(data, tokenizer, max_length=512):
 
 
 def compute_security_metrics(eval_pred):
-    """Compute security detection metrics."""
+    """
+    Compute security detection metrics aligned with MLCommons AI Safety evaluation.
+    
+    Key metrics:
+    - R (Recall): How many actual unsafe samples are correctly identified
+    - FPR (False Positive Rate): How many safe samples are incorrectly flagged as unsafe
+    - F1: Harmonic mean of precision and recall
+    
+    For binary classification: 0=safe, 1=unsafe
+    """
     predictions, labels = eval_pred
-    predictions = torch.argmax(torch.tensor(predictions), dim=1)
+    predictions = torch.argmax(torch.tensor(predictions), dim=1).numpy()
+    labels = np.array(labels)
 
     accuracy = accuracy_score(labels, predictions)
     precision, recall, f1, _ = precision_recall_fscore_support(
         labels, predictions, average="binary"
     )
+    
+    # Calculate FPR (False Positive Rate) = FP / (FP + TN)
+    # FPR = rate at which safe samples (label=0) are incorrectly flagged as unsafe (pred=1)
+    safe_mask = labels == 0
+    if safe_mask.sum() > 0:
+        fpr = (predictions[safe_mask] == 1).sum() / safe_mask.sum()
+    else:
+        fpr = 0.0
 
     return {
         "accuracy": accuracy,
         "f1": f1,
         "precision": precision,
-        "recall": recall,
+        "recall": recall,  # R (Recall) - key safety metric
+        "fpr": float(fpr),  # FPR - False Positive Rate (key safety metric)
     }
 
 
@@ -1648,11 +1668,12 @@ def main(
 
     # Evaluate
     eval_results = trainer.evaluate()
-    logger.info(f"Validation Results:")
+    logger.info(f"Validation Results (MLCommons AI Safety metrics):")
     logger.info(f"  Accuracy: {eval_results['eval_accuracy']:.4f}")
     logger.info(f"  F1: {eval_results['eval_f1']:.4f}")
+    logger.info(f"  Recall (R): {eval_results['eval_recall']:.4f}")
+    logger.info(f"  FPR: {eval_results.get('eval_fpr', 0):.4f}")
     logger.info(f"  Precision: {eval_results['eval_precision']:.4f}")
-    logger.info(f"  Recall: {eval_results['eval_recall']:.4f}")
     logger.info(f"LoRA Security model saved to: {output_dir}")
 
     # ===========================================
@@ -2229,9 +2250,20 @@ def train_hierarchical_mlcommons(
     )
     
     def compute_metrics(eval_pred):
+        """Compute metrics aligned with MLCommons AI Safety: R (Recall), FPR, F1"""
         logits, labels = eval_pred
         preds = logits.argmax(-1)
-        return {"accuracy": accuracy_score(labels, preds), "f1": f1_score(labels, preds, average="binary")}
+        labels = np.array(labels)
+        
+        # Core metrics
+        accuracy = accuracy_score(labels, preds)
+        precision, recall, f1, _ = precision_recall_fscore_support(labels, preds, average="binary")
+        
+        # FPR (False Positive Rate) = FP / (FP + TN) - key safety metric
+        safe_mask = labels == 0
+        fpr = (preds[safe_mask] == 1).sum() / safe_mask.sum() if safe_mask.sum() > 0 else 0.0
+        
+        return {"accuracy": accuracy, "f1": f1, "recall": float(recall), "fpr": float(fpr), "precision": float(precision)}
     
     trainer = Trainer(model=model, args=training_args, train_dataset=train_dataset,
                       eval_dataset=val_dataset, compute_metrics=compute_metrics)
@@ -2245,7 +2277,7 @@ def train_hierarchical_mlcommons(
                    "id_to_label": {str(k): v for k, v in level1_data["id2label"].items()}}, f, indent=2)
     
     level1_results = trainer.evaluate()
-    logger.info(f"✅ Level 1: Acc={level1_results['eval_accuracy']:.3f}, F1={level1_results['eval_f1']:.3f}")
+    logger.info(f"✅ Level 1 (MLCommons metrics): R={level1_results['eval_recall']:.1%}, FPR={level1_results['eval_fpr']:.1%}, F1={level1_results['eval_f1']:.1%}")
     
     # =========================================================================
     # LEVEL 2: 9-Class Hazard Taxonomy
@@ -2276,11 +2308,22 @@ def train_hierarchical_mlcommons(
     training_args.metric_for_best_model = "f1_macro"
     
     def compute_metrics_multiclass(eval_pred):
+        """Compute multiclass metrics aligned with MLCommons eval (per-category R, F1)"""
         logits, labels = eval_pred
         preds = logits.argmax(-1)
-        return {"accuracy": accuracy_score(labels, preds),
-                "f1_macro": f1_score(labels, preds, average="macro"),
-                "f1_weighted": f1_score(labels, preds, average="weighted")}
+        
+        # Overall metrics
+        accuracy = accuracy_score(labels, preds)
+        precision_macro, recall_macro, f1_macro, _ = precision_recall_fscore_support(labels, preds, average="macro")
+        f1_weighted = f1_score(labels, preds, average="weighted")
+        
+        return {
+            "accuracy": accuracy,
+            "f1_macro": f1_macro,
+            "f1_weighted": f1_weighted,
+            "recall_macro": float(recall_macro),  # Average R across categories
+            "precision_macro": float(precision_macro),
+        }
     
     trainer = Trainer(model=model, args=training_args, train_dataset=train_dataset,
                       eval_dataset=val_dataset, compute_metrics=compute_metrics_multiclass)
@@ -2295,7 +2338,7 @@ def train_hierarchical_mlcommons(
                    "mlcommons_taxonomy": MLCOMMONS_TAXONOMY["level2"]}, f, indent=2)
     
     level2_results = trainer.evaluate()
-    logger.info(f"✅ Level 2: Acc={level2_results['eval_accuracy']:.3f}, F1_macro={level2_results['eval_f1_macro']:.3f}")
+    logger.info(f"✅ Level 2 (MLCommons 9-class): R_macro={level2_results['eval_recall_macro']:.1%}, F1_macro={level2_results['eval_f1_macro']:.1%}, Acc={level2_results['eval_accuracy']:.1%}")
     
     # Summary
     logger.info("\n" + "=" * 70)
