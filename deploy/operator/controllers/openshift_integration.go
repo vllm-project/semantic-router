@@ -75,6 +75,10 @@ func createOrUpdateRoute(ctx context.Context, c client.Client, scheme *runtime.S
 	}
 
 	route := &routev1.Route{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "route.openshift.io/v1",
+			Kind:       "Route",
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      sr.Name,
 			Namespace: sr.Namespace,
