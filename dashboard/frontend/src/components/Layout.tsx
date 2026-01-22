@@ -246,31 +246,9 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
             >
               Decisions
             </button>
-            <div className={styles.mobileNavSection}>
-              <div className={styles.mobileNavSectionTitle}>System</div>
-              <button
-                className={styles.mobileNavLink}
-                onClick={() => {
-                  onConfigSectionChange?.('router-config')
-                  navigate('/config')
-                  setMobileMenuOpen(false)
-                }}
-              >
-                Router Config
-              </button>
-              <NavLink to="/status" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
-                Status
-              </NavLink>
-              <NavLink to="/logs" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
-                Logs
-              </NavLink>
-              <NavLink to="/monitoring" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
-                Grafana
-              </NavLink>
-              <NavLink to="/tracing" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
-                Tracing
-              </NavLink>
-            </div>
+            <NavLink to="/topology" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+              Topology
+            </NavLink>
           </div>
         )}
       </header>

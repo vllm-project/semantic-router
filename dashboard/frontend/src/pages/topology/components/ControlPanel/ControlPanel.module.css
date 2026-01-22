@@ -368,3 +368,16 @@
     transparent 8px
   );
 }
+
+/* Mobile Responsive - Hide Legend on mobile */
+@media (max-width: 768px) {
+  /* Hide the entire legend section on mobile */
+  .section:has(.legend) {
+    display: none;
+  }
+
+  /* Fallback: hide legend directly if :has() is not supported */
+  .legend {
+    display: none;
+  }
+}

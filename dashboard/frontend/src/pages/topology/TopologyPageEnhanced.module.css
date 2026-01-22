@@ -276,4 +276,9 @@
   .title {
     font-size: 1.25rem;
   }
+
+  /* Hide MiniMap (preview) on mobile */
+  .flowContainer :global(.react-flow__minimap) {
+    display: none !important;
+  }
 }
