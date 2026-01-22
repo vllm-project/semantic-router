@@ -121,7 +121,7 @@ signals:
   # latency - Latency-based routing signals (TPOT-based)
   latency:
     - name: "low_latency"
-      max_tpot: 0.05  # 50ms per token
+      max_tpot: 0.005  # 5ms per token
       description: "For real-time chat applications requiring fast responses"
     - name: "medium_latency"
       max_tpot: 0.15  # 150ms per token
@@ -387,7 +387,7 @@ decisions:
         - type: "language"
           name: "zh"
         - type: "latency"
-          name: "low_latency"
+          name: "medium_latency"
     modelRefs:
       - model: "openai/gpt-oss-20b"
         use_reasoning: false
