@@ -381,32 +381,40 @@
     display: none;
   }
 
-  /* Fix signal summary font size on mobile */
+  /* Fix signal summary font size on mobile - make it smaller */
   .resultSectionTitle {
-    font-size: 9px;
-  }
-
-  .signalTag {
-    font-size: 9px;
-    padding: 2px 6px;
-  }
-
-  .signalScore {
     font-size: 8px;
   }
 
-  .decisionResult {
-    font-size: 11px;
-  }
-
-  .fallbackBadge {
+  .signalTag {
     font-size: 8px;
     padding: 2px 5px;
   }
 
-  .fallbackReason {
+  .signalScore {
+    font-size: 7px;
+  }
+
+  .decisionResult {
     font-size: 9px;
-    padding: 3px 6px;
+  }
+
+  .fallbackBadge {
+    font-size: 7px;
+    padding: 2px 4px;
+  }
+
+  .fallbackReason {
+    font-size: 8px;
+    padding: 3px 5px;
+  }
+
+  .noMatch {
+    font-size: 9px;
+  }
+
+  .needsVerify {
+    font-size: 8px;
   }
 }
 

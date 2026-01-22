@@ -1424,34 +1424,9 @@
     font-size: 0.8125rem;
   }
 
-  /* Inline config - Default Model and Default Reasoning */
+  /* Inline config - Hide Default Model and Default Reasoning on mobile */
   .coreSettingsInline {
-    flex-direction: column;
-    gap: 0.75rem;
-    padding: 0.875rem 1rem;
-  }
-
-  .inlineConfigRow {
-    flex-direction: row;
-    align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-  }
-
-  .inlineConfigLabel {
-    font-size: 0.75rem;
-    white-space: nowrap;
-  }
-
-  .inlineConfigValue {
-    font-size: 0.75rem;
-    padding: 0.2rem 0.5rem;
-    word-break: break-word;
-  }
-
-  .badge {
-    font-size: 0.625rem;
-    padding: 0.2rem 0.5rem;
+    display: none;
   }
 
   /* Tools grid */
