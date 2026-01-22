@@ -2,41 +2,51 @@
 MoM Collection Evaluation Script
 ================================
 
-A unified evaluation script for the Mixture of Models (MoM) collection.
+A unified, evaluation script for the Mixture of Models (MoM) collection.
+Standardizes evaluation across Text Classification and Token Classification tasks.
 
-Supports:
-- Text Classification (Feedback, Jailbreak, Fact-check, Intent)
-- Token Classification (PII Detection)
-- Merged Models and LoRA Adapters
-- Local Datasets and HuggingFace Hub Datasets
-- Custom Model Paths (for fine-tuned local models)
-- Batch Processing for High Performance
+Features:
+- Full Registry: Supports all 10 MoM models (Merged and LoRA variants).
+- Real Data Alignment: Specialized logic for MMLU-Pro (Intent) and Presidio (PII).
+- Comprehensive Metrics: Accuracy, F1, Precision, Recall, Confusion Matrices, and Latency (p50/p99).
+- Robust Inference: Parallel execution support and OOM (Out of Memory) recovery.
+- Multilingual Support: Built-in language filtering for cross-lingual performance analysis.
 
 Usage:
-    # Evaluate official model
+    # Evaluate a single model on CUDA
     python src/training/model_eval/mom_collection_eval.py --model feedback --device cuda
 
-    # Evaluate local fine-tuned model
-    python src/training/model_eval/mom_collection_eval.py --model feedback --model_id ./my-local-model
+    # Evaluate multiple models in parallel
+    python src/training/model_eval/mom_collection_eval.py --model intent jailbreak pii --parallel
+
+    # Filter evaluation by language (e.g., Spanish)
+    python src/training/model_eval/mom_collection_eval.py --model feedback --language es
 """
 
 import argparse
 import json
 import logging
+import os
+import re
 import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
+from typing import Dict, List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+import requests
 import seaborn as sns
 import torch
 from datasets import Dataset, load_dataset
-from peft import PeftConfig, PeftModel
+from transformers import AutoConfig
+from peft import PeftModel
 from seqeval.metrics import accuracy_score as seqe_accuracy_score
 from seqeval.metrics import classification_report as seq_classification_report
 from seqeval.metrics import f1_score as seq_f1_score
 from sklearn.metrics import (
     accuracy_score,
+    classification_report,
     confusion_matrix,
     precision_recall_fscore_support,
 )
@@ -45,50 +55,88 @@ from transformers import (
     AutoModelForSequenceClassification,
     AutoModelForTokenClassification,
     AutoTokenizer,
+    ModernBertConfig,
+    ModernBertForSequenceClassification,
+    ModernBertForTokenClassification,
+)
+import warnings
+from sklearn.metrics._classification import _check_targets
+
+# suppress prf warnings
+warnings.filterwarnings(
+    "ignore", category=UserWarning, module="sklearn.metrics._classification"
 )
 
-# config logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler()],
-)
-logger = logging.getLogger(__name__)
+#  config logging
 
+
+def setup_logging(output_dir: Path):
+    output_dir.mkdir(parents=True, exist_ok=True)
+    log_file = output_dir / f"evaluation_{time.strftime('%Y%m%d_%H%M%S')}.log"
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[logging.FileHandler(log_file), logging.StreamHandler()],
+    )
+    return logging.getLogger("MoMEval")
+
+    # Lan codes and Registry
+
+
+LANGUAGE_CODES = {
+    "en": "English",
+    "es": "Spanish",
+    "fr": "French",
+    "de": "German",
+    "zh": "Chinese",
+    "ja": "Japanese",
+    "ar": "Arabic",
+    "hi": "Hindi",
+    "pt": "Portuguese",
+    "it": "Italian",
+}
 
 MODEL_REGISTRY = {
-    #               Text Classification Models
     "feedback": {
         "id": "llm-semantic-router/mmbert-feedback-detector-merged",
         "lora_id": "llm-semantic-router/mmbert-feedback-detector-lora",
         "type": "text_classification",
-        "hf_dataset": "llm-semantic-router/feedback-dataset",
-        "labels": ["SATISFIED", "FRUSTRATED", "NEUTRAL"],
+        "hf_dataset": "llm-semantic-router/feedback-detector-dataset",
+        "labels": ["SAT", "NEED_CLARIFICATION", "WRONG_ANSWER", "WANT_DIFFERENT"],
+        "text_col": "text",
+        "label_col": "label",
+        "split": "validation",
     },
     "jailbreak": {
         "id": "llm-semantic-router/mmbert-jailbreak-detector-merged",
         "lora_id": "llm-semantic-router/mmbert-jailbreak-detector-lora",
         "type": "text_classification",
-        "hf_dataset": "llm-semantic-router/jailbreak-dataset",
-        "labels": ["BENIGN", "JAILBREAK"],
+        "hf_dataset": "llm-semantic-router/jailbreak-detection-dataset",
+        "labels": ["safe", "unsafe"],
+        "text_col": "text",
+        "label_col": "label",
+        "split": "test",
     },
     "fact-check": {
         "id": "llm-semantic-router/mmbert-fact-check-merged",
         "lora_id": "llm-semantic-router/mmbert-fact-check-lora",
         "type": "text_classification",
-        "hf_dataset": "llm-semantic-router/fact-check-dataset",
-        "labels": ["NO_FACT_CHECK", "FACT_CHECK_NEEDED"],
+        "hf_dataset": "llm-semantic-router/fact-check-classification-dataset",
+        "labels": ["NO_FACT_CHECK_NEEDED", "FACT_CHECK_NEEDED"],
+        "text_col": "text",
+        "label_col": "label_id",
+        "split": "test",
     },
     "intent": {
         "id": "llm-semantic-router/mmbert-intent-classifier-merged",
         "lora_id": "llm-semantic-router/mmbert-intent-classifier-lora",
         "type": "text_classification",
-        "hf_dataset": "llm-semantic-router/intent-dataset",
+        "hf_dataset": "TIGER-Lab/MMLU-Pro",
         "labels": [
             "biology",
             "business",
             "chemistry",
-            "cs",
+            "computer science",
             "economics",
             "engineering",
             "health",
@@ -100,384 +148,625 @@ MODEL_REGISTRY = {
             "psychology",
             "other",
         ],
+        "text_col": "question",
+        "label_col": "category",
+        "split": "test",
     },
-    #                 Token Classification Models
     "pii": {
         "id": "llm-semantic-router/mmbert-pii-detector-merged",
         "lora_id": "llm-semantic-router/mmbert-pii-detector-lora",
         "type": "token_classification",
-        "hf_dataset": "llm-semantic-router/pii-dataset",
-        "labels": ["O", "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC"],
+        "hf_dataset": "presidio",
+        "labels": [
+            "O",
+            "B-AGE",
+            "I-AGE",
+            "B-CREDIT_CARD",
+            "I-CREDIT_CARD",
+            "B-DATE_TIME",
+            "I-DATE_TIME",
+            "B-DOMAIN_NAME",
+            "I-DOMAIN_NAME",
+            "B-EMAIL_ADDRESS",
+            "I-EMAIL_ADDRESS",
+            "B-GPE",
+            "I-GPE",
+            "B-IBAN_CODE",
+            "I-IBAN_CODE",
+            "B-IP_ADDRESS",
+            "I-IP_ADDRESS",
+            "B-NRP",
+            "I-NRP",
+            "B-ORGANIZATION",
+            "I-ORGANIZATION",
+            "B-PERSON",
+            "I-PERSON",
+            "B-PHONE_NUMBER",
+            "I-PHONE_NUMBER",
+            "B-STREET_ADDRESS",
+            "I-STREET_ADDRESS",
+            "B-TITLE",
+            "I-TITLE",
+            "B-US_DRIVER_LICENSE",
+            "I-US_DRIVER_LICENSE",
+            "B-US_SSN",
+            "I-US_SSN",
+            "B-ZIP_CODE",
+            "I-ZIP_CODE",
+        ],
+        "text_col": "tokens",
+        "label_col": "labels",
+        "split": "test",
     },
 }
 
+BASE_MODEL_ID = "jhu-clsp/mmBERT-base"
+
+#                                                                     CORE Functions
+
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Evaluate MoM Collection Models")
+    parser = argparse.ArgumentParser(description="Unified MoM Collection Evaluation")
     parser.add_argument(
         "--model",
         type=str,
+        nargs="+",
         required=True,
         choices=list(MODEL_REGISTRY.keys()),
-        help="Task type to evaluate (e.g., feedback, pii).",
+        help="Model(s) to evaluate. Can specify multiple.",
     )
     parser.add_argument(
-        "--model_id",
-        type=str,
-        default=None,
-        help="Optional: Override model path (e.g., local/path or user/repo). Defaults to official registry ID.",
-    )
-    parser.add_argument("--use_lora", action="store_true", help="Use the LoRA variant")
-    parser.add_argument(
-        "--batch_size", type=int, default=16, help="Inference batch size"
+        "--model_id", type=str, default=None, help="Override default model path/repo."
     )
     parser.add_argument(
-        "--limit", type=int, default=None, help="Max samples to evaluate"
+        "--use_lora",
+        action="store_true",
+        help="Evaluate LoRA variants instead of merged.",
+    )
+    parser.add_argument(
+        "--batch_size", type=int, default=16, help="Batch size for inference."
+    )
+    parser.add_argument(
+        "--limit", type=int, default=None, help="Limit samples for quick testing."
     )
     parser.add_argument(
         "--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu"
     )
     parser.add_argument(
-        "--output_dir",
+        "--language",
         type=str,
-        default="src/training/model_eval/results",
-        help="Output directory",
+        choices=list(LANGUAGE_CODES.keys()),
+        help="Filter dataset by language.",
     )
     parser.add_argument(
-        "--custom_dataset", type=str, default=None, help="Path to local dataset"
+        "--output_dir", type=str, default="src/training/model_eval/results"
     )
-
+    parser.add_argument(
+        "--custom_dataset",
+        type=str,
+        default=None,
+        help="Path to local .json/.csv file.",
+    )
+    parser.add_argument(
+        "--parallel", action="store_true", help="Evaluate multiple models in parallel."
+    )
+    parser.add_argument(
+        "--max_retries",
+        type=int,
+        default=3,
+        help="Max retries for network/loading operations.",
+    )
     return parser.parse_args()
 
 
-def load_model(key: str, override_model_id: str, use_lora: bool, device: str):
-    config = MODEL_REGISTRY[key]
-
-    # Determine which model ID to use
-    if override_model_id:
-        model_id = override_model_id
-        logger.info(f"Using Custom Model ID: {model_id}")
-    else:
-        model_id = config["lora_id"] if use_lora else config["id"]
-        logger.info(f"Using Registry Model ID: {model_id}")
-
-    task_type = config["type"]
-    logger.info(f"Loading model on {device} (Task: {task_type})...")
-
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(model_id)
-    except Exception:
-        logger.warning(
-            f"Could not load tokenizer from {model_id}. Trying base model logic..."
-        )
-        peft_config = PeftConfig.from_pretrained(model_id)
-        tokenizer = AutoTokenizer.from_pretrained(peft_config.base_model_name_or_path)
-
-    if use_lora:
-        peft_config = PeftConfig.from_pretrained(model_id)
-        base_model_id = peft_config.base_model_name_or_path
-
-        logger.info(f"Detected LoRA. Loading base model: {base_model_id}")
-
-        if task_type == "text_classification":
-            base_model = AutoModelForSequenceClassification.from_pretrained(
-                base_model_id, num_labels=len(config["labels"])
+def retry_operation(func, max_retries=3, delay=2):
+    """Retry wrapper with exponential backoff."""
+    for attempt in range(max_retries):
+        try:
+            return func()
+        except Exception as e:
+            if attempt == max_retries - 1:
+                raise
+            wait_time = delay * (2**attempt)
+            logging.getLogger("MoMEval").warning(
+                f"Attempt {attempt+1} failed: {e}. Retrying in {wait_time}s..."
             )
-        elif task_type == "token_classification":
-            base_model = AutoModelForTokenClassification.from_pretrained(
-                base_model_id, num_labels=len(config["labels"])
-            )
-
-        # Load Adapter
-        model = PeftModel.from_pretrained(base_model, model_id)
-
-    else:
-        if task_type == "text_classification":
-            model = AutoModelForSequenceClassification.from_pretrained(model_id)
-        elif task_type == "token_classification":
-            model = AutoModelForTokenClassification.from_pretrained(model_id)
-
-    model.to(device)
-    model.eval()
-    return model, tokenizer
+            time.sleep(wait_time)
 
 
-def load_eval_data(key: str, custom_path: str = None, limit: int = None):
-    """
-    Loads data from HF hub or local file.
-    Returns a dataset object.
-    """
-    config = MODEL_REGISTRY[key]
+def detect_language(text: str, target_lang: str) -> bool:
+    """Detect if text matches target lang using char ranges."""
+    if not text:
+        return False
 
-    # custom dataset
-    if custom_path:
-        logger.info(f"Loading custom dataset from: {custom_path}")
-        if custom_path.endswith(".json"):
-            dataset = load_dataset("json", data_files=custom_path, split="train")
-        elif custom_path.endswith(".csv"):
-            dataset = load_dataset("csv", data_files=custom_path, split="train")
-
-        if limit:
-            dataset = dataset.select(range(min(len(dataset), limit)))
-        return dataset
-
-    # hf dataset
-    try:
-        hf_id = config.get("hf_dataset")
-        logger.info(f"Attempting to load real dataset: {hf_id}...")
-
-        dataset = load_dataset(hf_id, split="test")
-        logger.info(f"Successfully loaded {len(dataset)} samples from {hf_id}")
-
-        if limit:
-            dataset = dataset.select(range(min(len(dataset), limit)))
-
-        return dataset
-
-    except Exception as e:
-        # fallback to dummy data
-        logger.warning(
-            f"Could not load HF dataset '{config.get('hf_dataset')}' (Error: {str(e)})."
-        )
-        logger.warning("Falling back to GENERATED DUMMY DATA for pipeline validation.")
-        return generate_dummy_data(config["type"], config["labels"], limit or 10)
-
-
-def generate_dummy_data(task_type, labels, count):
-    data = []
-    if task_type == "text_classification":
-        for i in range(count):
-            data.append(
-                {
-                    "text": f"This is a test sentence number {i} for evaluation.",
-                    "label": i % len(labels),
-                }
-            )
-    elif task_type == "token_classification":
-        for i in range(count):
-            data.append(
-                {
-                    "tokens": ["This", "is", "a", "test", "sentence", "."],
-                    "ner_tags": [0, 0, 0, 0, 0, 0],
-                }
-            )
-
-    return Dataset.from_list(data)
-
-
-#      Eval Loops
-
-
-def evaluate_text_classification(model, tokenizer, dataset, device, labels, batch_size):
-    predictions = []
-    ground_truths = []
-    latencies = []
-
-    logger.info(f"Starting Text Classification Evaluation (Batch Size: {batch_size})")
-
-    # Batched iteration
-    for i in tqdm(range(0, len(dataset), batch_size)):
-        batch = dataset[i : i + batch_size]
-
-        if isinstance(batch, dict):
-            texts = batch.get("text", batch.get("sentence"))
-            true_labels = batch["label"]
-        else:
-            texts = [item.get("text", item.get("sentence")) for item in batch]
-            true_labels = [item["label"] for item in batch]
-
-        start_ts = time.time()
-
-        inputs = tokenizer(
-            texts, return_tensors="pt", padding=True, truncation=True, max_length=512
-        ).to(device)
-
-        with torch.no_grad():
-            outputs = model(**inputs)
-            logits = outputs.logits
-
-            preds_batch = torch.argmax(logits, dim=-1).cpu().tolist()
-
-        batch_latency = (time.time() - start_ts) * 1000
-        latencies.extend([batch_latency / len(texts)] * len(texts))
-
-        predictions.extend(preds_batch)
-        ground_truths.extend(true_labels)
-
-    return predictions, ground_truths, latencies
-
-
-def evaluate_token_classification(
-    model, tokenizer, dataset, device, label_map, batch_size
-):
-    predictions = []
-    ground_truths = []
-    latencies = []
-
-    logger.info(f"Starting Token Classification Evaluation (Batch Size: {batch_size})")
-
-    for i in tqdm(range(0, len(dataset), batch_size)):
-        batch = dataset[i : i + batch_size]
-
-        if isinstance(batch, dict):
-            batch_words = batch["tokens"]
-            batch_tags = batch["ner_tags"]
-        else:
-            batch_words = [item["tokens"] for item in batch]
-            batch_tags = [item["ner_tags"] for item in batch]
-
-        start_ts = time.time()
-
-        # Tokenize batch
-        tokenized_inputs = tokenizer(
-            batch_words,
-            is_split_into_words=True,
-            return_tensors="pt",
-            padding=True,
-            truncation=True,
-        ).to(device)
-
-        with torch.no_grad():
-            outputs = model(**tokenized_inputs)
-            logits = outputs.logits
-            pred_ids = torch.argmax(logits, dim=-1)
-
-        batch_latency = (time.time() - start_ts) * 1000
-        latencies.extend([batch_latency / len(batch_words)] * len(batch_words))
-
-        # Align predictions for each sample in the batch
-        pred_ids = pred_ids.cpu().tolist()
-
-        for idx, pred_row in enumerate(pred_ids):
-            word_ids = tokenized_inputs.word_ids(batch_index=idx)
-            true_tag_ids = batch_tags[idx]
-
-            aligned_preds = []
-            aligned_truth = []
-
-            previous_word_idx = None
-            for token_idx, word_idx in enumerate(word_ids):
-                if word_idx is None:
-                    continue
-                elif word_idx != previous_word_idx:
-                    # Start of new word
-                    if token_idx < len(pred_row):
-                        aligned_preds.append(label_map[pred_row[token_idx]])
-                    else:
-                        aligned_preds.append("O")  # Fallback
-
-                    if word_idx < len(true_tag_ids):
-                        aligned_truth.append(label_map[true_tag_ids[word_idx]])
-                    else:
-                        aligned_truth.append("O")
-
-                previous_word_idx = word_idx
-
-            predictions.append(aligned_preds)
-            ground_truths.append(aligned_truth)
-
-    return predictions, ground_truths, latencies
-
-
-def calculate_metrics(predictions, ground_truths, latencies, labels, task_type):
-    metrics = {
-        "latency_ms": {
-            "avg": np.mean(latencies),
-            "p50": np.percentile(latencies, 50),
-            "p99": np.percentile(latencies, 99),
-        }
+    #                  For Non-Latin Scripts
+    char_checks = {
+        "zh": lambda t: any("\u4e00" <= c <= "\u9fff" for c in t),
+        "ja": lambda t: any("\u3040" <= c <= "\u30ff" for c in t),
+        "ar": lambda t: any("\u0600" <= c <= "\u06ff" for c in t),
+        "hi": lambda t: any("\u0900" <= c <= "\u097f" for c in t),
     }
 
-    if task_type == "text_classification":
-        acc = accuracy_score(ground_truths, predictions)
-        prec, rec, f1, _ = precision_recall_fscore_support(
-            ground_truths, predictions, average="weighted", zero_division=0
+    if target_lang in char_checks:
+        return char_checks[target_lang](text)
+
+    #  simple heuristic for latin
+
+    return any("a" <= c.lower() <= "z" for c in text)
+
+
+def filter_dataset_by_lang(dataset: Dataset, lang: str, text_col: str) -> Dataset:
+    """Filter dataset by language."""
+    logger = logging.getLogger("MoMEval")
+    original_len = len(dataset)
+    filtered = dataset.filter(lambda x: detect_language(x.get(text_col, ""), lang))
+    logger.info(f"Language filter ({lang}): {original_len} -> {len(filtered)} samples")
+    return filtered
+
+
+def load_eval_data(model_name: str, args) -> Dataset:
+    """Load eval dataset."""
+    config = MODEL_REGISTRY[model_name]
+    logger = logging.getLogger("MoMEval")
+
+    try:
+        # Custom Dataset
+        if args.custom_dataset:
+            logger.info(f"Loading custom dataset: {args.custom_dataset}")
+            ext = Path(args.custom_dataset).suffix
+            if ext not in [".json", ".csv"]:
+                raise ValueError(f"Unsupported format: {ext}. Use .json or .csv")
+
+            ds = retry_operation(
+                lambda: load_dataset(
+                    "json" if ext == ".json" else "csv",
+                    data_files=args.custom_dataset,
+                    split="train",
+                ),
+                max_retries=args.max_retries,
+            )
+            return ds.select(range(min(len(ds), args.limit))) if args.limit else ds
+
+        #  da  PII
+        if model_name == "pii":
+            logger.info("Fetching Presidio dataset...")
+            url = "https://raw.githubusercontent.com/microsoft/presidio-research/master/data/synth_dataset_v2.json"
+
+            def fetch_presidio():
+                resp = requests.get(url, timeout=30)
+                resp.raise_for_status()
+                return resp.json()
+
+            data = retry_operation(fetch_presidio, max_retries=args.max_retries)
+            if args.limit:
+                data = data[: args.limit]
+
+            processed = []
+            for entry in tqdm(data, desc="Processing PII data"):
+                text = entry["full_text"]
+                spans = entry.get("spans", [])
+                words = list(re.finditer(r"\S+", text))
+                tokens = []
+                labels = ["O"] * len(words)
+
+                for idx, m in enumerate(words):
+                    tokens.append(m.group())
+                    for s in spans:
+                        if (
+                            m.start() >= s["start_position"]
+                            and m.end() <= s["end_position"]
+                        ):
+                            prefix = "B-" if m.start() == s["start_position"] else "I-"
+                            labels[idx] = f"{prefix}{s['entity_type']}"
+                            break
+                processed.append({"tokens": tokens, "labels": labels})
+            return Dataset.from_list(processed)
+
+        # Intent da
+        if model_name == "intent":
+            logger.info("Loading MMLU-Pro dataset...")
+            ds = retry_operation(
+                lambda: load_dataset(config["hf_dataset"], split=config["split"]),
+                max_retries=args.max_retries,
+            )
+            ds = ds.filter(lambda x: x["category"] in config["labels"])
+            if args.limit:
+                ds = ds.select(range(min(len(ds), args.limit)))
+            l2id = {l: i for i, l in enumerate(config["labels"])}
+            ds = ds.map(lambda x: {"label": l2id[x["category"]]})
+            ds = ds.rename_column("question", "text")
+            return ds
+
+        #                 Standard Classification
+        logger.info(f"Loading {config['hf_dataset']}...")
+        ds = retry_operation(
+            lambda: load_dataset(config["hf_dataset"], split=config["split"]),
+            max_retries=args.max_retries,
         )
-        metrics["accuracy"] = acc
-        metrics["precision"] = prec
-        metrics["recall"] = rec
-        metrics["f1"] = f1
 
-        # Confusion Matrix
-        cm = confusion_matrix(ground_truths, predictions, labels=range(len(labels)))
-        metrics["confusion_matrix"] = cm.tolist()
+        if config["text_col"] not in ds.column_names:
+            possible_text_cols = [
+                "text",
+                "question",
+                "input",
+                "prompt",
+                "message",
+                "full_text",
+            ]
+            for col in possible_text_cols:
+                if col in ds.column_names:
+                    logger.info(f"Auto-detected text column '{col}' for {model_name}")
+                    config["text_col"] = col
+                    break
+            else:
+                raise ValueError(
+                    f"No suitable text column found in dataset for {model_name}. Columns: {ds.column_names}"
+                )
 
-    elif task_type == "token_classification":
-        acc = seqe_accuracy_score(ground_truths, predictions)
-        f1 = seq_f1_score(ground_truths, predictions)
-        report = seq_classification_report(ground_truths, predictions, output_dict=True)
+        if config["label_col"] not in ds.column_names:
+            possible_label_cols = ["label_id", "label_name", "label_text", "label"]
+            for col in possible_label_cols:
+                if col in ds.column_names:
+                    logger.info(f"Auto-detected label column '{col}' for {model_name}")
+                    config["label_col"] = col
+                    break
+            else:
+                raise ValueError(
+                    f"No suitable label column found in dataset for {model_name}. Columns: {ds.column_names}"
+                )
 
-        metrics["token_accuracy"] = acc
-        metrics["f1"] = f1
-        metrics["detailed_report"] = report
+        if args.language:
+            ds = filter_dataset_by_lang(ds, args.language, config["text_col"])
 
-    return metrics
+        if args.limit:
+            ds = ds.select(range(min(len(ds), args.limit)))
+
+        #                   Renaming columns
+        if config["text_col"] in ds.column_names and config["text_col"] != "text":
+            if "text" in ds.column_names:
+                ds = ds.remove_columns(["text"])
+            ds = ds.rename_column(config["text_col"], "text")
+        if config["label_col"] in ds.column_names and config["label_col"] != "label":
+            if "label" in ds.column_names:
+                ds = ds.remove_columns(["label"])
+            ds = ds.rename_column(config["label_col"], "label")
+
+        label2id = {l: i for i, l in enumerate(config["labels"])}
+
+        def map_to_int(example):
+            label = example["label"]
+            if isinstance(label, str):
+                example["label"] = label2id.get(label, -1)
+            return example
+
+        ds = ds.map(map_to_int)
+        ds = ds.filter(lambda x: x["label"] != -1)
+
+        logger.info(f"Dataset columns after processing: {ds.column_names}")
+
+        return ds
+
+    except Exception as e:
+        logger.error(f"Failed to load dataset for {model_name}: {e}")
+        raise
 
 
-def save_report(args, metrics, labels, task_type):
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+def load_model_and_tokenizer(model_name: str, args):
+    """Load model and tokenizer with robust handling using base config."""
+    config_reg = MODEL_REGISTRY[model_name]
+    logger = logging.getLogger("MoMEval")
 
-    timestamp = time.strftime("%Y%m%d-%H%M%S")
-
-    #         Save JSON
-    json_path = output_dir / f"{args.model}_eval_{timestamp}.json"
-    with open(json_path, "w") as f:
-        json.dump(metrics, f, indent=2)
-    logger.info(f"Metrics saved to {json_path}")
-
-    #       Save Confusion Matrix (Text Class only)
-    if task_type == "text_classification" and "confusion_matrix" in metrics:
-        cm = np.array(metrics["confusion_matrix"])
-        plt.figure(figsize=(10, 8))
-        sns.heatmap(
-            cm,
-            annot=True,
-            fmt="d",
-            cmap="Blues",
-            xticklabels=labels,
-            yticklabels=labels,
+    try:
+        model_id = args.model_id or (
+            config_reg["lora_id"] if args.use_lora else config_reg["id"]
         )
-        plt.xlabel("Predicted")
-        plt.ylabel("Actual")
-        plt.title(f"Confusion Matrix: {args.model}")
+        logger.info(f"Loading model: {model_id}")
 
-        plot_path = output_dir / f"{args.model}_cm_{timestamp}.png"
-        plt.savefig(plot_path)
-        logger.info(f"Confusion matrix plot saved to {plot_path}")
+        # Load tokenizer
+        def load_tok():
+            return AutoTokenizer.from_pretrained(model_id)
 
-    # Print Summary
-    print("\n" + "=" * 40)
-    print(f"EVALUATION REPORT: {args.model}")
-    print("=" * 40)
-    print(f"Accuracy: {metrics.get('accuracy', metrics.get('token_accuracy', 0)):.4f}")
-    if "f1" in metrics:
-        print(f"F1 Score: {metrics['f1']:.4f}")
-    print(f"Avg Latency: {metrics['latency_ms']['avg']:.2f} ms")
-    print("=" * 40 + "\n")
+        try:
+            tokenizer = retry_operation(load_tok, max_retries=args.max_retries)
+        except Exception as e:
+            logger.warning(
+                f"Tokenizer load from {model_id} failed: {e}. Falling back to base model."
+            )
+            tokenizer = retry_operation(
+                lambda: AutoTokenizer.from_pretrained(BASE_MODEL_ID),
+                max_retries=args.max_retries,
+            )
+
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+
+        # Build config from base model
+        clean_labels = config_reg["labels"]
+        id2label = {i: str(l) for i, l in enumerate(clean_labels)}
+        label2id = {str(l): i for i, l in enumerate(clean_labels)}
+
+        hf_config = ModernBertConfig.from_pretrained(
+            BASE_MODEL_ID,
+            num_labels=len(clean_labels),
+            id2label=id2label,
+            label2id=label2id,
+        )
+
+        # Load model
+        if config_reg["type"] == "text_classification":
+            model_cls = ModernBertForSequenceClassification
+        else:
+            model_cls = ModernBertForTokenClassification
+
+        if args.use_lora:
+            base_model = model_cls.from_pretrained(BASE_MODEL_ID, config=hf_config)
+            model = PeftModel.from_pretrained(base_model, model_id, config=hf_config)
+        else:
+            model = model_cls.from_pretrained(
+                model_id, config=hf_config, ignore_mismatched_sizes=True
+            )
+
+        model.to(args.device).eval()
+        logger.info(f"Model loaded successfully on {args.device}")
+        return model, tokenizer
+
+    except Exception as e:
+        logger.error(f"Failed to load model {model_name}: {e}")
+        raise
 
 
-#                                 --- MAIN ---
+def evaluate_single_model(model_name: str, args) -> Tuple[str, Dict]:
+    """Evaluate a single model with comprehensive error handling."""
+    config = MODEL_REGISTRY[model_name]
+    logger = logging.getLogger("MoMEval")
+
+    try:
+        #                           Load data and model
+        dataset = load_eval_data(model_name, args)
+        model, tokenizer = load_model_and_tokenizer(model_name, args)
+
+        all_preds, all_truths, lats = [], [], []
+
+        #                          Inference Loop
+        for i in tqdm(
+            range(0, len(dataset), args.batch_size), desc=f"Eval {model_name}"
+        ):
+            batch = dataset[i : i + args.batch_size]
+            start = time.time()
+
+            try:
+                if config["type"] == "text_classification":
+                    inputs = tokenizer(
+                        batch["text"],
+                        padding=True,
+                        truncation=True,
+                        max_length=512,
+                        return_tensors="pt",
+                    ).to(args.device)
+                    with torch.no_grad():
+                        out = model(**inputs)
+                        preds = torch.argmax(out.logits, dim=-1).cpu().tolist()
+                    all_preds.extend(preds)
+                    all_truths.extend(batch["label"])
+                else:
+                    inputs = tokenizer(
+                        batch["tokens"],
+                        is_split_into_words=True,
+                        padding=True,
+                        truncation=True,
+                        max_length=512,
+                        return_tensors="pt",
+                    ).to(args.device)
+
+                    with torch.no_grad():
+                        out = model(**inputs)
+                        pred_ids = torch.argmax(out.logits, dim=-1).cpu().tolist()
+
+                    for idx, (p_seq, true_labels) in enumerate(
+                        zip(pred_ids, batch["labels"])
+                    ):
+                        word_ids = inputs.word_ids(batch_index=idx)
+                        p_labels = []
+
+                        for j, word_id in enumerate(word_ids):
+                            if word_id is None:
+                                continue
+                            #          Take prediction only for the **first** subword
+                            if j == 0 or word_ids[j - 1] != word_id:
+                                label_idx = p_seq[j]
+                                if 0 <= label_idx < len(config["labels"]):
+                                    p_labels.append(config["labels"][label_idx])
+                                else:
+                                    p_labels.append("O")
+
+                        # Defensive len alignment
+                        min_len = min(len(p_labels), len(true_labels))
+                        if len(p_labels) != len(true_labels):
+                            logger.warning(
+                                f"Length mismatch sample {i+idx}: pred={len(p_labels)}, gt={len(true_labels)} → truncating"
+                            )
+                        p_labels = p_labels[:min_len]
+                        true_labels = true_labels[:min_len]
+
+                        all_preds.append(p_labels)
+                        all_truths.append(true_labels)
+
+                batch_time = (time.time() - start) * 1000
+                lats.extend([batch_time / len(batch)] * len(batch))
+
+            except torch.cuda.OutOfMemoryError:
+                logger.error(
+                    f"OOM at batch {i}. Reduce --batch_size. Skipping remaining batches."
+                )
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                break
+            except Exception as e:
+                logger.warning(f"Error processing batch {i}: {e}. Skipping...")
+                continue
+
+        # Validate we got predictions
+        if not all_preds or not all_truths:
+            raise ValueError(
+                f"No valid predictions for {model_name}. Check dataset and model compatibility."
+            )
+
+        # Metrics Calculation
+        stats = {
+            "latency": {
+                "avg_ms": float(np.mean(lats)),
+                "p50_ms": float(np.percentile(lats, 50)),
+                "p99_ms": float(np.percentile(lats, 99)),
+            }
+        }
+
+        if config["type"] == "text_classification":
+            unique_labels = sorted(set(all_truths) | set(all_preds))
+            stats["accuracy"] = float(accuracy_score(all_truths, all_preds))
+            p, r, f1, sup = precision_recall_fscore_support(
+                all_truths,
+                all_preds,
+                labels=unique_labels,
+                average="weighted",
+                zero_division=0,
+            )
+            stats.update({"precision": float(p), "recall": float(r), "f1": float(f1)})
+            stats["cm"] = (
+                confusion_matrix(
+                    all_truths, all_preds, labels=range(len(config["labels"]))
+                )
+                .astype(int)
+                .tolist()
+            )
+            stats["report"] = classification_report(
+                all_truths,
+                all_preds,
+                target_names=config["labels"],
+                labels=range(len(config["labels"])),
+                output_dict=True,
+                zero_division=0,
+            )
+        else:
+            # Align sequence lengths
+            aligned_t, aligned_p = [], []
+            for t, p in zip(all_truths, all_preds):
+                m_len = min(len(t), len(p))
+                aligned_t.append(t[:m_len])
+                aligned_p.append(p[:m_len])
+
+            stats["accuracy"] = float(seqe_accuracy_score(aligned_t, aligned_p))
+            stats["f1"] = float(seq_f1_score(aligned_t, aligned_p))
+            stats["report"] = seq_classification_report(
+                aligned_t, aligned_p, output_dict=True, zero_division=0
+            )
+
+            # Per-class metrics
+            per_class = seq_classification_report(
+                aligned_t, aligned_p, output_dict=True, zero_division=0
+            )
+            stats["per_class"] = {
+                entity: {
+                    "precision": float(per_class[entity]["precision"]),
+                    "recall": float(per_class[entity]["recall"]),
+                    "f1": float(per_class[entity]["f1-score"]),
+                    "support": int(per_class[entity]["support"]),
+                }
+                for entity in per_class
+                if entity not in ["accuracy", "macro avg", "weighted avg"]
+            }
+
+        #                                Save Results
+        out_dir = Path(args.output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        def default_converter(obj):
+            if isinstance(obj, np.integer):
+                return int(obj)
+            if isinstance(obj, np.floating):
+                return float(obj)
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            raise TypeError(
+                f"Object of type {obj.__class__.__name__} is not JSON serializable"
+            )
+
+        with open(out_dir / f"{model_name}_results.json", "w") as f:
+            json.dump(stats, f, indent=2, default=default_converter)
+
+        # Save conf mat if available
+        if "cm" in stats:
+            plt.figure(figsize=(10, 8))
+            sns.heatmap(
+                stats["cm"],
+                annot=True,
+                fmt="d",
+                cmap="Blues",
+                xticklabels=config["labels"],
+                yticklabels=config["labels"],
+            )
+            plt.title(f"Confusion Matrix: {model_name.upper()}")
+            plt.tight_layout()
+            plt.savefig(out_dir / f"{model_name}_cm.png")
+            plt.close()
+
+        #  cleanup the memoryyyy
+
+        del model, tokenizer
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        logger.info(f"{model_name} evaluation complete")
+        return model_name, stats
+
+    except Exception as e:
+        logger.error(f"{model_name} evaluation failed: {e}")
+        return model_name, {"error": str(e)}
 
 
 def main():
     args = parse_args()
-    config = MODEL_REGISTRY[args.model]
+    logger = setup_logging(Path(args.output_dir))
+    logger.info(f"Starting evaluation with args: {vars(args)}")
 
-    model, tokenizer = load_model(args.model, args.model_id, args.use_lora, args.device)
-    dataset = load_eval_data(args.model, args.custom_dataset, args.limit)
+    models = args.model if isinstance(args.model, list) else [args.model]
+    summary = {}
 
-    if config["type"] == "text_classification":
-        preds, truths, lats = evaluate_text_classification(
-            model, tokenizer, dataset, args.device, config["labels"], args.batch_size
-        )
+    #                                   || or seq ex
+    if args.parallel and len(models) > 1:
+        logger.info(f"Launching parallel evaluation for {len(models)} models...")
+        with ProcessPoolExecutor(max_workers=min(len(models), os.cpu_count())) as ex:
+            futures = [ex.submit(evaluate_single_model, m, args) for m in models]
+            for f in as_completed(futures):
+                try:
+                    name, res = f.result()
+                    summary[name] = res
+                except Exception as e:
+                    logger.error(f"Parallel task failed: {e}")
     else:
-        preds, truths, lats = evaluate_token_classification(
-            model, tokenizer, dataset, args.device, config["labels"], args.batch_size
-        )
+        for m in models:
+            name, res = evaluate_single_model(m, args)
+            summary[name] = res
 
-    metrics = calculate_metrics(preds, truths, lats, config["labels"], config["type"])
-    save_report(args, metrics, config["labels"], config["type"])
+    #  On console summary
+    print("\n" + "=" * 80)
+    print("FINAL EVALUATION SUMMARY")
+    print("=" * 80)
+    print(
+        f"{'Model':<15} | {'Accuracy':<10} | {'F1 Score':<10} | {'Latency (p50)':<15}"
+    )
+    print("-" * 80)
+
+    for name, res in summary.items():
+        if "error" in res:
+            print(f"{name.upper():<15} | {'ERROR':<10} | {'ERROR':<10} | {'ERROR':<15}")
+        else:
+            acc = res.get("accuracy", 0)
+            f1 = res.get("f1", 0)
+            lat = res["latency"]["p50_ms"]
+            print(f"{name.upper():<15} | {acc:<10.4f} | {f1:<10.4f} | {lat:<15.2f}ms")
+
+    print("=" * 80 + "\n")
+    logger.info("Evaluation pipeline complete!")
 
 
 if __name__ == "__main__":
