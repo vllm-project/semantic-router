@@ -2,6 +2,7 @@ package classification
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	candle "github.com/vllm-project/semantic-router/candle-binding"
@@ -155,11 +156,39 @@ func (d *HallucinationDetector) Detect(context, question, answer string) (*Hallu
 		SupportedSpans:        []string{},
 	}
 
+	minSpanLength := d.config.MinSpanLength
+	if minSpanLength <= 0 {
+		minSpanLength = 1 // Default minimum span length
+	}
+
+	minSpanConfidence := d.config.MinSpanConfidence
+	if minSpanConfidence < 0 {
+		minSpanConfidence = 0.0 // Default minimum span confidence
+	}
+
 	// Extract hallucinated spans (already filtered by threshold in Rust)
 	for _, span := range candleResult.Spans {
+		spanTokensLen := len(strings.Fields(span.Text))
+
+		// Skip spans below minimum length
+		if spanTokensLen < minSpanLength {
+			logging.Debugf("Filtered span (too short): '%s' (%d tokens < %d)",
+				span.Text, spanTokensLen, minSpanLength)
+			continue
+		}
+
+		// Skip spans below confidence threshold
+		if span.Confidence < minSpanConfidence {
+			logging.Debugf("Filtered span (low confidence): '%s' (%.3f < %.3f)",
+				span.Text, span.Confidence, minSpanConfidence)
+			continue
+		}
 		result.UnsupportedSpans = append(result.UnsupportedSpans, span.Text)
 	}
 
+	if len(result.UnsupportedSpans) == 0 && len(candleResult.Spans) > 0 {
+		result.HallucinationDetected = false
+	}
 	logging.Debugf("Hallucination detection: hallucination=%v, confidence=%.3f, threshold=%.3f, spans=%d",
 		result.HallucinationDetected, result.Confidence, threshold, len(result.UnsupportedSpans))
 
@@ -287,8 +316,51 @@ func (d *HallucinationDetector) DetectWithNLI(context, question, answer string) 
 		Spans:                 []EnhancedHallucinationSpan{},
 	}
 
+	minSpanLen := d.config.MinSpanLength
+	if minSpanLen <= 0 {
+		minSpanLen = 1 // Default minimum span length
+	}
+
+	minSpanConfidence := d.config.MinSpanConfidence
+	if minSpanConfidence < 0 {
+		minSpanConfidence = 0.0 // Default minimum span confidence
+	}
+	enableNLIFiltering := d.config.EnableNLIFiltering
+	nliEntailmentTheshold := d.config.NLIEntailmentThreshold
+	if nliEntailmentTheshold <= 0 {
+		nliEntailmentTheshold = 0.75 // Default entailment threshold
+	}
+
+	// Convert enanced spans with NLI filtering
+	filteredCount := 0
 	// Convert enhanced spans, adjusting severity based on NLI threshold
 	for _, span := range candleResult.Spans {
+		spanTokensLen := len(strings.Fields(span.Text))
+
+		// Skip spans below minimum length
+		if spanTokensLen < minSpanLen {
+			logging.Debugf("Filtered span (too short): '%s' (%d tokens < %d)",
+				span.Text, spanTokensLen, minSpanLen)
+			filteredCount++
+			continue
+		}
+
+		// Skip spans below confidence threshold
+		if span.HallucinationConfidence < minSpanConfidence {
+			logging.Debugf("Filtered span (low confidence): '%s' (%.3f < %.3f)",
+				span.Text, span.HallucinationConfidence, minSpanConfidence)
+			filteredCount++
+			continue
+		}
+
+		// If NLI filtering is enabled, skip spans with high entailment confidence
+		if enableNLIFiltering && span.NLILabel == NLIEntailment && span.NLIConfidence >= nliEntailmentTheshold {
+			logging.Debugf("Filtered span (NLI entailment): '%s' (entailment confidence %.3f >= %.3f)",
+				span.Text, span.NLIConfidence, nliEntailmentTheshold)
+			filteredCount++
+			continue
+		}
+
 		enhancedSpan := EnhancedHallucinationSpan{
 			Text:                    span.Text,
 			Start:                   span.Start,
@@ -312,6 +384,11 @@ func (d *HallucinationDetector) DetectWithNLI(context, question, answer string) 
 		}
 
 		result.Spans = append(result.Spans, enhancedSpan)
+	}
+
+	if len(result.Spans) == 0 && len(candleResult.Spans) > 0 {
+		result.HallucinationDetected = false
+		logging.Infof("All %d spans filtered out - marking as no hallucination", filteredCount)
 	}
 
 	logging.Debugf("Enhanced hallucination detection: detected=%v, confidence=%.3f, hal_threshold=%.3f, nli_threshold=%.3f, spans=%d",

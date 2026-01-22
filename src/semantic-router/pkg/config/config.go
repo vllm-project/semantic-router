@@ -1065,6 +1065,37 @@ type HallucinationModelConfig struct {
 
 	// Use CPU for inference
 	UseCPU bool `yaml:"use_cpu"`
+
+	// Minimum span length (in tokens) to consider for hallucination detection
+	// Helps reduce false positives from single-token mismatches
+	// Default: 1
+	MinSpanLength int `yaml:"min_span_length,omitempty"`
+
+	// MinSpanConfidence is the minimum average confidence (0.0–1.0)
+	// required for a span to be considered non-hallucinated.
+	// Spans with average confidence below this threshold are flagged
+	// as potential hallucinations.
+	// Default: 0.0 (disable span confidence filtering)
+	MinSpanConfidence float32 `yaml:"min_span_confidence,omitempty"`
+
+	// Context window size for span extraction (in tokens)
+	// Provides additional context around detected spans for better accuracy
+	// Default: 50
+	ContextWindowSize int `yaml:"context_window_size,omitempty"`
+
+	// EnableNLIFiltering enables NLI-based false positive filtering.
+	// When enabled, an NLI model verifies whether detected hallucination
+	// spans are actually unsupported by the surrounding context,
+	// reducing false positives.
+	// Default: false
+	EnableNLIFiltering bool `yaml:"enable_nli_filtering,omitempty"`
+
+	// NLIEntailmentThreshold is the confidence threshold (0.0-1.0)
+	// for NLI entailment when filtering hallucination spans.
+	// Spans with NLI entailment confidence above this threshold
+	// are considered supported by context and not hallucinations.
+	// Default: 0.75
+	NLIEntailmentThreshold float32 `yaml:"nli_entailment_threshold,omitempty"`
 }
 
 // NLIModelConfig represents configuration for the NLI (Natural Language Inference) model
