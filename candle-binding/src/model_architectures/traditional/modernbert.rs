@@ -35,6 +35,9 @@ pub enum ModernBertVariant {
     /// mmBERT - Multilingual ModernBERT (1800+ languages, 256k vocab, 8192 max length)
     /// Reference: https://huggingface.co/jhu-clsp/mmBERT-base
     Multilingual,
+    /// ModernBERT-base-32k - Extended context ModernBERT (32,768 max length with RoPE)
+    /// Reference: https://huggingface.co/llm-semantic-router/modernbert-base-32k
+    Extended32K,
 }
 
 impl ModernBertVariant {
@@ -43,6 +46,7 @@ impl ModernBertVariant {
         match self {
             ModernBertVariant::Standard => 512,
             ModernBertVariant::Multilingual => 8192,
+            ModernBertVariant::Extended32K => 32768,
         }
     }
 
@@ -55,6 +59,10 @@ impl ModernBertVariant {
             ModernBertVariant::Multilingual => {
                 crate::core::tokenization::TokenizationStrategy::MmBERT
             }
+            ModernBertVariant::Extended32K => {
+                // 32K variant uses ModernBERT tokenization strategy
+                crate::core::tokenization::TokenizationStrategy::ModernBERT
+            }
         }
     }
 
@@ -63,10 +71,11 @@ impl ModernBertVariant {
         match self {
             ModernBertVariant::Standard => "[PAD]",
             ModernBertVariant::Multilingual => "<pad>",
+            ModernBertVariant::Extended32K => "[PAD]",
         }
     }
 
-    /// Detect variant from config.json
+    /// Detect variant from config.json and training_config.json
     pub fn detect_from_config(config_path: &str) -> Result<Self, candle_core::Error> {
         let config_str = std::fs::read_to_string(config_path).map_err(|_e| {
             let unified_err = config_errors::file_not_found(config_path);
@@ -88,8 +97,51 @@ impl ModernBertVariant {
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
+        let max_position_embeddings = config_json
+            .get("max_position_embeddings")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+
+        // Check for 32K support via YaRN RoPE scaling in training_config.json
+        // ModernBERT-base-32k uses YaRN to extend from 8K to 32K
+        let model_dir = std::path::Path::new(config_path).parent().ok_or_else(|| {
+            let unified_err = config_errors::file_not_found("config.json parent directory");
+            candle_core::Error::from(unified_err)
+        })?;
+
+        let training_config_path = model_dir.join("training_config.json");
+        if training_config_path.exists() {
+            if let Ok(training_config_str) = std::fs::read_to_string(&training_config_path) {
+                if let Ok(training_config_json) =
+                    serde_json::from_str::<serde_json::Value>(&training_config_str)
+                {
+                    // Check for YaRN RoPE scaling with 32K model_max_length
+                    let rope_scaling_type = training_config_json
+                        .get("rope_scaling_type")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    let model_max_length = training_config_json
+                        .get("model_max_length")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
+
+                    // If YaRN scaling is configured and model_max_length is 32K, it's Extended32K
+                    if (rope_scaling_type == "yarn" || rope_scaling_type == "YaRN")
+                        && model_max_length >= 32768
+                    {
+                        return Ok(ModernBertVariant::Extended32K);
+                    }
+                }
+            }
+        }
+
+        // ModernBERT-base-32k: max_position_embeddings >= 32768 and uses sans_pos (RoPE)
+        // This should be checked before mmBERT to avoid false positives
+        if max_position_embeddings >= 32768 && position_embedding_type == "sans_pos" {
+            Ok(ModernBertVariant::Extended32K)
+        }
         // mmBERT has vocab_size >= 200000 and uses sans_pos (RoPE)
-        if vocab_size >= 200000 && position_embedding_type == "sans_pos" {
+        else if vocab_size >= 200000 && position_embedding_type == "sans_pos" {
             Ok(ModernBertVariant::Multilingual)
         } else {
             Ok(ModernBertVariant::Standard)
@@ -543,9 +595,33 @@ impl TraditionalModernBertClassifier {
             candle_core::Error::from(unified_err)
         })?;
 
-        // 9. Create unified tokenizer wrapper with variant-specific config
+        // 9. Load training_config.json for 32K models to get actual max_length
+        // For Extended32K variant, check training_config.json for model_max_length
+        let effective_max_length = if variant == ModernBertVariant::Extended32K {
+            let training_config_path = format!("{}/training_config.json", model_path);
+            if let Ok(training_config_str) = std::fs::read_to_string(&training_config_path) {
+                if let Ok(training_config_json) =
+                    serde_json::from_str::<serde_json::Value>(&training_config_str)
+                {
+                    // Use model_max_length from training_config if available
+                    training_config_json
+                        .get("model_max_length")
+                        .and_then(|v| v.as_u64())
+                        .map(|v| v as usize)
+                        .unwrap_or(variant.max_length())
+                } else {
+                    variant.max_length()
+                }
+            } else {
+                variant.max_length()
+            }
+        } else {
+            variant.max_length()
+        };
+
+        // 10. Create unified tokenizer wrapper with variant-specific config
         let tokenizer_config = crate::core::tokenization::TokenizationConfig {
-            max_length: variant.max_length(),
+            max_length: effective_max_length,
             add_special_tokens: true,
             truncation_strategy: tokenizers::TruncationStrategy::LongestFirst,
             truncation_direction: tokenizers::TruncationDirection::Right,
@@ -742,7 +818,7 @@ impl TraditionalModernBertTokenClassifier {
                     device.clone(),
                 )?
             }
-            ModernBertVariant::Standard => {
+            ModernBertVariant::Standard | ModernBertVariant::Extended32K => {
                 crate::core::tokenization::create_modernbert_compatibility_tokenizer(
                     base_tokenizer,
                     device.clone(),

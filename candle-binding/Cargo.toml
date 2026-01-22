@@ -64,6 +64,11 @@ path = "../deploy/examples/candle-binding/deberta_prompt_injection_example.rs"
 name = "test_raw_confidence"
 path = "../deploy/examples/candle-binding/test_raw_confidence.rs"
 
+# Example testing ModernBERT-base-32k integration
+[[example]]
+name = "test_modernbert_32k"
+path = "examples/test_modernbert_32k.rs"
+
 # Note: Benchmark binaries are located in ../bench/scripts/rust/candle-binding/
 # They are not included in the library build to keep it self-contained.
 # To run benchmarks, use the workspace-level Cargo.toml or run them directly from the bench directory.
