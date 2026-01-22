@@ -369,6 +369,15 @@ func (e *EloSelector) Select(ctx context.Context, selCtx *SelectionContext) (*Se
 	logging.Infof("[EloSelector] Selected model %s (rating=%.1f, score=%.4f, confidence=%.2f)",
 		bestModel.Model, bestRating.Rating, bestScore, confidence)
 
+	// Record metrics for all candidate models' current Elo ratings
+	for _, r := range ratings {
+		category := selCtx.DecisionName
+		if category == "" {
+			category = "_global"
+		}
+		RecordEloRating(r.Model, category, r.Rating)
+	}
+
 	return &SelectionResult{
 		SelectedModel: bestModel.Model,
 		LoRAName:      bestModel.LoRAName,
@@ -390,11 +399,71 @@ func (e *EloSelector) UpdateFeedback(ctx context.Context, feedback *Feedback) er
 		return fmt.Errorf("either winner_model or loser_model is required")
 	}
 
+	// Capture old ratings for metrics
+	oldWinnerRating := e.getGlobalRating(feedback.WinnerModel)
+	oldLoserRating := e.getGlobalRating(feedback.LoserModel)
+	var winnerOldElo, loserOldElo float64
+	if oldWinnerRating != nil {
+		winnerOldElo = oldWinnerRating.Rating
+	} else {
+		winnerOldElo = e.config.InitialRating
+	}
+	if oldLoserRating != nil {
+		loserOldElo = oldLoserRating.Rating
+	} else {
+		loserOldElo = e.config.InitialRating
+	}
+
 	// Update global ratings
 	e.updateRating(feedback, e.getGlobalRating, e.setGlobalRating)
 
+	// Capture new ratings after update
+	newWinnerRating := e.getGlobalRating(feedback.WinnerModel)
+	newLoserRating := e.getGlobalRating(feedback.LoserModel)
+
+	// Record metrics for global ratings
+	if newWinnerRating != nil {
+		RecordFeedbackMetrics(&FeedbackMetrics{
+			Winner:       feedback.WinnerModel,
+			Loser:        feedback.LoserModel,
+			Category:     "_global",
+			IsTie:        feedback.Tie,
+			WinnerOldElo: winnerOldElo,
+			WinnerNewElo: newWinnerRating.Rating,
+			LoserOldElo:  loserOldElo,
+			LoserNewElo: func() float64 {
+				if newLoserRating != nil {
+					return newLoserRating.Rating
+				}
+				return loserOldElo
+			}(),
+			WinnerStats: *newWinnerRating,
+			LoserStats: func() ModelRating {
+				if newLoserRating != nil {
+					return *newLoserRating
+				}
+				return ModelRating{}
+			}(),
+		})
+	}
+
 	// Update category ratings if applicable
 	if e.config.CategoryWeighted && feedback.DecisionName != "" {
+		// Capture old category ratings
+		oldCatWinner := e.getCategoryRating(feedback.DecisionName, feedback.WinnerModel)
+		oldCatLoser := e.getCategoryRating(feedback.DecisionName, feedback.LoserModel)
+		var catWinnerOldElo, catLoserOldElo float64
+		if oldCatWinner != nil {
+			catWinnerOldElo = oldCatWinner.Rating
+		} else {
+			catWinnerOldElo = e.config.InitialRating
+		}
+		if oldCatLoser != nil {
+			catLoserOldElo = oldCatLoser.Rating
+		} else {
+			catLoserOldElo = e.config.InitialRating
+		}
+
 		e.updateRating(feedback,
 			func(model string) *ModelRating {
 				return e.getCategoryRating(feedback.DecisionName, model)
@@ -402,6 +471,35 @@ func (e *EloSelector) UpdateFeedback(ctx context.Context, feedback *Feedback) er
 			func(model string, rating *ModelRating) {
 				e.setCategoryRating(feedback.DecisionName, model, rating)
 			})
+
+		// Capture new category ratings and record metrics
+		newCatWinner := e.getCategoryRating(feedback.DecisionName, feedback.WinnerModel)
+		newCatLoser := e.getCategoryRating(feedback.DecisionName, feedback.LoserModel)
+
+		if newCatWinner != nil {
+			RecordFeedbackMetrics(&FeedbackMetrics{
+				Winner:       feedback.WinnerModel,
+				Loser:        feedback.LoserModel,
+				Category:     feedback.DecisionName,
+				IsTie:        feedback.Tie,
+				WinnerOldElo: catWinnerOldElo,
+				WinnerNewElo: newCatWinner.Rating,
+				LoserOldElo:  catLoserOldElo,
+				LoserNewElo: func() float64 {
+					if newCatLoser != nil {
+						return newCatLoser.Rating
+					}
+					return catLoserOldElo
+				}(),
+				WinnerStats: *newCatWinner,
+				LoserStats: func() ModelRating {
+					if newCatLoser != nil {
+						return *newCatLoser
+					}
+					return ModelRating{}
+				}(),
+			})
+		}
 	}
 
 	logging.Infof("[EloSelector] Updated ratings: winner=%s, loser=%s, tie=%v",

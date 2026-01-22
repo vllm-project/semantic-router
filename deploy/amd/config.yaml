@@ -118,6 +118,15 @@ signals:
     - name: "other"
       description: "Creative writing, opinion-based, brainstorming, or general queries that don't fit specific domains"
 
+  # latency - Latency-based routing signals (TPOT-based)
+  latency:
+    - name: "low_latency"
+      max_tpot: 0.005  # 5ms per token
+      description: "For real-time chat applications requiring fast responses"
+    - name: "medium_latency"
+      max_tpot: 0.15  # 150ms per token
+      description: "For standard applications with moderate latency tolerance"
+
   # Fact-check signals for verification needs
   # Strategy: Identify queries that DON'T need fact checking (creative/code/opinion)
   # All other queries will be routed to fact-check-capable models
@@ -290,6 +299,30 @@ decisions:
           enabled: true
           similarity_threshold: 0.95
 
+  # Priority 135: Fast coding in English
+  - name: "fast_coding"
+    description: "Fast coding related queries in English"
+    priority: 135
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "computer science"
+        - type: "language"
+          name: "en"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
+        reasoning_effort: "low"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a fast coding assistant. Provide code solutions quickly."
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.95
+
   # Priority 130: Fast QA in Chinese
   - name: "fast_qa_chinese"
     description: "Quick answers in Chinese"
@@ -344,8 +377,6 @@ decisions:
       operator: "OR"
       conditions:
         - type: "domain"
-          name: "computer_science"
-        - type: "domain"
           name: "math"
         - type: "domain"
           name: "physics"
@@ -355,6 +386,8 @@ decisions:
           name: "en"
         - type: "language"
           name: "zh"
+        - type: "latency"
+          name: "medium_latency"
     modelRefs:
       - model: "openai/gpt-oss-20b"
         use_reasoning: false

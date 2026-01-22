@@ -20,7 +20,7 @@ We are building the **System Level Intelligence** for Mixture-of-Models (MoM), b
 
 ### Signal-Driven Decision Engine
 
-Captures and combines **7 types of signals** to make intelligent routing decisions:
+Captures and combines **8 types of signals** to make intelligent routing decisions:
 
 | Signal Type | Description | Use Case |
 |------------|-------------|----------|
@@ -31,6 +31,7 @@ Captures and combines **7 types of signals** to make intelligent routing decisio
 | **user_feedback** | User satisfaction and feedback classification | Handle follow-up messages and corrections |
 | **preference** | LLM-based route preference matching | Complex intent analysis via external LLM |
 | **language** | Multi-language detection (100+ languages) | Route queries to language-specific models |
+| **latency** | TPOT-based latency evaluation | Route latency-sensitive queries to faster models based on real-time TPOT |
 
 **How it works**: Signals are extracted from requests, combined using AND/OR operators in decision rules, and used to select the best model and configuration.
 
@@ -67,6 +68,7 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
         Feedback[User Feedback Signals<br/>Satisfaction Analysis]
         Preference[Preference Signals<br/>LLM-based Matching]
         Language[Language Signals<br/>Multi-language Detection]
+        Latency[Latency Signals<br/>TPOT-based Routing]
     end
 
     subgraph "Decision Engine"
@@ -91,6 +93,7 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
     Router --> Feedback
     Router --> Preference
     Router --> Language
+    Router --> Latency
 
     Keyword --> Rules
     Embedding --> Rules
@@ -99,6 +102,7 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
     Feedback --> Rules
     Preference --> Rules
     Language --> Rules
+    Latency --> Rules
 
     Rules --> ModelSelect
     ModelSelect --> Cache
@@ -174,7 +178,7 @@ Step-by-step guides for implementing intelligent routing, semantic caching, cont
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](./community/overview) for details.
+We welcome contributions! Please see our [Contributing Guide](https://github.com/vllm-project/semantic-router/blob/main/CONTRIBUTING.md) for details.
 
 ## License
 

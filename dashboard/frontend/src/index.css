@@ -93,6 +93,7 @@
 html {
   /* Default to dark theme */
   color-scheme: dark;
+  height: 100%;
 }
 
 body {
@@ -102,10 +103,12 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  height: 100%;
 }
 
 #root {
   min-height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
 }

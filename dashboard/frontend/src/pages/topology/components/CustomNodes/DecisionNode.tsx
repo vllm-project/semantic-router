@@ -46,7 +46,7 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
       }}
       title={isUnreachable ? `⚠️ Unreachable: ${unreachableReason}` : undefined}
     >
-      <Handle type="target" position={Position.Left} />
+      <Handle type="target" position={Position.Top} />
 
       <div className={styles.decisionHeader}>
         <span className={styles.decisionIcon}>{isUnreachable ? '⚠️' : '🔀'}</span>
@@ -121,7 +121,7 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
         )}
       </div>
 
-      <Handle type="source" position={Position.Right} />
+      <Handle type="source" position={Position.Bottom} />
     </div>
   )
 })

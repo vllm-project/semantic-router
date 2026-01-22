@@ -208,6 +208,7 @@ const ChatComponent = ({
         'x-vsr-matched-user-feedback',
         'x-vsr-matched-preference',
         'x-vsr-matched-language',
+        'x-vsr-matched-latency',
         // Looper headers
         'x-vsr-looper-model',
         'x-vsr-looper-models-used',

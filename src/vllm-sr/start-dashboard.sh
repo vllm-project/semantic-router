@@ -28,6 +28,21 @@ if [ "${DASHBOARD_READONLY}" = "true" ]; then
     echo "Dashboard read-only mode: ENABLED"
 fi
 
+# Build observability arguments
+OBSERVABILITY_ARGS=""
+if [ -n "${TARGET_JAEGER_URL}" ]; then
+    OBSERVABILITY_ARGS="${OBSERVABILITY_ARGS} -jaeger=${TARGET_JAEGER_URL}"
+    echo "Jaeger URL: ${TARGET_JAEGER_URL}"
+fi
+if [ -n "${TARGET_GRAFANA_URL}" ]; then
+    OBSERVABILITY_ARGS="${OBSERVABILITY_ARGS} -grafana=${TARGET_GRAFANA_URL}"
+    echo "Grafana URL: ${TARGET_GRAFANA_URL}"
+fi
+if [ -n "${TARGET_PROMETHEUS_URL}" ]; then
+    OBSERVABILITY_ARGS="${OBSERVABILITY_ARGS} -prometheus=${TARGET_PROMETHEUS_URL}"
+    echo "Prometheus URL: ${TARGET_PROMETHEUS_URL}"
+fi
+
 exec /usr/local/bin/dashboard-backend \
     -port=8700 \
     -static=/app/frontend \
@@ -35,5 +50,6 @@ exec /usr/local/bin/dashboard-backend \
     -router_api=http://localhost:8080 \
     -router_metrics=http://localhost:9190/metrics \
     -envoy="http://localhost:${ENVOY_PORT}" \
-    ${READONLY_ARG}
+    ${READONLY_ARG} \
+    "${OBSERVABILITY_ARGS}"
 

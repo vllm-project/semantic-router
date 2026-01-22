@@ -310,6 +310,9 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	})
 	modelSelectorRegistry := selectionFactory.CreateAll()
 
+	// Set as global registry so feedback API can access it
+	selection.GlobalRegistry = modelSelectorRegistry
+
 	logging.Infof("[Router] Initialized model selection registry (per-decision algorithm config)")
 
 	router := &OpenAIRouter{

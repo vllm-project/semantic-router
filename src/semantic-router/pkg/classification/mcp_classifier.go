@@ -420,10 +420,7 @@ func (c *Classifier) classifyCategoryWithEntropyMCP(text string) (string, float6
 	}
 
 	// Get full probability distribution via MCP
-	start := time.Now()
 	result, err := c.mcpCategoryInference.ClassifyWithProbabilities(ctx, text)
-	metrics.RecordClassifierLatency("category_mcp", time.Since(start).Seconds())
-
 	if err != nil {
 		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("MCP classification error: %w", err)
 	}
@@ -536,8 +533,8 @@ func (c *Classifier) classifyCategoryWithEntropyMCP(text string) (string, float6
 		logging.Infof("MCP classification confidence (%.4f) below threshold (%.4f), falling back to category: %s",
 			result.Confidence, threshold, fallbackCategory)
 
-		// Record the fallback category classification metric
-		metrics.RecordCategoryClassification(fallbackCategory)
+		// Record the fallback category as a signal match
+		metrics.RecordSignalMatch(config.SignalTypeKeyword, fallbackCategory)
 
 		// Return fallback category instead of empty string to enable proper decision routing
 		return fallbackCategory, float64(result.Confidence), reasoningDecision, nil
@@ -560,8 +557,8 @@ func (c *Classifier) classifyCategoryWithEntropyMCP(text string) (string, float6
 		genericCategory = categoryName
 	}
 
-	// Record the category classification metric
-	metrics.RecordCategoryClassification(genericCategory)
+	// Record the category as a signal match
+	metrics.RecordSignalMatch(config.SignalTypeKeyword, genericCategory)
 
 	logging.Infof("MCP classified as category: %s (mmlu=%s), reasoning_decision: use=%t, confidence=%.3f, reason=%s",
 		genericCategory, categoryName, reasoningDecision.UseReasoning, reasoningDecision.Confidence, reasoningDecision.DecisionReason)

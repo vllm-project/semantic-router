@@ -3,12 +3,10 @@ package classification
 import (
 	"fmt"
 	"sync"
-	"time"
 
 	candle "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // FactCheckResult represents the result of fact-check classification
@@ -96,12 +94,7 @@ func (c *FactCheckClassifier) Classify(text string) (*FactCheckResult, error) {
 		}, nil
 	}
 
-	start := time.Now()
-
 	result, err := candle.ClassifyFactCheckText(text)
-
-	metrics.RecordClassifierLatency("fact_check_ml", time.Since(start).Seconds())
-
 	if err != nil {
 		return nil, fmt.Errorf("fact-check ML classification failed: %w", err)
 	}

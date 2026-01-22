@@ -34,6 +34,7 @@ const (
 	SignalTypeUserFeedback = "user_feedback"
 	SignalTypePreference   = "preference"
 	SignalTypeLanguage     = "language"
+	SignalTypeLatency      = "latency"
 )
 
 // API format constants for model backends
@@ -316,6 +317,10 @@ type Signals struct {
 	// Language rules for multi-language detection signal classification
 	// When matched, outputs the detected language code (e.g., "en", "es", "zh", "fr")
 	LanguageRules []LanguageRule `yaml:"language_rules,omitempty"`
+
+	// Latency rules for latency-based signal classification
+	// When matched, outputs the latency rule name if available models meet TPOT requirements
+	LatencyRules []LatencyRule `yaml:"latency_rules,omitempty"`
 }
 
 // BackendModels represents the configuration for backend models
@@ -1772,6 +1777,21 @@ type LanguageRule struct {
 	Name string `yaml:"name"`
 
 	// Description provides human-readable explanation of the language
+	Description string `yaml:"description,omitempty"`
+}
+
+// LatencyRule defines a rule for latency-based signal classification
+// The latency classifier evaluates if available models meet TPOT (Time Per Output Token) requirements
+type LatencyRule struct {
+	// Name is the latency rule name that can be referenced in decision rules
+	Name string `yaml:"name"`
+
+	// MaxTPOT is the maximum acceptable TPOT (Time Per Output Token) in seconds
+	// Models with TPOT <= MaxTPOT will match this rule
+	// Example: 0.05 means 50ms per token
+	MaxTPOT float64 `yaml:"max_tpot"`
+
+	// Description provides human-readable explanation of the latency requirement
 	Description string `yaml:"description,omitempty"`
 }
 

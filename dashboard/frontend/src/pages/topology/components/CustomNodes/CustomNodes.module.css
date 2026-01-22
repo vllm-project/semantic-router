@@ -415,7 +415,7 @@
 .chainArrow {
   font-size: 14px;  /* Slightly larger for vertical arrow */
   opacity: 0.5;
-  transform: rotate(90deg);  /* Rotate arrow from → to ↓ */
+  /* No rotation needed - arrow is already ↓ in the component */
 }
 
 /* ============== Model Node ============== */
@@ -457,7 +457,8 @@
   align-items: center;
   gap: 4px;
   padding: 3px 8px;
-  background: linear-gradient(135deg, #E91E63, #9C27B0);
+  background: rgba(118, 185, 0, 0.2);
+  border: 1px solid #76b900;
   border-radius: 4px;
   font-size: 10px;
   color: white;

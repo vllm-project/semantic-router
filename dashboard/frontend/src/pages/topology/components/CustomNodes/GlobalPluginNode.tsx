@@ -70,7 +70,7 @@ export const GlobalPluginNode = memo<NodeProps<GlobalPluginNodeData>>(({ data })
       }}
       title={status.tooltip}
     >
-      <Handle type="target" position={Position.Left} />
+      <Handle type="target" position={Position.Top} />
 
       <div className={styles.pluginHeader}>
         <span className={styles.pluginIcon}>{display.icon}</span>
@@ -81,7 +81,7 @@ export const GlobalPluginNode = memo<NodeProps<GlobalPluginNodeData>>(({ data })
         {status.text}
       </div>
 
-      <Handle type="source" position={Position.Right} />
+      <Handle type="source" position={Position.Bottom} />
     </div>
   )
 })

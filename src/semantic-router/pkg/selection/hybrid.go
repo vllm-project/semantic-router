@@ -229,6 +229,18 @@ func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 	// Calculate confidence from component agreement
 	confidence := h.calculateConfidence(componentResults, bestModel.Model)
 
+	// Record component agreement metric for evolution tracking
+	if len(componentResults) > 1 {
+		agreementRatio := float64(0)
+		for _, r := range componentResults {
+			if r.SelectedModel == bestModel.Model {
+				agreementRatio++
+			}
+		}
+		agreementRatio /= float64(len(componentResults))
+		RecordComponentAgreement(agreementRatio)
+	}
+
 	// Build reasoning
 	reasoning := h.buildReasoning(componentScores, bestModel.Model)
 

@@ -6,7 +6,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // setFactCheckFromSignals sets fact-check context fields from signal evaluation results
@@ -34,12 +33,8 @@ func (r *OpenAIRouter) setFactCheckFromSignals(ctx *RequestContext, matchedFactC
 	// Set a default confidence of 1.0 since the signal already passed the threshold
 	ctx.FactCheckConfidence = 1.0
 
-	// Record metrics
-	if needsFactCheck {
-		metrics.RecordFactCheckClassification("fact_check_needed")
-	} else {
-		metrics.RecordFactCheckClassification("no_fact_check_needed")
-	}
+	// Record metrics - signal match is already recorded in classifier.go
+	// No need to record again here
 
 	logging.Infof("Fact-check from signals: needs_fact_check=%v, matched_rules=%v",
 		needsFactCheck, matchedFactCheckRules)

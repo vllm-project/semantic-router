@@ -39,7 +39,7 @@ export const FallbackDecisionNode = memo<NodeProps<FallbackDecisionNodeData>>(({
       className={`${styles.fallbackDecisionNode} ${isHighlighted ? styles.highlighted : ''}`}
       title={fallbackReason || info.description}
     >
-      <Handle type="target" position={Position.Left} />
+      <Handle type="target" position={Position.Top} />
 
       <div className={styles.fallbackDecisionHeader}>
         <span className={styles.fallbackDecisionIcon}>{info.icon}</span>
@@ -60,7 +60,7 @@ export const FallbackDecisionNode = memo<NodeProps<FallbackDecisionNodeData>>(({
         </div>
       )}
 
-      <Handle type="source" position={Position.Right} />
+      <Handle type="source" position={Position.Bottom} />
     </div>
   )
 })
