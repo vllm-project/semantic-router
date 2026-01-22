@@ -152,6 +152,16 @@ MLCOMMONS_TAXONOMY = {
     },
 }
 
+# Mapping from synthesized dataset categories to Level 2 labels
+SYNTH_TO_LEVEL2 = {
+    "S2_non_violent_crimes": "S2_nonviolent_crimes",
+    "S6_specialized_advice": "S8_specialized_advice",
+    "S7_privacy": "S9_privacy",
+    "S9_indiscriminate_weapons": "S5_weapons_cbrne",
+    "S11_suicide_self_harm": "S6_self_harm",
+    "S13_elections": "S13_misinformation",
+}
+
 # Mapping from AEGIS violated_categories to MLCommons Level 2
 AEGIS_TO_MLCOMMONS = {
     # S1: Violent Crimes
@@ -1250,9 +1260,13 @@ class MLCommons_Hierarchical_Dataset:
             "id2label": self.level1_labels["id2label"],
         }
     
-    def prepare_level2_dataset(self, max_samples: int = None):
+    def prepare_level2_dataset(self, max_samples: int = None, use_synthesized: bool = True):
         """
         Prepare Level 2 MLCommons 9-class dataset (unsafe samples only).
+        
+        Args:
+            max_samples: Maximum total samples (None = use all)
+            use_synthesized: Whether to include synthesized MLCommons dataset
         
         Returns:
             dict with 'train', 'validation', 'test' splits
@@ -1285,6 +1299,31 @@ class MLCommons_Hierarchical_Dataset:
                     label_id = self.level2_labels["label2id"][mlcommons_label]
                     labels.append(label_id)
                     label_counts[mlcommons_label] += 1
+        
+        logger.info(f"AEGIS dataset: {len(texts)} samples")
+        
+        # Add synthesized MLCommons dataset for weak categories
+        if use_synthesized:
+            logger.info("Loading synthesized MLCommons dataset...")
+            try:
+                synth_ds = load_dataset("llm-semantic-router/mlcommons-ai-safety-synth", split="train")
+                synth_count = 0
+                for item in synth_ds:
+                    text = item.get("text", "")
+                    synth_cat = item.get("category", "")
+                    
+                    # Map synthesized category to Level 2 label
+                    level2_label = SYNTH_TO_LEVEL2.get(synth_cat)
+                    if level2_label and level2_label in self.level2_labels["label2id"]:
+                        texts.append(text)
+                        label_id = self.level2_labels["label2id"][level2_label]
+                        labels.append(label_id)
+                        label_counts[level2_label] += 1
+                        synth_count += 1
+                
+                logger.info(f"  Added {synth_count} synthesized samples")
+            except Exception as e:
+                logger.warning(f"Could not load synthesized dataset: {e}")
         
         # Add edge case examples for each category
         logger.info("Adding edge case examples for underrepresented categories...")
