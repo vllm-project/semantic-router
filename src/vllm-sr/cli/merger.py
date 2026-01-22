@@ -154,8 +154,20 @@ def translate_latency_signals(latencies: list) -> list:
     for signal in latencies:
         rule = {
             "name": signal.name,
-            "max_tpot": signal.max_tpot,
         }
+        # At least one of tpot_percentile or ttft_percentile should be set
+        if signal.tpot_percentile is not None and signal.tpot_percentile > 0:
+            rule["tpot_percentile"] = signal.tpot_percentile
+        if signal.ttft_percentile is not None and signal.ttft_percentile > 0:
+            rule["ttft_percentile"] = signal.ttft_percentile
+
+        # Validate that at least one is set
+        if "tpot_percentile" not in rule and "ttft_percentile" not in rule:
+            log.warn(
+                f"Latency signal '{signal.name}' has neither tpot_percentile nor ttft_percentile set, skipping"
+            )
+            continue
+
         if signal.description:
             rule["description"] = signal.description
         rules.append(rule)
