@@ -90,6 +90,15 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
               Topology
             </NavLink>
 
+            <NavLink
+              to="/evaluation"
+              className={({ isActive }) =>
+                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+              }
+            >
+              Evaluation
+            </NavLink>
+
             {/* System Dropdown (includes router-config and observability) */}
             <div className={styles.systemDropdown}>
               <button
@@ -248,6 +257,9 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
             </button>
             <NavLink to="/topology" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
               Topology
+            </NavLink>
+            <NavLink to="/evaluation" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+              Evaluation
             </NavLink>
           </div>
         )}
