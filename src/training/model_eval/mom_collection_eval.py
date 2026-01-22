@@ -60,7 +60,10 @@ from transformers import (
     ModernBertForTokenClassification,
 )
 
-from .constants import BASE_MODEL_ID, LANGUAGE_CODES, MODEL_REGISTRY
+try:
+    from .constants import BASE_MODEL_ID, LANGUAGE_CODES, MODEL_REGISTRY
+except ImportError:
+    from constants import BASE_MODEL_ID, LANGUAGE_CODES, MODEL_REGISTRY
 import warnings
 from sklearn.metrics._classification import _check_targets
 
@@ -194,20 +197,45 @@ def load_eval_data(model_name: str, args) -> Dataset:
         # Custom Dataset
         if args.custom_dataset:
             logger.info(f"Loading custom dataset: {args.custom_dataset}")
-            ext = Path(args.custom_dataset).suffix
+            ext = Path(args.custom_dataset).suffix.lower()
             if ext not in [".json", ".csv"]:
                 raise ValueError(f"Unsupported format: {ext}. Use .json or .csv")
 
-            ds = retry_operation(
-                lambda: load_dataset(
+            def load_custom_ds(split_name):
+                return load_dataset(
                     "json" if ext == ".json" else "csv",
                     data_files=args.custom_dataset,
-                    split="train",
-                ),
-                max_retries=args.max_retries,
-            )
-            return ds.select(range(min(len(ds), args.limit))) if args.limit else ds
+                    split=split_name,
+                )
 
+            ds = None
+            for split in ["test", "validation", "eval", "train"]:
+                try:
+                    ds = retry_operation(
+                        lambda: load_custom_ds(split),
+                        max_retries=args.max_retries,
+                    )
+                    logger.info(
+                        f"Loaded custom dataset from '{split}' split ({len(ds)} samples"
+                    )
+                    if split == "train":
+                        logger.warning(
+                            "No test/val split found in custom dataset. "
+                            "Evaluating on train split, results may be optimistic."
+                        )
+                    break
+                except Exception as e:
+                    logger.debug(
+                        f"split '{split}' not found or failed: {e}. Trying next..."
+                    )
+            if ds is None:
+                raise ValueError(
+                    "Could not load any split from custom dataset. "
+                    "Please ensure the file contains at least one of: test, validation, eval, or train split. "
+                )
+            if args.limit:
+                ds = ds.select(range(min(len(ds), args.limit)))
+            return ds
         #  da  PII
         if model_name == "pii":
             logger.info("Fetching Presidio dataset...")
@@ -607,6 +635,11 @@ def evaluate_single_model(model_name: str, args) -> Tuple[str, Dict]:
 def main():
     args = parse_args()
     logger = setup_logging(Path(args.output_dir))
+    if args.parallel and "cuda" in args.device:
+        logger.warning(
+            "Parallel execution on CUDA is unstable/OOM-prone. Forcing device='cpu' for workers."
+        )
+        args.device = "cpu"
     logger.info(f"Starting evaluation with args: {vars(args)}")
 
     models = args.model if isinstance(args.model, list) else [args.model]
