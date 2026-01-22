@@ -84,6 +84,15 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		if strings.Contains(chunk, "data: [DONE]") {
 			ctx.StreamingComplete = true
 			logging.Infof("Streaming response completed, attempting to cache")
+
+			// Record completion latency for streaming responses
+			if ctx.RequestModel != "" && !ctx.StartTime.IsZero() {
+				completionLatency := time.Since(ctx.StartTime).Seconds()
+				metrics.RecordModelCompletionLatency(ctx.RequestModel, completionLatency)
+				logging.Infof("Recorded completion latency for streaming response: model=%s, latency=%.3fs",
+					ctx.RequestModel, completionLatency)
+			}
+
 			// Reconstruct and cache the complete response
 			if err := r.cacheStreamingResponse(ctx); err != nil {
 				logging.Errorf("Failed to cache streaming response: %v", err)
@@ -396,6 +405,26 @@ func (r *OpenAIRouter) cacheStreamingResponse(ctx *RequestContext) error {
 		}
 		if totalTokens, ok := usageMap["total_tokens"].(float64); ok {
 			usage.TotalTokens = int64(totalTokens)
+		}
+	}
+
+	// Record token metrics for streaming responses
+	if ctx.RequestModel != "" && (usage.PromptTokens > 0 || usage.CompletionTokens > 0) {
+		metrics.RecordModelTokensDetailed(
+			ctx.RequestModel,
+			float64(usage.PromptTokens),
+			float64(usage.CompletionTokens),
+		)
+		logging.Infof("Recorded token metrics for streaming response: model=%s, prompt=%d, completion=%d",
+			ctx.RequestModel, usage.PromptTokens, usage.CompletionTokens)
+
+		// Record TPOT for streaming responses if completion tokens are available
+		if usage.CompletionTokens > 0 && !ctx.StartTime.IsZero() {
+			completionLatency := time.Since(ctx.StartTime).Seconds()
+			timePerToken := completionLatency / float64(usage.CompletionTokens)
+			metrics.RecordModelTPOT(ctx.RequestModel, timePerToken)
+			logging.Infof("Recorded TPOT for streaming response: model=%s, TPOT=%.4f", ctx.RequestModel, timePerToken)
+			classification.UpdateTPOT(ctx.RequestModel, timePerToken)
 		}
 	}
 

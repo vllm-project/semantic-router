@@ -118,6 +118,15 @@ signals:
     - name: "other"
       description: "Creative writing, opinion-based, brainstorming, or general queries that don't fit specific domains"
 
+  # latency - Latency-based routing signals (TPOT-based)
+  latency:
+    - name: "low_latency"
+      max_tpot: 0.005  # 5ms per token
+      description: "For real-time chat applications requiring fast responses"
+    - name: "medium_latency"
+      max_tpot: 0.15  # 150ms per token
+      description: "For standard applications with moderate latency tolerance"
+
   # Fact-check signals for verification needs
   # Strategy: Identify queries that DON'T need fact checking (creative/code/opinion)
   # All other queries will be routed to fact-check-capable models
@@ -368,8 +377,6 @@ decisions:
       operator: "OR"
       conditions:
         - type: "domain"
-          name: "computer_science"
-        - type: "domain"
           name: "math"
         - type: "domain"
           name: "physics"
@@ -379,6 +386,8 @@ decisions:
           name: "en"
         - type: "language"
           name: "zh"
+        - type: "latency"
+          name: "medium_latency"
     modelRefs:
       - model: "openai/gpt-oss-20b"
         use_reasoning: false

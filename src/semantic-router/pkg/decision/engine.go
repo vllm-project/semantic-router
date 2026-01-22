@@ -21,9 +21,11 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // DecisionEngine evaluates routing decisions based on rule combinations
@@ -96,6 +98,13 @@ func (e *DecisionEngine) EvaluateDecisions(
 // EvaluateDecisionsWithSignals evaluates all decisions using SignalMatches
 // This is the new method that supports all signal types including fact_check
 func (e *DecisionEngine) EvaluateDecisionsWithSignals(signals *SignalMatches) (*DecisionResult, error) {
+	// Record decision evaluation start time
+	start := time.Now()
+	defer func() {
+		latencySeconds := time.Since(start).Seconds()
+		metrics.RecordDecisionEvaluation(latencySeconds)
+	}()
+
 	if len(e.decisions) == 0 {
 		return nil, fmt.Errorf("no decisions configured")
 	}
@@ -108,6 +117,9 @@ func (e *DecisionEngine) EvaluateDecisionsWithSignals(signals *SignalMatches) (*
 		matched, confidence, matchedRules := e.evaluateDecisionWithSignals(decision, signals)
 
 		if matched {
+			// Record decision match with confidence
+			metrics.RecordDecisionMatch(decision.Name, confidence)
+
 			results = append(results, DecisionResult{
 				Decision:     decision,
 				Confidence:   confidence,

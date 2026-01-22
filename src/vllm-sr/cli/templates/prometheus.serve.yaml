@@ -1,0 +1,12 @@
+# Prometheus configuration for vllm-sr serve
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'semantic-router'
+    static_configs:
+      - targets: ['vllm-sr-container:9190']
+        labels:
+          service: 'semantic-router'
+

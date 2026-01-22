@@ -144,6 +144,7 @@ type RouterIntentResponse struct {
 		UserFeedback []string `json:"user_feedback,omitempty"`
 		Preferences  []string `json:"preferences,omitempty"`
 		Language     []string `json:"language,omitempty"`
+		Latency      []string `json:"latency,omitempty"`
 	} `json:"matched_signals,omitempty"`
 	DecisionResult *struct {
 		DecisionName string   `json:"decision_name"`
@@ -303,6 +304,15 @@ func convertRouterResponse(req TestQueryRequest, routerResp *RouterIntentRespons
 				Reason:     "Language detected",
 			})
 			result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("signal-language-%s", lang))
+		}
+		for _, lat := range routerResp.MatchedSignals.Latency {
+			result.MatchedSignals = append(result.MatchedSignals, MatchedSignal{
+				Type:       "latency",
+				Name:       lat,
+				Confidence: 1.0,
+				Reason:     "Latency requirement matched",
+			})
+			result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("signal-latency-%s", lat))
 		}
 	}
 

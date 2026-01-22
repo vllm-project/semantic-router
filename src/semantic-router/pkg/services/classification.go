@@ -179,6 +179,7 @@ type MatchedSignals struct {
 	UserFeedback []string `json:"user_feedback,omitempty"`
 	Preferences  []string `json:"preferences,omitempty"`
 	Language     []string `json:"language,omitempty"`
+	Latency      []string `json:"latency,omitempty"`
 }
 
 // DecisionResult represents the result of decision evaluation
@@ -260,6 +261,7 @@ func (s *ClassificationService) buildIntentResponseFromSignals(
 			UserFeedback: signals.MatchedUserFeedbackRules,
 			Preferences:  signals.MatchedPreferenceRules,
 			Language:     signals.MatchedLanguageRules,
+			Latency:      signals.MatchedLatencyRules,
 		}
 	}
 
