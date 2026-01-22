@@ -235,7 +235,7 @@ def build_chat_aligned_dataset(
             # ignore prompt tokens for label prediction loss
             labels[i] = -100
 
-        for i, token_id in enumerate(full_encoding["input_ids"]):
+        for i, token_id in enumerate(full_encoding):
             # other padding tokens should also be ignored
             if token_id == pad_id:
                 labels[i] = -100
