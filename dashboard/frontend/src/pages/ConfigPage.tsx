@@ -477,6 +477,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       case 'User Feedback':
         cfg.signals.user_feedbacks = (cfg.signals.user_feedbacks || []).filter(s => s.name !== targetName)
         break
+      case 'Language':
+        cfg.signals.language = (cfg.signals.language || []).filter(s => s.name !== targetName)
+        break
       case 'Latency':
         cfg.signals.latency = (cfg.signals.latency || []).filter(s => s.name !== targetName)
         break
@@ -2364,6 +2367,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             }
           ]
         })
+      } else if (signal.type === 'Language') {
+        sections.push({
+          title: 'Language Signal',
+          fields: [
+            { label: 'Language Code', value: signal.rawData.name || 'N/A', fullWidth: true },
+            { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
+          ]
+        })
       } else if (signal.type === 'Latency') {
         sections.push({
           title: 'Latency Signal',
@@ -2502,7 +2513,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           name: 'type',
           label: 'Type',
           type: 'select',
-          options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Latency'],
+          options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Language', 'Latency'],
           required: true,
           description: 'Fields are validated based on the selected type.'
         },
@@ -2626,6 +2637,15 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
               {
                 name,
                 description: formData.description
+              }
+            ]
+            break
+          }
+          case 'Language': {
+            newConfig.signals.language = [
+              ...(newConfig.signals.language || []),
+              {
+                name
               }
             ]
             break
@@ -2863,7 +2883,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
     const openDecisionEditor = (mode: 'add' | 'edit', decision?: DecisionRow) => {
       setViewModalOpen(false)
-      const conditionTypeOptions = ['keyword', 'domain', 'preference', 'user_feedback', 'embedding', 'latency'] as const
+      const conditionTypeOptions = ['keyword', 'domain', 'preference', 'user_feedback', 'embedding', 'language', 'latency'] as const
 
       const getConditionNameOptions = (type?: DecisionConditionType) => {
         // derive condition name options based on signals configured
