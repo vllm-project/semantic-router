@@ -198,10 +198,53 @@ def build_prompt(
     return system_ids + label_ids + conversation_ids + instruction_ids
 
 
+def get_random_label_space(
+    available_labels: List[str],
+    target_label: str,
+    max_labels_in_prompt: int,
+    min_labels_in_prompt: int,
+    rng: np.random.Generator,
+) -> List[str]:
+    max_candidates = len(available_labels)
+    upper_bound = (
+        max_candidates
+        if max_labels_in_prompt is None
+        else min(max_labels_in_prompt, max_candidates)
+    )
+    lower_bound = min(min_labels_in_prompt, upper_bound)
+
+    base_labels = {target_label, CATCH_ALL_LABEL}
+    lower_bound = max(lower_bound, len(base_labels))
+    upper_bound = max(upper_bound, len(base_labels))
+
+    sample_size = (
+        upper_bound
+        if lower_bound == upper_bound
+        else int(rng.integers(lower_bound, upper_bound + 1))
+    )
+
+    # ensure the true label and catch-all are always present
+    chosen_labels = set(base_labels)
+    remaining_needed = sample_size - len(chosen_labels)
+    if remaining_needed > 0:
+        negative_pool = [
+            label for label in available_labels if label not in chosen_labels
+        ]
+        if negative_pool:
+            sampled = rng.choice(negative_pool, size=remaining_needed, replace=False)
+            chosen_labels.update(sampled.tolist())
+
+    randomized_label_space = rng.permutation(list(chosen_labels)).tolist()
+    return randomized_label_space
+
+
 def build_chat_aligned_dataset(
     examples: Sequence[PreferenceTrainingExample],
     tokenizer: PreTrainedTokenizerBase,
     max_length: int,
+    rng: np.random.Generator,
+    max_labels_in_prompt: int,
+    min_labels_in_prompt: int,
     pad_to_max_length: bool = False,
 ) -> Dataset:
     """Tokenize examples so only label tokens contribute to loss."""
@@ -218,9 +261,16 @@ def build_chat_aligned_dataset(
     )
 
     for example in examples:
+        random_label_space = get_random_label_space(
+            available_labels=label_space,
+            target_label=example.label,
+            max_labels_in_prompt=max_labels_in_prompt,
+            min_labels_in_prompt=min_labels_in_prompt,
+            rng=rng,
+        )
         prompt_encoding = build_prompt(
             conversation=example.conversation,
-            label_space=label_space,
+            label_space=random_label_space,
             tokenizer=tokenizer,
             max_length=max_length,
         )
@@ -564,12 +614,15 @@ def train(args: argparse.Namespace) -> None:
         start_index=args.start_index,
     )
     logger.info("Loaded %s labeled examples", len(examples))
-
+    rng = np.random.default_rng(args.seed)
     hf_dataset = build_chat_aligned_dataset(
         examples=examples,
         tokenizer=tokenizer,
         max_length=args.max_length,
         pad_to_max_length=args.pad_to_max_length,
+        max_labels_in_prompt=16,
+        min_labels_in_prompt=4,
+        rng=rng,
     )
 
     if args.eval_ratio and args.eval_ratio > 0:
