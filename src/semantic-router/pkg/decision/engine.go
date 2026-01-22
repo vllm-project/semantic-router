@@ -20,9 +20,12 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strings"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // DecisionEngine evaluates routing decisions based on rule combinations
@@ -63,6 +66,7 @@ type SignalMatches struct {
 	UserFeedbackRules []string // "need_clarification", "satisfied", "want_different", "wrong_answer"
 	PreferenceRules   []string // Route preference names matched via external LLM
 	LanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
+	LatencyRules      []string // Latency rule names that matched based on model TPOT
 }
 
 // DecisionResult represents the result of decision evaluation
@@ -94,6 +98,13 @@ func (e *DecisionEngine) EvaluateDecisions(
 // EvaluateDecisionsWithSignals evaluates all decisions using SignalMatches
 // This is the new method that supports all signal types including fact_check
 func (e *DecisionEngine) EvaluateDecisionsWithSignals(signals *SignalMatches) (*DecisionResult, error) {
+	// Record decision evaluation start time
+	start := time.Now()
+	defer func() {
+		latencySeconds := time.Since(start).Seconds()
+		metrics.RecordDecisionEvaluation(latencySeconds)
+	}()
+
 	if len(e.decisions) == 0 {
 		return nil, fmt.Errorf("no decisions configured")
 	}
@@ -106,6 +117,9 @@ func (e *DecisionEngine) EvaluateDecisionsWithSignals(signals *SignalMatches) (*
 		matched, confidence, matchedRules := e.evaluateDecisionWithSignals(decision, signals)
 
 		if matched {
+			// Record decision match with confidence
+			metrics.RecordDecisionMatch(decision.Name, confidence)
+
 			results = append(results, DecisionResult{
 				Decision:     decision,
 				Confidence:   confidence,
@@ -147,7 +161,11 @@ func (e *DecisionEngine) evaluateRuleCombinationWithSignals(
 	for _, condition := range rules.Conditions {
 		conditionMatched := false
 
-		switch condition.Type {
+		// Normalize condition type to lowercase for case-insensitive matching
+		// All signal types are normalized to match constants and switch cases
+		normalizedType := strings.ToLower(strings.TrimSpace(condition.Type))
+
+		switch normalizedType {
 		case "keyword":
 			conditionMatched = slices.Contains(signals.KeywordRules, condition.Name)
 		case "embedding":
@@ -166,6 +184,8 @@ func (e *DecisionEngine) evaluateRuleCombinationWithSignals(
 			conditionMatched = slices.Contains(signals.PreferenceRules, condition.Name)
 		case "language":
 			conditionMatched = slices.Contains(signals.LanguageRules, condition.Name)
+		case "latency":
+			conditionMatched = slices.Contains(signals.LatencyRules, condition.Name)
 		default:
 			continue
 		}

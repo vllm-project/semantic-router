@@ -141,6 +141,9 @@ func (f *Factory) Create() Selector {
 
 // CreateAll creates all available selectors and registers them
 func (f *Factory) CreateAll() *Registry {
+	// Initialize metrics for model selection tracking
+	InitializeMetrics()
+
 	registry := NewRegistry()
 
 	// Always create static selector

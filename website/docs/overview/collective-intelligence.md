@@ -28,7 +28,7 @@ User Query → Single LLM → Response
 ```
 User Query → Signal Extraction → Decision Engine → Best Model → Response
               ↓                    ↓                  ↓
-           7 Signal Types      AND/OR Rules      Specialized Models
+           8 Signal Types      AND/OR Rules      Specialized Models
               ↓                    ↓                  ↓
          Context Analysis    Smart Selection    Plugin Chain
 ```

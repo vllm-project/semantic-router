@@ -101,12 +101,9 @@ const TopologyFlow: React.FC = () => {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <h1 className={styles.title}>Topology</h1>
-          <p className={styles.subtitle}>
-            Mixture of Models: Signal-Driven Decision Visualization
-          </p>
-        </div>
+        <h1 className={styles.title}>
+          Mixture of Models: Signal-Driven Decision Topology
+        </h1>
         <button onClick={refresh} className={styles.refreshButton}>
           Refresh
         </button>

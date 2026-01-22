@@ -43,7 +43,7 @@ export const PluginChainNode = memo<NodeProps<PluginChainNodeData>>(({ data }) =
     <div
       className={`${styles.pluginChainNode} ${isHighlighted ? styles.highlighted : ''}`}
     >
-      <Handle type="target" position={Position.Left} />
+      <Handle type="target" position={Position.Top} />
 
       <div
         className={styles.pluginChainHeader}
@@ -86,7 +86,7 @@ export const PluginChainNode = memo<NodeProps<PluginChainNodeData>>(({ data }) =
         </div>
       )}
 
-      <Handle type="source" position={Position.Right} />
+      <Handle type="source" position={Position.Bottom} />
     </div>
   )
 })

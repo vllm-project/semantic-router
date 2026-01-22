@@ -11,6 +11,7 @@ export type SignalType =
   | 'user_feedback'
   | 'preference'
   | 'language'
+  | 'latency'
 
 export interface SignalConfig {
   type: SignalType
@@ -305,6 +306,11 @@ export interface ConfigData {
     name: string
     languages?: string[]
   }>
+  latency_rules?: Array<{
+    name: string
+    description?: string
+    max_tpot?: number
+  }>
   // Legacy format
   categories?: Array<{
     name: string
@@ -356,6 +362,11 @@ export interface ConfigData {
     language?: Array<{
       name: string
       description?: string
+    }>
+    latency?: Array<{
+      name: string
+      description?: string
+      max_tpot?: number
     }>
   }
   decisions?: Array<{

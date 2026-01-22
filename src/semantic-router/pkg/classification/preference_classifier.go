@@ -9,7 +9,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // PreferenceResult represents the result of preference classification
@@ -101,9 +100,6 @@ func (p *PreferenceClassifier) Classify(conversationJSON string) (*PreferenceRes
 		MaxTokens:   1000,
 		Temperature: 0.0,
 	})
-
-	metrics.RecordClassifierLatency("route", time.Since(start).Seconds())
-
 	if err != nil {
 		return nil, fmt.Errorf("external LLM API call failed: %w", err)
 	}

@@ -285,6 +285,9 @@ func (r *RouterDCSelector) Select(ctx context.Context, selCtx *SelectionContext)
 		allScores[model.Model] = similarity
 		logging.Infof("[RouterDC]   %s: similarity=%.4f", model.Model, similarity)
 
+		// Record similarity metric for evolution tracking
+		RecordRouterDCSimilarity(model.Model, similarity)
+
 		if similarity > bestScore {
 			bestScore = similarity
 			bestModel = model
@@ -338,12 +341,20 @@ func (r *RouterDCSelector) UpdateFeedback(ctx context.Context, feedback *Feedbac
 
 	// Increase affinity for winner
 	currentAffinity := r.affinityMatrix[queryHash][feedback.WinnerModel]
-	r.affinityMatrix[queryHash][feedback.WinnerModel] = currentAffinity + 0.1
+	newWinnerAffinity := currentAffinity + 0.1
+	r.affinityMatrix[queryHash][feedback.WinnerModel] = newWinnerAffinity
+
+	// Record affinity metric for evolution tracking
+	RecordRouterDCAffinity(feedback.WinnerModel, newWinnerAffinity)
 
 	// Decrease affinity for loser (if present)
 	if feedback.LoserModel != "" && !feedback.Tie {
 		loserAffinity := r.affinityMatrix[queryHash][feedback.LoserModel]
-		r.affinityMatrix[queryHash][feedback.LoserModel] = math.Max(0, loserAffinity-0.05)
+		newLoserAffinity := math.Max(0, loserAffinity-0.05)
+		r.affinityMatrix[queryHash][feedback.LoserModel] = newLoserAffinity
+
+		// Record loser affinity
+		RecordRouterDCAffinity(feedback.LoserModel, newLoserAffinity)
 	}
 
 	logging.Debugf("[RouterDC] Updated affinity for query hash %s: winner=%s (+0.1)",

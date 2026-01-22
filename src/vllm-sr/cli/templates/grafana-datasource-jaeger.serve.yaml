@@ -1,0 +1,15 @@
+# Grafana datasource configuration for Jaeger/Tempo tracing
+# Provisioned automatically when Grafana starts
+
+apiVersion: 1
+
+datasources:
+  - name: Jaeger
+    type: jaeger
+    access: proxy
+    url: http://vllm-sr-jaeger:16686
+    isDefault: false
+    editable: true
+    jsonData:
+      nodeGraph:
+        enabled: true

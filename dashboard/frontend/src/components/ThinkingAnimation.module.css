@@ -4,7 +4,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(255, 255, 255, 0.95);
+  background-color: rgba(0, 0, 0, 0.95);
   backdrop-filter: blur(40px) saturate(180%);
   -webkit-backdrop-filter: blur(40px) saturate(180%);
   z-index: 10001;
@@ -42,7 +42,7 @@
   font-family: 'SF Mono', 'Monaco', 'Menlo', 'Courier New', monospace;
   font-size: 1.125rem;
   font-weight: 400;
-  color: #1d1d1f;
+  color: #f5f5f7;
   text-align: center;
   animation: flicker 0.1s infinite;
   user-select: none;
@@ -62,7 +62,7 @@
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', 'Roboto', sans-serif;
   font-size: 1rem;
   font-weight: 400;
-  color: #1d1d1f;
+  color: #f5f5f7;
   letter-spacing: -0.01em;
   animation: pulse 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
@@ -96,16 +96,16 @@
   overflow-y: auto;
   margin-top: 1.5rem;
   padding: 1.5rem;
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: rgba(255, 255, 255, 0.05);
   border-radius: 12px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .thinkingLabel {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', 'Roboto', sans-serif;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #1d1d1f;
+  color: #f5f5f7;
   margin-bottom: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -115,7 +115,7 @@
   font-family: 'SF Mono', 'Monaco', 'Menlo', 'Courier New', monospace;
   font-size: 0.875rem;
   line-height: 1.6;
-  color: #1d1d1f;
+  color: #f5f5f7;
   white-space: pre-wrap;
   word-wrap: break-word;
   margin: 0;

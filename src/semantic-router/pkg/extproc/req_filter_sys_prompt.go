@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"encoding/json"
+	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc/codes"
@@ -42,21 +43,25 @@ func (r *OpenAIRouter) addSystemPromptIfConfigured(modifiedBody []byte, category
 		return modifiedBody, nil
 	}
 
-	// Start system prompt injection span
-	promptCtx, promptSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanSystemPromptInjection)
+	// Start system prompt plugin span
+	startTime := time.Now()
+	promptCtx, promptSpan := tracing.StartPluginSpan(ctx.TraceContext, "system_prompt", categoryName)
 
 	mode := decision.GetSystemPromptMode()
 	var injected bool
 	var err error
 	modifiedBody, injected, err = addSystemPromptToRequestBody(modifiedBody, systemPromptConfig.SystemPrompt, mode)
+	latencyMs := time.Since(startTime).Milliseconds()
+
 	if err != nil {
 		logging.Errorf("Error adding system prompt to request: %v", err)
 		tracing.RecordError(promptSpan, err)
+		tracing.EndPluginSpan(promptSpan, "error", latencyMs, "injection_failed")
 		metrics.RecordRequestError(model, "serialization_error")
-		promptSpan.End()
 		return nil, status.Errorf(codes.Internal, "error adding system prompt: %v", err)
 	}
 
+	// Keep legacy attributes for backward compatibility
 	tracing.SetSpanAttributes(promptSpan,
 		attribute.Bool("system_prompt.injected", injected),
 		attribute.String("system_prompt.mode", mode),
@@ -64,9 +69,11 @@ func (r *OpenAIRouter) addSystemPromptIfConfigured(modifiedBody []byte, category
 
 	if injected {
 		ctx.VSRInjectedSystemPrompt = true
+		tracing.EndPluginSpan(promptSpan, "success", latencyMs, "prompt_injected")
+	} else {
+		tracing.EndPluginSpan(promptSpan, "skipped", latencyMs, "no_injection_needed")
 	}
 
-	promptSpan.End()
 	ctx.TraceContext = promptCtx
 
 	return modifiedBody, nil

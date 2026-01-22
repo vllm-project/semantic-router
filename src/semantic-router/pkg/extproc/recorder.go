@@ -35,7 +35,8 @@ func (r *OpenAIRouter) logRoutingDecision(ctx *RequestContext, reasonCode string
 
 // recordRoutingDecision records routing decision with tracing
 func (r *OpenAIRouter) recordRoutingDecision(ctx *RequestContext, decisionName string, originalModel string, matchedModel string, reasoningDecision entropy.ReasoningDecision) {
-	routingCtx, routingSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanRoutingDecision)
+	// Start decision evaluation span
+	routingCtx, routingSpan := tracing.StartDecisionSpan(ctx.TraceContext, decisionName)
 
 	useReasoning := reasoningDecision.UseReasoning
 	logging.Infof("Entropy-based reasoning decision for this query: %v on [%s] model (confidence: %.3f, reason: %s)",
@@ -44,6 +45,7 @@ func (r *OpenAIRouter) recordRoutingDecision(ctx *RequestContext, decisionName s
 	effortForMetrics := r.getReasoningEffort(decisionName, matchedModel)
 	metrics.RecordReasoningDecision(decisionName, matchedModel, useReasoning, effortForMetrics)
 
+	// Keep legacy attributes for backward compatibility
 	tracing.SetSpanAttributes(routingSpan,
 		attribute.String(tracing.AttrRoutingStrategy, "auto"),
 		attribute.String(tracing.AttrRoutingReason, reasoningDecision.DecisionReason),
@@ -52,7 +54,9 @@ func (r *OpenAIRouter) recordRoutingDecision(ctx *RequestContext, decisionName s
 		attribute.Bool(tracing.AttrReasoningEnabled, useReasoning),
 		attribute.String(tracing.AttrReasoningEffort, effortForMetrics))
 
-	routingSpan.End()
+	// End decision span with evaluation results
+	// matchedRules would come from signal evaluation, using empty slice for now
+	tracing.EndDecisionSpan(routingSpan, float64(reasoningDecision.Confidence), []string{}, "auto")
 	ctx.TraceContext = routingCtx
 }
 

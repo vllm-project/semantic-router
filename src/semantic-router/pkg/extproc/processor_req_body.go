@@ -71,17 +71,7 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	// Store the original model
 	originalModel := openAIRequest.Model
 
-	// Set model on span
-	if ctx.TraceContext != nil {
-		_, span := tracing.StartSpan(ctx.TraceContext, "parse_request")
-		tracing.SetSpanAttributes(span,
-			attribute.String(tracing.AttrOriginalModel, originalModel))
-		span.End()
-	}
-
-	// Record the initial request to this model (count all requests)
-	metrics.RecordModelRequest(originalModel)
-	// Also set the model on context early so error metrics can label it
+	// Set the model on context early so error metrics can label it
 	if ctx.RequestModel == "" {
 		ctx.RequestModel = originalModel
 	}
@@ -105,6 +95,9 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	// Use decision-based routing if decisions are configured, otherwise fall back to category-based
 	// This also evaluates fact-check signal as part of the signal evaluation
 	decisionName, classificationConfidence, reasoningDecision, selectedModel := r.performDecisionEvaluation(originalModel, userContent, nonUserMessages, ctx)
+
+	// Record the initial request to this model (count all requests)
+	metrics.RecordModelRequest(selectedModel)
 
 	// Perform security checks with decision-specific settings
 	if response, shouldReturn := r.performJailbreaks(ctx, userContent, nonUserMessages, decisionName); shouldReturn {
@@ -354,23 +347,12 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCom
 }
 
 // selectEndpointForModel selects the best endpoint for the given model
+// Backend selection is now part of the model layer (upstream request span)
 func (r *OpenAIRouter) selectEndpointForModel(ctx *RequestContext, model string) string {
-	backendCtx, backendSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanBackendSelection)
-
 	endpointAddress, endpointFound := r.Config.SelectBestEndpointAddressForModel(model)
 	if endpointFound {
 		logging.Infof("Selected endpoint address: %s for model: %s", endpointAddress, model)
-
-		endpoints := r.Config.GetEndpointsForModel(model)
-		if len(endpoints) > 0 {
-			tracing.SetSpanAttributes(backendSpan,
-				attribute.String(tracing.AttrEndpointName, endpoints[0].Name),
-				attribute.String(tracing.AttrEndpointAddress, endpointAddress))
-		}
 	}
-
-	backendSpan.End()
-	ctx.TraceContext = backendCtx
 
 	// Store the selected endpoint in context (for routing/logging purposes)
 	ctx.SelectedEndpoint = endpointAddress

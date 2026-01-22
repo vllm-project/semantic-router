@@ -288,7 +288,7 @@ def docker_remove_container(container_name):
 
 
 def docker_start_vllm_sr(
-    config_file, env_vars, listeners, image=None, pull_policy=None
+    config_file, env_vars, listeners, image=None, pull_policy=None, network_name=None
 ):
     """
     Start vLLM Semantic Router container.
@@ -299,6 +299,7 @@ def docker_start_vllm_sr(
         listeners: List of listener configurations from config.yaml
         image: Container image to use (optional)
         pull_policy: Image pull policy (optional)
+        network_name: Docker network name (optional, for observability)
 
     Returns:
         (return_code, stdout, stderr)
@@ -334,6 +335,10 @@ def docker_start_vllm_sr(
         "--ulimit",
         f"nofile={nofile_limit}:{nofile_limit}",
     ]
+
+    # Add network if specified (for observability)
+    if network_name:
+        cmd.extend(["--network", network_name])
 
     # Add host gateway (syntax differs between docker and podman)
     if runtime == "docker":
@@ -481,6 +486,286 @@ def docker_exec(container_name, command):
     runtime = get_container_runtime()
     cmd = [runtime, "exec", container_name] + command
 
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return (0, result.stdout, result.stderr)
+    except subprocess.CalledProcessError as e:
+        return (e.returncode, e.stdout, e.stderr)
+
+
+def docker_create_network(network_name):
+    """
+    Create a Docker network if it doesn't exist.
+
+    Args:
+        network_name: Name of the network
+
+    Returns:
+        (return_code, stdout, stderr)
+    """
+    runtime = get_container_runtime()
+
+    # Check if network exists
+    cmd = [
+        runtime,
+        "network",
+        "ls",
+        "--filter",
+        f"name={network_name}",
+        "--format",
+        "{{.Name}}",
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        if network_name in result.stdout:
+            log.debug(f"Network {network_name} already exists")
+            return (0, "", "")
+    except subprocess.CalledProcessError:
+        pass
+
+    # Create network
+    cmd = [runtime, "network", "create", network_name]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        log.info(f"Created network: {network_name}")
+        return (0, result.stdout, result.stderr)
+    except subprocess.CalledProcessError as e:
+        return (e.returncode, e.stdout, e.stderr)
+
+
+def docker_remove_network(network_name):
+    """
+    Remove a Docker network.
+
+    Args:
+        network_name: Name of the network
+
+    Returns:
+        (return_code, stdout, stderr)
+    """
+    runtime = get_container_runtime()
+    cmd = [runtime, "network", "rm", network_name]
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return (0, result.stdout, result.stderr)
+    except subprocess.CalledProcessError as e:
+        return (e.returncode, e.stdout, e.stderr)
+
+
+def docker_start_jaeger(network_name="vllm-sr-network"):
+    """
+    Start Jaeger container for distributed tracing.
+
+    Args:
+        network_name: Docker network name
+
+    Returns:
+        (return_code, stdout, stderr)
+    """
+    runtime = get_container_runtime()
+    container_name = "vllm-sr-jaeger"
+
+    # Check if container already exists
+    status = docker_container_status(container_name)
+    if status != "not found":
+        log.info(f"Jaeger container already exists (status: {status}), cleaning up...")
+        docker_stop_container(container_name)
+        docker_remove_container(container_name)
+
+    cmd = [
+        runtime,
+        "run",
+        "-d",
+        "--name",
+        container_name,
+        "--network",
+        network_name,
+        "-e",
+        "COLLECTOR_OTLP_ENABLED=true",
+        "-p",
+        "4318:4317",  # OTLP gRPC (mapped to 4318 on host to avoid conflicts)
+        "-p",
+        "16686:16686",  # Web UI
+        "jaegertracing/all-in-one:latest",
+    ]
+
+    log.info("Starting Jaeger container...")
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return (0, result.stdout, result.stderr)
+    except subprocess.CalledProcessError as e:
+        return (e.returncode, e.stdout, e.stderr)
+
+
+def docker_start_prometheus(network_name="vllm-sr-network", config_dir=None):
+    """
+    Start Prometheus container for metrics collection.
+
+    Args:
+        network_name: Docker network name
+        config_dir: Directory containing prometheus.yaml config
+
+    Returns:
+        (return_code, stdout, stderr)
+    """
+    runtime = get_container_runtime()
+    container_name = "vllm-sr-prometheus"
+
+    # Check if container already exists
+    status = docker_container_status(container_name)
+    if status != "not found":
+        log.info(
+            f"Prometheus container already exists (status: {status}), cleaning up..."
+        )
+        docker_stop_container(container_name)
+        docker_remove_container(container_name)
+
+    # Prepare Prometheus config and data directory
+    # Always use .vllm-sr subdirectory
+    if config_dir is None:
+        config_dir = os.path.join(os.getcwd(), ".vllm-sr")
+    else:
+        # If config_dir is provided, append .vllm-sr subdirectory
+        config_dir = os.path.join(config_dir, ".vllm-sr")
+    os.makedirs(config_dir, exist_ok=True)
+
+    # Create Prometheus data directory for persistent storage
+    prometheus_data_dir = os.path.join(config_dir, "prometheus-data")
+    os.makedirs(prometheus_data_dir, exist_ok=True)
+
+    # Create data subdirectory inside prometheus-data for TSDB storage
+    # This ensures Prometheus can create queries.active and other files
+    prometheus_tsdb_dir = os.path.join(prometheus_data_dir, "data")
+    os.makedirs(prometheus_tsdb_dir, exist_ok=True)
+
+    # Set permissions for Prometheus container (runs as nobody:nobody, UID/GID 65534)
+    # This allows Prometheus to write to the data directory
+    try:
+        os.chmod(prometheus_data_dir, 0o777)
+        os.chmod(prometheus_tsdb_dir, 0o777)
+    except Exception as e:
+        log.warning(f"Failed to set permissions on Prometheus data directory: {e}")
+        log.warning(
+            "Prometheus may fail to start if it cannot write to the data directory"
+        )
+
+    # Store prometheus.yaml inside config subdirectory
+    prometheus_config_dir = os.path.join(config_dir, "prometheus-config")
+    os.makedirs(prometheus_config_dir, exist_ok=True)
+    prometheus_config = os.path.join(prometheus_config_dir, "prometheus.yaml")
+    # Always copy template to ensure we use the latest configuration
+    template_dir = os.path.join(os.path.dirname(__file__), "templates")
+    template_file = os.path.join(template_dir, "prometheus.serve.yaml")
+    shutil.copy(template_file, prometheus_config)
+
+    cmd = [
+        runtime,
+        "run",
+        "-d",
+        "--name",
+        container_name,
+        "--network",
+        network_name,
+        "-v",
+        f"{os.path.abspath(prometheus_config)}:/etc/prometheus/prometheus.yaml:ro",
+        "-v",
+        f"{os.path.abspath(prometheus_data_dir)}:/prometheus",
+        "-p",
+        "9090:9090",
+        "prom/prometheus:v2.53.0",
+        "--config.file=/etc/prometheus/prometheus.yaml",
+        "--storage.tsdb.path=/prometheus/data",
+        "--storage.tsdb.retention.time=15d",
+    ]
+
+    log.info("Starting Prometheus container...")
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return (0, result.stdout, result.stderr)
+    except subprocess.CalledProcessError as e:
+        return (e.returncode, e.stdout, e.stderr)
+
+
+def docker_start_grafana(network_name="vllm-sr-network", config_dir=None):
+    """
+    Start Grafana container for visualization.
+
+    Args:
+        network_name: Docker network name
+        config_dir: Directory containing Grafana configs
+
+    Returns:
+        (return_code, stdout, stderr)
+    """
+    runtime = get_container_runtime()
+    container_name = "vllm-sr-grafana"
+
+    # Check if container already exists
+    status = docker_container_status(container_name)
+    if status != "not found":
+        log.info(f"Grafana container already exists (status: {status}), cleaning up...")
+        docker_stop_container(container_name)
+        docker_remove_container(container_name)
+
+    # Prepare Grafana configs
+    # Always use .vllm-sr subdirectory
+    if config_dir is None:
+        config_dir = os.path.join(os.getcwd(), ".vllm-sr")
+    else:
+        # If config_dir is provided, append .vllm-sr subdirectory
+        config_dir = os.path.join(config_dir, ".vllm-sr")
+    grafana_dir = os.path.join(config_dir, "grafana")
+    os.makedirs(grafana_dir, exist_ok=True)
+
+    # Copy Grafana configuration files (always overwrite to ensure latest config)
+    template_dir = os.path.join(os.path.dirname(__file__), "templates")
+    for filename in [
+        "grafana.serve.ini",
+        "grafana-datasource.serve.yaml",
+        "grafana-datasource-jaeger.serve.yaml",
+        "grafana-dashboard.serve.yaml",
+        "llm-router-dashboard.serve.json",
+    ]:
+        src = os.path.join(template_dir, filename)
+        dst = os.path.join(grafana_dir, filename)
+        # Always copy to ensure we use the latest configuration
+        shutil.copy(src, dst)
+
+    # Note: Grafana data is NOT persisted - container is ephemeral
+    # Only Prometheus data is persisted for metrics history
+
+    cmd = [
+        runtime,
+        "run",
+        "-d",
+        "--name",
+        container_name,
+        "--network",
+        network_name,
+        "-e",
+        "GF_SECURITY_ADMIN_USER=admin",
+        "-e",
+        "GF_SECURITY_ADMIN_PASSWORD=admin",
+        "-e",
+        "PROMETHEUS_URL=vllm-sr-prometheus:9090",
+        "-v",
+        f"{os.path.abspath(os.path.join(grafana_dir, 'grafana.serve.ini'))}:/etc/grafana/grafana.ini:ro",
+        "-v",
+        f"{os.path.abspath(os.path.join(grafana_dir, 'grafana-datasource.serve.yaml'))}:/etc/grafana/provisioning/datasources/datasource.yaml:ro",
+        "-v",
+        f"{os.path.abspath(os.path.join(grafana_dir, 'grafana-datasource-jaeger.serve.yaml'))}:/etc/grafana/provisioning/datasources/datasource_jaeger.yaml:ro",
+        "-v",
+        f"{os.path.abspath(os.path.join(grafana_dir, 'grafana-dashboard.serve.yaml'))}:/etc/grafana/provisioning/dashboards/dashboard.yaml:ro",
+        "-v",
+        f"{os.path.abspath(os.path.join(grafana_dir, 'llm-router-dashboard.serve.json'))}:/etc/grafana/provisioning/dashboards/llm-router-dashboard.json:ro",
+        # No volume mount for /var/lib/grafana - Grafana data is ephemeral
+        "-p",
+        "3000:3000",
+        "grafana/grafana:11.5.1",
+    ]
+
+    log.info("Starting Grafana container...")
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         return (0, result.stdout, result.stderr)
