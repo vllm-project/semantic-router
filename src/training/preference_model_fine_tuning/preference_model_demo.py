@@ -3,19 +3,28 @@ import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
 # Paths
-ckpt_dir = Path("preference_model_qwen3")  # your saved --output-dir
+use_checkpoint = True
+ckpt_dir = Path("preference_model_qwen3") if use_checkpoint else Path("Qwen/Qwen3-0.6B")
 sharegpt_like_convo = [
     {
         "role": "user",
-        "content": "I need help booking a flight from SFO to JFK next week.",
+        "content": "Write a short story that includes a dragon and a castle.",
     },
-    {"role": "assistant", "content": "Sure, what dates and times do you prefer?"},
+    {"role": "assistant", "content": "Sure, here's a short story for you."},
+]
+
+sharegpt_like_convo_weather = [
+    {
+        "role": "user",
+        "content": "What's the weather like in New York City today?",
+    },
+    {"role": "assistant", "content": "Let me check that for you."},
 ]
 
 # Label space for inference (include your catch-all)
 label_space = [
-    "travel_booking",
-    "weather",
+    "general_creative_writing",
+    "general_weather_inquiry",
     "code_generation",
     "general_inquiry",
 ]
@@ -39,7 +48,7 @@ conversation_text = "\n".join(
             if turn["role"] == "user"
             else "Assistant: " + turn["content"]
         )
-        for turn in sharegpt_like_convo
+        for turn in sharegpt_like_convo_weather
     ]
 )
 user_content = (
@@ -62,7 +71,7 @@ prompt_text = tokenizer.apply_chat_template(
     add_generation_prompt=True,
     enable_thinking=False,
 )
-
+print(prompt_text)
 # Generate
 inputs = tokenizer(prompt_text, return_tensors="pt").to(model.device)
 with torch.no_grad():

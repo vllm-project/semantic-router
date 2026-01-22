@@ -277,15 +277,18 @@ def build_chat_aligned_dataset(
         )
         full_encoding: list[int] = (
             prompt_encoding
-            + tokenizer(example.label, add_special_tokens=False, truncation=False)[
-                "input_ids"
-            ]
+            + tokenizer(
+                f"{example.label}<|im_end|>",
+                add_special_tokens=False,
+                truncation=False,
+            )["input_ids"]
         )
         labels = full_encoding.copy()
         for i in range(len(prompt_encoding)):
             # ignore prompt tokens for label prediction loss
             labels[i] = -100
 
+        # should other paddings be ignored?
         for i, token_id in enumerate(full_encoding):
             # other padding tokens should also be ignored
             if token_id == pad_id:
@@ -325,6 +328,8 @@ def compute_token_accuracy(eval_pred: tuple) -> Dict[str, float]:
         return {"token_accuracy": 0.0}
 
     mask = labels != -100
+    print("length:", len(mask), len(labels), len(pred_tokens))
+    print("mask.sum():", mask.sum())
     correct_tokens = (pred_tokens == labels) & mask
     token_accuracy = correct_tokens.sum() / mask.sum() if mask.sum() > 0 else 0.0
 
