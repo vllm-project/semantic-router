@@ -27,6 +27,7 @@ import (
 
 	"gonum.org/v1/gonum/mat"
 
+	ml_binding "github.com/vllm-project/semantic-router/ml-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -469,8 +470,32 @@ func (s *KNNSelector) Load(path string) error {
 		s.training[i] = fromSerializable(r)
 	}
 
+	// Retrain ml_binding from training records if we have data
+	if s.mlKNN != nil && len(s.training) > 0 {
+		s.retrainFromRecords()
+	}
+
 	logging.Infof("Loaded KNN model with %d training records from %s", len(s.training), path)
 	return nil
+}
+
+// retrainFromRecords trains the ml_binding from stored training records (must hold lock)
+func (s *KNNSelector) retrainFromRecords() {
+	if s.mlKNN == nil || len(s.training) == 0 {
+		return
+	}
+
+	// Convert training records to embeddings and labels
+	embeddings := make([][]float64, len(s.training))
+	labels := make([]string, len(s.training))
+	for i, r := range s.training {
+		embeddings[i] = r.QueryEmbedding
+		labels[i] = r.SelectedModel
+	}
+
+	if err := s.mlKNN.Train(embeddings, labels); err != nil {
+		logging.Warnf("Failed to retrain KNN from loaded records: %v", err)
+	}
 }
 
 // ============================================================================
@@ -494,34 +519,23 @@ func (s *KMeansSelector) Save(path string) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Convert mat.Dense centroids to [][]float64
-	var centroids [][]float64
-	if s.centroids != nil {
-		rows, cols := s.centroids.Dims()
-		centroids = make([][]float64, rows)
-		for i := 0; i < rows; i++ {
-			centroids[i] = make([]float64, cols)
-			for j := 0; j < cols; j++ {
-				centroids[i][j] = s.centroids.At(i, j)
-			}
-		}
-	}
-
 	// Convert training records
 	training := make([]SerializableTrainingRecord, len(s.training))
 	for i, r := range s.training {
 		training[i] = toSerializable(r)
 	}
 
+	trained := s.mlKMeans != nil && s.mlKMeans.IsTrained()
+
 	data := KMeansModelData{
 		Version:          "1.0",
 		Algorithm:        "kmeans",
 		NumClusters:      s.numClusters,
-		Centroids:        centroids,
-		ClusterModels:    s.clusterModels,
+		Centroids:        nil, // Not used - retrained on load from training records
+		ClusterModels:    nil, // Not used - retrained on load from training records
 		EfficiencyWeight: s.efficiencyWeight,
 		Training:         training,
-		Trained:          s.trained,
+		Trained:          trained,
 	}
 
 	return saveModelJSON(path, data)
@@ -539,21 +553,6 @@ func (s *KMeansSelector) Load(path string) error {
 
 	s.numClusters = data.NumClusters
 	s.efficiencyWeight = data.EfficiencyWeight
-	s.clusterModels = data.ClusterModels
-	s.trained = data.Trained
-
-	// Convert [][]float64 to mat.Dense
-	if len(data.Centroids) > 0 {
-		rows := len(data.Centroids)
-		cols := len(data.Centroids[0])
-		flatData := make([]float64, rows*cols)
-		for i := 0; i < rows; i++ {
-			for j := 0; j < cols; j++ {
-				flatData[i*cols+j] = data.Centroids[i][j]
-			}
-		}
-		s.centroids = mat.NewDense(rows, cols, flatData)
-	}
 
 	// Convert training records
 	s.training = make([]TrainingRecord, len(data.Training))
@@ -561,9 +560,36 @@ func (s *KMeansSelector) Load(path string) error {
 		s.training[i] = fromSerializable(r)
 	}
 
+	// Retrain ml_binding from training records if we have data
+	if s.mlKMeans != nil && len(s.training) > 0 {
+		s.retrainFromRecords()
+	}
+
 	logging.Infof("Loaded KMeans model with %d clusters, %d training records from %s",
 		s.numClusters, len(s.training), path)
 	return nil
+}
+
+// retrainFromRecords trains the ml_binding from stored training records (must hold lock)
+func (s *KMeansSelector) retrainFromRecords() {
+	if s.mlKMeans == nil || len(s.training) == 0 {
+		return
+	}
+
+	// Convert training records to ml_binding format
+	records := make([]ml_binding.KMeansTrainingRecord, len(s.training))
+	for i, r := range s.training {
+		records[i] = ml_binding.KMeansTrainingRecord{
+			Embedding: r.QueryEmbedding,
+			Label:     r.SelectedModel,
+			Quality:   r.ResponseQuality,
+			LatencyNs: r.ResponseLatencyNs,
+		}
+	}
+
+	if err := s.mlKMeans.Train(records); err != nil {
+		logging.Warnf("Failed to retrain KMeans from loaded records: %v", err)
+	}
 }
 
 // ============================================================================
@@ -723,18 +749,20 @@ func (s *SVMSelector) Save(path string) error {
 		training[i] = toSerializable(r)
 	}
 
+	trained := s.mlSVM != nil && s.mlSVM.IsTrained()
+
 	data := SVMModelData{
 		Version:        "1.0",
 		Algorithm:      "svm",
 		Kernel:         s.kernel,
-		Gamma:          s.gamma,
-		ModelToIdx:     s.modelToIdx,
-		IdxToModel:     s.idxToModel,
-		SupportVectors: s.supportVectors,
-		Alphas:         s.alphas,
-		Biases:         s.biases,
+		Gamma:          0.1, // Default gamma
+		ModelToIdx:     nil, // Retrained on load from training records
+		IdxToModel:     nil, // Retrained on load from training records
+		SupportVectors: nil, // Retrained on load from training records
+		Alphas:         nil, // Not used with Linfa
+		Biases:         nil, // Not used with Linfa
 		Training:       training,
-		Trained:        s.trained,
+		Trained:        trained,
 	}
 
 	return saveModelJSON(path, data)
@@ -751,13 +779,6 @@ func (s *SVMSelector) Load(path string) error {
 	defer s.mu.Unlock()
 
 	s.kernel = data.Kernel
-	s.gamma = data.Gamma
-	s.modelToIdx = data.ModelToIdx
-	s.idxToModel = data.IdxToModel
-	s.supportVectors = data.SupportVectors
-	s.alphas = data.Alphas
-	s.biases = data.Biases
-	s.trained = data.Trained
 
 	// Convert training records
 	s.training = make([]TrainingRecord, len(data.Training))
@@ -765,8 +786,32 @@ func (s *SVMSelector) Load(path string) error {
 		s.training[i] = fromSerializable(r)
 	}
 
-	logging.Infof("Loaded SVM model with %d models from %s", len(s.idxToModel), path)
+	// Retrain ml_binding from training records if we have data
+	if s.mlSVM != nil && len(s.training) > 0 {
+		s.retrainFromRecords()
+	}
+
+	logging.Infof("Loaded SVM model with %d training records from %s", len(s.training), path)
 	return nil
+}
+
+// retrainFromRecords trains the ml_binding from stored training records (must hold lock)
+func (s *SVMSelector) retrainFromRecords() {
+	if s.mlSVM == nil || len(s.training) == 0 {
+		return
+	}
+
+	// Convert training records to embeddings and labels
+	embeddings := make([][]float64, len(s.training))
+	labels := make([]string, len(s.training))
+	for i, r := range s.training {
+		embeddings[i] = r.QueryEmbedding
+		labels[i] = r.SelectedModel
+	}
+
+	if err := s.mlSVM.Train(embeddings, labels); err != nil {
+		logging.Warnf("Failed to retrain SVM from loaded records: %v", err)
+	}
 }
 
 // ============================================================================

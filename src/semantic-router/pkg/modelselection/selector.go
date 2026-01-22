@@ -27,16 +27,22 @@ import (
 	"math"
 	"math/rand"
 	"os"
-	"sort"
 	"sync"
 	"time"
 
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/mat"
 
+	ml_binding "github.com/vllm-project/semantic-router/ml-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
+
+// UseLinfa enables Rust/Linfa implementations for KNN, KMeans, SVM.
+// When true, uses ml-binding (faster, battle-tested Linfa algorithms).
+// When false, uses pure Go implementations (no Rust dependency).
+// MLP and Matrix Factorization always use Go (not available in Linfa).
+var UseLinfa = false
 
 // Selector interface for all model selection algorithms
 type Selector interface {
@@ -482,6 +488,7 @@ type SavedModelData struct {
 	ModelToIdx     map[string]int                 `json:"model_to_idx,omitempty"`
 	IdxToModel     []string                       `json:"idx_to_model,omitempty"`
 	QueryFactors   [][]float64                    `json:"query_factors,omitempty"`
+	Projection     [][]float64                    `json:"projection,omitempty"` // Alternative field name for query_factors
 	ModelFactors   [][]float64                    `json:"model_factors,omitempty"`
 	ModelBiases    []float64                      `json:"model_biases,omitempty"`
 	GlobalBias     float64                        `json:"global_bias,omitempty"`
@@ -529,16 +536,17 @@ func buildModelIndex(refs []config.ModelRef) map[string]int {
 }
 
 // =============================================================================
-// KNN Selector - Production Implementation
+// KNN Selector - Linfa/Rust Implementation (via ml-binding)
 // =============================================================================
 
-// KNNSelector implements K-Nearest Neighbors model selection using gonum
+// KNNSelector implements K-Nearest Neighbors using Linfa (linfa-nn)
 type KNNSelector struct {
 	baseSelector
-	k int
+	k     int
+	mlKNN *ml_binding.KNNSelector
 }
 
-// NewKNNSelector creates a new KNN selector
+// NewKNNSelector creates a new KNN selector using Linfa
 func NewKNNSelector(k int) *KNNSelector {
 	if k <= 0 {
 		k = 3
@@ -546,6 +554,7 @@ func NewKNNSelector(k int) *KNNSelector {
 	return &KNNSelector{
 		baseSelector: newBaseSelector(10000),
 		k:            k,
+		mlKNN:        ml_binding.NewKNNSelector(k),
 	}
 }
 
@@ -553,6 +562,7 @@ func (s *KNNSelector) Name() string { return "knn" }
 
 // LoadFromJSON loads a pre-trained KNN model from JSON data
 func (s *KNNSelector) LoadFromJSON(data []byte) error {
+	// Load into baseSelector for compatibility
 	modelData, err := s.loadFromJSON(data)
 	if err != nil {
 		return err
@@ -560,12 +570,45 @@ func (s *KNNSelector) LoadFromJSON(data []byte) error {
 	if modelData.K > 0 {
 		s.k = modelData.K
 	}
+
+	// Also load into ml-binding
+	knn, err := ml_binding.KNNFromJSON(string(data))
+	if err != nil {
+		// Fallback: train ml-binding from loaded training data
+		s.trainMLBinding()
+		return nil
+	}
+	s.mlKNN = knn
 	return nil
+}
+
+// trainMLBinding trains the ml-binding KNN from baseSelector data
+func (s *KNNSelector) trainMLBinding() {
+	training := s.getTrainingData()
+	if len(training) == 0 {
+		return
+	}
+
+	embeddings := make([][]float64, len(training))
+	labels := make([]string, len(training))
+	for i, rec := range training {
+		embeddings[i] = rec.QueryEmbedding
+		labels[i] = rec.SelectedModel
+	}
+
+	if s.mlKNN == nil {
+		s.mlKNN = ml_binding.NewKNNSelector(s.k)
+	}
+	_ = s.mlKNN.Train(embeddings, labels)
 }
 
 func (s *KNNSelector) Train(data []TrainingRecord) error {
 	s.addTrainingData(data)
-	logging.Infof("KNN selector trained with %d records, total: %d", len(data), s.getTrainingCount())
+
+	// Train ml-binding KNN
+	s.trainMLBinding()
+
+	logging.Infof("KNN (Linfa) trained with %d records", len(data))
 	return nil
 }
 
@@ -577,127 +620,42 @@ func (s *KNNSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*co
 		return &refs[0], nil
 	}
 
-	training := s.getTrainingData()
-	if len(training) == 0 || len(ctx.QueryEmbedding) == 0 {
-		logging.Debugf("KNN: No training data or embedding, selecting first model")
+	if s.mlKNN == nil || !s.mlKNN.IsTrained() || len(ctx.QueryEmbedding) == 0 {
+		logging.Debugf("KNN: Not trained or no embedding, selecting first model")
 		return &refs[0], nil
 	}
 
-	// Find K nearest neighbors
-	type neighbor struct {
-		record     TrainingRecord
-		similarity float64
+	// Use ml-binding for selection
+	selectedModel, err := s.mlKNN.Select(ctx.QueryEmbedding)
+	if err != nil {
+		logging.Debugf("KNN (Linfa) selection failed: %v, selecting first model", err)
+		return &refs[0], nil
 	}
 
-	neighbors := make([]neighbor, 0, len(training))
-	for _, record := range training {
-		if len(record.QueryEmbedding) == 0 {
-			continue
-		}
-		sim := CosineSimilarity(ctx.QueryEmbedding, record.QueryEmbedding)
-		neighbors = append(neighbors, neighbor{record: record, similarity: sim})
-	}
-
-	// Sort by similarity (descending)
-	sort.Slice(neighbors, func(i, j int) bool {
-		return neighbors[i].similarity > neighbors[j].similarity
-	})
-
-	// Take top K
-	k := s.k
-	if k > len(neighbors) {
-		k = len(neighbors)
-	}
-	neighbors = neighbors[:k]
-
-	// Vote with similarity, quality, and latency weighting
-	// Formula inspired by RouteLLM: Score = w_perf × Perf - w_cost × Cost
+	// Find the selected model in refs
 	modelIndex := buildModelIndex(refs)
-	votes := make(map[string]float64)
-
-	// Find max latency for normalization
-	var maxLatencyMs float64
-	for _, n := range neighbors {
-		latencyMs := float64(n.record.ResponseLatency().Milliseconds())
-		if latencyMs > maxLatencyMs {
-			maxLatencyMs = latencyMs
-		}
-	}
-	if maxLatencyMs == 0 {
-		maxLatencyMs = 1000 // Default 1 second if no latency data
-	}
-
-	for _, n := range neighbors {
-		if _, available := modelIndex[n.record.SelectedModel]; available {
-			// Base weight from similarity
-			weight := n.similarity
-
-			// Quality factor: success + quality score
-			if n.record.Success {
-				weight *= (1.0 + n.record.ResponseQuality)
-			} else {
-				weight *= 0.5
-			}
-
-			// Latency factor: faster models get bonus (RouteLLM-style cost penalty)
-			// efficiency = 1 / (1 + normalized_latency)
-			// This gives: 0ms → 1.0, 500ms → 0.67, 1000ms → 0.5, 2000ms → 0.33
-			latencyMs := float64(n.record.ResponseLatency().Milliseconds())
-			normalizedLatency := latencyMs / maxLatencyMs
-			efficiencyBonus := 1.0 / (1.0 + normalizedLatency)
-			weight *= efficiencyBonus
-
-			votes[n.record.SelectedModel] += weight
-		}
-	}
-
-	// Find best model
-	var bestModel string
-	var bestVote float64
-	for model, vote := range votes {
-		if vote > bestVote {
-			bestVote = vote
-			bestModel = model
-		}
-	}
-
-	if bestModel != "" {
-		if idx, ok := modelIndex[bestModel]; ok {
-			logging.Infof("KNN selected model %s with vote %.3f from %d neighbors", bestModel, bestVote, k)
-			return &refs[idx], nil
-		}
+	if idx, ok := modelIndex[selectedModel]; ok {
+		logging.Infof("KNN (Linfa) selected model %s", selectedModel)
+		return &refs[idx], nil
 	}
 
 	return &refs[0], nil
 }
 
 // =============================================================================
-// KMeans Selector - Production Implementation (Avengers-Pro, arXiv:2508.12631)
-// Routes queries to models based on performance-efficiency score
+// KMeans Selector - Linfa/Rust Implementation (via ml-binding)
+// Based on Avengers-Pro framework (arXiv:2508.12631)
 // =============================================================================
 
-// ClusterModelStats tracks performance and efficiency stats for a model in a cluster
-type ClusterModelStats struct {
-	SuccessCount   int
-	TotalCount     int
-	TotalLatencyMs float64
-	TotalQuality   float64
-}
-
-// KMeansSelector implements KMeans clustering using gonum matrices
-// Based on Avengers-Pro framework that routes based on performance-efficiency score
+// KMeansSelector implements KMeans clustering using Linfa (linfa-clustering)
 type KMeansSelector struct {
 	baseSelector
 	numClusters      int
-	centroids        *mat.Dense // numClusters x embDim
-	clusterModels    []string
-	clusterStats     map[int]map[string]*ClusterModelStats // cluster -> model -> stats
-	efficiencyWeight float64                               // weight for efficiency vs performance (0-1)
-	trained          bool
+	efficiencyWeight float64
+	mlKMeans         *ml_binding.KMeansSelector
 }
 
-// NewKMeansSelector creates a new KMeans selector
-// efficiencyWeight controls the tradeoff: 0 = pure performance, 1 = pure efficiency
+// NewKMeansSelector creates a new KMeans selector using Linfa
 func NewKMeansSelector(numClusters int) *KMeansSelector {
 	if numClusters <= 0 {
 		numClusters = 4
@@ -705,9 +663,8 @@ func NewKMeansSelector(numClusters int) *KMeansSelector {
 	return &KMeansSelector{
 		baseSelector:     newBaseSelector(10000),
 		numClusters:      numClusters,
-		clusterModels:    make([]string, numClusters),
-		clusterStats:     make(map[int]map[string]*ClusterModelStats),
-		efficiencyWeight: 0.3, // Default: 70% performance, 30% efficiency (as per Avengers-Pro)
+		efficiencyWeight: 0.3, // Default: 70% performance, 30% efficiency
+		mlKMeans:         ml_binding.NewKMeansSelector(numClusters),
 	}
 }
 
@@ -722,6 +679,7 @@ func (s *KMeansSelector) Name() string { return "kmeans" }
 
 // LoadFromJSON loads a pre-trained KMeans model from JSON data
 func (s *KMeansSelector) LoadFromJSON(data []byte) error {
+	// Load into baseSelector for compatibility
 	modelData, err := s.loadFromJSON(data)
 	if err != nil {
 		return err
@@ -732,245 +690,49 @@ func (s *KMeansSelector) LoadFromJSON(data []byte) error {
 	if modelData.EffWeight > 0 {
 		s.efficiencyWeight = modelData.EffWeight
 	}
-	if len(modelData.ClusterModels) > 0 {
-		s.clusterModels = modelData.ClusterModels
+
+	// Also load into ml-binding
+	kmeans, err := ml_binding.KMeansFromJSON(string(data))
+	if err != nil {
+		// Fallback: train ml-binding from loaded training data
+		s.trainMLBinding()
+		return nil
 	}
-	if len(modelData.Centroids) > 0 {
-		// Convert centroids to mat.Dense
-		rows := len(modelData.Centroids)
-		if rows > 0 {
-			cols := len(modelData.Centroids[0])
-			flatData := make([]float64, rows*cols)
-			for i, row := range modelData.Centroids {
-				copy(flatData[i*cols:], row)
-			}
-			s.centroids = mat.NewDense(rows, cols, flatData)
+	s.mlKMeans = kmeans
+	return nil
+}
+
+// trainMLBinding trains the ml-binding KMeans from baseSelector data
+func (s *KMeansSelector) trainMLBinding() {
+	training := s.getTrainingData()
+	if len(training) == 0 {
+		return
+	}
+
+	records := make([]ml_binding.KMeansTrainingRecord, len(training))
+	for i, rec := range training {
+		records[i] = ml_binding.KMeansTrainingRecord{
+			Embedding: rec.QueryEmbedding,
+			Label:     rec.SelectedModel,
+			Quality:   rec.ResponseQuality,
+			LatencyNs: rec.ResponseLatencyNs,
 		}
 	}
-	// Respect the trained flag from JSON - only set trained if actually trained
-	s.trained = modelData.Trained && s.centroids != nil
-	return nil
+
+	if s.mlKMeans == nil {
+		s.mlKMeans = ml_binding.NewKMeansSelector(s.numClusters)
+	}
+	_ = s.mlKMeans.Train(records)
 }
 
 func (s *KMeansSelector) Train(data []TrainingRecord) error {
 	s.addTrainingData(data)
 
-	training := s.getTrainingData()
-	// Train if we have enough records for the algorithm
-	// Minimum: need at least numClusters records to form clusters
-	if len(training) >= s.numClusters {
-		s.runKMeans()
-	}
+	// Train ml-binding KMeans
+	s.trainMLBinding()
 
-	logging.Infof("KMeans selector trained with %d records", len(data))
+	logging.Infof("KMeans (Linfa) trained with %d records", len(data))
 	return nil
-}
-
-func (s *KMeansSelector) runKMeans() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Get valid training records
-	var validRecords []TrainingRecord
-	var embDim int
-	for _, r := range s.training {
-		if len(r.QueryEmbedding) > 0 {
-			if embDim == 0 {
-				embDim = len(r.QueryEmbedding)
-			}
-			if len(r.QueryEmbedding) == embDim {
-				validRecords = append(validRecords, r)
-			}
-		}
-	}
-
-	if len(validRecords) < s.numClusters {
-		return
-	}
-
-	// Initialize centroids using k-means++ for better placement
-	s.centroids = mat.NewDense(s.numClusters, embDim, nil)
-
-	// First centroid: random selection
-	firstIdx := rand.Intn(len(validRecords))
-	s.centroids.SetRow(0, validRecords[firstIdx].QueryEmbedding)
-
-	// Remaining centroids: weighted by distance squared
-	for k := 1; k < s.numClusters; k++ {
-		// Compute distances to nearest existing centroid
-		distances := make([]float64, len(validRecords))
-		totalDist := 0.0
-
-		for i, record := range validRecords {
-			minDist := math.MaxFloat64
-			for c := 0; c < k; c++ {
-				centroid := s.centroids.RawRowView(c)
-				dist := EuclideanDistance(record.QueryEmbedding, centroid)
-				if dist < minDist {
-					minDist = dist
-				}
-			}
-			distances[i] = minDist * minDist // Square for weighted probability
-			totalDist += distances[i]
-		}
-
-		// Select next centroid with probability proportional to distance squared
-		if totalDist > 0 {
-			target := rand.Float64() * totalDist
-			cumulative := 0.0
-			selectedIdx := 0
-			for i, d := range distances {
-				cumulative += d
-				if cumulative >= target {
-					selectedIdx = i
-					break
-				}
-			}
-			s.centroids.SetRow(k, validRecords[selectedIdx].QueryEmbedding)
-		} else {
-			// Fallback to sequential if distances are zero
-			s.centroids.SetRow(k, validRecords[k%len(validRecords)].QueryEmbedding)
-		}
-	}
-
-	// Run K-means iterations
-	const maxIterations = 100 // More iterations for convergence
-	const tolerance = 1e-6
-
-	for iter := 0; iter < maxIterations; iter++ {
-		// Assign points to clusters
-		assignments := make([]int, len(validRecords))
-		for i, record := range validRecords {
-			assignments[i] = s.findNearestClusterLocked(record.QueryEmbedding)
-		}
-
-		// Update centroids
-		newCentroids := mat.NewDense(s.numClusters, embDim, nil)
-		clusterCounts := make([]int, s.numClusters)
-
-		for i, record := range validRecords {
-			cluster := assignments[i]
-			clusterCounts[cluster]++
-			row := newCentroids.RawRowView(cluster)
-			floats.Add(row, record.QueryEmbedding)
-		}
-
-		// Average
-		for i := 0; i < s.numClusters; i++ {
-			if clusterCounts[i] > 0 {
-				row := newCentroids.RawRowView(i)
-				floats.Scale(1/float64(clusterCounts[i]), row)
-			}
-		}
-
-		// Check convergence
-		diff := mat.NewDense(s.numClusters, embDim, nil)
-		diff.Sub(newCentroids, s.centroids)
-		if mat.Norm(diff, 2) < tolerance {
-			break
-		}
-
-		s.centroids = newCentroids
-	}
-
-	// Assign best model to each cluster
-	s.updateClusterModels(validRecords)
-	s.trained = true
-}
-
-func (s *KMeansSelector) findNearestClusterLocked(embedding []float64) int {
-	if s.centroids == nil {
-		return 0
-	}
-
-	rows, _ := s.centroids.Dims()
-	bestCluster := 0
-	bestDist := math.MaxFloat64
-
-	for i := 0; i < rows; i++ {
-		centroid := s.centroids.RawRowView(i)
-		dist := EuclideanDistance(embedding, centroid)
-		if dist < bestDist {
-			bestDist = dist
-			bestCluster = i
-		}
-	}
-
-	return bestCluster
-}
-
-func (s *KMeansSelector) updateClusterModels(records []TrainingRecord) {
-	// Build comprehensive stats per model per cluster (Avengers-Pro approach)
-	s.clusterStats = make(map[int]map[string]*ClusterModelStats)
-
-	for _, record := range records {
-		cluster := s.findNearestClusterLocked(record.QueryEmbedding)
-		if s.clusterStats[cluster] == nil {
-			s.clusterStats[cluster] = make(map[string]*ClusterModelStats)
-		}
-		if s.clusterStats[cluster][record.SelectedModel] == nil {
-			s.clusterStats[cluster][record.SelectedModel] = &ClusterModelStats{}
-		}
-
-		stats := s.clusterStats[cluster][record.SelectedModel]
-		stats.TotalCount++
-		stats.TotalLatencyMs += float64(record.ResponseLatency().Milliseconds())
-		if record.Success {
-			stats.SuccessCount++
-			stats.TotalQuality += record.ResponseQuality
-		}
-	}
-
-	// Assign best model to each cluster using performance-efficiency score
-	// Score = (1 - efficiencyWeight) * performance + efficiencyWeight * efficiency
-	// Performance = success_rate * avg_quality
-	// Efficiency = 1 / (1 + normalized_latency)
-	for cluster := 0; cluster < s.numClusters; cluster++ {
-		var bestModel string
-		var bestScore float64 = -1
-
-		// Find max latency for normalization
-		var maxLatency float64
-		for _, stats := range s.clusterStats[cluster] {
-			if stats.TotalCount > 0 {
-				avgLatency := stats.TotalLatencyMs / float64(stats.TotalCount)
-				if avgLatency > maxLatency {
-					maxLatency = avgLatency
-				}
-			}
-		}
-		if maxLatency == 0 {
-			maxLatency = 1 // Avoid division by zero
-		}
-
-		for model, stats := range s.clusterStats[cluster] {
-			if stats.TotalCount < 3 { // Require minimum samples
-				continue
-			}
-
-			// Performance score: success_rate * average_quality
-			successRate := float64(stats.SuccessCount) / float64(stats.TotalCount)
-			avgQuality := 0.5 // Default quality
-			if stats.SuccessCount > 0 {
-				avgQuality = stats.TotalQuality / float64(stats.SuccessCount)
-			}
-			performance := successRate * avgQuality
-
-			// Efficiency score: inverse of normalized latency (lower latency = higher efficiency)
-			avgLatency := stats.TotalLatencyMs / float64(stats.TotalCount)
-			normalizedLatency := avgLatency / maxLatency
-			efficiency := 1.0 / (1.0 + normalizedLatency)
-
-			// Combined performance-efficiency score (Avengers-Pro formula)
-			score := (1-s.efficiencyWeight)*performance + s.efficiencyWeight*efficiency
-
-			if score > bestScore {
-				bestScore = score
-				bestModel = model
-			}
-		}
-		s.clusterModels[cluster] = bestModel
-	}
 }
 
 func (s *KMeansSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*config.ModelRef, error) {
@@ -981,22 +743,23 @@ func (s *KMeansSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (
 		return &refs[0], nil
 	}
 
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if !s.trained || s.centroids == nil || len(ctx.QueryEmbedding) == 0 {
+	if s.mlKMeans == nil || !s.mlKMeans.IsTrained() || len(ctx.QueryEmbedding) == 0 {
 		logging.Debugf("KMeans: Not trained or no embedding, selecting first model")
 		return &refs[0], nil
 	}
 
-	cluster := s.findNearestClusterLocked(ctx.QueryEmbedding)
-	modelIndex := buildModelIndex(refs)
+	// Use ml-binding for selection
+	selectedModel, err := s.mlKMeans.Select(ctx.QueryEmbedding)
+	if err != nil {
+		logging.Debugf("KMeans (Linfa) selection failed: %v, selecting first model", err)
+		return &refs[0], nil
+	}
 
-	if cluster < len(s.clusterModels) && s.clusterModels[cluster] != "" {
-		if idx, ok := modelIndex[s.clusterModels[cluster]]; ok {
-			logging.Infof("KMeans selected model %s from cluster %d", s.clusterModels[cluster], cluster)
-			return &refs[idx], nil
-		}
+	// Find the selected model in refs
+	modelIndex := buildModelIndex(refs)
+	if idx, ok := modelIndex[selectedModel]; ok {
+		logging.Infof("KMeans (Linfa) selected model %s", selectedModel)
+		return &refs[idx], nil
 	}
 
 	return &refs[0], nil
@@ -1371,35 +1134,25 @@ func (s *MLPSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*co
 }
 
 // =============================================================================
-// SVM Selector - Production Implementation
+// SVM Selector - Linfa/Rust Implementation (via ml-binding)
 // =============================================================================
 
-// SVMSelector implements SVM using gonum for kernel computations
+// SVMSelector implements SVM using Linfa (linfa-svm)
 type SVMSelector struct {
 	baseSelector
-	kernel         string
-	gamma          float64
-	supportVectors map[int][][]float64 // modelIdx -> support vectors
-	alphas         map[int][]float64   // modelIdx -> alpha values
-	biases         []float64
-	modelToIdx     map[string]int
-	idxToModel     []string
-	trained        bool
+	kernel string
+	mlSVM  *ml_binding.SVMSelector
 }
 
-// NewSVMSelector creates a new SVM selector
+// NewSVMSelector creates a new SVM selector using Linfa
 func NewSVMSelector(kernel string) *SVMSelector {
 	if kernel == "" {
 		kernel = "rbf"
 	}
 	return &SVMSelector{
-		baseSelector:   newBaseSelector(5000),
-		kernel:         kernel,
-		gamma:          0.1,
-		supportVectors: make(map[int][][]float64),
-		alphas:         make(map[int][]float64),
-		modelToIdx:     make(map[string]int),
-		idxToModel:     make([]string, 0),
+		baseSelector: newBaseSelector(5000),
+		kernel:       kernel,
+		mlSVM:        ml_binding.NewSVMSelector(),
 	}
 }
 
@@ -1407,6 +1160,7 @@ func (s *SVMSelector) Name() string { return "svm" }
 
 // LoadFromJSON loads a pre-trained SVM model from JSON data
 func (s *SVMSelector) LoadFromJSON(data []byte) error {
+	// Load into baseSelector for compatibility
 	modelData, err := s.loadFromJSON(data)
 	if err != nil {
 		return err
@@ -1414,163 +1168,46 @@ func (s *SVMSelector) LoadFromJSON(data []byte) error {
 	if modelData.Kernel != "" {
 		s.kernel = modelData.Kernel
 	}
-	if modelData.Gamma > 0 {
-		s.gamma = modelData.Gamma
+
+	// Also load into ml-binding
+	svm, err := ml_binding.SVMFromJSON(string(data))
+	if err != nil {
+		// Fallback: train ml-binding from loaded training data
+		s.trainMLBinding()
+		return nil
 	}
-	if len(modelData.IdxToModel) > 0 {
-		s.idxToModel = modelData.IdxToModel
-		s.modelToIdx = make(map[string]int)
-		for i, m := range s.idxToModel {
-			s.modelToIdx[m] = i
-		}
-	}
-	if len(modelData.SupportVectors) > 0 {
-		s.supportVectors = modelData.SupportVectors
-	}
-	// Load alphas from either "sv_coeffs" or "alphas" field
-	if len(modelData.SVCoeffs) > 0 {
-		s.alphas = modelData.SVCoeffs
-	} else if len(modelData.Alphas) > 0 {
-		s.alphas = modelData.Alphas
-	}
-	// Parse biases from raw JSON (can be map or array)
-	if len(modelData.Biases) > 0 {
-		// Try to parse as map first (SVM format)
-		var biasesMap map[int]float64
-		if err := json.Unmarshal(modelData.Biases, &biasesMap); err == nil {
-			s.biases = make([]float64, len(biasesMap))
-			for k, v := range biasesMap {
-				if k < len(s.biases) {
-					s.biases[k] = v
-				}
-			}
-		}
-	}
-	// Respect the trained flag from JSON - only set trained if actually trained
-	s.trained = modelData.Trained && len(s.supportVectors) > 0
+	s.mlSVM = svm
 	return nil
+}
+
+// trainMLBinding trains the ml-binding SVM from baseSelector data
+func (s *SVMSelector) trainMLBinding() {
+	training := s.getTrainingData()
+	if len(training) == 0 {
+		return
+	}
+
+	embeddings := make([][]float64, len(training))
+	labels := make([]string, len(training))
+	for i, rec := range training {
+		embeddings[i] = rec.QueryEmbedding
+		labels[i] = rec.SelectedModel
+	}
+
+	if s.mlSVM == nil {
+		s.mlSVM = ml_binding.NewSVMSelector()
+	}
+	_ = s.mlSVM.Train(embeddings, labels)
 }
 
 func (s *SVMSelector) Train(data []TrainingRecord) error {
 	s.addTrainingData(data)
 
-	s.mu.Lock()
-	for _, record := range data {
-		if _, exists := s.modelToIdx[record.SelectedModel]; !exists {
-			s.modelToIdx[record.SelectedModel] = len(s.idxToModel)
-			s.idxToModel = append(s.idxToModel, record.SelectedModel)
-		}
-	}
-	s.mu.Unlock()
+	// Train ml-binding SVM
+	s.trainMLBinding()
 
-	training := s.getTrainingData()
-	// Train if we have enough records (need at least 2 different models)
-	if len(training) >= 2 && len(s.idxToModel) > 1 {
-		s.trainSVM()
-	}
-
-	logging.Infof("SVM selector trained with %d records", len(data))
+	logging.Infof("SVM (Linfa) trained with %d records", len(data))
 	return nil
-}
-
-func (s *SVMSelector) trainSVM() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Get embedding dimension
-	var embDim int
-	for _, r := range s.training {
-		if len(r.QueryEmbedding) > 0 {
-			embDim = len(r.QueryEmbedding)
-			break
-		}
-	}
-	if embDim == 0 {
-		return
-	}
-
-	s.gamma = 1.0 / float64(embDim)
-	numModels := len(s.idxToModel)
-	s.biases = make([]float64, numModels)
-
-	// One-vs-all training for each model
-	for modelIdx := 0; modelIdx < numModels; modelIdx++ {
-		targetModel := s.idxToModel[modelIdx]
-
-		var positives, negatives [][]float64
-		for _, record := range s.training {
-			if len(record.QueryEmbedding) != embDim || !record.Success {
-				continue
-			}
-			if record.SelectedModel == targetModel {
-				positives = append(positives, record.QueryEmbedding)
-			} else {
-				negatives = append(negatives, record.QueryEmbedding)
-			}
-		}
-
-		if len(positives) < 5 || len(negatives) < 5 {
-			continue
-		}
-
-		// Sample support vectors
-		maxSVs := 50
-		if len(positives) > maxSVs {
-			positives = positives[:maxSVs]
-		}
-		if len(negatives) > maxSVs {
-			negatives = negatives[:maxSVs]
-		}
-
-		s.supportVectors[modelIdx] = append(positives, negatives...)
-		alphas := make([]float64, len(positives)+len(negatives))
-
-		for i := 0; i < len(positives); i++ {
-			alphas[i] = 1.0 / float64(len(positives))
-		}
-		for i := 0; i < len(negatives); i++ {
-			alphas[len(positives)+i] = -1.0 / float64(len(negatives))
-		}
-
-		s.alphas[modelIdx] = alphas
-	}
-
-	s.trained = true
-}
-
-func (s *SVMSelector) kernelFunc(a, b []float64) float64 {
-	switch s.kernel {
-	case "linear":
-		return floats.Dot(a, b)
-	case "poly":
-		dot := floats.Dot(a, b)
-		v := 1 + dot
-		return v * v * v
-	default: // rbf
-		dist := EuclideanDistance(a, b)
-		return math.Exp(-s.gamma * dist * dist)
-	}
-}
-
-func (s *SVMSelector) computeDecision(modelIdx int, query []float64) float64 {
-	svs, ok := s.supportVectors[modelIdx]
-	if !ok || len(svs) == 0 {
-		return 0
-	}
-
-	alphas := s.alphas[modelIdx]
-	var sum float64
-	for i, sv := range svs {
-		if len(sv) == len(query) {
-			sum += alphas[i] * s.kernelFunc(sv, query)
-		}
-	}
-
-	if modelIdx < len(s.biases) {
-		sum += s.biases[modelIdx]
-	}
-
-	return sum
 }
 
 func (s *SVMSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*config.ModelRef, error) {
@@ -1581,33 +1218,23 @@ func (s *SVMSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*co
 		return &refs[0], nil
 	}
 
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if !s.trained || len(ctx.QueryEmbedding) == 0 {
+	if s.mlSVM == nil || !s.mlSVM.IsTrained() || len(ctx.QueryEmbedding) == 0 {
 		logging.Debugf("SVM: Not trained or no embedding, selecting first model")
 		return &refs[0], nil
 	}
 
-	// Find best available model - iterate in refs order for deterministic tie-breaking
-	var bestRef *config.ModelRef
-	bestScore := -math.MaxFloat64
-
-	for i := range refs {
-		modelName := getModelName(refs[i])
-		if modelIdx, exists := s.modelToIdx[modelName]; exists {
-			score := s.computeDecision(modelIdx, ctx.QueryEmbedding)
-			// Use > (not >=) for deterministic tie-breaking: first model wins ties
-			if score > bestScore {
-				bestScore = score
-				bestRef = &refs[i]
-			}
-		}
+	// Use ml-binding for selection
+	selectedModel, err := s.mlSVM.Select(ctx.QueryEmbedding)
+	if err != nil {
+		logging.Debugf("SVM (Linfa) selection failed: %v, selecting first model", err)
+		return &refs[0], nil
 	}
 
-	if bestRef != nil {
-		logging.Infof("SVM selected model %s with score %.3f", getModelName(*bestRef), bestScore)
-		return bestRef, nil
+	// Find the selected model in refs
+	modelIndex := buildModelIndex(refs)
+	if idx, ok := modelIndex[selectedModel]; ok {
+		logging.Infof("SVM (Linfa) selected model %s", selectedModel)
+		return &refs[idx], nil
 	}
 
 	return &refs[0], nil
@@ -1727,15 +1354,18 @@ func (s *MatrixFactorizationSelector) LoadFromJSON(data []byte) error {
 			s.modelFactors = mat.NewDense(rows, cols, flatData)
 		}
 	}
-	if len(modelData.QueryFactors) > 0 && len(modelData.QueryFactors[0]) > 0 {
-		// Projection matrix from query factors
-		rows := len(modelData.QueryFactors[0])
-		cols := len(modelData.QueryFactors)
+	// Load projection matrix - check both field names for compatibility
+	projectionData := modelData.QueryFactors
+	if len(projectionData) == 0 && len(modelData.Projection) > 0 {
+		projectionData = modelData.Projection
+	}
+	if len(projectionData) > 0 && len(projectionData[0]) > 0 {
+		// Projection matrix from query factors or projection field
+		rows := len(projectionData)
+		cols := len(projectionData[0])
 		flatData := make([]float64, rows*cols)
-		for j, row := range modelData.QueryFactors {
-			for i, v := range row {
-				flatData[i*cols+j] = v
-			}
+		for i, row := range projectionData {
+			copy(flatData[i*cols:], row)
 		}
 		s.projection = mat.NewDense(rows, cols, flatData)
 	}

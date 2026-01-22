@@ -28,49 +28,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// =============================================================================
-// Real Query Samples for Qwen3 Embeddings
-// =============================================================================
-
-// Real query samples for each query type - used with Qwen3 embeddings
-var realQuerySamples = map[QueryType][]string{
-	QueryTypeMath: {
-		"Calculate the derivative of f(x) = x^3 + 2x^2 - 5x + 3",
-		"Solve the quadratic equation 2x^2 - 5x + 3 = 0",
-		"Find the integral of sin(x) * cos(x) dx",
-		"What is the limit of (x^2 - 1)/(x - 1) as x approaches 1?",
-		"Calculate the eigenvalues of the matrix [[1,2],[3,4]]",
-	},
-	QueryTypeCode: {
-		"Write a Python function to implement binary search",
-		"Implement a linked list data structure in Go",
-		"Create a REST API endpoint in Node.js with Express",
-		"Write a SQL query to find duplicate records",
-		"Implement the quicksort algorithm in Rust",
-	},
-	QueryTypeCreative: {
-		"Write a short story about a robot learning to paint",
-		"Compose a haiku about autumn leaves falling",
-		"Create a poem about the ocean at sunset",
-		"Write a creative description of a futuristic city",
-		"Imagine a conversation between Einstein and Newton",
-	},
-	QueryTypeFactual: {
-		"What is the capital of France?",
-		"When was the Eiffel Tower built?",
-		"Who invented the telephone?",
-		"What is the chemical formula for water?",
-		"How many planets are in our solar system?",
-	},
-	QueryTypeReasoning: {
-		"If all roses are flowers and some flowers fade quickly, can we conclude all roses fade quickly?",
-		"A train leaves Chicago at 9 AM going 60 mph. Another leaves NYC at 10 AM going 80 mph. When do they meet?",
-		"Explain why the sky appears blue during the day",
-		"What would happen to Earth if the Moon suddenly disappeared?",
-		"Analyze the trolley problem from different ethical perspectives",
-	},
-}
-
 // Trainer instance for generating embeddings
 var (
 	testTrainer         *Trainer
@@ -102,67 +59,10 @@ func initTestTrainer(t *testing.T) *Trainer {
 	return testTrainer
 }
 
-// getRealQueryEmbedding gets embedding for a real query using Qwen3 or fallback
-// generateRealTrainingData creates training data using real queries and Qwen3 embeddings
-func generateRealTrainingData(trainer *Trainer, count int) ([]TrainingRecord, error) {
-	records := make([]TrainingRecord, 0, count)
-
-	// Model-to-query-type mapping (using models from config-2-models-ollama.yaml)
-	queryTypeToModel := map[QueryType]string{
-		QueryTypeMath:      "mistral-7b",   // Best for math/reasoning
-		QueryTypeCode:      "codellama-7b", // Best for code
-		QueryTypeCreative:  "llama-3.2-3b", // Best for creative
-		QueryTypeFactual:   "llama-3.2-1b", // Good for simple factual
-		QueryTypeReasoning: "mistral-7b",   // Best for reasoning
-	}
-
-	queryTypes := []QueryType{QueryTypeMath, QueryTypeCode, QueryTypeCreative, QueryTypeFactual, QueryTypeReasoning}
-	recordsPerType := count / len(queryTypes)
-
-	for _, queryType := range queryTypes {
-		queries := realQuerySamples[queryType]
-		optimalModel := queryTypeToModel[queryType]
-
-		for i := 0; i < recordsPerType; i++ {
-			// Cycle through real queries
-			query := queries[i%len(queries)]
-
-			// Get real embedding
-			embedding, err := trainer.GetEmbedding(query)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get embedding for query: %w", err)
-			}
-
-			// Combine with category
-			featureVec := CombineEmbeddingWithCategory(embedding, string(queryType))
-
-			// 95% optimal model selection
-			selectedModel := optimalModel
-			quality := 0.88 + rand.Float64()*0.12
-
-			if rand.Float64() < 0.05 {
-				allModels := []string{"mistral-7b", "llama-3.2-3b", "llama-3.2-1b", "codellama-7b", "mistral-7b"}
-				for {
-					selectedModel = allModels[rand.Intn(len(allModels))]
-					if selectedModel != optimalModel {
-						break
-					}
-				}
-				quality = 0.2 + rand.Float64()*0.3
-			}
-
-			records = append(records, TrainingRecord{
-				QueryEmbedding:    featureVec,
-				SelectedModel:     selectedModel,
-				ResponseLatencyNs: int64(time.Duration(100+rand.Intn(400)) * time.Millisecond),
-				ResponseQuality:   quality,
-				Success:           quality > 0.5,
-				TimestampUnix:     time.Now().Add(-time.Duration(rand.Intn(24*30)) * time.Hour).Unix(),
-			})
-		}
-	}
-
-	return records, nil
+// loadOptimalRecordsForTests loads the optimal model record for each unique query
+// Uses the loadOptimalModelRecords function from selector_load_test.go
+func loadOptimalRecordsForTests() ([]TrainingRecord, error) {
+	return loadOptimalModelRecords("data/trained_models")
 }
 
 // =============================================================================
@@ -1218,26 +1118,59 @@ func TestProductionScenario_MemoryBoundedTraining(t *testing.T) {
 // These tests use actual query text and Qwen3/Candle for production-like embeddings
 // =============================================================================
 
-// TestRealQueries_AllAlgorithms tests all 5 algorithms with real queries and Qwen3 embeddings
+// TestRealQueries_AllAlgorithms tests all 5 algorithms with REAL Qwen3 embeddings
+// Trains on pre-computed data, then tests on NEW queries with LIVE Qwen3 embedding generation
 func TestRealQueries_AllAlgorithms(t *testing.T) {
+	// Initialize trainer with Qwen3/Candle
 	trainer := initTestTrainer(t)
 
-	// Generate training data with real queries
-	trainingData, err := generateRealTrainingData(trainer, 100)
+	// Load OPTIMAL records for training (pre-computed Qwen3 embeddings)
+	trainingData, err := loadOptimalRecordsForTests()
 	if err != nil {
-		t.Fatalf("Failed to generate real training data: %v", err)
+		t.Skipf("Skipping: could not load training data: %v", err)
 	}
 
-	t.Logf("Generated %d training records with %s embeddings",
-		len(trainingData),
-		map[bool]string{true: "Qwen3", false: "hash-based"}[testCandleAvailable])
+	t.Logf("=== Training with %d records, Testing with NEW Qwen3 queries ===", len(trainingData))
+	t.Logf("Embedding mode: %s", map[bool]string{true: "Qwen3/Candle", false: "Hash-based fallback"}[testCandleAvailable])
+
+	// Models available for selection
+	modelRefs := []config.ModelRef{
+		{Model: "llama-3.2-1b"},
+		{Model: "llama-3.2-3b"},
+		{Model: "codellama-7b"},
+		{Model: "mistral-7b"},
+	}
+
+	// NEW test queries (not in training data) with expected best models
+	// Based on model characteristics: codellama for code, mistral for math/reasoning, llama-3.2 for general
+	newTestQueries := []struct {
+		query          string
+		category       string
+		expectedModels []string // Any of these is acceptable
+		description    string
+	}{
+		// Code queries -> codellama-7b
+		{"Write a Python function to find the longest common subsequence of two strings", "code", []string{"codellama-7b"}, "LCS algorithm"},
+		{"Implement a binary heap data structure in Go", "code", []string{"codellama-7b"}, "Data structure"},
+		{"Create a regex to validate email addresses", "code", []string{"codellama-7b", "mistral-7b"}, "Regex pattern"},
+
+		// Math/reasoning queries -> mistral-7b
+		{"Prove that the square root of 2 is irrational", "math", []string{"mistral-7b"}, "Mathematical proof"},
+		{"Calculate the eigenvalues of a 3x3 rotation matrix", "math", []string{"mistral-7b", "codellama-7b"}, "Linear algebra"},
+		{"If A implies B and B implies C, what can we conclude?", "reasoning", []string{"mistral-7b"}, "Logic"},
+
+		// General/factual queries -> llama models
+		{"What are the main causes of climate change?", "general", []string{"llama-3.2-1b", "llama-3.2-3b", "mistral-7b"}, "Science fact"},
+		{"Summarize the plot of Romeo and Juliet", "general", []string{"llama-3.2-1b", "llama-3.2-3b"}, "Literature"},
+		{"What is photosynthesis and why is it important?", "science", []string{"llama-3.2-1b", "llama-3.2-3b", "mistral-7b"}, "Biology"},
+	}
 
 	algorithms := []struct {
 		name     string
 		selector Selector
 	}{
 		{"KNN", NewKNNSelector(5)},
-		{"KMeans", NewKMeansSelector(8)},
+		{"KMeans", NewKMeansSelector(4)},
 		{"MLP", NewMLPSelector([]int{256, 128})},
 		{"SVM", NewSVMSelector("rbf")},
 		{"MatrixFactorization", NewMatrixFactorizationSelector(16)},
@@ -1250,99 +1183,94 @@ func TestRealQueries_AllAlgorithms(t *testing.T) {
 				t.Fatalf("Training failed: %v", err)
 			}
 
-			// Test with real queries from each category
-			testCases := []struct {
-				query         string
-				category      string
-				expectedModel string
-			}{
-				{"Solve the differential equation dy/dx = 2xy", "math", "mistral-7b"},
-				{"Write a recursive function to compute Fibonacci numbers", "code", "codellama-7b"},
-				{"Compose a sonnet about the stars", "creative", "llama-3.2-3b"},
-				{"What is the boiling point of water?", "factual", "llama-3.2-1b"},
-				{"Explain why correlation does not imply causation", "reasoning", "mistral-7b"},
-			}
+			reasonableSelections := 0
+			algModelCounts := make(map[string]int)
 
-			correctSelections := 0
-			for _, tc := range testCases {
+			for _, tc := range newTestQueries {
+				// Generate NEW embedding at runtime using Qwen3
 				embedding, err := trainer.GetEmbedding(tc.query)
 				if err != nil {
-					t.Errorf("Failed to get embedding: %v", err)
+					t.Errorf("Failed to get embedding for '%s': %v", tc.description, err)
 					continue
 				}
 
+				// Combine with category
 				featureVec := CombineEmbeddingWithCategory(embedding, tc.category)
 
 				ctx := &SelectionContext{
 					QueryEmbedding: featureVec,
-					QueryText:      tc.query,
-					CategoryName:   tc.category,
-					DecisionName:   "real_query_test",
+					DecisionName:   "new_query_test",
 				}
 
-				result, err := algo.selector.Select(ctx, testModels)
+				result, err := algo.selector.Select(ctx, modelRefs)
 				if err != nil {
-					t.Errorf("Selection failed for '%s': %v", tc.query, err)
+					t.Errorf("Selection failed for '%s': %v", tc.description, err)
 					continue
 				}
 
-				if result.Model == tc.expectedModel {
-					correctSelections++
+				algModelCounts[result.Model]++
+
+				// Check if selection is reasonable (in expected models list)
+				isReasonable := false
+				for _, expected := range tc.expectedModels {
+					if result.Model == expected {
+						isReasonable = true
+						break
+					}
+				}
+				if isReasonable {
+					reasonableSelections++
 				}
 
-				t.Logf("  Query: '%s' -> Selected: %s (expected: %s)",
-					tc.query[:min(50, len(tc.query))], result.Model, tc.expectedModel)
+				queryPreview := tc.query
+				if len(queryPreview) > 50 {
+					queryPreview = queryPreview[:50] + "..."
+				}
+				t.Logf("  [%s] '%s' -> %s (expected: %v) %s",
+					tc.category, queryPreview, result.Model, tc.expectedModels,
+					map[bool]string{true: "✓", false: "✗"}[isReasonable])
 			}
 
-			accuracy := float64(correctSelections) / float64(len(testCases)) * 100
-			t.Logf("%s accuracy: %.1f%% (%d/%d)", algo.name, accuracy, correctSelections, len(testCases))
+			accuracy := float64(reasonableSelections) / float64(len(newTestQueries)) * 100
+			t.Logf("%s REASONABLE SELECTIONS: %.1f%% (%d/%d)", algo.name, accuracy, reasonableSelections, len(newTestQueries))
+
+			// Log model distribution
+			for model, count := range algModelCounts {
+				t.Logf("  %s: %d selections (%.1f%%)", model, count, float64(count)/float64(len(newTestQueries))*100)
+			}
 		})
 	}
 }
 
 // TestRealQueries_CodeSpecialization tests that code queries route to code-optimized models
+// Trains on pre-computed data, tests with NEW code queries using LIVE Qwen3 embedding generation
 func TestRealQueries_CodeSpecialization(t *testing.T) {
+	// Initialize trainer with Qwen3/Candle
 	trainer := initTestTrainer(t)
 
-	// Generate training data with strong code -> codellama-7b mapping
-	records := make([]TrainingRecord, 0)
-
-	// Code queries with high quality for codellama-7b
-	codeQueries := []string{
-		"Implement a hash table with collision handling",
-		"Write a thread-safe queue in Go",
-		"Create a parser for JSON using recursive descent",
-		"Implement graph BFS and DFS traversal",
-		"Write a memory allocator in C",
+	// Load training data
+	trainingData, err := loadOptimalRecordsForTests()
+	if err != nil {
+		t.Skipf("Skipping: could not load training data: %v", err)
 	}
 
-	for i, query := range codeQueries {
-		embedding, err := trainer.GetEmbedding(query)
-		if err != nil {
-			t.Fatalf("Failed to get embedding: %v", err)
-		}
-		featureVec := CombineEmbeddingWithCategory(embedding, "computer_science")
+	t.Logf("=== Code Specialization: Training with %d records ===", len(trainingData))
+	t.Logf("Embedding mode: %s", map[bool]string{true: "Qwen3/Candle", false: "Hash-based fallback"}[testCandleAvailable])
 
-		// codellama-7b gets high quality for code
-		records = append(records, TrainingRecord{
-			QueryEmbedding:    featureVec,
-			SelectedModel:     "codellama-7b",
-			ResponseQuality:   0.95,
-			ResponseLatencyNs: int64(200 * time.Millisecond),
-			Success:           true,
-		})
+	modelRefs := []config.ModelRef{
+		{Model: "llama-3.2-1b"},
+		{Model: "llama-3.2-3b"},
+		{Model: "codellama-7b"},
+		{Model: "mistral-7b"},
+	}
 
-		// Other models get lower quality for same query
-		for _, model := range []string{"mistral-7b", "llama-3.2-3b", "llama-3.2-1b", "mistral-7b"} {
-			records = append(records, TrainingRecord{
-				QueryEmbedding:    featureVec,
-				SelectedModel:     model,
-				ResponseQuality:   0.4 + rand.Float64()*0.2,
-				ResponseLatencyNs: int64((100 + rand.Intn(300)) * int(time.Millisecond)),
-				Success:           true,
-			})
-		}
-		_ = i // Use i to avoid unused variable
+	// NEW code queries (not in training data)
+	codeQueries := []string{
+		"Implement a trie data structure for autocomplete",
+		"Write a function to detect cycles in a linked list",
+		"Create a thread pool implementation in Java",
+		"Implement the A* pathfinding algorithm",
+		"Write a parser for arithmetic expressions",
 	}
 
 	// Train all algorithms
@@ -1351,7 +1279,7 @@ func TestRealQueries_CodeSpecialization(t *testing.T) {
 		selector Selector
 	}{
 		{"KNN", NewKNNSelector(5)},
-		{"KMeans", NewKMeansSelector(8)},
+		{"KMeans", NewKMeansSelector(4)},
 		{"MLP", NewMLPSelector([]int{256, 128})},
 		{"SVM", NewSVMSelector("rbf")},
 		{"MatrixFactorization", NewMatrixFactorizationSelector(16)},
@@ -1359,138 +1287,145 @@ func TestRealQueries_CodeSpecialization(t *testing.T) {
 
 	for _, algo := range algorithms {
 		t.Run(algo.name, func(t *testing.T) {
-			err := algo.selector.Train(records)
+			err := algo.selector.Train(trainingData)
 			if err != nil {
 				t.Fatalf("Training failed: %v", err)
 			}
 
-			// Test with new code queries
-			testQueries := []string{
-				"Write a binary tree serialization algorithm",
-				"Implement a LRU cache with O(1) operations",
-				"Create a rate limiter using token bucket",
-			}
+			codeLlamaSelections := 0
+			modelSelections := make(map[string]int)
 
-			claudeSelections := 0
-			for _, query := range testQueries {
+			for _, query := range codeQueries {
+				// Generate NEW embedding at runtime
 				embedding, err := trainer.GetEmbedding(query)
 				if err != nil {
 					t.Errorf("Failed to get embedding: %v", err)
 					continue
 				}
 
-				featureVec := CombineEmbeddingWithCategory(embedding, "computer_science")
+				featureVec := CombineEmbeddingWithCategory(embedding, "code")
 
 				ctx := &SelectionContext{
 					QueryEmbedding: featureVec,
-					QueryText:      query,
-					CategoryName:   "computer_science",
 				}
 
-				result, err := algo.selector.Select(ctx, testModels)
+				result, err := algo.selector.Select(ctx, modelRefs)
 				if err != nil {
 					t.Errorf("Selection failed: %v", err)
 					continue
 				}
 
+				modelSelections[result.Model]++
 				if result.Model == "codellama-7b" {
-					claudeSelections++
+					codeLlamaSelections++
 				}
-				t.Logf("  '%s' -> %s", query[:min(40, len(query))], result.Model)
+
+				queryPreview := query
+				if len(queryPreview) > 45 {
+					queryPreview = queryPreview[:45] + "..."
+				}
+				t.Logf("  '%s' -> %s", queryPreview, result.Model)
 			}
 
-			t.Logf("%s: codellama-7b selected %d/%d times for code queries",
-				algo.name, claudeSelections, len(testQueries))
+			t.Logf("%s: codellama-7b selected %d/%d times for code queries", algo.name, codeLlamaSelections, len(codeQueries))
+			for model, count := range modelSelections {
+				t.Logf("  %s: %d selections", model, count)
+			}
 		})
 	}
 }
 
 // TestRealQueries_MathSpecialization tests math query routing
+// Trains on pre-computed data, tests with NEW math queries using LIVE Qwen3 embedding generation
 func TestRealQueries_MathSpecialization(t *testing.T) {
+	// Initialize trainer with Qwen3/Candle
 	trainer := initTestTrainer(t)
 
-	// Generate training data with strong math -> mistral-7b mapping
-	records := make([]TrainingRecord, 0)
-
-	mathQueries := []string{
-		"Prove the fundamental theorem of calculus",
-		"Solve this system of linear equations",
-		"Find the eigenvalues of this matrix",
-		"Calculate the volume of a sphere using integration",
-		"Prove by induction that 1+2+...+n = n(n+1)/2",
-	}
-
-	for _, query := range mathQueries {
-		embedding, err := trainer.GetEmbedding(query)
-		if err != nil {
-			t.Fatalf("Failed to get embedding: %v", err)
-		}
-		featureVec := CombineEmbeddingWithCategory(embedding, "math")
-
-		// mistral-7b gets high quality for math
-		records = append(records, TrainingRecord{
-			QueryEmbedding:    featureVec,
-			SelectedModel:     "mistral-7b",
-			ResponseQuality:   0.95,
-			ResponseLatencyNs: int64(150 * time.Millisecond),
-			Success:           true,
-		})
-
-		// Other models get lower quality
-		for _, model := range []string{"codellama-7b", "llama-3.2-3b", "llama-3.2-1b", "mistral-7b"} {
-			records = append(records, TrainingRecord{
-				QueryEmbedding:    featureVec,
-				SelectedModel:     model,
-				ResponseQuality:   0.35 + rand.Float64()*0.25,
-				ResponseLatencyNs: int64((100 + rand.Intn(400)) * int(time.Millisecond)),
-				Success:           true,
-			})
-		}
-	}
-
-	// Test with KNN (simple and reliable)
-	selector := NewKNNSelector(5)
-	err := selector.Train(records)
+	// Load training data
+	trainingData, err := loadOptimalRecordsForTests()
 	if err != nil {
-		t.Fatalf("Training failed: %v", err)
+		t.Skipf("Skipping: could not load training data: %v", err)
 	}
 
-	// Test with new math queries
-	testQueries := []string{
-		"Differentiate f(x) = ln(x^2 + 1)",
-		"Solve the quadratic formula derivation",
-		"Calculate the determinant of a 4x4 matrix",
+	t.Logf("=== Math Specialization: Training with %d records ===", len(trainingData))
+	t.Logf("Embedding mode: %s", map[bool]string{true: "Qwen3/Candle", false: "Hash-based fallback"}[testCandleAvailable])
+
+	modelRefs := []config.ModelRef{
+		{Model: "llama-3.2-1b"},
+		{Model: "llama-3.2-3b"},
+		{Model: "codellama-7b"},
+		{Model: "mistral-7b"},
 	}
 
-	gptTurboCount := 0
-	for _, query := range testQueries {
-		embedding, err := trainer.GetEmbedding(query)
-		if err != nil {
-			t.Errorf("Failed to get embedding: %v", err)
-			continue
-		}
-
-		featureVec := CombineEmbeddingWithCategory(embedding, "math")
-
-		ctx := &SelectionContext{
-			QueryEmbedding: featureVec,
-			QueryText:      query,
-			CategoryName:   "math",
-		}
-
-		result, err := selector.Select(ctx, testModels)
-		if err != nil {
-			t.Errorf("Selection failed: %v", err)
-			continue
-		}
-
-		if result.Model == "mistral-7b" {
-			gptTurboCount++
-		}
-		t.Logf("'%s' -> %s", query[:min(40, len(query))], result.Model)
+	// NEW math queries (not in training data)
+	mathQueries := []string{
+		"Prove that the sum of angles in a triangle is 180 degrees",
+		"Calculate the derivative of e^(x^2)",
+		"Find the general solution to dy/dx = y/x",
+		"What is the probability of rolling two sixes with two dice?",
+		"Prove the Pythagorean theorem using similar triangles",
 	}
 
-	t.Logf("KNN: mistral-7b selected %d/%d times for math queries", gptTurboCount, len(testQueries))
+	// Test with all algorithms
+	algorithms := []struct {
+		name     string
+		selector Selector
+	}{
+		{"KNN", NewKNNSelector(5)},
+		{"KMeans", NewKMeansSelector(4)},
+		{"MLP", NewMLPSelector([]int{256, 128})},
+		{"SVM", NewSVMSelector("rbf")},
+		{"MatrixFactorization", NewMatrixFactorizationSelector(16)},
+	}
+
+	for _, algo := range algorithms {
+		t.Run(algo.name, func(t *testing.T) {
+			err := algo.selector.Train(trainingData)
+			if err != nil {
+				t.Fatalf("Training failed: %v", err)
+			}
+
+			mistralSelections := 0
+			modelSelections := make(map[string]int)
+
+			for _, query := range mathQueries {
+				// Generate NEW embedding at runtime
+				embedding, err := trainer.GetEmbedding(query)
+				if err != nil {
+					t.Errorf("Failed to get embedding: %v", err)
+					continue
+				}
+
+				featureVec := CombineEmbeddingWithCategory(embedding, "math")
+
+				ctx := &SelectionContext{
+					QueryEmbedding: featureVec,
+				}
+
+				result, err := algo.selector.Select(ctx, modelRefs)
+				if err != nil {
+					t.Errorf("Selection failed: %v", err)
+					continue
+				}
+
+				modelSelections[result.Model]++
+				if result.Model == "mistral-7b" {
+					mistralSelections++
+				}
+
+				queryPreview := query
+				if len(queryPreview) > 50 {
+					queryPreview = queryPreview[:50] + "..."
+				}
+				t.Logf("  '%s' -> %s", queryPreview, result.Model)
+			}
+
+			t.Logf("%s: mistral-7b selected %d/%d times for math queries", algo.name, mistralSelections, len(mathQueries))
+			for model, count := range modelSelections {
+				t.Logf("  %s: %d selections", model, count)
+			}
+		})
+	}
 }
 
 // =============================================================================
