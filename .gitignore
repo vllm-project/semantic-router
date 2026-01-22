@@ -75,6 +75,8 @@ tools/bin/
 !*/trained_model/README.md
 !*/models/README.md
 models
+# Exception for Go models package in dashboard backend
+!dashboard/backend/models/
 
 # Training data
 wikipedia_data/
@@ -145,6 +147,10 @@ dashboard/frontend/*.local
 # Dashboard backend build artifacts
 dashboard/backend/dashboard-backend
 dashboard/backend/dashboard-backend.exe
+
+# Dashboard backend runtime data (SQLite evaluation database)
+dashboard/backend/data/*
+!dashboard/backend/data/.gitignore
 
 # Keep old HTML backup for reference
 dashboard/frontend/index.html.old

@@ -95,7 +95,7 @@ const TracingPage: React.FC = () => {
                 iframeWindow.localStorage.setItem('theme', 'light')
                 setThemeSet(true)
                 // Reload iframe to apply the theme
-                iframe.src = iframe.src
+                iframeWindow.location.reload()
                 return
               }
 
