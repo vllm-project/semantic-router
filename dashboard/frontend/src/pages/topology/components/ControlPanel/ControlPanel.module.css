@@ -420,19 +420,37 @@
 
 @media (max-width: 480px) {
   .resultSectionTitle {
-    font-size: 8px;
-  }
-
-  .signalTag {
-    font-size: 8px;
-    padding: 2px 5px;
-  }
-
-  .signalScore {
     font-size: 7px;
   }
 
+  .signalTag {
+    font-size: 7px;
+    padding: 2px 4px;
+  }
+
+  .signalScore {
+    font-size: 6px;
+  }
+
   .decisionResult {
-    font-size: 10px;
+    font-size: 8px;
+  }
+
+  .fallbackBadge {
+    font-size: 6px;
+    padding: 1px 3px;
+  }
+
+  .fallbackReason {
+    font-size: 7px;
+    padding: 2px 4px;
+  }
+
+  .noMatch {
+    font-size: 8px;
+  }
+
+  .needsVerify {
+    font-size: 7px;
   }
 }

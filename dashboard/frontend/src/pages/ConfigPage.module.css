@@ -1501,17 +1501,5 @@
     padding: 0.2rem 0.5rem;
   }
 
-  .inlineConfigLabel {
-    font-size: 0.6875rem;
-  }
-
-  .inlineConfigValue {
-    font-size: 0.6875rem;
-    padding: 0.15rem 0.4rem;
-  }
-
-  .coreSettingsInline {
-    gap: 0.5rem;
-    padding: 0.75rem 0.875rem;
-  }
+  /* coreSettingsInline is already hidden on mobile, no need for additional styles */
 }
