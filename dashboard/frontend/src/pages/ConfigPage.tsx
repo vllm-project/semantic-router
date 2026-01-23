@@ -4200,7 +4200,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       <ViewModal
         isOpen={viewModalOpen}
         onClose={handleCloseViewModal}
-        onEdit={viewModalEditCallback || undefined}
+        onEdit={isReadonly ? undefined : (viewModalEditCallback || undefined)}
         title={viewModalTitle}
         sections={viewModalSections}
       />
