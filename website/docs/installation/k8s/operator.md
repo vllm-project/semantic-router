@@ -694,7 +694,7 @@ spec:
 **When to use:**
 
 - Development and testing
-- Small deployments (<1000 cached queries)
+- Small deployments (&lt;1000 cached queries)
 - No persistence requirements
 
 ##### 2. Redis Cache
