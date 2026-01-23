@@ -155,7 +155,7 @@ const LandingPage: React.FC = () => {
           </h1>
 
           <p className={styles.subtitle}>
-            System Level Intelligent for 
+            System Level Intelligence for{' '}
             <span className={styles.highlight}>Mixture-of-Models</span>
           </p>
           <p className={styles.deployTargets}>
