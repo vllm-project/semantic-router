@@ -1,6 +1,6 @@
 {
   "name": "vLLM Semantic Router",
-  "short_name": "vLLM Router",
+  "short_name": "vLLM-SR",
   "description": "Manage your AI-powered Intelligent Router",
   "start_url": "/",
   "display": "standalone",
@@ -9,11 +9,10 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/vllm.png",
+      "src": "/vllm-mobile.png",
       "sizes": "any",
       "type": "image/png",
       "purpose": "any maskable"
     }
   ]
 }
-
