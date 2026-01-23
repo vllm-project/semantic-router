@@ -26,7 +26,7 @@ def check_services():
         {"name": "Envoy Proxy", "check_func": check_envoy_running},
         {"name": "Router Metrics", "url": "http://localhost:9190/metrics"},
     ]
-    
+
     # Check for OpenAI API key if RAG OpenAI tests are enabled
     if os.getenv("OPENAI_API_KEY"):
         print("✅ OpenAI API key is set (RAG OpenAI tests can run)")

@@ -17,7 +17,7 @@ func TestFileStoreClient_UploadFile(t *testing.T) {
 			t.Errorf("Missing or invalid Authorization header")
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"id":"file-123","object":"file","bytes":1024,"created_at":1234567890,"filename":"test.pdf","purpose":"assistants","status":"uploaded"}`))
+		_, _ = w.Write([]byte(`{"id":"file-123","object":"file","bytes":1024,"created_at":1234567890,"filename":"test.pdf","purpose":"assistants","status":"uploaded"}`))
 	}))
 	defer server.Close()
 
@@ -46,7 +46,7 @@ func TestFileStoreClient_ListFiles(t *testing.T) {
 			t.Errorf("Unexpected request: %s %s", r.Method, r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"object":"list","data":[{"id":"file-1","object":"file","bytes":1024,"created_at":1234567890,"filename":"test1.pdf","purpose":"assistants"}],"has_more":false}`))
+		_, _ = w.Write([]byte(`{"object":"list","data":[{"id":"file-1","object":"file","bytes":1024,"created_at":1234567890,"filename":"test1.pdf","purpose":"assistants"}],"has_more":false}`))
 	}))
 	defer server.Close()
 
@@ -70,7 +70,7 @@ func TestFileStoreClient_GetFile(t *testing.T) {
 			t.Errorf("Unexpected request: %s %s", r.Method, r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"id":"file-123","object":"file","bytes":1024,"created_at":1234567890,"filename":"test.pdf","purpose":"assistants"}`))
+		_, _ = w.Write([]byte(`{"id":"file-123","object":"file","bytes":1024,"created_at":1234567890,"filename":"test.pdf","purpose":"assistants"}`))
 	}))
 	defer server.Close()
 
@@ -91,7 +91,7 @@ func TestFileStoreClient_DeleteFile(t *testing.T) {
 			t.Errorf("Unexpected request: %s %s", r.Method, r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"id":"file-123","object":"file","deleted":true}`))
+		_, _ = w.Write([]byte(`{"id":"file-123","object":"file","deleted":true}`))
 	}))
 	defer server.Close()
 
@@ -109,7 +109,7 @@ func TestFileStoreClient_DownloadFile(t *testing.T) {
 			t.Errorf("Unexpected request: %s %s", r.Method, r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(expectedContent))
+		_, _ = w.Write([]byte(expectedContent))
 	}))
 	defer server.Close()
 
@@ -127,7 +127,7 @@ func TestFileStoreClient_DownloadFile(t *testing.T) {
 func TestFileStoreClient_ErrorHandling(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(`{"error":{"message":"Invalid request"}}`))
+		_, _ = w.Write([]byte(`{"error":{"message":"Invalid request"}}`))
 	}))
 	defer server.Close()
 

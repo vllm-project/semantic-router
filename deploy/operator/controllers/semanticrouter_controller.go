@@ -29,6 +29,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -70,6 +71,10 @@ type SemanticRouterReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=autoscaling,resources=horizontalpodautoscalers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=serving.kserve.io,resources=inferenceservices,verbs=get;list;watch
+// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=gateways;httproutes,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=storage.k8s.io,resources=storageclasses,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -164,14 +169,29 @@ func (r *SemanticRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	// Reconcile Deployment
-	if err := r.reconcileDeployment(ctx, semanticrouter); err != nil {
+	// Determine gateway mode and reconcile Gateway integration
+	gatewayMode, err := reconcileGatewayIntegration(ctx, r.Client, r.Scheme, semanticrouter)
+	if err != nil {
+		logger.Error(err, "Gateway integration failed")
+		return ctrl.Result{}, err
+	}
+	semanticrouter.Status.GatewayMode = gatewayMode
+	logger.Info("Gateway mode determined", "mode", gatewayMode)
+
+	// Reconcile Envoy ConfigMap (only in standalone mode)
+	if err := r.reconcileEnvoyConfig(ctx, semanticrouter, gatewayMode); err != nil {
+		logger.Error(err, "Failed to reconcile Envoy ConfigMap")
+		return ctrl.Result{}, err
+	}
+
+	// Reconcile Deployment (pass gateway mode)
+	if err := r.reconcileDeployment(ctx, semanticrouter, gatewayMode); err != nil {
 		logger.Error(err, "Failed to reconcile Deployment")
 		return ctrl.Result{}, err
 	}
 
 	// Reconcile Service
-	if err := r.reconcileService(ctx, semanticrouter); err != nil {
+	if err := r.reconcileService(ctx, semanticrouter, gatewayMode); err != nil {
 		logger.Error(err, "Failed to reconcile Service")
 		return ctrl.Result{}, err
 	}
@@ -185,6 +205,16 @@ func (r *SemanticRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// Reconcile Ingress
 	if err := r.reconcileIngress(ctx, semanticrouter); err != nil {
 		logger.Error(err, "Failed to reconcile Ingress")
+		return ctrl.Result{}, err
+	}
+
+	// Reconcile OpenShift Route (if on OpenShift)
+	isOpenShift := false
+	if r.isOpenShift != nil {
+		isOpenShift = *r.isOpenShift
+	}
+	if err := reconcileRoute(ctx, r.Client, r.Scheme, semanticrouter, isOpenShift); err != nil {
+		logger.Error(err, "Route reconciliation failed")
 		return ctrl.Result{}, err
 	}
 
@@ -277,7 +307,7 @@ func (r *SemanticRouterReconciler) reconcileServiceAccount(ctx context.Context, 
 }
 
 func (r *SemanticRouterReconciler) reconcileConfigMap(ctx context.Context, sr *vllmv1alpha1.SemanticRouter) error {
-	configData, err := r.generateConfigYAML(sr)
+	configData, err := r.generateConfigYAML(ctx, sr)
 	if err != nil {
 		return err
 	}
@@ -335,6 +365,15 @@ func (r *SemanticRouterReconciler) reconcilePVC(ctx context.Context, sr *vllmv1a
 		return nil
 	}
 
+	// Validate StorageClass before creating PVC
+	validatedStorageClass, err := validateStorageClass(ctx, r.Client, sr.Spec.Persistence.StorageClassName)
+	if err != nil {
+		return fmt.Errorf("StorageClass validation failed: %w", err)
+	}
+
+	// Update the StorageClassName with validated/default value
+	sr.Spec.Persistence.StorageClassName = validatedStorageClass
+
 	pvc, err := r.generatePVC(sr)
 	if err != nil {
 		return fmt.Errorf("failed to generate PVC: %w", err)
@@ -352,8 +391,8 @@ func (r *SemanticRouterReconciler) reconcilePVC(ctx context.Context, sr *vllmv1a
 	return err
 }
 
-func (r *SemanticRouterReconciler) reconcileDeployment(ctx context.Context, sr *vllmv1alpha1.SemanticRouter) error {
-	deployment := r.generateDeployment(sr)
+func (r *SemanticRouterReconciler) reconcileDeployment(ctx context.Context, sr *vllmv1alpha1.SemanticRouter, gatewayMode string) error {
+	deployment := r.generateDeployment(sr, gatewayMode)
 	if err := controllerutil.SetControllerReference(sr, deployment, r.Scheme); err != nil {
 		return err
 	}
@@ -381,8 +420,8 @@ func (r *SemanticRouterReconciler) reconcileDeployment(ctx context.Context, sr *
 	return nil
 }
 
-func (r *SemanticRouterReconciler) reconcileService(ctx context.Context, sr *vllmv1alpha1.SemanticRouter) error {
-	svc := r.generateService(sr)
+func (r *SemanticRouterReconciler) reconcileService(ctx context.Context, sr *vllmv1alpha1.SemanticRouter, gatewayMode string) error {
+	svc := r.generateService(sr, gatewayMode)
 	if err := controllerutil.SetControllerReference(sr, svc, r.Scheme); err != nil {
 		return err
 	}
@@ -557,8 +596,28 @@ func (r *SemanticRouterReconciler) updateStatus(ctx context.Context, sr *vllmv1a
 	})
 }
 
-func (r *SemanticRouterReconciler) generateConfigYAML(sr *vllmv1alpha1.SemanticRouter) (string, error) {
+func (r *SemanticRouterReconciler) generateConfigYAML(ctx context.Context, sr *vllmv1alpha1.SemanticRouter) (string, error) {
 	config := map[string]interface{}{}
+
+	// Generate vLLM endpoints and model configs if specified
+	if len(sr.Spec.VLLMEndpoints) > 0 {
+		endpointsConfig, modelConfigs, err := generateVLLMEndpointsConfig(ctx, r.Client, sr.Spec.VLLMEndpoints, sr.Namespace)
+		if err != nil {
+			return "", fmt.Errorf("failed to generate vLLM endpoints config: %w", err)
+		}
+
+		// Add vllm_endpoints section
+		if endpointsConfig != nil {
+			if vllmEndpoints, ok := endpointsConfig["vllm_endpoints"]; ok {
+				config["vllm_endpoints"] = vllmEndpoints
+			}
+		}
+
+		// Add model_config section
+		if len(modelConfigs) > 0 {
+			config["model_config"] = modelConfigs
+		}
+	}
 
 	if sr.Spec.Config.BertModel != nil {
 		config["bert_model"] = r.convertToConfigMap(sr.Spec.Config.BertModel)
@@ -644,7 +703,7 @@ func (r *SemanticRouterReconciler) generatePVC(sr *vllmv1alpha1.SemanticRouter) 
 	return pvc, nil
 }
 
-func (r *SemanticRouterReconciler) generateDeployment(sr *vllmv1alpha1.SemanticRouter) *appsv1.Deployment {
+func (r *SemanticRouterReconciler) generateDeployment(sr *vllmv1alpha1.SemanticRouter, gatewayMode string) *appsv1.Deployment {
 	replicas := DefaultReplicas
 	if sr.Spec.Replicas != nil {
 		replicas = *sr.Spec.Replicas
@@ -682,8 +741,8 @@ func (r *SemanticRouterReconciler) generateDeployment(sr *vllmv1alpha1.SemanticR
 					ServiceAccountName: saName,
 					SecurityContext:    podSecurityContext,
 					ImagePullSecrets:   sr.Spec.ImagePullSecrets,
-					Containers:         r.generateContainers(sr),
-					Volumes:            r.generateVolumes(sr),
+					Containers:         r.generateContainers(sr, gatewayMode),
+					Volumes:            r.generateVolumes(sr, gatewayMode),
 					NodeSelector:       sr.Spec.NodeSelector,
 					Tolerations:        sr.Spec.Tolerations,
 					Affinity:           sr.Spec.Affinity,
@@ -754,7 +813,9 @@ func (r *SemanticRouterReconciler) getContainerSecurityContext(sr *vllmv1alpha1.
 	return securityContext
 }
 
-func (r *SemanticRouterReconciler) generateContainers(sr *vllmv1alpha1.SemanticRouter) []corev1.Container {
+func (r *SemanticRouterReconciler) generateContainers(sr *vllmv1alpha1.SemanticRouter, gatewayMode string) []corev1.Container {
+	containers := make([]corev1.Container, 0)
+
 	image := DefaultImage
 	if sr.Spec.Image.Repository != "" {
 		image = sr.Spec.Image.Repository
@@ -841,10 +902,88 @@ func (r *SemanticRouterReconciler) generateContainers(sr *vllmv1alpha1.SemanticR
 		}
 	}
 
-	return []corev1.Container{container}
+	// Always add semantic-router container
+	containers = append(containers, container)
+
+	// Only add Envoy sidecar in standalone mode
+	// In gateway-integration mode, traffic is routed through an existing Gateway
+	if gatewayMode == "standalone" {
+		envoyContainer := r.generateEnvoyContainer(sr)
+		containers = append(containers, envoyContainer)
+	}
+
+	return containers
 }
 
-func (r *SemanticRouterReconciler) generateVolumes(sr *vllmv1alpha1.SemanticRouter) []corev1.Volume {
+// generateEnvoyContainer creates the Envoy sidecar container
+func (r *SemanticRouterReconciler) generateEnvoyContainer(sr *vllmv1alpha1.SemanticRouter) corev1.Container {
+	envoyImage := "envoyproxy/envoy:v1.35.3"
+
+	container := corev1.Container{
+		Name:            "envoy-proxy",
+		Image:           envoyImage,
+		ImagePullPolicy: corev1.PullIfNotPresent,
+		Command:         []string{"/usr/local/bin/envoy"},
+		Args: []string{
+			"-c",
+			"/etc/envoy/envoy.yaml",
+			"--component-log-level",
+			"ext_proc:info,router:info,http:info",
+		},
+		SecurityContext: r.getContainerSecurityContext(sr),
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          "envoy-http",
+				ContainerPort: 8801,
+				Protocol:      corev1.ProtocolTCP,
+			},
+			{
+				Name:          "envoy-admin",
+				ContainerPort: 19000,
+				Protocol:      corev1.ProtocolTCP,
+			},
+		},
+		VolumeMounts: []corev1.VolumeMount{
+			{
+				Name:      "envoy-config-volume",
+				MountPath: "/etc/envoy",
+				ReadOnly:  true,
+			},
+		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("250m"),
+				corev1.ResourceMemory: resource.MustParse("256Mi"),
+			},
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("500m"),
+				corev1.ResourceMemory: resource.MustParse("512Mi"),
+			},
+		},
+		LivenessProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				TCPSocket: &corev1.TCPSocketAction{
+					Port: intstr.FromInt(8801),
+				},
+			},
+			InitialDelaySeconds: 30,
+			PeriodSeconds:       30,
+		},
+		ReadinessProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				TCPSocket: &corev1.TCPSocketAction{
+					Port: intstr.FromInt(8801),
+				},
+			},
+			InitialDelaySeconds: 10,
+			PeriodSeconds:       15,
+		},
+	}
+
+	return container
+}
+
+func (r *SemanticRouterReconciler) generateVolumes(sr *vllmv1alpha1.SemanticRouter, gatewayMode string) []corev1.Volume {
 	volumes := []corev1.Volume{
 		{
 			Name: "config-volume",
@@ -862,6 +1001,20 @@ func (r *SemanticRouterReconciler) generateVolumes(sr *vllmv1alpha1.SemanticRout
 				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
 		},
+	}
+
+	// Add Envoy config volume only in standalone mode
+	if gatewayMode == "standalone" {
+		volumes = append(volumes, corev1.Volume{
+			Name: "envoy-config-volume",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: sr.Name + "-envoy-config",
+					},
+				},
+			},
+		})
 	}
 
 	// Always create a models volume - either PVC (if persistence enabled) or emptyDir (if disabled)
@@ -913,7 +1066,7 @@ func (r *SemanticRouterReconciler) generateVolumeMounts(sr *vllmv1alpha1.Semanti
 	return mounts
 }
 
-func (r *SemanticRouterReconciler) generateService(sr *vllmv1alpha1.SemanticRouter) *corev1.Service {
+func (r *SemanticRouterReconciler) generateService(sr *vllmv1alpha1.SemanticRouter, gatewayMode string) *corev1.Service {
 	labels := map[string]string{
 		"app.kubernetes.io/name":     "semantic-router",
 		"app.kubernetes.io/instance": sr.Name,
@@ -937,6 +1090,16 @@ func (r *SemanticRouterReconciler) generateService(sr *vllmv1alpha1.SemanticRout
 			TargetPort: intstr.FromInt(int(r.getInt32OrDefault(&sr.Spec.Service.API.TargetPort, DefaultAPIPort))),
 			Protocol:   corev1.ProtocolTCP,
 		},
+	}
+
+	// Add Envoy HTTP port only in standalone mode
+	if gatewayMode == "standalone" {
+		ports = append(ports, corev1.ServicePort{
+			Name:       "envoy-http",
+			Port:       8801,
+			TargetPort: intstr.FromInt(8801),
+			Protocol:   corev1.ProtocolTCP,
+		})
 	}
 
 	if sr.Spec.Service.Metrics.Enabled == nil || *sr.Spec.Service.Metrics.Enabled {
@@ -1119,6 +1282,221 @@ func (r *SemanticRouterReconciler) finalizeSemanticRouter(ctx context.Context, s
 
 	logger.Info("Successfully finalized SemanticRouter")
 	return nil
+}
+
+// reconcileEnvoyConfig creates or updates the Envoy ConfigMap for standalone mode
+func (r *SemanticRouterReconciler) reconcileEnvoyConfig(ctx context.Context, sr *vllmv1alpha1.SemanticRouter, gatewayMode string) error {
+	// Only create Envoy ConfigMap in standalone mode
+	if gatewayMode != "standalone" {
+		return nil
+	}
+
+	envoyConfig := r.generateEnvoyConfig()
+
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      sr.Name + "-envoy-config",
+			Namespace: sr.Namespace,
+		},
+		Data: map[string]string{
+			"envoy.yaml": envoyConfig,
+		},
+	}
+
+	if err := controllerutil.SetControllerReference(sr, cm, r.Scheme); err != nil {
+		return err
+	}
+
+	found := &corev1.ConfigMap{}
+	err := r.Get(ctx, types.NamespacedName{Name: cm.Name, Namespace: cm.Namespace}, found)
+	if err != nil && errors.IsNotFound(err) {
+		return r.Create(ctx, cm)
+	} else if err != nil {
+		return err
+	}
+
+	// Update if data changed
+	if !reflect.DeepEqual(found.Data, cm.Data) {
+		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			if err := r.Get(ctx, types.NamespacedName{Name: cm.Name, Namespace: cm.Namespace}, found); err != nil {
+				return err
+			}
+			found.Data = cm.Data
+			return r.Update(ctx, found)
+		})
+	}
+
+	return nil
+}
+
+// generateEnvoyConfig generates the Envoy configuration YAML using Dynamic Forward Proxy
+func (r *SemanticRouterReconciler) generateEnvoyConfig() string {
+	return `static_resources:
+  listeners:
+  - name: listener_0
+    address:
+      socket_address:
+        address: 0.0.0.0
+        port_value: 8801
+    filter_chains:
+    - filters:
+      - name: envoy.filters.network.http_connection_manager
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+          stat_prefix: ingress_http
+          access_log:
+          - name: envoy.access_loggers.stdout
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+          route_config:
+            name: local_route
+            virtual_hosts:
+            - name: local_service
+              domains: ["*"]
+              routes:
+              # Route /v1/models to semantic router HTTP API
+              - match:
+                  path: "/v1/models"
+                route:
+                  cluster: semantic_router_cluster
+                  timeout: 300s
+              # Dynamic route - all other paths go through ExtProc then to vLLM backend
+              - match:
+                  prefix: "/"
+                route:
+                  cluster: dynamic_forward_proxy_cluster
+                  timeout: 300s
+          http_filters:
+          # ExtProc filter - semantic router processes requests first
+          - name: envoy.filters.http.ext_proc
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+              grpc_service:
+                envoy_grpc:
+                  cluster_name: extproc_service
+              allow_mode_override: true
+              processing_mode:
+                request_header_mode: "SEND"
+                response_header_mode: "SEND"
+                request_body_mode: "BUFFERED"
+                response_body_mode: "BUFFERED"
+                request_trailer_mode: "SKIP"
+                response_trailer_mode: "SKIP"
+              failure_mode_allow: true
+              message_timeout: 300s
+
+          # Lua filter to extract hostname from x-vsr-destination-endpoint header
+          - name: envoy.filters.http.lua
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+              default_source_code:
+                inline_string: |
+                  function envoy_on_request(request_handle)
+                    local destination = request_handle:headers():get("x-vsr-destination-endpoint")
+                    if destination then
+                      -- Set the host header for Dynamic Forward Proxy
+                      request_handle:headers():replace(":authority", destination)
+                      request_handle:logInfo("Setting :authority to: " .. destination)
+                    end
+                  end
+
+          # Dynamic Forward Proxy filter
+          - name: envoy.filters.http.dynamic_forward_proxy
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.dynamic_forward_proxy.v3.FilterConfig
+              dns_cache_config:
+                name: dynamic_forward_proxy_cache_config
+                dns_lookup_family: V4_ONLY
+                max_hosts: 1024
+                dns_min_refresh_rate: 20s
+
+          # Router filter (must be last)
+          - name: envoy.filters.http.router
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+          http2_protocol_options:
+            max_concurrent_streams: 100
+            initial_stream_window_size: 65536
+            initial_connection_window_size: 1048576
+          stream_idle_timeout: "300s"
+          request_timeout: "300s"
+          common_http_protocol_options:
+            idle_timeout: "300s"
+
+  clusters:
+  # ExtProc service - semantic router on localhost:50051
+  - name: extproc_service
+    connect_timeout: 300s
+    per_connection_buffer_limit_bytes: 52428800
+    type: STATIC
+    lb_policy: ROUND_ROBIN
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        explicit_http_config:
+          http2_protocol_options:
+            connection_keepalive:
+              interval: 300s
+              timeout: 300s
+    load_assignment:
+      cluster_name: extproc_service
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: 127.0.0.1
+                port_value: 50051
+
+  # Semantic router HTTP API cluster
+  - name: semantic_router_cluster
+    connect_timeout: 300s
+    per_connection_buffer_limit_bytes: 52428800
+    type: STATIC
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: semantic_router_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: 127.0.0.1
+                port_value: 8080
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        explicit_http_config:
+          http_protocol_options: {}
+
+  # Dynamic Forward Proxy cluster - routes based on :authority header
+  - name: dynamic_forward_proxy_cluster
+    connect_timeout: 300s
+    per_connection_buffer_limit_bytes: 52428800
+    lb_policy: CLUSTER_PROVIDED
+    cluster_type:
+      name: envoy.clusters.dynamic_forward_proxy
+      typed_config:
+        "@type": type.googleapis.com/envoy.extensions.clusters.dynamic_forward_proxy.v3.ClusterConfig
+        allow_insecure_cluster_options: true
+        dns_cache_config:
+          name: dynamic_forward_proxy_cache_config
+          dns_lookup_family: V4_ONLY
+          max_hosts: 1024
+          dns_min_refresh_rate: 20s
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        explicit_http_config:
+          http_protocol_options: {}
+
+admin:
+  address:
+    socket_address:
+      address: "127.0.0.1"
+      port_value: 19000
+`
 }
 
 // SetupWithManager sets up the controller with the Manager.

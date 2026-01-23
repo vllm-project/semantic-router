@@ -129,6 +129,12 @@ hallucination_mitigation:
     model_id: "models/mom-halugate-detector"
     threshold: 0.8
     use_cpu: true
+    # False positive reduction settings
+    min_span_length: 2  # Minimum tokens in a span to report (filters single-token false positives)
+    min_span_confidence: 0.6  # Minimum confidence for a span to be reported
+    context_window_size: 50  # Characters of context around flagged spans
+    enable_nli_filtering: true  # Use NLI to filter false positives
+    nli_entailment_threshold: 0.75  # Filter spans with high entailment scores
   # NLI model: provides explanations for hallucinated spans
   nli_model:
     model_id: "models/mom-halugate-explainer"

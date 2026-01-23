@@ -18,7 +18,7 @@ In traditional LLM routing, we only look at the user's query text. But there's s
 - **Quality signals**: Does this query need fact-checking? Is the user giving feedback?
 - **User signals**: What are the user's preferences? What's their satisfaction level?
 
-**Our solution**: A comprehensive signal extraction system that captures 7 types of signals from requests, responses, and context.
+**Our solution**: A comprehensive signal extraction system that captures 8 types of signals from requests, responses, and context.
 
 ### 2. How to combine the signals?
 

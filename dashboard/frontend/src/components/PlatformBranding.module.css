@@ -36,7 +36,7 @@
 
 .default .text {
   font-size: 1rem;
-  color: #1d1d1f;
+  color: #f5f5f7;
 }
 
 /* Variant: compact - used in ChatComponent footer */

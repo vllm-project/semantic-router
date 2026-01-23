@@ -410,9 +410,9 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		log.Printf("Warning: Prometheus URL not configured")
 	}
 
-	// Jaeger proxy (optional)
+	// Jaeger proxy (optional) - use NewJaegerProxy for dark theme injection
 	if cfg.JaegerURL != "" {
-		jp, err := proxy.NewReverseProxy(cfg.JaegerURL, "/embedded/jaeger", false)
+		jp, err := proxy.NewJaegerProxy(cfg.JaegerURL, "/embedded/jaeger")
 		if err != nil {
 			log.Fatalf("jaeger proxy error: %v", err)
 		}

@@ -62,6 +62,26 @@ make openshift-deploy
 
 ## Deploy Your First Router
 
+### Quick Start with Sample Configurations
+
+Choose a pre-configured sample based on your infrastructure:
+
+```bash
+# Simple standalone deployment with KServe backend
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_simple.yaml
+
+# Full-featured OpenShift deployment with Routes
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_openshift.yaml
+
+# Gateway integration mode (Istio/Envoy Gateway)
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_gateway.yaml
+
+# Llama Stack backend discovery
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_llamastack.yaml
+```
+
+### Custom Configuration
+
 Create a `my-router.yaml` file:
 
 ```yaml
@@ -76,6 +96,17 @@ spec:
   image:
     repository: ghcr.io/vllm-project/semantic-router/extproc
     tag: latest
+
+  # Configure vLLM backend endpoints
+  vllmEndpoints:
+    # KServe InferenceService (RHOAI 3.x)
+    - name: llama3-8b-endpoint
+      model: llama3-8b
+      reasoningFamily: qwen3
+      backend:
+        type: kserve
+        inferenceServiceName: llama-3-8b
+      weight: 1
 
   resources:
     limits:
@@ -93,7 +124,7 @@ spec:
   config:
     bert_model:
       model_id: "models/mom-embedding-light"
-      threshold: 0.6
+      threshold: "0.6"
       use_cpu: true
 
     semantic_cache:
@@ -105,11 +136,11 @@ spec:
     tools:
       enabled: true
       top_k: 3
-      similarity_threshold: 0.2
+      similarity_threshold: "0.2"
 
     prompt_guard:
       enabled: true
-      threshold: 0.7
+      threshold: "0.7"
 
   toolsDb:
     - tool:
@@ -156,6 +187,295 @@ Expected output:
 ```
 NAME                        PHASE     REPLICAS   READY   AGE
 semanticrouter.vllm.ai/my-router   Running   2          2       5m
+```
+
+## Backend Discovery Types
+
+The operator supports three types of backend discovery for connecting semantic router to vLLM model servers. Choose the type that matches your infrastructure.
+
+### KServe InferenceService Discovery
+
+For RHOAI 3.x or standalone KServe deployments. The operator automatically discovers the predictor service created by KServe.
+
+```yaml
+spec:
+  vllmEndpoints:
+    - name: llama3-8b-endpoint
+      model: llama3-8b
+      reasoningFamily: qwen3
+      backend:
+        type: kserve
+        inferenceServiceName: llama-3-8b  # InferenceService in same namespace
+      weight: 1
+```
+
+**When to use:**
+
+- Running on Red Hat OpenShift AI (RHOAI) 3.x
+- Using KServe for model serving
+- Want automatic service discovery
+
+**How it works:**
+
+- Discovers the predictor service: `{inferenceServiceName}-predictor`
+- Uses port 8443 (KServe default HTTPS port)
+- Works in the same namespace as SemanticRouter
+
+### Llama Stack Service Discovery
+
+Discovers Llama Stack deployments using Kubernetes label selectors.
+
+```yaml
+spec:
+  vllmEndpoints:
+    - name: llama-405b-endpoint
+      model: llama-3.3-70b-instruct
+      reasoningFamily: gpt
+      backend:
+        type: llamastack
+        discoveryLabels:
+          app: llama-stack
+          model: llama-3.3-70b
+      weight: 1
+```
+
+**When to use:**
+
+- Using Meta's Llama Stack for model serving
+- Multiple Llama Stack services with different models
+- Want label-based service discovery
+
+**How it works:**
+
+- Lists services matching the label selector
+- Uses first matching service if multiple found
+- Extracts port from service definition
+
+### Direct Kubernetes Service
+
+Direct connection to any Kubernetes service (vLLM, TGI, etc.).
+
+```yaml
+spec:
+  vllmEndpoints:
+    - name: custom-vllm-endpoint
+      model: deepseek-r1-distill-qwen-7b
+      reasoningFamily: deepseek
+      backend:
+        type: service
+        service:
+          name: vllm-deepseek
+          namespace: vllm-serving  # Can reference service in another namespace
+          port: 8000
+      weight: 1
+```
+
+**When to use:**
+
+- Direct vLLM deployments
+- Custom model servers with OpenAI-compatible API
+- Cross-namespace service references
+- Maximum control over service endpoints
+
+**How it works:**
+
+- Connects to specified service directly
+- No discovery - uses explicit configuration
+- Supports cross-namespace references
+
+### Multiple Backends
+
+You can configure multiple backends with load balancing weights:
+
+```yaml
+spec:
+  vllmEndpoints:
+    # KServe backend
+    - name: llama3-8b
+      model: llama3-8b
+      reasoningFamily: qwen3
+      backend:
+        type: kserve
+        inferenceServiceName: llama-3-8b
+      weight: 2  # Higher weight = more traffic
+
+    # Direct service backend
+    - name: qwen-7b
+      model: qwen2.5-7b
+      reasoningFamily: qwen3
+      backend:
+        type: service
+        service:
+          name: vllm-qwen
+          port: 8000
+      weight: 1
+```
+
+## Deployment Modes
+
+The operator supports two deployment modes with different architectures.
+
+### Standalone Mode (Default)
+
+Deploys semantic router with an **Envoy sidecar container** that acts as an ingress gateway.
+
+**Architecture:**
+
+```
+Client → Service (8080) → Envoy Sidecar → ExtProc gRPC → Semantic Router → vLLM
+```
+
+**When to use:**
+
+- Simple deployments without existing service mesh
+- Testing and development
+- Self-contained deployment with minimal dependencies
+
+**Configuration:**
+
+```yaml
+spec:
+  # No gateway configuration - defaults to standalone mode
+  service:
+    type: ClusterIP
+    api:
+      port: 8080  # Client traffic enters here
+      targetPort: 8080  # Envoy ingress port
+    grpc:
+      port: 50051  # ExtProc communication
+      targetPort: 50051
+```
+
+**Operator behavior:**
+
+- Deploys pod with two containers: semantic router + Envoy sidecar
+- Envoy handles ingress and forwards to semantic router via ExtProc gRPC
+- Status shows `gatewayMode: "standalone"`
+
+### Gateway Integration Mode
+
+Reuses an **existing Gateway** (Istio, Envoy Gateway, etc.) and creates an HTTPRoute.
+
+**Architecture:**
+
+```
+Client → Gateway (Istio/Envoy) → HTTPRoute → Service (8080) → Semantic Router API → vLLM
+```
+
+**When to use:**
+
+- Existing Istio or Envoy Gateway deployment
+- Centralized ingress management
+- Multi-tenancy with shared gateway
+- Advanced traffic management (circuit breaking, retries, rate limiting)
+
+**Configuration:**
+
+```yaml
+spec:
+  gateway:
+    existingRef:
+      name: istio-ingressgateway  # Or your Envoy Gateway name
+      namespace: istio-system
+
+  # Service only needs API port in gateway mode
+  service:
+    type: ClusterIP
+    api:
+      port: 8080
+      targetPort: 8080
+```
+
+**Operator behavior:**
+
+1. Creates HTTPRoute resource pointing to the specified Gateway
+2. Skips Envoy sidecar container in pod spec
+3. Sets `status.gatewayMode: "gateway-integration"`
+4. Semantic router operates in pure API mode (no ExtProc)
+
+**Example:** See [`vllm.ai_v1alpha1_semanticrouter_gateway.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_gateway.yaml)
+
+## OpenShift Routes
+
+For OpenShift deployments, the operator can create Routes for external access with TLS termination.
+
+### Basic OpenShift Route
+
+```yaml
+spec:
+  openshift:
+    routes:
+      enabled: true
+      hostname: semantic-router.apps.openshift.example.com  # Optional - auto-generated if omitted
+      tls:
+        termination: edge  # TLS terminates at Route, plain HTTP to backend
+        insecureEdgeTerminationPolicy: Redirect  # Redirect HTTP to HTTPS
+```
+
+### TLS Termination Options
+
+- **edge** (recommended): TLS terminates at Route, plain HTTP to backend
+- **passthrough**: TLS passthrough to backend (requires backend TLS)
+- **reencrypt**: TLS terminates at Route, re-encrypts to backend
+
+### When to Use OpenShift Routes
+
+- Running on OpenShift 4.x
+- Need external access without configuring Ingress
+- Want auto-generated hostnames
+- Require OpenShift-native TLS management
+
+### Status Information
+
+After creating a Route, check the status:
+
+```bash
+kubectl get semanticrouter my-router -o jsonpath='{.status.openshiftFeatures}'
+```
+
+Output:
+
+```json
+{
+  "routesEnabled": true,
+  "routeHostname": "semantic-router-default.apps.openshift.example.com"
+}
+```
+
+**Example:** See [`vllm.ai_v1alpha1_semanticrouter_route.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_route.yaml)
+
+## Choosing Your Configuration
+
+Use this decision tree to select the right configuration:
+
+```
+┌─ Need to run on OpenShift?
+│  ├─ YES → Use openshift sample (Routes + KServe/service backends)
+│  └─ NO ↓
+│
+├─ Have existing Gateway (Istio/Envoy)?
+│  ├─ YES → Use gateway sample (Gateway integration mode)
+│  └─ NO ↓
+│
+├─ Using Meta Llama Stack?
+│  ├─ YES → Use llamastack sample
+│  └─ NO ↓
+│
+└─ Simple deployment → Use simple sample (standalone mode)
+```
+
+**Backend choice:**
+
+```
+┌─ Running RHOAI 3.x or KServe?
+│  ├─ YES → Use KServe backend type
+│  └─ NO ↓
+│
+├─ Using Meta Llama Stack?
+│  ├─ YES → Use llamastack backend type
+│  └─ NO ↓
+│
+└─ Have direct vLLM service? → Use service backend type
 ```
 
 ## Architecture
@@ -306,6 +626,10 @@ spec:
     annotations:
       backup.velero.io/backup-volumes: "models"
 ```
+
+:::info Storage Validation
+The operator validates that the specified StorageClass exists before creating the PVC. If `storageClassName` is omitted, the cluster's default StorageClass is used.
+:::
 
 **Storage Class Examples:**
 
@@ -606,6 +930,82 @@ spec:
 ## Troubleshooting
 
 ### Common Issues
+
+#### Backend Discovery Failures
+
+**Symptom:** "No backends found" or "Failed to discover backend" in logs
+
+**For KServe backends:**
+
+```bash
+# Check InferenceService exists and is ready
+kubectl get inferenceservice llama-3-8b
+
+# Check predictor service was created by KServe
+kubectl get service llama-3-8b-predictor
+
+# Verify InferenceService status
+kubectl describe inferenceservice llama-3-8b
+```
+
+**For Llama Stack backends:**
+
+```bash
+# Verify services exist with correct labels
+kubectl get services -l app=llama-stack,model=llama-3.3-70b
+
+# Check service labels match discoveryLabels in CR
+kubectl get service <service-name> -o jsonpath='{.metadata.labels}'
+```
+
+**For direct service backends:**
+
+```bash
+# Verify service exists in specified namespace
+kubectl get service vllm-deepseek -n vllm-serving
+
+# Check service has ports defined
+kubectl get service vllm-deepseek -n vllm-serving -o jsonpath='{.spec.ports[0]}'
+```
+
+#### Gateway Integration Issues
+
+**Symptom:** HTTPRoute not created or traffic not reaching semantic router
+
+```bash
+# Verify Gateway exists
+kubectl get gateway istio-ingressgateway -n istio-system
+
+# Check HTTPRoute was created
+kubectl get httproute -l app.kubernetes.io/instance=my-router
+
+# Verify Gateway supports HTTPRoute (Gateway API v1)
+kubectl get gateway istio-ingressgateway -n istio-system -o yaml | grep -A5 listeners
+
+# Check operator status
+kubectl get semanticrouter my-router -o jsonpath='{.status.gatewayMode}'
+# Should show: "gateway-integration"
+```
+
+#### OpenShift Route Issues
+
+**Symptom:** Route not created on OpenShift
+
+```bash
+# Verify running on OpenShift cluster
+kubectl api-resources | grep route.openshift.io
+
+# Check if Route was created
+kubectl get route -l app.kubernetes.io/instance=my-router
+
+# Check operator detected OpenShift
+kubectl logs -n semantic-router-operator-system \
+  deployment/semantic-router-operator-controller-manager \
+  | grep -i "openshift\|route"
+
+# Verify Route status
+kubectl get semanticrouter my-router -o jsonpath='{.status.openshiftFeatures}'
+```
 
 #### Pod stuck in `ImagePullBackOff`
 

@@ -102,6 +102,29 @@ spec:
   args:
     - "--secure=false"
 
+  # vLLM Backend Endpoints - Configure model backends to route to
+  vllmEndpoints:
+    # Example: KServe InferenceService backend
+    - name: llama3-8b-endpoint
+      model: llama3-8b
+      reasoningFamily: qwen3
+      backend:
+        type: kserve
+        inferenceServiceName: llama-3-8b
+      weight: 1
+
+    # Example: Direct service backend
+    - name: qwen-endpoint
+      model: qwen2.5-7b
+      reasoningFamily: qwen3
+      backend:
+        type: service
+        service:
+          name: vllm-qwen
+          namespace: default
+          port: 8000
+      weight: 1
+
   # Semantic Router configuration
   config:
     # BERT model for embeddings

@@ -31,7 +31,7 @@ class RAGOpenAITest(TestBase):
         super().__init__(base_url, verbose)
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
         self.openai_base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-        
+
         if not self.openai_api_key:
             self.log("WARNING: OPENAI_API_KEY not set. Some tests may be skipped.")
 
@@ -43,17 +43,12 @@ class RAGOpenAITest(TestBase):
         # This assumes a decision is configured with OpenAI RAG backend
         request_body = {
             "model": "gpt-4o-mini",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": "What is Deep Research?"
-                }
-            ]
+            "messages": [{"role": "user", "content": "What is Deep Research?"}],
         }
 
         headers = {
             "Content-Type": "application/json",
-            "X-VSR-Selected-Decision": "rag-openai-decision"  # Decision with OpenAI RAG config
+            "X-VSR-Selected-Decision": "rag-openai-decision",  # Decision with OpenAI RAG config
         }
 
         try:
@@ -61,15 +56,17 @@ class RAGOpenAITest(TestBase):
                 f"{self.base_url}/v1/chat/completions",
                 json=request_body,
                 headers=headers,
-                timeout=30
+                timeout=30,
             )
 
             if response.status_code != 200:
-                self.log(f"ERROR: Unexpected status code {response.status_code}: {response.text}")
+                self.log(
+                    f"ERROR: Unexpected status code {response.status_code}: {response.text}"
+                )
                 return False
 
             result = response.json()
-            
+
             # Verify response contains content
             if "choices" not in result or len(result["choices"]) == 0:
                 self.log("ERROR: No choices in response")
@@ -85,7 +82,9 @@ class RAGOpenAITest(TestBase):
                 self.log("WARNING: Response doesn't appear to use RAG context")
                 return False
 
-            self.log(f"[RAG OpenAI Test] Direct search mode test passed. Response length: {len(content)} chars")
+            self.log(
+                f"[RAG OpenAI Test] Direct search mode test passed. Response length: {len(content)} chars"
+            )
             return True
 
         except Exception as e:
@@ -105,33 +104,35 @@ class RAGOpenAITest(TestBase):
                     "type": "file_search",
                     "file_search": {
                         "vector_store_ids": ["vs_test123"],
-                        "max_num_results": 5
-                    }
+                        "max_num_results": 5,
+                    },
                 }
-            ]
+            ],
         }
 
-        headers = {
-            "Content-Type": "application/json"
-        }
+        headers = {"Content-Type": "application/json"}
 
         try:
             response = requests.post(
                 f"{self.base_url}/v1/responses",
                 json=request_body,
                 headers=headers,
-                timeout=60  # Longer timeout for tool calls
+                timeout=60,  # Longer timeout for tool calls
             )
 
             if response.status_code != 200:
-                self.log(f"ERROR: Unexpected status code {response.status_code}: {response.text}")
+                self.log(
+                    f"ERROR: Unexpected status code {response.status_code}: {response.text}"
+                )
                 return False
 
             result = response.json()
 
             # Verify response format (Responses API format)
             if result.get("object") != "response":
-                self.log(f"ERROR: Expected Responses API format, got object: {result.get('object')}")
+                self.log(
+                    f"ERROR: Expected Responses API format, got object: {result.get('object')}"
+                )
                 return False
 
             # Verify output contains file_search results
@@ -148,21 +149,28 @@ class RAGOpenAITest(TestBase):
                     if "annotations" in item and item["annotations"]:
                         found_file_search = True
                         break
-                    
+
                     # Check for file_search_call
                     if "file_search_call" in item:
                         file_search_call = item["file_search_call"]
-                        if isinstance(file_search_call, dict) and "search_results" in file_search_call:
+                        if (
+                            isinstance(file_search_call, dict)
+                            and "search_results" in file_search_call
+                        ):
                             if file_search_call["search_results"]:
                                 found_file_search = True
                                 break
 
             if not found_file_search:
-                self.log("WARNING: file_search tool results not found in response (may be expected if tool not fully implemented)")
+                self.log(
+                    "WARNING: file_search tool results not found in response (may be expected if tool not fully implemented)"
+                )
                 # Don't fail the test - tool_based mode may require response annotation extraction
                 return True  # Return True as this is expected behavior for now
 
-            self.log("[RAG OpenAI Test] Tool-based mode test passed. file_search tool executed successfully")
+            self.log(
+                "[RAG OpenAI Test] Tool-based mode test passed. file_search tool executed successfully"
+            )
             return True
 
         except Exception as e:
@@ -172,7 +180,9 @@ class RAGOpenAITest(TestBase):
     def test_file_store_operations(self) -> bool:
         """Test OpenAI File Store API operations (if API key is available)."""
         if not self.openai_api_key:
-            self.log("[RAG OpenAI Test] Skipping file store operations test (OPENAI_API_KEY not set)")
+            self.log(
+                "[RAG OpenAI Test] Skipping file store operations test (OPENAI_API_KEY not set)"
+            )
             return True
 
         self.log("[RAG OpenAI Test] Testing File Store API operations...")
@@ -180,7 +190,9 @@ class RAGOpenAITest(TestBase):
         try:
             # This would test file upload, but requires actual OpenAI API access
             # For E2E tests, we'll skip this unless explicitly enabled
-            self.log("[RAG OpenAI Test] File Store operations test skipped (requires OpenAI API access)")
+            self.log(
+                "[RAG OpenAI Test] File Store operations test skipped (requires OpenAI API access)"
+            )
             return True
 
         except Exception as e:
@@ -235,13 +247,9 @@ def main():
     parser.add_argument(
         "--base-url",
         default="http://localhost:8080",
-        help="Base URL for the semantic router (default: http://localhost:8080)"
+        help="Base URL for the semantic router (default: http://localhost:8080)",
     )
-    parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Enable verbose logging"
-    )
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
 
     args = parser.parse_args()
 

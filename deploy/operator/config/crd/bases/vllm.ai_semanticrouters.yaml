@@ -338,7 +338,6 @@ spec:
                                     pod labels will be ignored. The default value is empty.
                                     The same key is forbidden to exist in both matchLabelKeys and labelSelector.
                                     Also, matchLabelKeys cannot be set when labelSelector isn't set.
-                                    This is a beta field and requires enabling MatchLabelKeysInPodAffinity feature gate (enabled by default).
                                   items:
                                     type: string
                                   type: array
@@ -353,7 +352,6 @@ spec:
                                     pod labels will be ignored. The default value is empty.
                                     The same key is forbidden to exist in both mismatchLabelKeys and labelSelector.
                                     Also, mismatchLabelKeys cannot be set when labelSelector isn't set.
-                                    This is a beta field and requires enabling MatchLabelKeysInPodAffinity feature gate (enabled by default).
                                   items:
                                     type: string
                                   type: array
@@ -519,7 +517,6 @@ spec:
                                 pod labels will be ignored. The default value is empty.
                                 The same key is forbidden to exist in both matchLabelKeys and labelSelector.
                                 Also, matchLabelKeys cannot be set when labelSelector isn't set.
-                                This is a beta field and requires enabling MatchLabelKeysInPodAffinity feature gate (enabled by default).
                               items:
                                 type: string
                               type: array
@@ -534,7 +531,6 @@ spec:
                                 pod labels will be ignored. The default value is empty.
                                 The same key is forbidden to exist in both mismatchLabelKeys and labelSelector.
                                 Also, mismatchLabelKeys cannot be set when labelSelector isn't set.
-                                This is a beta field and requires enabling MatchLabelKeysInPodAffinity feature gate (enabled by default).
                               items:
                                 type: string
                               type: array
@@ -627,8 +623,8 @@ spec:
                           most preferred is the one with the greatest sum of weights, i.e.
                           for each node that meets all of the scheduling requirements (resource
                           request, requiredDuringScheduling anti-affinity expressions, etc.),
-                          compute a sum by iterating through the elements of this field and adding
-                          "weight" to the sum if the node has pods which matches the corresponding podAffinityTerm; the
+                          compute a sum by iterating through the elements of this field and subtracting
+                          "weight" from the sum if the node has pods which matches the corresponding podAffinityTerm; the
                           node(s) with the highest sum are the most preferred.
                         items:
                           description: The weights of all of the matched WeightedPodAffinityTerm
@@ -697,7 +693,6 @@ spec:
                                     pod labels will be ignored. The default value is empty.
                                     The same key is forbidden to exist in both matchLabelKeys and labelSelector.
                                     Also, matchLabelKeys cannot be set when labelSelector isn't set.
-                                    This is a beta field and requires enabling MatchLabelKeysInPodAffinity feature gate (enabled by default).
                                   items:
                                     type: string
                                   type: array
@@ -712,7 +707,6 @@ spec:
                                     pod labels will be ignored. The default value is empty.
                                     The same key is forbidden to exist in both mismatchLabelKeys and labelSelector.
                                     Also, mismatchLabelKeys cannot be set when labelSelector isn't set.
-                                    This is a beta field and requires enabling MatchLabelKeysInPodAffinity feature gate (enabled by default).
                                   items:
                                     type: string
                                   type: array
@@ -878,7 +872,6 @@ spec:
                                 pod labels will be ignored. The default value is empty.
                                 The same key is forbidden to exist in both matchLabelKeys and labelSelector.
                                 Also, matchLabelKeys cannot be set when labelSelector isn't set.
-                                This is a beta field and requires enabling MatchLabelKeysInPodAffinity feature gate (enabled by default).
                               items:
                                 type: string
                               type: array
@@ -893,7 +886,6 @@ spec:
                                 pod labels will be ignored. The default value is empty.
                                 The same key is forbidden to exist in both mismatchLabelKeys and labelSelector.
                                 Also, mismatchLabelKeys cannot be set when labelSelector isn't set.
-                                This is a beta field and requires enabling MatchLabelKeysInPodAffinity feature gate (enabled by default).
                               items:
                                 type: string
                               type: array
@@ -1265,7 +1257,9 @@ spec:
                     a Container.
                   properties:
                     name:
-                      description: Name of the environment variable. Must be a C_IDENTIFIER.
+                      description: |-
+                        Name of the environment variable.
+                        May consist of any printable ASCII characters except '='.
                       type: string
                     value:
                       description: |-
@@ -1323,6 +1317,43 @@ spec:
                           - fieldPath
                           type: object
                           x-kubernetes-map-type: atomic
+                        fileKeyRef:
+                          description: |-
+                            FileKeyRef selects a key of the env file.
+                            Requires the EnvFiles feature gate to be enabled.
+                          properties:
+                            key:
+                              description: |-
+                                The key within the env file. An invalid key will prevent the pod from starting.
+                                The keys defined within a source may consist of any printable ASCII characters except '='.
+                                During Alpha stage of the EnvFiles feature gate, the key size is limited to 128 characters.
+                              type: string
+                            optional:
+                              default: false
+                              description: |-
+                                Specify whether the file or its key must be defined. If the file or key
+                                does not exist, then the env var is not published.
+                                If optional is set to true and the specified key does not exist,
+                                the environment variable will not be set in the Pod's containers.
+
+                                If optional is set to false and the specified key does not exist,
+                                an error will be returned during Pod creation.
+                              type: boolean
+                            path:
+                              description: |-
+                                The path within the volume from which to select the file.
+                                Must be relative and may not contain the '..' path or start with '..'.
+                              type: string
+                            volumeName:
+                              description: The name of the volume mount containing
+                                the env file.
+                              type: string
+                          required:
+                          - key
+                          - path
+                          - volumeName
+                          type: object
+                          x-kubernetes-map-type: atomic
                         resourceFieldRef:
                           description: |-
                             Selects a resource of the container: only resources limits and requests
@@ -1376,6 +1407,25 @@ spec:
                   - name
                   type: object
                 type: array
+              gateway:
+                description: Gateway integration for reusing existing gateways
+                properties:
+                  existingRef:
+                    description: ExistingRef references an existing Gateway to use
+                    properties:
+                      name:
+                        description: Name of the Gateway
+                        minLength: 1
+                        type: string
+                      namespace:
+                        description: Namespace of the Gateway
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    - namespace
+                    type: object
+                type: object
               image:
                 description: Image configuration
                 properties:
@@ -1497,6 +1547,43 @@ spec:
                 additionalProperties:
                   type: string
                 description: Node selector
+                type: object
+              openshift:
+                description: OpenShift-specific features
+                properties:
+                  routes:
+                    description: Routes configuration for OpenShift Routes
+                    properties:
+                      enabled:
+                        default: false
+                        description: Enabled specifies whether to create an OpenShift
+                          Route
+                        type: boolean
+                      hostname:
+                        description: Hostname for the Route (optional - OpenShift
+                          generates if empty)
+                        type: string
+                      tls:
+                        description: TLS configuration for the Route
+                        properties:
+                          insecureEdgeTerminationPolicy:
+                            default: Redirect
+                            description: InsecureEdgeTerminationPolicy for HTTP traffic
+                            enum:
+                            - Allow
+                            - Redirect
+                            - None
+                            type: string
+                          termination:
+                            default: edge
+                            description: Termination type (edge, passthrough, reencrypt)
+                            enum:
+                            - edge
+                            - passthrough
+                            - reencrypt
+                            type: string
+                        type: object
+                    type: object
                 type: object
               persistence:
                 description: Persistence configuration
@@ -1801,7 +1888,7 @@ spec:
                       Claims lists the names of resources, defined in spec.resourceClaims,
                       that are used by this container.
 
-                      This is an alpha field and requires enabling the
+                      This field depends on the
                       DynamicResourceAllocation feature gate.
 
                       This field is immutable. It can only be set for containers.
@@ -2241,6 +2328,76 @@ spec:
                       type: object
                   type: object
                 type: array
+              vllmEndpoints:
+                description: VLLMEndpoints configuration - generates vllm_endpoints
+                  and model_config in config.yaml
+                items:
+                  description: VLLMEndpointSpec defines a vLLM model backend endpoint
+                  properties:
+                    backend:
+                      description: Backend configuration
+                      properties:
+                        discoveryLabels:
+                          additionalProperties:
+                            type: string
+                          description: 'For type=llamastack: Labels to match services'
+                          type: object
+                        inferenceServiceName:
+                          description: 'For type=kserve: InferenceService name for
+                            auto-discovery'
+                          type: string
+                        service:
+                          description: 'For type=service: Direct service configuration'
+                          properties:
+                            name:
+                              description: Service name
+                              minLength: 1
+                              type: string
+                            namespace:
+                              description: Service namespace (defaults to same namespace)
+                              type: string
+                            port:
+                              description: Service port
+                              format: int32
+                              minimum: 1
+                              type: integer
+                          required:
+                          - name
+                          - port
+                          type: object
+                        type:
+                          description: 'Type of backend: kserve, llamastack, or service'
+                          enum:
+                          - kserve
+                          - llamastack
+                          - service
+                          type: string
+                      required:
+                      - type
+                      type: object
+                    model:
+                      description: Model name as reported by vLLM (e.g., "Model-A",
+                        "llama3-8b")
+                      minLength: 1
+                      type: string
+                    name:
+                      description: Name of the endpoint (used in model_config.preferred_endpoints)
+                      minLength: 1
+                      type: string
+                    reasoningFamily:
+                      description: Reasoning family for the model (e.g., "qwen3",
+                        "deepseek", "gpt")
+                      type: string
+                    weight:
+                      default: 1
+                      description: 'Weight for load balancing (default: 1)'
+                      type: integer
+                  required:
+                  - backend
+                  - model
+                  - name
+                  type: object
+                type: array
             type: object
           status:
             description: SemanticRouterStatus defines the observed state of SemanticRouter
@@ -2303,11 +2460,27 @@ spec:
                   - type
                   type: object
                 type: array
+              gatewayMode:
+                description: 'GatewayMode indicates deployment mode: standalone or
+                  gateway-integration'
+                type: string
               observedGeneration:
                 description: ObservedGeneration reflects the generation of the most
                   recently observed SemanticRouter
                 format: int64
                 type: integer
+              openshiftFeatures:
+                description: OpenShiftFeatures tracks OpenShift-specific feature status
+                properties:
+                  routeHostname:
+                    description: RouteHostname is the hostname of the created Route
+                    type: string
+                  routesEnabled:
+                    description: RoutesEnabled indicates if OpenShift Routes are enabled
+                    type: boolean
+                required:
+                - routesEnabled
+                type: object
               phase:
                 description: Phase represents the current phase of the SemanticRouter
                 type: string

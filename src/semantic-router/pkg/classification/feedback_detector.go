@@ -3,12 +3,10 @@ package classification
 import (
 	"fmt"
 	"sync"
-	"time"
 
 	candle "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // Feedback type labels - matching model's id2label mapping
@@ -114,12 +112,7 @@ func (d *FeedbackDetector) Classify(text string) (*FeedbackResult, error) {
 		}, nil
 	}
 
-	start := time.Now()
-
 	result, err := candle.ClassifyFeedbackText(text)
-
-	metrics.RecordClassifierLatency("feedback_detector", time.Since(start).Seconds())
-
 	if err != nil {
 		return nil, fmt.Errorf("feedback detection failed: %w", err)
 	}

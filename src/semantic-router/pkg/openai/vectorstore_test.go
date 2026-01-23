@@ -14,7 +14,7 @@ func TestVectorStoreClient_CreateVectorStore(t *testing.T) {
 			t.Errorf("Unexpected request: %s %s", r.Method, r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"id":"vs_123","object":"vector_store","created_at":1234567890,"name":"test-store","file_counts":{"total":0,"completed":0,"in_progress":0,"failed":0,"cancelled":0}}`))
+		_, _ = w.Write([]byte(`{"id":"vs_123","object":"vector_store","created_at":1234567890,"name":"test-store","file_counts":{"total":0,"completed":0,"in_progress":0,"failed":0,"cancelled":0}}`))
 	}))
 	defer server.Close()
 
@@ -45,13 +45,13 @@ func TestVectorStoreClient_SearchVectorStore(t *testing.T) {
 
 		// Verify request body
 		var reqBody map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&reqBody)
+		_ = json.NewDecoder(r.Body).Decode(&reqBody)
 		if reqBody["query"] != "test query" {
 			t.Errorf("Expected query 'test query', got '%v'", reqBody["query"])
 		}
 
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{
+		_, _ = w.Write([]byte(`{
 			"object":"list",
 			"data":[
 				{"content":"Test content 1","filename":"test1.pdf","score":0.95},
@@ -84,7 +84,7 @@ func TestVectorStoreClient_ListVectorStores(t *testing.T) {
 			t.Errorf("Unexpected request: %s %s", r.Method, r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"object":"list","data":[{"id":"vs_1","object":"vector_store","created_at":1234567890,"name":"store1","file_counts":{"total":0,"completed":0,"in_progress":0,"failed":0,"cancelled":0}}],"has_more":false}`))
+		_, _ = w.Write([]byte(`{"object":"list","data":[{"id":"vs_1","object":"vector_store","created_at":1234567890,"name":"store1","file_counts":{"total":0,"completed":0,"in_progress":0,"failed":0,"cancelled":0}}],"has_more":false}`))
 	}))
 	defer server.Close()
 
@@ -108,7 +108,7 @@ func TestVectorStoreClient_GetVectorStore(t *testing.T) {
 			t.Errorf("Unexpected request: %s %s", r.Method, r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"id":"vs_123","object":"vector_store","created_at":1234567890,"name":"test-store","file_counts":{"total":5,"completed":5,"in_progress":0,"failed":0,"cancelled":0}}`))
+		_, _ = w.Write([]byte(`{"id":"vs_123","object":"vector_store","created_at":1234567890,"name":"test-store","file_counts":{"total":5,"completed":5,"in_progress":0,"failed":0,"cancelled":0}}`))
 	}))
 	defer server.Close()
 
@@ -132,7 +132,7 @@ func TestVectorStoreClient_CreateVectorStoreFile(t *testing.T) {
 			t.Errorf("Unexpected request: %s %s", r.Method, r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"id":"vsf_123","object":"vector_store.file","created_at":1234567890,"vector_store_id":"vs_123","status":"completed"}`))
+		_, _ = w.Write([]byte(`{"id":"vsf_123","object":"vector_store.file","created_at":1234567890,"vector_store_id":"vs_123","status":"completed"}`))
 	}))
 	defer server.Close()
 
@@ -153,7 +153,7 @@ func TestVectorStoreClient_CreateVectorStoreFile(t *testing.T) {
 func TestVectorStoreClient_ErrorHandling(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte(`{"error":{"message":"Vector store not found"}}`))
+		_, _ = w.Write([]byte(`{"error":{"message":"Vector store not found"}}`))
 	}))
 	defer server.Close()
 

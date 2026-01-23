@@ -13,8 +13,6 @@ func TestRetrieveFromOpenAI_DirectSearch(t *testing.T) {
 	// For now, we test the configuration parsing and workflow mode selection
 
 	ragConfig := &config.RAGPluginConfig{
-		Enabled: true,
-		Backend: "openai",
 		BackendConfig: &config.OpenAIRAGConfig{
 			VectorStoreID: "vs_test123",
 			APIKey:        "test-key",
@@ -41,8 +39,6 @@ func TestRetrieveFromOpenAI_DirectSearch(t *testing.T) {
 
 func TestRetrieveFromOpenAI_ToolBased(t *testing.T) {
 	ragConfig := &config.RAGPluginConfig{
-		Enabled: true,
-		Backend: "openai",
 		BackendConfig: &config.OpenAIRAGConfig{
 			VectorStoreID: "vs_test123",
 			APIKey:        "test-key",

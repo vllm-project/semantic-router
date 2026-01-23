@@ -1318,3 +1318,188 @@
   border-radius: var(--radius-sm);
   font-weight: 500;
 }
+
+/* Mobile Responsive - Additional optimizations */
+@media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+    gap: 1rem;
+  }
+
+  .header {
+    padding: 0.875rem 1rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .headerLeft {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .title {
+    font-size: 1.125rem;
+  }
+
+  .viewToggle {
+    width: 100%;
+  }
+
+  .toggleButton {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .content {
+    overflow-x: hidden; /* Prevent horizontal scroll on main container */
+  }
+
+  .contentArea {
+    padding: 0.75rem;
+  }
+
+  /* Ensure cards don't overflow */
+  .section {
+    overflow-x: auto;
+  }
+
+  .sectionHeader {
+    padding: 0.875rem 1rem;
+    flex-wrap: wrap;
+  }
+
+  .sectionTitle {
+    font-size: 0.9375rem;
+  }
+
+  .sectionContent {
+    padding: 1rem;
+  }
+
+  /* Category cards */
+  .categoryCard {
+    padding: 1rem;
+  }
+
+  .categoryName {
+    font-size: 0.9375rem;
+  }
+
+  .categoryDescription {
+    font-size: 0.75rem;
+  }
+
+  /* Model cards */
+  .modelCard,
+  .endpointCard,
+  .featureCard {
+    margin-bottom: 0.75rem;
+  }
+
+  .modelCardHeader,
+  .endpointHeader,
+  .featureHeader {
+    padding: 0.625rem 0.75rem;
+  }
+
+  .modelCardBody,
+  .endpointDetails,
+  .featureBody {
+    padding: 0.75rem;
+  }
+
+  /* Config rows */
+  .configRow {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+    padding: 0.625rem 0;
+  }
+
+  .configLabel,
+  .configValue {
+    font-size: 0.8125rem;
+  }
+
+  /* Inline config - Hide Default Model and Default Reasoning on mobile */
+  .coreSettingsInline {
+    display: none;
+  }
+
+  /* Tools grid */
+  .toolsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .toolCard {
+    padding: 1rem;
+  }
+
+  .toolName {
+    font-size: 0.9375rem;
+  }
+
+  .toolDescription,
+  .toolFunctionDescription {
+    font-size: 0.8125rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 0.75rem;
+  }
+
+  .header {
+    padding: 0.75rem;
+  }
+
+  .title {
+    font-size: 1rem;
+  }
+
+  .toggleButton {
+    font-size: 0.75rem;
+    padding: 0.5rem;
+  }
+
+  .contentArea {
+    padding: 0.5rem;
+  }
+
+  .sectionHeader {
+    padding: 0.75rem;
+  }
+
+  .sectionTitle {
+    font-size: 0.875rem;
+  }
+
+  .sectionContent {
+    padding: 0.75rem;
+  }
+
+  .categoryCard,
+  .modelCard,
+  .endpointCard,
+  .featureCard,
+  .toolCard {
+    padding: 0.75rem;
+  }
+
+  .categoryName,
+  .modelCardTitle,
+  .toolName {
+    font-size: 0.875rem;
+  }
+
+  .badge {
+    font-size: 0.625rem;
+    padding: 0.2rem 0.5rem;
+  }
+
+  /* coreSettingsInline is already hidden on mobile, no need for additional styles */
+}

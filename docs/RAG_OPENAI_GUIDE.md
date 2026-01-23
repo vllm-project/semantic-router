@@ -103,6 +103,7 @@ Synchronous retrieval using vector store search API. Context is retrieved before
 **Use Case**: When you need immediate context injection and want to control the retrieval process.
 
 **Example**:
+
 ```yaml
 backend_config:
   workflow_mode: "direct_search"
@@ -110,6 +111,7 @@ backend_config:
 ```
 
 **Flow**:
+
 1. User sends query
 2. RAG plugin calls vector store search API
 3. Retrieved context is injected into request
@@ -122,6 +124,7 @@ Adds `file_search` tool to the request. The LLM calls the tool automatically, an
 **Use Case**: When using Responses API and want the LLM to control when to search.
 
 **Example**:
+
 ```yaml
 backend_config:
   workflow_mode: "tool_based"
@@ -129,6 +132,7 @@ backend_config:
 ```
 
 **Flow**:
+
 1. User sends query
 2. RAG plugin adds `file_search` tool to request
 3. Request sent to LLM
@@ -265,6 +269,7 @@ The OpenAI RAG backend exposes the following metrics:
 ### Tracing
 
 OpenTelemetry spans are created for:
+
 - `semantic_router.rag.retrieval` - RAG retrieval operation
 - `semantic_router.rag.context_injection` - Context injection operation
 

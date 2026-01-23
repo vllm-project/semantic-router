@@ -271,6 +271,32 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
 
+  // 8. Latency Rules
+  // From latency_rules (Go/Router format)
+  config.latency_rules?.forEach(rule => {
+    addSignal({
+      type: 'latency',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.latency,
+      config: {
+        max_tpot: rule.max_tpot,
+      },
+    })
+  })
+  // From signals.latency (Python CLI format)
+  config.signals?.latency?.forEach(rule => {
+    addSignal({
+      type: 'latency',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.latency,
+      config: {
+        max_tpot: rule.max_tpot,
+      },
+    })
+  })
+
   return signals
 }
 
@@ -429,6 +455,7 @@ export function groupSignalsByType(signals: SignalConfig[]): Record<SignalType, 
     user_feedback: [],
     preference: [],
     language: [],
+    latency: [],
   }
 
   signals.forEach(signal => {

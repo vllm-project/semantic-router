@@ -17,7 +17,7 @@ on:
       - '.github/workflows/operator-ci.yml'
 
 env:
-  GO_VERSION: '1.23'
+  GO_VERSION: '1.24'
 
 jobs:
   lint:
@@ -51,7 +51,7 @@ jobs:
 
       - name: Install golangci-lint
         run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.62.2
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.64.2
 
       - name: Run golangci-lint
         run: $(go env GOPATH)/bin/golangci-lint run --timeout=5m
@@ -142,8 +142,12 @@ jobs:
           git diff --exit-code || (echo "Generated manifests are out of date. Run 'make manifests' and commit the changes." && exit 1)
 
   docker-build:
-    name: Docker Build
+    name: Docker Build and Push
+    if: github.repository == 'vllm-project/semantic-router'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -151,29 +155,86 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build operator image
+      - name: Set up QEMU for multi-platform builds
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set lowercase repository owner
+        run: echo "REPOSITORY_OWNER_LOWER=$(echo $GITHUB_REPOSITORY_OWNER | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate tags for operator
+        id: operator-tags
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            TAG="${{ github.sha }}"
+            # For main branch: use ghcr.io tags
+            TAGS="ghcr.io/${REPOSITORY_OWNER_LOWER}/semantic-router/operator:${TAG},ghcr.io/${REPOSITORY_OWNER_LOWER}/semantic-router/operator:latest"
+          else
+            TAG="pr-${{ github.event.number }}"
+            # For PRs: use local test tag for integration tests
+            TAGS="semantic-router-operator:test"
+          fi
+
+          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+
+      - name: Generate tags for bundle
+        id: bundle-tags
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            TAG="${{ github.sha }}"
+            # For main branch: use ghcr.io tags
+            TAGS="ghcr.io/${REPOSITORY_OWNER_LOWER}/semantic-router/operator-bundle:${TAG},ghcr.io/${REPOSITORY_OWNER_LOWER}/semantic-router/operator-bundle:latest"
+          else
+            TAG="pr-${{ github.event.number }}"
+            # For PRs: use local test tag for validation
+            TAGS="semantic-router-operator-bundle:test"
+          fi
+
+          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+
+      - name: Build and push operator image
         uses: docker/build-push-action@v5
         with:
           context: ./deploy/operator
           file: ./deploy/operator/Dockerfile
-          push: false
-          tags: semantic-router-operator:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          outputs: type=docker,dest=/tmp/operator-image.tar
+          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          push: ${{ github.event_name != 'pull_request' }}
+          load: ${{ github.event_name == 'pull_request' }}
+          tags: ${{ steps.operator-tags.outputs.tags }}
+          cache-from: type=gha,scope=operator
+          cache-to: type=gha,mode=max,scope=operator
 
-      - name: Build bundle image
+      - name: Build and push bundle image
         uses: docker/build-push-action@v5
         with:
           context: ./deploy/operator
           file: ./deploy/operator/bundle/Dockerfile
-          push: false
-          tags: semantic-router-operator-bundle:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          outputs: type=docker,dest=/tmp/bundle-image.tar
+          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          push: ${{ github.event_name != 'pull_request' }}
+          load: ${{ github.event_name == 'pull_request' }}
+          tags: ${{ steps.bundle-tags.outputs.tags }}
+          cache-from: type=gha,scope=operator-bundle
+          cache-to: type=gha,mode=max,scope=operator-bundle
+
+      - name: Save operator image for integration tests
+        if: github.event_name == 'pull_request'
+        run: docker save -o /tmp/operator-image.tar semantic-router-operator:test
+
+      - name: Save bundle image for validation
+        if: github.event_name == 'pull_request'
+        run: docker save -o /tmp/bundle-image.tar semantic-router-operator-bundle:test
 
       - name: Upload operator image artifact
+        if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: operator-image
@@ -181,6 +242,7 @@ jobs:
           retention-days: 1
 
       - name: Upload bundle image artifact
+        if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: bundle-image
@@ -225,19 +287,19 @@ jobs:
 
       - name: Install kind
         run: |
-          curl --retry 5 --retry-delay 5 --retry-all-errors -Lo ./kind https://kind.sigs.k8s.io/dl/v0.22.0/kind-linux-amd64
+          curl --retry 5 --retry-delay 5 --retry-all-errors -Lo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-linux-amd64
           chmod +x ./kind
           sudo mv ./kind /usr/local/bin/kind
 
       - name: Install kubectl
         run: |
-          curl -LO "https://dl.k8s.io/release/v1.29.0/bin/linux/amd64/kubectl"
+          curl -LO "https://dl.k8s.io/release/v1.33.0/bin/linux/amd64/kubectl"
           chmod +x kubectl
           sudo mv kubectl /usr/local/bin/kubectl
 
       - name: Create kind cluster
         run: |
-          cat <<EOF | kind create cluster --name operator-test --config=-
+          cat <<EOF | kind create cluster --name operator-test --image kindest/node:v1.33.7@sha256:d26ef333bdb2cbe9862a0f7c3803ecc7b4303d8cea8e814b481b09949d353040 --config=-
           kind: Cluster
           apiVersion: kind.x-k8s.io/v1alpha4
           nodes:
@@ -245,6 +307,13 @@ jobs:
           EOF
           kubectl cluster-info
           kubectl get nodes
+
+      - name: Install Gateway API CRDs
+        run: |
+          echo "Installing Gateway API CRDs..."
+          kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.0.0/standard-install.yaml
+          kubectl wait --for condition=established --timeout=60s crd/gateways.gateway.networking.k8s.io
+          kubectl wait --for condition=established --timeout=60s crd/httproutes.gateway.networking.k8s.io
 
       - name: Download operator binary artifact
         uses: actions/download-artifact@v4

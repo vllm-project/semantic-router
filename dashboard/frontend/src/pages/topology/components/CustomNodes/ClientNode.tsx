@@ -18,7 +18,7 @@ export const ClientNode = memo<NodeProps<ClientNodeData>>(({ data }) => {
     >
       <span className={styles.clientIcon}>👤</span>
       <span className={styles.clientLabel}>{label}</span>
-      <Handle type="source" position={Position.Right} />
+      <Handle type="source" position={Position.Bottom} />
     </div>
   )
 })

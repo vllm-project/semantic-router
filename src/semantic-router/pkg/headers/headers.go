@@ -86,6 +86,10 @@ const (
 	// VSRMatchedLanguage contains comma-separated list of matched language signals.
 	// Example: "en,zh,es"
 	VSRMatchedLanguage = "x-vsr-matched-language"
+
+	// VSRMatchedLatency contains comma-separated list of matched latency signals.
+	// Example: "low_latency,medium_latency"
+	VSRMatchedLatency = "x-vsr-matched-latency"
 )
 
 // Security Headers

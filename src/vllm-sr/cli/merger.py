@@ -140,6 +140,28 @@ def translate_language_signals(languages: list) -> list:
     return rules
 
 
+def translate_latency_signals(latencies: list) -> list:
+    """
+    Translate latency signals to router format.
+
+    Args:
+        latencies: List of Latency objects
+
+    Returns:
+        list: Router latency rules
+    """
+    rules = []
+    for signal in latencies:
+        rule = {
+            "name": signal.name,
+            "max_tpot": signal.max_tpot,
+        }
+        if signal.description:
+            rule["description"] = signal.description
+        rules.append(rule)
+    return rules
+
+
 def translate_external_models(external_models: list) -> list:
     """
     Translate external models to router format.
@@ -383,6 +405,12 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
                 user_config.signals.language
             )
             log.info(f"  Added {len(user_config.signals.language)} language signals")
+
+        if user_config.signals.latency and len(user_config.signals.latency) > 0:
+            merged["latency_rules"] = translate_latency_signals(
+                user_config.signals.latency
+            )
+            log.info(f"  Added {len(user_config.signals.latency)} latency signals")
 
         # Translate domains to categories
         if user_config.signals.domains:
