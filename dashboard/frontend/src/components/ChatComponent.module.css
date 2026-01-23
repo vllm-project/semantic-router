@@ -224,6 +224,27 @@ body.playground-fullscreen .container {
   letter-spacing: -0.02em;
 }
 
+.typingGreeting h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+  letter-spacing: -0.02em;
+  min-height: 2rem;
+}
+
+.typingCursor {
+  display: inline-block;
+  margin-left: 2px;
+  font-weight: 400;
+  animation: blink 0.8s infinite;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
 .messages {
   display: flex;
   flex-direction: column;

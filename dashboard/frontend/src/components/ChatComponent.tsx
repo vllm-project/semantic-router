@@ -6,6 +6,49 @@ import ThinkingAnimation from './ThinkingAnimation'
 import HeaderReveal from './HeaderReveal'
 import ThinkingBlock from './ThinkingBlock'
 
+// Typing effect component for greeting with multiple lines
+const TypingGreeting = ({ lines }: { lines: string[] }) => {
+  const [currentLineIndex, setCurrentLineIndex] = useState(0)
+  const [displayedText, setDisplayedText] = useState('')
+  const [isTyping, setIsTyping] = useState(true)
+
+  useEffect(() => {
+    if (currentLineIndex >= lines.length) return
+
+    const currentLine = lines[currentLineIndex]
+    let charIndex = 0
+    setIsTyping(true)
+    setDisplayedText('')
+
+    const typingInterval = setInterval(() => {
+      if (charIndex < currentLine.length) {
+        setDisplayedText(currentLine.slice(0, charIndex + 1))
+        charIndex++
+      } else {
+        clearInterval(typingInterval)
+        setIsTyping(false)
+        // Wait before moving to next line
+        setTimeout(() => {
+          if (currentLineIndex < lines.length - 1) {
+            setCurrentLineIndex(prev => prev + 1)
+          }
+        }, 1500)
+      }
+    }, 60)
+
+    return () => clearInterval(typingInterval)
+  }, [currentLineIndex, lines])
+
+  return (
+    <div className={styles.typingGreeting}>
+      <h2>
+        {displayedText}
+        {isTyping && <span className={styles.typingCursor}>|</span>}
+      </h2>
+    </div>
+  )
+}
+
 // Choice represents a single model's response in ratings mode
 interface Choice {
   content: string
@@ -462,7 +505,11 @@ const ChatComponent = ({
       <div className={styles.messagesContainer}>
         {messages.length === 0 ? (
           <div className={styles.emptyState}>
-            <h2>Hi there 👋</h2>
+            <TypingGreeting lines={[
+              "Hi there, I am MoM.",
+              "The System-Level Intelligence for LLMs.",
+              "How can I help you today?"
+            ]} />
           </div>
         ) : (
           <div className={styles.messages}>
