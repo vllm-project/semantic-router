@@ -11,7 +11,8 @@ type RAGPluginConfig struct {
 	// Enable RAG retrieval for this decision
 	Enabled bool `json:"enabled" yaml:"enabled"`
 
-	// Retrieval backend type: "milvus", "external_api", "mcp", "hybrid"
+	// Retrieval backend type: "milvus", "external_api", "mcp", "openai", "hybrid"
+	// - "openai": Use OpenAI's file_search tool with vector stores (Responses API workflow)
 	Backend string `json:"backend" yaml:"backend"`
 
 	// Similarity threshold for retrieval (0.0-1.0)
@@ -35,6 +36,7 @@ type RAGPluginConfig struct {
 	// - "milvus": MilvusRAGConfig
 	// - "external_api": ExternalAPIRAGConfig
 	// - "mcp": MCPRAGConfig
+	// - "openai": OpenAIRAGConfig
 	// - "hybrid": HybridRAGConfig
 	BackendConfig interface{} `json:"backend_config,omitempty" yaml:"backend_config,omitempty"`
 
@@ -119,10 +121,44 @@ type MCPRAGConfig struct {
 	TimeoutSeconds *int `json:"timeout_seconds,omitempty" yaml:"timeout_seconds,omitempty"`
 }
 
+// OpenAIRAGConfig represents configuration for OpenAI file_search-based RAG retrieval
+// This supports both direct search API and Responses API workflow with file_search tool
+type OpenAIRAGConfig struct {
+	// Vector store ID to search (required)
+	// Can be created via OpenAI API or referenced if already exists
+	VectorStoreID string `json:"vector_store_id" yaml:"vector_store_id"`
+
+	// OpenAI API base URL (defaults to https://api.openai.com/v1)
+	BaseURL string `json:"base_url,omitempty" yaml:"base_url,omitempty"`
+
+	// OpenAI API key (required)
+	APIKey string `json:"api_key" yaml:"api_key"`
+
+	// Maximum number of results to return (default: 20)
+	MaxNumResults *int `json:"max_num_results,omitempty" yaml:"max_num_results,omitempty"`
+
+	// File IDs to restrict search to (optional)
+	// If empty, searches all files in the vector store
+	FileIDs []string `json:"file_ids,omitempty" yaml:"file_ids,omitempty"`
+
+	// Metadata filter (optional)
+	// Format: OpenAI metadata filter expression
+	Filter map[string]interface{} `json:"filter,omitempty" yaml:"filter,omitempty"`
+
+	// Timeout in seconds for API calls
+	TimeoutSeconds *int `json:"timeout_seconds,omitempty" yaml:"timeout_seconds,omitempty"`
+
+	// Workflow mode: "direct_search" (default) or "tool_based"
+	// - "direct_search": Use vector store search API directly for synchronous retrieval
+	// - "tool_based": Add file_search tool to request (Responses API workflow)
+	//   Results will be in response annotations, requires response handling
+	WorkflowMode string `json:"workflow_mode,omitempty" yaml:"workflow_mode,omitempty"`
+}
+
 // HybridRAGConfig represents configuration for hybrid RAG with multiple backends
 type HybridRAGConfig struct {
 	// Primary backend to use first
-	Primary string `json:"primary" yaml:"primary"` // "milvus", "external_api", "mcp"
+	Primary string `json:"primary" yaml:"primary"` // "milvus", "external_api", "mcp", "openai"
 
 	// Fallback backend if primary fails
 	Fallback string `json:"fallback,omitempty" yaml:"fallback,omitempty"`
@@ -160,6 +196,8 @@ func (d *Decision) GetRAGConfig() *RAGPluginConfig {
 			backendConfig = &ExternalAPIRAGConfig{}
 		case "mcp":
 			backendConfig = &MCPRAGConfig{}
+		case "openai":
+			backendConfig = &OpenAIRAGConfig{}
 		case "hybrid":
 			backendConfig = &HybridRAGConfig{}
 		default:
@@ -227,6 +265,20 @@ func (c *RAGPluginConfig) Validate() error {
 		}
 		if mcpConfig.ToolName == "" {
 			return fmt.Errorf("MCP tool name is required")
+		}
+	case "openai":
+		if c.BackendConfig == nil {
+			return fmt.Errorf("BackendConfig is required for backend 'openai'")
+		}
+		openaiConfig, ok := c.BackendConfig.(*OpenAIRAGConfig)
+		if !ok {
+			return fmt.Errorf("BackendConfig must be of type *OpenAIRAGConfig for backend 'openai'")
+		}
+		if openaiConfig.VectorStoreID == "" {
+			return fmt.Errorf("vector store ID is required for OpenAI backend")
+		}
+		if openaiConfig.APIKey == "" {
+			return fmt.Errorf("API key is required for OpenAI backend")
 		}
 	case "hybrid":
 		if c.BackendConfig == nil {

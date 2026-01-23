@@ -150,6 +150,8 @@ func (r *OpenAIRouter) retrieveContext(traceCtx context.Context, ctx *RequestCon
 		retrievedContext, err = r.retrieveFromExternalAPI(traceCtx, ctx, ragConfig)
 	case "mcp":
 		retrievedContext, err = r.retrieveFromMCP(traceCtx, ctx, ragConfig)
+	case "openai":
+		retrievedContext, err = r.retrieveFromOpenAI(traceCtx, ctx, ragConfig)
 	case "hybrid":
 		retrievedContext, err = r.retrieveFromHybrid(traceCtx, ctx, ragConfig)
 	default:

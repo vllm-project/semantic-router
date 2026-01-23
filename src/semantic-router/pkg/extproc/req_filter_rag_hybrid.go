@@ -218,6 +218,8 @@ func (r *OpenAIRouter) retrieveFromBackend(traceCtx context.Context, ctx *Reques
 		return r.retrieveFromExternalAPI(traceCtx, ctx, backendConfig)
 	case "mcp":
 		return r.retrieveFromMCP(traceCtx, ctx, backendConfig)
+	case "openai":
+		return r.retrieveFromOpenAI(traceCtx, ctx, backendConfig)
 	default:
 		return "", fmt.Errorf("unknown backend: %s", backendConfig.Backend)
 	}
