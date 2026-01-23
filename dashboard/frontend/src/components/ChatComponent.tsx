@@ -508,7 +508,8 @@ const ChatComponent = ({
             <TypingGreeting lines={[
               "Hi there, I am MoM.",
               "The System-Level Intelligence for LLMs.",
-              "How can I help you today?"
+              "The World's First Model-of-Models.",
+              "How can I help you today? 👋"
             ]} />
           </div>
         ) : (
