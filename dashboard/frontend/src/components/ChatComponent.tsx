@@ -10,7 +10,7 @@ import ThinkingBlock from './ThinkingBlock'
 const GREETING_LINES = [
   "Hi there, I am MoM.",
   "The System Intelligence for LLMs.",
-  "The World's First Model-of-Models.",
+  "The World First Model-of-Models.",
   "Open Source for Everyone.",
   "How can I help you today?"
 ]
