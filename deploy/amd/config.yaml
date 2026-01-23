@@ -88,6 +88,9 @@ signals:
         - "Devise a comprehensive plan for migrating a legacy monolithic application to a microservices architecture."
         - "Analyze the geopolitical implications of climate change and propose multi-faceted policy solutions."
         - "Design an algorithm to detect anomalies in time-series data and explain the statistical reasoning behind it."
+        - "认真想想，然后分析一下这个问题的各个方面，给我一个全面的回答。"
+        - "深度思考一下这个复杂的问题，需要你进行多步推理和详细分析。"
+        - "这是个非常重要的任务，请你认真执行，仔细分析每一个细节。"
 
   # user_feedbacks - User feedback signals
   user_feedbacks:
