@@ -162,15 +162,38 @@ export type ToolEventListener = (event: ToolEvent) => void
 
 // ========== Specific Tool Types ==========
 
-// Web Search
+// Web Search (对应 DuckDuckGo MCP: duckduckgo_search)
 export interface WebSearchArgs {
   query: string
-  num_results?: number
+  /** 最大结果数量（默认 5） */
+  max_results?: number
+  /** 安全搜索设置：on/moderate/off（默认 moderate） */
+  safesearch?: 'on' | 'moderate' | 'off'
+  /** 输出格式：json 返回结构化数据，text 返回 LLM 友好的格式化字符串（默认 json） */
+  output_format?: 'json' | 'text'
 }
 
 export interface WebSearchResult {
   title: string
   url: string
   snippet: string
-  domain: string
+}
+
+// Open Web (对应 DuckDuckGo MCP: jina_fetch)
+export interface OpenWebArgs {
+  url: string
+  /** 输出格式：markdown（默认）或 json */
+  format?: 'markdown' | 'json'
+  /** 最大内容长度，超过会截断（默认 15000） */
+  max_length?: number
+  /** 是否包含图片 alt 文本生成（默认 false） */
+  with_images?: boolean
+}
+
+export interface OpenWebResult {
+  url: string
+  title: string
+  content: string
+  length: number
+  truncated: boolean
 }

@@ -377,10 +377,12 @@ func doSearchRequest(query string, numResults int) ([]SearchResult, error) {
 	}
 
 	// Set headers to mimic a browser request with rotating User-Agent
+	// Note: Do NOT set Accept-Encoding manually, let Go's http.Transport handle compression
+	// automatically. When Accept-Encoding is set manually, Go won't auto-decompress the response,
+	// which causes garbled data if the server returns gzip/deflate compressed content.
 	req.Header.Set("User-Agent", getRandomUserAgent())
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7")
-	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
 	req.Header.Set("DNT", "1")
 	req.Header.Set("Connection", "keep-alive")
 	req.Header.Set("Upgrade-Insecure-Requests", "1")
@@ -401,6 +403,19 @@ func doSearchRequest(query string, numResults int) ([]SearchResult, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// Debug: Log response details to diagnose empty results
+	bodyStr := string(body)
+	log.Printf("DuckDuckGo response: status=%d, length=%d", resp.StatusCode, len(body))
+	if len(bodyStr) < 2000 {
+		log.Printf("DuckDuckGo full response: %s", bodyStr)
+	} else {
+		log.Printf("DuckDuckGo response preview (first 1000 chars): %s", bodyStr[:1000])
+	}
+	// Check for common blocking indicators
+	if strings.Contains(bodyStr, "captcha") || strings.Contains(bodyStr, "robot") || strings.Contains(bodyStr, "blocked") {
+		log.Printf("WARNING: DuckDuckGo may be blocking requests (captcha/robot detected)")
 	}
 
 	return parseDuckDuckGoHTML(string(body), numResults)

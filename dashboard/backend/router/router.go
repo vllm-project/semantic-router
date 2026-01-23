@@ -198,6 +198,10 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	mux.HandleFunc("/api/tools/web-search", handlers.WebSearchHandler())
 	log.Printf("Web Search API endpoint registered: /api/tools/web-search")
 
+	// Open Web endpoint for Playground tool execution (避免CORS问题)
+	mux.HandleFunc("/api/tools/open-web", handlers.OpenWebHandler())
+	log.Printf("Open Web API endpoint registered: /api/tools/open-web")
+
 	// Status endpoint - shows service health status (aligns with vllm-sr status)
 	mux.HandleFunc("/api/status", handlers.StatusHandler(cfg.RouterAPIURL))
 	log.Printf("Status API endpoint registered: /api/status")
