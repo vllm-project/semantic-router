@@ -16,6 +16,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	mcpclient "github.com/vllm-project/semantic-router/src/semantic-router/pkg/mcp"
 )
@@ -82,6 +83,67 @@ type MockJailbreakInitializer struct {
 func (m *MockJailbreakInitializer) Init(_ string, useCPU bool, numClasses ...int) error {
 	return m.InitError
 }
+
+type fakeDecisionCache struct {
+	enabled          bool
+	decisionToReturn *cache.DecisionEntry
+	found            bool
+	findErr          error
+
+	lastFindModel     string
+	lastFindQuery     string
+	lastFindThreshold float32
+
+	addCalled        bool
+	lastAddRequestID string
+	lastAddModel     string
+	lastAddQuery     string
+	lastAddDecision  *cache.DecisionEntry
+	lastAddTTL       int
+}
+
+func (f *fakeDecisionCache) IsEnabled() bool { return f.enabled }
+
+func (f *fakeDecisionCache) CheckConnection() error { return nil }
+
+func (f *fakeDecisionCache) AddPendingRequest(string, string, string, []byte, int) error {
+	return nil
+}
+
+func (f *fakeDecisionCache) UpdateWithResponse(string, []byte, int) error { return nil }
+
+func (f *fakeDecisionCache) AddEntry(string, string, string, []byte, []byte, int) error { return nil }
+
+func (f *fakeDecisionCache) AddDecisionEntry(requestID string, model string, query string, decision *cache.DecisionEntry, ttlSeconds int) error {
+	f.addCalled = true
+	f.lastAddRequestID = requestID
+	f.lastAddModel = model
+	f.lastAddQuery = query
+	f.lastAddDecision = decision
+	f.lastAddTTL = ttlSeconds
+	return nil
+}
+
+func (f *fakeDecisionCache) FindSimilar(string, string) ([]byte, bool, error) { return nil, false, nil }
+
+func (f *fakeDecisionCache) FindSimilarWithThreshold(string, string, float32) ([]byte, bool, error) {
+	return nil, false, nil
+}
+
+func (f *fakeDecisionCache) FindSimilarDecision(model string, query string) (*cache.DecisionEntry, bool, error) {
+	return f.FindSimilarDecisionWithThreshold(model, query, 0)
+}
+
+func (f *fakeDecisionCache) FindSimilarDecisionWithThreshold(model string, query string, threshold float32) (*cache.DecisionEntry, bool, error) {
+	f.lastFindModel = model
+	f.lastFindQuery = query
+	f.lastFindThreshold = threshold
+	return f.decisionToReturn, f.found, f.findErr
+}
+
+func (f *fakeDecisionCache) Close() error { return nil }
+
+func (f *fakeDecisionCache) GetStats() cache.CacheStats { return cache.CacheStats{} }
 
 var _ = Describe("jailbreak detection", func() {
 	var (
@@ -579,6 +641,106 @@ var _ = Describe("PII detection", func() {
 				Expect(detectedPII).To(ConsistOf("PERSON", "EMAIL"))
 			})
 		})
+	})
+})
+
+var _ = Describe("decision cache", func() {
+	It("returns cached decision on cache hit", func() {
+		cfg := &config.RouterConfig{
+			InlineModels: config.InlineModels{
+				BertModel: config.BertModel{
+					Threshold: 0.75,
+				},
+			},
+			IntelligentRouting: config.IntelligentRouting{
+				Decisions: []config.Decision{
+					{
+						Name: "cached-decision",
+						Rules: config.RuleCombination{
+							Operator: "AND",
+							Conditions: []config.RuleCondition{
+								{Type: "keyword", Name: "kw"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		classifier := &Classifier{Config: cfg}
+		fakeCache := &fakeDecisionCache{
+			enabled: true,
+			found:   true,
+			decisionToReturn: &cache.DecisionEntry{
+				Name:         "cached-decision",
+				Confidence:   0.42,
+				MatchedRules: []string{"keyword:kw"},
+			},
+		}
+		classifier.SetDecisionCache(fakeCache)
+
+		signals := &SignalResults{
+			SourceText:          "hello world",
+			MatchedKeywordRules: []string{},
+			MatchedKeywords:     []string{"kw-token"},
+		}
+
+		result, err := classifier.EvaluateDecisionWithEngine(signals)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(result).ToNot(BeNil())
+		Expect(result.Decision.Name).To(Equal("cached-decision"))
+		Expect(result.Confidence).To(BeNumerically("~", 0.42, 0.0001))
+		Expect(result.MatchedKeywords).To(Equal([]string{"kw-token"}))
+		Expect(fakeCache.lastFindModel).To(Equal(cache.DecisionCacheModelKey))
+		Expect(fakeCache.lastFindQuery).To(Equal("hello world"))
+		Expect(fakeCache.lastFindThreshold).To(Equal(cfg.GetCacheSimilarityThreshold()))
+		Expect(fakeCache.addCalled).To(BeFalse())
+	})
+
+	It("stores decision in cache after evaluation", func() {
+		cfg := &config.RouterConfig{
+			InlineModels: config.InlineModels{
+				BertModel: config.BertModel{
+					Threshold: 0.6,
+				},
+			},
+			IntelligentRouting: config.IntelligentRouting{
+				Decisions: []config.Decision{
+					{
+						Name: "matched-decision",
+						Rules: config.RuleCombination{
+							Operator: "AND",
+							Conditions: []config.RuleCondition{
+								{Type: "keyword", Name: "kw"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		classifier := &Classifier{Config: cfg}
+		fakeCache := &fakeDecisionCache{enabled: true}
+		classifier.SetDecisionCache(fakeCache)
+
+		signals := &SignalResults{
+			SourceText:          "decision input",
+			MatchedKeywordRules: []string{"kw"},
+			MatchedKeywords:     []string{"keyword-token"},
+		}
+
+		result, err := classifier.EvaluateDecisionWithEngine(signals)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(result).ToNot(BeNil())
+		Expect(result.Decision.Name).To(Equal("matched-decision"))
+		Expect(fakeCache.addCalled).To(BeTrue())
+		Expect(fakeCache.lastAddDecision).ToNot(BeNil())
+		Expect(fakeCache.lastAddDecision.Name).To(Equal("matched-decision"))
+		Expect(fakeCache.lastAddDecision.MatchedRules).To(ContainElements("keyword:kw"))
+		Expect(fakeCache.lastAddDecision.MatchedKeywords).To(Equal([]string{"keyword-token"}))
+		Expect(fakeCache.lastAddModel).To(Equal(cache.DecisionCacheModelKey))
+		Expect(fakeCache.lastAddQuery).To(Equal("decision input"))
+		Expect(fakeCache.lastAddTTL).To(Equal(-1))
 	})
 })
 

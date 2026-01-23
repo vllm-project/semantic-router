@@ -3,8 +3,10 @@ package cache
 import (
 	"context"
 	"crypto/md5"
+	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -294,6 +296,11 @@ func (c *MilvusCache) createCollection() error {
 				TypeParams: map[string]string{"max_length": "65535"},
 			},
 			{
+				Name:       "decision",
+				DataType:   entity.FieldTypeVarChar,
+				TypeParams: map[string]string{"max_length": "65535"},
+			},
+			{
 				Name:     c.config.Collection.VectorField.Name,
 				DataType: entity.FieldTypeFloatVector,
 				TypeParams: map[string]string{
@@ -380,7 +387,7 @@ func (c *MilvusCache) AddPendingRequest(requestID string, model string, query st
 	}
 
 	// Store incomplete entry for later completion with response
-	err := c.addEntry("", requestID, model, query, requestBody, nil, ttlSeconds)
+	err := c.addEntry("", requestID, model, query, requestBody, nil, nil, ttlSeconds)
 
 	if err != nil {
 		metrics.RecordCacheOperation("milvus", "add_pending", "error", time.Since(start).Seconds())
@@ -479,7 +486,7 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte, 
 	logging.Debugf("MilvusCache.UpdateWithResponse: found pending entry, adding complete entry (id: %s, model: %s)", id, model)
 
 	// Create the complete entry with response data and TTL
-	err = c.addEntry(id, requestID, model, query, []byte(requestBody), responseBody, ttlSeconds)
+	err = c.addEntry(id, requestID, model, query, []byte(requestBody), responseBody, nil, ttlSeconds)
 	if err != nil {
 		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to add complete entry: %w", err)
@@ -505,12 +512,40 @@ func (c *MilvusCache) AddEntry(requestID string, model string, query string, req
 		return nil
 	}
 
-	err := c.addEntry("", requestID, model, query, requestBody, responseBody, ttlSeconds)
+	err := c.addEntry("", requestID, model, query, requestBody, responseBody, nil, ttlSeconds)
 
 	if err != nil {
 		metrics.RecordCacheOperation("milvus", "add_entry", "error", time.Since(start).Seconds())
 	} else {
 		metrics.RecordCacheOperation("milvus", "add_entry", "success", time.Since(start).Seconds())
+	}
+
+	return err
+}
+
+// AddDecisionEntry stores a complete request-decision pair in the cache
+func (c *MilvusCache) AddDecisionEntry(requestID string, model string, query string, decision *DecisionEntry, ttlSeconds int) error {
+	start := time.Now()
+
+	if !c.enabled {
+		return nil
+	}
+
+	if ttlSeconds == 0 {
+		logging.Debugf("MilvusCache.AddDecisionEntry: skipping cache (ttl_seconds=0)")
+		return nil
+	}
+
+	if decision == nil || strings.TrimSpace(decision.Name) == "" {
+		logging.Debugf("MilvusCache.AddDecisionEntry: skipping cache (empty decision)")
+		return nil
+	}
+
+	err := c.addEntry("", requestID, model, query, nil, nil, decision, ttlSeconds)
+	if err != nil {
+		metrics.RecordCacheOperation("milvus", "add_decision", "error", time.Since(start).Seconds())
+	} else {
+		metrics.RecordCacheOperation("milvus", "add_decision", "success", time.Since(start).Seconds())
 	}
 
 	return err
@@ -537,6 +572,7 @@ func (c *MilvusCache) AddEntriesBatch(entries []CacheEntry) error {
 	queries := make([]string, len(entries))
 	requestBodies := make([]string, len(entries))
 	responseBodies := make([]string, len(entries))
+	decisionBodies := make([]string, len(entries))
 	embeddings := make([][]float32, len(entries))
 	timestamps := make([]int64, len(entries))
 
@@ -557,6 +593,15 @@ func (c *MilvusCache) AddEntriesBatch(entries []CacheEntry) error {
 		queries[i] = entry.Query
 		requestBodies[i] = string(entry.RequestBody)
 		responseBodies[i] = string(entry.ResponseBody)
+		decisionBody := ""
+		if entry.Decision != nil && strings.TrimSpace(entry.Decision.Name) != "" {
+			encoded, marshalErr := json.Marshal(entry.Decision)
+			if marshalErr != nil {
+				return fmt.Errorf("failed to encode decision for entry %d: %w", i, marshalErr)
+			}
+			decisionBody = string(encoded)
+		}
+		decisionBodies[i] = decisionBody
 		embeddings[i] = embedding
 		timestamps[i] = time.Now().Unix()
 	}
@@ -573,13 +618,14 @@ func (c *MilvusCache) AddEntriesBatch(entries []CacheEntry) error {
 	queryColumn := entity.NewColumnVarChar("query", queries)
 	requestColumn := entity.NewColumnVarChar("request_body", requestBodies)
 	responseColumn := entity.NewColumnVarChar("response_body", responseBodies)
+	decisionColumn := entity.NewColumnVarChar("decision", decisionBodies)
 	embeddingColumn := entity.NewColumnFloatVector(c.config.Collection.VectorField.Name, embeddingDim, embeddings)
 	timestampColumn := entity.NewColumnInt64("timestamp", timestamps)
 
 	// Upsert all entries at once
 	logging.Debugf("MilvusCache.AddEntriesBatch: upserting %d entries into collection '%s'",
 		len(entries), c.collectionName)
-	_, err := c.client.Upsert(ctx, c.collectionName, "", idColumn, requestIDColumn, modelColumn, queryColumn, requestColumn, responseColumn, embeddingColumn, timestampColumn)
+	_, err := c.client.Upsert(ctx, c.collectionName, "", idColumn, requestIDColumn, modelColumn, queryColumn, requestColumn, responseColumn, decisionColumn, embeddingColumn, timestampColumn)
 	if err != nil {
 		logging.Debugf("MilvusCache.AddEntriesBatch: upsert failed: %v", err)
 		metrics.RecordCacheOperation("milvus", "add_entries_batch", "error", time.Since(start).Seconds())
@@ -613,7 +659,7 @@ func (c *MilvusCache) Flush() error {
 }
 
 // addEntry handles the internal logic for storing entries in Milvus
-func (c *MilvusCache) addEntry(id string, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
+func (c *MilvusCache) addEntry(id string, requestID string, model string, query string, requestBody, responseBody []byte, decision *DecisionEntry, ttlSeconds int) error {
 	// Determine effective TTL: use provided value or fall back to cache default
 	effectiveTTL := ttlSeconds
 	if ttlSeconds == -1 {
@@ -648,6 +694,15 @@ func (c *MilvusCache) addEntry(id string, requestID string, model string, query 
 	queries := []string{query}
 	requestBodies := []string{string(requestBody)}
 	responseBodies := []string{string(responseBody)}
+	decisionBody := ""
+	if decision != nil && strings.TrimSpace(decision.Name) != "" {
+		encoded, marshalErr := json.Marshal(decision)
+		if marshalErr != nil {
+			return fmt.Errorf("failed to encode decision: %w", marshalErr)
+		}
+		decisionBody = string(encoded)
+	}
+	decisionBodies := []string{decisionBody}
 	embeddings := [][]float32{embedding}
 	timestamps := []int64{now.Unix()}
 	ttlSecondsSlice := []int64{int64(effectiveTTL)}
@@ -660,6 +715,7 @@ func (c *MilvusCache) addEntry(id string, requestID string, model string, query 
 	queryColumn := entity.NewColumnVarChar("query", queries)
 	requestColumn := entity.NewColumnVarChar("request_body", requestBodies)
 	responseColumn := entity.NewColumnVarChar("response_body", responseBodies)
+	decisionColumn := entity.NewColumnVarChar("decision", decisionBodies)
 	embeddingColumn := entity.NewColumnFloatVector(c.config.Collection.VectorField.Name, len(embedding), embeddings)
 	timestampColumn := entity.NewColumnInt64("timestamp", timestamps)
 	ttlSecondsColumn := entity.NewColumnInt64("ttl_seconds", ttlSecondsSlice)
@@ -668,7 +724,7 @@ func (c *MilvusCache) addEntry(id string, requestID string, model string, query 
 	// Upsert the entry into the collection
 	logging.Debugf("MilvusCache.addEntry: upserting entry into collection '%s' (embedding_dim: %d, request_size: %d, response_size: %d, ttl=%d)",
 		c.collectionName, len(embedding), len(requestBody), len(responseBody), effectiveTTL)
-	_, err = c.client.Upsert(ctx, c.collectionName, "", idColumn, requestIDColumn, modelColumn, queryColumn, requestColumn, responseColumn, embeddingColumn, timestampColumn, ttlSecondsColumn, expiresAtColumn)
+	_, err = c.client.Upsert(ctx, c.collectionName, "", idColumn, requestIDColumn, modelColumn, queryColumn, requestColumn, responseColumn, decisionColumn, embeddingColumn, timestampColumn, ttlSecondsColumn, expiresAtColumn)
 	if err != nil {
 		logging.Debugf("MilvusCache.addEntry: upsert failed: %v", err)
 		return fmt.Errorf("failed to upsert cache entry: %w", err)
@@ -813,6 +869,154 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 	})
 	metrics.RecordCacheOperation("milvus", "find_similar", "hit", time.Since(start).Seconds())
 	return responseBody, true, nil
+}
+
+// FindSimilarDecision searches for semantically similar cached decisions
+func (c *MilvusCache) FindSimilarDecision(model string, query string) (*DecisionEntry, bool, error) {
+	return c.FindSimilarDecisionWithThreshold(model, query, c.similarityThreshold)
+}
+
+// FindSimilarDecisionWithThreshold searches for semantically similar cached decisions using a specific threshold
+func (c *MilvusCache) FindSimilarDecisionWithThreshold(model string, query string, threshold float32) (*DecisionEntry, bool, error) {
+	start := time.Now()
+
+	if !c.enabled {
+		logging.Debugf("MilvusCache.FindSimilarDecisionWithThreshold: cache disabled")
+		return nil, false, nil
+	}
+	queryPreview := query
+	if len(query) > 50 {
+		queryPreview = query[:50] + "..."
+	}
+	logging.Debugf("MilvusCache.FindSimilarDecisionWithThreshold: searching for model='%s', query='%s' (len=%d chars), threshold=%.4f",
+		model, queryPreview, len(query), threshold)
+
+	// Generate semantic embedding for similarity comparison
+	queryEmbedding, err := candle_binding.GetEmbedding(query, 0)
+	if err != nil {
+		metrics.RecordCacheOperation("milvus", "find_similar_decision", "error", time.Since(start).Seconds())
+		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)
+	}
+
+	ctx := context.Background()
+
+	// Define search parameters
+	searchParam, err := entity.NewIndexHNSWSearchParam(c.config.Search.Params.Ef)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to create search parameters: %w", err)
+	}
+
+	// Use Milvus Search for efficient similarity search
+	now := time.Now().Unix()
+	filterExpr := fmt.Sprintf("model == \"%s\" && decision != \"\" && (expires_at == 0 || expires_at > %d)", model, now)
+
+	searchResult, err := c.client.Search(
+		ctx,
+		c.collectionName,
+		[]string{},
+		filterExpr,
+		[]string{"decision"},
+		[]entity.Vector{entity.FloatVector(queryEmbedding)},
+		c.config.Collection.VectorField.Name,
+		entity.MetricType(c.config.Collection.VectorField.MetricType),
+		c.config.Search.TopK,
+		searchParam,
+	)
+	if err != nil {
+		logging.Debugf("MilvusCache.FindSimilarDecisionWithThreshold: search failed: %v", err)
+		atomic.AddInt64(&c.missCount, 1)
+		metrics.RecordCacheOperation("milvus", "find_similar_decision", "error", time.Since(start).Seconds())
+		metrics.RecordCacheMiss()
+		return nil, false, nil
+	}
+
+	if len(searchResult) == 0 || searchResult[0].ResultCount == 0 {
+		atomic.AddInt64(&c.missCount, 1)
+		logging.Debugf("MilvusCache.FindSimilarDecisionWithThreshold: no entries found")
+		metrics.RecordCacheOperation("milvus", "find_similar_decision", "miss", time.Since(start).Seconds())
+		metrics.RecordCacheMiss()
+		return nil, false, nil
+	}
+
+	bestScore := searchResult[0].Scores[0]
+	if bestScore < threshold {
+		atomic.AddInt64(&c.missCount, 1)
+		logging.Debugf("MilvusCache.FindSimilarDecisionWithThreshold: CACHE MISS - best_similarity=%.4f < threshold=%.4f",
+			bestScore, threshold)
+		logging.LogEvent("cache_miss", map[string]interface{}{
+			"backend":         "milvus",
+			"best_similarity": bestScore,
+			"threshold":       threshold,
+			"model":           model,
+			"collection":      c.collectionName,
+		})
+		metrics.RecordCacheOperation("milvus", "find_similar_decision", "miss", time.Since(start).Seconds())
+		metrics.RecordCacheMiss()
+		return nil, false, nil
+	}
+
+	// Cache Hit
+	decisionFieldIndex := 0
+	if len(searchResult[0].Fields) > 1 {
+		if testCol, ok := searchResult[0].Fields[0].(*entity.ColumnVarChar); ok && testCol.Len() > 0 {
+			testVal := testCol.Data()[0]
+			if len(testVal) == 32 && isHexString(testVal) {
+				decisionFieldIndex = 1
+			}
+		}
+	}
+
+	var decisionStr string
+	decisionColumn, ok := searchResult[0].Fields[decisionFieldIndex].(*entity.ColumnVarChar)
+	if ok && decisionColumn.Len() > 0 {
+		decisionStr = decisionColumn.Data()[0]
+	}
+	if decisionStr == "" {
+		logging.Debugf("MilvusCache.FindSimilarDecisionWithThreshold: cache hit but decision is missing or empty")
+		atomic.AddInt64(&c.missCount, 1)
+		metrics.RecordCacheOperation("milvus", "find_similar_decision", "miss", time.Since(start).Seconds())
+		metrics.RecordCacheMiss()
+		return nil, false, nil
+	}
+
+	decisionStr = strings.TrimSpace(decisionStr)
+	if decisionStr == "" {
+		logging.Debugf("MilvusCache.FindSimilarDecisionWithThreshold: decoded decision is empty")
+		atomic.AddInt64(&c.missCount, 1)
+		metrics.RecordCacheOperation("milvus", "find_similar_decision", "miss", time.Since(start).Seconds())
+		metrics.RecordCacheMiss()
+		return nil, false, nil
+	}
+
+	var decisionEntry DecisionEntry
+	if err := json.Unmarshal([]byte(decisionStr), &decisionEntry); err != nil {
+		logging.Debugf("MilvusCache.FindSimilarDecisionWithThreshold: failed to decode decision: %v", err)
+		atomic.AddInt64(&c.missCount, 1)
+		metrics.RecordCacheOperation("milvus", "find_similar_decision", "error", time.Since(start).Seconds())
+		metrics.RecordCacheMiss()
+		return nil, false, nil
+	}
+	if strings.TrimSpace(decisionEntry.Name) == "" {
+		logging.Debugf("MilvusCache.FindSimilarDecisionWithThreshold: decoded decision is empty")
+		atomic.AddInt64(&c.missCount, 1)
+		metrics.RecordCacheOperation("milvus", "find_similar_decision", "miss", time.Since(start).Seconds())
+		metrics.RecordCacheMiss()
+		return nil, false, nil
+	}
+
+	atomic.AddInt64(&c.hitCount, 1)
+	logging.Debugf("MilvusCache.FindSimilarDecisionWithThreshold: CACHE HIT - similarity=%.4f >= threshold=%.4f, decision=%s",
+		bestScore, threshold, decisionEntry.Name)
+	logging.LogEvent("cache_hit", map[string]interface{}{
+		"backend":    "milvus",
+		"similarity": bestScore,
+		"threshold":  threshold,
+		"model":      model,
+		"collection": c.collectionName,
+	})
+	metrics.RecordCacheOperation("milvus", "find_similar_decision", "hit", time.Since(start).Seconds())
+	metrics.RecordCacheHit()
+	return &decisionEntry, true, nil
 }
 
 // GetAllEntries retrieves all entries from Milvus for HNSW index rebuilding

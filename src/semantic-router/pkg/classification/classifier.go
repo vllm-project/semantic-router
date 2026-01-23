@@ -8,6 +8,7 @@ import (
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -282,6 +283,7 @@ type Classifier struct {
 	CategoryMapping  *CategoryMapping
 	PIIMapping       *PIIMapping
 	JailbreakMapping *JailbreakMapping
+	decisionCache    cache.CacheBackend
 
 	// Category name mapping layer to support generic categories in config
 	// Maps MMLU-Pro category names -> generic category names (as defined in config.Categories)
@@ -333,6 +335,11 @@ func withContextClassifier(contextClassifier *ContextClassifier) option {
 	return func(c *Classifier) {
 		c.contextClassifier = contextClassifier
 	}
+}
+
+// SetDecisionCache assigns a semantic cache backend for decision caching.
+func (c *Classifier) SetDecisionCache(decisionCache cache.CacheBackend) {
+	c.decisionCache = decisionCache
 }
 
 func withComplexityClassifier(complexityClassifier *ComplexityClassifier) option {
@@ -719,6 +726,7 @@ func (c *Classifier) getUsedSignals() map[string]bool {
 
 // SignalResults contains all evaluated signal results
 type SignalResults struct {
+	SourceText               string
 	MatchedKeywordRules      []string
 	MatchedKeywords          []string // The actual keywords that matched (not rule names)
 	MatchedEmbeddingRules    []string
@@ -775,7 +783,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 	// Determine which signals (type:name) are actually used in decisions
 	usedSignals := c.getUsedSignals()
 
-	results := &SignalResults{}
+	results := &SignalResults{SourceText: text}
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
@@ -1173,11 +1181,45 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		return nil, fmt.Errorf("no decisions configured")
 	}
 
+	if signals == nil {
+		return nil, fmt.Errorf("signals are required for decision evaluation")
+	}
+
 	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, latency=%v, context=%v, complexity=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
 		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules,
 		signals.MatchedLanguageRules, signals.MatchedLatencyRules, signals.MatchedContextRules,
 		signals.MatchedComplexityRules)
+
+	// Attempt decision cache lookup before evaluating rules
+	if strings.TrimSpace(signals.SourceText) != "" && c.decisionCache != nil && c.decisionCache.IsEnabled() {
+		threshold := c.Config.GetCacheSimilarityThreshold()
+		cachedDecision, found, cacheErr := c.decisionCache.FindSimilarDecisionWithThreshold(
+			cache.DecisionCacheModelKey,
+			signals.SourceText,
+			threshold,
+		)
+		if cacheErr != nil {
+			logging.Warnf("Decision cache lookup failed: %v", cacheErr)
+		} else if found && cachedDecision != nil {
+			decisionConfig := c.Config.GetDecisionByName(cachedDecision.Name)
+			if decisionConfig != nil {
+				result := &decision.DecisionResult{
+					Decision:        decisionConfig,
+					Confidence:      cachedDecision.Confidence,
+					MatchedRules:    cachedDecision.MatchedRules,
+					MatchedKeywords: cachedDecision.MatchedKeywords,
+				}
+				if len(result.MatchedKeywords) == 0 {
+					result.MatchedKeywords = signals.MatchedKeywords
+				}
+				logging.Infof("Decision cache hit: decision=%s, confidence=%.3f, matched_rules=%v, matched_keywords=%v",
+					result.Decision.Name, result.Confidence, result.MatchedRules, result.MatchedKeywords)
+				return result, nil
+			}
+			logging.Warnf("Decision cache hit for unknown decision: %s", cachedDecision.Name)
+		}
+	}
 	// Create decision engine
 	engine := decision.NewDecisionEngine(
 		c.Config.KeywordRules,
@@ -1212,6 +1254,21 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 
 	logging.Infof("Decision evaluation result: decision=%s, confidence=%.3f, matched_rules=%v, matched_keywords=%v",
 		result.Decision.Name, result.Confidence, result.MatchedRules, result.MatchedKeywords)
+
+	// Store decision in cache for future reuse
+	if strings.TrimSpace(signals.SourceText) != "" && c.decisionCache != nil && c.decisionCache.IsEnabled() {
+		ttlSeconds := c.Config.GetCacheTTLSecondsForDecision(result.Decision.Name)
+		cacheEntry := &cache.DecisionEntry{
+			Name:            result.Decision.Name,
+			Confidence:      result.Confidence,
+			MatchedRules:    result.MatchedRules,
+			MatchedKeywords: result.MatchedKeywords,
+		}
+		requestID := fmt.Sprintf("decision-%d", time.Now().UnixNano())
+		if err := c.decisionCache.AddDecisionEntry(requestID, cache.DecisionCacheModelKey, signals.SourceText, cacheEntry, ttlSeconds); err != nil {
+			logging.Warnf("Failed to add decision to cache: %v", err)
+		}
+	}
 
 	return result, nil
 }

@@ -5,6 +5,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -427,6 +428,41 @@ func (h *HybridCache) AddEntry(requestID string, model string, query string, req
 	return nil
 }
 
+// AddDecisionEntry stores a complete request-decision pair
+func (h *HybridCache) AddDecisionEntry(requestID string, model string, query string, decision *DecisionEntry, ttlSeconds int) error {
+	start := time.Now()
+
+	if !h.enabled {
+		return nil
+	}
+
+	if ttlSeconds == 0 {
+		logging.Debugf("HybridCache.AddDecisionEntry: skipping cache (ttl_seconds=0)")
+		return nil
+	}
+
+	if decision == nil || strings.TrimSpace(decision.Name) == "" {
+		logging.Debugf("HybridCache.AddDecisionEntry: skipping cache (empty decision)")
+		return nil
+	}
+
+	// Store in Milvus only to avoid polluting response-cache HNSW index.
+	if err := h.milvusCache.AddDecisionEntry(requestID, model, query, decision, ttlSeconds); err != nil {
+		metrics.RecordCacheOperation("hybrid", "add_decision", "error", time.Since(start).Seconds())
+		return fmt.Errorf("milvus add decision failed: %w", err)
+	}
+
+	logging.Debugf("HybridCache.AddDecisionEntry: added decision to milvusID=%s, ttl=%d", requestID, ttlSeconds)
+	logging.LogEvent("hybrid_cache_decision_entry_added", map[string]interface{}{
+		"backend": "hybrid",
+		"query":   query,
+		"model":   model,
+	})
+
+	metrics.RecordCacheOperation("hybrid", "add_decision", "success", time.Since(start).Seconds())
+	return nil
+}
+
 // AddEntriesBatch stores multiple request-response pairs efficiently
 func (h *HybridCache) AddEntriesBatch(entries []CacheEntry) error {
 	start := time.Now()
@@ -737,6 +773,38 @@ func (h *HybridCache) FindSimilarWithThreshold(model string, query string, thres
 	})
 	metrics.RecordCacheOperation("hybrid", "find_similar_threshold", "miss", time.Since(start).Seconds())
 
+	return nil, false, nil
+}
+
+// FindSimilarDecision searches for semantically similar cached decisions
+func (h *HybridCache) FindSimilarDecision(model string, query string) (*DecisionEntry, bool, error) {
+	return h.FindSimilarDecisionWithThreshold(model, query, h.similarityThreshold)
+}
+
+// FindSimilarDecisionWithThreshold searches for semantically similar cached decisions with custom threshold
+func (h *HybridCache) FindSimilarDecisionWithThreshold(model string, query string, threshold float32) (*DecisionEntry, bool, error) {
+	start := time.Now()
+
+	if !h.enabled {
+		return nil, false, nil
+	}
+
+	decisionEntry, found, err := h.milvusCache.FindSimilarDecisionWithThreshold(model, query, threshold)
+	if err != nil {
+		metrics.RecordCacheOperation("hybrid", "find_similar_decision", "error", time.Since(start).Seconds())
+		return nil, false, err
+	}
+
+	if found {
+		atomic.AddInt64(&h.hitCount, 1)
+		metrics.RecordCacheOperation("hybrid", "find_similar_decision", "hit", time.Since(start).Seconds())
+		metrics.RecordCacheHit()
+		return decisionEntry, true, nil
+	}
+
+	atomic.AddInt64(&h.missCount, 1)
+	metrics.RecordCacheOperation("hybrid", "find_similar_decision", "miss", time.Since(start).Seconds())
+	metrics.RecordCacheMiss()
 	return nil, false, nil
 }
 

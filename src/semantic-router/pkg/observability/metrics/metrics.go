@@ -680,6 +680,16 @@ func RecordCachePluginMiss(decisionName, pluginType string) {
 	CachePluginMisses.WithLabelValues(decisionName, pluginType).Inc()
 }
 
+// RecordCacheHit records a generic cache hit (convenience wrapper)
+func RecordCacheHit() {
+	RecordCachePluginHit("", "")
+}
+
+// RecordCacheMiss records a generic cache miss (convenience wrapper)
+func RecordCacheMiss() {
+	RecordCachePluginMiss("", "")
+}
+
 // RecordPIIViolation records a PII policy violation for a specific model and PII data type
 func RecordPIIViolation(model string, piiType string) {
 	PIIViolations.WithLabelValues(model, piiType).Inc()

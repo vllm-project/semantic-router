@@ -752,6 +752,10 @@ development:
 		})
 	})
 
+	Describe("Decision cache encoding", func() {
+		Skip("Decision encoding helpers are now inlined; no standalone unit tests.")
+	})
+
 	Describe("InMemoryCache", func() {
 		var inMemoryCache CacheBackend
 

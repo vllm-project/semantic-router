@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -26,6 +27,8 @@ type RedisCache struct {
 	client              *redis.Client
 	config              *config.RedisConfig
 	indexName           string
+	decisionIndexName   string
+	decisionIndexPrefix string
 	similarityThreshold float32
 	ttlSeconds          int
 	enabled             bool
@@ -83,6 +86,8 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 		client:              redisClient,
 		config:              redisConfig,
 		indexName:           redisConfig.Index.Name,
+		decisionIndexName:   redisConfig.Index.Name + "_decision",
+		decisionIndexPrefix: redisConfig.Index.Prefix + "decision:",
 		similarityThreshold: options.SimilarityThreshold,
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
@@ -103,6 +108,15 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 		return nil, fmt.Errorf("failed to initialize index: %w", err)
 	}
 	logging.Debugf("RedisCache: initialization complete")
+
+	// Set up the index for decision cache entries
+	logging.Debugf("RedisCache: initializing decision index '%s'", cache.decisionIndexName)
+	if err := cache.initializeDecisionIndex(); err != nil {
+		logging.Debugf("RedisCache: failed to initialize decision index: %v", err)
+		redisClient.Close()
+		return nil, fmt.Errorf("failed to initialize decision index: %w", err)
+	}
+	logging.Debugf("RedisCache: decision index initialization complete")
 
 	return cache, nil
 }
@@ -158,27 +172,37 @@ func loadRedisConfig(configPath string) (*config.RedisConfig, error) {
 	return redisConfig, nil
 }
 
-// initializeIndex sets up the Redis index for vector search
+// initializeIndex sets up the Redis index for response cache vector search
 func (c *RedisCache) initializeIndex() error {
+	return c.initializeIndexWithPrefix(c.indexName, c.config.Index.Prefix)
+}
+
+// initializeDecisionIndex sets up the Redis index for decision cache vector search
+func (c *RedisCache) initializeDecisionIndex() error {
+	return c.initializeIndexWithPrefix(c.decisionIndexName, c.decisionIndexPrefix)
+}
+
+// initializeIndexWithPrefix sets up a Redis index with the provided prefix
+func (c *RedisCache) initializeIndexWithPrefix(indexName string, prefix string) error {
 	ctx := context.Background()
 
 	// Check if index exists
-	_, err := c.client.FTInfo(ctx, c.indexName).Result()
+	_, err := c.client.FTInfo(ctx, indexName).Result()
 	indexExists := err == nil
 
 	// Handle development mode index reset
 	if c.config.Development.DropIndexOnStartup && indexExists {
-		if err := c.client.FTDropIndexWithArgs(ctx, c.indexName, &redis.FTDropIndexOptions{
+		if err := c.client.FTDropIndexWithArgs(ctx, indexName, &redis.FTDropIndexOptions{
 			DeleteDocs: true,
 		}).Err(); err != nil {
 			logging.Debugf("RedisCache: failed to drop index: %v", err)
 			return fmt.Errorf("failed to drop index: %w", err)
 		}
 		indexExists = false
-		logging.Debugf("RedisCache: dropped existing index '%s' for development", c.indexName)
+		logging.Debugf("RedisCache: dropped existing index '%s' for development", indexName)
 		logging.LogEvent("index_dropped", map[string]interface{}{
 			"backend": "redis",
-			"index":   c.indexName,
+			"index":   indexName,
 			"reason":  "development_mode",
 		})
 	}
@@ -186,18 +210,18 @@ func (c *RedisCache) initializeIndex() error {
 	// Create index if it doesn't exist
 	if !indexExists {
 		if !c.config.Development.AutoCreateIndex {
-			return fmt.Errorf("index %s does not exist and auto-creation is disabled", c.indexName)
+			return fmt.Errorf("index %s does not exist and auto-creation is disabled", indexName)
 		}
 
-		if err := c.createIndex(); err != nil {
+		if err := c.createIndexWithPrefix(indexName, prefix); err != nil {
 			logging.Debugf("RedisCache: failed to create index: %v", err)
 			return fmt.Errorf("failed to create index: %w", err)
 		}
 		logging.Debugf("RedisCache: created new index '%s' with dimension %d",
-			c.indexName, c.config.Index.VectorField.Dimension)
+			indexName, c.config.Index.VectorField.Dimension)
 		logging.LogEvent("index_created", map[string]interface{}{
 			"backend":   "redis",
-			"index":     c.indexName,
+			"index":     indexName,
 			"dimension": c.config.Index.VectorField.Dimension,
 		})
 	}
@@ -205,8 +229,8 @@ func (c *RedisCache) initializeIndex() error {
 	return nil
 }
 
-// createIndex builds the Redis index with the appropriate schema
-func (c *RedisCache) createIndex() error {
+// createIndexWithPrefix builds the Redis index with the appropriate schema and prefix
+func (c *RedisCache) createIndexWithPrefix(indexName string, prefix string) error {
 	ctx := context.Background()
 
 	// Determine embedding dimension automatically
@@ -256,10 +280,10 @@ func (c *RedisCache) createIndex() error {
 
 	// Create the index with proper schema
 	_, err = c.client.FTCreate(ctx,
-		c.indexName,
+		indexName,
 		&redis.FTCreateOptions{
 			OnHash: true,
-			Prefix: []interface{}{c.config.Index.Prefix},
+			Prefix: []interface{}{prefix},
 		},
 		&redis.FieldSchema{
 			FieldName: "request_id",
@@ -282,6 +306,11 @@ func (c *RedisCache) createIndex() error {
 			FieldName: "response_body",
 			FieldType: redis.SearchFieldTypeText,
 			NoIndex:   true, // Don't index large text fields
+		},
+		&redis.FieldSchema{
+			FieldName: "decision",
+			FieldType: redis.SearchFieldTypeText,
+			NoIndex:   true, // Don't index decision payloads
 		},
 		&redis.FieldSchema{
 			FieldName:  c.config.Index.VectorField.Name,
@@ -345,7 +374,7 @@ func (c *RedisCache) AddPendingRequest(requestID string, model string, query str
 	}
 
 	// Store incomplete entry for later completion with response
-	err := c.addEntry("", requestID, model, query, requestBody, nil, ttlSeconds)
+	err := c.addEntry(c.indexName, c.config.Index.Prefix, "", requestID, model, query, requestBody, nil, nil, ttlSeconds)
 
 	if err != nil {
 		metrics.RecordCacheOperation("redis", "add_pending", "error", time.Since(start).Seconds())
@@ -413,7 +442,7 @@ func (c *RedisCache) UpdateWithResponse(requestID string, responseBody []byte, t
 	logging.Debugf("RedisCache.UpdateWithResponse: found pending entry, updating (id: %s, model: %s)", docID, model)
 
 	// Update the document with response body and TTL
-	err = c.addEntry(docID, requestID, model, queryStr, []byte(requestBodyStr), responseBody, ttlSeconds)
+	err = c.addEntry(c.indexName, c.config.Index.Prefix, docID, requestID, model, queryStr, []byte(requestBodyStr), responseBody, nil, ttlSeconds)
 	if err != nil {
 		metrics.RecordCacheOperation("redis", "update_response", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to update entry: %w", err)
@@ -439,12 +468,40 @@ func (c *RedisCache) AddEntry(requestID string, model string, query string, requ
 		return nil
 	}
 
-	err := c.addEntry("", requestID, model, query, requestBody, responseBody, ttlSeconds)
+	err := c.addEntry(c.indexName, c.config.Index.Prefix, "", requestID, model, query, requestBody, responseBody, nil, ttlSeconds)
 
 	if err != nil {
 		metrics.RecordCacheOperation("redis", "add_entry", "error", time.Since(start).Seconds())
 	} else {
 		metrics.RecordCacheOperation("redis", "add_entry", "success", time.Since(start).Seconds())
+	}
+
+	return err
+}
+
+// AddDecisionEntry stores a complete request-decision pair in the cache
+func (c *RedisCache) AddDecisionEntry(requestID string, model string, query string, decision *DecisionEntry, ttlSeconds int) error {
+	start := time.Now()
+
+	if !c.enabled {
+		return nil
+	}
+
+	if ttlSeconds == 0 {
+		logging.Debugf("RedisCache.AddDecisionEntry: skipping cache (ttl_seconds=0)")
+		return nil
+	}
+
+	if decision == nil || strings.TrimSpace(decision.Name) == "" {
+		logging.Debugf("RedisCache.AddDecisionEntry: skipping cache (empty decision)")
+		return nil
+	}
+
+	err := c.addEntry(c.decisionIndexName, c.decisionIndexPrefix, "", requestID, model, query, nil, nil, decision, ttlSeconds)
+	if err != nil {
+		metrics.RecordCacheOperation("redis", "add_decision", "error", time.Since(start).Seconds())
+	} else {
+		metrics.RecordCacheOperation("redis", "add_decision", "success", time.Since(start).Seconds())
 	}
 
 	return err
@@ -460,8 +517,20 @@ func floatsToBytes(fs []float32) []byte {
 	return buf
 }
 
+// escapeRedisTagValue escapes special characters in TAG field values for Redis queries.
+func escapeRedisTagValue(value string) string {
+	replacer := strings.NewReplacer(
+		",", "\\,",
+		".", "\\.",
+		"-", "\\-",
+		"/", "\\/",
+		" ", "\\ ",
+	)
+	return replacer.Replace(value)
+}
+
 // addEntry handles the internal logic for storing entries in Redis
-func (c *RedisCache) addEntry(id string, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
+func (c *RedisCache) addEntry(indexName string, prefix string, id string, requestID string, model string, query string, requestBody, responseBody []byte, decision *DecisionEntry, ttlSeconds int) error {
 	logging.Infof("addEntry called: id='%s', requestID='%s', requestBody_len=%d, responseBody_len=%d, ttl_seconds=%d",
 		id, requestID, len(requestBody), len(responseBody), ttlSeconds)
 
@@ -489,15 +558,23 @@ func (c *RedisCache) addEntry(id string, requestID string, model string, query s
 
 	// Prepare document key with prefix (check if already prefixed to avoid double prefix)
 	var docKey string
-	if strings.HasPrefix(id, c.config.Index.Prefix) {
+	if strings.HasPrefix(id, prefix) {
 		docKey = id // Already has prefix, use as-is
 		logging.Infof("ID already has prefix, using as-is: %s", docKey)
 	} else {
-		docKey = c.config.Index.Prefix + id // Add prefix
+		docKey = prefix + id // Add prefix
 		logging.Infof("Adding prefix to ID: %s -> %s", id, docKey)
 	}
 
 	responseBodyStr := string(responseBody)
+	decisionStr := ""
+	if decision != nil && strings.TrimSpace(decision.Name) != "" {
+		encoded, marshalErr := json.Marshal(decision)
+		if marshalErr != nil {
+			return fmt.Errorf("failed to encode decision: %w", marshalErr)
+		}
+		decisionStr = string(encoded)
+	}
 	logging.Infof("Setting response_body field: len=%d, isEmpty=%v", len(responseBodyStr), responseBodyStr == "")
 
 	// Prepare hash fields including ttl_seconds
@@ -507,6 +584,7 @@ func (c *RedisCache) addEntry(id string, requestID string, model string, query s
 		"query":                         query,
 		"request_body":                  string(requestBody),
 		"response_body":                 responseBodyStr,
+		"decision":                      decisionStr,
 		c.config.Index.VectorField.Name: embeddingBytes,
 		"timestamp":                     time.Now().Unix(),
 		"ttl_seconds":                   effectiveTTL,
@@ -528,7 +606,7 @@ func (c *RedisCache) addEntry(id string, requestID string, model string, query s
 		docKey, len(embedding), len(requestBody), len(responseBody), effectiveTTL)
 	logging.LogEvent("cache_entry_added", map[string]interface{}{
 		"backend":             "redis",
-		"index":               c.indexName,
+		"index":               indexName,
 		"request_id":          requestID,
 		"query":               query,
 		"model":               model,
@@ -694,6 +772,178 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 	})
 	metrics.RecordCacheOperation("redis", "find_similar", "hit", time.Since(start).Seconds())
 	return responseBody, true, nil
+}
+
+// FindSimilarDecision searches for semantically similar cached decisions
+func (c *RedisCache) FindSimilarDecision(model string, query string) (*DecisionEntry, bool, error) {
+	return c.FindSimilarDecisionWithThreshold(model, query, c.similarityThreshold)
+}
+
+// FindSimilarDecisionWithThreshold searches for semantically similar cached decisions using a specific threshold
+func (c *RedisCache) FindSimilarDecisionWithThreshold(model string, query string, threshold float32) (*DecisionEntry, bool, error) {
+	start := time.Now()
+
+	logging.Infof("FindSimilarDecisionWithThreshold ENTERED: model=%s, query='%s', threshold=%.2f", model, query, threshold)
+
+	if !c.enabled {
+		logging.Infof("FindSimilarDecisionWithThreshold: cache disabled, returning early")
+		return nil, false, nil
+	}
+
+	logging.Infof("FindSimilarDecisionWithThreshold: cache enabled, generating embedding for query")
+
+	// Generate semantic embedding for similarity comparison
+	queryEmbedding, err := candle_binding.GetEmbedding(query, 0)
+	if err != nil {
+		metrics.RecordCacheOperation("redis", "find_similar_decision", "error", time.Since(start).Seconds())
+		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)
+	}
+
+	ctx := context.Background()
+
+	// Convert embedding to bytes for Redis query
+	embeddingBytes := floatsToBytes(queryEmbedding)
+
+	// Build KNN query with model filter (TAG fields require escaped values)
+	escapedModel := escapeRedisTagValue(model)
+	knnQuery := fmt.Sprintf("(@model:{%s})=>[KNN %d @%s $vec AS vector_distance]",
+		escapedModel, c.config.Search.TopK, c.config.Index.VectorField.Name)
+
+	// Execute vector search
+	searchResult, err := c.client.FTSearchWithArgs(ctx,
+		c.decisionIndexName,
+		knnQuery,
+		&redis.FTSearchOptions{
+			Return: []redis.FTSearchReturn{
+				{FieldName: "vector_distance"},
+				{FieldName: "decision"},
+			},
+			DialectVersion: 2,
+			Params: map[string]interface{}{
+				"vec": embeddingBytes,
+			},
+		},
+	).Result()
+	if err != nil {
+		logging.Infof("RedisCache.FindSimilarDecisionWithThreshold: search failed: %v", err)
+		atomic.AddInt64(&c.missCount, 1)
+		metrics.RecordCacheOperation("redis", "find_similar_decision", "error", time.Since(start).Seconds())
+		metrics.RecordCacheMiss()
+		return nil, false, nil
+	}
+
+	logging.Infof("RedisCache.FindSimilarDecisionWithThreshold: search returned %d results", searchResult.Total)
+
+	if searchResult.Total == 0 {
+		atomic.AddInt64(&c.missCount, 1)
+		logging.Infof("RedisCache.FindSimilarDecisionWithThreshold: no entries found - cache miss")
+		metrics.RecordCacheOperation("redis", "find_similar_decision", "miss", time.Since(start).Seconds())
+		metrics.RecordCacheMiss()
+		return nil, false, nil
+	}
+
+	// Get best match
+	bestDoc := searchResult.Docs[0]
+
+	// Extract distance and convert to similarity score
+	distanceVal, ok := bestDoc.Fields["vector_distance"]
+	if !ok {
+		logging.Infof("RedisCache.FindSimilarDecisionWithThreshold: vector_distance field not found in result")
+		atomic.AddInt64(&c.missCount, 1)
+		metrics.RecordCacheOperation("redis", "find_similar_decision", "error", time.Since(start).Seconds())
+		metrics.RecordCacheMiss()
+		return nil, false, nil
+	}
+
+	var distance float64
+	if _, scanErr := fmt.Sscanf(fmt.Sprint(distanceVal), "%f", &distance); scanErr != nil {
+		logging.Infof("RedisCache.FindSimilarDecisionWithThreshold: failed to parse distance value: %v", scanErr)
+		atomic.AddInt64(&c.missCount, 1)
+		metrics.RecordCacheOperation("redis", "find_similar_decision", "error", time.Since(start).Seconds())
+		metrics.RecordCacheMiss()
+		return nil, false, nil
+	}
+
+	// Convert distance to similarity score based on metric type
+	var similarity float32
+	switch c.config.Index.VectorField.MetricType {
+	case "COSINE":
+		similarity = 1.0 - float32(distance)/2.0
+	case "IP":
+		similarity = float32(distance)
+	case "L2":
+		similarity = 1.0 / (1.0 + float32(distance))
+	default:
+		similarity = 1.0 - float32(distance)
+	}
+
+	logging.Infof("Calculated similarity=%.4f, threshold=%.4f, distance=%.4f (metric=%s)",
+		similarity, threshold, distance, c.config.Index.VectorField.MetricType)
+
+	if similarity < threshold {
+		atomic.AddInt64(&c.missCount, 1)
+		logging.Debugf("RedisCache.FindSimilarDecisionWithThreshold: cache miss - similarity %.4f below threshold %.4f",
+			similarity, threshold)
+		logging.LogEvent("cache_miss", map[string]interface{}{
+			"backend":         "redis",
+			"best_similarity": similarity,
+			"threshold":       threshold,
+			"model":           model,
+			"index":           c.indexName,
+		})
+		metrics.RecordCacheOperation("redis", "find_similar_decision", "miss", time.Since(start).Seconds())
+		metrics.RecordCacheMiss()
+		return nil, false, nil
+	}
+
+	logging.Infof("Attempting to extract decision field...")
+	decisionVal, ok := bestDoc.Fields["decision"]
+	if !ok {
+		logging.Infof("RedisCache.FindSimilarDecisionWithThreshold: cache hit BUT decision field is MISSING - treating as miss")
+		atomic.AddInt64(&c.missCount, 1)
+		metrics.RecordCacheOperation("redis", "find_similar_decision", "error", time.Since(start).Seconds())
+		metrics.RecordCacheMiss()
+		return nil, false, nil
+	}
+
+	decisionStr := strings.TrimSpace(fmt.Sprint(decisionVal))
+	if decisionStr == "" {
+		logging.Infof("RedisCache.FindSimilarDecisionWithThreshold: cache hit BUT decision is EMPTY - treating as miss")
+		atomic.AddInt64(&c.missCount, 1)
+		metrics.RecordCacheOperation("redis", "find_similar_decision", "error", time.Since(start).Seconds())
+		metrics.RecordCacheMiss()
+		return nil, false, nil
+	}
+
+	var decisionEntry DecisionEntry
+	if err := json.Unmarshal([]byte(decisionStr), &decisionEntry); err != nil {
+		logging.Infof("RedisCache.FindSimilarDecisionWithThreshold: failed to decode decision: %v", err)
+		atomic.AddInt64(&c.missCount, 1)
+		metrics.RecordCacheOperation("redis", "find_similar_decision", "error", time.Since(start).Seconds())
+		metrics.RecordCacheMiss()
+		return nil, false, nil
+	}
+	if strings.TrimSpace(decisionEntry.Name) == "" {
+		logging.Infof("RedisCache.FindSimilarDecisionWithThreshold: decoded decision is empty - treating as miss")
+		atomic.AddInt64(&c.missCount, 1)
+		metrics.RecordCacheOperation("redis", "find_similar_decision", "miss", time.Since(start).Seconds())
+		metrics.RecordCacheMiss()
+		return nil, false, nil
+	}
+
+	atomic.AddInt64(&c.hitCount, 1)
+	logging.Debugf("RedisCache.FindSimilarDecisionWithThreshold: cache hit - similarity=%.4f, decision=%s",
+		similarity, decisionEntry.Name)
+	logging.LogEvent("cache_hit", map[string]interface{}{
+		"backend":    "redis",
+		"similarity": similarity,
+		"threshold":  threshold,
+		"model":      model,
+		"index":      c.indexName,
+	})
+	metrics.RecordCacheOperation("redis", "find_similar_decision", "hit", time.Since(start).Seconds())
+	metrics.RecordCacheHit()
+	return &decisionEntry, true, nil
 }
 
 // Close releases all resources held by the cache

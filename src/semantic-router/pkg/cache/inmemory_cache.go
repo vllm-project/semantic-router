@@ -444,6 +444,101 @@ func (c *InMemoryCache) AddEntry(
 	return nil
 }
 
+// AddDecisionEntry stores a complete request-decision pair in the cache
+func (c *InMemoryCache) AddDecisionEntry(
+	requestID string,
+	model string,
+	query string,
+	decision *DecisionEntry,
+	ttlSeconds int,
+) error {
+	start := time.Now()
+
+	if !c.enabled {
+		return nil
+	}
+
+	if ttlSeconds == 0 {
+		logging.Debugf("InMemoryCache.AddDecisionEntry: skipping cache (ttl_seconds=0)")
+		return nil
+	}
+
+	if decision == nil || strings.TrimSpace(decision.Name) == "" {
+		logging.Debugf("InMemoryCache.AddDecisionEntry: skipping cache (empty decision)")
+		return nil
+	}
+
+	effectiveTTL := ttlSeconds
+	if ttlSeconds == -1 {
+		effectiveTTL = c.ttlSeconds
+	}
+
+	// Generate semantic embedding using the configured model
+	embedding, err := c.generateEmbedding(query)
+	if err != nil {
+		metrics.RecordCacheOperation("memory", "add_decision", "error", time.Since(start).Seconds())
+		return fmt.Errorf("failed to generate embedding: %w", err)
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Remove expired entries to maintain cache hygiene, but defer the HNSW rebuild to the insertion below if HNSW is enabled.
+	c.cleanupExpiredEntriesDeferred()
+
+	// Check if eviction is needed before adding the new entry
+	if c.maxEntries > 0 && len(c.entries) >= c.maxEntries {
+		c.evictOne()
+	}
+
+	now := time.Now()
+	entry := CacheEntry{
+		RequestID:    requestID,
+		Decision:     decision,
+		Model:        model,
+		Query:        query,
+		Embedding:    embedding,
+		Timestamp:    now,
+		LastAccessAt: now,
+		HitCount:     0,
+		TTLSeconds:   ttlSeconds,
+	}
+
+	// Calculate expiration time if TTL is set
+	if effectiveTTL > 0 {
+		entry.ExpiresAt = now.Add(time.Duration(effectiveTTL) * time.Second)
+	}
+
+	c.entries = append(c.entries, entry)
+	entryIndex := len(c.entries) - 1
+	c.entryMap[requestID] = entryIndex
+
+	// Register with optimized eviction policy for O(1) eviction
+	c.registerEntryWithEvictionPolicy(entryIndex, requestID)
+
+	// Register with expiration heap for efficient TTL cleanup
+	if effectiveTTL > 0 {
+		c.expirationHeap.Add(requestID, entryIndex, entry.ExpiresAt)
+	}
+
+	// Decision cache entries are intentionally excluded from HNSW index to avoid
+	// interfering with response-cache neighbor searches.
+
+	logging.Debugf("InMemoryCache.AddDecisionEntry: added decision entry (total entries: %d, useHNSW: %t, ttl=%d)",
+		len(c.entries), c.useHNSW, effectiveTTL)
+	logging.LogEvent("cache_decision_entry_added", map[string]interface{}{
+		"backend": "memory",
+		"query":   query,
+		"model":   model,
+	})
+
+	// Record success metrics
+	metrics.RecordCacheOperation("memory", "add_decision", "success", time.Since(start).Seconds())
+	metrics.UpdateCacheEntries("memory", len(c.entries))
+
+	return nil
+}
+
 // FindSimilar searches for semantically similar cached requests using the default threshold
 func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, error) {
 	return c.FindSimilarWithThreshold(model, query, c.similarityThreshold)
@@ -623,6 +718,134 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 		"entries_checked": entriesChecked,
 	})
 	metrics.RecordCacheOperation("memory", "find_similar", "miss", time.Since(start).Seconds())
+	return nil, false, nil
+}
+
+// FindSimilarDecision searches for semantically similar cached decisions using the default threshold
+func (c *InMemoryCache) FindSimilarDecision(model string, query string) (*DecisionEntry, bool, error) {
+	return c.FindSimilarDecisionWithThreshold(model, query, c.similarityThreshold)
+}
+
+// FindSimilarDecisionWithThreshold searches for semantically similar cached decisions using a specific threshold
+func (c *InMemoryCache) FindSimilarDecisionWithThreshold(model string, query string, threshold float32) (*DecisionEntry, bool, error) {
+	start := time.Now()
+
+	if !c.enabled {
+		logging.Debugf("InMemoryCache.FindSimilarDecisionWithThreshold: cache disabled")
+		return nil, false, nil
+	}
+	queryPreview := query
+	if len(query) > 50 {
+		queryPreview = query[:50] + "..."
+	}
+	logging.Debugf("InMemoryCache.FindSimilarDecisionWithThreshold: searching for model='%s', query='%s' (len=%d chars), threshold=%.4f",
+		model, queryPreview, len(query), threshold)
+
+	// Generate semantic embedding using the configured model
+	queryEmbedding, err := c.generateEmbedding(query)
+	if err != nil {
+		metrics.RecordCacheOperation("memory", "find_similar_decision", "error", time.Since(start).Seconds())
+		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)
+	}
+
+	c.mu.RLock()
+	var (
+		bestIndex      = -1
+		bestEntry      CacheEntry
+		bestSimilarity float32
+		entriesChecked int
+		expiredCount   int
+	)
+	now := time.Now()
+
+	// Decision cache entries are searched linearly to avoid HNSW interference with response cache.
+	for entryIndex, entry := range c.entries {
+		// Skip incomplete entries
+		if entry.Decision == nil || strings.TrimSpace(entry.Decision.Name) == "" {
+			continue
+		}
+
+		// Only consider entries for the same model
+		if entry.Model != model {
+			continue
+		}
+
+		// Skip entries that have expired before considering them
+		if c.isExpired(entry, now) {
+			expiredCount++
+			continue
+		}
+
+		// Compute semantic similarity using dot product
+		var dotProduct float32
+		for i := 0; i < len(queryEmbedding) && i < len(entry.Embedding); i++ {
+			dotProduct += queryEmbedding[i] * entry.Embedding[i]
+		}
+
+		entriesChecked++
+		if bestIndex == -1 || dotProduct > bestSimilarity {
+			bestSimilarity = dotProduct
+			bestIndex = entryIndex
+		}
+	}
+
+	// Snapshot the best entry before releasing the read lock
+	if bestIndex >= 0 {
+		bestEntry = c.entries[bestIndex]
+	}
+
+	c.mu.RUnlock()
+
+	if expiredCount > 0 {
+		logging.Debugf("InMemoryCache: excluded %d expired decision entries during search (TTL: %ds)",
+			expiredCount, c.ttlSeconds)
+		logging.LogEvent("cache_expired_entries_found", map[string]interface{}{
+			"backend":       "memory",
+			"expired_count": expiredCount,
+			"ttl_seconds":   c.ttlSeconds,
+		})
+	}
+
+	if bestIndex < 0 {
+		atomic.AddInt64(&c.missCount, 1)
+		logging.Debugf("InMemoryCache.FindSimilarDecisionWithThreshold: no decision entries found")
+		metrics.RecordCacheOperation("memory", "find_similar_decision", "miss", time.Since(start).Seconds())
+		metrics.RecordCacheMiss()
+		return nil, false, nil
+	}
+
+	if bestSimilarity >= threshold {
+		atomic.AddInt64(&c.hitCount, 1)
+
+		c.mu.Lock()
+		c.updateAccessInfo(bestIndex, bestEntry)
+		c.mu.Unlock()
+
+		logging.Debugf("InMemoryCache.FindSimilarDecisionWithThreshold: CACHE HIT - similarity=%.4f >= threshold=%.4f, decision=%s",
+			bestSimilarity, threshold, bestEntry.Decision.Name)
+		logging.LogEvent("cache_hit", map[string]interface{}{
+			"backend":    "memory",
+			"similarity": bestSimilarity,
+			"threshold":  threshold,
+			"model":      model,
+		})
+		metrics.RecordCacheOperation("memory", "find_similar_decision", "hit", time.Since(start).Seconds())
+		metrics.RecordCacheHit()
+		return bestEntry.Decision, true, nil
+	}
+
+	atomic.AddInt64(&c.missCount, 1)
+	logging.Debugf("InMemoryCache.FindSimilarDecisionWithThreshold: CACHE MISS - best_similarity=%.4f < threshold=%.4f (checked %d entries)",
+		bestSimilarity, threshold, entriesChecked)
+	logging.LogEvent("cache_miss", map[string]interface{}{
+		"backend":         "memory",
+		"best_similarity": bestSimilarity,
+		"threshold":       threshold,
+		"model":           model,
+		"entries_checked": entriesChecked,
+	})
+	metrics.RecordCacheOperation("memory", "find_similar_decision", "miss", time.Since(start).Seconds())
+	metrics.RecordCacheMiss()
 	return nil, false, nil
 }
 
@@ -1054,6 +1277,9 @@ func (c *InMemoryCache) rebuildHNSWIndex() {
 
 	// Rebuild by adding all entries
 	for i, entry := range c.entries {
+		if entry.Decision != nil && strings.TrimSpace(entry.Decision.Name) != "" {
+			continue
+		}
 		if len(entry.Embedding) > 0 {
 			c.hnswIndex.addNode(i, entry.Embedding, c.entries)
 		}
