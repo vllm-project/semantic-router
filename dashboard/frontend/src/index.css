@@ -283,3 +283,24 @@ body.playground-fullscreen main {
   background: rgba(118, 185, 0, 0.15);
   color: var(--color-primary);
 }
+
+/* ========================================
+   Browser Translation Prevention
+   ======================================== 
+   Use .notranslate class on elements that should not be translated
+   by browser extensions (Google Translate, Edge Translate, etc.)
+   
+   This prevents DOM manipulation conflicts with React during:
+   - Streaming/dynamic content updates
+   - Animations and transitions
+   - Real-time state changes
+*/
+.notranslate {
+  /* Standard attribute recognized by Google Translate */
+  translate: no;
+}
+
+/* Also add the HTML5 translate attribute via CSS for elements using this class */
+.notranslate[translate] {
+  translate: no;
+}

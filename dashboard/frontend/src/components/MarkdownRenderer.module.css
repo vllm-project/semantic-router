@@ -75,16 +75,55 @@
   overflow: hidden;
 }
 
-.codeLanguage {
+.codeHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 0.5rem 1rem;
   background-color: var(--color-bg-secondary);
   border-bottom: 1px solid var(--color-border);
+  min-height: 2rem;
+}
+
+.codeLanguage {
   font-size: 0.75rem;
   font-weight: 500;
   color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-family: var(--font-mono);
+}
+
+.copyButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background-color: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-tertiary, #6b7280);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  margin-left: auto;
+}
+
+.copyButton:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--color-text-secondary, #9ca3af);
+}
+
+.copyButton:active {
+  transform: scale(0.92);
+}
+
+.copyButton svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.5;
 }
 
 .codeBlock code {

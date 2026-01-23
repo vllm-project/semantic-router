@@ -192,6 +192,10 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	mux.HandleFunc("/api/tools-db", handlers.ToolsDBHandler(cfg.ConfigDir))
 	log.Printf("Tools DB API endpoint registered: /api/tools-db")
 
+	// Web Search endpoint for Playground tool execution
+	mux.HandleFunc("/api/tools/web-search", handlers.WebSearchHandler())
+	log.Printf("Web Search API endpoint registered: /api/tools/web-search")
+
 	// Status endpoint - shows service health status (aligns with vllm-sr status)
 	mux.HandleFunc("/api/status", handlers.StatusHandler(cfg.RouterAPIURL))
 	log.Printf("Status API endpoint registered: /api/status")
