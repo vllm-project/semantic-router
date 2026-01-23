@@ -84,34 +84,6 @@ jobs:
           flags: operator
           name: operator-coverage
 
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./deploy/operator
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Build operator binary
-        run: make build
-
-      - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: operator-binary
-          path: deploy/operator/bin/manager
-          retention-days: 7
-
   manifests:
     name: Verify Manifests
     runs-on: ubuntu-latest
@@ -171,70 +143,81 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate tags for operator
-        id: operator-tags
+      - name: Set local tags for integration tests
+        id: local-tags
         run: |
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            TAG="${{ github.sha }}"
-            # For main branch: use ghcr.io tags
-            TAGS="ghcr.io/${REPOSITORY_OWNER_LOWER}/semantic-router/operator:${TAG},ghcr.io/${REPOSITORY_OWNER_LOWER}/semantic-router/operator:latest"
-          else
-            TAG="pr-${{ github.event.number }}"
-            # For PRs: use local test tag for integration tests
-            TAGS="semantic-router-operator:test"
-          fi
+          echo "operator=semantic-router-operator:test" >> $GITHUB_OUTPUT
+          echo "bundle=semantic-router-operator-bundle:test" >> $GITHUB_OUTPUT
 
+      - name: Generate remote tags for operator
+        id: operator-remote-tags
+        if: github.event_name != 'pull_request'
+        run: |
+          TAG="${{ github.sha }}"
+          TAGS="ghcr.io/${REPOSITORY_OWNER_LOWER}/semantic-router/operator:${TAG},ghcr.io/${REPOSITORY_OWNER_LOWER}/semantic-router/operator:latest"
           echo "tags=${TAGS}" >> $GITHUB_OUTPUT
 
-      - name: Generate tags for bundle
-        id: bundle-tags
+      - name: Generate remote tags for bundle
+        id: bundle-remote-tags
+        if: github.event_name != 'pull_request'
         run: |
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            TAG="${{ github.sha }}"
-            # For main branch: use ghcr.io tags
-            TAGS="ghcr.io/${REPOSITORY_OWNER_LOWER}/semantic-router/operator-bundle:${TAG},ghcr.io/${REPOSITORY_OWNER_LOWER}/semantic-router/operator-bundle:latest"
-          else
-            TAG="pr-${{ github.event.number }}"
-            # For PRs: use local test tag for validation
-            TAGS="semantic-router-operator-bundle:test"
-          fi
-
+          TAG="${{ github.sha }}"
+          TAGS="ghcr.io/${REPOSITORY_OWNER_LOWER}/semantic-router/operator-bundle:${TAG},ghcr.io/${REPOSITORY_OWNER_LOWER}/semantic-router/operator-bundle:latest"
           echo "tags=${TAGS}" >> $GITHUB_OUTPUT
 
-      - name: Build and push operator image
+      - name: Build operator image (local for tests)
         uses: docker/build-push-action@v5
         with:
           context: ./deploy/operator
           file: ./deploy/operator/Dockerfile
-          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
-          push: ${{ github.event_name != 'pull_request' }}
-          load: ${{ github.event_name == 'pull_request' }}
-          tags: ${{ steps.operator-tags.outputs.tags }}
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: ${{ steps.local-tags.outputs.operator }}
           cache-from: type=gha,scope=operator
           cache-to: type=gha,mode=max,scope=operator
 
-      - name: Build and push bundle image
+      - name: Build and push operator image (multi-arch to registry)
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./deploy/operator
+          file: ./deploy/operator/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.operator-remote-tags.outputs.tags }}
+          cache-from: type=gha,scope=operator
+
+      - name: Build bundle image (local for tests)
         uses: docker/build-push-action@v5
         with:
           context: ./deploy/operator
           file: ./deploy/operator/bundle/Dockerfile
-          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
-          push: ${{ github.event_name != 'pull_request' }}
-          load: ${{ github.event_name == 'pull_request' }}
-          tags: ${{ steps.bundle-tags.outputs.tags }}
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: ${{ steps.local-tags.outputs.bundle }}
           cache-from: type=gha,scope=operator-bundle
           cache-to: type=gha,mode=max,scope=operator-bundle
 
+      - name: Build and push bundle image (multi-arch to registry)
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./deploy/operator
+          file: ./deploy/operator/bundle/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.bundle-remote-tags.outputs.tags }}
+          cache-from: type=gha,scope=operator-bundle
+
       - name: Save operator image for integration tests
-        if: github.event_name == 'pull_request'
-        run: docker save -o /tmp/operator-image.tar semantic-router-operator:test
+        run: docker save -o /tmp/operator-image.tar ${{ steps.local-tags.outputs.operator }}
 
       - name: Save bundle image for validation
-        if: github.event_name == 'pull_request'
-        run: docker save -o /tmp/bundle-image.tar semantic-router-operator-bundle:test
+        run: docker save -o /tmp/bundle-image.tar ${{ steps.local-tags.outputs.bundle }}
 
       - name: Upload operator image artifact
-        if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: operator-image
@@ -242,7 +225,6 @@ jobs:
           retention-days: 1
 
       - name: Upload bundle image artifact
-        if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: bundle-image
@@ -272,10 +254,31 @@ jobs:
         run: operator-sdk bundle validate ./bundle
 
   integration-test:
-    name: Integration Test (kind)
+    name: Integration Test (${{ matrix.cache-backend }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [build, docker-build]
+    needs: [docker-build]
+    strategy:
+      fail-fast: false
+      matrix:
+        cache-backend: [memory, redis, milvus, hybrid]
+        include:
+          - cache-backend: memory
+            deploy-redis: false
+            deploy-milvus: false
+            router-name: test-router
+          - cache-backend: redis
+            deploy-redis: true
+            deploy-milvus: false
+            router-name: test-router-redis
+          - cache-backend: milvus
+            deploy-redis: false
+            deploy-milvus: true
+            router-name: test-router-milvus
+          - cache-backend: hybrid
+            deploy-redis: false
+            deploy-milvus: true
+            router-name: test-router-hybrid
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -299,7 +302,7 @@ jobs:
 
       - name: Create kind cluster
         run: |
-          cat <<EOF | kind create cluster --name operator-test --image kindest/node:v1.33.7@sha256:d26ef333bdb2cbe9862a0f7c3803ecc7b4303d8cea8e814b481b09949d353040 --config=-
+          cat <<EOF | kind create cluster --name operator-test-${{ matrix.cache-backend }} --image kindest/node:v1.33.7@sha256:d26ef333bdb2cbe9862a0f7c3803ecc7b4303d8cea8e814b481b09949d353040 --config=-
           kind: Cluster
           apiVersion: kind.x-k8s.io/v1alpha4
           nodes:
@@ -315,14 +318,143 @@ jobs:
           kubectl wait --for condition=established --timeout=60s crd/gateways.gateway.networking.k8s.io
           kubectl wait --for condition=established --timeout=60s crd/httproutes.gateway.networking.k8s.io
 
-      - name: Download operator binary artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: operator-binary
-          path: deploy/operator/bin
+      - name: Deploy Redis
+        if: matrix.deploy-redis == true
+        run: |
+          echo "Deploying Redis..."
+          kubectl create namespace cache-backends || true
 
-      - name: Make operator binary executable
-        run: chmod +x deploy/operator/bin/manager
+          cat <<EOF | kubectl apply -f -
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: redis
+            namespace: cache-backends
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: redis
+            template:
+              metadata:
+                labels:
+                  app: redis
+              spec:
+                containers:
+                - name: redis
+                  image: redis/redis-stack-server:latest
+                  ports:
+                  - containerPort: 6379
+                    name: redis
+                  resources:
+                    requests:
+                      cpu: 100m
+                      memory: 256Mi
+                    limits:
+                      cpu: 500m
+                      memory: 512Mi
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: redis
+            namespace: cache-backends
+          spec:
+            selector:
+              app: redis
+            ports:
+            - port: 6379
+              targetPort: 6379
+              name: redis
+          EOF
+
+          kubectl wait --for=condition=available --timeout=120s deployment/redis -n cache-backends
+          echo "Redis deployed successfully"
+
+      - name: Deploy Milvus
+        if: matrix.deploy-milvus == true
+        run: |
+          echo "Deploying Milvus Standalone..."
+          kubectl create namespace cache-backends || true
+
+          cat <<EOF | kubectl apply -f -
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: milvus-standalone
+            namespace: cache-backends
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: milvus-standalone
+            template:
+              metadata:
+                labels:
+                  app: milvus-standalone
+              spec:
+                containers:
+                - name: milvus
+                  image: milvusdb/milvus:v2.4.0
+                  command:
+                  - milvus
+                  - run
+                  - standalone
+                  env:
+                  - name: ETCD_USE_EMBED
+                    value: "true"
+                  - name: COMMON_STORAGETYPE
+                    value: local
+                  ports:
+                  - containerPort: 19530
+                    name: milvus
+                  - containerPort: 9091
+                    name: metrics
+                  resources:
+                    requests:
+                      cpu: 500m
+                      memory: 1Gi
+                    limits:
+                      cpu: 2000m
+                      memory: 2Gi
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: milvus-standalone
+            namespace: cache-backends
+          spec:
+            selector:
+              app: milvus-standalone
+            ports:
+            - port: 19530
+              targetPort: 19530
+              name: milvus
+            - port: 9091
+              targetPort: 9091
+              name: metrics
+          EOF
+
+          kubectl wait --for=condition=available --timeout=180s deployment/milvus-standalone -n cache-backends
+          echo "Milvus deployed successfully"
+          sleep 10
+
+      - name: Create cache credentials secrets
+        if: matrix.deploy-redis == true || matrix.deploy-milvus == true
+        run: |
+          kubectl create namespace semantic-router-test || true
+
+          if [ "${{ matrix.deploy-redis }}" == "true" ]; then
+            kubectl create secret generic redis-credentials \
+              --from-literal=password=testpassword \
+              -n semantic-router-test
+          fi
+
+          if [ "${{ matrix.deploy-milvus }}" == "true" ]; then
+            kubectl create secret generic milvus-credentials \
+              --from-literal=password=Milvus \
+              -n semantic-router-test
+          fi
 
       - name: Download operator image artifact
         uses: actions/download-artifact@v4
@@ -333,8 +465,28 @@ jobs:
       - name: Load operator image into Docker
         run: docker load --input /tmp/operator-image.tar
 
+      - name: Verify operator image loaded
+        run: |
+          echo "Verifying operator image is available..."
+          docker images | grep semantic-router-operator || {
+            echo "ERROR: semantic-router-operator:test image not found!"
+            echo "Available images:"
+            docker images
+            exit 1
+          }
+
       - name: Load operator image into kind
-        run: kind load docker-image semantic-router-operator:test --name operator-test
+        run: kind load docker-image semantic-router-operator:test --name operator-test-${{ matrix.cache-backend }}
+
+      - name: Verify operator image in kind
+        run: |
+          echo "Verifying operator image is available in kind cluster..."
+          docker exec operator-test-${{ matrix.cache-backend }}-control-plane crictl images | grep semantic-router-operator || {
+            echo "ERROR: semantic-router-operator:test image not found in kind!"
+            echo "Available images in kind:"
+            docker exec operator-test-${{ matrix.cache-backend }}-control-plane crictl images
+            exit 1
+          }
 
       - name: Install CRDs
         run: |
@@ -396,15 +548,192 @@ jobs:
 
       - name: Create test namespace
         run: |
-          kubectl create namespace semantic-router-test
+          kubectl create namespace semantic-router-test || true
 
       - name: Create test SemanticRouter CR
         run: |
+          # Generate base CR configuration
+          CACHE_CONFIG=""
+
+          case "${{ matrix.cache-backend }}" in
+            memory)
+              CACHE_CONFIG='
+              semantic_cache:
+                enabled: true
+                backend_type: "memory"
+                max_entries: 100'
+              ;;
+            redis)
+              CACHE_CONFIG='
+              semantic_cache:
+                enabled: true
+                backend_type: "redis"
+                similarity_threshold: "0.85"
+                ttl_seconds: 3600
+                embedding_model: "bert"
+                redis:
+                  connection:
+                    host: redis.cache-backends.svc.cluster.local
+                    port: 6379
+                    database: 0
+                    password_secret_ref:
+                      name: redis-credentials
+                      key: password
+                    timeout: 30
+                    tls:
+                      enabled: false
+                  index:
+                    name: semantic_cache_idx
+                    prefix: "cache:"
+                    vector_field:
+                      name: embedding
+                      dimension: 384
+                      metric_type: COSINE
+                    index_type: HNSW
+                    params:
+                      M: 16
+                      efConstruction: 64
+                  search:
+                    topk: 1
+                  development:
+                    drop_index_on_startup: false
+                    auto_create_index: true
+                    verbose_errors: true'
+              ;;
+            milvus)
+              CACHE_CONFIG='
+              semantic_cache:
+                enabled: true
+                backend_type: "milvus"
+                similarity_threshold: "0.90"
+                ttl_seconds: 7200
+                embedding_model: "bert"
+                milvus:
+                  connection:
+                    host: milvus-standalone.cache-backends.svc.cluster.local
+                    port: 19530
+                    database: semantic_router_cache
+                    timeout: 30
+                    auth:
+                      enabled: true
+                      username: root
+                      password_secret_ref:
+                        name: milvus-credentials
+                        key: password
+                    tls:
+                      enabled: false
+                  collection:
+                    name: semantic_cache
+                    description: "Semantic cache for LLM responses"
+                    vector_field:
+                      name: embedding
+                      dimension: 384
+                      metric_type: IP
+                    index:
+                      type: HNSW
+                      params:
+                        M: 16
+                        efConstruction: 64
+                  search:
+                    params:
+                      ef: 64
+                    topk: 10
+                    consistency_level: Session
+                  performance:
+                    connection_pool:
+                      max_connections: 10
+                      max_idle_connections: 5
+                      acquire_timeout: 30
+                    batch:
+                      insert_batch_size: 100
+                      timeout: 60
+                  data_management:
+                    ttl:
+                      enabled: true
+                      timestamp_field: created_at
+                      cleanup_interval: 3600
+                    compaction:
+                      enabled: false
+                      interval: 86400
+                  development:
+                    drop_collection_on_startup: false
+                    auto_create_collection: true
+                    verbose_errors: true'
+              ;;
+            hybrid)
+              CACHE_CONFIG='
+              semantic_cache:
+                enabled: true
+                backend_type: "hybrid"
+                similarity_threshold: "0.85"
+                ttl_seconds: 3600
+                max_entries: 5000
+                eviction_policy: lru
+                embedding_model: "bert"
+                hnsw:
+                  use_hnsw: true
+                  hnsw_m: 32
+                  hnsw_ef_construction: 128
+                  max_memory_entries: 5000
+                milvus:
+                  connection:
+                    host: milvus-standalone.cache-backends.svc.cluster.local
+                    port: 19530
+                    database: semantic_router_cache
+                    timeout: 30
+                    auth:
+                      enabled: true
+                      username: root
+                      password_secret_ref:
+                        name: milvus-credentials
+                        key: password
+                    tls:
+                      enabled: false
+                  collection:
+                    name: semantic_cache_hybrid
+                    description: "Hybrid cache backend storage"
+                    vector_field:
+                      name: embedding
+                      dimension: 384
+                      metric_type: IP
+                    index:
+                      type: HNSW
+                      params:
+                        M: 32
+                        efConstruction: 128
+                  search:
+                    params:
+                      ef: 128
+                    topk: 20
+                    consistency_level: Eventually
+                  performance:
+                    connection_pool:
+                      max_connections: 20
+                      max_idle_connections: 10
+                      acquire_timeout: 30
+                    batch:
+                      insert_batch_size: 200
+                      timeout: 60
+                  data_management:
+                    ttl:
+                      enabled: true
+                      timestamp_field: created_at
+                      cleanup_interval: 1800
+                    compaction:
+                      enabled: true
+                      interval: 43200
+                  development:
+                    drop_collection_on_startup: false
+                    auto_create_collection: true
+                    verbose_errors: false'
+              ;;
+          esac
+
           cat <<EOF | kubectl apply -f -
           apiVersion: vllm.ai/v1alpha1
           kind: SemanticRouter
           metadata:
-            name: test-router
+            name: ${{ matrix.router-name }}
             namespace: semantic-router-test
           spec:
             replicas: 1
@@ -434,16 +763,12 @@ jobs:
               periodSeconds: 10
               timeoutSeconds: 5
               failureThreshold: 60
-            # Minimal config for testing - avoids downloading large models
             config:
               bert_model:
                 model_id: "models/mom-embedding-light"
                 threshold: "0.6"
                 use_cpu: true
-              semantic_cache:
-                enabled: true
-                backend_type: "memory"
-                max_entries: 100
+          ${CACHE_CONFIG}
               tools:
                 enabled: false
               prompt_guard:
@@ -463,28 +788,13 @@ jobs:
               observability:
                 tracing:
                   enabled: false
-            toolsDb:
-            - tool:
-                type: "function"
-                function:
-                  name: "test_tool"
-                  description: "Test tool for CI"
-                  parameters:
-                    type: "object"
-                    properties:
-                      input:
-                        type: "string"
-                    required: ["input"]
-              description: "Test tool"
-              category: "test"
-              tags: ["test"]
           EOF
 
       - name: Wait for SemanticRouter deployment to be created
         run: |
           echo "Waiting for deployment to be created..."
           for i in {1..30}; do
-            if kubectl get deployment test-router -n semantic-router-test 2>/dev/null; then
+            if kubectl get deployment ${{ matrix.router-name }} -n semantic-router-test 2>/dev/null; then
               echo "Deployment found!"
               break
             fi
@@ -495,10 +805,10 @@ jobs:
       - name: Verify resources created
         run: |
           echo "=== Checking Deployment ==="
-          kubectl get deployment test-router -n semantic-router-test -o yaml || true
+          kubectl get deployment ${{ matrix.router-name }} -n semantic-router-test -o yaml || true
 
           echo "=== Checking Service ==="
-          kubectl get service test-router -n semantic-router-test || true
+          kubectl get service ${{ matrix.router-name }} -n semantic-router-test || true
 
           echo "=== Checking ConfigMap ==="
           kubectl get configmap -n semantic-router-test || true
@@ -513,7 +823,7 @@ jobs:
         run: |
           echo "Waiting for pod to be created..."
           for i in {1..60}; do
-            POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=test-router -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+            POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=${{ matrix.router-name }} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
             if [ -n "$POD_NAME" ]; then
               echo "Pod $POD_NAME found!"
               break
@@ -526,7 +836,7 @@ jobs:
         run: |
           echo "Waiting for pod to be ready (downloading models may take several minutes)..."
           kubectl wait --for=condition=ready pod \
-            -l app.kubernetes.io/instance=test-router \
+            -l app.kubernetes.io/instance=${{ matrix.router-name }} \
             -n semantic-router-test \
             --timeout=300s || {
               echo "Pod failed to become ready within 5 minutes"
@@ -535,7 +845,7 @@ jobs:
               echo "=== Pod Events ==="
               kubectl get events -n semantic-router-test --sort-by='.lastTimestamp'
               echo "=== Pod Logs ==="
-              POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=test-router -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+              POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=${{ matrix.router-name }} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
               if [ -n "$POD_NAME" ]; then
                 kubectl logs $POD_NAME -n semantic-router-test --all-containers --tail=100 || true
               fi
@@ -554,7 +864,7 @@ jobs:
       - name: Get semantic router logs
         if: always()
         run: |
-          POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=test-router -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+          POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=${{ matrix.router-name }} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
           if [ -n "$POD_NAME" ]; then
             echo "=== Semantic Router Pod Logs ==="
             kubectl logs $POD_NAME -n semantic-router-test --all-containers --tail=200 || true
@@ -565,10 +875,10 @@ jobs:
       - name: Verify deployment reconciliation
         run: |
           echo "=== Checking SemanticRouter Status ==="
-          kubectl get semanticrouter test-router -n semantic-router-test -o yaml || true
+          kubectl get semanticrouter ${{ matrix.router-name }} -n semantic-router-test -o yaml || true
 
           echo "=== Verifying Deployment Exists ==="
-          if kubectl get deployment test-router -n semantic-router-test; then
+          if kubectl get deployment ${{ matrix.router-name }} -n semantic-router-test; then
             echo "✓ Deployment successfully created by operator"
           else
             echo "✗ Deployment not found"
@@ -576,7 +886,7 @@ jobs:
           fi
 
           echo "=== Verifying Service Exists ==="
-          if kubectl get service test-router -n semantic-router-test; then
+          if kubectl get service ${{ matrix.router-name }} -n semantic-router-test; then
             echo "✓ Service successfully created by operator"
           else
             echo "✗ Service not found"
@@ -586,7 +896,7 @@ jobs:
       - name: Test service connectivity
         run: |
           echo "=== Testing Service Endpoints ==="
-          kubectl get endpoints -n semantic-router-test test-router || true
+          kubectl get endpoints -n semantic-router-test ${{ matrix.router-name }} || true
 
       - name: Upload operator logs
         if: always()
@@ -603,7 +913,7 @@ jobs:
               --all-containers > /tmp/operator-logs/operator.log || true
           fi
 
-          POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=test-router -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+          POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=${{ matrix.router-name }} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
           if [ -n "$POD_NAME" ]; then
             kubectl logs $POD_NAME -n semantic-router-test --all-containers > /tmp/operator-logs/semantic-router.log || true
           fi
@@ -614,11 +924,11 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: operator-integration-logs
+          name: operator-integration-logs-${{ matrix.cache-backend }}
           path: /tmp/operator-logs/
           retention-days: 7
 
       - name: Clean up
         if: always()
         run: |
-          kind delete cluster --name operator-test || true
+          kind delete cluster --name operator-test-${{ matrix.cache-backend }} || true

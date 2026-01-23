@@ -82,6 +82,15 @@ kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/
 
 # Llama Stack backend discovery
 kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_llamastack.yaml
+
+# Redis cache backend for production caching
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_redis_cache.yaml
+
+# Milvus cache backend for large-scale deployments
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_milvus_cache.yaml
+
+# Hybrid cache backend for optimal performance
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_hybrid_cache.yaml
 ```
 
 #### Custom Configuration

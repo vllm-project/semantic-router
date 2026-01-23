@@ -68,6 +68,7 @@ type SemanticRouterReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=autoscaling,resources=horizontalpodautoscalers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
@@ -307,6 +308,16 @@ func (r *SemanticRouterReconciler) reconcileServiceAccount(ctx context.Context, 
 }
 
 func (r *SemanticRouterReconciler) reconcileConfigMap(ctx context.Context, sr *vllmv1alpha1.SemanticRouter) error {
+	// Validate cache configuration before proceeding
+	if err := validateSemanticCacheConfig(sr.Spec.Config.SemanticCache); err != nil {
+		return fmt.Errorf("invalid semantic cache configuration: %w", err)
+	}
+
+	// Resolve secrets before generating config
+	if err := r.resolveSemanticCacheSecrets(ctx, sr); err != nil {
+		return fmt.Errorf("failed to resolve cache secrets: %w", err)
+	}
+
 	configData, err := r.generateConfigYAML(ctx, sr)
 	if err != nil {
 		return err

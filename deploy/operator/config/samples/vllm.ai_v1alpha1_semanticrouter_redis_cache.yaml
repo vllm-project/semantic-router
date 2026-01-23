@@ -1,0 +1,109 @@
+---
+# SemanticRouter with Redis Cache Backend
+# This example demonstrates how to configure the semantic router to use Redis for caching
+# Redis provides high-performance, distributed caching with vector search capabilities
+apiVersion: vllm.ai/v1alpha1
+kind: SemanticRouter
+metadata:
+  name: semantic-router-redis
+  namespace: default
+spec:
+  replicas: 1
+
+  # Configure vLLM backend endpoints
+  vllmEndpoints:
+    - name: qwen-model
+      model: qwen3-8b
+      reasoningFamily: qwen3
+      backend:
+        type: service
+        service:
+          name: vllm-qwen
+          port: 8000
+
+  # Persistence for model cache
+  persistence:
+    enabled: true
+    size: 10Gi
+
+  # Basic resource limits
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 2Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+
+  # Semantic router configuration
+  config:
+    # BERT model for embeddings (required for semantic cache)
+    bert_model:
+      model_id: models/mom-embedding-light
+      threshold: "0.6"
+      use_cpu: true
+
+    # Semantic cache with Redis backend
+    semantic_cache:
+      enabled: true
+      backend_type: redis
+      similarity_threshold: "0.85"
+      ttl_seconds: 3600
+      embedding_model: bert
+
+      # Redis configuration
+      # NOTE: Update host to match your Redis deployment namespace
+      redis:
+        connection:
+          host: redis.cache-backends.svc.cluster.local
+          port: 6379
+          database: 0
+          # Option 1: Direct password (not recommended for production)
+          # password: "mypassword"
+          # Option 2: Reference to Kubernetes Secret (recommended)
+          password_secret_ref:
+            name: redis-credentials
+            key: password
+          timeout: 30
+          tls:
+            enabled: false
+
+        index:
+          name: semantic_cache_idx
+          prefix: "cache:"
+          vector_field:
+            name: embedding
+            dimension: 384  # For BERT embeddings
+            metric_type: COSINE
+          index_type: HNSW
+          params:
+            M: 16
+            efConstruction: 64
+
+        search:
+          topk: 1
+
+        development:
+          drop_index_on_startup: false
+          auto_create_index: true
+          verbose_errors: true
+
+    # Disable features that require additional models for this example
+    # Enable these features in production with proper model configuration
+    prompt_guard:
+      enabled: false
+
+    tools:
+      enabled: false
+
+---
+# Secret for Redis password (create separately)
+# In production, use a secret management system like External Secrets Operator
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redis-credentials
+  namespace: default
+type: Opaque
+stringData:
+  password: "your-redis-password-here"
