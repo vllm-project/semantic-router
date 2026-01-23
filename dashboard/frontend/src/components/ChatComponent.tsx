@@ -507,9 +507,9 @@ const ChatComponent = ({
           <div className={styles.emptyState}>
             <TypingGreeting lines={[
               "Hi there, I am MoM.",
-              "The System-Level Intelligence for LLMs.",
+              "The System Intelligence for LLMs.",
               "The World's First Model-of-Models.",
-              "How can I help you today? 👋"
+              "How can I help you today?"
             ]} />
           </div>
         ) : (
