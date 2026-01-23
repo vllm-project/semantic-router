@@ -622,12 +622,18 @@ body.playground-fullscreen .container {
 
   .input,
   .input:focus {
-    padding: 0.625rem 1rem;
-    font-size: 0.875rem;
+    padding: 0.875rem 1rem;
+    font-size: 16px; /* Prevent mobile browser auto-zoom */
     min-height: unset;
     box-shadow: none !important;
     border: none !important;
     outline: none !important;
+  }
+
+  .sendButton {
+    width: 36px;
+    height: 36px;
+    margin-right: 0.375rem;
   }
 
   .inputActionsRow {
@@ -692,20 +698,20 @@ body.playground-fullscreen .container {
   }
 
   .inputContainer {
-    padding: 0.375rem 0.5rem;
+    padding: 0.5rem;
   }
 
   .inputWrapper {
-    padding: 0.125rem 0.125rem 0.125rem 0;
+    padding: 0.25rem 0.25rem 0.25rem 0;
   }
 
   .input {
-    padding: 0.5rem 0.875rem;
-    font-size: 0.8125rem;
+    padding: 0.75rem 1rem;
+    font-size: 16px; /* Prevent mobile browser auto-zoom */
   }
 
   .sendButton {
-    width: 30px;
-    height: 30px;
+    width: 34px;
+    height: 34px;
   }
 }
