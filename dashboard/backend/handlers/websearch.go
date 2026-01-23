@@ -6,6 +6,7 @@ import (
 	"html"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -36,10 +37,10 @@ var errorMessages = map[SearchErrorCode]string{
 	ErrCodeInvalidRequest: "Invalid request body / 无效的请求体",
 	ErrCodeEmptyQuery:     "Search query is required / 搜索查询不能为空",
 	ErrCodeQueryTooLong:   "Query too long (max 500 chars) / 查询过长（最多500字符）",
-	ErrCodeRateLimited:    "Rate limit exceeded, please try again later / 请求过于频繁，请稍后重试",
+	ErrCodeRateLimited:    "Search service is busy, please try again in a moment / 搜索服务繁忙，请稍后再试",
 	ErrCodeSearchFailed:   "Search failed / 搜索失败",
-	ErrCodeTimeout:        "Search timeout / 搜索超时",
-	ErrCodeUpstreamError:  "Search service unavailable / 搜索服务不可用",
+	ErrCodeTimeout:        "Search timeout, please try again / 搜索超时，请重试",
+	ErrCodeUpstreamError:  "Search service temporarily unavailable / 搜索服务暂时不可用",
 	ErrCodeInvalidURL:     "Invalid URL detected / 检测到无效URL",
 }
 
@@ -48,14 +49,19 @@ var errorMessages = map[SearchErrorCode]string{
 // ========================
 
 const (
-	maxQueryLength    = 500 // Maximum query length
-	maxResultsLimit   = 10  // Maximum results per request
-	defaultNumResults = 5   // Default number of results
-	httpTimeout       = 10 * time.Second
-	maxRetries        = 3 // Retry attempts for transient failures
-	retryBaseDelay    = 500 * time.Millisecond
-	rateLimitWindow   = time.Minute // Rate limit window
-	rateLimitMaxReqs  = 30          // Max requests per window per IP
+	maxQueryLength     = 500 // Maximum query length
+	maxResultsLimit    = 10  // Maximum results per request
+	defaultNumResults  = 5   // Default number of results
+	httpTimeout        = 15 * time.Second
+	maxRetries         = 3 // Retry attempts for transient failures
+	retryBaseDelay     = 1 * time.Second
+	rateLimitWindow    = time.Minute // Rate limit window
+	rateLimitMaxReqs   = 5           // Max requests per window per IP (strict for public service)
+	globalRateLimit    = 30          // Global max requests per window (0.5 req/sec to avoid ban)
+	maxConcurrent      = 2           // Max concurrent outgoing requests (very conservative)
+	maxTrackedIPs      = 10000       // Max IPs to track (memory protection)
+	minRequestInterval = 1 * time.Second
+	maxRequestInterval = 3 * time.Second
 )
 
 // ========================
@@ -80,6 +86,27 @@ var (
 	// Pattern for whitespace normalization
 	whitespacePattern = regexp.MustCompile(`\s+`)
 )
+
+// User-Agent rotation to reduce detection risk
+var userAgents = []string{
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
+	"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0",
+}
+
+// getRandomUserAgent returns a random User-Agent string
+func getRandomUserAgent() string {
+	return userAgents[rand.Intn(len(userAgents))]
+}
+
+// randomDelay adds a random delay between min and max intervals to avoid detection
+func randomDelay() {
+	delay := minRequestInterval + time.Duration(rand.Int63n(int64(maxRequestInterval-minRequestInterval)))
+	time.Sleep(delay)
+}
 
 // ========================
 // HTTP Client pool (connection reuse)
@@ -108,27 +135,51 @@ func getHTTPClient() *http.Client {
 }
 
 // ========================
-// Rate limiter
+// Rate limiter with global limit
 // ========================
 
 type rateLimiter struct {
-	mu       sync.RWMutex
-	requests map[string][]time.Time
+	mu         sync.RWMutex
+	requests   map[string][]time.Time
+	globalReqs []time.Time // Track all requests globally
 }
 
 var globalRateLimiter = &rateLimiter{
-	requests: make(map[string][]time.Time),
+	requests:   make(map[string][]time.Time),
+	globalReqs: make([]time.Time, 0),
 }
 
+// Semaphore for concurrent request limiting
+var concurrentSem = make(chan struct{}, maxConcurrent)
+
 // isAllowed checks if a request from the given IP is allowed
-func (rl *rateLimiter) isAllowed(ip string) bool {
+func (rl *rateLimiter) isAllowed(ip string) (bool, SearchErrorCode) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
 	now := time.Now()
 	windowStart := now.Add(-rateLimitWindow)
 
-	// Clean old entries and count recent requests
+	// Check global rate limit first
+	var recentGlobal []time.Time
+	for _, t := range rl.globalReqs {
+		if t.After(windowStart) {
+			recentGlobal = append(recentGlobal, t)
+		}
+	}
+	if len(recentGlobal) >= globalRateLimit {
+		rl.globalReqs = recentGlobal
+		return false, ErrCodeRateLimited
+	}
+
+	// Memory protection: limit tracked IPs
+	if len(rl.requests) >= maxTrackedIPs {
+		if _, exists := rl.requests[ip]; !exists {
+			return false, ErrCodeRateLimited
+		}
+	}
+
+	// Check per-IP rate limit
 	var recentReqs []time.Time
 	for _, t := range rl.requests[ip] {
 		if t.After(windowStart) {
@@ -138,11 +189,14 @@ func (rl *rateLimiter) isAllowed(ip string) bool {
 
 	if len(recentReqs) >= rateLimitMaxReqs {
 		rl.requests[ip] = recentReqs
-		return false
+		return false, ErrCodeRateLimited
 	}
 
+	// Record the request
 	rl.requests[ip] = append(recentReqs, now)
-	return true
+	recentGlobal = append(recentGlobal, now)
+	rl.globalReqs = recentGlobal
+	return true, ""
 }
 
 // cleanup removes stale entries (call periodically)
@@ -151,6 +205,8 @@ func (rl *rateLimiter) cleanup() {
 	defer rl.mu.Unlock()
 
 	windowStart := time.Now().Add(-rateLimitWindow)
+
+	// Clean per-IP entries
 	for ip, times := range rl.requests {
 		var valid []time.Time
 		for _, t := range times {
@@ -164,6 +220,23 @@ func (rl *rateLimiter) cleanup() {
 			rl.requests[ip] = valid
 		}
 	}
+
+	// Clean global entries
+	var validGlobal []time.Time
+	for _, t := range rl.globalReqs {
+		if t.After(windowStart) {
+			validGlobal = append(validGlobal, t)
+		}
+	}
+	rl.globalReqs = validGlobal
+}
+
+// getStats returns current rate limiter statistics (for monitoring/debugging)
+// nolint:unused // Reserved for future monitoring endpoint
+func (rl *rateLimiter) getStats() (trackedIPs int, globalReqCount int) {
+	rl.mu.RLock()
+	defer rl.mu.RUnlock()
+	return len(rl.requests), len(rl.globalReqs)
 }
 
 // Start cleanup goroutine
@@ -279,8 +352,20 @@ func searchDuckDuckGo(query string, numResults int) ([]SearchResult, error) {
 	return nil, lastErr
 }
 
-// doSearchRequest performs a single search request
+// doSearchRequest performs a single search request with concurrency control
 func doSearchRequest(query string, numResults int) ([]SearchResult, error) {
+	// Acquire semaphore to limit concurrent outgoing requests
+	select {
+	case concurrentSem <- struct{}{}:
+		defer func() { <-concurrentSem }()
+	default:
+		// If semaphore is full, return rate limit error immediately
+		return nil, fmt.Errorf("%s: too many concurrent requests", ErrCodeRateLimited)
+	}
+
+	// Add random delay to avoid detection (1-3 seconds)
+	randomDelay()
+
 	// Use DuckDuckGo HTML interface
 	searchURL := fmt.Sprintf("https://html.duckduckgo.com/html/?q=%s", url.QueryEscape(query))
 
@@ -291,10 +376,14 @@ func doSearchRequest(query string, numResults int) ([]SearchResult, error) {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set headers to mimic a browser request
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
+	// Set headers to mimic a browser request with rotating User-Agent
+	req.Header.Set("User-Agent", getRandomUserAgent())
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7")
+	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
+	req.Header.Set("DNT", "1")
+	req.Header.Set("Connection", "keep-alive")
+	req.Header.Set("Upgrade-Insecure-Requests", "1")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -303,7 +392,7 @@ func doSearchRequest(query string, numResults int) ([]SearchResult, error) {
 		}
 		return nil, fmt.Errorf("%s: %w", ErrCodeSearchFailed, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("%s: status %d", ErrCodeUpstreamError, resp.StatusCode)
@@ -541,11 +630,12 @@ func WebSearchHandler() http.HandlerFunc {
 			return
 		}
 
-		// Rate limiting check
+		// Rate limiting check (per-IP + global)
 		clientIP := getClientIP(r)
-		if !globalRateLimiter.isAllowed(clientIP) {
-			log.Printf("Rate limit exceeded for IP: %s", clientIP)
-			sendErrorResponse(w, "", ErrCodeRateLimited, http.StatusTooManyRequests)
+		allowed, errCode := globalRateLimiter.isAllowed(clientIP)
+		if !allowed {
+			log.Printf("Rate limit exceeded for IP: %s (code: %s)", clientIP, errCode)
+			sendErrorResponse(w, "", errCode, http.StatusTooManyRequests)
 			return
 		}
 
