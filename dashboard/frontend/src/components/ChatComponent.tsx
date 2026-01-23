@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, memo } from 'react'
 import styles from './ChatComponent.module.css'
 import HeaderDisplay from './HeaderDisplay'
 import MarkdownRenderer from './MarkdownRenderer'
@@ -6,8 +6,18 @@ import ThinkingAnimation from './ThinkingAnimation'
 import HeaderReveal from './HeaderReveal'
 import ThinkingBlock from './ThinkingBlock'
 
+// Greeting lines - defined outside component to maintain stable reference
+const GREETING_LINES = [
+  "Hi there, I am MoM.",
+  "The System Intelligence for LLMs.",
+  "The World's First Model-of-Models.",
+  "Open Source for Everyone.",
+  "How can I help you today?"
+]
+
 // Typing effect component for greeting with multiple lines
-const TypingGreeting = ({ lines }: { lines: string[] }) => {
+// Memoized to prevent re-renders when parent state changes (e.g., input typing)
+const TypingGreeting = memo(({ lines }: { lines: string[] }) => {
   const [currentLineIndex, setCurrentLineIndex] = useState(0)
   const [displayedText, setDisplayedText] = useState('')
   const [isTyping, setIsTyping] = useState(true)
@@ -47,7 +57,7 @@ const TypingGreeting = ({ lines }: { lines: string[] }) => {
       </h2>
     </div>
   )
-}
+})
 
 // Choice represents a single model's response in ratings mode
 interface Choice {
@@ -505,12 +515,7 @@ const ChatComponent = ({
       <div className={styles.messagesContainer}>
         {messages.length === 0 ? (
           <div className={styles.emptyState}>
-            <TypingGreeting lines={[
-              "Hi there, I am MoM.",
-              "The System Intelligence for LLMs.",
-              "The World's First Model-of-Models.",
-              "How can I help you today?"
-            ]} />
+            <TypingGreeting lines={GREETING_LINES} />
           </div>
         ) : (
           <div className={styles.messages}>
