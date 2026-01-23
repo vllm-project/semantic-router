@@ -1,5 +1,6 @@
 /* Console Style - Playground */
 .container {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -7,7 +8,17 @@
   min-height: 0;
   padding: 0;
   overflow: hidden;
-  background-color: var(--color-bg);
+  background: #000;
+}
+
+.chatWrapper {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 0;
 }
 
 .controls {

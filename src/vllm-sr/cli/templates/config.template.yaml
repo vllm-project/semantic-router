@@ -282,7 +282,7 @@ decisions:
       - model: "openai/gpt-oss-120b"
         use_reasoning: false
 
-  - name: "math_route"
+  - name: "math_problems"
     description: "Route mathematical queries with reasoning enabled"
     priority: 100
     rules:
@@ -314,7 +314,7 @@ decisions:
           capture_response_body: false  # Capture response payloads (default: false)
           max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
-  - name: "physics_route"
+  - name: "physics_problems"
     description: "Route physics queries with reasoning"
     priority: 100
     rules:

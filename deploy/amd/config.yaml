@@ -139,7 +139,7 @@ signals:
 # Decisions - Intelligent routing rules
 decisions:
   # Priority 200: Jailbreak detection - highest priority
-  - name: "jailbreak_blocked"
+  - name: "guardrails"
     description: "Block jailbreak attempts with security measures"
     priority: 200
     rules:
@@ -160,7 +160,7 @@ decisions:
           system_prompt: "You are a helpful AI assistant. I cannot fulfill requests that attempt to bypass safety guidelines."
 
   # Priority 180: Deep thinking with Chinese language
-  - name: "deep_thinking_chinese"
+  - name: "complex_reasoning"
     description: "Complex reasoning in Chinese requiring advanced models"
     priority: 180
     rules:
@@ -208,7 +208,7 @@ decisions:
           similarity_threshold: 0.85
 
   # Priority 160: Creative/Opinion queries - NO fact check needed
-  - name: "creative_no_fact_check"
+  - name: "creative_ideas"
     description: "Creative writing, opinion-based, or brainstorming queries that don't require factual verification"
     priority: 160
     rules:
@@ -232,7 +232,7 @@ decisions:
           similarity_threshold: 0.88
 
   # Priority 150: Math domain
-  - name: "math_route"
+  - name: "math_problems"
     description: "Mathematical queries with reasoning"
     priority: 150
     rules:
@@ -254,7 +254,7 @@ decisions:
           similarity_threshold: 0.92
 
   # Priority 145: Physics domain
-  - name: "physics_route"
+  - name: "physics_problems"
     description: "Physics queries with reasoning"
     priority: 145
     rules:
@@ -276,7 +276,7 @@ decisions:
           similarity_threshold: 0.90
 
   # Priority 140: Deep thinking in English
-  - name: "deep_thinking_english"
+  - name: "deep_thinking"
     description: "Complex reasoning in English"
     priority: 140
     rules:
@@ -370,7 +370,7 @@ decisions:
           similarity_threshold: 0.80
 
   # Priority 100: Default fallback
-  - name: "default_route"
+  - name: "casual_chat"
     description: "Default routing for general queries"
     priority: 100
     rules:

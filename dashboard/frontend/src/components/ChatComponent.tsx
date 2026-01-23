@@ -8,10 +8,10 @@ import ThinkingBlock from './ThinkingBlock'
 
 // Greeting lines - defined outside component to maintain stable reference
 const GREETING_LINES = [
-  "Hi there, I am MoM.",
-  "The System Intelligence for LLMs.",
-  "The World First Model-of-Models.",
-  "Open Source for Everyone.",
+  "Hi there, I am MoM :-)",
+  "The System Intelligence for LLMs",
+  "The World First Model-of-Models",
+  "Open Source for Everyone",
   "How can I help you today?"
 ]
 

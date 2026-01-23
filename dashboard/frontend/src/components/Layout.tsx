@@ -6,9 +6,10 @@ interface LayoutProps {
   children: ReactNode
   configSection?: string
   onConfigSectionChange?: (section: string) => void
+  hideHeaderOnMobile?: boolean
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectionChange }) => {
+const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectionChange, hideHeaderOnMobile }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [systemDropdownOpen, setSystemDropdownOpen] = useState(false)
   const location = useLocation()
@@ -30,9 +31,9 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
   }, [])
 
   return (
-    <div className={styles.container}>
+    <div className={`${styles.container} ${hideHeaderOnMobile ? styles.hideHeaderMobile : ''}`}>
       {/* Top Navigation Bar */}
-      <header className={styles.header}>
+      <header className={`${styles.header} ${hideHeaderOnMobile ? styles.headerHideMobile : ''}`}>
         <div className={styles.headerContent}>
           {/* Left: Brand */}
           <NavLink to="/" className={styles.brand}>

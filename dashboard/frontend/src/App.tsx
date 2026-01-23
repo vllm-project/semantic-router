@@ -110,6 +110,7 @@ const App: React.FC = () => {
               <Layout
                 configSection={configSection}
                 onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                hideHeaderOnMobile={true}
               >
                 <PlaygroundPage />
               </Layout>

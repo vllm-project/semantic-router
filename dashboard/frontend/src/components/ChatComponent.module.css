@@ -4,8 +4,9 @@
   flex: 1;
   height: 100%;
   min-height: 0;
-  background-color: var(--color-bg);
-  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(40px) saturate(150%);
+  -webkit-backdrop-filter: blur(40px) saturate(150%);
   overflow: hidden;
 }
 
@@ -35,8 +36,8 @@ body.playground-fullscreen .container {
   align-items: center;
   justify-content: space-between;
   padding: 0.875rem 1.25rem;
-  background-color: var(--color-bg-secondary);
-  border-bottom: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex-wrap: wrap;
   gap: 0.5rem;
 }
@@ -379,7 +380,7 @@ body.playground-fullscreen .container {
   display: flex;
   flex-direction: column;
   padding: 0.75rem 1rem;
-  background-color: var(--color-bg-secondary);
+  background: rgba(255, 255, 255, 0.03);
   flex-shrink: 0;
   margin-top: auto;
 }
