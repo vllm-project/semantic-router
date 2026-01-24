@@ -98,7 +98,7 @@ func setupTestConfig(t *testing.T) string {
 
 func TestTopologyTestQueryHandler_BasicDryRun(t *testing.T) {
 	configPath := setupTestConfig(t)
-	defer os.RemoveAll(filepath.Dir(configPath))
+	defer func() { _ = os.RemoveAll(filepath.Dir(configPath)) }()
 
 	handler := TopologyTestQueryHandler(configPath, "")
 
@@ -146,7 +146,7 @@ func TestTopologyTestQueryHandler_BasicDryRun(t *testing.T) {
 
 func TestTopologyTestQueryHandler_CodingQuery(t *testing.T) {
 	configPath := setupTestConfig(t)
-	defer os.RemoveAll(filepath.Dir(configPath))
+	defer func() { _ = os.RemoveAll(filepath.Dir(configPath)) }()
 
 	handler := TopologyTestQueryHandler(configPath, "")
 
@@ -183,7 +183,7 @@ func TestTopologyTestQueryHandler_CodingQuery(t *testing.T) {
 
 func TestTopologyTestQueryHandler_JailbreakDetection(t *testing.T) {
 	configPath := setupTestConfig(t)
-	defer os.RemoveAll(filepath.Dir(configPath))
+	defer func() { _ = os.RemoveAll(filepath.Dir(configPath)) }()
 
 	handler := TopologyTestQueryHandler(configPath, "")
 

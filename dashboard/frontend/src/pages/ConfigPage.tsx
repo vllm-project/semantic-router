@@ -12,6 +12,7 @@ import {
   detectConfigFormat,
   DecisionConditionType
 } from '../types/config'
+import { MCPConfigPanel } from '../components/MCPConfigPanel'
 
 interface VLLMEndpoint {
   name: string
@@ -4428,6 +4429,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         return renderModelsSection()
       case 'router-config':
         return renderRouterConfigSection()
+      case 'mcp':
+        return <MCPConfigPanel />
       default:
         return renderSignalsSection()
     }
