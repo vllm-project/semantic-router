@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import styles from './DataTable.module.css'
 
 export interface Column<T> {
-  key: string
+  key: keyof T & string
   header: string
   width?: string
   align?: 'left' | 'center' | 'right'
@@ -40,15 +40,15 @@ export function DataTable<T>({
   emptyMessage = 'No data available',
   className = '',
   readonly = false
-}: DataTableProps<T>) {
-  const [sortColumn, setSortColumn] = useState<string | null>(null)
+}: DataTableProps<T>): JSX.Element {
+  const [sortColumn, setSortColumn] = useState<(keyof T & string) | null>(null)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
   // In readonly mode, disable edit and delete actions
   const effectiveOnEdit = readonly ? undefined : onEdit
   const effectiveOnDelete = readonly ? undefined : onDelete
 
-  const handleSort = (columnKey: string) => {
+  const handleSort = (columnKey: keyof T & string) => {
     if (sortColumn === columnKey) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
     } else {
@@ -61,12 +61,15 @@ export function DataTable<T>({
     if (!sortColumn) return data
 
     return [...data].sort((a, b) => {
-      const aValue = (a as any)[sortColumn]
-      const bValue = (b as any)[sortColumn]
+      const aValue = a[sortColumn]
+      const bValue = b[sortColumn]
 
       if (aValue === bValue) return 0
-      
-      const comparison = aValue > bValue ? 1 : -1
+
+      const comparison =
+        typeof aValue === 'number' && typeof bValue === 'number'
+          ? (aValue > bValue ? 1 : -1)
+          : String(aValue) > String(bValue) ? 1 : -1
       return sortDirection === 'asc' ? comparison : -comparison
     })
   }, [data, sortColumn, sortDirection])
@@ -81,7 +84,7 @@ export function DataTable<T>({
               <th
                 key={column.key}
                 className={`${styles.th} ${column.sortable ? styles.sortable : ''}`}
-                style={{ 
+                style={{
                   width: column.width,
                   textAlign: column.align || 'left'
                 }}
@@ -103,7 +106,7 @@ export function DataTable<T>({
         <tbody className={styles.tbody}>
           {sortedData.length === 0 ? (
             <tr>
-              <td 
+              <td
                 colSpan={columns.length + (expandable ? 1 : 0) + (onView || onEdit || onDelete ? 1 : 0)}
                 className={styles.emptyState}
               >
@@ -136,7 +139,7 @@ export function DataTable<T>({
                         className={styles.td}
                         style={{ textAlign: column.align || 'left' }}
                       >
-                        {column.render ? column.render(row) : (row as any)[column.key]}
+                        {column.render ? column.render(row) : (row[column.key] as React.ReactNode)}
                       </td>
                     ))}
                     {(onView || onEdit || onDelete) && (

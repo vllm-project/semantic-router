@@ -1,14 +1,31 @@
 import React, { useState, useEffect } from 'react'
 import styles from './EditModal.module.css'
 
+type BivariantCallback<TArgs extends unknown[], R> = {
+  bivarianceHack(...args: TArgs): R
+}['bivarianceHack']
+
+export type FieldValue =
+  | string
+  | number
+  | boolean
+  | string[]
+  | number[]
+  | unknown[]
+  | Record<string, unknown>
+  | null
+  | undefined
+
+
+type NaiveFieldValue = string | number | null | undefined
+export type FormData = Record<string, FieldValue>
+
 interface EditModalProps {
   isOpen: boolean
   onClose: () => void
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onSave: (data: any) => Promise<void>
+  onSave: (data: FormData) => Promise<void>
   title: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: any
+  data: FormData
   fields: FieldConfig[]
   mode?: 'edit' | 'add'
 }
@@ -24,10 +41,8 @@ export interface FieldConfig {
   min?: number
   max?: number
   step?: number
-  shouldHide?: (data: // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    any) => boolean
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  customRender?: (value: any, onChange: (value: any) => void) => React.ReactNode
+  shouldHide?: BivariantCallback<[FormData], boolean>
+  customRender?: BivariantCallback<[FieldValue, (value: FieldValue) => void], React.ReactNode>
 }
 
 const EditModal: React.FC<EditModalProps> = ({
@@ -39,29 +54,28 @@ const EditModal: React.FC<EditModalProps> = ({
   fields,
   mode = 'edit'
 }) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [formData, setFormData] = useState<any>({})
+  const [formData, setFormData] = useState<FormData>({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (isOpen) {
       // Convert percentage fields from 0-1 to 0-100 for display
-      const convertedData = { ...data }
+      const initialData = (data && typeof data === 'object') ? (data as Record<string, unknown>) : {}
+      const convertedData: FormData = { ...initialData }
       fields.forEach(field => {
-        if (field.type === 'percentage' && convertedData[field.name] !== undefined) {
-          convertedData[field.name] = Math.round(convertedData[field.name] * 100)
+        const value = convertedData[field.name]
+        if (field.type === 'percentage' && typeof value === 'number') {
+          convertedData[field.name] = Math.round(value * 100)
         }
       })
-      setFormData(convertedData || {})
+      setFormData(convertedData)
       setError(null)
     }
   }, [isOpen, data, fields])
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleChange = (fieldName: string, value: any) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    setFormData((prev: any) => ({
+  const handleChange = (fieldName: string, value: FieldValue): void => {
+    setFormData((prev: FormData) => ({
       ...prev,
       [fieldName]: value
     }))
@@ -74,10 +88,11 @@ const EditModal: React.FC<EditModalProps> = ({
 
     try {
       // Convert percentage fields from 0-100 back to 0-1 before saving
-      const convertedData = { ...formData }
+      const convertedData: FormData = { ...formData }
       fields.forEach(field => {
-        if (field.type === 'percentage' && convertedData[field.name] !== undefined) {
-          convertedData[field.name] = convertedData[field.name] / 100
+        const value = convertedData[field.name]
+        if (field.type === 'percentage' && typeof value === 'number') {
+          convertedData[field.name] = value / 100
         }
       })
       await onSave(convertedData)
@@ -108,159 +123,164 @@ const EditModal: React.FC<EditModalProps> = ({
           )}
 
           <div className={styles.fields}>
-            {fields.map((field) => !field.shouldHide?.(formData) && (
-              <div key={field.name} className={styles.field}>
-                <label className={styles.label}>
-                  {field.label}
-                  {field.required && <span className={styles.required}>*</span>}
-                </label>
-                {field.description && (
-                  <p className={styles.description}>{field.description}</p>
-                )}
+            {fields.map((field) => {
+              if (field.shouldHide?.(formData)) return null
+              const fieldValue = formData[field.name]
 
-                {field.type === 'text' && (
-                  <input
-                    type="text"
-                    className={styles.input}
-                    value={formData[field.name] || ''}
-                    onChange={(e) => handleChange(field.name, e.target.value)}
-                    placeholder={field.placeholder}
-                    required={field.required}
-                  />
-                )}
+              return (
+                <div key={field.name} className={styles.field}>
+                  <label className={styles.label}>
+                    {field.label}
+                    {field.required && <span className={styles.required}>*</span>}
+                  </label>
+                  {field.description && (
+                    <p className={styles.description}>{field.description}</p>
+                  )}
 
-                {field.type === 'number' && (
-                  <input
-                    type="number"
-                    step={field.step !== undefined ? field.step : "any"}
-                    min={field.min}
-                    max={field.max}
-                    className={styles.input}
-                    value={formData[field.name] || ''}
-                    onChange={(e) => handleChange(field.name, parseFloat(e.target.value))}
-                    placeholder={field.placeholder}
-                    required={field.required}
-                  />
-                )}
+                  {field.type === 'text' && (
+                    <input
+                      type="text"
+                      className={styles.input}
+                      value={fieldValue as NaiveFieldValue || ''}
+                      onChange={(e) => handleChange(field.name, e.target.value)}
+                      placeholder={field.placeholder}
+                      required={field.required}
+                    />
+                  )}
 
-                {field.type === 'percentage' && (
-                  <div style={{ position: 'relative' }}>
+                  {field.type === 'number' && (
                     <input
                       type="number"
-                      step={field.step !== undefined ? field.step : 1}
-                      min={0}
-                      max={100}
+                      step={field.step !== undefined ? field.step : "any"}
+                      min={field.min}
+                      max={field.max}
                       className={styles.input}
-                      value={formData[field.name] !== undefined ? formData[field.name] : ''}
+                      value={fieldValue as NaiveFieldValue || ''}
+                      onChange={(e) => handleChange(field.name, parseFloat(e.target.value))}
+                      placeholder={field.placeholder}
+                      required={field.required}
+                    />
+                  )}
+
+                  {field.type === 'percentage' && (
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="number"
+                        step={field.step !== undefined ? field.step : 1}
+                        min={0}
+                        max={100}
+                        className={styles.input}
+                        value={fieldValue as NaiveFieldValue || ''}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          handleChange(field.name, val === '' ? '' : parseFloat(val))
+                        }}
+                        placeholder={field.placeholder}
+                        required={field.required}
+                        style={{ paddingRight: '2.5rem' }}
+                      />
+                      <span style={{
+                        position: 'absolute',
+                        right: '0.75rem',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        color: 'var(--color-text-secondary)',
+                        fontSize: '0.875rem',
+                        pointerEvents: 'none'
+                      }}>
+                        %
+                      </span>
+                    </div>
+                  )}
+
+                  {field.type === 'boolean' && (
+                    <label className={styles.checkbox}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(fieldValue)}
+                        onChange={(e) => handleChange(field.name, e.target.checked)}
+                      />
+                      <span>Enable</span>
+                    </label>
+                  )}
+
+                  {field.type === 'select' && (
+                    <select
+                      className={styles.select}
+                      value={fieldValue as NaiveFieldValue || ''}
+                      onChange={(e) => handleChange(field.name, e.target.value)}
+                      required={field.required}
+                    >
+                      {field.options?.map((option) => (
+                        <option key={option} value={option}>
+                          {option || '(None)'}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+
+                  {field.type === 'multiselect' && (
+                    <div className={styles.multiselect}>
+                      {field.options?.map((option) => (
+                        <label key={option} className={styles.multiselectOption}>
+                          <input
+                            type="checkbox"
+                            checked={(fieldValue as NaiveFieldValue[] || []).includes(option)}
+                            onChange={(e) => {
+                              const currentValues = fieldValue as NaiveFieldValue[] || []
+                              const newValues = e.target.checked
+                                ? [...currentValues, option]
+                                : currentValues.filter((v) => v !== option)
+                              handleChange(field.name, newValues)
+                            }}
+                          />
+                          <span>{option}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  {field.type === 'textarea' && (
+                    <textarea
+                      className={styles.textarea}
+                      value={fieldValue as NaiveFieldValue || ''}
+                      onChange={(e) => handleChange(field.name, e.target.value)}
+                      placeholder={field.placeholder}
+                      required={field.required}
+                      rows={4}
+                    />
+                  )}
+
+                  {field.type === 'json' && (
+                    <textarea
+                      className={styles.textarea}
+                      value={
+                        typeof fieldValue === 'object' && fieldValue !== null
+                          ? JSON.stringify(fieldValue, null, 2)
+                          : fieldValue as NaiveFieldValue || ''
+                      }
                       onChange={(e) => {
-                        const val = e.target.value
-                        handleChange(field.name, val === '' ? '' : parseFloat(val))
+                        try {
+                          const parsed = JSON.parse(e.target.value)
+                          handleChange(field.name, parsed)
+                        } catch {
+                          handleChange(field.name, e.target.value)
+                        }
                       }}
                       placeholder={field.placeholder}
                       required={field.required}
-                      style={{ paddingRight: '2.5rem' }}
+                      rows={6}
                     />
-                    <span style={{
-                      position: 'absolute',
-                      right: '0.75rem',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      color: 'var(--color-text-secondary)',
-                      fontSize: '0.875rem',
-                      pointerEvents: 'none'
-                    }}>
-                      %
-                    </span>
-                  </div>
-                )}
+                  )}
 
-                {field.type === 'boolean' && (
-                  <label className={styles.checkbox}>
-                    <input
-                      type="checkbox"
-                      checked={formData[field.name] || false}
-                      onChange={(e) => handleChange(field.name, e.target.checked)}
-                    />
-                    <span>Enable</span>
-                  </label>
-                )}
-
-                {field.type === 'select' && (
-                  <select
-                    className={styles.select}
-                    value={formData[field.name] || ''}
-                    onChange={(e) => handleChange(field.name, e.target.value)}
-                    required={field.required}
-                  >
-                    {field.options?.map((option) => (
-                      <option key={option} value={option}>
-                        {option || '(None)'}
-                      </option>
-                    ))}
-                  </select>
-                )}
-
-                {field.type === 'multiselect' && (
-                  <div className={styles.multiselect}>
-                    {field.options?.map((option) => (
-                      <label key={option} className={styles.multiselectOption}>
-                        <input
-                          type="checkbox"
-                          checked={(formData[field.name] || []).includes(option)}
-                          onChange={(e) => {
-                            const currentValues = formData[field.name] || []
-                            const newValues = e.target.checked
-                              ? [...currentValues, option]
-                              : currentValues.filter((v: string) => v !== option)
-                            handleChange(field.name, newValues)
-                          }}
-                        />
-                        <span>{option}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-
-                {field.type === 'textarea' && (
-                  <textarea
-                    className={styles.textarea}
-                    value={formData[field.name] || ''}
-                    onChange={(e) => handleChange(field.name, e.target.value)}
-                    placeholder={field.placeholder}
-                    required={field.required}
-                    rows={4}
-                  />
-                )}
-
-                {field.type === 'json' && (
-                  <textarea
-                    className={styles.textarea}
-                    value={
-                      typeof formData[field.name] === 'object'
-                        ? JSON.stringify(formData[field.name], null, 2)
-                        : formData[field.name] || ''
-                    }
-                    onChange={(e) => {
-                      try {
-                        const parsed = JSON.parse(e.target.value)
-                        handleChange(field.name, parsed)
-                      } catch {
-                        handleChange(field.name, e.target.value)
-                      }
-                    }}
-                    placeholder={field.placeholder}
-                    required={field.required}
-                    rows={6}
-                  />
-                )}
-
-                {field.type === 'custom' && field.customRender && (
-                  <div>
-                    {field.customRender(formData[field.name], (value) => handleChange(field.name, value))}
-                  </div>
-                )}
-              </div>
-            ))}
+                  {field.type === 'custom' && field.customRender && (
+                    <div>
+                      {field.customRender(fieldValue, (value) => handleChange(field.name, value))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
 
           <div className={styles.actions}>

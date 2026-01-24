@@ -69,8 +69,8 @@ const TopologyFlow: React.FC = () => {
   }, [nodes.length, fitView])
 
   const getNodeColor = useCallback((node: Node) => {
-    const style = node.style as any
-    return style?.background || '#ccc'
+    const background = node.style?.background as string | undefined
+    return background || '#ccc'
   }, [])
 
   if (loading) {
@@ -140,15 +140,15 @@ const TopologyFlow: React.FC = () => {
             fitViewOptions={{ padding: 0.3, minZoom: 0.3, maxZoom: 1.5 }}
             defaultViewport={{ x: 0, y: 0, zoom: 0.6 }}
           >
-            <Background 
+            <Background
               variant={BackgroundVariant.Dots}
               gap={20}
               size={1}
               color={isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.08)'}
             />
             <Controls />
-            <MiniMap 
-              nodeColor={getNodeColor} 
+            <MiniMap
+              nodeColor={getNodeColor}
               maskColor={isDark ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.3)'}
               style={{
                 backgroundColor: isDark ? '#141414' : '#ffffff',

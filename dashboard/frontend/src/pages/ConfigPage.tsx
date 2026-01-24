@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import styles from './ConfigPage.module.css'
 import { ConfigSection } from '../components/ConfigNav'
-import EditModal, { FieldConfig } from '../components/EditModal'
+import EditModal, { FieldConfig, FormData } from '../components/EditModal'
 import ViewModal, { ViewSection } from '../components/ViewModal'
 import { DataTable, Column } from '../components/DataTable'
 import TableHeader from '../components/TableHeader'
@@ -10,7 +10,8 @@ import { useReadonly } from '../contexts/ReadonlyContext'
 import {
   ConfigFormat,
   detectConfigFormat,
-  DecisionConditionType
+  DecisionConditionType,
+  ProviderModel
 } from '../types/config'
 
 interface VLLMEndpoint {
@@ -59,13 +60,17 @@ interface Category {
   model_scores?: ModelScore[] | Record<string, number>
 }
 
+interface ToolFunctionProperty {
+  type: string
+  description: string
+}
+
 interface ToolFunction {
   name: string
   description: string
   parameters: {
     type: string
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    properties: Record<string, any>
+    properties: Record<string, ToolFunctionProperty>
     required?: string[]
   }
 }
@@ -174,8 +179,7 @@ interface ConfigData {
       conditions: Array<{ type: string; name: string }>
     }
     modelRefs: Array<{ model: string; use_reasoning: boolean }>
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    plugins?: Array<{ type: string; configuration: Record<string, any> }>
+    plugins?: Array<{ type: string; configuration: Record<string, unknown> }>
   }>
   providers?: {
     models: Array<{
@@ -188,6 +192,7 @@ interface ConfigData {
         protocol: 'http' | 'https'
       }>
       access_key?: string
+      pricing?: ModelPricing
     }>
     default_model: string
     reasoning_families?: Record<string, ReasoningFamily>
@@ -290,18 +295,15 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [editModalTitle, setEditModalTitle] = useState('')
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [editModalData, setEditModalData] = useState<any>(null)
+  const [editModalData, setEditModalData] = useState<FormData | null>(null)
   const [editModalFields, setEditModalFields] = useState<FieldConfig[]>([])
   const [editModalMode, setEditModalMode] = useState<'edit' | 'add'>('edit')
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [editModalCallback, setEditModalCallback] = useState<((data: any) => Promise<void>) | null>(null)
+  const [editModalCallback, setEditModalCallback] = useState<((data: FormData) => Promise<void>) | null>(null)
 
   // View modal state
   const [viewModalOpen, setViewModalOpen] = useState(false)
   const [viewModalTitle, setViewModalTitle] = useState('')
   const [viewModalSections, setViewModalSections] = useState<ViewSection[]>([])
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [viewModalEditCallback, setViewModalEditCallback] = useState<(() => void) | null>(null)
 
   // Search state
@@ -382,8 +384,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const saveConfig = async (updatedConfig: any) => {
+  const saveConfig = async (updatedConfig: ConfigData): Promise<void> => {
     // Prevent save in read-only mode
     if (isReadonly) {
       throw new Error('Dashboard is in read-only mode. Configuration editing is disabled.')
@@ -427,11 +428,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
   const openEditModal = (
     title: string,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    data: any,
+    data: FormData | null,
     fields: FieldConfig[],
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    callback: (data: any) => Promise<void>,
+    callback: (data: FormData) => Promise<void>,
     mode: 'edit' | 'add' = 'edit'
   ) => {
     setEditModalTitle(title)
@@ -449,12 +448,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     setEditModalCallback(null)
   }
 
-  const listInputToArray = (input: string) => input
+  const listInputToArray = (input: string): string[] => input
     .split(/[\n,]/)
     .map(item => item.trim())
     .filter(Boolean)
 
-  const removeSignalByName = (cfg: ConfigData, type: SignalType, targetName: string) => {
+  const removeSignalByName = (cfg: ConfigData, type: SignalType, targetName: string): void => {
     // match by type and name to remove the signal from the config
     if (!cfg.signals) cfg.signals = {}
 
@@ -562,17 +561,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
   const getModels = (): NormalizedModel[] => {
     if (isPythonCLI && config?.providers?.models) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return config.providers.models.map((m: any): NormalizedModel => {
-        const model: NormalizedModel = {
-          name: m.name,
-          reasoning_family: m.reasoning_family,
-          endpoints: m.endpoints || [],
-          access_key: m.access_key,
-          pricing: m.pricing,
-        }
-        return model
-      })
+      return config.providers.models.map((m): NormalizedModel => ({
+        name: m.name,
+        reasoning_family: m.reasoning_family,
+        endpoints: m.endpoints || [],
+        access_key: m.access_key,
+        pricing: m.pricing,
+      }))
     }
     // Legacy format - convert model_config to array
     if (config?.model_config) {
@@ -661,7 +656,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             onClick={() => {
               openEditModal(
                 'Edit PII Detection Configuration',
-                routerConfig.classifier?.pii_model || {},
+                (routerConfig.classifier?.pii_model || {}) as FormData,
                 [
                   {
                     name: 'model_id',
@@ -969,50 +964,50 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                               name: 'backend_type',
                               label: 'Backend Type',
                               type: 'select',
-                            options: ['memory', 'redis', 'memcached'],
-                            description: 'Cache backend storage type'
-                          },
-                          {
-                            name: 'similarity_threshold',
-                            label: 'Similarity Threshold',
-                            type: 'percentage',
-                            required: true,
-                            placeholder: '90',
-                            description: 'Minimum similarity score for cache hits (0-100%)',
-                            step: 1
-                          },
-                          {
-                            name: 'max_entries',
-                            label: 'Max Entries',
-                            type: 'number',
-                            placeholder: '10000',
-                            description: 'Maximum number of cached entries'
-                          },
-                          {
-                            name: 'ttl_seconds',
-                            label: 'TTL (seconds)',
-                            type: 'number',
-                            placeholder: '3600',
-                            description: 'Time-to-live for cached entries'
-                          },
-                          {
-                            name: 'eviction_policy',
-                            label: 'Eviction Policy',
-                            type: 'select',
-                            options: ['lru', 'lfu', 'fifo'],
-                            description: 'Cache eviction policy when max entries reached'
+                              options: ['memory', 'redis', 'memcached'],
+                              description: 'Cache backend storage type'
+                            },
+                            {
+                              name: 'similarity_threshold',
+                              label: 'Similarity Threshold',
+                              type: 'percentage',
+                              required: true,
+                              placeholder: '90',
+                              description: 'Minimum similarity score for cache hits (0-100%)',
+                              step: 1
+                            },
+                            {
+                              name: 'max_entries',
+                              label: 'Max Entries',
+                              type: 'number',
+                              placeholder: '10000',
+                              description: 'Maximum number of cached entries'
+                            },
+                            {
+                              name: 'ttl_seconds',
+                              label: 'TTL (seconds)',
+                              type: 'number',
+                              placeholder: '3600',
+                              description: 'Time-to-live for cached entries'
+                            },
+                            {
+                              name: 'eviction_policy',
+                              label: 'Eviction Policy',
+                              type: 'select',
+                              options: ['lru', 'lfu', 'fifo'],
+                              description: 'Cache eviction policy when max entries reached'
+                            }
+                          ],
+                          async (data) => {
+                            const newConfig = { ...config }
+                            newConfig.semantic_cache = data
+                            await saveConfig(newConfig)
                           }
-                        ],
-                        async (data) => {
-                          const newConfig = { ...config }
-                          newConfig.semantic_cache = data
-                          await saveConfig(newConfig)
-                        }
-                      )
-                    }}
-                  >
-                    Edit
-                  </button>
+                        )
+                      }}
+                    >
+                      Edit
+                    </button>
                   )}
                 </div>
               </div>
@@ -1080,54 +1075,54 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                           'Edit In-tree Category Classifier',
                           routerConfig.classifier?.category_model || {},
                           [
-                          {
-                            name: 'model_id',
-                            label: 'Model ID',
-                            type: 'text',
-                            required: true,
-                            placeholder: 'e.g., answerdotai/ModernBERT-base',
-                            description: 'HuggingFace model ID for category classification'
-                          },
-                          {
-                            name: 'threshold',
-                            label: 'Classification Threshold',
-                            type: 'percentage',
-                            required: true,
-                            placeholder: '70',
-                            description: 'Confidence threshold for category classification (0-100%)',
-                            step: 1
-                          },
-                          {
-                            name: 'use_cpu',
-                            label: 'Use CPU',
-                            type: 'boolean',
-                            description: 'Use CPU instead of GPU for inference'
-                          },
-                          {
-                            name: 'use_modernbert',
-                            label: 'Use ModernBERT',
-                            type: 'boolean',
-                            description: 'Enable ModernBERT-based classification'
-                          },
-                          {
-                            name: 'category_mapping_path',
-                            label: 'Category Mapping Path',
-                            type: 'text',
-                            placeholder: 'config/category_mapping.json',
-                            description: 'Path to category mapping configuration'
+                            {
+                              name: 'model_id',
+                              label: 'Model ID',
+                              type: 'text',
+                              required: true,
+                              placeholder: 'e.g., answerdotai/ModernBERT-base',
+                              description: 'HuggingFace model ID for category classification'
+                            },
+                            {
+                              name: 'threshold',
+                              label: 'Classification Threshold',
+                              type: 'percentage',
+                              required: true,
+                              placeholder: '70',
+                              description: 'Confidence threshold for category classification (0-100%)',
+                              step: 1
+                            },
+                            {
+                              name: 'use_cpu',
+                              label: 'Use CPU',
+                              type: 'boolean',
+                              description: 'Use CPU instead of GPU for inference'
+                            },
+                            {
+                              name: 'use_modernbert',
+                              label: 'Use ModernBERT',
+                              type: 'boolean',
+                              description: 'Enable ModernBERT-based classification'
+                            },
+                            {
+                              name: 'category_mapping_path',
+                              label: 'Category Mapping Path',
+                              type: 'text',
+                              placeholder: 'config/category_mapping.json',
+                              description: 'Path to category mapping configuration'
+                            }
+                          ],
+                          async (data) => {
+                            const newConfig = { ...config }
+                            if (!newConfig.classifier) newConfig.classifier = {}
+                            newConfig.classifier.category_model = data
+                            await saveConfig(newConfig)
                           }
-                        ],
-                        async (data) => {
-                          const newConfig = { ...config }
-                          if (!newConfig.classifier) newConfig.classifier = {}
-                          newConfig.classifier.category_model = data
-                          await saveConfig(newConfig)
-                        }
-                      )
-                    }}
-                  >
+                        )
+                      }}
+                    >
 
-                  </button>
+                    </button>
                   )}
                 </div>
               </div>
@@ -1175,83 +1170,83 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                           'Edit Out-tree MCP Category Classifier',
                           routerConfig.classifier?.mcp_category_model || {},
                           [
-                          {
-                            name: 'enabled',
-                            label: 'Enable MCP Classifier',
-                            type: 'boolean',
-                            description: 'Enable or disable MCP-based classification'
-                          },
-                          {
-                            name: 'transport_type',
-                            label: 'Transport Type',
-                            type: 'select',
-                            options: ['stdio', 'http'],
-                            required: true,
-                            description: 'MCP transport protocol type'
-                          },
-                          {
-                            name: 'command',
-                            label: 'Command',
-                            type: 'text',
-                            placeholder: 'e.g., python mcp_server.py',
-                            description: 'Command to start MCP server (for stdio transport)'
-                          },
-                          {
-                            name: 'args',
-                            label: 'Arguments (JSON)',
-                            type: 'json',
-                            placeholder: '["--port", "8080"]',
-                            description: 'Command line arguments as JSON array'
-                          },
-                          {
-                            name: 'env',
-                            label: 'Environment Variables (JSON)',
-                            type: 'json',
-                            placeholder: '{"API_KEY": "xxx"}',
-                            description: 'Environment variables as JSON object'
-                          },
-                          {
-                            name: 'url',
-                            label: 'URL',
-                            type: 'text',
-                            placeholder: 'http://localhost:8080',
-                            description: 'MCP server URL (for http transport)'
-                          },
-                          {
-                            name: 'tool_name',
-                            label: 'Tool Name',
-                            type: 'text',
-                            placeholder: 'classify_category',
-                            description: 'Name of the MCP tool to call'
-                          },
-                          {
-                            name: 'threshold',
-                            label: 'Classification Threshold',
-                            type: 'percentage',
-                            required: true,
-                            placeholder: '70',
-                            description: 'Confidence threshold for classification (0-100%)',
-                            step: 1
-                          },
-                          {
-                            name: 'timeout_seconds',
-                            label: 'Timeout (seconds)',
-                            type: 'number',
-                            placeholder: '30',
-                            description: 'Request timeout in seconds'
+                            {
+                              name: 'enabled',
+                              label: 'Enable MCP Classifier',
+                              type: 'boolean',
+                              description: 'Enable or disable MCP-based classification'
+                            },
+                            {
+                              name: 'transport_type',
+                              label: 'Transport Type',
+                              type: 'select',
+                              options: ['stdio', 'http'],
+                              required: true,
+                              description: 'MCP transport protocol type'
+                            },
+                            {
+                              name: 'command',
+                              label: 'Command',
+                              type: 'text',
+                              placeholder: 'e.g., python mcp_server.py',
+                              description: 'Command to start MCP server (for stdio transport)'
+                            },
+                            {
+                              name: 'args',
+                              label: 'Arguments (JSON)',
+                              type: 'json',
+                              placeholder: '["--port", "8080"]',
+                              description: 'Command line arguments as JSON array'
+                            },
+                            {
+                              name: 'env',
+                              label: 'Environment Variables (JSON)',
+                              type: 'json',
+                              placeholder: '{"API_KEY": "xxx"}',
+                              description: 'Environment variables as JSON object'
+                            },
+                            {
+                              name: 'url',
+                              label: 'URL',
+                              type: 'text',
+                              placeholder: 'http://localhost:8080',
+                              description: 'MCP server URL (for http transport)'
+                            },
+                            {
+                              name: 'tool_name',
+                              label: 'Tool Name',
+                              type: 'text',
+                              placeholder: 'classify_category',
+                              description: 'Name of the MCP tool to call'
+                            },
+                            {
+                              name: 'threshold',
+                              label: 'Classification Threshold',
+                              type: 'percentage',
+                              required: true,
+                              placeholder: '70',
+                              description: 'Confidence threshold for classification (0-100%)',
+                              step: 1
+                            },
+                            {
+                              name: 'timeout_seconds',
+                              label: 'Timeout (seconds)',
+                              type: 'number',
+                              placeholder: '30',
+                              description: 'Request timeout in seconds'
+                            }
+                          ],
+                          async (data) => {
+                            const newConfig = { ...config }
+                            if (!newConfig.classifier) newConfig.classifier = {}
+                            newConfig.classifier.mcp_category_model = data
+                            await saveConfig(newConfig)
                           }
-                        ],
-                        async (data) => {
-                          const newConfig = { ...config }
-                          if (!newConfig.classifier) newConfig.classifier = {}
-                          newConfig.classifier.mcp_category_model = data
-                          await saveConfig(newConfig)
-                        }
-                      )
-                    }}
-                  >
+                        )
+                      }}
+                    >
 
-                  </button>
+                    </button>
                   )}
                 </div>
               </div>
@@ -1830,7 +1825,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                     {tool.tool.function.parameters.properties && (
                       <div className={styles.toolParameters}>
                         <div className={styles.toolParametersHeader}>Parameters:</div>
-                        {Object.entries(tool.tool.function.parameters.properties).map(([paramName, paramInfo]: [string, any]) => (
+                        {Object.entries(tool.tool.function.parameters.properties).map(([paramName, paramInfo]) => (
                           <div key={paramName} className={styles.toolParameter}>
                             <div>
                               <span className={styles.parameterName}>
@@ -2126,12 +2121,18 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   const renderSignalsSection = () => {
     const signals = config?.signals
 
+    type SignalsConfig = NonNullable<ConfigData['signals']>
+    type KeywordSignal = SignalsConfig['keywords'][number]
+    type EmbeddingSignal = SignalsConfig['embeddings'][number]
+    type DomainSignal = SignalsConfig['domains'][number]
+    type PreferenceSignal = SignalsConfig['preferences'][number]
+    type UnifiedSignalRaw = KeywordSignal | EmbeddingSignal | DomainSignal | PreferenceSignal
+
     interface UnifiedSignal {
       name: string
       type: SignalType
       summary: string
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      rawData: any
+      rawData: UnifiedSignalRaw
     }
 
     // Flatten all signals into a unified array
@@ -3705,24 +3706,27 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         ],
         async (data) => {
           // Endpoints are already validated by EndpointsEditor
-          const endpoints = data.endpoints || []
+          const endpoints = data.endpoints as Endpoint[] || []
+          const promptPrice = parseFloat(String(data.prompt_per_1m ?? 0)) || 0
+          const completionPrice = parseFloat(String(data.completion_per_1m ?? 0)) || 0
 
-          const newConfig = { ...config }
+          const newConfig: ConfigData = { ...config } as ConfigData
 
           if (isPythonCLI && newConfig.providers) {
             newConfig.providers = { ...newConfig.providers }
             if (!newConfig.providers.models) {
               newConfig.providers.models = []
             }
-            const newModel: any = {
-              name: data.model_name,
-              reasoning_family: data.reasoning_family,
-              access_key: data.access_key,
-              endpoints: endpoints,
+
+            const newModel: ProviderModel = {
+              name: data.model_name as string || 'Untitled Model',
+              reasoning_family: data.reasoning_family as string | undefined,
+              access_key: data.access_key as string | undefined,
+              endpoints,
               pricing: {
-                currency: data.currency,
-                prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
-                completion_per_1m: parseFloat(data.completion_per_1m) || 0
+                currency: data.currency as string | undefined,
+                prompt_per_1m: promptPrice,
+                completion_per_1m: completionPrice
               }
             }
             newConfig.providers.models.push(newModel)
@@ -3731,13 +3735,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             if (!newConfig.model_config) {
               newConfig.model_config = {}
             }
-            newConfig.model_config[data.model_name] = {
-              reasoning_family: data.reasoning_family,
-              preferred_endpoints: endpoints.map((ep: any) => ep.name),
+            newConfig.model_config[data.model_name as string || 'Untitled Model'] = {
+              reasoning_family: data.reasoning_family as string | undefined,
+              preferred_endpoints: endpoints.map((ep: Endpoint) => ep.name),
               pricing: {
-                currency: data.currency,
-                prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
-                completion_per_1m: parseFloat(data.completion_per_1m) || 0
+                currency: data.currency as string | undefined,
+                prompt_per_1m: promptPrice,
+                completion_per_1m: completionPrice
               }
             }
           }
@@ -3813,10 +3817,15 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           }
         ],
         async (data) => {
-          const newConfig = { ...config }
+          const newConfig: ConfigData = { ...config } as ConfigData
 
-          // Endpoints are already validated by EndpointsEditor
-          const endpoints = data.endpoints || []
+          const endpoints = data.endpoints as Endpoint[] || []
+          const promptPrice = typeof data.prompt_per_1m === 'number'
+            ? data.prompt_per_1m
+            : parseFloat(String(data.prompt_per_1m ?? 0)) || 0
+          const completionPrice = typeof data.completion_per_1m === 'number'
+            ? data.completion_per_1m
+            : parseFloat(String(data.completion_per_1m ?? 0)) || 0
 
           if (isPythonCLI && newConfig.providers?.models) {
             newConfig.providers = { ...newConfig.providers }
@@ -3824,13 +3833,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             newConfig.providers.models = newConfig.providers.models.map((m: ModelType) =>
               m.name === model.name ? {
                 ...m,
-                reasoning_family: data.reasoning_family,
-                access_key: data.access_key,
-                endpoints: endpoints,
+                reasoning_family: data.reasoning_family as string | undefined,
+                access_key: data.access_key as string | undefined,
+                endpoints,
                 pricing: {
-                  currency: data.currency,
-                  prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
-                  completion_per_1m: parseFloat(data.completion_per_1m) || 0
+                  currency: data.currency as string | undefined,
+                  prompt_per_1m: promptPrice,
+                  completion_per_1m: completionPrice
                 }
               } : m
             )
@@ -3838,12 +3847,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             // Legacy format
             newConfig.model_config[model.name] = {
               ...newConfig.model_config[model.name],
-              reasoning_family: data.reasoning_family,
-              preferred_endpoints: endpoints.map((ep: any) => ep.name),
+              reasoning_family: data.reasoning_family as string | undefined,
+              preferred_endpoints: endpoints.map((ep: Endpoint) => ep.name),
               pricing: {
-                currency: data.currency,
-                prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
-                completion_per_1m: parseFloat(data.completion_per_1m) || 0
+                currency: data.currency as string | undefined,
+                prompt_per_1m: promptPrice,
+                completion_per_1m: completionPrice
               }
             }
           }
@@ -4189,9 +4198,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       <EditModal
         isOpen={editModalOpen}
         onClose={closeEditModal}
-        onSave={editModalCallback || (async () => { })}
+        onSave={editModalCallback ?? (async (_data: FormData) => { })}
         title={editModalTitle}
-        data={editModalData}
+        data={editModalData ?? {}}
         fields={editModalFields}
         mode={editModalMode}
       />

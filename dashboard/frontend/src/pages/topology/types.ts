@@ -19,6 +19,7 @@ export interface SignalConfig {
   description?: string
   latency: string
   config: KeywordSignalConfig | EmbeddingSignalConfig | DomainSignalConfig | GenericSignalConfig
+  isDynamic?: boolean
 }
 
 export interface KeywordSignalConfig {
