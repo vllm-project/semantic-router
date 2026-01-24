@@ -16,25 +16,25 @@ interface DecisionNodeData {
 }
 
 export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
-  const { 
-    decision, 
-    rulesCollapsed = false, 
-    isHighlighted, 
+  const {
+    decision,
+    rulesCollapsed = false,
+    isHighlighted,
     isUnreachable = false,
     unreachableReason,
-    onToggleRulesCollapse 
+    onToggleRulesCollapse,
   } = data
   const { name, priority, rules, modelRefs, algorithm, plugins } = decision
 
   const hasReasoning = modelRefs.some(m => m.use_reasoning)
   const hasPlugins = plugins && plugins.length > 0
   const hasAlgorithm = algorithm && algorithm.type !== 'static'
-  
+
   // Use warning colors for unreachable decisions
-  const colors = isUnreachable 
-    ? NODE_COLORS.decision.unreachable 
-    : hasReasoning 
-      ? NODE_COLORS.decision.reasoning 
+  const colors = isUnreachable
+    ? NODE_COLORS.decision.unreachable
+    : hasReasoning
+      ? NODE_COLORS.decision.reasoning
       : NODE_COLORS.decision.normal
 
   return (
@@ -51,13 +51,18 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
       <div className={styles.decisionHeader}>
         <span className={styles.decisionIcon}>{isUnreachable ? '⚠️' : '🔀'}</span>
         <span className={styles.decisionName} title={name}>{name}</span>
-        <span className={styles.decisionPriority}>P{priority}</span>
+        <span className={styles.decisionPriority}>
+          P
+          {priority}
+        </span>
       </div>
 
       {/* Unreachable Warning Banner */}
       {isUnreachable && (
         <div className={styles.unreachableBanner}>
-          ⚠️ {unreachableReason || 'Unreachable'}
+          ⚠️
+          {' '}
+          {unreachableReason || 'Unreachable'}
         </div>
       )}
 
@@ -78,12 +83,20 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
           <div className={styles.conditionsList}>
             {rules.conditions.slice(0, 4).map((cond, idx) => (
               <span key={idx} className={styles.condition}>
-                {SIGNAL_ICONS[cond.type] || '❓'} {cond.type}: {cond.name}
+                {SIGNAL_ICONS[cond.type] || '❓'}
+                {' '}
+                {cond.type}
+                :
+                {' '}
+                {cond.name}
               </span>
             ))}
             {rules.conditions.length > 4 && (
               <span className={styles.condition} style={{ opacity: 0.7 }}>
-                +{rules.conditions.length - 4} more
+                +
+                {rules.conditions.length - 4}
+                {' '}
+                more
               </span>
             )}
           </div>
@@ -94,12 +107,16 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
       <div className={styles.decisionMeta}>
         {hasAlgorithm && (
           <span className={styles.metaTag} title="Multi-model algorithm">
-            🔄 {algorithm!.type}
+            🔄
+            {' '}
+            {algorithm!.type}
           </span>
         )}
         {hasPlugins && (
           <span className={styles.metaTag} title="Has plugins">
-            🔌 {plugins!.length}
+            🔌
+            {' '}
+            {plugins!.length}
           </span>
         )}
         {hasReasoning && (
@@ -117,7 +134,10 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
           </span>
         ))}
         {modelRefs.length > 2 && (
-          <span className={styles.moreModels}>+{modelRefs.length - 2}</span>
+          <span className={styles.moreModels}>
+            +
+            {modelRefs.length - 2}
+          </span>
         )}
       </div>
 

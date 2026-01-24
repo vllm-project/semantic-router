@@ -1,24 +1,24 @@
-import { useCallback } from 'react';
-import type { EvaluationTask } from '../../types/evaluation';
-import { STATUS_INFO, formatDate, formatDuration } from '../../types/evaluation';
-import { useReadonly } from '../../contexts/ReadonlyContext';
-import styles from './TaskList.module.css';
+import { useCallback } from 'react'
+import type { EvaluationTask } from '../../types/evaluation'
+import { STATUS_INFO, formatDate, formatDuration } from '../../types/evaluation'
+import { useReadonly } from '../../contexts/ReadonlyContext'
+import styles from './TaskList.module.css'
 
 interface TaskListProps {
-  tasks: EvaluationTask[];
-  loading: boolean;
-  onView: (task: EvaluationTask) => void;
-  onRun: (task: EvaluationTask) => void;
-  onCancel: (task: EvaluationTask) => void;
-  onDelete: (task: EvaluationTask) => void;
-  onRefresh: () => void;
+  tasks: EvaluationTask[]
+  loading: boolean
+  onView: (task: EvaluationTask) => void
+  onRun: (task: EvaluationTask) => void
+  onCancel: (task: EvaluationTask) => void
+  onDelete: (task: EvaluationTask) => void
+  onRefresh: () => void
 }
 
 export function TaskList({ tasks, loading, onView, onRun, onCancel, onDelete, onRefresh }: TaskListProps) {
-  const { isReadonly } = useReadonly();
+  const { isReadonly } = useReadonly()
 
   const getStatusBadge = useCallback((status: EvaluationTask['status']) => {
-    const info = STATUS_INFO[status];
+    const info = STATUS_INFO[status]
     return (
       <span
         className={styles.statusBadge}
@@ -26,16 +26,16 @@ export function TaskList({ tasks, loading, onView, onRun, onCancel, onDelete, on
       >
         {info.label}
       </span>
-    );
-  }, []);
+    )
+  }, [])
 
   const canRun = useCallback((task: EvaluationTask) => {
-    return task.status === 'pending' || task.status === 'failed';
-  }, []);
+    return task.status === 'pending' || task.status === 'failed'
+  }, [])
 
   const canCancel = useCallback((task: EvaluationTask) => {
-    return task.status === 'running';
-  }, []);
+    return task.status === 'running'
+  }, [])
 
   if (loading && tasks.length === 0) {
     return (
@@ -43,7 +43,7 @@ export function TaskList({ tasks, loading, onView, onRun, onCancel, onDelete, on
         <div className={styles.spinner} />
         <span>Loading tasks...</span>
       </div>
-    );
+    )
   }
 
   if (tasks.length === 0) {
@@ -53,7 +53,7 @@ export function TaskList({ tasks, loading, onView, onRun, onCancel, onDelete, on
         <h3>No Evaluation Tasks</h3>
         <p>Create a new evaluation task to get started.</p>
       </div>
-    );
+    )
   }
 
   return (
@@ -78,7 +78,7 @@ export function TaskList({ tasks, loading, onView, onRun, onCancel, onDelete, on
             </tr>
           </thead>
           <tbody>
-            {tasks.map((task) => (
+            {tasks.map(task => (
               <tr key={task.id}>
                 <td>
                   <div className={styles.taskName}>
@@ -95,7 +95,10 @@ export function TaskList({ tasks, loading, onView, onRun, onCancel, onDelete, on
                       className={styles.progressBar}
                       style={{ width: `${task.progress_percent}%` }}
                     />
-                    <span className={styles.progressText}>{task.progress_percent}%</span>
+                    <span className={styles.progressText}>
+                      {task.progress_percent}
+                      %
+                    </span>
                   </div>
                   {task.current_step && (
                     <span className={styles.currentStep}>{task.current_step}</span>
@@ -150,7 +153,7 @@ export function TaskList({ tasks, loading, onView, onRun, onCancel, onDelete, on
         </table>
       </div>
     </div>
-  );
+  )
 }
 
-export default TaskList;
+export default TaskList

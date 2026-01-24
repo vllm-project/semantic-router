@@ -8,7 +8,7 @@ interface Blob {
   baseX: number
   baseY: number
   radius: number
-  color: { h: number; s: number; l: number }
+  color: { h: number, s: number, l: number }
   offsetX: number
   offsetY: number
   speedX: number
@@ -39,11 +39,11 @@ const LandingPage: React.FC = () => {
     // Create organic blobs with NVIDIA green palette
     const blobs: Blob[] = []
     const colors = [
-      { h: 84, s: 70, l: 50 },   // NVIDIA green
-      { h: 90, s: 65, l: 55 },   // Yellow-green
-      { h: 78, s: 75, l: 45 },   // Deep green
-      { h: 160, s: 60, l: 50 },  // Cyan accent
-      { h: 200, s: 55, l: 55 },  // Blue accent
+      { h: 84, s: 70, l: 50 }, // NVIDIA green
+      { h: 90, s: 65, l: 55 }, // Yellow-green
+      { h: 78, s: 75, l: 45 }, // Deep green
+      { h: 160, s: 60, l: 50 }, // Cyan accent
+      { h: 200, s: 55, l: 55 }, // Blue accent
     ]
 
     // Create 5 large organic blobs - more spread out
@@ -73,7 +73,7 @@ const LandingPage: React.FC = () => {
       // Dark gradient background
       const bgGradient = ctx.createRadialGradient(
         canvas.width / 2, canvas.height / 2, 0,
-        canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) / 2
+        canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) / 2,
       )
       bgGradient.addColorStop(0, '#0a0a0a')
       bgGradient.addColorStop(1, '#000000')
@@ -95,7 +95,7 @@ const LandingPage: React.FC = () => {
         // Create multi-stop gradient for depth
         const gradient = ctx.createRadialGradient(
           blob.x, blob.y, 0,
-          blob.x, blob.y, pulseRadius
+          blob.x, blob.y, pulseRadius,
         )
 
         const { h, s, l } = blob.color
@@ -155,7 +155,8 @@ const LandingPage: React.FC = () => {
           </h1>
 
           <p className={styles.subtitle}>
-            System Level Intelligence for{' '}
+            System Level Intelligence for
+            {' '}
             <span className={styles.highlight}>Mixture-of-Models</span>
           </p>
           <p className={styles.deployTargets}>

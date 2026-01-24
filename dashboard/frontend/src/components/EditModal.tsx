@@ -25,7 +25,7 @@ export interface FieldConfig {
   max?: number
   step?: number
   shouldHide?: (data: // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    any) => boolean
+  any) => boolean
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   customRender?: (value: any, onChange: (value: any) => void) => React.ReactNode
 }
@@ -37,7 +37,7 @@ const EditModal: React.FC<EditModalProps> = ({
   title,
   data,
   fields,
-  mode = 'edit'
+  mode = 'edit',
 }) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [formData, setFormData] = useState<any>({})
@@ -48,7 +48,7 @@ const EditModal: React.FC<EditModalProps> = ({
     if (isOpen) {
       // Convert percentage fields from 0-1 to 0-100 for display
       const convertedData = { ...data }
-      fields.forEach(field => {
+      fields.forEach((field) => {
         if (field.type === 'percentage' && convertedData[field.name] !== undefined) {
           convertedData[field.name] = Math.round(convertedData[field.name] * 100)
         }
@@ -63,7 +63,7 @@ const EditModal: React.FC<EditModalProps> = ({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     setFormData((prev: any) => ({
       ...prev,
-      [fieldName]: value
+      [fieldName]: value,
     }))
   }
 
@@ -75,16 +75,18 @@ const EditModal: React.FC<EditModalProps> = ({
     try {
       // Convert percentage fields from 0-100 back to 0-1 before saving
       const convertedData = { ...formData }
-      fields.forEach(field => {
+      fields.forEach((field) => {
         if (field.type === 'percentage' && convertedData[field.name] !== undefined) {
           convertedData[field.name] = convertedData[field.name] / 100
         }
       })
       await onSave(convertedData)
       onClose()
-    } catch (err) {
+    }
+    catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save')
-    } finally {
+    }
+    finally {
       setSaving(false)
     }
   }
@@ -93,7 +95,7 @@ const EditModal: React.FC<EditModalProps> = ({
 
   return (
     <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+      <div className={styles.modal} onClick={e => e.stopPropagation()}>
         <div className={styles.header}>
           <h2 className={styles.title}>{title}</h2>
           <button className={styles.closeButton} onClick={onClose}>✕</button>
@@ -108,7 +110,7 @@ const EditModal: React.FC<EditModalProps> = ({
           )}
 
           <div className={styles.fields}>
-            {fields.map((field) => !field.shouldHide?.(formData) && (
+            {fields.map(field => !field.shouldHide?.(formData) && (
               <div key={field.name} className={styles.field}>
                 <label className={styles.label}>
                   {field.label}
@@ -123,7 +125,7 @@ const EditModal: React.FC<EditModalProps> = ({
                     type="text"
                     className={styles.input}
                     value={formData[field.name] || ''}
-                    onChange={(e) => handleChange(field.name, e.target.value)}
+                    onChange={e => handleChange(field.name, e.target.value)}
                     placeholder={field.placeholder}
                     required={field.required}
                   />
@@ -132,12 +134,12 @@ const EditModal: React.FC<EditModalProps> = ({
                 {field.type === 'number' && (
                   <input
                     type="number"
-                    step={field.step !== undefined ? field.step : "any"}
+                    step={field.step !== undefined ? field.step : 'any'}
                     min={field.min}
                     max={field.max}
                     className={styles.input}
                     value={formData[field.name] || ''}
-                    onChange={(e) => handleChange(field.name, parseFloat(e.target.value))}
+                    onChange={e => handleChange(field.name, parseFloat(e.target.value))}
                     placeholder={field.placeholder}
                     required={field.required}
                   />
@@ -167,8 +169,9 @@ const EditModal: React.FC<EditModalProps> = ({
                       transform: 'translateY(-50%)',
                       color: 'var(--color-text-secondary)',
                       fontSize: '0.875rem',
-                      pointerEvents: 'none'
-                    }}>
+                      pointerEvents: 'none',
+                    }}
+                    >
                       %
                     </span>
                   </div>
@@ -179,7 +182,7 @@ const EditModal: React.FC<EditModalProps> = ({
                     <input
                       type="checkbox"
                       checked={formData[field.name] || false}
-                      onChange={(e) => handleChange(field.name, e.target.checked)}
+                      onChange={e => handleChange(field.name, e.target.checked)}
                     />
                     <span>Enable</span>
                   </label>
@@ -189,10 +192,10 @@ const EditModal: React.FC<EditModalProps> = ({
                   <select
                     className={styles.select}
                     value={formData[field.name] || ''}
-                    onChange={(e) => handleChange(field.name, e.target.value)}
+                    onChange={e => handleChange(field.name, e.target.value)}
                     required={field.required}
                   >
-                    {field.options?.map((option) => (
+                    {field.options?.map(option => (
                       <option key={option} value={option}>
                         {option || '(None)'}
                       </option>
@@ -202,7 +205,7 @@ const EditModal: React.FC<EditModalProps> = ({
 
                 {field.type === 'multiselect' && (
                   <div className={styles.multiselect}>
-                    {field.options?.map((option) => (
+                    {field.options?.map(option => (
                       <label key={option} className={styles.multiselectOption}>
                         <input
                           type="checkbox"
@@ -225,7 +228,7 @@ const EditModal: React.FC<EditModalProps> = ({
                   <textarea
                     className={styles.textarea}
                     value={formData[field.name] || ''}
-                    onChange={(e) => handleChange(field.name, e.target.value)}
+                    onChange={e => handleChange(field.name, e.target.value)}
                     placeholder={field.placeholder}
                     required={field.required}
                     rows={4}
@@ -244,7 +247,8 @@ const EditModal: React.FC<EditModalProps> = ({
                       try {
                         const parsed = JSON.parse(e.target.value)
                         handleChange(field.name, parsed)
-                      } catch {
+                      }
+                      catch {
                         handleChange(field.name, e.target.value)
                       }
                     }}
@@ -256,7 +260,7 @@ const EditModal: React.FC<EditModalProps> = ({
 
                 {field.type === 'custom' && field.customRender && (
                   <div>
-                    {field.customRender(formData[field.name], (value) => handleChange(field.name, value))}
+                    {field.customRender(formData[field.name], value => handleChange(field.name, value))}
                   </div>
                 )}
               </div>
@@ -287,4 +291,3 @@ const EditModal: React.FC<EditModalProps> = ({
 }
 
 export default EditModal
-

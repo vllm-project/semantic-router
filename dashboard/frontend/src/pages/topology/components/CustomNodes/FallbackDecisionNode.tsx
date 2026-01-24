@@ -12,7 +12,7 @@ interface FallbackDecisionNodeData {
 }
 
 // Mapping of system fallback decision names to display info
-const FALLBACK_DECISION_INFO: Record<string, { icon: string; label: string; description: string }> = {
+const FALLBACK_DECISION_INFO: Record<string, { icon: string, label: string, description: string }> = {
   low_confidence_general: {
     icon: '📉',
     label: 'Low Confidence',
@@ -27,7 +27,7 @@ const FALLBACK_DECISION_INFO: Record<string, { icon: string; label: string; desc
 
 export const FallbackDecisionNode = memo<NodeProps<FallbackDecisionNodeData>>(({ data }) => {
   const { decisionName, fallbackReason, defaultModel, isHighlighted } = data
-  
+
   const info = FALLBACK_DECISION_INFO[decisionName] || {
     icon: '⚠️',
     label: decisionName,
@@ -56,7 +56,9 @@ export const FallbackDecisionNode = memo<NodeProps<FallbackDecisionNodeData>>(({
 
       {defaultModel && (
         <div className={styles.fallbackDecisionModel}>
-          → {defaultModel.length > 20 ? defaultModel.slice(0, 20) + '...' : defaultModel}
+          →
+          {' '}
+          {defaultModel.length > 20 ? defaultModel.slice(0, 20) + '...' : defaultModel}
         </div>
       )}
 

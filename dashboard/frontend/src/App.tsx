@@ -85,37 +85,37 @@ const App: React.FC = () => {
           />
           <Route
             path="/monitoring"
-            element={
+            element={(
               <Layout
                 configSection={configSection}
-                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                onConfigSectionChange={section => setConfigSection(section as ConfigSection)}
               >
                 <MonitoringPage />
               </Layout>
-            }
+            )}
           />
           <Route
             path="/config"
-            element={
+            element={(
               <Layout
                 configSection={configSection}
-                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                onConfigSectionChange={section => setConfigSection(section as ConfigSection)}
               >
                 <ConfigPage activeSection={configSection} />
               </Layout>
-            }
+            )}
           />
           <Route
             path="/playground"
-            element={
+            element={(
               <Layout
                 configSection={configSection}
-                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                onConfigSectionChange={section => setConfigSection(section as ConfigSection)}
                 hideHeaderOnMobile={true}
               >
                 <PlaygroundPage />
               </Layout>
-            }
+            )}
           />
           <Route
             path="/playground/fullscreen"
@@ -123,58 +123,58 @@ const App: React.FC = () => {
           />
           <Route
             path="/topology"
-            element={
+            element={(
               <Layout
                 configSection={configSection}
-                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                onConfigSectionChange={section => setConfigSection(section as ConfigSection)}
               >
                 <TopologyPage />
               </Layout>
-            }
+            )}
           />
           <Route
             path="/tracing"
-            element={
+            element={(
               <Layout
                 configSection={configSection}
-                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                onConfigSectionChange={section => setConfigSection(section as ConfigSection)}
               >
                 <TracingPage />
               </Layout>
-            }
+            )}
           />
           <Route
             path="/status"
-            element={
+            element={(
               <Layout
                 configSection={configSection}
-                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                onConfigSectionChange={section => setConfigSection(section as ConfigSection)}
               >
                 <StatusPage />
               </Layout>
-            }
+            )}
           />
           <Route
             path="/logs"
-            element={
+            element={(
               <Layout
                 configSection={configSection}
-                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                onConfigSectionChange={section => setConfigSection(section as ConfigSection)}
               >
                 <LogsPage />
               </Layout>
-            }
+            )}
           />
           <Route
             path="/evaluation"
-            element={
+            element={(
               <Layout
                 configSection={configSection}
-                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                onConfigSectionChange={section => setConfigSection(section as ConfigSection)}
               >
                 <EvaluationPage />
               </Layout>
-            }
+            )}
           />
         </Routes>
       </BrowserRouter>

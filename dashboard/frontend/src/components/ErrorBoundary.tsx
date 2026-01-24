@@ -46,7 +46,8 @@ class ErrorBoundary extends Component<Props, State> {
           backgroundColor: 'rgba(239, 68, 68, 0.1)',
           border: '1px solid rgba(239, 68, 68, 0.3)',
           color: '#ef4444',
-        }}>
+        }}
+        >
           <h3 style={{ margin: '0 0 10px 0', fontSize: '14px' }}>
             Something went wrong
           </h3>

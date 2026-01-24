@@ -11,7 +11,7 @@ import { getTranslateAttr } from '../hooks/useNoTranslate'
 import type { ToolCall, ToolResult, WebSearchResult } from '../tools'
 
 // Copy button component for copying full response
-const CopyResponseButton = ({ copied, onCopy }: { copied: boolean; onCopy: () => void }) => {
+const CopyResponseButton = ({ copied, onCopy }: { copied: boolean, onCopy: () => void }) => {
   return (
     <button
       className={styles.actionButton}
@@ -19,16 +19,18 @@ const CopyResponseButton = ({ copied, onCopy }: { copied: boolean; onCopy: () =>
       title={copied ? 'Copied!' : 'Copy'}
       aria-label={copied ? 'Copied!' : 'Copy'}
     >
-      {copied ? (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
-      ) : (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <rect x="9" y="9" width="13" height="13" rx="2" />
-          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-        </svg>
-      )}
+      {copied
+        ? (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        )
+        : (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <rect x="9" y="9" width="13" height="13" rx="2" />
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+          </svg>
+        )}
     </button>
   )
 }
@@ -42,7 +44,8 @@ const MessageActionBar = ({ content }: { content: string }) => {
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(content)
-      } else {
+      }
+      else {
         const textArea = document.createElement('textarea')
         textArea.value = content
         textArea.style.position = 'fixed'
@@ -54,7 +57,8 @@ const MessageActionBar = ({ content }: { content: string }) => {
       }
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
+    }
+    catch (err) {
       console.error('Failed to copy:', err)
     }
   }, [content])
@@ -68,11 +72,11 @@ const MessageActionBar = ({ content }: { content: string }) => {
 
 // Greeting lines - defined outside component to maintain stable reference
 const GREETING_LINES = [
-  "Hi there, I am MoM :-)",
-  "The System Intelligence for LLMs",
-  "The World First Model-of-Models",
-  "Open Source for Everyone",
-  "How can I help you today?"
+  'Hi there, I am MoM :-)',
+  'The System Intelligence for LLMs',
+  'The World First Model-of-Models',
+  'Open Source for Everyone',
+  'How can I help you today?',
 ]
 
 // Typing effect component for greeting with multiple lines
@@ -94,7 +98,8 @@ const TypingGreeting = memo(({ lines }: { lines: string[] }) => {
       if (charIndex < currentLine.length) {
         setDisplayedText(currentLine.slice(0, charIndex + 1))
         charIndex++
-      } else {
+      }
+      else {
         clearInterval(typingInterval)
         setIsTyping(false)
         // Wait before moving to next line
@@ -146,12 +151,12 @@ interface Message {
 }
 
 // Web Search Card Component
-const WebSearchCard = ({ 
-  toolCall, 
+const WebSearchCard = ({
+  toolCall,
   toolResult,
   isExpanded,
-  onToggle 
-}: { 
+  onToggle,
+}: {
   toolCall: ToolCall
   toolResult?: ToolResult
   isExpanded: boolean
@@ -162,12 +167,13 @@ const WebSearchCard = ({
   try {
     const args = JSON.parse(toolCall.function.arguments || '{}')
     query = args.query || ''
-  } catch {
+  }
+  catch {
     // Arguments still streaming or invalid, show partial or empty
     const match = toolCall.function.arguments?.match(/"query"\s*:\s*"([^"]*)/)
     query = (match && match[1]) || 'Searching...'
   }
-  
+
   // Safely get results - ensure it's an array
   const results = useMemo(() => {
     if (!toolResult?.content) return undefined
@@ -177,50 +183,60 @@ const WebSearchCard = ({
     // If content is a string (error message), return undefined
     return undefined
   }, [toolResult?.content])
-  
+
   return (
     <div className={styles.webSearchCard}>
       <div className={styles.webSearchHeader} onClick={onToggle}>
         <div className={styles.webSearchIcon}>
-          {toolCall.status === 'running' ? (
-            <svg className={styles.searchSpinner} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="8" />
-              <path d="M21 21l-4.35-4.35" />
-            </svg>
-          ) : (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="8" />
-              <path d="M21 21l-4.35-4.35" />
-            </svg>
-          )}
+          {toolCall.status === 'running'
+            ? (
+              <svg className={styles.searchSpinner} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8" />
+                <path d="M21 21l-4.35-4.35" />
+              </svg>
+            )
+            : (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8" />
+                <path d="M21 21l-4.35-4.35" />
+              </svg>
+            )}
         </div>
         <div className={styles.webSearchInfo}>
           <span className={styles.webSearchTitle}>
             {toolCall.status === 'running' ? 'Searching...' : 'Web Search'}
           </span>
-          <span className={styles.webSearchQuery}>"{query}"</span>
+          <span className={styles.webSearchQuery}>
+            "
+            {query}
+            "
+          </span>
         </div>
         <div className={styles.webSearchStatus}>
           {toolCall.status === 'completed' && results && (
-            <span className={styles.webSearchCount}>{results.length} sources</span>
+            <span className={styles.webSearchCount}>
+              {results.length}
+              {' '}
+              sources
+            </span>
           )}
-          <svg 
-            className={`${styles.webSearchChevron} ${isExpanded ? styles.expanded : ''}`} 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="currentColor" 
+          <svg
+            className={`${styles.webSearchChevron} ${isExpanded ? styles.expanded : ''}`}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
             strokeWidth="2"
           >
             <polyline points="6 9 12 15 18 9" />
           </svg>
         </div>
       </div>
-      
+
       {isExpanded && toolCall.status === 'completed' && results && results.length > 0 && (
         <div className={styles.webSearchResults}>
           <div className={styles.sourcePills}>
             {results.map((result, idx) => (
-              <a 
+              <a
                 key={idx}
                 href={result.url}
                 target="_blank"
@@ -237,10 +253,14 @@ const WebSearchCard = ({
             {results.map((result, idx) => (
               <div key={idx} className={styles.sourceItem}>
                 <div className={styles.sourceItemHeader}>
-                  <span className={styles.sourceItemNumber}>[{idx + 1}]</span>
-                  <a 
-                    href={result.url} 
-                    target="_blank" 
+                  <span className={styles.sourceItemNumber}>
+                    [
+                    {idx + 1}
+                    ]
+                  </span>
+                  <a
+                    href={result.url}
+                    target="_blank"
                     rel="noopener noreferrer"
                     className={styles.sourceItemTitle}
                   >
@@ -253,7 +273,7 @@ const WebSearchCard = ({
           </div>
         </div>
       )}
-      
+
       {toolCall.status === 'running' && (
         <div className={styles.webSearchLoading}>
           <div className={styles.webSearchLoadingBar} />
@@ -264,11 +284,11 @@ const WebSearchCard = ({
 }
 
 // Tool Toggle Component
-const ToolToggle = ({ 
-  enabled, 
+const ToolToggle = ({
+  enabled,
   onToggle,
-  disabled 
-}: { 
+  disabled,
+}: {
   enabled: boolean
   onToggle: () => void
   disabled?: boolean
@@ -290,14 +310,14 @@ const ToolToggle = ({
 }
 
 // Citation Link Component - renders [1], [2], etc. as clickable links
-const CitationLink = ({ 
-  number, 
-  url, 
-  title 
-}: { 
+const CitationLink = ({
+  number,
+  url,
+  title,
+}: {
   number: number
   url?: string
-  title?: string 
+  title?: string
 }) => {
   const handleClick = (e: React.MouseEvent) => {
     if (url) {
@@ -314,17 +334,19 @@ const CitationLink = ({
       role="button"
       tabIndex={0}
     >
-      [{number}]
+      [
+      {number}
+      ]
     </span>
   )
 }
 
 // Content with Citations - parses [1], [2] etc and renders as clickable links
-const ContentWithCitations = ({ 
-  content, 
+const ContentWithCitations = ({
+  content,
   sources,
-  isStreaming = false
-}: { 
+  isStreaming = false,
+}: {
   content: string
   sources?: SearchResult[] | unknown
   isStreaming?: boolean
@@ -373,7 +395,7 @@ const ContentWithCitations = ({
             number={citationNumber}
             url={source?.url}
             title={source ? `${source.title} - ${source.domain}` : undefined}
-          />
+          />,
         )
 
         lastIndex = match.index + match[0].length
@@ -394,7 +416,7 @@ const ContentWithCitations = ({
 
     // Check if content has citations
     const hasCitations = /\[\d+\]/.test(content)
-    
+
     if (!hasCitations) {
       return <MarkdownRenderer content={content} />
     }
@@ -414,14 +436,15 @@ const ContentWithCitations = ({
           inCodeBlock = true
           codeBlockLang = line.slice(3).trim()
           codeBlockContent = ''
-        } else {
+        }
+        else {
           // End of code block - render as markdown
           processedLines.push(
             <div key={`code-${lineIndex}`} className={styles.codeBlockWrapper}>
-              <MarkdownRenderer 
-                content={`\`\`\`${codeBlockLang}\n${codeBlockContent}\`\`\``} 
+              <MarkdownRenderer
+                content={`\`\`\`${codeBlockLang}\n${codeBlockContent}\`\`\``}
               />
-            </div>
+            </div>,
           )
           inCodeBlock = false
           codeBlockLang = ''
@@ -440,17 +463,19 @@ const ContentWithCitations = ({
         processedLines.push(
           <p key={`line-${lineIndex}`} className={styles.citationParagraph}>
             {parseContentWithCitations(line, `line-${lineIndex}`)}
-          </p>
+          </p>,
         )
-      } else if (line.trim() === '') {
+      }
+      else if (line.trim() === '') {
         // Empty line - add spacer div instead of br for consistent structure
         processedLines.push(<div key={`space-${lineIndex}`} className={styles.lineBreak} />)
-      } else {
+      }
+      else {
         // Regular line without citations - use markdown wrapped in div
         processedLines.push(
           <div key={`md-${lineIndex}`} className={styles.markdownLine}>
             <MarkdownRenderer content={line} />
-          </div>
+          </div>,
         )
       }
     })
@@ -493,7 +518,7 @@ const ChatComponent = ({
   const [isFullscreen] = useState(isFullscreenMode)
   const [enableWebSearch, setEnableWebSearch] = useState(false)
   const [expandedToolCards, setExpandedToolCards] = useState<Set<string>>(new Set())
-  
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -522,7 +547,8 @@ const ChatComponent = ({
   useEffect(() => {
     if (isFullscreen) {
       document.body.classList.add('playground-fullscreen')
-    } else {
+    }
+    else {
       document.body.classList.remove('playground-fullscreen')
     }
 
@@ -600,7 +626,7 @@ const ChatComponent = ({
     // Reset animation states and show initial thinking animation (no content)
     setPendingHeaders(null)
     setShowHeaderReveal(false)
-    setShowThinking(true)  // Show immediately when user sends message
+    setShowThinking(true) // Show immediately when user sends message
 
     const assistantMessageId = generateId()
     const assistantMessage: Message = {
@@ -674,7 +700,7 @@ const ChatComponent = ({
         'x-vsr-looper-algorithm',
       ]
 
-      headerKeys.forEach(key => {
+      headerKeys.forEach((key) => {
         const value = response.headers.get(key)
         if (value) {
           responseHeaders[key] = value
@@ -685,8 +711,8 @@ const ChatComponent = ({
       if (Object.keys(responseHeaders).length > 0) {
         console.log('Headers received, showing HeaderReveal')
         setPendingHeaders(responseHeaders)
-        setShowThinking(false)  // Hide full-screen thinking animation
-        setShowHeaderReveal(true)  // Show HeaderReveal
+        setShowThinking(false) // Hide full-screen thinking animation
+        setShowHeaderReveal(true) // Show HeaderReveal
       }
 
       const reader = response.body?.getReader()
@@ -696,7 +722,7 @@ const ChatComponent = ({
 
       const decoder = new TextDecoder()
       // Track content for each choice (for ratings mode)
-      const choiceContents: Map<number, { content: string; model?: string }> = new Map()
+      const choiceContents: Map<number, { content: string, model?: string }> = new Map()
       // Check if this is ratings mode (multiple choices)
       let isRatingsMode = false
       // Track tool calls
@@ -742,9 +768,9 @@ const ChatComponent = ({
                         type: 'function',
                         function: {
                           name: tc.function?.name || '',
-                          arguments: ''
+                          arguments: '',
                         },
-                        status: 'running'
+                        status: 'running',
                       })
                     }
                     const existingTc = toolCallsMap.get(tcIndex)!
@@ -765,8 +791,8 @@ const ChatComponent = ({
                     prev.map(m =>
                       m.id === assistantMessageId
                         ? { ...m, toolCalls: currentToolCalls }
-                        : m
-                    )
+                        : m,
+                    ),
                   )
                 }
 
@@ -804,15 +830,16 @@ const ChatComponent = ({
                     prev.map(m =>
                       m.id === assistantMessageId
                         ? {
-                            ...m,
-                            content: choicesArray[0]?.content || '',
-                            choices: choicesArray,
-                            thinkingProcess: thinkingProcess
-                          }
-                        : m
-                    )
+                          ...m,
+                          content: choicesArray[0]?.content || '',
+                          choices: choicesArray,
+                          thinkingProcess: thinkingProcess,
+                        }
+                        : m,
+                    ),
                   )
-                } else {
+                }
+                else {
                   // Single choice mode
                   const firstChoice = choiceContents.get(0)
                   if (firstChoice) {
@@ -822,18 +849,19 @@ const ChatComponent = ({
                       prev.map(m =>
                         m.id === assistantMessageId
                           ? {
-                              ...m,
-                              content: parsed.final,
-                              thinkingProcess: parsed.thinking,
-                              isStreaming: !parsed.hasFinal  // Stop streaming when we hit assistantfinal
-                            }
-                          : m
-                      )
+                            ...m,
+                            content: parsed.final,
+                            thinkingProcess: parsed.thinking,
+                            isStreaming: !parsed.hasFinal, // Stop streaming when we hit assistantfinal
+                          }
+                          : m,
+                      ),
                     )
                   }
                 }
               }
-            } catch {
+            }
+            catch {
               // Skip malformed JSON chunks
             }
           }
@@ -844,15 +872,16 @@ const ChatComponent = ({
       if (hasToolCalls) {
         // Get the final accumulated tool calls from the map
         const toolCalls = Array.from(toolCallsMap.values())
-        
+
         // Mark all tools as running
-        toolCalls.forEach(tc => { tc.status = 'running' })
+        // eslint-disable-next-line @stylistic/max-statements-per-line
+        toolCalls.forEach((tc) => { tc.status = 'running' })
         setMessages(prev =>
           prev.map(m =>
             m.id === assistantMessageId
               ? { ...m, toolCalls: [...toolCalls] }
-              : m
-          )
+              : m,
+          ),
         )
 
         // Execute all tools in parallel using Tool Registry
@@ -861,7 +890,7 @@ const ChatComponent = ({
         })
 
         // Update tool statuses based on results
-        toolResults.forEach(result => {
+        toolResults.forEach((result) => {
           const tc = toolCalls.find(t => t.id === result.callId)
           if (tc) {
             tc.status = result.error ? 'failed' : 'completed'
@@ -873,8 +902,8 @@ const ChatComponent = ({
           prev.map(m =>
             m.id === assistantMessageId
               ? { ...m, toolCalls: [...toolCalls], toolResults }
-              : m
-          )
+              : m,
+          ),
         )
 
         // Auto-expand the first tool card
@@ -897,18 +926,18 @@ const ChatComponent = ({
               type: 'function',
               function: {
                 name: tc.function.name,
-                arguments: tc.function.arguments
-              }
-            }))
+                arguments: tc.function.arguments,
+              },
+            })),
           },
           // Tool results
           ...toolResults.map(tr => ({
             role: 'tool',
             tool_call_id: tr.callId,
-            content: typeof tr.content === 'string' 
-              ? tr.content 
-              : JSON.stringify(tr.content)
-          }))
+            content: typeof tr.content === 'string'
+              ? tr.content
+              : JSON.stringify(tr.content),
+          })),
         ]
 
         // Make second API call to get final response
@@ -928,7 +957,8 @@ const ChatComponent = ({
         if (!followUpResponse.ok) {
           console.error('Follow-up API call failed:', followUpResponse.status, followUpResponse.statusText)
           // Don't throw - we already have tool results to show
-        } else if (followUpResponse.body) {
+        }
+        else if (followUpResponse.body) {
           const followUpReader = followUpResponse.body.getReader()
           const followUpDecoder = new TextDecoder()
           let followUpContent = ''
@@ -955,11 +985,12 @@ const ChatComponent = ({
                       prev.map(m =>
                         m.id === assistantMessageId
                           ? { ...m, content: followUpContent }
-                          : m
-                      )
+                          : m,
+                      ),
                     )
                   }
-                } catch {
+                }
+                catch {
                   // Ignore parse errors
                 }
               }
@@ -971,8 +1002,8 @@ const ChatComponent = ({
       // Finalize message
       const finalChoices: Choice[] | undefined = isRatingsMode
         ? Array.from(choiceContents.entries())
-            .sort(([a], [b]) => a - b)
-            .map(([, v]) => ({ content: v.content, model: v.model }))
+          .sort(([a], [b]) => a - b)
+          .map(([, v]) => ({ content: v.content, model: v.model }))
         : undefined
 
       // Streaming finished - no need to control ThinkingAnimation here
@@ -982,22 +1013,24 @@ const ChatComponent = ({
         prev.map(m =>
           m.id === assistantMessageId
             ? {
-                ...m,
-                isStreaming: false,
-                headers: Object.keys(responseHeaders).length > 0 ? responseHeaders : undefined,
-                choices: finalChoices
-              }
-            : m
-        )
+              ...m,
+              isStreaming: false,
+              headers: Object.keys(responseHeaders).length > 0 ? responseHeaders : undefined,
+              choices: finalChoices,
+            }
+            : m,
+        ),
       )
-    } catch (err) {
+    }
+    catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
         return
       }
       const errorMessage = err instanceof Error ? err.message : 'Unknown error'
       setError(errorMessage)
       setMessages(prev => prev.filter(m => m.id !== assistantMessageId))
-    } finally {
+    }
+    finally {
       setIsLoading(false)
       abortControllerRef.current = null
     }
@@ -1040,290 +1073,304 @@ const ChatComponent = ({
       )}
 
       <div className={`${styles.container} ${isFullscreen ? styles.fullscreen : ''}`}>
-      {showSettings && (
-        <div className={styles.settings}>
-          <div className={styles.settingsHeader}>
-            <span className={styles.settingsTitle}>Settings</span>
-            <button
-              className={styles.iconButton}
-              onClick={() => setShowSettings(false)}
-              title="Close settings"
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M1 1l12 12M13 1L1 13" strokeLinecap="round"/>
-              </svg>
-            </button>
-          </div>
-          <div className={styles.settingRow}>
-            <label className={styles.settingLabel}>Model:</label>
-            <input
-              type="text"
-              value={model}
-              onChange={e => setModel(e.target.value)}
-              className={styles.settingInput}
-              placeholder="auto, gpt-4, etc."
-            />
-          </div>
-          <div className={styles.settingRow}>
-            <label className={styles.settingLabel}>System Prompt:</label>
-            <textarea
-              value={systemPrompt}
-              onChange={e => setSystemPrompt(e.target.value)}
-              className={styles.settingTextarea}
-              rows={3}
-              placeholder="You are a helpful assistant."
-            />
-          </div>
-        </div>
-      )}
-
-      {error && (
-        <div className={styles.error}>
-          <span className={styles.errorIcon}>⚠️</span>
-          <span>{error}</span>
-          <button
-            className={styles.errorDismiss}
-            onClick={() => setError(null)}
-          >
-            ×
-          </button>
-        </div>
-      )}
-
-      <div className={styles.messagesContainer}>
-        {messages.length === 0 ? (
-          <div className={styles.emptyState}>
-            <TypingGreeting lines={GREETING_LINES} />
-          </div>
-        ) : (
-          <div className={styles.messages}>
-            {messages.map(message => (
-              <div
-                key={message.id}
-                className={`${styles.message} ${styles[message.role]}`}
-                // Disable translation during streaming to prevent DOM conflicts
-                translate={getTranslateAttr(message.isStreaming ?? false)}
-              >
-                <div className={styles.messageAvatar}>
-                  {message.role === 'user' ? (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  ) : (
-                    <img src="/vllm.png" alt="vLLM SR" className={styles.avatarImage} />
-                  )}
-                </div>
-                <div className={styles.messageContent}>
-                  <div className={styles.messageRole}>
-                    {message.role === 'user' ? 'You' : 'vLLM SR'}
-                  </div>
-                  {/* Ratings mode: multiple choices */}
-                  {message.role === 'assistant' && message.choices && message.choices.length > 1 ? (
-                    <>
-                      {/* Show tool calls if any */}
-                      {message.toolCalls && message.toolCalls.length > 0 && (
-                        <div className={styles.toolCallsContainer}>
-                          {message.toolCalls.map(tc => (
-                            <WebSearchCard
-                              key={tc.id}
-                              toolCall={tc}
-                              toolResult={message.toolResults?.find(tr => tr.callId === tc.id)}
-                              isExpanded={expandedToolCards.has(tc.id)}
-                              onToggle={() => {
-                                setExpandedToolCards(prev => {
-                                  const next = new Set(prev)
-                                  if (next.has(tc.id)) {
-                                    next.delete(tc.id)
-                                  } else {
-                                    next.add(tc.id)
-                                  }
-                                  return next
-                                })
-                              }}
-                            />
-                          ))}
-                        </div>
-                      )}
-                      {/* Show thinking block if available */}
-                      {message.thinkingProcess && (
-                        <ThinkingBlock
-                          content={message.thinkingProcess}
-                          isStreaming={message.isStreaming}
-                        />
-                      )}
-                      <div className={styles.ratingsChoices}>
-                        {message.choices.map((choice, idx) => (
-                          <div key={idx} className={styles.choiceCard}>
-                            <div className={styles.choiceHeader}>
-                              <span className={styles.choiceModel}>{choice.model || `Model ${idx + 1}`}</span>
-                              <span className={styles.choiceIndex}>Choice {idx + 1}</span>
-                            </div>
-                            <div className={styles.choiceContent}>
-                              <ErrorBoundary>
-                                <ContentWithCitations 
-                                  content={choice.content}
-                                  sources={
-                                    message.toolResults?.find(tr => tr.name === 'search_web')?.content
-                                  }
-                                  isStreaming={message.isStreaming}
-                                />
-                              </ErrorBoundary>
-                              {message.isStreaming && idx === 0 && (
-                                <span className={styles.cursor}>▊</span>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    /* Single choice mode */
-                    <>
-                      {/* Show tool calls if any */}
-                      {message.role === 'assistant' && message.toolCalls && message.toolCalls.length > 0 && (
-                        <div className={styles.toolCallsContainer}>
-                          {message.toolCalls.map(tc => (
-                            <ErrorBoundary key={tc.id}>
-                              <WebSearchCard
-                                toolCall={tc}
-                                toolResult={message.toolResults?.find(tr => tr.callId === tc.id)}
-                                isExpanded={expandedToolCards.has(tc.id)}
-                                onToggle={() => {
-                                  setExpandedToolCards(prev => {
-                                    const next = new Set(prev)
-                                    if (next.has(tc.id)) {
-                                      next.delete(tc.id)
-                                    } else {
-                                      next.add(tc.id)
-                                    }
-                                    return next
-                                  })
-                                }}
-                              />
-                            </ErrorBoundary>
-                          ))}
-                        </div>
-                      )}
-                      {/* Show thinking block if available */}
-                      {message.role === 'assistant' && message.thinkingProcess && (
-                        <ThinkingBlock
-                          content={message.thinkingProcess}
-                          isStreaming={message.isStreaming}
-                        />
-                      )}
-                      <div className={styles.messageText}>
-                        {message.role === 'assistant' && message.content ? (
-                          <>
-                            <ErrorBoundary>
-                              <ContentWithCitations 
-                                content={message.content} 
-                                sources={
-                                  message.toolResults?.find(tr => tr.name === 'search_web')?.content
-                                }
-                                isStreaming={message.isStreaming}
-                              />
-                            </ErrorBoundary>
-                            {message.isStreaming && (
-                              <span className={styles.cursor}>▊</span>
-                            )}
-                          </>
-                        ) : (
-                          <>
-                            {message.content || (message.isStreaming && (
-                              <span className={styles.cursor}>▊</span>
-                            ))}
-                            {message.isStreaming && message.content && (
-                              <span className={styles.cursor}>▊</span>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </>
-                  )}
-                  {message.role === 'assistant' && message.headers && (
-                    <HeaderDisplay headers={message.headers} />
-                  )}
-                  {message.role === 'assistant' && message.content && !message.isStreaming && (
-                    <MessageActionBar content={message.content} />
-                  )}
-                </div>
-              </div>
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
-        )}
-      </div>
-
-      <div className={styles.inputContainer}>
-        <div className={styles.inputToolbar}>
-          <ToolToggle
-            enabled={enableWebSearch}
-            onToggle={() => setEnableWebSearch(!enableWebSearch)}
-            disabled={isLoading}
-          />
-        </div>
-        <div className={styles.inputWrapper}>
-          <textarea
-            ref={inputRef}
-            value={inputValue}
-            onChange={e => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask me anything..."
-            className={styles.input}
-            rows={1}
-            disabled={isLoading}
-          />
-          <div className={styles.inputActionsRow}>
-            <div className={styles.inputActions}>
+        {showSettings && (
+          <div className={styles.settings}>
+            <div className={styles.settingsHeader}>
+              <span className={styles.settingsTitle}>Settings</span>
               <button
-                className={styles.inputActionButton}
-                onClick={() => setShowSettings(!showSettings)}
-                title="Settings"
+                className={styles.iconButton}
+                onClick={() => setShowSettings(false)}
+                title="Close settings"
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <circle cx="8" cy="8" r="2.5"/>
-                  <path d="M8 1v2M8 13v2M15 8h-2M3 8H1M13.5 2.5l-1.4 1.4M3.9 12.1l-1.4 1.4M13.5 13.5l-1.4-1.4M3.9 3.9L2.5 2.5" strokeLinecap="round"/>
-                </svg>
-              </button>
-              <button
-                className={styles.inputActionButton}
-                onClick={handleClear}
-                title="Clear chat"
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M2 4h12M5.5 4V2.5h5V4M13 4v9.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4M6.5 7v4M9.5 7v4" strokeLinecap="round" strokeLinejoin="round"/>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M1 1l12 12M13 1L1 13" strokeLinecap="round" />
                 </svg>
               </button>
             </div>
-            {isLoading ? (
-              <button
-                className={`${styles.sendButton} ${styles.stopButton}`}
-                onClick={handleStop}
-                title="Stop generating"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <rect x="6" y="6" width="12" height="12" rx="2"/>
-                </svg>
-              </button>
-            ) : (
-              <button
-                className={styles.sendButton}
-                onClick={handleSend}
-                disabled={!inputValue.trim()}
-                title="Send message"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M12 19V5M5 12l7-7 7 7" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </button>
+            <div className={styles.settingRow}>
+              <label className={styles.settingLabel}>Model:</label>
+              <input
+                type="text"
+                value={model}
+                onChange={e => setModel(e.target.value)}
+                className={styles.settingInput}
+                placeholder="auto, gpt-4, etc."
+              />
+            </div>
+            <div className={styles.settingRow}>
+              <label className={styles.settingLabel}>System Prompt:</label>
+              <textarea
+                value={systemPrompt}
+                onChange={e => setSystemPrompt(e.target.value)}
+                className={styles.settingTextarea}
+                rows={3}
+                placeholder="You are a helpful assistant."
+              />
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className={styles.error}>
+            <span className={styles.errorIcon}>⚠️</span>
+            <span>{error}</span>
+            <button
+              className={styles.errorDismiss}
+              onClick={() => setError(null)}
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        <div className={styles.messagesContainer}>
+          {messages.length === 0
+            ? (
+              <div className={styles.emptyState}>
+                <TypingGreeting lines={GREETING_LINES} />
+              </div>
+            )
+            : (
+              <div className={styles.messages}>
+                {messages.map(message => (
+                  <div
+                    key={message.id}
+                    className={`${styles.message} ${styles[message.role]}`}
+                    // Disable translation during streaming to prevent DOM conflicts
+                    translate={getTranslateAttr(message.isStreaming ?? false)}
+                  >
+                    <div className={styles.messageAvatar}>
+                      {message.role === 'user'
+                        ? (
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )
+                        : (
+                          <img src="/vllm.png" alt="vLLM SR" className={styles.avatarImage} />
+                        )}
+                    </div>
+                    <div className={styles.messageContent}>
+                      <div className={styles.messageRole}>
+                        {message.role === 'user' ? 'You' : 'vLLM SR'}
+                      </div>
+                      {/* Ratings mode: multiple choices */}
+                      {message.role === 'assistant' && message.choices && message.choices.length > 1
+                        ? (
+                          <>
+                            {/* Show tool calls if any */}
+                            {message.toolCalls && message.toolCalls.length > 0 && (
+                              <div className={styles.toolCallsContainer}>
+                                {message.toolCalls.map(tc => (
+                                  <WebSearchCard
+                                    key={tc.id}
+                                    toolCall={tc}
+                                    toolResult={message.toolResults?.find(tr => tr.callId === tc.id)}
+                                    isExpanded={expandedToolCards.has(tc.id)}
+                                    onToggle={() => {
+                                      setExpandedToolCards((prev) => {
+                                        const next = new Set(prev)
+                                        if (next.has(tc.id)) {
+                                          next.delete(tc.id)
+                                        }
+                                        else {
+                                          next.add(tc.id)
+                                        }
+                                        return next
+                                      })
+                                    }}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                            {/* Show thinking block if available */}
+                            {message.thinkingProcess && (
+                              <ThinkingBlock
+                                content={message.thinkingProcess}
+                                isStreaming={message.isStreaming}
+                              />
+                            )}
+                            <div className={styles.ratingsChoices}>
+                              {message.choices.map((choice, idx) => (
+                                <div key={idx} className={styles.choiceCard}>
+                                  <div className={styles.choiceHeader}>
+                                    <span className={styles.choiceModel}>{choice.model || `Model ${idx + 1}`}</span>
+                                    <span className={styles.choiceIndex}>
+                                      Choice
+                                      {idx + 1}
+                                    </span>
+                                  </div>
+                                  <div className={styles.choiceContent}>
+                                    <ErrorBoundary>
+                                      <ContentWithCitations
+                                        content={choice.content}
+                                        sources={
+                                          message.toolResults?.find(tr => tr.name === 'search_web')?.content
+                                        }
+                                        isStreaming={message.isStreaming}
+                                      />
+                                    </ErrorBoundary>
+                                    {message.isStreaming && idx === 0 && (
+                                      <span className={styles.cursor}>▊</span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )
+                        : (
+                          /* Single choice mode */
+                          <>
+                            {/* Show tool calls if any */}
+                            {message.role === 'assistant' && message.toolCalls && message.toolCalls.length > 0 && (
+                              <div className={styles.toolCallsContainer}>
+                                {message.toolCalls.map(tc => (
+                                  <ErrorBoundary key={tc.id}>
+                                    <WebSearchCard
+                                      toolCall={tc}
+                                      toolResult={message.toolResults?.find(tr => tr.callId === tc.id)}
+                                      isExpanded={expandedToolCards.has(tc.id)}
+                                      onToggle={() => {
+                                        setExpandedToolCards((prev) => {
+                                          const next = new Set(prev)
+                                          if (next.has(tc.id)) {
+                                            next.delete(tc.id)
+                                          }
+                                          else {
+                                            next.add(tc.id)
+                                          }
+                                          return next
+                                        })
+                                      }}
+                                    />
+                                  </ErrorBoundary>
+                                ))}
+                              </div>
+                            )}
+                            {/* Show thinking block if available */}
+                            {message.role === 'assistant' && message.thinkingProcess && (
+                              <ThinkingBlock
+                                content={message.thinkingProcess}
+                                isStreaming={message.isStreaming}
+                              />
+                            )}
+                            <div className={styles.messageText}>
+                              {message.role === 'assistant' && message.content
+                                ? (
+                                  <>
+                                    <ErrorBoundary>
+                                      <ContentWithCitations
+                                        content={message.content}
+                                        sources={
+                                          message.toolResults?.find(tr => tr.name === 'search_web')?.content
+                                        }
+                                        isStreaming={message.isStreaming}
+                                      />
+                                    </ErrorBoundary>
+                                    {message.isStreaming && (
+                                      <span className={styles.cursor}>▊</span>
+                                    )}
+                                  </>
+                                )
+                                : (
+                                  <>
+                                    {message.content || (message.isStreaming && (
+                                      <span className={styles.cursor}>▊</span>
+                                    ))}
+                                    {message.isStreaming && message.content && (
+                                      <span className={styles.cursor}>▊</span>
+                                    )}
+                                  </>
+                                )}
+                            </div>
+                          </>
+                        )}
+                      {message.role === 'assistant' && message.headers && (
+                        <HeaderDisplay headers={message.headers} />
+                      )}
+                      {message.role === 'assistant' && message.content && !message.isStreaming && (
+                        <MessageActionBar content={message.content} />
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <div ref={messagesEndRef} />
+              </div>
             )}
+        </div>
+
+        <div className={styles.inputContainer}>
+          <div className={styles.inputToolbar}>
+            <ToolToggle
+              enabled={enableWebSearch}
+              onToggle={() => setEnableWebSearch(!enableWebSearch)}
+              disabled={isLoading}
+            />
+          </div>
+          <div className={styles.inputWrapper}>
+            <textarea
+              ref={inputRef}
+              value={inputValue}
+              onChange={e => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask me anything..."
+              className={styles.input}
+              rows={1}
+              disabled={isLoading}
+            />
+            <div className={styles.inputActionsRow}>
+              <div className={styles.inputActions}>
+                <button
+                  className={styles.inputActionButton}
+                  onClick={() => setShowSettings(!showSettings)}
+                  title="Settings"
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <circle cx="8" cy="8" r="2.5" />
+                    <path d="M8 1v2M8 13v2M15 8h-2M3 8H1M13.5 2.5l-1.4 1.4M3.9 12.1l-1.4 1.4M13.5 13.5l-1.4-1.4M3.9 3.9L2.5 2.5" strokeLinecap="round" />
+                  </svg>
+                </button>
+                <button
+                  className={styles.inputActionButton}
+                  onClick={handleClear}
+                  title="Clear chat"
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M2 4h12M5.5 4V2.5h5V4M13 4v9.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4M6.5 7v4M9.5 7v4" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              </div>
+              {isLoading
+                ? (
+                  <button
+                    className={`${styles.sendButton} ${styles.stopButton}`}
+                    onClick={handleStop}
+                    title="Stop generating"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                      <rect x="6" y="6" width="12" height="12" rx="2" />
+                    </svg>
+                  </button>
+                )
+                : (
+                  <button
+                    className={styles.sendButton}
+                    onClick={handleSend}
+                    disabled={!inputValue.trim()}
+                    title="Send message"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M12 19V5M5 12l7-7 7 7" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
     </>
   )
 }
 
 export default ChatComponent
-

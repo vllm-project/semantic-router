@@ -39,7 +39,8 @@ const PlatformBranding = ({ variant = 'default', className = '' }: PlatformBrand
     if (isAmd) {
       if (preloadedImages.has(imageSrc)) {
         setIsImageLoaded(true)
-      } else {
+      }
+      else {
         preloadImage(imageSrc).then(() => setIsImageLoaded(true))
       }
     }
@@ -70,4 +71,3 @@ export const preloadPlatformAssets = (platform?: string) => {
 }
 
 export default PlatformBranding
-

@@ -88,7 +88,7 @@ export interface ExecuteAllOptions extends ToolExecutionContext {
  */
 export type ToolExecutor<TArgs = unknown, TResult = unknown> = (
   args: TArgs,
-  context: ToolExecutionContext
+  context: ToolExecutionContext,
 ) => Promise<TResult>
 
 // ========== Tool Registration Types ==========
@@ -141,15 +141,15 @@ export interface RegisteredTool<TArgs = unknown, TResult = unknown> {
 
 // ========== Event Types ==========
 
-export type ToolEventType = 
-  | 'tool:registered'
-  | 'tool:unregistered'
-  | 'tool:enabled'
-  | 'tool:disabled'
-  | 'tool:execution:start'
-  | 'tool:execution:progress'
-  | 'tool:execution:complete'
-  | 'tool:execution:error'
+export type ToolEventType
+  = | 'tool:registered'
+    | 'tool:unregistered'
+    | 'tool:enabled'
+    | 'tool:disabled'
+    | 'tool:execution:start'
+    | 'tool:execution:progress'
+    | 'tool:execution:complete'
+    | 'tool:execution:error'
 
 export interface ToolEvent {
   type: ToolEventType

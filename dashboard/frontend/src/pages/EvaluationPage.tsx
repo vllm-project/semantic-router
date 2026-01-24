@@ -1,99 +1,101 @@
-import { useState, useCallback } from 'react';
-import type { EvaluationTask, CreateTaskRequest } from '../types/evaluation';
-import { useTasks, useTaskMutations, useResults } from '../hooks/useEvaluation';
-import { useReadonly } from '../contexts/ReadonlyContext';
+import { useState, useCallback } from 'react'
+import type { EvaluationTask, CreateTaskRequest } from '../types/evaluation'
+import { useTasks, useTaskMutations, useResults } from '../hooks/useEvaluation'
+import { useReadonly } from '../contexts/ReadonlyContext'
 import {
   TaskList,
   TaskCreationForm,
   ProgressTracker,
   ReportViewer,
   HistoricalResults,
-} from '../components/evaluation';
-import styles from './EvaluationPage.module.css';
+} from '../components/evaluation'
+import styles from './EvaluationPage.module.css'
 
-type TabType = 'tasks' | 'create' | 'progress' | 'report' | 'history';
+type TabType = 'tasks' | 'create' | 'progress' | 'report' | 'history'
 
 interface TabState {
-  active: TabType;
-  selectedTaskId: string | null;
+  active: TabType
+  selectedTaskId: string | null
 }
 
 export function EvaluationPage() {
-  const { isReadonly } = useReadonly();
-  const { tasks, loading: tasksLoading, refresh: refreshTasks } = useTasks(true);
-  const { loading: mutationLoading, error: mutationError, createTask, runTask, cancelTask, deleteTask, clearError } = useTaskMutations();
+  const { isReadonly } = useReadonly()
+  const { tasks, loading: tasksLoading, refresh: refreshTasks } = useTasks(true)
+  const { loading: mutationLoading, error: mutationError, createTask, runTask, cancelTask, deleteTask, clearError } = useTaskMutations()
 
-  const [tabState, setTabState] = useState<TabState>({ active: 'tasks', selectedTaskId: null });
+  const [tabState, setTabState] = useState<TabState>({ active: 'tasks', selectedTaskId: null })
 
   // Fetch results when viewing a task's report
   const { results: selectedResults } = useResults(
-    tabState.active === 'report' ? tabState.selectedTaskId : null
-  );
+    tabState.active === 'report' ? tabState.selectedTaskId : null,
+  )
 
   const handleViewTask = useCallback((task: EvaluationTask) => {
     if (task.status === 'running') {
-      setTabState({ active: 'progress', selectedTaskId: task.id });
-    } else if (task.status === 'completed' || task.status === 'failed') {
-      setTabState({ active: 'report', selectedTaskId: task.id });
-    } else {
-      // For pending tasks, just select them
-      setTabState({ active: 'tasks', selectedTaskId: task.id });
+      setTabState({ active: 'progress', selectedTaskId: task.id })
     }
-  }, []);
+    else if (task.status === 'completed' || task.status === 'failed') {
+      setTabState({ active: 'report', selectedTaskId: task.id })
+    }
+    else {
+      // For pending tasks, just select them
+      setTabState({ active: 'tasks', selectedTaskId: task.id })
+    }
+  }, [])
 
   const handleRunTask = useCallback(async (task: EvaluationTask) => {
-    const success = await runTask(task.id);
+    const success = await runTask(task.id)
     if (success) {
-      setTabState({ active: 'progress', selectedTaskId: task.id });
-      refreshTasks();
+      setTabState({ active: 'progress', selectedTaskId: task.id })
+      refreshTasks()
     }
-  }, [runTask, refreshTasks]);
+  }, [runTask, refreshTasks])
 
   const handleCancelTask = useCallback(async (task: EvaluationTask) => {
-    await cancelTask(task.id);
-    refreshTasks();
-    setTabState({ active: 'tasks', selectedTaskId: null });
-  }, [cancelTask, refreshTasks]);
+    await cancelTask(task.id)
+    refreshTasks()
+    setTabState({ active: 'tasks', selectedTaskId: null })
+  }, [cancelTask, refreshTasks])
 
   const handleDeleteTask = useCallback(async (task: EvaluationTask) => {
     if (window.confirm(`Are you sure you want to delete "${task.name}"?`)) {
-      await deleteTask(task.id);
-      refreshTasks();
+      await deleteTask(task.id)
+      refreshTasks()
     }
-  }, [deleteTask, refreshTasks]);
+  }, [deleteTask, refreshTasks])
 
   const handleCreateTask = useCallback(async (request: CreateTaskRequest) => {
-    const task = await createTask(request);
+    const task = await createTask(request)
     if (task) {
-      refreshTasks();
-      setTabState({ active: 'tasks', selectedTaskId: task.id });
+      refreshTasks()
+      setTabState({ active: 'tasks', selectedTaskId: task.id })
     }
-  }, [createTask, refreshTasks]);
+  }, [createTask, refreshTasks])
 
   const handleCancelCreate = useCallback(() => {
-    setTabState({ active: 'tasks', selectedTaskId: null });
-  }, []);
+    setTabState({ active: 'tasks', selectedTaskId: null })
+  }, [])
 
   const handleProgressComplete = useCallback(() => {
-    refreshTasks();
+    refreshTasks()
     if (tabState.selectedTaskId) {
-      setTabState({ active: 'report', selectedTaskId: tabState.selectedTaskId });
+      setTabState({ active: 'report', selectedTaskId: tabState.selectedTaskId })
     }
-  }, [refreshTasks, tabState.selectedTaskId]);
+  }, [refreshTasks, tabState.selectedTaskId])
 
   const handleBackFromReport = useCallback(() => {
-    setTabState({ active: 'tasks', selectedTaskId: null });
-  }, []);
+    setTabState({ active: 'tasks', selectedTaskId: null })
+  }, [])
 
   const handleViewHistoricalResults = useCallback((task: EvaluationTask) => {
-    setTabState({ active: 'report', selectedTaskId: task.id });
-  }, []);
+    setTabState({ active: 'report', selectedTaskId: task.id })
+  }, [])
 
   const tabs = [
     { id: 'tasks' as const, label: 'Tasks', icon: '📋' },
     { id: 'create' as const, label: 'Create', icon: '➕', hidden: isReadonly },
     { id: 'history' as const, label: 'History', icon: '📊' },
-  ];
+  ]
 
   return (
     <div className={styles.container}>
@@ -123,8 +125,8 @@ export function EvaluationPage() {
             taskId={tabState.selectedTaskId}
             onComplete={handleProgressComplete}
             onCancel={() => {
-              const task = tasks.find(t => t.id === tabState.selectedTaskId);
-              if (task) handleCancelTask(task);
+              const task = tasks.find(t => t.id === tabState.selectedTaskId)
+              if (task) handleCancelTask(task)
             }}
           />
         </div>
@@ -140,7 +142,7 @@ export function EvaluationPage() {
       {tabState.active !== 'progress' && tabState.active !== 'report' && (
         <>
           <div className={styles.tabs}>
-            {tabs.filter(t => !t.hidden).map((tab) => (
+            {tabs.filter(t => !t.hidden).map(tab => (
               <button
                 key={tab.id}
                 className={`${styles.tab} ${tabState.active === tab.id ? styles.activeTab : ''}`}
@@ -183,7 +185,7 @@ export function EvaluationPage() {
         </>
       )}
     </div>
-  );
+  )
 }
 
-export default EvaluationPage;
+export default EvaluationPage

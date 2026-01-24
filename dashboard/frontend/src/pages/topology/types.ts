@@ -3,15 +3,15 @@
 import { ReactNode } from 'react'
 
 // ============== Signal Types ==============
-export type SignalType =
-  | 'keyword'
-  | 'embedding'
-  | 'domain'
-  | 'fact_check'
-  | 'user_feedback'
-  | 'preference'
-  | 'language'
-  | 'latency'
+export type SignalType
+  = | 'keyword'
+    | 'embedding'
+    | 'domain'
+    | 'fact_check'
+    | 'user_feedback'
+    | 'preference'
+    | 'language'
+    | 'latency'
 
 export interface SignalConfig {
   type: SignalType
@@ -63,16 +63,16 @@ export interface RuleCondition {
 }
 
 // ============== Algorithm Types ==============
-export type AlgorithmType =
-  | 'confidence'
-  | 'concurrent'
-  | 'sequential'
-  | 'ratings'
-  | 'static'
-  | 'elo'
-  | 'router_dc'
-  | 'automix'
-  | 'hybrid'
+export type AlgorithmType
+  = | 'confidence'
+    | 'concurrent'
+    | 'sequential'
+    | 'ratings'
+    | 'static'
+    | 'elo'
+    | 'router_dc'
+    | 'automix'
+    | 'hybrid'
 
 export interface AlgorithmConfig {
   type: AlgorithmType
@@ -100,14 +100,14 @@ export interface AutoMixConfig {
 }
 
 // ============== Plugin Types ==============
-export type PluginType =
-  | 'semantic-cache'
-  | 'jailbreak'
-  | 'pii'
-  | 'system_prompt'
-  | 'header_mutation'
-  | 'hallucination'
-  | 'router_replay'
+export type PluginType
+  = | 'semantic-cache'
+    | 'jailbreak'
+    | 'pii'
+    | 'system_prompt'
+    | 'header_mutation'
+    | 'hallucination'
+    | 'router_replay'
 
 export interface PluginConfig {
   type: PluginType
@@ -154,16 +154,16 @@ export interface GlobalPluginConfig {
 }
 
 // ============== Topology Node Types ==============
-export type TopologyNodeType =
-  | 'client'
-  | 'global-plugin'
-  | 'signal-group'
-  | 'signal'
-  | 'decision'
-  | 'algorithm'
-  | 'plugin-chain'
-  | 'plugin'
-  | 'model'
+export type TopologyNodeType
+  = | 'client'
+    | 'global-plugin'
+    | 'signal-group'
+    | 'signal'
+    | 'decision'
+    | 'algorithm'
+    | 'plugin-chain'
+    | 'plugin'
+    | 'model'
 
 export interface TopologyNodeData {
   label: string | ReactNode
@@ -199,8 +199,8 @@ export interface TestQueryResult {
   evaluatedRules?: EvaluatedRule[]
   routingLatency?: number
   warning?: string
-  isFallbackDecision?: boolean  // True if matched decision is a system fallback
-  fallbackReason?: string       // Reason for fallback (e.g., "low_confidence", "no_match")
+  isFallbackDecision?: boolean // True if matched decision is a system fallback
+  fallbackReason?: string // Reason for fallback (e.g., "low_confidence", "no_match")
 }
 
 export interface MatchedSignal {
@@ -230,7 +230,7 @@ export interface ParsedTopology {
   decisions: DecisionConfig[]
   models: ModelConfig[]
   strategy: 'priority' | 'confidence'
-  defaultModel?: string  // Default/fallback model when no decision matches
+  defaultModel?: string // Default/fallback model when no decision matches
 }
 
 // ============== View Mode ==============

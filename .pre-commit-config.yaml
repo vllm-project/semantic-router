@@ -70,6 +70,13 @@ repos:
         files: \.(js|ts|tsx)$
         exclude: ^(\node_modules/)
         pass_filenames: false
+      - id: dashboard-format
+        name: dashboard format (eslint --fix)
+        entry: bash -c 'cd dashboard/frontend && npm run format'
+        language: system
+        files: ^dashboard/frontend/.*\.(ts|tsx)$
+        exclude: ^(\node_modules/)
+        pass_filenames: true
 
   # Rust specific hooks
   - repo: local

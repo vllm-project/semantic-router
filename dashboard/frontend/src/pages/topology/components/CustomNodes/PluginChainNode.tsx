@@ -20,7 +20,7 @@ interface PluginChainNodeData {
 // Check if plugin overrides global config
 function getPluginOverrideInfo(plugin: PluginConfig, data: PluginChainNodeData): string | null {
   if (plugin.type === 'semantic-cache') {
-    const config = plugin.configuration as { similarity_threshold?: number; enabled?: boolean } | undefined
+    const config = plugin.configuration as { similarity_threshold?: number, enabled?: boolean } | undefined
     if (config?.enabled === false) {
       return '(disabled)'
     }
@@ -51,7 +51,9 @@ export const PluginChainNode = memo<NodeProps<PluginChainNodeData>>(({ data }) =
       >
         <span className={styles.collapseIcon}>{collapsed ? '▶' : '▼'}</span>
         <span className={styles.pluginChainTitle}>
-          🔌 Plugin Chain ({plugins.length})
+          🔌 Plugin Chain (
+          {plugins.length}
+          )
         </span>
       </div>
 

@@ -18,13 +18,13 @@ const ThinkingAnimation = ({ onComplete, thinkingProcess }: ThinkingAnimationPro
   useEffect(() => {
     // Initialize with random characters
     setCharacters(Array.from({ length: GRID_SIZE }, () =>
-      CHARS[Math.floor(Math.random() * CHARS.length)]
+      CHARS[Math.floor(Math.random() * CHARS.length)],
     ))
 
     // Update characters rapidly
     const interval = setInterval(() => {
       setCharacters(prev =>
-        prev.map(() => CHARS[Math.floor(Math.random() * CHARS.length)])
+        prev.map(() => CHARS[Math.floor(Math.random() * CHARS.length)]),
       )
     }, 50) // Update every 50ms for fast flickering
 
@@ -84,4 +84,3 @@ const ThinkingAnimation = ({ onComplete, thinkingProcess }: ThinkingAnimationPro
 }
 
 export default ThinkingAnimation
-

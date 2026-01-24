@@ -26,7 +26,7 @@ const ThinkingBlock = ({ content, isStreaming = false, thinkingTime }: ThinkingB
       shouldAutoCollapse,
       isStreaming,
       hasAutoCollapsed,
-      isExpanded
+      isExpanded,
     })
 
     // Auto-collapse as soon as content exceeds threshold, even while streaming
@@ -44,7 +44,8 @@ const ThinkingBlock = ({ content, isStreaming = false, thinkingTime }: ThinkingB
         setDisplayTime(prev => prev + 0.1)
       }, 100)
       return () => clearInterval(interval)
-    } else if (thinkingTime !== undefined) {
+    }
+    else if (thinkingTime !== undefined) {
       setDisplayTime(thinkingTime)
     }
   }, [isStreaming, thinkingTime])
@@ -134,4 +135,3 @@ const ThinkingBlock = ({ content, isStreaming = false, thinkingTime }: ThinkingB
 }
 
 export default ThinkingBlock
-

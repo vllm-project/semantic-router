@@ -21,11 +21,12 @@ export function useCollapseState(): UseCollapseStateResult {
 
   const toggleCollapse = useCallback((
     type: 'signalGroup' | 'decision' | 'pluginChain',
-    key: string
+    key: string,
   ) => {
-    setCollapseState(prev => {
-      const section = type === 'signalGroup' ? 'signalGroups' :
-                      type === 'decision' ? 'decisions' : 'pluginChains'
+    setCollapseState((prev) => {
+      const section = type === 'signalGroup'
+        ? 'signalGroups'
+        : type === 'decision' ? 'decisions' : 'pluginChains'
       return {
         ...prev,
         [section]: {
@@ -54,13 +55,15 @@ export function useCollapseState(): UseCollapseStateResult {
 
   const isCollapsed = useCallback((
     type: 'signalGroup' | 'decision' | 'pluginChain',
-    key: string
+    key: string,
   ): boolean => {
     if (type === 'signalGroup') {
       return collapseState.signalGroups[key as SignalType] ?? false
-    } else if (type === 'decision') {
+    }
+    else if (type === 'decision') {
       return collapseState.decisions[key] ?? false
-    } else {
+    }
+    else {
       return collapseState.pluginChains[key] ?? false
     }
   }, [collapseState])

@@ -1,35 +1,35 @@
 /**
  * Tool Registry - Entry Point
  * 工具注册中心入口
- * 
+ *
  * Usage:
  * ```typescript
  * import { toolRegistry, useToolRegistry } from '@/tools'
- * 
+ *
  * // Get all enabled tool definitions for API call
  * const tools = toolRegistry.getDefinitions()
- * 
+ *
  * // Execute tool calls
  * const results = await toolRegistry.executeAll(toolCalls)
- * 
+ *
  * // In React components
  * const { tools, execute, isExecuting } = useToolRegistry()
  * ```
  */
 
 // Core exports
-export { 
-  toolRegistry, 
-  createTool, 
-  registerTools, 
+export {
+  toolRegistry,
+  createTool,
+  registerTools,
   unregisterTools,
   replaceAllTools,
   ToolRegistry,
 } from './registry'
 
 // Options and result types
-export type { 
-  RegisterToolsOptions, 
+export type {
+  RegisterToolsOptions,
   RegisterToolsResult,
 } from './registry'
 

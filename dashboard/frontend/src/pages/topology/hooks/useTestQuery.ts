@@ -27,7 +27,8 @@ export function useTestQuery(topologyData: ParsedTopology | null): UseTestQueryR
     try {
       const result = await testQueryDryRun(testQuery)
       setTestResult({ ...result, mode: 'dry-run', isAccurate: true })
-    } catch (error) {
+    }
+    catch (error) {
       console.warn('Backend verification failed, falling back to simulation:', error)
       // Fallback to frontend simulation if backend unavailable
       if (topologyData) {
@@ -39,7 +40,8 @@ export function useTestQuery(topologyData: ParsedTopology | null): UseTestQueryR
           warning: 'Backend unavailable, showing simulated results',
         })
       }
-    } finally {
+    }
+    finally {
       setIsLoading(false)
     }
   }, [testQuery, topologyData])

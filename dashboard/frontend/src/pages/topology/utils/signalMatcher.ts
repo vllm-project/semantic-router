@@ -15,14 +15,14 @@ import {
  */
 export async function simulateSignalMatching(
   query: string,
-  topology: ParsedTopology
+  topology: ParsedTopology,
 ): Promise<TestQueryResult> {
   const matchedSignals: MatchedSignal[] = []
 
   // 1. Keyword matching (accurate simulation)
   topology.signals
     .filter(s => s.type === 'keyword')
-    .forEach(signal => {
+    .forEach((signal) => {
       const config = signal.config as KeywordSignalConfig
       const keywords = config.keywords || []
       const queryToMatch = config.case_sensitive ? query : query.toLowerCase()
@@ -30,11 +30,12 @@ export async function simulateSignalMatching(
       let matched = false
       if (config.operator === 'AND') {
         matched = keywords.every(kw =>
-          queryToMatch.includes(config.case_sensitive ? kw : kw.toLowerCase())
+          queryToMatch.includes(config.case_sensitive ? kw : kw.toLowerCase()),
         )
-      } else {
+      }
+      else {
         matched = keywords.some(kw =>
-          queryToMatch.includes(config.case_sensitive ? kw : kw.toLowerCase())
+          queryToMatch.includes(config.case_sensitive ? kw : kw.toLowerCase()),
         )
       }
 
@@ -51,7 +52,7 @@ export async function simulateSignalMatching(
   // 2. Language matching (heuristic simulation)
   topology.signals
     .filter(s => s.type === 'language')
-    .forEach(signal => {
+    .forEach((signal) => {
       // Simple detection: Chinese characters > 30% = Chinese
       const chineseChars = (query.match(/[\u4e00-\u9fa5]/g) || []).length
       const chineseRatio = chineseChars / Math.max(query.length, 1)
@@ -62,7 +63,8 @@ export async function simulateSignalMatching(
       let matched = false
       if (signalNameLower.includes('chinese') || signalNameLower.includes('zh')) {
         matched = isLikelyChinese
-      } else if (signalNameLower.includes('english') || signalNameLower.includes('en')) {
+      }
+      else if (signalNameLower.includes('english') || signalNameLower.includes('en')) {
         matched = isLikelyEnglish
       }
 
@@ -78,10 +80,10 @@ export async function simulateSignalMatching(
 
   // 3. Other signal types - mark as "needs backend verification"
   const backendOnlyTypes: SignalType[] = ['embedding', 'domain', 'fact_check', 'user_feedback', 'preference', 'latency']
-  backendOnlyTypes.forEach(type => {
+  backendOnlyTypes.forEach((type) => {
     topology.signals
       .filter(s => s.type === type)
-      .forEach(signal => {
+      .forEach((signal) => {
         matchedSignals.push({
           type,
           name: signal.name,
@@ -100,7 +102,7 @@ export async function simulateSignalMatching(
   const highlightedPath: string[] = ['client']
 
   // Add global plugins to path
-  topology.globalPlugins.forEach(plugin => {
+  topology.globalPlugins.forEach((plugin) => {
     if (plugin.enabled) {
       highlightedPath.push(`global-plugin-${plugin.type}`)
     }
@@ -113,7 +115,7 @@ export async function simulateSignalMatching(
       matchedModels = decision.modelRefs.map(r => r.model)
 
       // Build highlighted path
-      decision.rules.conditions.forEach(cond => {
+      decision.rules.conditions.forEach((cond) => {
         highlightedPath.push(`signal-group-${cond.type}`)
       })
       highlightedPath.push(`decision-${decision.name}`)
@@ -123,7 +125,7 @@ export async function simulateSignalMatching(
       if (decision.plugins && decision.plugins.length > 0) {
         highlightedPath.push(`plugin-chain-${decision.name}`)
       }
-      decision.modelRefs.forEach(ref => {
+      decision.modelRefs.forEach((ref) => {
         highlightedPath.push(`model-${ref.model.replace(/[^a-zA-Z0-9]/g, '-')}`)
       })
 
@@ -150,7 +152,7 @@ function evaluateRules(rules: RuleCombination, matchedSignals: MatchedSignal[]):
     return true // No conditions = always match (default decision)
   }
 
-  const conditionResults = rules.conditions.map(cond => {
+  const conditionResults = rules.conditions.map((cond) => {
     const signal = matchedSignals.find(s => s.type === cond.type && s.name === cond.name)
     // If signal needs backend, we can't evaluate accurately - assume false for safety
     if (signal?.needsBackend) {
@@ -161,7 +163,8 @@ function evaluateRules(rules: RuleCombination, matchedSignals: MatchedSignal[]):
 
   if (rules.operator === 'AND') {
     return conditionResults.every(r => r)
-  } else {
+  }
+  else {
     return conditionResults.some(r => r)
   }
 }

@@ -1,47 +1,48 @@
-import { useCallback } from 'react';
-import type { EvaluationResult, TaskResults } from '../../types/evaluation';
-import { DIMENSION_INFO, formatDate, formatDuration, formatMetricValue, getMetricValue } from '../../types/evaluation';
-import { downloadExport } from '../../utils/evaluationApi';
-import styles from './ReportViewer.module.css';
+import { useCallback } from 'react'
+import type { EvaluationResult, TaskResults } from '../../types/evaluation'
+import { DIMENSION_INFO, formatDate, formatDuration, formatMetricValue, getMetricValue } from '../../types/evaluation'
+import { downloadExport } from '../../utils/evaluationApi'
+import styles from './ReportViewer.module.css'
 
 interface ReportViewerProps {
-  results: TaskResults;
-  onBack?: () => void;
+  results: TaskResults
+  onBack?: () => void
 }
 
 export function ReportViewer({ results, onBack }: ReportViewerProps) {
-  const { task, results: evaluationResults } = results;
+  const { task, results: evaluationResults } = results
 
   const handleExport = useCallback(async (format: 'json' | 'csv') => {
     try {
-      await downloadExport(task.id, format);
-    } catch (err) {
-      console.error('Export failed:', err);
+      await downloadExport(task.id, format)
     }
-  }, [task.id]);
+    catch (err) {
+      console.error('Export failed:', err)
+    }
+  }, [task.id])
 
   const getOverallScore = useCallback(() => {
     // Calculate an overall score based on available metrics
-    let totalScore = 0;
-    let count = 0;
+    let totalScore = 0
+    let count = 0
 
     for (const result of evaluationResults) {
-      const accuracy = getMetricValue(result.metrics, 'accuracy');
+      const accuracy = getMetricValue(result.metrics, 'accuracy')
       if (accuracy !== null) {
-        totalScore += accuracy;
-        count++;
+        totalScore += accuracy
+        count++
       }
-      const f1 = getMetricValue(result.metrics, 'f1_score');
+      const f1 = getMetricValue(result.metrics, 'f1_score')
       if (f1 !== null) {
-        totalScore += f1;
-        count++;
+        totalScore += f1
+        count++
       }
     }
 
-    return count > 0 ? totalScore / count : null;
-  }, [evaluationResults]);
+    return count > 0 ? totalScore / count : null
+  }, [evaluationResults])
 
-  const overallScore = getOverallScore();
+  const overallScore = getOverallScore()
 
   return (
     <div className={styles.container}>
@@ -95,7 +96,7 @@ export function ReportViewer({ results, onBack }: ReportViewerProps) {
       </div>
 
       <div className={styles.results}>
-        {evaluationResults.map((result) => (
+        {evaluationResults.map(result => (
           <ResultCard key={result.id} result={result} />
         ))}
       </div>
@@ -118,24 +119,24 @@ export function ReportViewer({ results, onBack }: ReportViewerProps) {
         </dl>
       </div>
     </div>
-  );
+  )
 }
 
 interface ResultCardProps {
-  result: EvaluationResult;
+  result: EvaluationResult
 }
 
 function ResultCard({ result }: ResultCardProps) {
-  const dimInfo = DIMENSION_INFO[result.dimension];
+  const dimInfo = DIMENSION_INFO[result.dimension]
 
   // Extract common metrics
-  const accuracy = getMetricValue(result.metrics, 'accuracy');
-  const precision = getMetricValue(result.metrics, 'precision');
-  const recall = getMetricValue(result.metrics, 'recall');
-  const f1 = getMetricValue(result.metrics, 'f1_score');
-  const avgLatency = getMetricValue(result.metrics, 'avg_latency_ms');
-  const p50Latency = getMetricValue(result.metrics, 'p50_latency_ms');
-  const p99Latency = getMetricValue(result.metrics, 'p99_latency_ms');
+  const accuracy = getMetricValue(result.metrics, 'accuracy')
+  const precision = getMetricValue(result.metrics, 'precision')
+  const recall = getMetricValue(result.metrics, 'recall')
+  const f1 = getMetricValue(result.metrics, 'f1_score')
+  const avgLatency = getMetricValue(result.metrics, 'avg_latency_ms')
+  const p50Latency = getMetricValue(result.metrics, 'p50_latency_ms')
+  const p99Latency = getMetricValue(result.metrics, 'p99_latency_ms')
 
   return (
     <div className={styles.resultCard}>
@@ -200,14 +201,14 @@ function ResultCard({ result }: ResultCardProps) {
         <HallucinationDetails metrics={result.metrics} />
       )}
     </div>
-  );
+  )
 }
 
 function ReasoningDetails({ metrics }: { metrics: Record<string, unknown> }) {
-  const standardAccuracy = getMetricValue(metrics, 'standard_accuracy');
-  const reasoningAccuracy = getMetricValue(metrics, 'reasoning_accuracy');
-  const accuracyDelta = getMetricValue(metrics, 'accuracy_delta');
-  const improvementPct = getMetricValue(metrics, 'accuracy_improvement_pct');
+  const standardAccuracy = getMetricValue(metrics, 'standard_accuracy')
+  const reasoningAccuracy = getMetricValue(metrics, 'reasoning_accuracy')
+  const accuracyDelta = getMetricValue(metrics, 'accuracy_delta')
+  const improvementPct = getMetricValue(metrics, 'accuracy_improvement_pct')
 
   return (
     <div className={styles.details}>
@@ -232,21 +233,23 @@ function ReasoningDetails({ metrics }: { metrics: Record<string, unknown> }) {
               className={styles.comparisonValue}
               style={{ color: accuracyDelta >= 0 ? '#22c55e' : '#ef4444' }}
             >
-              {accuracyDelta >= 0 ? '+' : ''}{formatMetricValue(improvementPct, 'decimal')}%
+              {accuracyDelta >= 0 ? '+' : ''}
+              {formatMetricValue(improvementPct, 'decimal')}
+              %
             </span>
           </div>
         )}
       </div>
     </div>
-  );
+  )
 }
 
 function HallucinationDetails({ metrics }: { metrics: Record<string, unknown> }) {
-  const tp = getMetricValue(metrics, 'true_positives');
-  const fp = getMetricValue(metrics, 'false_positives');
-  const tn = getMetricValue(metrics, 'true_negatives');
-  const fn = getMetricValue(metrics, 'false_negatives');
-  const efficiencyGain = getMetricValue(metrics, 'efficiency_gain_percent');
+  const tp = getMetricValue(metrics, 'true_positives')
+  const fp = getMetricValue(metrics, 'false_positives')
+  const tn = getMetricValue(metrics, 'true_negatives')
+  const fn = getMetricValue(metrics, 'false_negatives')
+  const efficiencyGain = getMetricValue(metrics, 'efficiency_gain_percent')
 
   return (
     <div className={styles.details}>
@@ -276,11 +279,14 @@ function HallucinationDetails({ metrics }: { metrics: Record<string, unknown> })
       {efficiencyGain !== null && (
         <div className={styles.efficiencyBanner}>
           <span className={styles.efficiencyLabel}>Efficiency Gain from Pre-filtering</span>
-          <span className={styles.efficiencyValue}>{formatMetricValue(efficiencyGain, 'decimal')}%</span>
+          <span className={styles.efficiencyValue}>
+            {formatMetricValue(efficiencyGain, 'decimal')}
+            %
+          </span>
         </div>
       )}
     </div>
-  );
+  )
 }
 
-export default ReportViewer;
+export default ReportViewer

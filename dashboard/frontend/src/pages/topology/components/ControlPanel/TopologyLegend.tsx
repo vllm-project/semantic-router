@@ -26,13 +26,14 @@ export const TopologyLegend: React.FC = () => {
         </div>
 
         <div className={styles.legendItem}>
-          <span 
-            className={styles.legendColor} 
-            style={{ 
+          <span
+            className={styles.legendColor}
+            style={{
               background: NODE_COLORS.decision.unreachable.background,
               border: '1px dashed #5D4037',
             }}
-          ></span>
+          >
+          </span>
           <span>Unreachable</span>
         </div>
 
@@ -51,7 +52,8 @@ export const TopologyLegend: React.FC = () => {
           <div
             className={styles.legendLine}
             style={{ background: EDGE_COLORS.reasoning }}
-          ></div>
+          >
+          </div>
           <span>Reasoning Path</span>
         </div>
 
@@ -64,7 +66,8 @@ export const TopologyLegend: React.FC = () => {
           <div
             className={styles.legendLine}
             style={{ background: EDGE_COLORS.highlighted }}
-          ></div>
+          >
+          </div>
           <span>Highlighted</span>
         </div>
       </div>

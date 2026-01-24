@@ -36,9 +36,11 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
           // Preload platform-specific assets immediately
           preloadPlatformAssets(platformValue)
         }
-      } catch (error) {
+      }
+      catch (error) {
         console.warn('Failed to fetch dashboard settings:', error)
-      } finally {
+      }
+      finally {
         setIsLoading(false)
       }
     }

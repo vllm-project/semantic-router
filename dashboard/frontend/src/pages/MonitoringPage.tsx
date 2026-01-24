@@ -25,7 +25,7 @@ const MonitoringPage: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [serviceAvailable, setServiceAvailable] = useState<boolean | null>(
-    null
+    null,
   )
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
@@ -42,7 +42,8 @@ const MonitoringPage: React.FC = () => {
         return
       }
       setServiceAvailable(true)
-    } catch {
+    }
+    catch {
       // Network error - service might be available but request failed
       setServiceAvailable(true)
     }
@@ -92,7 +93,7 @@ const MonitoringPage: React.FC = () => {
   const handleIframeError = () => {
     setLoading(false)
     setError(
-      'Failed to load Grafana dashboard. Please check the dashboard path and try again.'
+      'Failed to load Grafana dashboard. Please check the dashboard path and try again.',
     )
   }
 

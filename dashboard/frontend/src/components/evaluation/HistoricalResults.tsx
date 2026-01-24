@@ -1,55 +1,56 @@
-import { useState, useMemo } from 'react';
-import type { EvaluationTask } from '../../types/evaluation';
-import { STATUS_INFO, formatDate, formatDuration } from '../../types/evaluation';
-import styles from './HistoricalResults.module.css';
+import { useState, useMemo } from 'react'
+import type { EvaluationTask } from '../../types/evaluation'
+import { STATUS_INFO, formatDate, formatDuration } from '../../types/evaluation'
+import styles from './HistoricalResults.module.css'
 
 interface HistoricalResultsProps {
-  tasks: EvaluationTask[];
-  onViewResults: (task: EvaluationTask) => void;
-  onCompare?: (tasks: EvaluationTask[]) => void;
+  tasks: EvaluationTask[]
+  onViewResults: (task: EvaluationTask) => void
+  onCompare?: (tasks: EvaluationTask[]) => void
 }
 
 export function HistoricalResults({ tasks, onViewResults, onCompare }: HistoricalResultsProps) {
-  const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
-  const [sortBy, setSortBy] = useState<'date' | 'name'>('date');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set())
+  const [sortBy, setSortBy] = useState<'date' | 'name'>('date')
+  const [filterStatus, setFilterStatus] = useState<string>('all')
 
   const completedTasks = useMemo(() => {
-    return tasks.filter(t => t.status === 'completed' || t.status === 'failed');
-  }, [tasks]);
+    return tasks.filter(t => t.status === 'completed' || t.status === 'failed')
+  }, [tasks])
 
   const filteredTasks = useMemo(() => {
-    let filtered = completedTasks;
+    let filtered = completedTasks
 
     if (filterStatus !== 'all') {
-      filtered = filtered.filter(t => t.status === filterStatus);
+      filtered = filtered.filter(t => t.status === filterStatus)
     }
 
     return filtered.sort((a, b) => {
       if (sortBy === 'date') {
-        return new Date(b.completed_at || b.created_at).getTime() -
-               new Date(a.completed_at || a.created_at).getTime();
+        return new Date(b.completed_at || b.created_at).getTime()
+          - new Date(a.completed_at || a.created_at).getTime()
       }
-      return a.name.localeCompare(b.name);
-    });
-  }, [completedTasks, filterStatus, sortBy]);
+      return a.name.localeCompare(b.name)
+    })
+  }, [completedTasks, filterStatus, sortBy])
 
   const toggleTask = (taskId: string) => {
-    setSelectedTasks(prev => {
-      const next = new Set(prev);
+    setSelectedTasks((prev) => {
+      const next = new Set(prev)
       if (next.has(taskId)) {
-        next.delete(taskId);
-      } else {
-        next.add(taskId);
+        next.delete(taskId)
       }
-      return next;
-    });
-  };
+      else {
+        next.add(taskId)
+      }
+      return next
+    })
+  }
 
   const handleCompare = () => {
-    const tasksToCompare = filteredTasks.filter(t => selectedTasks.has(t.id));
-    onCompare?.(tasksToCompare);
-  };
+    const tasksToCompare = filteredTasks.filter(t => selectedTasks.has(t.id))
+    onCompare?.(tasksToCompare)
+  }
 
   if (completedTasks.length === 0) {
     return (
@@ -58,7 +59,7 @@ export function HistoricalResults({ tasks, onViewResults, onCompare }: Historica
         <h3>No Historical Results</h3>
         <p>Complete an evaluation to see results here.</p>
       </div>
-    );
+    )
   }
 
   return (
@@ -67,7 +68,7 @@ export function HistoricalResults({ tasks, onViewResults, onCompare }: Historica
         <div className={styles.filters}>
           <select
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
+            onChange={e => setFilterStatus(e.target.value)}
             className={styles.select}
           >
             <option value="all">All Status</option>
@@ -76,7 +77,7 @@ export function HistoricalResults({ tasks, onViewResults, onCompare }: Historica
           </select>
           <select
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as 'date' | 'name')}
+            onChange={e => setSortBy(e.target.value as 'date' | 'name')}
             className={styles.select}
           >
             <option value="date">Sort by Date</option>
@@ -85,15 +86,17 @@ export function HistoricalResults({ tasks, onViewResults, onCompare }: Historica
         </div>
         {onCompare && selectedTasks.size >= 2 && (
           <button className={styles.compareButton} onClick={handleCompare}>
-            Compare Selected ({selectedTasks.size})
+            Compare Selected (
+            {selectedTasks.size}
+            )
           </button>
         )}
       </div>
 
       <div className={styles.list}>
         {filteredTasks.map((task) => {
-          const statusInfo = STATUS_INFO[task.status];
-          const isSelected = selectedTasks.has(task.id);
+          const statusInfo = STATUS_INFO[task.status]
+          const isSelected = selectedTasks.has(task.id)
 
           return (
             <div
@@ -122,9 +125,18 @@ export function HistoricalResults({ tasks, onViewResults, onCompare }: Historica
                   <p className={styles.description}>{task.description}</p>
                 )}
                 <div className={styles.cardMeta}>
-                  <span>Completed: {formatDate(task.completed_at)}</span>
-                  <span>Duration: {formatDuration(task.started_at, task.completed_at)}</span>
-                  <span>Dimensions: {task.config.dimensions.length}</span>
+                  <span>
+                    Completed:
+                    {formatDate(task.completed_at)}
+                  </span>
+                  <span>
+                    Duration:
+                    {formatDuration(task.started_at, task.completed_at)}
+                  </span>
+                  <span>
+                    Dimensions:
+                    {task.config.dimensions.length}
+                  </span>
                 </div>
               </div>
               <button
@@ -134,11 +146,11 @@ export function HistoricalResults({ tasks, onViewResults, onCompare }: Historica
                 View Results
               </button>
             </div>
-          );
+          )
         })}
       </div>
     </div>
-  );
+  )
 }
 
-export default HistoricalResults;
+export default HistoricalResults

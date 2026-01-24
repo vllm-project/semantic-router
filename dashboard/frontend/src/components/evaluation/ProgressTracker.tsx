@@ -1,24 +1,24 @@
-import { useEffect } from 'react';
-import { DIMENSION_INFO, STATUS_INFO, formatDuration } from '../../types/evaluation';
-import { useProgress, useTask } from '../../hooks/useEvaluation';
-import styles from './ProgressTracker.module.css';
+import { useEffect } from 'react'
+import { DIMENSION_INFO, STATUS_INFO, formatDuration } from '../../types/evaluation'
+import { useProgress, useTask } from '../../hooks/useEvaluation'
+import styles from './ProgressTracker.module.css'
 
 interface ProgressTrackerProps {
-  taskId: string;
-  onComplete?: () => void;
-  onCancel?: () => void;
+  taskId: string
+  onComplete?: () => void
+  onCancel?: () => void
 }
 
 export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTrackerProps) {
-  const { task, refresh: refreshTask } = useTask(taskId);
-  const { progress, connected, completed, error } = useProgress(taskId, task?.status === 'running');
+  const { task, refresh: refreshTask } = useTask(taskId)
+  const { progress, connected, completed, error } = useProgress(taskId, task?.status === 'running')
 
   useEffect(() => {
     if (completed) {
-      refreshTask();
-      onComplete?.();
+      refreshTask()
+      onComplete?.()
     }
-  }, [completed, refreshTask, onComplete]);
+  }, [completed, refreshTask, onComplete])
 
   if (!task) {
     return (
@@ -28,16 +28,16 @@ export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTracke
           <span>Loading task...</span>
         </div>
       </div>
-    );
+    )
   }
 
   const displayProgress = progress || {
     progress_percent: task.progress_percent,
     current_step: task.current_step || '',
     message: '',
-  };
+  }
 
-  const statusInfo = STATUS_INFO[task.status];
+  const statusInfo = STATUS_INFO[task.status]
 
   return (
     <div className={styles.container}>
@@ -59,7 +59,10 @@ export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTracke
           <span className={styles.progressLabel}>
             {displayProgress.current_step || 'Preparing...'}
           </span>
-          <span className={styles.progressPercent}>{displayProgress.progress_percent}%</span>
+          <span className={styles.progressPercent}>
+            {displayProgress.progress_percent}
+            %
+          </span>
         </div>
         <div className={styles.progressBar}>
           <div
@@ -97,8 +100,8 @@ export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTracke
         <h4>Evaluation Dimensions</h4>
         <div className={styles.dimensionList}>
           {task.config.dimensions.map((dim) => {
-            const info = DIMENSION_INFO[dim];
-            const isActive = displayProgress.current_step?.toLowerCase().includes(dim);
+            const info = DIMENSION_INFO[dim]
+            const isActive = displayProgress.current_step?.toLowerCase().includes(dim)
             return (
               <div
                 key={dim}
@@ -108,14 +111,17 @@ export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTracke
                 <span className={styles.dimensionIndicator} style={{ backgroundColor: info.color }} />
                 <span className={styles.dimensionName}>{info.label}</span>
               </div>
-            );
+            )
           })}
         </div>
       </div>
 
       {error && (
         <div className={styles.error}>
-          <span>Connection error: {error}</span>
+          <span>
+            Connection error:
+            {error}
+          </span>
         </div>
       )}
 
@@ -134,7 +140,7 @@ export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTracke
         </div>
       )}
     </div>
-  );
+  )
 }
 
-export default ProgressTracker;
+export default ProgressTracker
