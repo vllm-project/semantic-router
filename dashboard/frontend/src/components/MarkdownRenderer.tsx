@@ -22,7 +22,8 @@ const CopyButton = ({ text }: { text: string }) => {
       // Try modern clipboard API first
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(text)
-      } else {
+      }
+      else {
         // Fallback for older browsers or non-HTTPS
         const textArea = document.createElement('textarea')
         textArea.value = text
@@ -35,7 +36,8 @@ const CopyButton = ({ text }: { text: string }) => {
       }
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
+    }
+    catch (err) {
       console.error('Failed to copy:', err)
     }
   }, [text])
@@ -47,16 +49,18 @@ const CopyButton = ({ text }: { text: string }) => {
       title={copied ? 'Copied!' : 'Copy code'}
       aria-label={copied ? 'Copied!' : 'Copy code'}
     >
-      {copied ? (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
-      ) : (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <rect x="9" y="9" width="13" height="13" rx="2" />
-          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-        </svg>
-      )}
+      {copied
+        ? (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          )
+        : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <rect x="9" y="9" width="13" height="13" rx="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+          )}
     </button>
   )
 }
@@ -91,21 +95,23 @@ const MarkdownRenderer = ({ content }: MarkdownRendererProps) => {
       const isInline = !className
       const codeText = extractTextContent(children).replace(/\n$/, '')
 
-      return !isInline ? (
-        <div className={styles.codeBlock}>
-          <div className={styles.codeHeader}>
-            {match && <span className={styles.codeLanguage}>{match[1]}</span>}
-            <CopyButton text={codeText} />
-          </div>
-          <code className={className} {...props}>
-            {children}
-          </code>
-        </div>
-      ) : (
-        <code className={styles.inlineCode} {...props}>
-          {children}
-        </code>
-      )
+      return !isInline
+        ? (
+            <div className={styles.codeBlock}>
+              <div className={styles.codeHeader}>
+                {match && <span className={styles.codeLanguage}>{match[1]}</span>}
+                <CopyButton text={codeText} />
+              </div>
+              <code className={className} {...props}>
+                {children}
+              </code>
+            </div>
+          )
+        : (
+            <code className={styles.inlineCode} {...props}>
+              {children}
+            </code>
+          )
     },
     // Customize links to open in new tab
     a({ children, href, ...props }) {
@@ -139,4 +145,3 @@ const MarkdownRenderer = ({ content }: MarkdownRendererProps) => {
 }
 
 export default MarkdownRenderer
-

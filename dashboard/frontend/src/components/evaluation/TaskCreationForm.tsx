@@ -1,27 +1,27 @@
-import { useCallback } from 'react';
-import type { CreateTaskRequest, DatasetInfo, EvaluationDimension } from '../../types/evaluation';
-import { DIMENSION_INFO } from '../../types/evaluation';
-import { useTaskCreationForm, useDatasets } from '../../hooks/useEvaluation';
-import styles from './TaskCreationForm.module.css';
+import { useCallback } from 'react'
+import type { CreateTaskRequest, DatasetInfo, EvaluationDimension } from '../../types/evaluation'
+import { DIMENSION_INFO } from '../../types/evaluation'
+import { useTaskCreationForm, useDatasets } from '../../hooks/useEvaluation'
+import styles from './TaskCreationForm.module.css'
 
 interface TaskCreationFormProps {
-  onSubmit: (request: CreateTaskRequest) => void;
-  onCancel: () => void;
-  loading?: boolean;
+  onSubmit: (request: CreateTaskRequest) => void
+  onCancel: () => void
+  loading?: boolean
 }
 
 export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFormProps) {
-  const form = useTaskCreationForm();
-  const { datasets: availableDatasets, loading: datasetsLoading } = useDatasets();
+  const form = useTaskCreationForm()
+  const { datasets: availableDatasets, loading: datasetsLoading } = useDatasets()
 
   const handleSubmit = useCallback(() => {
-    const config = form.getConfig();
-    onSubmit(config);
-  }, [form, onSubmit]);
+    const config = form.getConfig()
+    onSubmit(config)
+  }, [form, onSubmit])
 
   const renderStepIndicator = () => (
     <div className={styles.stepIndicator}>
-      {[1, 2, 3, 4].map((s) => (
+      {[1, 2, 3, 4].map(s => (
         <button
           key={s}
           className={`${styles.step} ${form.step === s ? styles.active : ''} ${form.step > s ? styles.completed : ''}`}
@@ -38,7 +38,7 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
         </button>
       ))}
     </div>
-  );
+  )
 
   const renderStep1 = () => (
     <div className={styles.stepContent}>
@@ -51,7 +51,7 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
           id="name"
           type="text"
           value={form.name}
-          onChange={(e) => form.setName(e.target.value)}
+          onChange={e => form.setName(e.target.value)}
           placeholder="e.g., Weekly MoM Evaluation"
           className={styles.input}
         />
@@ -62,7 +62,7 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
         <textarea
           id="description"
           value={form.description}
-          onChange={(e) => form.setDescription(e.target.value)}
+          onChange={e => form.setDescription(e.target.value)}
           placeholder="Describe the purpose of this evaluation..."
           className={styles.textarea}
           rows={3}
@@ -75,7 +75,7 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
           id="endpoint"
           type="text"
           value={form.endpoint}
-          onChange={(e) => form.setEndpoint(e.target.value)}
+          onChange={e => form.setEndpoint(e.target.value)}
           placeholder="http://localhost:8801"
           className={styles.input}
         />
@@ -88,7 +88,7 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
             id="maxSamples"
             type="number"
             value={form.maxSamples}
-            onChange={(e) => form.setMaxSamples(parseInt(e.target.value) || 50)}
+            onChange={e => form.setMaxSamples(parseInt(e.target.value) || 50)}
             min={1}
             max={1000}
             className={styles.input}
@@ -100,7 +100,7 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
             id="samplesPerCat"
             type="number"
             value={form.samplesPerCat}
-            onChange={(e) => form.setSamplesPerCat(parseInt(e.target.value) || 10)}
+            onChange={e => form.setSamplesPerCat(parseInt(e.target.value) || 10)}
             min={1}
             max={100}
             className={styles.input}
@@ -108,7 +108,7 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
         </div>
       </div>
     </div>
-  );
+  )
 
   const renderStep2 = () => (
     <div className={styles.stepContent}>
@@ -130,55 +130,59 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
               </div>
               <p className={styles.dimensionDescription}>{info.description}</p>
             </button>
-          )
+          ),
         )}
       </div>
     </div>
-  );
+  )
 
   const renderStep3 = () => (
     <div className={styles.stepContent}>
       <h3>Select Datasets</h3>
       <p className={styles.stepDescription}>Choose which datasets to use for each dimension.</p>
 
-      {datasetsLoading ? (
-        <div className={styles.loading}>Loading datasets...</div>
-      ) : (
-        <div className={styles.datasetGroups}>
-          {form.dimensions.map((dim) => {
-            const datasets = availableDatasets[dim] || [];
-            return (
-              <div key={dim} className={styles.datasetGroup}>
-                <h4 style={{ color: DIMENSION_INFO[dim].color }}>{DIMENSION_INFO[dim].label}</h4>
-                <div className={styles.datasetList}>
-                  {datasets.length === 0 ? (
-                    <p className={styles.noDatasets}>No datasets available for this dimension.</p>
-                  ) : (
-                    datasets.map((ds: DatasetInfo) => (
-                      <label key={ds.name} className={styles.datasetItem}>
-                        <input
-                          type="checkbox"
-                          checked={form.selectedDatasets[dim]?.includes(ds.name) || false}
-                          onChange={() => form.toggleDataset(dim, ds.name)}
-                        />
-                        <div className={styles.datasetInfo}>
-                          <span className={styles.datasetName}>{ds.name}</span>
-                          <span className={styles.datasetDesc}>{ds.description}</span>
-                        </div>
-                      </label>
-                    ))
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {datasetsLoading
+        ? (
+            <div className={styles.loading}>Loading datasets...</div>
+          )
+        : (
+            <div className={styles.datasetGroups}>
+              {form.dimensions.map((dim) => {
+                const datasets = availableDatasets[dim] || []
+                return (
+                  <div key={dim} className={styles.datasetGroup}>
+                    <h4 style={{ color: DIMENSION_INFO[dim].color }}>{DIMENSION_INFO[dim].label}</h4>
+                    <div className={styles.datasetList}>
+                      {datasets.length === 0
+                        ? (
+                            <p className={styles.noDatasets}>No datasets available for this dimension.</p>
+                          )
+                        : (
+                            datasets.map((ds: DatasetInfo) => (
+                              <label key={ds.name} className={styles.datasetItem}>
+                                <input
+                                  type="checkbox"
+                                  checked={form.selectedDatasets[dim]?.includes(ds.name) || false}
+                                  onChange={() => form.toggleDataset(dim, ds.name)}
+                                />
+                                <div className={styles.datasetInfo}>
+                                  <span className={styles.datasetName}>{ds.name}</span>
+                                  <span className={styles.datasetDesc}>{ds.description}</span>
+                                </div>
+                              </label>
+                            ))
+                          )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
     </div>
-  );
+  )
 
   const renderStep4 = () => {
-    const config = form.getConfig();
+    const config = form.getConfig()
     return (
       <div className={styles.stepContent}>
         <h3>Review & Submit</h3>
@@ -201,7 +205,7 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
         <div className={styles.reviewSection}>
           <h4>Dimensions</h4>
           <div className={styles.dimensionTags}>
-            {config.config.dimensions.map((dim) => (
+            {config.config.dimensions.map(dim => (
               <span
                 key={dim}
                 className={styles.dimensionTag}
@@ -225,8 +229,8 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
           </dl>
         </div>
       </div>
-    );
-  };
+    )
+  }
 
   return (
     <div className={styles.container}>
@@ -249,23 +253,25 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
               Previous
             </button>
           )}
-          {form.step < 4 ? (
-            <button
-              className={styles.nextButton}
-              onClick={form.nextStep}
-              disabled={!form.isStepValid(form.step) || loading}
-            >
-              Next
-            </button>
-          ) : (
-            <button className={styles.submitButton} onClick={handleSubmit} disabled={loading}>
-              {loading ? 'Creating...' : 'Create Task'}
-            </button>
-          )}
+          {form.step < 4
+            ? (
+                <button
+                  className={styles.nextButton}
+                  onClick={form.nextStep}
+                  disabled={!form.isStepValid(form.step) || loading}
+                >
+                  Next
+                </button>
+              )
+            : (
+                <button className={styles.submitButton} onClick={handleSubmit} disabled={loading}>
+                  {loading ? 'Creating...' : 'Create Task'}
+                </button>
+              )}
         </div>
       </div>
     </div>
-  );
+  )
 }
 
-export default TaskCreationForm;
+export default TaskCreationForm

@@ -40,9 +40,11 @@ const LogsPage: React.FC = () => {
       setDeploymentType(data.deployment_type)
       setError(data.error || null)
       setMessage(data.message || null)
-    } catch (err) {
+    }
+    catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')
-    } finally {
+    }
+    finally {
       setLoading(false)
     }
   }, [selectedComponent, lines])
@@ -93,7 +95,9 @@ const LogsPage: React.FC = () => {
             View logs from vLLM Semantic Router services
             {deploymentType !== 'none' && deploymentType !== 'detecting...' && (
               <span className={styles.deploymentBadge}>
-                {getDeploymentIcon(deploymentType)} {deploymentType}
+                {getDeploymentIcon(deploymentType)}
+                {' '}
+                {deploymentType}
               </span>
             )}
           </p>
@@ -133,7 +137,7 @@ const LogsPage: React.FC = () => {
             <label>Lines:</label>
             <select
               value={lines}
-              onChange={(e) => setLines(Number(e.target.value))}
+              onChange={e => setLines(Number(e.target.value))}
               className={styles.linesSelect}
             >
               <option value={50}>50</option>
@@ -147,7 +151,7 @@ const LogsPage: React.FC = () => {
             <input
               type="checkbox"
               checked={autoRefresh}
-              onChange={(e) => setAutoRefresh(e.target.checked)}
+              onChange={e => setAutoRefresh(e.target.checked)}
             />
             <span>Auto-refresh</span>
           </label>
@@ -156,7 +160,7 @@ const LogsPage: React.FC = () => {
             <input
               type="checkbox"
               checked={autoScroll}
-              onChange={(e) => setAutoScroll(e.target.checked)}
+              onChange={e => setAutoScroll(e.target.checked)}
             />
             <span>Auto-scroll</span>
           </label>
@@ -184,42 +188,52 @@ const LogsPage: React.FC = () => {
       <div className={styles.logsSection}>
         <div className={styles.logsHeader}>
           <span className={styles.logsTitle}>
-            {selectedComponent.charAt(0).toUpperCase() + selectedComponent.slice(1)} Logs
+            {selectedComponent.charAt(0).toUpperCase() + selectedComponent.slice(1)}
+            {' '}
+            Logs
           </span>
-          <span className={styles.logsCount}>{logs.length} entries</span>
+          <span className={styles.logsCount}>
+            {logs.length}
+            {' '}
+            entries
+          </span>
         </div>
 
         <div ref={logsContainerRef} className={styles.logsContainer}>
-          {loading && logs.length === 0 ? (
-            <div className={styles.loadingLogs}>
-              <div className={styles.spinner}></div>
-              <span>Fetching logs...</span>
-            </div>
-          ) : logs.length === 0 ? (
-            <div className={styles.noLogs}>
-              <span className={styles.noLogsIcon}>📭</span>
-              <p>No logs available</p>
-              {deploymentType === 'none' && (
-                <p className={styles.noLogsHint}>
-                  No running deployment detected. Start the router first.
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className={styles.logsList}>
-              {logs.map((log, index) => {
-                const level = getLogLevel(log.line)
-                return (
-                  <div 
-                    key={index} 
-                    className={`${styles.logEntry} ${level ? styles[`level${level.charAt(0).toUpperCase() + level.slice(1)}`] : ''}`}
-                  >
-                    <span className={styles.logLine}>{log.line}</span>
+          {loading && logs.length === 0
+            ? (
+                <div className={styles.loadingLogs}>
+                  <div className={styles.spinner}></div>
+                  <span>Fetching logs...</span>
+                </div>
+              )
+            : logs.length === 0
+              ? (
+                  <div className={styles.noLogs}>
+                    <span className={styles.noLogsIcon}>📭</span>
+                    <p>No logs available</p>
+                    {deploymentType === 'none' && (
+                      <p className={styles.noLogsHint}>
+                        No running deployment detected. Start the router first.
+                      </p>
+                    )}
                   </div>
                 )
-              })}
-            </div>
-          )}
+              : (
+                  <div className={styles.logsList}>
+                    {logs.map((log, index) => {
+                      const level = getLogLevel(log.line)
+                      return (
+                        <div
+                          key={index}
+                          className={`${styles.logEntry} ${level ? styles[`level${level.charAt(0).toUpperCase() + level.slice(1)}`] : ''}`}
+                        >
+                          <span className={styles.logLine}>{log.line}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
         </div>
       </div>
     </div>

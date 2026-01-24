@@ -35,8 +35,8 @@ interface ModelConnection {
 function createVerticalEdge(baseEdge: Partial<Edge>): Edge {
   return {
     ...baseEdge,
-    sourceHandle: 'bottom',  // Connect from bottom of source node
-    targetHandle: 'top',     // Connect to top of target node
+    sourceHandle: 'bottom', // Connect from bottom of source node
+    targetHandle: 'top', // Connect to top of target node
   } as Edge
 }
 
@@ -106,7 +106,7 @@ export function calculateFullLayout(
   topology: ParsedTopology,
   collapseState: CollapseState,
   highlightedPath: string[] = [],
-  testResult?: TestQueryResult | null
+  testResult?: TestQueryResult | null,
 ): LayoutResult {
   const nodes: Node[] = []
   const edges: Edge[] = []
@@ -115,23 +115,23 @@ export function calculateFullLayout(
   const isHighlighted = (id: string): boolean => {
     // Exact match first
     if (highlightedPath.includes(id)) return true
-    
+
     // For model nodes: compare normalized versions (handle special char differences)
     // Backend: model-qwen2-5-7b-reasoning  Frontend: model-qwen2-5-7b-reasoning
     if (id.startsWith('model-')) {
       const normalizedId = id.toLowerCase().replace(/[^a-z0-9-]/g, '-')
-      return highlightedPath.some(path => {
+      return highlightedPath.some((path) => {
         if (!path.startsWith('model-')) return false
         const normalizedPath = path.toLowerCase().replace(/[^a-z0-9-]/g, '-')
         // Exact match after normalization
         return normalizedId === normalizedPath
       })
     }
-    
+
     // For plugin chain nodes
     if (id.startsWith('plugin-chain-')) {
       const decisionName = id.substring(13)
-      return highlightedPath.some(path => {
+      return highlightedPath.some((path) => {
         if (path.startsWith('plugins-')) {
           return decisionName === path.substring(8)
         }
@@ -141,7 +141,7 @@ export function calculateFullLayout(
         return false
       })
     }
-    
+
     return false
   }
 
@@ -150,7 +150,7 @@ export function calculateFullLayout(
   const activeSignalTypes = SIGNAL_TYPES.filter(type => signalGroups[type].length > 0)
 
   // ============== Build node dimensions map ==============
-  const nodeDimensions: Map<string, { width: number; height: number }> = new Map()
+  const nodeDimensions: Map<string, { width: number, height: number }> = new Map()
 
   // ============== 1. Client Node ==============
   const clientId = 'client'
@@ -170,7 +170,7 @@ export function calculateFullLayout(
   const lastSourceId = clientId
 
   // ============== 3. Signal Groups ==============
-  activeSignalTypes.forEach(signalType => {
+  activeSignalTypes.forEach((signalType) => {
     const signals = signalGroups[signalType]
     if (signals.length === 0) return
 
@@ -212,10 +212,10 @@ export function calculateFullLayout(
   // (e.g., user_feedback detected by ML model but not configured in user_feedback_rules)
   if (testResult?.matchedSignals?.length) {
     const existingGroupTypes = new Set(activeSignalTypes)
-    const dynamicSignalsByType = new Map<SignalType, { name: string; confidence?: number }[]>()
-    
+    const dynamicSignalsByType = new Map<SignalType, { name: string, confidence?: number }[]>()
+
     // Group test result signals by type
-    testResult.matchedSignals.forEach(signal => {
+    testResult.matchedSignals.forEach((signal) => {
       if (!existingGroupTypes.has(signal.type)) {
         if (!dynamicSignalsByType.has(signal.type)) {
           dynamicSignalsByType.set(signal.type, [])
@@ -226,11 +226,11 @@ export function calculateFullLayout(
         })
       }
     })
-    
+
     // Create dynamic signal group nodes
     dynamicSignalsByType.forEach((signals, signalType) => {
       const signalGroupId = `signal-group-${signalType}`
-      
+
       // Create synthetic signal configs for display
       const syntheticSignals = signals.map(s => ({
         type: signalType,
@@ -240,10 +240,10 @@ export function calculateFullLayout(
         config: {},
         isDynamic: true, // Mark as dynamically detected
       }))
-      
+
       const nodeHeight = getSignalGroupHeight(syntheticSignals, false)
       nodeDimensions.set(signalGroupId, { width: 160, height: nodeHeight })
-      
+
       nodes.push({
         id: signalGroupId,
         type: 'signalGroupNode',
@@ -256,7 +256,7 @@ export function calculateFullLayout(
           isDynamic: true, // Mark the group as dynamic
         },
       })
-      
+
       // Connect from client to dynamic signal group
       edges.push(createVerticalEdge({
         id: `e-${lastSourceId}-${signalGroupId}`,
@@ -273,7 +273,7 @@ export function calculateFullLayout(
           color: EDGE_COLORS.normal,
         },
       }))
-      
+
       // Add to active signal types for decision routing
       activeSignalTypes.push(signalType)
     })
@@ -291,7 +291,7 @@ export function calculateFullLayout(
   // Create a set of existing signal group IDs for quick lookup
   const existingSignalGroups = new Set(signalGroupIds)
 
-  topology.decisions.forEach(decision => {
+  topology.decisions.forEach((decision) => {
     const decisionId = `decision-${decision.name}`
     const isRulesCollapsed = collapseState.decisions[decision.name]
     const nodeHeight = getDecisionNodeHeight(decision, isRulesCollapsed)
@@ -304,7 +304,7 @@ export function calculateFullLayout(
     // 2. All its conditions reference signal types that don't exist
     const hasConditions = decision.rules.conditions.length > 0
     const hasValidConditions = hasConditions && decision.rules.conditions.some(
-      cond => existingSignalGroups.has(`signal-group-${cond.type}`)
+      cond => existingSignalGroups.has(`signal-group-${cond.type}`),
     )
     const isUnreachable = !hasValidConditions
 
@@ -316,21 +316,21 @@ export function calculateFullLayout(
         decision,
         rulesCollapsed: isRulesCollapsed,
         isHighlighted: isHighlighted(decisionId),
-        isUnreachable,  // Pass unreachable flag to node
-        unreachableReason: !hasConditions 
-          ? 'No conditions defined' 
+        isUnreachable, // Pass unreachable flag to node
+        unreachableReason: !hasConditions
+          ? 'No conditions defined'
           : 'Referenced signals not configured',
       },
     })
 
     // Edges from signal groups to decision
     const connectedSignalTypes = new Set<SignalType>()
-    decision.rules.conditions.forEach(cond => {
+    decision.rules.conditions.forEach((cond) => {
       connectedSignalTypes.add(cond.type)
     })
 
     let hasConnection = false
-    connectedSignalTypes.forEach(signalType => {
+    connectedSignalTypes.forEach((signalType) => {
       const signalGroupId = `signal-group-${signalType}`
       if (nodes.find(n => n.id === signalGroupId)) {
         hasConnection = true
@@ -457,7 +457,7 @@ export function calculateFullLayout(
       style: {
         stroke: EDGE_COLORS.normal,
         strokeWidth: 1.5,
-        strokeDasharray: '8, 4',  // Dashed to indicate fallback path
+        strokeDasharray: '8, 4', // Dashed to indicate fallback path
       },
       markerEnd: { type: MarkerType.ArrowClosed, color: EDGE_COLORS.normal },
       label: 'fallback',
@@ -471,10 +471,10 @@ export function calculateFullLayout(
   // e.g., "low_confidence_general" or "high_confidence_specialized"
   const fallbackDecisionId = 'fallback-decision'
   let fallbackDecisionSourceId: string | null = null
-  
+
   if (testResult?.isFallbackDecision && testResult.matchedDecision) {
     nodeDimensions.set(fallbackDecisionId, { width: 180, height: 100 })
-    
+
     nodes.push({
       id: fallbackDecisionId,
       type: 'fallbackDecisionNode',
@@ -486,15 +486,15 @@ export function calculateFullLayout(
         isHighlighted: isHighlighted(fallbackDecisionId) || highlightedPath.includes(`decision-${testResult.matchedDecision}`),
       },
     })
-    
+
     // Connect from matched signal groups to fallback decision
     const matchedSignalTypes = new Set<SignalType>()
-    testResult.matchedSignals?.forEach(signal => {
+    testResult.matchedSignals?.forEach((signal) => {
       matchedSignalTypes.add(signal.type)
     })
-    
+
     let hasSignalConnection = false
-    matchedSignalTypes.forEach(signalType => {
+    matchedSignalTypes.forEach((signalType) => {
       const signalGroupId = `signal-group-${signalType}`
       if (nodes.find(n => n.id === signalGroupId)) {
         hasSignalConnection = true
@@ -518,7 +518,7 @@ export function calculateFullLayout(
         }))
       }
     })
-    
+
     // If no signal connections, connect from client directly
     if (!hasSignalConnection) {
       edges.push(createVerticalEdge({
@@ -537,7 +537,7 @@ export function calculateFullLayout(
         },
       }))
     }
-    
+
     fallbackDecisionSourceId = fallbackDecisionId
   }
 
@@ -545,10 +545,10 @@ export function calculateFullLayout(
   // Group connections by physical model (base model + LoRA), not by reasoning config
   const modelConnections: Map<string, ModelConnection[]> = new Map()
 
-  topology.decisions.forEach(decision => {
+  topology.decisions.forEach((decision) => {
     const finalSourceId = decisionFinalSources[decision.name]
 
-    decision.modelRefs.forEach(modelRef => {
+    decision.modelRefs.forEach((modelRef) => {
       // Use physical model key for aggregation (same model, different reasoning = same node)
       const physicalKey = getPhysicalModelKey(modelRef)
       if (!modelConnections.has(physicalKey)) {
@@ -569,24 +569,24 @@ export function calculateFullLayout(
     const modelId = `model-${physicalKey.replace(/[^a-zA-Z0-9]/g, '-')}`
     const primaryConnection = connections[0]
     const fromDecisions = connections.map(c => c.decisionName)
-    
+
     // Aggregate modes for this physical model
     const modes = connections.map(conn => ({
       decisionName: conn.decisionName,
       hasReasoning: conn.hasReasoning,
       reasoningEffort: conn.reasoningEffort,
     }))
-    
+
     // Calculate node height based on number of modes
     const uniqueModes = new Set(modes.map(m => m.hasReasoning ? 'reasoning' : 'standard'))
     const nodeHeight = 80 + (uniqueModes.size > 1 ? 30 : 0)
-    
+
     nodeDimensions.set(modelId, { width: 180, height: nodeHeight })
 
     // Check if this model node should be highlighted
     // Match against any of the possible config keys for this physical model
     const configKeys = connections.map(c => getModelConfigKey(c.modelRef))
-    const modelHighlighted = configKeys.some(configKey => {
+    const modelHighlighted = configKeys.some((configKey) => {
       const configModelId = `model-${configKey.replace(/[^a-zA-Z0-9]/g, '-')}`
       return isHighlighted(configModelId)
     }) || isHighlighted(modelId)
@@ -608,15 +608,15 @@ export function calculateFullLayout(
 
     // Create edges from each source to this model
     // Edge style reflects the reasoning mode of that specific connection
-    connections.forEach(conn => {
+    connections.forEach((conn) => {
       // Generate config-specific ID for edge (to support highlighting specific paths)
       const configKey = getModelConfigKey(conn.modelRef)
       const edgeId = `e-${conn.sourceId}-${modelId}-${conn.hasReasoning ? 'reasoning' : 'std'}`
-      
+
       // Check if this specific edge should be highlighted
       const configModelId = `model-${configKey.replace(/[^a-zA-Z0-9]/g, '-')}`
       const edgeHighlighted = isHighlighted(conn.sourceId) && isHighlighted(configModelId)
-      
+
       edges.push(createVerticalEdge({
         id: edgeId,
         source: conn.sourceId,
@@ -655,14 +655,14 @@ export function calculateFullLayout(
     const defaultModelKey = topology.defaultModel
     const normalizedDefaultKey = defaultModelKey.replace(/[^a-zA-Z0-9]/g, '-')
     const defaultModelId = `model-${normalizedDefaultKey}`
-    
+
     // Check if default model node already exists (it might be used by a decision too)
     const existingModelNode = nodes.find(n => n.id === defaultModelId)
-    
+
     if (existingModelNode) {
       // Default model already exists, just connect to it
       const edgeHighlighted = isHighlighted(defaultRouteId) && isHighlighted(defaultModelId)
-      
+
       edges.push(createVerticalEdge({
         id: `e-${defaultRouteId}-${defaultModelId}`,
         source: defaultRouteId,
@@ -678,12 +678,13 @@ export function calculateFullLayout(
           color: edgeHighlighted ? EDGE_COLORS.highlighted : EDGE_COLORS.normal,
         },
       }))
-    } else {
+    }
+    else {
       // Create a new model node for the default model
       nodeDimensions.set(defaultModelId, { width: 180, height: 80 })
-      
+
       const modelHighlighted = isHighlighted(defaultModelId)
-      
+
       nodes.push({
         id: defaultModelId,
         type: 'modelNode',
@@ -697,9 +698,9 @@ export function calculateFullLayout(
           hasMultipleModes: false,
         },
       })
-      
+
       const edgeHighlighted = isHighlighted(defaultRouteId) && modelHighlighted
-      
+
       edges.push(createVerticalEdge({
         id: `e-${defaultRouteId}-${defaultModelId}`,
         source: defaultRouteId,
@@ -724,10 +725,10 @@ export function calculateFullLayout(
     const matchedModelName = testResult.matchedModels[0]
     const normalizedModelKey = matchedModelName.replace(/[^a-zA-Z0-9]/g, '-')
     const matchedModelId = `model-${normalizedModelKey}`
-    
+
     // Check if model node exists
     const existingModelNode = nodes.find(n => n.id === matchedModelId)
-    
+
     if (existingModelNode) {
       // Connect fallback decision to existing model
       edges.push(createVerticalEdge({
@@ -744,7 +745,8 @@ export function calculateFullLayout(
           color: EDGE_COLORS.highlighted,
         },
       }))
-    } else if (topology.defaultModel) {
+    }
+    else if (topology.defaultModel) {
       // Fallback to default model connection
       const defaultModelKey = topology.defaultModel.replace(/[^a-zA-Z0-9]/g, '-')
       const defaultModelId = `model-${defaultModelKey}`
@@ -773,23 +775,23 @@ export function calculateFullLayout(
   const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}))
 
   g.setGraph({
-    rankdir: 'TB',           // Top to Bottom (changed from LR)
-    nodesep: 80,             // Horizontal spacing between nodes in same rank
-    ranksep: 100,            // Vertical spacing between ranks/rows
+    rankdir: 'TB', // Top to Bottom (changed from LR)
+    nodesep: 80, // Horizontal spacing between nodes in same rank
+    ranksep: 100, // Vertical spacing between ranks/rows
     marginx: 80,
     marginy: 80,
     ranker: 'network-simplex', // Best for DAGs
-    align: 'UL',             // Align nodes to upper-left for better distribution
+    align: 'UL', // Align nodes to upper-left for better distribution
   })
 
   // Add nodes with dimensions to Dagre
-  nodes.forEach(node => {
+  nodes.forEach((node) => {
     const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
     g.setNode(node.id, { width: dim.width, height: dim.height })
   })
 
   // Add edges to Dagre
-  edges.forEach(edge => {
+  edges.forEach((edge) => {
     g.setEdge(edge.source, edge.target)
   })
 
@@ -799,11 +801,11 @@ export function calculateFullLayout(
   // ============== Neural Network Layer Structure ==============
   // Define fixed Y positions for each layer to create clear neural network structure
   const LAYER_Y_POSITIONS = {
-    client: 0,           // Layer 1: User Query
-    signals: 200,        // Layer 2: Signals
-    decisions: 500,      // Layer 3: Decisions
-    pluginChains: 800,   // Layer 4: Plugin Chains
-    models: 1100,        // Layer 5: Models
+    client: 0, // Layer 1: User Query
+    signals: 200, // Layer 2: Signals
+    decisions: 500, // Layer 3: Decisions
+    pluginChains: 800, // Layer 4: Plugin Chains
+    models: 1100, // Layer 5: Models
   }
 
   // Group nodes by layer
@@ -815,16 +817,20 @@ export function calculateFullLayout(
     models: [],
   }
 
-  nodes.forEach(node => {
+  nodes.forEach((node) => {
     if (node.id === 'client') {
       nodesByLayer.client.push(node)
-    } else if (node.id.startsWith('signal-group-')) {
+    }
+    else if (node.id.startsWith('signal-group-')) {
       nodesByLayer.signals.push(node)
-    } else if (node.id.startsWith('decision-') || node.id === 'default-route' || node.id === 'fallback-decision') {
+    }
+    else if (node.id.startsWith('decision-') || node.id === 'default-route' || node.id === 'fallback-decision') {
       nodesByLayer.decisions.push(node)
-    } else if (node.id.startsWith('plugin-chain-')) {
+    }
+    else if (node.id.startsWith('plugin-chain-')) {
       nodesByLayer.pluginChains.push(node)
-    } else if (node.id.startsWith('model-')) {
+    }
+    else if (node.id.startsWith('model-')) {
       nodesByLayer.models.push(node)
     }
   })
@@ -842,13 +848,15 @@ export function calculateFullLayout(
     }, 0)
 
     // Different spacing for different layers
-    let spacing = 80  // Default spacing
+    let spacing = 80 // Default spacing
     if (layerName === 'pluginChains') {
-      spacing = 150  // More spacing for plugin chains
-    } else if (layerName === 'models') {
-      spacing = 120  // More spacing for models
-    } else if (layerName === 'decisions') {
-      spacing = 100  // Slightly more spacing for decisions
+      spacing = 150 // More spacing for plugin chains
+    }
+    else if (layerName === 'models') {
+      spacing = 120 // More spacing for models
+    }
+    else if (layerName === 'decisions') {
+      spacing = 100 // Slightly more spacing for decisions
     }
 
     const totalSpacing = (layerNodes.length - 1) * spacing
@@ -858,7 +866,7 @@ export function calculateFullLayout(
     let currentX = -layerTotalWidth / 2
 
     // Position each node in the layer
-    layerNodes.forEach(node => {
+    layerNodes.forEach((node) => {
       const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
 
       node.position = {
@@ -874,7 +882,7 @@ export function calculateFullLayout(
   if (highlightedPath.length > 0) {
     // Build a set of highlighted node IDs for quick lookup
     const highlightedNodeIds = new Set<string>()
-    nodes.forEach(node => {
+    nodes.forEach((node) => {
       if (isHighlighted(node.id)) {
         highlightedNodeIds.add(node.id)
       }
@@ -882,7 +890,7 @@ export function calculateFullLayout(
 
     // Build forward edge map
     const edgeMap = new Map<string, string[]>()
-    edges.forEach(edge => {
+    edges.forEach((edge) => {
       if (!edgeMap.has(edge.source)) {
         edgeMap.set(edge.source, [])
       }
@@ -891,28 +899,28 @@ export function calculateFullLayout(
 
     // Find the specific path from client to the highlighted model
     // Only include nodes that are in the highlightedPath from backend
-    
+
     const nodesOnPath = new Set<string>()
-    
+
     // Add all nodes that backend marked as highlighted
     highlightedNodeIds.forEach(id => nodesOnPath.add(id))
-    
+
     // Find the highlighted decision (the one that was matched)
     const highlightedDecision = Array.from(highlightedNodeIds).find(id => id.startsWith('decision-'))
-    
+
     if (highlightedDecision) {
       const decisionName = highlightedDecision.substring(9) // Remove 'decision-' prefix
-      
+
       // Always include client
       nodesOnPath.add('client')
-      
+
       // Only include signal groups that were actually matched (already in highlightedNodeIds)
       // Do NOT auto-include all signal groups connected to the decision
-      
+
       // Include algorithm and plugin-chain for this specific decision
       const algorithmId = `algorithm-${decisionName}`
       const pluginChainId = `plugin-chain-${decisionName}`
-      
+
       if (nodes.find(n => n.id === algorithmId)) {
         nodesOnPath.add(algorithmId)
       }
@@ -922,10 +930,10 @@ export function calculateFullLayout(
     }
 
     // Highlight edges where both source and target are on the path
-    edges.forEach(edge => {
+    edges.forEach((edge) => {
       const sourceOnPath = nodesOnPath.has(edge.source)
       const targetOnPath = nodesOnPath.has(edge.target)
-      
+
       if (sourceOnPath && targetOnPath) {
         edge.style = {
           ...edge.style,
@@ -944,9 +952,9 @@ export function calculateFullLayout(
         edge.className = 'highlighted-edge'
       }
     })
-    
+
     // Update node highlight status for nodes on path
-    nodes.forEach(node => {
+    nodes.forEach((node) => {
       if (nodesOnPath.has(node.id)) {
         node.data.isHighlighted = true
       }

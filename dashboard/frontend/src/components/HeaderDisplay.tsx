@@ -5,7 +5,7 @@ interface HeaderDisplayProps {
 }
 
 // Header metadata for display
-const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'warning' | 'danger' }> = {
+const HEADER_INFO: Record<string, { label: string, type: 'info' | 'success' | 'warning' | 'danger' }> = {
   'x-vsr-selected-model': {
     label: 'Model',
     type: 'info',
@@ -111,4 +111,3 @@ const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
 }
 
 export default HeaderDisplay
-

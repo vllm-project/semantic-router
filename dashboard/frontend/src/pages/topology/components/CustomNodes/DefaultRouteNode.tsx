@@ -25,7 +25,9 @@ export const DefaultRouteNode = memo<NodeProps<DefaultRouteNodeData>>(({ data })
         <span className={styles.defaultRouteLabel}>Fallback</span>
         {defaultModel && (
           <span className={styles.defaultRouteModel} title={defaultModel}>
-            → {defaultModel.length > 15 ? defaultModel.slice(0, 15) + '...' : defaultModel}
+            →
+            {' '}
+            {defaultModel.length > 15 ? defaultModel.slice(0, 15) + '...' : defaultModel}
           </span>
         )}
       </div>

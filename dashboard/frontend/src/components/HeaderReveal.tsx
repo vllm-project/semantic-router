@@ -8,7 +8,7 @@ interface HeaderRevealProps {
 }
 
 // Header metadata for display
-const HEADER_INFO: Record<string, { label: string; description: string }> = {
+const HEADER_INFO: Record<string, { label: string, description: string }> = {
   'x-vsr-selected-model': {
     label: 'Selected Model',
     description: 'The model chosen by the router',
@@ -135,4 +135,3 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
 }
 
 export default HeaderReveal
-

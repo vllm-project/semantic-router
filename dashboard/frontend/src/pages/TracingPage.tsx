@@ -19,7 +19,7 @@ const TracingPage: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [serviceAvailable, setServiceAvailable] = useState<boolean | null>(
-    null
+    null,
   )
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [themeSet, setThemeSet] = useState(false)
@@ -37,7 +37,8 @@ const TracingPage: React.FC = () => {
         return
       }
       setServiceAvailable(true)
-    } catch {
+    }
+    catch {
       // Network error - service might be available but request failed
       setServiceAvailable(true)
     }
@@ -86,8 +87,8 @@ const TracingPage: React.FC = () => {
             const iframeWindow = iframe.contentWindow
             if (iframeWindow && iframeWindow.localStorage) {
               // Check current theme
-              const currentTheme = iframeWindow.localStorage.getItem('jaeger-ui-theme') ||
-                                   iframeWindow.localStorage.getItem('theme')
+              const currentTheme = iframeWindow.localStorage.getItem('jaeger-ui-theme')
+                || iframeWindow.localStorage.getItem('theme')
 
               // If not already light, set it to light and reload
               if (currentTheme !== 'light' && !themeSet) {
@@ -106,13 +107,15 @@ const TracingPage: React.FC = () => {
                 iframeWindow.document.documentElement.style.colorScheme = 'light'
               }
             }
-          } catch (e) {
+          }
+          catch (e) {
             // Cross-origin restrictions - this is expected if Jaeger is on a different domain
             console.log('Note: Could not access Jaeger iframe (cross-origin):', e)
           }
         }, 100)
       }
-    } catch (e) {
+    }
+    catch (e) {
       console.log('Note: Could not access iframe:', e)
     }
   }
@@ -120,7 +123,7 @@ const TracingPage: React.FC = () => {
   const handleIframeError = () => {
     setLoading(false)
     setError(
-      'Failed to load Jaeger UI. Please check that Jaeger is running and the proxy is configured.'
+      'Failed to load Jaeger UI. Please check that Jaeger is running and the proxy is configured.',
     )
   }
 

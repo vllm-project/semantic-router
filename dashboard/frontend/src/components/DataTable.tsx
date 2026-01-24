@@ -39,7 +39,7 @@ export function DataTable<T>({
   onToggleExpand,
   emptyMessage = 'No data available',
   className = '',
-  readonly = false
+  readonly = false,
 }: DataTableProps<T>) {
   const [sortColumn, setSortColumn] = useState<string | null>(null)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
@@ -51,7 +51,8 @@ export function DataTable<T>({
   const handleSort = (columnKey: string) => {
     if (sortColumn === columnKey) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
-    } else {
+    }
+    else {
       setSortColumn(columnKey)
       setSortDirection('asc')
     }
@@ -65,7 +66,7 @@ export function DataTable<T>({
       const bValue = (b as any)[sortColumn]
 
       if (aValue === bValue) return 0
-      
+
       const comparison = aValue > bValue ? 1 : -1
       return sortDirection === 'asc' ? comparison : -comparison
     })
@@ -77,13 +78,13 @@ export function DataTable<T>({
         <thead className={styles.thead}>
           <tr>
             {expandable && <th className={styles.expandColumn}></th>}
-            {columns.map((column) => (
+            {columns.map(column => (
               <th
                 key={column.key}
                 className={`${styles.th} ${column.sortable ? styles.sortable : ''}`}
-                style={{ 
+                style={{
                   width: column.width,
-                  textAlign: column.align || 'left'
+                  textAlign: column.align || 'left',
                 }}
                 onClick={() => column.sortable && handleSort(column.key)}
               >
@@ -101,89 +102,90 @@ export function DataTable<T>({
           </tr>
         </thead>
         <tbody className={styles.tbody}>
-          {sortedData.length === 0 ? (
-            <tr>
-              <td 
-                colSpan={columns.length + (expandable ? 1 : 0) + (onView || onEdit || onDelete ? 1 : 0)}
-                className={styles.emptyState}
-              >
-                {emptyMessage}
-              </td>
-            </tr>
-          ) : (
-            sortedData.map((row) => {
-              const key = keyExtractor(row)
-              const isExpanded = isRowExpanded?.(row) || false
-
-              return (
-                <React.Fragment key={key}>
-                  <tr className={styles.tr}>
-                    {expandable && (
-                      <td className={styles.expandCell}>
-                        <button
-                          className={styles.expandButton}
-                          onClick={() => onToggleExpand?.(row)}
-                        >
-                          <span className={`${styles.expandIcon} ${isExpanded ? styles.expanded : ''}`}>
-                            ▶
-                          </span>
-                        </button>
-                      </td>
-                    )}
-                    {columns.map((column) => (
-                      <td
-                        key={column.key}
-                        className={styles.td}
-                        style={{ textAlign: column.align || 'left' }}
-                      >
-                        {column.render ? column.render(row) : (row as any)[column.key]}
-                      </td>
-                    ))}
-                    {(onView || onEdit || onDelete) && (
-                      <td className={`${styles.td} ${styles.actionsCell}`}>
-                        <div className={styles.actionButtons}>
-                          {onView && (
-                            <button
-                              className={`${styles.actionButton} ${styles.viewButton}`}
-                              onClick={() => onView(row)}
-                            >
-                              View
-                            </button>
-                          )}
-                          {effectiveOnEdit && (
-                            <button
-                              className={`${styles.actionButton} ${styles.editButton}`}
-                              onClick={() => effectiveOnEdit(row)}
-                            >
-                              Edit
-                            </button>
-                          )}
-                          {effectiveOnDelete && (
-                            <button
-                              className={`${styles.actionButton} ${styles.deleteButton}`}
-                              onClick={() => effectiveOnDelete(row)}
-                            >
-                              Delete
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                  {expandable && isExpanded && renderExpandedRow && (
-                    <tr className={styles.expandedRow}>
-                      <td colSpan={columns.length + 2}>
-                        {renderExpandedRow(row)}
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
+          {sortedData.length === 0
+            ? (
+                <tr>
+                  <td
+                    colSpan={columns.length + (expandable ? 1 : 0) + (onView || onEdit || onDelete ? 1 : 0)}
+                    className={styles.emptyState}
+                  >
+                    {emptyMessage}
+                  </td>
+                </tr>
               )
-            })
-          )}
+            : (
+                sortedData.map((row) => {
+                  const key = keyExtractor(row)
+                  const isExpanded = isRowExpanded?.(row) || false
+
+                  return (
+                    <React.Fragment key={key}>
+                      <tr className={styles.tr}>
+                        {expandable && (
+                          <td className={styles.expandCell}>
+                            <button
+                              className={styles.expandButton}
+                              onClick={() => onToggleExpand?.(row)}
+                            >
+                              <span className={`${styles.expandIcon} ${isExpanded ? styles.expanded : ''}`}>
+                                ▶
+                              </span>
+                            </button>
+                          </td>
+                        )}
+                        {columns.map(column => (
+                          <td
+                            key={column.key}
+                            className={styles.td}
+                            style={{ textAlign: column.align || 'left' }}
+                          >
+                            {column.render ? column.render(row) : (row as any)[column.key]}
+                          </td>
+                        ))}
+                        {(onView || onEdit || onDelete) && (
+                          <td className={`${styles.td} ${styles.actionsCell}`}>
+                            <div className={styles.actionButtons}>
+                              {onView && (
+                                <button
+                                  className={`${styles.actionButton} ${styles.viewButton}`}
+                                  onClick={() => onView(row)}
+                                >
+                                  View
+                                </button>
+                              )}
+                              {effectiveOnEdit && (
+                                <button
+                                  className={`${styles.actionButton} ${styles.editButton}`}
+                                  onClick={() => effectiveOnEdit(row)}
+                                >
+                                  Edit
+                                </button>
+                              )}
+                              {effectiveOnDelete && (
+                                <button
+                                  className={`${styles.actionButton} ${styles.deleteButton}`}
+                                  onClick={() => effectiveOnDelete(row)}
+                                >
+                                  Delete
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                      {expandable && isExpanded && renderExpandedRow && (
+                        <tr className={styles.expandedRow}>
+                          <td colSpan={columns.length + 2}>
+                            {renderExpandedRow(row)}
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  )
+                })
+              )}
         </tbody>
       </table>
     </div>
   )
 }
-

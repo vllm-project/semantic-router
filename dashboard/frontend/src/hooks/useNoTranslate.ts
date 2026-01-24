@@ -1,9 +1,9 @@
 /**
  * Utility for preventing browser translation on dynamic elements
- * 
+ *
  * Browser translation extensions (Google Translate, Edge Translate) can cause
  * React crashes by directly manipulating the DOM during streaming/animation.
- * 
+ *
  * This utility provides a consistent way to disable translation on dynamic elements.
  */
 

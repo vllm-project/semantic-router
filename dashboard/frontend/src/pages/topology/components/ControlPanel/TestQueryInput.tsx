@@ -45,7 +45,7 @@ export const TestQueryInput: React.FC<TestQueryInputProps> = ({
           className={styles.queryInput}
           placeholder="Enter a test query to verify routing... (⌘+Enter to test)"
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={e => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
           rows={3}
         />
@@ -67,7 +67,10 @@ export const TestQueryInput: React.FC<TestQueryInputProps> = ({
               ✅ Verified
             </span>
             {result.routingLatency !== undefined && (
-              <span className={styles.latencyBadge}>{result.routingLatency}ms</span>
+              <span className={styles.latencyBadge}>
+                {result.routingLatency}
+                ms
+              </span>
             )}
           </div>
 
@@ -89,10 +92,13 @@ export const TestQueryInput: React.FC<TestQueryInputProps> = ({
                   className={styles.signalTag}
                   style={{ background: getSignalColor(signal.type) }}
                 >
-                  {getSignalIcon(signal.type)} {signal.name}
+                  {getSignalIcon(signal.type)}
+                  {' '}
+                  {signal.name}
                   {signal.score !== undefined && (
                     <span className={styles.signalScore}>
-                      {(signal.score * 100).toFixed(0)}%
+                      {(signal.score * 100).toFixed(0)}
+                      %
                     </span>
                   )}
                 </span>
@@ -113,7 +119,9 @@ export const TestQueryInput: React.FC<TestQueryInputProps> = ({
             </span>
             {result.isFallbackDecision && result.fallbackReason && (
               <div className={styles.fallbackReason}>
-                💡 {result.fallbackReason}
+                💡
+                {' '}
+                {result.fallbackReason}
               </div>
             )}
           </div>
@@ -124,7 +132,9 @@ export const TestQueryInput: React.FC<TestQueryInputProps> = ({
             <div className={styles.modelTags}>
               {result.matchedModels.map(model => (
                 <span key={model} className={styles.modelTag}>
-                  🤖 {model.split('/').pop()}
+                  🤖
+                  {' '}
+                  {model.split('/').pop()}
                 </span>
               ))}
             </div>

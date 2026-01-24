@@ -27,10 +27,12 @@ export function useTopologyData(): UseTopologyDataResult {
       setRawConfig(config)
       const parsed = parseConfigToTopology(config)
       setData(parsed)
-    } catch (err) {
+    }
+    catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load configuration')
       console.error('Error fetching topology config:', err)
-    } finally {
+    }
+    finally {
       setLoading(false)
     }
   }, [])

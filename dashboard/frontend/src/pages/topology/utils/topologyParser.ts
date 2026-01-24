@@ -101,7 +101,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
 
   // 1. Keyword Rules → keyword signals
   // From keyword_rules (Go/Router format)
-  config.keyword_rules?.forEach(rule => {
+  config.keyword_rules?.forEach((rule) => {
     addSignal({
       type: 'keyword',
       name: rule.name,
@@ -114,7 +114,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
   // From signals.keywords (Python CLI format)
-  config.signals?.keywords?.forEach(rule => {
+  config.signals?.keywords?.forEach((rule) => {
     addSignal({
       type: 'keyword',
       name: rule.name,
@@ -129,7 +129,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
 
   // 2. Embedding Rules → embedding signals
   // From embedding_rules (Go/Router format)
-  config.embedding_rules?.forEach(rule => {
+  config.embedding_rules?.forEach((rule) => {
     addSignal({
       type: 'embedding',
       name: rule.name,
@@ -142,7 +142,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
   // From signals.embeddings (Python CLI format)
-  config.signals?.embeddings?.forEach(rule => {
+  config.signals?.embeddings?.forEach((rule) => {
     addSignal({
       type: 'embedding',
       name: rule.name,
@@ -157,7 +157,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
 
   // 3. Categories/Domains → domain signals
   // From signals.domains (Python CLI format)
-  config.signals?.domains?.forEach(domain => {
+  config.signals?.domains?.forEach((domain) => {
     addSignal({
       type: 'domain',
       name: domain.name,
@@ -169,7 +169,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
   // From categories (Go/Router format)
-  config.categories?.forEach(cat => {
+  config.categories?.forEach((cat) => {
     // Only add if it has mmlu_categories (domain signal)
     if (cat.mmlu_categories) {
       addSignal({
@@ -186,7 +186,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
 
   // 4. Fact Check Rules
   // From fact_check_rules (Go/Router format)
-  config.fact_check_rules?.forEach(rule => {
+  config.fact_check_rules?.forEach((rule) => {
     addSignal({
       type: 'fact_check',
       name: rule.name,
@@ -196,7 +196,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
   // From signals.fact_check (Python CLI format)
-  config.signals?.fact_check?.forEach(rule => {
+  config.signals?.fact_check?.forEach((rule) => {
     addSignal({
       type: 'fact_check',
       name: rule.name,
@@ -208,7 +208,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
 
   // 5. User Feedback Rules
   // From user_feedback_rules (Go/Router format)
-  config.user_feedback_rules?.forEach(rule => {
+  config.user_feedback_rules?.forEach((rule) => {
     addSignal({
       type: 'user_feedback',
       name: rule.name,
@@ -218,7 +218,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
   // From signals.user_feedbacks (Python CLI format)
-  config.signals?.user_feedbacks?.forEach(rule => {
+  config.signals?.user_feedbacks?.forEach((rule) => {
     addSignal({
       type: 'user_feedback',
       name: rule.name,
@@ -230,7 +230,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
 
   // 6. Preference Rules
   // From preference_rules (Go/Router format)
-  config.preference_rules?.forEach(rule => {
+  config.preference_rules?.forEach((rule) => {
     addSignal({
       type: 'preference',
       name: rule.name,
@@ -240,7 +240,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
   // From signals.preferences (Python CLI format)
-  config.signals?.preferences?.forEach(rule => {
+  config.signals?.preferences?.forEach((rule) => {
     addSignal({
       type: 'preference',
       name: rule.name,
@@ -252,7 +252,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
 
   // 7. Language Rules
   // From language_rules (Go/Router format)
-  config.language_rules?.forEach(rule => {
+  config.language_rules?.forEach((rule) => {
     addSignal({
       type: 'language',
       name: rule.name,
@@ -261,7 +261,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
   // From signals.language (Python CLI format)
-  config.signals?.language?.forEach(rule => {
+  config.signals?.language?.forEach((rule) => {
     addSignal({
       type: 'language',
       name: rule.name,
@@ -273,7 +273,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
 
   // 8. Latency Rules
   // From latency_rules (Go/Router format)
-  config.latency_rules?.forEach(rule => {
+  config.latency_rules?.forEach((rule) => {
     addSignal({
       type: 'latency',
       name: rule.name,
@@ -285,7 +285,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
   // From signals.latency (Python CLI format)
-  config.signals?.latency?.forEach(rule => {
+  config.signals?.latency?.forEach((rule) => {
     addSignal({
       type: 'latency',
       name: rule.name,
@@ -308,7 +308,7 @@ function extractDecisions(config: ConfigData): DecisionConfig[] {
 
   // Python CLI format: decisions array
   if (config.decisions && config.decisions.length > 0) {
-    config.decisions.forEach(decision => {
+    config.decisions.forEach((decision) => {
       const rules: RuleCombination = {
         operator: (decision.rules?.operator as 'AND' | 'OR') || 'AND',
         conditions: (decision.rules?.conditions || []).map(cond => ({
@@ -332,7 +332,7 @@ function extractDecisions(config: ConfigData): DecisionConfig[] {
       }))
 
       // Find reasoning_family from providers.models
-      const modelRefs: ModelRefConfig[] = (decision.modelRefs || []).map(ref => {
+      const modelRefs: ModelRefConfig[] = (decision.modelRefs || []).map((ref) => {
         const modelConfig = config.providers?.models?.find(m => m.name === ref.model)
         return {
           model: ref.model,
@@ -358,7 +358,7 @@ function extractDecisions(config: ConfigData): DecisionConfig[] {
   else if (config.categories && config.categories.length > 0) {
     config.categories.forEach((cat, index) => {
       const modelScores = normalizeModelScores(cat.model_scores)
-      const modelRefs: ModelRefConfig[] = modelScores.map(ms => {
+      const modelRefs: ModelRefConfig[] = modelScores.map((ms) => {
         const modelConfig = config.model_config?.[ms.model]
         return {
           model: ms.model,
@@ -399,7 +399,7 @@ function extractModels(config: ConfigData): ModelConfig[] {
   const models: ModelConfig[] = []
 
   // From providers.models
-  config.providers?.models?.forEach(model => {
+  config.providers?.models?.forEach((model) => {
     models.push({
       name: model.name,
       reasoning_family: model.reasoning_family,
@@ -431,7 +431,7 @@ interface NormalizedModelScore {
 }
 
 function normalizeModelScores(
-  modelScores: Array<{ model: string; score: number; use_reasoning?: boolean }> | Record<string, number> | undefined
+  modelScores: Array<{ model: string, score: number, use_reasoning?: boolean }> | Record<string, number> | undefined,
 ): NormalizedModelScore[] {
   if (!modelScores) return []
   if (Array.isArray(modelScores)) return modelScores
@@ -458,7 +458,7 @@ export function groupSignalsByType(signals: SignalConfig[]): Record<SignalType, 
     latency: [],
   }
 
-  signals.forEach(signal => {
+  signals.forEach((signal) => {
     if (groups[signal.type]) {
       groups[signal.type].push(signal)
     }

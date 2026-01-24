@@ -32,7 +32,7 @@ export const ModelNode = memo<NodeProps<ModelNodeData>>(({ data }) => {
   // Analyze modes: group by reasoning status
   const reasoningModes = modes?.filter(m => m.hasReasoning) || []
   const standardModes = modes?.filter(m => !m.hasReasoning) || []
-  
+
   // Determine primary display mode
   const hasAnyReasoning = reasoningModes.length > 0
   const hasAnyStandard = standardModes.length > 0
@@ -65,72 +65,87 @@ export const ModelNode = memo<NodeProps<ModelNodeData>>(({ data }) => {
       {/* Modes Section - Show aggregated modes */}
       <div className={styles.modelFeatures}>
         {/* Show both modes if model is used in multiple ways */}
-        {hasMultipleModes && hasAnyReasoning && hasAnyStandard ? (
-          <div className={styles.modesContainer}>
-            {/* Reasoning Mode */}
-            <div className={styles.modeBadge} style={{ background: 'rgba(118, 185, 0, 0.2)', borderColor: '#76b900', color: 'white' }}>
-              <span>🧠</span>
-              <span>Reasoning</span>
-              {reasoning_family && (
-                <span className={styles.reasoningFamily}>({reasoning_family})</span>
-              )}
-              {reasoningEfforts.length > 0 && (
-                <span className={styles.effortTag}>
-                  {reasoningEfforts.map(e => e ? (REASONING_EFFORT_DISPLAY[e]?.icon || e) : '').join(' ')}
-                </span>
-              )}
-            </div>
-            {/* Standard Mode */}
-            <div className={styles.modeBadge} style={{ background: 'rgba(100, 100, 100, 0.3)', borderColor: '#666' }}>
-              <span>⚡</span>
-              <span>Standard</span>
-            </div>
-          </div>
-        ) : (
-          <>
-            {/* Single Reasoning Mode */}
-            {hasAnyReasoning && (
-              <div className={styles.reasoningBadge}>
-                <span className={styles.reasoningIcon}>🧠</span>
+        {hasMultipleModes && hasAnyReasoning && hasAnyStandard
+          ? (
+            <div className={styles.modesContainer}>
+              {/* Reasoning Mode */}
+              <div className={styles.modeBadge} style={{ background: 'rgba(118, 185, 0, 0.2)', borderColor: '#76b900', color: 'white' }}>
+                <span>🧠</span>
                 <span>Reasoning</span>
                 {reasoning_family && (
-                  <span className={styles.reasoningFamily}>({reasoning_family})</span>
+                  <span className={styles.reasoningFamily}>
+                    (
+                    {reasoning_family}
+                    )
+                  </span>
+                )}
+                {reasoningEfforts.length > 0 && (
+                  <span className={styles.effortTag}>
+                    {reasoningEfforts.map(e => e ? (REASONING_EFFORT_DISPLAY[e]?.icon || e) : '').join(' ')}
+                  </span>
                 )}
               </div>
-            )}
-
-            {/* Reasoning Effort Level */}
-            {reasoningEfforts.length > 0 && reasoningEfforts.map((effort, idx) => {
-              if (!effort) return null
-              const effortConfig = REASONING_EFFORT_DISPLAY[effort]
-              return effortConfig ? (
-                <div
-                  key={idx}
-                  className={styles.effortBadge}
-                  style={{ background: effortConfig.color }}
-                  title={`Reasoning Effort: ${effortConfig.label}`}
-                >
-                  <span>{effortConfig.icon}</span>
-                  <span>{effortConfig.label}</span>
-                </div>
-              ) : null
-            })}
-
-            {/* Standard Mode Only */}
-            {!hasAnyReasoning && (
-              <div className={styles.standardBadge}>
+              {/* Standard Mode */}
+              <div className={styles.modeBadge} style={{ background: 'rgba(100, 100, 100, 0.3)', borderColor: '#666' }}>
                 <span>⚡</span>
                 <span>Standard</span>
               </div>
-            )}
-          </>
-        )}
+            </div>
+          )
+          : (
+            <>
+              {/* Single Reasoning Mode */}
+              {hasAnyReasoning && (
+                <div className={styles.reasoningBadge}>
+                  <span className={styles.reasoningIcon}>🧠</span>
+                  <span>Reasoning</span>
+                  {reasoning_family && (
+                    <span className={styles.reasoningFamily}>
+                      (
+                      {reasoning_family}
+                      )
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Reasoning Effort Level */}
+              {reasoningEfforts.length > 0 && reasoningEfforts.map((effort, idx) => {
+                if (!effort) return null
+                const effortConfig = REASONING_EFFORT_DISPLAY[effort]
+                return effortConfig
+                  ? (
+                    <div
+                      key={idx}
+                      className={styles.effortBadge}
+                      style={{ background: effortConfig.color }}
+                      title={`Reasoning Effort: ${effortConfig.label}`}
+                    >
+                      <span>{effortConfig.icon}</span>
+                      <span>{effortConfig.label}</span>
+                    </div>
+                  )
+                  : null
+              })}
+
+              {/* Standard Mode Only */}
+              {!hasAnyReasoning && (
+                <div className={styles.standardBadge}>
+                  <span>⚡</span>
+                  <span>Standard</span>
+                </div>
+              )}
+            </>
+          )}
 
         {/* LoRA Adapter */}
         {lora_name && (
           <div className={styles.loraBadge} title={`LoRA Adapter: ${lora_name}`}>
             <span className={styles.loraIcon}>🎨</span>
-            <span className={styles.loraName}>LoRA: {lora_name}</span>
+            <span className={styles.loraName}>
+              LoRA:
+              {lora_name}
+            </span>
           </div>
         )}
       </div>

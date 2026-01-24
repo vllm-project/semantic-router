@@ -45,7 +45,7 @@ export interface UseToolRegistryReturn {
 }
 
 export function useToolRegistry(
-  options: UseToolRegistryOptions = {}
+  options: UseToolRegistryOptions = {},
 ): UseToolRegistryReturn {
   const { subscribe = true, categories, enabledOnly = true } = options
 
@@ -61,41 +61,41 @@ export function useToolRegistry(
 
     // Tool registration/unregistration events
     unsubscribers.push(
-      toolRegistry.on('tool:registered', () => setVersion(v => v + 1))
+      toolRegistry.on('tool:registered', () => setVersion(v => v + 1)),
     )
     unsubscribers.push(
-      toolRegistry.on('tool:unregistered', () => setVersion(v => v + 1))
+      toolRegistry.on('tool:unregistered', () => setVersion(v => v + 1)),
     )
     unsubscribers.push(
-      toolRegistry.on('tool:enabled', () => setVersion(v => v + 1))
+      toolRegistry.on('tool:enabled', () => setVersion(v => v + 1)),
     )
     unsubscribers.push(
-      toolRegistry.on('tool:disabled', () => setVersion(v => v + 1))
+      toolRegistry.on('tool:disabled', () => setVersion(v => v + 1)),
     )
 
     // Execution events
     unsubscribers.push(
       toolRegistry.on('tool:execution:start', (event: ToolEvent) => {
         setExecutingTools(prev => new Set([...prev, event.toolId]))
-      })
+      }),
     )
     unsubscribers.push(
       toolRegistry.on('tool:execution:complete', (event: ToolEvent) => {
-        setExecutingTools(prev => {
+        setExecutingTools((prev) => {
           const next = new Set(prev)
           next.delete(event.toolId)
           return next
         })
-      })
+      }),
     )
     unsubscribers.push(
       toolRegistry.on('tool:execution:error', (event: ToolEvent) => {
-        setExecutingTools(prev => {
+        setExecutingTools((prev) => {
           const next = new Set(prev)
           next.delete(event.toolId)
           return next
         })
-      })
+      }),
     )
 
     return () => {
@@ -137,7 +137,7 @@ export function useToolRegistry(
     async (toolCall: ToolCall, context?: ToolExecutionContext) => {
       return toolRegistry.execute(toolCall, context)
     },
-    []
+    [],
   )
 
   // Execute all tools
@@ -145,7 +145,7 @@ export function useToolRegistry(
     async (toolCalls: ToolCall[], context?: ToolExecutionContext) => {
       return toolRegistry.executeAll(toolCalls, context)
     },
-    []
+    [],
   )
 
   // Enable tool

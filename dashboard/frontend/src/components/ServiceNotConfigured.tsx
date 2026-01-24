@@ -37,21 +37,30 @@ const ServiceNotConfigured: React.FC<ServiceNotConfiguredProps> = ({
           </svg>
         </div>
 
-        <h2 className={styles.title}>{service.name} Not Configured</h2>
+        <h2 className={styles.title}>
+          {service.name}
+          {' '}
+          Not Configured
+        </h2>
 
         <p className={styles.description}>{service.description}</p>
 
         <div className={styles.configSection}>
           <h3 className={styles.sectionTitle}>Configuration Required</h3>
           <p className={styles.configHint}>
-            Set the following environment variable to enable {service.name}:
+            Set the following environment variable to enable
+            {' '}
+            {service.name}
+            :
           </p>
           <code className={styles.envVar}>{service.envVar}</code>
           {service.exampleValue && (
             <div className={styles.example}>
               <span className={styles.exampleLabel}>Example:</span>
               <code className={styles.exampleCode}>
-                {service.envVar}={service.exampleValue}
+                {service.envVar}
+                =
+                {service.exampleValue}
               </code>
             </div>
           )}

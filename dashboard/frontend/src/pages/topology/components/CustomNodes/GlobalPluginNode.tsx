@@ -12,7 +12,7 @@ interface GlobalPluginNodeData {
 }
 
 // Get status text based on plugin type and mode
-function getPluginStatus(plugin: GlobalPluginConfig): { text: string; tooltip: string } {
+function getPluginStatus(plugin: GlobalPluginConfig): { text: string, tooltip: string } {
   if (!plugin.enabled) {
     return { text: '✗ Disabled', tooltip: 'Plugin is disabled' }
   }

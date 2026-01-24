@@ -2,12 +2,12 @@ import React from 'react'
 import styles from './ConfigNav.module.css'
 
 // New navigation structure aligned with Python CLI config format
-export type ConfigSection =
-  | 'signals'        // config.yaml: signals (keywords, embeddings, domains, etc.)
-  | 'decisions'      // config.yaml: decisions (routing rules)
-  | 'models'         // config.yaml: providers.models
-  | 'router-config'  // .vllm-sr/router-defaults.yaml (cache, prompt guard, tools, etc.)
-  | 'topology'       // Separate page for visualization
+export type ConfigSection
+  = | 'signals' // config.yaml: signals (keywords, embeddings, domains, etc.)
+    | 'decisions' // config.yaml: decisions (routing rules)
+    | 'models' // config.yaml: providers.models
+    | 'router-config' // .vllm-sr/router-defaults.yaml (cache, prompt guard, tools, etc.)
+    | 'topology' // Separate page for visualization
 
 interface ConfigNavProps {
   activeSection: ConfigSection
@@ -20,32 +20,32 @@ const ConfigNav: React.FC<ConfigNavProps> = ({ activeSection, onSectionChange })
       id: 'signals' as ConfigSection,
       icon: '📡',
       title: 'Signals',
-      description: 'Keywords, embeddings, domains & preferences'
+      description: 'Keywords, embeddings, domains & preferences',
     },
     {
       id: 'decisions' as ConfigSection,
       icon: '🔀',
       title: 'Decisions',
-      description: 'Routing rules with priorities & plugins'
+      description: 'Routing rules with priorities & plugins',
     },
     {
       id: 'models' as ConfigSection,
       icon: '🤖',
       title: 'Models',
-      description: 'Provider models and endpoints'
+      description: 'Provider models and endpoints',
     },
     {
       id: 'router-config' as ConfigSection,
       icon: '⚙️',
       title: 'Router Configuration',
-      description: 'Cache, prompt guard, tools & observability'
+      description: 'Cache, prompt guard, tools & observability',
     },
     {
       id: 'topology' as ConfigSection,
       icon: '🗺️',
       title: 'Topology',
-      description: 'Visualize signal-driven routing flow'
-    }
+      description: 'Visualize signal-driven routing flow',
+    },
   ]
 
   return (
@@ -54,7 +54,7 @@ const ConfigNav: React.FC<ConfigNavProps> = ({ activeSection, onSectionChange })
         <h3 className={styles.navTitle}>Configuration</h3>
       </div>
       <ul className={styles.navList}>
-        {sections.map((section) => (
+        {sections.map(section => (
           <li key={section.id}>
             <button
               className={`${styles.navItem} ${activeSection === section.id ? styles.active : ''}`}

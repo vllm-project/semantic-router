@@ -46,8 +46,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
             <NavLink
               to="/playground"
               className={({ isActive }) =>
-                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
-              }
+                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink}
             >
               Playground
             </NavLink>
@@ -85,8 +84,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
             <NavLink
               to="/topology"
               className={({ isActive }) =>
-                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
-              }
+                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink}
             >
               Topology
             </NavLink>
@@ -94,8 +92,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
             <NavLink
               to="/evaluation"
               className={({ isActive }) =>
-                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
-              }
+                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink}
             >
               Evaluation
             </NavLink>
@@ -203,18 +200,20 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
               aria-label="Toggle menu"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                {mobileMenuOpen ? (
-                  <>
-                    <path d="M18 6L6 18" />
-                    <path d="M6 6L18 18" />
-                  </>
-                ) : (
-                  <>
-                    <path d="M4 6h16" />
-                    <path d="M4 12h16" />
-                    <path d="M4 18h16" />
-                  </>
-                )}
+                {mobileMenuOpen
+                  ? (
+                      <>
+                        <path d="M18 6L6 18" />
+                        <path d="M6 6L18 18" />
+                      </>
+                    )
+                  : (
+                      <>
+                        <path d="M4 6h16" />
+                        <path d="M4 12h16" />
+                        <path d="M4 18h16" />
+                      </>
+                    )}
               </svg>
             </button>
           </div>

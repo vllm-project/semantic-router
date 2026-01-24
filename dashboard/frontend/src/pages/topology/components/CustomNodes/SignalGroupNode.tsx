@@ -61,7 +61,10 @@ export const SignalGroupNode = memo<NodeProps<SignalGroupNodeData>>(({ data }) =
             ))}
             {signals.length > 5 && (
               <div className={styles.signalItem} style={{ opacity: 0.7 }}>
-                +{signals.length - 5} more
+                +
+                {signals.length - 5}
+                {' '}
+                more
               </div>
             )}
           </div>

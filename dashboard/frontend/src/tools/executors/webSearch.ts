@@ -15,39 +15,39 @@ import type {
  */
 function decodeHtmlEntities(text: string): string {
   if (!text) return text
-  
+
   // Handle Unicode escapes like \u0026
-  let decoded = text.replace(/\\u([0-9a-fA-F]{4})/g, (_, code) => 
-    String.fromCharCode(parseInt(code, 16))
+  let decoded = text.replace(/\\u([0-9a-fA-F]{4})/g, (_, code) =>
+    String.fromCharCode(parseInt(code, 16)),
   )
-  
+
   // Handle HTML entities like &#x27; &amp; &lt; etc.
   const entities: Record<string, string> = {
     '&amp;': '&',
     '&lt;': '<',
     '&gt;': '>',
     '&quot;': '"',
-    '&#x27;': "'",
-    '&#39;': "'",
-    '&apos;': "'",
+    '&#x27;': '\'',
+    '&#39;': '\'',
+    '&apos;': '\'',
     '&#x2F;': '/',
     '&nbsp;': ' ',
   }
-  
+
   for (const [entity, char] of Object.entries(entities)) {
     decoded = decoded.split(entity).join(char)
   }
-  
+
   // Handle numeric entities like &#123;
-  decoded = decoded.replace(/&#(\d+);/g, (_, code) => 
-    String.fromCharCode(parseInt(code, 10))
+  decoded = decoded.replace(/&#(\d+);/g, (_, code) =>
+    String.fromCharCode(parseInt(code, 10)),
   )
-  
+
   // Handle hex entities like &#x7B;
-  decoded = decoded.replace(/&#x([0-9a-fA-F]+);/g, (_, code) => 
-    String.fromCharCode(parseInt(code, 16))
+  decoded = decoded.replace(/&#x([0-9a-fA-F]+);/g, (_, code) =>
+    String.fromCharCode(parseInt(code, 16)),
   )
-  
+
   return decoded
 }
 
@@ -76,7 +76,7 @@ function validateWebSearchArgs(args: unknown): WebSearchArgs {
  */
 async function executeWebSearch(
   args: WebSearchArgs,
-  context: ToolExecutionContext
+  context: ToolExecutionContext,
 ): Promise<WebSearchResult[]> {
   const { query, num_results = 5 } = args
 
@@ -103,12 +103,12 @@ async function executeWebSearch(
   context.onProgress?.(100)
 
   const results: WebSearchResult[] = (data.results || []).map(
-    (r: { title: string; url: string; snippet: string; domain: string }) => ({
+    (r: { title: string, url: string, snippet: string, domain: string }) => ({
       title: decodeHtmlEntities(r.title),
       url: r.url,
       snippet: decodeHtmlEntities(r.snippet),
       domain: r.domain,
-    })
+    }),
   )
 
   if (results.length === 0) {
@@ -136,7 +136,7 @@ function formatWebSearchResult(results: WebSearchResult[]): string {
   return results
     .map(
       (r, i) =>
-        `[${i + 1}] ${r.title}\n    URL: ${r.url}\n    ${r.snippet}`
+        `[${i + 1}] ${r.title}\n    URL: ${r.url}\n    ${r.snippet}`,
     )
     .join('\n\n')
 }

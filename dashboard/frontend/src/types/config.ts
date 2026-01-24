@@ -1,6 +1,6 @@
 /**
  * Configuration types for vLLM Semantic Router Dashboard
- * 
+ *
  * This file defines TypeScript interfaces for the Python CLI config format.
  * The format uses: providers, signals, decisions (not vllm_endpoints, model_config)
  */
@@ -12,12 +12,12 @@
 export interface ProviderEndpoint {
   name: string
   weight: number
-  endpoint: string  // e.g., "host.docker.internal:8000" or "api.openai.com"
+  endpoint: string // e.g., "host.docker.internal:8000" or "api.openai.com"
   protocol: 'http' | 'https'
 }
 
 export interface ProviderModel {
-  name: string  // e.g., "openai/gpt-oss-120b"
+  name: string // e.g., "openai/gpt-oss-120b"
   reasoning_family?: string
   endpoints: ProviderEndpoint[]
   access_key?: string
@@ -30,7 +30,7 @@ export interface ProviderModel {
 
 export interface ReasoningFamily {
   type: 'reasoning_effort' | 'chat_template_kwargs'
-  parameter: string  // e.g., "reasoning_effort", "enable_thinking"
+  parameter: string // e.g., "reasoning_effort", "enable_thinking"
 }
 
 export interface Providers {
@@ -91,7 +91,6 @@ export interface Signals {
 // =============================================================================
 // DECISIONS - Routing logic
 // =============================================================================
-
 
 export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'latency'
 export interface DecisionCondition {
@@ -301,4 +300,3 @@ export function isPythonCLIFormat(config: any): config is PythonCLIConfig {
 export function isLegacyFormat(config: any): config is LegacyConfig {
   return detectConfigFormat(config) === 'legacy'
 }
-

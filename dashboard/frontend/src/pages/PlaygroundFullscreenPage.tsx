@@ -6,7 +6,7 @@ const PlaygroundFullscreenPage = () => {
   useEffect(() => {
     // Add fullscreen class to body on mount
     document.body.classList.add('playground-fullscreen')
-    
+
     // Remove on unmount
     return () => {
       document.body.classList.remove('playground-fullscreen')
@@ -26,4 +26,3 @@ const PlaygroundFullscreenPage = () => {
 }
 
 export default PlaygroundFullscreenPage
-

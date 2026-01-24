@@ -30,8 +30,8 @@ interface TestQueryResponse {
   }>
   routingLatency?: number
   warning?: string
-  isFallbackDecision?: boolean  // True if matched decision is a system fallback
-  fallbackReason?: string       // Reason for fallback
+  isFallbackDecision?: boolean // True if matched decision is a system fallback
+  fallbackReason?: string // Reason for fallback
 }
 
 /**

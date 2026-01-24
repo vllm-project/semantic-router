@@ -22,7 +22,7 @@ const TableHeader: React.FC<TableHeaderProps> = ({
   onSearchChange,
   onAdd,
   addButtonText = 'Add New',
-  disabled = false
+  disabled = false,
 }) => {
   return (
     <div className={styles.header}>
@@ -30,7 +30,11 @@ const TableHeader: React.FC<TableHeaderProps> = ({
         {icon && <span className={styles.icon}>{icon}</span>}
         <h3 className={styles.title}>{title}</h3>
         {count !== undefined && (
-          <span className={styles.badge}>{count} {count === 1 ? 'item' : 'items'}</span>
+          <span className={styles.badge}>
+            {count}
+            {' '}
+            {count === 1 ? 'item' : 'items'}
+          </span>
         )}
       </div>
       <div className={styles.actions}>
@@ -40,7 +44,7 @@ const TableHeader: React.FC<TableHeaderProps> = ({
             className={styles.searchInput}
             placeholder={searchPlaceholder}
             value={searchValue}
-            onChange={(e) => onSearchChange(e.target.value)}
+            onChange={e => onSearchChange(e.target.value)}
           />
         )}
         {onAdd && !disabled && (
@@ -54,4 +58,3 @@ const TableHeader: React.FC<TableHeaderProps> = ({
 }
 
 export default TableHeader
-

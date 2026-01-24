@@ -1,7 +1,7 @@
 /**
  * Tool Registry - Core Implementation
  * 工具注册中心核心实现
- * 
+ *
  * Features:
  * - Dynamic tool registration/unregistration
  * - Tool discovery and lookup
@@ -70,7 +70,7 @@ class ToolRegistry {
    * Get a registered tool by ID
    */
   get<TArgs = unknown, TResult = unknown>(
-    toolId: string
+    toolId: string,
   ): RegisteredTool<TArgs, TResult> | undefined {
     return this.tools.get(toolId) as RegisteredTool<TArgs, TResult> | undefined
   }
@@ -147,7 +147,7 @@ class ToolRegistry {
    */
   async execute(
     toolCall: ToolCall,
-    context: ToolExecutionContext = {}
+    context: ToolExecutionContext = {},
   ): Promise<ToolResult> {
     const toolId = toolCall.function.name
     const tool = this.tools.get(toolId)
@@ -174,7 +174,8 @@ class ToolRegistry {
     let args: unknown
     try {
       args = JSON.parse(toolCall.function.arguments || '{}')
-    } catch (e) {
+    }
+    catch (e) {
       return {
         callId: toolCall.id,
         name: toolId,
@@ -187,7 +188,8 @@ class ToolRegistry {
     if (tool.validateArgs) {
       try {
         args = tool.validateArgs(args)
-      } catch (e) {
+      }
+      catch (e) {
         return {
           callId: toolCall.id,
           name: toolId,
@@ -213,7 +215,7 @@ class ToolRegistry {
           },
         }),
         timeout,
-        context.signal
+        context.signal,
       )
 
       this.emit('tool:execution:complete', toolId, { callId: toolCall.id, result })
@@ -223,7 +225,8 @@ class ToolRegistry {
         name: toolId,
         content: result,
       }
-    } catch (e) {
+    }
+    catch (e) {
       const error = e instanceof Error ? e.message : 'Execution failed'
       this.emit('tool:execution:error', toolId, { callId: toolCall.id, error })
 
@@ -233,7 +236,8 @@ class ToolRegistry {
         content: null,
         error,
       }
-    } finally {
+    }
+    finally {
       this.activeExecutions--
     }
   }
@@ -244,7 +248,7 @@ class ToolRegistry {
   private async executeWithTimeout<T>(
     promise: Promise<T>,
     timeout: number,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<T> {
     return new Promise((resolve, reject) => {
       const timeoutId = setTimeout(() => {
@@ -276,7 +280,7 @@ class ToolRegistry {
    */
   async executeAll(
     toolCalls: ToolCall[],
-    options: ExecuteAllOptions = {}
+    options: ExecuteAllOptions = {},
   ): Promise<ToolResult[]> {
     const { concurrency = DEFAULT_CONCURRENCY, continueOnError = true, ...context } = options
 
@@ -308,7 +312,8 @@ class ToolRegistry {
           if (results[index].error) {
             hasError = true
           }
-        } catch (e) {
+        }
+        catch (e) {
           hasError = true
           results[index] = {
             callId: toolCall.id,
@@ -335,7 +340,7 @@ class ToolRegistry {
    */
   async executeSequential(
     toolCalls: ToolCall[],
-    context: ToolExecutionContext = {}
+    context: ToolExecutionContext = {},
   ): Promise<ToolResult[]> {
     const results: ToolResult[] = []
     for (const tc of toolCalls) {
@@ -381,10 +386,11 @@ class ToolRegistry {
       data,
     }
 
-    this.listeners.get(type)?.forEach(listener => {
+    this.listeners.get(type)?.forEach((listener) => {
       try {
         listener(event)
-      } catch (e) {
+      }
+      catch (e) {
         console.error(`Error in tool event listener:`, e)
       }
     })
@@ -421,7 +427,7 @@ class ToolRegistry {
     const all = this.getAll()
     const byCategory: Record<string, number> = {}
 
-    all.forEach(t => {
+    all.forEach((t) => {
       byCategory[t.metadata.category] = (byCategory[t.metadata.category] || 0) + 1
     })
 
@@ -445,7 +451,7 @@ export const toolRegistry = new ToolRegistry()
  * Create a tool definition helper
  */
 export function createTool<TArgs, TResult>(
-  config: RegisteredTool<TArgs, TResult>
+  config: RegisteredTool<TArgs, TResult>,
 ): RegisteredTool<TArgs, TResult> {
   return config
 }
@@ -468,7 +474,7 @@ export interface RegisterToolsOptions {
 export interface RegisterToolsResult {
   success: string[]
   skipped: string[]
-  failed: { id: string; error: string }[]
+  failed: { id: string, error: string }[]
 }
 
 /**
@@ -476,10 +482,10 @@ export interface RegisterToolsResult {
  */
 export function registerTools(
   tools: RegisteredTool[],
-  options: RegisterToolsOptions = {}
+  options: RegisterToolsOptions = {},
 ): RegisterToolsResult {
   const { skipExisting = false, stopOnError = false, validate = true } = options
-  
+
   const result: RegisterToolsResult = {
     success: [],
     skipped: [],
@@ -488,7 +494,7 @@ export function registerTools(
 
   // Deduplicate by tool ID (keep last occurrence)
   const uniqueTools = new Map<string, RegisteredTool>()
-  tools.forEach(tool => {
+  tools.forEach((tool) => {
     uniqueTools.set(tool.metadata.id, tool)
   })
 
@@ -509,7 +515,8 @@ export function registerTools(
 
       toolRegistry.register(tool)
       result.success.push(toolId)
-    } catch (e) {
+    }
+    catch (e) {
       const error = e instanceof Error ? e.message : 'Unknown error'
       result.failed.push({ id: toolId, error })
 
@@ -534,7 +541,7 @@ function validateToolDefinition(tool: RegisteredTool): void {
   }
   if (tool.metadata.id !== tool.definition.function.name) {
     throw new Error(
-      `Tool ID mismatch: metadata.id="${tool.metadata.id}" vs function.name="${tool.definition.function.name}"`
+      `Tool ID mismatch: metadata.id="${tool.metadata.id}" vs function.name="${tool.definition.function.name}"`,
     )
   }
   if (typeof tool.executor !== 'function') {
@@ -552,10 +559,11 @@ export function unregisterTools(toolIds: string[]): {
   const removed: string[] = []
   const notFound: string[] = []
 
-  toolIds.forEach(id => {
+  toolIds.forEach((id) => {
     if (toolRegistry.unregister(id)) {
       removed.push(id)
-    } else {
+    }
+    else {
       notFound.push(id)
     }
   })
@@ -568,26 +576,26 @@ export function unregisterTools(toolIds: string[]): {
  */
 export function replaceAllTools(
   tools: RegisteredTool[],
-  options: RegisterToolsOptions = {}
+  options: RegisterToolsOptions = {},
 ): RegisterToolsResult {
   // Store current tools for rollback
   const previousTools = toolRegistry.getAll()
-  
+
   // Clear all
   toolRegistry.clear()
-  
+
   // Register new tools
   const result = registerTools(tools, { ...options, stopOnError: true })
-  
+
   // Rollback if any failed and stopOnError
   if (result.failed.length > 0 && options.stopOnError) {
     toolRegistry.clear()
     previousTools.forEach(tool => toolRegistry.register(tool))
     throw new Error(
-      `Failed to replace tools: ${result.failed.map(f => f.id).join(', ')}`
+      `Failed to replace tools: ${result.failed.map(f => f.id).join(', ')}`,
     )
   }
-  
+
   return result
 }
 

@@ -7,7 +7,7 @@ interface Blob {
   baseX: number
   baseY: number
   radius: number
-  color: { h: number; s: number; l: number }
+  color: { h: number, s: number, l: number }
   offsetX: number
   offsetY: number
   speedX: number
@@ -39,11 +39,11 @@ const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({ speed = 'normal
 
     const blobs: Blob[] = []
     const colors = [
-      { h: 84, s: 70, l: 50 },   // NVIDIA green
-      { h: 90, s: 65, l: 55 },   // Yellow-green
-      { h: 78, s: 75, l: 45 },   // Deep green
-      { h: 160, s: 60, l: 50 },  // Cyan accent
-      { h: 200, s: 55, l: 55 },  // Blue accent
+      { h: 84, s: 70, l: 50 }, // NVIDIA green
+      { h: 90, s: 65, l: 55 }, // Yellow-green
+      { h: 78, s: 75, l: 45 }, // Deep green
+      { h: 160, s: 60, l: 50 }, // Cyan accent
+      { h: 200, s: 55, l: 55 }, // Blue accent
     ]
 
     const speedMultiplier = speed === 'slow' ? 0.3 : 1
@@ -73,7 +73,7 @@ const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({ speed = 'normal
 
       const bgGradient = ctx.createRadialGradient(
         canvas.width / 2, canvas.height / 2, 0,
-        canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) / 2
+        canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) / 2,
       )
       bgGradient.addColorStop(0, '#0a0a0a')
       bgGradient.addColorStop(1, '#000000')
@@ -91,7 +91,7 @@ const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({ speed = 'normal
 
         const gradient = ctx.createRadialGradient(
           blob.x, blob.y, 0,
-          blob.x, blob.y, pulseRadius
+          blob.x, blob.y, pulseRadius,
         )
 
         const { h, s, l } = blob.color
@@ -127,4 +127,3 @@ const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({ speed = 'normal
 }
 
 export default AnimatedBackground
-
