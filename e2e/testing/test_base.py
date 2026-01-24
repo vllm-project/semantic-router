@@ -3,6 +3,16 @@ import unittest
 from typing import Any, Dict, Optional
 
 
+class TestBase:
+    def __init__(self, base_url: str, verbose: bool = True):
+        self.base_url = base_url.rstrip("/")
+        self.verbose = verbose
+
+    def log(self, message: str):
+        if self.verbose or message.startswith(("ERROR", "WARNING")):
+            print(message)
+
+
 class SemanticRouterTestBase(unittest.TestCase):
     def print_test_header(self, test_name: str, description: Optional[str] = None):
         """Print a formatted header for each test."""

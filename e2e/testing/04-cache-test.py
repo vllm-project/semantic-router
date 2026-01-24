@@ -33,11 +33,88 @@ def extract_metric(metrics_text, metric_name):
     return None
 
 
+# Helper function to sum a metric across label variants
+def extract_metric_sum(metrics_text, metric_name, labels=None):
+    total = 0.0
+    found = False
+    for line in metrics_text.split("\n"):
+        if line.startswith("#") or not line.startswith(metric_name):
+            continue
+
+        name_part, _, value_part = line.partition(" ")
+        if labels:
+            if "{" not in name_part or "}" not in name_part:
+                continue
+            label_str = name_part[name_part.find("{") + 1 : name_part.rfind("}")]
+            if any(
+                f'{key}="{value}"' not in label_str for key, value in labels.items()
+            ):
+                continue
+
+        try:
+            total += float(value_part)
+            found = True
+        except ValueError:
+            continue
+
+    return total if found else None
+
+
+def _read_default_model_from_config(config_path):
+    if not config_path or not os.path.exists(config_path):
+        return None
+
+    try:
+        with open(config_path, "r", encoding="utf-8") as handle:
+            for raw_line in handle:
+                line = raw_line.strip()
+                if line.startswith("default_model:"):
+                    return line.split(":", 1)[1].strip().strip('"').strip("'")
+    except OSError:
+        return None
+
+    return None
+
+
+def _resolve_test_model():
+    env_model = os.getenv("SR_E2E_MODEL") or os.getenv("E2E_MODEL")
+    if env_model:
+        return env_model
+
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    candidate_configs = [
+        os.getenv("SR_E2E_CONFIG"),
+        os.path.join(repo_root, "config/testing/config.testing.yaml"),
+        os.path.join(repo_root, "config/config.yaml"),
+        os.path.join(repo_root, "config.yaml"),
+    ]
+    for config_path in candidate_configs:
+        default_model = _read_default_model_from_config(config_path)
+        if default_model:
+            return default_model
+
+    return "Qwen/Qwen2-0.5B-Instruct"
+
+
+def _require_json_response(response):
+    if response.status_code >= 400:
+        raise AssertionError(
+            f"Request failed with status {response.status_code}: {response.text}"
+        )
+    try:
+        return response.json()
+    except requests.exceptions.JSONDecodeError as exc:
+        raise AssertionError(
+            f"Expected JSON response but got: {response.text}"
+        ) from exc
+
+
 class SemanticCacheTest(SemanticRouterTestBase):
     """Test the semantic cache functionality."""
 
     def setUp(self):
         """Check if the services are running before running tests."""
+        self.model = _resolve_test_model()
         self.print_test_header(
             "Setup Check",
             "Verifying that required services (Envoy and Router) are running and cache is enabled",
@@ -46,7 +123,7 @@ class SemanticCacheTest(SemanticRouterTestBase):
         # Check Envoy
         try:
             payload = {
-                "model": "Model-A",
+                "model": self.model,
                 "messages": [{"role": "user", "content": "test"}],
             }
 
@@ -106,11 +183,18 @@ class SemanticCacheTest(SemanticRouterTestBase):
         # Get baseline cache metrics
         response = requests.get(ROUTER_METRICS_URL)
         baseline_metrics = response.text
-        baseline_hits = extract_metric(baseline_metrics, "llm_cache_hits_total") or 0
+        baseline_hits = (
+            extract_metric_sum(
+                baseline_metrics,
+                "llm_cache_operations_total",
+                {"operation": "find_similar", "status": "hit"},
+            )
+            or 0
+        )
 
         self.print_request_info(
             payload={
-                "model": "Model-A",
+                "model": self.model,
                 "messages": [
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": query},
@@ -122,7 +206,7 @@ class SemanticCacheTest(SemanticRouterTestBase):
 
         # First request should be a cache miss
         payload = {
-            "model": "Model-A",
+            "model": self.model,
             "messages": [
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": query},
@@ -138,7 +222,7 @@ class SemanticCacheTest(SemanticRouterTestBase):
             f"{ENVOY_URL}{OPENAI_ENDPOINT}", headers=headers, json=payload, timeout=120
         )
 
-        response1_json = response1.json()
+        response1_json = _require_json_response(response1)
         model1 = response1_json.get("model", "unknown")
 
         self.print_response_info(
@@ -159,7 +243,7 @@ class SemanticCacheTest(SemanticRouterTestBase):
             f"{ENVOY_URL}{OPENAI_ENDPOINT}", headers=headers, json=payload, timeout=120
         )
 
-        response2_json = response2.json()
+        response2_json = _require_json_response(response2)
         model2 = response2_json.get("model", "unknown")
 
         self.print_response_info(
@@ -177,7 +261,14 @@ class SemanticCacheTest(SemanticRouterTestBase):
         # Check if cache hits increased
         response = requests.get(ROUTER_METRICS_URL)
         updated_metrics = response.text
-        updated_hits = extract_metric(updated_metrics, "llm_cache_hits_total") or 0
+        updated_hits = (
+            extract_metric_sum(
+                updated_metrics,
+                "llm_cache_operations_total",
+                {"operation": "find_similar", "status": "hit"},
+            )
+            or 0
+        )
 
         passed = (model1 == model2) and (updated_hits > baseline_hits)
         self.print_test_result(
@@ -212,12 +303,19 @@ class SemanticCacheTest(SemanticRouterTestBase):
         # Get baseline cache metrics
         response = requests.get(ROUTER_METRICS_URL)
         baseline_metrics = response.text
-        baseline_hits = extract_metric(baseline_metrics, "llm_cache_hits_total") or 0
+        baseline_hits = (
+            extract_metric_sum(
+                baseline_metrics,
+                "llm_cache_operations_total",
+                {"operation": "find_similar", "status": "hit"},
+            )
+            or 0
+        )
 
         # First request with original query
         self.print_subtest_header("Original Query")
         payload1 = {
-            "model": "Model-A",
+            "model": self.model,
             "messages": [
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": original_query},
@@ -235,7 +333,7 @@ class SemanticCacheTest(SemanticRouterTestBase):
             f"{ENVOY_URL}{OPENAI_ENDPOINT}", headers=headers, json=payload1, timeout=120
         )
 
-        response1_json = response1.json()
+        response1_json = _require_json_response(response1)
         model1 = response1_json.get("model", "unknown")
 
         self.print_response_info(
@@ -254,7 +352,7 @@ class SemanticCacheTest(SemanticRouterTestBase):
         # Second request with similar query
         self.print_subtest_header("Similar Query")
         payload2 = {
-            "model": "Model-A",
+            "model": self.model,
             "messages": [
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": similar_query},
@@ -271,7 +369,7 @@ class SemanticCacheTest(SemanticRouterTestBase):
             f"{ENVOY_URL}{OPENAI_ENDPOINT}", headers=headers, json=payload2, timeout=120
         )
 
-        response2_json = response2.json()
+        response2_json = _require_json_response(response2)
         model2 = response2_json.get("model", "unknown")
 
         self.print_response_info(
@@ -290,7 +388,14 @@ class SemanticCacheTest(SemanticRouterTestBase):
         # Check cache metrics
         response = requests.get(ROUTER_METRICS_URL)
         updated_metrics = response.text
-        updated_hits = extract_metric(updated_metrics, "llm_cache_hits_total") or 0
+        updated_hits = (
+            extract_metric_sum(
+                updated_metrics,
+                "llm_cache_operations_total",
+                {"operation": "find_similar", "status": "hit"},
+            )
+            or 0
+        )
 
         passed = (model1 == model2) and (updated_hits > baseline_hits)
         self.print_test_result(
@@ -350,6 +455,82 @@ class SemanticCacheTest(SemanticRouterTestBase):
         )
 
         self.assertGreater(len(metrics_found), 0, "No cache metrics found")
+
+    def test_decision_cache_hit_with_identical_query(self):
+        """Test that identical queries result in decision cache hits."""
+        self.print_test_header(
+            "Decision Cache Hit Test",
+            "Verifies that identical queries trigger decision cache hits",
+        )
+
+        session_id = str(uuid.uuid4())
+        query = "Explain the water cycle in simple terms."
+
+        # Get baseline decision cache metrics
+        response = requests.get(ROUTER_METRICS_URL)
+        baseline_metrics = response.text
+        baseline_hits = (
+            extract_metric_sum(
+                baseline_metrics,
+                "llm_cache_operations_total",
+                {"operation": "find_similar_decision", "status": "hit"},
+            )
+            or 0
+        )
+
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": query},
+            ],
+            "temperature": 0.7,
+        }
+
+        headers = {"Content-Type": "application/json", "X-Session-ID": session_id}
+
+        # First request should populate decision cache
+        self.print_subtest_header("First Request (Expected Decision Cache Miss)")
+        response1 = requests.post(
+            f"{ENVOY_URL}{OPENAI_ENDPOINT}", headers=headers, json=payload, timeout=120
+        )
+        _require_json_response(response1)
+
+        time.sleep(2)
+
+        # Second identical request should hit decision cache
+        self.print_subtest_header("Second Request (Expected Decision Cache Hit)")
+        response2 = requests.post(
+            f"{ENVOY_URL}{OPENAI_ENDPOINT}", headers=headers, json=payload, timeout=120
+        )
+        _require_json_response(response2)
+
+        time.sleep(2)
+
+        response = requests.get(ROUTER_METRICS_URL)
+        updated_metrics = response.text
+        updated_hits = (
+            extract_metric_sum(
+                updated_metrics,
+                "llm_cache_operations_total",
+                {"operation": "find_similar_decision", "status": "hit"},
+            )
+            or 0
+        )
+
+        passed = updated_hits > baseline_hits
+        self.print_test_result(
+            passed=passed,
+            message=(
+                f"Decision cache hits increased from {baseline_hits} to {updated_hits}"
+            ),
+        )
+
+        self.assertGreater(
+            updated_hits,
+            baseline_hits,
+            "Decision cache hit count did not increase for identical queries",
+        )
 
 
 if __name__ == "__main__":

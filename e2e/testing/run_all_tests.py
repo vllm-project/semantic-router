@@ -60,12 +60,48 @@ def check_services():
     return all_running
 
 
+def _read_default_model_from_config(config_path):
+    if not config_path or not os.path.exists(config_path):
+        return None
+
+    try:
+        with open(config_path, "r", encoding="utf-8") as handle:
+            for raw_line in handle:
+                line = raw_line.strip()
+                if line.startswith("default_model:"):
+                    return line.split(":", 1)[1].strip().strip('"').strip("'")
+    except OSError:
+        return None
+
+    return None
+
+
+def _resolve_check_model():
+    env_model = os.getenv("SR_E2E_MODEL") or os.getenv("E2E_MODEL")
+    if env_model:
+        return env_model
+
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    candidate_configs = [
+        os.getenv("SR_E2E_CONFIG"),
+        os.path.join(repo_root, "config/testing/config.testing.yaml"),
+        os.path.join(repo_root, "config/config.yaml"),
+        os.path.join(repo_root, "config.yaml"),
+    ]
+    for config_path in candidate_configs:
+        default_model = _read_default_model_from_config(config_path)
+        if default_model:
+            return default_model
+
+    return "Qwen/Qwen2-0.5B-Instruct"
+
+
 def check_envoy_running():
     """Check if Envoy is running by making a minimal POST request to the chat completions endpoint."""
     try:
         # Simple request with minimal content
         payload = {
-            "model": "Qwen/Qwen2-0.5B-Instruct",
+            "model": _resolve_check_model(),
             "messages": [{"role": "user", "content": "test"}],
         }
         response = requests.post(

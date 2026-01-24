@@ -752,8 +752,61 @@ development:
 		})
 	})
 
-	Describe("Decision cache encoding", func() {
-		Skip("Decision encoding helpers are now inlined; no standalone unit tests.")
+	Describe("Decision cache", func() {
+		var decisionCache CacheBackend
+
+		BeforeEach(func() {
+			options := InMemoryCacheOptions{
+				Enabled:             true,
+				SimilarityThreshold: 0.8,
+				MaxEntries:          100,
+				TTLSeconds:          300,
+				EmbeddingModel:      "bert",
+			}
+			decisionCache = NewInMemoryCache(options)
+		})
+
+		AfterEach(func() {
+			if decisionCache != nil {
+				decisionCache.Close()
+			}
+		})
+
+		It("should store and retrieve decision cache entries", func() {
+			decision := &DecisionEntry{
+				Name:            "general_decision",
+				Confidence:      0.92,
+				MatchedRules:    []string{"keyword:decision_cache_test"},
+				MatchedKeywords: []string{"water cycle"},
+			}
+
+			err := decisionCache.AddDecisionEntry("decision-req", DecisionCacheModelKey, "Explain the water cycle.", decision, -1)
+			Expect(err).NotTo(HaveOccurred())
+
+			cachedDecision, found, err := decisionCache.FindSimilarDecisionWithThreshold(DecisionCacheModelKey, "Explain the water cycle.", 0.8)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeTrue())
+			Expect(cachedDecision).NotTo(BeNil())
+			Expect(cachedDecision.Name).To(Equal("general_decision"))
+			Expect(cachedDecision.Confidence).To(Equal(0.92))
+			Expect(cachedDecision.MatchedRules).To(ContainElement("keyword:decision_cache_test"))
+			Expect(cachedDecision.MatchedKeywords).To(ContainElement("water cycle"))
+		})
+
+		It("should not return decision entries for response cache lookups", func() {
+			decision := &DecisionEntry{
+				Name:       "general_decision",
+				Confidence: 0.9,
+			}
+
+			err := decisionCache.AddDecisionEntry("decision-req", DecisionCacheModelKey, "Explain the water cycle.", decision, -1)
+			Expect(err).NotTo(HaveOccurred())
+
+			response, found, err := decisionCache.FindSimilar("Model-A", "Explain the water cycle.")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeFalse())
+			Expect(response).To(BeNil())
+		})
 	})
 
 	Describe("InMemoryCache", func() {

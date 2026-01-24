@@ -31,10 +31,10 @@ This test suite provides a progressive approach to testing the Semantic Router, 
    - Tests that requests are routed to the correct backend model
    - Verifies model header modifications
 
-6. **04-cache-test.py** - TBD (To Be Developed)
-   - Tests cache hit/miss behavior
-   - Verifies similarity thresholds
-   - Tests cache TTL
+6. **04-cache-test.py** - Semantic cache tests ✅
+   - Tests response cache hit/miss behavior
+   - Verifies similarity thresholds and metrics labels
+   - Tests decision cache hits for identical queries
 
 7. **05-e2e-category-test.py** - TBD (To Be Developed)
    - Tests math queries route to the math-specialized model
@@ -84,6 +84,7 @@ Currently implemented:
 - **01-envoy-extproc-test.py** ✅ - Envoy ExtProc interaction and processing tests
 - **02-router-classification-test.py** ✅ - Router classification and model selection tests
 - **03-classification-api-test.py** ✅ - Standalone Classification API service tests
+- **04-cache-test.py** ✅ - Response + decision cache hit/miss validation
 
 Individual tests can be run with:
 

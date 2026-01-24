@@ -5,11 +5,66 @@ bert_model:
 
 semantic_cache:
   enabled: true
-  backend_type: "memory"
+  backend_type: "milvus"
   similarity_threshold: 0.8
-  max_entries: 1000
   ttl_seconds: 3600
-  eviction_policy: "fifo"
+  milvus:
+    connection:
+      host: "milvus"
+      port: 19530
+      database: "semantic_router_cache"
+      timeout: 30
+      auth:
+        enabled: false
+        username: ""
+        password: ""
+      tls:
+        enabled: false
+        cert_file: ""
+        key_file: ""
+        ca_file: ""
+    collection:
+      name: "semantic_cache"
+      description: "Semantic cache for LLM request-response pairs"
+      vector_field:
+        name: "embedding"
+        dimension: 384
+        metric_type: "IP"
+      index:
+        type: "HNSW"
+        params:
+          M: 16
+          efConstruction: 64
+    search:
+      params:
+        ef: 64
+      topk: 10
+      consistency_level: "Session"
+    performance:
+      connection_pool:
+        max_connections: 10
+        max_idle_connections: 5
+        acquire_timeout: 5
+      batch:
+        insert_batch_size: 1000
+        timeout: 30
+    data_management:
+      ttl:
+        enabled: true
+        timestamp_field: "timestamp"
+        cleanup_interval: 3600
+      compaction:
+        enabled: true
+        interval: 86400
+    logging:
+      level: "info"
+      enable_query_log: false
+      enable_metrics: true
+    development:
+      drop_collection_on_startup: true
+      auto_create_collection: true
+      verbose_errors: true
+  embedding_model: "bert"
 
 tools:
   enabled: true
