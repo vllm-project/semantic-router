@@ -147,6 +147,7 @@ dashboard/frontend/*.local
 # Dashboard backend build artifacts
 dashboard/backend/dashboard-backend
 dashboard/backend/dashboard-backend.exe
+dashboard/backend/dashboard-server
 
 # Dashboard backend runtime data (SQLite evaluation database)
 dashboard/backend/data/*
