@@ -48,7 +48,7 @@ Run the following command to start vLLM with multiple model names (simulating mo
 ```bash
 sudo docker run -d \
   --name vllm-gpt-oss-120b \
-  --network=host \
+  --network=vllm-sr-network \
   --device=/dev/kfd \
   --device=/dev/dri \
   --group-add=video \
@@ -62,21 +62,17 @@ sudo docker run -d \
   -e VLLM_ROCM_USE_AITER=1 \
   -e VLLM_USE_AITER_UNIFIED_ATTENTION=1 \
   -e VLLM_ROCM_USE_AITER_MHA=0 \
-  rocm/vllm-dev:open-mi300-08052025 \
-  vllm serve openai/gpt-oss-120b \
+  --entrypoint python3 \
+  vllm/vllm-openai-rocm:v0.14.0 \
+  -m vllm.entrypoints.openai.api_server \
+    --model openai/gpt-oss-120b \
     --host 0.0.0.0 \
     --port 8000 \
     --served-model-name openai/gpt-oss-120b openai/gpt-oss-20b Qwen/Qwen3-235B Kimi-K2-Thinking GLM-4.7 DeepSeek-V3.2 \
-    --compilation-config '{"cudagraph_mode": "full"}'
+    --gpu-memory-utilization 0.9 \
+    --enable-auto-tool-choice \
+    --tool-call-parser openai
 ```
-
-**Explanation:**
-
-- `--device=/dev/kfd --device=/dev/dri`: AMD GPU device access
-- `--group-add=video`: GPU access permissions
-- `--shm-size 32G`: Shared memory for large models
-- `VLLM_ROCM_USE_AITER=1`: Enable AMD-optimized attention
-- `--served-model-name`: Multiple model names for routing simulation
 
 **Verify vLLM is running:**
 
@@ -103,13 +99,16 @@ source vsr/bin/activate
 pip3 install vllm-sr
 ```
 
-### Step 3: Download Configuration
+### Step 3: Initialize and Configure
 
-Download the intelligent routing configuration:
+Initialize vllm-sr to create the default configuration, then replace it with the intelligent routing configuration:
 
 ```bash
-# Download config.yaml
-wget https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/amd/config.yaml
+# Initialize vllm-sr (creates default config.yaml)
+vllm-sr init
+
+# Download and replace with the AMD-optimized config.yaml
+wget -O config.yaml https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/amd/config.yaml
 ```
 
 ### Step 4: Start vLLM Semantic Router

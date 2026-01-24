@@ -6,6 +6,7 @@ include PUBLISHING.md
 # Include templates (now in cli package)
 recursive-include cli/templates *.yaml
 recursive-include cli/templates *.json
+recursive-include cli/templates *.ini
 
 # Include requirements
 include requirements.txt

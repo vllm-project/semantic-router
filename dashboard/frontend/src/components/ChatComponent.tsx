@@ -220,7 +220,7 @@ const WebSearchCard = ({
         <div className={styles.webSearchResults}>
           <div className={styles.sourcePills}>
             {results.map((result, idx) => (
-              <a 
+              <a
                 key={idx}
                 href={result.url}
                 target="_blank"
@@ -229,7 +229,7 @@ const WebSearchCard = ({
                 title={result.snippet}
               >
                 <span className={styles.sourcePillNumber}>{idx + 1}</span>
-                <span className={styles.sourcePillDomain}>{result.domain}</span>
+                <span className={styles.sourcePillDomain}>{(() => { try { return new URL(result.url).hostname } catch { return result.url } })()}</span>
               </a>
             ))}
           </div>
@@ -263,6 +263,189 @@ const WebSearchCard = ({
   )
 }
 
+// Open Web Card Component - displays webpage content extraction
+const OpenWebCard = ({ 
+  toolCall, 
+  toolResult,
+  isExpanded,
+  onToggle 
+}: { 
+  toolCall: ToolCall
+  toolResult?: ToolResult
+  isExpanded: boolean
+  onToggle: () => void
+}) => {
+  // Safely parse arguments
+  let url = ''
+  try {
+    const args = JSON.parse(toolCall.function.arguments || '{}')
+    url = args.url || ''
+  } catch {
+    const match = toolCall.function.arguments?.match(/"url"\s*:\s*"([^"]*)/)
+    url = (match && match[1]) || 'Loading...'
+  }
+
+  // Extract domain from URL
+  const domain = useMemo(() => {
+    try {
+      return new URL(url).hostname
+    } catch {
+      return url
+    }
+  }, [url])
+
+  // Get result data
+  const resultData = useMemo(() => {
+    if (!toolResult?.content) return null
+    if (typeof toolResult.content === 'object' && toolResult.content !== null) {
+      const data = toolResult.content as { title?: string; content?: string; length?: number; truncated?: boolean }
+      return data
+    }
+    return null
+  }, [toolResult?.content])
+  
+  return (
+    <div className={styles.webSearchCard}>
+      <div className={styles.webSearchHeader} onClick={onToggle}>
+        <div className={styles.webSearchIcon}>
+          {toolCall.status === 'running' ? (
+            <svg className={styles.searchSpinner} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+            </svg>
+          )}
+        </div>
+        <div className={styles.webSearchInfo}>
+          <span className={styles.webSearchTitle}>
+            {toolCall.status === 'running' ? 'Opening page...' : 'Web Page'}
+          </span>
+          <span className={styles.webSearchQuery}>{domain}</span>
+        </div>
+        <div className={styles.webSearchStatus}>
+          {toolCall.status === 'completed' && resultData && (
+            <span className={styles.webSearchCount}>
+              {resultData.length ? `${Math.round(resultData.length / 1000)}k chars` : ''}
+              {resultData.truncated ? ' (truncated)' : ''}
+            </span>
+          )}
+          {toolCall.status === 'failed' && (
+            <span className={styles.webSearchCount} style={{ color: 'var(--color-error)' }}>Failed</span>
+          )}
+          <svg 
+            className={`${styles.webSearchChevron} ${isExpanded ? styles.expanded : ''}`} 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            strokeWidth="2"
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </div>
+      </div>
+      
+      {isExpanded && toolCall.status === 'completed' && resultData && (
+        <div className={styles.webSearchResults}>
+          <div className={styles.sourceDetails}>
+            <div className={styles.sourceItem}>
+              <div className={styles.sourceItemHeader}>
+                <a 
+                  href={url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className={styles.sourceItemTitle}
+                >
+                  {resultData.title || 'Untitled'}
+                </a>
+              </div>
+              <div className={styles.openWebContent}>
+                {resultData.content?.substring(0, 500)}
+                {(resultData.content?.length || 0) > 500 && '...'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isExpanded && toolCall.status === 'failed' && toolResult?.error && (
+        <div className={styles.webSearchResults}>
+          <div className={styles.sourceDetails}>
+            <div className={styles.sourceItem}>
+              <p className={styles.sourceItemSnippet} style={{ color: 'var(--color-error)' }}>
+                {toolResult.error}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {toolCall.status === 'running' && (
+        <div className={styles.webSearchLoading}>
+          <div className={styles.webSearchLoadingBar} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Generic Tool Card - routes to specific card based on tool type
+const ToolCard = ({ 
+  toolCall, 
+  toolResult,
+  isExpanded,
+  onToggle 
+}: { 
+  toolCall: ToolCall
+  toolResult?: ToolResult
+  isExpanded: boolean
+  onToggle: () => void
+}) => {
+  const toolName = toolCall.function.name
+
+  if (toolName === 'search_web') {
+    return (
+      <WebSearchCard 
+        toolCall={toolCall} 
+        toolResult={toolResult} 
+        isExpanded={isExpanded} 
+        onToggle={onToggle} 
+      />
+    )
+  }
+
+  if (toolName === 'open_web') {
+    return (
+      <OpenWebCard 
+        toolCall={toolCall} 
+        toolResult={toolResult} 
+        isExpanded={isExpanded} 
+        onToggle={onToggle} 
+      />
+    )
+  }
+
+  // Fallback for unknown tools
+  return (
+    <div className={styles.webSearchCard}>
+      <div className={styles.webSearchHeader} onClick={onToggle}>
+        <div className={styles.webSearchIcon}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+          </svg>
+        </div>
+        <div className={styles.webSearchInfo}>
+          <span className={styles.webSearchTitle}>{toolName}</span>
+          <span className={styles.webSearchQuery}>{toolCall.status}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Tool Toggle Component
 const ToolToggle = ({ 
   enabled, 
@@ -275,16 +458,16 @@ const ToolToggle = ({
 }) => {
   return (
     <button
-      className={`${styles.toolToggle} ${enabled ? styles.toolToggleActive : ''}`}
+      className={`${styles.inputActionButton} ${enabled ? styles.searchToggleActive : ''}`}
       onClick={onToggle}
       disabled={disabled}
-      title={enabled ? 'Web Search enabled' : 'Enable Web Search'}
+      data-tooltip={enabled ? 'Web Search enabled' : 'Enable Web Search'}
     >
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <circle cx="11" cy="11" r="8" />
-        <path d="M21 21l-4.35-4.35" />
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M2 12h20" />
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
       </svg>
-      <span>Search</span>
     </button>
   )
 }
@@ -372,7 +555,7 @@ const ContentWithCitations = ({
             key={`${keyPrefix}-citation-${keyIndex++}`}
             number={citationNumber}
             url={source?.url}
-            title={source ? `${source.title} - ${source.domain}` : undefined}
+            title={source ? `${source.title} - ${(() => { try { return new URL(source.url).hostname } catch { return source.url } })()}` : undefined}
           />
         )
 
@@ -491,7 +674,7 @@ const ChatComponent = ({
   const [showHeaderReveal, setShowHeaderReveal] = useState(false)
   const [pendingHeaders, setPendingHeaders] = useState<Record<string, string> | null>(null)
   const [isFullscreen] = useState(isFullscreenMode)
-  const [enableWebSearch, setEnableWebSearch] = useState(false)
+const [enableWebSearch, setEnableWebSearch] = useState(true)
   const [expandedToolCards, setExpandedToolCards] = useState<Set<string>>(new Set())
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -499,8 +682,15 @@ const ChatComponent = ({
   const abortControllerRef = useRef<AbortController | null>(null)
 
   // Tool Registry integration
-  const { definitions: toolDefinitions, executeAll: executeTools } = useToolRegistry({
+  // Search tools (controlled by web search toggle)
+  const { definitions: searchToolDefinitions } = useToolRegistry({
     enabledOnly: true,
+    categories: ['search'],
+  })
+  // Other tools (always available, not controlled by web search toggle)
+  const { definitions: otherToolDefinitions, executeAll: executeTools } = useToolRegistry({
+    enabledOnly: true,
+    categories: ['code', 'file', 'image', 'custom'],
   })
 
   const scrollToBottom = useCallback(() => {
@@ -615,11 +805,42 @@ const ChatComponent = ({
     try {
       abortControllerRef.current = new AbortController()
 
-      const chatMessages = [
+      // Build chat messages with proper tool call history
+      // This ensures the model knows which tool calls have been completed
+      type ChatMessage = {
+        role: string
+        content: string | null
+        tool_calls?: Array<{
+          id: string
+          type: 'function'
+          function: { name: string; arguments: string }
+        }>
+        tool_call_id?: string
+      }
+
+      const chatMessages: ChatMessage[] = [
         { role: 'system', content: systemPrompt },
-        ...messages.map(m => ({ role: m.role, content: m.content })),
-        { role: 'user', content: trimmedInput },
       ]
+
+      // Process each message for context
+      // IMPORTANT: For history messages, we only include the final text content,
+      // NOT the tool calls and results. This prevents context pollution where
+      // the model might be confused by previous tool usage when answering new questions.
+      for (const m of messages) {
+        if (m.role === 'user') {
+          chatMessages.push({ role: 'user', content: m.content })
+        } else if (m.role === 'assistant') {
+          // For assistant messages, only include the final text content
+          // Don't include tool_calls or tool results in history
+          // This keeps the context clean for new questions
+          if (m.content) {
+            chatMessages.push({ role: 'assistant', content: m.content })
+          }
+        }
+      }
+
+      // Add the new user message
+      chatMessages.push({ role: 'user', content: trimmedInput })
 
       // Build request body
       const requestBody: Record<string, unknown> = {
@@ -628,9 +849,15 @@ const ChatComponent = ({
         stream: true,
       }
 
-      // Add tools from registry if web search is enabled
-      if (enableWebSearch && toolDefinitions.length > 0) {
-        requestBody.tools = toolDefinitions
+      // Add tools to request:
+      // - Search tools: only when web search is enabled
+      // - Other tools: always available
+      const activeTools = [
+        ...otherToolDefinitions,
+        ...(enableWebSearch ? searchToolDefinitions : []),
+      ]
+      if (activeTools.length > 0) {
+        requestBody.tools = activeTools
         requestBody.tool_choice = 'auto'
       }
 
@@ -840,98 +1067,156 @@ const ChatComponent = ({
         }
       }
 
-      // If we had tool calls, execute the tools using Tool Registry
+      // If we had tool calls, execute tools in a loop until model gives final answer
       if (hasToolCalls) {
-        // Get the final accumulated tool calls from the map
-        const toolCalls = Array.from(toolCallsMap.values())
+        // Maximum tool call iterations to prevent infinite loops
+const MAX_TOOL_ITERATIONS = 30
+        let iteration = 0
         
-        // Mark all tools as running
-        toolCalls.forEach(tc => { tc.status = 'running' })
-        setMessages(prev =>
-          prev.map(m =>
-            m.id === assistantMessageId
-              ? { ...m, toolCalls: [...toolCalls] }
-              : m
-          )
-        )
+        // Accumulated tool calls and results across all iterations
+        let allToolCalls = Array.from(toolCallsMap.values())
+        let allToolResults: ToolResult[] = []
+        
+        // Track final content from tool loop
+        let finalContent = ''
+        
+        // Current conversation state for tool loop - use chatMessages as base (already built correctly)
+        type ChatMessage = { role: string; content: string | null; tool_calls?: unknown[]; tool_call_id?: string }
+        let currentMessages: ChatMessage[] = [...chatMessages]
 
-        // Execute all tools in parallel using Tool Registry
-        const toolResults = await executeTools(toolCalls, {
-          signal: abortControllerRef.current?.signal,
-        })
+        while (iteration < MAX_TOOL_ITERATIONS) {
+          iteration++
+          console.log(`Tool iteration ${iteration}/${MAX_TOOL_ITERATIONS}`)
 
-        // Update tool statuses based on results
-        toolResults.forEach(result => {
-          const tc = toolCalls.find(t => t.id === result.callId)
-          if (tc) {
-            tc.status = result.error ? 'failed' : 'completed'
-          }
-        })
+          // Get current tool calls to execute
+          const currentToolCalls = iteration === 1 
+            ? allToolCalls 
+            : Array.from(toolCallsMap.values())
+          
+          if (currentToolCalls.length === 0) break
 
-        // Update message with completed tool calls and results
-        setMessages(prev =>
-          prev.map(m =>
-            m.id === assistantMessageId
-              ? { ...m, toolCalls: [...toolCalls], toolResults }
-              : m
-          )
-        )
-
-        // Auto-expand the first tool card
-        if (toolCalls.length > 0) {
-          setExpandedToolCards(new Set([toolCalls[0].id]))
-        }
-
-        // === CRITICAL: Send tool results back to model for final response ===
-        // Build messages including tool call and tool results
-        const messagesWithToolResults = [
-          { role: 'system', content: systemPrompt },
-          ...messages.map(m => ({ role: m.role, content: m.content })),
-          { role: 'user', content: trimmedInput },
-          // Assistant message with tool_calls
-          {
-            role: 'assistant',
-            content: null,
-            tool_calls: toolCalls.map(tc => ({
-              id: tc.id,
-              type: 'function',
-              function: {
-                name: tc.function.name,
-                arguments: tc.function.arguments
+          // Mark all tools as running
+          currentToolCalls.forEach(tc => { tc.status = 'running' })
+          
+          // Update UI with current tool calls
+          const uiToolCalls = [...allToolCalls]
+          if (iteration > 1) {
+            // Add new tool calls from subsequent iterations
+            currentToolCalls.forEach(tc => {
+              if (!uiToolCalls.find(t => t.id === tc.id)) {
+                uiToolCalls.push(tc)
               }
-            }))
-          },
-          // Tool results
-          ...toolResults.map(tr => ({
-            role: 'tool',
-            tool_call_id: tr.callId,
-            content: typeof tr.content === 'string' 
-              ? tr.content 
-              : JSON.stringify(tr.content)
-          }))
-        ]
+            })
+            allToolCalls = uiToolCalls
+          }
+          
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === assistantMessageId
+                ? { ...m, toolCalls: [...uiToolCalls] }
+                : m
+            )
+          )
 
-        // Make second API call to get final response
-        const followUpResponse = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model,
-            messages: messagesWithToolResults,
-            stream: true,
-          }),
-          signal: abortControllerRef.current?.signal,
-        })
+          // Execute all current tools in parallel
+          const toolResults = await executeTools(currentToolCalls, {
+            signal: abortControllerRef.current?.signal,
+          })
 
-        if (!followUpResponse.ok) {
-          console.error('Follow-up API call failed:', followUpResponse.status, followUpResponse.statusText)
-          // Don't throw - we already have tool results to show
-        } else if (followUpResponse.body) {
+          // Update tool statuses based on results
+          toolResults.forEach(result => {
+            const tc = currentToolCalls.find(t => t.id === result.callId)
+            if (tc) {
+              tc.status = result.error ? 'failed' : 'completed'
+            }
+          })
+          
+          // Accumulate results
+          allToolResults = [...allToolResults, ...toolResults]
+
+          // Update message with completed tool calls and all results
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === assistantMessageId
+                ? { ...m, toolCalls: [...uiToolCalls], toolResults: allToolResults }
+                : m
+            )
+          )
+
+          // Auto-expand the first tool card
+          if (uiToolCalls.length > 0 && expandedToolCards.size === 0) {
+            setExpandedToolCards(new Set([uiToolCalls[0].id]))
+          }
+
+          // Build messages for next API call
+          currentMessages = [
+            ...currentMessages,
+            // Assistant message with tool_calls
+            {
+              role: 'assistant',
+              content: null,
+              tool_calls: currentToolCalls.map(tc => ({
+                id: tc.id,
+                type: 'function',
+                function: {
+                  name: tc.function.name,
+                  arguments: tc.function.arguments
+                }
+              }))
+            },
+            // Tool results (truncate long content to avoid exceeding model context)
+            ...toolResults.map(tr => {
+              const MAX_TOOL_RESULT_LENGTH = 15000 // ~4k tokens
+              let content = typeof tr.content === 'string' 
+                ? tr.content 
+                : JSON.stringify(tr.content)
+              
+              // Truncate if too long
+              if (content.length > MAX_TOOL_RESULT_LENGTH) {
+                content = content.substring(0, MAX_TOOL_RESULT_LENGTH) + '\n\n...[Content truncated due to length]'
+                console.log(`Tool result for ${tr.name} truncated from ${typeof tr.content === 'string' ? tr.content.length : JSON.stringify(tr.content).length} to ${MAX_TOOL_RESULT_LENGTH} chars`)
+              }
+              
+              return {
+                role: 'tool',
+                tool_call_id: tr.callId,
+                content
+              }
+            })
+          ]
+
+          // Make follow-up API call with tools enabled
+          const followUpResponse = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model,
+              messages: currentMessages,
+              stream: true,
+              // Keep tools enabled for multi-step tool usage (same logic as initial request)
+              tools: activeTools,
+              tool_choice: 'auto',
+            }),
+            signal: abortControllerRef.current?.signal,
+          })
+
+          if (!followUpResponse.ok) {
+            console.error('Follow-up API call failed:', followUpResponse.status, followUpResponse.statusText)
+            break
+          }
+
+          if (!followUpResponse.body) break
+
           const followUpReader = followUpResponse.body.getReader()
           const followUpDecoder = new TextDecoder()
           let followUpContent = ''
+          let hasMoreToolCalls = false
+          let streamFinishReason = ''
+          
+          // Reset tool calls map for this iteration
+          toolCallsMap.clear()
 
           while (true) {
             const { done, value } = await followUpReader.read()
@@ -948,7 +1233,45 @@ const ChatComponent = ({
                 try {
                   const parsed = JSON.parse(data)
                   const delta = parsed.choices?.[0]?.delta
+                  const deltaToolCalls = delta?.tool_calls
+                  const finishReason = parsed.choices?.[0]?.finish_reason
 
+                  // Capture finish reason when present
+                  if (finishReason) {
+                    streamFinishReason = finishReason
+                    console.log(`Iteration ${iteration} finish_reason: ${finishReason}, hasContent: ${followUpContent.length > 0}`)
+                  }
+
+                  // Check for new tool calls
+                  if (deltaToolCalls && Array.isArray(deltaToolCalls)) {
+                    hasMoreToolCalls = true
+                    for (const tc of deltaToolCalls) {
+                      const tcIndex = tc.index ?? 0
+                      if (!toolCallsMap.has(tcIndex)) {
+                        toolCallsMap.set(tcIndex, {
+                          id: tc.id || `tool-${iteration}-${tcIndex}`,
+                          type: 'function',
+                          function: {
+                            name: tc.function?.name || '',
+                            arguments: ''
+                          },
+                          status: 'pending'
+                        })
+                      }
+                      const existingTc = toolCallsMap.get(tcIndex)!
+                      if (tc.function?.name) {
+                        existingTc.function.name = tc.function.name
+                      }
+                      if (tc.function?.arguments) {
+                        existingTc.function.arguments += tc.function.arguments
+                      }
+                      if (tc.id) {
+                        existingTc.id = tc.id
+                      }
+                    }
+                  }
+
+                  // Accumulate content
                   if (delta?.content) {
                     followUpContent += delta.content
                     setMessages(prev =>
@@ -965,6 +1288,84 @@ const ChatComponent = ({
               }
             }
           }
+
+          // Save content from this iteration
+          if (followUpContent) {
+            finalContent = followUpContent
+            console.log(`Iteration ${iteration} content: ${followUpContent.substring(0, 100)}`)
+          }
+
+          // Check if we should continue the loop
+          if (streamFinishReason === 'tool_calls' && toolCallsMap.size > 0) {
+            // Model wants to call more tools, continue loop
+            console.log(`Model requested ${toolCallsMap.size} more tool call(s) (finish_reason: tool_calls), will continue loop`)
+            continue
+          } else if (streamFinishReason === 'stop' || streamFinishReason === 'length') {
+            // Model finished, exit loop
+            console.log(`Model finished (finish_reason: ${streamFinishReason}), exiting tool loop`)
+            break
+          } else if (!hasMoreToolCalls) {
+            // No more tool calls, exit loop
+            console.log('No more tool calls detected, exiting tool loop')
+            break
+          }
+          
+          console.log(`Default case: hasMoreToolCalls=${hasMoreToolCalls}, finish_reason=${streamFinishReason}, continuing`)
+        }
+
+        if (iteration >= MAX_TOOL_ITERATIONS) {
+          console.warn('Reached maximum tool iterations, stopping')
+        }
+        
+        // Ensure final content is set after all tool iterations
+        console.log('Tool loop finished, final content length:', finalContent.length)
+        if (finalContent) {
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === assistantMessageId
+                ? { ...m, content: finalContent }
+                : m
+            )
+          )
+        } else {
+          // If no content after tool loop, generate a fallback summary from tool results
+          console.warn('Tool loop finished but no content received from model, generating fallback summary')
+          
+          // Generate fallback content based on tool results
+          let fallbackContent = ''
+          if (allToolResults.length > 0) {
+            const successResults = allToolResults.filter(tr => !tr.error)
+            const failedResults = allToolResults.filter(tr => tr.error)
+            
+            if (successResults.length > 0) {
+              fallbackContent = '基于搜索结果，以下是相关信息：\n\n'
+              for (const tr of successResults) {
+                if (typeof tr.content === 'string' && tr.content.length > 0) {
+                  // 截取前 500 字符作为摘要
+                  const summary = tr.content.length > 500 
+                    ? tr.content.substring(0, 500) + '...' 
+                    : tr.content
+                  fallbackContent += summary + '\n\n'
+                }
+              }
+            }
+            
+            if (failedResults.length > 0 && !fallbackContent) {
+              fallbackContent = '抱歉，部分工具执行失败。请尝试重新查询或使用其他关键词。'
+            }
+          }
+          
+          if (!fallbackContent) {
+            fallbackContent = '模型没有生成响应内容，请尝试重新提问。'
+          }
+          
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === assistantMessageId
+                ? { ...m, content: fallbackContent }
+                : m
+            )
+          )
         }
       }
 
@@ -1124,7 +1525,7 @@ const ChatComponent = ({
                       {message.toolCalls && message.toolCalls.length > 0 && (
                         <div className={styles.toolCallsContainer}>
                           {message.toolCalls.map(tc => (
-                            <WebSearchCard
+                            <ToolCard
                               key={tc.id}
                               toolCall={tc}
                               toolResult={message.toolResults?.find(tr => tr.callId === tc.id)}
@@ -1184,7 +1585,7 @@ const ChatComponent = ({
                         <div className={styles.toolCallsContainer}>
                           {message.toolCalls.map(tc => (
                             <ErrorBoundary key={tc.id}>
-                              <WebSearchCard
+                              <ToolCard
                                 toolCall={tc}
                                 toolResult={message.toolResults?.find(tr => tr.callId === tc.id)}
                                 isExpanded={expandedToolCards.has(tc.id)}
@@ -1255,13 +1656,6 @@ const ChatComponent = ({
       </div>
 
       <div className={styles.inputContainer}>
-        <div className={styles.inputToolbar}>
-          <ToolToggle
-            enabled={enableWebSearch}
-            onToggle={() => setEnableWebSearch(!enableWebSearch)}
-            disabled={isLoading}
-          />
-        </div>
         <div className={styles.inputWrapper}>
           <textarea
             ref={inputRef}
@@ -1275,10 +1669,15 @@ const ChatComponent = ({
           />
           <div className={styles.inputActionsRow}>
             <div className={styles.inputActions}>
+              <ToolToggle
+                enabled={enableWebSearch}
+                onToggle={() => setEnableWebSearch(!enableWebSearch)}
+                disabled={isLoading}
+              />
               <button
                 className={styles.inputActionButton}
                 onClick={() => setShowSettings(!showSettings)}
-                title="Settings"
+                data-tooltip="Settings"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <circle cx="8" cy="8" r="2.5"/>
@@ -1288,7 +1687,7 @@ const ChatComponent = ({
               <button
                 className={styles.inputActionButton}
                 onClick={handleClear}
-                title="Clear chat"
+                data-tooltip="Clear chat"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M2 4h12M5.5 4V2.5h5V4M13 4v9.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4M6.5 7v4M9.5 7v4" strokeLinecap="round" strokeLinejoin="round"/>

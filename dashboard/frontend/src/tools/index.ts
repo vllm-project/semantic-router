@@ -52,10 +52,13 @@ export type {
   // Specific tool types
   WebSearchArgs,
   WebSearchResult,
+  OpenWebArgs,
+  OpenWebResult,
 } from './types'
 
 // Built-in tools
 export { webSearchTool } from './executors/webSearch'
+export { openWebTool } from './executors/openWeb'
 
 // React hook
 export { useToolRegistry } from './hooks/useToolRegistry'
@@ -63,6 +66,8 @@ export { useToolRegistry } from './hooks/useToolRegistry'
 // Initialize built-in tools
 import { toolRegistry } from './registry'
 import { webSearchTool } from './executors/webSearch'
+import { openWebTool } from './executors/openWeb'
 
 // Auto-register built-in tools
 toolRegistry.register(webSearchTool)
+toolRegistry.register(openWebTool)

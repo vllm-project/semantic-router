@@ -408,7 +408,7 @@ providers:
       endpoints:
         - name: "vllm_endpoint"
           weight: 1
-          endpoint: "host.docker.internal:8000"
+          endpoint: "vllm-gpt-oss-120b:8000"
           protocol: "http"
 
     - name: "openai/gpt-oss-20b"
@@ -417,7 +417,7 @@ providers:
       endpoints:
         - name: "vllm_endpoint"
           weight: 1
-          endpoint: "host.docker.internal:8000"
+          endpoint: "vllm-gpt-oss-120b:8000"
           protocol: "http"
 
     - name: "Qwen/Qwen3-235B"
@@ -426,7 +426,7 @@ providers:
       endpoints:
         - name: "vllm_endpoint"
           weight: 1
-          endpoint: "host.docker.internal:8000"
+          endpoint: "vllm-gpt-oss-120b:8000"
           protocol: "http"
 
     - name: "Kimi-K2-Thinking"
@@ -435,7 +435,7 @@ providers:
       endpoints:
         - name: "vllm_endpoint"
           weight: 1
-          endpoint: "host.docker.internal:8000"
+          endpoint: "vllm-gpt-oss-120b:8000"
           protocol: "http"
 
     - name: "GLM-4.7"
@@ -444,7 +444,7 @@ providers:
       endpoints:
         - name: "vllm_endpoint"
           weight: 1
-          endpoint: "host.docker.internal:8000"
+          endpoint: "vllm-gpt-oss-120b:8000"
           protocol: "http"
 
     - name: "DeepSeek-V3.2"
@@ -453,7 +453,7 @@ providers:
       endpoints:
         - name: "vllm_endpoint"
           weight: 1
-          endpoint: "host.docker.internal:8000"
+          endpoint: "vllm-gpt-oss-120b:8000"
           protocol: "http"
 
   # Default model for unmatched queries
