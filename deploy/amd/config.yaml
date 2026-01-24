@@ -374,7 +374,8 @@ decisions:
           system_prompt: "你是一个高效的AI助手。请提供简洁、准确的回答。"
       - type: "semantic-cache"
         configuration:
-          enabled: false
+          enabled: true
+          similarity_threshold: 0.95
 
   # Priority 120: Fast QA in English
   - name: "fast_qa_english"
