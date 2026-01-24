@@ -316,6 +316,7 @@ body.playground-fullscreen .container {
   gap: 0.25rem;
   min-width: 0;
   flex: 1;
+  overflow: hidden;
 }
 
 .messageRole {
@@ -374,6 +375,8 @@ body.playground-fullscreen .container {
   line-height: 1.6;
   word-break: break-word;
   overflow-wrap: break-word;
+  overflow-x: auto;
+  max-width: 100%;
 }
 
 /* For user messages, preserve whitespace */

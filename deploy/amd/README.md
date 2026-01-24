@@ -49,6 +49,7 @@ Run the following command to start vLLM with multiple model names (simulating mo
 sudo docker run -d \
   --name vllm-gpt-oss-120b \
   --network=vllm-sr-network \
+  -p 8000:8000 \
   --device=/dev/kfd \
   --device=/dev/dri \
   --group-add=video \
