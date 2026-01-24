@@ -60,7 +60,7 @@ signals:
 
   # Embedding-based signals for intent classification
   embeddings:
-    # Fast QA - Simple, quick questions requiring brief answers
+    # Fast QA (English) - Simple, quick questions requiring brief answers
     - name: "fast_qa"
       threshold: 0.72
       aggregation_method: "max"
@@ -75,7 +75,28 @@ signals:
         - "What are the primary colors and how do they combine?"
         - "Can you give me a simple explanation of how photosynthesis works?"
 
-    # Deep Thinking - Complex reasoning requiring multi-step analysis
+    # Fast QA (Chinese) - 简单快速问答
+    - name: "fast_qa_zh"
+      threshold: 0.72
+      aggregation_method: "max"
+      candidates:
+        - "你好，请问你是谁？"
+        - "你是谁？你叫什么名字？"
+        - "机器学习的定义是什么？它和传统编程有什么区别？"
+        - "能简单解释一下神经网络的概念和基本架构吗？"
+        - "监督学习和无监督学习的主要区别是什么？"
+        - "请简要介绍一下自然语言处理是什么。"
+        - "法国的首都是哪里？人口有多少？"
+        - "已知圆的半径，如何计算圆的面积？"
+        - "三原色是什么？它们如何混合？"
+        - "能简单解释一下光合作用是怎么工作的吗？"
+        - "Python和Java这两种编程语言各有什么优缺点？请简单对比一下。"
+        - "什么是API？能用通俗易懂的方式解释一下吗？"
+        - "HTTP和HTTPS有什么区别？为什么现在网站都要用HTTPS？"
+        - "数据库中的索引是什么？为什么能加快查询速度？"
+        - "什么是递归？能举个简单的例子说明吗？"
+
+    # Deep Thinking (English) - Complex reasoning requiring multi-step analysis
     - name: "deep_thinking"
       threshold: 0.75
       aggregation_method: "max"
@@ -88,6 +109,26 @@ signals:
         - "Devise a comprehensive plan for migrating a legacy monolithic application to a microservices architecture."
         - "Analyze the geopolitical implications of climate change and propose multi-faceted policy solutions."
         - "Design an algorithm to detect anomalies in time-series data and explain the statistical reasoning behind it."
+
+    # Deep Thinking (Chinese) - 复杂推理，需要多步分析
+    - name: "deep_thinking_zh"
+      threshold: 0.75
+      aggregation_method: "max"
+      candidates:
+        - "分析通用人工智能的伦理影响，并提出一个负责任开发的综合框架。"
+        - "设计一个能够处理数百万并发用户同时保持数据一致性的分布式系统架构。"
+        - "制定一个使用动态规划解决旅行商问题的分步策略，并解释其时间复杂度。"
+        - "比较和对比不同的机器学习范式，并为特定业务问题推荐最佳方法。"
+        - "解释量子计算的数学基础，以及它与经典计算在根本层面上的区别。"
+        - "制定一个将遗留单体应用迁移到微服务架构的综合计划。"
+        - "分析气候变化的地缘政治影响，并提出多方面的政策解决方案。"
+        - "设计一个检测时间序列数据异常的算法，并解释其背后的统计推理。"
+        - "请深入分析大型语言模型的训练过程，包括预训练、微调和RLHF各阶段的技术细节，以及它们对模型能力的影响。"
+        - "从系统设计的角度，详细分析如何构建一个高可用、低延迟的全球化支付系统，需要考虑哪些关键技术挑战和解决方案？"
+        - "请从多个维度深入比较Transformer架构和传统RNN架构的优劣，分析为什么Transformer在NLP领域取得了突破性进展。"
+        - "设计一个完整的推荐系统架构，需要支持实时推荐和离线批处理，请详细说明各个组件的设计思路和技术选型。"
+        - "深入分析分布式数据库中CAP定理的实际应用，结合具体案例说明不同系统是如何在一致性、可用性和分区容错性之间做权衡的。"
+        - "请系统性地分析当前AI安全领域面临的主要挑战，包括对齐问题、可解释性、鲁棒性等方面，并提出可能的研究方向。"
 
   # user_feedbacks - User feedback signals
   user_feedbacks:
@@ -167,21 +208,17 @@ decisions:
       operator: "AND"
       conditions:
         - type: "embedding"
-          name: "deep_thinking"
+          name: "deep_thinking_zh"
         - type: "language"
           name: "zh"
     modelRefs:
-      - model: "Qwen/Qwen3-235B"
+      - model: "Kimi-K2-Thinking"
         use_reasoning: true
         reasoning_effort: "high"
     plugins:
       - type: "system_prompt"
         configuration:
           system_prompt: "你是一个专业的AI助手，擅长深度分析和复杂推理。请提供详细、深入的回答。"
-      - type: "semantic-cache"
-        configuration:
-          enabled: true
-          similarity_threshold: 0.88
 
   # Priority 145: Computer science domain with deep thinking
   - name: "code_deep_thinking"
@@ -204,8 +241,7 @@ decisions:
           system_prompt: "You are an expert software engineer. Provide detailed, well-structured code solutions with explanations."
       - type: "semantic-cache"
         configuration:
-          enabled: true
-          similarity_threshold: 0.85
+          enabled: false
 
   # Priority 160: Creative/Opinion queries - NO fact check needed
   - name: "creative_ideas"
@@ -228,8 +264,7 @@ decisions:
           system_prompt: "You are a creative and insightful assistant. Feel free to explore ideas, provide opinions, and think outside the box."
       - type: "semantic-cache"
         configuration:
-          enabled: true
-          similarity_threshold: 0.88
+          enabled: false
 
   # Priority 150: Math domain
   - name: "math_problems"
@@ -250,8 +285,7 @@ decisions:
           system_prompt: "You are a mathematics expert. Provide rigorous proofs with step-by-step reasoning."
       - type: "semantic-cache"
         configuration:
-          enabled: true
-          similarity_threshold: 0.92
+          enabled: false
 
   # Priority 145: Physics domain
   - name: "physics_problems"
@@ -272,8 +306,7 @@ decisions:
           system_prompt: "You are a physics expert. Explain concepts with mathematical derivations and verified facts."
       - type: "semantic-cache"
         configuration:
-          enabled: true
-          similarity_threshold: 0.90
+          enabled: false
 
   # Priority 140: Deep thinking in English
   - name: "deep_thinking"
@@ -296,8 +329,7 @@ decisions:
           system_prompt: "You are an expert analyst. Provide comprehensive, well-reasoned responses with deep insights."
       - type: "semantic-cache"
         configuration:
-          enabled: true
-          similarity_threshold: 0.95
+          enabled: false
 
   # Priority 135: Fast coding in English
   - name: "fast_coding"
@@ -320,22 +352,21 @@ decisions:
           system_prompt: "You are a fast coding assistant. Provide code solutions quickly."
       - type: "semantic-cache"
         configuration:
-          enabled: true
-          similarity_threshold: 0.95
+          enabled: false
 
   # Priority 130: Fast QA in Chinese
-  - name: "fast_qa_chinese"
+  - name: "fast_qa"
     description: "Quick answers in Chinese"
     priority: 130
     rules:
       operator: "AND"
       conditions:
         - type: "embedding"
-          name: "fast_qa"
+          name: "fast_qa_zh"
         - type: "language"
           name: "zh"
     modelRefs:
-      - model: "openai/gpt-oss-20b"
+      - model: "DeepSeek-V3.2"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -344,7 +375,7 @@ decisions:
       - type: "semantic-cache"
         configuration:
           enabled: true
-          similarity_threshold: 0.80
+          similarity_threshold: 0.95
 
   # Priority 120: Fast QA in English
   - name: "fast_qa_english"
@@ -358,7 +389,7 @@ decisions:
         - type: "language"
           name: "en"
     modelRefs:
-      - model: "openai/gpt-oss-20b"
+      - model: "GLM-4.7"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -366,8 +397,7 @@ decisions:
           system_prompt: "You are an efficient AI assistant. Provide concise, accurate answers."
       - type: "semantic-cache"
         configuration:
-          enabled: true
-          similarity_threshold: 0.80
+          enabled: false
 
   # Priority 100: Default fallback
   - name: "casual_chat"
@@ -376,10 +406,6 @@ decisions:
     rules:
       operator: "OR"
       conditions:
-        - type: "domain"
-          name: "math"
-        - type: "domain"
-          name: "physics"
         - type: "domain"
           name: "other"
         - type: "language"
@@ -395,7 +421,7 @@ decisions:
       - type: "semantic-cache"
         configuration:
           enabled: true
-          similarity_threshold: 0.85
+          similarity_threshold: 0.96
 
 # Providers - Backend model configuration
 providers:

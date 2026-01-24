@@ -138,7 +138,7 @@ interface Message {
   headers?: Record<string, string>
   // For ratings mode: multiple choices from different models
   choices?: Choice[]
-  // Thinking process (content before assistantfinal tag)
+  // Thinking process (from reasoning_content field)
   thinkingProcess?: string
   // Tool calls and results
   toolCalls?: ToolCall[]
@@ -723,44 +723,6 @@ const [enableWebSearch, setEnableWebSearch] = useState(true)
 
   const generateId = () => `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
 
-  // Parse content to separate thinking process from final answer
-  const parseStreamingContent = (fullContent: string): {
-    hasAnalysis: boolean
-    thinking: string
-    hasFinal: boolean
-    final: string
-  } => {
-    // Check if content contains "analysis" tag
-    const hasAnalysis = /analysis/i.test(fullContent)
-
-    // Look for assistantfinal tag (case insensitive)
-    const finalMatch = fullContent.match(/assistantfinal(.*)$/is)
-
-    if (finalMatch) {
-      // Found assistantfinal - split content
-      const finalIndex = fullContent.search(/assistantfinal/i)
-
-      // Everything from "analysis" to "assistantfinal" is thinking
-      const analysisMatch = fullContent.match(/analysis(.*?)assistantfinal/is)
-      const thinking = analysisMatch ? analysisMatch[1].trim() : ''
-
-      // Everything after assistantfinal is the final answer
-      const final = fullContent.substring(finalIndex + 'assistantfinal'.length).trim()
-
-      return { hasAnalysis, thinking, hasFinal: true, final }
-    }
-
-    // If we have analysis but no assistantfinal yet, all content after "analysis" is thinking
-    if (hasAnalysis) {
-      const analysisMatch = fullContent.match(/analysis(.*)$/is)
-      const thinking = analysisMatch ? analysisMatch[1].trim() : ''
-      return { hasAnalysis: true, thinking, hasFinal: false, final: '' }
-    }
-
-    // No special tags - treat as final answer
-    return { hasAnalysis: false, thinking: '', hasFinal: false, final: fullContent }
-  }
-
   const handleThinkingComplete = useCallback(() => {
     // Thinking animation will be hidden when headers arrive
     // This callback is kept for ThinkingAnimation component compatibility
@@ -922,8 +884,8 @@ const [enableWebSearch, setEnableWebSearch] = useState(true)
       }
 
       const decoder = new TextDecoder()
-      // Track content for each choice (for ratings mode)
-      const choiceContents: Map<number, { content: string; model?: string }> = new Map()
+      // Track content and reasoning for each choice (for ratings mode)
+      const choiceContents: Map<number, { content: string; reasoningContent: string; model?: string }> = new Map()
       // Check if this is ratings mode (multiple choices)
       let isRatingsMode = false
       // Track tool calls
@@ -955,6 +917,7 @@ const [enableWebSearch, setEnableWebSearch] = useState(true)
               for (const choice of choices) {
                 const index = choice.index ?? 0
                 const content = choice.delta?.content || ''
+                const reasoningContent = choice.delta?.reasoning_content || ''
                 const model = choice.model
                 const deltaToolCalls = choice.delta?.tool_calls
 
@@ -998,12 +961,15 @@ const [enableWebSearch, setEnableWebSearch] = useState(true)
                 }
 
                 if (!choiceContents.has(index)) {
-                  choiceContents.set(index, { content: '', model })
+                  choiceContents.set(index, { content: '', reasoningContent: '', model })
                 }
 
                 const current = choiceContents.get(index)!
                 if (content) {
                   current.content += content
+                }
+                if (reasoningContent) {
+                  current.reasoningContent += reasoningContent
                 }
                 if (model && !current.model) {
                   current.model = model
@@ -1017,15 +983,12 @@ const [enableWebSearch, setEnableWebSearch] = useState(true)
                   const choicesArray: Choice[] = []
 
                   choiceContents.forEach((value, index) => {
-                    const parsed = parseStreamingContent(value.content)
-                    choicesArray[index] = { content: parsed.final, model: value.model }
+                    choicesArray[index] = { content: value.content, model: value.model }
                   })
 
-                  // Get thinking process from first choice
-                  const firstChoiceForThinking = choiceContents.get(0)
-                  const thinkingProcess = firstChoiceForThinking
-                    ? parseStreamingContent(firstChoiceForThinking.content).thinking
-                    : ''
+                  // Get thinking process (reasoning_content) from first choice
+                  const firstChoice = choiceContents.get(0)
+                  const thinkingProcess = firstChoice?.reasoningContent || ''
 
                   setMessages(prev =>
                     prev.map(m =>
@@ -1043,16 +1006,14 @@ const [enableWebSearch, setEnableWebSearch] = useState(true)
                   // Single choice mode
                   const firstChoice = choiceContents.get(0)
                   if (firstChoice) {
-                    const parsed = parseStreamingContent(firstChoice.content)
-
                     setMessages(prev =>
                       prev.map(m =>
                         m.id === assistantMessageId
                           ? {
                               ...m,
-                              content: parsed.final,
-                              thinkingProcess: parsed.thinking,
-                              isStreaming: !parsed.hasFinal  // Stop streaming when we hit assistantfinal
+                              content: firstChoice.content,
+                              thinkingProcess: firstChoice.reasoningContent,
+                              isStreaming: true
                             }
                           : m
                       )
@@ -1376,6 +1337,9 @@ const MAX_TOOL_ITERATIONS = 30
             .map(([, v]) => ({ content: v.content, model: v.model }))
         : undefined
 
+      // Get final thinking process from reasoning_content
+      const finalThinkingProcess = choiceContents.get(0)?.reasoningContent || ''
+
       // Streaming finished - no need to control ThinkingAnimation here
       // It was already hidden when headers arrived
 
@@ -1386,7 +1350,8 @@ const MAX_TOOL_ITERATIONS = 30
                 ...m,
                 isStreaming: false,
                 headers: Object.keys(responseHeaders).length > 0 ? responseHeaders : undefined,
-                choices: finalChoices
+                choices: finalChoices,
+                thinkingProcess: finalThinkingProcess || m.thinkingProcess
               }
             : m
         )
@@ -1580,31 +1545,41 @@ const MAX_TOOL_ITERATIONS = 30
                   ) : (
                     /* Single choice mode */
                     <>
-                      {/* Show tool calls if any */}
-                      {message.role === 'assistant' && message.toolCalls && message.toolCalls.length > 0 && (
-                        <div className={styles.toolCallsContainer}>
-                          {message.toolCalls.map(tc => (
-                            <ErrorBoundary key={tc.id}>
-                              <ToolCard
-                                toolCall={tc}
-                                toolResult={message.toolResults?.find(tr => tr.callId === tc.id)}
-                                isExpanded={expandedToolCards.has(tc.id)}
-                                onToggle={() => {
-                                  setExpandedToolCards(prev => {
-                                    const next = new Set(prev)
-                                    if (next.has(tc.id)) {
-                                      next.delete(tc.id)
-                                    } else {
-                                      next.add(tc.id)
-                                    }
-                                    return next
-                                  })
-                                }}
-                              />
-                            </ErrorBoundary>
-                          ))}
-                        </div>
-                      )}
+                      {/* Show tool calls if any - filter out failed ones for cleaner UX */}
+                      {message.role === 'assistant' && message.toolCalls && message.toolCalls.length > 0 && (() => {
+                        const successfulToolCalls = message.toolCalls.filter(tc => tc.status !== 'failed')
+                        const failedCount = message.toolCalls.length - successfulToolCalls.length
+
+                        if (successfulToolCalls.length === 0 && failedCount > 0) {
+                          // All failed, show nothing or a minimal indicator
+                          return null
+                        }
+
+                        return (
+                          <div className={styles.toolCallsContainer}>
+                            {successfulToolCalls.map(tc => (
+                              <ErrorBoundary key={tc.id}>
+                                <ToolCard
+                                  toolCall={tc}
+                                  toolResult={message.toolResults?.find(tr => tr.callId === tc.id)}
+                                  isExpanded={expandedToolCards.has(tc.id)}
+                                  onToggle={() => {
+                                    setExpandedToolCards(prev => {
+                                      const next = new Set(prev)
+                                      if (next.has(tc.id)) {
+                                        next.delete(tc.id)
+                                      } else {
+                                        next.add(tc.id)
+                                      }
+                                      return next
+                                    })
+                                  }}
+                                />
+                              </ErrorBoundary>
+                            ))}
+                          </div>
+                        )
+                      })()}
                       {/* Show thinking block if available */}
                       {message.role === 'assistant' && message.thinkingProcess && (
                         <ThinkingBlock
