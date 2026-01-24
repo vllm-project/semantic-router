@@ -646,7 +646,8 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 	embeddingBytes := floatsToBytes(queryEmbedding)
 
 	// Build KNN query without model filter (model filtering removed for cross-model cache sharing)
-	knnQuery := fmt.Sprintf("[KNN %d @%s $vec AS vector_distance]",
+	// RediSearch requires a base query; use '*' to match all documents.
+	knnQuery := fmt.Sprintf("*=>[KNN %d @%s $vec AS vector_distance]",
 		c.config.Search.TopK, c.config.Index.VectorField.Name)
 
 	// Execute vector search

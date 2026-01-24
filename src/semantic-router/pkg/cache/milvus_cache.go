@@ -416,10 +416,9 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte, 
 
 	logging.Debugf("MilvusCache.UpdateWithResponse: searching for pending entry with expr: %s", queryExpr)
 
-	// Note: We don't explicitly request "id" since Milvus auto-includes the primary key
-	// We request model, query, request_body and will detect which column is which
+	// Request explicit columns to avoid relying on non-deterministic order
 	results, err := c.client.Query(ctx, c.collectionName, []string{}, queryExpr,
-		[]string{"model", "query", "request_body"})
+		[]string{"id", "model", "query", "request_body"})
 	if err != nil {
 		logging.Debugf("MilvusCache.UpdateWithResponse: query failed: %v", err)
 		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
@@ -432,48 +431,65 @@ func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte, 
 		return fmt.Errorf("no pending entry found")
 	}
 
-	// Milvus automatically includes the primary key in results but order is non-deterministic
-	// We requested ["model", "query", "request_body"], expect 3-4 columns (primary key may be auto-included)
-	// Strategy: Find the ID column (32-char hex string), then map remaining columns
-	if len(results) < 3 {
-		logging.Debugf("MilvusCache.UpdateWithResponse: unexpected result count: %d", len(results))
+	getVarChar := func(name string) (*entity.ColumnVarChar, error) {
+		column := results.GetColumn(name)
+		if column == nil {
+			return nil, fmt.Errorf("missing column: %s", name)
+		}
+		typed, ok := column.(*entity.ColumnVarChar)
+		if !ok {
+			return nil, fmt.Errorf("unexpected column type for %s: %T", name, column)
+		}
+		if typed.Len() == 0 {
+			return nil, fmt.Errorf("column %s is empty", name)
+		}
+		return typed, nil
+	}
+
+	idColumn, err := getVarChar("id")
+	if err != nil {
+		logging.Debugf("MilvusCache.UpdateWithResponse: %v", err)
 		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
-		return fmt.Errorf("incomplete query result: expected 3+ columns, got %d", len(results))
+		return fmt.Errorf("failed to extract id column: %w", err)
+	}
+	modelColumn, err := getVarChar("model")
+	if err != nil {
+		logging.Debugf("MilvusCache.UpdateWithResponse: %v", err)
+		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
+		return fmt.Errorf("failed to extract model column: %w", err)
+	}
+	queryColumn, err := getVarChar("query")
+	if err != nil {
+		logging.Debugf("MilvusCache.UpdateWithResponse: %v", err)
+		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
+		return fmt.Errorf("failed to extract query column: %w", err)
+	}
+	requestBodyColumn, err := getVarChar("request_body")
+	if err != nil {
+		logging.Debugf("MilvusCache.UpdateWithResponse: %v", err)
+		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
+		return fmt.Errorf("failed to extract request_body column: %w", err)
 	}
 
-	var id, model, query, requestBody string
-	idColIndex := -1
-
-	// First pass: find the ID column (32-char hex string = MD5 hash)
-	for i := 0; i < len(results); i++ {
-		if col, ok := results[i].(*entity.ColumnVarChar); ok && col.Len() > 0 {
-			val := col.Data()[0]
-			if len(val) == 32 && isHexString(val) {
-				id = val
-				idColIndex = i
-				break
-			}
-		}
+	id, err := idColumn.ValueByIdx(0)
+	if err != nil {
+		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
+		return fmt.Errorf("failed to read id value: %w", err)
 	}
-
-	// Second pass: extract data fields in order, skipping the ID column
-	dataFieldIndex := 0
-	for i := 0; i < len(results); i++ {
-		if i == idColIndex {
-			continue // Skip the primary key column
-		}
-		if col, ok := results[i].(*entity.ColumnVarChar); ok && col.Len() > 0 {
-			val := col.Data()[0]
-			switch dataFieldIndex {
-			case 0:
-				model = val
-			case 1:
-				query = val
-			case 2:
-				requestBody = val
-			}
-			dataFieldIndex++
-		}
+	model, err := modelColumn.ValueByIdx(0)
+	if err != nil {
+		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
+		return fmt.Errorf("failed to read model value: %w", err)
+	}
+	query, err := queryColumn.ValueByIdx(0)
+	if err != nil {
+		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
+		return fmt.Errorf("failed to read query value: %w", err)
+	}
+	requestBody, err := requestBodyColumn.ValueByIdx(0)
+	if err != nil {
+		metrics.RecordCacheOperation("milvus", "update_response", "error", time.Since(start).Seconds())
+		return fmt.Errorf("failed to read request_body value: %w", err)
 	}
 
 	if id == "" || model == "" || query == "" {
@@ -907,8 +923,9 @@ func (c *MilvusCache) FindSimilarDecisionWithThreshold(model string, query strin
 	}
 
 	// Use Milvus Search for efficient similarity search
+	// Decision cache is global across models, so filter only on decision presence and TTL.
 	now := time.Now().Unix()
-	filterExpr := fmt.Sprintf("model == \"%s\" && decision != \"\" && (expires_at == 0 || expires_at > %d)", model, now)
+	filterExpr := fmt.Sprintf("decision != \"\" && (expires_at == 0 || expires_at > %d)", now)
 
 	searchResult, err := c.client.Search(
 		ctx,
