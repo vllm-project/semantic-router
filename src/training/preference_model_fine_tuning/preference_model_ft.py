@@ -16,11 +16,10 @@ from typing import Dict, Iterable, List, Optional, Sequence
 import numpy as np
 import torch
 from datasets import Dataset
-from torch.utils.data import DataLoader, Dataset as TorchDataset
+from torch.utils.data import Dataset as TorchDataset
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    DataCollatorForLanguageModeling,
     PreTrainedTokenizerBase,
     Trainer,
     TrainingArguments,
@@ -185,7 +184,7 @@ def build_prompt(
     )["input_ids"]
     reserved = (
         len(system_ids) + len(instruction_ids) + len(label_ids) + 5
-    )  # buffer for target label
+    )  # buffer for target label and end token
     if reserved >= max_length:
         raise ValueError("Instruction + system + labels exceed max_length")
     remaining = max_length - reserved
@@ -309,31 +308,37 @@ def build_chat_aligned_dataset(
     )
 
 
-def compute_token_accuracy(eval_pred: tuple) -> Dict[str, float]:
-    """Compute token accuracy on non-masked positions."""
+def compute_label_accuracy(eval_pred: tuple) -> Dict[str, float]:
+    """Compute label accuracy"""
 
     predictions = (
         eval_pred.predictions if hasattr(eval_pred, "predictions") else eval_pred[0]
     )
     labels = eval_pred.label_ids if hasattr(eval_pred, "label_ids") else eval_pred[1]
 
+    # shape of predictions: (batch_size, seq_length)
+    # shape of labels: (batch_size, seq_length)
     if not isinstance(predictions, np.ndarray):
         predictions = np.array(predictions)
+    if not isinstance(labels, np.ndarray):
+        labels = np.array(labels)
 
     if predictions.ndim == 3:
+        # if we didn't preprocess logits, take argmax over vocab dimension
         pred_tokens = np.argmax(predictions, axis=-1)
     elif predictions.ndim == 2:
+        # if we already have token predictions
         pred_tokens = predictions
     else:
-        return {"token_accuracy": 0.0}
+        return {"label_accuracy": 0.0}
 
     mask = labels != -100
-    print("length:", len(mask), len(labels), len(pred_tokens))
-    print("mask.sum():", mask.sum())
-    correct_tokens = (pred_tokens == labels) & mask
-    token_accuracy = correct_tokens.sum() / mask.sum() if mask.sum() > 0 else 0.0
+    # A sample is correct only if all unmasked tokens match its labels.
+    correct_tokens = np.where(mask, pred_tokens == labels, True)
+    correct_labels = np.all(correct_tokens, axis=1)
+    label_accuracy = float(np.mean(correct_labels)) if correct_labels.size else 0.0
 
-    return {"token_accuracy": float(token_accuracy)}
+    return {"label_accuracy": label_accuracy}
 
 
 class LabelPaddingCollator:
@@ -674,19 +679,14 @@ def train(args: argparse.Namespace) -> None:
     def preprocess_logits_for_metrics(logits, labels):
         return logits.argmax(dim=-1)
 
-    def compute_metrics(eval_pred):
-        preds, labels = eval_pred
-        return {"accuracy": (preds == labels).mean()}
-
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         data_collator=data_collator,
-        compute_metrics=compute_metrics,
         preprocess_logits_for_metrics=preprocess_logits_for_metrics,
-        # compute_metrics=compute_token_accuracy if eval_dataset is not None else None,
+        compute_metrics=compute_label_accuracy if eval_dataset is not None else None,
     )
 
     logger.info(
