@@ -111,7 +111,7 @@ export interface ModelRef {
 
 export interface PluginConfig {
   type: 'system_prompt' | 'semantic-cache' | 'pii' | 'hallucination'
-  configuration: Record<string, any>
+  configuration: Record<string, unknown>
 }
 
 export interface Decision {
@@ -177,7 +177,7 @@ export interface LegacyCategory {
 
 export interface LegacyConfig {
   vllm_endpoints?: LegacyVLLMEndpoint[]
-  model_config?: Record<string, any>
+  model_config?: Record<string, UnifiedConfig>
   categories?: LegacyCategory[]
   classifier?: {
     category_model?: LegacyModelConfig
@@ -275,13 +275,13 @@ export interface UnifiedConfig extends Partial<PythonCLIConfig>, Partial<LegacyC
 /**
  * Detect the config format based on key indicators
  */
-export function detectConfigFormat(config: any): ConfigFormat {
+export function detectConfigFormat(config: UnifiedConfig): ConfigFormat {
   // Python CLI format has providers.models
   if (config?.providers?.models) {
     return 'python-cli'
   }
   // Legacy format has vllm_endpoints or model_config at root
-  if (config?.vllm_endpoints || config?.model_config) {
+  if (config.vllm_endpoints || config.model_config) {
     return 'legacy'
   }
   // Default to python-cli as that's the future
@@ -291,14 +291,14 @@ export function detectConfigFormat(config: any): ConfigFormat {
 /**
  * Check if config is in Python CLI format
  */
-export function isPythonCLIFormat(config: any): config is PythonCLIConfig {
+export function isPythonCLIFormat(config: UnifiedConfig): config is PythonCLIConfig {
   return detectConfigFormat(config) === 'python-cli'
 }
 
 /**
  * Check if config is in legacy format
  */
-export function isLegacyFormat(config: any): config is LegacyConfig {
+export function isLegacyFormat(config: UnifiedConfig): config is LegacyConfig {
   return detectConfigFormat(config) === 'legacy'
 }
 

@@ -15,7 +15,7 @@ interface SignalGroupNodeData {
   onToggleCollapse?: () => void
 }
 
-export const SignalGroupNode = memo<NodeProps<SignalGroupNodeData>>(({ data }) => {
+const SignalGroupNodeComponent = ({ data }: NodeProps<SignalGroupNodeData>): JSX.Element => {
   const { signalType, signals, collapsed = false, isHighlighted, isDynamic = false, onToggleCollapse } = data
   const color = SIGNAL_COLORS[signalType]
   const icon = SIGNAL_ICONS[signalType]
@@ -56,7 +56,7 @@ export const SignalGroupNode = memo<NodeProps<SignalGroupNodeData>>(({ data }) =
             {signals.slice(0, 5).map(signal => (
               <div key={signal.name} className={styles.signalItem}>
                 {signal.name}
-                {(signal as any).isDynamic && <span className={styles.mlTag}>🤖</span>}
+                {signal.isDynamic && <span className={styles.mlTag}>🤖</span>}
               </div>
             ))}
             {signals.length > 5 && (
@@ -71,6 +71,8 @@ export const SignalGroupNode = memo<NodeProps<SignalGroupNodeData>>(({ data }) =
       <Handle type="source" position={Position.Bottom} />
     </div>
   )
-})
+}
+
+export const SignalGroupNode = memo<NodeProps<SignalGroupNodeData>>(SignalGroupNodeComponent)
 
 SignalGroupNode.displayName = 'SignalGroupNode'
