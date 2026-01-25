@@ -61,6 +61,10 @@ type InMemoryCache struct {
 	hnswNeedsRebuild bool   // true while the HNSW graph is stale relative to entries
 	hnswEfSearch     int    // Search-time ef parameter
 	embeddingModel   string // "bert", "qwen3", or "gemma"
+
+	// Background cleanup
+	cleanupTicker *time.Ticker
+	stopCleanup   chan struct{}
 }
 
 // InMemoryCacheOptions contains configuration parameters for the in-memory cache
@@ -138,6 +142,19 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 		}
 		cache.hnswIndex = newHNSWIndex(M, efConstruction)
 		logging.Debugf("HNSW index initialized: M=%d, efConstruction=%d", M, efConstruction)
+	}
+
+	// Start background cleanup goroutine if TTL is enabled
+	if options.Enabled && options.TTLSeconds > 0 {
+		cache.stopCleanup = make(chan struct{})
+		// Run cleanup every TTL/2 seconds (e.g., every 30s for 60s TTL)
+		cleanupInterval := time.Duration(options.TTLSeconds/2) * time.Second
+		if cleanupInterval < 10*time.Second {
+			cleanupInterval = 10 * time.Second // Minimum 10 seconds
+		}
+		cache.cleanupTicker = time.NewTicker(cleanupInterval)
+		go cache.backgroundCleanup()
+		logging.Debugf("Background cleanup started: interval=%v", cleanupInterval)
 	}
 
 	return cache
@@ -602,6 +619,14 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 
 // Close releases all resources held by the cache
 func (c *InMemoryCache) Close() error {
+	// Stop background cleanup goroutine
+	if c.stopCleanup != nil {
+		close(c.stopCleanup)
+	}
+	if c.cleanupTicker != nil {
+		c.cleanupTicker.Stop()
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -612,6 +637,20 @@ func (c *InMemoryCache) Close() error {
 	metrics.UpdateCacheEntries("memory", 0)
 
 	return nil
+}
+
+// backgroundCleanup runs periodic cleanup of expired entries
+func (c *InMemoryCache) backgroundCleanup() {
+	for {
+		select {
+		case <-c.cleanupTicker.C:
+			c.mu.Lock()
+			c.cleanupExpiredEntries()
+			c.mu.Unlock()
+		case <-c.stopCleanup:
+			return
+		}
+	}
 }
 
 // GetStats provides current cache performance metrics
@@ -866,6 +905,9 @@ func (c *InMemoryCache) evictOne() {
 
 	// Record eviction metric
 	metrics.RecordCacheOperation("memory", "evict", "success", 0)
+
+	// Update cache entries count after eviction
+	metrics.UpdateCacheEntries("memory", len(c.entries))
 }
 
 // ===== Optimized Eviction Policy Helpers =====
