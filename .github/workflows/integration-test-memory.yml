@@ -1,0 +1,140 @@
+name: Integration Test [Memory]
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/semantic-router/pkg/memory/**'
+      - 'src/semantic-router/pkg/extproc/*memory*'
+      - 'src/semantic-router/pkg/responseapi/**'
+      - 'src/vllm-sr/**'
+      - 'e2e/testing/09-memory-features-test.py'
+      - 'config/testing/config.memory*.yaml'
+      - '.github/workflows/integration-test-memory.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  memory-integration-test:
+    name: Memory Integration Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      # NOTE: Model storage setup skipped - using echo backend for memory tests
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Set up Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: "1.90"
+
+      - name: Install Python dependencies
+        run: pip install -U "huggingface_hub[cli]" hf_transfer requests
+
+      # NOTE: Model download skipped - using echo backend which doesn't need a real model
+      # Echo backend returns the full prompt for keyword verification in memory tests
+
+      - name: Start Milvus
+        run: |
+          make start-milvus
+          for i in {1..60}; do
+            curl -s http://localhost:9091/healthz 2>/dev/null | grep -q "OK" && echo "✅ Milvus ready" && break
+            sleep 2
+          done
+
+      - name: Build and start llm-katan (echo backend for memory tests)
+        run: |
+          make docker-build-llm-katan DOCKER_TAG=ci
+          # Use echo backend for memory tests - returns full prompt for keyword verification
+          # This allows tests to verify memory was injected by checking for keywords in response
+          docker run -d --name llm-katan --network host \
+            ghcr.io/vllm-project/semantic-router/llm-katan:ci \
+            llm-katan --model dummy --host 0.0.0.0 --port 8000 --served-model-name qwen3 --backend echo
+          
+          for i in {1..30}; do
+            curl -s http://localhost:8000/health 2>/dev/null | grep -q "ok\|healthy" && echo "✅ llm-katan (echo) ready" && break
+            docker ps | grep -q llm-katan || { echo "❌ llm-katan died"; docker logs llm-katan; exit 1; }
+            sleep 1
+          done
+
+      - name: Install vllm-sr CLI and setup config
+        run: |
+          pip install ./src/vllm-sr
+          cp config/testing/config.memory-user.yaml config.yaml
+          vllm-sr validate --config config.yaml || true
+
+      - name: Build vllm-sr Docker image
+        run: make vllm-sr-build VLLM_SR_IMAGE=vllm-sr:ci
+        env:
+          CI: true
+
+      - name: Start vllm-sr serve
+        run: |
+          vllm-sr serve --config config.yaml --image vllm-sr:ci --image-pull-policy never &
+          VLLM_SR_PID=$!
+          
+          for i in {1..180}; do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8888/health 2>/dev/null || echo "000")
+            [ "$HTTP_CODE" = "200" ] && echo "✅ vllm-sr ready" && break
+            kill -0 $VLLM_SR_PID 2>/dev/null || { echo "❌ vllm-sr died"; vllm-sr logs router; exit 1; }
+            sleep 2
+          done
+          
+          # Final verification
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8888/health 2>/dev/null || echo "000")
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ vllm-sr not ready"
+            exit 1
+          fi
+
+      - name: Run memory integration tests
+        run: |
+          cd e2e/testing
+          ROUTER_ENDPOINT=http://localhost:8888 python 09-memory-features-test.py
+        env:
+          PYTHONUNBUFFERED: 1
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo "=== Service Status ==="
+          docker ps -a
+          vllm-sr status || true
+          
+          echo "=== Router Logs ==="
+          docker exec vllm-sr-container cat /var/log/supervisor/router.log 2>&1 | tail -100 || true
+          docker exec vllm-sr-container cat /var/log/supervisor/router-error.log 2>&1 | tail -50 || true
+          
+          echo "=== Envoy Logs ==="
+          docker logs vllm-sr-container 2>&1 | tail -100 || true
+          
+          echo "=== llm-katan Logs ==="
+          docker logs llm-katan 2>&1 | tail -50 || true
+          
+          echo "=== Milvus Logs ==="
+          docker logs milvus-semantic-cache 2>&1 | tail -30 || true
+
+      - name: Clean up
+        if: always()
+        run: |
+          vllm-sr stop || true
+          docker stop llm-katan vllm-sr-container 2>/dev/null || true
+          docker rm llm-katan vllm-sr-container 2>/dev/null || true
+          make stop-milvus || true

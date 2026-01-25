@@ -10,7 +10,6 @@ import (
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
@@ -40,10 +39,10 @@ type OpenAIRouter struct {
 	ReplayRecorder       *routerreplay.Recorder
 	// ModelSelector is the registry of advanced model selection algorithms
 	// Initialized from config.IntelligentRouting.ModelSelection
-	ModelSelector        *selection.Registry
-	ReplayRecorders      map[string]*routerreplay.Recorder
-	MemoryStore          *memory.MilvusStore
-	MemoryExtractor      *memory.MemoryExtractor
+	ModelSelector   *selection.Registry
+	ReplayRecorders map[string]*routerreplay.Recorder
+	MemoryStore     *memory.MilvusStore
+	MemoryExtractor *memory.MemoryExtractor
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls
@@ -370,12 +369,14 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		}
 	}
 
-	// Create memory extractor if memory and extraction are enabled
+	// Create memory extractor if memory_extraction external model is configured
 	var memoryExtractor *memory.MemoryExtractor
-	if cfg.Memory.Enabled && cfg.Memory.Extraction.Enabled {
+	if cfg.Memory.Enabled && cfg.FindExternalModelByRole(config.ModelRoleMemoryExtraction) != nil {
 		if memoryStore != nil {
-			memoryExtractor = memory.NewMemoryExtractorWithStore(&cfg.Memory.Extraction, memoryStore)
-			logging.Infof("Memory extractor enabled with extraction endpoint: %s", cfg.Memory.Extraction.Endpoint)
+			memoryExtractor = memory.NewMemoryExtractorWithStore(cfg, cfg.Memory.ExtractionBatchSize, memoryStore)
+			if memoryExtractor != nil {
+				logging.Infof("Memory extractor enabled with model_role: %s", config.ModelRoleMemoryExtraction)
+			}
 		} else {
 			logging.Warnf("Memory extraction enabled but memory store not available, extraction will be disabled")
 		}
@@ -709,20 +710,41 @@ func createResponseStore(cfg *config.RouterConfig) (responsestore.ResponseStore,
 }
 
 // createMemoryStore creates a memory store based on configuration.
-// Supports Milvus backend with address/collection from MemoryConfig.Milvus.
 func createMemoryStore(cfg *config.RouterConfig) (*memory.MilvusStore, error) {
-	// Get Milvus address from Memory config, with fallback to defaults
 	milvusAddress := cfg.Memory.Milvus.Address
 	if milvusAddress == "" {
-		milvusAddress = "localhost:19530" // Default
+		milvusAddress = "localhost:19530"
 	}
 
 	collectionName := cfg.Memory.Milvus.Collection
 	if collectionName == "" {
-		collectionName = "agentic_memory" // Default
+		collectionName = "agentic_memory"
+	}
+
+	// Auto-detect embedding model from embedding_models configuration
+	embeddingModel := cfg.Memory.EmbeddingModel
+	if embeddingModel == "" {
+		if cfg.EmbeddingModels.MmBertModelPath != "" {
+			embeddingModel = "mmbert"
+			logging.Infof("Memory: Auto-selected mmbert from embedding_models config")
+		} else if cfg.EmbeddingModels.Qwen3ModelPath != "" {
+			embeddingModel = "qwen3"
+			logging.Infof("Memory: Auto-selected qwen3 from embedding_models config")
+		} else if cfg.EmbeddingModels.GemmaModelPath != "" {
+			embeddingModel = "gemma"
+			logging.Infof("Memory: Auto-selected gemma from embedding_models config")
+		} else {
+			embeddingModel = "bert"
+			logging.Warnf("Memory: No embedding models configured, using bert")
+		}
+	}
+
+	embeddingConfig := memory.EmbeddingConfig{
+		Model: memory.EmbeddingModelType(embeddingModel),
 	}
 
 	logging.Infof("Memory: Connecting to Milvus at %s, collection=%s", milvusAddress, collectionName)
+	logging.Infof("Memory: Using embedding model=%s", embeddingConfig.Model)
 
 	// Create Milvus client
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -741,22 +763,24 @@ func createMemoryStore(cfg *config.RouterConfig) (*memory.MilvusStore, error) {
 	}
 	if state == nil || !state.IsHealthy {
 		milvusClient.Close()
-		return nil, fmt.Errorf("Milvus connection is not healthy")
+		return nil, fmt.Errorf("milvus connection is not healthy")
 	}
 
-	// Create memory store
+	// Create memory store with unified embedding config
 	store, err := memory.NewMilvusStore(memory.MilvusStoreOptions{
-		Client:         milvusClient,
-		CollectionName: collectionName,
-		Config:         cfg.Memory,
-		Enabled:        cfg.Memory.Enabled,
+		Client:          milvusClient,
+		CollectionName:  collectionName,
+		Config:          cfg.Memory,
+		Enabled:         cfg.Memory.Enabled,
+		EmbeddingConfig: &embeddingConfig,
 	})
 	if err != nil {
 		milvusClient.Close()
 		return nil, fmt.Errorf("failed to create memory store: %w", err)
 	}
 
-	logging.Infof("Memory store initialized: address=%s, collection=%s", milvusAddress, collectionName)
+	logging.Infof("Memory store initialized: address=%s, collection=%s, embedding=%s",
+		milvusAddress, collectionName, embeddingConfig.Model)
 	return store, nil
 }
 

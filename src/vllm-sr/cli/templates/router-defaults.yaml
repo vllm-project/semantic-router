@@ -16,10 +16,23 @@ router_replay:
 
 # Agentic Memory Configuration
 # Cross-session memory that persists user facts, preferences, and context
-# Requires: Milvus for vector storage, LLM endpoint for query rewriting and extraction
-# To enable, set enabled: true and configure milvus.address + extraction.endpoint
+# Requires: Milvus for vector storage
+# Optional: LLM endpoint for query rewriting and fact extraction (via external_models)
+#
+# To enable memory:
+#   1. Set enabled: true
+#   2. Configure milvus.address
+#   3. (Optional) Add external_models with model_role "memory_rewrite" or "memory_extraction"
+#
+# Query rewriting and fact extraction are enabled by adding external_models with:
+#   - model_role: "memory_rewrite"    -> enables query rewriting
+#   - model_role: "memory_extraction" -> enables fact extraction
+# See external_models section below for examples.
 memory:
-  enabled: false  # Disabled by default - requires Milvus and LLM endpoint
+  enabled: false  # Disabled by default - requires Milvus
+
+  # Auto-store extracted facts after each response
+  auto_store: false
 
   # Milvus vector database for memory storage
   milvus:
@@ -36,23 +49,9 @@ memory:
   default_retrieval_limit: 5
   default_similarity_threshold: 0.70
 
-  # Query rewriting - rewrites vague queries with conversation context
-  # Requires an OpenAI-compatible LLM endpoint
-  query_rewrite:
-    enabled: false  # Enable when you have an LLM endpoint configured
-    endpoint: ""    # e.g., "http://llm-host:8000"
-    model: ""       # e.g., "qwen3", "llama3"
-    max_tokens: 100
-    timeout_seconds: 30
-
-  # Memory extraction - extracts facts from conversations
-  # Requires an OpenAI-compatible LLM endpoint
-  extraction:
-    enabled: false  # Enable when you have an LLM endpoint configured
-    endpoint: ""    # e.g., "http://llm-host:8000"
-    model: ""       # e.g., "qwen3", "llama3"
-    batch_size: 10  # Extract every N conversation turns
-    timeout_seconds: 30
+  # Fact extraction runs every N conversation turns (default: 10)
+  # Only applies when memory_extraction external model is configured
+  extraction_batch_size: 10
 
 semantic_cache:
   enabled: true
@@ -150,9 +149,34 @@ feedback_detector:
   use_mmbert_32k: true
 
 # External models configuration
-# Used for advanced routing signals like preference-based routing via external LLM
-# Users can configure external models in their config to enable these features
-# Example:
+# Used for advanced features that require an external LLM endpoint:
+#   - model_role: "preference"         -> preference-based routing
+#   - model_role: "memory_rewrite"     -> query rewriting for memory search
+#   - model_role: "memory_extraction"  -> fact extraction from conversations
+#   - model_role: "guardrail"          -> external guardrail/safety model
+#
+# Example for memory features:
+# external_models:
+#   - llm_provider: "vllm"
+#     model_role: "memory_rewrite"      # Enables query rewriting
+#     llm_endpoint:
+#       address: "localhost"
+#       port: 8000
+#     llm_model_name: "qwen3"
+#     llm_timeout_seconds: 30
+#     max_tokens: 100                   # Max tokens for rewritten query
+#     temperature: 0.1                  # Low temperature for consistent output
+#   - llm_provider: "vllm"
+#     model_role: "memory_extraction"   # Enables fact extraction
+#     llm_endpoint:
+#       address: "localhost"
+#       port: 8000
+#     llm_model_name: "qwen3"
+#     llm_timeout_seconds: 30
+#     max_tokens: 500                   # Max tokens for extracted facts
+#     temperature: 0.1
+#
+# Example for preference-based routing:
 # external_models:
 #   - llm_provider: "vllm"
 #     model_role: "preference"

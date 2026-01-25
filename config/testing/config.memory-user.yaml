@@ -1,0 +1,91 @@
+# vllm-sr CLI config for Memory Integration Test
+# This is the user-facing vllm-sr format
+
+version: v0.1
+
+# Listeners - Network configuration (required)
+listeners:
+  - name: "http-8888"
+    address: "0.0.0.0"
+    port: 8888
+    timeout: "300s"
+
+# Signals - Domain-based for category auto-generation
+signals:
+  domains:
+    - name: "general"
+      description: "General queries for memory testing"
+      mmlu_categories: ["other"]
+  keywords: []
+
+# Decisions - Simple routing for test (using domain for category auto-gen)
+decisions:
+  - name: "default_route"
+    description: "Default route for memory testing"
+    priority: 1
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "general"
+    modelRefs:
+      - model: "qwen3"
+        use_reasoning: false
+    # Plugins - System prompt + Memory to test they work together
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are MoM, a helpful AI assistant with memory. You remember important facts about users and use this context to provide personalized assistance."
+          mode: "insert"  # insert mode to test with memory injection
+      - type: "memory"
+        configuration:
+          enabled: true
+          retrieval_limit: 5
+          similarity_threshold: 0.70
+          auto_store: true
+
+# Providers - LLM backend
+providers:
+  models:
+    - name: "qwen3"
+      endpoints:
+        - name: "llm_katan"
+          weight: 1
+          endpoint: "host.docker.internal:8000"
+          protocol: "http"
+  default_model: "qwen3"
+
+# Memory configuration - the key feature being tested
+memory:
+  enabled: true
+  auto_store: true
+  milvus:
+    address: "host.docker.internal:19530"
+    collection: "memory_test_ci"
+    dimension: 384  # Must match embedding_models target_dimension
+  # embedding_model: "mmbert"  # Optional override - defaults to embedding_models config
+  default_retrieval_limit: 5
+  default_similarity_threshold: 0.70
+  extraction_batch_size: 1  # Extract after every turn (1%1=0 triggers extraction)
+
+# External models for memory features
+# Query rewriting and extraction are enabled by defining these models
+external_models:
+  - llm_provider: "vllm"
+    model_role: "memory_rewrite"
+    llm_endpoint:
+      address: "host.docker.internal"
+      port: 8000
+    llm_model_name: "qwen3"
+    llm_timeout_seconds: 30
+    max_tokens: 100
+    temperature: 0.1
+  - llm_provider: "vllm"
+    model_role: "memory_extraction"
+    llm_endpoint:
+      address: "host.docker.internal"
+      port: 8000
+    llm_model_name: "qwen3"
+    llm_timeout_seconds: 30
+    max_tokens: 500
+    temperature: 0.1

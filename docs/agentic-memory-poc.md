@@ -209,7 +209,7 @@ Session B (March 20) - NEW SESSION:
 | **Reflective** | Self-analysis, lessons learned | "Previous budget response was incomplete - user prefers detailed breakdowns" | 🔮 Future |
 
 > **⚠️ Episodic Memory (MVP Limitation):** Session-end detection is not implemented. Episodic memories are only created when the LLM extraction explicitly produces a summary-style output. Reliable session-end triggers are deferred to Phase 2.
-
+>
 > **🔮 Reflective Memory:** Self-analysis and lessons learned. Not in scope for this POC. See [Appendix A](#appendix-a-reflective-memory).
 
 ### Memory Vector Space
@@ -270,11 +270,10 @@ Memories cluster by **content/topic**, not by type. Type is metadata:
 ```
 
 > **Design Decision:** Memory retrieval adds value in **both** scenarios — new sessions (no chain) and existing sessions (query may reference other sessions). We always search when pre-filter passes.
-
+>
 > **Known Redundancy:** When the answer IS in the current chain, we still search memory (~10-30ms wasted). We can't cheaply detect "is the answer already in history?" without understanding the query semantically. For POC, we accept this overhead.
-
-> **Phase 2 Solution:** [Context Compression](#phase-2-context-compression-high-priority) solves this properly — instead of Response API sending full history, we send compressed summaries + recent turns + relevant memories. Facts are extracted during summarization, eliminating redundancy entirely.
-
+>
+> **Phase 2 Solution:** [Context Compression](#context-compression-high-priority) solves this properly — instead of Response API sending full history, we send compressed summaries + recent turns + relevant memories. Facts are extracted during summarization, eliminating redundancy entirely.
 
 ---
 
@@ -854,6 +853,7 @@ DELETE /v1/memory?user_id=user_123&project_id=project_abc
 ```
 
 **Use Cases:**
+
 - User requests "forget what I told you about X"
 - GDPR/privacy compliance (right to be forgotten)
 - Clearing outdated information
@@ -873,6 +873,7 @@ After consolidation:
 ```
 
 **Trigger options:**
+
 - When memory count exceeds threshold
 - Scheduled background job
 - On session end
@@ -1001,15 +1002,12 @@ type MemoryContext struct {
 # config.yaml
 memory:
   enabled: true
-  store_backend: "milvus"  # or "memory" for development
+  auto_store: true  # Enable automatic fact extraction
   
   milvus:
     address: "milvus:19530"
     collection: "agentic_memory"
     dimension: 384             # Must match embedding model output
-    ef_construction: 256
-    m: 16
-    ef: 64
   
   # Embedding model for memory
   embedding:
@@ -1020,12 +1018,30 @@ memory:
   default_retrieval_limit: 5
   default_similarity_threshold: 0.6   # Tunable; start conservative
   
-  # Extraction settings (for saving)
-  extraction:
-    enabled: true
-    batch_size: 10                    # Extract every N turns
-    llm_endpoint: "http://qwen:8000"
-    timeout_seconds: 30
+  # Extraction runs every N conversation turns
+  extraction_batch_size: 10
+
+# External models for memory LLM features
+# Query rewriting and fact extraction are enabled by adding external_models
+external_models:
+  - llm_provider: "vllm"
+    model_role: "memory_rewrite"      # Enables query rewriting
+    llm_endpoint:
+      address: "qwen"
+      port: 8000
+    llm_model_name: "qwen3"
+    llm_timeout_seconds: 30
+    max_tokens: 100
+    temperature: 0.1
+  - llm_provider: "vllm"
+    model_role: "memory_extraction"   # Enables fact extraction
+    llm_endpoint:
+      address: "qwen"
+      port: 8000
+    llm_model_name: "qwen3"
+    llm_timeout_seconds: 30
+    max_tokens: 500
+    temperature: 0.1
 ```
 
 ### Configuration Notes
@@ -1034,8 +1050,8 @@ memory:
 |-----------|-------|-----------|
 | `dimension: 384` | Fixed | Must match all-MiniLM-L6-v2 output |
 | `default_similarity_threshold: 0.6` | Starting value | Tune based on retrieval quality logs |
-| `batch_size: 10` | Default | Balance between freshness and LLM cost |
-| `timeout_seconds: 30` | Default | Prevent extraction from blocking indefinitely |
+| `extraction_batch_size: 10` | Default | Balance between freshness and LLM cost |
+| `llm_timeout_seconds: 30` | Default | Prevent extraction from blocking indefinitely |
 
 > **Embedding Model Choice:**
 > 
@@ -1043,12 +1059,13 @@ memory:
 > |-------|-----------|------|------|
 > | **all-MiniLM-L6-v2** (POC choice) | 384 | Better semantic similarity, forgiving on wording, ideal for memory retrieval & deduplication | Requires loading separate model |
 > | Qwen3-Embedding-0.6B (existing) | 1024 | Already loaded for semantic cache, no extra memory | More sensitive to exact wording, may miss similar memories |
-> 
+>
 > **Why 384-dim for Memory?** Lower dimensions capture high-level semantic meaning and are less sensitive to specific details (numbers, names). This is beneficial for:
+>
 > - **Retrieval**: "What's my budget?" matches "Hawaii trip budget is $10K" even with different wording
 > - **Deduplication**: "budget is $10K" and "budget is now $15K" recognized as same topic (update value)
 > - **Cross-session**: Wording naturally differs between sessions
-> 
+>
 > **Alternative:** Reusing Qwen3-Embedding (1024-dim) is possible to avoid loading a second model. Trade-off is slightly stricter matching which may increase false negatives.
 
 ---
@@ -1152,6 +1169,7 @@ if err != nil {
 | **Current state** | Session context | Redis | Old messages |
 
 > **Key Insight:** The "current state" should be **structured** (not prose summary), making it KG-ready:
+>
 > ```json
 > {"topic": "Hawaii vacation", "budget": "$10K", "decisions": ["fly direct"], "open": ["which hotel?"]}
 > ```
@@ -1193,11 +1211,13 @@ Context sent to LLM:
 ```
 
 **Synergy with Agentic Memory:**
+
 - Fact extraction (Section 6) runs during compression → saves to Milvus
 - Current state replaces old messages → reduces tokens
 - Structured format → KG-ready for future
 
 **Benefits:**
+
 - Controlled token usage (predictable cost)
 - Better context quality (structured state vs. full history)
 - **KG-ready**: Structured current state maps directly to graph nodes/edges
@@ -1254,11 +1274,13 @@ Context sent to LLM:
 Self-analysis and lessons learned from past interactions. Inspired by the [Reflexion paper](https://arxiv.org/abs/2303.11366).
 
 **What it stores:**
+
 - Insights from incorrect or suboptimal responses
 - Learned preferences about response style
 - Patterns that improve future interactions
 
 **Examples:**
+
 - "I gave incorrect deployment steps - next time verify k8s version first"
 - "User prefers bullet points over paragraphs for technical content"
 - "Budget questions should include breakdown, not just total"
@@ -1339,6 +1361,7 @@ func rewriteQuery(history []Message, query string) string {
 Generate hypothetical answer, embed that instead of query.
 
 **The Problem HyDE Solves:**
+
 ```
 Query: "What's the cost?"           → embeds as QUESTION style
 Stored: "Budget is $10,000"         → embeds as STATEMENT style
@@ -1375,6 +1398,7 @@ func hydeRewrite(query string, history []Message) string {
 #### References
 
 **Query Rewriting:**
+
 1. **HyDE** - [Precise Zero-Shot Dense Retrieval without Relevance Labels](https://arxiv.org/abs/2212.10496) (Gao et al., 2022) - Style bridging (question → document style)
 2. **RRR** - [Query Rewriting for Retrieval-Augmented LLMs](https://arxiv.org/abs/2305.14283) (Ma et al., 2023) - Trainable rewriter with RL, handles conversational context
 
@@ -1391,4 +1415,3 @@ func hydeRewrite(query string, history []Message) string {
 *Last Updated: December 2025*  
 *Status: POC DESIGN - v3 (Review-Addressed)*  
 *Based on: [Issue #808 - Explore Agentic Memory in Response API](https://github.com/vllm-project/semantic-router/issues/808)*
-

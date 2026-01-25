@@ -80,9 +80,9 @@ class TransformersBackend(ModelBackend):
         is_gpu_device = device in ["xpu", "cuda"]
         torch_dtype = torch.float16 if is_gpu_device else torch.float32
         if device == "xpu":
-            device_map = f"xpu:0"
+            device_map = "xpu:0"
         else:
-            device_map = ("auto" if device == "cuda" else None,)
+            device_map = "auto" if device == "cuda" else None
         self.model = AutoModelForCausalLM.from_pretrained(
             self.config.model_name,
             torch_dtype=torch_dtype,
@@ -440,11 +440,131 @@ class VLLMBackend(ModelBackend):
         }
 
 
+class EchoBackend(ModelBackend):
+    """
+    Echo backend - returns the full prompt for testing.
+
+    This backend is useful for integration tests where you need to verify
+    that content (like memory context) was properly injected into the prompt.
+    The response contains all messages (system, user, assistant) that were sent.
+
+    Usage:
+        llm-katan --backend echo --served-model-name test-model
+    """
+
+    def __init__(self, config: ServerConfig):
+        super().__init__(config)
+
+    async def load_model(self) -> None:
+        """No model to load for echo backend"""
+        logger.info("🔊 Echo backend ready (no model to load)")
+
+    async def generate(
+        self,
+        messages: List[Dict[str, str]],
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+        stream: bool = False,
+    ) -> AsyncGenerator[Dict, None]:
+        """Echo back all messages - useful for testing prompt injection"""
+        # Format all messages for echo response
+        echo_parts = []
+        for msg in messages:
+            role = msg.get("role", "unknown")
+            content = msg.get("content", "")
+            echo_parts.append(f"[{role}]: {content}")
+
+        echo_content = "\n".join(echo_parts)
+
+        # Calculate rough token count
+        token_count = len(echo_content.split())
+
+        response_data = {
+            "id": f"echo-{int(time.time())}",
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": self.config.served_model_name,
+            "system_fingerprint": "llm-katan-echo",
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": echo_content},
+                    "logprobs": None,
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {
+                "prompt_tokens": token_count,
+                "completion_tokens": token_count,
+                "total_tokens": token_count * 2,
+                "prompt_tokens_details": {"cached_tokens": 0},
+                "completion_tokens_details": {"reasoning_tokens": 0},
+            },
+        }
+
+        # Add token_usage as alias for better SDK compatibility
+        response_data["token_usage"] = response_data["usage"]
+
+        if stream:
+            # For streaming, yield the content in chunks
+            words = echo_content.split()
+            for i, word in enumerate(words):
+                chunk = {
+                    "id": response_data["id"],
+                    "object": "chat.completion.chunk",
+                    "created": response_data["created"],
+                    "model": self.config.served_model_name,
+                    "system_fingerprint": "llm-katan-echo",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {
+                                "content": word + " " if i < len(words) - 1 else word
+                            },
+                            "logprobs": None,
+                            "finish_reason": None,
+                        }
+                    ],
+                }
+                yield chunk
+                await asyncio.sleep(0.01)  # Fast streaming for tests
+
+            # Final chunk
+            final_chunk = {
+                "id": response_data["id"],
+                "object": "chat.completion.chunk",
+                "created": response_data["created"],
+                "model": self.config.served_model_name,
+                "system_fingerprint": "llm-katan-echo",
+                "choices": [
+                    {"index": 0, "delta": {}, "logprobs": None, "finish_reason": "stop"}
+                ],
+                "usage": response_data["usage"],
+            }
+            yield final_chunk
+        else:
+            yield response_data
+
+    def get_model_info(self) -> Dict[str, any]:
+        """Get model information"""
+        return {
+            "id": self.config.served_model_name,
+            "object": "model",
+            "created": int(time.time()),
+            "owned_by": "llm-katan-echo",
+            "permission": [],
+            "root": self.config.served_model_name,
+            "parent": None,
+        }
+
+
 def create_backend(config: ServerConfig) -> ModelBackend:
     """Factory function to create the appropriate backend"""
     if config.backend == "vllm":
         return VLLMBackend(config)
     elif config.backend == "transformers":
         return TransformersBackend(config)
+    elif config.backend == "echo":
+        return EchoBackend(config)
     else:
         raise ValueError(f"Unknown backend: {config.backend}")

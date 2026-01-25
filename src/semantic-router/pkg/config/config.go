@@ -21,10 +21,12 @@ const (
 
 // Model role constants for external models
 const (
-	ModelRoleGuardrail      = "guardrail"
-	ModelRoleClassification = "classification"
-	ModelRoleScoring        = "scoring"
-	ModelRolePreference     = "preference" // For route preference matching via external LLM
+	ModelRoleGuardrail        = "guardrail"
+	ModelRoleClassification   = "classification"
+	ModelRoleScoring          = "scoring"
+	ModelRolePreference       = "preference"        // For route preference matching via external LLM
+	ModelRoleMemoryRewrite    = "memory_rewrite"    // For memory query rewriting
+	ModelRoleMemoryExtraction = "memory_extraction" // For memory fact extraction
 )
 
 // Signal type constants for rule conditions
@@ -719,17 +721,22 @@ type MemoryConfig struct {
 	// Enable memory features
 	Enabled bool `yaml:"enabled"`
 
+	// AutoStore enables automatic memory extraction from conversations
+	AutoStore bool `yaml:"auto_store,omitempty"`
+
 	// Milvus configuration for memory storage
 	Milvus MemoryMilvusConfig `yaml:"milvus,omitempty"`
 
-	// Query rewriting configuration
-	QueryRewrite QueryRewriteConfig `yaml:"query_rewrite"`
+	// EmbeddingModel specifies which embedding model to use
+	// If not set, auto-detected from embedding_models section
+	// Options: "bert", "mmbert", "qwen3", "gemma"
+	EmbeddingModel string `yaml:"embedding_model,omitempty"`
 
-	// Embedding configuration for memory retrieval
+	// Embedding configuration (deprecated, use embedding_model instead)
 	Embedding MemoryEmbeddingConfig `yaml:"embedding,omitempty"`
 
-	// Fact extraction configuration
-	Extraction ExtractionConfig `yaml:"extraction"`
+	// ExtractionBatchSize is the number of turns between extraction runs (default: 10)
+	ExtractionBatchSize int `yaml:"extraction_batch_size,omitempty"`
 
 	// Default retrieval limit (max number of results to return)
 	// Default: 5
@@ -738,6 +745,10 @@ type MemoryConfig struct {
 	// Default similarity threshold for memory retrieval (0.0-1.0)
 	// Default: 0.6
 	DefaultSimilarityThreshold float32 `yaml:"default_similarity_threshold,omitempty"`
+
+	// Note: Query rewriting and fact extraction are enabled by defining
+	// external_models with model_role="memory_rewrite" or "memory_extraction".
+	// Use FindExternalModelByRole() to check if enabled and get config.
 }
 
 // MemoryMilvusConfig contains Milvus-specific configuration for memory storage.
@@ -752,59 +763,27 @@ type MemoryMilvusConfig struct {
 	Dimension int `yaml:"dimension,omitempty"`
 }
 
-// MemoryEmbeddingConfig contains configuration for embedding generation in memory operations
+// MemoryEmbeddingConfig contains configuration for embedding generation in memory operations.
+//
+// Supported models:
+//   - "bert": all-MiniLM-L6-v2 (384-dim) - forgiving matching, legacy default
+//   - "mmbert": ModernBERT (768-dim, 32K context) - recommended unified model
+//   - "qwen3": Qwen3-Embedding-0.6B (1024-dim) - high precision
+//   - "gemma": EmbeddingGemma-300M (768-dim) - fast inference
+//
+// Default: "mmbert" with 768-dim for unified embedding across memory and cache
 type MemoryEmbeddingConfig struct {
-	// Model is the embedding model name (default: "all-MiniLM-L6-v2")
+	// Model is the embedding model type: "bert", "mmbert", "qwen3", or "gemma"
+	// Default: "mmbert" (unified embedding with semantic cache)
 	Model string `yaml:"model,omitempty"`
 
-	// Dimension is the embedding dimension (default: 384 for all-MiniLM-L6-v2)
+	// Dimension is the embedding dimension
+	// Defaults: bert=384, mmbert=768, qwen3=1024, gemma=768
 	Dimension int `yaml:"dimension,omitempty"`
-}
 
-// QueryRewriteConfig holds configuration for LLM-based query rewriting
-type QueryRewriteConfig struct {
-	// Enable query rewriting
-	Enabled bool `yaml:"enabled"`
-
-	// LLM endpoint for query rewriting (e.g., "http://localhost:8080")
-	Endpoint string `yaml:"endpoint"`
-
-	// Model to use for query rewriting (e.g., "qwen3-7b")
-	Model string `yaml:"model"`
-
-	// Maximum tokens for rewritten query (default: 50)
-	MaxTokens int `yaml:"max_tokens,omitempty"`
-
-	// Temperature for LLM generation (default: 0.1)
-	Temperature float64 `yaml:"temperature,omitempty"`
-
-	// Timeout in seconds for LLM request (default: 5)
-	TimeoutSeconds int `yaml:"timeout_seconds,omitempty"`
-}
-
-// ExtractionConfig holds configuration for LLM-based fact extraction from conversations.
-// Facts are extracted from conversation history and stored in long-term memory.
-type ExtractionConfig struct {
-	// Enable fact extraction
-	Enabled bool `yaml:"enabled"`
-
-	// LLM endpoint for fact extraction (e.g., "http://localhost:8080")
-	Endpoint string `yaml:"endpoint"`
-
-	// Model to use for extraction (e.g., "qwen3-7b")
-	Model string `yaml:"model"`
-
-	// Maximum tokens for extracted facts (default: 500)
-	MaxTokens int `yaml:"max_tokens,omitempty"`
-
-	// Temperature for LLM generation (default: 0.1)
-	Temperature float64 `yaml:"temperature,omitempty"`
-
-	// Timeout in seconds for LLM request (default: 30)
-	TimeoutSeconds int `yaml:"timeout_seconds,omitempty"`
-
-	// BatchSize is the number of turns between extraction runs (default: 10)
-	BatchSize int `yaml:"batch_size,omitempty"`
+	// Layer is the transformer layer for 2D Matryoshka models (mmbert only)
+	// Lower layers = faster but less accurate (range: 1-22, default: 6)
+	Layer int `yaml:"layer,omitempty"`
 }
 
 // ResponseAPIConfig configures the Response API for stateful conversations.
@@ -1133,10 +1112,9 @@ type PreferenceModelConfig struct {
 type ExternalModelConfig struct {
 	// Provider (e.g., "vllm")
 	Provider string `yaml:"llm_provider"`
-	// Classifier type (e.g., "guardrail", "classification", "scoring")
+	// Classifier type (e.g., "guardrail", "classification", "scoring", "memory_rewrite", "memory_extraction")
 	ModelRole string `yaml:"model_role"`
-	// Dedicated LLM endpoint configuration for PromptGuard
-	// This is separate from vllm_endpoints (which are for backend inference)
+	// Dedicated LLM endpoint configuration
 	ModelEndpoint ClassifierVLLMEndpoint `yaml:"llm_endpoint,omitempty"`
 	// Model name on LLM server (e.g., "Qwen/Qwen3Guard-Gen-0.6B")
 	ModelName string `yaml:"llm_model_name,omitempty"`
@@ -1153,6 +1131,10 @@ type ExternalModelConfig struct {
 	// Optional access key for Authorization header
 	// If provided, will be sent as "Authorization: Bearer <access_key>"
 	AccessKey string `yaml:"access_key,omitempty"`
+	// Maximum tokens for LLM generation (used by memory_rewrite, memory_extraction)
+	MaxTokens int `yaml:"max_tokens,omitempty"`
+	// Temperature for LLM generation (used by memory_rewrite, memory_extraction)
+	Temperature float64 `yaml:"temperature,omitempty"`
 }
 
 // ToolFilteringWeights defines per-signal weights for advanced tool filtering.
@@ -1716,7 +1698,7 @@ type ModelRef struct {
 
 // DecisionPlugin represents a plugin configuration for a decision
 type DecisionPlugin struct {
-	// Type specifies the plugin type. Permitted values: "semantic-cache", "jailbreak", "pii", "system_prompt", "header_mutation", "hallucination", "router_replay".
+	// Type specifies the plugin type. Permitted values: "semantic-cache", "jailbreak", "pii", "system_prompt", "header_mutation", "hallucination", "router_replay", "memory".
 	Type string `yaml:"type" json:"type"`
 
 	// Configuration is the raw configuration for this plugin
@@ -1733,6 +1715,14 @@ type SemanticCachePluginConfig struct {
 	Enabled             bool     `json:"enabled" yaml:"enabled"`
 	SimilarityThreshold *float32 `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"`
 	TTLSeconds          *int     `json:"ttl_seconds,omitempty" yaml:"ttl_seconds,omitempty"` // Per-entry TTL (0 = do not cache, nil = use global default)
+}
+
+// MemoryPluginConfig is per-decision memory config (overrides global MemoryConfig).
+type MemoryPluginConfig struct {
+	Enabled             bool     `json:"enabled" yaml:"enabled"`                                               // If false, memory is skipped even if globally enabled
+	RetrievalLimit      *int     `json:"retrieval_limit,omitempty" yaml:"retrieval_limit,omitempty"`           // Max memories to retrieve (nil = use global)
+	SimilarityThreshold *float32 `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"` // Min similarity score (nil = use global)
+	AutoStore           *bool    `json:"auto_store,omitempty" yaml:"auto_store,omitempty"`                     // Auto-extract memories (nil = use request config)
 }
 
 // JailbreakPluginConfig represents configuration for jailbreak plugin
@@ -2073,6 +2063,21 @@ func (d *Decision) GetRouterReplayConfig() *RouterReplayPluginConfig {
 	result := &RouterReplayPluginConfig{}
 	if err := unmarshalPluginConfig(config, result); err != nil {
 		logging.Errorf("Failed to unmarshal router_replay config: %v", err)
+		return nil
+	}
+	return result
+}
+
+// GetMemoryConfig returns the memory plugin config, or nil to use global config.
+func (d *Decision) GetMemoryConfig() *MemoryPluginConfig {
+	config := d.GetPluginConfig("memory")
+	if config == nil {
+		return nil
+	}
+
+	result := &MemoryPluginConfig{}
+	if err := unmarshalPluginConfig(config, result); err != nil {
+		logging.Errorf("Failed to unmarshal memory config: %v", err)
 		return nil
 	}
 	return result

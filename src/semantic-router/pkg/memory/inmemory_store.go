@@ -8,23 +8,29 @@ import (
 	"sync"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // InMemoryStore is an in-memory implementation of Store for testing and POC.
 // It stores memories in memory with embedding-based similarity search.
 type InMemoryStore struct {
-	mu       sync.RWMutex
-	memories map[string]*Memory // ID -> Memory
-	enabled  bool
+	mu              sync.RWMutex
+	memories        map[string]*Memory // ID -> Memory
+	enabled         bool
+	embeddingConfig EmbeddingConfig
 }
 
-// NewInMemoryStore creates a new in-memory memory store.
+// NewInMemoryStore creates a new in-memory memory store with default embedding config.
 func NewInMemoryStore() *InMemoryStore {
+	return NewInMemoryStoreWithConfig(EmbeddingConfig{Model: EmbeddingModelBERT})
+}
+
+// NewInMemoryStoreWithConfig creates a new in-memory memory store with custom embedding config.
+func NewInMemoryStoreWithConfig(embeddingConfig EmbeddingConfig) *InMemoryStore {
 	return &InMemoryStore{
-		memories: make(map[string]*Memory),
-		enabled:  true,
+		memories:        make(map[string]*Memory),
+		enabled:         true,
+		embeddingConfig: embeddingConfig,
 	}
 }
 
@@ -43,8 +49,8 @@ func (s *InMemoryStore) Store(ctx context.Context, memory *Memory) error {
 	defer s.mu.Unlock()
 
 	// Generate embedding if not already set
-	if memory.Embedding == nil || len(memory.Embedding) == 0 {
-		embedding, err := candle_binding.GetEmbedding(memory.Content, 0)
+	if len(memory.Embedding) == 0 {
+		embedding, err := GenerateEmbedding(memory.Content, s.embeddingConfig)
 		if err != nil {
 			return err
 		}
@@ -75,8 +81,8 @@ func (s *InMemoryStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Generate embedding for query
-	queryEmbedding, err := candle_binding.GetEmbedding(opts.Query, 0)
+	// Generate embedding for query using unified embedding configuration
+	queryEmbedding, err := GenerateEmbedding(opts.Query, s.embeddingConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +185,7 @@ func (s *InMemoryStore) Update(ctx context.Context, id string, memory *Memory) e
 
 	// Regenerate embedding if content changed
 	if existing.Content != memory.Content {
-		embedding, err := candle_binding.GetEmbedding(memory.Content, 0)
+		embedding, err := GenerateEmbedding(memory.Content, s.embeddingConfig)
 		if err != nil {
 			return err
 		}

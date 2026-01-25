@@ -133,6 +133,10 @@ type RequestContext struct {
 	RAGBackend          string  // Backend used for retrieval ("milvus", "external_api", "mcp", "hybrid")
 	RAGSimilarityScore  float32 // Best similarity score from retrieval
 	RAGRetrievalLatency float64 // Retrieval latency in seconds
+
+	// Memory retrieval tracking
+	// Stores formatted memory context to be injected after system prompt
+	MemoryContext string // Formatted memory context (empty if no memories retrieved)
 }
 
 // handleRequestHeaders processes the request headers

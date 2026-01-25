@@ -10,30 +10,20 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
-// extractAutoStore checks if auto_store is enabled in the request.
-//
-// auto_store must be explicitly set in the request body under memory_config.auto_store.
-// This is an opt-in feature - if not provided, memory extraction will not run.
-//
-// Example request with auto_store enabled:
-//
-//	{
-//	  "model": "qwen3",
-//	  "input": "What's my budget?",
-//	  "memory_config": {
-//	    "enabled": true,
-//	    "auto_store": true  // ← Must be set to true to enable automatic memory extraction
-//	  },
-//	  "memory_context": {
-//	    "user_id": "user_123"
-//	  }
-//	}
-//
-// Note: Only supported for Response API requests (/v1/responses).
-// Chat Completions API is stateless by design and doesn't support auto_store
-// because the router doesn't manage conversation history for Chat Completions.
+// extractAutoStore checks if auto_store is enabled.
+// Priority: per-decision plugin config > request-level memory_config.auto_store.
+// Only supported for Response API (Chat Completions is stateless).
 func extractAutoStore(ctx *RequestContext) bool {
-	// Check Response API request for memory_config.auto_store
+	if ctx.VSRSelectedDecision != nil {
+		memoryPluginConfig := ctx.VSRSelectedDecision.GetMemoryConfig()
+		if memoryPluginConfig != nil && memoryPluginConfig.AutoStore != nil {
+			logging.Infof("extractAutoStore: Using per-decision plugin config, AutoStore=%v (decision: %s)",
+				*memoryPluginConfig.AutoStore, ctx.VSRSelectedDecisionName)
+			return *memoryPluginConfig.AutoStore
+		}
+	}
+
+	// Fall back to request-level config
 	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
 		if ctx.ResponseAPICtx.OriginalRequest != nil {
 			if ctx.ResponseAPICtx.OriginalRequest.MemoryConfig != nil {
@@ -99,7 +89,6 @@ func extractMemoryInfo(ctx *RequestContext) (sessionID string, userID string, hi
 	// Check this early to avoid unnecessary sessionID calculation
 	if userID == "" {
 		// Extract history for error context (even though we'll return error)
-		var history []memory.Message
 		if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.ConversationHistory != nil {
 			history = convertStoredResponsesToMessages(ctx.ResponseAPICtx.ConversationHistory)
 		}

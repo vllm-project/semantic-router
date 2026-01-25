@@ -67,36 +67,47 @@ func (m *MockMilvusClient) ListDatabases(context.Context) ([]entity.Database, er
 func (m *MockMilvusClient) CreateDatabase(context.Context, string, ...client.CreateDatabaseOption) error {
 	return nil
 }
+
 func (m *MockMilvusClient) DropDatabase(context.Context, string, ...client.DropDatabaseOption) error {
 	return nil
 }
+
 func (m *MockMilvusClient) AlterDatabase(context.Context, string, ...entity.DatabaseAttribute) error {
 	return nil
 }
+
 func (m *MockMilvusClient) DescribeDatabase(context.Context, string) (*entity.Database, error) {
 	return nil, nil
 }
+
 func (m *MockMilvusClient) NewCollection(context.Context, string, int64, ...client.CreateCollectionOption) error {
 	return nil
 }
+
 func (m *MockMilvusClient) ListCollections(context.Context, ...client.ListCollectionOption) ([]*entity.Collection, error) {
 	return nil, nil
 }
+
 func (m *MockMilvusClient) CreateCollection(context.Context, *entity.Schema, int32, ...client.CreateCollectionOption) error {
 	return nil
 }
+
 func (m *MockMilvusClient) DescribeCollection(context.Context, string) (*entity.Collection, error) {
 	return nil, nil
 }
+
 func (m *MockMilvusClient) DropCollection(context.Context, string, ...client.DropCollectionOption) error {
 	return nil
 }
+
 func (m *MockMilvusClient) GetCollectionStatistics(context.Context, string) (map[string]string, error) {
 	return nil, nil
 }
+
 func (m *MockMilvusClient) LoadCollection(context.Context, string, bool, ...client.LoadCollectionOption) error {
 	return nil
 }
+
 func (m *MockMilvusClient) ReleaseCollection(context.Context, string, ...client.ReleaseCollectionOption) error {
 	return nil
 }
@@ -127,54 +138,71 @@ func (m *MockMilvusClient) ListUsers(context.Context) ([]entity.User, error)    
 func (m *MockMilvusClient) Grant(context.Context, string, entity.PriviledgeObjectType, string, string, ...entity.OperatePrivilegeOption) error {
 	return nil
 }
+
 func (m *MockMilvusClient) Revoke(context.Context, string, entity.PriviledgeObjectType, string, string, ...entity.OperatePrivilegeOption) error {
 	return nil
 }
+
 func (m *MockMilvusClient) ListGrant(context.Context, string, string, string, string) ([]entity.RoleGrants, error) {
 	return nil, nil
 }
+
 func (m *MockMilvusClient) ListGrants(context.Context, string, string) ([]entity.RoleGrants, error) {
 	return nil, nil
 }
+
 func (m *MockMilvusClient) CreatePartition(context.Context, string, string, ...client.CreatePartitionOption) error {
 	return nil
 }
+
 func (m *MockMilvusClient) DropPartition(context.Context, string, string, ...client.DropPartitionOption) error {
 	return nil
 }
+
 func (m *MockMilvusClient) ShowPartitions(context.Context, string) ([]*entity.Partition, error) {
 	return nil, nil
 }
+
 func (m *MockMilvusClient) HasPartition(context.Context, string, string) (bool, error) {
 	return false, nil
 }
+
 func (m *MockMilvusClient) LoadPartitions(context.Context, string, []string, bool, ...client.LoadPartitionsOption) error {
 	return nil
 }
+
 func (m *MockMilvusClient) ReleasePartitions(context.Context, string, []string, ...client.ReleasePartitionsOption) error {
 	return nil
 }
+
 func (m *MockMilvusClient) GetPersistentSegmentInfo(context.Context, string) ([]*entity.Segment, error) {
 	return nil, nil
 }
+
 func (m *MockMilvusClient) CreateIndex(context.Context, string, string, entity.Index, bool, ...client.IndexOption) error {
 	return nil
 }
+
 func (m *MockMilvusClient) DescribeIndex(context.Context, string, string, ...client.IndexOption) ([]entity.Index, error) {
 	return nil, nil
 }
+
 func (m *MockMilvusClient) DropIndex(context.Context, string, string, ...client.IndexOption) error {
 	return nil
 }
+
 func (m *MockMilvusClient) GetIndexState(context.Context, string, string, ...client.IndexOption) (entity.IndexState, error) {
 	return 0, nil
 }
+
 func (m *MockMilvusClient) AlterIndex(context.Context, string, string, ...client.IndexOption) error {
 	return nil
 }
+
 func (m *MockMilvusClient) GetIndexBuildProgress(context.Context, string, string, ...client.IndexOption) (int64, int64, error) {
 	return 0, 0, nil
 }
+
 func (m *MockMilvusClient) Insert(ctx context.Context, coll string, part string, cols ...entity.Column) (entity.Column, error) {
 	m.InsertCallCount++
 	if m.InsertFunc != nil {
@@ -182,15 +210,19 @@ func (m *MockMilvusClient) Insert(ctx context.Context, coll string, part string,
 	}
 	return nil, nil
 }
+
 func (m *MockMilvusClient) Flush(context.Context, string, bool, ...client.FlushOption) error {
 	return nil
 }
+
 func (m *MockMilvusClient) FlushV2(context.Context, string, bool, ...client.FlushOption) ([]int64, []int64, int64, map[string]msgpb.MsgPosition, error) {
 	return nil, nil, 0, make(map[string]msgpb.MsgPosition), nil
 }
+
 func (m *MockMilvusClient) DeleteByPks(context.Context, string, string, entity.Column) error {
 	return nil
 }
+
 func (m *MockMilvusClient) Delete(ctx context.Context, coll string, part string, expr string) error {
 	m.DeleteCallCount++
 	if m.DeleteFunc != nil {
@@ -198,12 +230,15 @@ func (m *MockMilvusClient) Delete(ctx context.Context, coll string, part string,
 	}
 	return nil
 }
+
 func (m *MockMilvusClient) Upsert(context.Context, string, string, ...entity.Column) (entity.Column, error) {
 	return nil, nil
 }
+
 func (m *MockMilvusClient) QueryByPks(context.Context, string, []string, entity.Column, []string, ...client.SearchQueryOptionFunc) (client.ResultSet, error) {
 	return nil, nil
 }
+
 func (m *MockMilvusClient) Query(ctx context.Context, coll string, parts []string, expr string, out []string, opts ...client.SearchQueryOptionFunc) (client.ResultSet, error) {
 	m.QueryCallCount++
 	if m.QueryFunc != nil {
@@ -211,45 +246,59 @@ func (m *MockMilvusClient) Query(ctx context.Context, coll string, parts []strin
 	}
 	return nil, nil
 }
+
 func (m *MockMilvusClient) Get(context.Context, string, entity.Column, ...client.GetOption) (client.ResultSet, error) {
 	return nil, nil
 }
+
 func (m *MockMilvusClient) QueryIterator(context.Context, *client.QueryIteratorOption) (*client.QueryIterator, error) {
 	return nil, nil
 }
+
 func (m *MockMilvusClient) CalcDistance(context.Context, string, []string, entity.MetricType, entity.Column, entity.Column) (entity.Column, error) {
 	return nil, nil
 }
+
 func (m *MockMilvusClient) CreateCollectionByRow(context.Context, entity.Row, int32) error {
 	return nil
 }
+
 func (m *MockMilvusClient) InsertByRows(context.Context, string, string, []entity.Row) (entity.Column, error) {
 	return nil, nil
 }
+
 func (m *MockMilvusClient) InsertRows(context.Context, string, string, []interface{}) (entity.Column, error) {
 	return nil, nil
 }
+
 func (m *MockMilvusClient) ManualCompaction(context.Context, string, time.Duration) (int64, error) {
 	return 0, nil
 }
+
 func (m *MockMilvusClient) GetCompactionState(context.Context, int64) (entity.CompactionState, error) {
 	return 0, nil
 }
+
 func (m *MockMilvusClient) GetCompactionStateWithPlans(context.Context, int64) (entity.CompactionState, []entity.CompactionPlan, error) {
 	return 0, nil, nil
 }
+
 func (m *MockMilvusClient) BulkInsert(context.Context, string, string, []string, ...client.BulkInsertOption) (int64, error) {
 	return 0, nil
 }
+
 func (m *MockMilvusClient) GetBulkInsertState(context.Context, int64) (*entity.BulkInsertTaskState, error) {
 	return nil, nil
 }
+
 func (m *MockMilvusClient) ListBulkInsertTasks(context.Context, string, int64) ([]*entity.BulkInsertTaskState, error) {
 	return nil, nil
 }
+
 func (m *MockMilvusClient) CreateResourceGroup(context.Context, string, ...client.CreateResourceGroupOption) error {
 	return nil
 }
+
 func (m *MockMilvusClient) UpdateResourceGroups(context.Context, ...client.UpdateResourceGroupsOption) error {
 	return nil
 }
@@ -262,15 +311,19 @@ func (m *MockMilvusClient) TransferNode(context.Context, string, string, int32) 
 func (m *MockMilvusClient) TransferReplica(context.Context, string, string, string, int64) error {
 	return nil
 }
+
 func (m *MockMilvusClient) DescribeUser(context.Context, string) (entity.UserDescription, error) {
 	return entity.UserDescription{}, nil
 }
+
 func (m *MockMilvusClient) DescribeUsers(context.Context) ([]entity.UserDescription, error) {
 	return nil, nil
 }
+
 func (m *MockMilvusClient) GetLoadingProgress(context.Context, string, []string) (int64, error) {
 	return 0, nil
 }
+
 func (m *MockMilvusClient) GetLoadState(context.Context, string, []string) (entity.LoadState, error) {
 	return 0, nil
 }
@@ -278,17 +331,23 @@ func (m *MockMilvusClient) GetVersion(context.Context) (string, error) { return 
 func (m *MockMilvusClient) HybridSearch(context.Context, string, []string, int, []string, client.Reranker, []*client.ANNSearchRequest, ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
 	return nil, nil
 }
+
 func (m *MockMilvusClient) ReplicateMessage(context.Context, string, uint64, uint64, [][]byte, []*msgpb.MsgPosition, []*msgpb.MsgPosition, ...client.ReplicateMessageOption) (*entity.MessageInfo, error) {
 	return nil, nil
 }
 
 func setupTestStore() (*MilvusStore, *MockMilvusClient) {
 	mockClient := &MockMilvusClient{}
+	// Use bert embedding config for tests since that's initialized in TestMain
+	testEmbeddingConfig := EmbeddingConfig{
+		Model: EmbeddingModelBERT,
+	}
 	options := MilvusStoreOptions{
-		Client:         mockClient,
-		CollectionName: "test_memories",
-		Config:         DefaultMemoryConfig(),
-		Enabled:        true,
+		Client:          mockClient,
+		CollectionName:  "test_memories",
+		Config:          DefaultMemoryConfig(),
+		Enabled:         true,
+		EmbeddingConfig: &testEmbeddingConfig,
 	}
 	store, _ := NewMilvusStore(options)
 	return store, mockClient
@@ -365,11 +424,11 @@ func TestMilvusStore_Retrieve_DefaultThreshold(t *testing.T) {
 	store, mockClient := setupTestStore()
 	ctx := context.Background()
 
-	// DefaultMemoryConfig has DefaultSimilarityThreshold: 0.6
+	// DefaultMemoryConfig has DefaultSimilarityThreshold: 0.70
 	mockResults := []client.SearchResult{
 		{
 			ResultCount: 3,
-			Scores:      []float32{0.85, 0.65, 0.45}, // 0.45 should be dropped with default 0.6
+			Scores:      []float32{0.85, 0.75, 0.45}, // 0.45 should be dropped with default 0.70
 			Fields: []entity.Column{
 				entity.NewColumnVarChar("id", []string{"id1", "id2", "id3"}),
 				entity.NewColumnVarChar("content", []string{"c1", "c2", "c3"}),
@@ -382,17 +441,17 @@ func TestMilvusStore_Retrieve_DefaultThreshold(t *testing.T) {
 		return mockResults, nil
 	}
 
-	// Test with Threshold = 0 (should use default 0.6)
+	// Test with Threshold = 0 (should use default 0.70)
 	results, err := store.Retrieve(ctx, RetrieveOptions{
 		Query: "test", UserID: "u1", Threshold: 0,
 	})
 	require.NoError(t, err)
-	require.Len(t, results, 2, "Should filter out score 0.45 with default threshold 0.6")
-	
+	require.Len(t, results, 2, "Should filter out score 0.45 with default threshold 0.70")
+
 	// Verify all results meet default threshold
 	for _, result := range results {
-		assert.GreaterOrEqual(t, result.Score, float32(0.6),
-			"Result score %.4f should be >= default threshold 0.6", result.Score)
+		assert.GreaterOrEqual(t, result.Score, float32(0.70),
+			"Result score %.4f should be >= default threshold 0.70", result.Score)
 	}
 }
 
@@ -421,16 +480,16 @@ func TestMilvusStore_Retrieve_ThresholdBoundary(t *testing.T) {
 		Query: "test", UserID: "u1", Threshold: 0.6,
 	})
 	require.NoError(t, err)
-	
+
 	// Should include 0.85 and 0.60, exclude 0.59
 	require.Len(t, results, 2, "Should include scores >= 0.6")
-	
+
 	// Verify all results meet threshold
 	for _, result := range results {
 		assert.GreaterOrEqual(t, result.Score, float32(0.6),
 			"Result score %.4f should be >= 0.6 threshold", result.Score)
 	}
-	
+
 	// Verify specific scores
 	scores := make([]float32, len(results))
 	for i, r := range results {
