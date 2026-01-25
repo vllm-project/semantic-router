@@ -163,8 +163,9 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	ctx.VSRSelectedCategory = categoryName
 	ctx.VSRSelectedDecisionConfidence = evaluationConfidence
 
-	// Store matched keywords in context for response headers
-	ctx.VSRMatchedKeywords = result.MatchedKeywords
+	// Note: VSRMatchedKeywords is already set from signals.MatchedKeywordRules (line 61)
+	// We should NOT overwrite it with result.MatchedKeywords which contains actual keywords
+	// The header should show rule names, not the actual matched keywords
 
 	decisionName = result.Decision.Name
 	evaluationConfidence = result.Confidence
