@@ -90,6 +90,15 @@ const (
 	// VSRMatchedLatency contains comma-separated list of matched latency signals.
 	// Example: "low_latency,medium_latency"
 	VSRMatchedLatency = "x-vsr-matched-latency"
+
+	// VSRMatchedContext contains comma-separated list of matched context rule names.
+	// Example: "low_token_count,high_token_count"
+	VSRMatchedContext = "x-vsr-matched-context"
+
+	// VSRContextTokenCount contains the actual token count for the request.
+	// Example: "1500"
+	//nolint:gosec
+	VSRContextTokenCount = "x-vsr-context-token-count"
 )
 
 // Security Headers

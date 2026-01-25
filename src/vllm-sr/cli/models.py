@@ -76,6 +76,15 @@ class Latency(BaseModel):
     description: str
 
 
+class ContextRule(BaseModel):
+    """Context-based (token count) signal configuration."""
+
+    name: str
+    min_tokens: str  # Supports suffixes: "1K", "1.5M", etc.
+    max_tokens: str
+    description: Optional[str] = None
+
+
 class Signals(BaseModel):
     """All signal configurations."""
 
@@ -87,6 +96,7 @@ class Signals(BaseModel):
     preferences: Optional[List[Preference]] = []
     language: Optional[List[Language]] = []
     latency: Optional[List[Latency]] = []
+    context_rules: Optional[List[ContextRule]] = []
 
 
 class Condition(BaseModel):

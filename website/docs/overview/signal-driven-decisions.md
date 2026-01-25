@@ -26,7 +26,7 @@ if (keyword_match AND domain_match) OR high_embedding_similarity:
 
 **Why this matters**: Multiple signals voting together make more accurate decisions than any single signal.
 
-## The 8 Signal Types
+## The 9 Signal Types
 
 ### 1. Keyword Signals
 
@@ -165,6 +165,28 @@ signals:
 **Example**: Real-time chat query → low_latency signal → Route to fast model (TPOT < 50ms/token)
 
 **How it works**: TPOT is automatically tracked from each response. The latency classifier evaluates if available models meet the TPOT threshold before routing.
+
+### 9. Context Signals
+
+- **What**: Token-count based routing for short/long request handling
+- **Latency**: 1ms (calculated during processing)
+- **Use Case**: Route long-context requests to models with larger context windows
+- **Metrics**: Tracks input token counts with `llm_context_token_count` histogram
+
+```yaml
+signals:
+  context_rules:
+    - name: "low_token_count"
+      min_tokens: "0"
+      max_tokens: "1K"
+      description: "Short requests"
+    - name: "high_token_count"
+      min_tokens: "1K"
+      max_tokens: "128K"
+      description: "Long requests requiring large context window"
+```
+
+**Example**: A request with 5,000 tokens → Matches "high_token_count" → Routes to `claude-3-opus`
 
 ## How Signals Combine
 

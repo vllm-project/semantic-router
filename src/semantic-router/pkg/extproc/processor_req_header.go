@@ -78,6 +78,8 @@ type RequestContext struct {
 	VSRMatchedPreference   []string // Matched preference signals
 	VSRMatchedLanguage     []string // Matched language signals
 	VSRMatchedLatency      []string // Matched latency signals
+	VSRMatchedContext      []string // Matched context rule names (e.g. "low_token_count")
+	VSRContextTokenCount   int      // Actual token count for the request
 
 	// Endpoint tracking for windowed metrics
 	SelectedEndpoint string // The endpoint address selected for this request

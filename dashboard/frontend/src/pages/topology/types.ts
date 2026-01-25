@@ -12,13 +12,14 @@ export type SignalType =
   | 'preference'
   | 'language'
   | 'latency'
+  | 'context'
 
 export interface SignalConfig {
   type: SignalType
   name: string
   description?: string
   latency: string
-  config: KeywordSignalConfig | EmbeddingSignalConfig | DomainSignalConfig | GenericSignalConfig
+  config: KeywordSignalConfig | EmbeddingSignalConfig | DomainSignalConfig | ContextSignalConfig | GenericSignalConfig
 }
 
 export interface KeywordSignalConfig {
@@ -35,6 +36,11 @@ export interface EmbeddingSignalConfig {
 
 export interface DomainSignalConfig {
   mmlu_categories?: string[]
+}
+
+export interface ContextSignalConfig {
+  min_tokens?: string
+  max_tokens?: string
 }
 
 export interface GenericSignalConfig {
@@ -311,6 +317,11 @@ export interface ConfigData {
     description?: string
     max_tpot?: number
   }>
+  context_rules?: Array<{
+    name: string
+    min_tokens?: string
+    max_tokens?: string
+  }>
   // Legacy format
   categories?: Array<{
     name: string
@@ -367,6 +378,11 @@ export interface ConfigData {
       name: string
       description?: string
       max_tpot?: number
+    }>
+    context?: Array<{
+      name: string
+      min_tokens?: string
+      max_tokens?: string
     }>
   }
   decisions?: Array<{

@@ -10,7 +10,7 @@ This guide covers the configuration options for the Semantic Router. The system 
 
 The configuration defines three main layers:
 
-1. **Signal Extraction Layer**: Define 8 types of signals (keyword, embedding, domain, fact_check, user_feedback, preference, language, latency)
+1. **Signal Extraction Layer**: Define 9 types of signals (keyword, embedding, domain, fact_check, user_feedback, preference, language, latency, context)
 2. **Decision Engine**: Combine signals using AND/OR operators to make routing decisions
 3. **Plugin Chain**: Configure plugins for caching, security, and optimization
 
@@ -441,6 +441,28 @@ signals:
 - TPOT (Time Per Output Token) is automatically tracked from responses
 
 **How it works**: The latency classifier evaluates available models' TPOT values against configured thresholds. Models with TPOT ≤ max_tpot match the latency rule.
+
+### 9. Context Signals - Token Count Routing
+
+```yaml
+signals:
+  context_rules:
+    - name: "low_token_count"
+      min_tokens: "0"
+      max_tokens: "1K"
+      description: "Short requests"
+    - name: "high_token_count"
+      min_tokens: "1K"
+      max_tokens: "128K"
+      description: "Long context requests"
+```
+
+**Use Cases:**
+
+- Route long documents to models with larger context windows
+- Send short queries to faster, smaller models
+- Optimize cost by routing based on request size
+- Supports "K" (thousand) and "M" (million) suffixes
 
 ## Decision Rules - Signal Fusion
 

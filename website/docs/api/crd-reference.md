@@ -21,6 +21,21 @@ Package v1alpha1 contains API Schema definitions for the v1alpha1 API group
 - [IntelligentRoute](#intelligentroute)
 - [IntelligentRouteList](#intelligentroutelist)
 
+#### ContextRule
+
+ContextRule defines a rule for context-based (token count) classification
+
+_Appears in:_
+
+- [Signals](#signals)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name is the signal name (e.g., "high_token_count") |  | MaxLength: 100 <br />MinLength: 1 <br />Required: \{\} <br /> |
+| `minTokens` _string_ | MinTokens is the minimum token count (supports K/M suffixes) |  | Pattern: `^[0-9]+(\.[0-9]+)?[KMkm]?$` <br />Required: \{\} <br /> |
+| `maxTokens` _string_ | MaxTokens is the maximum token count (supports K/M suffixes) |  | Pattern: `^[0-9]+(\.[0-9]+)?[KMkm]?$` <br />Required: \{\} <br /> |
+| `description` _string_ | Description provides human-readable explanation |  | MaxLength: 500 <br /> |
+
 #### Decision
 
 Decision defines a routing decision based on rule combinations
@@ -297,7 +312,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `type` _string_ | Type defines the type of signal (keyword/embedding/domain) |  | Enum: [keyword embedding domain] <br />Required: \{\} <br /> |
+| `type` _string_ | Type defines the type of signal (keyword/embedding/domain/fact_check/context) |  | Enum: [keyword embedding domain fact_check context] <br />Required: \{\} <br /> |
 | `name` _string_ | Name is the name of the signal to reference |  | MaxLength: 100 <br />MinLength: 1 <br />Required: \{\} <br /> |
 
 #### Signals
@@ -313,3 +328,4 @@ _Appears in:_
 | `keywords` _[KeywordSignal](#keywordsignal) array_ | Keywords defines keyword-based signal extraction rules |  | MaxItems: 100 <br /> |
 | `embeddings` _[EmbeddingSignal](#embeddingsignal) array_ | Embeddings defines embedding-based signal extraction rules |  | MaxItems: 100 <br /> |
 | `domains` _[DomainSignal](#domainsignal) array_ | Domains defines MMLU domain categories for classification |  | MaxItems: 14 <br /> |
+| `contextRules` _[ContextRule](#contextrule) array_ | ContextRules defines context (token count) rules for signal classification |  | MaxItems: 20 <br /> |

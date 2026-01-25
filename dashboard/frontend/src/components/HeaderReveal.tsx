@@ -73,6 +73,14 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Signal: Latency',
     description: 'Matched latency rule based on model TPOT',
   },
+  'x-vsr-matched-context': {
+    label: 'Signal: Context',
+    description: 'Token count-based context classification',
+  },
+  'x-vsr-context-token-count': {
+    label: 'Token Count',
+    description: 'Estimated token count for the request',
+  },
   // Looper headers
   'x-vsr-looper-model': {
     label: 'Final Model',

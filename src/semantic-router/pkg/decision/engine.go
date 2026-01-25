@@ -67,6 +67,7 @@ type SignalMatches struct {
 	PreferenceRules   []string // Route preference names matched via external LLM
 	LanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
 	LatencyRules      []string // Latency rule names that matched based on model TPOT
+	ContextRules      []string // Context rule names matched (e.g. "low_token_count")
 }
 
 // DecisionResult represents the result of decision evaluation
@@ -186,6 +187,8 @@ func (e *DecisionEngine) evaluateRuleCombinationWithSignals(
 			conditionMatched = slices.Contains(signals.LanguageRules, condition.Name)
 		case "latency":
 			conditionMatched = slices.Contains(signals.LatencyRules, condition.Name)
+		case "context":
+			conditionMatched = slices.Contains(signals.ContextRules, condition.Name)
 		default:
 			continue
 		}

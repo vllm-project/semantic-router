@@ -272,6 +272,9 @@ type Classifier struct {
 	// Latency classifier
 	latencyClassifier *LatencyClassifier
 
+	// Context classifier for token count-based routing
+	contextClassifier *ContextClassifier
+
 	Config           *config.RouterConfig
 	CategoryMapping  *CategoryMapping
 	PIIMapping       *PIIMapping
@@ -323,6 +326,12 @@ func withKeywordEmbeddingClassifier(keywordEmbeddingInitializer EmbeddingClassif
 	}
 }
 
+func withContextClassifier(contextClassifier *ContextClassifier) option {
+	return func(c *Classifier) {
+		c.contextClassifier = contextClassifier
+	}
+}
+
 // initModels initializes the models for the classifier
 func initModels(classifier *Classifier) (*Classifier, error) {
 	// Initialize either in-tree OR MCP-based category classifier
@@ -352,6 +361,11 @@ func initModels(classifier *Classifier) (*Classifier, error) {
 		if err := classifier.initializeKeywordEmbeddingClassifier(); err != nil {
 			return nil, err
 		}
+	}
+
+	// Initialize context classifier (no external model init needed, but good to log)
+	if classifier.contextClassifier != nil {
+		logging.Infof("Context classifier initialized with %d rules", len(classifier.contextClassifier.rules))
 	}
 
 	// Initialize hallucination mitigation classifiers
@@ -463,6 +477,14 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 			return nil, err
 		}
 		options = append(options, withKeywordEmbeddingClassifier(createEmbeddingInitializer(), keywordEmbeddingClassifier))
+	}
+
+	// Add context classifier if configured
+	if len(cfg.ContextRules) > 0 {
+		// Create token counter (uses character-based heuristic for performance)
+		tokenCounter := &CharacterBasedTokenCounter{}
+		contextClassifier := NewContextClassifier(tokenCounter, cfg.ContextRules)
+		options = append(options, withContextClassifier(contextClassifier))
 	}
 
 	// Add in-tree classifier if configured
@@ -682,6 +704,8 @@ type SignalResults struct {
 	MatchedPreferenceRules   []string // Route preference names matched via external LLM
 	MatchedLanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
 	MatchedLatencyRules      []string // Latency rule names that matched based on model TPOT
+	MatchedContextRules      []string // Matched context rule names (e.g. "low_token_count")
+	TokenCount               int      // Total token count
 }
 
 // analyzeRuleCombination recursively analyzes rule combinations to find used signals
@@ -1044,6 +1068,28 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 		}()
 	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeLatency) {
 		logging.Infof("[Signal Computation] Latency signal not used in any decision, skipping evaluation")
+	}
+
+	// Evaluate context rules in parallel (only if used in decisions)
+	if isSignalTypeUsed(usedSignals, config.SignalTypeContext) && c.contextClassifier != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			start := time.Now()
+			matchedRules, count, err := c.contextClassifier.Classify(text)
+			elapsed := time.Since(start)
+			logging.Infof("[Signal Computation] Context signal evaluation completed in %v (count=%d)", elapsed, count)
+			if err != nil {
+				logging.Errorf("context rule evaluation failed: %v", err)
+			} else {
+				mu.Lock()
+				results.MatchedContextRules = matchedRules
+				results.TokenCount = count
+				mu.Unlock()
+			}
+		}()
+	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeContext) {
+		logging.Infof("[Signal Computation] Context signal not used in any decision, skipping evaluation")
 	}
 
 	// Wait for all signal evaluations to complete

@@ -54,11 +54,14 @@ def validate_signal_references(config: UserConfig) -> List[ValidationError]:
         if config.signals.fact_check:
             for signal in config.signals.fact_check:
                 signal_names.add(signal.name)
+        if config.signals.context_rules:
+            for signal in config.signals.context_rules:
+                signal_names.add(signal.name)
 
     # Check decision conditions
     for decision in config.decisions:
         for condition in decision.rules.conditions:
-            if condition.type in ["keyword", "embedding", "fact_check"]:
+            if condition.type in ["keyword", "embedding", "fact_check", "context"]:
                 if condition.name not in signal_names:
                     errors.append(
                         ValidationError(
