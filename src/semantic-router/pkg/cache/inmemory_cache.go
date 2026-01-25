@@ -65,6 +65,7 @@ type InMemoryCache struct {
 	// Background cleanup
 	cleanupTicker *time.Ticker
 	stopCleanup   chan struct{}
+	closeOnce     sync.Once
 }
 
 // InMemoryCacheOptions contains configuration parameters for the in-memory cache
@@ -619,22 +620,25 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 
 // Close releases all resources held by the cache
 func (c *InMemoryCache) Close() error {
-	// Stop background cleanup goroutine
-	if c.stopCleanup != nil {
-		close(c.stopCleanup)
-	}
-	if c.cleanupTicker != nil {
-		c.cleanupTicker.Stop()
-	}
+	// Use sync.Once to ensure cleanup happens only once
+	c.closeOnce.Do(func() {
+		// Stop background cleanup goroutine
+		if c.stopCleanup != nil {
+			close(c.stopCleanup)
+		}
+		if c.cleanupTicker != nil {
+			c.cleanupTicker.Stop()
+		}
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
+		c.mu.Lock()
+		defer c.mu.Unlock()
 
-	// Clear all entries to free memory
-	c.entries = nil
+		// Clear all entries to free memory
+		c.entries = nil
 
-	// Zero cache entries metrics
-	metrics.UpdateCacheEntries("memory", 0)
+		// Zero cache entries metrics
+		metrics.UpdateCacheEntries("memory", 0)
+	})
 
 	return nil
 }
