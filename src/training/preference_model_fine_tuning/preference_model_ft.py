@@ -172,19 +172,22 @@ def build_prompt(
         add_special_tokens=False,
         truncation=False,
     )["input_ids"]
+
+    instruction_content = "\nAnswer with the single label that best matches the conversation. Do not include thinking process.\n"
     instruction_ids = tokenizer(
-        "\nAnswer with the single label that best matches the conversation.\n",
+        instruction_content,
         add_special_tokens=False,
         truncation=False,
     )["input_ids"]
+    label_content = f"Valid labels: {label_clause}"
     label_ids = tokenizer(
-        f"Valid labels:{label_clause}\n\nConversation:",
+        label_content,
         add_special_tokens=False,
         truncation=False,
     )["input_ids"]
     reserved = (
-        len(system_ids) + len(instruction_ids) + len(label_ids) + 5
-    )  # buffer for target label and end token
+        len(system_ids) + len(instruction_ids) + len(label_ids) + 15
+    )  # buffer for target label and special tokens
     if reserved >= max_length:
         raise ValueError("Instruction + system + labels exceed max_length")
     remaining = max_length - reserved
@@ -195,7 +198,31 @@ def build_prompt(
         max_length=remaining,
     )["input_ids"]
 
-    return system_ids + label_ids + conversation_ids + instruction_ids
+    user_content = (
+        f"{label_content}\n"
+        f"Conversation:\n{tokenizer.decode(conversation_ids, skip_special_tokens=True)}\n\n"
+        f"{instruction_content}"
+    )
+
+    messages = [
+        {
+            "role": "system",
+            "content": "You are a routing controller that reads a conversation and outputs the best preference label for downstream model routing. If none of the labels apply, respond with 'general_inquiry'\n",
+        },
+        {"role": "user", "content": user_content},
+    ]
+
+    prompt_text = tokenizer.apply_chat_template(
+        messages,
+        tokenize=False,
+        add_generation_prompt=True,
+        enable_thinking=False,
+    )
+    return tokenizer(
+        prompt_text,
+        add_special_tokens=True,
+        truncation=False,
+    )["input_ids"]
 
 
 def get_random_label_space(
@@ -308,39 +335,6 @@ def build_chat_aligned_dataset(
     )
 
 
-def compute_label_accuracy(eval_pred: tuple) -> Dict[str, float]:
-    """Compute label accuracy"""
-
-    predictions = (
-        eval_pred.predictions if hasattr(eval_pred, "predictions") else eval_pred[0]
-    )
-    labels = eval_pred.label_ids if hasattr(eval_pred, "label_ids") else eval_pred[1]
-
-    # shape of predictions: (batch_size, seq_length)
-    # shape of labels: (batch_size, seq_length)
-    if not isinstance(predictions, np.ndarray):
-        predictions = np.array(predictions)
-    if not isinstance(labels, np.ndarray):
-        labels = np.array(labels)
-
-    if predictions.ndim == 3:
-        # if we didn't preprocess logits, take argmax over vocab dimension
-        pred_tokens = np.argmax(predictions, axis=-1)
-    elif predictions.ndim == 2:
-        # if we already have token predictions
-        pred_tokens = predictions
-    else:
-        return {"label_accuracy": 0.0}
-
-    mask = labels != -100
-    # A sample is correct only if all unmasked tokens match its labels.
-    correct_tokens = np.where(mask, pred_tokens == labels, True)
-    correct_labels = np.all(correct_tokens, axis=1)
-    label_accuracy = float(np.mean(correct_labels)) if correct_labels.size else 0.0
-
-    return {"label_accuracy": label_accuracy}
-
-
 class LabelPaddingCollator:
     """Pad variable-length causal LM batches, including labels."""
 
@@ -375,107 +369,6 @@ class LabelPaddingCollator:
 
         batch["labels"] = torch.tensor(padded_labels, dtype=torch.long)
         return batch
-
-
-class ShareGPTPreferenceDataset(TorchDataset):
-    """Torch dataset that tokenizes ShareGPT preference examples for Qwen3."""
-
-    def __init__(
-        self,
-        dataset_path: Path,
-        label_map_path: Path,
-        tokenizer: PreTrainedTokenizerBase,
-        max_length: int = 2048,
-        system_prompt: str = DEFAULT_SYSTEM_PROMPT,
-        pad_to_max_length: bool = True,
-        max_samples: Optional[int] = None,
-        start_index: int = 0,
-        min_labels_in_prompt: int = 4,
-        max_labels_in_prompt: Optional[
-            int
-        ] = 16,  # don't make it too large because otherwise it's hard to fit in memory
-        random_seed: Optional[int] = None,
-    ) -> None:
-        self.examples = build_training_examples(
-            dataset_path=dataset_path,
-            label_map_path=label_map_path,
-            max_samples=max_samples,
-            start_index=start_index,
-        )
-        self.tokenizer = tokenizer
-        self.max_length = max_length
-        self.pad_to_max_length = pad_to_max_length
-        self.system_prompt = system_prompt
-        self.label_space = sorted({example.label for example in self.examples})
-        if CATCH_ALL_LABEL not in self.label_space:
-            # this should not happen
-            self.label_space.append(CATCH_ALL_LABEL)
-        self.min_labels_in_prompt = max(1, min_labels_in_prompt)
-        self.max_labels_in_prompt = (
-            max_labels_in_prompt
-            if max_labels_in_prompt is None
-            else max_labels_in_prompt
-        )
-        self._rng = np.random.default_rng(random_seed)
-
-    def __len__(self) -> int:  # pragma: no cover - trivial
-        return len(self.examples)
-
-    def __getitem__(self, index: int) -> Dict[str, torch.Tensor]:
-        example = self.examples[index]
-        # shuffle the label space to
-        # 1. avoid position bias
-        # 2. simulate open-set classification
-        available_labels = list(self.label_space)
-
-        # clamp bounds to what is feasible for this dataset instance
-        max_candidates = len(available_labels)
-        upper_bound = (
-            max_candidates
-            if self.max_labels_in_prompt is None
-            else min(self.max_labels_in_prompt, max_candidates)
-        )
-        lower_bound = min(self.min_labels_in_prompt, upper_bound)
-
-        base_labels = {example.label, CATCH_ALL_LABEL}
-        lower_bound = max(lower_bound, len(base_labels))
-        upper_bound = max(upper_bound, len(base_labels))
-
-        sample_size = (
-            upper_bound
-            if lower_bound == upper_bound
-            else int(self._rng.integers(lower_bound, upper_bound + 1))
-        )
-
-        # ensure the true label and catch-all are always present
-        chosen_labels = set(base_labels)
-        remaining_needed = sample_size - len(chosen_labels)
-        if remaining_needed > 0:
-            negative_pool = [
-                label for label in available_labels if label not in chosen_labels
-            ]
-            if negative_pool:
-                sampled = self._rng.choice(
-                    negative_pool, size=remaining_needed, replace=False
-                )
-                chosen_labels.update(sampled.tolist())
-
-        randomized_label_space = self._rng.permutation(list(chosen_labels)).tolist()
-
-        prompt = build_prompt(
-            conversation=example.conversation,
-            label_space=randomized_label_space,
-            system_prompt=self.system_prompt,
-        )
-        tokenized = self.tokenizer(
-            prompt,
-            text_target=example.label,
-            max_length=self.max_length,
-            truncation=True,
-            padding="max_length" if self.pad_to_max_length else False,
-            return_tensors="pt",
-        )
-        return {key: value.squeeze(0) for key, value in tokenized.items()}
 
 
 def parse_args() -> argparse.Namespace:
@@ -613,7 +506,9 @@ def train(args: argparse.Namespace) -> None:
 
     torch.manual_seed(args.seed)
 
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.model_name, trust_remote_code=True, fix_mistral_regex=True
+    )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
         tokenizer.pad_token_id = tokenizer.eos_token_id
@@ -678,6 +573,43 @@ def train(args: argparse.Namespace) -> None:
 
     def preprocess_logits_for_metrics(logits, labels):
         return logits.argmax(dim=-1)
+
+    def compute_label_accuracy(eval_pred):
+        preds = eval_pred.predictions
+        labels = eval_pred.label_ids
+
+        # preds already token ids due to preprocess_logits_for_metrics
+        if not isinstance(preds, np.ndarray):
+            preds = np.array(preds)
+        if not isinstance(labels, np.ndarray):
+            labels = np.array(labels)
+
+        # ---- SHIFT ----
+        preds = preds[:, :-1]
+        labels = labels[:, 1:]
+
+        # ---- MASK ----
+        mask = labels != -100
+
+        # Debug print first sample
+        i = 0
+        pred_ids = preds[i][mask[i]]
+        label_ids = labels[i][mask[i]]
+
+        print("______PREDICTION EXAMPLE______")
+        print(tokenizer.decode(pred_ids, skip_special_tokens=True))
+        print("______LABEL EXAMPLE______")
+        print(tokenizer.decode(label_ids, skip_special_tokens=True))
+
+        # ---- EXACT MATCH PER SAMPLE ----
+        token_correct = np.where(mask, preds == labels, True)
+        sample_correct = np.all(token_correct, axis=1)
+
+        acc = float(sample_correct.mean()) if sample_correct.size else 0.0
+
+        print("Label accuracy:", acc)
+
+        return {"label_accuracy": acc}
 
     trainer = Trainer(
         model=model,
