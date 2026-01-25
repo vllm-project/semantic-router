@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import styles from './ThinkingBlock.module.css'
 import MarkdownRenderer from './MarkdownRenderer'
+import { getTranslateAttr } from '../hooks/useNoTranslate'
 
 interface ThinkingBlockProps {
   content: string
@@ -58,7 +59,7 @@ const ThinkingBlock = ({ content, isStreaming = false, thinkingTime }: ThinkingB
   }
 
   return (
-    <div className={styles.container}>
+    <div className={styles.container} translate={getTranslateAttr(isStreaming)}>
       <button
         className={styles.header}
         onClick={() => setIsExpanded(!isExpanded)}

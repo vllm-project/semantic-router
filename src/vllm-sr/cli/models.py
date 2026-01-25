@@ -68,6 +68,14 @@ class Language(BaseModel):
     description: str
 
 
+class Latency(BaseModel):
+    """Latency signal configuration."""
+
+    name: str
+    max_tpot: float
+    description: str
+
+
 class ContextRule(BaseModel):
     """Context-based (token count) signal configuration."""
 
@@ -87,6 +95,7 @@ class Signals(BaseModel):
     user_feedbacks: Optional[List[UserFeedback]] = []
     preferences: Optional[List[Preference]] = []
     language: Optional[List[Language]] = []
+    latency: Optional[List[Latency]] = []
     context_rules: Optional[List[ContextRule]] = []
 
 

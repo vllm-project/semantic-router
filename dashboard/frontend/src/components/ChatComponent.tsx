@@ -1,16 +1,133 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react'
 import styles from './ChatComponent.module.css'
 import HeaderDisplay from './HeaderDisplay'
 import MarkdownRenderer from './MarkdownRenderer'
 import ThinkingAnimation from './ThinkingAnimation'
 import HeaderReveal from './HeaderReveal'
 import ThinkingBlock from './ThinkingBlock'
+import ErrorBoundary from './ErrorBoundary'
+import { useToolRegistry } from '../tools'
+import { getTranslateAttr } from '../hooks/useNoTranslate'
+import type { ToolCall, ToolResult, WebSearchResult } from '../tools'
+
+// Copy button component for copying full response
+const CopyResponseButton = ({ copied, onCopy }: { copied: boolean; onCopy: () => void }) => {
+  return (
+    <button
+      className={styles.actionButton}
+      onClick={onCopy}
+      title={copied ? 'Copied!' : 'Copy'}
+      aria-label={copied ? 'Copied!' : 'Copy'}
+    >
+      {copied ? (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <rect x="9" y="9" width="13" height="13" rx="2" />
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+        </svg>
+      )}
+    </button>
+  )
+}
+
+// Message action bar component
+const MessageActionBar = ({ content }: { content: string }) => {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = useCallback(async () => {
+    if (!content) return
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(content)
+      } else {
+        const textArea = document.createElement('textarea')
+        textArea.value = content
+        textArea.style.position = 'fixed'
+        textArea.style.left = '-9999px'
+        document.body.appendChild(textArea)
+        textArea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textArea)
+      }
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy:', err)
+    }
+  }, [content])
+
+  return (
+    <div className={styles.messageActionBar}>
+      <CopyResponseButton copied={copied} onCopy={handleCopy} />
+    </div>
+  )
+}
+
+// Greeting lines - defined outside component to maintain stable reference
+const GREETING_LINES = [
+  "Hi there, I am MoM :-)",
+  "The System Intelligence for LLMs",
+  "The World First Model-of-Models",
+  "Open Source for Everyone",
+  "How can I help you today?"
+]
+
+// Typing effect component for greeting with multiple lines
+// Memoized to prevent re-renders when parent state changes (e.g., input typing)
+const TypingGreeting = memo(({ lines }: { lines: string[] }) => {
+  const [currentLineIndex, setCurrentLineIndex] = useState(0)
+  const [displayedText, setDisplayedText] = useState('')
+  const [isTyping, setIsTyping] = useState(true)
+
+  useEffect(() => {
+    if (currentLineIndex >= lines.length) return
+
+    const currentLine = lines[currentLineIndex]
+    let charIndex = 0
+    setIsTyping(true)
+    setDisplayedText('')
+
+    const typingInterval = setInterval(() => {
+      if (charIndex < currentLine.length) {
+        setDisplayedText(currentLine.slice(0, charIndex + 1))
+        charIndex++
+      } else {
+        clearInterval(typingInterval)
+        setIsTyping(false)
+        // Wait before moving to next line
+        setTimeout(() => {
+          if (currentLineIndex < lines.length - 1) {
+            setCurrentLineIndex(prev => prev + 1)
+          }
+        }, 1500)
+      }
+    }, 60)
+
+    return () => clearInterval(typingInterval)
+  }, [currentLineIndex, lines])
+
+  return (
+    <div className={styles.typingGreeting} translate="no">
+      <h2>
+        {displayedText}
+        {isTyping && <span className={styles.typingCursor}>|</span>}
+      </h2>
+    </div>
+  )
+})
 
 // Choice represents a single model's response in ratings mode
 interface Choice {
   content: string
   model?: string
 }
+
+// Re-export ToolCall and ToolResult types from tools module
+// Local SearchResult alias for backward compatibility
+type SearchResult = WebSearchResult
 
 interface Message {
   id: string
@@ -21,8 +138,516 @@ interface Message {
   headers?: Record<string, string>
   // For ratings mode: multiple choices from different models
   choices?: Choice[]
-  // Thinking process (content before assistantfinal tag)
+  // Thinking process (from reasoning_content field)
   thinkingProcess?: string
+  // Tool calls and results
+  toolCalls?: ToolCall[]
+  toolResults?: ToolResult[]
+}
+
+// Web Search Card Component
+const WebSearchCard = ({ 
+  toolCall, 
+  toolResult,
+  isExpanded,
+  onToggle 
+}: { 
+  toolCall: ToolCall
+  toolResult?: ToolResult
+  isExpanded: boolean
+  onToggle: () => void
+}) => {
+  // Safely parse arguments - may be incomplete during streaming
+  let query = ''
+  try {
+    const args = JSON.parse(toolCall.function.arguments || '{}')
+    query = args.query || ''
+  } catch {
+    // Arguments still streaming or invalid, show partial or empty
+    const match = toolCall.function.arguments?.match(/"query"\s*:\s*"([^"]*)/)
+    query = (match && match[1]) || 'Searching...'
+  }
+  
+  // Safely get results - ensure it's an array
+  const results = useMemo(() => {
+    if (!toolResult?.content) return undefined
+    if (Array.isArray(toolResult.content)) {
+      return toolResult.content as SearchResult[]
+    }
+    // If content is a string (error message), return undefined
+    return undefined
+  }, [toolResult?.content])
+  
+  return (
+    <div className={styles.webSearchCard}>
+      <div className={styles.webSearchHeader} onClick={onToggle}>
+        <div className={styles.webSearchIcon}>
+          {toolCall.status === 'running' ? (
+            <svg className={styles.searchSpinner} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8" />
+              <path d="M21 21l-4.35-4.35" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8" />
+              <path d="M21 21l-4.35-4.35" />
+            </svg>
+          )}
+        </div>
+        <div className={styles.webSearchInfo}>
+          <span className={styles.webSearchTitle}>
+            {toolCall.status === 'running' ? 'Searching...' : 'Web Search'}
+          </span>
+          <span className={styles.webSearchQuery}>"{query}"</span>
+        </div>
+        <div className={styles.webSearchStatus}>
+          {toolCall.status === 'completed' && results && (
+            <span className={styles.webSearchCount}>{results.length} sources</span>
+          )}
+          <svg 
+            className={`${styles.webSearchChevron} ${isExpanded ? styles.expanded : ''}`} 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            strokeWidth="2"
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </div>
+      </div>
+      
+      {isExpanded && toolCall.status === 'completed' && results && results.length > 0 && (
+        <div className={styles.webSearchResults}>
+          <div className={styles.sourcePills}>
+            {results.map((result, idx) => (
+              <a
+                key={idx}
+                href={result.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.sourcePill}
+                title={result.snippet}
+              >
+                <span className={styles.sourcePillNumber}>{idx + 1}</span>
+                <span className={styles.sourcePillDomain}>{(() => { try { return new URL(result.url).hostname } catch { return result.url } })()}</span>
+              </a>
+            ))}
+          </div>
+          <div className={styles.sourceDetails}>
+            {results.map((result, idx) => (
+              <div key={idx} className={styles.sourceItem}>
+                <div className={styles.sourceItemHeader}>
+                  <span className={styles.sourceItemNumber}>[{idx + 1}]</span>
+                  <a 
+                    href={result.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className={styles.sourceItemTitle}
+                  >
+                    {result.title}
+                  </a>
+                </div>
+                <p className={styles.sourceItemSnippet}>{result.snippet}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      {toolCall.status === 'running' && (
+        <div className={styles.webSearchLoading}>
+          <div className={styles.webSearchLoadingBar} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Open Web Card Component - displays webpage content extraction
+const OpenWebCard = ({ 
+  toolCall, 
+  toolResult,
+  isExpanded,
+  onToggle 
+}: { 
+  toolCall: ToolCall
+  toolResult?: ToolResult
+  isExpanded: boolean
+  onToggle: () => void
+}) => {
+  // Safely parse arguments
+  let url = ''
+  try {
+    const args = JSON.parse(toolCall.function.arguments || '{}')
+    url = args.url || ''
+  } catch {
+    const match = toolCall.function.arguments?.match(/"url"\s*:\s*"([^"]*)/)
+    url = (match && match[1]) || 'Loading...'
+  }
+
+  // Extract domain from URL
+  const domain = useMemo(() => {
+    try {
+      return new URL(url).hostname
+    } catch {
+      return url
+    }
+  }, [url])
+
+  // Get result data
+  const resultData = useMemo(() => {
+    if (!toolResult?.content) return null
+    if (typeof toolResult.content === 'object' && toolResult.content !== null) {
+      const data = toolResult.content as { title?: string; content?: string; length?: number; truncated?: boolean }
+      return data
+    }
+    return null
+  }, [toolResult?.content])
+  
+  return (
+    <div className={styles.webSearchCard}>
+      <div className={styles.webSearchHeader} onClick={onToggle}>
+        <div className={styles.webSearchIcon}>
+          {toolCall.status === 'running' ? (
+            <svg className={styles.searchSpinner} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+            </svg>
+          )}
+        </div>
+        <div className={styles.webSearchInfo}>
+          <span className={styles.webSearchTitle}>
+            {toolCall.status === 'running' ? 'Opening page...' : 'Web Page'}
+          </span>
+          <span className={styles.webSearchQuery}>{domain}</span>
+        </div>
+        <div className={styles.webSearchStatus}>
+          {toolCall.status === 'completed' && resultData && (
+            <span className={styles.webSearchCount}>
+              {resultData.length ? `${Math.round(resultData.length / 1000)}k chars` : ''}
+              {resultData.truncated ? ' (truncated)' : ''}
+            </span>
+          )}
+          {toolCall.status === 'failed' && (
+            <span className={styles.webSearchCount} style={{ color: 'var(--color-error)' }}>Failed</span>
+          )}
+          <svg 
+            className={`${styles.webSearchChevron} ${isExpanded ? styles.expanded : ''}`} 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            strokeWidth="2"
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </div>
+      </div>
+      
+      {isExpanded && toolCall.status === 'completed' && resultData && (
+        <div className={styles.webSearchResults}>
+          <div className={styles.sourceDetails}>
+            <div className={styles.sourceItem}>
+              <div className={styles.sourceItemHeader}>
+                <a 
+                  href={url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className={styles.sourceItemTitle}
+                >
+                  {resultData.title || 'Untitled'}
+                </a>
+              </div>
+              <div className={styles.openWebContent}>
+                {resultData.content?.substring(0, 500)}
+                {(resultData.content?.length || 0) > 500 && '...'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isExpanded && toolCall.status === 'failed' && toolResult?.error && (
+        <div className={styles.webSearchResults}>
+          <div className={styles.sourceDetails}>
+            <div className={styles.sourceItem}>
+              <p className={styles.sourceItemSnippet} style={{ color: 'var(--color-error)' }}>
+                {toolResult.error}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {toolCall.status === 'running' && (
+        <div className={styles.webSearchLoading}>
+          <div className={styles.webSearchLoadingBar} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Generic Tool Card - routes to specific card based on tool type
+const ToolCard = ({ 
+  toolCall, 
+  toolResult,
+  isExpanded,
+  onToggle 
+}: { 
+  toolCall: ToolCall
+  toolResult?: ToolResult
+  isExpanded: boolean
+  onToggle: () => void
+}) => {
+  const toolName = toolCall.function.name
+
+  if (toolName === 'search_web') {
+    return (
+      <WebSearchCard 
+        toolCall={toolCall} 
+        toolResult={toolResult} 
+        isExpanded={isExpanded} 
+        onToggle={onToggle} 
+      />
+    )
+  }
+
+  if (toolName === 'open_web') {
+    return (
+      <OpenWebCard 
+        toolCall={toolCall} 
+        toolResult={toolResult} 
+        isExpanded={isExpanded} 
+        onToggle={onToggle} 
+      />
+    )
+  }
+
+  // Fallback for unknown tools
+  return (
+    <div className={styles.webSearchCard}>
+      <div className={styles.webSearchHeader} onClick={onToggle}>
+        <div className={styles.webSearchIcon}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+          </svg>
+        </div>
+        <div className={styles.webSearchInfo}>
+          <span className={styles.webSearchTitle}>{toolName}</span>
+          <span className={styles.webSearchQuery}>{toolCall.status}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Tool Toggle Component
+const ToolToggle = ({ 
+  enabled, 
+  onToggle,
+  disabled 
+}: { 
+  enabled: boolean
+  onToggle: () => void
+  disabled?: boolean
+}) => {
+  return (
+    <button
+      className={`${styles.inputActionButton} ${enabled ? styles.searchToggleActive : ''}`}
+      onClick={onToggle}
+      disabled={disabled}
+      data-tooltip={enabled ? 'Web Search enabled' : 'Enable Web Search'}
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M2 12h20" />
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+      </svg>
+    </button>
+  )
+}
+
+// Citation Link Component - renders [1], [2], etc. as clickable links
+const CitationLink = ({ 
+  number, 
+  url, 
+  title 
+}: { 
+  number: number
+  url?: string
+  title?: string 
+}) => {
+  const handleClick = (e: React.MouseEvent) => {
+    if (url) {
+      e.preventDefault()
+      window.open(url, '_blank', 'noopener,noreferrer')
+    }
+  }
+
+  return (
+    <span
+      className={styles.citationLink}
+      onClick={handleClick}
+      title={title || `Source ${number}`}
+      role="button"
+      tabIndex={0}
+    >
+      [{number}]
+    </span>
+  )
+}
+
+// Content with Citations - parses [1], [2] etc and renders as clickable links
+const ContentWithCitations = ({ 
+  content, 
+  sources,
+  isStreaming = false
+}: { 
+  content: string
+  sources?: SearchResult[] | unknown
+  isStreaming?: boolean
+}) => {
+  // Safely normalize sources to array
+  const safeSources = useMemo(() => {
+    if (!sources) return undefined
+    if (Array.isArray(sources)) return sources as SearchResult[]
+    return undefined
+  }, [sources])
+
+  // Disable translation during streaming to prevent DOM conflicts
+  const translateAttr = getTranslateAttr(isStreaming)
+
+  // Memoize the processed content to avoid re-parsing on every render
+  const processedContent = useMemo(() => {
+    // Safety check for content - always return consistent structure
+    if (!content || typeof content !== 'string') {
+      return null
+    }
+
+    // Parse content and replace [n] patterns with citation links
+    const parseContentWithCitations = (text: string, keyPrefix: string): React.ReactNode[] => {
+      const parts: React.ReactNode[] = []
+      // Match [1], [2], [3] etc. - citation format
+      const citationRegex = /\[(\d+)\]/g
+      let lastIndex = 0
+      let match
+      let keyIndex = 0
+      let iterationCount = 0
+      const maxIterations = 1000 // Prevent infinite loop
+
+      while ((match = citationRegex.exec(text)) !== null && iterationCount < maxIterations) {
+        iterationCount++
+        // Add text before the citation
+        if (match.index > lastIndex) {
+          parts.push(<span key={`${keyPrefix}-text-${keyIndex++}`}>{text.slice(lastIndex, match.index)}</span>)
+        }
+
+        const citationNumber = parseInt(match[1], 10)
+        const source = safeSources?.[citationNumber - 1] // 1-indexed
+
+        parts.push(
+          <CitationLink
+            key={`${keyPrefix}-citation-${keyIndex++}`}
+            number={citationNumber}
+            url={source?.url}
+            title={source ? `${source.title} - ${(() => { try { return new URL(source.url).hostname } catch { return source.url } })()}` : undefined}
+          />
+        )
+
+        lastIndex = match.index + match[0].length
+      }
+
+      // Add remaining text
+      if (lastIndex < text.length) {
+        parts.push(<span key={`${keyPrefix}-text-${keyIndex++}`}>{text.slice(lastIndex)}</span>)
+      }
+
+      return parts
+    }
+
+    // If no sources, just render with MarkdownRenderer wrapped in consistent container
+    if (!safeSources || safeSources.length === 0) {
+      return <MarkdownRenderer content={content} />
+    }
+
+    // Check if content has citations
+    const hasCitations = /\[\d+\]/.test(content)
+    
+    if (!hasCitations) {
+      return <MarkdownRenderer content={content} />
+    }
+
+    // For content with citations, we need to handle it specially
+    // Split by markdown blocks to preserve code blocks etc.
+    const lines = content.split('\n')
+    const processedLines: React.ReactNode[] = []
+    let inCodeBlock = false
+    let codeBlockContent = ''
+    let codeBlockLang = ''
+
+    lines.forEach((line, lineIndex) => {
+      // Check for code block start/end
+      if (line.startsWith('```')) {
+        if (!inCodeBlock) {
+          inCodeBlock = true
+          codeBlockLang = line.slice(3).trim()
+          codeBlockContent = ''
+        } else {
+          // End of code block - render as markdown
+          processedLines.push(
+            <div key={`code-${lineIndex}`} className={styles.codeBlockWrapper}>
+              <MarkdownRenderer 
+                content={`\`\`\`${codeBlockLang}\n${codeBlockContent}\`\`\``} 
+              />
+            </div>
+          )
+          inCodeBlock = false
+          codeBlockLang = ''
+        }
+        return
+      }
+
+      if (inCodeBlock) {
+        codeBlockContent += (codeBlockContent ? '\n' : '') + line
+        return
+      }
+
+      // For regular lines, check for citations
+      if (/\[\d+\]/.test(line)) {
+        // Line has citations - render with citation links
+        processedLines.push(
+          <p key={`line-${lineIndex}`} className={styles.citationParagraph}>
+            {parseContentWithCitations(line, `line-${lineIndex}`)}
+          </p>
+        )
+      } else if (line.trim() === '') {
+        // Empty line - add spacer div instead of br for consistent structure
+        processedLines.push(<div key={`space-${lineIndex}`} className={styles.lineBreak} />)
+      } else {
+        // Regular line without citations - use markdown wrapped in div
+        processedLines.push(
+          <div key={`md-${lineIndex}`} className={styles.markdownLine}>
+            <MarkdownRenderer content={line} />
+          </div>
+        )
+      }
+    })
+
+    return <>{processedLines}</>
+  }, [content, safeSources])
+
+  // Always return consistent div structure
+  // Disable translation during streaming to prevent DOM conflicts with browser translators
+  return (
+    <div className={styles.contentWithCitations} translate={translateAttr}>
+      {processedContent}
+    </div>
+  )
 }
 
 interface ChatComponentProps {
@@ -49,10 +674,24 @@ const ChatComponent = ({
   const [showHeaderReveal, setShowHeaderReveal] = useState(false)
   const [pendingHeaders, setPendingHeaders] = useState<Record<string, string> | null>(null)
   const [isFullscreen] = useState(isFullscreenMode)
+const [enableWebSearch, setEnableWebSearch] = useState(true)
+  const [expandedToolCards, setExpandedToolCards] = useState<Set<string>>(new Set())
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
+
+  // Tool Registry integration
+  // Search tools (controlled by web search toggle)
+  const { definitions: searchToolDefinitions } = useToolRegistry({
+    enabledOnly: true,
+    categories: ['search'],
+  })
+  // Other tools (always available, not controlled by web search toggle)
+  const { definitions: otherToolDefinitions, executeAll: executeTools } = useToolRegistry({
+    enabledOnly: true,
+    categories: ['code', 'file', 'image', 'custom'],
+  })
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -83,44 +722,6 @@ const ChatComponent = ({
   }, [isFullscreen])
 
   const generateId = () => `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
-
-  // Parse content to separate thinking process from final answer
-  const parseStreamingContent = (fullContent: string): {
-    hasAnalysis: boolean
-    thinking: string
-    hasFinal: boolean
-    final: string
-  } => {
-    // Check if content contains "analysis" tag
-    const hasAnalysis = /analysis/i.test(fullContent)
-
-    // Look for assistantfinal tag (case insensitive)
-    const finalMatch = fullContent.match(/assistantfinal(.*)$/is)
-
-    if (finalMatch) {
-      // Found assistantfinal - split content
-      const finalIndex = fullContent.search(/assistantfinal/i)
-
-      // Everything from "analysis" to "assistantfinal" is thinking
-      const analysisMatch = fullContent.match(/analysis(.*?)assistantfinal/is)
-      const thinking = analysisMatch ? analysisMatch[1].trim() : ''
-
-      // Everything after assistantfinal is the final answer
-      const final = fullContent.substring(finalIndex + 'assistantfinal'.length).trim()
-
-      return { hasAnalysis, thinking, hasFinal: true, final }
-    }
-
-    // If we have analysis but no assistantfinal yet, all content after "analysis" is thinking
-    if (hasAnalysis) {
-      const analysisMatch = fullContent.match(/analysis(.*)$/is)
-      const thinking = analysisMatch ? analysisMatch[1].trim() : ''
-      return { hasAnalysis: true, thinking, hasFinal: false, final: '' }
-    }
-
-    // No special tags - treat as final answer
-    return { hasAnalysis: false, thinking: '', hasFinal: false, final: fullContent }
-  }
 
   const handleThinkingComplete = useCallback(() => {
     // Thinking animation will be hidden when headers arrive
@@ -166,22 +767,68 @@ const ChatComponent = ({
     try {
       abortControllerRef.current = new AbortController()
 
-      const chatMessages = [
+      // Build chat messages with proper tool call history
+      // This ensures the model knows which tool calls have been completed
+      type ChatMessage = {
+        role: string
+        content: string | null
+        tool_calls?: Array<{
+          id: string
+          type: 'function'
+          function: { name: string; arguments: string }
+        }>
+        tool_call_id?: string
+      }
+
+      const chatMessages: ChatMessage[] = [
         { role: 'system', content: systemPrompt },
-        ...messages.map(m => ({ role: m.role, content: m.content })),
-        { role: 'user', content: trimmedInput },
       ]
+
+      // Process each message for context
+      // IMPORTANT: For history messages, we only include the final text content,
+      // NOT the tool calls and results. This prevents context pollution where
+      // the model might be confused by previous tool usage when answering new questions.
+      for (const m of messages) {
+        if (m.role === 'user') {
+          chatMessages.push({ role: 'user', content: m.content })
+        } else if (m.role === 'assistant') {
+          // For assistant messages, only include the final text content
+          // Don't include tool_calls or tool results in history
+          // This keeps the context clean for new questions
+          if (m.content) {
+            chatMessages.push({ role: 'assistant', content: m.content })
+          }
+        }
+      }
+
+      // Add the new user message
+      chatMessages.push({ role: 'user', content: trimmedInput })
+
+      // Build request body
+      const requestBody: Record<string, unknown> = {
+        model,
+        messages: chatMessages,
+        stream: true,
+      }
+
+      // Add tools to request:
+      // - Search tools: only when web search is enabled
+      // - Other tools: always available
+      const activeTools = [
+        ...otherToolDefinitions,
+        ...(enableWebSearch ? searchToolDefinitions : []),
+      ]
+      if (activeTools.length > 0) {
+        requestBody.tools = activeTools
+        requestBody.tool_choice = 'auto'
+      }
 
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          model,
-          messages: chatMessages,
-          stream: true,
-        }),
+        body: JSON.stringify(requestBody),
         signal: abortControllerRef.current.signal,
       })
 
@@ -208,6 +855,7 @@ const ChatComponent = ({
         'x-vsr-matched-user-feedback',
         'x-vsr-matched-preference',
         'x-vsr-matched-language',
+        'x-vsr-matched-latency',
         // Looper headers
         'x-vsr-looper-model',
         'x-vsr-looper-models-used',
@@ -236,10 +884,13 @@ const ChatComponent = ({
       }
 
       const decoder = new TextDecoder()
-      // Track content for each choice (for ratings mode)
-      const choiceContents: Map<number, { content: string; model?: string }> = new Map()
+      // Track content and reasoning for each choice (for ratings mode)
+      const choiceContents: Map<number, { content: string; reasoningContent: string; model?: string }> = new Map()
       // Check if this is ratings mode (multiple choices)
       let isRatingsMode = false
+      // Track tool calls
+      const toolCallsMap: Map<number, ToolCall> = new Map()
+      let hasToolCalls = false
 
       while (true) {
         const { done, value } = await reader.read()
@@ -266,67 +917,108 @@ const ChatComponent = ({
               for (const choice of choices) {
                 const index = choice.index ?? 0
                 const content = choice.delta?.content || ''
+                const reasoningContent = choice.delta?.reasoning_content || ''
                 const model = choice.model
+                const deltaToolCalls = choice.delta?.tool_calls
+
+                // Handle tool calls
+                if (deltaToolCalls && Array.isArray(deltaToolCalls)) {
+                  hasToolCalls = true
+                  for (const tc of deltaToolCalls) {
+                    const tcIndex = tc.index ?? 0
+                    if (!toolCallsMap.has(tcIndex)) {
+                      toolCallsMap.set(tcIndex, {
+                        id: tc.id || `tool-${tcIndex}`,
+                        type: 'function',
+                        function: {
+                          name: tc.function?.name || '',
+                          arguments: ''
+                        },
+                        status: 'running'
+                      })
+                    }
+                    const existingTc = toolCallsMap.get(tcIndex)!
+                    if (tc.function?.name) {
+                      existingTc.function.name = tc.function.name
+                    }
+                    if (tc.function?.arguments) {
+                      existingTc.function.arguments += tc.function.arguments
+                    }
+                    if (tc.id) {
+                      existingTc.id = tc.id
+                    }
+                  }
+
+                  // Update message with tool calls
+                  const currentToolCalls = Array.from(toolCallsMap.values())
+                  setMessages(prev =>
+                    prev.map(m =>
+                      m.id === assistantMessageId
+                        ? { ...m, toolCalls: currentToolCalls }
+                        : m
+                    )
+                  )
+                }
 
                 if (!choiceContents.has(index)) {
-                  choiceContents.set(index, { content: '', model })
+                  choiceContents.set(index, { content: '', reasoningContent: '', model })
                 }
 
                 const current = choiceContents.get(index)!
                 if (content) {
                   current.content += content
                 }
+                if (reasoningContent) {
+                  current.reasoningContent += reasoningContent
+                }
                 if (model && !current.model) {
                   current.model = model
                 }
               }
 
-              // Update message state
-              if (isRatingsMode) {
-                // Ratings mode: update choices array
-                const choicesArray: Choice[] = []
+              // Update message state (only if we have content, not just tool calls)
+              if (!hasToolCalls || choiceContents.get(0)?.content) {
+                if (isRatingsMode) {
+                  // Ratings mode: update choices array
+                  const choicesArray: Choice[] = []
 
-                choiceContents.forEach((value, index) => {
-                  const parsed = parseStreamingContent(value.content)
-                  choicesArray[index] = { content: parsed.final, model: value.model }
-                })
+                  choiceContents.forEach((value, index) => {
+                    choicesArray[index] = { content: value.content, model: value.model }
+                  })
 
-                // Get thinking process from first choice
-                const firstChoiceForThinking = choiceContents.get(0)
-                const thinkingProcess = firstChoiceForThinking
-                  ? parseStreamingContent(firstChoiceForThinking.content).thinking
-                  : ''
-
-                setMessages(prev =>
-                  prev.map(m =>
-                    m.id === assistantMessageId
-                      ? {
-                          ...m,
-                          content: choicesArray[0]?.content || '',
-                          choices: choicesArray,
-                          thinkingProcess: thinkingProcess
-                        }
-                      : m
-                  )
-                )
-              } else {
-                // Single choice mode
-                const firstChoice = choiceContents.get(0)
-                if (firstChoice) {
-                  const parsed = parseStreamingContent(firstChoice.content)
+                  // Get thinking process (reasoning_content) from first choice
+                  const firstChoice = choiceContents.get(0)
+                  const thinkingProcess = firstChoice?.reasoningContent || ''
 
                   setMessages(prev =>
                     prev.map(m =>
                       m.id === assistantMessageId
                         ? {
                             ...m,
-                            content: parsed.final,
-                            thinkingProcess: parsed.thinking,
-                            isStreaming: !parsed.hasFinal  // Stop streaming when we hit assistantfinal
+                            content: choicesArray[0]?.content || '',
+                            choices: choicesArray,
+                            thinkingProcess: thinkingProcess
                           }
                         : m
                     )
                   )
+                } else {
+                  // Single choice mode
+                  const firstChoice = choiceContents.get(0)
+                  if (firstChoice) {
+                    setMessages(prev =>
+                      prev.map(m =>
+                        m.id === assistantMessageId
+                          ? {
+                              ...m,
+                              content: firstChoice.content,
+                              thinkingProcess: firstChoice.reasoningContent,
+                              isStreaming: true
+                            }
+                          : m
+                      )
+                    )
+                  }
                 }
               }
             } catch {
@@ -336,12 +1028,317 @@ const ChatComponent = ({
         }
       }
 
+      // If we had tool calls, execute tools in a loop until model gives final answer
+      if (hasToolCalls) {
+        // Maximum tool call iterations to prevent infinite loops
+const MAX_TOOL_ITERATIONS = 30
+        let iteration = 0
+        
+        // Accumulated tool calls and results across all iterations
+        let allToolCalls = Array.from(toolCallsMap.values())
+        let allToolResults: ToolResult[] = []
+        
+        // Track final content from tool loop
+        let finalContent = ''
+        
+        // Current conversation state for tool loop - use chatMessages as base (already built correctly)
+        type ChatMessage = { role: string; content: string | null; tool_calls?: unknown[]; tool_call_id?: string }
+        let currentMessages: ChatMessage[] = [...chatMessages]
+
+        while (iteration < MAX_TOOL_ITERATIONS) {
+          iteration++
+          console.log(`Tool iteration ${iteration}/${MAX_TOOL_ITERATIONS}`)
+
+          // Get current tool calls to execute
+          const currentToolCalls = iteration === 1 
+            ? allToolCalls 
+            : Array.from(toolCallsMap.values())
+          
+          if (currentToolCalls.length === 0) break
+
+          // Mark all tools as running
+          currentToolCalls.forEach(tc => { tc.status = 'running' })
+          
+          // Update UI with current tool calls
+          const uiToolCalls = [...allToolCalls]
+          if (iteration > 1) {
+            // Add new tool calls from subsequent iterations
+            currentToolCalls.forEach(tc => {
+              if (!uiToolCalls.find(t => t.id === tc.id)) {
+                uiToolCalls.push(tc)
+              }
+            })
+            allToolCalls = uiToolCalls
+          }
+          
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === assistantMessageId
+                ? { ...m, toolCalls: [...uiToolCalls] }
+                : m
+            )
+          )
+
+          // Execute all current tools in parallel
+          const toolResults = await executeTools(currentToolCalls, {
+            signal: abortControllerRef.current?.signal,
+          })
+
+          // Update tool statuses based on results
+          toolResults.forEach(result => {
+            const tc = currentToolCalls.find(t => t.id === result.callId)
+            if (tc) {
+              tc.status = result.error ? 'failed' : 'completed'
+            }
+          })
+          
+          // Accumulate results
+          allToolResults = [...allToolResults, ...toolResults]
+
+          // Update message with completed tool calls and all results
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === assistantMessageId
+                ? { ...m, toolCalls: [...uiToolCalls], toolResults: allToolResults }
+                : m
+            )
+          )
+
+          // Auto-expand the first tool card
+          if (uiToolCalls.length > 0 && expandedToolCards.size === 0) {
+            setExpandedToolCards(new Set([uiToolCalls[0].id]))
+          }
+
+          // Build messages for next API call
+          currentMessages = [
+            ...currentMessages,
+            // Assistant message with tool_calls
+            {
+              role: 'assistant',
+              content: null,
+              tool_calls: currentToolCalls.map(tc => ({
+                id: tc.id,
+                type: 'function',
+                function: {
+                  name: tc.function.name,
+                  arguments: tc.function.arguments
+                }
+              }))
+            },
+            // Tool results (truncate long content to avoid exceeding model context)
+            ...toolResults.map(tr => {
+              const MAX_TOOL_RESULT_LENGTH = 15000 // ~4k tokens
+              let content = typeof tr.content === 'string' 
+                ? tr.content 
+                : JSON.stringify(tr.content)
+              
+              // Truncate if too long
+              if (content.length > MAX_TOOL_RESULT_LENGTH) {
+                content = content.substring(0, MAX_TOOL_RESULT_LENGTH) + '\n\n...[Content truncated due to length]'
+                console.log(`Tool result for ${tr.name} truncated from ${typeof tr.content === 'string' ? tr.content.length : JSON.stringify(tr.content).length} to ${MAX_TOOL_RESULT_LENGTH} chars`)
+              }
+              
+              return {
+                role: 'tool',
+                tool_call_id: tr.callId,
+                content
+              }
+            })
+          ]
+
+          // Make follow-up API call with tools enabled
+          const followUpResponse = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model,
+              messages: currentMessages,
+              stream: true,
+              // Keep tools enabled for multi-step tool usage (same logic as initial request)
+              tools: activeTools,
+              tool_choice: 'auto',
+            }),
+            signal: abortControllerRef.current?.signal,
+          })
+
+          if (!followUpResponse.ok) {
+            console.error('Follow-up API call failed:', followUpResponse.status, followUpResponse.statusText)
+            break
+          }
+
+          if (!followUpResponse.body) break
+
+          const followUpReader = followUpResponse.body.getReader()
+          const followUpDecoder = new TextDecoder()
+          let followUpContent = ''
+          let hasMoreToolCalls = false
+          let streamFinishReason = ''
+          
+          // Reset tool calls map for this iteration
+          toolCallsMap.clear()
+
+          while (true) {
+            const { done, value } = await followUpReader.read()
+            if (done) break
+
+            const chunk = followUpDecoder.decode(value, { stream: true })
+            const lines = chunk.split('\n').filter(line => line.trim() !== '')
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const data = line.slice(6)
+                if (data === '[DONE]') continue
+
+                try {
+                  const parsed = JSON.parse(data)
+                  const delta = parsed.choices?.[0]?.delta
+                  const deltaToolCalls = delta?.tool_calls
+                  const finishReason = parsed.choices?.[0]?.finish_reason
+
+                  // Capture finish reason when present
+                  if (finishReason) {
+                    streamFinishReason = finishReason
+                    console.log(`Iteration ${iteration} finish_reason: ${finishReason}, hasContent: ${followUpContent.length > 0}`)
+                  }
+
+                  // Check for new tool calls
+                  if (deltaToolCalls && Array.isArray(deltaToolCalls)) {
+                    hasMoreToolCalls = true
+                    for (const tc of deltaToolCalls) {
+                      const tcIndex = tc.index ?? 0
+                      if (!toolCallsMap.has(tcIndex)) {
+                        toolCallsMap.set(tcIndex, {
+                          id: tc.id || `tool-${iteration}-${tcIndex}`,
+                          type: 'function',
+                          function: {
+                            name: tc.function?.name || '',
+                            arguments: ''
+                          },
+                          status: 'pending'
+                        })
+                      }
+                      const existingTc = toolCallsMap.get(tcIndex)!
+                      if (tc.function?.name) {
+                        existingTc.function.name = tc.function.name
+                      }
+                      if (tc.function?.arguments) {
+                        existingTc.function.arguments += tc.function.arguments
+                      }
+                      if (tc.id) {
+                        existingTc.id = tc.id
+                      }
+                    }
+                  }
+
+                  // Accumulate content
+                  if (delta?.content) {
+                    followUpContent += delta.content
+                    setMessages(prev =>
+                      prev.map(m =>
+                        m.id === assistantMessageId
+                          ? { ...m, content: followUpContent }
+                          : m
+                      )
+                    )
+                  }
+                } catch {
+                  // Ignore parse errors
+                }
+              }
+            }
+          }
+
+          // Save content from this iteration
+          if (followUpContent) {
+            finalContent = followUpContent
+            console.log(`Iteration ${iteration} content: ${followUpContent.substring(0, 100)}`)
+          }
+
+          // Check if we should continue the loop
+          if (streamFinishReason === 'tool_calls' && toolCallsMap.size > 0) {
+            // Model wants to call more tools, continue loop
+            console.log(`Model requested ${toolCallsMap.size} more tool call(s) (finish_reason: tool_calls), will continue loop`)
+            continue
+          } else if (streamFinishReason === 'stop' || streamFinishReason === 'length') {
+            // Model finished, exit loop
+            console.log(`Model finished (finish_reason: ${streamFinishReason}), exiting tool loop`)
+            break
+          } else if (!hasMoreToolCalls) {
+            // No more tool calls, exit loop
+            console.log('No more tool calls detected, exiting tool loop')
+            break
+          }
+          
+          console.log(`Default case: hasMoreToolCalls=${hasMoreToolCalls}, finish_reason=${streamFinishReason}, continuing`)
+        }
+
+        if (iteration >= MAX_TOOL_ITERATIONS) {
+          console.warn('Reached maximum tool iterations, stopping')
+        }
+        
+        // Ensure final content is set after all tool iterations
+        console.log('Tool loop finished, final content length:', finalContent.length)
+        if (finalContent) {
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === assistantMessageId
+                ? { ...m, content: finalContent }
+                : m
+            )
+          )
+        } else {
+          // If no content after tool loop, generate a fallback summary from tool results
+          console.warn('Tool loop finished but no content received from model, generating fallback summary')
+          
+          // Generate fallback content based on tool results
+          let fallbackContent = ''
+          if (allToolResults.length > 0) {
+            const successResults = allToolResults.filter(tr => !tr.error)
+            const failedResults = allToolResults.filter(tr => tr.error)
+            
+            if (successResults.length > 0) {
+              fallbackContent = '基于搜索结果，以下是相关信息：\n\n'
+              for (const tr of successResults) {
+                if (typeof tr.content === 'string' && tr.content.length > 0) {
+                  // 截取前 500 字符作为摘要
+                  const summary = tr.content.length > 500 
+                    ? tr.content.substring(0, 500) + '...' 
+                    : tr.content
+                  fallbackContent += summary + '\n\n'
+                }
+              }
+            }
+            
+            if (failedResults.length > 0 && !fallbackContent) {
+              fallbackContent = '抱歉，部分工具执行失败。请尝试重新查询或使用其他关键词。'
+            }
+          }
+          
+          if (!fallbackContent) {
+            fallbackContent = '模型没有生成响应内容，请尝试重新提问。'
+          }
+          
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === assistantMessageId
+                ? { ...m, content: fallbackContent }
+                : m
+            )
+          )
+        }
+      }
+
       // Finalize message
       const finalChoices: Choice[] | undefined = isRatingsMode
         ? Array.from(choiceContents.entries())
             .sort(([a], [b]) => a - b)
             .map(([, v]) => ({ content: v.content, model: v.model }))
         : undefined
+
+      // Get final thinking process from reasoning_content
+      const finalThinkingProcess = choiceContents.get(0)?.reasoningContent || ''
 
       // Streaming finished - no need to control ThinkingAnimation here
       // It was already hidden when headers arrived
@@ -353,7 +1350,8 @@ const ChatComponent = ({
                 ...m,
                 isStreaming: false,
                 headers: Object.keys(responseHeaders).length > 0 ? responseHeaders : undefined,
-                choices: finalChoices
+                choices: finalChoices,
+                thinkingProcess: finalThinkingProcess || m.thinkingProcess
               }
             : m
         )
@@ -461,11 +1459,7 @@ const ChatComponent = ({
       <div className={styles.messagesContainer}>
         {messages.length === 0 ? (
           <div className={styles.emptyState}>
-            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.3">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            <h3>Start a conversation</h3>
-            <p>Send a message to begin chatting with the mixture of models.</p>
+            <TypingGreeting lines={GREETING_LINES} />
           </div>
         ) : (
           <div className={styles.messages}>
@@ -473,6 +1467,8 @@ const ChatComponent = ({
               <div
                 key={message.id}
                 className={`${styles.message} ${styles[message.role]}`}
+                // Disable translation during streaming to prevent DOM conflicts
+                translate={getTranslateAttr(message.isStreaming ?? false)}
               >
                 <div className={styles.messageAvatar}>
                   {message.role === 'user' ? (
@@ -490,6 +1486,30 @@ const ChatComponent = ({
                   {/* Ratings mode: multiple choices */}
                   {message.role === 'assistant' && message.choices && message.choices.length > 1 ? (
                     <>
+                      {/* Show tool calls if any */}
+                      {message.toolCalls && message.toolCalls.length > 0 && (
+                        <div className={styles.toolCallsContainer}>
+                          {message.toolCalls.map(tc => (
+                            <ToolCard
+                              key={tc.id}
+                              toolCall={tc}
+                              toolResult={message.toolResults?.find(tr => tr.callId === tc.id)}
+                              isExpanded={expandedToolCards.has(tc.id)}
+                              onToggle={() => {
+                                setExpandedToolCards(prev => {
+                                  const next = new Set(prev)
+                                  if (next.has(tc.id)) {
+                                    next.delete(tc.id)
+                                  } else {
+                                    next.add(tc.id)
+                                  }
+                                  return next
+                                })
+                              }}
+                            />
+                          ))}
+                        </div>
+                      )}
                       {/* Show thinking block if available */}
                       {message.thinkingProcess && (
                         <ThinkingBlock
@@ -505,7 +1525,15 @@ const ChatComponent = ({
                               <span className={styles.choiceIndex}>Choice {idx + 1}</span>
                             </div>
                             <div className={styles.choiceContent}>
-                              <MarkdownRenderer content={choice.content} />
+                              <ErrorBoundary>
+                                <ContentWithCitations 
+                                  content={choice.content}
+                                  sources={
+                                    message.toolResults?.find(tr => tr.name === 'search_web')?.content
+                                  }
+                                  isStreaming={message.isStreaming}
+                                />
+                              </ErrorBoundary>
                               {message.isStreaming && idx === 0 && (
                                 <span className={styles.cursor}>▊</span>
                               )}
@@ -517,6 +1545,41 @@ const ChatComponent = ({
                   ) : (
                     /* Single choice mode */
                     <>
+                      {/* Show tool calls if any - filter out failed ones for cleaner UX */}
+                      {message.role === 'assistant' && message.toolCalls && message.toolCalls.length > 0 && (() => {
+                        const successfulToolCalls = message.toolCalls.filter(tc => tc.status !== 'failed')
+                        const failedCount = message.toolCalls.length - successfulToolCalls.length
+
+                        if (successfulToolCalls.length === 0 && failedCount > 0) {
+                          // All failed, show nothing or a minimal indicator
+                          return null
+                        }
+
+                        return (
+                          <div className={styles.toolCallsContainer}>
+                            {successfulToolCalls.map(tc => (
+                              <ErrorBoundary key={tc.id}>
+                                <ToolCard
+                                  toolCall={tc}
+                                  toolResult={message.toolResults?.find(tr => tr.callId === tc.id)}
+                                  isExpanded={expandedToolCards.has(tc.id)}
+                                  onToggle={() => {
+                                    setExpandedToolCards(prev => {
+                                      const next = new Set(prev)
+                                      if (next.has(tc.id)) {
+                                        next.delete(tc.id)
+                                      } else {
+                                        next.add(tc.id)
+                                      }
+                                      return next
+                                    })
+                                  }}
+                                />
+                              </ErrorBoundary>
+                            ))}
+                          </div>
+                        )
+                      })()}
                       {/* Show thinking block if available */}
                       {message.role === 'assistant' && message.thinkingProcess && (
                         <ThinkingBlock
@@ -527,7 +1590,15 @@ const ChatComponent = ({
                       <div className={styles.messageText}>
                         {message.role === 'assistant' && message.content ? (
                           <>
-                            <MarkdownRenderer content={message.content} />
+                            <ErrorBoundary>
+                              <ContentWithCitations 
+                                content={message.content} 
+                                sources={
+                                  message.toolResults?.find(tr => tr.name === 'search_web')?.content
+                                }
+                                isStreaming={message.isStreaming}
+                              />
+                            </ErrorBoundary>
                             {message.isStreaming && (
                               <span className={styles.cursor}>▊</span>
                             )}
@@ -548,6 +1619,9 @@ const ChatComponent = ({
                   {message.role === 'assistant' && message.headers && (
                     <HeaderDisplay headers={message.headers} />
                   )}
+                  {message.role === 'assistant' && message.content && !message.isStreaming && (
+                    <MessageActionBar content={message.content} />
+                  )}
                 </div>
               </div>
             ))}
@@ -557,59 +1631,68 @@ const ChatComponent = ({
       </div>
 
       <div className={styles.inputContainer}>
-        <div className={styles.inputActions}>
-          <button
-            className={styles.inputActionButton}
-            onClick={() => setShowSettings(!showSettings)}
-            title="Settings"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <circle cx="8" cy="8" r="2.5"/>
-              <path d="M8 1v2M8 13v2M15 8h-2M3 8H1M13.5 2.5l-1.4 1.4M3.9 12.1l-1.4 1.4M13.5 13.5l-1.4-1.4M3.9 3.9L2.5 2.5" strokeLinecap="round"/>
-            </svg>
-          </button>
-          <button
-            className={styles.inputActionButton}
-            onClick={handleClear}
-            title="Clear chat"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M2 4h12M5.5 4V2.5h5V4M13 4v9.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4M6.5 7v4M9.5 7v4" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
+        <div className={styles.inputWrapper}>
+          <textarea
+            ref={inputRef}
+            value={inputValue}
+            onChange={e => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask me anything..."
+            className={styles.input}
+            rows={1}
+            disabled={isLoading}
+          />
+          <div className={styles.inputActionsRow}>
+            <div className={styles.inputActions}>
+              <ToolToggle
+                enabled={enableWebSearch}
+                onToggle={() => setEnableWebSearch(!enableWebSearch)}
+                disabled={isLoading}
+              />
+              <button
+                className={styles.inputActionButton}
+                onClick={() => setShowSettings(!showSettings)}
+                data-tooltip="Settings"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <circle cx="8" cy="8" r="2.5"/>
+                  <path d="M8 1v2M8 13v2M15 8h-2M3 8H1M13.5 2.5l-1.4 1.4M3.9 12.1l-1.4 1.4M13.5 13.5l-1.4-1.4M3.9 3.9L2.5 2.5" strokeLinecap="round"/>
+                </svg>
+              </button>
+              <button
+                className={styles.inputActionButton}
+                onClick={handleClear}
+                data-tooltip="Clear chat"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M2 4h12M5.5 4V2.5h5V4M13 4v9.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4M6.5 7v4M9.5 7v4" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            </div>
+            {isLoading ? (
+              <button
+                className={`${styles.sendButton} ${styles.stopButton}`}
+                onClick={handleStop}
+                title="Stop generating"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="6" y="6" width="12" height="12" rx="2"/>
+                </svg>
+              </button>
+            ) : (
+              <button
+                className={styles.sendButton}
+                onClick={handleSend}
+                disabled={!inputValue.trim()}
+                title="Send message"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M12 19V5M5 12l7-7 7 7" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
-        <textarea
-          ref={inputRef}
-          value={inputValue}
-          onChange={e => setInputValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Type a message... (Enter to send)"
-          className={styles.input}
-          rows={1}
-          disabled={isLoading}
-        />
-        {isLoading ? (
-          <button
-            className={`${styles.sendButton} ${styles.stopButton}`}
-            onClick={handleStop}
-            title="Stop generating"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <rect x="6" y="6" width="12" height="12" rx="1"/>
-            </svg>
-          </button>
-        ) : (
-          <button
-            className={styles.sendButton}
-            onClick={handleSend}
-            disabled={!inputValue.trim()}
-            title="Send message"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
-        )}
       </div>
     </div>
     </>

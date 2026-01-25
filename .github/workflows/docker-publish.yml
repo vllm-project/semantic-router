@@ -53,7 +53,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        image: [extproc, llm-katan, dashboard, vllm-sr]
+        image: [extproc, llm-katan, vllm-sr]
       fail-fast: false
 
     steps:

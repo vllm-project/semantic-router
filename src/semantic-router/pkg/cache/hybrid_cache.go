@@ -566,7 +566,6 @@ func (h *HybridCache) FindSimilar(model string, query string) ([]byte, bool, err
 			logging.Debugf("HybridCache.FindSimilar: no candidates found in HNSW")
 		}
 		metrics.RecordCacheOperation("hybrid", "find_similar", "miss", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -603,7 +602,6 @@ func (h *HybridCache) FindSimilar(model string, query string) ([]byte, bool, err
 				"latency_ms": time.Since(start).Milliseconds(),
 			})
 			metrics.RecordCacheOperation("hybrid", "find_similar", "hit_milvus", time.Since(start).Seconds())
-			metrics.RecordCacheHit()
 			return responseBody, true, nil
 		}
 	}
@@ -618,7 +616,6 @@ func (h *HybridCache) FindSimilar(model string, query string) ([]byte, bool, err
 		"candidates": len(candidatesWithIDs),
 	})
 	metrics.RecordCacheOperation("hybrid", "find_similar", "miss", time.Since(start).Seconds())
-	metrics.RecordCacheMiss()
 
 	return nil, false, nil
 }
@@ -689,7 +686,6 @@ func (h *HybridCache) FindSimilarWithThreshold(model string, query string, thres
 			logging.Debugf("HybridCache.FindSimilarWithThreshold: no candidates found in HNSW")
 		}
 		metrics.RecordCacheOperation("hybrid", "find_similar_threshold", "miss", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -726,7 +722,6 @@ func (h *HybridCache) FindSimilarWithThreshold(model string, query string, thres
 				"latency_ms": time.Since(start).Milliseconds(),
 			})
 			metrics.RecordCacheOperation("hybrid", "find_similar_threshold", "hit_milvus", time.Since(start).Seconds())
-			metrics.RecordCacheHit()
 			return responseBody, true, nil
 		}
 	}
@@ -741,7 +736,6 @@ func (h *HybridCache) FindSimilarWithThreshold(model string, query string, thres
 		"candidates": len(candidatesWithIDs),
 	})
 	metrics.RecordCacheOperation("hybrid", "find_similar_threshold", "miss", time.Since(start).Seconds())
-	metrics.RecordCacheMiss()
 
 	return nil, false, nil
 }

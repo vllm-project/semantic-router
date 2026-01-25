@@ -10,7 +10,7 @@ This guide covers the configuration options for the Semantic Router. The system 
 
 The configuration defines three main layers:
 
-1. **Signal Extraction Layer**: Define 8 types of signals (keyword, embedding, domain, fact_check, user_feedback, preference, language, context)
+1. **Signal Extraction Layer**: Define 9 types of signals (keyword, embedding, domain, fact_check, user_feedback, preference, language, latency, context)
 2. **Decision Engine**: Combine signals using AND/OR operators to make routing decisions
 3. **Plugin Chain**: Configure plugins for caching, security, and optimization
 
@@ -420,7 +420,29 @@ signals:
 - Support multilingual applications
 - Supports 100+ languages via whatlanggo library
 
-### 8. Context Signals - Token Count Routing
+### 8. Latency Signals - TPOT-based Routing
+
+```yaml
+signals:
+  latency:
+    - name: "low_latency"
+      max_tpot: 0.05  # 50ms per token
+      description: "For real-time chat applications"
+    - name: "medium_latency"
+      max_tpot: 0.15  # 150ms per token
+      description: "For standard applications"
+```
+
+**Use Cases:**
+
+- Route latency-sensitive queries to faster models
+- Optimize for real-time applications (chat, streaming)
+- Balance latency vs. capability based on query requirements
+- TPOT (Time Per Output Token) is automatically tracked from responses
+
+**How it works**: The latency classifier evaluates available models' TPOT values against configured thresholds. Models with TPOT ≤ max_tpot match the latency rule.
+
+### 9. Context Signals - Token Count Routing
 
 ```yaml
 signals:

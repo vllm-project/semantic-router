@@ -69,6 +69,10 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Signal: Language',
     description: 'Detected language match',
   },
+  'x-vsr-matched-latency': {
+    label: 'Signal: Latency',
+    description: 'Matched latency rule based on model TPOT',
+  },
   // Looper headers
   'x-vsr-looper-model': {
     label: 'Final Model',

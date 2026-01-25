@@ -1,0 +1,57 @@
+---
+# Simple SemanticRouter example with minimal configuration
+# This example shows the minimum required fields to deploy a semantic router
+# For a comprehensive example with all features, see vllm.ai_v1alpha1_semanticrouter_openshift.yaml
+apiVersion: vllm.ai/v1alpha1
+kind: SemanticRouter
+metadata:
+  name: semantic-router-simple
+  namespace: default
+spec:
+  # Basic deployment settings
+  replicas: 1
+
+  # Configure vLLM backend endpoints
+  # The semantic router will discover and route to these model services
+  vllmEndpoints:
+    # KServe InferenceService in RHOAI
+    - name: my-llama-model
+      model: llama3-8b
+      reasoningFamily: qwen3
+      backend:
+        type: kserve
+        inferenceServiceName: llama-3-8b  # Name of InferenceService in same namespace
+
+  # Persistence for model cache
+  persistence:
+    enabled: true
+    # storageClassName: gp3  # Uses cluster default if omitted
+    size: 10Gi
+
+  # Basic resource limits
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 2Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+
+  # Semantic router configuration
+  config:
+    # Semantic cache for better latency/token efficiency
+    semantic_cache:
+      enabled: true
+      similarity_threshold: "0.85"
+      max_entries: 1000
+      ttl_seconds: 3600
+
+    # Prompt guard (jailbreak detection)
+    prompt_guard:
+      enabled: true
+      threshold: "0.7"
+
+    # Tools auto-selection
+    tools:
+      enabled: true
+      top_k: 3

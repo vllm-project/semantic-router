@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { preloadPlatformAssets } from '../components/PlatformBranding'
 
 interface ReadonlyContextType {
   isReadonly: boolean
@@ -30,7 +31,10 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
         if (response.ok) {
           const data = await response.json()
           setIsReadonly(data.readonlyMode || false)
-          setPlatform(data.platform || '')
+          const platformValue = data.platform || ''
+          setPlatform(platformValue)
+          // Preload platform-specific assets immediately
+          preloadPlatformAssets(platformValue)
         }
       } catch (error) {
         console.warn('Failed to fetch dashboard settings:', error)

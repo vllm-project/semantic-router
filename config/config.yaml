@@ -69,7 +69,7 @@ semantic_cache:
   # Embedding model for semantic similarity matching
   # Options: "bert" (fast, 384-dim), "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
   # Default: "bert" (fastest, lowest memory)
-  embedding_model: "qwen3"
+  embedding_model: "qwen2.5:3b"
 
 tools:
   enabled: true
@@ -129,6 +129,12 @@ hallucination_mitigation:
     model_id: "models/mom-halugate-detector"
     threshold: 0.8
     use_cpu: true
+    # False positive reduction settings
+    min_span_length: 2  # Minimum tokens in a span to report (filters single-token false positives)
+    min_span_confidence: 0.6  # Minimum confidence for a span to be reported
+    context_window_size: 50  # Characters of context around flagged spans
+    enable_nli_filtering: true  # Use NLI to filter false positives
+    nli_entailment_threshold: 0.75  # Filter spans with high entailment scores
   # NLI model: provides explanations for hallucinated spans
   nli_model:
     model_id: "models/mom-halugate-explainer"
@@ -140,15 +146,15 @@ hallucination_mitigation:
 # Supported formats: 127.0.0.1, 192.168.1.1, ::1, 2001:db8::1, example.com, localhost
 # Note: Use the 'port' field for port numbers, not in the address field
 vllm_endpoints:
-  - name: "endpoint1"
-    address: "172.28.0.20"  # Static IPv4 of llm-katan within docker compose network
-    port: 8002
+  - name: "ollama"
+    address: "127.0.0.1"  # Ollama endpoint for testing
+    port: 11434
     weight: 1
 
 model_config:
-  "qwen3":
-    reasoning_family: "qwen3"  # This model uses Qwen-3 reasoning syntax
-    preferred_endpoints: ["endpoint1"]  # Optional: omit to let upstream handle endpoint selection
+  "qwen2.5:3b":
+    reasoning_family: "qwen3"  # Qwen2.5 uses similar reasoning syntax to Qwen3
+    preferred_endpoints: ["ollama"]
 
 # Categories define domain metadata only (no routing logic)
 categories:
@@ -208,7 +214,7 @@ decisions:
         - type: "domain"
           name: "business"
     modelRefs:
-      - model: "qwen3"
+      - model: "qwen2.5:3b"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -228,7 +234,7 @@ decisions:
         - type: "domain"
           name: "law"
     modelRefs:
-      - model: "qwen3"
+      - model: "qwen2.5:3b"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -248,7 +254,7 @@ decisions:
         - type: "domain"
           name: "psychology"
     modelRefs:
-      - model: "qwen3"
+      - model: "qwen2.5:3b"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -272,7 +278,7 @@ decisions:
         - type: "domain"
           name: "biology"
     modelRefs:
-      - model: "qwen3"
+      - model: "qwen2.5:3b"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -292,7 +298,7 @@ decisions:
         - type: "domain"
           name: "chemistry"
     modelRefs:
-      - model: "qwen3"
+      - model: "qwen2.5:3b"
         use_reasoning: true
     plugins:
       - type: "system_prompt"
@@ -312,7 +318,7 @@ decisions:
         - type: "domain"
           name: "history"
     modelRefs:
-      - model: "qwen3"
+      - model: "qwen2.5:3b"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -332,7 +338,7 @@ decisions:
         - type: "domain"
           name: "health"
     modelRefs:
-      - model: "qwen3"
+      - model: "qwen2.5:3b"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -356,7 +362,7 @@ decisions:
         - type: "domain"
           name: "economics"
     modelRefs:
-      - model: "qwen3"
+      - model: "qwen2.5:3b"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -376,7 +382,7 @@ decisions:
         - type: "domain"
           name: "math"
     modelRefs:
-      - model: "qwen3"
+      - model: "qwen2.5:3b"
         use_reasoning: true
     plugins:
       - type: "system_prompt"
@@ -396,7 +402,7 @@ decisions:
         - type: "domain"
           name: "physics"
     modelRefs:
-      - model: "qwen3"
+      - model: "qwen2.5:3b"
         use_reasoning: true
     plugins:
       - type: "system_prompt"
@@ -416,7 +422,7 @@ decisions:
         - type: "domain"
           name: "computer_science"
     modelRefs:
-      - model: "qwen3"
+      - model: "qwen2.5:3b"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -436,7 +442,7 @@ decisions:
         - type: "domain"
           name: "philosophy"
     modelRefs:
-      - model: "qwen3"
+      - model: "qwen2.5:3b"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -456,7 +462,7 @@ decisions:
         - type: "domain"
           name: "engineering"
     modelRefs:
-      - model: "qwen3"
+      - model: "qwen2.5:3b"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -476,7 +482,7 @@ decisions:
         - type: "domain"
           name: "other"
     modelRefs:
-      - model: "qwen3"
+      - model: "qwen2.5:3b"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -492,7 +498,7 @@ decisions:
           pii_types_allowed: []
 
 
-default_model: qwen3
+default_model: "qwen2.5:3b"
 
 # Reasoning family configurations
 reasoning_families:

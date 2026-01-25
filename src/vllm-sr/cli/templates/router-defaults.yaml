@@ -89,6 +89,12 @@ hallucination_mitigation:
     model_id: "models/mom-halugate-detector"
     threshold: 0.8
     use_cpu: true
+    # False positive reduction settings
+    min_span_length: 2  # Minimum tokens in a span to report (filters single-token false positives)
+    min_span_confidence: 0.6  # Minimum confidence for a span to be reported
+    context_window_size: 50  # Characters of context around flagged spans
+    enable_nli_filtering: true  # Use NLI to filter false positives
+    nli_entailment_threshold: 0.75  # Filter spans with high entailment scores
   # NLI model: provides explanations for hallucinated spans
   nli_model:
     model_id: "models/mom-halugate-explainer"
@@ -139,19 +145,19 @@ embedding_models:
 # Observability Configuration
 observability:
   metrics:
-    enabled: false  # Set to false to disable the Prometheus /metrics endpoint
+    enabled: true  # Enable Prometheus /metrics endpoint for vllm-sr serve
   tracing:
-    enabled: false  # Enable distributed tracing for docker-compose stack
+    enabled: true  # Enable distributed tracing for vllm-sr serve
     provider: "opentelemetry"  # Provider: opentelemetry, openinference, openllmetry
     exporter:
       type: "otlp"  # Export spans to Jaeger (via OTLP gRPC)
-      endpoint: "jaeger:4317"  # Jaeger collector inside compose network
+      endpoint: "vllm-sr-jaeger:4317"  # Jaeger collector (use container name for vllm-sr serve)
       insecure: true  # Use insecure connection (no TLS)
     sampling:
       type: "always_on"  # Sampling: always_on, always_off, probabilistic
       rate: 1.0  # Sampling rate for probabilistic (0.0-1.0)
     resource:
-      service_name: "vllm-semantic-router"
+      service_name: "vllm-sr"
       service_version: "v0.1.0"
       deployment_environment: "development"
 

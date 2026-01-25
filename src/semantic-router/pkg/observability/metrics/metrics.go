@@ -225,32 +225,6 @@ var (
 		},
 	)
 
-	// ClassifierLatency tracks the latency of classifier invocations by type
-	ClassifierLatency = promauto.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "llm_classifier_latency_seconds",
-			Help:    "The latency of classifier invocations by type",
-			Buckets: prometheus.DefBuckets,
-		},
-		[]string{"classifier"},
-	)
-
-	// CacheHits tracks cache hits and misses
-	CacheHits = promauto.NewCounter(
-		prometheus.CounterOpts{
-			Name: "llm_cache_hits_total",
-			Help: "The total number of cache hits",
-		},
-	)
-
-	// CacheMisses tracks cache misses
-	CacheMisses = promauto.NewCounter(
-		prometheus.CounterOpts{
-			Name: "llm_cache_misses_total",
-			Help: "The total number of cache misses",
-		},
-	)
-
 	// CacheOperationDuration tracks the duration of cache operations by backend and operation type
 	CacheOperationDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -279,14 +253,22 @@ var (
 		[]string{"backend"},
 	)
 
-	// CategoryClassificationsCount is an alias with a name preferred by the issue request.
-	// It mirrors CategoryClassifications and is incremented alongside it for compatibility.
-	CategoryClassificationsCount = promauto.NewCounterVec(
+	// CachePluginHits tracks cache hits by decision and plugin type
+	CachePluginHits = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "llm_category_classifications_count",
-			Help: "The total number of times each category is classified (alias metric)",
+			Name: "llm_cache_plugin_hits_total",
+			Help: "The total number of cache hits by decision and plugin type",
 		},
-		[]string{"category"},
+		[]string{"decision_name", "plugin_type"},
+	)
+
+	// CachePluginMisses tracks cache misses by decision and plugin type
+	CachePluginMisses = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_cache_plugin_misses_total",
+			Help: "The total number of cache misses by decision and plugin type",
+		},
+		[]string{"decision_name", "plugin_type"},
 	)
 
 	// PIIViolations tracks PII policy violations by model and PII data type
@@ -296,24 +278,6 @@ var (
 			Help: "The total number of PII policy violations by model and PII data type",
 		},
 		[]string{"model", "pii_type"},
-	)
-
-	// FactCheckClassifications tracks fact-check classification results
-	FactCheckClassifications = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "llm_fact_check_classifications_total",
-			Help: "The total number of fact-check classifications by result",
-		},
-		[]string{"result"},
-	)
-
-	// HallucinationDetections tracks hallucination detection results
-	HallucinationDetections = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "llm_hallucination_detections_total",
-			Help: "The total number of hallucination detection runs by result",
-		},
-		[]string{"result"},
 	)
 
 	// HallucinationDetectionLatency tracks the latency of hallucination detection
@@ -414,6 +378,152 @@ var (
 			Help: "The number of times entropy-based routing falls back to traditional classification",
 		},
 		[]string{"fallback_reason", "fallback_strategy"},
+	)
+
+	// Signal extraction metrics
+	// SignalExtractionTotal tracks the total number of signal extractions by type and name
+	SignalExtractionTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_signal_extraction_total",
+			Help: "Total number of signal extractions by type and name",
+		},
+		[]string{"signal_type", "signal_name"},
+	)
+
+	// SignalExtractionLatency tracks the latency of signal extraction by type
+	SignalExtractionLatency = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "llm_signal_extraction_latency_seconds",
+			Help:    "Latency of signal extraction by type in seconds",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"signal_type"},
+	)
+
+	// SignalMatchTotal tracks the total number of signal matches by type and name
+	SignalMatchTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_signal_match_total",
+			Help: "Total number of signal matches by type and name",
+		},
+		[]string{"signal_type", "signal_name"},
+	)
+
+	// Decision evaluation metrics
+	// DecisionEvaluationTotal tracks the total number of decision evaluations
+	DecisionEvaluationTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "llm_decision_evaluation_total",
+			Help: "Total number of decision evaluations",
+		},
+	)
+
+	// DecisionEvaluationLatency tracks the latency of decision evaluation
+	DecisionEvaluationLatency = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "llm_decision_evaluation_latency_seconds",
+			Help:    "Latency of decision evaluation in seconds",
+			Buckets: prometheus.DefBuckets,
+		},
+	)
+
+	// DecisionMatchTotal tracks the total number of decision matches by decision name
+	DecisionMatchTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_decision_match_total",
+			Help: "Total number of decision matches by decision name",
+		},
+		[]string{"decision_name"},
+	)
+
+	// DecisionConfidence tracks the distribution of decision confidence scores
+	DecisionConfidence = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "llm_decision_confidence",
+			Help:    "Distribution of decision confidence scores by decision name",
+			Buckets: []float64{0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
+		},
+		[]string{"decision_name"},
+	)
+
+	// Plugin execution metrics
+	// PluginExecutionTotal tracks the total number of plugin executions by type, decision, and status
+	PluginExecutionTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_plugin_execution_total",
+			Help: "Total number of plugin executions by type, decision, and status",
+		},
+		[]string{"plugin_type", "decision_name", "status"},
+	)
+
+	// PluginExecutionLatency tracks the latency of plugin execution by type
+	PluginExecutionLatency = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "llm_plugin_execution_latency_seconds",
+			Help:    "Latency of plugin execution by type in seconds",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"plugin_type"},
+	)
+
+	// PluginExecutionErrors tracks the total number of plugin execution errors by type and reason
+	PluginExecutionErrors = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_plugin_execution_errors_total",
+			Help: "Total number of plugin execution errors by type and reason",
+		},
+		[]string{"plugin_type", "error_reason"},
+	)
+
+	// RAG (Retrieval-Augmented Generation) metrics
+	RAGRetrievalAttempts = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "rag_retrieval_attempts_total",
+			Help: "Total number of RAG retrieval attempts",
+		},
+		[]string{"backend", "decision", "status"}, // status: success, error
+	)
+
+	RAGRetrievalLatency = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "rag_retrieval_latency_seconds",
+			Help:    "RAG retrieval latency in seconds",
+			Buckets: []float64{0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0},
+		},
+		[]string{"backend", "decision"},
+	)
+
+	RAGSimilarityScore = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "rag_similarity_score",
+			Help: "Average similarity score of retrieved documents",
+		},
+		[]string{"backend", "decision"},
+	)
+
+	RAGContextLength = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "rag_context_length_chars",
+			Help:    "Length of retrieved context in characters",
+			Buckets: []float64{100, 500, 1000, 2000, 5000, 10000, 20000},
+		},
+		[]string{"backend", "decision"},
+	)
+
+	RAGCacheHits = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "rag_cache_hits_total",
+			Help: "Total number of RAG cache hits",
+		},
+		[]string{"backend"},
+	)
+
+	RAGCacheMisses = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "rag_cache_misses_total",
+			Help: "Total number of RAG cache misses",
+		},
+		[]string{"backend"},
 	)
 
 	// ContextTokenCount tracks the distribution of input token counts for context-based routing
@@ -537,16 +647,6 @@ func RecordModelRoutingLatency(seconds float64) {
 	ModelRoutingLatency.Observe(seconds)
 }
 
-// RecordCacheHit records a cache hit
-func RecordCacheHit() {
-	CacheHits.Inc()
-}
-
-// RecordCacheMiss records a cache miss
-func RecordCacheMiss() {
-	CacheMisses.Inc()
-}
-
 // RecordCacheOperation records a cache operation with duration and status
 func RecordCacheOperation(backend, operation, status string, duration float64) {
 	CacheOperationDuration.WithLabelValues(backend, operation).Observe(duration)
@@ -558,12 +658,26 @@ func UpdateCacheEntries(backend string, count int) {
 	CacheEntriesTotal.WithLabelValues(backend).Set(float64(count))
 }
 
-// RecordCategoryClassification increments the counter for a specific category classification
-func RecordCategoryClassification(category string) {
-	if category == "" {
-		category = consts.UnknownLabel
+// RecordCachePluginHit records a cache hit for a specific decision and plugin type
+func RecordCachePluginHit(decisionName, pluginType string) {
+	if decisionName == "" {
+		decisionName = consts.UnknownLabel
 	}
-	CategoryClassificationsCount.WithLabelValues(category).Inc()
+	if pluginType == "" {
+		pluginType = "semantic-cache"
+	}
+	CachePluginHits.WithLabelValues(decisionName, pluginType).Inc()
+}
+
+// RecordCachePluginMiss records a cache miss for a specific decision and plugin type
+func RecordCachePluginMiss(decisionName, pluginType string) {
+	if decisionName == "" {
+		decisionName = consts.UnknownLabel
+	}
+	if pluginType == "" {
+		pluginType = "semantic-cache"
+	}
+	CachePluginMisses.WithLabelValues(decisionName, pluginType).Inc()
 }
 
 // RecordPIIViolation records a PII policy violation for a specific model and PII data type
@@ -576,21 +690,6 @@ func RecordPIIViolations(model string, piiTypes []string) {
 	for _, piiType := range piiTypes {
 		PIIViolations.WithLabelValues(model, piiType).Inc()
 	}
-}
-
-// RecordClassifierLatency records the latency for a classifier invocation by type
-func RecordClassifierLatency(classifier string, seconds float64) {
-	ClassifierLatency.WithLabelValues(classifier).Observe(seconds)
-}
-
-// RecordFactCheckClassification records a fact-check classification result
-func RecordFactCheckClassification(result string) {
-	FactCheckClassifications.WithLabelValues(result).Inc()
-}
-
-// RecordHallucinationDetection records a hallucination detection result
-func RecordHallucinationDetection(result string) {
-	HallucinationDetections.WithLabelValues(result).Inc()
 }
 
 // RecordHallucinationDetectionLatency records the latency for hallucination detection
@@ -938,6 +1037,70 @@ func RecordEntropyClassificationMetrics(
 	if latencySeconds > 0 {
 		RecordEntropyClassificationLatency(latencySeconds)
 	}
+}
+
+// RecordSignalExtraction records a signal extraction event
+func RecordSignalExtraction(signalType, signalName string, latencySeconds float64) {
+	if signalType == "" {
+		signalType = consts.UnknownLabel
+	}
+	if signalName == "" {
+		signalName = consts.UnknownLabel
+	}
+	SignalExtractionTotal.WithLabelValues(signalType, signalName).Inc()
+	SignalExtractionLatency.WithLabelValues(signalType).Observe(latencySeconds)
+}
+
+// RecordSignalMatch records a signal match event
+func RecordSignalMatch(signalType, signalName string) {
+	if signalType == "" {
+		signalType = consts.UnknownLabel
+	}
+	if signalName == "" {
+		signalName = consts.UnknownLabel
+	}
+	SignalMatchTotal.WithLabelValues(signalType, signalName).Inc()
+}
+
+// RecordDecisionEvaluation records a decision evaluation event
+func RecordDecisionEvaluation(latencySeconds float64) {
+	DecisionEvaluationTotal.Inc()
+	DecisionEvaluationLatency.Observe(latencySeconds)
+}
+
+// RecordDecisionMatch records a decision match event with confidence
+func RecordDecisionMatch(decisionName string, confidence float64) {
+	if decisionName == "" {
+		decisionName = consts.UnknownLabel
+	}
+	DecisionMatchTotal.WithLabelValues(decisionName).Inc()
+	DecisionConfidence.WithLabelValues(decisionName).Observe(confidence)
+}
+
+// RecordPluginExecution records a plugin execution event
+func RecordPluginExecution(pluginType, decisionName, status string, latencySeconds float64) {
+	if pluginType == "" {
+		pluginType = consts.UnknownLabel
+	}
+	if decisionName == "" {
+		decisionName = consts.UnknownLabel
+	}
+	if status == "" {
+		status = "unknown"
+	}
+	PluginExecutionTotal.WithLabelValues(pluginType, decisionName, status).Inc()
+	PluginExecutionLatency.WithLabelValues(pluginType).Observe(latencySeconds)
+}
+
+// RecordPluginError records a plugin execution error
+func RecordPluginError(pluginType, errorReason string) {
+	if pluginType == "" {
+		pluginType = consts.UnknownLabel
+	}
+	if errorReason == "" {
+		errorReason = "unknown"
+	}
+	PluginExecutionErrors.WithLabelValues(pluginType, errorReason).Inc()
 }
 
 // RecordContextTokenCount records the input token count with context level

@@ -172,7 +172,118 @@ func RecordError(span trace.Span, err error) {
 	}
 }
 
-// Span attribute keys following OpenInference conventions for LLM observability
+// StartSignalSpan starts a new span for signal evaluation
+// signalType: the type of signal (e.g., "keyword", "embedding", "domain")
+// Returns the new context and span
+func StartSignalSpan(ctx context.Context, signalType string) (context.Context, trace.Span) {
+	// Use specific signal span name based on type
+	var spanName string
+	switch signalType {
+	case "keyword":
+		spanName = SpanSignalKeyword
+	case "embedding":
+		spanName = SpanSignalEmbedding
+	case "domain":
+		spanName = SpanSignalDomain
+	case "fact_check":
+		spanName = SpanSignalFactCheck
+	case "user_feedback":
+		spanName = SpanSignalUserFeedback
+	case "preference":
+		spanName = SpanSignalPreference
+	case "language":
+		spanName = SpanSignalLanguage
+	case "latency":
+		spanName = SpanSignalLatency
+	default:
+		spanName = SpanSignalEvaluation
+	}
+
+	spanCtx, span := StartSpan(ctx, spanName)
+	SetSpanAttributes(span, attribute.String(AttrSignalType, signalType))
+	return spanCtx, span
+}
+
+// EndSignalSpan ends a signal span with matched rules and confidence
+func EndSignalSpan(span trace.Span, matchedRules []string, confidence float64, latencyMs int64) {
+	if span == nil {
+		return
+	}
+
+	if len(matchedRules) > 0 {
+		SetSpanAttributes(span,
+			attribute.StringSlice(AttrSignalMatchedRules, matchedRules),
+			attribute.Float64(AttrSignalConfidence, confidence),
+			attribute.Int64(AttrSignalLatencyMs, latencyMs))
+	} else {
+		SetSpanAttributes(span,
+			attribute.Int64(AttrSignalLatencyMs, latencyMs))
+	}
+
+	span.End()
+}
+
+// StartDecisionSpan starts a new span for decision evaluation
+// decisionName: the name of the decision being evaluated
+// Returns the new context and span
+func StartDecisionSpan(ctx context.Context, decisionName string) (context.Context, trace.Span) {
+	spanCtx, span := StartSpan(ctx, SpanDecisionEvaluation)
+	SetSpanAttributes(span, attribute.String(AttrDecisionName, decisionName))
+	return spanCtx, span
+}
+
+// EndDecisionSpan ends a decision span with evaluation results
+func EndDecisionSpan(span trace.Span, confidence float64, matchedRules []string, strategy string) {
+	if span == nil {
+		return
+	}
+
+	SetSpanAttributes(span,
+		attribute.Float64(AttrDecisionConfidence, confidence),
+		attribute.StringSlice(AttrDecisionMatchedRules, matchedRules),
+		attribute.String(AttrDecisionStrategy, strategy))
+
+	span.End()
+}
+
+// StartPluginSpan starts a new span for plugin execution with standard attributes
+// pluginType: the type of plugin (e.g., "pii", "jailbreak", "system_prompt", "semantic-cache")
+// decisionName: the decision name this plugin is associated with
+// Returns the new context and span
+func StartPluginSpan(ctx context.Context, pluginType string, decisionName string) (context.Context, trace.Span) {
+	spanCtx, span := StartSpan(ctx, SpanPluginExecution)
+
+	// Set standard plugin attributes
+	SetSpanAttributes(span,
+		attribute.String(AttrPluginType, pluginType),
+		attribute.String(AttrPluginDecision, decisionName))
+
+	return spanCtx, span
+}
+
+// EndPluginSpan ends a plugin span with status and latency
+// status: "success", "error", "blocked", "skipped", etc.
+// latencyMs: execution time in milliseconds
+// result: optional result string (e.g., "pii_detected", "jailbreak_blocked", "cache_hit")
+func EndPluginSpan(span trace.Span, status string, latencyMs int64, result string) {
+	if span == nil {
+		return
+	}
+
+	attrs := []attribute.KeyValue{
+		attribute.String(AttrPluginStatus, status),
+		attribute.Int64(AttrPluginLatency, latencyMs),
+	}
+
+	if result != "" {
+		attrs = append(attrs, attribute.String(AttrPluginResult, result))
+	}
+
+	SetSpanAttributes(span, attrs...)
+	span.End()
+}
+
+// Span attribute keys following the signal -> decision -> plugin -> model hierarchy
 const (
 	// Request metadata
 	AttrRequestID  = "request.id"
@@ -181,47 +292,56 @@ const (
 	AttrHTTPMethod = "http.method"
 	AttrHTTPPath   = "http.path"
 
-	// Model information
-	AttrModelName     = "model.name"
-	AttrModelProvider = "model.provider"
-	AttrModelVersion  = "model.version"
+	// Signal layer attributes
+	AttrSignalType         = "signal.type"
+	AttrSignalMatchedRules = "signal.matched_rules"
+	AttrSignalConfidence   = "signal.confidence"
+	AttrSignalLatencyMs    = "signal.latency_ms"
 
-	// Classification
-	AttrCategoryName       = "category.name"
-	AttrCategoryConfidence = "category.confidence"
-	AttrClassifierType     = "classifier.type"
+	// Decision layer attributes
+	AttrDecisionName         = "decision.name"
+	AttrDecisionConfidence   = "decision.confidence"
+	AttrDecisionMatchedRules = "decision.matched_rules"
+	AttrDecisionStrategy     = "decision.strategy"
 
-	// Routing
-	AttrRoutingStrategy = "routing.strategy"
-	AttrRoutingReason   = "routing.reason"
-	AttrOriginalModel   = "routing.original_model"
-	AttrSelectedModel   = "routing.selected_model"
-	AttrEndpointName    = "endpoint.name"
-	AttrEndpointAddress = "endpoint.address"
+	// Plugin layer attributes
+	AttrPluginType     = "plugin.type"
+	AttrPluginDecision = "plugin.decision"
+	AttrPluginStatus   = "plugin.status"
+	AttrPluginLatency  = "plugin.latency_ms"
+	AttrPluginEnabled  = "plugin.enabled"
+	AttrPluginResult   = "plugin.result"
 
-	// Security
-	AttrPIIDetected       = "pii.detected"
-	AttrPIITypes          = "pii.types"
-	AttrJailbreakDetected = "jailbreak.detected"
-	AttrJailbreakType     = "jailbreak.type"
-	AttrSecurityAction    = "security.action"
+	// Model layer attributes
+	AttrModelName            = "model.name"
+	AttrModelProvider        = "model.provider"
+	AttrModelVersion         = "model.version"
+	AttrModelEndpoint        = "model.endpoint"
+	AttrReasoningEnabled     = "model.reasoning_enabled"
+	AttrReasoningEffort      = "model.reasoning_effort"
+	AttrTokenCountPrompt     = "model.token_count_prompt"
+	AttrTokenCountCompletion = "model.token_count_completion"
 
-	// Performance
-	AttrTokenCountPrompt     = "token.count.prompt"
-	AttrTokenCountCompletion = "token.count.completion"
-	AttrCacheHit             = "cache.hit"
-	AttrCacheKey             = "cache.key"
-
-	// Reasoning
-	AttrReasoningEnabled = "reasoning.enabled"
-	AttrReasoningEffort  = "reasoning.effort"
-	AttrReasoningFamily  = "reasoning.family"
-
-	// Tools
-	AttrToolsSelected = "tools.selected"
-	AttrToolsCount    = "tools.count"
-
-	// Processing times
+	// Legacy attributes (for backward compatibility, to be deprecated)
+	AttrCategoryName             = "category.name"
+	AttrCategoryConfidence       = "category.confidence"
+	AttrClassifierType           = "classifier.type"
+	AttrRoutingStrategy          = "routing.strategy"
+	AttrRoutingReason            = "routing.reason"
+	AttrOriginalModel            = "routing.original_model"
+	AttrSelectedModel            = "routing.selected_model"
+	AttrEndpointName             = "endpoint.name"
+	AttrEndpointAddress          = "endpoint.address"
+	AttrPIIDetected              = "pii.detected"
+	AttrPIITypes                 = "pii.types"
+	AttrJailbreakDetected        = "jailbreak.detected"
+	AttrJailbreakType            = "jailbreak.type"
+	AttrSecurityAction           = "security.action"
+	AttrCacheHit                 = "cache.hit"
+	AttrCacheKey                 = "cache.key"
+	AttrReasoningFamily          = "reasoning.family"
+	AttrToolsSelected            = "tools.selected"
+	AttrToolsCount               = "tools.count"
 	AttrProcessingTimeMs         = "processing.time_ms"
 	AttrClassificationTimeMs     = "classification.time_ms"
 	AttrCacheLookupTimeMs        = "cache.lookup_time_ms"
@@ -229,17 +349,43 @@ const (
 	AttrJailbreakDetectionTimeMs = "jailbreak.detection_time_ms"
 )
 
-// Span names for different operations
+// Span names following the hierarchy: signal -> decision -> plugin -> model
 const (
-	SpanRequestReceived       = "semantic_router.request.received"
-	SpanClassification        = "semantic_router.classification"
-	SpanPIIDetection          = "semantic_router.security.pii_detection"
-	SpanJailbreakDetection    = "semantic_router.security.jailbreak_detection"
-	SpanCacheLookup           = "semantic_router.cache.lookup"
-	SpanRoutingDecision       = "semantic_router.routing.decision"
-	SpanBackendSelection      = "semantic_router.backend.selection"
+	// Root span
+	SpanRequestReceived = "semantic_router.request.received"
+
+	// Signal evaluation layer (Layer 1)
+	SpanSignalEvaluation   = "semantic_router.signal.evaluation"
+	SpanSignalKeyword      = "semantic_router.signal.keyword"
+	SpanSignalEmbedding    = "semantic_router.signal.embedding"
+	SpanSignalDomain       = "semantic_router.signal.domain"
+	SpanSignalFactCheck    = "semantic_router.signal.fact_check"
+	SpanSignalUserFeedback = "semantic_router.signal.user_feedback"
+	SpanSignalPreference   = "semantic_router.signal.preference"
+	SpanSignalLanguage     = "semantic_router.signal.language"
+	SpanSignalLatency      = "semantic_router.signal.latency"
+
+	// Decision evaluation layer (Layer 2)
+	SpanDecisionEvaluation = "semantic_router.decision.evaluation"
+
+	// Plugin execution layer (Layer 3)
+	SpanPluginExecution = "semantic_router.plugin.execution"
+
+	// RAG (Retrieval-Augmented Generation) spans
+	SpanRAGRetrieval        = "semantic_router.rag.retrieval"
+	SpanRAGContextInjection = "semantic_router.rag.context_injection"
+
+	// Model invocation layer (Layer 4)
 	SpanUpstreamRequest       = "semantic_router.upstream.request"
 	SpanResponseProcessing    = "semantic_router.response.processing"
 	SpanToolSelection         = "semantic_router.tools.selection"
 	SpanSystemPromptInjection = "semantic_router.system_prompt.injection"
+
+	// Legacy spans (deprecated - kept for backward compatibility during migration)
+	SpanClassification     = "semantic_router.classification" // Use SpanSignalEvaluation instead
+	SpanPIIDetection       = "semantic_router.security.pii_detection"
+	SpanJailbreakDetection = "semantic_router.security.jailbreak_detection"
+	SpanCacheLookup        = "semantic_router.cache.lookup"
+	SpanRoutingDecision    = "semantic_router.routing.decision"
+	SpanBackendSelection   = "semantic_router.backend.selection"
 )

@@ -1,0 +1,330 @@
+---
+# SemanticRouter with Llama Stack Integration
+# This example demonstrates discovering and routing to Llama Stack deployments
+apiVersion: vllm.ai/v1alpha1
+kind: SemanticRouter
+metadata:
+  name: semantic-router-llamastack
+  namespace: llama-serving
+spec:
+  replicas: 2
+
+  # ====================
+  # Llama Stack Backend Configuration
+  # ====================
+  # The operator discovers Llama Stack services using label selectors
+  # and automatically generates vllm_endpoints configuration
+  vllmEndpoints:
+    # Example 1: Llama Stack service discovery by labels
+    - name: llama-3-3-70b-endpoint
+      model: llama-3.3-70b-instruct
+      reasoningFamily: gpt
+      backend:
+        type: llamastack
+        discoveryLabels:
+          # Labels that identify your Llama Stack deployment
+          app: llama-stack
+          model: llama-3.3-70b
+      weight: 1
+
+    # Example 2: Another Llama Stack model
+    - name: llama-3-1-8b-endpoint
+      model: llama-3.1-8b-instruct
+      reasoningFamily: gpt
+      backend:
+        type: llamastack
+        discoveryLabels:
+          app: llama-stack
+          model: llama-3.1-8b
+      weight: 2  # Higher weight = more traffic
+
+    # Example 3: Mix with KServe backend
+    - name: kserve-qwen-endpoint
+      model: qwen2.5-7b
+      reasoningFamily: qwen3
+      backend:
+        type: kserve
+        inferenceServiceName: qwen-2-5-7b
+
+    # Example 4: Direct vLLM service as fallback
+    - name: vllm-fallback
+      model: llama-3-8b
+      reasoningFamily: qwen3
+      backend:
+        type: service
+        service:
+          name: vllm-llama
+          namespace: llama-serving
+          port: 8000
+
+  # ====================
+  # Service Configuration
+  # ====================
+  service:
+    type: ClusterIP
+    # Envoy ingress port (standalone mode)
+    api:
+      port: 8080
+      targetPort: 8080
+    # ExtProc gRPC port
+    grpc:
+      port: 50051
+      targetPort: 50051
+    # Metrics
+    metrics:
+      enabled: true
+      port: 9190
+      targetPort: 9190
+
+  # ====================
+  # Persistence
+  # ====================
+  persistence:
+    enabled: true
+    storageClassName: standard  # Adjust for your cluster
+    size: 15Gi
+
+  # ====================
+  # Resources
+  # ====================
+  resources:
+    requests:
+      cpu: 1500m
+      memory: 3Gi
+    limits:
+      cpu: 3000m
+      memory: 6Gi
+
+  # ====================
+  # Semantic Router Configuration
+  # ====================
+  config:
+    # Semantic cache for performance optimization
+    semantic_cache:
+      enabled: true
+      backend_type: memory
+      similarity_threshold: "0.85"
+      max_entries: 5000
+      ttl_seconds: 3600
+      eviction_policy: lru
+
+    # Tools auto-selection
+    tools:
+      enabled: true
+      top_k: 3
+      similarity_threshold: "0.2"
+      fallback_to_empty: true
+
+    # Prompt guard (jailbreak detection)
+    prompt_guard:
+      enabled: true
+      threshold: "0.7"
+
+    # Classifiers
+    classifier:
+      category_model:
+        threshold: "0.5"
+        use_cpu: true
+      pii_model:
+        threshold: "0.7"
+        use_cpu: true
+
+    # Reasoning families for different model types
+    reasoning_families:
+      gpt:
+        type: reasoning_effort
+        parameter: reasoning_effort
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+
+    default_reasoning_effort: medium
+
+  # ====================
+  # Tools Database
+  # ====================
+  # Define tools that can be auto-selected based on query
+  toolsDb:
+    - name: web_search
+      description: Search the web for current information
+      parameters:
+        type: object
+        properties:
+          query:
+            type: string
+            description: Search query
+          num_results:
+            type: integer
+            description: Number of results to return
+            default: 5
+        required: [query]
+
+    - name: code_interpreter
+      description: Execute Python code in a sandbox environment
+      parameters:
+        type: object
+        properties:
+          code:
+            type: string
+            description: Python code to execute
+          timeout:
+            type: integer
+            description: Execution timeout in seconds
+            default: 30
+        required: [code]
+
+    - name: knowledge_base_search
+      description: Search internal knowledge base for company information
+      parameters:
+        type: object
+        properties:
+          query:
+            type: string
+            description: Search query
+          collection:
+            type: string
+            description: Knowledge base collection name
+            enum: [policies, procedures, technical_docs]
+        required: [query]
+
+  # ====================
+  # Autoscaling
+  # ====================
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 12
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  # ====================
+  # Health Probes
+  # ====================
+  startupProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    failureThreshold: 30
+
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: 8080
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  # ====================
+  # Security Context
+  # ====================
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+
+  podSecurityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+
+  # ====================
+  # Scheduling
+  # ====================
+  nodeSelector:
+    node-role.kubernetes.io/worker: ""
+
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - semantic-router
+            topologyKey: kubernetes.io/hostname
+
+  # ====================
+  # Monitoring
+  # ====================
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9190"
+    prometheus.io/path: "/metrics"
+
+---
+# Example Llama Stack Deployment
+# This is what your Llama Stack deployment should look like for discovery to work
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llama-stack-70b
+  namespace: llama-serving
+  labels:
+    app: llama-stack
+    model: llama-3.3-70b
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llama-stack
+      model: llama-3.3-70b
+  template:
+    metadata:
+      labels:
+        app: llama-stack
+        model: llama-3.3-70b
+    spec:
+      containers:
+        - name: llama-stack
+          image: meta-llama/llama-stack:latest
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: MODEL_NAME
+              value: llama-3.3-70b-instruct
+            - name: LLAMASTACK_PORT
+              value: "8000"
+          resources:
+            requests:
+              cpu: 4000m
+              memory: 32Gi
+            limits:
+              cpu: 8000m
+              memory: 64Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llama-stack-70b
+  namespace: llama-serving
+  labels:
+    app: llama-stack
+    model: llama-3.3-70b
+spec:
+  type: ClusterIP
+  selector:
+    app: llama-stack
+    model: llama-3.3-70b
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: http

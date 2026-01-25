@@ -115,7 +115,7 @@ jobs:
           echo "Verifying package contents..."
           echo ""
           echo "=== Wheel contents ==="
-          unzip -l dist/*.whl | grep -E "(cli/templates|\.yaml|\.json)" || echo "WARNING: No template files found!"
+          unzip -l dist/*.whl | grep -E "(cli/templates|\.yaml|\.json|\.ini)" || echo "WARNING: No template files found!"
           echo ""
           echo "=== Checking required template files ==="
           REQUIRED_FILES=(
@@ -123,6 +123,12 @@ jobs:
             "cli/templates/envoy.template.yaml"
             "cli/templates/router-defaults.yaml"
             "cli/templates/tools_db.json"
+            "cli/templates/grafana.serve.ini"
+            "cli/templates/grafana-datasource.serve.yaml"
+            "cli/templates/grafana-datasource-jaeger.serve.yaml"
+            "cli/templates/grafana-dashboard.serve.yaml"
+            "cli/templates/llm-router-dashboard.serve.json"
+            "cli/templates/prometheus.serve.yaml"
           )
           MISSING_FILES=()
           for file in "${REQUIRED_FILES[@]}"; do

@@ -1,7 +1,9 @@
 package proxy
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -44,26 +46,40 @@ func NewReverseProxy(targetBase, stripPrefix string, forwardAuth bool) (*httputi
 
 		// Capture incoming Origin for downstream CORS decisions
 		incomingOrigin := r.Header.Get("Origin")
+
+		// If no Origin header, try to extract from Referer (for iframe requests)
+		if incomingOrigin == "" {
+			if referer := r.Header.Get("Referer"); referer != "" {
+				if refererURL, err := url.Parse(referer); err == nil {
+					incomingOrigin = refererURL.Scheme + "://" + refererURL.Host
+				}
+			}
+		}
+
+		// Forward the original Origin for response CORS handling
+		// This is critical: we must preserve the actual client origin, not the target URL
+		if incomingOrigin != "" {
+			r.Header.Set("X-Forwarded-Origin", incomingOrigin)
+		}
+		// If still no origin, don't set X-Forwarded-Origin (will use wildcard in response)
+
+		// Set Origin header to match the target URL for iframe embedding
+		// This is required for embedded services to accept iframe embedding
+		// and pass CSRF/Origin validation checks.
 		if overrideOrigin && (r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch || r.Method == http.MethodDelete) {
 			// Force Origin to target to satisfy upstream Origin/CSRF checks for write requests
 			r.Header.Set("Origin", targetURL.Scheme+"://"+targetURL.Host)
-		} else if incomingOrigin == "" {
+		} else if r.Header.Get("Origin") == "" {
 			// If no Origin present, set to target origin to avoid empty Origin edge cases
 			r.Header.Set("Origin", targetURL.Scheme+"://"+targetURL.Host)
 		}
 
-		// Forward the original Origin (prior to any override) for response CORS handling
-		if incomingOrigin != "" {
-			r.Header.Set("X-Forwarded-Origin", incomingOrigin)
-		} else {
-			r.Header.Set("X-Forwarded-Origin", targetURL.Scheme+"://"+targetURL.Host)
+		// Preserve Access-Control-Request-Private-Network header for PNA preflight requests
+		// This header is sent by Chrome when making preflight requests to private network resources
+		// from public pages. We need to forward it to the upstream service.
+		if pnaHeader := r.Header.Get("Access-Control-Request-Private-Network"); pnaHeader != "" {
+			log.Printf("PNA preflight request detected: %s", pnaHeader)
 		}
-
-		// Set Origin header to match the target URL for iframe embedding
-		// This is required for embedded services to accept iframe embedding
-		// and pass CSRF/Origin validation checks. The original Origin is preserved in X-Forwarded-Origin
-		// for CORS response handling. This override is intentional and necessary for iframe embedding to work.
-		r.Header.Set("Origin", targetURL.Scheme+"://"+targetURL.Host)
 
 		// Set X-Forwarded-* headers to preserve client information
 		// These headers should reflect the original client request, not the target service
@@ -169,6 +185,96 @@ func NewReverseProxy(targetBase, stripPrefix string, forwardAuth bool) (*httputi
 		resp.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		resp.Header.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin")
 		resp.Header.Set("Access-Control-Expose-Headers", "Content-Length, Content-Range")
+
+		// Add Private Network Access (PNA) headers to allow public pages to access private network resources
+		// This is required when accessing the dashboard via a public domain that proxies to local services
+		// Chrome's Private Network Access policy requires these headers for cross-origin requests to private networks
+		// See: https://developer.chrome.com/blog/private-network-access-preflight/
+		resp.Header.Set("Access-Control-Allow-Private-Network", "true")
+
+		return nil
+	}
+
+	return proxy, nil
+}
+
+// NewJaegerProxy creates a reverse proxy specifically for Jaeger UI with dark theme injection
+func NewJaegerProxy(targetBase, stripPrefix string) (*httputil.ReverseProxy, error) {
+	proxy, err := NewReverseProxy(targetBase, stripPrefix, false)
+	if err != nil {
+		return nil, err
+	}
+
+	// Override ModifyResponse to inject dark theme script into HTML responses
+	originalModifyResponse := proxy.ModifyResponse
+	proxy.ModifyResponse = func(resp *http.Response) error {
+		// First apply the original response modifications (CORS, CSP, etc.)
+		if originalModifyResponse != nil {
+			if err := originalModifyResponse(resp); err != nil {
+				return err
+			}
+		}
+
+		// Only inject script into HTML responses
+		contentType := resp.Header.Get("Content-Type")
+		if !strings.Contains(contentType, "text/html") {
+			return nil
+		}
+
+		// Read the response body
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+		resp.Body.Close()
+
+		// Inject light theme script to ensure Jaeger displays consistently in light mode
+		// This avoids theme conflicts with the dashboard
+		themeScript := `<script>
+(function() {
+  try {
+    // Force Jaeger UI to use light theme for consistent appearance
+    localStorage.setItem('jaeger-ui-theme', 'light');
+    localStorage.setItem('theme', 'light');
+
+    // Set data-theme attribute on document element
+    if (document.documentElement) {
+      document.documentElement.setAttribute('data-theme', 'light');
+      document.documentElement.setAttribute('data-bs-theme', 'light');
+      document.documentElement.style.colorScheme = 'light';
+    }
+
+    // Also set it after DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+      if (document.documentElement) {
+        document.documentElement.setAttribute('data-theme', 'light');
+        document.documentElement.setAttribute('data-bs-theme', 'light');
+        document.documentElement.style.colorScheme = 'light';
+      }
+    });
+  } catch (e) {
+    console.error('Failed to set Jaeger theme:', e);
+  }
+})();
+</script>`
+
+		// Try to inject before </head>, otherwise before </body>
+		modifiedBody := string(body)
+		if strings.Contains(modifiedBody, "</head>") {
+			modifiedBody = strings.Replace(modifiedBody, "</head>", themeScript+"</head>", 1)
+		} else if strings.Contains(modifiedBody, "<body") {
+			// Find the end of the <body> tag and inject after it
+			bodyTagEnd := strings.Index(modifiedBody, ">")
+			if bodyTagEnd != -1 {
+				modifiedBody = modifiedBody[:bodyTagEnd+1] + themeScript + modifiedBody[bodyTagEnd+1:]
+			}
+		}
+
+		// Create new response body
+		newBody := []byte(modifiedBody)
+		resp.Body = io.NopCloser(bytes.NewReader(newBody))
+		resp.ContentLength = int64(len(newBody))
+		resp.Header.Set("Content-Length", fmt.Sprintf("%d", len(newBody)))
 
 		return nil
 	}

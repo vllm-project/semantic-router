@@ -236,19 +236,35 @@ func TestInjectTraceContextToSlice(t *testing.T) {
 }
 
 func TestSpanAttributeConstants(t *testing.T) {
-	// Verify span name constants are defined
+	// Verify span name constants are defined following the new hierarchy:
+	// signal -> decision -> plugin -> model
 	spanNames := []string{
+		// Root span
 		SpanRequestReceived,
-		SpanClassification,
-		SpanPIIDetection,
-		SpanJailbreakDetection,
-		SpanCacheLookup,
-		SpanRoutingDecision,
-		SpanBackendSelection,
+
+		// Signal evaluation layer
+		SpanSignalEvaluation,
+		SpanSignalKeyword,
+		SpanSignalEmbedding,
+		SpanSignalDomain,
+		SpanSignalFactCheck,
+		SpanSignalUserFeedback,
+		SpanSignalPreference,
+		SpanSignalLanguage,
+		SpanSignalLatency,
+
+		// Decision evaluation layer
+		SpanDecisionEvaluation,
+
+		// Plugin execution layer
+		SpanPluginExecution,
+
+		// Model invocation layer
 		SpanUpstreamRequest,
 		SpanResponseProcessing,
-		SpanToolSelection,
-		SpanSystemPromptInjection,
+
+		// Legacy spans (for backward compatibility)
+		SpanClassification,
 	}
 
 	for _, name := range spanNames {

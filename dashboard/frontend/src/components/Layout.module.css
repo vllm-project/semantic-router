@@ -386,4 +386,17 @@ button.navLink {
   .brandText {
     display: none;
   }
+
+  /* Hide header on mobile for specific pages */
+  .headerHideMobile {
+    display: none;
+  }
+
+  .hideHeaderMobile .main {
+    padding-top: 0;
+  }
+
+  .hideHeaderMobile .mainContent {
+    height: 100vh;
+  }
 }

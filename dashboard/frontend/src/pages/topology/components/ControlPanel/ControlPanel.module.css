@@ -368,3 +368,138 @@
     transparent 8px
   );
 }
+
+/* Mobile Responsive - Hide Legend on mobile */
+@media (max-width: 768px) {
+  /* Hide the entire legend section on mobile */
+  .section:has(.legend) {
+    display: none;
+  }
+
+  /* Fallback: hide legend directly if :has() is not supported */
+  .legend {
+    display: none;
+  }
+
+  /* Fix signal summary font size on mobile - make it smaller with !important */
+  .resultSectionTitle {
+    font-size: 8px !important;
+  }
+
+  .signalTag {
+    font-size: 8px !important;
+    padding: 2px 5px !important;
+  }
+
+  .signalScore {
+    font-size: 7px !important;
+  }
+
+  .decisionResult {
+    font-size: 9px !important;
+  }
+
+  .fallbackBadge {
+    font-size: 7px !important;
+    padding: 2px 4px !important;
+  }
+
+  .fallbackReason {
+    font-size: 8px !important;
+    padding: 3px 5px !important;
+  }
+
+  .noMatch {
+    font-size: 9px !important;
+  }
+
+  .needsVerify {
+    font-size: 8px !important;
+  }
+
+  .modelTag {
+    font-size: 8px !important;
+    padding: 2px 5px !important;
+  }
+
+  .resultTitle {
+    font-size: 10px !important;
+  }
+
+  .accurateBadge,
+  .simulatedBadge {
+    font-size: 8px !important;
+    padding: 2px 4px !important;
+  }
+
+  .latencyBadge {
+    font-size: 8px !important;
+  }
+
+  .warningBanner {
+    font-size: 9px !important;
+    padding: 6px !important;
+  }
+
+}
+
+@media (max-width: 480px) {
+  .resultSectionTitle {
+    font-size: 7px !important;
+  }
+
+  .signalTag {
+    font-size: 7px !important;
+    padding: 2px 4px !important;
+  }
+
+  .signalScore {
+    font-size: 6px !important;
+  }
+
+  .decisionResult {
+    font-size: 8px !important;
+  }
+
+  .fallbackBadge {
+    font-size: 6px !important;
+    padding: 1px 3px !important;
+  }
+
+  .fallbackReason {
+    font-size: 7px !important;
+    padding: 2px 4px !important;
+  }
+
+  .noMatch {
+    font-size: 8px !important;
+  }
+
+  .needsVerify {
+    font-size: 7px !important;
+  }
+
+  .modelTag {
+    font-size: 7px !important;
+    padding: 2px 4px !important;
+  }
+
+  .resultTitle {
+    font-size: 9px !important;
+  }
+
+  .accurateBadge,
+  .simulatedBadge {
+    font-size: 7px !important;
+    padding: 1px 3px !important;
+  }
+
+  .latencyBadge {
+    font-size: 7px !important;
+  }
+
+  .warningBanner {
+    font-size: 8px !important;
+    padding: 5px !important;
+  }
+}

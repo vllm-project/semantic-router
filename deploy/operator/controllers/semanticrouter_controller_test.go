@@ -184,7 +184,7 @@ func TestGenerateDeployment(t *testing.T) {
 		},
 	}
 
-	deployment := r.generateDeployment(sr)
+	deployment := r.generateDeployment(sr, "standalone")
 
 	if deployment == nil {
 		t.Fatal("generateDeployment() returned nil")
@@ -414,7 +414,7 @@ func TestGenerateService(t *testing.T) {
 		Spec: vllmv1alpha1.SemanticRouterSpec{},
 	}
 
-	svc := r.generateService(sr)
+	svc := r.generateService(sr, "gateway-integration")
 
 	if svc == nil {
 		t.Fatal("generateService() returned nil")
@@ -565,7 +565,7 @@ func TestGenerateContainers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			containers := r.generateContainers(tt.sr)
+			containers := r.generateContainers(tt.sr, "gateway-integration")
 
 			if len(containers) != 1 {
 				t.Fatalf("expected 1 container, got %d", len(containers))
@@ -617,7 +617,7 @@ func TestGenerateVolumes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			volumes := r.generateVolumes(tt.sr)
+			volumes := r.generateVolumes(tt.sr, "gateway-integration")
 
 			if len(volumes) != tt.expectedVolume {
 				t.Errorf("expected %d volumes, got %d", tt.expectedVolume, len(volumes))
@@ -658,7 +658,7 @@ func TestReconcileService(t *testing.T) {
 	}
 
 	// Test service creation
-	err := r.reconcileService(context.Background(), sr)
+	err := r.reconcileService(context.Background(), sr, "gateway-integration")
 	if err != nil {
 		t.Fatalf("reconcileService() failed: %v", err)
 	}

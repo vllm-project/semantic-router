@@ -1,0 +1,14 @@
+# Grafana datasource configuration for Prometheus
+# This file is provisioned automatically when Grafana starts
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://vllm-sr-prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      timeInterval: 15s

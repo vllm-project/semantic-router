@@ -55,11 +55,20 @@ func serializeOpenAIRequestWithStream(req *openai.ChatCompletionNewParams, hasSt
 		return nil, err
 	}
 
-	// If original request had stream parameter, add it back
+	// If original request had stream parameter, add it back along with stream_options
 	if hasStreamParam {
 		var sdkMap map[string]interface{}
 		if err := json.Unmarshal(sdkBytes, &sdkMap); err == nil {
 			sdkMap["stream"] = true
+
+			// Automatically add stream_options to enable usage tracking in streaming responses
+			// This ensures vLLM returns token usage information in the final chunk
+			sdkMap["stream_options"] = map[string]interface{}{
+				"include_usage": true,
+			}
+
+			logging.Infof("Added stream_options.include_usage=true for streaming request")
+
 			if modifiedBytes, err := json.Marshal(sdkMap); err == nil {
 				return modifiedBytes, nil
 			}

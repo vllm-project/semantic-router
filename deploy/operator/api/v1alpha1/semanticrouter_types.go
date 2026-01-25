@@ -68,6 +68,10 @@ type SemanticRouterSpec struct {
 	// +optional
 	ToolsDb []ToolEntry `json:"toolsDb,omitempty"`
 
+	// VLLMEndpoints configuration - generates vllm_endpoints and model_config in config.yaml
+	// +optional
+	VLLMEndpoints []VLLMEndpointSpec `json:"vllmEndpoints,omitempty"`
+
 	// Autoscaling configuration
 	// +optional
 	Autoscaling AutoscalingSpec `json:"autoscaling,omitempty"`
@@ -111,6 +115,14 @@ type SemanticRouterSpec struct {
 	// Container arguments
 	// +optional
 	Args []string `json:"args,omitempty"`
+
+	// Gateway integration for reusing existing gateways
+	// +optional
+	Gateway *GatewaySpec `json:"gateway,omitempty"`
+
+	// OpenShift-specific features
+	// +optional
+	OpenShift *OpenShiftSpec `json:"openshift,omitempty"`
 
 	// Ingress configuration
 	// +optional
@@ -658,6 +670,119 @@ type IngressTLS struct {
 	Hosts []string `json:"hosts,omitempty"`
 }
 
+// VLLMEndpointSpec defines a vLLM model backend endpoint
+type VLLMEndpointSpec struct {
+	// Name of the endpoint (used in model_config.preferred_endpoints)
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// Model name as reported by vLLM (e.g., "Model-A", "llama3-8b")
+	// +kubebuilder:validation:MinLength=1
+	Model string `json:"model"`
+
+	// Reasoning family for the model (e.g., "qwen3", "deepseek", "gpt")
+	// +optional
+	ReasoningFamily string `json:"reasoningFamily,omitempty"`
+
+	// Backend configuration
+	Backend VLLMBackend `json:"backend"`
+
+	// Weight for load balancing (default: 1)
+	// +optional
+	// +kubebuilder:default=1
+	Weight int `json:"weight,omitempty"`
+}
+
+// VLLMBackend specifies how to reach the vLLM service
+type VLLMBackend struct {
+	// Type of backend: kserve, llamastack, or service
+	// +kubebuilder:validation:Enum=kserve;llamastack;service
+	Type string `json:"type"`
+
+	// For type=kserve: InferenceService name for auto-discovery
+	// +optional
+	InferenceServiceName string `json:"inferenceServiceName,omitempty"`
+
+	// For type=llamastack: Labels to match services
+	// +optional
+	DiscoveryLabels map[string]string `json:"discoveryLabels,omitempty"`
+
+	// For type=service: Direct service configuration
+	// +optional
+	Service *ServiceBackend `json:"service,omitempty"`
+}
+
+// ServiceBackend defines a direct Kubernetes service backend
+type ServiceBackend struct {
+	// Service name
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// Service namespace (defaults to same namespace)
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
+
+	// Service port
+	// +kubebuilder:validation:Minimum=1
+	Port int32 `json:"port"`
+}
+
+// GatewaySpec defines Gateway API integration configuration
+type GatewaySpec struct {
+	// ExistingRef references an existing Gateway to use
+	// +optional
+	ExistingRef *GatewayReference `json:"existingRef,omitempty"`
+}
+
+// GatewayReference references an existing Gateway
+type GatewayReference struct {
+	// Name of the Gateway
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// Namespace of the Gateway
+	// +kubebuilder:validation:MinLength=1
+	Namespace string `json:"namespace"`
+}
+
+// OpenShiftSpec defines OpenShift-specific configuration
+type OpenShiftSpec struct {
+	// Routes configuration for OpenShift Routes
+	// +optional
+	Routes *RouteConfig `json:"routes,omitempty"`
+}
+
+// RouteConfig defines OpenShift Route configuration
+type RouteConfig struct {
+	// Enabled specifies whether to create an OpenShift Route
+	// +optional
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Hostname for the Route (optional - OpenShift generates if empty)
+	// +optional
+	Hostname string `json:"hostname,omitempty"`
+
+	// TLS configuration for the Route
+	// +optional
+	TLS *RouteTLSConfig `json:"tls,omitempty"`
+}
+
+// RouteTLSConfig defines TLS configuration for OpenShift Routes
+type RouteTLSConfig struct {
+	// Termination type (edge, passthrough, reencrypt)
+	// +optional
+	// +kubebuilder:default="edge"
+	// +kubebuilder:validation:Enum=edge;passthrough;reencrypt
+	Termination string `json:"termination,omitempty"`
+
+	// InsecureEdgeTerminationPolicy for HTTP traffic
+	// +optional
+	// +kubebuilder:default="Redirect"
+	// +kubebuilder:validation:Enum=Allow;Redirect;None
+	InsecureEdgeTerminationPolicy string `json:"insecureEdgeTerminationPolicy,omitempty"`
+}
+
 // SemanticRouterStatus defines the observed state of SemanticRouter
 type SemanticRouterStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
@@ -682,6 +807,24 @@ type SemanticRouterStatus struct {
 	// Phase represents the current phase of the SemanticRouter
 	// +optional
 	Phase string `json:"phase,omitempty"`
+
+	// GatewayMode indicates deployment mode: standalone or gateway-integration
+	// +optional
+	GatewayMode string `json:"gatewayMode,omitempty"`
+
+	// OpenShiftFeatures tracks OpenShift-specific feature status
+	// +optional
+	OpenShiftFeatures *OpenShiftFeaturesStatus `json:"openshiftFeatures,omitempty"`
+}
+
+// OpenShiftFeaturesStatus tracks OpenShift-specific feature status
+type OpenShiftFeaturesStatus struct {
+	// RoutesEnabled indicates if OpenShift Routes are enabled
+	RoutesEnabled bool `json:"routesEnabled"`
+
+	// RouteHostname is the hostname of the created Route
+	// +optional
+	RouteHostname string `json:"routeHostname,omitempty"`
 }
 
 // +kubebuilder:object:root=true

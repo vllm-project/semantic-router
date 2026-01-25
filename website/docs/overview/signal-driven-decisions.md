@@ -26,7 +26,7 @@ if (keyword_match AND domain_match) OR high_embedding_similarity:
 
 **Why this matters**: Multiple signals voting together make more accurate decisions than any single signal.
 
-## The 8 Signal Types
+## The 9 Signal Types
 
 ### 1. Keyword Signals
 
@@ -148,7 +148,25 @@ signals:
 - **Example 1**: "Hola, ¿cómo estás?" → Spanish (es) → Spanish model
 - **Example 2**: "你好，世界" → Chinese (zh) → Chinese model
 
-### 8. Context Signals
+### 8. Latency Signals - TPOT-based Routing
+
+**What**: Model latency evaluation using TPOT (Time Per Output Token)
+**Latency**: Less than 1ms (cache lookup)
+**Use Case**: Route latency-sensitive queries to faster models
+
+```yaml
+signals:
+  latency:
+    - name: "low_latency"
+      max_tpot: 0.05  # 50ms per token
+      description: "For real-time chat applications"
+```
+
+**Example**: Real-time chat query → low_latency signal → Route to fast model (TPOT < 50ms/token)
+
+**How it works**: TPOT is automatically tracked from each response. The latency classifier evaluates if available models meet the TPOT threshold before routing.
+
+### 9. Context Signals
 
 - **What**: Token-count based routing for short/long request handling
 - **Latency**: 1ms (calculated during processing)

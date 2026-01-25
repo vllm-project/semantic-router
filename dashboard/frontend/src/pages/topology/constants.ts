@@ -11,6 +11,7 @@ export const SIGNAL_ICONS: Record<SignalType, string> = {
   user_feedback: '💬',
   preference: '⚙️',
   language: '🌐',
+  latency: '⚡',
 }
 
 // ============== Signal Colors (Gray Nodes, Green Paths) ==============
@@ -22,17 +23,19 @@ export const SIGNAL_COLORS: Record<SignalType, { background: string; border: str
   user_feedback: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
   preference: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
   language: { background: '#4a5568', border: '#2d3748' },     // Dark Gray
+  latency: { background: '#4a5568', border: '#2d3748' },      // Dark Gray
 }
 
 // ============== Signal Latency ==============
 export const SIGNAL_LATENCY: Record<SignalType, string> = {
   keyword: '<1ms',
   embedding: '10-50ms',
-  domain: '50-100ms',
-  fact_check: '50-100ms',
-  user_feedback: '50-100ms',
+  domain: '10-50ms',
+  fact_check: '10-50ms',
+  user_feedback: '10-50ms',
   preference: '200-500ms',
   language: '<1ms',
+  latency: '<1ms',
 }
 
 // ============== Plugin Icons ==============
@@ -155,6 +158,7 @@ export const SIGNAL_TYPES: SignalType[] = [
   'user_feedback',
   'preference',
   'language',
+  'latency',
 ]
 
 // ============== Plugin Types Array ==============

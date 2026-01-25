@@ -106,7 +106,7 @@ export const TestQueryInput: React.FC<TestQueryInputProps> = ({
 
           {/* Selected Decision */}
           <div className={styles.resultSection}>
-            <span className={styles.resultSectionTitle}>Selected Decision:</span>
+            <span className={styles.resultSectionTitle}>Selected Decision: </span>
             <span className={`${styles.decisionResult} ${result.isFallbackDecision ? styles.fallbackDecision : ''}`}>
               {result.isFallbackDecision && <span className={styles.fallbackBadge}>⚠️ System Fallback</span>}
               {result.matchedDecision || 'Default (no match)'}

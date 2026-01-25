@@ -8,6 +8,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
@@ -44,9 +45,8 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 		logging.Infof("handleCaching: Performing cache lookup - model=%s, query='%s', threshold=%.2f",
 			requestModel, requestQuery, threshold)
 
-		// Start cache lookup span
-		spanCtx, span := tracing.StartSpan(ctx.TraceContext, tracing.SpanCacheLookup)
-		defer span.End()
+		// Start semantic-cache plugin span
+		spanCtx, span := tracing.StartPluginSpan(ctx.TraceContext, "semantic-cache", categoryName)
 
 		startTime := time.Now()
 		// Try to find a similar cached response using category-specific threshold
@@ -55,6 +55,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 
 		logging.Infof("FindSimilarWithThreshold returned: found=%v, error=%v, lookupTime=%dms", found, cacheErr, lookupTime)
 
+		// Keep legacy attributes for backward compatibility
 		tracing.SetSpanAttributes(span,
 			attribute.String(tracing.AttrCacheKey, requestQuery),
 			attribute.Bool(tracing.AttrCacheHit, found),
@@ -65,6 +66,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 		if cacheErr != nil {
 			logging.Errorf("Error searching cache: %v", cacheErr)
 			tracing.RecordError(span, cacheErr)
+			tracing.EndPluginSpan(span, "error", lookupTime, "lookup_failed")
 		} else if found {
 			// Mark this request as a cache hit
 			ctx.VSRCacheHit = true
@@ -74,6 +76,12 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 			if categoryName != "" {
 				ctx.VSRSelectedDecisionName = categoryName
 			}
+
+			// Record cache plugin hit with decision name
+			metrics.RecordCachePluginHit(categoryName, "semantic-cache")
+
+			// End plugin span with cache hit status
+			tracing.EndPluginSpan(span, "success", lookupTime, "cache_hit")
 
 			// Start router replay capture if enabled, even when serving from cache
 			r.startRouterReplay(ctx, requestModel, requestModel, categoryName)
@@ -91,6 +99,10 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 			r.attachRouterReplayResponse(ctx, cachedResponse, true)
 			ctx.TraceContext = spanCtx
 			return response, true
+		} else {
+			// Cache miss - record cache plugin miss with decision name
+			metrics.RecordCachePluginMiss(categoryName, "semantic-cache")
+			tracing.EndPluginSpan(span, "success", lookupTime, "cache_miss")
 		}
 		ctx.TraceContext = spanCtx
 	}
