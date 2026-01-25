@@ -661,6 +661,226 @@ impl TraditionalModernBertClassifier {
         })
     }
 
+    /// Load classifier with custom base model from separate paths
+    /// 
+    /// This method allows loading a base model from one path and classifier weights from another path.
+    /// This is useful when you have a base model (e.g., Extended32K) and want to use classifier weights
+    /// from a different model (e.g., Standard ModernBERT classifier).
+    /// 
+    /// # Arguments
+    /// * `base_model_path` - Path to the base model directory (contains config.json, tokenizer.json, model.safetensors)
+    /// * `classifier_path` - Path to the classifier model directory (contains config.json with id2label, model.safetensors with classifier weights)
+    /// * `variant` - The ModernBERT variant to use (should match the base model)
+    /// * `use_cpu` - Whether to use CPU instead of GPU
+    /// 
+    /// # Returns
+    /// * `Result<Self>` - The loaded classifier with custom base model
+    pub fn load_with_custom_base_model(
+        base_model_path: &str,
+        classifier_path: &str,
+        variant: ModernBertVariant,
+        use_cpu: bool,
+    ) -> Result<Self, candle_core::Error> {
+        // 1. Determine device
+        let device = if use_cpu {
+            Device::Cpu
+        } else {
+            Device::cuda_if_available(0).unwrap_or(Device::Cpu)
+        };
+
+        // 2. Load base model config.json
+        let base_config_path = format!("{}/config.json", base_model_path);
+        let base_config_str = std::fs::read_to_string(&base_config_path).map_err(|_e| {
+            let unified_err = config_errors::file_not_found(&base_config_path);
+            candle_core::Error::from(unified_err)
+        })?;
+
+        let config: Config = serde_json::from_str(&base_config_str).map_err(|e| {
+            let unified_err = config_errors::invalid_json(&base_config_path, &e.to_string());
+            candle_core::Error::from(unified_err)
+        })?;
+
+        // 3. Load number of classes from classifier config.json
+        let num_classes = Self::load_modernbert_num_classes(classifier_path)?;
+
+        // 4. Load tokenizer from base model
+        let tokenizer_path = format!("{}/tokenizer.json", base_model_path);
+        let mut tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|e| {
+            let unified_err = model_error!(
+                ModelErrorType::Tokenizer,
+                "tokenizer loading",
+                format!("Failed to load tokenizer from {}: {}", tokenizer_path, e),
+                &tokenizer_path
+            );
+            candle_core::Error::from(unified_err)
+        })?;
+
+        // Configure padding for batch processing
+        if let Some(pad_token) = tokenizer.get_padding() {
+            let mut padding_params = pad_token.clone();
+            padding_params.strategy = tokenizers::PaddingStrategy::BatchLongest;
+            tokenizer.with_padding(Some(padding_params));
+        }
+
+        // 5. Load base model weights
+        let base_weights_path = format!("{}/model.safetensors", base_model_path);
+        if !std::path::Path::new(&base_weights_path).exists() {
+            let unified_err = config_errors::file_not_found(&base_weights_path);
+            return Err(candle_core::Error::from(unified_err));
+        }
+
+        let base_vb = unsafe {
+            VarBuilder::from_mmaped_safetensors(&[base_weights_path.clone()], DType::F32, &device)
+                .map_err(|e| {
+                    let unified_err = model_error!(
+                        ModelErrorType::ModernBERT,
+                        "base model weights loading",
+                        format!("Failed to load base model weights from {}: {}", base_weights_path, e),
+                        &base_weights_path
+                    );
+                    candle_core::Error::from(unified_err)
+                })?
+        };
+
+        // 6. Load base ModernBERT model - try both with and without prefix
+        let model = if let Ok(model) = ModernBert::load(base_vb.clone(), &config) {
+            model
+        } else if let Ok(model) = ModernBert::load(base_vb.pp("_orig_mod"), &config) {
+            model
+        } else {
+            let unified_err = model_error!(
+                ModelErrorType::ModernBERT,
+                "base model loading",
+                "Failed to load base ModernBERT model with or without _orig_mod prefix",
+                base_model_path
+            );
+            return Err(candle_core::Error::from(unified_err));
+        };
+
+        // 7. Load classifier weights from classifier path
+        let classifier_weights_path = format!("{}/model.safetensors", classifier_path);
+        if !std::path::Path::new(&classifier_weights_path).exists() {
+            let unified_err = config_errors::file_not_found(&classifier_weights_path);
+            return Err(candle_core::Error::from(unified_err));
+        }
+
+        let classifier_vb = unsafe {
+            VarBuilder::from_mmaped_safetensors(&[classifier_weights_path.clone()], DType::F32, &device)
+                .map_err(|e| {
+                    let unified_err = model_error!(
+                        ModelErrorType::Classifier,
+                        "classifier weights loading",
+                        format!("Failed to load classifier weights from {}: {}", classifier_weights_path, e),
+                        &classifier_weights_path
+                    );
+                    candle_core::Error::from(unified_err)
+                })?
+        };
+
+        // Try to load head from classifier (if exists)
+        let head = FixedModernBertHead::load(classifier_vb.pp("head"), &config).ok();
+
+        // 8. Load classifier weights from classifier path
+        let classifier = FixedModernBertClassifier::load_with_classes(
+            classifier_vb.pp("classifier"),
+            &config,
+            num_classes,
+        )
+        .map_err(|e| {
+            let unified_err = model_error!(
+                ModelErrorType::Classifier,
+                "classifier loading",
+                format!("Failed to load classifier from {}: {}", classifier_path, e),
+                classifier_path
+            );
+            candle_core::Error::from(unified_err)
+        })?;
+
+        // 9. Determine effective max length (for Extended32K, check training_config.json)
+        let effective_max_length = if variant == ModernBertVariant::Extended32K {
+            let training_config_path = format!("{}/training_config.json", base_model_path);
+            if let Ok(training_config_str) = std::fs::read_to_string(&training_config_path) {
+                if let Ok(training_config_json) =
+                    serde_json::from_str::<serde_json::Value>(&training_config_str)
+                {
+                    training_config_json
+                        .get("model_max_length")
+                        .and_then(|v| v.as_u64())
+                        .map(|v| v as usize)
+                        .unwrap_or(variant.max_length())
+                } else {
+                    variant.max_length()
+                }
+            } else {
+                variant.max_length()
+            }
+        } else {
+            variant.max_length()
+        };
+
+        // 10. Create unified tokenizer wrapper with variant-specific config
+        let tokenizer_config = crate::core::tokenization::TokenizationConfig {
+            max_length: effective_max_length,
+            add_special_tokens: true,
+            truncation_strategy: tokenizers::TruncationStrategy::LongestFirst,
+            truncation_direction: tokenizers::TruncationDirection::Right,
+            pad_token_id: config.pad_token_id,
+            pad_token: variant.pad_token().to_string(),
+            tokenization_strategy: variant.tokenization_strategy(),
+            token_data_type: crate::core::tokenization::TokenDataType::U32,
+        };
+
+        let tokenizer_wrapper = Box::new(
+            crate::core::tokenization::UnifiedTokenizer::new(
+                tokenizer,
+                tokenizer_config,
+                device.clone(),
+            )
+            .map_err(|e| {
+                let unified_err = model_error!(
+                    ModelErrorType::Tokenizer,
+                    "tokenizer wrapper creation",
+                    format!("Failed to create tokenizer wrapper: {}", e),
+                    base_model_path
+                );
+                candle_core::Error::from(unified_err)
+            })?,
+        ) as Box<dyn DualPathTokenizer>;
+
+        // 11. Determine classifier pooling from classifier config
+        let classifier_config_path = format!("{}/config.json", classifier_path);
+        let classifier_config_str = std::fs::read_to_string(&classifier_config_path)
+            .ok()
+            .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
+        
+        let classifier_pooling = if let Some(config_json) = &classifier_config_str {
+            if config_json
+                .get("classifier_pooling")
+                .and_then(|v| v.as_str())
+                .map(|s| s == "mean")
+                .unwrap_or(false)
+            {
+                ClassifierPooling::MEAN
+            } else {
+                ClassifierPooling::CLS
+            }
+        } else {
+            ClassifierPooling::MEAN // Default to MEAN
+        };
+
+        Ok(Self {
+            model,
+            head,
+            classifier,
+            classifier_pooling,
+            tokenizer: tokenizer_wrapper,
+            device,
+            config,
+            num_classes,
+            variant,
+        })
+    }
+
     /// Load mmBERT (multilingual) model from directory
     /// Convenience method that explicitly loads as Multilingual variant
     pub fn load_mmbert_from_directory(
