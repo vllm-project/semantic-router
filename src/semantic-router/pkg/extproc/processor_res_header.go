@@ -223,6 +223,26 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 			})
 		}
 
+		// Add x-vsr-matched-context header (from context signal classification)
+		if len(ctx.VSRMatchedContext) > 0 {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.VSRMatchedContext,
+					RawValue: []byte(strings.Join(ctx.VSRMatchedContext, ",")),
+				},
+			})
+		}
+
+		// Add x-vsr-context-token-count header
+		if ctx.VSRContextTokenCount > 0 {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.VSRContextTokenCount,
+					RawValue: []byte(strconv.Itoa(ctx.VSRContextTokenCount)),
+				},
+			})
+		}
+
 		// Attach router replay identifier when available
 		if ctx.RouterReplayID != "" {
 			setHeaders = append(setHeaders, &core.HeaderValueOption{

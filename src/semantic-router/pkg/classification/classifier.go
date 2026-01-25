@@ -481,8 +481,8 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 
 	// Add context classifier if configured
 	if len(cfg.ContextRules) > 0 {
-		// Create token counter (uses Candle binding)
-		tokenCounter := &CandleTokenCounter{}
+		// Create token counter (uses character-based heuristic for performance)
+		tokenCounter := &CharacterBasedTokenCounter{}
 		contextClassifier := NewContextClassifier(tokenCounter, cfg.ContextRules)
 		options = append(options, withContextClassifier(contextClassifier))
 	}

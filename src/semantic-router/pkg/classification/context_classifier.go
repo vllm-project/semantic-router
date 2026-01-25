@@ -1,9 +1,6 @@
 package classification
 
 import (
-	"fmt"
-
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -12,19 +9,25 @@ type TokenCounter interface {
 	CountTokens(text string) (int, error)
 }
 
-// CandleTokenCounter implements TokenCounter using the Candle binding tokenizer
-type CandleTokenCounter struct{}
+const CharactersPerToken = 4
 
-// CountTokens counts the number of tokens in the given text using the initialized Candle model
-func (c *CandleTokenCounter) CountTokens(text string) (int, error) {
-	// Use a large max length to ensure we count all tokens (up to 1M)
-	// This avoids truncation for most practical context sizes
-	const MaxTokenLimit = 1000000
-	result, err := candle_binding.TokenizeText(text, MaxTokenLimit)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count tokens: %w", err)
+// CharacterBasedTokenCounter implements TokenCounter using a fast character-based heuristic.
+// It estimates token count as: len(text) / CharactersPerToken
+// This provides O(1) performance compared to full tokenization.
+type CharacterBasedTokenCounter struct{}
+
+// CountTokens estimates the number of tokens using the 1:4 character-to-token heuristic.
+// This is a fast O(1) operation that avoids the overhead of full tokenization.
+// The heuristic is based on OpenAI's guidance that 1 token ≈ 4 characters for English text.
+func (c *CharacterBasedTokenCounter) CountTokens(text string) (int, error) {
+	// len(text) returns byte count, which for UTF-8 may be higher than character count.
+	// For mixed-language text, this provides a conservative (higher) estimate.
+	byteLen := len(text)
+	if byteLen == 0 {
+		return 0, nil
 	}
-	return len(result.TokenIDs), nil
+	// Integer division rounds down, add 1 to ensure we don't underestimate
+	return (byteLen + CharactersPerToken - 1) / CharactersPerToken, nil
 }
 
 // ContextClassifier classifies text based on token count rules
