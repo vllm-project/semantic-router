@@ -590,7 +590,6 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 		logging.Infof("RedisCache.FindSimilarWithThreshold: search failed: %v", err)
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -600,7 +599,6 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 		atomic.AddInt64(&c.missCount, 1)
 		logging.Infof("RedisCache.FindSimilarWithThreshold: no entries found - cache miss")
 		metrics.RecordCacheOperation("redis", "find_similar", "miss", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -616,7 +614,6 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 		logging.Infof("RedisCache.FindSimilarWithThreshold: vector_distance field not found in result")
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -625,7 +622,6 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 		logging.Infof("RedisCache.FindSimilarWithThreshold: failed to parse distance value: %v", err)
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -661,7 +657,6 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 			"index":           c.indexName,
 		})
 		metrics.RecordCacheOperation("redis", "find_similar", "miss", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -672,7 +667,6 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 		logging.Infof("RedisCache.FindSimilarWithThreshold: cache hit BUT response_body field is MISSING - treating as miss")
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -681,7 +675,6 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 		logging.Infof("RedisCache.FindSimilarWithThreshold: cache hit BUT response_body is EMPTY - treating as miss")
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -700,7 +693,6 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 		"index":      c.indexName,
 	})
 	metrics.RecordCacheOperation("redis", "find_similar", "hit", time.Since(start).Seconds())
-	metrics.RecordCacheHit()
 	return responseBody, true, nil
 }
 

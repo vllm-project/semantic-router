@@ -8,6 +8,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
@@ -76,6 +77,9 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 				ctx.VSRSelectedDecisionName = categoryName
 			}
 
+			// Record cache plugin hit with decision name
+			metrics.RecordCachePluginHit(categoryName, "semantic-cache")
+
 			// End plugin span with cache hit status
 			tracing.EndPluginSpan(span, "success", lookupTime, "cache_hit")
 
@@ -96,7 +100,8 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 			ctx.TraceContext = spanCtx
 			return response, true
 		} else {
-			// Cache miss
+			// Cache miss - record cache plugin miss with decision name
+			metrics.RecordCachePluginMiss(categoryName, "semantic-cache")
 			tracing.EndPluginSpan(span, "success", lookupTime, "cache_miss")
 		}
 		ctx.TraceContext = spanCtx

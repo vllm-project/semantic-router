@@ -563,7 +563,6 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 		atomic.AddInt64(&c.missCount, 1)
 		logging.Debugf("InMemoryCache.FindSimilarWithThreshold: no entries found with responses")
 		metrics.RecordCacheOperation("memory", "find_similar", "miss", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -584,7 +583,6 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 			"model":      model,
 		})
 		metrics.RecordCacheOperation("memory", "find_similar", "hit", time.Since(start).Seconds())
-		metrics.RecordCacheHit()
 		return bestEntry.ResponseBody, true, nil
 	}
 
@@ -599,7 +597,6 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 		"entries_checked": entriesChecked,
 	})
 	metrics.RecordCacheOperation("memory", "find_similar", "miss", time.Since(start).Seconds())
-	metrics.RecordCacheMiss()
 	return nil, false, nil
 }
 
@@ -714,6 +711,11 @@ func (c *InMemoryCache) cleanupExpiredEntriesInternal(deferRebuild bool) {
 	})
 	cleanupTime := time.Now()
 	c.lastCleanupTime = &cleanupTime
+
+	// Record cleanup operation metric
+	if expiredCount > 0 {
+		metrics.RecordCacheOperation("memory", "cleanup_expired", "success", time.Since(now).Seconds())
+	}
 
 	// Rebuild HNSW index if entries were removed and deferRebuild is false
 	if expiredCount > 0 && c.useHNSW && c.hnswIndex != nil {
@@ -861,6 +863,9 @@ func (c *InMemoryCache) evictOne() {
 		"request_id":  evictedRequestID,
 		"max_entries": c.maxEntries,
 	})
+
+	// Record eviction metric
+	metrics.RecordCacheOperation("memory", "evict", "success", 0)
 }
 
 // ===== Optimized Eviction Policy Helpers =====

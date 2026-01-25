@@ -748,7 +748,6 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 		logging.Debugf("MilvusCache.FindSimilarWithThreshold: search failed: %v", err)
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -756,7 +755,6 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 		atomic.AddInt64(&c.missCount, 1)
 		logging.Debugf("MilvusCache.FindSimilarWithThreshold: no entries found")
 		metrics.RecordCacheOperation("milvus", "find_similar", "miss", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -773,7 +771,6 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 			"collection":      c.collectionName,
 		})
 		metrics.RecordCacheOperation("milvus", "find_similar", "miss", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -801,7 +798,6 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 		logging.Debugf("MilvusCache.FindSimilarWithThreshold: cache hit but response_body is missing or not a string")
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -816,7 +812,6 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 		"collection": c.collectionName,
 	})
 	metrics.RecordCacheOperation("milvus", "find_similar", "hit", time.Since(start).Seconds())
-	metrics.RecordCacheHit()
 	return responseBody, true, nil
 }
 
