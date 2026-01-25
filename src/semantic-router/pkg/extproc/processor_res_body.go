@@ -219,7 +219,6 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 			// even if the original request context is cancelled.
 			bgCtx := context.Background()
 			sessionID, userID, history, err := extractMemoryInfo(ctx)
-
 			// extractMemoryInfo returns error if userID is missing (required for memory extraction)
 			if err != nil {
 				logging.Errorf("Memory extraction failed: %v", err)

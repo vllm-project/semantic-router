@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
@@ -91,6 +93,119 @@ func TestExtractAutoStore_ResponseAPI_NotSet(t *testing.T) {
 
 	result := extractAutoStore(ctx)
 	assert.False(t, result, "should return false when IsResponseAPIRequest is false")
+}
+
+// =============================================================================
+// extractAutoStore - Per-Decision Plugin Config Tests
+// =============================================================================
+
+func TestExtractAutoStore_PerDecisionPlugin_Enabled(t *testing.T) {
+	autoStoreTrue := true
+	ctx := &RequestContext{
+		VSRSelectedDecision: &config.Decision{
+			Name: "customer_support",
+			Plugins: []config.DecisionPlugin{
+				{
+					Type: "memory",
+					Configuration: map[string]interface{}{
+						"enabled":    true,
+						"auto_store": true,
+					},
+				},
+			},
+		},
+		VSRSelectedDecisionName: "customer_support",
+	}
+	// Verify plugin config is parsed correctly
+	memCfg := ctx.VSRSelectedDecision.GetMemoryConfig()
+	require.NotNil(t, memCfg)
+	require.NotNil(t, memCfg.AutoStore)
+	assert.Equal(t, autoStoreTrue, *memCfg.AutoStore)
+
+	result := extractAutoStore(ctx)
+	assert.True(t, result, "should return true from per-decision plugin config")
+}
+
+func TestExtractAutoStore_PerDecisionPlugin_Disabled(t *testing.T) {
+	ctx := &RequestContext{
+		VSRSelectedDecision: &config.Decision{
+			Name: "coding_task",
+			Plugins: []config.DecisionPlugin{
+				{
+					Type: "memory",
+					Configuration: map[string]interface{}{
+						"enabled":    true,
+						"auto_store": false, // Explicitly disabled
+					},
+				},
+			},
+		},
+		VSRSelectedDecisionName: "coding_task",
+		ResponseAPICtx: &ResponseAPIContext{
+			IsResponseAPIRequest: true,
+			OriginalRequest: &responseapi.ResponseAPIRequest{
+				MemoryConfig: &responseapi.MemoryConfig{
+					AutoStore: true, // Request-level says true
+				},
+			},
+		},
+	}
+
+	result := extractAutoStore(ctx)
+	assert.False(t, result, "per-decision plugin config should override request-level")
+}
+
+func TestExtractAutoStore_PerDecisionPlugin_NotSet_FallbackToRequest(t *testing.T) {
+	ctx := &RequestContext{
+		VSRSelectedDecision: &config.Decision{
+			Name: "general",
+			Plugins: []config.DecisionPlugin{
+				{
+					Type: "memory",
+					Configuration: map[string]interface{}{
+						"enabled": true,
+						// auto_store NOT set - should fall back to request
+					},
+				},
+			},
+		},
+		VSRSelectedDecisionName: "general",
+		ResponseAPICtx: &ResponseAPIContext{
+			IsResponseAPIRequest: true,
+			OriginalRequest: &responseapi.ResponseAPIRequest{
+				MemoryConfig: &responseapi.MemoryConfig{
+					AutoStore: true,
+				},
+			},
+		},
+	}
+
+	result := extractAutoStore(ctx)
+	assert.True(t, result, "should fall back to request-level when plugin doesn't set auto_store")
+}
+
+func TestExtractAutoStore_NoMemoryPlugin_FallbackToRequest(t *testing.T) {
+	ctx := &RequestContext{
+		VSRSelectedDecision: &config.Decision{
+			Name: "no_memory_decision",
+			Plugins: []config.DecisionPlugin{
+				{Type: "pii", Configuration: map[string]interface{}{"enabled": true}},
+				// No memory plugin
+			},
+		},
+		VSRSelectedDecisionName: "no_memory_decision",
+		ResponseAPICtx: &ResponseAPIContext{
+			IsResponseAPIRequest: true,
+			OriginalRequest: &responseapi.ResponseAPIRequest{
+				MemoryConfig: &responseapi.MemoryConfig{
+					AutoStore: true,
+				},
+			},
+		},
+	}
+
+	result := extractAutoStore(ctx)
+	assert.True(t, result, "should fall back to request-level when no memory plugin configured")
 }
 
 // =============================================================================
@@ -560,7 +675,7 @@ func TestExtractContentFromInputItem_EmptyContent(t *testing.T) {
 	}
 
 	result := extractContentFromInputItem(item)
-	assert.Equal(t, "", result)
+	assert.Empty(t, result)
 }
 
 func TestExtractContentFromInputItem_NilContent(t *testing.T) {
@@ -569,7 +684,7 @@ func TestExtractContentFromInputItem_NilContent(t *testing.T) {
 	}
 
 	result := extractContentFromInputItem(item)
-	assert.Equal(t, "", result)
+	assert.Empty(t, result)
 }
 
 func TestExtractContentFromInputItem_InvalidJSON(t *testing.T) {
@@ -578,7 +693,7 @@ func TestExtractContentFromInputItem_InvalidJSON(t *testing.T) {
 	}
 
 	result := extractContentFromInputItem(item)
-	assert.Equal(t, "", result, "should return empty string for invalid JSON")
+	assert.Empty(t, result, "should return empty string for invalid JSON")
 }
 
 // =============================================================================
@@ -641,7 +756,7 @@ func TestExtractContentFromOutputItem_EmptyContent(t *testing.T) {
 	}
 
 	result := extractContentFromOutputItem(item)
-	assert.Equal(t, "", result)
+	assert.Empty(t, result)
 }
 
 func TestExtractContentFromOutputItem_NilContent(t *testing.T) {
@@ -650,7 +765,7 @@ func TestExtractContentFromOutputItem_NilContent(t *testing.T) {
 	}
 
 	result := extractContentFromOutputItem(item)
-	assert.Equal(t, "", result)
+	assert.Empty(t, result)
 }
 
 // =============================================================================
@@ -727,10 +842,10 @@ func TestExtractTextFromContentParts_EmptyText(t *testing.T) {
 
 func TestExtractTextFromContentParts_EmptySlice(t *testing.T) {
 	result := extractTextFromContentParts(nil)
-	assert.Equal(t, "", result)
+	assert.Empty(t, result)
 
 	result = extractTextFromContentParts([]responseapi.ContentPart{})
-	assert.Equal(t, "", result)
+	assert.Empty(t, result)
 }
 
 // =============================================================================

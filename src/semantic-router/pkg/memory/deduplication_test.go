@@ -19,9 +19,17 @@ func init() {
 	}
 }
 
+// newTestStore creates an InMemoryStore with bert config for testing
+// since that's the model initialized in init()
+func newTestStore() *InMemoryStore {
+	return NewInMemoryStoreWithConfig(EmbeddingConfig{
+		Model: EmbeddingModelBERT,
+	})
+}
+
 func TestDeduplicationLogic(t *testing.T) {
 	// Create in-memory store
-	store := NewInMemoryStore()
+	store := newTestStore()
 	ctx := context.Background()
 	config := DefaultDeduplicationConfig()
 
@@ -99,7 +107,7 @@ func TestDeduplicationLogic(t *testing.T) {
 }
 
 func TestDeduplicationMultipleMemories(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestStore()
 	ctx := context.Background()
 	config := DefaultDeduplicationConfig()
 
@@ -147,7 +155,7 @@ func TestDeduplicationMultipleMemories(t *testing.T) {
 }
 
 func TestDeduplicationUserIsolation(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestStore()
 	ctx := context.Background()
 	config := DefaultDeduplicationConfig()
 
@@ -175,7 +183,7 @@ func TestDeduplicationUserIsolation(t *testing.T) {
 }
 
 func TestDeduplicationTypeIsolation(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestStore()
 	ctx := context.Background()
 	config := DefaultDeduplicationConfig()
 
@@ -207,7 +215,7 @@ func TestDeduplicationTypeIsolation(t *testing.T) {
 // =============================================================================
 
 func TestDeduplicationDefaultThresholdValues(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestStore()
 	ctx := context.Background()
 	config := DefaultDeduplicationConfig()
 
@@ -250,7 +258,7 @@ func TestDeduplicationDefaultThresholdValues(t *testing.T) {
 }
 
 func TestDeduplicationSearchThresholdBehavior(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestStore()
 	ctx := context.Background()
 
 	// Test with custom SearchThreshold to verify filtering behavior
@@ -297,7 +305,7 @@ func TestDeduplicationSearchThresholdBehavior(t *testing.T) {
 }
 
 func TestDeduplicationUpdateThresholdBehavior(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestStore()
 	ctx := context.Background()
 
 	config := DeduplicationConfig{
@@ -340,7 +348,7 @@ func TestDeduplicationUpdateThresholdBehavior(t *testing.T) {
 // =============================================================================
 
 func TestDeduplicationBoundaryAtSearchThreshold(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestStore()
 	ctx := context.Background()
 
 	// Test with SearchThreshold set to a specific value
@@ -402,7 +410,7 @@ func TestDeduplicationBoundaryAtSearchThreshold(t *testing.T) {
 }
 
 func TestDeduplicationBoundaryAtUpdateThreshold(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestStore()
 	ctx := context.Background()
 
 	config := DeduplicationConfig{
@@ -456,7 +464,7 @@ func TestDeduplicationBoundaryAtUpdateThreshold(t *testing.T) {
 // =============================================================================
 
 func TestDeduplicationCustomThresholdConfig(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestStore()
 	ctx := context.Background()
 
 	// Test with custom thresholds
@@ -505,7 +513,7 @@ func TestDeduplicationCustomThresholdConfig(t *testing.T) {
 }
 
 func TestDeduplicationCustomThresholdVeryStrict(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestStore()
 	ctx := context.Background()
 
 	// Test with very strict thresholds
@@ -543,7 +551,7 @@ func TestDeduplicationCustomThresholdVeryStrict(t *testing.T) {
 }
 
 func TestDeduplicationCustomThresholdVeryLenient(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestStore()
 	ctx := context.Background()
 
 	// Test with very lenient thresholds
@@ -590,7 +598,7 @@ func TestDeduplicationCustomThresholdVeryLenient(t *testing.T) {
 // =============================================================================
 
 func TestDeduplicationSearchThresholdMinimumSimilarity(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestStore()
 	ctx := context.Background()
 
 	// Store a memory
@@ -662,7 +670,7 @@ func TestDeduplicationSearchThresholdMinimumSimilarity(t *testing.T) {
 }
 
 func TestDeduplicationThresholdRanges(t *testing.T) {
-	store := NewInMemoryStore()
+	store := newTestStore()
 	ctx := context.Background()
 
 	// Store a memory

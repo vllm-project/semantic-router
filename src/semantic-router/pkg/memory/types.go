@@ -123,11 +123,9 @@ type RetrieveOptions struct {
 }
 
 // DefaultMemoryConfig returns a default memory configuration
-// This is a helper function that returns config.MemoryConfig with defaults
 func DefaultMemoryConfig() config.MemoryConfig {
 	return config.MemoryConfig{
 		Embedding: config.MemoryEmbeddingConfig{
-			Model:     "all-MiniLM-L6-v2",
 			Dimension: 384,
 		},
 		DefaultRetrievalLimit:      5,

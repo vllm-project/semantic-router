@@ -71,7 +71,6 @@ func FindSimilar(
 		Limit:     1, // Only need the most similar one
 		Threshold: config.SearchThreshold,
 	})
-
 	if err != nil {
 		logging.Debugf("Memory deduplication: search failed: %v", err)
 		return nil, 0

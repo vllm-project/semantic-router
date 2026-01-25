@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 )
@@ -392,7 +393,7 @@ func TestIsGreeting_ShortResponses(t *testing.T) {
 
 func TestIsGreeting_Informal(t *testing.T) {
 	greetings := []string{
-		"What's up", "Whats up?",
+		"What's up", "What's up?",
 		"Sup",
 		"Yo",
 	}
@@ -452,14 +453,14 @@ func TestIsGreeting_LengthBoundary(t *testing.T) {
 	t.Run("exactly 25 characters - passes length but not pattern", func(t *testing.T) {
 		// 25 chars that don't match greeting pattern
 		query25 := "1234567890123456789012345" // 25 chars of numbers
-		assert.Equal(t, 25, len(query25), "should be exactly 25 chars")
+		assert.Len(t, query25, 25, "should be exactly 25 chars")
 		assert.False(t, IsGreeting(query25), "passes length but not pattern")
 	})
 
 	t.Run("greeting at exactly 25 chars with padding", func(t *testing.T) {
 		// "Hi" with spaces to make it 25 chars - trim should handle it
 		query := "Hi                       " // Hi + 23 spaces = 25 chars
-		assert.Equal(t, 25, len(query), "should be exactly 25 chars")
+		assert.Len(t, query, 25, "should be exactly 25 chars")
 		result := IsGreeting(query)
 		assert.True(t, result, "Hi with padding should match after trim")
 	})
@@ -502,36 +503,61 @@ func TestIsGreeting_EdgePatterns(t *testing.T) {
 // BuildSearchQuery Tests
 // =============================================================================
 
-func TestBuildSearchQuery_DisabledConfig(t *testing.T) {
-	cfg := &config.QueryRewriteConfig{
-		Enabled: false,
+// createMockRouterConfig creates a RouterConfig with external_models pointing to the mock server.
+// The serverURL should be from httptest.NewServer().URL
+func createMockRouterConfig(serverURL string) *config.RouterConfig {
+	// Parse the URL to extract host and port
+	// httptest.Server.URL format: http://127.0.0.1:PORT
+	var address string
+	var port int
+	if serverURL != "" {
+		// Remove http:// prefix
+		hostPort := serverURL[7:] // skip "http://"
+		// Split by : to get host and port
+		for i := len(hostPort) - 1; i >= 0; i-- {
+			if hostPort[i] == ':' {
+				address = hostPort[:i]
+				portStr := hostPort[i+1:]
+				// Parse port
+				for _, c := range portStr {
+					port = port*10 + int(c-'0')
+				}
+				break
+			}
+		}
 	}
 
+	return &config.RouterConfig{
+		ExternalModels: []config.ExternalModelConfig{
+			{
+				Provider:  "vllm",
+				ModelRole: config.ModelRoleMemoryRewrite,
+				ModelEndpoint: config.ClassifierVLLMEndpoint{
+					Address: address,
+					Port:    port,
+				},
+				ModelName:      "test-model",
+				TimeoutSeconds: 5,
+			},
+		},
+	}
+}
+
+func TestBuildSearchQuery_NoExternalModel(t *testing.T) {
 	history := []ConversationMessage{
 		{Role: "user", Content: "Planning vacation to Hawaii"},
 	}
 
-	result, err := BuildSearchQuery(context.Background(), history, "How much?", cfg)
+	// With nil routerCfg, should return original query
+	result, err := BuildSearchQuery(context.Background(), history, "How much?", nil)
 	require.NoError(t, err)
-	assert.Equal(t, "How much?", result, "should return original when disabled")
-}
+	assert.Equal(t, "How much?", result, "should return original when no routerCfg")
 
-func TestBuildSearchQuery_NoEndpoint(t *testing.T) {
-	cfg := &config.QueryRewriteConfig{
-		Enabled:  true,
-		Endpoint: "", // No endpoint
-	}
-
-	result, err := BuildSearchQuery(context.Background(), nil, "test query", cfg)
+	// RouterConfig without external_models
+	routerCfg := &config.RouterConfig{}
+	result, err = BuildSearchQuery(context.Background(), nil, "test query", routerCfg)
 	require.NoError(t, err)
-	assert.Equal(t, "test query", result, "should return original when no endpoint")
-}
-
-func TestBuildSearchQuery_NilConfig(t *testing.T) {
-	// With nil config, should use defaults (which has no endpoint, so returns original)
-	result, err := BuildSearchQuery(context.Background(), nil, "test query", nil)
-	require.NoError(t, err)
-	assert.Equal(t, "test query", result, "should return original with nil config")
+	assert.Equal(t, "test query", result, "should return original when no external models")
 }
 
 func TestBuildSearchQuery_WithMockLLM(t *testing.T) {
@@ -567,25 +593,18 @@ func TestBuildSearchQuery_WithMockLLM(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
-	cfg := &config.QueryRewriteConfig{
-		Enabled:        true,
-		Endpoint:       server.URL,
-		Model:          "test-model",
-		MaxTokens:      50,
-		Temperature:    0.1,
-		TimeoutSeconds: 5,
-	}
+	routerCfg := createMockRouterConfig(server.URL)
 
 	history := []ConversationMessage{
 		{Role: "user", Content: "Planning vacation to Hawaii"},
 		{Role: "assistant", Content: "Hawaii sounds great! What's your budget?"},
 	}
 
-	result, err := BuildSearchQuery(context.Background(), history, "How much?", cfg)
+	result, err := BuildSearchQuery(context.Background(), history, "How much?", routerCfg)
 	require.NoError(t, err)
 	assert.Equal(t, "What is the budget for the Hawaii vacation?", result)
 }
@@ -605,18 +624,13 @@ func TestBuildSearchQuery_SelfContainedQuery(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
-	cfg := &config.QueryRewriteConfig{
-		Enabled:        true,
-		Endpoint:       server.URL,
-		Model:          "test-model",
-		TimeoutSeconds: 5,
-	}
+	routerCfg := createMockRouterConfig(server.URL)
 
-	result, err := BuildSearchQuery(context.Background(), nil, "What is the capital of France?", cfg)
+	result, err := BuildSearchQuery(context.Background(), nil, "What is the capital of France?", routerCfg)
 	require.NoError(t, err)
 	assert.Equal(t, "What is the capital of France?", result, "self-contained query should remain unchanged")
 }
@@ -628,14 +642,8 @@ func TestBuildSearchQuery_LLMError_FallbackToOriginal(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cfg := &config.QueryRewriteConfig{
-		Enabled:        true,
-		Endpoint:       server.URL,
-		Model:          "test-model",
-		TimeoutSeconds: 1,
-	}
-
-	result, err := BuildSearchQuery(context.Background(), nil, "original query", cfg)
+	routerCfg := createMockRouterConfig(server.URL)
+	result, err := BuildSearchQuery(context.Background(), nil, "original query", routerCfg)
 	require.NoError(t, err) // Should not return error, just fallback
 	assert.Equal(t, "original query", result, "should fallback to original on error")
 }
@@ -655,18 +663,12 @@ func TestBuildSearchQuery_CleanupQuotes(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
-	cfg := &config.QueryRewriteConfig{
-		Enabled:        true,
-		Endpoint:       server.URL,
-		Model:          "test-model",
-		TimeoutSeconds: 5,
-	}
-
-	result, err := BuildSearchQuery(context.Background(), nil, "How much?", cfg)
+	routerCfg := createMockRouterConfig(server.URL)
+	result, err := BuildSearchQuery(context.Background(), nil, "How much?", routerCfg)
 	require.NoError(t, err)
 	assert.Equal(t, "What is my budget for Hawaii?", result, "should strip quotes")
 }
@@ -686,18 +688,13 @@ func TestBuildSearchQuery_CleanupWhitespace(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
-	cfg := &config.QueryRewriteConfig{
-		Enabled:        true,
-		Endpoint:       server.URL,
-		Model:          "test-model",
-		TimeoutSeconds: 5,
-	}
+	routerCfg := createMockRouterConfig(server.URL)
 
-	result, err := BuildSearchQuery(context.Background(), nil, "How much?", cfg)
+	result, err := BuildSearchQuery(context.Background(), nil, "How much?", routerCfg)
 	require.NoError(t, err)
 	assert.Equal(t, "What is the budget?", result, "should trim whitespace")
 }
@@ -713,18 +710,13 @@ func TestBuildSearchQuery_EmptyChoices(t *testing.T) {
 			}{}, // Empty
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
-	cfg := &config.QueryRewriteConfig{
-		Enabled:        true,
-		Endpoint:       server.URL,
-		Model:          "test-model",
-		TimeoutSeconds: 5,
-	}
+	routerCfg := createMockRouterConfig(server.URL)
 
-	result, err := BuildSearchQuery(context.Background(), nil, "original query", cfg)
+	result, err := BuildSearchQuery(context.Background(), nil, "original query", routerCfg)
 	require.NoError(t, err) // Should fallback gracefully
 	assert.Equal(t, "original query", result, "should fallback on empty choices")
 }
@@ -777,7 +769,7 @@ func TestExtractConversationHistory_OnlySystemMessages(t *testing.T) {
 
 	history, err := ExtractConversationHistory([]byte(messagesJSON))
 	require.NoError(t, err)
-	assert.Len(t, history, 0, "should return empty for system-only messages")
+	assert.Empty(t, history, "should return empty for system-only messages")
 }
 
 func TestExtractConversationHistory_InvalidJSON(t *testing.T) {
@@ -788,7 +780,7 @@ func TestExtractConversationHistory_InvalidJSON(t *testing.T) {
 func TestExtractConversationHistory_EmptyArray(t *testing.T) {
 	history, err := ExtractConversationHistory([]byte("[]"))
 	require.NoError(t, err)
-	assert.Len(t, history, 0)
+	assert.Empty(t, history)
 }
 
 func TestExtractConversationHistory_MissingRole(t *testing.T) {
@@ -862,7 +854,7 @@ func TestFormatHistoryForPrompt_LimitToLast5(t *testing.T) {
 func TestTruncateForLog(t *testing.T) {
 	assert.Equal(t, "short", truncateForLog("short", 10))
 	assert.Equal(t, "this is a ...", truncateForLog("this is a long string", 10))
-	assert.Equal(t, "", truncateForLog("", 10))
+	assert.Empty(t, truncateForLog("", 10))
 	assert.Equal(t, "exactly10!", truncateForLog("exactly10!", 10))
 }
 
@@ -1049,10 +1041,10 @@ func TestInjectMemories_NilMemoryContent(t *testing.T) {
 
 func TestFormatMemoriesAsContext_Empty(t *testing.T) {
 	result := FormatMemoriesAsContext(nil)
-	assert.Equal(t, "", result)
+	assert.Empty(t, result)
 
 	result = FormatMemoriesAsContext([]*memory.RetrieveResult{})
-	assert.Equal(t, "", result)
+	assert.Empty(t, result)
 }
 
 func TestFormatMemoriesAsContext_SingleMemory(t *testing.T) {
