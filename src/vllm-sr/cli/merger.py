@@ -435,16 +435,11 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
             )
             log.info(f"  Added {len(user_config.signals.latency)} latency signals")
 
-        if (
-            user_config.signals.context_rules
-            and len(user_config.signals.context_rules) > 0
-        ):
+        if user_config.signals.context and len(user_config.signals.context) > 0:
             merged["context_rules"] = translate_context_signals(
-                user_config.signals.context_rules
+                user_config.signals.context
             )
-            log.info(
-                f"  Added {len(user_config.signals.context_rules)} context signals"
-            )
+            log.info(f"  Added {len(user_config.signals.context)} context signals")
 
         # Translate domains to categories
         if user_config.signals.domains:

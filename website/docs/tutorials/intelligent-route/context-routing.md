@@ -26,7 +26,7 @@ Add `context_rules` to your `signals` configuration:
 
 ```yaml
 signals:
-  context_rules:
+  context:
     - name: "short_context"
       min_tokens: "0"
       max_tokens: "4K"
