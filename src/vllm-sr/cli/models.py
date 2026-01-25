@@ -96,7 +96,7 @@ class Signals(BaseModel):
     preferences: Optional[List[Preference]] = []
     language: Optional[List[Language]] = []
     latency: Optional[List[Latency]] = []
-    context_rules: Optional[List[ContextRule]] = []
+    context: Optional[List[ContextRule]] = []
 
 
 class Condition(BaseModel):

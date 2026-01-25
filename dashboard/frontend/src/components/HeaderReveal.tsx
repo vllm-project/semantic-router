@@ -78,7 +78,7 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     description: 'Token count-based context classification',
   },
   'x-vsr-context-token-count': {
-    label: 'Token Count',
+    label: 'Context Count',
     description: 'Estimated token count for the request',
   },
   // Looper headers

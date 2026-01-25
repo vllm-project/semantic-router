@@ -162,6 +162,7 @@ export const SIGNAL_TYPES: SignalType[] = [
   'preference',
   'language',
   'latency',
+  'context',
 ]
 
 // ============== Plugin Types Array ==============

@@ -164,6 +164,7 @@ interface ConfigData {
     preferences?: Array<{ name: string; description: string }>
     language?: Array<{ name: string }>
     latency?: Array<{ name: string; max_tpot?: number; description?: string }>
+    context?: Array<{ name: string; min_tokens: string; max_tokens: string; description?: string }>
   }
   decisions?: Array<{
     name: string
@@ -236,7 +237,7 @@ interface ConfigPageProps {
   activeSection?: ConfigSection
 }
 
-type SignalType = 'Keywords' | 'Embeddings' | 'Domain' | 'Preference' | 'Fact Check' | 'User Feedback' | 'Language' | 'Latency'
+type SignalType = 'Keywords' | 'Embeddings' | 'Domain' | 'Preference' | 'Fact Check' | 'User Feedback' | 'Language' | 'Latency' | 'Context'
 type DecisionConfig = NonNullable<ConfigData['decisions']>[number]
 
 interface DecisionFormState {
@@ -261,6 +262,8 @@ interface AddSignalFormState {
   aggregation_method: string
   mmlu_categories: string
   max_tpot?: number
+  min_tokens?: string
+  max_tokens?: string
 }
 
 // Helper function to format threshold as percentage
@@ -482,6 +485,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         break
       case 'Latency':
         cfg.signals.latency = (cfg.signals.latency || []).filter(s => s.name !== targetName)
+        break
+      case 'Context':
+        cfg.signals.context = (cfg.signals.context || []).filter(s => s.name !== targetName)
         break
       default:
         break
@@ -2213,8 +2219,18 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       allSignals.push({
         name: lat.name,
         type: 'Latency',
-        summary: 'Latency-based routing rule',
+        summary: `Max TPOT: ${lat.max_tpot}s`,
         rawData: lat
+      })
+    })
+
+    // Context
+    signals?.context?.forEach(ctx => {
+      allSignals.push({
+        name: ctx.name,
+        type: 'Context',
+        summary: `${ctx.min_tokens} to ${ctx.max_tokens} tokens`,
+        rawData: ctx
       })
     })
 
@@ -2247,7 +2263,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             'Fact Check': 'rgba(34, 197, 94, 0.15)',
             'User Feedback': 'rgba(236, 72, 153, 0.15)',
             'Language': 'rgba(59, 130, 246, 0.15)',
-            'Latency': 'rgba(168, 85, 247, 0.15)'
+            'Latency': 'rgba(168, 85, 247, 0.15)',
+            'Context': 'rgba(251, 146, 60, 0.15)'
           }
           return (
             <span className={styles.badge} style={{ background: typeColors[row.type] }}>
@@ -2412,7 +2429,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         candidates: '',
         aggregation_method: 'mean',
         mmlu_categories: '',
-        max_tpot: 0.05
+        max_tpot: 0.05,
+        min_tokens: '0',
+        max_tokens: '8K'
       }
 
       const initialData: AddSignalFormState = mode === 'edit' && signal ? {
@@ -2426,7 +2445,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         candidates: (signal.rawData.candidates || []).join('\n'),
         aggregation_method: signal.rawData.aggregation_method || 'mean',
         mmlu_categories: (signal.rawData.mmlu_categories || []).join('\n'),
-        max_tpot: signal.rawData.max_tpot ?? 0.05
+        max_tpot: signal.rawData.max_tpot ?? 0.05,
+        min_tokens: signal.rawData.min_tokens || '0',
+        max_tokens: signal.rawData.max_tokens || '8K'
       } : defaultForm
 
 
@@ -2508,12 +2529,31 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         }
       ]
 
+      const contextFields: FieldConfig[] = [
+        {
+          name: 'min_tokens',
+          label: 'Minimum Tokens (context only)',
+          type: 'text',
+          placeholder: 'e.g., 0, 8K, 1M',
+          description: 'Minimum token count (supports K/M suffixes)',
+          shouldHide: conditionallyHideFieldExceptType('Context')
+        },
+        {
+          name: 'max_tokens',
+          label: 'Maximum Tokens (context only)',
+          type: 'text',
+          placeholder: 'e.g., 8K, 1024K',
+          description: 'Maximum token count (supports K/M suffixes)',
+          shouldHide: conditionallyHideFieldExceptType('Context')
+        }
+      ]
+
       const fields: FieldConfig[] = [
         {
           name: 'type',
           label: 'Type',
           type: 'select',
-          options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Language', 'Latency'],
+          options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Language', 'Latency', 'Context'],
           required: true,
           description: 'Fields are validated based on the selected type.'
         },
@@ -2534,6 +2574,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         ...embeddingFields,
         ...domainFields,
         ...latencyFields,
+        ...contextFields,
       ]
 
       const saveSignal = async (formData: AddSignalFormState) => {
@@ -2660,6 +2701,23 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
               {
                 name,
                 max_tpot,
+                description: formData.description || undefined
+              }
+            ]
+            break
+          }
+          case 'Context': {
+            const min_tokens = (formData.min_tokens || '0').trim()
+            const max_tokens = (formData.max_tokens || '8K').trim()
+            if (!min_tokens || !max_tokens) {
+              throw new Error('Both min_tokens and max_tokens are required.')
+            }
+            newConfig.signals.context = [
+              ...(newConfig.signals.context || []),
+              {
+                name,
+                min_tokens,
+                max_tokens,
                 description: formData.description || undefined
               }
             ]

@@ -54,8 +54,8 @@ def validate_signal_references(config: UserConfig) -> List[ValidationError]:
         if config.signals.fact_check:
             for signal in config.signals.fact_check:
                 signal_names.add(signal.name)
-        if config.signals.context_rules:
-            for signal in config.signals.context_rules:
+        if config.signals.context:
+            for signal in config.signals.context:
                 signal_names.add(signal.name)
 
     # Check decision conditions

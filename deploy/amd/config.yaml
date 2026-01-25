@@ -271,6 +271,18 @@ signals:
     - name: "no_fact_check_needed"
       description: "Query is creative, code-related, opinion-based, or doesn't require factual verification"
 
+  # Context signals for token count
+  context:
+    - name: "short_context"
+      min_tokens: "0"
+      max_tokens: "1K"
+    - name: "medium_context"
+      min_tokens: "1k"
+      max_tokens: "8K"
+    - name: "long_context"
+      min_tokens: "8K"
+      max_tokens: "1024K"
+
 # Decisions - Intelligent routing rules
 decisions:
   # Priority 200: Jailbreak detection - highest priority
@@ -413,6 +425,10 @@ decisions:
           name: "deep_thinking_en"
         - type: "keyword"
           name: "thinking_en"
+        - type: "context"
+          name: "long_context"
+        - type: "context"
+          name: "medium_context"
     modelRefs:
       - model: "Kimi-K2-Thinking"
         use_reasoning: true
@@ -459,6 +475,8 @@ decisions:
           name: "fast_qa_zh"
         - type: "language"
           name: "zh"
+        - type: "context"
+          name: "short_context"
     modelRefs:
       - model: "DeepSeek-V3.2"
         use_reasoning: false
@@ -482,6 +500,8 @@ decisions:
           name: "fast_qa"
         - type: "language"
           name: "en"
+        - type: "context"
+          name: "short_context"
     modelRefs:
       - model: "GLM-4.7"
         use_reasoning: false
@@ -509,6 +529,8 @@ decisions:
           name: "zh"
         - type: "latency"
           name: "medium_latency"
+        - type: "context"
+          name: "short_context"
     modelRefs:
       - model: "openai/gpt-oss-20b"
         use_reasoning: false

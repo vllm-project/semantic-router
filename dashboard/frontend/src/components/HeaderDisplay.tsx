@@ -75,7 +75,7 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
     type: 'info',
   },
   'x-vsr-context-token-count': {
-    label: 'Token Count',
+    label: 'Context Count',
     type: 'info',
   },
   // Looper headers

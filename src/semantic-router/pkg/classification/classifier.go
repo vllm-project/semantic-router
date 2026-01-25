@@ -739,6 +739,14 @@ func isSignalTypeUsed(usedSignals map[string]bool, signalType string) bool {
 // EvaluateAllSignals evaluates all signal types and returns SignalResults
 // This is the new method that includes fact_check signals
 func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
+	// For backward compatibility, use the same text for both evaluation and context counting
+	return c.EvaluateAllSignalsWithContext(text, text)
+}
+
+// EvaluateAllSignalsWithContext evaluates all signal types with separate text for context counting
+// text: text to use for signal evaluation (usually latest user message)
+// contextText: text to use for context token counting (usually all messages combined)
+func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string) *SignalResults {
 	// Determine which signals (type:name) are actually used in decisions
 	usedSignals := c.getUsedSignals()
 
@@ -1071,12 +1079,13 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 	}
 
 	// Evaluate context rules in parallel (only if used in decisions)
+	// Use contextText for token counting to include all messages in multi-turn conversations
 	if isSignalTypeUsed(usedSignals, config.SignalTypeContext) && c.contextClassifier != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			matchedRules, count, err := c.contextClassifier.Classify(text)
+			matchedRules, count, err := c.contextClassifier.Classify(contextText)
 			elapsed := time.Since(start)
 			logging.Infof("[Signal Computation] Context signal evaluation completed in %v (count=%d)", elapsed, count)
 			if err != nil {
@@ -1106,10 +1115,10 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		return nil, fmt.Errorf("no decisions configured")
 	}
 
-	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, latency=%v",
+	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, latency=%v, context=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
 		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules,
-		signals.MatchedLanguageRules, signals.MatchedLatencyRules)
+		signals.MatchedLanguageRules, signals.MatchedLatencyRules, signals.MatchedContextRules)
 	// Create decision engine
 	engine := decision.NewDecisionEngine(
 		c.Config.KeywordRules,
@@ -1129,6 +1138,7 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		PreferenceRules:   signals.MatchedPreferenceRules,
 		LanguageRules:     signals.MatchedLanguageRules,
 		LatencyRules:      signals.MatchedLatencyRules,
+		ContextRules:      signals.MatchedContextRules,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("decision evaluation failed: %w", err)
