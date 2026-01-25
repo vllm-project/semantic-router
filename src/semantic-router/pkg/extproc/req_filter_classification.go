@@ -48,12 +48,28 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 		return "", 0.0, entropy.ReasoningDecision{}, ""
 	}
 
+	// For context token counting, we need to include ALL messages (user + non-user)
+	// This ensures multi-turn conversations are properly counted
+	var allMessagesText string
+	if userContent != "" && len(nonUserMessages) > 0 {
+		// Combine user content with all non-user messages for full context
+		allMessages := make([]string, 0, len(nonUserMessages)+1)
+		allMessages = append(allMessages, nonUserMessages...)
+		allMessages = append(allMessages, userContent)
+		allMessagesText = strings.Join(allMessages, " ")
+	} else if userContent != "" {
+		allMessagesText = userContent
+	} else {
+		allMessagesText = strings.Join(nonUserMessages, " ")
+	}
+
 	// Start signal evaluation span (Layer 1)
 	signalStart := time.Now()
 	signalCtx, signalSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanSignalEvaluation)
 
 	// Evaluate all signals first to get detailed signal information
-	signals := r.Classifier.EvaluateAllSignals(evaluationText)
+	// Use evaluationText for most signals, but pass allMessagesText for context counting
+	signals := r.Classifier.EvaluateAllSignalsWithContext(evaluationText, allMessagesText)
 
 	signalLatency := time.Since(signalStart).Milliseconds()
 
@@ -66,6 +82,8 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	ctx.VSRMatchedPreference = signals.MatchedPreferenceRules
 	ctx.VSRMatchedLanguage = signals.MatchedLanguageRules
 	ctx.VSRMatchedLatency = signals.MatchedLatencyRules
+	ctx.VSRMatchedContext = signals.MatchedContextRules
+	ctx.VSRContextTokenCount = signals.TokenCount
 
 	// Set fact-check context fields from signal results
 	// This replaces the old performFactCheckClassification call to avoid duplicate computation
@@ -161,8 +179,9 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	ctx.VSRSelectedCategory = categoryName
 	ctx.VSRSelectedDecisionConfidence = evaluationConfidence
 
-	// Store matched keywords in context for response headers
-	ctx.VSRMatchedKeywords = result.MatchedKeywords
+	// Note: VSRMatchedKeywords is already set from signals.MatchedKeywordRules (line 61)
+	// We should NOT overwrite it with result.MatchedKeywords which contains actual keywords
+	// The header should show rule names, not the actual matched keywords
 
 	decisionName = result.Decision.Name
 	evaluationConfidence = result.Confidence

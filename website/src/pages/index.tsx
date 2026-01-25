@@ -75,7 +75,7 @@ const HomepageHeader: React.FC = () => {
           </Link>
           <a
             className="button button--outline button--lg"
-            href="http://play.vllm-semantic-router.com/"
+            href="https://play.vllm-semantic-router.com/"
             target="_blank"
             rel="noopener noreferrer"
           >

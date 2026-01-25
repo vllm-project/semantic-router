@@ -856,6 +856,8 @@ const [enableWebSearch, setEnableWebSearch] = useState(true)
         'x-vsr-matched-preference',
         'x-vsr-matched-language',
         'x-vsr-matched-latency',
+        'x-vsr-matched-context',
+        'x-vsr-context-token-count',
         // Looper headers
         'x-vsr-looper-model',
         'x-vsr-looper-models-used',
