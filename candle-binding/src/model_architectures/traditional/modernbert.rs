@@ -675,6 +675,25 @@ impl TraditionalModernBertClassifier {
     /// 
     /// # Returns
     /// * `Result<Self>` - The loaded classifier with custom base model
+    /// 
+    /// # Example
+    /// 
+    /// ```rust,no_run
+    /// use candle_semantic_router::model_architectures::traditional::modernbert::{
+    ///     ModernBertVariant, TraditionalModernBertClassifier
+    /// };
+    /// 
+    /// // Load Extended32K base model with PII classifier weights
+    /// let classifier = TraditionalModernBertClassifier::load_with_custom_base_model(
+    ///     "/path/to/modernbert-base-32k",           // Base model path
+    ///     "/path/to/pii_classifier_modernbert-base", // Classifier weights path
+    ///     ModernBertVariant::Extended32K,
+    ///     true, // use_cpu
+    /// )?;
+    /// 
+    /// // Now classify text with 32K context support
+    /// let (class_id, confidence) = classifier.classify_text("My email is john@example.com")?;
+    /// ```
     pub fn load_with_custom_base_model(
         base_model_path: &str,
         classifier_path: &str,
@@ -807,11 +826,27 @@ impl TraditionalModernBertClassifier {
                         .get("model_max_length")
                         .and_then(|v| v.as_u64())
                         .map(|v| v as usize)
-                        .unwrap_or(variant.max_length())
+                        .unwrap_or_else(|| {
+                            eprintln!(
+                                "⚠️  Warning: training_config.json found but model_max_length not set, using variant default: {}",
+                                variant.max_length()
+                            );
+                            variant.max_length()
+                        })
                 } else {
+                    eprintln!(
+                        "⚠️  Warning: Failed to parse training_config.json for Extended32K variant at {}, using variant default: {}",
+                        training_config_path,
+                        variant.max_length()
+                    );
                     variant.max_length()
                 }
             } else {
+                eprintln!(
+                    "⚠️  Warning: training_config.json not found for Extended32K variant at {}, using variant default: {}. This may limit context length accuracy.",
+                    training_config_path,
+                    variant.max_length()
+                );
                 variant.max_length()
             }
         } else {
