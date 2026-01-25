@@ -115,17 +115,10 @@ class ShareGPTPreferencePipeline:
                 "other"
             """
             return [
+                RoutePolicy(label="code_generation", description="Code generation"),
+                RoutePolicy(label="creative_writing", description="Creative writing"),
                 RoutePolicy(
-                    label="general_inquiry", description="General inquiry"
-                ),  # general_inquiry as default
-                RoutePolicy(
-                    label="general_code_generation", description="Code generation"
-                ),
-                RoutePolicy(
-                    label="general_creative_writing", description="Creative writing"
-                ),
-                RoutePolicy(
-                    label="general_text_summarization", description="Text summarization"
+                    label="text_summarization", description="Text summarization"
                 ),
                 RoutePolicy(
                     label="math_problem_solving", description="Math problem solving"
@@ -581,16 +574,10 @@ Return a JSON dict that represents the mapping in the format:
         canonical_labels_set: set[str],
     ) -> RoutePolicySample:
         """Verify the policy label for one conversation."""
-        verify_policy_prompt = f"""You are an expert at verifying routing policy labels.
+        verify_policy_prompt = f"""You are an expert at grouping conversations with routing policy labels.
 ### Instructions
-Given the following conversation and its assigned routing policy label, determine if the label accurately reflects the user's intent.
-If the label is appropriate, return the same label.
-If the label is inappropriate or the label is too general, suggest a more suitable/specific label from the following canonical label set:
+Given the following conversation, pick the most suitable label from the canonical label set that best describes the user's intent for routing purposes. If none of the labels apply, respond with 'none_of_the_above'.
 {json.dumps(list(canonical_labels_set))}
-
-
-### Assigned Label
-{canonical_label}
 
 ### Conversation
 {json.dumps(sample.to_dict(), indent=2)}
