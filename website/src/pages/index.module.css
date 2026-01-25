@@ -109,10 +109,10 @@
   align-items: center;
   justify-content: center;
   margin-top: 2rem;
+  gap: 1.5rem;
 }
 
 .buttons .button {
-  margin: 0 0.5rem;
   background: linear-gradient(45deg, var(--tech-primary-blue), var(--tech-accent-purple));
   border: none;
   box-shadow: 0 4px 16px rgba(9, 105, 218, 0.2);
@@ -122,6 +122,20 @@
 .buttons .button:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(9, 105, 218, 0.3);
+}
+
+.buttons .button--outline {
+  background: linear-gradient(45deg, var(--tech-primary-blue), var(--tech-accent-purple));
+  border: none;
+  box-shadow: 0 4px 16px rgba(9, 105, 218, 0.2);
+  transition: all 0.3s ease;
+  color: #000000 !important;
+}
+
+.buttons .button--outline:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(9, 105, 218, 0.3);
+  color: #000000 !important;
 }
 
 /* New AI-themed styles */

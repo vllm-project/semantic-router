@@ -50,11 +50,19 @@ func NewKeywordClassifier(cfgRules []config.KeywordRule) (*KeywordClassifier, er
 		for j, keyword := range rule.Keywords {
 			quotedKeyword := regexp.QuoteMeta(keyword)
 			// Conditionally add word boundaries. If the keyword contains at least one word character,
-			// apply word boundaries. Otherwise, match literally without boundaries.
+			// apply word boundaries. However, skip word boundaries for Chinese characters since \b
+			// doesn't work with non-ASCII characters.
 			hasWordChar := false
+			hasChinese := false
 			for _, r := range keyword {
 				if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' {
 					hasWordChar = true
+				}
+				// Check if the character is Chinese (CJK Unified Ideographs)
+				if unicode.Is(unicode.Han, r) {
+					hasChinese = true
+				}
+				if hasWordChar && hasChinese {
 					break
 				}
 			}
@@ -62,7 +70,8 @@ func NewKeywordClassifier(cfgRules []config.KeywordRule) (*KeywordClassifier, er
 			patternCS := quotedKeyword
 			patternCI := "(?i)" + quotedKeyword
 
-			if hasWordChar {
+			// Only add word boundaries for non-Chinese keywords
+			if hasWordChar && !hasChinese {
 				patternCS = "\\b" + patternCS + "\\b"
 				patternCI = "(?i)\\b" + quotedKeyword + "\\b"
 			}

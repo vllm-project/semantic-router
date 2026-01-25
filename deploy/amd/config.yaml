@@ -47,6 +47,49 @@ signals:
         - "invent"
       case_sensitive: false
 
+    # Deep thinking keywords (Chinese)
+    - name: "thinking_zh"
+      operator: "OR"
+      keywords:
+        - "认真分析"
+        - "深度思考"
+        - "详细分析"
+        - "深入探讨"
+        - "系统性分析"
+        - "全面分析"
+        - "仔细思考"
+        - "深入分析"
+        - "逐步分析"
+        - "多角度分析"
+        - "综合分析"
+        - "批判性思考"
+        - "辩证分析"
+        - "理性分析"
+      case_sensitive: false
+
+    # Deep thinking keywords (English)
+    - name: "thinking_en"
+      operator: "OR"
+      keywords:
+        - "analyze carefully"
+        - "deep thinking"
+        - "step by step"
+        - "detailed analysis"
+        - "in-depth exploration"
+        - "systematic analysis"
+        - "comprehensive analysis"
+        - "think carefully"
+        - "deep analysis"
+        - "step-by-step analysis"
+        - "multi-perspective analysis"
+        - "comprehensive review"
+        - "critical thinking"
+        - "dialectical analysis"
+        - "rational analysis"
+        - "thorough examination"
+        - "rigorous analysis"
+      case_sensitive: false
+
   # preferences - Route preferences via external LLM
   preferences:
     - name: "code_generation"
@@ -65,6 +108,7 @@ signals:
       threshold: 0.72
       aggregation_method: "max"
       candidates:
+        - "Hello, how are you?"
         - "Who are you? What is your name?"
         - "What is the definition of machine learning and how does it differ from traditional programming approaches?"
         - "Can you quickly explain the concept of neural networks and their basic architecture?"
@@ -74,6 +118,21 @@ signals:
         - "How do I calculate the area of a circle given its radius?"
         - "What are the primary colors and how do they combine?"
         - "Can you give me a simple explanation of how photosynthesis works?"
+        - "What time is it now?"
+        - "How's the weather today?"
+        - "What does HTTP stand for?"
+        - "Who invented the telephone?"
+        - "What is the speed of light?"
+        - "How many continents are there?"
+        - "What is DNA?"
+        - "When was the internet invented?"
+        - "What is the largest ocean?"
+        - "How do I convert Celsius to Fahrenheit?"
+        - "What is the difference between RAM and ROM?"
+        - "What does CPU stand for?"
+        - "How many days are in a leap year?"
+        - "What is the boiling point of water?"
+        - "Who wrote Romeo and Juliet?"
 
     # Fast QA (Chinese) - 简单快速问答
     - name: "fast_qa_zh"
@@ -95,9 +154,24 @@ signals:
         - "HTTP和HTTPS有什么区别？为什么现在网站都要用HTTPS？"
         - "数据库中的索引是什么？为什么能加快查询速度？"
         - "什么是递归？能举个简单的例子说明吗？"
+        - "现在几点了？"
+        - "今天天气怎么样？"
+        - "CPU是什么意思？"
+        - "谁发明了电话？"
+        - "光速是多少？"
+        - "世界上有几个大洲？"
+        - "DNA是什么？"
+        - "互联网是什么时候发明的？"
+        - "最大的海洋是哪个？"
+        - "摄氏度怎么转换成华氏度？"
+        - "RAM和ROM有什么区别？"
+        - "闰年有多少天？"
+        - "水的沸点是多少度？"
+        - "《罗密欧与朱丽叶》是谁写的？"
+        - "1加1等于几？"
 
     # Deep Thinking (English) - Complex reasoning requiring multi-step analysis
-    - name: "deep_thinking"
+    - name: "deep_thinking_en"
       threshold: 0.75
       aggregation_method: "max"
       candidates:
@@ -109,6 +183,16 @@ signals:
         - "Devise a comprehensive plan for migrating a legacy monolithic application to a microservices architecture."
         - "Analyze the geopolitical implications of climate change and propose multi-faceted policy solutions."
         - "Design an algorithm to detect anomalies in time-series data and explain the statistical reasoning behind it."
+        - "Critically evaluate the trade-offs between different consensus algorithms in blockchain systems and recommend the optimal choice for a specific use case."
+        - "Develop a comprehensive strategy for implementing zero-trust security architecture in a large enterprise environment."
+        - "Analyze the computational complexity of various sorting algorithms and explain when each should be used in practice."
+        - "Design a machine learning pipeline for real-time fraud detection that balances accuracy, latency, and cost."
+        - "Explain the theoretical foundations of reinforcement learning and how it differs from supervised learning approaches."
+        - "Propose a detailed plan for optimizing database query performance in a high-traffic application with complex joins."
+        - "Analyze the architectural patterns for building scalable event-driven systems and their trade-offs."
+        - "Design a comprehensive testing strategy for a distributed microservices architecture including unit, integration, and end-to-end tests."
+        - "Evaluate different approaches to handling eventual consistency in distributed systems and recommend best practices."
+        - "Develop a step-by-step methodology for conducting root cause analysis of production incidents in complex systems."
 
     # Deep Thinking (Chinese) - 复杂推理，需要多步分析
     - name: "deep_thinking_zh"
@@ -129,6 +213,16 @@ signals:
         - "设计一个完整的推荐系统架构，需要支持实时推荐和离线批处理，请详细说明各个组件的设计思路和技术选型。"
         - "深入分析分布式数据库中CAP定理的实际应用，结合具体案例说明不同系统是如何在一致性、可用性和分区容错性之间做权衡的。"
         - "请系统性地分析当前AI安全领域面临的主要挑战，包括对齐问题、可解释性、鲁棒性等方面，并提出可能的研究方向。"
+        - "批判性地评估区块链系统中不同共识算法的权衡，并为特定用例推荐最优选择。"
+        - "制定一个在大型企业环境中实施零信任安全架构的综合策略。"
+        - "分析各种排序算法的计算复杂度，并解释在实践中何时应该使用每种算法。"
+        - "设计一个用于实时欺诈检测的机器学习管道，平衡准确性、延迟和成本。"
+        - "解释强化学习的理论基础，以及它与监督学习方法的区别。"
+        - "提出一个详细的计划，用于优化高流量应用中具有复杂连接的数据库查询性能。"
+        - "分析构建可扩展事件驱动系统的架构模式及其权衡。"
+        - "设计一个分布式微服务架构的综合测试策略，包括单元测试、集成测试和端到端测试。"
+        - "评估处理分布式系统中最终一致性的不同方法，并推荐最佳实践。"
+        - "制定一个逐步的方法论，用于对复杂系统中的生产事故进行根本原因分析。"
 
   # user_feedbacks - User feedback signals
   user_feedbacks:
@@ -205,12 +299,12 @@ decisions:
     description: "Complex reasoning in Chinese requiring advanced models"
     priority: 180
     rules:
-      operator: "AND"
+      operator: "OR"
       conditions:
         - type: "embedding"
           name: "deep_thinking_zh"
-        - type: "language"
-          name: "zh"
+        - type: "keyword"
+          name: "thinking_zh"
     modelRefs:
       - model: "Kimi-K2-Thinking"
         use_reasoning: true
@@ -221,7 +315,7 @@ decisions:
           system_prompt: "你是一个专业的AI助手，擅长深度分析和复杂推理。请提供详细、深入的回答。"
 
   # Priority 145: Computer science domain with deep thinking
-  - name: "code_deep_thinking"
+  - name: "complex_engineering"
     description: "Complex code generation and algorithm design (only when domain is clearly computer science)"
     priority: 145
     rules:
@@ -230,7 +324,7 @@ decisions:
         - type: "domain"
           name: "computer science"
         - type: "embedding"
-          name: "deep_thinking"
+          name: "deep_thinking_en"
     modelRefs:
       - model: "DeepSeek-V3.2"
         use_reasoning: true
@@ -313,12 +407,12 @@ decisions:
     description: "Complex reasoning in English"
     priority: 140
     rules:
-      operator: "AND"
+      operator: "OR"
       conditions:
         - type: "embedding"
-          name: "deep_thinking"
-        - type: "language"
-          name: "en"
+          name: "deep_thinking_en"
+        - type: "keyword"
+          name: "thinking_en"
     modelRefs:
       - model: "Kimi-K2-Thinking"
         use_reasoning: true
@@ -355,7 +449,7 @@ decisions:
           enabled: false
 
   # Priority 130: Fast QA in Chinese
-  - name: "fast_qa"
+  - name: "quick_question"
     description: "Quick answers in Chinese"
     priority: 130
     rules:
@@ -378,7 +472,7 @@ decisions:
           similarity_threshold: 0.95
 
   # Priority 120: Fast QA in English
-  - name: "fast_qa_english"
+  - name: "fast_qa"
     description: "Quick answers in English"
     priority: 120
     rules:
@@ -397,7 +491,8 @@ decisions:
           system_prompt: "You are an efficient AI assistant. Provide concise, accurate answers."
       - type: "semantic-cache"
         configuration:
-          enabled: false
+          enabled: true
+          similarity_threshold: 0.95
 
   # Priority 100: Default fallback
   - name: "casual_chat"

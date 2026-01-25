@@ -671,6 +671,149 @@ def generate_dashboard():
     panel_id += 1
     y_pos += 8
 
+    # ========== 6. Cache Plugin Metrics ==========
+    panels.append(create_row_panel("Cache Plugin Metrics", y=y_pos, panel_id=600))
+    y_pos += 1
+
+    # Cache Hit Rate by Decision
+    panels.append(
+        create_timeseries_panel(
+            "Cache Hit Rate by Decision",
+            [
+                create_target(
+                    "sum(rate(llm_cache_plugin_hits_total[5m])) by (decision_name) / (sum(rate(llm_cache_plugin_hits_total[5m])) by (decision_name) + sum(rate(llm_cache_plugin_misses_total[5m])) by (decision_name)) * 100",
+                    "{{decision_name}}",
+                    "A",
+                )
+            ],
+            x=0,
+            y=y_pos,
+            w=12,
+            h=8,
+            panel_id=panel_id,
+            unit="percent",
+        )
+    )
+    panel_id += 1
+
+    # Cache Hits/Misses by Decision
+    panels.append(
+        create_timeseries_panel(
+            "Cache Hits/Misses by Decision",
+            [
+                create_target(
+                    "sum(rate(llm_cache_plugin_hits_total[$__range])) by (decision_name)",
+                    "{{decision_name}} - hits",
+                    "A",
+                ),
+                create_target(
+                    "sum(rate(llm_cache_plugin_misses_total[$__range])) by (decision_name)",
+                    "{{decision_name}} - misses",
+                    "B",
+                ),
+            ],
+            x=12,
+            y=y_pos,
+            w=12,
+            h=8,
+            panel_id=panel_id,
+            unit="ops",
+        )
+    )
+    panel_id += 1
+    y_pos += 8
+
+    # Current Cache Items by Backend
+    panels.append(
+        create_stat_panel(
+            "Current Cache Items (Total)",
+            "sum(llm_cache_entries_total)",
+            unit="short",
+            x=0,
+            y=y_pos,
+            w=6,
+            h=6,
+            panel_id=panel_id,
+        )
+    )
+    panel_id += 1
+
+    # Cache Items by Backend (Gauge)
+    panels.append(
+        create_timeseries_panel(
+            "Cache Items by Backend",
+            [
+                create_target(
+                    "llm_cache_entries_total",
+                    "{{backend}}",
+                    "A",
+                )
+            ],
+            x=6,
+            y=y_pos,
+            w=18,
+            h=6,
+            panel_id=panel_id,
+            unit="short",
+        )
+    )
+    panel_id += 1
+    y_pos += 6
+
+    # Cache Item Operations Over Time (add/expired/evicted)
+    panels.append(
+        create_timeseries_panel(
+            "Cache Item Operations (add/cleanup_expired/evict)",
+            [
+                create_target(
+                    'sum(rate(llm_cache_operations_total{operation="add_entry", status="success"}[$__range])) by (backend)',
+                    "{{backend}} - add",
+                    "A",
+                ),
+                create_target(
+                    'sum(rate(llm_cache_operations_total{operation="cleanup_expired", status="success"}[$__range])) by (backend)',
+                    "{{backend}} - expired",
+                    "B",
+                ),
+                create_target(
+                    'sum(rate(llm_cache_operations_total{operation="evict", status="success"}[$__range])) by (backend)',
+                    "{{backend}} - evicted",
+                    "C",
+                ),
+            ],
+            x=0,
+            y=y_pos,
+            w=24,
+            h=8,
+            panel_id=panel_id,
+            unit="ops",
+        )
+    )
+    panel_id += 1
+    y_pos += 8
+
+    # Cache Operation Latency
+    panels.append(
+        create_timeseries_panel(
+            "Cache Operation Latency (p95)",
+            [
+                create_target(
+                    "histogram_quantile(0.95, sum(rate(llm_cache_operation_duration_seconds_bucket[$__range])) by (backend, operation, le))",
+                    "{{backend}} - {{operation}}",
+                    "A",
+                )
+            ],
+            x=0,
+            y=y_pos,
+            w=24,
+            h=8,
+            panel_id=panel_id,
+            unit="s",
+        )
+    )
+    panel_id += 1
+    y_pos += 8
+
     return panels
 
 

@@ -339,6 +339,35 @@ a:hover {
   box-shadow: 0 12px 32px rgba(88, 166, 255, 0.3);
 }
 
+/* Homepage hero buttons - outline button styling */
+.button--outline {
+  background: rgb(50, 52, 55) !important;
+  border: 2px solid rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !important;
+  transition: all 0.3s ease !important;
+  color: #ffffff !important;
+}
+
+.button--outline:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3) !important;
+  background: rgb(60, 62, 65) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  color: #ffffff !important;
+}
+
+[data-theme='dark'] .button--outline {
+  background: rgb(235, 237, 240) !important;
+  border: 2px solid rgba(0, 0, 0, 0.2) !important;
+  color: #000000 !important;
+}
+
+[data-theme='dark'] .button--outline:hover {
+  background: rgb(245, 247, 250) !important;
+  border-color: rgba(0, 0, 0, 0.3) !important;
+  color: #000000 !important;
+}
+
 /* Cards and containers */
 .card {
   background: var(--tech-card-bg);
