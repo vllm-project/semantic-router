@@ -349,6 +349,9 @@
   "homepage.hero.getStarted": {
     "message": "快速开始 - 5分钟 ⏱️"
   },
+  "homepage.hero.publicBeta": {
+    "message": "公开测试版 ☁️"
+  },
   "homepage.aiTech.title": {
     "message": "神经网络处理架构"
   },
