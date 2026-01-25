@@ -576,7 +576,7 @@ Return a JSON dict that represents the mapping in the format:
         """Verify the policy label for one conversation."""
         verify_policy_prompt = f"""You are an expert at grouping conversations with routing policy labels.
 ### Instructions
-Given the following conversation, pick the most suitable label from the canonical label set that best describes the user's intent for routing purposes. If none of the labels apply, respond with 'none_of_the_above'.
+Given the following conversation, pick the most suitable label from the canonical label set that best describes the user's intent for routing purposes. If none of the labels apply, respond with 'none_of_the_above'. Do not create new labels that is not in the canonical label set.
 {json.dumps(list(canonical_labels_set))}
 
 ### Conversation
@@ -611,6 +611,16 @@ Given the following conversation, pick the most suitable label from the canonica
                 verified_route_policy_sample.get("label"),
                 canonical_label,
             )
+        if (
+            verified_route_policy_sample.get("label") not in canonical_labels_set
+            and verified_route_policy_sample.get("label") != "none_of_the_above"
+        ):
+            logging.warning(
+                "Sample %s: verified label %s is not in canonical label set",
+                sample.sample_id,
+                verified_route_policy_sample.get("label"),
+            )
+            verified_route_policy_sample["label"] = "none_of_the_above"
         return RoutePolicySample(
             sample_id=verified_route_policy_sample["sample_id"],
             label=verified_route_policy_sample["label"],
