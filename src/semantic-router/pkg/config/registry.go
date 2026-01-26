@@ -56,7 +56,7 @@ type ModelSpec struct {
 // DefaultModelRegistry provides the structured model registry
 // Users can override this by specifying mom_registry in their config.yaml
 var DefaultModelRegistry = []ModelSpec{
-	// Domain/Intent Classification
+	// Domain/Intent Classification - LoRA (legacy)
 	{
 		LocalPath:        "models/mom-domain-classifier",
 		RepoID:           "LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model",
@@ -68,6 +68,20 @@ var DefaultModelRegistry = []ModelSpec{
 		NumClasses:       14, // MMLU categories
 		MaxContextLength: 512,
 		Tags:             []string{"classification", "lora", "mmlu", "domain", "bert"},
+	},
+
+	// Domain/Intent Classification - mmBERT (merged, recommended)
+	{
+		LocalPath:        "models/mmbert-intent-classifier-merged",
+		RepoID:           "llm-semantic-router/mmbert-intent-classifier-merged",
+		Aliases:          []string{"mmbert-intent-classifier", "mmbert-domain-classifier", "mmbert-category-classifier"},
+		Purpose:          PurposeDomainClassification,
+		Description:      "mmBERT-based merged intent/domain classifier for MMLU categories (multilingual, 8192 context)",
+		ParameterSize:    "149M",
+		UsesLoRA:         false,
+		NumClasses:       14, // MMLU categories
+		MaxContextLength: 8192,
+		Tags:             []string{"classification", "mmbert", "mmlu", "domain", "intent", "merged", "multilingual"},
 	},
 
 	// PII Detection - BERT LoRA
@@ -98,7 +112,7 @@ var DefaultModelRegistry = []ModelSpec{
 		Tags:             []string{"pii", "privacy", "modernbert", "token-classification", "merged"},
 	},
 
-	// Jailbreak Detection
+	// Jailbreak Detection - ModernBERT (legacy)
 	{
 		LocalPath:        "models/mom-jailbreak-classifier",
 		RepoID:           "LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model",
@@ -112,7 +126,21 @@ var DefaultModelRegistry = []ModelSpec{
 		Tags:             []string{"safety", "jailbreak", "prompt-injection", "modernbert"},
 	},
 
-	// Hallucination Detection - Sentinel
+	// Jailbreak Detection - mmBERT (merged, recommended)
+	{
+		LocalPath:        "models/mmbert-jailbreak-detector-merged",
+		RepoID:           "llm-semantic-router/mmbert-jailbreak-detector-merged",
+		Aliases:          []string{"mmbert-jailbreak-detector", "mmbert-jailbreak-classifier", "mmbert-prompt-guard"},
+		Purpose:          PurposeJailbreakDetection,
+		Description:      "mmBERT-based merged jailbreak/prompt injection detector (multilingual, 8192 context)",
+		ParameterSize:    "149M",
+		UsesLoRA:         false,
+		NumClasses:       2, // benign/jailbreak
+		MaxContextLength: 8192,
+		Tags:             []string{"safety", "jailbreak", "prompt-injection", "mmbert", "merged", "multilingual"},
+	},
+
+	// Hallucination Detection - Sentinel (legacy)
 	{
 		LocalPath:        "models/mom-halugate-sentinel",
 		RepoID:           "LLM-Semantic-Router/halugate-sentinel",
@@ -123,6 +151,20 @@ var DefaultModelRegistry = []ModelSpec{
 		NumClasses:       2, // hallucination/no-hallucination
 		MaxContextLength: 512,
 		Tags:             []string{"hallucination", "sentinel", "screening", "bert"},
+	},
+
+	// Fact Check - mmBERT (merged, recommended)
+	{
+		LocalPath:        "models/mmbert-fact-check-merged",
+		RepoID:           "llm-semantic-router/mmbert-fact-check-merged",
+		Aliases:          []string{"mmbert-fact-check", "mmbert-fact-check-detector", "mmbert-halugate-sentinel"},
+		Purpose:          PurposeHallucinationSentinel,
+		Description:      "mmBERT-based merged fact-check classifier (multilingual, 8192 context)",
+		ParameterSize:    "149M",
+		UsesLoRA:         false,
+		NumClasses:       2, // needs-fact-check/no-fact-check-needed
+		MaxContextLength: 8192,
+		Tags:             []string{"fact-check", "hallucination", "sentinel", "mmbert", "merged", "multilingual"},
 	},
 
 	// Hallucination Detection - Detector
