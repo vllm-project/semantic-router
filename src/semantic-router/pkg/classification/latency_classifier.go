@@ -114,6 +114,7 @@ func NewLatencyClassifier(cfgRules []config.LatencyRule) (*LatencyClassifier, er
 
 // Classify evaluates latency rules against available models
 // It checks if models in the decision's ModelRefs meet the latency requirements
+// Returns only the most strict matching rule (smallest max_tpot that is satisfied)
 func (c *LatencyClassifier) Classify(availableModels []string) (*LatencyResult, error) {
 	if len(c.rules) == 0 {
 		return &LatencyResult{
@@ -122,9 +123,15 @@ func (c *LatencyClassifier) Classify(availableModels []string) (*LatencyResult, 
 		}, nil
 	}
 
-	var matchedRules []string
-	totalConfidence := 0.0
-	matchedCount := 0
+	// Track all matched rules with their thresholds
+	type matchedRule struct {
+		name       string
+		maxTPOT    float64
+		bestTPOT   float64
+		bestModel  string
+		confidence float64
+	}
+	var allMatched []matchedRule
 
 	for _, rule := range c.rules {
 		// Check if any available model meets this latency rule
@@ -152,36 +159,55 @@ func (c *LatencyClassifier) Classify(availableModels []string) (*LatencyResult, 
 		}
 
 		if matched {
-			matchedRules = append(matchedRules, rule.Name)
-
 			// Calculate confidence based on how much better the TPOT is than the threshold
 			// If TPOT is much lower than threshold, higher confidence
+			confidence := 0.0
 			if rule.MaxTPOT > 0 {
 				ratio := bestTPOT / rule.MaxTPOT
-				confidence := 1.0 - ratio // Lower ratio = higher confidence
+				confidence = 1.0 - ratio // Lower ratio = higher confidence
 				if confidence < 0.5 {
 					confidence = 0.5 // Minimum confidence
 				}
 				if confidence > 1.0 {
 					confidence = 1.0
 				}
-				totalConfidence += confidence
-				matchedCount++
-
-				logging.Infof("Latency rule '%s' matched: model=%s, TPOT=%.4fs, threshold=%.4fs, confidence=%.2f",
-					rule.Name, bestModel, bestTPOT, rule.MaxTPOT, confidence)
 			}
+
+			allMatched = append(allMatched, matchedRule{
+				name:       rule.Name,
+				maxTPOT:    rule.MaxTPOT,
+				bestTPOT:   bestTPOT,
+				bestModel:  bestModel,
+				confidence: confidence,
+			})
+
+			logging.Debugf("Latency rule '%s' matched: model=%s, TPOT=%.4fs, threshold=%.4fs, confidence=%.2f",
+				rule.Name, bestModel, bestTPOT, rule.MaxTPOT, confidence)
 		}
 	}
 
-	// Calculate average confidence
-	avgConfidence := 0.0
-	if matchedCount > 0 {
-		avgConfidence = totalConfidence / float64(matchedCount)
+	// If no rules matched, return empty result
+	if len(allMatched) == 0 {
+		return &LatencyResult{
+			MatchedRules: []string{},
+			Confidence:   0.0,
+		}, nil
 	}
 
+	// Find the most strict rule (smallest max_tpot) among matched rules
+	// This ensures we only return one latency signal - the most restrictive one that is satisfied
+	strictestRule := allMatched[0]
+	for _, mr := range allMatched[1:] {
+		if mr.maxTPOT < strictestRule.maxTPOT {
+			strictestRule = mr
+		}
+	}
+
+	logging.Infof("Latency signal selected (most strict): '%s' (model=%s, TPOT=%.4fs, threshold=%.4fs, confidence=%.2f)",
+		strictestRule.name, strictestRule.bestModel, strictestRule.bestTPOT, strictestRule.maxTPOT, strictestRule.confidence)
+
 	return &LatencyResult{
-		MatchedRules: matchedRules,
-		Confidence:   avgConfidence,
+		MatchedRules: []string{strictestRule.name},
+		Confidence:   strictestRule.confidence,
 	}, nil
 }

@@ -1403,7 +1403,7 @@ const MAX_TOOL_ITERATIONS = 30
         <HeaderReveal
           headers={pendingHeaders}
           onComplete={handleHeaderRevealComplete}
-          displayDuration={2000}
+          displayDuration={1000}
         />
       )}
 
@@ -1633,7 +1633,7 @@ const MAX_TOOL_ITERATIONS = 30
       </div>
 
       <div className={styles.inputContainer}>
-        <div className={styles.inputWrapper}>
+        <div className={`${styles.inputWrapper} ${inputValue.trim() ? styles.hasContent : ''}`}>
           <textarea
             ref={inputRef}
             value={inputValue}
