@@ -117,6 +117,7 @@ hallucination_mitigation:
 feedback_detector:
   enabled: true
   model_id: "models/mom-feedback-detector"
+  use_modernbert: true  # Feedback detector uses ModernBERT architecture
   threshold: 0.7
   use_cpu: true
 

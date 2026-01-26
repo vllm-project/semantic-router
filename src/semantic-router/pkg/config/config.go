@@ -381,6 +381,7 @@ type PIIModel struct {
 	ModelID        string  `yaml:"model_id"`
 	Threshold      float32 `yaml:"threshold"`
 	UseCPU         bool    `yaml:"use_cpu"`
+	UseModernBERT  bool    `yaml:"use_modernbert"`
 	PIIMappingPath string  `yaml:"pii_mapping_path"`
 }
 
@@ -1057,6 +1058,9 @@ type FactCheckModelConfig struct {
 
 	// Use CPU for inference
 	UseCPU bool `yaml:"use_cpu"`
+
+	// Use ModernBERT/mmBERT architecture (auto-detects mmBERT when true)
+	UseModernBERT bool `yaml:"use_modernbert"`
 }
 
 // HallucinationModelConfig represents configuration for hallucination detection model
