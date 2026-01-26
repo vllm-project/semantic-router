@@ -62,12 +62,12 @@ var DefaultModelRegistry = []ModelSpec{
 		RepoID:           "LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model",
 		Aliases:          []string{"domain-classifier", "intent-classifier", "category-classifier", "category_classifier_modernbert-base_model", "lora_intent_classifier_bert-base-uncased_model"},
 		Purpose:          PurposeDomainClassification,
-		Description:      "BERT-based domain/intent classifier with LoRA adapters for MMLU categories",
-		ParameterSize:    "110M + LoRA",
+		Description:      "Domain/intent classifier compatible with ModernBERT-base-32k for 32K context support. Uses traditional classifier weights (compatible with ModernBERT-base-32k base model) for MMLU categories",
+		ParameterSize:    "149M (ModernBERT-base-32k) + classifier",
 		UsesLoRA:         true,
 		NumClasses:       14, // MMLU categories
-		MaxContextLength: 512,
-		Tags:             []string{"classification", "lora", "mmlu", "domain", "bert"},
+		MaxContextLength: 32768, // Supports 32K tokens via ModernBERT-base-32k
+		Tags:             []string{"classification", "lora", "mmlu", "domain", "modernbert", "long-context"},
 	},
 
 	// PII Detection - BERT LoRA
@@ -76,12 +76,12 @@ var DefaultModelRegistry = []ModelSpec{
 		RepoID:           "LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model",
 		Aliases:          []string{"pii-detector", "pii-classifier", "privacy-guard", "lora_pii_detector_bert-base-uncased_model"},
 		Purpose:          PurposePIIDetection,
-		Description:      "BERT-based PII detector with LoRA adapters for 35 PII types",
-		ParameterSize:    "110M + LoRA",
+		Description:      "PII detector compatible with ModernBERT-base-32k for 32K context support. Uses traditional classifier weights (compatible with ModernBERT-base-32k base model) for 35 PII types",
+		ParameterSize:    "149M (ModernBERT-base-32k) + classifier",
 		UsesLoRA:         true,
 		NumClasses:       35, // PII types
-		MaxContextLength: 512,
-		Tags:             []string{"pii", "privacy", "lora", "token-classification", "bert"},
+		MaxContextLength: 32768, // Supports 32K tokens via ModernBERT-base-32k
+		Tags:             []string{"pii", "privacy", "lora", "token-classification", "modernbert", "long-context"},
 	},
 
 	// PII Detection - ModernBERT (Token-level)
@@ -104,12 +104,12 @@ var DefaultModelRegistry = []ModelSpec{
 		RepoID:           "LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model",
 		Aliases:          []string{"jailbreak-detector", "prompt-guard", "safety-classifier", "jailbreak_classifier_modernbert-base_model", "lora_jailbreak_classifier_bert-base-uncased_model", "jailbreak_classifier_modernbert_model"},
 		Purpose:          PurposeJailbreakDetection,
-		Description:      "ModernBERT-based jailbreak/prompt injection detector",
-		ParameterSize:    "149M",
+		Description:      "ModernBERT-based jailbreak/prompt injection detector compatible with ModernBERT-base-32k for 32K context support",
+		ParameterSize:    "149M (ModernBERT-base-32k)",
 		UsesLoRA:         false,
 		NumClasses:       2, // benign/jailbreak
-		MaxContextLength: 512,
-		Tags:             []string{"safety", "jailbreak", "prompt-injection", "modernbert"},
+		MaxContextLength: 32768, // Supports 32K tokens via ModernBERT-base-32k
+		Tags:             []string{"safety", "jailbreak", "prompt-injection", "modernbert", "long-context"},
 	},
 
 	// Hallucination Detection - Sentinel
