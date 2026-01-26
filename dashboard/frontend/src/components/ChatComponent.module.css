@@ -439,14 +439,12 @@ body.playground-fullscreen .container {
 
 .inputWrapper:focus-within {
   border-color: var(--color-primary);
-  border-width: 2px;
-  box-shadow: 0 0 0 1px var(--color-primary);
+  box-shadow: 0 0 0 0.5px var(--color-primary);
 }
 
 .inputWrapper.hasContent {
   border-color: var(--color-primary);
-  border-width: 2px;
-  box-shadow: 0 0 0 1px var(--color-primary);
+  box-shadow: 0 0 0 0.5px var(--color-primary);
 }
 
 .input {
@@ -733,8 +731,7 @@ body.playground-fullscreen .container {
   .inputWrapper:focus-within,
   .inputWrapper.hasContent {
     border-color: var(--color-primary) !important;
-    border-width: 2px !important;
-    box-shadow: 0 0 0 1px var(--color-primary) !important;
+    box-shadow: 0 0 0 0.5px var(--color-primary) !important;
   }
 
   .input,
@@ -828,8 +825,7 @@ body.playground-fullscreen .container {
   .inputWrapper:focus-within,
   .inputWrapper.hasContent {
     border-color: var(--color-primary) !important;
-    border-width: 2px !important;
-    box-shadow: 0 0 0 1px var(--color-primary) !important;
+    box-shadow: 0 0 0 0.5px var(--color-primary) !important;
   }
 
   .input {

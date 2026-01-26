@@ -2889,16 +2889,19 @@ var _ = Describe("LatencyClassifier", func() {
 		Expect(result.MatchedRules).To(ContainElement("high_latency"))      // 0.20 <= 0.30, so matches
 	})
 
-	It("should match multiple latency rules when model TPOT meets multiple thresholds", func() {
+	It("should return only the most strict latency rule when model TPOT meets multiple thresholds", func() {
 		// Set up TPOT cache with medium-speed model
 		UpdateTPOT("medium-model", 0.10) // 100ms per token
 
 		result, err := classifier.Classify([]string{"medium-model"})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result).NotTo(BeNil())
-		Expect(result.MatchedRules).NotTo(ContainElement("low_latency")) // 0.10 > 0.05, so doesn't match
-		Expect(result.MatchedRules).To(ContainElement("medium_latency")) // 0.10 <= 0.15, so matches
-		Expect(result.MatchedRules).To(ContainElement("high_latency"))   // 0.10 <= 0.30, so matches
+		// 0.10 meets both medium_latency (0.15) and high_latency (0.30) thresholds
+		// But only the most strict (smallest max_tpot) should be returned
+		Expect(result.MatchedRules).To(HaveLen(1))
+		Expect(result.MatchedRules).To(ContainElement("medium_latency"))  // Most strict rule that matches
+		Expect(result.MatchedRules).NotTo(ContainElement("low_latency"))  // 0.10 > 0.05, so doesn't match
+		Expect(result.MatchedRules).NotTo(ContainElement("high_latency")) // Matches but not the most strict
 	})
 
 	It("should handle models without TPOT data", func() {
