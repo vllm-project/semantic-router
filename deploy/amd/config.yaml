@@ -104,7 +104,7 @@ signals:
   # Embedding-based signals for intent classification
   embeddings:
     # Fast QA (English) - Simple, quick questions requiring brief answers
-    - name: "fast_qa"
+    - name: "fast_qa_en"
       threshold: 0.72
       aggregation_method: "max"
       candidates:
@@ -271,7 +271,7 @@ signals:
     - name: "medium_latency"
       max_tpot: 0.05  # 50ms per token
       description: "For standard applications with moderate latency tolerance"
-    - name: "medium_latency"
+    - name: "high_latency"
       max_tpot: 0.20  # 200ms per token
       description: "For applications with high latency tolerance"
 
@@ -500,7 +500,7 @@ decisions:
       - type: "semantic-cache"
         configuration:
           enabled: true
-          similarity_threshold: 0.95
+          similarity_threshold: 0.98
 
   # Priority 120: Fast QA in English
   - name: "fast_qa"
@@ -510,7 +510,7 @@ decisions:
       operator: "AND"
       conditions:
         - type: "embedding"
-          name: "fast_qa"
+          name: "fast_qa_en"
         - type: "language"
           name: "en"
         - type: "context"
@@ -525,7 +525,7 @@ decisions:
       - type: "semantic-cache"
         configuration:
           enabled: true
-          similarity_threshold: 0.95
+          similarity_threshold: 0.98
 
   # Priority 100: Default fallback
   - name: "casual_chat"
@@ -551,7 +551,7 @@ decisions:
       - type: "semantic-cache"
         configuration:
           enabled: true
-          similarity_threshold: 0.96
+          similarity_threshold: 0.98
 
 # Providers - Backend model configuration
 providers:
