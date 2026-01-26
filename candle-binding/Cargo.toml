@@ -69,6 +69,26 @@ path = "../deploy/examples/candle-binding/test_raw_confidence.rs"
 name = "test_modernbert_32k"
 path = "examples/test_modernbert_32k.rs"
 
+# Example testing LoRA adapter compatibility with ModernBERT-base-32k
+[[example]]
+name = "test_lora_compatibility_32k"
+path = "examples/test_lora_compatibility_32k.rs"
+
+# Example testing full inference with LoRA adapters on ModernBERT-base-32k
+[[example]]
+name = "test_lora_inference_32k"
+path = "examples/test_lora_inference_32k.rs"
+
+# Example listing safetensors keys
+[[example]]
+name = "list_safetensors_keys"
+path = "examples/list_safetensors_keys.rs"
+
+# Example testing long text inference (8K, 16K, 32K tokens)
+[[example]]
+name = "test_long_text_inference_32k"
+path = "examples/test_long_text_inference_32k.rs"
+
 # Note: Benchmark binaries are located in ../bench/scripts/rust/candle-binding/
 # They are not included in the library build to keep it self-contained.
 # To run benchmarks, use the workspace-level Cargo.toml or run them directly from the bench directory.
