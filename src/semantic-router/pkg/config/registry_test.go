@@ -93,8 +93,8 @@ func TestGetModelByPath_FindsByAlias(t *testing.T) {
 	if model == nil {
 		t.Fatal("Expected to find model by old alias path")
 	}
-	if model.LocalPath != "models/mom-mmbert-pii-detector" {
-		t.Errorf("Expected LocalPath to be models/mom-mmbert-pii-detector, got %s", model.LocalPath)
+	if model.LocalPath != "models/mom-mmbert-pii-detector-merged" {
+		t.Errorf("Expected LocalPath to be models/mom-mmbert-pii-detector-merged, got %s", model.LocalPath)
 	}
 
 	// Test finding by short alias
@@ -113,7 +113,7 @@ func TestMmBertModelsInRegistry(t *testing.T) {
 	// Test mmBERT intent classifier
 	intentMmBertRepo := "llm-semantic-router/mmbert-intent-classifier-merged"
 	intentMmBertTests := []string{
-		"models/mmbert-intent-classifier-merged",
+		"models/mom-mmbert-intent-classifier-merged",
 		"models/mmbert-intent-classifier",
 		"models/mmbert-domain-classifier",
 		"models/mmbert-category-classifier",
@@ -132,7 +132,7 @@ func TestMmBertModelsInRegistry(t *testing.T) {
 	// Test mmBERT fact-check model
 	factCheckMmBertRepo := "llm-semantic-router/mmbert-fact-check-merged"
 	factCheckMmBertTests := []string{
-		"models/mmbert-fact-check-merged",
+		"models/mom-mmbert-fact-check-merged",
 		"models/mmbert-fact-check",
 		"models/mmbert-fact-check-detector",
 		"models/mmbert-halugate-sentinel",
@@ -151,7 +151,7 @@ func TestMmBertModelsInRegistry(t *testing.T) {
 	// Test mmBERT jailbreak detector
 	jailbreakMmBertRepo := "llm-semantic-router/mmbert-jailbreak-detector-merged"
 	jailbreakMmBertTests := []string{
-		"models/mmbert-jailbreak-detector-merged",
+		"models/mom-mmbert-jailbreak-detector-merged",
 		"models/mmbert-jailbreak-detector",
 		"models/mmbert-jailbreak-classifier",
 		"models/mmbert-prompt-guard",
@@ -164,6 +164,22 @@ func TestMmBertModelsInRegistry(t *testing.T) {
 			t.Errorf("Expected %s to be in registry", path)
 		} else if repo != jailbreakMmBertRepo {
 			t.Errorf("Expected %s to map to %s, got %s", path, jailbreakMmBertRepo, repo)
+		}
+	}
+
+	// Test mmBERT PII detector
+	piiMmBertRepo := "llm-semantic-router/mmbert-pii-detector-merged"
+	piiMmBertTests := []string{
+		"models/mom-mmbert-pii-detector-merged",
+		"models/mom-mmbert-pii-detector",
+		"models/mmbert-pii-detector",
+		"mmbert-pii-detector",
+	}
+	for _, path := range piiMmBertTests {
+		if repo, ok := registry[path]; !ok {
+			t.Errorf("Expected %s to be in registry", path)
+		} else if repo != piiMmBertRepo {
+			t.Errorf("Expected %s to map to %s, got %s", path, piiMmBertRepo, repo)
 		}
 	}
 }

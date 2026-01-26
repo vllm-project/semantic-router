@@ -72,9 +72,9 @@ var DefaultModelRegistry = []ModelSpec{
 
 	// Domain/Intent Classification - mmBERT (merged, recommended)
 	{
-		LocalPath:        "models/mmbert-intent-classifier-merged",
+		LocalPath:        "models/mom-mmbert-intent-classifier-merged",
 		RepoID:           "llm-semantic-router/mmbert-intent-classifier-merged",
-		Aliases:          []string{"mmbert-intent-classifier", "mmbert-domain-classifier", "mmbert-category-classifier"},
+		Aliases:          []string{"mmbert-intent-classifier-merged", "mmbert-intent-classifier", "mmbert-domain-classifier", "mmbert-category-classifier"},
 		Purpose:          PurposeDomainClassification,
 		Description:      "mmBERT-based merged intent/domain classifier for MMLU categories (multilingual, 8192 context)",
 		ParameterSize:    "149M",
@@ -100,9 +100,9 @@ var DefaultModelRegistry = []ModelSpec{
 
 	// PII Detection - ModernBERT (Token-level)
 	{
-		LocalPath:        "models/mom-mmbert-pii-detector",
+		LocalPath:        "models/mom-mmbert-pii-detector-merged",
 		RepoID:           "llm-semantic-router/mmbert-pii-detector-merged",
-		Aliases:          []string{"mmbert-pii-detector", "mmbert-pii-detector-merged", "pii_classifier_modernbert-base_presidio_token_model", "pii_classifier_modernbert-base_model", "pii_classifier_modernbert_model", "pii_classifier_modernbert_ai4privacy_token_model"},
+		Aliases:          []string{"mmbert-pii-detector-merged", "mmbert-pii-detector", "mom-mmbert-pii-detector", "pii_classifier_modernbert-base_presidio_token_model", "pii_classifier_modernbert-base_model", "pii_classifier_modernbert_model", "pii_classifier_modernbert_ai4privacy_token_model"},
 		Purpose:          PurposePIIDetection,
 		Description:      "ModernBERT-based merged PII detector for token-level classification",
 		ParameterSize:    "149M",
@@ -128,9 +128,9 @@ var DefaultModelRegistry = []ModelSpec{
 
 	// Jailbreak Detection - mmBERT (merged, recommended)
 	{
-		LocalPath:        "models/mmbert-jailbreak-detector-merged",
+		LocalPath:        "models/mom-mmbert-jailbreak-detector-merged",
 		RepoID:           "llm-semantic-router/mmbert-jailbreak-detector-merged",
-		Aliases:          []string{"mmbert-jailbreak-detector", "mmbert-jailbreak-classifier", "mmbert-prompt-guard"},
+		Aliases:          []string{"mmbert-jailbreak-detector-merged", "mmbert-jailbreak-detector", "mmbert-jailbreak-classifier", "mmbert-prompt-guard"},
 		Purpose:          PurposeJailbreakDetection,
 		Description:      "mmBERT-based merged jailbreak/prompt injection detector (multilingual, 8192 context)",
 		ParameterSize:    "149M",
@@ -155,9 +155,9 @@ var DefaultModelRegistry = []ModelSpec{
 
 	// Fact Check - mmBERT (merged, recommended)
 	{
-		LocalPath:        "models/mmbert-fact-check-merged",
+		LocalPath:        "models/mom-mmbert-fact-check-merged",
 		RepoID:           "llm-semantic-router/mmbert-fact-check-merged",
-		Aliases:          []string{"mmbert-fact-check", "mmbert-fact-check-detector", "mmbert-halugate-sentinel"},
+		Aliases:          []string{"mmbert-fact-check-merged", "mmbert-fact-check", "mmbert-fact-check-detector", "mmbert-halugate-sentinel"},
 		Purpose:          PurposeHallucinationSentinel,
 		Description:      "mmBERT-based merged fact-check classifier (multilingual, 8192 context)",
 		ParameterSize:    "149M",
