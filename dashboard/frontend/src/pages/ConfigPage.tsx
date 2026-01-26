@@ -3556,7 +3556,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                 <tr key={idx} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
                   <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem', fontWeight: 500 }}>{ep.name}</td>
                   <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem', fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)' }}>
-                    {ep.endpoint || 'N/A'}
+                    {isReadonly ? '************' : (ep.endpoint || 'N/A')}
                   </td>
                   <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
                     <span style={{
@@ -3631,7 +3631,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                           color: 'var(--color-text-secondary)'
                         }}>
                           <span style={{ fontFamily: 'var(--font-mono)' }}>
-                            {ep.endpoint}
+                            {isReadonly ? '************' : ep.endpoint}
                           </span>
                           <span>
                             <span style={{
