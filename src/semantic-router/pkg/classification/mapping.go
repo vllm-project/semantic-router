@@ -21,13 +21,13 @@ type PIIMapping struct {
 }
 
 // JailbreakMapping holds the mapping between indices and jailbreak types
-// Supports both naming conventions: label_to_idx/idx_to_label and label_to_id/id_to_label
+// Supports both formats: label_to_idx/idx_to_label (legacy) and label_to_id/id_to_label (mmBERT)
 type JailbreakMapping struct {
-	LabelToIdx map[string]int    `json:"label_to_idx"`
-	IdxToLabel map[string]string `json:"idx_to_label"`
-	// Alternative naming (for HuggingFace compatibility)
-	LabelToID map[string]int    `json:"label_to_id"`
-	IDToLabel map[string]string `json:"id_to_label"`
+	LabelToIdx map[string]int    `json:"label_to_idx"` // Legacy format
+	IdxToLabel map[string]string `json:"idx_to_label"` // Legacy format
+	// mmBERT format (alternative field names)
+	LabelToID map[string]int    `json:"label_to_id,omitempty"` // mmBERT format
+	IDToLabel map[string]string `json:"id_to_label,omitempty"` // mmBERT format
 }
 
 // LoadCategoryMapping loads the category mapping from a JSON file
@@ -65,7 +65,7 @@ func LoadPIIMapping(path string) (*PIIMapping, error) {
 }
 
 // LoadJailbreakMapping loads the jailbreak mapping from a JSON file
-// Supports both label_to_idx/idx_to_label and label_to_id/id_to_label formats
+// Supports both formats: label_to_idx/idx_to_label (legacy) and label_to_id/id_to_label (mmBERT)
 func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 	// Read the mapping file
 	data, err := os.ReadFile(path)
@@ -79,8 +79,7 @@ func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 		return nil, fmt.Errorf("failed to parse jailbreak mapping JSON: %w", err)
 	}
 
-	// If standard fields are empty but alternative fields are populated,
-	// copy from alternative fields to standard fields for internal use
+	// Normalize: if mmBERT format (label_to_id/id_to_label) is present but legacy format is not, copy it
 	if len(mapping.LabelToIdx) == 0 && len(mapping.LabelToID) > 0 {
 		mapping.LabelToIdx = mapping.LabelToID
 	}
