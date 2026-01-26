@@ -142,16 +142,12 @@ const LandingPage: React.FC = () => {
     <div className={styles.container}>
       <canvas ref={canvasRef} className={styles.backgroundCanvas} />
 
-      {/* Logo at top */}
-      <div className={styles.logoContainer}>
-        <img src="/vllm.png" alt="vLLM Logo" className={styles.logo} />
-      </div>
-
       {/* Main Content - Centered */}
       <main className={styles.mainContent}>
         <div className={styles.heroSection}>
           <h1 className={styles.title}>
-            vLLM Semantic Router
+            <img src="/vllm.png" alt="vLLM Logo" className={styles.logoInline} />
+            LLM Semantic Router
           </h1>
 
           <p className={styles.subtitle}>

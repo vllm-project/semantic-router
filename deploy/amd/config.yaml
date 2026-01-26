@@ -240,7 +240,17 @@ signals:
     - name: "en"
       description: "English language queries"
     - name: "zh"
-      description: "Chinese language queries (Simplified and Traditional)"
+      description: "Chinese language queries"
+    - name: "kor"
+      description: "Korean language queries"
+    - name: "fr"
+      description: "French language queries"
+    - name: "ru"
+      description: "Russian language queries"
+    - name: "de"
+      description: "German language queries"
+    - name: "ja"
+      description: "Japanese language queries"
 
   # Domain classification signals (using MMLU standard categories)
   domains:
@@ -259,8 +269,11 @@ signals:
       max_tpot: 0.005  # 5ms per token
       description: "For real-time chat applications requiring fast responses"
     - name: "medium_latency"
-      max_tpot: 0.15  # 150ms per token
+      max_tpot: 0.05  # 50ms per token
       description: "For standard applications with moderate latency tolerance"
+    - name: "medium_latency"
+      max_tpot: 0.20  # 200ms per token
+      description: "For applications with high latency tolerance"
 
   # Fact-check signals for verification needs
   # Strategy: Identify queries that DON'T need fact checking (creative/code/opinion)
