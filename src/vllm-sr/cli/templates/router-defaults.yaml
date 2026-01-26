@@ -64,7 +64,7 @@ classifier:
     use_mmbert_32k: true
     threshold: 0.9
     use_cpu: true
-    pii_mapping_path: "models/mmbert32k-pii-detector-merged/pii_type_mapping.json"
+    pii_mapping_path: "models/mmbert32k-pii-detector-merged/label_mapping.json"  # mmBERT models use label_mapping.json instead of pii_type_mapping.json
 
 # Hallucination mitigation configuration
 # Disabled by default - enable in decisions via hallucination plugin
