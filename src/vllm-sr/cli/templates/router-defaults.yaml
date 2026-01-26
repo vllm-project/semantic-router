@@ -1,15 +1,24 @@
+# Model registry maps local model paths to HuggingFace repository IDs
+# The router will automatically download models listed here if they don't exist locally
+# If mom_registry is empty or not specified, the router uses DefaultModelRegistry from code
 # You can override by specifying your own mappings below:
-# Uncomment and customize if you need different model mappings:
-# mom_registry:
-#   "models/mom-domain-classifier": "LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model"
-#   "models/mom-pii-classifier": "LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model"
-#   "models/mom-jailbreak-classifier": "LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model"
-#   "models/mom-halugate-detector": "KRLabsOrg/lettucedect-base-modernbert-en-v1"
-#   "models/mom-halugate-sentinel": "LLM-Semantic-Router/halugate-sentinel"
-#   "models/mom-halugate-explainer": "tasksource/ModernBERT-base-nli"
-#   "models/mom-feedback-detector": "llm-semantic-router/feedback-detector"
-#   "models/mom-embedding-pro": "Qwen/Qwen3-Embedding-0.6B"
-#   "models/mom-embedding-flash": "google/embeddinggemma-300m"
+mom_registry:
+  # mmBERT models (recommended - multilingual, 8192 context)
+  "models/mmbert-intent-classifier-merged": "llm-semantic-router/mmbert-intent-classifier-merged"
+  "models/mmbert-pii-detector-merged": "llm-semantic-router/mmbert-pii-detector-merged"
+  "models/mmbert-jailbreak-detector-merged": "llm-semantic-router/mmbert-jailbreak-detector-merged"
+  "models/mmbert-fact-check-merged": "llm-semantic-router/mmbert-fact-check-merged"
+  # Legacy models (still supported)
+  "models/mom-domain-classifier": "LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model"
+  "models/mom-pii-classifier": "LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model"
+  "models/mom-jailbreak-classifier": "LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model"
+  "models/mom-halugate-detector": "KRLabsOrg/lettucedect-base-modernbert-en-v1"
+  "models/mom-halugate-sentinel": "LLM-Semantic-Router/halugate-sentinel"
+  "models/mom-halugate-explainer": "tasksource/ModernBERT-base-nli"
+  "models/mom-feedback-detector": "llm-semantic-router/feedback-detector"
+  "models/mom-embedding-pro": "Qwen/Qwen3-Embedding-0.6B"
+  "models/mom-embedding-flash": "google/embeddinggemma-300m"
+  "models/mom-embedding-light": "sentence-transformers/all-MiniLM-L12-v2"
 
 # Response API Configuration
 # Enables OpenAI Response API support with conversation chaining
