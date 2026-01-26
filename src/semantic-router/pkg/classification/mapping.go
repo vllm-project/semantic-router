@@ -15,9 +15,13 @@ type CategoryMapping struct {
 }
 
 // PIIMapping holds the mapping between indices and PII types
+// Supports both formats: label_to_idx/idx_to_label (legacy) and label_to_id/id_to_label (mmBERT)
 type PIIMapping struct {
-	LabelToIdx map[string]int    `json:"label_to_idx"`
-	IdxToLabel map[string]string `json:"idx_to_label"`
+	LabelToIdx map[string]int    `json:"label_to_idx"` // Legacy format
+	IdxToLabel map[string]string `json:"idx_to_label"` // Legacy format
+	// mmBERT format (alternative field names)
+	LabelToID map[string]int    `json:"label_to_id,omitempty"` // mmBERT format
+	IDToLabel map[string]string `json:"id_to_label,omitempty"` // mmBERT format
 }
 
 // JailbreakMapping holds the mapping between indices and jailbreak types
@@ -48,6 +52,7 @@ func LoadCategoryMapping(path string) (*CategoryMapping, error) {
 }
 
 // LoadPIIMapping loads the PII mapping from a JSON file
+// Supports both formats: label_to_idx/idx_to_label (legacy) and label_to_id/id_to_label (mmBERT)
 func LoadPIIMapping(path string) (*PIIMapping, error) {
 	// Read the mapping file
 	data, err := os.ReadFile(path)
@@ -59,6 +64,14 @@ func LoadPIIMapping(path string) (*PIIMapping, error) {
 	var mapping PIIMapping
 	if err := json.Unmarshal(data, &mapping); err != nil {
 		return nil, fmt.Errorf("failed to parse PII mapping JSON: %w", err)
+	}
+
+	// Normalize: if mmBERT format (label_to_id/id_to_label) is present but legacy format is not, copy it
+	if len(mapping.LabelToIdx) == 0 && len(mapping.LabelToID) > 0 {
+		mapping.LabelToIdx = mapping.LabelToID
+	}
+	if len(mapping.IdxToLabel) == 0 && len(mapping.IDToLabel) > 0 {
+		mapping.IdxToLabel = mapping.IDToLabel
 	}
 
 	return &mapping, nil
