@@ -1403,7 +1403,7 @@ const MAX_TOOL_ITERATIONS = 30
         <HeaderReveal
           headers={pendingHeaders}
           onComplete={handleHeaderRevealComplete}
-          displayDuration={1000}
+          displayDuration={2000}
         />
       )}
 

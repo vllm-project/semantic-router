@@ -16,7 +16,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
   const navigate = useNavigate()
   const isConfigPage = location.pathname === '/config'
   const isSystemPage = isConfigPage && configSection === 'router-config'
-  const isObservabilityPage = ['/status', '/logs', '/monitoring', '/tracing'].includes(location.pathname)
+  const isObservabilityPage = ['/status', '/logs', '/monitoring', '/tracing', '/evaluation'].includes(location.pathname)
 
   // Close system dropdown when clicking outside
   useEffect(() => {
@@ -91,16 +91,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
               Topology
             </NavLink>
 
-            <NavLink
-              to="/evaluation"
-              className={({ isActive }) =>
-                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
-              }
-            >
-              Evaluation
-            </NavLink>
-
-            {/* System Dropdown (includes router-config and observability) */}
+            {/* System Dropdown (includes router-config, observability, and evaluation) */}
             <div className={styles.systemDropdown}>
               <button
                 className={`${styles.navLink} ${styles.dropdownTrigger} ${(isSystemPage || isObservabilityPage) ? styles.navLinkActive : ''}`}
@@ -162,6 +153,14 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
                     onClick={() => setSystemDropdownOpen(false)}
                   >
                     Tracing
+                  </NavLink>
+                  <div className={styles.dropdownDivider}></div>
+                  <NavLink
+                    to="/evaluation"
+                    className={`${styles.dropdownItem} ${location.pathname === '/evaluation' ? styles.dropdownItemActive : ''}`}
+                    onClick={() => setSystemDropdownOpen(false)}
+                  >
+                    Evaluation
                   </NavLink>
                 </div>
               )}
