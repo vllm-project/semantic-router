@@ -1,3 +1,27 @@
+# Model registry maps local model paths to HuggingFace repository IDs
+# The router will automatically download models listed here if they don't exist locally
+# If mom_registry is empty or not specified, the router uses DefaultModelRegistry from code
+# You can override by specifying your own mappings below:
+mom_registry:
+  # mmBERT-32K models (recommended - multilingual, 32K context)
+  "models/mmbert32k-intent-classifier-merged": "llm-semantic-router/mmbert32k-intent-classifier-merged"
+  "models/mmbert32k-pii-detector-merged": "llm-semantic-router/mmbert32k-pii-detector-merged"
+  "models/mmbert32k-jailbreak-detector-merged": "llm-semantic-router/mmbert32k-jailbreak-detector-merged"
+  "models/mmbert32k-factcheck-classifier-merged": "llm-semantic-router/mmbert32k-factcheck-classifier-merged"
+  "models/mmbert32k-feedback-detector-merged": "llm-semantic-router/mmbert32k-feedback-detector-merged"
+  # Legacy models (still supported)
+  "models/mom-domain-classifier": "LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model"
+  "models/mom-pii-classifier": "LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model"
+  "models/mom-jailbreak-classifier": "LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model"
+  "models/mom-halugate-detector": "KRLabsOrg/lettucedect-base-modernbert-en-v1"
+  "models/mom-halugate-sentinel": "LLM-Semantic-Router/halugate-sentinel"
+  "models/mom-halugate-explainer": "tasksource/ModernBERT-base-nli"
+  "models/mom-feedback-detector": "llm-semantic-router/feedback-detector"
+  "models/mom-embedding-pro": "Qwen/Qwen3-Embedding-0.6B"
+  "models/mom-embedding-flash": "google/embeddinggemma-300m"
+  "models/mom-embedding-light": "sentence-transformers/all-MiniLM-L12-v2"
+  "models/mom-embedding-ultra": "llm-semantic-router/mmbert-embed-32k-2d-matryoshka"
+
 # Response API Configuration
 # Enables OpenAI Response API support with conversation chaining
 response_api:
