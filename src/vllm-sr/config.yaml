@@ -1,19 +1,12 @@
-# vLLM Semantic Router
-# Users only configure: version, listeners, signals, decisions, llm
-# System defaults (semantic_cache, classifier, etc.) are provided by CLI
-
 version: v0.1
 
-# Listeners - Network configuration
 listeners:
   - name: "http-8888"
     address: "0.0.0.0"
     port: 8888
     timeout: "300s"
 
-# Signals - Classification signals for routing
 signals:
-  # Keyword-based signals
   keywords:
     - name: "math_keywords"
       operator: "OR"
@@ -36,7 +29,6 @@ signals:
         - "collaborative"
       case_sensitive: false
 
-  # Embedding-based signals (semantic similarity)
   embeddings:
     - name: "quick_answer"
       threshold: 0.70
@@ -86,7 +78,6 @@ signals:
         - "analyze rigorously"
       aggregation_method: "max"
 
-  # domains - Domain categories (optional, can be auto-generated)
   domains:
     - name: "math"
       description: "Mathematics and quantitative reasoning"
@@ -131,14 +122,12 @@ signals:
       description: "General knowledge and miscellaneous topics"
       mmlu_categories: ["other"]
 
-  # fact_check - Fact-checking signals
   fact_check:
     - name: needs_fact_check
       description: "Query contains factual claims that should be verified against context"
     - name: no_fact_check_needed
       description: "Query is creative, code-related, or opinion-based - no fact verification needed"
 
-  # user_feedbacks - User feedback signals
   user_feedbacks:
     - name: need_clarification
       description: "User needs more clarification on the answer"
@@ -149,7 +138,6 @@ signals:
     - name: wrong_answer
       description: "User is not satisfied with the answer and it is wrong"
 
-  # preferences - Route preferences via external LLM
   preferences:
     - name: "code_generation"
       description: "Generating new code snippets, writing functions, creating classes"
@@ -160,7 +148,6 @@ signals:
     - name: "other"
       description: "Irrelevant queries or already fulfilled requests"
 
-  # language - Multi-language detection signals
   language:
     - name: "en"
       description: "English language queries"
@@ -177,7 +164,6 @@ signals:
     - name: "ja"
       description: "Japanese language queries"
 
-  # latency - Latency-based routing signals (TPOT-based)
   latency:
     - name: "low_latency"
       max_tpot: 0.05  # 50ms per token
@@ -186,7 +172,6 @@ signals:
       max_tpot: 0.15  # 150ms per token
       description: "For standard applications with moderate latency tolerance"
 
-  # context_rules - Context length signals (Token Count)
   context_rules:
     - name: "low_token_count"
       min_tokens: "0"
@@ -197,9 +182,7 @@ signals:
       max_tokens: "128K"
       description: "Long requests requiring large context window"
 
-# Decisions - Routing logic
 decisions:
-  # Highest priority: Preference-based routing via external LLM
   - name: "preference_code_generation"
     description: "Route code generation requests based on LLM preference matching"
     priority: 200
@@ -232,7 +215,6 @@ decisions:
         configuration:
           system_prompt: "You are an expert debugger. Analyze the issue carefully, identify the root cause, and provide a clear fix with explanation."
 
-  # High priority: Quick answer requests
   - name: "quick_answer_route"
     description: "Route quick answer requests to fast model without reasoning"
     priority: 180
@@ -250,7 +232,6 @@ decisions:
         configuration:
           system_prompt: "Provide a concise and direct answer. Be brief and to the point."
 
-  # High priority: Deep thinking requests
   - name: "deep_thinking_route"
     description: "Route deep thinking requests with reasoning enabled"
     priority: 180
@@ -268,7 +249,6 @@ decisions:
         configuration:
           system_prompt: "Think deeply and systematically. Break down the problem, analyze each step carefully, and provide a thorough explanation of your reasoning process."
 
-  # Language-based routing
   - name: "russian_route"
     description: "Route Russian queries to Russian-optimized model"
     priority: 80
@@ -306,7 +286,7 @@ decisions:
     modelRefs:
       - model: "openai/gpt-oss-120b"
         use_reasoning: true
-        reasoning_effort: "high"  # Override default reasoning effort for math queries
+        reasoning_effort: "high"
     plugins:
       - type: "system_prompt"
         configuration:
@@ -315,15 +295,13 @@ decisions:
         configuration:
           enabled: true
           similarity_threshold: 0.92
-      # Router Replay plugin: Capture routing decisions for debugging
-      # Records accessible via /v1/router_replay API endpoint
       - type: "router_replay"
         configuration:
           enabled: true
-          max_records: 200              # Maximum records in memory (default: 200)
-          capture_request_body: true   # Capture request payloads (default: false)
-          capture_response_body: false  # Capture response payloads (default: false)
-          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
+          max_records: 200
+          capture_request_body: true
+          capture_response_body: false
+          max_body_bytes: 4096
 
   - name: "physics_problems"
     description: "Route physics queries with reasoning"
@@ -336,7 +314,7 @@ decisions:
     modelRefs:
       - model: "openai/gpt-oss-120b"
         use_reasoning: true
-        reasoning_effort: "medium"  # Use medium effort for physics queries
+        reasoning_effort: "medium"
     plugins:
       - type: "system_prompt"
         configuration:
@@ -377,7 +355,6 @@ decisions:
           enabled: true
           similarity_threshold: 0.85
 
-  # Size-aware routing example: Try smaller models first, escalate if confidence is low
   - name: "confidence_route"
     description: "Cost-efficient routing: try small model first, escalate if needed"
     priority: 40
@@ -389,24 +366,15 @@ decisions:
         - type: "keyword"
           name: "looper_keywords"
     modelRefs:
-      - model: "openai/gpt-oss-120b"    # param_size defined in providers.models
+      - model: "openai/gpt-oss-120b"
       - model: "gpt-5.2"
     algorithm:
       type: "confidence"
       confidence:
-        # Confidence evaluation method (all normalized to 0-1, higher = more confident):
-        # - "avg_logprob": Based on average token logprob
-        # - "margin": Based on margin between top-1 and top-2 tokens
-        # - "hybrid": Weighted combination of both
         confidence_method: "margin"
-        threshold: 0.9      # Escalate to larger model if confidence < threshold (0-1)
-        # For hybrid method, configure weights:
-        # hybrid_weights:
-        #   logprob_weight: 0.4
-        #   margin_weight: 0.6
-        on_error: "skip"    # Skip failed models, try next
+        threshold: 0.9
+        on_error: "skip"
 
-  # Ratings algorithm example: Use multiple models, select best based on ratings
   - name: "ratings_route"
     description: "Route using ratings algorithm for model selection"
     priority: 60
@@ -418,21 +386,18 @@ decisions:
         - type: "domain"
           name: "other"
     modelRefs:
-      - model: "openai/gpt-oss-120b"    # param_size defined in providers.models
+      - model: "openai/gpt-oss-120b"
       - model: "gpt-5.2"
     algorithm:
       type: "ratings"
       ratings:
-        on_error: "skip"    # Skip failed models, try next
+        on_error: "skip"
     plugins:
       - type: "semantic-cache"
         configuration:
           enabled: false
 
-# LLM - Backend model configuration
 providers:
-  # Model configuration
-  # param_size is used by confidence algorithm to sort models (smallest first)
   models:
     - name: "openai/gpt-oss-120b"
       reasoning_family: "gpt-oss"
@@ -444,7 +409,7 @@ providers:
           protocol: "http"
       access_key: "jGNm/R0CpwDQsvJoaABrymRTrGKt7B63dikib7hW8EyMISRJr"
     - name: "gpt-5.2"
-      param_size: "330b"  # Used for confidence routing
+      param_size: "330b"
       endpoints:
         - name: "external_provider"
           weight: 1
@@ -452,14 +417,11 @@ providers:
           protocol: "https"
       access_key: "sk-xxxxxx"
 
-  # Default model for fallback
   default_model: "openai/gpt-oss-120b"
 
-  # Reasoning families configuration
   reasoning_families:
     gpt-oss:
       type: "reasoning_effort"
       parameter: "reasoning_effort"
 
-  # Default reasoning effort level
   default_reasoning_effort: "low"
