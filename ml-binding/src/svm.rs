@@ -1,16 +1,13 @@
-//! SVM (Support Vector Machine) using Linfa
+//! SVM (Support Vector Machine) inference implementation
+//!
+//! Inference-only implementation. Training is done in Python (src/training/ml_model_selection/).
+//! Models are loaded from JSON files trained by the Python scripts.
 //!
 //! Supports both Linear and RBF kernels for one-vs-all multiclass classification.
-//! Aligned with FusionFactory (arXiv:2507.10540) query-level fusion approach.
 //!
 //! - Linear kernel: f(x) = w·x - rho (fast, good for high-dim data)
 //! - RBF kernel: f(x) = Σ(αᵢ·exp(-γ||x-xᵢ||²)) - rho (flexible boundaries)
-//!
-//! Training uses quality scores to determine the BEST model for each query,
-//! rather than blindly using which model was selected.
 
-use linfa::prelude::*;
-use linfa_svm::Svm;
 use ndarray::{Array1, Array2};
 use serde::{Deserialize, Serialize};
 
@@ -106,14 +103,6 @@ pub struct SVMSelector {
     gamma: f64, // For RBF kernel
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SVMTrainingRecord {
-    pub embedding: Vec<f64>,
-    pub model: String,
-    pub quality: f64,      // Response quality score (0-1)
-    pub latency_ns: i64,   // Response latency in nanoseconds
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 struct LinearClassifierData {
     model_name: String,
@@ -175,158 +164,6 @@ impl SVMSelector {
             v.iter().map(|x| x / norm).collect()
         } else {
             v.to_vec()
-        }
-    }
-
-    /// Train one-vs-all SVM classifiers
-    /// Uses quality + latency weighted training:
-    /// - High quality records have more influence on decision boundaries
-    /// - Low latency records have more influence (faster = better)
-    /// Implemented via oversampling: duplicate records proportional to their weight
-    pub fn train(&mut self, records: Vec<SVMTrainingRecord>) -> Result<(), String> {
-        if records.is_empty() {
-            return Err("No training records provided".to_string());
-        }
-
-        // Calculate weights based on quality and latency
-        // Formula: weight = 0.9 * quality + 0.1 * speed_factor
-        // This matches the global QualityWeight=0.9 hyperparameter (90% quality, 10% speed)
-        let max_latency = records.iter().map(|r| r.latency_ns).max().unwrap_or(1) as f64;
-        let min_latency = records.iter().map(|r| r.latency_ns).min().unwrap_or(1) as f64;
-        let latency_range = (max_latency - min_latency).max(1.0);
-
-        const QUALITY_WEIGHT: f64 = 0.9;  // 90% quality
-        const SPEED_WEIGHT: f64 = 0.1;    // 10% speed
-
-        // Compute weights for all records
-        let weights: Vec<f64> = records.iter().map(|r| {
-            let normalized_latency = (r.latency_ns as f64 - min_latency) / latency_range;
-            let speed_factor = 1.0 - normalized_latency; // 1.0 for fastest, 0.0 for slowest
-            let weight = QUALITY_WEIGHT * r.quality + SPEED_WEIGHT * speed_factor;
-            weight.max(0.01) // Minimum weight to include all samples
-        }).collect();
-
-        // Normalize weights to [1, 5] range for oversampling
-        let max_weight = weights.iter().cloned().fold(0.0_f64, f64::max);
-        let min_weight = weights.iter().cloned().fold(f64::MAX, f64::min);
-        let weight_range = (max_weight - min_weight).max(0.01);
-
-        // Build weighted training set via oversampling
-        // Higher weight = more copies of the record
-        let mut weighted_records: Vec<&SVMTrainingRecord> = Vec::new();
-        for (i, record) in records.iter().enumerate() {
-            let normalized_weight = (weights[i] - min_weight) / weight_range;
-            let copies = (1.0 + normalized_weight * 4.0).round() as usize; // 1-5 copies
-            for _ in 0..copies {
-                weighted_records.push(record);
-            }
-        }
-
-        eprintln!("SVM training: {} records -> {} weighted samples (quality+latency weighting)",
-            records.len(), weighted_records.len());
-
-        if weighted_records.is_empty() {
-            return Err("No training records after weighting".to_string());
-        }
-
-        let dim = weighted_records[0].embedding.len();
-        let n = weighted_records.len();
-
-        // For normalized embeddings (L2 norm = 1), squared distance between
-        // orthogonal vectors ≈ 2. Using gamma=1.0 gives exp(-1.0*2)≈0.14 for
-        // orthogonal vectors, providing sharper class boundaries.
-        // gamma=1.0 is good for high-dimensional data where vectors tend to be
-        // nearly orthogonal due to curse of dimensionality.
-
-        // Normalize embeddings
-        let normalized: Vec<Vec<f64>> = weighted_records
-            .iter()
-            .map(|r| Self::normalize_vector(&r.embedding))
-            .collect();
-
-        // Build training matrix and labels
-        let mut data = Vec::with_capacity(n * dim);
-        let mut labels: Vec<String> = Vec::with_capacity(n);
-
-        for (i, record) in weighted_records.iter().enumerate() {
-            if record.embedding.len() != dim {
-                return Err("Inconsistent embedding dimensions".to_string());
-            }
-            data.extend(normalized[i].iter().cloned());
-            labels.push(record.model.clone());
-        }
-
-        let embeddings = Array2::from_shape_vec((n, dim), data)
-            .map_err(|e| format!("Failed to create embeddings matrix: {}", e))?;
-
-        // Get unique model names
-        let unique_models: Vec<String> = {
-            let mut models: Vec<String> = labels.iter().cloned().collect();
-            models.sort();
-            models.dedup();
-            models
-        };
-        self.model_names = unique_models.clone();
-        self.classifiers.clear();
-
-        // Train one-vs-all classifiers
-        for model_name in &unique_models {
-            let binary_labels: Vec<bool> = labels.iter().map(|m| m == model_name).collect();
-            let labels_arr = Array1::from_vec(binary_labels);
-            let dataset = Dataset::new(embeddings.clone(), labels_arr);
-
-            // Train with appropriate kernel
-            let train_result = match self.kernel_type {
-                KernelType::Linear => Svm::<_, bool>::params().linear_kernel().fit(&dataset),
-                KernelType::Rbf => Svm::<_, bool>::params()
-                    .gaussian_kernel(self.gamma)
-                    .fit(&dataset),
-            };
-
-            match train_result {
-                Ok(svm) => {
-                    let alpha = svm.alpha.clone();
-                    let rho = svm.rho;
-
-                    match self.kernel_type {
-                        KernelType::Linear => {
-                            // Compute weight vector: w = Σ(αᵢ·xᵢ)
-                            let mut weights = Array1::zeros(dim);
-                            for (i, &alpha_i) in alpha.iter().enumerate() {
-                                let x_i = embeddings.row(i);
-                                weights = weights + &(x_i.to_owned() * alpha_i);
-                            }
-
-                            self.classifiers.push(Classifier::Linear(LinearClassifier {
-                                model_name: model_name.clone(),
-                                weights,
-                                rho,
-                            }));
-                        }
-                        KernelType::Rbf => {
-                            // For RBF, we need to store all training samples
-                            self.classifiers.push(Classifier::Rbf(RbfClassifier {
-                                model_name: model_name.clone(),
-                                alpha,
-                                support_vectors: embeddings.clone(),
-                                rho,
-                                gamma: self.gamma,
-                            }));
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Warning: SVM training failed for {}: {}", model_name, e);
-                }
-            }
-        }
-
-        self.trained = !self.classifiers.is_empty();
-
-        if self.trained {
-            Ok(())
-        } else {
-            Err("Failed to train any SVM classifiers".to_string())
         }
     }
 
@@ -479,22 +316,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_svm_linear_basic() {
-        let mut selector = SVMSelector::with_kernel(KernelType::Linear, 1.0); // Explicit Linear kernel
+    fn test_svm_linear_load_and_select() {
+        // Pre-trained linear SVM model
+        let json = r#"{
+            "algorithm": "svm",
+            "trained": true,
+            "model_names": ["model-a", "model-b", "model-c"],
+            "kernel_type": "Linear",
+            "gamma": 1.0,
+            "linear_classifiers": [
+                {"model_name": "model-a", "weights": [1.0, 0.0, 0.0], "rho": 0.0},
+                {"model_name": "model-b", "weights": [0.0, 1.0, 0.0], "rho": 0.0},
+                {"model_name": "model-c", "weights": [0.0, 0.0, 1.0], "rho": 0.0}
+            ],
+            "rbf_classifiers": []
+        }"#;
 
-        let records = vec![
-            SVMTrainingRecord { embedding: vec![1.0, 0.0, 0.0], model: "model-a".to_string(), quality: 0.9, latency_ns: 100 },
-            SVMTrainingRecord { embedding: vec![0.9, 0.1, 0.0], model: "model-a".to_string(), quality: 0.85, latency_ns: 110 },
-            SVMTrainingRecord { embedding: vec![0.8, 0.2, 0.0], model: "model-a".to_string(), quality: 0.88, latency_ns: 105 },
-            SVMTrainingRecord { embedding: vec![0.0, 1.0, 0.0], model: "model-b".to_string(), quality: 0.92, latency_ns: 200 },
-            SVMTrainingRecord { embedding: vec![0.1, 0.9, 0.0], model: "model-b".to_string(), quality: 0.90, latency_ns: 190 },
-            SVMTrainingRecord { embedding: vec![0.2, 0.8, 0.0], model: "model-b".to_string(), quality: 0.87, latency_ns: 210 },
-            SVMTrainingRecord { embedding: vec![0.0, 0.0, 1.0], model: "model-c".to_string(), quality: 0.95, latency_ns: 150 },
-            SVMTrainingRecord { embedding: vec![0.0, 0.1, 0.9], model: "model-c".to_string(), quality: 0.93, latency_ns: 160 },
-            SVMTrainingRecord { embedding: vec![0.0, 0.2, 0.8], model: "model-c".to_string(), quality: 0.91, latency_ns: 155 },
-        ];
-
-        selector.train(records).unwrap();
+        let selector = SVMSelector::from_json(json).unwrap();
         assert!(selector.is_trained());
         assert_eq!(selector.kernel_type(), KernelType::Linear);
 
@@ -508,82 +346,64 @@ mod tests {
     }
 
     #[test]
-    fn test_svm_rbf_basic() {
-        let mut selector = SVMSelector::with_kernel(KernelType::Rbf, 1.0);
+    fn test_svm_rbf_load_and_select() {
+        // Pre-trained RBF SVM model with support vectors
+        let json = r#"{
+            "algorithm": "svm",
+            "trained": true,
+            "model_names": ["model-a", "model-b"],
+            "kernel_type": "Rbf",
+            "gamma": 1.0,
+            "linear_classifiers": [],
+            "rbf_classifiers": [
+                {
+                    "model_name": "model-a",
+                    "alpha": [1.0],
+                    "support_vectors": [[1.0, 0.0]],
+                    "rho": 0.0,
+                    "gamma": 1.0
+                },
+                {
+                    "model_name": "model-b",
+                    "alpha": [1.0],
+                    "support_vectors": [[0.0, 1.0]],
+                    "rho": 0.0,
+                    "gamma": 1.0
+                }
+            ]
+        }"#;
 
-        let records = vec![
-            SVMTrainingRecord { embedding: vec![1.0, 0.0, 0.0], model: "model-a".to_string(), quality: 0.9, latency_ns: 100 },
-            SVMTrainingRecord { embedding: vec![0.9, 0.1, 0.0], model: "model-a".to_string(), quality: 0.85, latency_ns: 110 },
-            SVMTrainingRecord { embedding: vec![0.8, 0.2, 0.0], model: "model-a".to_string(), quality: 0.88, latency_ns: 105 },
-            SVMTrainingRecord { embedding: vec![0.0, 1.0, 0.0], model: "model-b".to_string(), quality: 0.92, latency_ns: 200 },
-            SVMTrainingRecord { embedding: vec![0.1, 0.9, 0.0], model: "model-b".to_string(), quality: 0.90, latency_ns: 190 },
-            SVMTrainingRecord { embedding: vec![0.2, 0.8, 0.0], model: "model-b".to_string(), quality: 0.87, latency_ns: 210 },
-            SVMTrainingRecord { embedding: vec![0.0, 0.0, 1.0], model: "model-c".to_string(), quality: 0.95, latency_ns: 150 },
-            SVMTrainingRecord { embedding: vec![0.0, 0.1, 0.9], model: "model-c".to_string(), quality: 0.93, latency_ns: 160 },
-            SVMTrainingRecord { embedding: vec![0.0, 0.2, 0.8], model: "model-c".to_string(), quality: 0.91, latency_ns: 155 },
-        ];
-
-        selector.train(records).unwrap();
+        let selector = SVMSelector::from_json(json).unwrap();
         assert!(selector.is_trained());
         assert_eq!(selector.kernel_type(), KernelType::Rbf);
 
-        // RBF should also classify well-separated data
-        let result_a = selector.select(&[0.95, 0.05, 0.0]).unwrap();
-        let result_b = selector.select(&[0.05, 0.95, 0.0]).unwrap();
-        let result_c = selector.select(&[0.0, 0.05, 0.95]).unwrap();
-
+        // Query closer to model-a's support vector
+        let result_a = selector.select(&[0.95, 0.05]).unwrap();
         assert_eq!(result_a, "model-a");
+
+        // Query closer to model-b's support vector
+        let result_b = selector.select(&[0.05, 0.95]).unwrap();
         assert_eq!(result_b, "model-b");
-        assert_eq!(result_c, "model-c");
     }
 
     #[test]
-    fn test_svm_quality_filtering() {
-        let mut selector = SVMSelector::new();
+    fn test_svm_json_roundtrip() {
+        let json = r#"{
+            "algorithm": "svm",
+            "trained": true,
+            "model_names": ["a", "b"],
+            "kernel_type": "Linear",
+            "gamma": 1.0,
+            "linear_classifiers": [
+                {"model_name": "a", "weights": [1.0, 0.0], "rho": 0.1},
+                {"model_name": "b", "weights": [0.0, 1.0], "rho": 0.1}
+            ],
+            "rbf_classifiers": []
+        }"#;
 
-        // Mix of high and low quality samples
-        // Low quality samples (quality < 0.5) should be filtered out
-        let records = vec![
-            SVMTrainingRecord { embedding: vec![1.0, 0.0], model: "good-model".to_string(), quality: 0.9, latency_ns: 100 },
-            SVMTrainingRecord { embedding: vec![0.9, 0.1], model: "good-model".to_string(), quality: 0.85, latency_ns: 110 },
-            SVMTrainingRecord { embedding: vec![0.8, 0.2], model: "good-model".to_string(), quality: 0.88, latency_ns: 105 },
-            SVMTrainingRecord { embedding: vec![0.0, 1.0], model: "good-model".to_string(), quality: 0.92, latency_ns: 200 },
-            SVMTrainingRecord { embedding: vec![0.1, 0.9], model: "good-model".to_string(), quality: 0.90, latency_ns: 190 },
-            SVMTrainingRecord { embedding: vec![0.2, 0.8], model: "good-model".to_string(), quality: 0.87, latency_ns: 210 },
-            // These low-quality samples should be filtered
-            SVMTrainingRecord { embedding: vec![0.5, 0.5], model: "bad-model".to_string(), quality: 0.1, latency_ns: 500 },
-            SVMTrainingRecord { embedding: vec![0.4, 0.6], model: "bad-model".to_string(), quality: 0.2, latency_ns: 600 },
-            SVMTrainingRecord { embedding: vec![0.6, 0.4], model: "bad-model".to_string(), quality: 0.15, latency_ns: 550 },
-            // Add more high-quality to ensure we have enough
-            SVMTrainingRecord { embedding: vec![0.7, 0.3], model: "good-model".to_string(), quality: 0.8, latency_ns: 120 },
-            SVMTrainingRecord { embedding: vec![0.3, 0.7], model: "good-model".to_string(), quality: 0.82, latency_ns: 130 },
-            SVMTrainingRecord { embedding: vec![0.95, 0.05], model: "good-model".to_string(), quality: 0.95, latency_ns: 90 },
-        ];
-
-        selector.train(records).unwrap();
-        assert!(selector.is_trained());
-
-        // Should predict good-model because bad-model samples were filtered
-        let result = selector.select(&[0.5, 0.5]).unwrap();
-        assert_eq!(result, "good-model", "Quality filtering should exclude low-quality samples");
-    }
-
-    #[test]
-    fn test_svm_linear_serialization() {
-        let mut selector = SVMSelector::with_kernel(KernelType::Linear, 1.0); // Explicit Linear for this test
-
-        let records = vec![
-            SVMTrainingRecord { embedding: vec![1.0, 0.0], model: "a".to_string(), quality: 0.9, latency_ns: 100 },
-            SVMTrainingRecord { embedding: vec![0.9, 0.1], model: "a".to_string(), quality: 0.85, latency_ns: 110 },
-            SVMTrainingRecord { embedding: vec![0.8, 0.2], model: "a".to_string(), quality: 0.88, latency_ns: 105 },
-            SVMTrainingRecord { embedding: vec![0.0, 1.0], model: "b".to_string(), quality: 0.92, latency_ns: 200 },
-            SVMTrainingRecord { embedding: vec![0.1, 0.9], model: "b".to_string(), quality: 0.90, latency_ns: 190 },
-            SVMTrainingRecord { embedding: vec![0.2, 0.8], model: "b".to_string(), quality: 0.87, latency_ns: 210 },
-        ];
-
-        selector.train(records).unwrap();
-        let json = selector.to_json().unwrap();
-        let loaded = SVMSelector::from_json(&json).unwrap();
+        let selector = SVMSelector::from_json(json).unwrap();
+        let exported = selector.to_json().unwrap();
+        let loaded = SVMSelector::from_json(&exported).unwrap();
 
         assert!(loaded.is_trained());
         assert_eq!(loaded.kernel_type(), KernelType::Linear);
@@ -591,73 +411,5 @@ mod tests {
             selector.select(&[0.95, 0.05]).unwrap(),
             loaded.select(&[0.95, 0.05]).unwrap()
         );
-    }
-
-    #[test]
-    fn test_svm_rbf_serialization() {
-        let mut selector = SVMSelector::with_kernel(KernelType::Rbf, 0.5);
-
-        let records = vec![
-            SVMTrainingRecord { embedding: vec![1.0, 0.0], model: "a".to_string(), quality: 0.9, latency_ns: 100 },
-            SVMTrainingRecord { embedding: vec![0.9, 0.1], model: "a".to_string(), quality: 0.85, latency_ns: 110 },
-            SVMTrainingRecord { embedding: vec![0.8, 0.2], model: "a".to_string(), quality: 0.88, latency_ns: 105 },
-            SVMTrainingRecord { embedding: vec![0.0, 1.0], model: "b".to_string(), quality: 0.92, latency_ns: 200 },
-            SVMTrainingRecord { embedding: vec![0.1, 0.9], model: "b".to_string(), quality: 0.90, latency_ns: 190 },
-            SVMTrainingRecord { embedding: vec![0.2, 0.8], model: "b".to_string(), quality: 0.87, latency_ns: 210 },
-        ];
-
-        selector.train(records).unwrap();
-        let json = selector.to_json().unwrap();
-        let loaded = SVMSelector::from_json(&json).unwrap();
-
-        assert!(loaded.is_trained());
-        assert_eq!(loaded.kernel_type(), KernelType::Rbf);
-        assert_eq!(
-            selector.select(&[0.95, 0.05]).unwrap(),
-            loaded.select(&[0.95, 0.05]).unwrap()
-        );
-    }
-
-    #[test]
-    fn test_svm_multiclass() {
-        let mut selector = SVMSelector::new(); // Uses default RBF kernel
-        let mut records = Vec::new();
-
-        for i in 0..20 {
-            let offset = (i as f64) * 0.05;
-            let quality = 0.8 + (i as f64) * 0.01; // Varying quality
-            records.push(SVMTrainingRecord {
-                embedding: vec![1.0 + offset, 1.0 + offset],
-                model: "top-right".to_string(),
-                quality,
-                latency_ns: 100 + i * 10,
-            });
-            records.push(SVMTrainingRecord {
-                embedding: vec![-1.0 - offset, 1.0 + offset],
-                model: "top-left".to_string(),
-                quality,
-                latency_ns: 100 + i * 10,
-            });
-            records.push(SVMTrainingRecord {
-                embedding: vec![-1.0 - offset, -1.0 - offset],
-                model: "bottom-left".to_string(),
-                quality,
-                latency_ns: 100 + i * 10,
-            });
-            records.push(SVMTrainingRecord {
-                embedding: vec![1.0 + offset, -1.0 - offset],
-                model: "bottom-right".to_string(),
-                quality,
-                latency_ns: 100 + i * 10,
-            });
-        }
-
-        selector.train(records).unwrap();
-        assert!(selector.is_trained());
-
-        assert_eq!(selector.select(&[5.0, 5.0]).unwrap(), "top-right");
-        assert_eq!(selector.select(&[-5.0, 5.0]).unwrap(), "top-left");
-        assert_eq!(selector.select(&[-5.0, -5.0]).unwrap(), "bottom-left");
-        assert_eq!(selector.select(&[5.0, -5.0]).unwrap(), "bottom-right");
     }
 }

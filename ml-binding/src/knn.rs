@@ -1,5 +1,7 @@
 //! KNN (K-Nearest Neighbors) implementation using Linfa
-//! Aligned with FusionFactory (arXiv:2507.10540) query-level fusion approach
+//!
+//! Inference-only implementation. Training is done in Python (src/training/ml_model_selection/).
+//! Models are loaded from JSON files trained by the Python scripts.
 //!
 //! Uses quality-weighted voting: neighbors with higher quality scores have more influence.
 //! This ensures we select models that PERFORM BEST, not just which was selected.
@@ -19,15 +21,6 @@ pub struct KNNSelector {
     qualities: Vec<f64>,   // Quality score for each training sample
     latencies: Vec<i64>,   // Latency in nanoseconds for each sample
     trained: bool,
-}
-
-/// Training record for KNN - includes quality and latency for weighted voting
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KNNTrainingRecord {
-    pub embedding: Vec<f64>,
-    pub model: String,
-    pub quality: f64,      // Response quality score (0-1)
-    pub latency_ns: i64,   // Response latency in nanoseconds
 }
 
 /// Model data for JSON serialization
@@ -55,45 +48,6 @@ impl KNNSelector {
             latencies: Vec::new(),
             trained: false,
         }
-    }
-
-    /// Train the KNN model with training records
-    /// Stores embeddings, labels, quality, and latency for quality-weighted selection
-    pub fn train(&mut self, records: Vec<KNNTrainingRecord>) -> Result<(), String> {
-        if records.is_empty() {
-            return Err("No training records provided".to_string());
-        }
-
-        let dim = records[0].embedding.len();
-        let n = records.len();
-
-        // Build embeddings matrix and collect metadata
-        let mut data = Vec::with_capacity(n * dim);
-        self.labels.clear();
-        self.qualities.clear();
-        self.latencies.clear();
-
-        for record in &records {
-            if record.embedding.len() != dim {
-                return Err(format!(
-                    "Inconsistent embedding dimension: expected {}, got {}",
-                    dim,
-                    record.embedding.len()
-                ));
-            }
-            data.extend(&record.embedding);
-            self.labels.push(record.model.clone());
-            self.qualities.push(record.quality);
-            self.latencies.push(record.latency_ns);
-        }
-
-        self.embeddings = Some(
-            Array2::from_shape_vec((n, dim), data)
-                .map_err(|e| format!("Failed to create embeddings matrix: {}", e))?,
-        );
-        self.trained = true;
-
-        Ok(())
     }
 
     /// Select the best model for a query embedding using Linfa Ball Tree
@@ -219,39 +173,30 @@ impl KNNSelector {
 mod tests {
     use super::*;
 
+    fn create_test_model_json() -> String {
+        r#"{
+            "algorithm": "knn",
+            "trained": true,
+            "k": 3,
+            "embeddings": [
+                [1.0, 0.0, 0.0],
+                [1.0, 0.1, 0.0],
+                [0.0, 1.0, 0.0],
+                [0.0, 1.0, 0.1]
+            ],
+            "labels": ["model-a", "model-a", "model-b", "model-b"],
+            "qualities": [0.9, 0.85, 0.95, 0.88],
+            "latencies": [100, 110, 200, 190]
+        }"#.to_string()
+    }
+
     #[test]
-    fn test_knn_train_and_select() {
-        let mut selector = KNNSelector::new(3);
+    fn test_knn_load_and_select() {
+        let json = create_test_model_json();
+        let selector = KNNSelector::from_json(&json).unwrap();
 
-        let records = vec![
-            KNNTrainingRecord {
-                embedding: vec![1.0, 0.0, 0.0],
-                model: "model-a".to_string(),
-                quality: 0.9,
-                latency_ns: 100,
-            },
-            KNNTrainingRecord {
-                embedding: vec![1.0, 0.1, 0.0],
-                model: "model-a".to_string(),
-                quality: 0.85,
-                latency_ns: 110,
-            },
-            KNNTrainingRecord {
-                embedding: vec![0.0, 1.0, 0.0],
-                model: "model-b".to_string(),
-                quality: 0.95,
-                latency_ns: 200,
-            },
-            KNNTrainingRecord {
-                embedding: vec![0.0, 1.0, 0.1],
-                model: "model-b".to_string(),
-                quality: 0.88,
-                latency_ns: 190,
-            },
-        ];
-
-        selector.train(records).unwrap();
         assert!(selector.is_trained());
+        assert_eq!(selector.k, 3);
 
         // Query closer to model-a cluster
         let result = selector.select(&[0.9, 0.1, 0.0]).unwrap();
@@ -264,31 +209,22 @@ mod tests {
 
     #[test]
     fn test_knn_quality_weighted_voting() {
-        let mut selector = KNNSelector::new(3);
-
         // Two neighbors of model-a with low quality, one neighbor of model-b with high quality
-        let records = vec![
-            KNNTrainingRecord {
-                embedding: vec![1.0, 0.0, 0.0],
-                model: "model-a".to_string(),
-                quality: 0.3,  // Low quality
-                latency_ns: 100,
-            },
-            KNNTrainingRecord {
-                embedding: vec![1.0, 0.1, 0.0],
-                model: "model-a".to_string(),
-                quality: 0.3,  // Low quality
-                latency_ns: 110,
-            },
-            KNNTrainingRecord {
-                embedding: vec![0.9, 0.0, 0.0],
-                model: "model-b".to_string(),
-                quality: 0.95, // High quality
-                latency_ns: 200,
-            },
-        ];
+        let json = r#"{
+            "algorithm": "knn",
+            "trained": true,
+            "k": 3,
+            "embeddings": [
+                [1.0, 0.0, 0.0],
+                [1.0, 0.1, 0.0],
+                [0.9, 0.0, 0.0]
+            ],
+            "labels": ["model-a", "model-a", "model-b"],
+            "qualities": [0.3, 0.3, 0.95],
+            "latencies": [100, 110, 200]
+        }"#;
 
-        selector.train(records).unwrap();
+        let selector = KNNSelector::from_json(json).unwrap();
 
         // Query is closest to all 3 neighbors
         // Without quality weighting: model-a wins (2 votes vs 1)
@@ -299,19 +235,19 @@ mod tests {
 
     #[test]
     fn test_knn_json_roundtrip() {
-        let mut selector = KNNSelector::new(5);
-        let records = vec![
-            KNNTrainingRecord {
-                embedding: vec![1.0, 2.0, 3.0],
-                model: "test-model".to_string(),
-                quality: 0.85,
-                latency_ns: 500,
-            },
-        ];
-        selector.train(records).unwrap();
+        let json = r#"{
+            "algorithm": "knn",
+            "trained": true,
+            "k": 5,
+            "embeddings": [[1.0, 2.0, 3.0]],
+            "labels": ["test-model"],
+            "qualities": [0.85],
+            "latencies": [500]
+        }"#;
 
-        let json = selector.to_json().unwrap();
-        let restored = KNNSelector::from_json(&json).unwrap();
+        let selector = KNNSelector::from_json(json).unwrap();
+        let exported = selector.to_json().unwrap();
+        let restored = KNNSelector::from_json(&exported).unwrap();
 
         assert_eq!(restored.k, 5);
         assert!(restored.is_trained());

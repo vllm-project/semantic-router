@@ -10,11 +10,9 @@ name = "ml_semantic_router"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-# Linfa ML framework - aligned with FusionFactory (arXiv:2507.10540) query-level fusion
-linfa = "0.7"
-linfa-clustering = "0.7"   # KMeans clustering
-linfa-nn = "0.7"           # K-Nearest Neighbors
-linfa-svm = "0.7"          # Support Vector Machine
+# Linfa ML framework - inference only (training done in Python)
+# Training: src/training/ml_model_selection/
+linfa-nn = "0.7"           # Ball Tree for KNN/KMeans inference
 
 # Linear algebra (must match Linfa's ndarray version)
 ndarray = "0.15"

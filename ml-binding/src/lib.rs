@@ -1,11 +1,17 @@
 //! ML Binding for Semantic Router
 //!
-//! This library provides Linfa-based ML algorithms for model selection:
-//! - KNN (K-Nearest Neighbors) via linfa-nn
-//! - KMeans clustering via linfa-clustering
-//! - SVM (Support Vector Machine) via linfa-svm
+//! Inference-only library for ML-based model selection.
 //!
-//! MLP and Matrix Factorization remain in Go implementation.
+//! ## Architecture
+//! - **Training**: Done in Python (src/training/ml_model_selection/) using scikit-learn
+//! - **Inference**: Done in Rust via FFI to Go, using linfa-nn for efficient Ball Tree lookups
+//!
+//! ## Algorithms
+//! - KNN (K-Nearest Neighbors): Quality-weighted voting among neighbors
+//! - KMeans: Nearest centroid lookup with pre-trained cluster assignments
+//! - SVM: Decision function scoring with Linear or RBF kernels
+//!
+//! Models are loaded from JSON files trained by the Python scripts.
 
 pub mod knn;
 pub mod kmeans;

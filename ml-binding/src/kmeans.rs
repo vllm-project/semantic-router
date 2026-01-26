@@ -1,29 +1,21 @@
-//! KMeans clustering implementation using linfa-clustering
-//! Uses linfa-nn for efficient centroid lookup during inference
+//! KMeans clustering implementation using linfa-nn
+//!
+//! Inference-only implementation. Training is done in Python (src/training/ml_model_selection/).
+//! Models are loaded from JSON files trained by the Python scripts.
+//!
+//! Uses linfa-nn for efficient centroid lookup during inference.
 
-use linfa::prelude::*;
-use linfa_clustering::KMeans;
 use linfa_nn::{distance::L2Dist, BallTree, NearestNeighbour};
 use ndarray::{Array1, Array2};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
-/// KMeans Selector using Linfa's clustering implementation
+/// KMeans Selector using Linfa's Ball Tree for efficient centroid lookup
 #[derive(Debug)]
 pub struct KMeansSelector {
     num_clusters: usize,
     centroids: Option<Array2<f64>>,
     cluster_models: Vec<String>,
     trained: bool,
-}
-
-/// Training record for KMeans
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KMeansTrainingRecord {
-    pub embedding: Vec<f64>,
-    pub model: String,
-    pub quality: f64,
-    pub latency_ns: i64,
 }
 
 /// Model data for JSON serialization
@@ -45,106 +37,6 @@ impl KMeansSelector {
             cluster_models: Vec::new(),
             trained: false,
         }
-    }
-
-    /// Train the KMeans model with training records
-    pub fn train(&mut self, records: Vec<KMeansTrainingRecord>) -> Result<(), String> {
-        if records.is_empty() {
-            return Err("No training records provided".to_string());
-        }
-
-        let dim = records[0].embedding.len();
-        let n = records.len();
-
-        // Build embeddings matrix
-        let mut data = Vec::with_capacity(n * dim);
-        for record in &records {
-            if record.embedding.len() != dim {
-                return Err(format!(
-                    "Inconsistent embedding dimension: expected {}, got {}",
-                    dim,
-                    record.embedding.len()
-                ));
-            }
-            data.extend(&record.embedding);
-        }
-
-        let embeddings = Array2::from_shape_vec((n, dim), data)
-            .map_err(|e| format!("Failed to create embeddings matrix: {}", e))?;
-
-        // Create dataset for Linfa
-        let dataset = DatasetBase::from(embeddings.clone());
-
-        // Fit KMeans
-        let k = self.num_clusters.min(n);
-        let model = KMeans::params(k)
-            .max_n_iterations(100)
-            .tolerance(1e-4)
-            .fit(&dataset)
-            .map_err(|e| format!("KMeans fitting failed: {}", e))?;
-
-        self.centroids = Some(model.centroids().to_owned());
-
-        // Assign points to clusters
-        let predictions = model.predict(&dataset);
-
-        // Assign best model to each cluster based on quality scores
-        self.cluster_models = self.assign_cluster_models(&records, &predictions, k);
-        self.trained = true;
-
-        Ok(())
-    }
-
-    /// Assign the best model to each cluster based on quality + speed scores
-    /// Formula: score = 0.9 * quality + 0.1 * speed_factor
-    /// Matches global QualityWeight=0.9 hyperparameter (90% quality, 10% speed)
-    fn assign_cluster_models(
-        &self,
-        records: &[KMeansTrainingRecord],
-        labels: &Array1<usize>,
-        k: usize,
-    ) -> Vec<String> {
-        const QUALITY_WEIGHT: f64 = 0.9;
-        const SPEED_WEIGHT: f64 = 0.1;
-
-        // Compute min/max latency for normalization
-        let max_latency = records.iter().map(|r| r.latency_ns).max().unwrap_or(1) as f64;
-        let min_latency = records.iter().map(|r| r.latency_ns).min().unwrap_or(1) as f64;
-        let latency_range = (max_latency - min_latency).max(1.0);
-
-        // For each cluster, track model weighted scores
-        let mut cluster_model_scores: Vec<HashMap<String, (f64, i32)>> = vec![HashMap::new(); k];
-
-        for (i, record) in records.iter().enumerate() {
-            let cluster = labels[i];
-            if cluster < k {
-                // Calculate combined score: 0.9*quality + 0.1*speed
-                let normalized_latency = (record.latency_ns as f64 - min_latency) / latency_range;
-                let speed_factor = 1.0 - normalized_latency; // 1.0 for fastest, 0.0 for slowest
-                let combined_score = QUALITY_WEIGHT * record.quality + SPEED_WEIGHT * speed_factor;
-
-                let entry = cluster_model_scores[cluster]
-                    .entry(record.model.clone())
-                    .or_insert((0.0, 0));
-                entry.0 += combined_score;
-                entry.1 += 1;
-            }
-        }
-
-        // Select best model for each cluster (highest average weighted score)
-        cluster_model_scores
-            .into_iter()
-            .map(|scores| {
-                scores
-                    .into_iter()
-                    .map(|(model, (total_score, count))| {
-                        (model, total_score / count as f64)
-                    })
-                    .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
-                    .map(|(model, _)| model)
-                    .unwrap_or_else(|| "unknown".to_string())
-            })
-            .collect()
     }
 
     /// Select the best model for a query embedding using Linfa BallTree
@@ -231,40 +123,50 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_kmeans_train_and_select() {
-        let mut selector = KMeansSelector::new(2);
+    fn test_kmeans_load_and_select() {
+        // Pre-trained model with 2 clusters
+        let json = r#"{
+            "algorithm": "kmeans",
+            "trained": true,
+            "num_clusters": 2,
+            "centroids": [
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0]
+            ],
+            "cluster_models": ["model-a", "model-b"]
+        }"#;
 
-        let records = vec![
-            KMeansTrainingRecord {
-                embedding: vec![1.0, 0.0, 0.0],
-                model: "model-a".to_string(),
-                quality: 0.9,
-                latency_ns: 100,
-            },
-            KMeansTrainingRecord {
-                embedding: vec![1.1, 0.1, 0.0],
-                model: "model-a".to_string(),
-                quality: 0.85,
-                latency_ns: 110,
-            },
-            KMeansTrainingRecord {
-                embedding: vec![0.0, 1.0, 0.0],
-                model: "model-b".to_string(),
-                quality: 0.95,
-                latency_ns: 200,
-            },
-            KMeansTrainingRecord {
-                embedding: vec![0.1, 1.1, 0.0],
-                model: "model-b".to_string(),
-                quality: 0.88,
-                latency_ns: 190,
-            },
-        ];
-
-        selector.train(records).unwrap();
+        let selector = KMeansSelector::from_json(json).unwrap();
         assert!(selector.is_trained());
 
-        // Should work without panicking
-        let _result = selector.select(&[0.9, 0.1, 0.0]);
+        // Query closer to first centroid
+        let result = selector.select(&[0.9, 0.1, 0.0]).unwrap();
+        assert_eq!(result, "model-a");
+
+        // Query closer to second centroid
+        let result = selector.select(&[0.1, 0.9, 0.0]).unwrap();
+        assert_eq!(result, "model-b");
+    }
+
+    #[test]
+    fn test_kmeans_json_roundtrip() {
+        let json = r#"{
+            "algorithm": "kmeans",
+            "trained": true,
+            "num_clusters": 3,
+            "centroids": [
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [0.0, 0.0, 1.0]
+            ],
+            "cluster_models": ["model-a", "model-b", "model-c"]
+        }"#;
+
+        let selector = KMeansSelector::from_json(json).unwrap();
+        let exported = selector.to_json().unwrap();
+        let restored = KMeansSelector::from_json(&exported).unwrap();
+
+        assert!(restored.is_trained());
+        assert_eq!(restored.num_clusters, 3);
     }
 }

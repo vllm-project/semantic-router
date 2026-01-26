@@ -7,8 +7,6 @@
 //
 // Training is done in Python (src/training/ml_model_selection/).
 // This package provides inference-only functionality, loading models from JSON.
-//
-// MLP and Matrix Factorization remain in Go (see modelselection package).
 package ml_binding
 
 /*

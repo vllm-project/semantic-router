@@ -17,8 +17,13 @@ limitations under the License.
 // Package modelselection provides ML-based model selection algorithms
 // for choosing the optimal model from a set of candidates.
 //
-// This package uses Linfa (Rust) via ml-binding for ML algorithms.
-// MLP and Matrix Factorization have been removed to reduce dependencies.
+// This package uses Linfa (Rust) via ml-binding for ML algorithms:
+// - KNN (K-Nearest Neighbors)
+// - KMeans clustering
+// - SVM (Support Vector Machine)
+//
+// Training is done in Python (src/training/ml_model_selection/).
+// This package provides inference-only functionality, loading models from JSON.
 package modelselection
 
 import (
@@ -573,11 +578,7 @@ func (s *KNNSelector) trainMLBinding() {
 
 func (s *KNNSelector) Train(data []TrainingRecord) error {
 	s.addTrainingData(data)
-
-	// Train ml-binding KNN
 	s.trainMLBinding()
-
-	logging.Infof("KNN (Linfa) trained with %d records", len(data))
 	return nil
 }
 
@@ -697,11 +698,7 @@ func (s *KMeansSelector) trainMLBinding() {
 
 func (s *KMeansSelector) Train(data []TrainingRecord) error {
 	s.addTrainingData(data)
-
-	// Train ml-binding KMeans
 	s.trainMLBinding()
-
-	logging.Infof("KMeans (Linfa) trained with %d records", len(data))
 	return nil
 }
 
@@ -823,11 +820,7 @@ func (s *SVMSelector) trainMLBinding() {
 
 func (s *SVMSelector) Train(data []TrainingRecord) error {
 	s.addTrainingData(data)
-
-	// Train ml-binding SVM
 	s.trainMLBinding()
-
-	logging.Infof("SVM (Linfa) trained with %d records", len(data))
 	return nil
 }
 
