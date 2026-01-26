@@ -1412,9 +1412,9 @@ type RatingsAlgorithmConfig struct {
 }
 
 // MLModelSelectionConfig configures the ML-based model selection algorithm
-// Supported types: knn, kmeans, mlp, svm, matrix_factorization
+// Supported types: knn, kmeans, svm
 type MLModelSelectionConfig struct {
-	// Type specifies the algorithm: "knn", "kmeans", "mlp", "svm", "matrix_factorization"
+	// Type specifies the algorithm: "knn", "kmeans", "svm"
 	Type string `yaml:"type"`
 
 	// ModelsPath is the path to pre-trained model files (e.g., "trained_models/")
@@ -1428,14 +1428,8 @@ type MLModelSelectionConfig struct {
 	// NumClusters is the number of clusters for KMeans algorithm (default: equals number of models)
 	NumClusters int `yaml:"num_clusters,omitempty"`
 
-	// HiddenLayers defines MLP hidden layer sizes (default: [64, 32])
-	HiddenLayers []int `yaml:"hidden_layers,omitempty"`
-
 	// Kernel specifies the SVM kernel type: "linear", "rbf", "poly" (default: "rbf")
 	Kernel string `yaml:"kernel,omitempty"`
-
-	// NumFactors is the number of latent factors for Matrix Factorization (default: 10)
-	NumFactors int `yaml:"num_factors,omitempty"`
 
 	// EfficiencyWeight controls the performance-efficiency tradeoff for KMeans (default: 0.3)
 	// 0 = pure performance (quality), 1 = pure efficiency (latency)

@@ -425,9 +425,7 @@ toolsDb:
 # Supported algorithms:
 #   - knn: K-Nearest Neighbors (semantic similarity)
 #   - kmeans: KMeans clustering (pattern-based routing)
-#   - mlp: Multi-Layer Perceptron (complex patterns)
 #   - svm: Support Vector Machine (classification-based)
-#   - matrix_factorization: Collaborative filtering style
 #
 # Example configuration:
 #

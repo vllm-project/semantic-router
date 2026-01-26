@@ -101,25 +101,6 @@ func TestLoadPretrainedKMeansSelector(t *testing.T) {
 	t.Logf("Loaded KMeans selector with %d training records", count)
 }
 
-func TestLoadPretrainedMLPSelector(t *testing.T) {
-	modelsPath := "data/trained_models"
-	selector, err := loadPretrainedSelectorFromPath("mlp", modelsPath)
-	if err != nil {
-		t.Skipf("Skipping: pretrained model not available (expected in CI): %v", err)
-	}
-
-	if selector.Name() != "mlp" {
-		t.Errorf("Expected name 'mlp', got '%s'", selector.Name())
-	}
-
-	mlpSelector := selector.(*MLPSelector)
-	count := mlpSelector.getTrainingCount()
-	if count == 0 {
-		t.Error("Expected training records to be loaded, got 0")
-	}
-	t.Logf("Loaded MLP selector with %d training records", count)
-}
-
 func TestLoadPretrainedSVMSelector(t *testing.T) {
 	modelsPath := "data/trained_models"
 	selector, err := loadPretrainedSelectorFromPath("svm", modelsPath)
@@ -137,25 +118,6 @@ func TestLoadPretrainedSVMSelector(t *testing.T) {
 		t.Error("Expected training records to be loaded, got 0")
 	}
 	t.Logf("Loaded SVM selector with %d training records", count)
-}
-
-func TestLoadPretrainedMFSelector(t *testing.T) {
-	modelsPath := "data/trained_models"
-	selector, err := loadPretrainedSelectorFromPath("matrix_factorization", modelsPath)
-	if err != nil {
-		t.Skipf("Skipping: pretrained model not available (expected in CI): %v", err)
-	}
-
-	if selector.Name() != "matrix_factorization" {
-		t.Errorf("Expected name 'matrix_factorization', got '%s'", selector.Name())
-	}
-
-	mfSelector := selector.(*MatrixFactorizationSelector)
-	count := mfSelector.getTrainingCount()
-	if count == 0 {
-		t.Error("Expected training records to be loaded, got 0")
-	}
-	t.Logf("Loaded MF selector with %d training records", count)
 }
 
 // ============================================================================
@@ -470,7 +432,7 @@ func TestGeneralizationAllCategories(t *testing.T) {
 	}
 
 	modelRefs := getDefaultModelRefs()
-	algorithms := []string{"knn", "kmeans", "mlp", "svm", "matrix_factorization"}
+	algorithms := []string{"knn", "kmeans", "svm"}
 
 	for _, alg := range algorithms {
 		t.Run(alg, func(t *testing.T) {
@@ -577,7 +539,7 @@ func TestAlgorithmComparison(t *testing.T) {
 	}
 
 	modelRefs := getDefaultModelRefs()
-	algorithms := []string{"knn", "kmeans", "mlp", "svm", "matrix_factorization"}
+	algorithms := []string{"knn", "kmeans", "svm"}
 
 	// Store results for comparison
 	algorithmResults := make(map[string]map[string]int) // alg -> model -> count
@@ -664,7 +626,7 @@ func TestModelDistributionPerCategory(t *testing.T) {
 	}
 
 	modelRefs := getDefaultModelRefs()
-	algorithms := []string{"knn", "kmeans", "mlp", "svm", "matrix_factorization"}
+	algorithms := []string{"knn", "kmeans", "svm"}
 
 	for _, alg := range algorithms {
 		t.Run(alg, func(t *testing.T) {
@@ -1297,7 +1259,7 @@ func TestEdgeCaseQueries(t *testing.T) {
 	t.Log("Testing unusual query patterns and edge cases")
 
 	modelRefs := getDefaultModelRefs()
-	algorithms := []string{"knn", "kmeans", "mlp", "svm", "matrix_factorization"}
+	algorithms := []string{"knn", "kmeans", "svm"}
 
 	for _, alg := range algorithms {
 		t.Run(alg, func(t *testing.T) {
@@ -1371,7 +1333,7 @@ func TestLongFormQueries(t *testing.T) {
 	t.Log("Testing detailed, comprehensive queries")
 
 	modelRefs := getDefaultModelRefs()
-	algorithms := []string{"knn", "kmeans", "mlp", "svm", "matrix_factorization"}
+	algorithms := []string{"knn", "kmeans", "svm"}
 
 	for _, alg := range algorithms {
 		t.Run(alg, func(t *testing.T) {
@@ -1442,7 +1404,7 @@ func TestMixedDifficultyQueries(t *testing.T) {
 	t.Log("Testing beginner to expert level queries")
 
 	modelRefs := getDefaultModelRefs()
-	algorithms := []string{"knn", "kmeans", "mlp", "svm", "matrix_factorization"}
+	algorithms := []string{"knn", "kmeans", "svm"}
 
 	for _, alg := range algorithms {
 		t.Run(alg, func(t *testing.T) {
@@ -1656,7 +1618,7 @@ func TestComprehensiveStressTest(t *testing.T) {
 	t.Logf("Testing %d queries across all 14 categories", len(allQueries))
 
 	modelRefs := getDefaultModelRefs()
-	algorithms := []string{"knn", "kmeans", "mlp", "svm", "matrix_factorization"}
+	algorithms := []string{"knn", "kmeans", "svm"}
 
 	for _, alg := range algorithms {
 		t.Run(alg, func(t *testing.T) {
@@ -1728,7 +1690,7 @@ func runGeneralizationTest(t *testing.T, trainer *Trainer, modelsPath string, te
 	t.Logf("Testing %d NEW queries (not in training data)", len(testCases))
 
 	modelRefs := getDefaultModelRefs()
-	algorithms := []string{"knn", "kmeans", "mlp", "svm", "matrix_factorization"}
+	algorithms := []string{"knn", "kmeans", "svm"}
 
 	for _, alg := range algorithms {
 		t.Run(alg, func(t *testing.T) {
@@ -2086,9 +2048,7 @@ func TestTrainWithBestModelPerQuery(t *testing.T) {
 	}{
 		{"knn", NewKNNSelector(5)},
 		{"kmeans", NewKMeansSelector(8)},
-		{"mlp", NewMLPSelector([]int{64, 32})},
 		{"svm", NewSVMSelector("rbf")},
-		{"mf", NewMatrixFactorizationSelector(16)},
 	}
 
 	t.Log("\n=== Training and Evaluation Results ===")
@@ -2283,7 +2243,7 @@ func TestBenchmarkWithRealData(t *testing.T) {
 	t.Log("Pre-trained models were trained on: llama-3.2-1b, llama-3.2-3b, codellama-7b, mistral-7b")
 
 	// Test each algorithm with pre-trained models
-	algorithms := []string{"knn", "kmeans", "mlp", "svm", "matrix_factorization"}
+	algorithms := []string{"knn", "kmeans", "svm"}
 
 	t.Log("\n=== Evaluation Results (Pre-trained Models) ===")
 

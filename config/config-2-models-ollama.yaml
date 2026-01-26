@@ -194,9 +194,9 @@ decisions:
         - type: "domain"
           name: "chemistry"
     algorithm:
-      type: "mlp"
-      mlp:
-        hidden_layers: [64, 32]
+      type: "svm"
+      svm:
+        kernel: "rbf"
     modelRefs:
       - model: "llama-3.2-1b"
         use_reasoning: false
@@ -244,8 +244,8 @@ decisions:
           similarity_threshold: 0.85
 
   # ============================================================================
-  # EXAMPLE 5: Matrix Factorization (RouteLLM-style)
-  # Best for: Learning latent query-model preferences
+  # EXAMPLE 5: KMeans Clustering
+  # Best for: Grouping similar queries to model clusters
   # ============================================================================
   - name: "computer_science_decision"
     description: "Computer science and programming"
@@ -256,9 +256,9 @@ decisions:
         - type: "domain"
           name: "computer_science"
     algorithm:
-      type: "matrix_factorization"
-      matrix_factorization:
-        num_factors: 10
+      type: "kmeans"
+      kmeans:
+        num_clusters: 4
     modelRefs:
       - model: "llama-3.2-1b"
         use_reasoning: false

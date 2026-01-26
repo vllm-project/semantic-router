@@ -25,8 +25,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gonum.org/v1/gonum/mat"
-
 	ml_binding "github.com/vllm-project/semantic-router/ml-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -480,20 +478,24 @@ func (s *KNNSelector) Load(path string) error {
 }
 
 // retrainFromRecords trains the ml_binding from stored training records (must hold lock)
+// Now passes quality and latency for quality-weighted voting
 func (s *KNNSelector) retrainFromRecords() {
 	if s.mlKNN == nil || len(s.training) == 0 {
 		return
 	}
 
-	// Convert training records to embeddings and labels
-	embeddings := make([][]float64, len(s.training))
-	labels := make([]string, len(s.training))
+	// Convert training records to ml_binding format with quality and latency
+	records := make([]ml_binding.KNNTrainingRecord, len(s.training))
 	for i, r := range s.training {
-		embeddings[i] = r.QueryEmbedding
-		labels[i] = r.SelectedModel
+		records[i] = ml_binding.KNNTrainingRecord{
+			Embedding: r.QueryEmbedding,
+			Label:     r.SelectedModel,
+			Quality:   r.ResponseQuality,
+			LatencyNs: r.ResponseLatencyNs,
+		}
 	}
 
-	if err := s.mlKNN.Train(embeddings, labels); err != nil {
+	if err := s.mlKNN.Train(records); err != nil {
 		logging.Warnf("Failed to retrain KNN from loaded records: %v", err)
 	}
 }
@@ -593,133 +595,6 @@ func (s *KMeansSelector) retrainFromRecords() {
 }
 
 // ============================================================================
-// MLP Model Persistence
-// ============================================================================
-
-// MLPModelData holds serializable MLP model state
-type MLPModelData struct {
-	Version      string                       `json:"version"`
-	Algorithm    string                       `json:"algorithm"`
-	InputDim     int                          `json:"input_dim"`
-	HiddenLayers []int                        `json:"hidden_layers"`
-	Weights      [][][]float64                `json:"weights"`
-	Biases       [][]float64                  `json:"biases"`
-	ModelToIdx   map[string]int               `json:"model_to_idx"`
-	IdxToModel   []string                     `json:"idx_to_model"`
-	Training     []SerializableTrainingRecord `json:"training"`
-	Trained      bool                         `json:"trained"`
-}
-
-// Save persists MLP model to file
-func (s *MLPSelector) Save(path string) error {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	// Convert mat.Dense weights to [][]float64
-	weights := make([][][]float64, len(s.weights))
-	for l, w := range s.weights {
-		if w == nil {
-			continue
-		}
-		rows, cols := w.Dims()
-		weights[l] = make([][]float64, rows)
-		for i := 0; i < rows; i++ {
-			weights[l][i] = make([]float64, cols)
-			for j := 0; j < cols; j++ {
-				weights[l][i][j] = w.At(i, j)
-			}
-		}
-	}
-
-	// Convert biases
-	biases := make([][]float64, len(s.biases))
-	for l, b := range s.biases {
-		if b == nil {
-			continue
-		}
-		rows, _ := b.Dims()
-		biases[l] = make([]float64, rows)
-		for i := 0; i < rows; i++ {
-			biases[l][i] = b.At(i, 0)
-		}
-	}
-
-	// Convert training records
-	training := make([]SerializableTrainingRecord, len(s.training))
-	for i, r := range s.training {
-		training[i] = toSerializable(r)
-	}
-
-	data := MLPModelData{
-		Version:      "1.0",
-		Algorithm:    "mlp",
-		InputDim:     s.inputDim,
-		HiddenLayers: s.hiddenLayers,
-		Weights:      weights,
-		Biases:       biases,
-		ModelToIdx:   s.modelToIdx,
-		IdxToModel:   s.idxToModel,
-		Training:     training,
-		Trained:      s.trained,
-	}
-
-	return saveModelJSON(path, data)
-}
-
-// Load restores MLP model from file
-func (s *MLPSelector) Load(path string) error {
-	var data MLPModelData
-	if err := loadModelJSON(path, &data); err != nil {
-		return err
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.inputDim = data.InputDim
-	s.hiddenLayers = data.HiddenLayers
-	s.modelToIdx = data.ModelToIdx
-	s.idxToModel = data.IdxToModel
-	s.trained = data.Trained
-
-	// Convert weights back to mat.Dense
-	s.weights = make([]*mat.Dense, len(data.Weights))
-	for l, w := range data.Weights {
-		if len(w) == 0 {
-			continue
-		}
-		rows := len(w)
-		cols := len(w[0])
-		flatData := make([]float64, rows*cols)
-		for i := 0; i < rows; i++ {
-			for j := 0; j < cols; j++ {
-				flatData[i*cols+j] = w[i][j]
-			}
-		}
-		s.weights[l] = mat.NewDense(rows, cols, flatData)
-	}
-
-	// Convert biases back to mat.Dense
-	s.biases = make([]*mat.Dense, len(data.Biases))
-	for l, b := range data.Biases {
-		if len(b) == 0 {
-			continue
-		}
-		s.biases[l] = mat.NewDense(len(b), 1, b)
-	}
-
-	// Convert training records
-	s.training = make([]TrainingRecord, len(data.Training))
-	for i, r := range data.Training {
-		s.training[i] = fromSerializable(r)
-	}
-
-	logging.Infof("Loaded MLP model with %d layers, %d models from %s",
-		len(s.hiddenLayers), len(s.idxToModel), path)
-	return nil
-}
-
-// ============================================================================
 // SVM Model Persistence
 // ============================================================================
 
@@ -755,7 +630,7 @@ func (s *SVMSelector) Save(path string) error {
 		Version:        "1.0",
 		Algorithm:      "svm",
 		Kernel:         s.kernel,
-		Gamma:          0.1, // Default gamma
+		Gamma:          0.5, // Optimized for high-dim normalized embeddings
 		ModelToIdx:     nil, // Retrained on load from training records
 		IdxToModel:     nil, // Retrained on load from training records
 		SupportVectors: nil, // Retrained on load from training records
@@ -796,173 +671,26 @@ func (s *SVMSelector) Load(path string) error {
 }
 
 // retrainFromRecords trains the ml_binding from stored training records (must hold lock)
+// Now passes quality and latency for quality-based training
 func (s *SVMSelector) retrainFromRecords() {
 	if s.mlSVM == nil || len(s.training) == 0 {
 		return
 	}
 
-	// Convert training records to embeddings and labels
-	embeddings := make([][]float64, len(s.training))
-	labels := make([]string, len(s.training))
+	// Convert training records to ml_binding format with quality and latency
+	records := make([]ml_binding.SVMTrainingRecord, len(s.training))
 	for i, r := range s.training {
-		embeddings[i] = r.QueryEmbedding
-		labels[i] = r.SelectedModel
+		records[i] = ml_binding.SVMTrainingRecord{
+			Embedding: r.QueryEmbedding,
+			Label:     r.SelectedModel,
+			Quality:   r.ResponseQuality,
+			LatencyNs: r.ResponseLatencyNs,
+		}
 	}
 
-	if err := s.mlSVM.Train(embeddings, labels); err != nil {
+	if err := s.mlSVM.Train(records); err != nil {
 		logging.Warnf("Failed to retrain SVM from loaded records: %v", err)
 	}
-}
-
-// ============================================================================
-// Matrix Factorization Model Persistence
-// ============================================================================
-
-// SerializablePreferenceRecord is JSON-friendly version of PreferenceRecord
-type SerializablePreferenceRecord struct {
-	QueryEmbedding []float64 `json:"query_embedding"`
-	PreferredModel string    `json:"preferred_model"`
-	OtherModel     string    `json:"other_model"`
-	Confidence     float64   `json:"confidence"`
-}
-
-// MatrixFactorizationModelData holds serializable MF model state
-type MatrixFactorizationModelData struct {
-	Version      string                         `json:"version"`
-	Algorithm    string                         `json:"algorithm"`
-	NumFactors   int                            `json:"num_factors"`
-	ModelToIdx   map[string]int                 `json:"model_to_idx"`
-	IdxToModel   []string                       `json:"idx_to_model"`
-	ModelFactors [][]float64                    `json:"model_factors"`
-	Projection   [][]float64                    `json:"projection"`
-	ModelBiases  []float64                      `json:"model_biases"`
-	GlobalBias   float64                        `json:"global_bias"`
-	InputDim     int                            `json:"input_dim"`
-	Training     []SerializableTrainingRecord   `json:"training"`
-	Preferences  []SerializablePreferenceRecord `json:"preferences"`
-	Trained      bool                           `json:"trained"`
-}
-
-// Save persists Matrix Factorization model to file
-func (s *MatrixFactorizationSelector) Save(path string) error {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	// Convert mat.Dense to [][]float64
-	var modelFactors [][]float64
-	if s.modelFactors != nil {
-		rows, cols := s.modelFactors.Dims()
-		modelFactors = make([][]float64, rows)
-		for i := 0; i < rows; i++ {
-			modelFactors[i] = make([]float64, cols)
-			for j := 0; j < cols; j++ {
-				modelFactors[i][j] = s.modelFactors.At(i, j)
-			}
-		}
-	}
-
-	var projection [][]float64
-	if s.projection != nil {
-		rows, cols := s.projection.Dims()
-		projection = make([][]float64, rows)
-		for i := 0; i < rows; i++ {
-			projection[i] = make([]float64, cols)
-			for j := 0; j < cols; j++ {
-				projection[i][j] = s.projection.At(i, j)
-			}
-		}
-	}
-
-	// Convert training records
-	training := make([]SerializableTrainingRecord, len(s.training))
-	for i, r := range s.training {
-		training[i] = toSerializable(r)
-	}
-
-	// Convert preference records
-	preferences := make([]SerializablePreferenceRecord, len(s.preferences))
-	for i, p := range s.preferences {
-		preferences[i] = SerializablePreferenceRecord(p)
-	}
-
-	data := MatrixFactorizationModelData{
-		Version:      "1.0",
-		Algorithm:    "matrix_factorization",
-		NumFactors:   s.numFactors,
-		ModelToIdx:   s.modelToIdx,
-		IdxToModel:   s.idxToModel,
-		ModelFactors: modelFactors,
-		Projection:   projection,
-		ModelBiases:  s.modelBiases,
-		GlobalBias:   s.globalBias,
-		InputDim:     s.inputDim,
-		Training:     training,
-		Preferences:  preferences,
-		Trained:      s.trained,
-	}
-
-	return saveModelJSON(path, data)
-}
-
-// Load restores Matrix Factorization model from file
-func (s *MatrixFactorizationSelector) Load(path string) error {
-	var data MatrixFactorizationModelData
-	if err := loadModelJSON(path, &data); err != nil {
-		return err
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.numFactors = data.NumFactors
-	s.modelToIdx = data.ModelToIdx
-	s.idxToModel = data.IdxToModel
-	s.modelBiases = data.ModelBiases
-	s.globalBias = data.GlobalBias
-	s.inputDim = data.InputDim
-	s.trained = data.Trained
-
-	// Convert modelFactors
-	if len(data.ModelFactors) > 0 {
-		rows := len(data.ModelFactors)
-		cols := len(data.ModelFactors[0])
-		flatData := make([]float64, rows*cols)
-		for i := 0; i < rows; i++ {
-			for j := 0; j < cols; j++ {
-				flatData[i*cols+j] = data.ModelFactors[i][j]
-			}
-		}
-		s.modelFactors = mat.NewDense(rows, cols, flatData)
-	}
-
-	// Convert projection
-	if len(data.Projection) > 0 {
-		rows := len(data.Projection)
-		cols := len(data.Projection[0])
-		flatData := make([]float64, rows*cols)
-		for i := 0; i < rows; i++ {
-			for j := 0; j < cols; j++ {
-				flatData[i*cols+j] = data.Projection[i][j]
-			}
-		}
-		s.projection = mat.NewDense(rows, cols, flatData)
-	}
-
-	// Convert training records
-	s.training = make([]TrainingRecord, len(data.Training))
-	for i, r := range data.Training {
-		s.training[i] = fromSerializable(r)
-	}
-
-	// Convert preference records
-	s.preferences = make([]PreferenceRecord, len(data.Preferences))
-	for i, p := range data.Preferences {
-		s.preferences[i] = PreferenceRecord(p)
-	}
-
-	logging.Infof("Loaded Matrix Factorization model with %d models, %d factors from %s",
-		len(s.idxToModel), s.numFactors, path)
-	return nil
 }
 
 // ============================================================================
@@ -1025,7 +753,7 @@ func GetPretrainedPath() string {
 func ListPretrainedModels(modelsPath string) ([]string, error) {
 	var available []string
 
-	algorithms := []string{"knn", "kmeans", "mlp", "svm", "mf"}
+	algorithms := []string{"knn", "kmeans", "svm"}
 	for _, alg := range algorithms {
 		fileName := alg + "_model.json"
 		modelPath := filepath.Join(modelsPath, fileName)
@@ -1054,14 +782,10 @@ func GetPretrainedModelInfo(algorithm, modelsPath string) (*PretrainedModelInfo,
 		fileName = "knn_model.json"
 	case "kmeans":
 		fileName = "kmeans_model.json"
-	case "mlp":
-		fileName = "mlp_model.json"
 	case "svm":
 		fileName = "svm_model.json"
-	case "matrix_factorization", "mf":
-		fileName = "mf_model.json"
 	default:
-		return nil, fmt.Errorf("unknown algorithm: %s", algorithm)
+		return nil, fmt.Errorf("unknown algorithm: %s (supported: knn, kmeans, svm)", algorithm)
 	}
 
 	modelPath := filepath.Join(modelsPath, fileName)

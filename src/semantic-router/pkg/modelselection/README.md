@@ -15,14 +15,11 @@ This module implements machine learning-based model selection algorithms that in
 
 | Algorithm | Implementation | Linfa Crate | Best For | Key Parameters |
 |-----------|----------------|-------------|----------|----------------|
-| **KNN** (K-Nearest Neighbors) | Rust (`ml-binding/`) | `linfa-nn` | Finding similar queries using Ball Tree | `k` (neighbors) |
-| **KMeans** | Rust (`ml-binding/`) | `linfa-clustering` | Cluster-based routing (Avengers-Pro) | `num_clusters` |
-| **SVM** (Support Vector Machine) | Rust (`ml-binding/`) | `linfa-svm` | Decision boundaries with RBF kernel | `kernel` |
-| **MLP** (Multi-Layer Perceptron) | Go (gonum) | N/A | Complex query-model patterns | `hidden_layers` |
-| **Matrix Factorization** | Go (gonum) | N/A | Collaborative filtering (RouteLLM) | `num_factors` |
+| **KNN** (K-Nearest Neighbors) | Rust (`ml-binding/`) | `linfa-nn` | Quality-weighted voting among similar queries | `k` (neighbors) |
+| **KMeans** | Rust (`ml-binding/`) | `linfa-clustering` | Cluster-based routing with quality-weighted assignment | `num_clusters` |
+| **SVM** (Support Vector Machine) | Rust (`ml-binding/`) | `linfa-svm` | Decision boundaries with RBF kernel (gamma=1.0) | `kernel`, `gamma` |
 
-> **Note:** KNN, KMeans, and SVM use [Linfa](https://github.com/rust-ml/linfa) via `ml-binding/`.
-> MLP and Matrix Factorization use pure Go implementations (Linfa doesn't support these algorithms).
+> **Note:** All algorithms use [Linfa](https://github.com/rust-ml/linfa) via `ml-binding/`.
 >
 > **Reference:** Implementation aligned with [FusionFactory (arXiv:2507.10540)](https://arxiv.org/abs/2507.10540) query-level fusion approach.
 
@@ -52,7 +49,7 @@ This module implements machine learning-based model selection algorithms that in
 │  │                    TRAINER                                   │   │
 │  │  • Generates embeddings (768-dim)                           │   │
 │  │  • Creates training records with category features          │   │
-│  │  • Trains 5 algorithms                                      │   │
+│  │  • Trains 3 algorithms                                      │   │
 │  │  • Saves model parameters to JSON                           │   │
 │  └─────────────────────────────────────────────────────────────┘   │
 │                               │                                     │
@@ -61,9 +58,7 @@ This module implements machine learning-based model selection algorithms that in
 │  │              TRAINED MODEL FILES                             │   │
 │  │  • knn_model.json      (embeddings + best models)           │   │
 │  │  • kmeans_model.json   (cluster centroids)                  │   │
-│  │  • mlp_model.json      (weights + biases)                   │   │
 │  │  • svm_model.json      (support vectors + alphas)           │   │
-│  │  • mf_model.json       (model factors + projection)         │   │
 │  └─────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────┘
 
@@ -109,9 +104,7 @@ src/semantic-router/pkg/modelselection/
     └── trained_models/
         ├── knn_model.json       # KNN trained model
         ├── kmeans_model.json    # KMeans trained model
-        ├── mlp_model.json       # MLP trained model
-        ├── svm_model.json       # SVM trained model
-        └── mf_model.json        # Matrix Factorization trained model
+        └── svm_model.json       # SVM trained model
 ```
 
 ---
@@ -122,9 +115,29 @@ src/semantic-router/pkg/modelselection/
 
 **How it works:**
 
-- Stores all training embeddings with their associated best-performing model
+- Stores all training embeddings with their associated best-performing model and quality scores
 - For new queries, finds K nearest neighbors using cosine similarity
-- Returns the model with most votes among neighbors
+- Uses **quality-weighted voting**: sums quality scores for each model among neighbors
+- Returns the model with highest total quality (not just most votes)
+
+**Quality-Weighted Voting Example:**
+
+```text
+Query: "Explain quantum entanglement"
+5 Nearest Neighbors:
+  - llama-3b (quality: 0.92)
+  - llama-3b (quality: 0.88)  
+  - mistral (quality: 0.95)
+  - llama-1b (quality: 0.75)
+  - mistral (quality: 0.91)
+
+Quality Sums:
+  - llama-3b: 0.92 + 0.88 = 1.80
+  - mistral:  0.95 + 0.91 = 1.86  ← Winner (higher quality sum)
+  - llama-1b: 0.75
+
+Selected: mistral-7b (despite llama-3b having same vote count)
+```
 
 **JSON Structure (`knn_model.json`):**
 
@@ -137,6 +150,8 @@ src/semantic-router/pkg/modelselection/
     {
       "embedding": [0.123, -0.456, ...],  // 782-dim vector
       "best_model": "llama-3.2-3b",
+      "quality": 0.92,
+      "latency_ns": 1500000000,
       "category": "math"
     }
   ]
@@ -166,44 +181,29 @@ src/semantic-router/pkg/modelselection/
 }
 ```
 
-### 3. MLP (Multi-Layer Perceptron)
-
-**How it works:**
-
-- Neural network with configurable hidden layers
-- Input: 782-dim feature vector (768 embedding + 14 category one-hot)
-- Output: Score per model
-- Uses ReLU activation and softmax output
-
-**JSON Structure (`mlp_model.json`):**
-
-```json
-{
-  "algorithm": "mlp",
-  "trained": true,
-  "input_dim": 782,
-  "hidden_layers": [64, 32],
-  "weights": [
-    [[...], [...], ...],  // Layer 1: 782 x 64
-    [[...], [...], ...],  // Layer 2: 64 x 32
-    [[...], [...], ...]   // Output: 32 x num_models
-  ],
-  "biases": [
-    [...],  // Layer 1 biases
-    [...],  // Layer 2 biases
-    [...]   // Output biases
-  ]
-}
-```
-
-### 4. SVM (Support Vector Machine)
+### 3. SVM (Support Vector Machine)
 
 **How it works:**
 
 - Binary classifiers for each model (one-vs-all)
-- Uses RBF kernel by default
+- Uses **RBF kernel by default** with gamma=1.0 (optimal for 782-dim normalized embeddings)
+- **Quality+Latency weighted training**: Records are weighted by `0.9*quality + 0.1*speed`
 - Stores support vectors and alpha coefficients
 - Model with highest decision score wins
+
+**Weighted Training (Oversampling):**
+
+- High-quality, fast responses are duplicated more in training (1-5 copies)
+- Low-quality, slow responses have less influence
+- Formula: `weight = 0.9 * quality + 0.1 * speed_factor`
+- Matches global `--quality-weight 0.9` hyperparameter (90% quality, 10% speed)
+
+**Kernel Options:**
+
+| Kernel | Gamma | Best For |
+|--------|-------|----------|
+| **RBF** (default) | 1.0 | High-dimensional embeddings, non-linear boundaries |
+| Linear | N/A | Simple linear separable data |
 
 **JSON Structure (`svm_model.json`):**
 
@@ -212,6 +212,7 @@ src/semantic-router/pkg/modelselection/
   "algorithm": "svm",
   "trained": true,
   "kernel": "rbf",
+  "gamma": 1.0,
   "support_vectors": {
     "0": [[...], [...], ...],  // Support vectors for model 0
     "1": [[...], [...], ...]   // Support vectors for model 1
@@ -224,35 +225,44 @@ src/semantic-router/pkg/modelselection/
 }
 ```
 
-### 5. Matrix Factorization
+---
 
-**How it works:**
+## Quality-Based Training Approach
 
-- Collaborative filtering approach for model selection
-- Projects query embeddings into latent factor space
-- Learns model factor vectors
-- Score = dot(projection(embedding), model_factors) + bias
+All algorithms now use **response quality** and **latency** from benchmark data to make better model selections:
 
-**JSON Structure (`mf_model.json`):**
+### How Quality is Used
+
+| Algorithm | Quality Usage |
+|-----------|--------------|
+| **KNN** | Quality-weighted voting: neighbors with higher quality scores have more influence |
+| **KMeans** | Quality-weighted cluster assignment: models with best quality×efficiency assigned to clusters |
+| **SVM** | Quality filtering: only trains on records with quality ≥ 0.5 (high-quality responses) |
+
+### Training Record Structure
+
+Each training record now includes:
 
 ```json
 {
-  "algorithm": "matrix_factorization",
-  "trained": true,
-  "num_factors": 10,
-  "input_dim": 782,
-  "model_factors": {
-    "llama-3.2-1b": [...],  // 10-dim factor vector
-    "llama-3.2-3b": [...]
-  },
-  "projection": [[...], [...], ...],  // 782 x 10 matrix
-  "model_biases": {
-    "llama-3.2-1b": 0.5,
-    "llama-3.2-3b": 0.3
-  },
-  "global_bias": 0.1
+  "query_embedding": [0.123, -0.456, ...],  // 782-dim feature vector
+  "selected_model": "llama-3.2-3b",
+  "response_quality": 0.92,                  // 0-1 quality score
+  "response_latency_ns": 1500000000          // Latency in nanoseconds
 }
 ```
+
+### Why This Matters
+
+**Before:** Algorithms learned to predict which model was *selected* (potentially arbitrary)
+
+**After:** Algorithms learn to predict which model produces *high-quality responses*
+
+This improves selection accuracy because:
+
+1. KNN prefers neighbors that had good outcomes (quality-weighted)
+2. SVM only learns from successful model selections (quality ≥ 0.5)
+3. KMeans assigns clusters based on quality×efficiency, not just selection count
 
 ---
 
@@ -786,7 +796,7 @@ decisions:
         - type: "domain"
           name: "math"
     algorithm:
-      type: "knn"          # Choose: knn, kmeans, mlp, svm, matrix_factorization
+      type: "knn"          # Choose: knn, kmeans, svm
       knn:
         k: 5               # Algorithm-specific parameters
     modelRefs:
@@ -950,8 +960,6 @@ go run ./cmd/vsr train \
 | `--quality-weight` | 0.9 | **Global** quality vs speed weight for ALL algorithms (0=pure speed, 1=pure quality) |
 | `--knn-k` | 5 | KNN: Number of neighbors to consider |
 | `--kmeans-clusters` | 8 | KMeans: Number of clusters |
-| `--mlp-hidden-layers` | "256,128" | MLP: Hidden layer sizes (comma-separated) |
-| `--mf-num-factors` | 16 | Matrix Factorization: Number of latent factors |
 
 **Quality Weight Examples:**
 
@@ -973,8 +981,6 @@ go run ./cmd/vsr train --benchmark \
   --quality-weight 0.8 \
   --knn-k 7 \
   --kmeans-clusters 12 \
-  --mlp-hidden-layers "512,256,128" \
-  --mf-num-factors 20
 ```
 
 **Embedding Options:**
@@ -1173,9 +1179,7 @@ type ModelSelector interface {
 |-----------|---------------|-----------------|--------------|
 | KNN | Fast | O(n) - slower with more data | High (stores all embeddings) |
 | KMeans | Medium | O(k) - fast | Low (only centroids) |
-| MLP | Slow | O(1) - very fast | Medium (weights) |
 | SVM | Slow | O(sv) - depends on support vectors | Medium |
-| Matrix Factorization | Medium | O(1) - very fast | Low |
 
 ---
 
@@ -1243,9 +1247,7 @@ This ensures we're testing the model's ability to generalize to unseen queries.
 |-----------|----------------|-------------|-----------------|-------------------|---------|
 | **KNN** | Rust | `linfa-nn` | **4** | codellama:4, llama-1b:13, llama-3b:4, mistral:9 | 30/30 ✅ |
 | **KMeans** | Rust | `linfa-clustering` | **1** | mistral:30 (cluster-based) | 30/30 ✅ |
-| **MLP** | Go | N/A | **4** | codellama:4, llama-1b:12, llama-3b:7, mistral:7 | 30/30 ✅ |
 | **SVM** | Rust | `linfa-svm` | **4** | codellama:4, llama-1b:13, llama-3b:3, mistral:10 | 30/30 ✅ |
-| **MF** | Go | N/A | **3** | llama-1b:8, llama-3b:9, mistral:13 | 30/30 ✅ |
 
 #### Model Selection Diversity Chart
 
@@ -1260,28 +1262,18 @@ KMeans  ░░░░░░░░░░░░░░░░░░░░░░░░
         ░░░░░░░░░░░░░░░░░░░░░░░░░░░░ llama-3b (0%)
         ████████████████████████████ mistral (100%)
 
-MLP     █████░░░░░░░░░░░░░░░░░░░░░░░ codellama (13%)
-        █████████████████░░░░░░░░░░░ llama-1b (40%)
-        ████████░░░░░░░░░░░░░░░░░░░░ llama-3b (23%)
-        ████████░░░░░░░░░░░░░░░░░░░░ mistral (23%)
-
 SVM     █████░░░░░░░░░░░░░░░░░░░░░░░ codellama (13%)
         █████████████████░░░░░░░░░░░ llama-1b (43%)
         ████░░░░░░░░░░░░░░░░░░░░░░░░ llama-3b (10%)
         ███████████░░░░░░░░░░░░░░░░░ mistral (33%)
-
-MF      ░░░░░░░░░░░░░░░░░░░░░░░░░░░░ codellama (0%)
-        █████████░░░░░░░░░░░░░░░░░░░ llama-1b (27%)
-        ██████████░░░░░░░░░░░░░░░░░░ llama-3b (30%)
-        ████████████████░░░░░░░░░░░░ mistral (43%)
 ```
 
 #### Key Insights
 
 | Metric | Best Algorithm |
 |--------|----------------|
-| **Most Diverse** | KNN, SVM, MLP (use all 4 models) |
-| **Fastest Inference** | KMeans, MLP (< 1s for 30 queries) |
+| **Most Diverse** | KNN, SVM (use all 4 models) |
+| **Fastest Inference** | KMeans (< 1s for 30 queries) |
 | **Best for Quality** | KNN (Ball Tree nearest neighbor) |
 | **Cluster-based** | KMeans (routes to dominant cluster) |
 | **Decision Boundaries** | SVM (RBF kernel) |
@@ -1302,10 +1294,8 @@ MF      ░░░░░░░░░░░░░░░░░░░░░░░░
 | Algorithm | Accuracy | Notes |
 |-----------|----------|-------|
 | **KMeans** | 55% | Best overall |
-| **MLP** | 55% | Best overall |
 | **SVM** | 55% | Best overall |
 | KNN | 35% | Lower due to voting among duplicates |
-| MF | 15% | Collaborative filtering approach |
 
 All algorithms now correctly select **multiple different models** based on query characteristics.
 
@@ -1317,6 +1307,4 @@ The implementation is aligned with [RouteLLM (arXiv:2406.18665)](https://arxiv.o
 |------------------|-------------------|
 | Routes between stronger/weaker LLMs | Selects from multiple LLMs |
 | Optimizes cost vs quality | Formula: `quality × efficiency` |
-| Uses preference data for training | `TrainWithPreferences()` + BPR |
-| Matrix Factorization router | `MatrixFactorizationSelector` |
 | Transfer learning capability | Pre-trained models generalize to new queries |

@@ -45,13 +45,16 @@ pub extern "C" fn ml_knn_free(handle: *mut KNNHandle) {
     }
 }
 
-/// Train KNN with embeddings and labels
+/// Train KNN with embeddings, labels, quality scores, and latencies
+/// Now includes quality and latency for quality-weighted voting
 #[no_mangle]
 pub extern "C" fn ml_knn_train(
     handle: *mut KNNHandle,
     embeddings: *const c_double,
     embedding_dim: size_t,
     labels: *const *const c_char,
+    qualities: *const c_double,
+    latencies: *const i64,
     num_records: size_t,
 ) -> c_int {
     if handle.is_null() || embeddings.is_null() || labels.is_null() {
@@ -61,6 +64,18 @@ pub extern "C" fn ml_knn_train(
     let selector = unsafe { &mut (*handle).0 };
     let emb_slice = unsafe { slice::from_raw_parts(embeddings, num_records * embedding_dim) };
     let labels_slice = unsafe { slice::from_raw_parts(labels, num_records) };
+
+    // Handle optional quality and latency arrays
+    let qualities_slice = if qualities.is_null() {
+        vec![0.5; num_records] // Default quality
+    } else {
+        unsafe { slice::from_raw_parts(qualities, num_records).to_vec() }
+    };
+    let latencies_slice = if latencies.is_null() {
+        vec![0i64; num_records] // Default latency
+    } else {
+        unsafe { slice::from_raw_parts(latencies, num_records).to_vec() }
+    };
 
     let mut records = Vec::with_capacity(num_records);
     for i in 0..num_records {
@@ -76,6 +91,8 @@ pub extern "C" fn ml_knn_train(
         records.push(KNNTrainingRecord {
             embedding,
             model: label,
+            quality: qualities_slice[i],
+            latency_ns: latencies_slice[i],
         });
     }
 
@@ -281,10 +298,30 @@ pub extern "C" fn ml_kmeans_from_json(json: *const c_char) -> *mut KMeansHandle 
 /// Opaque handle to SVM selector
 pub struct SVMHandle(SVMSelector);
 
-/// Create a new SVM selector
+/// Create a new SVM selector with default (linear) kernel
 #[no_mangle]
 pub extern "C" fn ml_svm_new() -> *mut SVMHandle {
     Box::into_raw(Box::new(SVMHandle(SVMSelector::new())))
+}
+
+/// Create a new SVM selector with specified kernel
+/// kernel_type: 0 = linear, 1 = rbf
+/// gamma: RBF gamma parameter (ignored for linear, use 0.0 for auto which defaults to 1.0)
+#[no_mangle]
+pub extern "C" fn ml_svm_new_with_kernel(kernel_type: c_int, gamma: c_double) -> *mut SVMHandle {
+    use crate::svm::KernelType;
+
+    let selector = match kernel_type {
+        0 => SVMSelector::with_kernel(KernelType::Linear, 1.0), // Explicit Linear
+        1 => {
+            // RBF with optional gamma (0.0 = auto, defaults to 1.0)
+            let gamma_opt = if gamma > 0.0 { Some(gamma) } else { None };
+            SVMSelector::with_rbf(gamma_opt)
+        }
+        _ => SVMSelector::new(), // Default to RBF
+    };
+
+    Box::into_raw(Box::new(SVMHandle(selector)))
 }
 
 /// Free SVM selector
@@ -295,13 +332,16 @@ pub extern "C" fn ml_svm_free(handle: *mut SVMHandle) {
     }
 }
 
-/// Train SVM with embeddings and labels
+/// Train SVM with embeddings, labels, quality scores, and latencies
+/// Now includes quality for filtering and quality-based training
 #[no_mangle]
 pub extern "C" fn ml_svm_train(
     handle: *mut SVMHandle,
     embeddings: *const c_double,
     embedding_dim: size_t,
     labels: *const *const c_char,
+    qualities: *const c_double,
+    latencies: *const i64,
     num_records: size_t,
 ) -> c_int {
     if handle.is_null() || embeddings.is_null() || labels.is_null() {
@@ -311,6 +351,18 @@ pub extern "C" fn ml_svm_train(
     let selector = unsafe { &mut (*handle).0 };
     let emb_slice = unsafe { slice::from_raw_parts(embeddings, num_records * embedding_dim) };
     let labels_slice = unsafe { slice::from_raw_parts(labels, num_records) };
+
+    // Handle optional quality and latency arrays
+    let qualities_slice = if qualities.is_null() {
+        vec![0.5; num_records] // Default quality
+    } else {
+        unsafe { slice::from_raw_parts(qualities, num_records).to_vec() }
+    };
+    let latencies_slice = if latencies.is_null() {
+        vec![0i64; num_records] // Default latency
+    } else {
+        unsafe { slice::from_raw_parts(latencies, num_records).to_vec() }
+    };
 
     let mut records = Vec::with_capacity(num_records);
     for i in 0..num_records {
@@ -326,6 +378,8 @@ pub extern "C" fn ml_svm_train(
         records.push(SVMTrainingRecord {
             embedding,
             model: label,
+            quality: qualities_slice[i],
+            latency_ns: latencies_slice[i],
         });
     }
 

@@ -9,10 +9,8 @@ This directory contains Rust-based ML algorithm implementations using [Linfa](ht
 | **KNN** (K-Nearest Neighbors) | `linfa-nn` | ✅ Implemented |
 | **KMeans** (Clustering) | `linfa-clustering` | ✅ Implemented |
 | **SVM** (Support Vector Machine) | `linfa-svm` | ✅ Implemented |
-| **MLP** (Neural Network) | N/A | 🔧 Go implementation |
-| **Matrix Factorization** | N/A | 🔧 Go implementation |
 
-> **Note:** MLP and Matrix Factorization are not available in Linfa and remain in the Go implementation at `src/semantic-router/pkg/modelselection/selector.go`.
+> **Note:** All ML algorithms use the [Linfa](https://github.com/rust-ml/linfa) Rust ML framework.
 
 ## Directory Structure
 
@@ -107,17 +105,17 @@ func main() {
 
 ## Integration with Model Selection
 
-The `ml-binding` package can be used alongside the Go implementations in `modelselection`:
+The `ml-binding` package provides all ML algorithms for model selection:
 
 ```go
 // Use Linfa-based KNN
 knn := ml_binding.NewKNNSelector(5)
 
-// Use Go-based MLP (Linfa doesn't have MLP)
-mlp := modelselection.NewMLPSelector([]int{256, 128})
+// Use Linfa-based KMeans
+kmeans := ml_binding.NewKMeansSelector(8)
 
-// Use Go-based Matrix Factorization (Linfa doesn't have MF)
-mf := modelselection.NewMatrixFactorizationSelector(16)
+// Use Linfa-based SVM
+svm := ml_binding.NewSVMSelector()
 ```
 
 ## Why Linfa?
@@ -129,13 +127,11 @@ mf := modelselection.NewMatrixFactorizationSelector(16)
 
 ## Algorithm Coverage
 
-| Required (Issue #986) | Linfa | Go Fallback |
-|-----------------------|-------|-------------|
-| KNN | ✅ `linfa-nn` | - |
-| KMeans | ✅ `linfa-clustering` | - |
-| SVM | ✅ `linfa-svm` | - |
-| MLP | ❌ | ✅ `selector.go` |
-| Matrix Factorization | ❌ | ✅ `selector.go` |
+| Required (Issue #986) | Linfa | Status |
+|-----------------------|-------|--------|
+| KNN | ✅ `linfa-nn` | Implemented |
+| KMeans | ✅ `linfa-clustering` | Implemented |
+| SVM | ✅ `linfa-svm` | Implemented |
 
 ## License
 

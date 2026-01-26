@@ -13,16 +13,16 @@ package ml_binding
 #include <stdlib.h>
 #include <stdint.h>
 
-// KNN functions
+// KNN functions - now with quality and latency for quality-weighted voting
 void* ml_knn_new(int k);
 void ml_knn_free(void* handle);
-int ml_knn_train(void* handle, double* embeddings, size_t embedding_dim, char** labels, size_t num_records);
+int ml_knn_train(void* handle, double* embeddings, size_t embedding_dim, char** labels, double* qualities, int64_t* latencies, size_t num_records);
 char* ml_knn_select(void* handle, double* query, size_t query_len);
 int ml_knn_is_trained(void* handle);
 char* ml_knn_to_json(void* handle);
 void* ml_knn_from_json(char* json);
 
-// KMeans functions
+// KMeans functions - uses quality for best model per cluster
 void* ml_kmeans_new(int num_clusters);
 void ml_kmeans_free(void* handle);
 int ml_kmeans_train(void* handle, double* embeddings, size_t embedding_dim, char** labels, double* qualities, int64_t* latencies, size_t num_records);
@@ -31,10 +31,11 @@ int ml_kmeans_is_trained(void* handle);
 char* ml_kmeans_to_json(void* handle);
 void* ml_kmeans_from_json(char* json);
 
-// SVM functions
+// SVM functions - now with quality and latency for quality-based training
 void* ml_svm_new();
+void* ml_svm_new_with_kernel(int kernel_type, double gamma);
 void ml_svm_free(void* handle);
-int ml_svm_train(void* handle, double* embeddings, size_t embedding_dim, char** labels, size_t num_records);
+int ml_svm_train(void* handle, double* embeddings, size_t embedding_dim, char** labels, double* qualities, int64_t* latencies, size_t num_records);
 char* ml_svm_select(void* handle, double* query, size_t query_len);
 int ml_svm_is_trained(void* handle);
 char* ml_svm_to_json(void* handle);
@@ -80,37 +81,44 @@ func (s *KNNSelector) Close() {
 	}
 }
 
-// Train trains the KNN model with embeddings and labels
-func (s *KNNSelector) Train(embeddings [][]float64, labels []string) error {
+// KNNTrainingRecord represents a training record for KNN with quality and latency
+type KNNTrainingRecord struct {
+	Embedding []float64
+	Label     string
+	Quality   float64
+	LatencyNs int64
+}
+
+// Train trains the KNN model with training records (embeddings, labels, quality, latency)
+// Uses quality for weighted voting during selection
+func (s *KNNSelector) Train(records []KNNTrainingRecord) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.handle == nil {
 		return errors.New("selector not initialized")
 	}
-	if len(embeddings) == 0 || len(labels) == 0 {
+	if len(records) == 0 {
 		return errors.New("empty training data")
 	}
-	if len(embeddings) != len(labels) {
-		return errors.New("embeddings and labels count mismatch")
-	}
 
-	embeddingDim := len(embeddings[0])
-	numRecords := len(embeddings)
+	embeddingDim := len(records[0].Embedding)
+	numRecords := len(records)
 
-	// Flatten embeddings
+	// Flatten embeddings and collect metadata
 	flatEmbeddings := make([]C.double, numRecords*embeddingDim)
-	for i, emb := range embeddings {
-		for j, v := range emb {
+	cLabels := make([]*C.char, numRecords)
+	qualities := make([]C.double, numRecords)
+	latencies := make([]C.int64_t, numRecords)
+
+	for i, rec := range records {
+		for j, v := range rec.Embedding {
 			flatEmbeddings[i*embeddingDim+j] = C.double(v)
 		}
-	}
-
-	// Convert labels to C strings
-	cLabels := make([]*C.char, numRecords)
-	for i, label := range labels {
-		cLabels[i] = C.CString(label)
+		cLabels[i] = C.CString(rec.Label)
 		defer C.free(unsafe.Pointer(cLabels[i]))
+		qualities[i] = C.double(rec.Quality)
+		latencies[i] = C.int64_t(rec.LatencyNs)
 	}
 
 	result := C.ml_knn_train(
@@ -118,6 +126,8 @@ func (s *KNNSelector) Train(embeddings [][]float64, labels []string) error {
 		&flatEmbeddings[0],
 		C.size_t(embeddingDim),
 		&cLabels[0],
+		&qualities[0],
+		&latencies[0],
 		C.size_t(numRecords),
 	)
 
@@ -337,15 +347,36 @@ func KMeansFromJSON(json string) (*KMeansSelector, error) {
 // SVM Selector
 // =============================================================================
 
+// SVMKernelType defines the kernel type for SVM
+type SVMKernelType int
+
+const (
+	// SVMKernelLinear uses linear kernel: f(x) = w·x - b
+	SVMKernelLinear SVMKernelType = 0
+	// SVMKernelRBF uses RBF (Gaussian) kernel: f(x) = Σ(αᵢ·exp(-γ||x-xᵢ||²))
+	SVMKernelRBF SVMKernelType = 1
+)
+
 // SVMSelector wraps the Linfa SVM implementation
 type SVMSelector struct {
 	handle unsafe.Pointer
 	mu     sync.RWMutex
 }
 
-// NewSVMSelector creates a new SVM selector
+// NewSVMSelector creates a new SVM selector with default (linear) kernel
 func NewSVMSelector() *SVMSelector {
 	handle := C.ml_svm_new()
+	if handle == nil {
+		return nil
+	}
+	return &SVMSelector{handle: handle}
+}
+
+// NewSVMSelectorWithKernel creates a new SVM selector with specified kernel
+// kernelType: SVMKernelLinear or SVMKernelRBF
+// gamma: RBF gamma parameter (use 0 for auto = 1/n_features)
+func NewSVMSelectorWithKernel(kernelType SVMKernelType, gamma float64) *SVMSelector {
+	handle := C.ml_svm_new_with_kernel(C.int(kernelType), C.double(gamma))
 	if handle == nil {
 		return nil
 	}
@@ -362,37 +393,44 @@ func (s *SVMSelector) Close() {
 	}
 }
 
-// Train trains the SVM model with embeddings and labels
-func (s *SVMSelector) Train(embeddings [][]float64, labels []string) error {
+// SVMTrainingRecord represents a training record for SVM with quality and latency
+type SVMTrainingRecord struct {
+	Embedding []float64
+	Label     string
+	Quality   float64
+	LatencyNs int64
+}
+
+// Train trains the SVM model with training records (embeddings, labels, quality, latency)
+// Uses quality for filtering low-quality samples during training
+func (s *SVMSelector) Train(records []SVMTrainingRecord) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.handle == nil {
 		return errors.New("selector not initialized")
 	}
-	if len(embeddings) == 0 || len(labels) == 0 {
+	if len(records) == 0 {
 		return errors.New("empty training data")
 	}
-	if len(embeddings) != len(labels) {
-		return errors.New("embeddings and labels count mismatch")
-	}
 
-	embeddingDim := len(embeddings[0])
-	numRecords := len(embeddings)
+	embeddingDim := len(records[0].Embedding)
+	numRecords := len(records)
 
-	// Flatten embeddings
+	// Flatten embeddings and collect metadata
 	flatEmbeddings := make([]C.double, numRecords*embeddingDim)
-	for i, emb := range embeddings {
-		for j, v := range emb {
+	cLabels := make([]*C.char, numRecords)
+	qualities := make([]C.double, numRecords)
+	latencies := make([]C.int64_t, numRecords)
+
+	for i, rec := range records {
+		for j, v := range rec.Embedding {
 			flatEmbeddings[i*embeddingDim+j] = C.double(v)
 		}
-	}
-
-	// Convert labels to C strings
-	cLabels := make([]*C.char, numRecords)
-	for i, label := range labels {
-		cLabels[i] = C.CString(label)
+		cLabels[i] = C.CString(rec.Label)
 		defer C.free(unsafe.Pointer(cLabels[i]))
+		qualities[i] = C.double(rec.Quality)
+		latencies[i] = C.int64_t(rec.LatencyNs)
 	}
 
 	result := C.ml_svm_train(
@@ -400,6 +438,8 @@ func (s *SVMSelector) Train(embeddings [][]float64, labels []string) error {
 		&flatEmbeddings[0],
 		C.size_t(embeddingDim),
 		&cLabels[0],
+		&qualities[0],
+		&latencies[0],
 		C.size_t(numRecords),
 	)
 

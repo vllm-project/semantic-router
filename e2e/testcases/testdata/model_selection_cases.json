@@ -25,7 +25,7 @@
     "decision": "math_decision",
     "expected_models": ["gpt-4-turbo", "deepseek-math", "llama-math"],
     "description": "Mathematical proof query",
-    "algorithm": "mlp"
+    "algorithm": "svm"
   },
   {
     "query": "Write a Python function to implement quicksort algorithm",
@@ -46,7 +46,7 @@
     "decision": "code_decision",
     "expected_models": ["claude-3-opus", "gpt-4-turbo", "codellama"],
     "description": "Go programming query",
-    "algorithm": "matrix_factorization"
+    "algorithm": "kmeans"
   },
   {
     "query": "Think step by step: If all roses are flowers, and some flowers fade quickly, can we conclude that some roses fade quickly?",
@@ -60,14 +60,14 @@
     "decision": "thinking_decision",
     "expected_models": ["deepseek-v3", "gpt-4-turbo", "llama-70b"],
     "description": "Complex word problem requiring careful analysis",
-    "algorithm": "mlp"
+    "algorithm": "svm"
   },
   {
     "query": "Write a short poem about the beauty of autumn leaves falling",
     "decision": "creative_decision",
     "expected_models": ["gpt-4", "claude-3-opus"],
     "description": "Creative poetry writing",
-    "algorithm": "matrix_factorization"
+    "algorithm": "kmeans"
   },
   {
     "query": "Create a short story about a robot learning to feel emotions",

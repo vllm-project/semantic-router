@@ -29,7 +29,7 @@ type ModelSelectionCase struct {
 	ExpectedModels []string `json:"expected_models"` // List of valid models for this query
 	Description    string   `json:"description"`
 	// Algorithm specifies which model selection algorithm is expected to be used
-	// Supported: "knn", "kmeans", "mlp", "svm", "matrix_factorization"
+	// Supported: "knn", "kmeans", "svm"
 	Algorithm string `json:"algorithm,omitempty"`
 	// ExpectEfficient indicates if the test expects an efficiency-optimized selection (KMeans)
 	// When true, expects faster/cheaper model; when false, expects higher quality model
@@ -255,7 +255,7 @@ func getDefaultModelSelectionCases() []ModelSelectionCase {
 			Decision:       "math_decision",
 			ExpectedModels: []string{"gpt-4-turbo", "deepseek-math", "llama-math"},
 			Description:    "Advanced calculus query",
-			Algorithm:      "mlp",
+			Algorithm:      "svm",
 		},
 		// Code decision with multiple models (SVM algorithm)
 		{
@@ -286,7 +286,7 @@ func getDefaultModelSelectionCases() []ModelSelectionCase {
 			Decision:       "creative_decision",
 			ExpectedModels: []string{"gpt-4", "claude-3-opus"},
 			Description:    "Creative writing query",
-			Algorithm:      "matrix_factorization",
+			Algorithm:      "kmeans",
 		},
 		// Factual decision with efficiency optimization (KMeans - Avengers-Pro style)
 		{
