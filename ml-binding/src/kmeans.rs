@@ -1,8 +1,10 @@
 //! KMeans clustering implementation using linfa-clustering
+//! Uses linfa-nn for efficient centroid lookup during inference
 
 use linfa::prelude::*;
 use linfa_clustering::KMeans;
-use ndarray::{Array1, Array2, Axis};
+use linfa_nn::{distance::L2Dist, BallTree, NearestNeighbour};
+use ndarray::{Array1, Array2};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -93,35 +95,50 @@ impl KMeansSelector {
         Ok(())
     }
 
-    /// Assign the best model to each cluster based on quality scores
+    /// Assign the best model to each cluster based on quality + speed scores
+    /// Formula: score = 0.9 * quality + 0.1 * speed_factor
+    /// Matches global QualityWeight=0.9 hyperparameter (90% quality, 10% speed)
     fn assign_cluster_models(
         &self,
         records: &[KMeansTrainingRecord],
         labels: &Array1<usize>,
         k: usize,
     ) -> Vec<String> {
-        // For each cluster, track model quality scores
+        const QUALITY_WEIGHT: f64 = 0.9;
+        const SPEED_WEIGHT: f64 = 0.1;
+
+        // Compute min/max latency for normalization
+        let max_latency = records.iter().map(|r| r.latency_ns).max().unwrap_or(1) as f64;
+        let min_latency = records.iter().map(|r| r.latency_ns).min().unwrap_or(1) as f64;
+        let latency_range = (max_latency - min_latency).max(1.0);
+
+        // For each cluster, track model weighted scores
         let mut cluster_model_scores: Vec<HashMap<String, (f64, i32)>> = vec![HashMap::new(); k];
 
         for (i, record) in records.iter().enumerate() {
             let cluster = labels[i];
             if cluster < k {
+                // Calculate combined score: 0.9*quality + 0.1*speed
+                let normalized_latency = (record.latency_ns as f64 - min_latency) / latency_range;
+                let speed_factor = 1.0 - normalized_latency; // 1.0 for fastest, 0.0 for slowest
+                let combined_score = QUALITY_WEIGHT * record.quality + SPEED_WEIGHT * speed_factor;
+
                 let entry = cluster_model_scores[cluster]
                     .entry(record.model.clone())
                     .or_insert((0.0, 0));
-                entry.0 += record.quality;
+                entry.0 += combined_score;
                 entry.1 += 1;
             }
         }
 
-        // Select best model for each cluster (highest average quality)
+        // Select best model for each cluster (highest average weighted score)
         cluster_model_scores
             .into_iter()
             .map(|scores| {
                 scores
                     .into_iter()
-                    .map(|(model, (total_quality, count))| {
-                        (model, total_quality / count as f64)
+                    .map(|(model, (total_score, count))| {
+                        (model, total_score / count as f64)
                     })
                     .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
                     .map(|(model, _)| model)
@@ -130,7 +147,8 @@ impl KMeansSelector {
             .collect()
     }
 
-    /// Select the best model for a query embedding
+    /// Select the best model for a query embedding using Linfa BallTree
+    /// Uses linfa-nn for efficient O(log k) nearest centroid lookup
     pub fn select(&self, query: &[f64]) -> Result<String, String> {
         if !self.trained {
             return Err("Model not trained".to_string());
@@ -139,18 +157,20 @@ impl KMeansSelector {
         let centroids = self.centroids.as_ref().unwrap();
         let query_arr = Array1::from_vec(query.to_vec());
 
-        // Find nearest centroid using Euclidean distance
-        let mut min_dist = f64::MAX;
-        let mut nearest_cluster = 0;
+        // Use Linfa BallTree for efficient nearest centroid search
+        let ball_tree = BallTree::new()
+            .from_batch(centroids, L2Dist)
+            .map_err(|e| format!("Failed to build BallTree from centroids: {}", e))?;
 
-        for (i, centroid) in centroids.axis_iter(Axis(0)).enumerate() {
-            let diff = &query_arr - &centroid;
-            let dist = diff.mapv(|x| x * x).sum().sqrt();
-            if dist < min_dist {
-                min_dist = dist;
-                nearest_cluster = i;
-            }
-        }
+        // Find nearest centroid using Linfa's k_nearest
+        let neighbors = ball_tree
+            .k_nearest(query_arr.view(), 1)
+            .map_err(|e| format!("Nearest centroid search failed: {}", e))?;
+
+        let nearest_cluster = neighbors
+            .first()
+            .map(|(_, idx)| *idx)
+            .ok_or_else(|| "No nearest centroid found".to_string())?;
 
         self.cluster_models
             .get(nearest_cluster)

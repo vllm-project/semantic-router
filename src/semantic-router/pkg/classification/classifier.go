@@ -2478,7 +2478,7 @@ func (c *Classifier) evaluateComposerCondition(
 
 // GetQueryEmbedding returns the embedding vector for a query text as float64
 // This is used by model selection algorithms for similarity-based selection
-// Returns float64 for compatibility with gonum numerical operations
+// Returns float64 for compatibility with numerical operations
 func (c *Classifier) GetQueryEmbedding(text string) []float64 {
 	if text == "" {
 		return nil
@@ -2492,7 +2492,7 @@ func (c *Classifier) GetQueryEmbedding(text string) []float64 {
 		return nil
 	}
 
-	// Convert float32 to float64 for gonum compatibility
+	// Convert float32 to float64 for numerical operations
 	embedding64 := make([]float64, len(embedding32))
 	for i, v := range embedding32 {
 		embedding64[i] = float64(v)

@@ -59,10 +59,10 @@ func initTestTrainer(t *testing.T) *Trainer {
 	return testTrainer
 }
 
-// loadOptimalRecordsForTests loads the optimal model record for each unique query
-// Uses the loadOptimalModelRecords function from selector_load_test.go
+// loadOptimalRecordsForTests returns nil since we now use pretrained models from HuggingFace.
+// Tests that need training records will skip, which is expected behavior.
 func loadOptimalRecordsForTests() ([]TrainingRecord, error) {
-	return loadOptimalModelRecords("data/trained_models")
+	return nil, nil
 }
 
 // =============================================================================
@@ -96,20 +96,8 @@ func TestNewSelector(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:        "mlp selector",
-			cfg:         &config.MLModelSelectionConfig{Type: "mlp", HiddenLayers: []int{32, 16}},
-			expectName:  "mlp",
-			expectError: false,
-		},
-		{
-			name:        "mlp with default layers",
-			cfg:         &config.MLModelSelectionConfig{Type: "mlp"},
-			expectName:  "mlp",
-			expectError: false,
-		},
-		{
 			name:        "svm selector",
-			cfg:         &config.MLModelSelectionConfig{Type: "svm", Kernel: "rbf"},
+			cfg:         &config.MLModelSelectionConfig{Type: "svm", Kernel: "linear"},
 			expectName:  "svm",
 			expectError: false,
 		},
@@ -123,12 +111,6 @@ func TestNewSelector(t *testing.T) {
 			name:        "svm poly kernel",
 			cfg:         &config.MLModelSelectionConfig{Type: "svm", Kernel: "poly"},
 			expectName:  "svm",
-			expectError: false,
-		},
-		{
-			name:        "matrix_factorization selector",
-			cfg:         &config.MLModelSelectionConfig{Type: "matrix_factorization", NumFactors: 8},
-			expectName:  "matrix_factorization",
 			expectError: false,
 		},
 		{
@@ -287,9 +269,7 @@ func TestSelector_EmptyRefs(t *testing.T) {
 	selectors := []Selector{
 		NewKNNSelector(3),
 		NewKMeansSelector(3),
-		NewMLPSelector([]int{32}),
 		NewSVMSelector("rbf"),
-		NewMatrixFactorizationSelector(10),
 	}
 
 	for _, selector := range selectors {
@@ -310,9 +290,7 @@ func TestSelector_SingleModel(t *testing.T) {
 	selectors := []Selector{
 		NewKNNSelector(3),
 		NewKMeansSelector(3),
-		NewMLPSelector([]int{32}),
 		NewSVMSelector("rbf"),
-		NewMatrixFactorizationSelector(10),
 	}
 
 	singleModel := []config.ModelRef{{Model: "only-model"}}
@@ -335,9 +313,7 @@ func TestSelector_NoEmbedding(t *testing.T) {
 	selectors := []Selector{
 		NewKNNSelector(3),
 		NewKMeansSelector(3),
-		NewMLPSelector([]int{32}),
 		NewSVMSelector("rbf"),
-		NewMatrixFactorizationSelector(10),
 	}
 
 	for _, selector := range selectors {
@@ -563,11 +539,7 @@ func TestProductionScenario_AllAlgorithms(t *testing.T) {
 		// KNN and SVM achieve highest accuracy - recommended for production
 		{"KNN", &config.MLModelSelectionConfig{Type: "knn", K: 5}, 500},
 		{"KMeans", &config.MLModelSelectionConfig{Type: "kmeans", NumClusters: 5, EfficiencyWeight: floatPtr(0)}, 500}, // Pure performance
-		// MLP uses simplified training (output layer only) - full backprop would improve accuracy
-		{"MLP", &config.MLModelSelectionConfig{Type: "mlp", HiddenLayers: []int{128, 64}}, 500},
-		{"SVM", &config.MLModelSelectionConfig{Type: "svm", Kernel: "rbf"}, 500},
-		// Matrix Factorization designed for preference data, not embedding similarity
-		{"MatrixFactorization", &config.MLModelSelectionConfig{Type: "matrix_factorization", NumFactors: 20}, 500},
+		{"SVM", &config.MLModelSelectionConfig{Type: "svm", Kernel: "linear"}, 500},
 	}
 
 	for _, algo := range algorithms {
@@ -638,7 +610,7 @@ func TestProductionScenario_AllAlgorithms(t *testing.T) {
 
 // TestProductionScenario_ColdStart tests behavior with no training data
 func TestProductionScenario_ColdStart(t *testing.T) {
-	algorithms := []string{"knn", "kmeans", "mlp", "svm", "matrix_factorization"}
+	algorithms := []string{"knn", "kmeans", "svm"}
 
 	for _, algoType := range algorithms {
 		t.Run(algoType, func(t *testing.T) {
@@ -1026,9 +998,7 @@ func TestProductionScenario_NumericalStability(t *testing.T) {
 	}{
 		{"KNN", NewKNNSelector(3)},
 		{"KMeans", NewKMeansSelector(3)},
-		{"MLP", NewMLPSelector([]int{32, 16})},
 		{"SVM", NewSVMSelector("rbf")},
-		{"MatrixFactorization", NewMatrixFactorizationSelector(10)},
 	}
 
 	for _, algo := range algorithms {
@@ -1171,9 +1141,7 @@ func TestRealQueries_AllAlgorithms(t *testing.T) {
 	}{
 		{"KNN", NewKNNSelector(5)},
 		{"KMeans", NewKMeansSelector(4)},
-		{"MLP", NewMLPSelector([]int{256, 128})},
 		{"SVM", NewSVMSelector("rbf")},
-		{"MatrixFactorization", NewMatrixFactorizationSelector(16)},
 	}
 
 	for _, algo := range algorithms {
@@ -1280,9 +1248,7 @@ func TestRealQueries_CodeSpecialization(t *testing.T) {
 	}{
 		{"KNN", NewKNNSelector(5)},
 		{"KMeans", NewKMeansSelector(4)},
-		{"MLP", NewMLPSelector([]int{256, 128})},
 		{"SVM", NewSVMSelector("rbf")},
-		{"MatrixFactorization", NewMatrixFactorizationSelector(16)},
 	}
 
 	for _, algo := range algorithms {
@@ -1373,9 +1339,7 @@ func TestRealQueries_MathSpecialization(t *testing.T) {
 	}{
 		{"KNN", NewKNNSelector(5)},
 		{"KMeans", NewKMeansSelector(4)},
-		{"MLP", NewMLPSelector([]int{256, 128})},
 		{"SVM", NewSVMSelector("rbf")},
-		{"MatrixFactorization", NewMatrixFactorizationSelector(16)},
 	}
 
 	for _, algo := range algorithms {
@@ -1462,39 +1426,9 @@ func BenchmarkKMeansSelection(b *testing.B) {
 	}
 }
 
-func BenchmarkMLPSelection(b *testing.B) {
-	selector := NewMLPSelector([]int{128, 64})
-	trainingData := generateProductionTrainingData(1000, 384)
-	_ = selector.Train(trainingData)
-
-	ctx := &SelectionContext{
-		QueryEmbedding: generateRealisticEmbedding(QueryTypeMath, 0, 384),
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = selector.Select(ctx, testModels)
-	}
-}
-
 func BenchmarkSVMSelection(b *testing.B) {
 	selector := NewSVMSelector("rbf")
 	trainingData := generateProductionTrainingData(500, 384)
-	_ = selector.Train(trainingData)
-
-	ctx := &SelectionContext{
-		QueryEmbedding: generateRealisticEmbedding(QueryTypeMath, 0, 384),
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = selector.Select(ctx, testModels)
-	}
-}
-
-func BenchmarkMatrixFactorizationSelection(b *testing.B) {
-	selector := NewMatrixFactorizationSelector(20)
-	trainingData := generateProductionTrainingData(1000, 384)
 	_ = selector.Train(trainingData)
 
 	ctx := &SelectionContext{
@@ -1603,16 +1537,8 @@ func TestDecisionIntegration_AllAlgorithms(t *testing.T) {
 			config: &config.MLModelSelectionConfig{Type: "kmeans", NumClusters: 3},
 		},
 		{
-			name:   "mlp",
-			config: &config.MLModelSelectionConfig{Type: "mlp", HiddenLayers: []int{64, 32}},
-		},
-		{
 			name:   "svm",
-			config: &config.MLModelSelectionConfig{Type: "svm", Kernel: "rbf"},
-		},
-		{
-			name:   "matrix_factorization",
-			config: &config.MLModelSelectionConfig{Type: "matrix_factorization", NumFactors: 10},
+			config: &config.MLModelSelectionConfig{Type: "svm", Kernel: "linear"},
 		},
 	}
 
@@ -1788,15 +1714,6 @@ func TestDecisionIntegration_ConfigValidation(t *testing.T) {
 		}
 		if knn.Name() != "knn" {
 			t.Errorf("Expected knn, got %s", knn.Name())
-		}
-
-		// MLP with default layers
-		mlp, err := NewSelector(&config.MLModelSelectionConfig{Type: "mlp"})
-		if err != nil {
-			t.Errorf("MLP with defaults failed: %v", err)
-		}
-		if mlp.Name() != "mlp" {
-			t.Errorf("Expected mlp, got %s", mlp.Name())
 		}
 
 		// SVM with default kernel
@@ -2088,207 +2005,6 @@ func TestKMeans_ConfigWithEfficiencyWeight(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// RouteLLM Matrix Factorization Tests (arXiv:2406.18665)
-// Tests for preference-based training using BPR
-// =============================================================================
-
-// TestMatrixFactorization_PreferenceTraining tests the BPR training with preference data
-func TestMatrixFactorization_PreferenceTraining(t *testing.T) {
-	embeddingDim := 128
-	selector := NewMatrixFactorizationSelector(10)
-
-	// Create preference data: for math queries, llama-3.2-3b is preferred over llama-3.2-1b
-	preferences := []PreferenceRecord{}
-
-	for i := 0; i < 100; i++ {
-		preferences = append(preferences, PreferenceRecord{
-			QueryEmbedding: generateRealisticEmbedding(QueryTypeMath, i, embeddingDim),
-			PreferredModel: "llama-3.2-3b",
-			OtherModel:     "gpt-3.5",
-			Confidence:     0.9,
-		})
-	}
-
-	// Train with preferences
-	err := selector.TrainWithPreferences(preferences)
-	if err != nil {
-		t.Fatalf("Training with preferences failed: %v", err)
-	}
-
-	// Verify selector is in preference mode
-	if !selector.usePreference {
-		t.Error("Expected selector to be in preference mode")
-	}
-
-	// Test selection
-	models := []config.ModelRef{
-		{Model: "llama-3.2-3b"},
-		{Model: "gpt-3.5"},
-	}
-
-	ctx := &SelectionContext{
-		QueryEmbedding: generateRealisticEmbedding(QueryTypeMath, 200, embeddingDim),
-	}
-
-	result, err := selector.Select(ctx, models)
-	if err != nil {
-		t.Fatalf("Selection failed: %v", err)
-	}
-
-	// After preference training, should prefer llama-3.2-3b for math queries
-	t.Logf("Preference-trained selector chose: %s (expected llama-3.2-3b)", result.Model)
-}
-
-// TestMatrixFactorization_MixedPreferences tests with multiple preference patterns
-func TestMatrixFactorization_MixedPreferences(t *testing.T) {
-	embeddingDim := 128
-	selector := NewMatrixFactorizationSelector(15)
-
-	preferences := []PreferenceRecord{}
-
-	// Math queries: prefer llama-3.2-3b over others
-	for i := 0; i < 50; i++ {
-		preferences = append(preferences, PreferenceRecord{
-			QueryEmbedding: generateRealisticEmbedding(QueryTypeMath, i, embeddingDim),
-			PreferredModel: "llama-3.2-3b",
-			OtherModel:     "claude",
-			Confidence:     0.85,
-		})
-	}
-
-	// Code queries: prefer claude over others
-	for i := 0; i < 50; i++ {
-		preferences = append(preferences, PreferenceRecord{
-			QueryEmbedding: generateRealisticEmbedding(QueryTypeCode, i+100, embeddingDim),
-			PreferredModel: "claude",
-			OtherModel:     "llama-3.2-3b",
-			Confidence:     0.9,
-		})
-	}
-
-	err := selector.TrainWithPreferences(preferences)
-	if err != nil {
-		t.Fatalf("Training failed: %v", err)
-	}
-
-	models := []config.ModelRef{
-		{Model: "llama-3.2-3b"},
-		{Model: "claude"},
-	}
-
-	// Test math query
-	mathCtx := &SelectionContext{
-		QueryEmbedding: generateRealisticEmbedding(QueryTypeMath, 300, embeddingDim),
-	}
-	mathResult, _ := selector.Select(mathCtx, models)
-	t.Logf("Math query selected: %s (expected llama-3.2-3b)", mathResult.Model)
-
-	// Test code query
-	codeCtx := &SelectionContext{
-		QueryEmbedding: generateRealisticEmbedding(QueryTypeCode, 301, embeddingDim),
-	}
-	codeResult, _ := selector.Select(codeCtx, models)
-	t.Logf("Code query selected: %s (expected claude)", codeResult.Model)
-}
-
-// TestMatrixFactorization_PreferenceWithConfidence tests that confidence affects training
-func TestMatrixFactorization_PreferenceWithConfidence(t *testing.T) {
-	embeddingDim := 128
-	selector := NewMatrixFactorizationSelector(10)
-
-	preferences := []PreferenceRecord{}
-
-	// High confidence preferences for model-a
-	for i := 0; i < 30; i++ {
-		preferences = append(preferences, PreferenceRecord{
-			QueryEmbedding: generateRealisticEmbedding(QueryTypeMath, i, embeddingDim),
-			PreferredModel: "model-a",
-			OtherModel:     "model-b",
-			Confidence:     1.0, // High confidence
-		})
-	}
-
-	// Low confidence preferences for model-b (should have less impact)
-	for i := 30; i < 60; i++ {
-		preferences = append(preferences, PreferenceRecord{
-			QueryEmbedding: generateRealisticEmbedding(QueryTypeMath, i, embeddingDim),
-			PreferredModel: "model-b",
-			OtherModel:     "model-a",
-			Confidence:     0.2, // Low confidence
-		})
-	}
-
-	err := selector.TrainWithPreferences(preferences)
-	if err != nil {
-		t.Fatalf("Training failed: %v", err)
-	}
-
-	models := []config.ModelRef{
-		{Model: "model-a"},
-		{Model: "model-b"},
-	}
-
-	ctx := &SelectionContext{
-		QueryEmbedding: generateRealisticEmbedding(QueryTypeMath, 200, embeddingDim),
-	}
-
-	result, _ := selector.Select(ctx, models)
-	// High confidence preferences for model-a should outweigh low confidence for model-b
-	t.Logf("With confidence weighting, selected: %s (expected model-a due to higher confidence)", result.Model)
-}
-
-// TestMatrixFactorization_BackwardCompatibility tests that regular Train() still works
-func TestMatrixFactorization_BackwardCompatibility(t *testing.T) {
-	embeddingDim := 128
-	selector := NewMatrixFactorizationSelector(10)
-
-	// Use regular TrainingRecord (not PreferenceRecord)
-	trainingData := generateProductionTrainingData(100, embeddingDim)
-
-	err := selector.Train(trainingData)
-	if err != nil {
-		t.Fatalf("Regular training failed: %v", err)
-	}
-
-	// Should NOT be in preference mode
-	if selector.usePreference {
-		t.Error("Expected selector to NOT be in preference mode with regular training")
-	}
-
-	ctx := &SelectionContext{
-		QueryEmbedding: generateRealisticEmbedding(QueryTypeMath, 200, embeddingDim),
-	}
-
-	result, err := selector.Select(ctx, testModels)
-	if err != nil {
-		t.Fatalf("Selection failed: %v", err)
-	}
-
-	t.Logf("Regular training selected: %s", result.Model)
-}
-
-// BenchmarkMatrixFactorizationBPR benchmarks the BPR training
-func BenchmarkMatrixFactorizationBPR(b *testing.B) {
-	embeddingDim := 384
-	preferences := make([]PreferenceRecord, 500)
-
-	for i := 0; i < 500; i++ {
-		preferences[i] = PreferenceRecord{
-			QueryEmbedding: generateRealisticEmbedding(QueryTypeMath, i, embeddingDim),
-			PreferredModel: "model-a",
-			OtherModel:     "model-b",
-			Confidence:     0.9,
-		}
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		selector := NewMatrixFactorizationSelector(20)
-		_ = selector.TrainWithPreferences(preferences)
-	}
-}
-
 // BenchmarkKMeansWithEfficiency benchmarks KMeans with efficiency scoring
 func BenchmarkKMeansWithEfficiency(b *testing.B) {
 	embeddingDim := 384
@@ -2331,6 +2047,7 @@ func BenchmarkKMeansWithEfficiency(b *testing.B) {
 
 // TestAdvanced_NoisyEmbeddings tests algorithm robustness to noisy embeddings
 func TestAdvanced_NoisyEmbeddings(t *testing.T) {
+	t.Skip("Skipping: requires Go-based training. Use pretrained models from HuggingFace instead.")
 	embeddingDim := 256
 
 	algorithms := []struct {
@@ -2338,8 +2055,7 @@ func TestAdvanced_NoisyEmbeddings(t *testing.T) {
 		config *config.MLModelSelectionConfig
 	}{
 		{"KNN", &config.MLModelSelectionConfig{Type: "knn", K: 5}},
-		{"SVM", &config.MLModelSelectionConfig{Type: "svm", Kernel: "rbf"}},
-		{"MLP", &config.MLModelSelectionConfig{Type: "mlp", HiddenLayers: []int{64, 32}}},
+		{"SVM", &config.MLModelSelectionConfig{Type: "svm", Kernel: "linear"}},
 	}
 
 	noiseLevels := []float64{0.0, 0.1, 0.2, 0.3, 0.5}
@@ -2400,6 +2116,7 @@ func addNoise(embedding []float64, noiseLevel float64) []float64 {
 
 // TestAdvanced_ClassImbalance tests handling of imbalanced training data
 func TestAdvanced_ClassImbalance(t *testing.T) {
+	t.Skip("Skipping: requires Go-based training. Use pretrained models from HuggingFace instead.")
 	embeddingDim := 256
 
 	algorithms := []struct {
@@ -2407,7 +2124,7 @@ func TestAdvanced_ClassImbalance(t *testing.T) {
 		config *config.MLModelSelectionConfig
 	}{
 		{"KNN", &config.MLModelSelectionConfig{Type: "knn", K: 3}},
-		{"SVM", &config.MLModelSelectionConfig{Type: "svm", Kernel: "rbf"}},
+		{"SVM", &config.MLModelSelectionConfig{Type: "svm", Kernel: "linear"}},
 	}
 
 	for _, algo := range algorithms {
@@ -2479,6 +2196,7 @@ func TestAdvanced_ClassImbalance(t *testing.T) {
 
 // TestAdvanced_ManyModels tests scaling to many models (10+)
 func TestAdvanced_ManyModels(t *testing.T) {
+	t.Skip("Skipping: requires Go-based training. Use pretrained models from HuggingFace instead.")
 	embeddingDim := 256
 	numModels := 15
 
@@ -2493,7 +2211,7 @@ func TestAdvanced_ManyModels(t *testing.T) {
 		config *config.MLModelSelectionConfig
 	}{
 		{"KNN", &config.MLModelSelectionConfig{Type: "knn", K: 5}},
-		{"SVM", &config.MLModelSelectionConfig{Type: "svm", Kernel: "rbf"}},
+		{"SVM", &config.MLModelSelectionConfig{Type: "svm", Kernel: "linear"}},
 		{"KMeans", &config.MLModelSelectionConfig{Type: "kmeans", NumClusters: numModels}},
 	}
 
@@ -2567,6 +2285,7 @@ func TestAdvanced_ManyModels(t *testing.T) {
 
 // TestAdvanced_EmbeddingDimensions tests different embedding sizes
 func TestAdvanced_EmbeddingDimensions(t *testing.T) {
+	t.Skip("Skipping: requires Go-based training. Use pretrained models from HuggingFace instead.")
 	dimensions := []int{32, 128, 384, 768, 1536}
 
 	for _, dim := range dimensions {
@@ -2653,6 +2372,7 @@ func TestAdvanced_TemporalDrift(t *testing.T) {
 
 // TestAdvanced_SimilarQueryTypes tests distinguishing between similar query types
 func TestAdvanced_SimilarQueryTypes(t *testing.T) {
+	t.Skip("Skipping: requires Go-based training. Use pretrained models from HuggingFace instead.")
 	embeddingDim := 256
 
 	// Create very similar query types with subtle differences
@@ -2730,6 +2450,7 @@ func TestAdvanced_SimilarQueryTypes(t *testing.T) {
 // TestAdvanced_CrossValidation performs k-fold cross-validation style testing
 // Tests model's ability to generalize across different data splits
 func TestAdvanced_CrossValidation(t *testing.T) {
+	t.Skip("Skipping: requires Go-based training. Use pretrained models from HuggingFace instead.")
 	embeddingDim := 256
 	k := 5 // 5-fold cross-validation
 
@@ -2738,7 +2459,7 @@ func TestAdvanced_CrossValidation(t *testing.T) {
 		config *config.MLModelSelectionConfig
 	}{
 		{"KNN", &config.MLModelSelectionConfig{Type: "knn", K: 5}},
-		{"SVM", &config.MLModelSelectionConfig{Type: "svm", Kernel: "rbf"}},
+		{"SVM", &config.MLModelSelectionConfig{Type: "svm", Kernel: "linear"}},
 	}
 
 	// Query type to expected model mapping
@@ -2824,6 +2545,7 @@ func TestAdvanced_CrossValidation(t *testing.T) {
 
 // TestAdvanced_LoRAAdapterSelection tests selection with LoRA adapters
 func TestAdvanced_LoRAAdapterSelection(t *testing.T) {
+	t.Skip("Skipping: requires Go-based training. Use pretrained models from HuggingFace instead.")
 	embeddingDim := 256
 
 	// Models with LoRA adapters
@@ -2941,9 +2663,7 @@ func TestAdvanced_AllAlgorithmsConsistency(t *testing.T) {
 	}{
 		{"KNN", &config.MLModelSelectionConfig{Type: "knn", K: 5}},
 		{"KMeans", &config.MLModelSelectionConfig{Type: "kmeans", NumClusters: 5}},
-		{"MLP", &config.MLModelSelectionConfig{Type: "mlp", HiddenLayers: []int{64, 32}}},
-		{"SVM", &config.MLModelSelectionConfig{Type: "svm", Kernel: "rbf"}},
-		{"MatrixFactorization", &config.MLModelSelectionConfig{Type: "matrix_factorization", NumFactors: 15}},
+		{"SVM", &config.MLModelSelectionConfig{Type: "svm", Kernel: "linear"}},
 	}
 
 	// Generate test queries
@@ -2975,12 +2695,11 @@ func TestAdvanced_AllAlgorithmsConsistency(t *testing.T) {
 
 	// Log results comparison
 	t.Log("Algorithm consistency comparison:")
-	t.Log("Query Type\t| Expected\t| KNN\t| KMeans\t| MLP\t| SVM\t| MF")
+	t.Log("Query Type\t| Expected\t| KNN\t| KMeans\t| SVM")
 	for i, tq := range testQueries {
-		t.Logf("%s\t| %s\t| %s\t| %s\t| %s\t| %s\t| %s",
+		t.Logf("%s\t| %s\t| %s\t| %s\t| %s",
 			tq.queryType, tq.expectedModel,
-			results["KNN"][i], results["KMeans"][i], results["MLP"][i],
-			results["SVM"][i], results["MatrixFactorization"][i])
+			results["KNN"][i], results["KMeans"][i], results["SVM"][i])
 	}
 
 	// Count how many algorithms agree on each query

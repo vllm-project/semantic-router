@@ -183,7 +183,7 @@ clear_route_cache: true
 # Reference: https://github.com/ulab-uiuc/LLMRouter
 model_selection:
   enabled: true
-  # Default algorithm: knn, kmeans, mlp, svm, matrix_factorization
+  # Default algorithm: knn, kmeans, svm
   default_algorithm: "knn"
 
   # LLM candidates configuration
@@ -209,24 +209,11 @@ model_selection:
     max_iterations: 100
     model_file: "kmeans_model.json"
 
-  mlp:
-    hidden_layers: [128, 64]  # Network architecture
-    learning_rate: 0.01
-    epochs: 100
-    model_file: "mlp_model.json"
-
   svm:
     kernel: "rbf"  # "linear", "rbf", "poly"
     c: 1.0  # Regularization parameter
     gamma: "auto"  # Kernel coefficient
     model_file: "svm_model.json"
-
-  matrix_factorization:
-    num_factors: 64  # Latent dimension
-    learning_rate: 0.01
-    regularization: 0.01
-    epochs: 100
-    model_file: "mf_model.json"
 
   # Custom training options
   # Allows customers to train on their own models

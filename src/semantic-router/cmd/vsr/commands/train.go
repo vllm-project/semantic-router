@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -35,8 +33,21 @@ import (
 
 var trainCmd = &cobra.Command{
 	Use:   "train",
-	Short: "Train model selection algorithms",
-	Long: `Train the 5 model selection algorithms (KNN, KMeans, MLP, SVM, Matrix Factorization)
+	Short: "Train model selection algorithms (DEPRECATED - use Python training)",
+	Long: `⚠️  DEPRECATED: This command is deprecated. Use Python training instead:
+
+    cd src/training/ml_model_selection
+    python train.py --data-file benchmark.jsonl --output-dir models/
+
+Or download pretrained models from HuggingFace:
+
+    python download_model.py --output-dir models/
+
+See: src/training/ml_model_selection/README.md
+
+---
+
+[LEGACY] Train the 3 model selection algorithms (KNN, KMeans, SVM)
 to select the best LLM for each query type.
 
 TRAINING FLOW:
@@ -97,8 +108,6 @@ var (
 	// Algorithm hyperparameters
 	trainKnnK              int
 	trainKmeansNumClusters int
-	trainMlpHiddenLayers   string
-	trainMfNumFactors      int
 	trainQualityWeight     float64 // Global quality weight for all algorithms
 )
 
@@ -144,48 +153,13 @@ func init() {
 	trainCmd.Flags().IntVar(&trainKmeansNumClusters, "kmeans-clusters",
 		8,
 		"KMeans: Number of clusters (default: 8, or number of models)")
-	trainCmd.Flags().StringVar(&trainMlpHiddenLayers, "mlp-hidden-layers",
-		"256,128",
-		"MLP: Hidden layer sizes comma-separated (default: 256,128)")
-	trainCmd.Flags().IntVar(&trainMfNumFactors, "mf-num-factors",
-		16,
-		"Matrix Factorization: Number of latent factors (default: 16)")
 	trainCmd.Flags().Float64Var(&trainQualityWeight, "quality-weight",
 		0.9,
 		"Global quality vs speed weight for all algorithms: 0-1 (0=pure speed, 1=pure quality, default: 0.9)")
 }
 
-// parseHiddenLayers parses a comma-separated string of hidden layer sizes
-func parseHiddenLayers(s string) ([]int, error) {
-	parts := strings.Split(s, ",")
-	layers := make([]int, 0, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-		n, err := strconv.Atoi(part)
-		if err != nil {
-			return nil, fmt.Errorf("invalid layer size '%s': %w", part, err)
-		}
-		if n <= 0 {
-			return nil, fmt.Errorf("layer size must be positive, got %d", n)
-		}
-		layers = append(layers, n)
-	}
-	if len(layers) == 0 {
-		return []int{256, 128}, nil // Default
-	}
-	return layers, nil
-}
-
 // buildHyperparams builds AlgorithmHyperparams from command-line flags
 func buildHyperparams() (modelselection.AlgorithmHyperparams, error) {
-	hiddenLayers, err := parseHiddenLayers(trainMlpHiddenLayers)
-	if err != nil {
-		return modelselection.AlgorithmHyperparams{}, fmt.Errorf("invalid --mlp-hidden-layers: %w", err)
-	}
-
 	// Validate quality weight is in range [0, 1]
 	if trainQualityWeight < 0 || trainQualityWeight > 1 {
 		return modelselection.AlgorithmHyperparams{}, fmt.Errorf("--quality-weight must be between 0 and 1, got %f", trainQualityWeight)
@@ -195,8 +169,6 @@ func buildHyperparams() (modelselection.AlgorithmHyperparams, error) {
 		QualityWeight:     trainQualityWeight,
 		KnnK:              trainKnnK,
 		KmeansNumClusters: trainKmeansNumClusters,
-		MlpHiddenLayers:   hiddenLayers,
-		MfNumFactors:      trainMfNumFactors,
 	}, nil
 }
 
@@ -240,8 +212,6 @@ func runTrain(cmd *cobra.Command, args []string) error {
 		(1-hyperparams.QualityWeight)*100)
 	fmt.Printf("  KNN k:              %d\n", hyperparams.KnnK)
 	fmt.Printf("  KMeans clusters:    %d\n", hyperparams.KmeansNumClusters)
-	fmt.Printf("  MLP hidden layers:  %v\n", hyperparams.MlpHiddenLayers)
-	fmt.Printf("  MF num factors:     %d\n", hyperparams.MfNumFactors)
 	fmt.Println("----------------------------------------------")
 
 	// Create trainer with appropriate embedding mode
@@ -250,20 +220,40 @@ func runTrain(cmd *cobra.Command, args []string) error {
 		// Use hash-based fallback (no Candle required)
 		trainer = modelselection.NewTrainerWithFallback(trainEmbeddingDim)
 		trainer.SetHyperparams(hyperparams)
-		fmt.Println("\n[1/5] Setting up embedding provider...")
+		fmt.Println("\n[1/4] Setting up embedding provider...")
 		fmt.Printf("      Using hash-based fallback embeddings (dim=%d)\n", trainEmbeddingDim)
 		fmt.Println("      For real embeddings, remove --use-fallback flag")
 	} else {
 		// Use Candle for real embeddings (Qwen3 by default)
+		fmt.Println("\n[1/4] Setting up embedding provider...")
+		fmt.Printf("      Initializing Candle embedding models...\n")
+
+		// Initialize Candle embedding models before using them
+		qwen3ModelPath := "models/mom-embedding-pro"
+		if initErr := candle_binding.InitEmbeddingModelsBatched(qwen3ModelPath, 32, 100, true); initErr != nil {
+			logging.Warnf("Failed to initialize batched embeddings: %v", initErr)
+			// Try standard initialization as fallback
+			gemmaModelPath := "models/embeddinggemma-300m"
+			if initErr2 := candle_binding.InitEmbeddingModels(qwen3ModelPath, gemmaModelPath, "", true); initErr2 != nil {
+				logging.Warnf("Failed to initialize Candle embeddings: %v. Falling back to hash-based.", initErr2)
+				trainer = modelselection.NewTrainerWithFallback(trainEmbeddingDim)
+				trainer.SetHyperparams(hyperparams)
+				fmt.Printf("      ⚠️  Candle init failed, using hash-based fallback (dim=%d)\n", trainEmbeddingDim)
+				goto skipCandleInit
+			}
+		}
+		fmt.Printf("      ✅ Candle embedding models initialized\n")
+
 		trainer = modelselection.NewTrainer(trainEmbeddingDim)
 		trainer.SetEmbeddingModel(trainEmbeddingModel)
 		trainer.SetHyperparams(hyperparams)
-		fmt.Println("\n[1/5] Setting up embedding provider...")
 		fmt.Printf("      Using Candle with %s model (dim=%d)\n", trainEmbeddingModel, trainEmbeddingDim)
 	}
 
+skipCandleInit:
+
 	// Load training data
-	fmt.Println("\n[2/5] Loading training data...")
+	fmt.Println("\n[2/4] Loading training data...")
 	if loadErr := trainer.LoadBenchmarkData(trainDataFile); loadErr != nil {
 		return fmt.Errorf("failed to load training data: %w", loadErr)
 	}
@@ -289,23 +279,18 @@ func runTrain(cmd *cobra.Command, args []string) error {
 	}
 
 	// Convert to training records (generates embeddings + category one-hot)
-	fmt.Println("\n[3/5] Generating feature vectors (embedding + category)...")
+	fmt.Println("\n[3/4] Generating feature vectors (embedding + category)...")
 	trainingRecords := trainer.ConvertToTrainingRecords()
 	fmt.Printf("      Generated %d training records\n", len(trainingRecords))
 	if len(trainingRecords) > 0 {
 		fmt.Printf("      Feature dimension: %d\n", len(trainingRecords[0].QueryEmbedding))
 	}
 
-	// Generate preference records for Matrix Factorization
-	fmt.Println("\n[4/5] Generating preference records...")
-	preferenceRecords := trainer.GeneratePreferenceRecords()
-	fmt.Printf("      Generated %d preference records\n", len(preferenceRecords))
-
 	// Train all algorithms
-	fmt.Println("\n[5/5] Training algorithms...")
+	fmt.Println("\n[4/4] Training algorithms...")
 
 	// Train each algorithm and report progress
-	algorithms := []string{"KNN", "KMeans", "MLP", "SVM", "MatrixFactorization"}
+	algorithms := []string{"KNN", "KMeans", "SVM"}
 	for i, alg := range algorithms {
 		fmt.Printf("      [%d/%d] Training %s...\n", i+1, len(algorithms), alg)
 	}
@@ -368,8 +353,6 @@ func runConfigDrivenTraining(cmd *cobra.Command, args []string) error {
 		(1-hyperparams.QualityWeight)*100)
 	fmt.Printf("  KNN k:              %d\n", hyperparams.KnnK)
 	fmt.Printf("  KMeans clusters:    %d\n", hyperparams.KmeansNumClusters)
-	fmt.Printf("  MLP hidden layers:  %v\n", hyperparams.MlpHiddenLayers)
-	fmt.Printf("  MF num factors:     %d\n", hyperparams.MfNumFactors)
 	fmt.Println("----------------------------------------------")
 
 	// Analyze config
@@ -431,7 +414,7 @@ func runConfigDrivenTraining(cmd *cobra.Command, args []string) error {
 			logging.Warnf("Failed to initialize batched embeddings, trying standard init: %v", err)
 			// Try standard initialization as fallback
 			gemmaModelPath := "models/embeddinggemma-300m"
-			if err := candle_binding.InitEmbeddingModels(qwen3ModelPath, gemmaModelPath, true); err != nil {
+			if err := candle_binding.InitEmbeddingModels(qwen3ModelPath, gemmaModelPath, "", true); err != nil {
 				logging.Warnf("Failed to initialize Candle embeddings: %v. Falling back to hash-based.", err)
 				trainer = modelselection.NewTrainerWithFallback(trainEmbeddingDim)
 				trainer.SetHyperparams(hyperparams)
@@ -483,7 +466,7 @@ trainerReady:
 
 	// Train all algorithms
 	fmt.Println("\n[5/5] Training model selection algorithms...")
-	algorithms := []string{"KNN", "KMeans", "MLP", "SVM", "MatrixFactorization"}
+	algorithms := []string{"KNN", "KMeans", "SVM"}
 	for i, alg := range algorithms {
 		fmt.Printf("      [%d/%d] Training %s...\n", i+1, len(algorithms), alg)
 	}

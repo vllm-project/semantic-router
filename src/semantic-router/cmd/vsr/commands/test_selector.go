@@ -32,7 +32,7 @@ Examples:
 // NewTestSelectorCmd creates the test-selector command
 func NewTestSelectorCmd() *cobra.Command {
 	testSelectorCmd.Flags().StringVar(&testSelectorAlgorithm, "algorithm", "knn",
-		"Algorithm to test: knn, kmeans, mlp, svm, mf")
+		"Algorithm to test: knn, kmeans, svm")
 	testSelectorCmd.Flags().StringVar(&testSelectorCategory, "category", "other",
 		"Category for the query (biology, math, physics, etc.)")
 	testSelectorCmd.Flags().StringVar(&testSelectorModelsDir, "models-dir",
@@ -65,7 +65,7 @@ func runTestSelector(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 
 	// Test all algorithms
-	algorithms := []string{"knn", "kmeans", "mlp", "svm", "mf"}
+	algorithms := []string{"knn", "kmeans", "svm"}
 
 	fmt.Println("Trained Model Statistics:")
 	fmt.Println("-" + strings.Repeat("-", 59))

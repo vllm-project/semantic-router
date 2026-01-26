@@ -303,6 +303,30 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		NormalizeScores:     hybridCfg.NormalizeScores,
 	}
 
+	// Copy ML config for KNN, KMeans, SVM selectors
+	mlCfg := cfg.IntelligentRouting.ModelSelection.ML
+	if mlCfg.ModelsPath != "" || mlCfg.KNN.PretrainedPath != "" || mlCfg.KMeans.PretrainedPath != "" || mlCfg.SVM.PretrainedPath != "" {
+		modelSelectionCfg.ML = &selection.MLSelectorConfig{
+			ModelsPath:   mlCfg.ModelsPath,
+			EmbeddingDim: mlCfg.EmbeddingDim,
+			KNN: &selection.KNNConfig{
+				K:              mlCfg.KNN.K,
+				PretrainedPath: mlCfg.KNN.PretrainedPath,
+			},
+			KMeans: &selection.KMeansConfig{
+				NumClusters:      mlCfg.KMeans.NumClusters,
+				EfficiencyWeight: mlCfg.KMeans.EfficiencyWeight,
+				PretrainedPath:   mlCfg.KMeans.PretrainedPath,
+			},
+			SVM: &selection.SVMConfig{
+				Kernel:         mlCfg.SVM.Kernel,
+				Gamma:          mlCfg.SVM.Gamma,
+				PretrainedPath: mlCfg.SVM.PretrainedPath,
+			},
+		}
+		logging.Infof("[Router] ML model selection enabled with models_path=%s", mlCfg.ModelsPath)
+	}
+
 	// Create selection factory and initialize all selectors
 	selectionFactory := selection.NewFactory(modelSelectionCfg)
 	if cfg.BackendModels.ModelConfig != nil {
@@ -311,9 +335,14 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	if len(cfg.Categories) > 0 {
 		selectionFactory = selectionFactory.WithCategories(cfg.Categories)
 	}
-	// Wire embedding function for RouterDC to convert model descriptions to vectors
+	// Wire embedding function for ML model selection using Qwen3 (1024-dim)
+	// This must match the embedding model used during training (Qwen/Qwen3-Embedding-0.6B)
 	selectionFactory = selectionFactory.WithEmbeddingFunc(func(text string) ([]float32, error) {
-		return candle_binding.GetEmbedding(text, 0)
+		output, err := candle_binding.GetEmbeddingBatched(text, "qwen3", 1024)
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
 	})
 	modelSelectorRegistry := selectionFactory.CreateAll()
 

@@ -186,6 +186,9 @@ type ModelSelectionConfig struct {
 	// Default: "static" (uses static scores from configuration)
 	Method string `yaml:"method,omitempty"`
 
+	// Enabled indicates if model selection is enabled
+	Enabled bool `yaml:"enabled,omitempty"`
+
 	// Elo configuration for Elo rating-based selection
 	Elo EloSelectionConfig `yaml:"elo,omitempty"`
 
@@ -197,6 +200,47 @@ type ModelSelectionConfig struct {
 
 	// Hybrid configuration for combined selection methods
 	Hybrid HybridSelectionConfig `yaml:"hybrid,omitempty"`
+
+	// ML configuration for ML-based selection (KNN, KMeans, SVM)
+	ML MLSelectionConfig `yaml:"ml,omitempty"`
+}
+
+// MLSelectionConfig holds configuration for all ML-based selectors
+type MLSelectionConfig struct {
+	// ModelsPath is the base path for pretrained model files
+	ModelsPath string `yaml:"models_path,omitempty"`
+
+	// EmbeddingDim is the embedding dimension (default: 1024 for Qwen3)
+	EmbeddingDim int `yaml:"embedding_dim,omitempty"`
+
+	// KNN configuration
+	KNN MLKNNConfig `yaml:"knn,omitempty"`
+
+	// KMeans configuration
+	KMeans MLKMeansConfig `yaml:"kmeans,omitempty"`
+
+	// SVM configuration
+	SVM MLSVMConfig `yaml:"svm,omitempty"`
+}
+
+// MLKNNConfig holds KNN-specific configuration
+type MLKNNConfig struct {
+	K              int    `yaml:"k,omitempty"`
+	PretrainedPath string `yaml:"pretrained_path,omitempty"`
+}
+
+// MLKMeansConfig holds KMeans-specific configuration
+type MLKMeansConfig struct {
+	NumClusters      int     `yaml:"num_clusters,omitempty"`
+	EfficiencyWeight float64 `yaml:"efficiency_weight,omitempty"`
+	PretrainedPath   string  `yaml:"pretrained_path,omitempty"`
+}
+
+// MLSVMConfig holds SVM-specific configuration
+type MLSVMConfig struct {
+	Kernel         string  `yaml:"kernel,omitempty"`
+	Gamma          float64 `yaml:"gamma,omitempty"`
+	PretrainedPath string  `yaml:"pretrained_path,omitempty"`
 }
 
 // EloSelectionConfig configures Elo rating-based model selection
@@ -1438,9 +1482,9 @@ type RatingsAlgorithmConfig struct {
 }
 
 // MLModelSelectionConfig configures the ML-based model selection algorithm
-// Supported types: knn, kmeans, mlp, svm, matrix_factorization
+// Supported types: knn, kmeans, svm
 type MLModelSelectionConfig struct {
-	// Type specifies the algorithm: "knn", "kmeans", "mlp", "svm", "matrix_factorization"
+	// Type specifies the algorithm: "knn", "kmeans", "svm"
 	Type string `yaml:"type"`
 
 	// ModelsPath is the path to pre-trained model files (e.g., "trained_models/")
@@ -1454,14 +1498,11 @@ type MLModelSelectionConfig struct {
 	// NumClusters is the number of clusters for KMeans algorithm (default: equals number of models)
 	NumClusters int `yaml:"num_clusters,omitempty"`
 
-	// HiddenLayers defines MLP hidden layer sizes (default: [64, 32])
-	HiddenLayers []int `yaml:"hidden_layers,omitempty"`
-
 	// Kernel specifies the SVM kernel type: "linear", "rbf", "poly" (default: "rbf")
 	Kernel string `yaml:"kernel,omitempty"`
 
-	// NumFactors is the number of latent factors for Matrix Factorization (default: 10)
-	NumFactors int `yaml:"num_factors,omitempty"`
+	// Gamma is the RBF kernel parameter for SVM (default: 1.0)
+	Gamma float64 `yaml:"gamma,omitempty"`
 
 	// EfficiencyWeight controls the performance-efficiency tradeoff for KMeans (default: 0.3)
 	// 0 = pure performance (quality), 1 = pure efficiency (latency)
