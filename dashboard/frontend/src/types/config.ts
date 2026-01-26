@@ -79,6 +79,24 @@ export interface PreferenceSignal {
   description: string
 }
 
+export interface LanguageSignal {
+  name: string
+  description?: string
+}
+
+export interface LatencySignal {
+  name: string
+  max_tpot: number
+  description?: string
+}
+
+export interface ContextSignal {
+  name: string
+  min_tokens: string
+  max_tokens: string
+  description?: string
+}
+
 export interface Signals {
   keywords?: KeywordSignal[]
   embeddings?: EmbeddingSignal[]
@@ -86,6 +104,9 @@ export interface Signals {
   fact_check?: FactCheckSignal[]
   user_feedbacks?: UserFeedbackSignal[]
   preferences?: PreferenceSignal[]
+  language?: LanguageSignal[]
+  latency?: LatencySignal[]
+  context?: ContextSignal[]
 }
 
 // =============================================================================
@@ -93,7 +114,7 @@ export interface Signals {
 // =============================================================================
 
 
-export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'latency'
+export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'latency' | 'context'
 export interface DecisionCondition {
   type: DecisionConditionType
   name: string

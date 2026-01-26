@@ -47,6 +47,49 @@ signals:
         - "invent"
       case_sensitive: false
 
+    # Deep thinking keywords (Chinese)
+    - name: "thinking_zh"
+      operator: "OR"
+      keywords:
+        - "认真分析"
+        - "深度思考"
+        - "详细分析"
+        - "深入探讨"
+        - "系统性分析"
+        - "全面分析"
+        - "仔细思考"
+        - "深入分析"
+        - "逐步分析"
+        - "多角度分析"
+        - "综合分析"
+        - "批判性思考"
+        - "辩证分析"
+        - "理性分析"
+      case_sensitive: false
+
+    # Deep thinking keywords (English)
+    - name: "thinking_en"
+      operator: "OR"
+      keywords:
+        - "analyze carefully"
+        - "deep thinking"
+        - "step by step"
+        - "detailed analysis"
+        - "in-depth exploration"
+        - "systematic analysis"
+        - "comprehensive analysis"
+        - "think carefully"
+        - "deep analysis"
+        - "step-by-step analysis"
+        - "multi-perspective analysis"
+        - "comprehensive review"
+        - "critical thinking"
+        - "dialectical analysis"
+        - "rational analysis"
+        - "thorough examination"
+        - "rigorous analysis"
+      case_sensitive: false
+
   # preferences - Route preferences via external LLM
   preferences:
     - name: "code_generation"
@@ -60,11 +103,12 @@ signals:
 
   # Embedding-based signals for intent classification
   embeddings:
-    # Fast QA - Simple, quick questions requiring brief answers
-    - name: "fast_qa"
+    # Fast QA (English) - Simple, quick questions requiring brief answers
+    - name: "fast_qa_en"
       threshold: 0.72
       aggregation_method: "max"
       candidates:
+        - "Hello, how are you?"
         - "Who are you? What is your name?"
         - "What is the definition of machine learning and how does it differ from traditional programming approaches?"
         - "Can you quickly explain the concept of neural networks and their basic architecture?"
@@ -74,9 +118,60 @@ signals:
         - "How do I calculate the area of a circle given its radius?"
         - "What are the primary colors and how do they combine?"
         - "Can you give me a simple explanation of how photosynthesis works?"
+        - "What time is it now?"
+        - "How's the weather today?"
+        - "What does HTTP stand for?"
+        - "Who invented the telephone?"
+        - "What is the speed of light?"
+        - "How many continents are there?"
+        - "What is DNA?"
+        - "When was the internet invented?"
+        - "What is the largest ocean?"
+        - "How do I convert Celsius to Fahrenheit?"
+        - "What is the difference between RAM and ROM?"
+        - "What does CPU stand for?"
+        - "How many days are in a leap year?"
+        - "What is the boiling point of water?"
+        - "Who wrote Romeo and Juliet?"
 
-    # Deep Thinking - Complex reasoning requiring multi-step analysis
-    - name: "deep_thinking"
+    # Fast QA (Chinese) - 简单快速问答
+    - name: "fast_qa_zh"
+      threshold: 0.72
+      aggregation_method: "max"
+      candidates:
+        - "你好，请问你是谁？"
+        - "你是谁？你叫什么名字？"
+        - "机器学习的定义是什么？它和传统编程有什么区别？"
+        - "能简单解释一下神经网络的概念和基本架构吗？"
+        - "监督学习和无监督学习的主要区别是什么？"
+        - "请简要介绍一下自然语言处理是什么。"
+        - "法国的首都是哪里？人口有多少？"
+        - "已知圆的半径，如何计算圆的面积？"
+        - "三原色是什么？它们如何混合？"
+        - "能简单解释一下光合作用是怎么工作的吗？"
+        - "Python和Java这两种编程语言各有什么优缺点？请简单对比一下。"
+        - "什么是API？能用通俗易懂的方式解释一下吗？"
+        - "HTTP和HTTPS有什么区别？为什么现在网站都要用HTTPS？"
+        - "数据库中的索引是什么？为什么能加快查询速度？"
+        - "什么是递归？能举个简单的例子说明吗？"
+        - "现在几点了？"
+        - "今天天气怎么样？"
+        - "CPU是什么意思？"
+        - "谁发明了电话？"
+        - "光速是多少？"
+        - "世界上有几个大洲？"
+        - "DNA是什么？"
+        - "互联网是什么时候发明的？"
+        - "最大的海洋是哪个？"
+        - "摄氏度怎么转换成华氏度？"
+        - "RAM和ROM有什么区别？"
+        - "闰年有多少天？"
+        - "水的沸点是多少度？"
+        - "《罗密欧与朱丽叶》是谁写的？"
+        - "1加1等于几？"
+
+    # Deep Thinking (English) - Complex reasoning requiring multi-step analysis
+    - name: "deep_thinking_en"
       threshold: 0.75
       aggregation_method: "max"
       candidates:
@@ -88,6 +183,46 @@ signals:
         - "Devise a comprehensive plan for migrating a legacy monolithic application to a microservices architecture."
         - "Analyze the geopolitical implications of climate change and propose multi-faceted policy solutions."
         - "Design an algorithm to detect anomalies in time-series data and explain the statistical reasoning behind it."
+        - "Critically evaluate the trade-offs between different consensus algorithms in blockchain systems and recommend the optimal choice for a specific use case."
+        - "Develop a comprehensive strategy for implementing zero-trust security architecture in a large enterprise environment."
+        - "Analyze the computational complexity of various sorting algorithms and explain when each should be used in practice."
+        - "Design a machine learning pipeline for real-time fraud detection that balances accuracy, latency, and cost."
+        - "Explain the theoretical foundations of reinforcement learning and how it differs from supervised learning approaches."
+        - "Propose a detailed plan for optimizing database query performance in a high-traffic application with complex joins."
+        - "Analyze the architectural patterns for building scalable event-driven systems and their trade-offs."
+        - "Design a comprehensive testing strategy for a distributed microservices architecture including unit, integration, and end-to-end tests."
+        - "Evaluate different approaches to handling eventual consistency in distributed systems and recommend best practices."
+        - "Develop a step-by-step methodology for conducting root cause analysis of production incidents in complex systems."
+
+    # Deep Thinking (Chinese) - 复杂推理，需要多步分析
+    - name: "deep_thinking_zh"
+      threshold: 0.75
+      aggregation_method: "max"
+      candidates:
+        - "分析通用人工智能的伦理影响，并提出一个负责任开发的综合框架。"
+        - "设计一个能够处理数百万并发用户同时保持数据一致性的分布式系统架构。"
+        - "制定一个使用动态规划解决旅行商问题的分步策略，并解释其时间复杂度。"
+        - "比较和对比不同的机器学习范式，并为特定业务问题推荐最佳方法。"
+        - "解释量子计算的数学基础，以及它与经典计算在根本层面上的区别。"
+        - "制定一个将遗留单体应用迁移到微服务架构的综合计划。"
+        - "分析气候变化的地缘政治影响，并提出多方面的政策解决方案。"
+        - "设计一个检测时间序列数据异常的算法，并解释其背后的统计推理。"
+        - "请深入分析大型语言模型的训练过程，包括预训练、微调和RLHF各阶段的技术细节，以及它们对模型能力的影响。"
+        - "从系统设计的角度，详细分析如何构建一个高可用、低延迟的全球化支付系统，需要考虑哪些关键技术挑战和解决方案？"
+        - "请从多个维度深入比较Transformer架构和传统RNN架构的优劣，分析为什么Transformer在NLP领域取得了突破性进展。"
+        - "设计一个完整的推荐系统架构，需要支持实时推荐和离线批处理，请详细说明各个组件的设计思路和技术选型。"
+        - "深入分析分布式数据库中CAP定理的实际应用，结合具体案例说明不同系统是如何在一致性、可用性和分区容错性之间做权衡的。"
+        - "请系统性地分析当前AI安全领域面临的主要挑战，包括对齐问题、可解释性、鲁棒性等方面，并提出可能的研究方向。"
+        - "批判性地评估区块链系统中不同共识算法的权衡，并为特定用例推荐最优选择。"
+        - "制定一个在大型企业环境中实施零信任安全架构的综合策略。"
+        - "分析各种排序算法的计算复杂度，并解释在实践中何时应该使用每种算法。"
+        - "设计一个用于实时欺诈检测的机器学习管道，平衡准确性、延迟和成本。"
+        - "解释强化学习的理论基础，以及它与监督学习方法的区别。"
+        - "提出一个详细的计划，用于优化高流量应用中具有复杂连接的数据库查询性能。"
+        - "分析构建可扩展事件驱动系统的架构模式及其权衡。"
+        - "设计一个分布式微服务架构的综合测试策略，包括单元测试、集成测试和端到端测试。"
+        - "评估处理分布式系统中最终一致性的不同方法，并推荐最佳实践。"
+        - "制定一个逐步的方法论，用于对复杂系统中的生产事故进行根本原因分析。"
 
   # user_feedbacks - User feedback signals
   user_feedbacks:
@@ -105,7 +240,17 @@ signals:
     - name: "en"
       description: "English language queries"
     - name: "zh"
-      description: "Chinese language queries (Simplified and Traditional)"
+      description: "Chinese language queries"
+    - name: "kor"
+      description: "Korean language queries"
+    - name: "fr"
+      description: "French language queries"
+    - name: "ru"
+      description: "Russian language queries"
+    - name: "de"
+      description: "German language queries"
+    - name: "ja"
+      description: "Japanese language queries"
 
   # Domain classification signals (using MMLU standard categories)
   domains:
@@ -124,8 +269,11 @@ signals:
       max_tpot: 0.005  # 5ms per token
       description: "For real-time chat applications requiring fast responses"
     - name: "medium_latency"
-      max_tpot: 0.15  # 150ms per token
+      max_tpot: 0.05  # 50ms per token
       description: "For standard applications with moderate latency tolerance"
+    - name: "high_latency"
+      max_tpot: 0.20  # 200ms per token
+      description: "For applications with high latency tolerance"
 
   # Fact-check signals for verification needs
   # Strategy: Identify queries that DON'T need fact checking (creative/code/opinion)
@@ -135,6 +283,18 @@ signals:
       description: "Query contains factual claims requiring verification"
     - name: "no_fact_check_needed"
       description: "Query is creative, code-related, opinion-based, or doesn't require factual verification"
+
+  # Context signals for token count
+  context:
+    - name: "short_context"
+      min_tokens: "0"
+      max_tokens: "1K"
+    - name: "medium_context"
+      min_tokens: "1k"
+      max_tokens: "8K"
+    - name: "long_context"
+      min_tokens: "8K"
+      max_tokens: "1024K"
 
 # Decisions - Intelligent routing rules
 decisions:
@@ -164,27 +324,23 @@ decisions:
     description: "Complex reasoning in Chinese requiring advanced models"
     priority: 180
     rules:
-      operator: "AND"
+      operator: "OR"
       conditions:
         - type: "embedding"
-          name: "deep_thinking"
-        - type: "language"
-          name: "zh"
+          name: "deep_thinking_zh"
+        - type: "keyword"
+          name: "thinking_zh"
     modelRefs:
-      - model: "Qwen/Qwen3-235B"
+      - model: "Kimi-K2-Thinking"
         use_reasoning: true
         reasoning_effort: "high"
     plugins:
       - type: "system_prompt"
         configuration:
           system_prompt: "你是一个专业的AI助手，擅长深度分析和复杂推理。请提供详细、深入的回答。"
-      - type: "semantic-cache"
-        configuration:
-          enabled: true
-          similarity_threshold: 0.88
 
   # Priority 145: Computer science domain with deep thinking
-  - name: "code_deep_thinking"
+  - name: "complex_engineering"
     description: "Complex code generation and algorithm design (only when domain is clearly computer science)"
     priority: 145
     rules:
@@ -193,7 +349,7 @@ decisions:
         - type: "domain"
           name: "computer science"
         - type: "embedding"
-          name: "deep_thinking"
+          name: "deep_thinking_en"
     modelRefs:
       - model: "DeepSeek-V3.2"
         use_reasoning: true
@@ -204,8 +360,7 @@ decisions:
           system_prompt: "You are an expert software engineer. Provide detailed, well-structured code solutions with explanations."
       - type: "semantic-cache"
         configuration:
-          enabled: true
-          similarity_threshold: 0.85
+          enabled: false
 
   # Priority 160: Creative/Opinion queries - NO fact check needed
   - name: "creative_ideas"
@@ -228,8 +383,7 @@ decisions:
           system_prompt: "You are a creative and insightful assistant. Feel free to explore ideas, provide opinions, and think outside the box."
       - type: "semantic-cache"
         configuration:
-          enabled: true
-          similarity_threshold: 0.88
+          enabled: false
 
   # Priority 150: Math domain
   - name: "math_problems"
@@ -250,8 +404,7 @@ decisions:
           system_prompt: "You are a mathematics expert. Provide rigorous proofs with step-by-step reasoning."
       - type: "semantic-cache"
         configuration:
-          enabled: true
-          similarity_threshold: 0.92
+          enabled: false
 
   # Priority 145: Physics domain
   - name: "physics_problems"
@@ -272,20 +425,23 @@ decisions:
           system_prompt: "You are a physics expert. Explain concepts with mathematical derivations and verified facts."
       - type: "semantic-cache"
         configuration:
-          enabled: true
-          similarity_threshold: 0.90
+          enabled: false
 
   # Priority 140: Deep thinking in English
   - name: "deep_thinking"
     description: "Complex reasoning in English"
     priority: 140
     rules:
-      operator: "AND"
+      operator: "OR"
       conditions:
         - type: "embedding"
-          name: "deep_thinking"
-        - type: "language"
-          name: "en"
+          name: "deep_thinking_en"
+        - type: "keyword"
+          name: "thinking_en"
+        - type: "context"
+          name: "long_context"
+        - type: "context"
+          name: "medium_context"
     modelRefs:
       - model: "Kimi-K2-Thinking"
         use_reasoning: true
@@ -296,8 +452,7 @@ decisions:
           system_prompt: "You are an expert analyst. Provide comprehensive, well-reasoned responses with deep insights."
       - type: "semantic-cache"
         configuration:
-          enabled: true
-          similarity_threshold: 0.95
+          enabled: false
 
   # Priority 135: Fast coding in English
   - name: "fast_coding"
@@ -320,22 +475,23 @@ decisions:
           system_prompt: "You are a fast coding assistant. Provide code solutions quickly."
       - type: "semantic-cache"
         configuration:
-          enabled: true
-          similarity_threshold: 0.95
+          enabled: false
 
   # Priority 130: Fast QA in Chinese
-  - name: "fast_qa_chinese"
+  - name: "quick_question"
     description: "Quick answers in Chinese"
     priority: 130
     rules:
       operator: "AND"
       conditions:
         - type: "embedding"
-          name: "fast_qa"
+          name: "fast_qa_zh"
         - type: "language"
           name: "zh"
+        - type: "context"
+          name: "short_context"
     modelRefs:
-      - model: "openai/gpt-oss-20b"
+      - model: "DeepSeek-V3.2"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -344,21 +500,23 @@ decisions:
       - type: "semantic-cache"
         configuration:
           enabled: true
-          similarity_threshold: 0.80
+          similarity_threshold: 0.98
 
   # Priority 120: Fast QA in English
-  - name: "fast_qa_english"
+  - name: "fast_qa"
     description: "Quick answers in English"
     priority: 120
     rules:
       operator: "AND"
       conditions:
         - type: "embedding"
-          name: "fast_qa"
+          name: "fast_qa_en"
         - type: "language"
           name: "en"
+        - type: "context"
+          name: "short_context"
     modelRefs:
-      - model: "openai/gpt-oss-20b"
+      - model: "GLM-4.7"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -367,7 +525,7 @@ decisions:
       - type: "semantic-cache"
         configuration:
           enabled: true
-          similarity_threshold: 0.80
+          similarity_threshold: 0.98
 
   # Priority 100: Default fallback
   - name: "casual_chat"
@@ -377,10 +535,6 @@ decisions:
       operator: "OR"
       conditions:
         - type: "domain"
-          name: "math"
-        - type: "domain"
-          name: "physics"
-        - type: "domain"
           name: "other"
         - type: "language"
           name: "en"
@@ -388,6 +542,8 @@ decisions:
           name: "zh"
         - type: "latency"
           name: "medium_latency"
+        - type: "context"
+          name: "short_context"
     modelRefs:
       - model: "openai/gpt-oss-20b"
         use_reasoning: false
@@ -395,7 +551,7 @@ decisions:
       - type: "semantic-cache"
         configuration:
           enabled: true
-          similarity_threshold: 0.85
+          similarity_threshold: 0.98
 
 # Providers - Backend model configuration
 providers:

@@ -186,6 +186,17 @@ signals:
       max_tpot: 0.15  # 150ms per token
       description: "For standard applications with moderate latency tolerance"
 
+  # context_rules - Context length signals (Token Count)
+  context_rules:
+    - name: "low_token_count"
+      min_tokens: "0"
+      max_tokens: "1K"
+      description: "Short requests"
+    - name: "high_token_count"
+      min_tokens: "1K"
+      max_tokens: "128K"
+      description: "Long requests requiring large context window"
+
 # Decisions - Routing logic
 decisions:
   # Highest priority: Preference-based routing via external LLM
