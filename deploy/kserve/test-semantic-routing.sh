@@ -25,7 +25,7 @@ fi
 NAMESPACE="${NAMESPACE:-$DEFAULT_NAMESPACE}"
 ROUTE_NAME="semantic-router-kserve"
 # Model name to use for testing - get from configmap or override with MODEL_NAME env var
-MODEL_NAME="${MODEL_NAME:-$($CLI get configmap semantic-router-kserve-config -n "$NAMESPACE" -o jsonpath='{.data.config\.yaml}' 2>/dev/null | grep 'default_model:' | awk '{print $2}' || echo 'granite32-8b')}"
+MODEL_NAME="${MODEL_NAME:-$($CLI get configmap semantic-router-kserve-config -n "$NAMESPACE" -o jsonpath='{.data.config\.yaml}' 2>/dev/null | grep 'default_model:' | awk '{print $2}' | tr -d '\"' || echo 'granite32-8b')}"
 
 # Get the route URL
 echo "Using CLI: $CLI"
@@ -178,6 +178,7 @@ echo ""
 echo -e "${BLUE}Test 3:${NC} Testing end-to-end chat completion"
 echo ""
 
+test_chat_completion "Route this with auto model selection" "auto"
 test_chat_completion "What is 2+2? Answer briefly."
 test_chat_completion "Tell me a joke"
 
