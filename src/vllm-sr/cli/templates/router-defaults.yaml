@@ -55,25 +55,26 @@ tools:
 
 prompt_guard:
   enabled: true  # Global default - can be overridden per category with jailbreak_enabled
-  use_modernbert: false
-  model_id: "models/mom-jailbreak-classifier"
-  jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
+  use_modernbert: true  # mmBERT models use modernbert architecture
+  model_id: "models/mmbert-jailbreak-detector-merged"
+  jailbreak_mapping_path: "models/mmbert-jailbreak-detector-merged/jailbreak_type_mapping.json"
   threshold: 0.7
   use_cpu: true
 
 # Classifier configuration
 classifier:
   category_model:
-    model_id: "models/mom-domain-classifier"
+    model_id: "models/mmbert-intent-classifier-merged"
+    use_modernbert: true  # mmBERT models use modernbert architecture
     threshold: 0.6
     use_cpu: true
-    category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
+    category_mapping_path: "models/mmbert-intent-classifier-merged/category_mapping.json"
   pii_model:
-    model_id: "models/mom-pii-classifier"
-    use_modernbert: false
+    model_id: "models/mmbert-pii-detector-merged"
+    use_modernbert: true  # mmBERT models use modernbert architecture
     threshold: 0.9
     use_cpu: true
-    pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
+    pii_mapping_path: "models/mmbert-pii-detector-merged/pii_type_mapping.json"
 
 # Hallucination mitigation configuration
 # Disabled by default - enable in decisions via hallucination plugin
@@ -81,7 +82,8 @@ hallucination_mitigation:
   enabled: false
   # Fact-check classifier: determines if a prompt needs fact verification
   fact_check_model:
-    model_id: "models/mom-halugate-sentinel"
+    model_id: "models/mmbert-fact-check-merged"
+    use_modernbert: true  # mmBERT models use modernbert architecture
     threshold: 0.6
     use_cpu: true
   # Hallucination detector: verifies if LLM response is grounded in context
