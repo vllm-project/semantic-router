@@ -1,0 +1,171 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: semantic-router
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: semantic-router
+  namespace: default
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        container:
+          resources: {}
+  logging:
+    level:
+      default: debug
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: semantic-router
+  namespace: default
+spec:
+  gatewayClassName: semantic-router
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+  infrastructure:
+    parametersRef:
+      group: gateway.envoyproxy.io
+      kind: EnvoyProxy
+      name: semantic-router
+---
+# Buffer limit for AI workloads
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: semantic-router
+  namespace: default
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: semantic-router
+  connection:
+    bufferLimit: 50Mi
+---
+# AIGatewayRoute with rules for all ML model selection models
+# These match the models configured in values.yaml
+apiVersion: aigateway.envoyproxy.io/v1alpha1
+kind: AIGatewayRoute
+metadata:
+  name: semantic-router
+  namespace: default
+spec:
+  parentRefs:
+  - name: semantic-router
+    kind: Gateway
+    group: gateway.networking.k8s.io
+  rules:
+  # Models from ML training data
+  - matches:
+    - headers:
+      - type: Exact
+        name: x-selected-model
+        value: llama-3.2-1b
+    backendRefs:
+    - name: mock-llm
+    timeouts:
+      request: 60s
+      backendRequest: 60s
+  - matches:
+    - headers:
+      - type: Exact
+        name: x-selected-model
+        value: llama-3.2-3b
+    backendRefs:
+    - name: mock-llm
+    timeouts:
+      request: 60s
+      backendRequest: 60s
+  - matches:
+    - headers:
+      - type: Exact
+        name: x-selected-model
+        value: codellama-7b
+    backendRefs:
+    - name: mock-llm
+    timeouts:
+      request: 60s
+      backendRequest: 60s
+  - matches:
+    - headers:
+      - type: Exact
+        name: x-selected-model
+        value: mistral-7b
+    backendRefs:
+    - name: mock-llm
+    timeouts:
+      request: 60s
+      backendRequest: 60s
+  # Default fallback - catch all other requests
+  - backendRefs:
+    - name: mock-llm
+    timeouts:
+      request: 60s
+      backendRequest: 60s
+---
+# EnvoyPatchPolicy to add ExtProc filter for semantic-router
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyPatchPolicy
+metadata:
+  name: ai-gateway-prepost-extproc-patch-policy
+  namespace: default
+spec:
+  jsonPatches:
+  - name: default/semantic-router/http
+    operation:
+      op: add
+      path: /default_filter_chain/filters/0/typed_config/http_filters/0
+      value:
+        name: semantic-router-extproc
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+          allow_mode_override: true
+          grpcService:
+            envoyGrpc:
+              authority: semantic-router.vllm-semantic-router-system:50051
+              clusterName: semantic-router
+            timeout: 60s
+          message_timeout: 60s
+          processing_mode:
+            request_body_mode: BUFFERED
+            request_header_mode: SEND
+            request_trailer_mode: SKIP
+            response_body_mode: BUFFERED
+            response_header_mode: SEND
+            response_trailer_mode: SKIP
+    type: type.googleapis.com/envoy.config.listener.v3.Listener
+  - name: semantic-router
+    operation:
+      op: add
+      path: ''
+      value:
+        connect_timeout: 60s
+        http2_protocol_options: {}
+        lb_policy: ROUND_ROBIN
+        load_assignment:
+          cluster_name: semantic-router
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: semantic-router.vllm-semantic-router-system.svc.cluster.local
+                    port_value: 50051
+        name: semantic-router
+        type: STRICT_DNS
+    type: type.googleapis.com/envoy.config.cluster.v3.Cluster
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: semantic-router
+  type: JSONPatch

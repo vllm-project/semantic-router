@@ -23,6 +23,9 @@ ndarray = "0.15"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
+# Pin noisy_float to version compatible with Rust 1.75
+noisy_float = "=0.2.0"
+
 # FFI
 libc = "0.2"
 

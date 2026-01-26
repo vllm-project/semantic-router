@@ -1,9 +1,10 @@
 //! FFI exports for Go bindings
+//!
+//! This module provides inference-only functions for KNN, KMeans, and SVM.
+//! Training is done in Python (src/training/ml_model_selection/).
+//! Models are loaded from JSON files trained by the Python scripts.
 
 use crate::{KMeansSelector, KNNSelector, SVMSelector};
-use crate::knn::KNNTrainingRecord;
-use crate::kmeans::KMeansTrainingRecord;
-use crate::svm::SVMTrainingRecord;
 use libc::{c_char, c_double, c_int, size_t};
 use std::ffi::{CStr, CString};
 use std::ptr;
@@ -25,7 +26,7 @@ fn string_to_c_str(s: String) -> *mut c_char {
 }
 
 // =============================================================================
-// KNN FFI
+// KNN FFI (Inference Only)
 // =============================================================================
 
 /// Opaque handle to KNN selector
@@ -42,46 +43,6 @@ pub extern "C" fn ml_knn_new(k: c_int) -> *mut KNNHandle {
 pub extern "C" fn ml_knn_free(handle: *mut KNNHandle) {
     if !handle.is_null() {
         unsafe { drop(Box::from_raw(handle)) };
-    }
-}
-
-/// Train KNN with embeddings and labels
-#[no_mangle]
-pub extern "C" fn ml_knn_train(
-    handle: *mut KNNHandle,
-    embeddings: *const c_double,
-    embedding_dim: size_t,
-    labels: *const *const c_char,
-    num_records: size_t,
-) -> c_int {
-    if handle.is_null() || embeddings.is_null() || labels.is_null() {
-        return -1;
-    }
-
-    let selector = unsafe { &mut (*handle).0 };
-    let emb_slice = unsafe { slice::from_raw_parts(embeddings, num_records * embedding_dim) };
-    let labels_slice = unsafe { slice::from_raw_parts(labels, num_records) };
-
-    let mut records = Vec::with_capacity(num_records);
-    for i in 0..num_records {
-        let start = i * embedding_dim;
-        let end = start + embedding_dim;
-        let embedding = emb_slice[start..end].to_vec();
-
-        let label = match unsafe { c_str_to_string(labels_slice[i]) } {
-            Some(s) => s,
-            None => return -2,
-        };
-
-        records.push(KNNTrainingRecord {
-            embedding,
-            model: label,
-        });
-    }
-
-    match selector.train(records) {
-        Ok(()) => 0,
-        Err(_) => -3,
     }
 }
 
@@ -105,7 +66,7 @@ pub extern "C" fn ml_knn_select(
     }
 }
 
-/// Check if KNN is trained
+/// Check if KNN is trained (has loaded model)
 #[no_mangle]
 pub extern "C" fn ml_knn_is_trained(handle: *const KNNHandle) -> c_int {
     if handle.is_null() {
@@ -128,7 +89,7 @@ pub extern "C" fn ml_knn_to_json(handle: *const KNNHandle) -> *mut c_char {
     }
 }
 
-/// Load KNN from JSON
+/// Load KNN from JSON (primary way to load trained models)
 #[no_mangle]
 pub extern "C" fn ml_knn_from_json(json: *const c_char) -> *mut KNNHandle {
     let json_str = match unsafe { c_str_to_string(json) } {
@@ -143,7 +104,7 @@ pub extern "C" fn ml_knn_from_json(json: *const c_char) -> *mut KNNHandle {
 }
 
 // =============================================================================
-// KMeans FFI
+// KMeans FFI (Inference Only)
 // =============================================================================
 
 /// Opaque handle to KMeans selector
@@ -160,60 +121,6 @@ pub extern "C" fn ml_kmeans_new(num_clusters: c_int) -> *mut KMeansHandle {
 pub extern "C" fn ml_kmeans_free(handle: *mut KMeansHandle) {
     if !handle.is_null() {
         unsafe { drop(Box::from_raw(handle)) };
-    }
-}
-
-/// Train KMeans with embeddings, labels, quality, and latency
-#[no_mangle]
-pub extern "C" fn ml_kmeans_train(
-    handle: *mut KMeansHandle,
-    embeddings: *const c_double,
-    embedding_dim: size_t,
-    labels: *const *const c_char,
-    qualities: *const c_double,
-    latencies: *const i64,
-    num_records: size_t,
-) -> c_int {
-    if handle.is_null() || embeddings.is_null() || labels.is_null() {
-        return -1;
-    }
-
-    let selector = unsafe { &mut (*handle).0 };
-    let emb_slice = unsafe { slice::from_raw_parts(embeddings, num_records * embedding_dim) };
-    let labels_slice = unsafe { slice::from_raw_parts(labels, num_records) };
-    let qualities_slice = if qualities.is_null() {
-        vec![1.0; num_records]
-    } else {
-        unsafe { slice::from_raw_parts(qualities, num_records).to_vec() }
-    };
-    let latencies_slice = if latencies.is_null() {
-        vec![0i64; num_records]
-    } else {
-        unsafe { slice::from_raw_parts(latencies, num_records).to_vec() }
-    };
-
-    let mut records = Vec::with_capacity(num_records);
-    for i in 0..num_records {
-        let start = i * embedding_dim;
-        let end = start + embedding_dim;
-        let embedding = emb_slice[start..end].to_vec();
-
-        let label = match unsafe { c_str_to_string(labels_slice[i]) } {
-            Some(s) => s,
-            None => return -2,
-        };
-
-        records.push(KMeansTrainingRecord {
-            embedding,
-            model: label,
-            quality: qualities_slice[i],
-            latency_ns: latencies_slice[i],
-        });
-    }
-
-    match selector.train(records) {
-        Ok(()) => 0,
-        Err(_) => -3,
     }
 }
 
@@ -237,7 +144,7 @@ pub extern "C" fn ml_kmeans_select(
     }
 }
 
-/// Check if KMeans is trained
+/// Check if KMeans is trained (has loaded model)
 #[no_mangle]
 pub extern "C" fn ml_kmeans_is_trained(handle: *const KMeansHandle) -> c_int {
     if handle.is_null() {
@@ -260,7 +167,7 @@ pub extern "C" fn ml_kmeans_to_json(handle: *const KMeansHandle) -> *mut c_char 
     }
 }
 
-/// Load KMeans from JSON
+/// Load KMeans from JSON (primary way to load trained models)
 #[no_mangle]
 pub extern "C" fn ml_kmeans_from_json(json: *const c_char) -> *mut KMeansHandle {
     let json_str = match unsafe { c_str_to_string(json) } {
@@ -275,16 +182,36 @@ pub extern "C" fn ml_kmeans_from_json(json: *const c_char) -> *mut KMeansHandle 
 }
 
 // =============================================================================
-// SVM FFI
+// SVM FFI (Inference Only)
 // =============================================================================
 
 /// Opaque handle to SVM selector
 pub struct SVMHandle(SVMSelector);
 
-/// Create a new SVM selector
+/// Create a new SVM selector with default (RBF) kernel
 #[no_mangle]
 pub extern "C" fn ml_svm_new() -> *mut SVMHandle {
     Box::into_raw(Box::new(SVMHandle(SVMSelector::new())))
+}
+
+/// Create a new SVM selector with specified kernel
+/// kernel_type: 0 = linear, 1 = rbf
+/// gamma: RBF gamma parameter (ignored for linear, use 0.0 for auto which defaults to 1.0)
+#[no_mangle]
+pub extern "C" fn ml_svm_new_with_kernel(kernel_type: c_int, gamma: c_double) -> *mut SVMHandle {
+    use crate::svm::KernelType;
+
+    let selector = match kernel_type {
+        0 => SVMSelector::with_kernel(KernelType::Linear, 1.0), // Explicit Linear
+        1 => {
+            // RBF with optional gamma (0.0 = auto, defaults to 1.0)
+            let gamma_opt = if gamma > 0.0 { Some(gamma) } else { None };
+            SVMSelector::with_rbf(gamma_opt)
+        }
+        _ => SVMSelector::new(), // Default to RBF
+    };
+
+    Box::into_raw(Box::new(SVMHandle(selector)))
 }
 
 /// Free SVM selector
@@ -292,46 +219,6 @@ pub extern "C" fn ml_svm_new() -> *mut SVMHandle {
 pub extern "C" fn ml_svm_free(handle: *mut SVMHandle) {
     if !handle.is_null() {
         unsafe { drop(Box::from_raw(handle)) };
-    }
-}
-
-/// Train SVM with embeddings and labels
-#[no_mangle]
-pub extern "C" fn ml_svm_train(
-    handle: *mut SVMHandle,
-    embeddings: *const c_double,
-    embedding_dim: size_t,
-    labels: *const *const c_char,
-    num_records: size_t,
-) -> c_int {
-    if handle.is_null() || embeddings.is_null() || labels.is_null() {
-        return -1;
-    }
-
-    let selector = unsafe { &mut (*handle).0 };
-    let emb_slice = unsafe { slice::from_raw_parts(embeddings, num_records * embedding_dim) };
-    let labels_slice = unsafe { slice::from_raw_parts(labels, num_records) };
-
-    let mut records = Vec::with_capacity(num_records);
-    for i in 0..num_records {
-        let start = i * embedding_dim;
-        let end = start + embedding_dim;
-        let embedding = emb_slice[start..end].to_vec();
-
-        let label = match unsafe { c_str_to_string(labels_slice[i]) } {
-            Some(s) => s,
-            None => return -2,
-        };
-
-        records.push(SVMTrainingRecord {
-            embedding,
-            model: label,
-        });
-    }
-
-    match selector.train(records) {
-        Ok(()) => 0,
-        Err(_) => -3,
     }
 }
 
@@ -355,7 +242,7 @@ pub extern "C" fn ml_svm_select(
     }
 }
 
-/// Check if SVM is trained
+/// Check if SVM is trained (has loaded model)
 #[no_mangle]
 pub extern "C" fn ml_svm_is_trained(handle: *const SVMHandle) -> c_int {
     if handle.is_null() {
@@ -378,7 +265,7 @@ pub extern "C" fn ml_svm_to_json(handle: *const SVMHandle) -> *mut c_char {
     }
 }
 
-/// Load SVM from JSON
+/// Load SVM from JSON (primary way to load trained models)
 #[no_mangle]
 pub extern "C" fn ml_svm_from_json(json: *const c_char) -> *mut SVMHandle {
     let json_str = match unsafe { c_str_to_string(json) } {

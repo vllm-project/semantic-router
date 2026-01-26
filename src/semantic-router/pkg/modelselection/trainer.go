@@ -27,10 +27,22 @@ import (
 )
 
 // VSR's 14 categories for one-hot encoding
+// IMPORTANT: This order MUST match Python training: src/training/ml_model_selection/data_loader.py
 var VSRCategories = []string{
-	"biology", "business", "chemistry", "computer science",
-	"economics", "engineering", "health", "history",
-	"law", "math", "other", "philosophy", "physics", "psychology",
+	"math",
+	"physics",
+	"chemistry",
+	"biology",
+	"computer science",
+	"history",
+	"economics",
+	"business",
+	"law",
+	"health",
+	"psychology",
+	"philosophy",
+	"other",
+	"unknown",
 }
 
 // CategoryToIndex maps category name to one-hot index
@@ -53,12 +65,6 @@ type AlgorithmHyperparams struct {
 
 	// KMeans hyperparameters
 	KmeansNumClusters int // Number of clusters (default: 8)
-
-	// MLP hyperparameters
-	MlpHiddenLayers []int // Hidden layer sizes (default: [256, 128])
-
-	// Matrix Factorization hyperparameters
-	MfNumFactors int // Number of latent factors (default: 16)
 }
 
 // DefaultHyperparams returns the default hyperparameters
@@ -67,14 +73,12 @@ func DefaultHyperparams() AlgorithmHyperparams {
 		QualityWeight:     0.9, // 90% quality, 10% speed (global for all algorithms)
 		KnnK:              5,   // 5 neighbors for stable, smooth routing
 		KmeansNumClusters: 8,   // 8 clusters for 14 categories
-		MlpHiddenLayers:   []int{256, 128},
-		MfNumFactors:      16, // 16 latent factors for 4-8 models
 	}
 }
 
 // Trainer handles training of model selection algorithms
 type Trainer struct {
-	// EmbeddingDim is the dimension of query embeddings (e.g., 768)
+	// EmbeddingDim is the dimension of query embeddings (e.g., 1024 for Qwen3)
 	EmbeddingDim int
 
 	// FeatureDim is the total feature dimension (EmbeddingDim + 14 categories)
@@ -105,7 +109,7 @@ type Trainer struct {
 func NewTrainer(embeddingDim int) *Trainer {
 	return &Trainer{
 		EmbeddingDim:   embeddingDim,
-		FeatureDim:     embeddingDim + len(VSRCategories), // 768 + 14 = 782
+		FeatureDim:     embeddingDim + len(VSRCategories), // e.g., 1024 + 14 = 1038 for Qwen3
 		EmbeddingModel: "qwen3",                           // Default to Qwen3
 		UseCandle:      true,                              // Default to using Candle
 		EmbeddingCache: make(map[string][]float64),
@@ -391,7 +395,7 @@ func (t *Trainer) ConvertToTrainingRecords() []TrainingRecord {
 		}
 
 		// Combine embedding with category one-hot encoding
-		// This creates the full 782-dimension feature vector
+		// This creates the full feature vector (e.g., 1024 + 14 = 1038 for Qwen3)
 		featureVector := CombineEmbeddingWithCategory(embedding, category)
 
 		// Get model scores and find best model
@@ -460,59 +464,9 @@ func (t *Trainer) ConvertToTrainingRecords() []TrainingRecord {
 	return records
 }
 
-// GeneratePreferenceRecords generates preference pairs for Matrix Factorization
-// Uses combined feature vectors (embedding + category one-hot)
-func (t *Trainer) GeneratePreferenceRecords() []PreferenceRecord {
-	var preferences []PreferenceRecord
-
-	for i, rd := range t.RoutingData {
-		category := rd.QueryType
-
-		// Get embedding (will be cached from ConvertToTrainingRecords)
-		embedding, err := t.GetEmbedding(rd.Query)
-		if err != nil {
-			continue // Skip if embedding generation fails
-		}
-
-		// Combine with category one-hot
-		featureVector := CombineEmbeddingWithCategory(embedding, category)
-
-		// Create preference pairs: better model preferred over worse
-		// RouteLLM approach: generate diverse preferences to prevent single-model dominance
-		for model1, score1 := range rd.ModelScores {
-			for model2, score2 := range rd.ModelScores {
-				if model1 == model2 {
-					continue
-				}
-				// Generate preference if there's any score difference
-				if score1 > score2+0.001 {
-					// Confidence based on score difference, but capped to prevent domination
-					confidence := math.Min(score1-score2, 0.3)
-					pref := PreferenceRecord{
-						QueryEmbedding: featureVector, // Now 782 dimensions
-						PreferredModel: model1,
-						OtherModel:     model2,
-						Confidence:     confidence,
-					}
-					preferences = append(preferences, pref)
-				}
-			}
-		}
-
-		// Progress logging
-		if (i+1)%1000 == 0 {
-			logging.Infof("Generated preferences for %d/%d queries", i+1, len(t.RoutingData))
-		}
-	}
-
-	logging.Infof("Generated %d preference records", len(preferences))
-	return preferences
-}
-
 // TrainAllAlgorithms trains all algorithms and saves them
 func (t *Trainer) TrainAllAlgorithms(outputPath string) error {
 	trainingRecords := t.ConvertToTrainingRecords()
-	preferenceRecords := t.GeneratePreferenceRecords()
 
 	// Train KNN
 	if err := t.trainAndSaveKNN(trainingRecords, outputPath+"/knn_model.json"); err != nil {
@@ -524,19 +478,9 @@ func (t *Trainer) TrainAllAlgorithms(outputPath string) error {
 		return fmt.Errorf("failed to train KMeans: %w", err)
 	}
 
-	// Train MLP
-	if err := t.trainAndSaveMLP(trainingRecords, outputPath+"/mlp_model.json"); err != nil {
-		return fmt.Errorf("failed to train MLP: %w", err)
-	}
-
 	// Train SVM
 	if err := t.trainAndSaveSVM(trainingRecords, outputPath+"/svm_model.json"); err != nil {
 		return fmt.Errorf("failed to train SVM: %w", err)
-	}
-
-	// Train Matrix Factorization
-	if err := t.trainAndSaveMatFac(trainingRecords, preferenceRecords, outputPath+"/mf_model.json"); err != nil {
-		return fmt.Errorf("failed to train Matrix Factorization: %w", err)
 	}
 
 	logging.Infof("Successfully trained and saved all algorithms to %s", outputPath)
@@ -561,33 +505,10 @@ func (t *Trainer) trainAndSaveKMeans(records []TrainingRecord, path string) erro
 	return selector.Save(path)
 }
 
-func (t *Trainer) trainAndSaveMLP(records []TrainingRecord, path string) error {
-	selector := NewMLPSelector(t.Hyperparams.MlpHiddenLayers)
-	logging.Infof("Training MLP with hidden_layers=%v", t.Hyperparams.MlpHiddenLayers)
-	if err := selector.Train(records); err != nil {
-		return err
-	}
-	return selector.Save(path)
-}
-
 func (t *Trainer) trainAndSaveSVM(records []TrainingRecord, path string) error {
 	selector := NewSVMSelector("rbf")
 	if err := selector.Train(records); err != nil {
 		return err
-	}
-	return selector.Save(path)
-}
-
-func (t *Trainer) trainAndSaveMatFac(records []TrainingRecord, prefs []PreferenceRecord, path string) error {
-	selector := NewMatrixFactorizationSelector(t.Hyperparams.MfNumFactors)
-	logging.Infof("Training Matrix Factorization with num_factors=%d", t.Hyperparams.MfNumFactors)
-	if err := selector.Train(records); err != nil {
-		return err
-	}
-	if len(prefs) > 0 {
-		if err := selector.TrainWithPreferences(prefs); err != nil {
-			return err
-		}
 	}
 	return selector.Save(path)
 }
@@ -609,22 +530,8 @@ func LoadPretrainedSelector(algorithm, path string) (Selector, error) {
 		}
 		return s, nil
 
-	case "mlp":
-		s := NewMLPSelector([]int{128, 64})
-		if err := s.Load(path); err != nil {
-			return nil, err
-		}
-		return s, nil
-
 	case "svm":
 		s := NewSVMSelector("rbf")
-		if err := s.Load(path); err != nil {
-			return nil, err
-		}
-		return s, nil
-
-	case "matrix_factorization":
-		s := NewMatrixFactorizationSelector(64)
 		if err := s.Load(path); err != nil {
 			return nil, err
 		}

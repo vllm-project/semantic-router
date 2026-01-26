@@ -200,7 +200,8 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	if len(result.Decision.ModelRefs) > 0 {
 		// Use advanced model selection (Elo, RouterDC, AutoMix, Hybrid, or Static)
 		// Pass decision's algorithm config for per-decision algorithm override
-		selectedModelRef, usedMethod := r.selectModelFromCandidates(result.Decision.ModelRefs, decisionName, userContent, result.Decision.Algorithm)
+		// Pass categoryName for ML selectors to create feature vectors with category one-hot encoding
+		selectedModelRef, usedMethod := r.selectModelFromCandidates(result.Decision.ModelRefs, decisionName, userContent, result.Decision.Algorithm, categoryName)
 
 		// Use LoRA name if specified, otherwise use the base model name
 		selectedModel = selectedModelRef.Model
@@ -251,8 +252,9 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 // selectModelFromCandidates uses the configured selection algorithm to choose the best model
 // from the decision's candidate models. Falls back to first model if selection fails.
 // The algorithm parameter allows per-decision algorithm override (aligned with looper pattern).
+// The categoryName parameter is the detected domain category (e.g., "physics", "math") for ML feature vectors.
 // Returns the selected model and the method name used for logging.
-func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, decisionName string, query string, algorithm *config.AlgorithmConfig) (*config.ModelRef, string) {
+func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, decisionName string, query string, algorithm *config.AlgorithmConfig, categoryName string) (*config.ModelRef, string) {
 	if len(modelRefs) == 0 {
 		return nil, ""
 	}
@@ -283,6 +285,7 @@ func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, de
 	selCtx := &selection.SelectionContext{
 		Query:           query,
 		DecisionName:    decisionName,
+		CategoryName:    categoryName,
 		CandidateModels: modelRefs,
 		CostWeight:      costWeight,
 		QualityWeight:   qualityWeight,
@@ -329,6 +332,12 @@ func (r *OpenAIRouter) getSelectionMethod(algorithm *config.AlgorithmConfig) sel
 			return selection.MethodHybrid
 		case "static":
 			return selection.MethodStatic
+		case "knn":
+			return selection.MethodKNN
+		case "kmeans":
+			return selection.MethodKMeans
+		case "svm":
+			return selection.MethodSVM
 		case "confidence", "ratings":
 			// These are looper algorithms, not selection algorithms
 			// Fall through to default

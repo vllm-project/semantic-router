@@ -156,6 +156,21 @@ tolerations: []
 # Affinity rules
 affinity: {}
 
+# Extra volumes for custom mounts (e.g., ML models via hostPath)
+extraVolumes: []
+# Example:
+#   - name: ml-models
+#     hostPath:
+#       path: /mnt/ml-models
+#       type: DirectoryOrCreate
+
+# Extra volume mounts
+extraVolumeMounts: []
+# Example:
+#   - name: ml-models
+#     mountPath: /mnt/ml-models
+#     readOnly: true
+
 # Startup probe configuration (for slow-starting containers with model loading)
 # This probe runs FIRST and disables liveness/readiness probes until it succeeds
 # Models are now downloaded automatically at startup, which can take 10-20 minutes depending on network speed
@@ -425,9 +440,7 @@ toolsDb:
 # Supported algorithms:
 #   - knn: K-Nearest Neighbors (semantic similarity)
 #   - kmeans: KMeans clustering (pattern-based routing)
-#   - mlp: Multi-Layer Perceptron (complex patterns)
 #   - svm: Support Vector Machine (classification-based)
-#   - matrix_factorization: Collaborative filtering style
 #
 # Example configuration:
 #

@@ -5,6 +5,9 @@
 // - KMeans clustering via linfa-clustering
 // - SVM (Support Vector Machine) via linfa-svm
 //
+// Training is done in Python (src/training/ml_model_selection/).
+// This package provides inference-only functionality, loading models from JSON.
+//
 // MLP and Matrix Factorization remain in Go (see modelselection package).
 package ml_binding
 
@@ -13,28 +16,26 @@ package ml_binding
 #include <stdlib.h>
 #include <stdint.h>
 
-// KNN functions
+// KNN functions (inference only - training done in Python)
 void* ml_knn_new(int k);
 void ml_knn_free(void* handle);
-int ml_knn_train(void* handle, double* embeddings, size_t embedding_dim, char** labels, size_t num_records);
 char* ml_knn_select(void* handle, double* query, size_t query_len);
 int ml_knn_is_trained(void* handle);
 char* ml_knn_to_json(void* handle);
 void* ml_knn_from_json(char* json);
 
-// KMeans functions
+// KMeans functions (inference only - training done in Python)
 void* ml_kmeans_new(int num_clusters);
 void ml_kmeans_free(void* handle);
-int ml_kmeans_train(void* handle, double* embeddings, size_t embedding_dim, char** labels, double* qualities, int64_t* latencies, size_t num_records);
 char* ml_kmeans_select(void* handle, double* query, size_t query_len);
 int ml_kmeans_is_trained(void* handle);
 char* ml_kmeans_to_json(void* handle);
 void* ml_kmeans_from_json(char* json);
 
-// SVM functions
+// SVM functions (inference only - training done in Python)
 void* ml_svm_new();
+void* ml_svm_new_with_kernel(int kernel_type, double gamma);
 void ml_svm_free(void* handle);
-int ml_svm_train(void* handle, double* embeddings, size_t embedding_dim, char** labels, size_t num_records);
 char* ml_svm_select(void* handle, double* query, size_t query_len);
 int ml_svm_is_trained(void* handle);
 char* ml_svm_to_json(void* handle);
@@ -52,10 +53,10 @@ import (
 )
 
 // =============================================================================
-// KNN Selector
+// KNN Selector (Inference Only)
 // =============================================================================
 
-// KNNSelector wraps the Linfa KNN implementation
+// KNNSelector wraps the Linfa KNN implementation for inference
 type KNNSelector struct {
 	handle unsafe.Pointer
 	mu     sync.RWMutex
@@ -78,53 +79,6 @@ func (s *KNNSelector) Close() {
 		C.ml_knn_free(s.handle)
 		s.handle = nil
 	}
-}
-
-// Train trains the KNN model with embeddings and labels
-func (s *KNNSelector) Train(embeddings [][]float64, labels []string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.handle == nil {
-		return errors.New("selector not initialized")
-	}
-	if len(embeddings) == 0 || len(labels) == 0 {
-		return errors.New("empty training data")
-	}
-	if len(embeddings) != len(labels) {
-		return errors.New("embeddings and labels count mismatch")
-	}
-
-	embeddingDim := len(embeddings[0])
-	numRecords := len(embeddings)
-
-	// Flatten embeddings
-	flatEmbeddings := make([]C.double, numRecords*embeddingDim)
-	for i, emb := range embeddings {
-		for j, v := range emb {
-			flatEmbeddings[i*embeddingDim+j] = C.double(v)
-		}
-	}
-
-	// Convert labels to C strings
-	cLabels := make([]*C.char, numRecords)
-	for i, label := range labels {
-		cLabels[i] = C.CString(label)
-		defer C.free(unsafe.Pointer(cLabels[i]))
-	}
-
-	result := C.ml_knn_train(
-		s.handle,
-		&flatEmbeddings[0],
-		C.size_t(embeddingDim),
-		&cLabels[0],
-		C.size_t(numRecords),
-	)
-
-	if result != 0 {
-		return errors.New("KNN training failed")
-	}
-	return nil
 }
 
 // Select selects the best model for a query embedding
@@ -150,7 +104,7 @@ func (s *KNNSelector) Select(query []float64) (string, error) {
 	return C.GoString(result), nil
 }
 
-// IsTrained returns whether the model is trained
+// IsTrained returns whether the model has been loaded
 func (s *KNNSelector) IsTrained() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -175,7 +129,7 @@ func (s *KNNSelector) ToJSON() (string, error) {
 	return C.GoString(result), nil
 }
 
-// KNNFromJSON loads a KNN selector from JSON
+// KNNFromJSON loads a KNN selector from JSON (the primary way to load trained models)
 func KNNFromJSON(json string) (*KNNSelector, error) {
 	cJSON := C.CString(json)
 	defer C.free(unsafe.Pointer(cJSON))
@@ -189,10 +143,10 @@ func KNNFromJSON(json string) (*KNNSelector, error) {
 }
 
 // =============================================================================
-// KMeans Selector
+// KMeans Selector (Inference Only)
 // =============================================================================
 
-// KMeansSelector wraps the Linfa KMeans implementation
+// KMeansSelector wraps the Linfa KMeans implementation for inference
 type KMeansSelector struct {
 	handle unsafe.Pointer
 	mu     sync.RWMutex
@@ -215,61 +169,6 @@ func (s *KMeansSelector) Close() {
 		C.ml_kmeans_free(s.handle)
 		s.handle = nil
 	}
-}
-
-// KMeansTrainingRecord represents a training record for KMeans
-type KMeansTrainingRecord struct {
-	Embedding []float64
-	Label     string
-	Quality   float64
-	LatencyNs int64
-}
-
-// Train trains the KMeans model with training records
-func (s *KMeansSelector) Train(records []KMeansTrainingRecord) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.handle == nil {
-		return errors.New("selector not initialized")
-	}
-	if len(records) == 0 {
-		return errors.New("empty training data")
-	}
-
-	embeddingDim := len(records[0].Embedding)
-	numRecords := len(records)
-
-	// Flatten embeddings
-	flatEmbeddings := make([]C.double, numRecords*embeddingDim)
-	cLabels := make([]*C.char, numRecords)
-	qualities := make([]C.double, numRecords)
-	latencies := make([]C.int64_t, numRecords)
-
-	for i, rec := range records {
-		for j, v := range rec.Embedding {
-			flatEmbeddings[i*embeddingDim+j] = C.double(v)
-		}
-		cLabels[i] = C.CString(rec.Label)
-		defer C.free(unsafe.Pointer(cLabels[i]))
-		qualities[i] = C.double(rec.Quality)
-		latencies[i] = C.int64_t(rec.LatencyNs)
-	}
-
-	result := C.ml_kmeans_train(
-		s.handle,
-		&flatEmbeddings[0],
-		C.size_t(embeddingDim),
-		&cLabels[0],
-		&qualities[0],
-		&latencies[0],
-		C.size_t(numRecords),
-	)
-
-	if result != 0 {
-		return errors.New("KMeans training failed")
-	}
-	return nil
 }
 
 // Select selects the best model for a query embedding
@@ -295,7 +194,7 @@ func (s *KMeansSelector) Select(query []float64) (string, error) {
 	return C.GoString(result), nil
 }
 
-// IsTrained returns whether the model is trained
+// IsTrained returns whether the model has been loaded
 func (s *KMeansSelector) IsTrained() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -320,7 +219,7 @@ func (s *KMeansSelector) ToJSON() (string, error) {
 	return C.GoString(result), nil
 }
 
-// KMeansFromJSON loads a KMeans selector from JSON
+// KMeansFromJSON loads a KMeans selector from JSON (the primary way to load trained models)
 func KMeansFromJSON(json string) (*KMeansSelector, error) {
 	cJSON := C.CString(json)
 	defer C.free(unsafe.Pointer(cJSON))
@@ -334,18 +233,39 @@ func KMeansFromJSON(json string) (*KMeansSelector, error) {
 }
 
 // =============================================================================
-// SVM Selector
+// SVM Selector (Inference Only)
 // =============================================================================
 
-// SVMSelector wraps the Linfa SVM implementation
+// SVMKernelType defines the kernel type for SVM
+type SVMKernelType int
+
+const (
+	// SVMKernelLinear uses linear kernel: f(x) = w·x - b
+	SVMKernelLinear SVMKernelType = 0
+	// SVMKernelRBF uses RBF (Gaussian) kernel: f(x) = Σ(αᵢ·exp(-γ||x-xᵢ||²))
+	SVMKernelRBF SVMKernelType = 1
+)
+
+// SVMSelector wraps the Linfa SVM implementation for inference
 type SVMSelector struct {
 	handle unsafe.Pointer
 	mu     sync.RWMutex
 }
 
-// NewSVMSelector creates a new SVM selector
+// NewSVMSelector creates a new SVM selector with default (RBF) kernel
 func NewSVMSelector() *SVMSelector {
 	handle := C.ml_svm_new()
+	if handle == nil {
+		return nil
+	}
+	return &SVMSelector{handle: handle}
+}
+
+// NewSVMSelectorWithKernel creates a new SVM selector with specified kernel
+// kernelType: SVMKernelLinear or SVMKernelRBF
+// gamma: RBF gamma parameter (use 0 for auto = 1.0)
+func NewSVMSelectorWithKernel(kernelType SVMKernelType, gamma float64) *SVMSelector {
+	handle := C.ml_svm_new_with_kernel(C.int(kernelType), C.double(gamma))
 	if handle == nil {
 		return nil
 	}
@@ -360,53 +280,6 @@ func (s *SVMSelector) Close() {
 		C.ml_svm_free(s.handle)
 		s.handle = nil
 	}
-}
-
-// Train trains the SVM model with embeddings and labels
-func (s *SVMSelector) Train(embeddings [][]float64, labels []string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.handle == nil {
-		return errors.New("selector not initialized")
-	}
-	if len(embeddings) == 0 || len(labels) == 0 {
-		return errors.New("empty training data")
-	}
-	if len(embeddings) != len(labels) {
-		return errors.New("embeddings and labels count mismatch")
-	}
-
-	embeddingDim := len(embeddings[0])
-	numRecords := len(embeddings)
-
-	// Flatten embeddings
-	flatEmbeddings := make([]C.double, numRecords*embeddingDim)
-	for i, emb := range embeddings {
-		for j, v := range emb {
-			flatEmbeddings[i*embeddingDim+j] = C.double(v)
-		}
-	}
-
-	// Convert labels to C strings
-	cLabels := make([]*C.char, numRecords)
-	for i, label := range labels {
-		cLabels[i] = C.CString(label)
-		defer C.free(unsafe.Pointer(cLabels[i]))
-	}
-
-	result := C.ml_svm_train(
-		s.handle,
-		&flatEmbeddings[0],
-		C.size_t(embeddingDim),
-		&cLabels[0],
-		C.size_t(numRecords),
-	)
-
-	if result != 0 {
-		return errors.New("SVM training failed")
-	}
-	return nil
 }
 
 // Select selects the best model for a query embedding
@@ -432,7 +305,7 @@ func (s *SVMSelector) Select(query []float64) (string, error) {
 	return C.GoString(result), nil
 }
 
-// IsTrained returns whether the model is trained
+// IsTrained returns whether the model has been loaded
 func (s *SVMSelector) IsTrained() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -457,7 +330,7 @@ func (s *SVMSelector) ToJSON() (string, error) {
 	return C.GoString(result), nil
 }
 
-// SVMFromJSON loads an SVM selector from JSON
+// SVMFromJSON loads an SVM selector from JSON (the primary way to load trained models)
 func SVMFromJSON(json string) (*SVMSelector, error) {
 	cJSON := C.CString(json)
 	defer C.free(unsafe.Pointer(cJSON))

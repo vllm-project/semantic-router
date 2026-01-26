@@ -54,6 +54,21 @@ const (
 
 	// MethodStatic uses static scores from configuration (default behavior)
 	MethodStatic SelectionMethod = "static"
+
+	// MethodKNN uses K-Nearest Neighbors for query-based model selection
+	// Finds similar historical queries and uses quality-weighted voting
+	// Reference: FusionFactory (arXiv:2507.10540) query-level fusion
+	MethodKNN SelectionMethod = "knn"
+
+	// MethodKMeans uses KMeans clustering for model selection
+	// Clusters queries and assigns models based on quality+latency scores
+	// Reference: Avengers-Pro (arXiv:2508.12631) performance-efficiency routing
+	MethodKMeans SelectionMethod = "kmeans"
+
+	// MethodSVM uses Support Vector Machine for model classification
+	// Learns decision boundaries between model preferences using RBF kernel
+	// Reference: FusionFactory (arXiv:2507.10540), Avengers-Pro (arXiv:2508.12631)
+	MethodSVM SelectionMethod = "svm"
 )
 
 // SelectionContext provides context for model selection decisions
@@ -70,6 +85,10 @@ type SelectionContext struct {
 
 	// DecisionName is the name of the matched decision for category-specific selection
 	DecisionName string
+
+	// CategoryName is the detected domain category (e.g., "physics", "math")
+	// Used by ML selectors to create feature vectors with category one-hot encoding
+	CategoryName string
 
 	// CandidateModels is the list of models to select from
 	CandidateModels []config.ModelRef

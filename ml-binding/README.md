@@ -2,17 +2,40 @@
 
 This directory contains Rust-based ML algorithm implementations using [Linfa](https://github.com/rust-ml/linfa), the Rust ML framework.
 
+> **Note:** This package provides **inference only**. Training is done in Python. See `src/training/ml_model_selection/`.
+
 ## Algorithms
 
 | Algorithm | Linfa Crate | Status |
 |-----------|-------------|--------|
-| **KNN** (K-Nearest Neighbors) | `linfa-nn` | ✅ Implemented |
-| **KMeans** (Clustering) | `linfa-clustering` | ✅ Implemented |
-| **SVM** (Support Vector Machine) | `linfa-svm` | ✅ Implemented |
-| **MLP** (Neural Network) | N/A | 🔧 Go implementation |
-| **Matrix Factorization** | N/A | 🔧 Go implementation |
+| **KNN** (K-Nearest Neighbors) | `linfa-nn` | ✅ Inference |
+| **KMeans** (Clustering) | `linfa-clustering` | ✅ Inference |
+| **SVM** (Support Vector Machine) | `linfa-svm` | ✅ Inference |
 
-> **Note:** MLP and Matrix Factorization are not available in Linfa and remain in the Go implementation at `src/semantic-router/pkg/modelselection/selector.go`.
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    TRAINING (Python)                             │
+├─────────────────────────────────────────────────────────────────┤
+│  src/training/ml_model_selection/                               │
+│  ├── train.py          # Train models using scikit-learn        │
+│  ├── upload_model.py   # Upload to HuggingFace                  │
+│  └── download_model.py # Download from HuggingFace              │
+│                                                                  │
+│  Output: knn_model.json, kmeans_model.json, svm_model.json      │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                    INFERENCE (Rust/Go)                           │
+├─────────────────────────────────────────────────────────────────┤
+│  ml-binding/                                                    │
+│  ├── src/knn.rs    # Load JSON, select using Linfa Ball Tree    │
+│  ├── src/kmeans.rs # Load JSON, select using cluster centroids  │
+│  ├── src/svm.rs    # Load JSON, select using decision function  │
+│  └── ml_binding.go # Go bindings via CGO                        │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ## Directory Structure
 
@@ -24,10 +47,10 @@ ml-binding/
 ├── README.md            # This file
 └── src/
     ├── lib.rs           # Library entry point
-    ├── knn.rs           # KNN implementation
-    ├── kmeans.rs        # KMeans implementation
-    ├── svm.rs           # SVM implementation
-    └── ffi.rs           # C FFI exports for Go
+    ├── knn.rs           # KNN inference implementation
+    ├── kmeans.rs        # KMeans inference implementation
+    ├── svm.rs           # SVM inference implementation
+    └── ffi.rs           # C FFI exports for Go (inference only)
 ```
 
 > **Note:** Requires Linux/macOS/WSL with Rust and CGO. Windows native is not supported.
@@ -50,7 +73,6 @@ cargo build --release
 # The library will be at:
 # - Linux: target/release/libml_semantic_router.so
 # - macOS: target/release/libml_semantic_router.dylib
-# - Windows: target/release/ml_semantic_router.dll
 ```
 
 ### Set Library Path
@@ -75,67 +97,92 @@ go test -v ./...
 
 ## Usage in Go
 
+### Loading Pretrained Models
+
 ```go
 package main
 
 import (
     ml "github.com/vllm-project/semantic-router/ml-binding"
+    "os"
 )
 
 func main() {
-    // KNN Example
-    knn := ml.NewKNNSelector(5)
+    // Load pretrained KNN model from JSON
+    jsonData, _ := os.ReadFile("models/knn_model.json")
+    knn, _ := ml.KNNFromJSON(string(jsonData))
     defer knn.Close()
 
-    embeddings := [][]float64{
-        {1.0, 0.0, 0.0},
-        {0.0, 1.0, 0.0},
-    }
-    labels := []string{"model-a", "model-b"}
-
-    knn.Train(embeddings, labels)
-
-    query := []float64{0.9, 0.1, 0.0}
+    // Run inference
+    query := []float64{0.9, 0.1, 0.0, /* ... 1038 dims total (1024 embedding + 14 category) */}
     selected, _ := knn.Select(query)
-    // selected == "model-a"
+    // selected == "llama-3.2-3b" (or whichever model the KNN selects)
 
-    // Save/Load
-    json, _ := knn.ToJSON()
-    restored, _ := ml.KNNFromJSON(json)
+    // Same pattern for KMeans and SVM
+    kmeansData, _ := os.ReadFile("models/kmeans_model.json")
+    kmeans, _ := ml.KMeansFromJSON(string(kmeansData))
+    
+    svmData, _ := os.ReadFile("models/svm_model.json")
+    svm, _ := ml.SVMFromJSON(string(svmData))
 }
 ```
 
-## Integration with Model Selection
+### Available Functions
 
-The `ml-binding` package can be used alongside the Go implementations in `modelselection`:
+| Function | Description |
+|----------|-------------|
+| `KNNFromJSON(json)` | Load KNN model from JSON |
+| `KMeansFromJSON(json)` | Load KMeans model from JSON |
+| `SVMFromJSON(json)` | Load SVM model from JSON |
+| `knn.Select(embedding)` | Select best model for query |
+| `knn.IsTrained()` | Check if model is loaded |
+| `knn.ToJSON()` | Serialize model to JSON |
+| `knn.Close()` | Release resources |
 
-```go
-// Use Linfa-based KNN
-knn := ml_binding.NewKNNSelector(5)
+## Training Models
 
-// Use Go-based MLP (Linfa doesn't have MLP)
-mlp := modelselection.NewMLPSelector([]int{256, 128})
+Training is done in Python using scikit-learn. See `src/training/ml_model_selection/`:
 
-// Use Go-based Matrix Factorization (Linfa doesn't have MF)
-mf := modelselection.NewMatrixFactorizationSelector(16)
+```bash
+# Install dependencies
+cd src/training/ml_model_selection
+pip install -r requirements.txt
+
+# Train models
+python train.py \
+  --data-file benchmark.jsonl \
+  --output-dir models/
+
+# Or download pretrained from HuggingFace
+python download_model.py --output-dir models/
 ```
 
-## Why Linfa?
+## Why Linfa for Inference?
 
-1. **Battle-tested**: Community-maintained implementations
-2. **Performance**: Native Rust speed
-3. **Consistency**: Same pattern as `candle-binding` for embeddings
-4. **Reduced maintenance**: Less custom code to maintain
+1. **Performance**: Native Rust speed for inference
+2. **Consistency**: Same pattern as `candle-binding` for embeddings
+3. **Memory safety**: Rust guarantees
+4. **No Python dependency**: Production inference without Python runtime
 
-## Algorithm Coverage
+## Algorithm Details
 
-| Required (Issue #986) | Linfa | Go Fallback |
-|-----------------------|-------|-------------|
-| KNN | ✅ `linfa-nn` | - |
-| KMeans | ✅ `linfa-clustering` | - |
-| SVM | ✅ `linfa-svm` | - |
-| MLP | ❌ | ✅ `selector.go` |
-| Matrix Factorization | ❌ | ✅ `selector.go` |
+### KNN (K-Nearest Neighbors)
+
+- Uses Linfa Ball Tree for O(log n) neighbor search
+- Quality-weighted voting: `score = 0.9 * quality + 0.1 * speed`
+- Loads embeddings and metadata from JSON
+
+### KMeans
+
+- Loads cluster centroids from JSON
+- Assigns queries to nearest centroid
+- Each cluster maps to best model (by quality+speed)
+
+### SVM (Support Vector Machine)
+
+- Supports Linear and RBF kernels
+- Loads support vectors from JSON
+- One-vs-All classification for multi-model selection
 
 ## License
 

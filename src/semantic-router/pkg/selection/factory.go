@@ -37,6 +37,9 @@ type ModelSelectionConfig struct {
 
 	// Hybrid configuration (used when method is "hybrid")
 	Hybrid *HybridConfig `yaml:"hybrid,omitempty"`
+
+	// ML configuration (used for knn, kmeans, svm methods)
+	ML *MLSelectorConfig `yaml:"ml,omitempty"`
 }
 
 // DefaultModelSelectionConfig returns the default configuration
@@ -203,7 +206,37 @@ func (f *Factory) CreateAll() *Registry {
 	}
 	registry.Register(MethodHybrid, hybridSelector)
 
-	logging.Infof("[SelectionFactory] Created all selectors: static, elo, router_dc, automix, hybrid")
+	// Create ML-based selectors (KNN, KMeans, SVM)
+	mlCfg := f.cfg.ML
+	if mlCfg == nil {
+		mlCfg = DefaultMLSelectorConfig()
+	}
+
+	// Create KNN selector
+	knnAdapter, err := CreateKNNSelector(mlCfg, f.embeddingFunc)
+	if err != nil {
+		logging.Warnf("[SelectionFactory] Failed to create KNN selector: %v", err)
+	} else {
+		registry.Register(MethodKNN, knnAdapter)
+	}
+
+	// Create KMeans selector
+	kmeansAdapter, err := CreateKMeansSelector(mlCfg, f.embeddingFunc)
+	if err != nil {
+		logging.Warnf("[SelectionFactory] Failed to create KMeans selector: %v", err)
+	} else {
+		registry.Register(MethodKMeans, kmeansAdapter)
+	}
+
+	// Create SVM selector
+	svmAdapter, err := CreateSVMSelector(mlCfg, f.embeddingFunc)
+	if err != nil {
+		logging.Warnf("[SelectionFactory] Failed to create SVM selector: %v", err)
+	} else {
+		registry.Register(MethodSVM, svmAdapter)
+	}
+
+	logging.Infof("[SelectionFactory] Created all selectors: static, elo, router_dc, automix, hybrid, knn, kmeans, svm")
 	return registry
 }
 
