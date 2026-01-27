@@ -1,0 +1,71 @@
+name: Integration Test [vLLM-SR CLI]
+
+on:
+  workflow_dispatch: # Allow manual triggering
+
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+    paths:
+      - 'src/vllm-sr/**'
+      - 'e2e/testing/vllm-sr-cli/**'
+      - '.github/workflows/integration-test-vllm-sr-cli.yml'
+
+  push:
+    branches: [main]
+    paths:
+      - 'src/vllm-sr/**'
+      - 'e2e/testing/vllm-sr-cli/**'
+      - '.github/workflows/integration-test-vllm-sr-cli.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cli-tests:
+    name: CLI E2E Tests
+    if: github.repository == 'vllm-project/semantic-router' && !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      #######################################
+      # Setup
+      #######################################
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install vllm-sr CLI
+        run: |
+          pip install -e src/vllm-sr
+          vllm-sr --version
+
+      #######################################
+      # Run CLI Tests
+      #######################################
+      - name: Run CLI Integration Tests
+        run: make vllm-sr-test-integration
+
+      #######################################
+      # Cleanup
+      #######################################
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo "=== Container Status ==="
+          docker ps -a
+          echo "=== vllm-sr Container Logs ==="
+          docker logs vllm-sr-container 2>&1 | tail -200 || true
+
+      - name: Clean up
+        if: always()
+        run: |
+          docker stop vllm-sr-container 2>/dev/null || true
+          docker rm vllm-sr-container 2>/dev/null || true
+          docker system prune -f || true
