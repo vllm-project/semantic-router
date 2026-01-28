@@ -39,21 +39,20 @@ data:
       use_cpu: true
       jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
 
-    # vLLM Endpoints Configuration - Using KServe InferenceService with Istio
+    # vLLM Endpoints Configuration - Using KServe LLMInferenceService (HTTP)
     # IMPORTANT: Using stable ClusterIP service (not pod IP or headless service)
     # - KServe creates headless service by default (no stable ClusterIP)
     # - deploy.sh creates a stable ClusterIP service for consistent routing
     # - Service ClusterIP remains stable even when predictor pods restart
-    # - Use HTTP (not HTTPS) on port 8080 - Istio handles mTLS
     # Template variables: {{INFERENCESERVICE_NAME}}, {{PREDICTOR_SERVICE_IP}}
     vllm_endpoints:
       - name: "{{INFERENCESERVICE_NAME}}-endpoint"
         address: "{{PREDICTOR_SERVICE_IP}}"  # Stable service ClusterIP (auto-populated by deploy script)
-        port: 8080  # Container port (HTTP - Istio provides mTLS)
+        port: 8000  # Container port (HTTP)
         weight: 1
 
     model_config:
-      # KServe InferenceService model configuration
+    # KServe LLMInferenceService model configuration
       # Template variable: {{MODEL_NAME}}, {{INFERENCESERVICE_NAME}}
       "{{MODEL_NAME}}":
         reasoning_family: "qwen3"  # Adjust based on model family: qwen3, deepseek, gpt, gpt-oss
