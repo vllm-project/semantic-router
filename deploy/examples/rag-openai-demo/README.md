@@ -42,6 +42,7 @@ python3 demo_rag_openai.py
 ```
 
 **What it does:**
+
 - Uploads sample PDF files to OpenAI File Store
 - Creates a vector store and attaches files
 - Tests RAG retrieval using direct_search mode
@@ -58,12 +59,12 @@ streamlit run app.py
 ```
 
 **Features:**
+
 - 📄 File upload interface
 - 🔍 Vector store management
 - 💬 Interactive chat with RAG
 - 📊 Response comparison (with/without RAG)
 - 📈 Metrics and performance visualization
-
 
 ## Demo Scenarios
 
@@ -144,17 +145,20 @@ decisions:
 ## Expected Results
 
 ### Without RAG
+
 - Generic responses
 - May hallucinate facts
 - No document-specific context
 
 ### With RAG (Direct Search)
+
 - Responses include relevant document excerpts
 - Accurate citations
 - Context-aware answers
 - Faster response (synchronous retrieval)
 
 ### With RAG (Tool-Based)
+
 - LLM controls when to search
 - More natural conversation flow
 - Results in response annotations
@@ -163,6 +167,7 @@ decisions:
 ## Performance Metrics
 
 The demo tracks:
+
 - **Retrieval Latency**: Time to search vector store
 - **Context Length**: Amount of retrieved context
 - **Similarity Scores**: Relevance of retrieved documents
@@ -183,15 +188,18 @@ delete_vector_store(vector_store_id)
 ## Troubleshooting
 
 ### Issue: "Vector store not found"
+
 - Ensure files are fully processed (check `file_counts.completed`)
 - Wait a few seconds after attaching files
 
 ### Issue: "No results found"
+
 - Check similarity threshold (may be too high)
 - Verify files contain relevant content
 - Try increasing `top_k` or `max_num_results`
 
 ### Issue: "API key invalid"
+
 - Verify `OPENAI_API_KEY` is set correctly
 - Check API key has access to File Store and Vector Store APIs
 

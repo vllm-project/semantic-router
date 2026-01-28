@@ -74,6 +74,11 @@ def print_info(text: str):
     print(f"{Colors.OKBLUE}ℹ{Colors.ENDC} {text}")
 
 
+def print_warning(text: str):
+    """Print warning message"""
+    print(f"{Colors.WARNING}⚠{Colors.ENDC} {text}")
+
+
 def create_sample_pdf_content() -> bytes:
     """Create a sample PDF content for demo purposes"""
     # In a real scenario, you would read from an actual PDF file
