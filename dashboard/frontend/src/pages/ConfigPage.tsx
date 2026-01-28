@@ -164,6 +164,18 @@ interface ConfigData {
     preferences?: Array<{ name: string; description: string }>
     language?: Array<{ name: string }>
     latency?: Array<{ name: string; max_tpot?: number; description?: string }>
+    context?: Array<{ name: string; min_tokens: string; max_tokens: string; description?: string }>
+    complexity?: Array<{
+      name: string
+      threshold: number
+      hard: { candidates: string[] }
+      easy: { candidates: string[] }
+      description?: string
+      composer?: {
+        operator: 'AND' | 'OR'
+        conditions: Array<{ type: string; name: string }>
+      }
+    }>
   }
   decisions?: Array<{
     name: string
@@ -236,7 +248,7 @@ interface ConfigPageProps {
   activeSection?: ConfigSection
 }
 
-type SignalType = 'Keywords' | 'Embeddings' | 'Domain' | 'Preference' | 'Fact Check' | 'User Feedback' | 'Language' | 'Latency'
+type SignalType = 'Keywords' | 'Embeddings' | 'Domain' | 'Preference' | 'Fact Check' | 'User Feedback' | 'Language' | 'Latency' | 'Context' | 'Complexity'
 type DecisionConfig = NonNullable<ConfigData['decisions']>[number]
 
 interface DecisionFormState {
@@ -261,6 +273,13 @@ interface AddSignalFormState {
   aggregation_method: string
   mmlu_categories: string
   max_tpot?: number
+  min_tokens?: string
+  max_tokens?: string
+  complexity_threshold?: number
+  hard_candidates?: string
+  easy_candidates?: string
+  composer_operator?: 'AND' | 'OR'
+  composer_conditions?: string
 }
 
 // Helper function to format threshold as percentage
@@ -477,8 +496,17 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       case 'User Feedback':
         cfg.signals.user_feedbacks = (cfg.signals.user_feedbacks || []).filter(s => s.name !== targetName)
         break
+      case 'Language':
+        cfg.signals.language = (cfg.signals.language || []).filter(s => s.name !== targetName)
+        break
       case 'Latency':
         cfg.signals.latency = (cfg.signals.latency || []).filter(s => s.name !== targetName)
+        break
+      case 'Context':
+        cfg.signals.context = (cfg.signals.context || []).filter(s => s.name !== targetName)
+        break
+      case 'Complexity':
+        cfg.signals.complexity = (cfg.signals.complexity || []).filter(s => s.name !== targetName)
         break
       default:
         break
@@ -2210,8 +2238,30 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       allSignals.push({
         name: lat.name,
         type: 'Latency',
-        summary: 'Latency-based routing rule',
+        summary: `Max TPOT: ${lat.max_tpot}s`,
         rawData: lat
+      })
+    })
+
+    // Context
+    signals?.context?.forEach(ctx => {
+      allSignals.push({
+        name: ctx.name,
+        type: 'Context',
+        summary: `${ctx.min_tokens} to ${ctx.max_tokens} tokens`,
+        rawData: ctx
+      })
+    })
+
+    // Complexity
+    signals?.complexity?.forEach(comp => {
+      const hardCount = comp.hard?.candidates?.length || 0
+      const easyCount = comp.easy?.candidates?.length || 0
+      allSignals.push({
+        name: comp.name,
+        type: 'Complexity',
+        summary: `Threshold: ${comp.threshold}, ${hardCount} hard / ${easyCount} easy candidates`,
+        rawData: comp
       })
     })
 
@@ -2244,7 +2294,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             'Fact Check': 'rgba(34, 197, 94, 0.15)',
             'User Feedback': 'rgba(236, 72, 153, 0.15)',
             'Language': 'rgba(59, 130, 246, 0.15)',
-            'Latency': 'rgba(168, 85, 247, 0.15)'
+            'Latency': 'rgba(168, 85, 247, 0.15)',
+            'Context': 'rgba(251, 146, 60, 0.15)',
+            'Complexity': 'rgba(66, 153, 225, 0.15)'
           }
           return (
             <span className={styles.badge} style={{ background: typeColors[row.type] }}>
@@ -2364,6 +2416,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             }
           ]
         })
+      } else if (signal.type === 'Language') {
+        sections.push({
+          title: 'Language Signal',
+          fields: [
+            { label: 'Language Code', value: signal.rawData.name || 'N/A', fullWidth: true },
+            { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
+          ]
+        })
       } else if (signal.type === 'Latency') {
         sections.push({
           title: 'Latency Signal',
@@ -2371,6 +2431,77 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             { label: 'Max TPOT', value: signal.rawData.max_tpot ? `${signal.rawData.max_tpot}s (${(signal.rawData.max_tpot * 1000).toFixed(0)}ms per token)` : 'N/A', fullWidth: true },
             { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
           ]
+        })
+      } else if (signal.type === 'Context') {
+        sections.push({
+          title: 'Context Signal',
+          fields: [
+            { label: 'Min Tokens', value: signal.rawData.min_tokens || 'N/A', fullWidth: true },
+            { label: 'Max Tokens', value: signal.rawData.max_tokens || 'N/A', fullWidth: true },
+            { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
+          ]
+        })
+      } else if (signal.type === 'Complexity') {
+        const fields: Array<{ label: string; value: React.ReactNode; fullWidth?: boolean }> = [
+          { label: 'Threshold', value: signal.rawData.threshold?.toString() || 'N/A', fullWidth: true }
+        ]
+
+        // Add composer if present
+        if (signal.rawData.composer) {
+          fields.push({
+            label: 'Composer',
+            value: (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div><strong>Operator:</strong> {signal.rawData.composer.operator}</div>
+                <div><strong>Conditions:</strong></div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginLeft: '1rem' }}>
+                  {signal.rawData.composer.conditions.map((cond: { type: string; name: string }, i: number) => (
+                    <div key={i} style={{
+                      padding: '0.5rem',
+                      background: 'rgba(255, 165, 0, 0.1)',
+                      borderRadius: '4px',
+                      fontSize: '0.875rem',
+                      fontFamily: 'var(--font-mono)'
+                    }}>
+                      {cond.type}: {cond.name}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ),
+            fullWidth: true
+          })
+        }
+
+        fields.push(
+          {
+            label: 'Hard Candidates',
+            value: (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontFamily: 'var(--font-mono)', fontSize: '0.875rem' }}>
+                {(signal.rawData.hard?.candidates || []).map((c: string, i: number) => (
+                  <div key={i}>• {c}</div>
+                ))}
+              </div>
+            ),
+            fullWidth: true
+          },
+          {
+            label: 'Easy Candidates',
+            value: (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontFamily: 'var(--font-mono)', fontSize: '0.875rem' }}>
+                {(signal.rawData.easy?.candidates || []).map((c: string, i: number) => (
+                  <div key={i}>• {c}</div>
+                ))}
+              </div>
+            ),
+            fullWidth: true
+          },
+          { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
+        )
+
+        sections.push({
+          title: 'Complexity Signal',
+          fields
         })
       } else {
         // Preference, Fact Check, User Feedback
@@ -2401,7 +2532,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         candidates: '',
         aggregation_method: 'mean',
         mmlu_categories: '',
-        max_tpot: 0.05
+        max_tpot: 0.05,
+        min_tokens: '0',
+        max_tokens: '8K',
+        complexity_threshold: 0.1,
+        hard_candidates: '',
+        easy_candidates: '',
+        composer_operator: 'AND',
+        composer_conditions: ''
       }
 
       const initialData: AddSignalFormState = mode === 'edit' && signal ? {
@@ -2415,7 +2553,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         candidates: (signal.rawData.candidates || []).join('\n'),
         aggregation_method: signal.rawData.aggregation_method || 'mean',
         mmlu_categories: (signal.rawData.mmlu_categories || []).join('\n'),
-        max_tpot: signal.rawData.max_tpot ?? 0.05
+        max_tpot: signal.rawData.max_tpot ?? 0.05,
+        min_tokens: signal.rawData.min_tokens || '0',
+        max_tokens: signal.rawData.max_tokens || '8K',
+        complexity_threshold: signal.rawData.threshold ?? 0.1,
+        hard_candidates: (signal.rawData.hard?.candidates || []).join('\n'),
+        easy_candidates: (signal.rawData.easy?.candidates || []).join('\n'),
+        composer_operator: signal.rawData.composer?.operator || 'AND',
+        composer_conditions: signal.rawData.composer?.conditions?.map((c: { type: string; name: string }) => `${c.type}:${c.name}`).join('\n') || ''
       } : defaultForm
 
 
@@ -2497,12 +2642,74 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         }
       ]
 
+      const contextFields: FieldConfig[] = [
+        {
+          name: 'min_tokens',
+          label: 'Minimum Tokens (context only)',
+          type: 'text',
+          placeholder: 'e.g., 0, 8K, 1M',
+          description: 'Minimum token count (supports K/M suffixes)',
+          shouldHide: conditionallyHideFieldExceptType('Context')
+        },
+        {
+          name: 'max_tokens',
+          label: 'Maximum Tokens (context only)',
+          type: 'text',
+          placeholder: 'e.g., 8K, 1024K',
+          description: 'Maximum token count (supports K/M suffixes)',
+          shouldHide: conditionallyHideFieldExceptType('Context')
+        }
+      ]
+
+      const complexityFields: FieldConfig[] = [
+        {
+          name: 'complexity_threshold',
+          label: 'Threshold (complexity only)',
+          type: 'number',
+          placeholder: 'e.g., 0.1',
+          description: 'Similarity difference threshold for hard/easy classification',
+          shouldHide: conditionallyHideFieldExceptType('Complexity')
+        },
+        {
+          name: 'composer_operator',
+          label: 'Composer Operator (complexity only)',
+          type: 'select',
+          options: ['AND', 'OR'],
+          description: 'Logical operator for composer conditions (recommended to filter based on other signals)',
+          shouldHide: conditionallyHideFieldExceptType('Complexity')
+        },
+        {
+          name: 'composer_conditions',
+          label: 'Composer Conditions (complexity only)',
+          type: 'textarea',
+          placeholder: 'One condition per line in format type:name, e.g.:\ndomain:computer_science\nkeyword:coding',
+          description: 'Filter this complexity signal based on other signals (RECOMMENDED). Format: type:name per line',
+          shouldHide: conditionallyHideFieldExceptType('Complexity')
+        },
+        {
+          name: 'hard_candidates',
+          label: 'Hard Candidates (complexity only)',
+          type: 'textarea',
+          placeholder: 'One candidate per line, e.g.:\ndesign distributed system\nimplement consensus algorithm',
+          description: 'Phrases representing hard/complex queries',
+          shouldHide: conditionallyHideFieldExceptType('Complexity')
+        },
+        {
+          name: 'easy_candidates',
+          label: 'Easy Candidates (complexity only)',
+          type: 'textarea',
+          placeholder: 'One candidate per line, e.g.:\nprint hello world\nloop through array',
+          description: 'Phrases representing easy/simple queries',
+          shouldHide: conditionallyHideFieldExceptType('Complexity')
+        }
+      ]
+
       const fields: FieldConfig[] = [
         {
           name: 'type',
           label: 'Type',
           type: 'select',
-          options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Latency'],
+          options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Language', 'Latency', 'Context', 'Complexity'],
           required: true,
           description: 'Fields are validated based on the selected type.'
         },
@@ -2523,6 +2730,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         ...embeddingFields,
         ...domainFields,
         ...latencyFields,
+        ...contextFields,
+        ...complexityFields,
       ]
 
       const saveSignal = async (formData: AddSignalFormState) => {
@@ -2630,6 +2839,15 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             ]
             break
           }
+          case 'Language': {
+            newConfig.signals.language = [
+              ...(newConfig.signals.language || []),
+              {
+                name
+              }
+            ]
+            break
+          }
           case 'Latency': {
             const max_tpot = formData.max_tpot ?? 0.05
             if (max_tpot <= 0) {
@@ -2641,6 +2859,83 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                 name,
                 max_tpot,
                 description: formData.description || undefined
+              }
+            ]
+            break
+          }
+          case 'Context': {
+            const min_tokens = (formData.min_tokens || '0').trim()
+            const max_tokens = (formData.max_tokens || '8K').trim()
+            if (!min_tokens || !max_tokens) {
+              throw new Error('Both min_tokens and max_tokens are required.')
+            }
+            newConfig.signals.context = [
+              ...(newConfig.signals.context || []),
+              {
+                name,
+                min_tokens,
+                max_tokens,
+                description: formData.description || undefined
+              }
+            ]
+            break
+          }
+          case 'Complexity': {
+            const complexity_threshold = formData.complexity_threshold ?? 0.1
+            const hard_candidates = (formData.hard_candidates || '').trim()
+            const easy_candidates = (formData.easy_candidates || '').trim()
+
+            if (!hard_candidates || !easy_candidates) {
+              throw new Error('Both hard and easy candidates are required.')
+            }
+
+            const hardList = hard_candidates.split('\n').map(c => c.trim()).filter(c => c.length > 0)
+            const easyList = easy_candidates.split('\n').map(c => c.trim()).filter(c => c.length > 0)
+
+            if (hardList.length === 0 || easyList.length === 0) {
+              throw new Error('Both hard and easy candidates must have at least one entry.')
+            }
+
+            // Parse composer conditions if provided
+            const composer_conditions_str = (formData.composer_conditions || '').trim()
+            let composer = undefined
+            if (composer_conditions_str) {
+              const conditions = composer_conditions_str
+                .split('\n')
+                .map(line => line.trim())
+                .filter(line => line.length > 0)
+                .map(line => {
+                  const parts = line.split(':')
+                  if (parts.length !== 2) {
+                    throw new Error(`Invalid composer condition format: "${line}". Expected format: type:name`)
+                  }
+                  return {
+                    type: parts[0].trim(),
+                    name: parts[1].trim()
+                  }
+                })
+
+              if (conditions.length > 0) {
+                composer = {
+                  operator: formData.composer_operator || 'AND',
+                  conditions
+                }
+              }
+            }
+
+            newConfig.signals.complexity = [
+              ...(newConfig.signals.complexity || []),
+              {
+                name,
+                threshold: complexity_threshold,
+                hard: {
+                  candidates: hardList
+                },
+                easy: {
+                  candidates: easyList
+                },
+                description: formData.description || undefined,
+                ...(composer && { composer })
               }
             ]
             break
@@ -2863,7 +3158,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
     const openDecisionEditor = (mode: 'add' | 'edit', decision?: DecisionRow) => {
       setViewModalOpen(false)
-      const conditionTypeOptions = ['keyword', 'domain', 'preference', 'user_feedback', 'embedding', 'latency'] as const
+      const conditionTypeOptions = ['keyword', 'domain', 'preference', 'user_feedback', 'embedding', 'language', 'latency'] as const
 
       const getConditionNameOptions = (type?: DecisionConditionType) => {
         // derive condition name options based on signals configured
@@ -3478,7 +3773,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                 <tr key={idx} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
                   <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem', fontWeight: 500 }}>{ep.name}</td>
                   <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem', fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)' }}>
-                    {ep.endpoint || 'N/A'}
+                    {isReadonly ? '************' : (ep.endpoint || 'N/A')}
                   </td>
                   <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
                     <span style={{
@@ -3553,7 +3848,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                           color: 'var(--color-text-secondary)'
                         }}>
                           <span style={{ fontFamily: 'var(--font-mono)' }}>
-                            {ep.endpoint}
+                            {isReadonly ? '************' : ep.endpoint}
                           </span>
                           <span>
                             <span style={{
@@ -4180,7 +4475,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       <ViewModal
         isOpen={viewModalOpen}
         onClose={handleCloseViewModal}
-        onEdit={viewModalEditCallback || undefined}
+        onEdit={isReadonly ? undefined : (viewModalEditCallback || undefined)}
         title={viewModalTitle}
         sections={viewModalSections}
       />

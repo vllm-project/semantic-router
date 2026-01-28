@@ -225,22 +225,6 @@ var (
 		},
 	)
 
-	// CacheHits tracks cache hits and misses
-	CacheHits = promauto.NewCounter(
-		prometheus.CounterOpts{
-			Name: "llm_cache_hits_total",
-			Help: "The total number of cache hits",
-		},
-	)
-
-	// CacheMisses tracks cache misses
-	CacheMisses = promauto.NewCounter(
-		prometheus.CounterOpts{
-			Name: "llm_cache_misses_total",
-			Help: "The total number of cache misses",
-		},
-	)
-
 	// CacheOperationDuration tracks the duration of cache operations by backend and operation type
 	CacheOperationDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -267,6 +251,24 @@ var (
 			Help: "The total number of entries in the cache",
 		},
 		[]string{"backend"},
+	)
+
+	// CachePluginHits tracks cache hits by decision and plugin type
+	CachePluginHits = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_cache_plugin_hits_total",
+			Help: "The total number of cache hits by decision and plugin type",
+		},
+		[]string{"decision_name", "plugin_type"},
+	)
+
+	// CachePluginMisses tracks cache misses by decision and plugin type
+	CachePluginMisses = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_cache_plugin_misses_total",
+			Help: "The total number of cache misses by decision and plugin type",
+		},
+		[]string{"decision_name", "plugin_type"},
 	)
 
 	// PIIViolations tracks PII policy violations by model and PII data type
@@ -472,6 +474,67 @@ var (
 		},
 		[]string{"plugin_type", "error_reason"},
 	)
+
+	// RAG (Retrieval-Augmented Generation) metrics
+	RAGRetrievalAttempts = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "rag_retrieval_attempts_total",
+			Help: "Total number of RAG retrieval attempts",
+		},
+		[]string{"backend", "decision", "status"}, // status: success, error
+	)
+
+	RAGRetrievalLatency = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "rag_retrieval_latency_seconds",
+			Help:    "RAG retrieval latency in seconds",
+			Buckets: []float64{0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0},
+		},
+		[]string{"backend", "decision"},
+	)
+
+	RAGSimilarityScore = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "rag_similarity_score",
+			Help: "Average similarity score of retrieved documents",
+		},
+		[]string{"backend", "decision"},
+	)
+
+	RAGContextLength = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "rag_context_length_chars",
+			Help:    "Length of retrieved context in characters",
+			Buckets: []float64{100, 500, 1000, 2000, 5000, 10000, 20000},
+		},
+		[]string{"backend", "decision"},
+	)
+
+	RAGCacheHits = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "rag_cache_hits_total",
+			Help: "Total number of RAG cache hits",
+		},
+		[]string{"backend"},
+	)
+
+	RAGCacheMisses = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "rag_cache_misses_total",
+			Help: "Total number of RAG cache misses",
+		},
+		[]string{"backend"},
+	)
+
+	// ContextTokenCount tracks the distribution of input token counts for context-based routing
+	ContextTokenCount = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "llm_context_token_count",
+			Help:    "Distribution of input token counts for context-based routing",
+			Buckets: []float64{100, 500, 1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000},
+		},
+		[]string{"model", "context_level"},
+	)
 )
 
 // RecordModelRequest increments the counter for requests to a specific model
@@ -584,16 +647,6 @@ func RecordModelRoutingLatency(seconds float64) {
 	ModelRoutingLatency.Observe(seconds)
 }
 
-// RecordCacheHit records a cache hit
-func RecordCacheHit() {
-	CacheHits.Inc()
-}
-
-// RecordCacheMiss records a cache miss
-func RecordCacheMiss() {
-	CacheMisses.Inc()
-}
-
 // RecordCacheOperation records a cache operation with duration and status
 func RecordCacheOperation(backend, operation, status string, duration float64) {
 	CacheOperationDuration.WithLabelValues(backend, operation).Observe(duration)
@@ -603,6 +656,28 @@ func RecordCacheOperation(backend, operation, status string, duration float64) {
 // UpdateCacheEntries updates the current number of cache entries for a backend
 func UpdateCacheEntries(backend string, count int) {
 	CacheEntriesTotal.WithLabelValues(backend).Set(float64(count))
+}
+
+// RecordCachePluginHit records a cache hit for a specific decision and plugin type
+func RecordCachePluginHit(decisionName, pluginType string) {
+	if decisionName == "" {
+		decisionName = consts.UnknownLabel
+	}
+	if pluginType == "" {
+		pluginType = "semantic-cache"
+	}
+	CachePluginHits.WithLabelValues(decisionName, pluginType).Inc()
+}
+
+// RecordCachePluginMiss records a cache miss for a specific decision and plugin type
+func RecordCachePluginMiss(decisionName, pluginType string) {
+	if decisionName == "" {
+		decisionName = consts.UnknownLabel
+	}
+	if pluginType == "" {
+		pluginType = "semantic-cache"
+	}
+	CachePluginMisses.WithLabelValues(decisionName, pluginType).Inc()
 }
 
 // RecordPIIViolation records a PII policy violation for a specific model and PII data type
@@ -1026,4 +1101,15 @@ func RecordPluginError(pluginType, errorReason string) {
 		errorReason = "unknown"
 	}
 	PluginExecutionErrors.WithLabelValues(pluginType, errorReason).Inc()
+}
+
+// RecordContextTokenCount records the input token count with context level
+func RecordContextTokenCount(model string, tokenCount int, contextLevel string) {
+	if model == "" {
+		model = consts.UnknownLabel
+	}
+	if contextLevel == "" {
+		contextLevel = consts.UnknownLabel
+	}
+	ContextTokenCount.WithLabelValues(model, contextLevel).Observe(float64(tokenCount))
 }

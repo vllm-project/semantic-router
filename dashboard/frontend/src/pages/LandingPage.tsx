@@ -60,8 +60,8 @@ const LandingPage: React.FC = () => {
         color: colors[i],
         offsetX: 0,
         offsetY: 0,
-        speedX: 0.002 + Math.random() * 0.001, // Much faster
-        speedY: 0.002 + Math.random() * 0.001, // Much faster
+        speedX: 0.006 + Math.random() * 0.003,
+        speedY: 0.006 + Math.random() * 0.003,
       })
     }
 
@@ -142,22 +142,20 @@ const LandingPage: React.FC = () => {
     <div className={styles.container}>
       <canvas ref={canvasRef} className={styles.backgroundCanvas} />
 
-      {/* Logo at top */}
-      <div className={styles.logoContainer}>
-        <img src="/vllm.png" alt="vLLM Logo" className={styles.logo} />
-      </div>
-
       {/* Main Content - Centered */}
       <main className={styles.mainContent}>
         <div className={styles.heroSection}>
           <h1 className={styles.title}>
-            vLLM Semantic Router
+            <img src="/vllm.png" alt="vLLM Logo" className={styles.logoInline} />
+            LLM Semantic Router
           </h1>
 
           <p className={styles.subtitle}>
-            System Level Intelligent Router for Mixture-of-Models
-            <br />
-            at Cloud, Data Center and Edge
+            System Level Intelligence for{' '}
+            <span className={styles.highlight}>Mixture-of-Models</span>
+          </p>
+          <p className={styles.deployTargets}>
+            Cloud · Data Center · Edge
           </p>
 
           <button

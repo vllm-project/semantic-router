@@ -4,9 +4,11 @@ import (
 	"log"
 	"net/http"
 	"net/http/httputil"
+	"path/filepath"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
+	"github.com/vllm-project/semantic-router/dashboard/backend/evaluation"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
 	"github.com/vllm-project/semantic-router/dashboard/backend/proxy"
@@ -192,6 +194,14 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	mux.HandleFunc("/api/tools-db", handlers.ToolsDBHandler(cfg.ConfigDir))
 	log.Printf("Tools DB API endpoint registered: /api/tools-db")
 
+	// Web Search endpoint for Playground tool execution
+	mux.HandleFunc("/api/tools/web-search", handlers.WebSearchHandler())
+	log.Printf("Web Search API endpoint registered: /api/tools/web-search")
+
+	// Open Web endpoint for Playground tool execution (避免CORS问题)
+	mux.HandleFunc("/api/tools/open-web", handlers.OpenWebHandler())
+	log.Printf("Open Web API endpoint registered: /api/tools/open-web")
+
 	// Status endpoint - shows service health status (aligns with vllm-sr status)
 	mux.HandleFunc("/api/status", handlers.StatusHandler(cfg.RouterAPIURL))
 	log.Printf("Status API endpoint registered: /api/status")
@@ -204,6 +214,70 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	// dry-run mode calls real Router API, simulate mode uses local config
 	mux.HandleFunc("/api/topology/test-query", handlers.TopologyTestQueryHandler(cfg.AbsConfigPath, cfg.RouterAPIURL))
 	log.Printf("Topology Test Query API endpoint registered: /api/topology/test-query (Router API: %s)", cfg.RouterAPIURL)
+
+	// Evaluation endpoints (if enabled)
+	if cfg.EvaluationEnabled {
+		// Get project root (one level up from config dir, e.g., /path/to/semantic-router-fork/config -> /path/to/semantic-router-fork)
+		projectRoot := filepath.Dir(cfg.ConfigDir)
+
+		// Initialize evaluation database
+		evalDB, err := evaluation.NewDB(cfg.EvaluationDBPath)
+		if err != nil {
+			log.Printf("Warning: failed to initialize evaluation database: %v", err)
+		} else {
+			// Initialize evaluation runner
+			runner := evaluation.NewRunner(evaluation.RunnerConfig{
+				DB:            evalDB,
+				ProjectRoot:   projectRoot,
+				PythonPath:    cfg.PythonPath,
+				ResultsDir:    cfg.EvaluationResultsDir,
+				MaxConcurrent: 3,
+			})
+
+			// Create evaluation handler
+			evalHandler := handlers.NewEvaluationHandler(evalDB, runner, cfg.ReadonlyMode)
+
+			// Register evaluation endpoints
+			// /api/evaluation/tasks - GET for list, POST for create
+			mux.HandleFunc("/api/evaluation/tasks", func(w http.ResponseWriter, r *http.Request) {
+				if middleware.HandleCORSPreflight(w, r) {
+					return
+				}
+				switch r.Method {
+				case http.MethodGet:
+					evalHandler.ListTasksHandler().ServeHTTP(w, r)
+				case http.MethodPost:
+					evalHandler.CreateTaskHandler().ServeHTTP(w, r)
+				default:
+					http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				}
+			})
+			// /api/evaluation/tasks/{id} - GET for details, DELETE for remove
+			mux.HandleFunc("/api/evaluation/tasks/", func(w http.ResponseWriter, r *http.Request) {
+				if middleware.HandleCORSPreflight(w, r) {
+					return
+				}
+				switch r.Method {
+				case http.MethodGet:
+					evalHandler.GetTaskHandler().ServeHTTP(w, r)
+				case http.MethodDelete:
+					evalHandler.DeleteTaskHandler().ServeHTTP(w, r)
+				default:
+					http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				}
+			})
+			mux.HandleFunc("/api/evaluation/run", evalHandler.RunTaskHandler())
+			mux.HandleFunc("/api/evaluation/cancel/", evalHandler.CancelTaskHandler())
+			mux.HandleFunc("/api/evaluation/stream/", evalHandler.StreamProgressHandler())
+			mux.HandleFunc("/api/evaluation/results/", evalHandler.GetResultsHandler())
+			mux.HandleFunc("/api/evaluation/export/", evalHandler.ExportResultsHandler())
+			mux.HandleFunc("/api/evaluation/datasets", evalHandler.GetDatasetsHandler())
+			mux.HandleFunc("/api/evaluation/history", evalHandler.GetHistoryHandler())
+			log.Printf("Evaluation API endpoints registered: /api/evaluation/*")
+		}
+	} else {
+		log.Printf("Evaluation feature disabled")
+	}
 
 	// Envoy proxy for chat completions (if configured)
 	// Chat completions must go through Envoy's ext_proc pipeline

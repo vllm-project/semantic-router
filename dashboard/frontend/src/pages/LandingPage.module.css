@@ -20,26 +20,22 @@
   opacity: 0.8;
 }
 
-/* Logo at top */
-.logoContainer {
-  position: fixed;
-  top: 3rem;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 10;
-  animation: fadeInDown 1s ease-out;
-}
-
-.logo {
-  height: 80px;
+/* Logo inline with title */
+.logoInline {
+  height: 0.7em;
   width: auto;
+  vertical-align: baseline;
+  margin-right: 0.05em;
   filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.3));
   transition: all 0.3s ease;
+  display: inline-block;
+  position: relative;
+  top: 0;
+  animation: logoGlow 3s ease-in-out infinite;
 }
 
-.logo:hover {
-  transform: scale(1.05);
-  filter: drop-shadow(0 0 30px rgba(255, 255, 255, 0.5));
+.logoInline:hover {
+  filter: drop-shadow(0 0 30px rgba(255, 255, 255, 0.6));
 }
 
 /* Main Content - Centered */
@@ -72,11 +68,26 @@
 
 .subtitle {
   font-size: 1.25rem;
-  line-height: 1.8;
+  line-height: 1.6;
   color: rgba(255, 255, 255, 0.7);
-  margin-bottom: 4rem;
+  margin-bottom: 1rem;
   font-weight: 300;
   letter-spacing: 0.01em;
+}
+
+.highlight {
+  color: #76b900;
+  font-weight: 600;
+  text-shadow: 0 0 20px rgba(118, 185, 0, 0.4);
+}
+
+.deployTargets {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 3rem;
+  font-weight: 400;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
 }
 
 /* Launch Button - Futuristic with pulse effect */
@@ -132,14 +143,12 @@
 }
 
 /* Animations */
-@keyframes fadeInDown {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -30px);
+@keyframes logoGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.3));
   }
-  to {
-    opacity: 1;
-    transform: translate(-50%, 0);
+  50% {
+    filter: drop-shadow(0 0 35px rgba(255, 255, 255, 0.7)) drop-shadow(0 0 15px rgba(255, 255, 255, 0.5));
   }
 }
 
@@ -173,10 +182,6 @@
     font-size: 1.125rem;
   }
 
-  .logo {
-    height: 70px;
-  }
-
   .launchButton {
     padding: 1.25rem 3rem;
     font-size: 1.25rem;
@@ -184,14 +189,6 @@
 }
 
 @media (max-width: 768px) {
-  .logoContainer {
-    top: 2rem;
-  }
-
-  .logo {
-    height: 60px;
-  }
-
   .title {
     font-size: 2.5rem;
   }
@@ -208,14 +205,6 @@
 }
 
 @media (max-width: 480px) {
-  .logoContainer {
-    top: 1.5rem;
-  }
-
-  .logo {
-    height: 50px;
-  }
-
   .title {
     font-size: 2rem;
   }

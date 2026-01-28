@@ -79,6 +79,45 @@ export interface PreferenceSignal {
   description: string
 }
 
+export interface LanguageSignal {
+  name: string
+  description?: string
+}
+
+export interface LatencySignal {
+  name: string
+  max_tpot: number
+  description?: string
+}
+
+export interface ContextSignal {
+  name: string
+  min_tokens: string
+  max_tokens: string
+  description?: string
+}
+
+export interface ComplexityCandidates {
+  candidates: string[]
+}
+
+export interface RuleComposer {
+  operator: 'AND' | 'OR'
+  conditions: Array<{
+    type: string
+    name: string
+  }>
+}
+
+export interface ComplexitySignal {
+  name: string
+  threshold: number
+  hard: ComplexityCandidates
+  easy: ComplexityCandidates
+  description?: string
+  composer?: RuleComposer
+}
+
 export interface Signals {
   keywords?: KeywordSignal[]
   embeddings?: EmbeddingSignal[]
@@ -86,6 +125,10 @@ export interface Signals {
   fact_check?: FactCheckSignal[]
   user_feedbacks?: UserFeedbackSignal[]
   preferences?: PreferenceSignal[]
+  language?: LanguageSignal[]
+  latency?: LatencySignal[]
+  context?: ContextSignal[]
+  complexity?: ComplexitySignal[]
 }
 
 // =============================================================================
@@ -93,7 +136,7 @@ export interface Signals {
 // =============================================================================
 
 
-export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'latency'
+export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'latency' | 'context' | 'complexity'
 export interface DecisionCondition {
   type: DecisionConditionType
   name: string

@@ -47,6 +47,15 @@ func (r *OpenAIRouter) setFactCheckFromSignals(ctx *RequestContext, matchedFactC
 // checkRequestHasTools checks if the request body contains tools that could provide
 // context for fact-checking (tool results from previous turns or tool definitions)
 func (r *OpenAIRouter) checkRequestHasTools(ctx *RequestContext) {
+	// Check for RAG-injected context first (NEW)
+	if ctx.RAGRetrievedContext != "" {
+		ctx.HasToolsForFactCheck = true
+		ctx.ToolResultsContext = ctx.RAGRetrievedContext
+		logging.Infof("Using RAG-retrieved context for hallucination detection (%d chars)",
+			len(ctx.RAGRetrievedContext))
+		return
+	}
+
 	if len(ctx.OriginalRequestBody) == 0 {
 		return
 	}

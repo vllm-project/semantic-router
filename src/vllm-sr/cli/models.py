@@ -76,6 +76,37 @@ class Latency(BaseModel):
     description: str
 
 
+class ContextRule(BaseModel):
+    """Context-based (token count) signal configuration."""
+
+    name: str
+    min_tokens: str  # Supports suffixes: "1K", "1.5M", etc.
+    max_tokens: str
+    description: Optional[str] = None
+
+
+class ComplexityCandidates(BaseModel):
+    """Complexity candidates configuration."""
+
+    candidates: List[str]
+
+
+class ComplexityRule(BaseModel):
+    """Complexity-based signal configuration using embedding similarity.
+
+    The composer field allows filtering based on other signals (e.g., only apply
+    code_complexity when domain is "computer_science"). This is evaluated after
+    all signals are computed in parallel, enabling signal dependencies.
+    """
+
+    name: str
+    threshold: float = 0.1
+    hard: ComplexityCandidates
+    easy: ComplexityCandidates
+    description: Optional[str] = None
+    composer: Optional["Rules"] = None  # Forward reference, defined below
+
+
 class Signals(BaseModel):
     """All signal configurations."""
 
@@ -87,6 +118,8 @@ class Signals(BaseModel):
     preferences: Optional[List[Preference]] = []
     language: Optional[List[Language]] = []
     latency: Optional[List[Latency]] = []
+    context: Optional[List[ContextRule]] = []
+    complexity: Optional[List[ComplexityRule]] = []
 
 
 class Condition(BaseModel):

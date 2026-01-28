@@ -272,6 +272,12 @@ type Classifier struct {
 	// Latency classifier
 	latencyClassifier *LatencyClassifier
 
+	// Context classifier for token count-based routing
+	contextClassifier *ContextClassifier
+
+	// Complexity classifier for complexity-based routing using embedding similarity
+	complexityClassifier *ComplexityClassifier
+
 	Config           *config.RouterConfig
 	CategoryMapping  *CategoryMapping
 	PIIMapping       *PIIMapping
@@ -323,6 +329,18 @@ func withKeywordEmbeddingClassifier(keywordEmbeddingInitializer EmbeddingClassif
 	}
 }
 
+func withContextClassifier(contextClassifier *ContextClassifier) option {
+	return func(c *Classifier) {
+		c.contextClassifier = contextClassifier
+	}
+}
+
+func withComplexityClassifier(complexityClassifier *ComplexityClassifier) option {
+	return func(c *Classifier) {
+		c.complexityClassifier = complexityClassifier
+	}
+}
+
 // initModels initializes the models for the classifier
 func initModels(classifier *Classifier) (*Classifier, error) {
 	// Initialize either in-tree OR MCP-based category classifier
@@ -352,6 +370,11 @@ func initModels(classifier *Classifier) (*Classifier, error) {
 		if err := classifier.initializeKeywordEmbeddingClassifier(); err != nil {
 			return nil, err
 		}
+	}
+
+	// Initialize context classifier (no external model init needed, but good to log)
+	if classifier.contextClassifier != nil {
+		logging.Infof("Context classifier initialized with %d rules", len(classifier.contextClassifier.rules))
 	}
 
 	// Initialize hallucination mitigation classifiers
@@ -463,6 +486,29 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 			return nil, err
 		}
 		options = append(options, withKeywordEmbeddingClassifier(createEmbeddingInitializer(), keywordEmbeddingClassifier))
+	}
+
+	// Add context classifier if configured
+	if len(cfg.ContextRules) > 0 {
+		// Create token counter (uses character-based heuristic for performance)
+		tokenCounter := &CharacterBasedTokenCounter{}
+		contextClassifier := NewContextClassifier(tokenCounter, cfg.ContextRules)
+		options = append(options, withContextClassifier(contextClassifier))
+	}
+
+	// Add complexity classifier if configured
+	if len(cfg.ComplexityRules) > 0 {
+		// Get model type from embedding models configuration (reuse same model as embedding classifier)
+		modelType := cfg.HNSWConfig.ModelType
+		if modelType == "" {
+			modelType = "qwen3" // Default to qwen3
+		}
+		complexityClassifier, err := NewComplexityClassifier(cfg.ComplexityRules, modelType)
+		if err != nil {
+			logging.Errorf("Failed to create complexity classifier: %v", err)
+			return nil, err
+		}
+		options = append(options, withComplexityClassifier(complexityClassifier))
 	}
 
 	// Add in-tree classifier if configured
@@ -682,6 +728,9 @@ type SignalResults struct {
 	MatchedPreferenceRules   []string // Route preference names matched via external LLM
 	MatchedLanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
 	MatchedLatencyRules      []string // Latency rule names that matched based on model TPOT
+	MatchedContextRules      []string // Matched context rule names (e.g. "low_token_count")
+	TokenCount               int      // Total token count
+	MatchedComplexityRules   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
 }
 
 // analyzeRuleCombination recursively analyzes rule combinations to find used signals
@@ -715,6 +764,14 @@ func isSignalTypeUsed(usedSignals map[string]bool, signalType string) bool {
 // EvaluateAllSignals evaluates all signal types and returns SignalResults
 // This is the new method that includes fact_check signals
 func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
+	// For backward compatibility, use the same text for both evaluation and context counting
+	return c.EvaluateAllSignalsWithContext(text, text)
+}
+
+// EvaluateAllSignalsWithContext evaluates all signal types with separate text for context counting
+// text: text to use for signal evaluation (usually latest user message)
+// contextText: text to use for context token counting (usually all messages combined)
+func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string) *SignalResults {
 	// Determine which signals (type:name) are actually used in decisions
 	usedSignals := c.getUsedSignals()
 
@@ -1046,8 +1103,64 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 		logging.Infof("[Signal Computation] Latency signal not used in any decision, skipping evaluation")
 	}
 
+	// Evaluate context rules in parallel (only if used in decisions)
+	// Use contextText for token counting to include all messages in multi-turn conversations
+	if isSignalTypeUsed(usedSignals, config.SignalTypeContext) && c.contextClassifier != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			start := time.Now()
+			matchedRules, count, err := c.contextClassifier.Classify(contextText)
+			elapsed := time.Since(start)
+			logging.Infof("[Signal Computation] Context signal evaluation completed in %v (count=%d)", elapsed, count)
+			if err != nil {
+				logging.Errorf("context rule evaluation failed: %v", err)
+			} else {
+				mu.Lock()
+				results.MatchedContextRules = matchedRules
+				results.TokenCount = count
+				mu.Unlock()
+			}
+		}()
+	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeContext) {
+		logging.Infof("[Signal Computation] Context signal not used in any decision, skipping evaluation")
+	}
+
+	// Evaluate complexity rules in parallel (only if used in decisions)
+	if isSignalTypeUsed(usedSignals, config.SignalTypeComplexity) && c.complexityClassifier != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			start := time.Now()
+			matchedRules, err := c.complexityClassifier.Classify(text)
+			elapsed := time.Since(start)
+			latencySeconds := elapsed.Seconds()
+
+			// Record signal extraction metrics for each matched rule
+			for _, ruleName := range matchedRules {
+				metrics.RecordSignalExtraction(config.SignalTypeComplexity, ruleName, latencySeconds)
+				metrics.RecordSignalMatch(config.SignalTypeComplexity, ruleName)
+			}
+
+			logging.Infof("[Signal Computation] Complexity signal evaluation completed in %v", elapsed)
+			if err != nil {
+				logging.Errorf("complexity rule evaluation failed: %v", err)
+			} else {
+				mu.Lock()
+				results.MatchedComplexityRules = matchedRules
+				mu.Unlock()
+			}
+		}()
+	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeComplexity) {
+		logging.Infof("[Signal Computation] Complexity signal not used in any decision, skipping evaluation")
+	}
+
 	// Wait for all signal evaluations to complete
 	wg.Wait()
+
+	// Phase 2: Apply signal composers (handle signal dependencies)
+	// This phase filters signals based on other signals' results
+	results = c.applySignalComposers(results)
 
 	return results
 }
@@ -1060,10 +1173,11 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		return nil, fmt.Errorf("no decisions configured")
 	}
 
-	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, latency=%v",
+	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, latency=%v, context=%v, complexity=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
 		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules,
-		signals.MatchedLanguageRules, signals.MatchedLatencyRules)
+		signals.MatchedLanguageRules, signals.MatchedLatencyRules, signals.MatchedContextRules,
+		signals.MatchedComplexityRules)
 	// Create decision engine
 	engine := decision.NewDecisionEngine(
 		c.Config.KeywordRules,
@@ -1083,6 +1197,8 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		PreferenceRules:   signals.MatchedPreferenceRules,
 		LanguageRules:     signals.MatchedLanguageRules,
 		LatencyRules:      signals.MatchedLatencyRules,
+		ContextRules:      signals.MatchedContextRules,
+		ComplexityRules:   signals.MatchedComplexityRules,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("decision evaluation failed: %w", err)
@@ -2056,4 +2172,133 @@ func (c *Classifier) GetFeedbackDetector() *FeedbackDetector {
 // GetLanguageClassifier returns the language classifier instance
 func (c *Classifier) GetLanguageClassifier() *LanguageClassifier {
 	return c.languageClassifier
+}
+
+// applySignalComposers applies composer filters to signals that depend on other signals
+// This is executed after all signals are computed in parallel
+func (c *Classifier) applySignalComposers(results *SignalResults) *SignalResults {
+	// Filter complexity signals by composer conditions
+	if len(results.MatchedComplexityRules) > 0 && len(c.Config.ComplexityRules) > 0 {
+		results.MatchedComplexityRules = c.filterComplexityByComposer(
+			results.MatchedComplexityRules,
+			results,
+		)
+	}
+
+	// Future: Add other signals' composer filtering here
+	// if len(results.MatchedXxxRules) > 0 { ... }
+
+	return results
+}
+
+// filterComplexityByComposer filters complexity rules based on their composer conditions
+func (c *Classifier) filterComplexityByComposer(
+	matchedRules []string,
+	allSignals *SignalResults,
+) []string {
+	filtered := []string{}
+
+	for _, matched := range matchedRules {
+		// Parse rule name (e.g., "code_complexity:hard" -> "code_complexity")
+		parts := strings.Split(matched, ":")
+		if len(parts) != 2 {
+			logging.Warnf("Invalid complexity rule format: %s", matched)
+			continue
+		}
+		ruleName := parts[0]
+
+		// Find the corresponding rule config
+		var rule *config.ComplexityRule
+		for i := range c.Config.ComplexityRules {
+			if c.Config.ComplexityRules[i].Name == ruleName {
+				rule = &c.Config.ComplexityRules[i]
+				break
+			}
+		}
+
+		if rule == nil {
+			logging.Warnf("Complexity rule config not found: %s", ruleName)
+			continue
+		}
+
+		// If no composer, keep the result (no filtering)
+		if rule.Composer == nil {
+			filtered = append(filtered, matched)
+			logging.Debugf("Complexity rule '%s' has no composer, keeping result", matched)
+			continue
+		}
+
+		// Evaluate composer conditions
+		if c.evaluateComposer(rule.Composer, allSignals) {
+			filtered = append(filtered, matched)
+			logging.Infof("Complexity rule '%s' passed composer filter", matched)
+		} else {
+			logging.Infof("Complexity rule '%s' filtered out by composer", matched)
+		}
+	}
+
+	return filtered
+}
+
+// evaluateComposer evaluates a composer's conditions against signal results
+func (c *Classifier) evaluateComposer(
+	composer *config.RuleCombination,
+	signals *SignalResults,
+) bool {
+	if composer == nil {
+		return true
+	}
+
+	// Evaluate each condition
+	conditionResults := make([]bool, len(composer.Conditions))
+	for i, condition := range composer.Conditions {
+		conditionResults[i] = c.evaluateComposerCondition(&condition, signals)
+	}
+
+	// Apply operator (AND/OR)
+	if composer.Operator == "OR" {
+		for _, result := range conditionResults {
+			if result {
+				return true
+			}
+		}
+		return false
+	} else { // Default to AND
+		for _, result := range conditionResults {
+			if !result {
+				return false
+			}
+		}
+		return true
+	}
+}
+
+// evaluateComposerCondition evaluates a single condition against signal results
+func (c *Classifier) evaluateComposerCondition(
+	condition *config.RuleCondition,
+	signals *SignalResults,
+) bool {
+	switch condition.Type {
+	case "keyword":
+		return slices.Contains(signals.MatchedKeywordRules, condition.Name)
+	case "embedding":
+		return slices.Contains(signals.MatchedEmbeddingRules, condition.Name)
+	case "domain":
+		return slices.Contains(signals.MatchedDomainRules, condition.Name)
+	case "fact_check":
+		return slices.Contains(signals.MatchedFactCheckRules, condition.Name)
+	case "user_feedback":
+		return slices.Contains(signals.MatchedUserFeedbackRules, condition.Name)
+	case "preference":
+		return slices.Contains(signals.MatchedPreferenceRules, condition.Name)
+	case "language":
+		return slices.Contains(signals.MatchedLanguageRules, condition.Name)
+	case "latency":
+		return slices.Contains(signals.MatchedLatencyRules, condition.Name)
+	case "context":
+		return slices.Contains(signals.MatchedContextRules, condition.Name)
+	default:
+		logging.Warnf("Unknown composer condition type: %s", condition.Type)
+		return false
+	}
 }

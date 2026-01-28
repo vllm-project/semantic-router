@@ -49,7 +49,7 @@ Issues = "https://github.com/vllm-project/vllm-semantic-router/issues"
 packages = ["cli", "cli.commands", "cli.templates"]
 
 [tool.setuptools.package-data]
-"cli.templates" = ["*.yaml", "*.json"]
+"cli.templates" = ["*.yaml", "*.json", "*.ini"]
 
 [tool.pytest.ini_options]
 addopts = ["-v"]

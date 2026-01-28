@@ -371,10 +371,21 @@ const (
 	// Plugin execution layer (Layer 3)
 	SpanPluginExecution = "semantic_router.plugin.execution"
 
+	// RAG (Retrieval-Augmented Generation) spans
+	SpanRAGRetrieval        = "semantic_router.rag.retrieval"
+	SpanRAGContextInjection = "semantic_router.rag.context_injection"
+
 	// Model invocation layer (Layer 4)
-	SpanUpstreamRequest    = "semantic_router.upstream.request"
-	SpanResponseProcessing = "semantic_router.response.processing"
+	SpanUpstreamRequest       = "semantic_router.upstream.request"
+	SpanResponseProcessing    = "semantic_router.response.processing"
+	SpanToolSelection         = "semantic_router.tools.selection"
+	SpanSystemPromptInjection = "semantic_router.system_prompt.injection"
 
 	// Legacy spans (deprecated - kept for backward compatibility during migration)
-	SpanClassification = "semantic_router.classification" // Use SpanSignalEvaluation instead
+	SpanClassification     = "semantic_router.classification" // Use SpanSignalEvaluation instead
+	SpanPIIDetection       = "semantic_router.security.pii_detection"
+	SpanJailbreakDetection = "semantic_router.security.jailbreak_detection"
+	SpanCacheLookup        = "semantic_router.cache.lookup"
+	SpanRoutingDecision    = "semantic_router.routing.decision"
+	SpanBackendSelection   = "semantic_router.backend.selection"
 )

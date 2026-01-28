@@ -978,25 +978,25 @@ def generate_vsr_model_config(
         Dictionary containing vSR model configuration
     """
     # Aggregate metrics across all datasets
-    total_std_accuracy = sum(c.standard.accuracy for c in comparisons) / len(
+    total_std_accuracy = sum(c.standard_mode.accuracy for c in comparisons) / len(
         comparisons
     )
-    total_reas_accuracy = sum(c.reasoning.accuracy for c in comparisons) / len(
+    total_reas_accuracy = sum(c.reasoning_mode.accuracy for c in comparisons) / len(
         comparisons
     )
 
-    avg_token_ratio_std = sum(c.standard.token_usage_ratio for c in comparisons) / len(
-        comparisons
-    )
+    avg_token_ratio_std = sum(
+        c.standard_mode.token_usage_ratio for c in comparisons
+    ) / len(comparisons)
     avg_token_ratio_reas = sum(
-        c.reasoning.token_usage_ratio for c in comparisons
+        c.reasoning_mode.token_usage_ratio for c in comparisons
     ) / len(comparisons)
 
     avg_time_per_token_std = sum(
-        c.standard.time_per_output_token for c in comparisons
+        c.standard_mode.time_per_output_token for c in comparisons
     ) / len(comparisons)
     avg_time_per_token_reas = sum(
-        c.reasoning.time_per_output_token for c in comparisons
+        c.reasoning_mode.time_per_output_token for c in comparisons
     ) / len(comparisons)
 
     # Determine reasoning family if not provided

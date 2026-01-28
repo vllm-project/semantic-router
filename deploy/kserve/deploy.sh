@@ -19,6 +19,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NAMESPACE=""
 INFERENCESERVICE_NAME=""
 MODEL_NAME=""
+SIMULATOR=false
+SIM_INFERENCESERVICE_A="model-a"
+SIM_INFERENCESERVICE_B="model-b"
+MODEL_NAME_A="Model-A"
+MODEL_NAME_B="Model-B"
 STORAGE_CLASS=""
 MODELS_PVC_SIZE="10Gi"
 CACHE_PVC_SIZE="5Gi"
@@ -41,10 +46,17 @@ Deploy vLLM Semantic Router for OpenShift AI KServe InferenceServices
 
 Required Options:
   -n, --namespace NAMESPACE          OpenShift namespace to deploy to
+
+Required Options (non-simulator):
   -i, --inferenceservice NAME        Name of the KServe InferenceService
   -m, --model MODEL_NAME             Model name as reported by the InferenceService
 
 Optional:
+  --simulator                        Use KServe simulator with Model-A and Model-B
+  --sim-inferenceservice-a NAME      Simulator InferenceService A name (default: model-a)
+  --sim-inferenceservice-b NAME      Simulator InferenceService B name (default: model-b)
+  --sim-model-a NAME                 Simulator model name for A (default: Model-A)
+  --sim-model-b NAME                 Simulator model name for B (default: Model-B)
   -s, --storage-class CLASS          StorageClass for PVCs (default: cluster default)
   --models-pvc-size SIZE             Size for models PVC (default: 10Gi)
   --cache-pvc-size SIZE              Size for cache PVC (default: 5Gi)
@@ -57,6 +69,9 @@ Examples:
   # Deploy to namespace 'semantic' with granite32-8b model
   $0 -n semantic -i granite32-8b -m granite32-8b
 
+  # Deploy with KServe simulator (Model-A / Model-B)
+  $0 -n semantic --simulator
+
   # Deploy with custom storage class and embedding model
   $0 -n myproject -i llama3-70b -m llama3-70b -s gp3-csi --embedding-model all-mpnet-base-v2
 
@@ -65,13 +80,40 @@ Examples:
 
 Prerequisites:
   - OpenShift CLI (oc) installed and logged in
-  - OpenShift AI (RHOAI) with KServe installed
+  - KServe installed
   - InferenceService already deployed
   - Cluster admin or namespace admin permissions
 
 For more information, see README.md
 EOF
     exit 1
+}
+
+# Function to substitute variables in a file
+substitute_vars() {
+    local input_file="$1"
+    local output_file="$2"
+
+    sed -e "s|{{NAMESPACE}}|$NAMESPACE|g" \
+        -e "s|{{INFERENCESERVICE_NAME}}|$INFERENCESERVICE_NAME|g" \
+        -e "s|{{INFERENCESERVICE_NAME_A}}|$SIM_INFERENCESERVICE_A|g" \
+        -e "s|{{INFERENCESERVICE_NAME_B}}|$SIM_INFERENCESERVICE_B|g" \
+        -e "s|{{MODEL_NAME}}|$MODEL_NAME|g" \
+        -e "s|{{MODEL_NAME_A}}|$MODEL_NAME_A|g" \
+        -e "s|{{MODEL_NAME_B}}|$MODEL_NAME_B|g" \
+        -e "s|{{EMBEDDING_MODEL}}|$EMBEDDING_MODEL|g" \
+        -e "s|{{PREDICTOR_SERVICE_IP}}|${PREDICTOR_SERVICE_IP:-10.0.0.1}|g" \
+        -e "s|{{PREDICTOR_SERVICE_IP_A}}|${PREDICTOR_SERVICE_IP_A:-10.0.0.1}|g" \
+        -e "s|{{PREDICTOR_SERVICE_IP_B}}|${PREDICTOR_SERVICE_IP_B:-10.0.0.1}|g" \
+        -e "s|{{MODELS_PVC_SIZE}}|$MODELS_PVC_SIZE|g" \
+        -e "s|{{CACHE_PVC_SIZE}}|$CACHE_PVC_SIZE|g" \
+        "$input_file" > "$output_file"
+
+    # Handle storage class (optional)
+    if [ -n "$STORAGE_CLASS" ]; then
+        sed -i.bak "s/# storageClassName:.*/storageClassName: $STORAGE_CLASS/g" "$output_file"
+        rm -f "${output_file}.bak"
+    fi
 }
 
 # Parse arguments
@@ -87,6 +129,26 @@ while [[ $# -gt 0 ]]; do
             ;;
         -m|--model)
             MODEL_NAME="$2"
+            shift 2
+            ;;
+        --simulator)
+            SIMULATOR=true
+            shift
+            ;;
+        --sim-inferenceservice-a)
+            SIM_INFERENCESERVICE_A="$2"
+            shift 2
+            ;;
+        --sim-inferenceservice-b)
+            SIM_INFERENCESERVICE_B="$2"
+            shift 2
+            ;;
+        --sim-model-a)
+            MODEL_NAME_A="$2"
+            shift 2
+            ;;
+        --sim-model-b)
+            MODEL_NAME_B="$2"
             shift 2
             ;;
         -s|--storage-class)
@@ -124,10 +186,20 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Validate required arguments
-if [ -z "$NAMESPACE" ] || [ -z "$INFERENCESERVICE_NAME" ] || [ -z "$MODEL_NAME" ]; then
+if [ -z "$NAMESPACE" ]; then
     echo -e "${RED}Error: Missing required arguments${NC}"
     usage
 fi
+
+if [ "$SIMULATOR" = false ]; then
+    if [ -z "$INFERENCESERVICE_NAME" ] || [ -z "$MODEL_NAME" ]; then
+        echo -e "${RED}Error: Missing required arguments${NC}"
+        usage
+    fi
+fi
+
+TEMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TEMP_DIR"' EXIT
 
 # Banner
 echo ""
@@ -139,8 +211,17 @@ echo ""
 # Display configuration
 echo -e "${BLUE}Configuration:${NC}"
 echo "  Namespace:              $NAMESPACE"
-echo "  InferenceService:       $INFERENCESERVICE_NAME"
-echo "  Model Name:             $MODEL_NAME"
+if [ "$SIMULATOR" = true ]; then
+    echo "  Simulator Mode:         true"
+    echo "  InferenceService A:     $SIM_INFERENCESERVICE_A"
+    echo "  InferenceService B:     $SIM_INFERENCESERVICE_B"
+    echo "  Model A Name:           $MODEL_NAME_A"
+    echo "  Model B Name:           $MODEL_NAME_B"
+else
+    echo "  Simulator Mode:         false"
+    echo "  InferenceService:       $INFERENCESERVICE_NAME"
+    echo "  Model Name:             $MODEL_NAME"
+fi
 echo "  Embedding Model:        $EMBEDDING_MODEL"
 echo "  Storage Class:          ${STORAGE_CLASS:-<cluster default>}"
 echo "  Models PVC Size:        $MODELS_PVC_SIZE"
@@ -182,50 +263,55 @@ if [ "$SKIP_VALIDATION" = false ]; then
         echo -e "${GREEN}✓${NC} Namespace exists: $NAMESPACE"
     fi
 
-    # Check if InferenceService exists
-    if ! oc get inferenceservice "$INFERENCESERVICE_NAME" -n "$NAMESPACE" &> /dev/null; then
-        echo -e "${RED}✗ Error: InferenceService '$INFERENCESERVICE_NAME' not found in namespace '$NAMESPACE'${NC}"
-        echo "  Please deploy your InferenceService first."
-        exit 1
-    fi
-    echo -e "${GREEN}✓${NC} InferenceService exists: $INFERENCESERVICE_NAME"
-
-    # Check if InferenceService is ready
-    ISVC_READY=$(oc get inferenceservice "$INFERENCESERVICE_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
-    if [ "$ISVC_READY" != "True" ]; then
-        echo -e "${YELLOW}⚠ Warning: InferenceService '$INFERENCESERVICE_NAME' is not ready yet${NC}"
-        echo "  Status: $(oc get inferenceservice "$INFERENCESERVICE_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}')"
-        read -p "Continue anyway? (y/n) " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    validate_inferenceservice() {
+        local name="$1"
+        if ! oc get inferenceservice "$name" -n "$NAMESPACE" &> /dev/null; then
+            echo -e "${RED}✗ Error: InferenceService '$name' not found in namespace '$NAMESPACE'${NC}"
+            echo "  Please deploy your InferenceService first."
             exit 1
         fi
-    else
-        echo -e "${GREEN}✓${NC} InferenceService is ready"
-    fi
+        echo -e "${GREEN}✓${NC} InferenceService exists: $name"
 
-    # Get predictor service URL
-    PREDICTOR_URL=$(oc get inferenceservice "$INFERENCESERVICE_NAME" -n "$NAMESPACE" -o jsonpath='{.status.components.predictor.address.url}' 2>/dev/null || echo "")
-    if [ -n "$PREDICTOR_URL" ]; then
-        echo -e "${GREEN}✓${NC} Predictor URL: $PREDICTOR_URL"
-    fi
+        local isvc_ready
+        isvc_ready=$(oc get inferenceservice "$name" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+        if [ "$isvc_ready" != "True" ]; then
+            echo -e "${YELLOW}⚠ Warning: InferenceService '$name' is not ready yet${NC}"
+            echo "  Status: $(oc get inferenceservice "$name" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}')"
+            read -p "Continue anyway? (y/n) " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                exit 1
+            fi
+        else
+            echo -e "${GREEN}✓${NC} InferenceService is ready"
+        fi
 
-    # Create stable ClusterIP service for predictor (KServe creates headless service by default)
-    echo "Creating stable ClusterIP service for predictor..."
+        local predictor_url
+        predictor_url=$(oc get inferenceservice "$name" -n "$NAMESPACE" -o jsonpath='{.status.components.predictor.address.url}' 2>/dev/null || echo "")
+        if [ -n "$predictor_url" ]; then
+            echo -e "${GREEN}✓${NC} Predictor URL: $predictor_url"
+        fi
+    }
 
-    # Use template file for stable service
-    if [ -f "$SCRIPT_DIR/service-predictor-stable.yaml" ]; then
-        substitute_vars "$SCRIPT_DIR/service-predictor-stable.yaml" "$TEMP_DIR/service-predictor-stable.yaml.tmp"
-        oc apply -f "$TEMP_DIR/service-predictor-stable.yaml.tmp" -n "$NAMESPACE" > /dev/null 2>&1
-    else
-        # Fallback to inline creation if template not found
-        cat <<EOF | oc apply -f - -n "$NAMESPACE" > /dev/null 2>&1
+    create_stable_service() {
+        local name="$1"
+        local output
+
+        echo "Creating stable ClusterIP service for predictor: $name" >&2
+        if [ -f "$SCRIPT_DIR/service-predictor-stable.yaml" ]; then
+            output="$TEMP_DIR/service-predictor-stable-${name}.yaml.tmp"
+            sed -e "s|{{INFERENCESERVICE_NAME}}|$name|g" \
+                -e "s|{{NAMESPACE}}|$NAMESPACE|g" \
+                "$SCRIPT_DIR/service-predictor-stable.yaml" > "$output"
+            oc apply -f "$output" -n "$NAMESPACE" > /dev/null 2>&1
+        else
+            cat <<EOF | oc apply -f - -n "$NAMESPACE" > /dev/null 2>&1
 apiVersion: v1
 kind: Service
 metadata:
-  name: ${INFERENCESERVICE_NAME}-predictor-stable
+  name: ${name}-predictor-stable
   labels:
-    app: ${INFERENCESERVICE_NAME}
+    app: ${name}
     component: predictor-stable
     managed-by: semantic-router-deploy
   annotations:
@@ -233,23 +319,39 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    serving.kserve.io/inferenceservice: ${INFERENCESERVICE_NAME}
+    serving.kserve.io/inferenceservice: ${name}
   ports:
   - name: http
     port: 8080
     targetPort: 8080
     protocol: TCP
 EOF
-    fi
+        fi
 
-    # Get the stable ClusterIP
-    PREDICTOR_SERVICE_IP=$(oc get svc "${INFERENCESERVICE_NAME}-predictor-stable" -n "$NAMESPACE" -o jsonpath='{.spec.clusterIP}' 2>/dev/null || echo "")
-    if [ -z "$PREDICTOR_SERVICE_IP" ]; then
-        echo -e "${RED}✗ Error: Could not get predictor service ClusterIP${NC}"
-        echo "  The stable service was not created properly."
-        exit 1
+        local ip
+        ip=$(oc get svc "${name}-predictor-stable" -n "$NAMESPACE" -o jsonpath='{.spec.clusterIP}' 2>/dev/null || echo "")
+        if [ -z "$ip" ]; then
+            echo -e "${RED}✗ Error: Could not get predictor service ClusterIP for $name${NC}"
+            echo "  The stable service was not created properly."
+            exit 1
+        fi
+        echo "$ip"
+    }
+
+    if [ "$SIMULATOR" = true ]; then
+        validate_inferenceservice "$SIM_INFERENCESERVICE_A"
+        validate_inferenceservice "$SIM_INFERENCESERVICE_B"
+
+        PREDICTOR_SERVICE_IP_A=$(create_stable_service "$SIM_INFERENCESERVICE_A")
+        echo -e "${GREEN}✓${NC} Predictor service ClusterIP A: $PREDICTOR_SERVICE_IP_A (stable across pod restarts)"
+        PREDICTOR_SERVICE_IP_B=$(create_stable_service "$SIM_INFERENCESERVICE_B")
+        echo -e "${GREEN}✓${NC} Predictor service ClusterIP B: $PREDICTOR_SERVICE_IP_B (stable across pod restarts)"
+    else
+        validate_inferenceservice "$INFERENCESERVICE_NAME"
+
+        PREDICTOR_SERVICE_IP=$(create_stable_service "$INFERENCESERVICE_NAME")
+        echo -e "${GREEN}✓${NC} Predictor service ClusterIP: $PREDICTOR_SERVICE_IP (stable across pod restarts)"
     fi
-    echo -e "${GREEN}✓${NC} Predictor service ClusterIP: $PREDICTOR_SERVICE_IP (stable across pod restarts)"
 
     echo ""
 fi
@@ -257,32 +359,28 @@ fi
 # Generate manifests
 echo -e "${BLUE}Step 2: Generating manifests...${NC}"
 
-TEMP_DIR=$(mktemp -d)
-trap 'rm -rf "$TEMP_DIR"' EXIT
+CONFIGMAP_SRC="$SCRIPT_DIR/configmap-router-config.yaml"
+ENVOY_CONFIG_SRC="$SCRIPT_DIR/configmap-envoy-config.yaml"
+if [ "$SIMULATOR" = true ]; then
+    CONFIGMAP_SRC="$SCRIPT_DIR/configmap-router-config-simulator.yaml"
+    ENVOY_CONFIG_SRC="$SCRIPT_DIR/configmap-envoy-config-simulator.yaml"
+fi
 
-# Function to substitute variables in a file
-substitute_vars() {
-    local input_file="$1"
-    local output_file="$2"
+if [ -f "$CONFIGMAP_SRC" ]; then
+    substitute_vars "$CONFIGMAP_SRC" "$TEMP_DIR/configmap-router-config.yaml"
+    echo -e "${GREEN}✓${NC} Generated: configmap-router-config.yaml"
+else
+    echo -e "${YELLOW}⚠ Missing configmap source: $CONFIGMAP_SRC${NC}"
+fi
 
-    sed -e "s/{{NAMESPACE}}/$NAMESPACE/g" \
-        -e "s/{{INFERENCESERVICE_NAME}}/$INFERENCESERVICE_NAME/g" \
-        -e "s/{{MODEL_NAME}}/$MODEL_NAME/g" \
-        -e "s|{{EMBEDDING_MODEL}}|$EMBEDDING_MODEL|g" \
-        -e "s/{{PREDICTOR_SERVICE_IP}}/${PREDICTOR_SERVICE_IP:-10.0.0.1}/g" \
-        -e "s/{{MODELS_PVC_SIZE}}/$MODELS_PVC_SIZE/g" \
-        -e "s/{{CACHE_PVC_SIZE}}/$CACHE_PVC_SIZE/g" \
-        "$input_file" > "$output_file"
+if [ -f "$ENVOY_CONFIG_SRC" ]; then
+    substitute_vars "$ENVOY_CONFIG_SRC" "$TEMP_DIR/configmap-envoy-config.yaml"
+    echo -e "${GREEN}✓${NC} Generated: configmap-envoy-config.yaml"
+else
+    echo -e "${YELLOW}⚠ Missing envoy config source: $ENVOY_CONFIG_SRC${NC}"
+fi
 
-    # Handle storage class (optional)
-    if [ -n "$STORAGE_CLASS" ]; then
-        sed -i.bak "s/# storageClassName:.*/storageClassName: $STORAGE_CLASS/g" "$output_file"
-        rm -f "${output_file}.bak"
-    fi
-}
-
-# Process each manifest file
-for file in serviceaccount.yaml pvc.yaml configmap-router-config.yaml configmap-envoy-config.yaml peerauthentication.yaml deployment.yaml service.yaml route.yaml; do
+for file in serviceaccount.yaml pvc.yaml peerauthentication.yaml deployment.yaml service.yaml route.yaml; do
     if [ -f "$SCRIPT_DIR/$file" ]; then
         substitute_vars "$SCRIPT_DIR/$file" "$TEMP_DIR/$file"
         echo -e "${GREEN}✓${NC} Generated: $file"
@@ -315,7 +413,11 @@ oc apply -f "$TEMP_DIR/serviceaccount.yaml" -n "$NAMESPACE"
 oc apply -f "$TEMP_DIR/pvc.yaml" -n "$NAMESPACE"
 oc apply -f "$TEMP_DIR/configmap-router-config.yaml" -n "$NAMESPACE"
 oc apply -f "$TEMP_DIR/configmap-envoy-config.yaml" -n "$NAMESPACE"
-oc apply -f "$TEMP_DIR/peerauthentication.yaml" -n "$NAMESPACE"
+if oc get crd peerauthentications.security.istio.io &>/dev/null; then
+    oc apply -f "$TEMP_DIR/peerauthentication.yaml" -n "$NAMESPACE"
+else
+    echo "Skipping PeerAuthentication (Istio CRD not found)."
+fi
 oc apply -f "$TEMP_DIR/deployment.yaml" -n "$NAMESPACE"
 oc apply -f "$TEMP_DIR/service.yaml" -n "$NAMESPACE"
 oc apply -f "$TEMP_DIR/route.yaml" -n "$NAMESPACE"
@@ -382,12 +484,17 @@ echo "1. Test the deployment:"
 echo "   curl -k \"https://$ROUTE_URL/v1/models\""
 echo ""
 echo "2. Try a chat completion:"
+if [ "$SIMULATOR" = true ]; then
+    TEST_MODEL_NAME="$MODEL_NAME_B"
+else
+    TEST_MODEL_NAME="$MODEL_NAME"
+fi
 echo "   curl -k \"https://$ROUTE_URL/v1/chat/completions\" \\"
 echo "     -H 'Content-Type: application/json' \\"
-echo "     -d '{\"model\": \"$MODEL_NAME\", \"messages\": [{\"role\": \"user\", \"content\": \"Hello!\"}]}'"
+echo "     -d '{\"model\": \"$TEST_MODEL_NAME\", \"messages\": [{\"role\": \"user\", \"content\": \"Hello!\"}]}'"
 echo ""
 echo "3. Run validation tests:"
-echo "   NAMESPACE=$NAMESPACE MODEL_NAME=$MODEL_NAME $SCRIPT_DIR/test-semantic-routing.sh"
+echo "   NAMESPACE=$NAMESPACE MODEL_NAME=$TEST_MODEL_NAME $SCRIPT_DIR/test-semantic-routing.sh"
 echo ""
 echo "4. View logs:"
 echo "   oc logs -l app=semantic-router -c semantic-router -n $NAMESPACE -f"
@@ -397,15 +504,20 @@ echo "   oc port-forward -n $NAMESPACE svc/semantic-router-kserve 9190:9190"
 echo "   curl http://localhost:9190/metrics"
 echo ""
 
-# Offer to run tests
+# Offer to run tests (interactive only)
 if [ "$SKIP_VALIDATION" = false ]; then
-    echo ""
-    read -p "Run validation tests now? (y/n) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
+    if [ -t 0 ]; then
         echo ""
-        export NAMESPACE MODEL_NAME
-        bash "$SCRIPT_DIR/test-semantic-routing.sh" || true
+        read -p "Run validation tests now? (y/n) " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo ""
+            MODEL_NAME="$TEST_MODEL_NAME"
+            export NAMESPACE MODEL_NAME
+            bash "$SCRIPT_DIR/test-semantic-routing.sh" || true
+        fi
+    else
+        echo "Skipping interactive validation prompt (non-interactive shell)."
     fi
 fi
 

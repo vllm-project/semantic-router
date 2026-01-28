@@ -153,6 +153,16 @@ def validate_signal_uniqueness(config: UserConfig) -> list:
             )
         seen[signal.name] = "embeddings"
 
+    # Check context signals
+    if config.signals.context_rules:
+        for signal in config.signals.context_rules:
+            if signal.name in seen:
+                errors.append(
+                    f"Duplicate signal name '{signal.name}' in context rules "
+                    f"(already defined in {seen[signal.name]})"
+                )
+            seen[signal.name] = "context_rules"
+
     return errors
 
 

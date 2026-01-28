@@ -297,6 +297,62 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
 
+  // 9. Context Rules
+  // From context_rules (Go/Router format)
+  config.context_rules?.forEach(rule => {
+    addSignal({
+      type: 'context',
+      name: rule.name,
+      latency: SIGNAL_LATENCY.context,
+      config: {
+        min_tokens: rule.min_tokens,
+        max_tokens: rule.max_tokens,
+      },
+    })
+  })
+  // From signals.context (Python CLI format)
+  config.signals?.context?.forEach(rule => {
+    addSignal({
+      type: 'context',
+      name: rule.name,
+      latency: SIGNAL_LATENCY.context,
+      config: {
+        min_tokens: rule.min_tokens,
+        max_tokens: rule.max_tokens,
+      },
+    })
+  })
+
+  // 10. Complexity Rules
+  // From complexity_rules (Go/Router format)
+  config.complexity_rules?.forEach(rule => {
+    addSignal({
+      type: 'complexity',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.complexity,
+      config: {
+        threshold: rule.threshold,
+        hard: rule.hard,
+        easy: rule.easy,
+      },
+    })
+  })
+  // From signals.complexity (Python CLI format)
+  config.signals?.complexity?.forEach(rule => {
+    addSignal({
+      type: 'complexity',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.complexity,
+      config: {
+        threshold: rule.threshold,
+        hard: rule.hard,
+        easy: rule.easy,
+      },
+    })
+  })
+
   return signals
 }
 
@@ -456,6 +512,8 @@ export function groupSignalsByType(signals: SignalConfig[]): Record<SignalType, 
     preference: [],
     language: [],
     latency: [],
+    context: [],
+    complexity: [],
   }
 
   signals.forEach(signal => {

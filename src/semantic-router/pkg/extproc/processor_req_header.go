@@ -78,6 +78,9 @@ type RequestContext struct {
 	VSRMatchedPreference   []string // Matched preference signals
 	VSRMatchedLanguage     []string // Matched language signals
 	VSRMatchedLatency      []string // Matched latency signals
+	VSRMatchedContext      []string // Matched context rule names (e.g. "low_token_count")
+	VSRContextTokenCount   int      // Actual token count for the request
+	VSRMatchedComplexity   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
 
 	// Endpoint tracking for windowed metrics
 	SelectedEndpoint string // The endpoint address selected for this request
@@ -113,6 +116,12 @@ type RequestContext struct {
 	// APIFormat indicates the target API format (e.g., "anthropic", "gemini")
 	// Empty string means standard OpenAI-compatible backend (no transformation needed)
 	APIFormat string
+
+	// RAG (Retrieval-Augmented Generation) tracking
+	RAGRetrievedContext string  // Retrieved context from RAG plugin
+	RAGBackend          string  // Backend used for retrieval ("milvus", "external_api", "mcp", "hybrid")
+	RAGSimilarityScore  float32 // Best similarity score from retrieval
+	RAGRetrievalLatency float64 // Retrieval latency in seconds
 }
 
 // handleRequestHeaders processes the request headers

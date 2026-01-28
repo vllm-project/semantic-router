@@ -58,8 +58,23 @@ After running `vllm-sr serve`, the following endpoints are available:
 | API | 8888* | Chat completions API (configurable in config.yaml) |
 | Metrics | 9190 | Prometheus metrics |
 | gRPC | 50051 | Router gRPC (internal) |
+| Jaeger UI | 16686 | Distributed tracing UI |
+| Grafana (embedded) | 8700 | Dashboards at /embedded/grafana |
+| Prometheus UI | 9090 | Metrics storage and querying |
 
 *Default port, configurable via `listeners` in config.yaml
+
+### Observability
+
+`vllm-sr serve` automatically starts the observability stack:
+
+- **Jaeger**: Distributed tracing embedded at http://localhost:8700/embedded/jaeger (also available directly at http://localhost:16686)
+- **Grafana**: Pre-configured dashboards embedded at http://localhost:8700/embedded/grafana
+- **Prometheus**: Metrics collection at http://localhost:9090
+
+**Note**: Grafana is optimized for embedded access through the dashboard. For the best experience, use http://localhost:8700/embedded/grafana where anonymous authentication is pre-configured.
+
+Tracing is enabled by default. Traces are visible in Jaeger under the `vllm-sr` service name.
 
 ## Configuration
 

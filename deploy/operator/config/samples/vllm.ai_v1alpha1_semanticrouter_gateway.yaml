@@ -1,0 +1,205 @@
+---
+# SemanticRouter with Gateway Integration
+# This example demonstrates using an existing Gateway (Istio, Envoy Gateway)
+# instead of deploying the Envoy sidecar container
+apiVersion: vllm.ai/v1alpha1
+kind: SemanticRouter
+metadata:
+  name: semantic-router-gateway
+  namespace: vllm-serving
+spec:
+  replicas: 3
+
+  # ====================
+  # Gateway Integration
+  # ====================
+  # Reference existing Gateway - operator will:
+  # 1. Create HTTPRoute pointing to this Gateway
+  # 2. Skip deploying Envoy sidecar container
+  # 3. Set gatewayMode status to "gateway-integration"
+  gateway:
+    existingRef:
+      name: istio-ingressgateway  # Or your Envoy Gateway name
+      namespace: istio-system
+
+  # ====================
+  # vLLM Backend Configuration
+  # ====================
+  vllmEndpoints:
+    # Multiple KServe models with different reasoning families
+    - name: llama3-8b-endpoint
+      model: llama3-8b
+      reasoningFamily: qwen3
+      backend:
+        type: kserve
+        inferenceServiceName: llama-3-8b
+
+    - name: deepseek-endpoint
+      model: deepseek-r1-distill-qwen-7b
+      reasoningFamily: deepseek
+      backend:
+        type: kserve
+        inferenceServiceName: deepseek-r1
+
+    # Direct service backend (vLLM deployment)
+    - name: custom-vllm
+      model: qwen2.5-7b
+      reasoningFamily: qwen3
+      backend:
+        type: service
+        service:
+          name: vllm-qwen
+          namespace: vllm-serving
+          port: 8000
+
+  # ====================
+  # Service Configuration
+  # ====================
+  # In gateway mode, clients hit Gateway → HTTPRoute → Service (port 8080)
+  # No Envoy sidecar, so only semantic router API port matters
+  service:
+    type: ClusterIP
+    api:
+      port: 8080
+      targetPort: 8080
+    grpc:
+      port: 50051  # For internal communication if needed
+      targetPort: 50051
+    metrics:
+      enabled: true
+      port: 9190
+      targetPort: 9190
+
+  # ====================
+  # Persistence
+  # ====================
+  persistence:
+    enabled: true
+    storageClassName: gp3
+    size: 20Gi
+
+  # ====================
+  # Resources
+  # ====================
+  resources:
+    requests:
+      cpu: 2000m
+      memory: 4Gi
+    limits:
+      cpu: 4000m
+      memory: 8Gi
+
+  # ====================
+  # Configuration
+  # ====================
+  config:
+    semantic_cache:
+      enabled: true
+      backend_type: memory
+      similarity_threshold: "0.85"
+      max_entries: 10000
+      ttl_seconds: 3600
+      eviction_policy: lru
+
+    tools:
+      enabled: true
+      top_k: 3
+      similarity_threshold: "0.2"
+
+    prompt_guard:
+      enabled: true
+      threshold: "0.7"
+
+    classifier:
+      category_model:
+        threshold: "0.5"
+      pii_model:
+        threshold: "0.7"
+
+    reasoning_families:
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+      deepseek:
+        type: chat_template_kwargs
+        parameter: thinking
+      gpt:
+        type: reasoning_effort
+        parameter: reasoning_effort
+
+    default_reasoning_effort: medium
+
+    # OpenTelemetry tracing
+    observability:
+      tracing:
+        enabled: true
+        provider: opentelemetry
+        exporter:
+          type: otlp
+          endpoint: jaeger-collector.observability.svc.cluster.local:4317
+          insecure: true
+        sampling:
+          type: probabilistic
+          probability: "0.1"
+
+  # ====================
+  # Autoscaling
+  # ====================
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  # ====================
+  # Health Probes
+  # ====================
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    periodSeconds: 10
+
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: 8080
+    periodSeconds: 5
+
+  # ====================
+  # Security
+  # ====================
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    runAsNonRoot: true
+
+  podSecurityContext:
+    runAsNonRoot: true
+
+  # ====================
+  # Scheduling
+  # ====================
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - semantic-router
+            topologyKey: kubernetes.io/hostname
+
+  # ====================
+  # Monitoring
+  # ====================
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9190"
+    prometheus.io/path: "/metrics"

@@ -118,6 +118,13 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	}
 	logging.Infof("handleCaching returned no cached response, continuing to model routing")
 
+	// Execute RAG plugin if enabled (after cache check, before other plugins)
+	// RAG plugin retrieves context and injects it into the request
+	if err := r.executeRAGPlugin(ctx, decisionName); err != nil {
+		// If RAG fails with on_failure=block, return error response
+		return r.createErrorResponse(503, fmt.Sprintf("RAG retrieval failed: %v", err)), nil
+	}
+
 	// Handle model selection and routing with pre-computed classification results and selected model
 	return r.handleModelRouting(openAIRequest, originalModel, decisionName, classificationConfidence, reasoningDecision, selectedModel, ctx)
 }

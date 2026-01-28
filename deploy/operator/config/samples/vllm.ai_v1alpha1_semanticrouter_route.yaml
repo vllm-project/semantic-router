@@ -1,0 +1,220 @@
+---
+# SemanticRouter with OpenShift Route
+# This example demonstrates creating an OpenShift Route for external access
+# with TLS edge termination
+apiVersion: vllm.ai/v1alpha1
+kind: SemanticRouter
+metadata:
+  name: semantic-router-route
+  namespace: vllm-serving
+spec:
+  replicas: 2
+
+  # ====================
+  # OpenShift Route Configuration
+  # ====================
+  # Create OpenShift Route for external access with TLS
+  openshift:
+    routes:
+      enabled: true
+      # Optional - OpenShift auto-generates if omitted
+      hostname: semantic-router.apps.openshift.example.com
+      tls:
+        termination: edge  # TLS terminates at Route, plain HTTP to backend
+        insecureEdgeTerminationPolicy: Redirect  # HTTP → HTTPS redirect
+
+  # ====================
+  # vLLM Backend Endpoints
+  # ====================
+  vllmEndpoints:
+    # RHOAI 3 KServe InferenceServices
+    - name: llama3-8b
+      model: llama3-8b
+      reasoningFamily: qwen3
+      backend:
+        type: kserve
+        inferenceServiceName: llama-3-8b
+
+    - name: qwen2-5-7b
+      model: qwen2.5-7b
+      reasoningFamily: qwen3
+      backend:
+        type: kserve
+        inferenceServiceName: qwen-2-5-7b
+
+  # ====================
+  # Service Configuration
+  # ====================
+  # Route points to Service API port (8080)
+  service:
+    type: ClusterIP
+    api:
+      port: 8080
+      targetPort: 8080
+    grpc:
+      port: 50051
+      targetPort: 50051
+    metrics:
+      enabled: true
+      port: 9190
+      targetPort: 9190
+
+  # ====================
+  # Persistence
+  # ====================
+  persistence:
+    enabled: true
+    # Uses cluster default StorageClass if not specified
+    size: 15Gi
+
+  # ====================
+  # Resources
+  # ====================
+  resources:
+    requests:
+      cpu: 1500m
+      memory: 3Gi
+    limits:
+      cpu: 3000m
+      memory: 6Gi
+
+  # ====================
+  # Semantic Router Configuration
+  # ====================
+  config:
+    # Semantic cache for better performance
+    semantic_cache:
+      enabled: true
+      similarity_threshold: "0.85"
+      max_entries: 5000
+      ttl_seconds: 3600
+      eviction_policy: lru
+
+    # Tools auto-selection
+    tools:
+      enabled: true
+      top_k: 3
+      similarity_threshold: "0.2"
+
+    # Prompt guard (jailbreak detection)
+    prompt_guard:
+      enabled: true
+      threshold: "0.7"
+
+    # Classifiers
+    classifier:
+      category_model:
+        threshold: "0.5"
+        use_cpu: true
+      pii_model:
+        threshold: "0.7"
+        use_cpu: true
+
+    # Reasoning configuration
+    reasoning_families:
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+
+    default_reasoning_effort: medium
+
+  # ====================
+  # Tools Database
+  # ====================
+  toolsDb:
+    - name: get_weather
+      description: Get current weather for a location
+      parameters:
+        type: object
+        properties:
+          location:
+            type: string
+            description: City name
+        required: [location]
+
+    - name: search_docs
+      description: Search documentation
+      parameters:
+        type: object
+        properties:
+          query:
+            type: string
+            description: Search query
+        required: [query]
+
+  # ====================
+  # Autoscaling
+  # ====================
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+  # ====================
+  # Health Probes
+  # ====================
+  startupProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    failureThreshold: 30
+
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    periodSeconds: 10
+
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: 8080
+    periodSeconds: 5
+
+  # ====================
+  # OpenShift Security
+  # ====================
+  # OpenShift SCC-compliant security settings
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+
+  podSecurityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+
+  # ====================
+  # Scheduling
+  # ====================
+  nodeSelector:
+    node-role.kubernetes.io/worker: ""
+
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - semantic-router
+            topologyKey: kubernetes.io/hostname
+
+  # ====================
+  # Monitoring
+  # ====================
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9190"
+    prometheus.io/path: "/metrics"

@@ -145,6 +145,8 @@ type RouterIntentResponse struct {
 		Preferences  []string `json:"preferences,omitempty"`
 		Language     []string `json:"language,omitempty"`
 		Latency      []string `json:"latency,omitempty"`
+		Context      []string `json:"context,omitempty"`
+		Complexity   []string `json:"complexity,omitempty"`
 	} `json:"matched_signals,omitempty"`
 	DecisionResult *struct {
 		DecisionName string   `json:"decision_name"`
@@ -313,6 +315,24 @@ func convertRouterResponse(req TestQueryRequest, routerResp *RouterIntentRespons
 				Reason:     "Latency requirement matched",
 			})
 			result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("signal-latency-%s", lat))
+		}
+		for _, ctx := range routerResp.MatchedSignals.Context {
+			result.MatchedSignals = append(result.MatchedSignals, MatchedSignal{
+				Type:       "context",
+				Name:       ctx,
+				Confidence: 1.0,
+				Reason:     "Context token count matched",
+			})
+			result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("signal-context-%s", ctx))
+		}
+		for _, comp := range routerResp.MatchedSignals.Complexity {
+			result.MatchedSignals = append(result.MatchedSignals, MatchedSignal{
+				Type:       "complexity",
+				Name:       comp,
+				Confidence: 0.9,
+				Reason:     "Complexity level matched",
+			})
+			result.HighlightedPath = append(result.HighlightedPath, fmt.Sprintf("signal-complexity-%s", comp))
 		}
 	}
 

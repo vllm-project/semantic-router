@@ -62,6 +62,35 @@ make openshift-deploy
 
 ## Deploy Your First Router
 
+### Quick Start with Sample Configurations
+
+Choose a pre-configured sample based on your infrastructure:
+
+```bash
+# Simple standalone deployment with KServe backend
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_simple.yaml
+
+# Full-featured OpenShift deployment with Routes
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_openshift.yaml
+
+# Gateway integration mode (Istio/Envoy Gateway)
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_gateway.yaml
+
+# Llama Stack backend discovery
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_llamastack.yaml
+
+# Redis cache backend for production caching
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_redis_cache.yaml
+
+# Milvus cache backend for large-scale deployments
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_milvus_cache.yaml
+
+# Hybrid cache backend for optimal performance
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_hybrid_cache.yaml
+```
+
+### Custom Configuration
+
 Create a `my-router.yaml` file:
 
 ```yaml
@@ -76,6 +105,17 @@ spec:
   image:
     repository: ghcr.io/vllm-project/semantic-router/extproc
     tag: latest
+
+  # Configure vLLM backend endpoints
+  vllmEndpoints:
+    # KServe InferenceService (RHOAI 3.x)
+    - name: llama3-8b-endpoint
+      model: llama3-8b
+      reasoningFamily: qwen3
+      backend:
+        type: kserve
+        inferenceServiceName: llama-3-8b
+      weight: 1
 
   resources:
     limits:
@@ -93,7 +133,7 @@ spec:
   config:
     bert_model:
       model_id: "models/mom-embedding-light"
-      threshold: 0.6
+      threshold: "0.6"
       use_cpu: true
 
     semantic_cache:
@@ -105,11 +145,11 @@ spec:
     tools:
       enabled: true
       top_k: 3
-      similarity_threshold: 0.2
+      similarity_threshold: "0.2"
 
     prompt_guard:
       enabled: true
-      threshold: 0.7
+      threshold: "0.7"
 
   toolsDb:
     - tool:
@@ -156,6 +196,295 @@ Expected output:
 ```
 NAME                        PHASE     REPLICAS   READY   AGE
 semanticrouter.vllm.ai/my-router   Running   2          2       5m
+```
+
+## Backend Discovery Types
+
+The operator supports three types of backend discovery for connecting semantic router to vLLM model servers. Choose the type that matches your infrastructure.
+
+### KServe InferenceService Discovery
+
+For RHOAI 3.x or standalone KServe deployments. The operator automatically discovers the predictor service created by KServe.
+
+```yaml
+spec:
+  vllmEndpoints:
+    - name: llama3-8b-endpoint
+      model: llama3-8b
+      reasoningFamily: qwen3
+      backend:
+        type: kserve
+        inferenceServiceName: llama-3-8b  # InferenceService in same namespace
+      weight: 1
+```
+
+**When to use:**
+
+- Running on Red Hat OpenShift AI (RHOAI) 3.x
+- Using KServe for model serving
+- Want automatic service discovery
+
+**How it works:**
+
+- Discovers the predictor service: `{inferenceServiceName}-predictor`
+- Uses port 8443 (KServe default HTTPS port)
+- Works in the same namespace as SemanticRouter
+
+### Llama Stack Service Discovery
+
+Discovers Llama Stack deployments using Kubernetes label selectors.
+
+```yaml
+spec:
+  vllmEndpoints:
+    - name: llama-405b-endpoint
+      model: llama-3.3-70b-instruct
+      reasoningFamily: gpt
+      backend:
+        type: llamastack
+        discoveryLabels:
+          app: llama-stack
+          model: llama-3.3-70b
+      weight: 1
+```
+
+**When to use:**
+
+- Using Meta's Llama Stack for model serving
+- Multiple Llama Stack services with different models
+- Want label-based service discovery
+
+**How it works:**
+
+- Lists services matching the label selector
+- Uses first matching service if multiple found
+- Extracts port from service definition
+
+### Direct Kubernetes Service
+
+Direct connection to any Kubernetes service (vLLM, TGI, etc.).
+
+```yaml
+spec:
+  vllmEndpoints:
+    - name: custom-vllm-endpoint
+      model: deepseek-r1-distill-qwen-7b
+      reasoningFamily: deepseek
+      backend:
+        type: service
+        service:
+          name: vllm-deepseek
+          namespace: vllm-serving  # Can reference service in another namespace
+          port: 8000
+      weight: 1
+```
+
+**When to use:**
+
+- Direct vLLM deployments
+- Custom model servers with OpenAI-compatible API
+- Cross-namespace service references
+- Maximum control over service endpoints
+
+**How it works:**
+
+- Connects to specified service directly
+- No discovery - uses explicit configuration
+- Supports cross-namespace references
+
+### Multiple Backends
+
+You can configure multiple backends with load balancing weights:
+
+```yaml
+spec:
+  vllmEndpoints:
+    # KServe backend
+    - name: llama3-8b
+      model: llama3-8b
+      reasoningFamily: qwen3
+      backend:
+        type: kserve
+        inferenceServiceName: llama-3-8b
+      weight: 2  # Higher weight = more traffic
+
+    # Direct service backend
+    - name: qwen-7b
+      model: qwen2.5-7b
+      reasoningFamily: qwen3
+      backend:
+        type: service
+        service:
+          name: vllm-qwen
+          port: 8000
+      weight: 1
+```
+
+## Deployment Modes
+
+The operator supports two deployment modes with different architectures.
+
+### Standalone Mode (Default)
+
+Deploys semantic router with an **Envoy sidecar container** that acts as an ingress gateway.
+
+**Architecture:**
+
+```
+Client → Service (8080) → Envoy Sidecar → ExtProc gRPC → Semantic Router → vLLM
+```
+
+**When to use:**
+
+- Simple deployments without existing service mesh
+- Testing and development
+- Self-contained deployment with minimal dependencies
+
+**Configuration:**
+
+```yaml
+spec:
+  # No gateway configuration - defaults to standalone mode
+  service:
+    type: ClusterIP
+    api:
+      port: 8080  # Client traffic enters here
+      targetPort: 8080  # Envoy ingress port
+    grpc:
+      port: 50051  # ExtProc communication
+      targetPort: 50051
+```
+
+**Operator behavior:**
+
+- Deploys pod with two containers: semantic router + Envoy sidecar
+- Envoy handles ingress and forwards to semantic router via ExtProc gRPC
+- Status shows `gatewayMode: "standalone"`
+
+### Gateway Integration Mode
+
+Reuses an **existing Gateway** (Istio, Envoy Gateway, etc.) and creates an HTTPRoute.
+
+**Architecture:**
+
+```
+Client → Gateway (Istio/Envoy) → HTTPRoute → Service (8080) → Semantic Router API → vLLM
+```
+
+**When to use:**
+
+- Existing Istio or Envoy Gateway deployment
+- Centralized ingress management
+- Multi-tenancy with shared gateway
+- Advanced traffic management (circuit breaking, retries, rate limiting)
+
+**Configuration:**
+
+```yaml
+spec:
+  gateway:
+    existingRef:
+      name: istio-ingressgateway  # Or your Envoy Gateway name
+      namespace: istio-system
+
+  # Service only needs API port in gateway mode
+  service:
+    type: ClusterIP
+    api:
+      port: 8080
+      targetPort: 8080
+```
+
+**Operator behavior:**
+
+1. Creates HTTPRoute resource pointing to the specified Gateway
+2. Skips Envoy sidecar container in pod spec
+3. Sets `status.gatewayMode: "gateway-integration"`
+4. Semantic router operates in pure API mode (no ExtProc)
+
+**Example:** See [`vllm.ai_v1alpha1_semanticrouter_gateway.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_gateway.yaml)
+
+## OpenShift Routes
+
+For OpenShift deployments, the operator can create Routes for external access with TLS termination.
+
+### Basic OpenShift Route
+
+```yaml
+spec:
+  openshift:
+    routes:
+      enabled: true
+      hostname: semantic-router.apps.openshift.example.com  # Optional - auto-generated if omitted
+      tls:
+        termination: edge  # TLS terminates at Route, plain HTTP to backend
+        insecureEdgeTerminationPolicy: Redirect  # Redirect HTTP to HTTPS
+```
+
+### TLS Termination Options
+
+- **edge** (recommended): TLS terminates at Route, plain HTTP to backend
+- **passthrough**: TLS passthrough to backend (requires backend TLS)
+- **reencrypt**: TLS terminates at Route, re-encrypts to backend
+
+### When to Use OpenShift Routes
+
+- Running on OpenShift 4.x
+- Need external access without configuring Ingress
+- Want auto-generated hostnames
+- Require OpenShift-native TLS management
+
+### Status Information
+
+After creating a Route, check the status:
+
+```bash
+kubectl get semanticrouter my-router -o jsonpath='{.status.openshiftFeatures}'
+```
+
+Output:
+
+```json
+{
+  "routesEnabled": true,
+  "routeHostname": "semantic-router-default.apps.openshift.example.com"
+}
+```
+
+**Example:** See [`vllm.ai_v1alpha1_semanticrouter_route.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_route.yaml)
+
+## Choosing Your Configuration
+
+Use this decision tree to select the right configuration:
+
+```
+┌─ Need to run on OpenShift?
+│  ├─ YES → Use openshift sample (Routes + KServe/service backends)
+│  └─ NO ↓
+│
+├─ Have existing Gateway (Istio/Envoy)?
+│  ├─ YES → Use gateway sample (Gateway integration mode)
+│  └─ NO ↓
+│
+├─ Using Meta Llama Stack?
+│  ├─ YES → Use llamastack sample
+│  └─ NO ↓
+│
+└─ Simple deployment → Use simple sample (standalone mode)
+```
+
+**Backend choice:**
+
+```
+┌─ Running RHOAI 3.x or KServe?
+│  ├─ YES → Use KServe backend type
+│  └─ NO ↓
+│
+├─ Using Meta Llama Stack?
+│  ├─ YES → Use llamastack backend type
+│  └─ NO ↓
+│
+└─ Have direct vLLM service? → Use service backend type
 ```
 
 ## Architecture
@@ -307,6 +636,10 @@ spec:
       backup.velero.io/backup-volumes: "models"
 ```
 
+:::info Storage Validation
+The operator validates that the specified StorageClass exists before creating the PVC. If `storageClassName` is omitted, the cluster's default StorageClass is used.
+:::
+
 **Storage Class Examples:**
 
 - **AWS EKS**: `gp3-csi`, `gp2`
@@ -314,25 +647,515 @@ spec:
 - **Azure AKS**: `managed`, `managed-premium`
 - **OpenShift**: `gp3-csi`, `thin`, `ocs-storagecluster-ceph-rbd`
 
+### Semantic Cache Backends
+
+The operator supports multiple cache backends for semantic caching, which significantly improves latency and reduces token usage by caching similar queries and their responses.
+
+:::warning Prerequisites
+The operator does **not** deploy Redis or Milvus. You must deploy these services separately in your cluster before using them as cache backends. The operator only configures the SemanticRouter to connect to your existing Redis/Milvus deployment.
+
+For deployment examples, see the [Redis](#deploying-redis) and [Milvus](#deploying-milvus) sections below.
+
+**Alternative:** If you prefer automatic deployment of Redis/Milvus, consider using the [Helm chart](https://github.com/vllm-project/semantic-router/tree/main/deploy/helm), which can deploy cache backends as Helm chart dependencies.
+:::
+
+#### Supported Backends
+
+##### 1. Memory Cache (Default)
+
+Simple in-memory cache suitable for development and small deployments.
+
+**Characteristics:**
+
+- No external dependencies
+- Fast access
+- Not persistent (cleared on restart)
+- Limited by pod memory
+
+**Configuration:**
+
+```yaml
+spec:
+  config:
+    bert_model:
+      model_id: models/mom-embedding-light
+      threshold: "0.6"
+      use_cpu: true
+
+    semantic_cache:
+      enabled: true
+      backend_type: memory
+      similarity_threshold: "0.8"
+      max_entries: 1000
+      ttl_seconds: 3600
+      eviction_policy: fifo  # fifo, lru, or lfu
+```
+
+**When to use:**
+
+- Development and testing
+- Small deployments (&lt;1000 cached queries)
+- No persistence requirements
+
+##### 2. Redis Cache
+
+High-performance distributed cache using Redis with vector search capabilities.
+
+**Characteristics:**
+
+- Distributed and scalable
+- Persistent storage (with AOF/RDB)
+- HNSW or FLAT indexing
+- Wide ecosystem support
+
+**Prerequisites:**
+
+- Redis 7.0+ with RediSearch module
+- Create Kubernetes Secret for password:
+
+```bash
+kubectl create secret generic redis-credentials \
+  --from-literal=password='your-redis-password'
+```
+
+**Configuration:**
+
+```yaml
+spec:
+  config:
+    bert_model:
+      model_id: models/mom-embedding-light
+      threshold: "0.6"
+      use_cpu: true
+
+    semantic_cache:
+      enabled: true
+      backend_type: redis
+      similarity_threshold: "0.85"
+      ttl_seconds: 3600
+      embedding_model: bert
+
+      redis:
+        connection:
+          host: redis.default.svc.cluster.local
+          port: 6379
+          database: 0
+          password_secret_ref:
+            name: redis-credentials
+            key: password
+          timeout: 30
+          tls:
+            enabled: false
+
+        index:
+          name: semantic_cache_idx
+          prefix: "cache:"
+          vector_field:
+            name: embedding
+            dimension: 384  # Match your embedding model
+            metric_type: COSINE
+          index_type: HNSW
+          params:
+            M: 16
+            efConstruction: 64
+
+        search:
+          topk: 1
+
+        development:
+          auto_create_index: true
+          verbose_errors: true
+```
+
+**When to use:**
+
+- Production deployments with moderate scale
+- Need persistence and high availability
+- Existing Redis infrastructure
+- Fast in-memory performance required
+
+**Example:** [`vllm.ai_v1alpha1_semanticrouter_redis_cache.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_redis_cache.yaml)
+
+##### 3. Milvus Cache
+
+Enterprise-grade vector database for production deployments with large cache volumes.
+
+**Characteristics:**
+
+- Highly scalable and distributed
+- Advanced indexing (HNSW, IVF, etc.)
+- Built-in data lifecycle management
+- High availability support
+
+**Prerequisites:**
+
+- Milvus 2.3+ (standalone or cluster)
+- Create Kubernetes Secret for credentials:
+
+```bash
+kubectl create secret generic milvus-credentials \
+  --from-literal=password='your-milvus-password'
+```
+
+**Configuration:**
+
+```yaml
+spec:
+  config:
+    bert_model:
+      model_id: models/mom-embedding-light
+      threshold: "0.6"
+      use_cpu: true
+
+    semantic_cache:
+      enabled: true
+      backend_type: milvus
+      similarity_threshold: "0.90"
+      ttl_seconds: 7200
+      embedding_model: bert
+
+      milvus:
+        connection:
+          host: milvus-standalone.default.svc.cluster.local
+          port: 19530
+          database: semantic_router_cache
+          timeout: 30
+          auth:
+            enabled: true
+            username: root
+            password_secret_ref:
+              name: milvus-credentials
+              key: password
+
+        collection:
+          name: semantic_cache
+          description: "Semantic cache for LLM responses"
+          vector_field:
+            name: embedding
+            dimension: 384  # Match your embedding model
+            metric_type: IP
+          index:
+            type: HNSW
+            params:
+              M: 16
+              efConstruction: 64
+
+        search:
+          params:
+            ef: 64
+          topk: 10
+          consistency_level: Session
+
+        performance:
+          connection_pool:
+            max_connections: 10
+            max_idle_connections: 5
+          batch:
+            insert_batch_size: 100
+
+        data_management:
+          ttl:
+            enabled: true
+            timestamp_field: created_at
+            cleanup_interval: 3600
+
+        development:
+          auto_create_collection: true
+```
+
+**When to use:**
+
+- Large-scale production deployments
+- Need advanced vector search capabilities
+- Require data lifecycle management (TTL, compaction)
+- High availability and scalability requirements
+
+**Example:** [`vllm.ai_v1alpha1_semanticrouter_milvus_cache.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_milvus_cache.yaml)
+
+##### 4. Hybrid Cache
+
+Combines in-memory HNSW index with persistent Milvus storage for optimal performance and durability.
+
+**Characteristics:**
+
+- Fast in-memory search with HNSW
+- Persistent storage in Milvus
+- Best of both worlds
+- Automatic synchronization
+
+**Configuration:**
+
+```yaml
+spec:
+  config:
+    bert_model:
+      model_id: models/mom-embedding-light
+      threshold: "0.6"
+      use_cpu: true
+
+    semantic_cache:
+      enabled: true
+      backend_type: hybrid
+      similarity_threshold: "0.85"
+      ttl_seconds: 3600
+      max_entries: 5000
+      eviction_policy: lru
+      embedding_model: bert
+
+      # HNSW in-memory configuration
+      hnsw:
+        use_hnsw: true
+        hnsw_m: 32
+        hnsw_ef_construction: 128
+        max_memory_entries: 5000
+
+      # Milvus persistent storage (same config as milvus backend)
+      milvus:
+        connection:
+          host: milvus-standalone.default.svc.cluster.local
+          port: 19530
+          # ... rest of milvus config
+```
+
+**When to use:**
+
+- Need fastest possible cache lookups
+- Require persistence and durability
+- Willing to trade memory for performance
+- High-throughput production deployments
+
+**Example:** [`vllm.ai_v1alpha1_semanticrouter_hybrid_cache.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_hybrid_cache.yaml)
+
+#### Deploying Redis
+
+Before using Redis cache backend, deploy Redis with RediSearch module to your cluster:
+
+```yaml
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cache-backends
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: cache-backends
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis/redis-stack-server:latest
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: cache-backends
+spec:
+  type: ClusterIP
+  ports:
+  - port: 6379
+    targetPort: 6379
+  selector:
+    app: redis
+```
+
+Apply the configuration:
+
+```bash
+kubectl apply -f redis-deployment.yaml
+```
+
+Create the credentials Secret:
+
+```bash
+kubectl create secret generic redis-credentials \
+  --from-literal=password=''  # Empty for no password, or set your password
+```
+
+**For production deployments**, consider using:
+
+- [Redis Operator](https://github.com/spotahome/redis-operator)
+- [Redis Enterprise Operator](https://docs.redis.com/latest/kubernetes/)
+- Managed Redis services (AWS ElastiCache, Azure Cache for Redis, GCP Memorystore)
+
+#### Deploying Milvus
+
+Before using Milvus cache backend, deploy Milvus to your cluster:
+
+```yaml
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milvus-standalone
+  namespace: cache-backends
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: milvus
+  template:
+    metadata:
+      labels:
+        app: milvus
+    spec:
+      containers:
+      - name: milvus
+        image: milvusdb/milvus:v2.4.0
+        command: ["milvus", "run", "standalone"]
+        ports:
+        - containerPort: 19530
+          name: grpc
+        - containerPort: 9091
+          name: metrics
+        env:
+        - name: ETCD_USE_EMBED
+          value: "true"
+        - name: COMMON_STORAGETYPE
+          value: "local"
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 2000m
+            memory: 4Gi
+        volumeMounts:
+        - name: milvus-data
+          mountPath: /var/lib/milvus
+      volumes:
+      - name: milvus-data
+        emptyDir: {}  # Use PVC for production
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus-standalone
+  namespace: cache-backends
+spec:
+  type: ClusterIP
+  ports:
+  - port: 19530
+    targetPort: 19530
+    name: grpc
+  selector:
+    app: milvus
+```
+
+Apply the configuration:
+
+```bash
+kubectl apply -f milvus-deployment.yaml
+```
+
+Create the credentials Secret:
+
+```bash
+kubectl create secret generic milvus-credentials \
+  --from-literal=password='Milvus'  # Default Milvus password
+```
+
+**For production deployments**, consider using:
+
+- [Milvus Operator](https://milvus.io/docs/install_cluster-milvusoperator.md)
+- [Milvus Helm Chart](https://milvus.io/docs/install_cluster-helm.md)
+- [Zilliz Cloud](https://cloud.zilliz.com/) (managed Milvus service)
+
+:::tip Production Best Practices
+For production cache backends:
+
+1. Use persistent volumes (not emptyDir)
+2. Enable authentication and TLS
+3. Configure resource limits appropriately
+4. Set up monitoring and alerting
+5. Use operators or Helm charts for easier management
+6. Consider managed services for reduced operational overhead
+:::
+
+#### Embedding Models
+
+The semantic cache supports different embedding models for similarity calculation:
+
+- **bert** (default): Lightweight, 384 dimensions, good for general use
+- **qwen3**: Higher quality, 1024 dimensions, better accuracy
+- **gemma**: Balanced, 768 dimensions, moderate performance
+
+Configure via:
+
+```yaml
+spec:
+  config:
+    semantic_cache:
+      embedding_model: bert  # or qwen3, gemma
+```
+
+**Note:** Ensure the `dimension` in cache config matches your chosen embedding model.
+
+#### Migration Between Backends
+
+Migrating from memory cache to Redis or Milvus is straightforward:
+
+1. Deploy Redis or Milvus in your cluster
+2. Create the credentials Secret
+3. Update SemanticRouter CR with new backend configuration
+4. Apply the changes - operator will perform rolling update
+
+The cache will be empty after migration but will populate naturally as queries are processed.
+
+#### Cache Configuration Reference
+
+For detailed configuration options, use `kubectl explain`:
+
+```bash
+# Redis cache configuration
+kubectl explain semanticrouter.spec.config.semantic_cache.redis
+
+# Milvus cache configuration
+kubectl explain semanticrouter.spec.config.semantic_cache.milvus
+
+# HNSW configuration
+kubectl explain semanticrouter.spec.config.semantic_cache.hnsw
+```
+
 ### Semantic Router Configuration
 
-Full semantic router configuration is embedded in the CR. See the complete example in [`deploy/operator/config/samples/vllm_v1alpha1_semanticrouter.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/operator/config/samples/vllm_v1alpha1_semanticrouter.yaml).
+Full semantic router configuration is embedded in the CR. See the complete examples above and in [`deploy/operator/config/samples/`](https://github.com/vllm-project/semantic-router/tree/main/deploy/operator/config/samples).
 
 Key configuration sections:
 
 ```yaml
 spec:
   config:
-    # BERT model for embeddings
+    # BERT model for embeddings (required for semantic cache)
     bert_model:
       model_id: "models/mom-embedding-light"
       threshold: 0.6
       use_cpu: true
 
-    # Semantic cache
+    # Semantic cache (see Semantic Cache Backends section above)
     semantic_cache:
       enabled: true
-      backend_type: "memory"  # or "milvus"
+      backend_type: "memory"  # or redis, milvus, hybrid
       similarity_threshold: 0.8
       max_entries: 1000
       ttl_seconds: 3600
@@ -606,6 +1429,82 @@ spec:
 ## Troubleshooting
 
 ### Common Issues
+
+#### Backend Discovery Failures
+
+**Symptom:** "No backends found" or "Failed to discover backend" in logs
+
+**For KServe backends:**
+
+```bash
+# Check InferenceService exists and is ready
+kubectl get inferenceservice llama-3-8b
+
+# Check predictor service was created by KServe
+kubectl get service llama-3-8b-predictor
+
+# Verify InferenceService status
+kubectl describe inferenceservice llama-3-8b
+```
+
+**For Llama Stack backends:**
+
+```bash
+# Verify services exist with correct labels
+kubectl get services -l app=llama-stack,model=llama-3.3-70b
+
+# Check service labels match discoveryLabels in CR
+kubectl get service <service-name> -o jsonpath='{.metadata.labels}'
+```
+
+**For direct service backends:**
+
+```bash
+# Verify service exists in specified namespace
+kubectl get service vllm-deepseek -n vllm-serving
+
+# Check service has ports defined
+kubectl get service vllm-deepseek -n vllm-serving -o jsonpath='{.spec.ports[0]}'
+```
+
+#### Gateway Integration Issues
+
+**Symptom:** HTTPRoute not created or traffic not reaching semantic router
+
+```bash
+# Verify Gateway exists
+kubectl get gateway istio-ingressgateway -n istio-system
+
+# Check HTTPRoute was created
+kubectl get httproute -l app.kubernetes.io/instance=my-router
+
+# Verify Gateway supports HTTPRoute (Gateway API v1)
+kubectl get gateway istio-ingressgateway -n istio-system -o yaml | grep -A5 listeners
+
+# Check operator status
+kubectl get semanticrouter my-router -o jsonpath='{.status.gatewayMode}'
+# Should show: "gateway-integration"
+```
+
+#### OpenShift Route Issues
+
+**Symptom:** Route not created on OpenShift
+
+```bash
+# Verify running on OpenShift cluster
+kubectl api-resources | grep route.openshift.io
+
+# Check if Route was created
+kubectl get route -l app.kubernetes.io/instance=my-router
+
+# Check operator detected OpenShift
+kubectl logs -n semantic-router-operator-system \
+  deployment/semantic-router-operator-controller-manager \
+  | grep -i "openshift\|route"
+
+# Verify Route status
+kubectl get semanticrouter my-router -o jsonpath='{.status.openshiftFeatures}'
+```
 
 #### Pod stuck in `ImagePullBackOff`
 

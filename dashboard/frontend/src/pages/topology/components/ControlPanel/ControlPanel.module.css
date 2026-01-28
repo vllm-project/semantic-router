@@ -17,6 +17,8 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex: 1;
+  max-width: 600px;
 }
 
 .sectionTitle {
@@ -66,9 +68,7 @@
 }
 
 .testQueryHeader {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  display: none;
 }
 
 .testQueryIcon {
@@ -111,26 +111,31 @@
 
 .inputGroup {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  align-items: flex-end;
+  gap: 12px;
+  position: relative;
 }
 
 .queryInput {
   width: 100%;
-  padding: 10px 12px;
+  padding: 10px 16px;
   border: 1px solid var(--border-color, #333);
   background: var(--bg-primary, #1a1a1a);
   color: var(--text-primary, #e8e8e8);
-  font-size: 12px;
-  border-radius: 6px;
-  resize: vertical;
-  min-height: 60px;
+  font-size: 14px;
+  border-radius: 24px;
+  resize: none;
+  min-height: 44px;
+  max-height: 200px;
   font-family: inherit;
+  line-height: 1.5;
+  transition: all 0.2s ease;
 }
 
 .queryInput:focus {
   outline: none;
   border-color: var(--accent-color, #76b900);
+  box-shadow: 0 0 0 2px rgba(118, 185, 0, 0.15);
 }
 
 .queryInput::placeholder {
@@ -138,19 +143,24 @@
 }
 
 .testBtn {
-  padding: 10px 16px;
+  padding: 10px 24px;
   background: var(--accent-color, #76b900);
   color: white;
   border: none;
-  border-radius: 6px;
-  font-size: 12px;
+  border-radius: 24px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
+  white-space: nowrap;
+  min-height: 44px;
+  flex-shrink: 0;
 }
 
 .testBtn:hover:not(:disabled) {
   background: var(--accent-hover, #8ed100);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(118, 185, 0, 0.3);
 }
 
 .testBtn:disabled {
@@ -309,24 +319,26 @@
 /* ============== Collapse Controls ============== */
 .collapseControls {
   display: flex;
+  flex-direction: column;
   gap: 8px;
 }
 
 .collapseBtn {
-  flex: 1;
-  padding: 8px 12px;
+  padding: 10px 16px;
   border: 1px solid var(--border-color, #333);
-  background: transparent;
+  background: var(--bg-primary, #1a1a1a);
   color: var(--text-secondary, #888);
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 8px;
   transition: all 0.2s;
+  white-space: nowrap;
 }
 
 .collapseBtn:hover {
-  border-color: var(--text-secondary, #888);
+  border-color: var(--accent-color, #76b900);
   color: var(--text-primary, #e8e8e8);
+  background: var(--bg-hover, #222);
 }
 
 /* ============== Legend ============== */
@@ -367,4 +379,139 @@
     transparent 4px,
     transparent 8px
   );
+}
+
+/* Mobile Responsive - Hide Legend on mobile */
+@media (max-width: 768px) {
+  /* Hide the entire legend section on mobile */
+  .section:has(.legend) {
+    display: none;
+  }
+
+  /* Fallback: hide legend directly if :has() is not supported */
+  .legend {
+    display: none;
+  }
+
+  /* Fix signal summary font size on mobile - make it smaller with !important */
+  .resultSectionTitle {
+    font-size: 8px !important;
+  }
+
+  .signalTag {
+    font-size: 8px !important;
+    padding: 2px 5px !important;
+  }
+
+  .signalScore {
+    font-size: 7px !important;
+  }
+
+  .decisionResult {
+    font-size: 9px !important;
+  }
+
+  .fallbackBadge {
+    font-size: 7px !important;
+    padding: 2px 4px !important;
+  }
+
+  .fallbackReason {
+    font-size: 8px !important;
+    padding: 3px 5px !important;
+  }
+
+  .noMatch {
+    font-size: 9px !important;
+  }
+
+  .needsVerify {
+    font-size: 8px !important;
+  }
+
+  .modelTag {
+    font-size: 8px !important;
+    padding: 2px 5px !important;
+  }
+
+  .resultTitle {
+    font-size: 10px !important;
+  }
+
+  .accurateBadge,
+  .simulatedBadge {
+    font-size: 8px !important;
+    padding: 2px 4px !important;
+  }
+
+  .latencyBadge {
+    font-size: 8px !important;
+  }
+
+  .warningBanner {
+    font-size: 9px !important;
+    padding: 6px !important;
+  }
+
+}
+
+@media (max-width: 480px) {
+  .resultSectionTitle {
+    font-size: 7px !important;
+  }
+
+  .signalTag {
+    font-size: 7px !important;
+    padding: 2px 4px !important;
+  }
+
+  .signalScore {
+    font-size: 6px !important;
+  }
+
+  .decisionResult {
+    font-size: 8px !important;
+  }
+
+  .fallbackBadge {
+    font-size: 6px !important;
+    padding: 1px 3px !important;
+  }
+
+  .fallbackReason {
+    font-size: 7px !important;
+    padding: 2px 4px !important;
+  }
+
+  .noMatch {
+    font-size: 8px !important;
+  }
+
+  .needsVerify {
+    font-size: 7px !important;
+  }
+
+  .modelTag {
+    font-size: 7px !important;
+    padding: 2px 4px !important;
+  }
+
+  .resultTitle {
+    font-size: 9px !important;
+  }
+
+  .accurateBadge,
+  .simulatedBadge {
+    font-size: 7px !important;
+    padding: 1px 3px !important;
+  }
+
+  .latencyBadge {
+    font-size: 7px !important;
+  }
+
+  .warningBanner {
+    font-size: 8px !important;
+    padding: 5px !important;
+  }
 }
