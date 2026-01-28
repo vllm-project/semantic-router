@@ -1207,16 +1207,521 @@ spec:
                     properties:
                       backend_type:
                         default: memory
+                        description: |-
+                          BackendType specifies the cache backend to use
+                          Options: "memory" (default), "redis", "milvus", "hybrid"
+                        enum:
+                        - memory
+                        - redis
+                        - milvus
+                        - hybrid
+                        type: string
+                      embedding_model:
+                        default: bert
+                        description: |-
+                          EmbeddingModel specifies which embedding model to use for semantic similarity
+                          Options: "bert" (default), "qwen3", "gemma"
+                        enum:
+                        - bert
+                        - qwen3
+                        - gemma
                         type: string
                       enabled:
                         default: true
+                        description: Enabled controls whether semantic caching is
+                          active
                         type: boolean
                       eviction_policy:
                         default: fifo
+                        description: EvictionPolicy for in-memory cache ("fifo", "lru",
+                          "lfu")
+                        enum:
+                        - fifo
+                        - lru
+                        - lfu
                         type: string
+                      hnsw:
+                        description: HNSW configuration for hybrid/in-memory backends
+                        properties:
+                          hnsw_ef_construction:
+                            default: 200
+                            description: EfConstruction is the size of dynamic candidate
+                              list during construction
+                            minimum: 1
+                            type: integer
+                          hnsw_m:
+                            default: 16
+                            description: M is the number of bi-directional links per
+                              node
+                            minimum: 2
+                            type: integer
+                          max_memory_entries:
+                            default: 1000
+                            description: MaxMemoryEntries limits in-memory entries
+                              for hybrid backend
+                            minimum: 0
+                            type: integer
+                          use_hnsw:
+                            default: false
+                            description: UseHNSW enables HNSW indexing for faster
+                              similarity search
+                            type: boolean
+                        type: object
                       max_entries:
                         default: 1000
+                        description: MaxEntries is the maximum number of cache entries
+                          (for memory/hybrid backends)
                         type: integer
+                      milvus:
+                        description: Milvus configuration (required when backend_type
+                          is "milvus")
+                        properties:
+                          collection:
+                            description: Collection settings for Milvus
+                            properties:
+                              description:
+                                default: Semantic cache for LLM request-response pairs
+                                description: Description of the collection
+                                type: string
+                              index:
+                                description: Index configuration for the collection
+                                properties:
+                                  params:
+                                    description: Params for the index
+                                    properties:
+                                      M:
+                                        default: 16
+                                        description: M is the number of bi-directional
+                                          links for HNSW
+                                        minimum: 2
+                                        type: integer
+                                      efConstruction:
+                                        default: 64
+                                        description: EfConstruction for HNSW index
+                                          building
+                                        minimum: 1
+                                        type: integer
+                                    type: object
+                                  type:
+                                    default: HNSW
+                                    description: Type of index algorithm
+                                    enum:
+                                    - HNSW
+                                    - IVF_FLAT
+                                    - IVF_SQ8
+                                    - IVF_PQ
+                                    type: string
+                                type: object
+                              name:
+                                default: semantic_cache
+                                description: Name of the Milvus collection
+                                type: string
+                              vector_field:
+                                description: VectorField configuration for embeddings
+                                properties:
+                                  dimension:
+                                    description: Dimension of the embedding vectors
+                                    minimum: 1
+                                    type: integer
+                                  metric_type:
+                                    default: IP
+                                    description: |-
+                                      MetricType for vector similarity
+                                      Options: "IP" (inner product), "L2", "COSINE"
+                                    enum:
+                                    - IP
+                                    - L2
+                                    - COSINE
+                                    type: string
+                                  name:
+                                    default: embedding
+                                    description: Name of the vector field
+                                    type: string
+                                type: object
+                            type: object
+                          connection:
+                            description: Connection settings for Milvus server
+                            properties:
+                              auth:
+                                description: Auth configuration for Milvus authentication
+                                properties:
+                                  enabled:
+                                    default: false
+                                    description: Enabled controls whether to use authentication
+                                    type: boolean
+                                  password:
+                                    description: Password for Milvus authentication
+                                      (plaintext - consider using PasswordSecretRef
+                                      instead)
+                                    type: string
+                                  password_secret_ref:
+                                    description: |-
+                                      PasswordSecretRef references a Secret containing the Milvus password
+                                      Preferred over plaintext Password field for security
+                                    properties:
+                                      key:
+                                        description: The key of the secret to select
+                                          from.  Must be a valid secret key.
+                                        type: string
+                                      name:
+                                        default: ""
+                                        description: |-
+                                          Name of the referent.
+                                          This field is effectively required, but due to backwards compatibility is
+                                          allowed to be empty. Instances of this type with an empty value here are
+                                          almost certainly wrong.
+                                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                        type: string
+                                      optional:
+                                        description: Specify whether the Secret or
+                                          its key must be defined
+                                        type: boolean
+                                    required:
+                                    - key
+                                    type: object
+                                    x-kubernetes-map-type: atomic
+                                  username:
+                                    description: Username for Milvus authentication
+                                    type: string
+                                type: object
+                              database:
+                                default: semantic_router_cache
+                                description: Database name in Milvus
+                                type: string
+                              host:
+                                description: Host is the Milvus server hostname or
+                                  IP address
+                                type: string
+                              port:
+                                default: 19530
+                                description: Port is the Milvus server port
+                                maximum: 65535
+                                minimum: 1
+                                type: integer
+                              timeout:
+                                default: 30
+                                description: Timeout for Milvus operations in seconds
+                                minimum: 0
+                                type: integer
+                              tls:
+                                description: TLS configuration for secure Milvus connections
+                                properties:
+                                  ca_file:
+                                    description: CAFile is the path to CA certificate
+                                      file
+                                    type: string
+                                  cert_file:
+                                    description: CertFile is the path to client certificate
+                                      file
+                                    type: string
+                                  enabled:
+                                    default: false
+                                    description: Enabled controls whether to use TLS
+                                    type: boolean
+                                  key_file:
+                                    description: KeyFile is the path to client key
+                                      file
+                                    type: string
+                                type: object
+                            type: object
+                          data_management:
+                            description: DataManagement settings for TTL and compaction
+                            properties:
+                              compaction:
+                                description: Compaction settings
+                                properties:
+                                  enabled:
+                                    default: false
+                                    description: Enabled controls whether auto-compaction
+                                      is active
+                                    type: boolean
+                                  interval:
+                                    default: 86400
+                                    description: Interval in seconds between compaction
+                                      runs
+                                    minimum: 0
+                                    type: integer
+                                type: object
+                              ttl:
+                                description: TTL settings for automatic expiration
+                                properties:
+                                  cleanup_interval:
+                                    default: 3600
+                                    description: CleanupInterval in seconds between
+                                      cleanup runs
+                                    minimum: 0
+                                    type: integer
+                                  enabled:
+                                    default: false
+                                    description: Enabled controls whether TTL is active
+                                    type: boolean
+                                  timestamp_field:
+                                    default: created_at
+                                    description: TimestampField is the field used
+                                      for TTL calculation
+                                    type: string
+                                type: object
+                            type: object
+                          development:
+                            description: Development settings for Milvus cache
+                            properties:
+                              auto_create_collection:
+                                default: true
+                                description: AutoCreateCollection automatically creates
+                                  the collection if it doesn't exist
+                                type: boolean
+                              drop_collection_on_startup:
+                                default: false
+                                description: DropCollectionOnStartup clears the collection
+                                  when router starts (for testing)
+                                type: boolean
+                              verbose_errors:
+                                default: true
+                                description: VerboseErrors includes detailed error
+                                  messages in logs
+                                type: boolean
+                            type: object
+                          performance:
+                            description: Performance tuning for Milvus
+                            properties:
+                              batch:
+                                description: Batch settings for operations
+                                properties:
+                                  insert_batch_size:
+                                    default: 100
+                                    description: InsertBatchSize for bulk inserts
+                                    minimum: 1
+                                    type: integer
+                                  timeout:
+                                    default: 60
+                                    description: Timeout for batch operations in seconds
+                                    minimum: 0
+                                    type: integer
+                                type: object
+                              connection_pool:
+                                description: ConnectionPool settings
+                                properties:
+                                  acquire_timeout:
+                                    default: 30
+                                    description: AcquireTimeout in seconds
+                                    minimum: 0
+                                    type: integer
+                                  max_connections:
+                                    default: 10
+                                    description: MaxConnections in the pool
+                                    minimum: 1
+                                    type: integer
+                                  max_idle_connections:
+                                    default: 5
+                                    description: MaxIdleConnections to keep
+                                    minimum: 0
+                                    type: integer
+                                type: object
+                            type: object
+                          search:
+                            description: Search settings for Milvus queries
+                            properties:
+                              consistency_level:
+                                default: Session
+                                description: |-
+                                  ConsistencyLevel for search operations
+                                  Options: "Strong", "Session", "Bounded", "Eventually"
+                                enum:
+                                - Strong
+                                - Session
+                                - Bounded
+                                - Eventually
+                                type: string
+                              params:
+                                description: Params for search operations
+                                properties:
+                                  ef:
+                                    default: 64
+                                    description: Ef is the search-time HNSW parameter
+                                    minimum: 1
+                                    type: integer
+                                type: object
+                              topk:
+                                default: 10
+                                description: TopK is the number of results to return
+                                minimum: 1
+                                type: integer
+                            type: object
+                        type: object
+                      redis:
+                        description: Redis configuration (required when backend_type
+                          is "redis")
+                        properties:
+                          connection:
+                            description: Connection settings for Redis server
+                            properties:
+                              database:
+                                default: 0
+                                description: Database is the Redis database number
+                                  to use
+                                minimum: 0
+                                type: integer
+                              host:
+                                description: |-
+                                  Host is the Redis server hostname or IP address
+                                  Example: "redis.default.svc.cluster.local"
+                                type: string
+                              password:
+                                description: Password for Redis authentication (plaintext
+                                  - consider using PasswordSecretRef instead)
+                                type: string
+                              password_secret_ref:
+                                description: |-
+                                  PasswordSecretRef references a Secret containing the Redis password
+                                  Preferred over plaintext Password field for security
+                                properties:
+                                  key:
+                                    description: The key of the secret to select from.  Must
+                                      be a valid secret key.
+                                    type: string
+                                  name:
+                                    default: ""
+                                    description: |-
+                                      Name of the referent.
+                                      This field is effectively required, but due to backwards compatibility is
+                                      allowed to be empty. Instances of this type with an empty value here are
+                                      almost certainly wrong.
+                                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                    type: string
+                                  optional:
+                                    description: Specify whether the Secret or its
+                                      key must be defined
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                                x-kubernetes-map-type: atomic
+                              port:
+                                default: 6379
+                                description: Port is the Redis server port
+                                maximum: 65535
+                                minimum: 1
+                                type: integer
+                              timeout:
+                                default: 30
+                                description: Timeout for Redis operations in seconds
+                                minimum: 0
+                                type: integer
+                              tls:
+                                description: TLS configuration for secure Redis connections
+                                properties:
+                                  ca_file:
+                                    description: CAFile is the path to CA certificate
+                                      file
+                                    type: string
+                                  cert_file:
+                                    description: CertFile is the path to client certificate
+                                      file
+                                    type: string
+                                  enabled:
+                                    default: false
+                                    description: Enabled controls whether to use TLS
+                                      for Redis connection
+                                    type: boolean
+                                  key_file:
+                                    description: KeyFile is the path to client key
+                                      file
+                                    type: string
+                                type: object
+                            type: object
+                          development:
+                            description: Development settings for Redis cache
+                            properties:
+                              auto_create_index:
+                                default: true
+                                description: AutoCreateIndex automatically creates
+                                  the index if it doesn't exist
+                                type: boolean
+                              drop_index_on_startup:
+                                default: false
+                                description: DropIndexOnStartup clears the index when
+                                  router starts (for testing)
+                                type: boolean
+                              verbose_errors:
+                                default: true
+                                description: VerboseErrors includes detailed error
+                                  messages in logs
+                                type: boolean
+                            type: object
+                          index:
+                            description: Index settings for Redis vector search
+                            properties:
+                              index_type:
+                                default: HNSW
+                                description: |-
+                                  IndexType specifies the index algorithm
+                                  Options: "HNSW" (recommended), "FLAT"
+                                enum:
+                                - HNSW
+                                - FLAT
+                                type: string
+                              name:
+                                default: semantic_cache_idx
+                                description: Name of the Redis index
+                                type: string
+                              params:
+                                description: Params for HNSW index
+                                properties:
+                                  M:
+                                    default: 16
+                                    description: |-
+                                      M is the number of bi-directional links per node
+                                      Higher values = better recall, more memory
+                                    minimum: 2
+                                    type: integer
+                                  efConstruction:
+                                    default: 64
+                                    description: |-
+                                      EfConstruction is the size of dynamic candidate list during construction
+                                      Higher values = better quality, slower indexing
+                                    minimum: 1
+                                    type: integer
+                                type: object
+                              prefix:
+                                default: 'doc:'
+                                description: Prefix for Redis keys
+                                type: string
+                              vector_field:
+                                description: VectorField configuration for embeddings
+                                properties:
+                                  dimension:
+                                    description: |-
+                                      Dimension of the embedding vectors
+                                      For BERT: 384, for Qwen3: 1024, for Gemma: 768
+                                    minimum: 1
+                                    type: integer
+                                  metric_type:
+                                    default: COSINE
+                                    description: |-
+                                      MetricType for vector similarity
+                                      Options: "COSINE", "IP" (inner product), "L2" (Euclidean)
+                                    enum:
+                                    - COSINE
+                                    - IP
+                                    - L2
+                                    type: string
+                                  name:
+                                    default: embedding
+                                    description: Name of the vector field
+                                    type: string
+                                type: object
+                            type: object
+                          search:
+                            description: Search settings for Redis queries
+                            properties:
+                              topk:
+                                default: 1
+                                description: TopK is the number of results to return
+                                  from vector search
+                                minimum: 1
+                                type: integer
+                            type: object
+                        type: object
                       similarity_threshold:
                         default: "0.8"
                         description: Similarity threshold for cache hits (0.0-1.0).
@@ -1225,6 +1730,8 @@ spec:
                         type: string
                       ttl_seconds:
                         default: 3600
+                        description: TTLSeconds is the time-to-live for cache entries
+                          in seconds
                         type: integer
                     type: object
                   tools:

@@ -1633,7 +1633,7 @@ const MAX_TOOL_ITERATIONS = 30
       </div>
 
       <div className={styles.inputContainer}>
-        <div className={styles.inputWrapper}>
+        <div className={`${styles.inputWrapper} ${inputValue.trim() ? styles.hasContent : ''}`}>
           <textarea
             ref={inputRef}
             value={inputValue}

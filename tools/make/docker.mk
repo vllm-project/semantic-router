@@ -246,7 +246,6 @@ response-api-test: response-api-test-up
 	@sleep 10
 	@$(MAKE) response-api-test-run
 	@$(MAKE) response-api-test-down
-
 # Help target for Docker commands
 docker-help:
 docker-help: ## Show help for Docker-related make targets and environment variables
@@ -311,3 +310,16 @@ vllm-sr-start: vllm-sr-dev
 	@echo "Starting vLLM Semantic Router service..."
 	@vllm-sr serve --image-pull-policy=ifnotpresent --image $(VLLM_SR_IMAGE)
 	@vllm-sr dashboard
+
+##@ vLLM-SR Tests (e2e tests for vllm-sr CLI)
+# Tests are located in e2e/testing/vllm-sr-cli/
+
+vllm-sr-test: ## Run CLI unit tests (fast, no Docker image required)
+vllm-sr-test:
+	@$(LOG_TARGET)
+	@cd e2e/testing/vllm-sr-cli && python run_cli_tests.py --verbose
+
+vllm-sr-test-integration: ## Run CLI unit + integration tests (requires Docker image)
+vllm-sr-test-integration: vllm-sr-build
+	@$(LOG_TARGET)
+	@cd e2e/testing/vllm-sr-cli && RUN_INTEGRATION_TESTS=true python run_cli_tests.py --verbose --integration

@@ -55,6 +55,8 @@ This deploys only the core components without Dashboard, OpenWebUI, Grafana, and
 | Flag | Description |
 |------|-------------|
 | `--no-observability` | Skip deploying Dashboard, OpenWebUI, Grafana, and Prometheus |
+| `--kserve` | Deploy semantic-router with a KServe backend (add `--simulator` for KServe simulator) |
+| *(auto)* | If the KServe CRD is missing, the script installs upstream KServe and cert-manager |
 | `--help`, `-h` | Show help message |
 
 ### Manual Deployment (Advanced)
@@ -152,6 +154,37 @@ curl -k -X POST https://$ENVOY_ROUTE/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"auto","messages":[{"role":"user","content":"What is 2+2?"}]}'
 ```
+
+### KServe Mode Routes
+
+When using `--kserve`, routes are created with different names:
+
+```bash
+# Classification API route
+API_ROUTE=$(oc get route semantic-router-kserve-api -n vllm-semantic-router-system -o jsonpath='{.spec.host}')
+
+# Envoy route for chat completions
+ENVOY_ROUTE=$(oc get route semantic-router-kserve -n vllm-semantic-router-system -o jsonpath='{.spec.host}')
+
+curl -k https://$API_ROUTE/health
+
+curl -k -X POST https://$API_ROUTE/api/v1/classify/intent \
+  -H "Content-Type: application/json" \
+  -d '{"text": "What is machine learning?"}'
+
+curl -k -X POST https://$ENVOY_ROUTE/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"auto","messages":[{"role":"user","content":"What is 2+2?"}]}'
+```
+
+To run the KServe simulator with two models (Model-A and Model-B):
+
+```bash
+cd deploy/openshift
+./deploy-to-openshift.sh --kserve --simulator
+```
+
+For non-simulator KServe deployments, use `deploy/kserve/deploy.sh` directly so you can pass custom KServe options.
 
 ## Architecture Differences from Kubernetes
 

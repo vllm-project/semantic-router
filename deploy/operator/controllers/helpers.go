@@ -17,10 +17,16 @@ limitations under the License.
 package controllers
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/types"
+
+	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
 )
 
 // getInt32OrDefault returns the value if not nil, otherwise returns the default
@@ -107,4 +113,114 @@ func (r *SemanticRouterReconciler) convertStringValue(s string) interface{} {
 
 	// If none of the above, keep as string
 	return s
+}
+
+// getSecretValue retrieves a value from a Kubernetes Secret
+func (r *SemanticRouterReconciler) getSecretValue(
+	ctx context.Context,
+	namespace string,
+	selector *corev1.SecretKeySelector,
+) (string, error) {
+	if selector == nil {
+		return "", fmt.Errorf("secret selector is nil")
+	}
+
+	secret := &corev1.Secret{}
+	err := r.Get(ctx, types.NamespacedName{
+		Name:      selector.Name,
+		Namespace: namespace,
+	}, secret)
+	if err != nil {
+		return "", fmt.Errorf("failed to get secret %s: %w", selector.Name, err)
+	}
+
+	value, ok := secret.Data[selector.Key]
+	if !ok {
+		return "", fmt.Errorf("key %s not found in secret %s", selector.Key, selector.Name)
+	}
+
+	return string(value), nil
+}
+
+// resolveSemanticCacheSecrets resolves all SecretKeySelector references in cache config
+func (r *SemanticRouterReconciler) resolveSemanticCacheSecrets(
+	ctx context.Context,
+	sr *vllmv1alpha1.SemanticRouter,
+) error {
+	if sr.Spec.Config.SemanticCache == nil {
+		return nil
+	}
+
+	cache := sr.Spec.Config.SemanticCache
+
+	// Resolve Redis password from Secret
+	if cache.Redis != nil && cache.Redis.Connection.PasswordSecretRef != nil {
+		password, err := r.getSecretValue(
+			ctx,
+			sr.Namespace,
+			cache.Redis.Connection.PasswordSecretRef,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to resolve Redis password: %w", err)
+		}
+		cache.Redis.Connection.Password = password
+		// Clear the SecretRef after resolution so it doesn't appear in the ConfigMap
+		cache.Redis.Connection.PasswordSecretRef = nil
+	}
+
+	// Resolve Milvus password from Secret
+	if cache.Milvus != nil &&
+		cache.Milvus.Connection.Auth.PasswordSecretRef != nil {
+		password, err := r.getSecretValue(
+			ctx,
+			sr.Namespace,
+			cache.Milvus.Connection.Auth.PasswordSecretRef,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to resolve Milvus password: %w", err)
+		}
+		cache.Milvus.Connection.Auth.Password = password
+		// Clear the SecretRef after resolution so it doesn't appear in the ConfigMap
+		cache.Milvus.Connection.Auth.PasswordSecretRef = nil
+	}
+
+	return nil
+}
+
+// validateSemanticCacheConfig validates cache configuration consistency
+func validateSemanticCacheConfig(cache *vllmv1alpha1.SemanticCacheConfig) error {
+	if cache == nil || !cache.Enabled {
+		return nil
+	}
+
+	switch cache.BackendType {
+	case "redis":
+		if cache.Redis == nil {
+			return fmt.Errorf("redis configuration required when backend_type is 'redis'")
+		}
+		if cache.Redis.Connection.Host == "" {
+			return fmt.Errorf("redis.connection.host is required")
+		}
+	case "milvus":
+		if cache.Milvus == nil {
+			return fmt.Errorf("milvus configuration required when backend_type is 'milvus'")
+		}
+		if cache.Milvus.Connection.Host == "" {
+			return fmt.Errorf("milvus.connection.host is required")
+		}
+	case "hybrid":
+		if cache.Milvus == nil {
+			return fmt.Errorf("milvus configuration required for hybrid backend")
+		}
+		if cache.Milvus.Connection.Host == "" {
+			return fmt.Errorf("milvus.connection.host is required for hybrid backend")
+		}
+		// HNSW config is optional but recommended
+	case "memory", "":
+		// No additional validation needed for memory backend
+	default:
+		return fmt.Errorf("unsupported backend_type: %s (must be one of: memory, redis, milvus, hybrid)", cache.BackendType)
+	}
+
+	return nil
 }

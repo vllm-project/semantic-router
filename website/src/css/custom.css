@@ -312,11 +312,11 @@ a:hover {
   color: var(--tech-accent-orange);
 }
 
-/* Buttons */
+/* Buttons - Minimalist Style */
 .button {
-  border-radius: 8px;
-  font-weight: 600;
-  transition: all 0.3s ease;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: all 0.2s ease;
   border: 1px solid transparent;
 }
 
@@ -339,33 +339,234 @@ a:hover {
   box-shadow: 0 12px 32px rgba(88, 166, 255, 0.3);
 }
 
-/* Homepage hero buttons - outline button styling */
-.button--outline {
-  background: rgb(50, 52, 55) !important;
-  border: 2px solid rgba(255, 255, 255, 0.15) !important;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !important;
-  transition: all 0.3s ease !important;
+/* Get Started button - Secondary (dark solid with enhanced 3D effect) */
+.button--secondary {
+  background: linear-gradient(180deg, #2d2d30 0%, #1a1a1c 100%) !important;
+  border: none !important;
+  border-top: 2px solid rgba(255, 255, 255, 0.15) !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.05) !important;
+  border-right: 1px solid rgba(0, 0, 0, 0.3) !important;
   color: #ffffff !important;
+  font-weight: 600 !important;
+  padding: 0.75rem 2.5rem !important;
+  min-width: 180px !important;
+  position: relative;
+  border-radius: 8px !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.1) inset,
+    0 6px 0 #0a0a0a,
+    0 8px 0 rgba(0, 0, 0, 0.2),
+    0 12px 24px rgba(0, 0, 0, 0.4),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+  transition: all 0.15s ease !important;
+  transform: translateY(0) !important;
+}
+
+.button--secondary::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 8px;
+  padding: 1px;
+  background: linear-gradient(135deg,
+    rgba(255, 255, 255, 0.2) 0%,
+    rgba(255, 255, 255, 0.05) 25%,
+    transparent 50%,
+    rgba(0, 0, 0, 0.1) 75%,
+    rgba(0, 0, 0, 0.2) 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.button--secondary:hover {
+  background: linear-gradient(180deg, #3f3f46 0%, #27272a 100%) !important;
+  color: #ffffff !important;
+  transform: translateY(-3px) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.15) inset,
+    0 9px 0 #0a0a0a,
+    0 11px 0 rgba(0, 0, 0, 0.25),
+    0 16px 32px rgba(0, 0, 0, 0.5),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12) !important;
+}
+
+.button--secondary:active {
+  transform: translateY(4px) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 2px 0 #0a0a0a,
+    0 4px 0 rgba(0, 0, 0, 0.15),
+    0 6px 12px rgba(0, 0, 0, 0.3),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05) !important;
+}
+
+[data-theme='dark'] .button--secondary {
+  background: linear-gradient(180deg, #ffffff 0%, #f0f0f0 100%) !important;
+  border-top: 2px solid #ffffff !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.8) !important;
+  border-right: 1px solid rgba(0, 0, 0, 0.1) !important;
+  color: #18181b !important;
+  padding: 0.75rem 2.5rem !important;
+  min-width: 180px !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 6px 0 #c7c7c7,
+    0 8px 0 rgba(0, 0, 0, 0.1),
+    0 12px 24px rgba(0, 0, 0, 0.2),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.06) !important;
+}
+
+[data-theme='dark'] .button--secondary::before {
+  background: linear-gradient(135deg,
+    rgba(0, 0, 0, 0.15) 0%,
+    rgba(0, 0, 0, 0.05) 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.08) 75%,
+    rgba(255, 255, 255, 0.15) 100%);
+}
+
+[data-theme='dark'] .button--secondary:hover {
+  background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%) !important;
+  color: #18181b !important;
+  transform: translateY(-3px) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 9px 0 #c7c7c7,
+    0 11px 0 rgba(0, 0, 0, 0.12),
+    0 16px 32px rgba(0, 0, 0, 0.25),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-theme='dark'] .button--secondary:active {
+  transform: translateY(4px) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.5) inset,
+    0 2px 0 #c7c7c7,
+    0 4px 0 rgba(0, 0, 0, 0.08),
+    0 6px 12px rgba(0, 0, 0, 0.15),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Public Beta button - Outline with enhanced 3D effect */
+.button--outline {
+  background: linear-gradient(180deg, #ffffff 0%, #f5f5f5 100%) !important;
+  border: 2px solid #d4d4d8 !important;
+  border-top-color: #ffffff !important;
+  border-left-color: #e8e8e8 !important;
+  border-right-color: #c0c0c0 !important;
+  border-bottom-color: #b0b0b0 !important;
+  color: #18181b !important;
+  font-weight: 600 !important;
+  padding: 0.75rem 2.5rem !important;
+  min-width: 180px !important;
+  position: relative;
+  border-radius: 8px !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 6px 0 #d0d0d0,
+    0 8px 0 rgba(0, 0, 0, 0.08),
+    0 12px 24px rgba(0, 0, 0, 0.15),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.04) !important;
+  transition: all 0.15s ease !important;
+  transform: translateY(0) !important;
+}
+
+.button--outline::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 8px;
+  padding: 1px;
+  background: linear-gradient(135deg,
+    rgba(0, 0, 0, 0.12) 0%,
+    rgba(0, 0, 0, 0.04) 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.3) 75%,
+    rgba(255, 255, 255, 0.5) 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
 }
 
 .button--outline:hover {
-  transform: translateY(-2px) !important;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3) !important;
-  background: rgb(60, 62, 65) !important;
-  border-color: rgba(255, 255, 255, 0.25) !important;
-  color: #ffffff !important;
+  background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%) !important;
+  border-color: #c0c0c0 !important;
+  border-top-color: #ffffff !important;
+  border-left-color: #e0e0e0 !important;
+  color: #18181b !important;
+  transform: translateY(-3px) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 1) inset,
+    0 9px 0 #d0d0d0,
+    0 11px 0 rgba(0, 0, 0, 0.1),
+    0 16px 32px rgba(0, 0, 0, 0.2),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.06) !important;
+}
+
+.button--outline:active {
+  transform: translateY(4px) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 2px 0 #d0d0d0,
+    0 4px 0 rgba(0, 0, 0, 0.06),
+    0 6px 12px rgba(0, 0, 0, 0.12),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.03) !important;
 }
 
 [data-theme='dark'] .button--outline {
-  background: rgb(235, 237, 240) !important;
-  border: 2px solid rgba(0, 0, 0, 0.2) !important;
-  color: #000000 !important;
+  background: linear-gradient(180deg, #3f3f46 0%, #2d2d30 100%) !important;
+  border: 2px solid #52525b !important;
+  border-top-color: #71717a !important;
+  border-left-color: #5a5a5f !important;
+  border-right-color: #2a2a2d !important;
+  border-bottom-color: #1a1a1c !important;
+  color: #fafafa !important;
+  padding: 0.75rem 2.5rem !important;
+  min-width: 180px !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.1) inset,
+    0 6px 0 #1a1a1c,
+    0 8px 0 rgba(0, 0, 0, 0.3),
+    0 12px 24px rgba(0, 0, 0, 0.4),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06) !important;
+}
+
+[data-theme='dark'] .button--outline::before {
+  background: linear-gradient(135deg,
+    rgba(255, 255, 255, 0.15) 0%,
+    rgba(255, 255, 255, 0.08) 25%,
+    transparent 50%,
+    rgba(0, 0, 0, 0.15) 75%,
+    rgba(0, 0, 0, 0.25) 100%);
 }
 
 [data-theme='dark'] .button--outline:hover {
-  background: rgb(245, 247, 250) !important;
-  border-color: rgba(0, 0, 0, 0.3) !important;
-  color: #000000 !important;
+  background: linear-gradient(180deg, #52525b 0%, #3f3f46 100%) !important;
+  border-color: #71717a !important;
+  border-top-color: #a1a1aa !important;
+  border-left-color: #7a7a7f !important;
+  color: #ffffff !important;
+  transform: translateY(-3px) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.15) inset,
+    0 9px 0 #1a1a1c,
+    0 11px 0 rgba(0, 0, 0, 0.35),
+    0 16px 32px rgba(0, 0, 0, 0.5),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+}
+
+[data-theme='dark'] .button--outline:active {
+  transform: translateY(4px) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 2px 0 #1a1a1c,
+    0 4px 0 rgba(0, 0, 0, 0.25),
+    0 6px 12px rgba(0, 0, 0, 0.35),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04) !important;
 }
 
 /* Cards and containers */
