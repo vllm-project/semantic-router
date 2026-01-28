@@ -97,6 +97,27 @@ export interface ContextSignal {
   description?: string
 }
 
+export interface ComplexityCandidates {
+  candidates: string[]
+}
+
+export interface RuleComposer {
+  operator: 'AND' | 'OR'
+  conditions: Array<{
+    type: string
+    name: string
+  }>
+}
+
+export interface ComplexitySignal {
+  name: string
+  threshold: number
+  hard: ComplexityCandidates
+  easy: ComplexityCandidates
+  description?: string
+  composer?: RuleComposer
+}
+
 export interface Signals {
   keywords?: KeywordSignal[]
   embeddings?: EmbeddingSignal[]
@@ -107,6 +128,7 @@ export interface Signals {
   language?: LanguageSignal[]
   latency?: LatencySignal[]
   context?: ContextSignal[]
+  complexity?: ComplexitySignal[]
 }
 
 // =============================================================================
@@ -114,7 +136,7 @@ export interface Signals {
 // =============================================================================
 
 
-export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'latency' | 'context'
+export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'latency' | 'context' | 'complexity'
 export interface DecisionCondition {
   type: DecisionConditionType
   name: string

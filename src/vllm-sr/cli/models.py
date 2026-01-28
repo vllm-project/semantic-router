@@ -85,6 +85,28 @@ class ContextRule(BaseModel):
     description: Optional[str] = None
 
 
+class ComplexityCandidates(BaseModel):
+    """Complexity candidates configuration."""
+
+    candidates: List[str]
+
+
+class ComplexityRule(BaseModel):
+    """Complexity-based signal configuration using embedding similarity.
+
+    The composer field allows filtering based on other signals (e.g., only apply
+    code_complexity when domain is "computer_science"). This is evaluated after
+    all signals are computed in parallel, enabling signal dependencies.
+    """
+
+    name: str
+    threshold: float = 0.1
+    hard: ComplexityCandidates
+    easy: ComplexityCandidates
+    description: Optional[str] = None
+    composer: Optional["Rules"] = None  # Forward reference, defined below
+
+
 class Signals(BaseModel):
     """All signal configurations."""
 
@@ -97,6 +119,7 @@ class Signals(BaseModel):
     language: Optional[List[Language]] = []
     latency: Optional[List[Latency]] = []
     context: Optional[List[ContextRule]] = []
+    complexity: Optional[List[ComplexityRule]] = []
 
 
 class Condition(BaseModel):
@@ -424,21 +447,22 @@ class MemoryEmbeddingConfig(BaseModel):
 
 
 class MemoryQueryRewriteConfig(BaseModel):
-    """Query rewrite configuration for memory search."""
+    """Query rewrite configuration for memory search.
+
+    Uses model_role to reference an entry in external_models.
+    """
 
     enabled: bool = False
-    endpoint: Optional[str] = None
-    model: Optional[str] = None
+    model_role: Optional[str] = "memory_rewrite"  # References external_models entry
+    max_tokens: Optional[int] = 100
 
 
 class MemoryExtractionConfig(BaseModel):
     """Fact extraction configuration for memory saving."""
 
     enabled: bool = True
-    endpoint: str
-    model: str
-    batch_size: int = 10  # Extract every N turns (must match Go config field name)
-    timeout_seconds: int = 30  # Timeout for LLM extraction calls
+    model_role: Optional[str] = "memory_extraction"  # References external_models entry
+    batch_size: int = 10  # Extract every N conversation turns
 
 
 class MemoryConfig(BaseModel):
@@ -462,6 +486,9 @@ class UserConfig(BaseModel):
     decisions: List[Decision]
     providers: Providers
     memory: Optional[MemoryConfig] = None  # Agentic Memory config
+    # External models for memory operations, preference inference, etc.
+    # Uses Go-level format: llm_provider, model_role, llm_endpoint, etc.
+    external_models: Optional[List[Dict[str, Any]]] = None
 
     class Config:
         populate_by_name = True

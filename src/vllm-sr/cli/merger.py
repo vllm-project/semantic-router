@@ -185,6 +185,37 @@ def translate_context_signals(context_rules: list) -> list:
     return rules
 
 
+def translate_complexity_signals(complexity_rules: list) -> list:
+    """
+    Translate complexity signals to router format.
+
+    Args:
+        complexity_rules: List of ComplexityRule objects
+
+    Returns:
+        list: Router complexity rules
+    """
+    rules = []
+    for signal in complexity_rules:
+        rule = {
+            "name": signal.name,
+            "threshold": signal.threshold,
+            "hard": {"candidates": signal.hard.candidates},
+            "easy": {"candidates": signal.easy.candidates},
+        }
+        if signal.description:
+            rule["description"] = signal.description
+        if signal.composer:
+            rule["composer"] = {
+                "operator": signal.composer.operator,
+                "conditions": [
+                    {"type": c.type, "name": c.name} for c in signal.composer.conditions
+                ],
+            }
+        rules.append(rule)
+    return rules
+
+
 def translate_external_models(external_models: list) -> list:
     """
     Translate external models to router format.
@@ -441,6 +472,14 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
             )
             log.info(f"  Added {len(user_config.signals.context)} context signals")
 
+        if user_config.signals.complexity and len(user_config.signals.complexity) > 0:
+            merged["complexity_rules"] = translate_complexity_signals(
+                user_config.signals.complexity
+            )
+            log.info(
+                f"  Added {len(user_config.signals.complexity)} complexity signals"
+            )
+
         # Translate domains to categories
         if user_config.signals.domains:
             merged["categories"] = translate_domains_to_categories(
@@ -491,6 +530,11 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
         memory_config = user_config.memory.model_dump(exclude_none=True)
         merged["memory"] = memory_config
         log.info(f"  Added memory configuration (enabled={user_config.memory.enabled})")
+
+    # Pass through external_models if provided (already in Go-level format)
+    if user_config.external_models:
+        merged["external_models"] = user_config.external_models
+        log.info(f"  Added {len(user_config.external_models)} external models")
 
     log.info("✓ Configuration merged successfully")
 

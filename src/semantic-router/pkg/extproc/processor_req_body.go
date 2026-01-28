@@ -415,6 +415,19 @@ func (r *OpenAIRouter) modifyRequestBodyForAutoRouting(openAIRequest *openai.Cha
 		return nil, err
 	}
 
+	// Inject memories AFTER system prompt to avoid being overwritten
+	// Memory injection was deferred from handleMemoryRetrieval to here because
+	// the serialization above would lose any previously injected memories.
+	if len(ctx.RetrievedMemories) > 0 {
+		modifiedBody, err = InjectMemories(modifiedBody, ctx.RetrievedMemories)
+		if err != nil {
+			logging.Warnf("Memory: Failed to inject memories after system prompt: %v", err)
+			// Continue without memory injection (graceful degradation)
+		} else {
+			logging.Infof("Memory: Injected %d memories into request (after system prompt)", len(ctx.RetrievedMemories))
+		}
+	}
+
 	return modifiedBody, nil
 }
 
@@ -778,13 +791,14 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 	}
 	logging.Infof("╚══════════════════════════════════════════════════════════════════╝")
 
-	// Step 6: Inject memories into request body
-	modifiedBody, err := InjectMemories(requestBody, memories)
-	if err != nil {
-		return requestBody, fmt.Errorf("memory injection failed: %w", err)
-	}
+	// Step 6: Store memories in context for later injection
+	// NOTE: We don't inject here because modifyRequestBodyForAutoRouting will
+	// re-serialize from openAIRequest struct, which would lose the injected memories.
+	// Instead, memories are injected AFTER system prompt in modifyRequestBodyForAutoRouting.
+	ctx.RetrievedMemories = memories
+	logging.Infof("Memory: Stored %d memories in context for later injection (after system prompt)", len(memories))
 
-	return modifiedBody, nil
+	return requestBody, nil
 }
 
 // getMemoryStore returns the memory store instance.

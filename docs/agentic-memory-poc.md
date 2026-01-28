@@ -1044,13 +1044,13 @@ memory:
 > |-------|-----------|------|------|
 > | **all-MiniLM-L6-v2** (POC choice) | 384 | Better semantic similarity, forgiving on wording, ideal for memory retrieval & deduplication | Requires loading separate model |
 > | Qwen3-Embedding-0.6B (existing) | 1024 | Already loaded for semantic cache, no extra memory | More sensitive to exact wording, may miss similar memories |
->
+> 
 > **Why 384-dim for Memory?** Lower dimensions capture high-level semantic meaning and are less sensitive to specific details (numbers, names). This is beneficial for:
 >
 > - **Retrieval**: "What's my budget?" matches "Hawaii trip budget is $10K" even with different wording
 > - **Deduplication**: "budget is $10K" and "budget is now $15K" recognized as same topic (update value)
 > - **Cross-session**: Wording naturally differs between sessions
->
+> 
 > **Alternative:** Reusing Qwen3-Embedding (1024-dim) is possible to avoid loading a second model. Trade-off is slightly stricter matching which may increase false negatives.
 
 ---

@@ -31,6 +31,22 @@ decisions:
     modelRefs:
       - model: "qwen3"
         use_reasoning: false
+    plugins:
+      # System prompt plugin (Bug #808: must work together with memory)
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a helpful AI assistant with access to user memories. Use the provided context to personalize your responses."
+      # PII plugin (blocks before memory if PII detected)
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []  # Block all PII types
+      # Memory plugin config (per-decision override example)
+      - type: "memory"
+        configuration:
+          enabled: true
+          retrieval_limit: 5
+          similarity_threshold: 0.70
 
 # Providers - LLM backend
 providers:
@@ -42,6 +58,25 @@ providers:
           endpoint: "host.docker.internal:8000"
           protocol: "http"
   default_model: "qwen3"
+
+# External models for memory operations
+external_models:
+  - llm_provider: "vllm"
+    model_role: "memory_extraction"
+    llm_endpoint:
+      address: "host.docker.internal"
+      port: 8000
+      name: "llm_katan"
+    llm_model_name: "qwen3"
+    llm_timeout_seconds: 30
+  - llm_provider: "vllm"
+    model_role: "memory_rewrite"
+    llm_endpoint:
+      address: "host.docker.internal"
+      port: 8000
+      name: "llm_katan"
+    llm_model_name: "qwen3"
+    llm_timeout_seconds: 30
 
 # Memory configuration - the key feature being tested
 memory:
@@ -57,13 +92,9 @@ memory:
   default_similarity_threshold: 0.70
   query_rewrite:
     enabled: true
-    endpoint: "http://host.docker.internal:8000"
-    model: "qwen3"
+    model_role: "memory_rewrite"
     max_tokens: 100
-    timeout_seconds: 30
   extraction:
     enabled: true
-    endpoint: "http://host.docker.internal:8000"
-    model: "qwen3"
+    model_role: "memory_extraction"
     batch_size: 10
-    timeout_seconds: 30

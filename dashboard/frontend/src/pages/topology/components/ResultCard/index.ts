@@ -1,0 +1,2 @@
+export { ResultCard } from './ResultCard'
+
