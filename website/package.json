@@ -8,7 +8,10 @@
   "scripts": {
     "docusaurus": "docusaurus",
     "start": "docusaurus start",
+    "start:zh": "docusaurus start --locale zh-Hans",
     "build": "docusaurus build",
+    "build:en": "docusaurus build --locale en",
+    "build:zh": "docusaurus build --locale zh-Hans",
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy",
     "clear": "docusaurus clear",
