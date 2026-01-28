@@ -65,7 +65,8 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 		var err error
 
 		// Choose between manual model selection or automatic routing
-		if req.Model == "auto" || req.Model == "" {
+		switch req.Model {
+		case "auto", "":
 			// Automatic routing based on quality/latency priorities
 			output, err = candle_binding.GetEmbeddingWithMetadata(
 				text,
@@ -73,7 +74,7 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 				req.LatencyPriority,
 				req.Dimension,
 			)
-		} else if req.Model == "mmbert" {
+		case "mmbert":
 			// mmBERT with 2D Matryoshka support (layer early exit + dimension)
 			output, err = candle_binding.GetEmbedding2DMatryoshka(
 				text,
@@ -81,7 +82,7 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 				req.TargetLayer,
 				req.Dimension,
 			)
-		} else {
+		default:
 			// Manual model selection ("qwen3" or "gemma")
 			output, err = candle_binding.GetEmbeddingWithModelType(
 				text,

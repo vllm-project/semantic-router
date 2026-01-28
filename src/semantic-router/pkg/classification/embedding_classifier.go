@@ -14,10 +14,6 @@ import (
 // It exists so tests can override it.
 var getEmbeddingWithModelType = candle_binding.GetEmbeddingWithModelType
 
-// getEmbedding2DMatryoshka is a package-level variable for mmBERT 2D Matryoshka embeddings.
-// It exists so tests can override it.
-var getEmbedding2DMatryoshka = candle_binding.GetEmbedding2DMatryoshka
-
 // EmbeddingClassifierInitializer initializes KeywordEmbeddingClassifier for embedding based classification
 type EmbeddingClassifierInitializer interface {
 	Init(qwen3ModelPath string, gemmaModelPath string, useCPU bool) error

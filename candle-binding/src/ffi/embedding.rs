@@ -700,7 +700,11 @@ fn generate_mmbert_embedding(
         .map_err(|e| format!("Tokenization failed: {:?}", e))?;
 
     let token_ids: Vec<u32> = encoding.get_ids().to_vec();
-    let attention_mask: Vec<u32> = encoding.get_attention_mask().iter().map(|&x| x as u32).collect();
+    let attention_mask: Vec<u32> = encoding
+        .get_attention_mask()
+        .iter()
+        .map(|&x| x as u32)
+        .collect();
     let seq_len = token_ids.len();
 
     // Create tensors
@@ -712,7 +716,12 @@ fn generate_mmbert_embedding(
 
     // Forward pass with 2D Matryoshka (layer early exit + dimension truncation)
     let embedding = model
-        .embedding_forward_with_matryoshka(&input_ids, Some(&attention_mask_tensor), target_layer, target_dim)
+        .embedding_forward_with_matryoshka(
+            &input_ids,
+            Some(&attention_mask_tensor),
+            target_layer,
+            target_dim,
+        )
         .map_err(|e| format!("mmBERT forward failed: {:?}", e))?;
 
     // Convert to Vec<f32>
@@ -860,7 +869,9 @@ pub extern "C" fn get_embedding_with_dim(
                 eprintln!("INFO: Qwen3 not available, falling back to gemma");
                 "gemma"
             } else {
-                eprintln!("Error: Qwen3Embedding selected but not available and no fallback available");
+                eprintln!(
+                    "Error: Qwen3Embedding selected but not available and no fallback available"
+                );
                 unsafe {
                     (*result) = create_error_result();
                 }
@@ -877,7 +888,9 @@ pub extern "C" fn get_embedding_with_dim(
                 eprintln!("INFO: Gemma not available, falling back to qwen3");
                 "qwen3"
             } else {
-                eprintln!("Error: GemmaEmbedding selected but not available and no fallback available");
+                eprintln!(
+                    "Error: GemmaEmbedding selected but not available and no fallback available"
+                );
                 unsafe {
                     (*result) = create_error_result();
                 }
@@ -1030,12 +1043,8 @@ pub extern "C" fn get_embedding_2d_matryoshka(
 
     // Generate embedding based on model type
     let embedding_result = match model_type {
-        ModelType::Qwen3Embedding => {
-            generate_qwen3_embedding(factory, text_str, target_dimension)
-        }
-        ModelType::GemmaEmbedding => {
-            generate_gemma_embedding(factory, text_str, target_dimension)
-        }
+        ModelType::Qwen3Embedding => generate_qwen3_embedding(factory, text_str, target_dimension),
+        ModelType::GemmaEmbedding => generate_gemma_embedding(factory, text_str, target_dimension),
         ModelType::MmBertEmbedding => {
             generate_mmbert_embedding(factory, text_str, layer, target_dimension)
         }

@@ -35,7 +35,9 @@ use crate::model_architectures::traits::{
 };
 use crate::model_architectures::unified_interface::CoreModel;
 use candle_core::{DType, Device, IndexOp, Module, Tensor, D};
-use candle_nn::{embedding, layer_norm_no_bias, linear_no_bias, Embedding, LayerNorm, Linear, VarBuilder};
+use candle_nn::{
+    embedding, layer_norm_no_bias, linear_no_bias, Embedding, LayerNorm, Linear, VarBuilder,
+};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -84,11 +86,17 @@ impl MmBertEmbeddingConfig {
             num_hidden_layers: config_json["num_hidden_layers"].as_u64().unwrap_or(22) as usize,
             num_attention_heads: config_json["num_attention_heads"].as_u64().unwrap_or(12) as usize,
             intermediate_size: config_json["intermediate_size"].as_u64().unwrap_or(1152) as usize,
-            max_position_embeddings: config_json["max_position_embeddings"].as_u64().unwrap_or(32768) as usize,
+            max_position_embeddings: config_json["max_position_embeddings"]
+                .as_u64()
+                .unwrap_or(32768) as usize,
             layer_norm_eps: config_json["layer_norm_eps"].as_f64().unwrap_or(1e-5),
             pad_token_id: config_json["pad_token_id"].as_u64().unwrap_or(0) as u32,
-            global_attn_every_n_layers: config_json["global_attn_every_n_layers"].as_u64().unwrap_or(3) as usize,
-            global_rope_theta: config_json["global_rope_theta"].as_f64().unwrap_or(160000.0),
+            global_attn_every_n_layers: config_json["global_attn_every_n_layers"]
+                .as_u64()
+                .unwrap_or(3) as usize,
+            global_rope_theta: config_json["global_rope_theta"]
+                .as_f64()
+                .unwrap_or(160000.0),
             local_attention: config_json["local_attention"].as_u64().unwrap_or(128) as usize,
             local_rope_theta: config_json["local_rope_theta"].as_f64().unwrap_or(160000.0),
         })
@@ -173,7 +181,12 @@ struct RotaryEmbedding {
 }
 
 impl RotaryEmbedding {
-    fn new(dtype: DType, config: &MmBertEmbeddingConfig, rope_theta: f64, device: &Device) -> candle_core::Result<Self> {
+    fn new(
+        dtype: DType,
+        config: &MmBertEmbeddingConfig,
+        rope_theta: f64,
+        device: &Device,
+    ) -> candle_core::Result<Self> {
         let dim = config.head_dim();
         let inv_freq: Vec<_> = (0..dim)
             .step_by(2)
@@ -192,7 +205,11 @@ impl RotaryEmbedding {
         })
     }
 
-    fn apply_rotary_emb_qkv(&self, q: &Tensor, k: &Tensor) -> candle_core::Result<(Tensor, Tensor)> {
+    fn apply_rotary_emb_qkv(
+        &self,
+        q: &Tensor,
+        k: &Tensor,
+    ) -> candle_core::Result<(Tensor, Tensor)> {
         let q_embed = candle_nn::rotary_emb::rope(&q.contiguous()?, &self.cos, &self.sin)?;
         let k_embed = candle_nn::rotary_emb::rope(&k.contiguous()?, &self.cos, &self.sin)?;
         Ok((q_embed, k_embed))
@@ -213,7 +230,11 @@ struct MmBertAttention {
 }
 
 impl MmBertAttention {
-    fn load(vb: VarBuilder, config: &MmBertEmbeddingConfig, rotary_emb: Arc<RotaryEmbedding>) -> candle_core::Result<Self> {
+    fn load(
+        vb: VarBuilder,
+        config: &MmBertEmbeddingConfig,
+        rotary_emb: Arc<RotaryEmbedding>,
+    ) -> candle_core::Result<Self> {
         let num_attention_heads = config.num_attention_heads;
         let attention_head_size = config.hidden_size / config.num_attention_heads;
 
@@ -229,11 +250,21 @@ impl MmBertAttention {
         })
     }
 
-    fn forward(&self, hidden_states: &Tensor, attention_mask: &Tensor) -> candle_core::Result<Tensor> {
+    fn forward(
+        &self,
+        hidden_states: &Tensor,
+        attention_mask: &Tensor,
+    ) -> candle_core::Result<Tensor> {
         let (b, seq_len, d) = hidden_states.dims3()?;
         let qkv = hidden_states
             .apply(&self.qkv)?
-            .reshape((b, seq_len, 3, self.num_attention_heads, self.attention_head_size))?
+            .reshape((
+                b,
+                seq_len,
+                3,
+                self.num_attention_heads,
+                self.attention_head_size,
+            ))?
             .permute((2, 0, 3, 1, 4))?;
 
         let q = qkv.i(0)?;
@@ -272,7 +303,11 @@ struct MmBertMLP {
 
 impl MmBertMLP {
     fn load(vb: VarBuilder, config: &MmBertEmbeddingConfig) -> candle_core::Result<Self> {
-        let wi = linear_no_bias(config.hidden_size, config.intermediate_size * 2, vb.pp("Wi"))?;
+        let wi = linear_no_bias(
+            config.hidden_size,
+            config.intermediate_size * 2,
+            vb.pp("Wi"),
+        )?;
         let wo = linear_no_bias(config.intermediate_size, config.hidden_size, vb.pp("Wo"))?;
         Ok(Self { wi, wo })
     }
@@ -308,8 +343,14 @@ impl MmBertLayer {
     ) -> candle_core::Result<Self> {
         let attn = MmBertAttention::load(vb.pp("attn"), config, rotary_emb)?;
         let mlp = MmBertMLP::load(vb.pp("mlp"), config)?;
-        let attn_norm = layer_norm_no_bias(config.hidden_size, config.layer_norm_eps, vb.pp("attn_norm")).ok();
-        let mlp_norm = layer_norm_no_bias(config.hidden_size, config.layer_norm_eps, vb.pp("mlp_norm"))?;
+        let attn_norm = layer_norm_no_bias(
+            config.hidden_size,
+            config.layer_norm_eps,
+            vb.pp("attn_norm"),
+        )
+        .ok();
+        let mlp_norm =
+            layer_norm_no_bias(config.hidden_size, config.layer_norm_eps, vb.pp("mlp_norm"))?;
         Ok(Self {
             attn,
             mlp,
@@ -347,7 +388,11 @@ impl MmBertLayer {
 // Attention Mask Helpers
 // ============================================================================
 
-fn prepare_4d_attention_mask(mask: &Tensor, dtype: DType, tgt_len: Option<usize>) -> candle_core::Result<Tensor> {
+fn prepare_4d_attention_mask(
+    mask: &Tensor,
+    dtype: DType,
+    tgt_len: Option<usize>,
+) -> candle_core::Result<Tensor> {
     let bsz = mask.dim(0)?;
     let src_len = mask.dim(1)?;
     let tgt_len = tgt_len.unwrap_or(src_len);
@@ -362,7 +407,11 @@ fn prepare_4d_attention_mask(mask: &Tensor, dtype: DType, tgt_len: Option<usize>
     (inverted_mask * f32::MIN as f64)?.to_dtype(dtype)
 }
 
-fn get_local_attention_mask(seq_len: usize, max_distance: usize, device: &Device) -> candle_core::Result<Tensor> {
+fn get_local_attention_mask(
+    seq_len: usize,
+    max_distance: usize,
+    device: &Device,
+) -> candle_core::Result<Tensor> {
     let mask: Vec<_> = (0..seq_len)
         .flat_map(|i| {
             (0..seq_len).map(move |j| {
@@ -454,10 +503,17 @@ impl MmBertEncoder {
 
     /// Forward pass with early exit at specified layer (1-indexed)
     /// For example, target_layer=6 will run layers 0-5 (6 layers total)
-    fn forward_to_layer(&self, xs: &Tensor, mask: &Tensor, target_layer: usize) -> candle_core::Result<Tensor> {
+    fn forward_to_layer(
+        &self,
+        xs: &Tensor,
+        mask: &Tensor,
+        target_layer: usize,
+    ) -> candle_core::Result<Tensor> {
         let seq_len = xs.shape().dims()[1];
-        let global_attention_mask = prepare_4d_attention_mask(mask, DType::F32, None)?.to_device(xs.device())?;
-        let local_attention_mask = get_local_attention_mask(seq_len, self.local_attention_size / 2, xs.device())?;
+        let global_attention_mask =
+            prepare_4d_attention_mask(mask, DType::F32, None)?.to_device(xs.device())?;
+        let local_attention_mask =
+            get_local_attention_mask(seq_len, self.local_attention_size / 2, xs.device())?;
 
         let mut xs = xs.apply(&self.word_embeddings)?.apply(&self.norm)?;
 
@@ -505,7 +561,13 @@ impl MmBertEmbeddingModel {
         let safetensors_path = format!("{}/model.safetensors", model_path);
         let vb = unsafe {
             VarBuilder::from_mmaped_safetensors(&[safetensors_path.clone()], DType::F32, device)
-                .map_err(|e| from_candle_error(e, &format!("failed to load safetensors from {}", safetensors_path), Some(model_path)))?
+                .map_err(|e| {
+                    from_candle_error(
+                        e,
+                        &format!("failed to load safetensors from {}", safetensors_path),
+                        Some(model_path),
+                    )
+                })?
         };
 
         Self::load_with_vb(model_path, &config, vb, device)
@@ -612,19 +674,27 @@ impl MmBertEmbeddingModel {
         };
 
         // Forward through encoder with early exit
-        let hidden_states = self.encoder
+        let hidden_states = self
+            .encoder
             .forward_to_layer(input_ids, &mask, target_layer)
-            .map_err(|e| from_candle_error(e, &format!("encoder forward to layer {}", target_layer), None))?;
+            .map_err(|e| {
+                from_candle_error(
+                    e,
+                    &format!("encoder forward to layer {}", target_layer),
+                    None,
+                )
+            })?;
 
         // Mean pooling
         let mask_f32 = mask
             .to_dtype(DType::F32)
             .map_err(|e| from_candle_error(e, "mask to f32", None))?;
-        let embeddings = mean_pool(&hidden_states, &mask_f32).map_err(|e| UnifiedError::Processing {
-            operation: "mean_pool".to_string(),
-            source: e.to_string(),
-            input_context: None,
-        })?;
+        let embeddings =
+            mean_pool(&hidden_states, &mask_f32).map_err(|e| UnifiedError::Processing {
+                operation: "mean_pool".to_string(),
+                source: e.to_string(),
+                input_context: None,
+            })?;
 
         // Dimension truncation
         let embeddings = if target_dim < hidden_size {
@@ -658,17 +728,22 @@ impl MmBertEmbeddingModel {
         target_layer: Option<usize>,
         target_dim: Option<usize>,
     ) -> UnifiedResult<Tensor> {
-        let encodings = tokenizer
-            .encode_batch(texts.to_vec(), true)
-            .map_err(|e| UnifiedError::Processing {
-                operation: "tokenize batch".to_string(),
-                source: e.to_string(),
-                input_context: None,
-            })?;
+        let encodings =
+            tokenizer
+                .encode_batch(texts.to_vec(), true)
+                .map_err(|e| UnifiedError::Processing {
+                    operation: "tokenize batch".to_string(),
+                    source: e.to_string(),
+                    input_context: None,
+                })?;
 
         let batch_size = encodings.len();
         let seq_len = max_length.min(
-            encodings.iter().map(|e| e.get_ids().len()).max().unwrap_or(0),
+            encodings
+                .iter()
+                .map(|e| e.get_ids().len())
+                .max()
+                .unwrap_or(0),
         );
 
         let mut input_ids_vec = Vec::with_capacity(batch_size * seq_len);
@@ -691,18 +766,32 @@ impl MmBertEmbeddingModel {
 
         let input_ids = Tensor::from_vec(input_ids_vec, (batch_size, seq_len), &self.device)
             .map_err(|e| from_candle_error(e, "create input_ids tensor", None))?;
-        let attention_mask = Tensor::from_vec(attention_mask_vec, (batch_size, seq_len), &self.device)
-            .map_err(|e| from_candle_error(e, "create attention_mask tensor", None))?;
+        let attention_mask =
+            Tensor::from_vec(attention_mask_vec, (batch_size, seq_len), &self.device)
+                .map_err(|e| from_candle_error(e, "create attention_mask tensor", None))?;
 
-        self.embedding_forward_with_matryoshka(&input_ids, Some(&attention_mask), target_layer, target_dim)
+        self.embedding_forward_with_matryoshka(
+            &input_ids,
+            Some(&attention_mask),
+            target_layer,
+            target_dim,
+        )
     }
 
     fn l2_normalize(&self, embeddings: &Tensor) -> UnifiedResult<Tensor> {
-        let squared = embeddings.sqr().map_err(|e| from_candle_error(e, "L2 sqr", None))?;
-        let sum_squared = squared.sum_keepdim(1).map_err(|e| from_candle_error(e, "L2 sum", None))?;
-        let norm = sum_squared.sqrt().map_err(|e| from_candle_error(e, "L2 sqrt", None))?;
+        let squared = embeddings
+            .sqr()
+            .map_err(|e| from_candle_error(e, "L2 sqr", None))?;
+        let sum_squared = squared
+            .sum_keepdim(1)
+            .map_err(|e| from_candle_error(e, "L2 sum", None))?;
+        let norm = sum_squared
+            .sqrt()
+            .map_err(|e| from_candle_error(e, "L2 sqrt", None))?;
         let norm_safe = (norm + 1e-12).map_err(|e| from_candle_error(e, "L2 eps", None))?;
-        embeddings.broadcast_div(&norm_safe).map_err(|e| from_candle_error(e, "L2 div", None))
+        embeddings
+            .broadcast_div(&norm_safe)
+            .map_err(|e| from_candle_error(e, "L2 div", None))
     }
 }
 
@@ -719,7 +808,11 @@ impl CoreModel for MmBertEmbeddingModel {
         ModelType::MmBertEmbedding
     }
 
-    fn forward(&self, input_ids: &Tensor, attention_mask: &Tensor) -> Result<Self::Output, Self::Error> {
+    fn forward(
+        &self,
+        input_ids: &Tensor,
+        attention_mask: &Tensor,
+    ) -> Result<Self::Output, Self::Error> {
         self.embedding_forward(input_ids, Some(attention_mask))
     }
 
@@ -759,11 +852,12 @@ impl LongContextEmbeddingCapable for MmBertEmbeddingModel {
         attention_mask: &Tensor,
         target_dim: Option<usize>,
     ) -> Result<Tensor, Self::Error> {
-        let embeddings = mean_pool(hidden_states, attention_mask).map_err(|e| UnifiedError::Processing {
-            operation: "extract_embeddings".to_string(),
-            source: e.to_string(),
-            input_context: None,
-        })?;
+        let embeddings =
+            mean_pool(hidden_states, attention_mask).map_err(|e| UnifiedError::Processing {
+                operation: "extract_embeddings".to_string(),
+                source: e.to_string(),
+                input_context: None,
+            })?;
 
         if let Some(dim) = target_dim {
             if dim > self.config.hidden_size {
@@ -774,7 +868,9 @@ impl LongContextEmbeddingCapable for MmBertEmbeddingModel {
                     context: None,
                 });
             }
-            embeddings.narrow(1, 0, dim).map_err(|e| from_candle_error(e, "truncation", None))
+            embeddings
+                .narrow(1, 0, dim)
+                .map_err(|e| from_candle_error(e, "truncation", None))
         } else {
             Ok(embeddings)
         }
@@ -875,7 +971,11 @@ mod integration_tests {
         let text = "Hello world";
         let encoding = tokenizer.encode(text, true).unwrap();
         let input_ids: Vec<u32> = encoding.get_ids().to_vec();
-        let attention_mask: Vec<u32> = encoding.get_attention_mask().iter().map(|&x| x as u32).collect();
+        let attention_mask: Vec<u32> = encoding
+            .get_attention_mask()
+            .iter()
+            .map(|&x| x as u32)
+            .collect();
         let seq_len = input_ids.len();
 
         let input_ids = Tensor::from_vec(input_ids, (1, seq_len), &device).unwrap();
@@ -884,7 +984,12 @@ mod integration_tests {
         // Test different exit layers
         for target_layer in [3, 6, 11, 22] {
             let embeddings = model
-                .embedding_forward_with_matryoshka(&input_ids, Some(&attention_mask), Some(target_layer), None)
+                .embedding_forward_with_matryoshka(
+                    &input_ids,
+                    Some(&attention_mask),
+                    Some(target_layer),
+                    None,
+                )
                 .expect(&format!("Failed at layer {}", target_layer));
 
             let shape = embeddings.dims();
@@ -892,8 +997,21 @@ mod integration_tests {
             assert_eq!(shape[1], 768);
 
             // Check normalized
-            let norm: f32 = embeddings.sqr().unwrap().sum(1).unwrap().sqrt().unwrap().to_vec1().unwrap()[0];
-            assert!((norm - 1.0).abs() < 0.01, "layer {}: norm={}", target_layer, norm);
+            let norm: f32 = embeddings
+                .sqr()
+                .unwrap()
+                .sum(1)
+                .unwrap()
+                .sqrt()
+                .unwrap()
+                .to_vec1()
+                .unwrap()[0];
+            assert!(
+                (norm - 1.0).abs() < 0.01,
+                "layer {}: norm={}",
+                target_layer,
+                norm
+            );
         }
     }
 
@@ -910,7 +1028,11 @@ mod integration_tests {
         let text = "Test 2D Matryoshka";
         let encoding = tokenizer.encode(text, true).unwrap();
         let input_ids: Vec<u32> = encoding.get_ids().to_vec();
-        let attention_mask: Vec<u32> = encoding.get_attention_mask().iter().map(|&x| x as u32).collect();
+        let attention_mask: Vec<u32> = encoding
+            .get_attention_mask()
+            .iter()
+            .map(|&x| x as u32)
+            .collect();
         let seq_len = input_ids.len();
 
         let input_ids = Tensor::from_vec(input_ids, (1, seq_len), &device).unwrap();
@@ -920,12 +1042,21 @@ mod integration_tests {
         for target_layer in [6, 11, 22] {
             for target_dim in [64, 256, 768] {
                 let embeddings = model
-                    .embedding_forward_with_matryoshka(&input_ids, Some(&attention_mask), Some(target_layer), Some(target_dim))
+                    .embedding_forward_with_matryoshka(
+                        &input_ids,
+                        Some(&attention_mask),
+                        Some(target_layer),
+                        Some(target_dim),
+                    )
                     .expect(&format!("Failed at L{}/{}d", target_layer, target_dim));
 
                 let shape = embeddings.dims();
                 assert_eq!(shape[0], 1);
-                assert_eq!(shape[1], target_dim, "Expected dim {}, got {}", target_dim, shape[1]);
+                assert_eq!(
+                    shape[1], target_dim,
+                    "Expected dim {}, got {}",
+                    target_dim, shape[1]
+                );
             }
         }
     }

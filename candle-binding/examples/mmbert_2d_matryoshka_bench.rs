@@ -23,7 +23,6 @@
 /// # Download model first if needed:
 /// huggingface-cli download llm-semantic-router/mmbert-embed-32k-2d-matryoshka
 /// ```
-
 use candle_core::Device;
 use candle_semantic_router::model_architectures::embedding::{
     MatryoshkaConfig, MmBertEmbeddingModel,
@@ -204,7 +203,10 @@ fn bench_sequence_lengths(
         let encodings = match tokenizer.encode_batch(texts.clone(), true) {
             Ok(e) => e,
             Err(err) => {
-                println!("    Skipping seq_len={}: tokenization error: {}", seq_len, err);
+                println!(
+                    "    Skipping seq_len={}: tokenization error: {}",
+                    seq_len, err
+                );
                 continue;
             }
         };
@@ -229,17 +231,14 @@ fn bench_sequence_lengths(
             attention_mask_vec.extend(padded_mask);
         }
 
-        let input_ids = match candle_core::Tensor::from_vec(
-            input_ids_vec,
-            (batch_size, actual_len),
-            device,
-        ) {
-            Ok(t) => t,
-            Err(e) => {
-                println!("    Skipping seq_len={}: tensor error: {}", seq_len, e);
-                continue;
-            }
-        };
+        let input_ids =
+            match candle_core::Tensor::from_vec(input_ids_vec, (batch_size, actual_len), device) {
+                Ok(t) => t,
+                Err(e) => {
+                    println!("    Skipping seq_len={}: tensor error: {}", seq_len, e);
+                    continue;
+                }
+            };
 
         let attention_mask = match candle_core::Tensor::from_vec(
             attention_mask_vec,
@@ -354,12 +353,24 @@ fn bench_matryoshka_api(
 
     let batch_size = 4;
     let seq_len = 128; // Short for CPU testing
-    let texts: Vec<&str> = SAMPLE_TEXTS.iter().cycle().take(batch_size).copied().collect();
+    let texts: Vec<&str> = SAMPLE_TEXTS
+        .iter()
+        .cycle()
+        .take(batch_size)
+        .copied()
+        .collect();
     let mut results = Vec::new();
 
     // Tokenize once
-    let encodings = tokenizer.encode_batch(texts.clone(), true).expect("Tokenization failed");
-    let actual_len = encodings.iter().map(|e| e.len()).max().unwrap_or(seq_len).min(seq_len);
+    let encodings = tokenizer
+        .encode_batch(texts.clone(), true)
+        .expect("Tokenization failed");
+    let actual_len = encodings
+        .iter()
+        .map(|e| e.len())
+        .max()
+        .unwrap_or(seq_len)
+        .min(seq_len);
 
     let mut input_ids_vec = Vec::new();
     let mut attention_mask_vec = Vec::new();
@@ -381,8 +392,9 @@ fn bench_matryoshka_api(
 
     let input_ids = candle_core::Tensor::from_vec(input_ids_vec, (batch_size, actual_len), device)
         .expect("Failed to create input_ids");
-    let attention_mask = candle_core::Tensor::from_vec(attention_mask_vec, (batch_size, actual_len), device)
-        .expect("Failed to create attention_mask");
+    let attention_mask =
+        candle_core::Tensor::from_vec(attention_mask_vec, (batch_size, actual_len), device)
+            .expect("Failed to create attention_mask");
 
     // Test each Matryoshka dimension
     for &dim in MATRYOSHKA_DIMS {
@@ -430,7 +442,10 @@ fn bench_matryoshka_api(
 
         println!(
             "    {}d: {:.2}ms | {:.1} emb/s | {:.0}% quality",
-            dim, stats.mean, throughput, quality * 100.0
+            dim,
+            stats.mean,
+            throughput,
+            quality * 100.0
         );
     }
 
@@ -450,12 +465,24 @@ fn bench_layer_early_exit(
 
     let batch_size = 4;
     let seq_len = 64; // Short for CPU testing
-    let texts: Vec<&str> = SAMPLE_TEXTS.iter().cycle().take(batch_size).copied().collect();
+    let texts: Vec<&str> = SAMPLE_TEXTS
+        .iter()
+        .cycle()
+        .take(batch_size)
+        .copied()
+        .collect();
     let mut results = Vec::new();
 
     // Tokenize once
-    let encodings = tokenizer.encode_batch(texts.clone(), true).expect("Tokenization failed");
-    let actual_len = encodings.iter().map(|e| e.len()).max().unwrap_or(seq_len).min(seq_len);
+    let encodings = tokenizer
+        .encode_batch(texts.clone(), true)
+        .expect("Tokenization failed");
+    let actual_len = encodings
+        .iter()
+        .map(|e| e.len())
+        .max()
+        .unwrap_or(seq_len)
+        .min(seq_len);
 
     let mut input_ids_vec = Vec::new();
     let mut attention_mask_vec = Vec::new();
@@ -477,8 +504,9 @@ fn bench_layer_early_exit(
 
     let input_ids = candle_core::Tensor::from_vec(input_ids_vec, (batch_size, actual_len), device)
         .expect("Failed to create input_ids");
-    let attention_mask = candle_core::Tensor::from_vec(attention_mask_vec, (batch_size, actual_len), device)
-        .expect("Failed to create attention_mask");
+    let attention_mask =
+        candle_core::Tensor::from_vec(attention_mask_vec, (batch_size, actual_len), device)
+            .expect("Failed to create attention_mask");
 
     let exit_layers = &matryoshka_config.layers; // [3, 6, 11, 22]
 
@@ -521,7 +549,11 @@ fn bench_layer_early_exit(
         if target_layer == 22 {
             baseline_ms = stats.mean;
         }
-        let speedup = if baseline_ms > 0.0 { baseline_ms / stats.mean } else { 1.0 };
+        let speedup = if baseline_ms > 0.0 {
+            baseline_ms / stats.mean
+        } else {
+            1.0
+        };
 
         results.push(BenchmarkResult {
             name: format!("layer_{}", target_layer),
@@ -535,7 +567,11 @@ fn bench_layer_early_exit(
 
         println!(
             "    L{}: {:.2}ms | {:.1} emb/s | {:.0}% quality | {:.2}x speedup",
-            target_layer, stats.mean, throughput, quality * 100.0, speedup
+            target_layer,
+            stats.mean,
+            throughput,
+            quality * 100.0,
+            speedup
         );
     }
 
@@ -555,12 +591,24 @@ fn bench_2d_matrix(
 
     let batch_size = 4;
     let seq_len = 64;
-    let texts: Vec<&str> = SAMPLE_TEXTS.iter().cycle().take(batch_size).copied().collect();
+    let texts: Vec<&str> = SAMPLE_TEXTS
+        .iter()
+        .cycle()
+        .take(batch_size)
+        .copied()
+        .collect();
     let mut results = Vec::new();
 
     // Tokenize
-    let encodings = tokenizer.encode_batch(texts.clone(), true).expect("Tokenization failed");
-    let actual_len = encodings.iter().map(|e| e.len()).max().unwrap_or(seq_len).min(seq_len);
+    let encodings = tokenizer
+        .encode_batch(texts.clone(), true)
+        .expect("Tokenization failed");
+    let actual_len = encodings
+        .iter()
+        .map(|e| e.len())
+        .max()
+        .unwrap_or(seq_len)
+        .min(seq_len);
 
     let mut input_ids_vec = Vec::new();
     let mut attention_mask_vec = Vec::new();
@@ -582,8 +630,9 @@ fn bench_2d_matrix(
 
     let input_ids = candle_core::Tensor::from_vec(input_ids_vec, (batch_size, actual_len), device)
         .expect("Failed to create input_ids");
-    let attention_mask = candle_core::Tensor::from_vec(attention_mask_vec, (batch_size, actual_len), device)
-        .expect("Failed to create attention_mask");
+    let attention_mask =
+        candle_core::Tensor::from_vec(attention_mask_vec, (batch_size, actual_len), device)
+            .expect("Failed to create attention_mask");
 
     // Print header
     print!("    {:>6}", "");
@@ -674,7 +723,10 @@ fn print_summary(all_results: &[BenchmarkResult], matryoshka_config: &Matryoshka
         .unwrap_or(1.0);
 
     for &dim in MATRYOSHKA_DIMS {
-        if let Some(result) = all_results.iter().find(|r| r.name == format!("matryoshka_{}d", dim)) {
+        if let Some(result) = all_results
+            .iter()
+            .find(|r| r.name == format!("matryoshka_{}d", dim))
+        {
             let quality = matryoshka_config.estimate_quality(22, dim) * 100.0;
             let storage = (dim as f64 / 768.0) * 100.0;
             let speedup = baseline_latency / result.mean_ms;
@@ -789,7 +841,10 @@ fn main() {
         }
     };
 
-    println!("✅ Model loaded in {:.2}s", model_start.elapsed().as_secs_f64());
+    println!(
+        "✅ Model loaded in {:.2}s",
+        model_start.elapsed().as_secs_f64()
+    );
 
     // Display model config
     let config = model.config();
@@ -832,7 +887,8 @@ fn main() {
     println!("  1️⃣  Matryoshka Dimension Benchmark (encode_batch API)");
     println!("{}", "=".repeat(80));
 
-    let dim_results = bench_matryoshka_dimensions(&model, &tokenizer, &matryoshka_config, warmup, iterations);
+    let dim_results =
+        bench_matryoshka_dimensions(&model, &tokenizer, &matryoshka_config, warmup, iterations);
     all_results.extend(dim_results);
 
     // ==================================================================================
@@ -842,7 +898,14 @@ fn main() {
     println!("  2️⃣  Matryoshka Dimension Reduction (full layers)");
     println!("{}", "=".repeat(80));
 
-    let api_results = bench_matryoshka_api(&model, &tokenizer, &device, &matryoshka_config, warmup, iterations);
+    let api_results = bench_matryoshka_api(
+        &model,
+        &tokenizer,
+        &device,
+        &matryoshka_config,
+        warmup,
+        iterations,
+    );
     all_results.extend(api_results);
 
     // ==================================================================================
@@ -852,7 +915,14 @@ fn main() {
     println!("  3️⃣  Layer Early Exit (full dimension)");
     println!("{}", "=".repeat(80));
 
-    let layer_results = bench_layer_early_exit(&model, &tokenizer, &device, &matryoshka_config, warmup, iterations);
+    let layer_results = bench_layer_early_exit(
+        &model,
+        &tokenizer,
+        &device,
+        &matryoshka_config,
+        warmup,
+        iterations,
+    );
     all_results.extend(layer_results);
 
     // ==================================================================================
@@ -862,7 +932,14 @@ fn main() {
     println!("  4️⃣  Full 2D Matryoshka Matrix (layers × dimensions)");
     println!("{}", "=".repeat(80));
 
-    let matrix_results = bench_2d_matrix(&model, &tokenizer, &device, &matryoshka_config, warmup, iterations);
+    let matrix_results = bench_2d_matrix(
+        &model,
+        &tokenizer,
+        &device,
+        &matryoshka_config,
+        warmup,
+        iterations,
+    );
     all_results.extend(matrix_results);
 
     // ==================================================================================

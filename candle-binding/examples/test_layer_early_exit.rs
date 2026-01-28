@@ -27,9 +27,13 @@ fn main() {
     };
 
     let model = MmBertEmbeddingModel::load(&model_path, &device).expect("Failed to load model");
-    
+
     println!("Device: {}", device_name);
-    println!("Layers: {}, Hidden: {}\n", model.num_layers(), model.config().hidden_size);
+    println!(
+        "Layers: {}, Hidden: {}\n",
+        model.num_layers(),
+        model.config().hidden_size
+    );
 
     let batch_size = 4;
     let seq_lengths = [128, 256];
@@ -44,7 +48,9 @@ fn main() {
 
         // Measure baseline (L22)
         let start = Instant::now();
-        let result = model.embedding_forward_with_matryoshka(&input_ids, Some(&attention_mask), Some(22), None).unwrap();
+        let result = model
+            .embedding_forward_with_matryoshka(&input_ids, Some(&attention_mask), Some(22), None)
+            .unwrap();
         let _: Vec<f32> = result.flatten_all().unwrap().to_vec1().unwrap();
         let baseline_ms = start.elapsed().as_secs_f64() * 1000.0;
 
@@ -53,16 +59,29 @@ fn main() {
             let attention_mask = Tensor::ones((batch_size, seq_len), DType::U32, &device).unwrap();
 
             let start = Instant::now();
-            let result = model.embedding_forward_with_matryoshka(&input_ids, Some(&attention_mask), Some(target_layer), None).unwrap();
+            let result = model
+                .embedding_forward_with_matryoshka(
+                    &input_ids,
+                    Some(&attention_mask),
+                    Some(target_layer),
+                    None,
+                )
+                .unwrap();
             let _: Vec<f32> = result.flatten_all().unwrap().to_vec1().unwrap();
             let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
 
             let speedup = baseline_ms / elapsed_ms;
             let expected = 22.0 / target_layer as f64;
-            let status = if (speedup - expected).abs() / expected < 0.4 { "OK" } else { "FAIL" };
+            let status = if (speedup - expected).abs() / expected < 0.4 {
+                "OK"
+            } else {
+                "FAIL"
+            };
 
-            println!("  L{:2}: {:7.1}ms  {:.2}x (expected {:.2}x)  {}", 
-                     target_layer, elapsed_ms, speedup, expected, status);
+            println!(
+                "  L{:2}: {:7.1}ms  {:.2}x (expected {:.2}x)  {}",
+                target_layer, elapsed_ms, speedup, expected, status
+            );
         }
         println!();
     }

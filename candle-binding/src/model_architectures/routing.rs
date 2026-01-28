@@ -219,9 +219,9 @@ impl DualPathRouter {
         let base_score = match model_type {
             ModelType::LoRA => self.router_config.lora_baseline_score,
             ModelType::Traditional => self.router_config.traditional_baseline_score,
-            ModelType::Qwen3Embedding
-            | ModelType::GemmaEmbedding
-            | ModelType::MmBertEmbedding => self.router_config.embedding_baseline_score,
+            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding | ModelType::MmBertEmbedding => {
+                self.router_config.embedding_baseline_score
+            }
         };
 
         let mut score = base_score;
