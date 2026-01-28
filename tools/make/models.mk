@@ -18,6 +18,9 @@ MMBERT_MODELS := \
 	mmbert-pii-detector-merged \
 	mmbert-jailbreak-detector-merged
 
+# mmBERT embedding model with 2D Matryoshka support
+MMBERT_EMBEDDING_MODEL := mmbert-embed-32k-2d-matryoshka
+
 # mmBERT LoRA adapters (for Python fine-tuning)
 MMBERT_LORA_ADAPTERS := \
 	mmbert-intent-classifier-lora \
@@ -70,7 +73,26 @@ download-mmbert-lora: ## Download mmBERT LoRA adapters for Python fine-tuning
 	@echo "✅ mmBERT LoRA adapters downloaded to $(MODELS_DIR)/"
 	@ls -la $(MODELS_DIR)/
 
-download-mmbert-all: download-mmbert download-mmbert-lora ## Download all mmBERT models and LoRA adapters
+download-mmbert-all: download-mmbert download-mmbert-lora download-mmbert-embedding ## Download all mmBERT models, LoRA adapters, and embedding model
+
+download-mmbert-embedding: ## Download mmBERT 2D Matryoshka embedding model
+	@echo "📦 Downloading mmBERT 2D Matryoshka embedding model..."
+	@mkdir -p $(MODELS_DIR)
+	@echo ""
+	@echo "⬇️  Downloading $(MMBERT_EMBEDDING_MODEL)..."
+	@echo "   This model supports:"
+	@echo "   - 32K context length (YaRN-scaled RoPE)"
+	@echo "   - Multilingual (1800+ languages)"
+	@echo "   - 2D Matryoshka: layer early exit (3/6/11/22) + dimension reduction (64-768)"
+	@if [ -d "$(MODELS_DIR)/$(MMBERT_EMBEDDING_MODEL)" ]; then \
+		echo "   Already exists, updating..."; \
+	fi
+	@huggingface-cli download $(HF_ORG)/$(MMBERT_EMBEDDING_MODEL) --local-dir $(MODELS_DIR)/$(MMBERT_EMBEDDING_MODEL) --local-dir-use-symlinks False
+	@echo ""
+	@echo "✅ mmBERT embedding model downloaded to $(MODELS_DIR)/$(MMBERT_EMBEDDING_MODEL)"
+	@echo ""
+	@echo "Usage example:"
+	@echo "  make run-router CONFIG_FILE=config/intelligent-routing/in-tree/embedding-mmbert.yaml"
 
 clean-minimal-models: ## No-op target for backward compatibility
 	@echo "ℹ️  This target is no longer needed"
@@ -80,4 +102,5 @@ clean-mmbert: ## Remove downloaded mmBERT models
 	@for model in $(MMBERT_MODELS) $(MMBERT_LORA_ADAPTERS); do \
 		rm -rf $(MODELS_DIR)/$$model; \
 	done
+	@rm -rf $(MODELS_DIR)/$(MMBERT_EMBEDDING_MODEL)
 	@echo "✅ mmBERT models removed"
