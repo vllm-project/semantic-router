@@ -13,24 +13,21 @@ export const CollapseControls: React.FC<CollapseControlsProps> = ({
   onCollapseAll,
 }) => {
   return (
-    <div className={styles.section}>
-      <span className={styles.sectionTitle}>View Controls</span>
-      <div className={styles.collapseControls}>
-        <button
-          className={styles.collapseBtn}
-          onClick={onExpandAll}
-          title="Expand All"
-        >
-          ➕ Expand All
-        </button>
-        <button
-          className={styles.collapseBtn}
-          onClick={onCollapseAll}
-          title="Collapse All"
-        >
-          ➖ Collapse All
-        </button>
-      </div>
+    <div className={styles.collapseControls}>
+      <button
+        className={styles.collapseBtn}
+        onClick={onExpandAll}
+        title="Expand All"
+      >
+        ➕ Expand All
+      </button>
+      <button
+        className={styles.collapseBtn}
+        onClick={onCollapseAll}
+        title="Collapse All"
+      >
+        ➖ Collapse All
+      </button>
     </div>
   )
 }

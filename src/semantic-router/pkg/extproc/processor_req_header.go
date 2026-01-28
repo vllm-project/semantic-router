@@ -80,6 +80,7 @@ type RequestContext struct {
 	VSRMatchedLatency      []string // Matched latency signals
 	VSRMatchedContext      []string // Matched context rule names (e.g. "low_token_count")
 	VSRContextTokenCount   int      // Actual token count for the request
+	VSRMatchedComplexity   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
 
 	// Endpoint tracking for windowed metrics
 	SelectedEndpoint string // The endpoint address selected for this request

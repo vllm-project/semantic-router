@@ -84,6 +84,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	ctx.VSRMatchedLatency = signals.MatchedLatencyRules
 	ctx.VSRMatchedContext = signals.MatchedContextRules
 	ctx.VSRContextTokenCount = signals.TokenCount
+	ctx.VSRMatchedComplexity = signals.MatchedComplexityRules
 
 	// Set fact-check context fields from signal results
 	// This replaces the old performFactCheckClassification call to avoid duplicate computation

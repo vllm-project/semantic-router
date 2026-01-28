@@ -243,6 +243,16 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 			})
 		}
 
+		// Add x-vsr-matched-complexity header (from complexity signal classification)
+		if len(ctx.VSRMatchedComplexity) > 0 {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.VSRMatchedComplexity,
+					RawValue: []byte(strings.Join(ctx.VSRMatchedComplexity, ",")),
+				},
+			})
+		}
+
 		// Attach router replay identifier when available
 		if ctx.RouterReplayID != "" {
 			setHeaders = append(setHeaders, &core.HeaderValueOption{

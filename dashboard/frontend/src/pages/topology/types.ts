@@ -13,13 +13,14 @@ export type SignalType =
   | 'language'
   | 'latency'
   | 'context'
+  | 'complexity'
 
 export interface SignalConfig {
   type: SignalType
   name: string
   description?: string
   latency: string
-  config: KeywordSignalConfig | EmbeddingSignalConfig | DomainSignalConfig | ContextSignalConfig | GenericSignalConfig
+  config: KeywordSignalConfig | EmbeddingSignalConfig | DomainSignalConfig | ContextSignalConfig | ComplexitySignalConfig | GenericSignalConfig
 }
 
 export interface KeywordSignalConfig {
@@ -41,6 +42,12 @@ export interface DomainSignalConfig {
 export interface ContextSignalConfig {
   min_tokens?: string
   max_tokens?: string
+}
+
+export interface ComplexitySignalConfig {
+  threshold?: number
+  hard_candidates?: string[]
+  easy_candidates?: string[]
 }
 
 export interface GenericSignalConfig {
@@ -322,6 +329,17 @@ export interface ConfigData {
     min_tokens?: string
     max_tokens?: string
   }>
+  complexity_rules?: Array<{
+    name: string
+    threshold?: number
+    hard?: {
+      candidates?: string[]
+    }
+    easy?: {
+      candidates?: string[]
+    }
+    description?: string
+  }>
   // Legacy format
   categories?: Array<{
     name: string
@@ -383,6 +401,17 @@ export interface ConfigData {
       name: string
       min_tokens?: string
       max_tokens?: string
+    }>
+    complexity?: Array<{
+      name: string
+      threshold?: number
+      hard?: {
+        candidates?: string[]
+      }
+      easy?: {
+        candidates?: string[]
+      }
+      description?: string
     }>
   }
   decisions?: Array<{
