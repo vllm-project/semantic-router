@@ -844,10 +844,57 @@ pub extern "C" fn get_embedding_with_dim(
         }
     };
 
+    // Get model factory to check availability
+    let factory = GLOBAL_MODEL_FACTORY.get();
+
     // Convert ModelType to string for get_embedding_with_model_type
+    // Check if selected model is available, fall back to mmbert if not
     let model_type_str = match model_type {
-        ModelType::Qwen3Embedding => "qwen3",
-        ModelType::GemmaEmbedding => "gemma",
+        ModelType::Qwen3Embedding => {
+            if factory.map_or(false, |f| f.get_qwen3_model().is_some()) {
+                "qwen3"
+            } else if factory.map_or(false, |f| f.get_mmbert_model().is_some()) {
+                eprintln!("INFO: Qwen3 not available, falling back to mmbert");
+                "mmbert"
+            } else if factory.map_or(false, |f| f.get_gemma_model().is_some()) {
+                eprintln!("INFO: Qwen3 not available, falling back to gemma");
+                "gemma"
+            } else {
+                eprintln!("Error: Qwen3Embedding selected but not available and no fallback available");
+                unsafe {
+                    (*result) = create_error_result();
+                }
+                return -1;
+            }
+        }
+        ModelType::GemmaEmbedding => {
+            if factory.map_or(false, |f| f.get_gemma_model().is_some()) {
+                "gemma"
+            } else if factory.map_or(false, |f| f.get_mmbert_model().is_some()) {
+                eprintln!("INFO: Gemma not available, falling back to mmbert");
+                "mmbert"
+            } else if factory.map_or(false, |f| f.get_qwen3_model().is_some()) {
+                eprintln!("INFO: Gemma not available, falling back to qwen3");
+                "qwen3"
+            } else {
+                eprintln!("Error: GemmaEmbedding selected but not available and no fallback available");
+                unsafe {
+                    (*result) = create_error_result();
+                }
+                return -1;
+            }
+        }
+        ModelType::MmBertEmbedding => {
+            if factory.map_or(false, |f| f.get_mmbert_model().is_some()) {
+                "mmbert"
+            } else {
+                eprintln!("Error: MmBertEmbedding selected but not available");
+                unsafe {
+                    (*result) = create_error_result();
+                }
+                return -1;
+            }
+        }
         _ => {
             eprintln!("Error: unsupported model type: {:?}", model_type);
             unsafe {
@@ -857,9 +904,9 @@ pub extern "C" fn get_embedding_with_dim(
         }
     };
 
-    // Call get_embedding_with_model_type
+    // Call get_embedding_2d_matryoshka which handles all model types
     let model_type_cstr = std::ffi::CString::new(model_type_str).unwrap();
-    get_embedding_with_model_type(text, model_type_cstr.as_ptr(), target_dim, result)
+    get_embedding_2d_matryoshka(text, model_type_cstr.as_ptr(), 0, target_dim, result)
 }
 
 /// Get embedding with manually specified model type (no automatic routing)
