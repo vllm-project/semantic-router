@@ -829,7 +829,6 @@ func (c *RedisCache) FindSimilarDecisionWithThreshold(model string, query string
 		logging.Infof("RedisCache.FindSimilarDecisionWithThreshold: search failed: %v", err)
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("redis", "find_similar_decision", "error", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -839,7 +838,6 @@ func (c *RedisCache) FindSimilarDecisionWithThreshold(model string, query string
 		atomic.AddInt64(&c.missCount, 1)
 		logging.Infof("RedisCache.FindSimilarDecisionWithThreshold: no entries found - cache miss")
 		metrics.RecordCacheOperation("redis", "find_similar_decision", "miss", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -852,7 +850,6 @@ func (c *RedisCache) FindSimilarDecisionWithThreshold(model string, query string
 		logging.Infof("RedisCache.FindSimilarDecisionWithThreshold: vector_distance field not found in result")
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("redis", "find_similar_decision", "error", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -861,7 +858,6 @@ func (c *RedisCache) FindSimilarDecisionWithThreshold(model string, query string
 		logging.Infof("RedisCache.FindSimilarDecisionWithThreshold: failed to parse distance value: %v", scanErr)
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("redis", "find_similar_decision", "error", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -893,7 +889,6 @@ func (c *RedisCache) FindSimilarDecisionWithThreshold(model string, query string
 			"index":           c.indexName,
 		})
 		metrics.RecordCacheOperation("redis", "find_similar_decision", "miss", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -903,7 +898,6 @@ func (c *RedisCache) FindSimilarDecisionWithThreshold(model string, query string
 		logging.Infof("RedisCache.FindSimilarDecisionWithThreshold: cache hit BUT decision field is MISSING - treating as miss")
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("redis", "find_similar_decision", "error", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -912,7 +906,6 @@ func (c *RedisCache) FindSimilarDecisionWithThreshold(model string, query string
 		logging.Infof("RedisCache.FindSimilarDecisionWithThreshold: cache hit BUT decision is EMPTY - treating as miss")
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("redis", "find_similar_decision", "error", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -921,14 +914,12 @@ func (c *RedisCache) FindSimilarDecisionWithThreshold(model string, query string
 		logging.Infof("RedisCache.FindSimilarDecisionWithThreshold: failed to decode decision: %v", err)
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("redis", "find_similar_decision", "error", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 	if strings.TrimSpace(decisionEntry.Name) == "" {
 		logging.Infof("RedisCache.FindSimilarDecisionWithThreshold: decoded decision is empty - treating as miss")
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("redis", "find_similar_decision", "miss", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -943,7 +934,6 @@ func (c *RedisCache) FindSimilarDecisionWithThreshold(model string, query string
 		"index":      c.indexName,
 	})
 	metrics.RecordCacheOperation("redis", "find_similar_decision", "hit", time.Since(start).Seconds())
-	metrics.RecordCacheHit()
 	return &decisionEntry, true, nil
 }
 

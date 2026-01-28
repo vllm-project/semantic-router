@@ -1192,7 +1192,15 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		signals.MatchedComplexityRules)
 
 	// Attempt decision cache lookup before evaluating rules
-	if strings.TrimSpace(signals.SourceText) != "" && c.decisionCache != nil && c.decisionCache.IsEnabled() {
+	// Skip cache lookup if any decision uses dynamic signals (latency, user_feedback, preference, context)
+	// because these signals can change for the same query text, making cached decisions potentially stale
+	useDecisionCache := strings.TrimSpace(signals.SourceText) != "" && c.decisionCache != nil && c.decisionCache.IsEnabled()
+	if useDecisionCache && c.Config.HasDecisionsWithDynamicSignals() {
+		logging.Debugf("Decision cache bypassed: configuration contains decisions with dynamic signals")
+		useDecisionCache = false
+	}
+
+	if useDecisionCache {
 		threshold := c.Config.GetCacheSimilarityThreshold()
 		cachedDecision, found, cacheErr := c.decisionCache.FindSimilarDecisionWithThreshold(
 			cache.DecisionCacheModelKey,
@@ -1256,7 +1264,8 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		result.Decision.Name, result.Confidence, result.MatchedRules, result.MatchedKeywords)
 
 	// Store decision in cache for future reuse
-	if strings.TrimSpace(signals.SourceText) != "" && c.decisionCache != nil && c.decisionCache.IsEnabled() {
+	// Skip cache storage if any decision uses dynamic signals (same reason as lookup bypass)
+	if useDecisionCache {
 		ttlSeconds := c.Config.GetCacheTTLSecondsForDecision(result.Decision.Name)
 		cacheEntry := &cache.DecisionEntry{
 			Name:            result.Decision.Name,

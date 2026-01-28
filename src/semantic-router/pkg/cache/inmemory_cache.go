@@ -810,7 +810,6 @@ func (c *InMemoryCache) FindSimilarDecisionWithThreshold(model string, query str
 		atomic.AddInt64(&c.missCount, 1)
 		logging.Debugf("InMemoryCache.FindSimilarDecisionWithThreshold: no decision entries found")
 		metrics.RecordCacheOperation("memory", "find_similar_decision", "miss", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -830,7 +829,6 @@ func (c *InMemoryCache) FindSimilarDecisionWithThreshold(model string, query str
 			"model":      model,
 		})
 		metrics.RecordCacheOperation("memory", "find_similar_decision", "hit", time.Since(start).Seconds())
-		metrics.RecordCacheHit()
 		return bestEntry.Decision, true, nil
 	}
 
@@ -845,7 +843,6 @@ func (c *InMemoryCache) FindSimilarDecisionWithThreshold(model string, query str
 		"entries_checked": entriesChecked,
 	})
 	metrics.RecordCacheOperation("memory", "find_similar_decision", "miss", time.Since(start).Seconds())
-	metrics.RecordCacheMiss()
 	return nil, false, nil
 }
 

@@ -943,7 +943,6 @@ func (c *MilvusCache) FindSimilarDecisionWithThreshold(model string, query strin
 		logging.Debugf("MilvusCache.FindSimilarDecisionWithThreshold: search failed: %v", err)
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("milvus", "find_similar_decision", "error", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -951,7 +950,6 @@ func (c *MilvusCache) FindSimilarDecisionWithThreshold(model string, query strin
 		atomic.AddInt64(&c.missCount, 1)
 		logging.Debugf("MilvusCache.FindSimilarDecisionWithThreshold: no entries found")
 		metrics.RecordCacheOperation("milvus", "find_similar_decision", "miss", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -968,7 +966,6 @@ func (c *MilvusCache) FindSimilarDecisionWithThreshold(model string, query strin
 			"collection":      c.collectionName,
 		})
 		metrics.RecordCacheOperation("milvus", "find_similar_decision", "miss", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -992,7 +989,6 @@ func (c *MilvusCache) FindSimilarDecisionWithThreshold(model string, query strin
 		logging.Debugf("MilvusCache.FindSimilarDecisionWithThreshold: cache hit but decision is missing or empty")
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("milvus", "find_similar_decision", "miss", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -1001,7 +997,6 @@ func (c *MilvusCache) FindSimilarDecisionWithThreshold(model string, query strin
 		logging.Debugf("MilvusCache.FindSimilarDecisionWithThreshold: decoded decision is empty")
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("milvus", "find_similar_decision", "miss", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -1010,14 +1005,12 @@ func (c *MilvusCache) FindSimilarDecisionWithThreshold(model string, query strin
 		logging.Debugf("MilvusCache.FindSimilarDecisionWithThreshold: failed to decode decision: %v", err)
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("milvus", "find_similar_decision", "error", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 	if strings.TrimSpace(decisionEntry.Name) == "" {
 		logging.Debugf("MilvusCache.FindSimilarDecisionWithThreshold: decoded decision is empty")
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("milvus", "find_similar_decision", "miss", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -1032,7 +1025,6 @@ func (c *MilvusCache) FindSimilarDecisionWithThreshold(model string, query strin
 		"collection": c.collectionName,
 	})
 	metrics.RecordCacheOperation("milvus", "find_similar_decision", "hit", time.Since(start).Seconds())
-	metrics.RecordCacheHit()
 	return &decisionEntry, true, nil
 }
 

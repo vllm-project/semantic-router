@@ -1777,6 +1777,39 @@ type RuleCondition struct {
 	Name string `yaml:"name"`
 }
 
+// DynamicSignalTypes are signal types that can change for the same query text
+// based on external factors (latency, user state, context, etc.)
+// These signals make decision caching unsafe when keyed only by query text.
+var DynamicSignalTypes = map[string]bool{
+	SignalTypeLatency:      true, // Current backend latency conditions
+	SignalTypeUserFeedback: true, // User satisfaction state
+	SignalTypePreference:   true, // LLM-determined preference (may vary)
+	SignalTypeContext:      true, // Conversation history context
+}
+
+// IsDynamicSignalType returns true if the signal type is dynamic
+// (i.e., can change for the same query text based on external factors)
+func IsDynamicSignalType(signalType string) bool {
+	return DynamicSignalTypes[signalType]
+}
+
+// UsesDynamicSignals returns true if any condition in the RuleCombination
+// uses a dynamic signal type that can change for the same query text
+func (r *RuleCombination) UsesDynamicSignals() bool {
+	for _, cond := range r.Conditions {
+		if IsDynamicSignalType(cond.Type) {
+			return true
+		}
+	}
+	return false
+}
+
+// UsesDynamicSignals returns true if this decision uses any dynamic signals
+// that can change for the same query text (latency, user_feedback, preference, context)
+func (d *Decision) UsesDynamicSignals() bool {
+	return d.Rules.UsesDynamicSignals()
+}
+
 // FactCheckRule defines a rule for fact-check signal classification
 // Similar to KeywordRule and EmbeddingRule, but based on ML model classification
 // The classifier determines if a query needs fact verification and outputs

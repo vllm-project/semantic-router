@@ -798,13 +798,11 @@ func (h *HybridCache) FindSimilarDecisionWithThreshold(model string, query strin
 	if found {
 		atomic.AddInt64(&h.hitCount, 1)
 		metrics.RecordCacheOperation("hybrid", "find_similar_decision", "hit", time.Since(start).Seconds())
-		metrics.RecordCacheHit()
 		return decisionEntry, true, nil
 	}
 
 	atomic.AddInt64(&h.missCount, 1)
 	metrics.RecordCacheOperation("hybrid", "find_similar_decision", "miss", time.Since(start).Seconds())
-	metrics.RecordCacheMiss()
 	return nil, false, nil
 }
 
