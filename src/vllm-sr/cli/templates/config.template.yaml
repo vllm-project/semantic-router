@@ -186,8 +186,8 @@ signals:
       max_tpot: 0.15  # 150ms per token
       description: "For standard applications with moderate latency tolerance"
 
-  # context_rules - Context length signals (Token Count)
-  context_rules:
+  # context - Context length signals (Token Count)
+  context:
     - name: "low_token_count"
       min_tokens: "0"
       max_tokens: "1K"
@@ -196,6 +196,60 @@ signals:
       min_tokens: "1K"
       max_tokens: "128K"
       description: "Long requests requiring large context window"
+
+  # complexity - Complexity signals (Embedding-based difficulty detection)
+  # IMPORTANT: It is strongly recommended to configure a composer for each complexity rule
+  # to filter based on other signals (e.g., domain). This prevents misclassification where
+  # a math question might match code_complexity or vice versa.
+  complexity:
+    - name: "code_complexity"
+      composer:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "computer science"
+      threshold: 0.1
+      hard:
+        candidates:
+          - "design distributed system"
+          - "implement consensus algorithm"
+          - "optimize for scale"
+          - "architect microservices"
+          - "fix race condition"
+          - "implement garbage collector"
+      easy:
+        candidates:
+          - "print hello world"
+          - "loop through array"
+          - "read file"
+          - "sort list"
+          - "string concatenation"
+          - "simple function"
+      description: "Detects code complexity level"
+    - name: "math_complexity"
+      composer:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "math"
+      threshold: 0.1
+      hard:
+        candidates:
+          - "prove mathematically"
+          - "derive the equation"
+          - "formal proof"
+          - "solve differential equation"
+          - "prove by induction"
+          - "analyze convergence"
+      easy:
+        candidates:
+          - "what is 2+2"
+          - "simple arithmetic"
+          - "basic calculation"
+          - "count numbers"
+          - "add two numbers"
+          - "multiply values"
+      description: "Detects mathematical complexity level"
 
 # Decisions - Routing logic
 decisions:

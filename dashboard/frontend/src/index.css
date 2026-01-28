@@ -47,9 +47,9 @@
   --accent-hover: #8ed100;
 
   /* Flow background for dark mode */
-  --flow-bg-gradient-start: #0d0d14;
-  --flow-bg-gradient-mid: #1a1a2e;
-  --flow-bg-gradient-end: #0d0d14;
+  --flow-bg-gradient-start: #0f0f0f;
+  --flow-bg-gradient-mid: #1a1a1a;
+  --flow-bg-gradient-end: #0f0f0f;
   --flow-dot-color: rgba(255, 255, 255, 0.05);
 
   /* Typography - NVIDIA uses clean sans-serif */

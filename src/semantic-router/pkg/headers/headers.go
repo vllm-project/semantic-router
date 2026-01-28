@@ -99,6 +99,10 @@ const (
 	// Example: "1500"
 	//nolint:gosec
 	VSRContextTokenCount = "x-vsr-context-token-count"
+
+	// VSRMatchedComplexity contains comma-separated list of matched complexity rules with difficulty levels.
+	// Example: "code_complexity:hard,math_complexity:easy"
+	VSRMatchedComplexity = "x-vsr-matched-complexity"
 )
 
 // Security Headers

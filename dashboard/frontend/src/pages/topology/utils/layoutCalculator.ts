@@ -800,10 +800,10 @@ export function calculateFullLayout(
   // Define fixed Y positions for each layer to create clear neural network structure
   const LAYER_Y_POSITIONS = {
     client: 0,           // Layer 1: User Query
-    signals: 200,        // Layer 2: Signals
-    decisions: 500,      // Layer 3: Decisions
-    pluginChains: 800,   // Layer 4: Plugin Chains
-    models: 1100,        // Layer 5: Models
+    signals: 280,        // Layer 2: Signals (increased from 200)
+    decisions: 680,      // Layer 3: Decisions (increased from 500)
+    pluginChains: 1000,  // Layer 4: Plugin Chains (increased from 800)
+    models: 1300,        // Layer 5: Models (increased from 1100)
   }
 
   // Group nodes by layer

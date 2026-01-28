@@ -38,6 +38,7 @@ const (
 	SignalTypeLanguage     = "language"
 	SignalTypeLatency      = "latency"
 	SignalTypeContext      = "context"
+	SignalTypeComplexity   = "complexity"
 )
 
 // API format constants for model backends
@@ -328,6 +329,10 @@ type Signals struct {
 	// Context rules for token count-based classification
 	// When matched, outputs the rule name (e.g., "low_token_count", "high_token_count")
 	ContextRules []ContextRule `yaml:"context_rules,omitempty"`
+
+	// Complexity rules for complexity-based classification using embedding similarity
+	// When matched, outputs the rule name with difficulty level (e.g., "code_complexity:hard", "math_complexity:easy")
+	ComplexityRules []ComplexityRule `yaml:"complexity_rules,omitempty"`
 }
 
 // BackendModels represents the configuration for backend models
@@ -1867,6 +1872,28 @@ type ContextRule struct {
 	MinTokens   TokenCount `yaml:"min_tokens"`
 	MaxTokens   TokenCount `yaml:"max_tokens"`
 	Description string     `yaml:"description,omitempty"`
+}
+
+// ComplexityCandidates defines hard and easy candidates for complexity classification
+type ComplexityCandidates struct {
+	Candidates []string `yaml:"candidates"`
+}
+
+// ComplexityRule defines a rule for complexity-based classification using embedding similarity
+// The classifier computes max similarity to hard and easy candidates, then:
+// - If (max_hard_sim - max_easy_sim) > threshold: outputs "rulename:hard"
+// - If (max_hard_sim - max_easy_sim) < -threshold: outputs "rulename:easy"
+// - Otherwise: outputs "rulename:medium"
+//
+// The Composer field allows filtering based on other signals (e.g., only apply code_complexity when domain is "computer_science")
+// This is evaluated after all signals are computed in parallel, enabling signal dependencies.
+type ComplexityRule struct {
+	Name        string               `yaml:"name"`
+	Threshold   float32              `yaml:"threshold"`
+	Hard        ComplexityCandidates `yaml:"hard"`
+	Easy        ComplexityCandidates `yaml:"easy"`
+	Description string               `yaml:"description,omitempty"`
+	Composer    *RuleCombination     `yaml:"composer,omitempty"` // Optional: filter based on other signals
 }
 
 // ModelReasoningControl represents reasoning mode control on model level

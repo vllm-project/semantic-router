@@ -165,6 +165,17 @@ interface ConfigData {
     language?: Array<{ name: string }>
     latency?: Array<{ name: string; max_tpot?: number; description?: string }>
     context?: Array<{ name: string; min_tokens: string; max_tokens: string; description?: string }>
+    complexity?: Array<{
+      name: string
+      threshold: number
+      hard: { candidates: string[] }
+      easy: { candidates: string[] }
+      description?: string
+      composer?: {
+        operator: 'AND' | 'OR'
+        conditions: Array<{ type: string; name: string }>
+      }
+    }>
   }
   decisions?: Array<{
     name: string
@@ -237,7 +248,7 @@ interface ConfigPageProps {
   activeSection?: ConfigSection
 }
 
-type SignalType = 'Keywords' | 'Embeddings' | 'Domain' | 'Preference' | 'Fact Check' | 'User Feedback' | 'Language' | 'Latency' | 'Context'
+type SignalType = 'Keywords' | 'Embeddings' | 'Domain' | 'Preference' | 'Fact Check' | 'User Feedback' | 'Language' | 'Latency' | 'Context' | 'Complexity'
 type DecisionConfig = NonNullable<ConfigData['decisions']>[number]
 
 interface DecisionFormState {
@@ -264,6 +275,11 @@ interface AddSignalFormState {
   max_tpot?: number
   min_tokens?: string
   max_tokens?: string
+  complexity_threshold?: number
+  hard_candidates?: string
+  easy_candidates?: string
+  composer_operator?: 'AND' | 'OR'
+  composer_conditions?: string
 }
 
 // Helper function to format threshold as percentage
@@ -488,6 +504,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         break
       case 'Context':
         cfg.signals.context = (cfg.signals.context || []).filter(s => s.name !== targetName)
+        break
+      case 'Complexity':
+        cfg.signals.complexity = (cfg.signals.complexity || []).filter(s => s.name !== targetName)
         break
       default:
         break
@@ -2234,6 +2253,18 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       })
     })
 
+    // Complexity
+    signals?.complexity?.forEach(comp => {
+      const hardCount = comp.hard?.candidates?.length || 0
+      const easyCount = comp.easy?.candidates?.length || 0
+      allSignals.push({
+        name: comp.name,
+        type: 'Complexity',
+        summary: `Threshold: ${comp.threshold}, ${hardCount} hard / ${easyCount} easy candidates`,
+        rawData: comp
+      })
+    })
+
     // Filter signals based on search
     const filteredSignals = allSignals.filter(signal =>
       signal.name.toLowerCase().includes(signalsSearch.toLowerCase()) ||
@@ -2264,7 +2295,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             'User Feedback': 'rgba(236, 72, 153, 0.15)',
             'Language': 'rgba(59, 130, 246, 0.15)',
             'Latency': 'rgba(168, 85, 247, 0.15)',
-            'Context': 'rgba(251, 146, 60, 0.15)'
+            'Context': 'rgba(251, 146, 60, 0.15)',
+            'Complexity': 'rgba(66, 153, 225, 0.15)'
           }
           return (
             <span className={styles.badge} style={{ background: typeColors[row.type] }}>
@@ -2400,6 +2432,77 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
           ]
         })
+      } else if (signal.type === 'Context') {
+        sections.push({
+          title: 'Context Signal',
+          fields: [
+            { label: 'Min Tokens', value: signal.rawData.min_tokens || 'N/A', fullWidth: true },
+            { label: 'Max Tokens', value: signal.rawData.max_tokens || 'N/A', fullWidth: true },
+            { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
+          ]
+        })
+      } else if (signal.type === 'Complexity') {
+        const fields: Array<{ label: string; value: React.ReactNode; fullWidth?: boolean }> = [
+          { label: 'Threshold', value: signal.rawData.threshold?.toString() || 'N/A', fullWidth: true }
+        ]
+
+        // Add composer if present
+        if (signal.rawData.composer) {
+          fields.push({
+            label: 'Composer',
+            value: (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div><strong>Operator:</strong> {signal.rawData.composer.operator}</div>
+                <div><strong>Conditions:</strong></div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginLeft: '1rem' }}>
+                  {signal.rawData.composer.conditions.map((cond: { type: string; name: string }, i: number) => (
+                    <div key={i} style={{
+                      padding: '0.5rem',
+                      background: 'rgba(255, 165, 0, 0.1)',
+                      borderRadius: '4px',
+                      fontSize: '0.875rem',
+                      fontFamily: 'var(--font-mono)'
+                    }}>
+                      {cond.type}: {cond.name}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ),
+            fullWidth: true
+          })
+        }
+
+        fields.push(
+          {
+            label: 'Hard Candidates',
+            value: (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontFamily: 'var(--font-mono)', fontSize: '0.875rem' }}>
+                {(signal.rawData.hard?.candidates || []).map((c: string, i: number) => (
+                  <div key={i}>• {c}</div>
+                ))}
+              </div>
+            ),
+            fullWidth: true
+          },
+          {
+            label: 'Easy Candidates',
+            value: (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontFamily: 'var(--font-mono)', fontSize: '0.875rem' }}>
+                {(signal.rawData.easy?.candidates || []).map((c: string, i: number) => (
+                  <div key={i}>• {c}</div>
+                ))}
+              </div>
+            ),
+            fullWidth: true
+          },
+          { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
+        )
+
+        sections.push({
+          title: 'Complexity Signal',
+          fields
+        })
       } else {
         // Preference, Fact Check, User Feedback
         sections.push({
@@ -2431,7 +2534,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         mmlu_categories: '',
         max_tpot: 0.05,
         min_tokens: '0',
-        max_tokens: '8K'
+        max_tokens: '8K',
+        complexity_threshold: 0.1,
+        hard_candidates: '',
+        easy_candidates: '',
+        composer_operator: 'AND',
+        composer_conditions: ''
       }
 
       const initialData: AddSignalFormState = mode === 'edit' && signal ? {
@@ -2447,7 +2555,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         mmlu_categories: (signal.rawData.mmlu_categories || []).join('\n'),
         max_tpot: signal.rawData.max_tpot ?? 0.05,
         min_tokens: signal.rawData.min_tokens || '0',
-        max_tokens: signal.rawData.max_tokens || '8K'
+        max_tokens: signal.rawData.max_tokens || '8K',
+        complexity_threshold: signal.rawData.threshold ?? 0.1,
+        hard_candidates: (signal.rawData.hard?.candidates || []).join('\n'),
+        easy_candidates: (signal.rawData.easy?.candidates || []).join('\n'),
+        composer_operator: signal.rawData.composer?.operator || 'AND',
+        composer_conditions: signal.rawData.composer?.conditions?.map((c: { type: string; name: string }) => `${c.type}:${c.name}`).join('\n') || ''
       } : defaultForm
 
 
@@ -2548,12 +2661,55 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         }
       ]
 
+      const complexityFields: FieldConfig[] = [
+        {
+          name: 'complexity_threshold',
+          label: 'Threshold (complexity only)',
+          type: 'number',
+          placeholder: 'e.g., 0.1',
+          description: 'Similarity difference threshold for hard/easy classification',
+          shouldHide: conditionallyHideFieldExceptType('Complexity')
+        },
+        {
+          name: 'composer_operator',
+          label: 'Composer Operator (complexity only)',
+          type: 'select',
+          options: ['AND', 'OR'],
+          description: 'Logical operator for composer conditions (recommended to filter based on other signals)',
+          shouldHide: conditionallyHideFieldExceptType('Complexity')
+        },
+        {
+          name: 'composer_conditions',
+          label: 'Composer Conditions (complexity only)',
+          type: 'textarea',
+          placeholder: 'One condition per line in format type:name, e.g.:\ndomain:computer_science\nkeyword:coding',
+          description: 'Filter this complexity signal based on other signals (RECOMMENDED). Format: type:name per line',
+          shouldHide: conditionallyHideFieldExceptType('Complexity')
+        },
+        {
+          name: 'hard_candidates',
+          label: 'Hard Candidates (complexity only)',
+          type: 'textarea',
+          placeholder: 'One candidate per line, e.g.:\ndesign distributed system\nimplement consensus algorithm',
+          description: 'Phrases representing hard/complex queries',
+          shouldHide: conditionallyHideFieldExceptType('Complexity')
+        },
+        {
+          name: 'easy_candidates',
+          label: 'Easy Candidates (complexity only)',
+          type: 'textarea',
+          placeholder: 'One candidate per line, e.g.:\nprint hello world\nloop through array',
+          description: 'Phrases representing easy/simple queries',
+          shouldHide: conditionallyHideFieldExceptType('Complexity')
+        }
+      ]
+
       const fields: FieldConfig[] = [
         {
           name: 'type',
           label: 'Type',
           type: 'select',
-          options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Language', 'Latency', 'Context'],
+          options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Language', 'Latency', 'Context', 'Complexity'],
           required: true,
           description: 'Fields are validated based on the selected type.'
         },
@@ -2575,6 +2731,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         ...domainFields,
         ...latencyFields,
         ...contextFields,
+        ...complexityFields,
       ]
 
       const saveSignal = async (formData: AddSignalFormState) => {
@@ -2719,6 +2876,66 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                 min_tokens,
                 max_tokens,
                 description: formData.description || undefined
+              }
+            ]
+            break
+          }
+          case 'Complexity': {
+            const complexity_threshold = formData.complexity_threshold ?? 0.1
+            const hard_candidates = (formData.hard_candidates || '').trim()
+            const easy_candidates = (formData.easy_candidates || '').trim()
+
+            if (!hard_candidates || !easy_candidates) {
+              throw new Error('Both hard and easy candidates are required.')
+            }
+
+            const hardList = hard_candidates.split('\n').map(c => c.trim()).filter(c => c.length > 0)
+            const easyList = easy_candidates.split('\n').map(c => c.trim()).filter(c => c.length > 0)
+
+            if (hardList.length === 0 || easyList.length === 0) {
+              throw new Error('Both hard and easy candidates must have at least one entry.')
+            }
+
+            // Parse composer conditions if provided
+            const composer_conditions_str = (formData.composer_conditions || '').trim()
+            let composer = undefined
+            if (composer_conditions_str) {
+              const conditions = composer_conditions_str
+                .split('\n')
+                .map(line => line.trim())
+                .filter(line => line.length > 0)
+                .map(line => {
+                  const parts = line.split(':')
+                  if (parts.length !== 2) {
+                    throw new Error(`Invalid composer condition format: "${line}". Expected format: type:name`)
+                  }
+                  return {
+                    type: parts[0].trim(),
+                    name: parts[1].trim()
+                  }
+                })
+
+              if (conditions.length > 0) {
+                composer = {
+                  operator: formData.composer_operator || 'AND',
+                  conditions
+                }
+              }
+            }
+
+            newConfig.signals.complexity = [
+              ...(newConfig.signals.complexity || []),
+              {
+                name,
+                threshold: complexity_threshold,
+                hard: {
+                  candidates: hardList
+                },
+                easy: {
+                  candidates: easyList
+                },
+                description: formData.description || undefined,
+                ...(composer && { composer })
               }
             ]
             break

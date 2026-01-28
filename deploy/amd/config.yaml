@@ -296,6 +296,116 @@ signals:
       min_tokens: "8K"
       max_tokens: "1024K"
 
+  # complexity - Complexity signals (Embedding-based difficulty detection)
+  # IMPORTANT: It is strongly recommended to configure a composer for each complexity rule
+  # to filter based on other signals (e.g., domain). This prevents misclassification where
+  # a math question might match code_complexity or vice versa.
+  complexity:
+    - name: "code_complexity"
+      composer:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "computer science"
+      threshold: 0.1
+      hard:
+        candidates:
+          - "design distributed system"
+          - "implement consensus algorithm"
+          - "optimize for scale"
+          - "architect microservices"
+          - "fix race condition"
+          - "implement garbage collector"
+          - "design database schema with complex relationships"
+          - "implement custom memory allocator"
+          - "build compiler or interpreter"
+          - "optimize algorithm time complexity"
+          - "implement concurrent data structures"
+          - "design fault-tolerant system"
+          - "implement distributed transaction protocol"
+          - "build real-time streaming pipeline"
+          - "optimize database query performance"
+          - "implement machine learning algorithm from scratch"
+          - "design scalable API architecture"
+          - "debug memory leak in production"
+          - "implement custom networking protocol"
+          - "build distributed lock manager"
+      easy:
+        candidates:
+          - "print hello world"
+          - "loop through array"
+          - "read file"
+          - "sort list"
+          - "string concatenation"
+          - "simple function"
+          - "create variable"
+          - "write if statement"
+          - "use for loop"
+          - "define class"
+          - "call function"
+          - "import library"
+          - "print output"
+          - "read input"
+          - "basic arithmetic in code"
+          - "concatenate strings"
+          - "access array element"
+          - "create dictionary"
+          - "write comment"
+          - "format string"
+      description: "Programming and software development tasks including coding problems, algorithm implementation, system design, debugging, software architecture, data structures, code optimization, testing, and technical questions about programming languages, frameworks, APIs, databases, and software engineering practices ranging from simple scripts to complex distributed systems"
+    - name: "math_complexity"
+      composer:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "math"
+      threshold: 0.1
+      hard:
+        candidates:
+          - "prove mathematically"
+          - "derive the equation"
+          - "formal proof"
+          - "solve differential equation"
+          - "prove by induction"
+          - "analyze convergence"
+          - "prove theorem rigorously"
+          - "derive formula using calculus"
+          - "solve partial differential equation"
+          - "prove inequality mathematically"
+          - "analyze asymptotic behavior"
+          - "compute eigenvalues and eigenvectors"
+          - "prove using contradiction"
+          - "derive Taylor series expansion"
+          - "solve system of nonlinear equations"
+          - "prove limit exists"
+          - "compute complex integral"
+          - "prove bijection between sets"
+          - "analyze stability of system"
+          - "derive closed form solution"
+      easy:
+        candidates:
+          - "what is 2+2"
+          - "simple arithmetic"
+          - "basic calculation"
+          - "count numbers"
+          - "add two numbers"
+          - "multiply values"
+          - "subtract numbers"
+          - "divide numbers"
+          - "calculate percentage"
+          - "find average"
+          - "round number"
+          - "compare numbers"
+          - "basic addition"
+          - "basic subtraction"
+          - "basic multiplication"
+          - "basic division"
+          - "simple fraction"
+          - "count objects"
+          - "basic geometry area"
+          - "simple equation solve"
+      description: "Mathematical problems and calculations including arithmetic operations, algebra, geometry, trigonometry, calculus, linear algebra, differential equations, mathematical proofs, number theory, statistics, probability, mathematical reasoning, derivations, and theoretical mathematics ranging from basic calculations to advanced mathematical analysis and formal proofs"
+
 # Decisions - Intelligent routing rules
 decisions:
   # Priority 200: Jailbreak detection - highest priority
@@ -337,30 +447,7 @@ decisions:
     plugins:
       - type: "system_prompt"
         configuration:
-          system_prompt: "你是一个专业的AI助手，擅长深度分析和复杂推理。请提供详细、深入的回答。"
-
-  # Priority 145: Computer science domain with deep thinking
-  - name: "complex_engineering"
-    description: "Complex code generation and algorithm design (only when domain is clearly computer science)"
-    priority: 145
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "domain"
-          name: "computer science"
-        - type: "embedding"
-          name: "deep_thinking_en"
-    modelRefs:
-      - model: "DeepSeek-V3.2"
-        use_reasoning: true
-        reasoning_effort: "high"
-    plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "You are an expert software engineer. Provide detailed, well-structured code solutions with explanations."
-      - type: "semantic-cache"
-        configuration:
-          enabled: false
+          system_prompt: "你是 Kimi-K2-Thinking，一个专业的AI助手，擅长深度分析和复杂推理。请提供详细、深入的回答。"
 
   # Priority 160: Creative/Opinion queries - NO fact check needed
   - name: "creative_ideas"
@@ -380,20 +467,22 @@ decisions:
     plugins:
       - type: "system_prompt"
         configuration:
-          system_prompt: "You are a creative and insightful assistant. Feel free to explore ideas, provide opinions, and think outside the box."
+          system_prompt: "You are Qwen3-235B, a creative and insightful assistant. Feel free to explore ideas, provide opinions, and think outside the box."
       - type: "semantic-cache"
         configuration:
           enabled: false
 
-  # Priority 150: Math domain
-  - name: "math_problems"
-    description: "Mathematical queries with reasoning"
+  # Priority 150: Hard Math domain
+  - name: "hard_math_problems"
+    description: "Hard Mathematical queries with high reasoning"
     priority: 150
     rules:
       operator: "AND"
       conditions:
         - type: "domain"
           name: "math"
+        - type: "complexity"
+          name: "math_complexity:hard"
     modelRefs:
       - model: "Qwen/Qwen3-235B"
         use_reasoning: true
@@ -401,7 +490,30 @@ decisions:
     plugins:
       - type: "system_prompt"
         configuration:
-          system_prompt: "You are a mathematics expert. Provide rigorous proofs with step-by-step reasoning."
+          system_prompt: "You are Qwen3-235B, a mathematics expert. Provide rigorous proofs with step-by-step with hard reasoning."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+
+  # Priority 149: Easy Math domain
+  - name: "easy_math_problems"
+    description: "Easy Mathematical queries with low reasoning"
+    priority: 149
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "math"
+        - type: "complexity"
+          name: "math_complexity:easy"
+    modelRefs:
+      - model: "Qwen/Qwen3-235B"
+        use_reasoning: true
+        reasoning_effort: "low"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are Qwen3-235B, a mathematics expert. Provide simple answers with easy reasoning."
       - type: "semantic-cache"
         configuration:
           enabled: false
@@ -422,7 +534,7 @@ decisions:
     plugins:
       - type: "system_prompt"
         configuration:
-          system_prompt: "You are a physics expert. Explain concepts with mathematical derivations and verified facts."
+          system_prompt: "You are GLM-4.7, a physics expert. Explain concepts with mathematical derivations and verified facts."
       - type: "semantic-cache"
         configuration:
           enabled: false
@@ -449,7 +561,32 @@ decisions:
     plugins:
       - type: "system_prompt"
         configuration:
-          system_prompt: "You are an expert analyst. Provide comprehensive, well-reasoned responses with deep insights."
+          system_prompt: "You are Kimi-K2-Thinking, an expert analyst. Provide comprehensive, well-reasoned responses with deep insights."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+
+  # Priority 136: Computer science domain with deep thinking
+  - name: "complex_engineering"
+    description: "Complex code generation and algorithm design (only when domain is clearly computer science)"
+    priority: 136
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "computer science"
+        - type: "embedding"
+          name: "deep_thinking_en"
+        - type: "complexity"
+          name: "code_complexity:hard"
+    modelRefs:
+      - model: "DeepSeek-V3.2"
+        use_reasoning: true
+        reasoning_effort: "high"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are DeepSeek-V3.2, an expert software engineer. Provide detailed, well-structured code solutions with explanations."
       - type: "semantic-cache"
         configuration:
           enabled: false
@@ -459,12 +596,14 @@ decisions:
     description: "Fast coding related queries in English"
     priority: 135
     rules:
-      operator: "AND"
+      operator: "OR"
       conditions:
         - type: "domain"
           name: "computer science"
-        - type: "language"
-          name: "en"
+        - type: "complexity"
+          name: "code_complexity:easy"
+        - type: "complexity"
+          name: "code_complexity:medium"
     modelRefs:
       - model: "openai/gpt-oss-120b"
         use_reasoning: true
@@ -496,11 +635,11 @@ decisions:
     plugins:
       - type: "system_prompt"
         configuration:
-          system_prompt: "你是一个高效的AI助手。请提供简洁、准确的回答。"
+          system_prompt: "你是 DeepSeek-V3.2, 一个高效的AI助手。请提供简洁、准确的回答。"
       - type: "semantic-cache"
         configuration:
           enabled: true
-          similarity_threshold: 0.98
+          similarity_threshold: 0.97
 
   # Priority 120: Fast QA in English
   - name: "fast_qa"
@@ -521,11 +660,11 @@ decisions:
     plugins:
       - type: "system_prompt"
         configuration:
-          system_prompt: "You are an efficient AI assistant. Provide concise, accurate answers."
+          system_prompt: "You are GLM-4.7, an efficient AI assistant. Provide concise, accurate answers."
       - type: "semantic-cache"
         configuration:
           enabled: true
-          similarity_threshold: 0.98
+          similarity_threshold: 0.97
 
   # Priority 100: Default fallback
   - name: "casual_chat"
@@ -548,10 +687,13 @@ decisions:
       - model: "openai/gpt-oss-20b"
         use_reasoning: false
     plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are openai/gpt-oss-20b, a quick thinking and helpful assistant for general queries in casual chat."
       - type: "semantic-cache"
         configuration:
           enabled: true
-          similarity_threshold: 0.98
+          similarity_threshold: 0.97
 
 # Providers - Backend model configuration
 providers:

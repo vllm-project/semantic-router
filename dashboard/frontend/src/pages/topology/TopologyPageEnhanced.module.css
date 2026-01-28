@@ -3,74 +3,89 @@
 .container {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 60px);
+  height: 100vh;
   width: 100%;
   background: var(--bg-primary, #1a1a1a);
   overflow: hidden;
 }
 
-.header {
-  padding: 1rem 1.5rem;
-  background: var(--bg-secondary, #141414);
-  border-bottom: 1px solid var(--border-color, #333);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--text-primary, #e8e8e8);
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.refreshButton {
-  padding: 0.5rem 1rem;
-  background: var(--accent-color, #76b900);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-weight: 500;
-}
-
-.refreshButton:hover {
-  background: var(--accent-hover, #8ed100);
-  transform: translateY(-1px);
-}
-
 .content {
   flex: 1;
   display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.bottomPanel {
+  background: rgba(20, 20, 20, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(51, 51, 51, 0.5);
+  transition: all 0.3s ease;
+  position: relative;
+  height: 100px;
   overflow: hidden;
 }
 
-.controlPanel {
-  width: 280px;
-  background: var(--bg-secondary, #141414);
-  border-right: 1px solid var(--border-color, #333);
-  padding: 16px;
-  overflow-y: auto;
+.bottomPanel.collapsed {
+  height: 0;
+  border-top: none;
+}
+
+.bottomToggle {
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  width: 48px;
+  height: 24px;
+  background: rgba(20, 20, 20, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(51, 51, 51, 0.5);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  color: var(--text-secondary, #888);
+  font-size: 12px;
+  cursor: pointer;
   display: flex;
-  flex-direction: column;
-  gap: 20px;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.bottomToggle:hover {
+  background: rgba(34, 34, 34, 0.9);
+  color: var(--text-primary, #e8e8e8);
+  height: 28px;
+  top: -28px;
+}
+
+.bottomPanelContent {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .flowContainer {
   flex: 1;
   position: relative;
   background: linear-gradient(
-    135deg, 
-    var(--flow-bg-gradient-start, #0d0d14) 0%, 
-    var(--flow-bg-gradient-mid, #1a1a2e) 50%, 
-    var(--flow-bg-gradient-end, #0d0d14) 100%
+    135deg,
+    var(--flow-bg-gradient-start, #0f0f0f) 0%,
+    var(--flow-bg-gradient-mid, #1a1a1a) 50%,
+    var(--flow-bg-gradient-end, #0f0f0f) 100%
   );
 }
 
@@ -250,31 +265,21 @@
 
 /* Responsive */
 @media (max-width: 1024px) {
-  .controlPanel {
-    width: 240px;
+  .bottomPanel {
+    height: 90px;
   }
 }
 
 @media (max-width: 768px) {
-  .content {
+  .bottomPanel {
+    height: 80px;
+  }
+
+  .bottomPanelContent {
     flex-direction: column;
-  }
-
-  .controlPanel {
-    width: 100%;
-    max-height: 200px;
-    border-right: none;
-    border-bottom: 1px solid var(--border-color, #333);
-  }
-
-  .header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
-  }
-
-  .title {
-    font-size: 1.25rem;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 8px 12px;
   }
 
   /* Hide MiniMap (preview) on mobile */
