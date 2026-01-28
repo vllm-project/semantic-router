@@ -216,8 +216,11 @@ extern EmbeddingResult get_text_embedding(const char* text, int max_length);
 extern int get_embedding_smart(const char* text, float quality_priority, float latency_priority, EmbeddingResult* result);
 extern int get_embedding_with_dim(const char* text, float quality_priority, float latency_priority, int target_dim, EmbeddingResult* result);
 extern int get_embedding_with_model_type(const char* text, const char* model_type, int target_dim, EmbeddingResult* result);
+extern int get_embedding_2d_matryoshka(const char* text, const char* model_type, int target_layer, int target_dim, EmbeddingResult* result);
 extern int get_embedding_batched(const char* text, const char* model_type, int target_dim, EmbeddingResult* result);
 extern bool init_embedding_models(const char* qwen3_model_path, const char* gemma_model_path, bool use_cpu);
+extern bool init_embedding_models_with_mmbert(const char* qwen3_model_path, const char* gemma_model_path, const char* mmbert_model_path, bool use_cpu);
+extern bool init_mmbert_embedding_model(const char* model_path, bool use_cpu);
 extern bool init_embedding_models_batched(const char* qwen3_model_path, int max_batch_size, unsigned long long max_wait_ms, bool use_cpu);
 extern int calculate_embedding_similarity(const char* text1, const char* text2, const char* model_type, int target_dim, EmbeddingSimilarityResult* result);
 extern int calculate_similarity_batch(const char* query, const char** candidates, int num_candidates, int top_k, const char* model_type, int target_dim, BatchSimilarityResult* result);
@@ -831,6 +834,104 @@ func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath string, useCPU bool) err
 	return nil
 }
 
+// InitMmBertEmbeddingModel initializes the mmBERT embedding model with 2D Matryoshka support.
+//
+// This model supports:
+//   - 32K context length (YaRN-scaled RoPE)
+//   - Multilingual (1800+ languages via Glot500)
+//   - 2D Matryoshka: dimension reduction (768→64) AND layer early exit (22→3 layers)
+//
+// After initialization, use GetEmbedding2DMatryoshka with modelType="mmbert" to generate embeddings.
+//
+// Parameters:
+//   - modelPath: Path to the mmBERT model directory
+//   - useCPU: If true, use CPU for inference; if false, use GPU if available
+//
+// Returns:
+//   - error: Non-nil if initialization fails
+//
+// Example:
+//
+//	err := InitMmBertEmbeddingModel("/path/to/mmbert-embed-32k-2d-matryoshka", false)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	// Generate embedding with early exit (3 layers, 256 dimensions)
+//	output, err := GetEmbedding2DMatryoshka("Hello world", "mmbert", 3, 256)
+func InitMmBertEmbeddingModel(modelPath string, useCPU bool) error {
+	if modelPath == "" {
+		return fmt.Errorf("modelPath cannot be empty")
+	}
+
+	cModelPath := C.CString(modelPath)
+	defer C.free(unsafe.Pointer(cModelPath))
+
+	success := C.init_mmbert_embedding_model(cModelPath, C.bool(useCPU))
+
+	if !bool(success) {
+		return fmt.Errorf("failed to initialize mmBERT embedding model")
+	}
+
+	log.Printf("INFO: mmBERT embedding model initialized with 2D Matryoshka support")
+	return nil
+}
+
+// InitEmbeddingModelsWithMmBert initializes all embedding models including mmBERT.
+//
+// This is a convenience function to initialize qwen3, gemma, and mmbert models together.
+// Pass empty string "" for any model you don't want to load.
+//
+// Parameters:
+//   - qwen3ModelPath: Path to Qwen3 model (or "" to skip)
+//   - gemmaModelPath: Path to Gemma model (or "" to skip)
+//   - mmBertModelPath: Path to mmBERT model (or "" to skip)
+//   - useCPU: If true, use CPU for inference
+//
+// Returns:
+//   - error: Non-nil if initialization fails
+//
+// Example:
+//
+//	// Load only mmBERT
+//	err := InitEmbeddingModelsWithMmBert("", "", "/path/to/mmbert", false)
+//
+//	// Load qwen3 and mmbert
+//	err := InitEmbeddingModelsWithMmBert("/path/to/qwen3", "", "/path/to/mmbert", false)
+func InitEmbeddingModelsWithMmBert(qwen3ModelPath, gemmaModelPath, mmBertModelPath string, useCPU bool) error {
+	var cQwen3Path *C.char
+	var cGemmaPath *C.char
+	var cMmBertPath *C.char
+
+	if qwen3ModelPath != "" {
+		cQwen3Path = C.CString(qwen3ModelPath)
+		defer C.free(unsafe.Pointer(cQwen3Path))
+	}
+
+	if gemmaModelPath != "" {
+		cGemmaPath = C.CString(gemmaModelPath)
+		defer C.free(unsafe.Pointer(cGemmaPath))
+	}
+
+	if mmBertModelPath != "" {
+		cMmBertPath = C.CString(mmBertModelPath)
+		defer C.free(unsafe.Pointer(cMmBertPath))
+	}
+
+	success := C.init_embedding_models_with_mmbert(
+		cQwen3Path,
+		cGemmaPath,
+		cMmBertPath,
+		C.bool(useCPU),
+	)
+
+	if !bool(success) {
+		return fmt.Errorf("failed to initialize embedding models with mmBERT")
+	}
+
+	log.Printf("INFO: Embedding models initialized (with mmBERT 2D Matryoshka support)")
+	return nil
+}
+
 // GetEmbeddingWithDim generates an embedding with intelligent model selection and Matryoshka dimension support.
 //
 // This function automatically selects between Qwen3/Gemma based on text length and quality/latency priorities,
@@ -989,9 +1090,40 @@ func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority floa
 //	}
 //	fmt.Printf("Used model: %s\n", output.ModelType)
 func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
-	// Validate model type (only accept "qwen3" or "gemma")
-	if modelType != "qwen3" && modelType != "gemma" {
-		return nil, fmt.Errorf("invalid model type: %s (must be 'qwen3' or 'gemma')", modelType)
+	// Validate model type (accept "qwen3", "gemma", or "mmbert")
+	if modelType != "qwen3" && modelType != "gemma" && modelType != "mmbert" {
+		return nil, fmt.Errorf("invalid model type: %s (must be 'qwen3', 'gemma', or 'mmbert')", modelType)
+	}
+
+	// For mmbert, delegate to 2D Matryoshka function with default layer (full model)
+	return GetEmbedding2DMatryoshka(text, modelType, 0, targetDim)
+}
+
+// GetEmbedding2DMatryoshka generates embeddings with 2D Matryoshka support.
+//
+// This function supports the full 2D Matryoshka API for mmBERT models:
+//   - Layer early exit: Use fewer layers (3, 6, 11, or 22) for faster inference
+//   - Dimension truncation: Use smaller dimensions (64, 128, 256, 512, 768)
+//
+// For qwen3 and gemma models, only dimension truncation is supported (targetLayer is ignored).
+//
+// Parameters:
+//   - text: Input text to generate embedding for
+//   - modelType: "qwen3", "gemma", or "mmbert"
+//   - targetLayer: Target layer for early exit (0 for full model, mmbert: 3/6/11/22)
+//   - targetDim: Target embedding dimension (0 for default)
+//
+// Returns:
+//   - EmbeddingOutput containing the embedding vector and metadata
+//   - error if embedding generation fails
+//
+// Example for mmbert with early exit (3 layers, 256 dimensions):
+//
+//	output, err := GetEmbedding2DMatryoshka("Hello world", "mmbert", 3, 256)
+func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, targetDim int) (*EmbeddingOutput, error) {
+	// Validate model type
+	if modelType != "qwen3" && modelType != "gemma" && modelType != "mmbert" {
+		return nil, fmt.Errorf("invalid model type: %s (must be 'qwen3', 'gemma', or 'mmbert')", modelType)
 	}
 
 	cText := C.CString(text)
@@ -1001,9 +1133,10 @@ func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*E
 	defer C.free(unsafe.Pointer(cModelType))
 
 	var result C.EmbeddingResult
-	status := C.get_embedding_with_model_type(
+	status := C.get_embedding_2d_matryoshka(
 		cText,
 		cModelType,
+		C.int(targetLayer),
 		C.int(targetDim),
 		&result,
 	)
@@ -1026,13 +1159,15 @@ func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*E
 
 	embedding := cFloatArrayToGoSlice(result.data, result.length)
 
-	// Convert model_type to string
+	// Convert model_type to string (0=qwen3, 1=gemma, 2=mmbert)
 	var actualModelType string
 	switch int(result.model_type) {
 	case 0:
 		actualModelType = "qwen3"
 	case 1:
 		actualModelType = "gemma"
+	case 2:
+		actualModelType = "mmbert"
 	default:
 		actualModelType = "unknown"
 	}
