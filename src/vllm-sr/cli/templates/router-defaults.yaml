@@ -19,6 +19,42 @@ response_api:
   ttl_seconds: 86400       # 24 hours
   max_responses: 1000
 
+# Agentic Memory Configuration
+# Cross-session memory that persists user facts, preferences, and context
+# Requires: Milvus for vector storage, LLM endpoint for query rewriting and extraction
+# To enable, set enabled: true and configure milvus.address + extraction.endpoint
+memory:
+  enabled: false  # Disabled by default - requires Milvus and LLM endpoint
+
+  # Milvus vector database for memory storage
+  milvus:
+    address: ""  # e.g., "localhost:19530" or "milvus-host:19530"
+    collection: "agentic_memory"
+    dimension: 384
+
+  # Embedding model for semantic similarity
+  embedding:
+    model: "all-MiniLM-L6-v2"
+    dimension: 384
+
+  # Memory retrieval settings
+  default_retrieval_limit: 5
+  default_similarity_threshold: 0.70
+
+  # Query rewriting - rewrites vague queries with conversation context
+  # Requires external_models with model_role: "memory_rewrite"
+  query_rewrite:
+    enabled: false  # Enable when you have an external model configured
+    model_role: "memory_rewrite"  # References external_models entry
+    max_tokens: 100
+
+  # Memory extraction - extracts facts from conversations
+  # Requires external_models with model_role: "memory_extraction"
+  extraction:
+    enabled: false  # Enable when you have an external model configured
+    model_role: "memory_extraction"  # References external_models entry
+    batch_size: 10  # Extract every N conversation turns
+
 semantic_cache:
   enabled: true
   backend_type: "memory"  # Options: "memory", "milvus", or "hybrid"

@@ -11,6 +11,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
@@ -102,6 +103,9 @@ type RequestContext struct {
 
 	// Response API context
 	ResponseAPICtx *ResponseAPIContext // Non-nil if this is a Response API request
+
+	// Memory retrieval results (injected after system prompt to avoid conflicts)
+	RetrievedMemories []*memory.RetrieveResult
 
 	// Router replay context
 	RouterReplayID       string                     // ID of the router replay session, if applicable

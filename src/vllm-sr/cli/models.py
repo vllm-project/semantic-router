@@ -216,6 +216,7 @@ class PluginType(str, Enum):
     HEADER_MUTATION = "header_mutation"
     HALLUCINATION = "hallucination"
     ROUTER_REPLAY = "router_replay"
+    MEMORY = "memory"
 
 
 class SemanticCachePluginConfig(BaseModel):
@@ -305,6 +306,27 @@ class RouterReplayPluginConfig(BaseModel):
         default=4096,
         gt=0,
         description="Max bytes to capture per body (must be > 0, default: 4096)",
+    )
+
+
+class MemoryPluginConfig(BaseModel):
+    """Configuration for memory plugin (per-decision memory settings)."""
+
+    enabled: bool = True
+    retrieval_limit: Optional[int] = Field(
+        default=None,
+        gt=0,
+        description="Max memories to retrieve (default: use global config)",
+    )
+    similarity_threshold: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Min similarity score (0.0-1.0, default: use global config)",
+    )
+    auto_store: Optional[bool] = Field(
+        default=None,
+        description="Auto-extract memories from conversation (default: use request config)",
     )
 
 
@@ -409,6 +431,52 @@ class Providers(BaseModel):
     external_models: Optional[List[ExternalModel]] = []
 
 
+class MemoryMilvusConfig(BaseModel):
+    """Milvus configuration for memory storage."""
+
+    address: str
+    collection: str = "agentic_memory"
+    dimension: int = 384
+
+
+class MemoryEmbeddingConfig(BaseModel):
+    """Embedding configuration for memory."""
+
+    model: str = "all-MiniLM-L6-v2"
+    dimension: int = 384
+
+
+class MemoryQueryRewriteConfig(BaseModel):
+    """Query rewrite configuration for memory search.
+
+    Uses model_role to reference an entry in external_models.
+    """
+
+    enabled: bool = False
+    model_role: Optional[str] = "memory_rewrite"  # References external_models entry
+    max_tokens: Optional[int] = 100
+
+
+class MemoryExtractionConfig(BaseModel):
+    """Fact extraction configuration for memory saving."""
+
+    enabled: bool = True
+    model_role: Optional[str] = "memory_extraction"  # References external_models entry
+    batch_size: int = 10  # Extract every N conversation turns
+
+
+class MemoryConfig(BaseModel):
+    """Agentic Memory configuration for cross-session memory."""
+
+    enabled: bool = True
+    milvus: Optional[MemoryMilvusConfig] = None
+    embedding: Optional[MemoryEmbeddingConfig] = None
+    default_retrieval_limit: int = 5
+    default_similarity_threshold: float = 0.70
+    query_rewrite: Optional[MemoryQueryRewriteConfig] = None
+    extraction: Optional[MemoryExtractionConfig] = None
+
+
 class UserConfig(BaseModel):
     """Complete user configuration."""
 
@@ -417,6 +485,10 @@ class UserConfig(BaseModel):
     signals: Optional[Signals] = None
     decisions: List[Decision]
     providers: Providers
+    memory: Optional[MemoryConfig] = None  # Agentic Memory config
+    # External models for memory operations, preference inference, etc.
+    # Uses Go-level format: llm_provider, model_role, llm_endpoint, etc.
+    external_models: Optional[List[Dict[str, Any]]] = None
 
     class Config:
         populate_by_name = True

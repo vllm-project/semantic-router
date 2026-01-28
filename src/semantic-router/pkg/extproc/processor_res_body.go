@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -206,6 +207,37 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		} else {
 			logging.Infof("Cache updated for request ID: %s", ctx.RequestID)
 		}
+	}
+
+	// Memory Extraction (async, if auto_store enabled)
+	// Runs in background, does NOT add latency to response
+	autoStoreEnabled := extractAutoStore(ctx)
+	logging.Infof("Memory extraction check: MemoryExtractor=%v, autoStore=%v", r.MemoryExtractor != nil, autoStoreEnabled)
+	if r.MemoryExtractor != nil && autoStoreEnabled {
+		go func() {
+			// Use a background context for the goroutine to ensure it runs to completion
+			// even if the original request context is cancelled.
+			bgCtx := context.Background()
+			sessionID, userID, history, err := extractMemoryInfo(ctx)
+			// extractMemoryInfo returns error if userID is missing (required for memory extraction)
+			if err != nil {
+				logging.Errorf("Memory extraction failed: %v", err)
+				return
+			}
+
+			logging.Infof("Memory extraction: sessionID=%s, userID=%s, historyLen=%d", sessionID, userID, len(history))
+
+			// Only extract if we have history (not relevant for first request)
+			if len(history) == 0 {
+				logging.Infof("Memory extraction: skipping - no history to extract")
+				return // No history to extract from
+			}
+
+			logging.Infof("Memory extraction: calling ProcessResponse with %d messages", len(history))
+			if err := r.MemoryExtractor.ProcessResponse(bgCtx, sessionID, userID, history); err != nil {
+				logging.Warnf("Memory extraction failed: %v", err)
+			}
+		}()
 	}
 
 	// Translate response for Response API requests

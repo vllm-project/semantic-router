@@ -21,10 +21,12 @@ const (
 
 // Model role constants for external models
 const (
-	ModelRoleGuardrail      = "guardrail"
-	ModelRoleClassification = "classification"
-	ModelRoleScoring        = "scoring"
-	ModelRolePreference     = "preference" // For route preference matching via external LLM
+	ModelRoleGuardrail        = "guardrail"
+	ModelRoleClassification   = "classification"
+	ModelRoleScoring          = "scoring"
+	ModelRolePreference       = "preference"        // For route preference matching via external LLM
+	ModelRoleMemoryRewrite    = "memory_rewrite"    // For memory query rewriting
+	ModelRoleMemoryExtraction = "memory_extraction" // For memory fact extraction
 )
 
 // Signal type constants for rule conditions
@@ -75,6 +77,8 @@ type RouterConfig struct {
 
 	// Semantic cache configuration
 	SemanticCache `yaml:"semantic_cache"`
+	// Memory configuration for agentic memory (cross-session context)
+	Memory MemoryConfig `yaml:"memory"`
 	// Response API configuration for stateful conversations
 	ResponseAPI ResponseAPIConfig `yaml:"response_api"`
 	// Router Replay configuration for recording routing decisions
@@ -654,6 +658,91 @@ type SemanticCache struct {
 	// - "gemma": Balanced, 768-dim, supports 8K context
 	// Default: "bert"
 	EmbeddingModel string `yaml:"embedding_model,omitempty"`
+}
+
+// MemoryConfig represents the configuration for agentic memory
+type MemoryConfig struct {
+	// Enable memory features
+	Enabled bool `yaml:"enabled"`
+
+	// Milvus configuration for memory storage
+	Milvus MemoryMilvusConfig `yaml:"milvus,omitempty"`
+
+	// Query rewriting configuration
+	QueryRewrite QueryRewriteConfig `yaml:"query_rewrite"`
+
+	// Embedding configuration for memory retrieval
+	Embedding MemoryEmbeddingConfig `yaml:"embedding,omitempty"`
+
+	// Fact extraction configuration
+	Extraction ExtractionConfig `yaml:"extraction"`
+
+	// Default retrieval limit (max number of results to return)
+	// Default: 5
+	DefaultRetrievalLimit int `yaml:"default_retrieval_limit,omitempty"`
+
+	// Default similarity threshold for memory retrieval (0.0-1.0)
+	// Default: 0.6
+	DefaultSimilarityThreshold float32 `yaml:"default_similarity_threshold,omitempty"`
+}
+
+// MemoryMilvusConfig contains Milvus-specific configuration for memory storage.
+type MemoryMilvusConfig struct {
+	// Milvus server address (e.g., "localhost:19530")
+	Address string `yaml:"address"`
+
+	// Collection name for memory storage (default: "agentic_memory")
+	Collection string `yaml:"collection,omitempty"`
+
+	// Embedding dimension (default: 384 for all-MiniLM-L6-v2)
+	Dimension int `yaml:"dimension,omitempty"`
+}
+
+// MemoryEmbeddingConfig contains configuration for embedding generation in memory operations
+type MemoryEmbeddingConfig struct {
+	// Model is the embedding model name (default: "all-MiniLM-L6-v2")
+	Model string `yaml:"model,omitempty"`
+
+	// Dimension is the embedding dimension (default: 384 for all-MiniLM-L6-v2)
+	Dimension int `yaml:"dimension,omitempty"`
+}
+
+// QueryRewriteConfig holds configuration for LLM-based query rewriting.
+// The LLM endpoint is configured via external_models with model_role="memory_rewrite".
+type QueryRewriteConfig struct {
+	// Enable query rewriting
+	Enabled bool `yaml:"enabled"`
+
+	// ModelRole references an external model by role (default: "memory_rewrite")
+	// The external model must be defined in external_models with this role
+	ModelRole string `yaml:"model_role,omitempty"`
+
+	// Maximum tokens for rewritten query (default: 50)
+	MaxTokens int `yaml:"max_tokens,omitempty"`
+
+	// Temperature for LLM generation (default: 0.1)
+	Temperature float64 `yaml:"temperature,omitempty"`
+}
+
+// ExtractionConfig holds configuration for LLM-based fact extraction from conversations.
+// Facts are extracted from conversation history and stored in long-term memory.
+// The LLM endpoint is configured via external_models with model_role="memory_extraction".
+type ExtractionConfig struct {
+	// Enable fact extraction
+	Enabled bool `yaml:"enabled"`
+
+	// ModelRole references an external model by role (default: "memory_extraction")
+	// The external model must be defined in external_models with this role
+	ModelRole string `yaml:"model_role,omitempty"`
+
+	// Maximum tokens for extracted facts (default: 500)
+	MaxTokens int `yaml:"max_tokens,omitempty"`
+
+	// Temperature for LLM generation (default: 0.1)
+	Temperature float64 `yaml:"temperature,omitempty"`
+
+	// BatchSize is the number of turns between extraction runs (default: 10)
+	BatchSize int `yaml:"batch_size,omitempty"`
 }
 
 // ResponseAPIConfig configures the Response API for stateful conversations.
@@ -1425,6 +1514,14 @@ type SemanticCachePluginConfig struct {
 	TTLSeconds          *int     `json:"ttl_seconds,omitempty" yaml:"ttl_seconds,omitempty"` // Per-entry TTL (0 = do not cache, nil = use global default)
 }
 
+// MemoryPluginConfig is per-decision memory config (overrides global MemoryConfig).
+type MemoryPluginConfig struct {
+	Enabled             bool     `json:"enabled" yaml:"enabled"`                                               // If false, memory is skipped even if globally enabled
+	RetrievalLimit      *int     `json:"retrieval_limit,omitempty" yaml:"retrieval_limit,omitempty"`           // Max memories to retrieve (nil = use global)
+	SimilarityThreshold *float32 `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"` // Min similarity score (nil = use global)
+	AutoStore           *bool    `json:"auto_store,omitempty" yaml:"auto_store,omitempty"`                     // Auto-extract memories (nil = use request config)
+}
+
 // JailbreakPluginConfig represents configuration for jailbreak plugin
 type JailbreakPluginConfig struct {
 	Enabled        bool     `json:"enabled" yaml:"enabled"`
@@ -1745,6 +1842,21 @@ func (d *Decision) GetHallucinationConfig() *HallucinationPluginConfig {
 	result := &HallucinationPluginConfig{}
 	if err := unmarshalPluginConfig(config, result); err != nil {
 		logging.Errorf("Failed to unmarshal hallucination config: %v", err)
+		return nil
+	}
+	return result
+}
+
+// GetMemoryConfig returns the memory plugin config, or nil to use global config.
+func (d *Decision) GetMemoryConfig() *MemoryPluginConfig {
+	config := d.GetPluginConfig("memory")
+	if config == nil {
+		return nil
+	}
+
+	result := &MemoryPluginConfig{}
+	if err := unmarshalPluginConfig(config, result); err != nil {
+		logging.Errorf("Failed to unmarshal memory config: %v", err)
 		return nil
 	}
 	return result
