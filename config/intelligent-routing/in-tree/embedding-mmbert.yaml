@@ -66,50 +66,47 @@ classifier:
     pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
 
 # Embedding-based classification rules using mmBERT 2D Matryoshka
-# Each rule can specify target_layer for layer early exit (mmbert only)
+# Uses semantic similarity to match queries against candidate phrases
 embedding_rules:
-  - category: "technical_support"
-    threshold: 0.75
-    keywords:
+  - name: "technical_support"
+    threshold: 0.70
+    candidates:
       - "how to configure the system"
       - "installation guide"
       - "troubleshooting steps"
       - "error message explanation"
       - "setup instructions"
+      - "system configuration help"
+      - "technical assistance needed"
     aggregation_method: "max"
-    model: "mmbert"
-    dimension: 256        # Use 256-dim for good balance
-    target_layer: 6       # Use 6 layers (~3.6x speedup)
 
-  - category: "product_inquiry"
-    threshold: 0.70
-    keywords:
+  - name: "product_inquiry"
+    threshold: 0.68
+    candidates:
       - "product features and specifications"
       - "pricing information"
       - "availability and stock"
       - "product comparison"
       - "warranty details"
-    aggregation_method: "avg"
-    model: "mmbert"
-    dimension: 256
-    target_layer: 6       # Fast inference
+      - "what does this product do"
+      - "how much does it cost"
+    aggregation_method: "max"
 
-  - category: "account_management"
-    threshold: 0.72
-    keywords:
+  - name: "account_management"
+    threshold: 0.70
+    candidates:
       - "password reset"
       - "account settings"
       - "profile update"
       - "subscription management"
       - "billing information"
+      - "change my password"
+      - "update my account"
     aggregation_method: "max"
-    model: "mmbert"
-    dimension: 512        # Higher dimension for accuracy
-    target_layer: 11      # More layers for better quality
 
-  - category: "multilingual_support"
-    threshold: 0.68
-    keywords:
+  - name: "multilingual_support"
+    threshold: 0.65
+    candidates:
       - "多语言支持"           # Chinese: multilingual support
       - "サポートが必要です"    # Japanese: need support
       - "도움이 필요합니다"     # Korean: need help
@@ -118,21 +115,17 @@ embedding_rules:
       - "Ich brauche Hilfe"    # German: I need help
       - "Мне нужна помощь"     # Russian: I need help
     aggregation_method: "max"
-    model: "mmbert"          # mmBERT is multilingual (1800+ languages)
-    dimension: 256
-    target_layer: 6
 
-  - category: "general_inquiry"
-    threshold: 0.65
-    keywords:
+  - name: "general_inquiry"
+    threshold: 0.60
+    candidates:
       - "general question"
       - "information request"
       - "help needed"
       - "customer service"
-    aggregation_method: "any"
-    model: "mmbert"
-    dimension: 128        # Smallest dimension for fastest inference
-    target_layer: 3       # Only 3 layers (~7x speedup)
+      - "I have a question"
+      - "can you help me"
+    aggregation_method: "max"
 
 # Categories define domain metadata
 categories:
@@ -161,7 +154,7 @@ decisions:
     rules:
       operator: "AND"
       conditions:
-        - type: "domain"
+        - type: "embedding"
           name: "technical_support"
     modelRefs:
       - model: "qwen3"
@@ -184,7 +177,7 @@ decisions:
     rules:
       operator: "AND"
       conditions:
-        - type: "domain"
+        - type: "embedding"
           name: "product_inquiry"
     modelRefs:
       - model: "qwen3"
@@ -203,7 +196,7 @@ decisions:
     rules:
       operator: "AND"
       conditions:
-        - type: "domain"
+        - type: "embedding"
           name: "account_management"
     modelRefs:
       - model: "qwen3"
@@ -226,7 +219,7 @@ decisions:
     rules:
       operator: "AND"
       conditions:
-        - type: "domain"
+        - type: "embedding"
           name: "multilingual_support"
     modelRefs:
       - model: "qwen3"
@@ -245,7 +238,7 @@ decisions:
     rules:
       operator: "AND"
       conditions:
-        - type: "domain"
+        - type: "embedding"
           name: "general_inquiry"
     modelRefs:
       - model: "qwen3"
