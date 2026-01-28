@@ -151,6 +151,9 @@ type InlineModels struct {
 
 	// Feedback detector configuration for user satisfaction detection
 	FeedbackDetector FeedbackDetectorConfig `yaml:"feedback_detector"`
+
+	// Preference model configuration for local preference classification
+	PreferenceModel PreferenceModelConfig `yaml:"preference_model,omitempty"`
 }
 
 // IntelligentRouting represents the configuration for intelligent routing
@@ -1002,6 +1005,20 @@ type FeedbackDetectorConfig struct {
 
 	// Path to the feedback type mapping file
 	FeedbackMappingPath string `yaml:"feedback_mapping_path"`
+}
+
+// PreferenceModelConfig represents configuration for local (Candle) preference classification
+// This enables running the preference classifier without an external vLLM endpoint.
+type PreferenceModelConfig struct {
+	// Model ID/path for the preference classification model (Candle model path)
+	ModelID string `yaml:"model_id"`
+
+	// Confidence threshold for accepting the predicted preference (0.0-1.0)
+	// If 0, no thresholding is applied.
+	Threshold float32 `yaml:"threshold,omitempty"`
+
+	// Use CPU for inference (Candle CPU flag)
+	UseCPU bool `yaml:"use_cpu"`
 }
 
 // ExternalModelConfig represents configuration for external LLM-based models
