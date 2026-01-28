@@ -12,7 +12,7 @@ bert_model:
   use_cpu: true
 
 semantic_cache:
-  enabled: true
+  enabled: false  # Disabled: cache embedding doesn't support mmbert yet
   backend_type: "memory"
   similarity_threshold: 0.8
   max_entries: 1000
@@ -21,11 +21,10 @@ semantic_cache:
   use_hnsw: true
   hnsw_m: 16
   hnsw_ef_construction: 200
-  # Use mmBERT for semantic cache (fast with layer=6)
-  embedding_model: "mmbert"
+  embedding_model: "bert"
 
 tools:
-  enabled: true
+  enabled: false  # Disabled: tools embedding uses auto-routing which requires qwen3/gemma
   top_k: 3
   similarity_threshold: 0.2
   tools_db_path: "config/tools_db.json"
