@@ -20,7 +20,7 @@ use crate::model_architectures::unified_interface::{
 };
 //Import embedding models
 use crate::model_architectures::embedding::{
-    GemmaEmbeddingConfig, GemmaEmbeddingModel, Qwen3EmbeddingModel,
+    GemmaEmbeddingConfig, GemmaEmbeddingModel, MmBertEmbeddingModel, Qwen3EmbeddingModel,
 };
 use candle_nn::VarBuilder;
 use tokenizers::Tokenizer;
@@ -68,6 +68,8 @@ pub enum DualPathModel {
     Qwen3Embedding,
     /// Gemma embedding model
     GemmaEmbedding,
+    /// mmBERT embedding model (32K context, multilingual, 2D Matryoshka)
+    MmBertEmbedding,
 }
 
 /// Intelligent model factory for dual-path architecture
@@ -88,6 +90,12 @@ pub struct ModelFactory {
     gemma_tokenizer: Option<Tokenizer>,
     /// Gemma model path
     gemma_model_path: Option<String>,
+    /// mmBERT embedding model
+    mmbert_embedding_model: Option<MmBertEmbeddingModel>,
+    /// mmBERT tokenizer
+    mmbert_tokenizer: Option<Tokenizer>,
+    /// mmBERT model path
+    mmbert_model_path: Option<String>,
     /// Intelligent router for path selection
     router: DualPathRouter,
     /// Computing device
@@ -107,6 +115,9 @@ impl ModelFactory {
             gemma_embedding_model: None,
             gemma_tokenizer: None,
             gemma_model_path: None,
+            mmbert_embedding_model: None,
+            mmbert_tokenizer: None,
+            mmbert_model_path: None,
             router: DualPathRouter::new(PathSelectionStrategy::Automatic),
         }
     }
@@ -199,6 +210,34 @@ impl ModelFactory {
         Ok(())
     }
 
+    /// Register mmBERT embedding model
+    ///
+    /// mmBERT-Embed-32K-2D-Matryoshka supports:
+    /// - 32K context length with YaRN-scaled RoPE
+    /// - 1800+ languages via Glot500 vocabulary
+    /// - 2D Matryoshka: dimension reduction (768→64) + layer reduction (22L→3L)
+    /// - 1.6-3.1× faster than BGE-M3 due to Flash Attention 2 advantage
+    pub fn register_mmbert_embedding_model(&mut self, model_path: &str) -> Result<()> {
+        // Load model
+        let model = MmBertEmbeddingModel::load(model_path, &self.device)
+            .map_err(|e| E::msg(format!("Failed to load mmBERT model: {:?}", e)))?;
+
+        // Load tokenizer
+        let tokenizer_path = format!("{}/tokenizer.json", model_path);
+        let tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|e| {
+            E::msg(format!(
+                "Failed to load mmBERT tokenizer from {}: {:?}",
+                tokenizer_path, e
+            ))
+        })?;
+
+        self.mmbert_embedding_model = Some(model);
+        self.mmbert_tokenizer = Some(tokenizer);
+        self.mmbert_model_path = Some(model_path.to_string());
+
+        Ok(())
+    }
+
     /// Create a dual-path model instance with intelligent routing
     pub fn create_dual_path_model(
         &self,
@@ -250,6 +289,17 @@ impl ModelFactory {
                     ))
                 }
             }
+            ModelType::MmBertEmbedding => {
+                // Direct routing to mmBERT embedding model
+                if self.mmbert_embedding_model.is_some() {
+                    Ok(DualPathModel::MmBertEmbedding)
+                } else {
+                    Err(E::msg(
+                        "mmBERT embedding model not loaded. \
+                         Please call register_mmbert_embedding_model() with a valid model path.",
+                    ))
+                }
+            }
         }
     }
 
@@ -291,6 +341,21 @@ impl ModelFactory {
     /// Get Gemma model path
     pub fn get_gemma_model_path(&self) -> Option<&str> {
         self.gemma_model_path.as_deref()
+    }
+
+    /// Get mmBERT embedding model reference
+    pub fn get_mmbert_model(&self) -> Option<&MmBertEmbeddingModel> {
+        self.mmbert_embedding_model.as_ref()
+    }
+
+    /// Get mmBERT tokenizer reference
+    pub fn get_mmbert_tokenizer(&self) -> Option<&Tokenizer> {
+        self.mmbert_tokenizer.as_ref()
+    }
+
+    /// Get mmBERT model path
+    pub fn get_mmbert_model_path(&self) -> Option<&str> {
+        self.mmbert_model_path.as_deref()
     }
 
     /// Check if factory supports both paths
@@ -339,7 +404,9 @@ impl LoRACapable for DualPathModel {
             DualPathModel::Traditional(_) => 0, // Traditional models don't have LoRA rank
             DualPathModel::LoRA(model) => model.get_lora_rank(),
             //Embedding models don't have LoRA rank
-            DualPathModel::Qwen3Embedding | DualPathModel::GemmaEmbedding => 0,
+            DualPathModel::Qwen3Embedding
+            | DualPathModel::GemmaEmbedding
+            | DualPathModel::MmBertEmbedding => 0,
         }
     }
 
@@ -348,7 +415,9 @@ impl LoRACapable for DualPathModel {
             DualPathModel::Traditional(_) => vec![], // Traditional models don't have task adapters
             DualPathModel::LoRA(model) => model.get_task_adapters(),
             // Embedding models don't have task adapters
-            DualPathModel::Qwen3Embedding | DualPathModel::GemmaEmbedding => vec![],
+            DualPathModel::Qwen3Embedding
+            | DualPathModel::GemmaEmbedding
+            | DualPathModel::MmBertEmbedding => vec![],
         }
     }
 
@@ -357,7 +426,9 @@ impl LoRACapable for DualPathModel {
             DualPathModel::Traditional(_) => false,
             DualPathModel::LoRA(model) => model.supports_multi_task_parallel(),
             //Embedding models don't support parallel multi-task
-            DualPathModel::Qwen3Embedding | DualPathModel::GemmaEmbedding => false,
+            DualPathModel::Qwen3Embedding
+            | DualPathModel::GemmaEmbedding
+            | DualPathModel::MmBertEmbedding => false,
         }
     }
 }
@@ -371,7 +442,9 @@ impl TraditionalModel for DualPathModel {
             DualPathModel::Traditional(_) => FineTuningType::Full, // Traditional models use full fine-tuning
             DualPathModel::LoRA(_) => FineTuningType::LayerWise, // LoRA uses layer-wise adaptation
             //Embedding models use full fine-tuning
-            DualPathModel::Qwen3Embedding | DualPathModel::GemmaEmbedding => FineTuningType::Full,
+            DualPathModel::Qwen3Embedding
+            | DualPathModel::GemmaEmbedding
+            | DualPathModel::MmBertEmbedding => FineTuningType::Full,
         }
     }
 
@@ -384,7 +457,9 @@ impl TraditionalModel for DualPathModel {
             DualPathModel::Traditional(_) => true, // Traditional BERT models have classification heads
             DualPathModel::LoRA(_) => true,        // LoRA models support classification
             //Embedding models don't have classification heads
-            DualPathModel::Qwen3Embedding | DualPathModel::GemmaEmbedding => false,
+            DualPathModel::Qwen3Embedding
+            | DualPathModel::GemmaEmbedding
+            | DualPathModel::MmBertEmbedding => false,
         }
     }
 
@@ -393,7 +468,9 @@ impl TraditionalModel for DualPathModel {
             DualPathModel::Traditional(_) => false, // Traditional BERT is for sequence classification
             DualPathModel::LoRA(_) => false,        // Not implemented yet
             //Embedding models don't have token classification heads
-            DualPathModel::Qwen3Embedding | DualPathModel::GemmaEmbedding => false,
+            DualPathModel::Qwen3Embedding
+            | DualPathModel::GemmaEmbedding
+            | DualPathModel::MmBertEmbedding => false,
         }
     }
 
@@ -419,12 +496,11 @@ impl TraditionalModel for DualPathModel {
                 Ok(ModelOutput::LoRA { result })
             }
             //Embedding models don't support sequential_forward (classification)
-            DualPathModel::Qwen3Embedding | DualPathModel::GemmaEmbedding => {
-                Err(candle_core::Error::Msg(
-                    "Embedding models don't support classification (sequential_forward)"
-                        .to_string(),
-                ))
-            }
+            DualPathModel::Qwen3Embedding
+            | DualPathModel::GemmaEmbedding
+            | DualPathModel::MmBertEmbedding => Err(candle_core::Error::Msg(
+                "Embedding models don't support classification (sequential_forward)".to_string(),
+            )),
         }
     }
 
@@ -490,6 +566,9 @@ impl std::fmt::Debug for DualPathModel {
             DualPathModel::GemmaEmbedding => {
                 f.debug_struct("DualPathModel::GemmaEmbedding").finish()
             }
+            DualPathModel::MmBertEmbedding => {
+                f.debug_struct("DualPathModel::MmBertEmbedding").finish()
+            }
         }
     }
 }
@@ -511,6 +590,7 @@ impl CoreModel for DualPathModel {
             //Precise embedding model types
             DualPathModel::Qwen3Embedding => ModelType::Qwen3Embedding,
             DualPathModel::GemmaEmbedding => ModelType::GemmaEmbedding,
+            DualPathModel::MmBertEmbedding => ModelType::MmBertEmbedding,
         }
     }
 
@@ -535,12 +615,11 @@ impl CoreModel for DualPathModel {
                 Ok(ModelOutput::LoRA { result })
             }
             //Embedding models don't support classification via CoreModel::forward
-            DualPathModel::Qwen3Embedding | DualPathModel::GemmaEmbedding => {
-                Err(candle_core::Error::Msg(
-                    "Embedding models don't support classification (CoreModel::forward)"
-                        .to_string(),
-                ))
-            }
+            DualPathModel::Qwen3Embedding
+            | DualPathModel::GemmaEmbedding
+            | DualPathModel::MmBertEmbedding => Err(candle_core::Error::Msg(
+                "Embedding models don't support classification (CoreModel::forward)".to_string(),
+            )),
         }
     }
 
@@ -565,7 +644,9 @@ impl PathSpecialization for DualPathModel {
                 <LoRABertClassifier as PathSpecialization>::supports_parallel(model)
             }
             // Embedding models support parallel processing
-            DualPathModel::Qwen3Embedding | DualPathModel::GemmaEmbedding => true,
+            DualPathModel::Qwen3Embedding
+            | DualPathModel::GemmaEmbedding
+            | DualPathModel::MmBertEmbedding => true,
         }
     }
 
@@ -579,7 +660,9 @@ impl PathSpecialization for DualPathModel {
                 <LoRABertClassifier as PathSpecialization>::get_confidence_threshold(model)
             }
             //Embedding models don't have classification confidence threshold
-            DualPathModel::Qwen3Embedding | DualPathModel::GemmaEmbedding => 0.0,
+            DualPathModel::Qwen3Embedding
+            | DualPathModel::GemmaEmbedding
+            | DualPathModel::MmBertEmbedding => 0.0,
         }
     }
 
@@ -590,6 +673,7 @@ impl PathSpecialization for DualPathModel {
             //Embedding models can handle larger batches
             DualPathModel::Qwen3Embedding => 64, // Qwen3 supports 32K context
             DualPathModel::GemmaEmbedding => 48, // Gemma is smaller, faster
+            DualPathModel::MmBertEmbedding => 32, // mmBERT with 32K context
         }
     }
 }

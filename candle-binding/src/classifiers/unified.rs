@@ -502,8 +502,8 @@ impl DualPathUnifiedClassifier {
             ModelType::Traditional => {
                 self.classify_with_traditional_path_optimized(texts, tasks, start_time)
             }
-            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding => {
-                // Embedding models (Qwen3/Gemma) are NOT for classification
+            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding | ModelType::MmBertEmbedding => {
+                // Embedding models (Qwen3/Gemma/mmBERT) are NOT for classification
                 // They generate embeddings, not class predictions
                 return Err(UnifiedClassifierError::ProcessingError(
                     format!(
@@ -757,7 +757,7 @@ impl DualPathUnifiedClassifier {
                 stats.traditional_total_time += result.total_processing_time_ms;
                 stats.traditional_request_count += 1;
             }
-            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding => {
+            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding | ModelType::MmBertEmbedding => {
                 // Embedding models don't participate in classification
                 // Performance tracking is handled separately via update_embedding_stats()
                 // This branch should not be reached in normal operation
@@ -1102,7 +1102,7 @@ impl DualPathUnifiedClassifier {
                 // Traditional is the baseline
                 0.0
             }
-            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding => {
+            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding | ModelType::MmBertEmbedding => {
                 // Embedding models don't participate in classification performance tracking
                 // Their metrics (latency, throughput) are tracked separately via update_embedding_stats()
                 // Performance comparison is not meaningful in classification context

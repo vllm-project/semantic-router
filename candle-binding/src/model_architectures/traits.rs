@@ -8,7 +8,7 @@ use std::fmt::Debug;
 /// Model type enumeration for multi-path routing
 ///
 /// Supports both classification models (Traditional, LoRA) and embedding models
-/// (Qwen3Embedding, GemmaEmbedding) with distinct characteristics for intelligent routing.
+/// (Qwen3Embedding, GemmaEmbedding, MmBertEmbedding) with distinct characteristics for intelligent routing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ModelType {
     /// Traditional BERT fine-tuning path - stable and reliable for classification
@@ -34,6 +34,17 @@ pub enum ModelType {
     /// - Latency: ~20ms (512 tokens)
     /// - Best for: Short to medium documents, latency-sensitive applications
     GemmaEmbedding,
+    /// mmBERT embedding model - multilingual, 32K context, 2D Matryoshka
+    ///
+    /// Characteristics:
+    /// - Max sequence length: 32,768 tokens
+    /// - Hidden size: 768 (supports 64-768 via Matryoshka)
+    /// - Pooling: Mean
+    /// - Languages: 1800+ (via Glot500)
+    /// - 2D Matryoshka: Dimension reduction + Layer reduction
+    /// - Latency: 1.6-3.1× faster than BGE-M3 (FA2 advantage)
+    /// - Best for: Multilingual RAG, long-document retrieval, edge deployment
+    MmBertEmbedding,
 }
 
 /// Task type enumeration for multi-task processing
