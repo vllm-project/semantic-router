@@ -1,10 +1,10 @@
 """Configuration merger for vLLM Semantic Router."""
 
 import copy
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
-from cli.models import UserConfig, PluginType
 from cli.defaults import load_embedded_defaults
+from cli.models import PluginType, UserConfig
 from cli.utils import getLogger
 
 log = getLogger(__name__)
@@ -524,6 +524,26 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
     merged.update(provider_config)
     log.info(f"  Added {len(user_config.providers.models)} models")
     log.info(f"  Added {len(provider_config['vllm_endpoints'])} endpoints")
+
+    # Merge semantic_cache configuration if provided by user
+    if user_config.semantic_cache:
+        user_cache_config = user_config.semantic_cache.model_dump(exclude_none=True)
+        if user_cache_config:
+            # Deep merge: user config overrides defaults
+            if "semantic_cache" not in merged:
+                merged["semantic_cache"] = {}
+            for key, value in user_cache_config.items():
+                if isinstance(value, dict) and key in merged["semantic_cache"]:
+                    # Deep merge nested dicts (e.g., milvus, redis)
+                    merged["semantic_cache"][key] = {
+                        **merged["semantic_cache"].get(key, {}),
+                        **value,
+                    }
+                else:
+                    merged["semantic_cache"][key] = value
+            log.info(
+                f"  Merged semantic_cache config: backend_type={merged['semantic_cache'].get('backend_type', 'memory')}"
+            )
 
     log.info("✓ Configuration merged successfully")
 

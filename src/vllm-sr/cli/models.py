@@ -1,7 +1,8 @@
 """Pydantic models for vLLM Semantic Router configuration."""
 
-from typing import List, Dict, Any, Optional, Literal
 from enum import Enum
+from typing import Any, Dict, List, Literal, Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -409,6 +410,30 @@ class Providers(BaseModel):
     external_models: Optional[List[ExternalModel]] = []
 
 
+class SemanticCacheConfig(BaseModel):
+    """Semantic cache configuration for user config.
+
+    This allows users to override the default semantic cache settings.
+    Any fields not specified will use the defaults from router-defaults.yaml.
+    """
+
+    enabled: Optional[bool] = None
+    backend_type: Optional[str] = None  # "memory", "milvus", "redis", "hybrid"
+    similarity_threshold: Optional[float] = None
+    max_entries: Optional[int] = None
+    ttl_seconds: Optional[int] = None
+    eviction_policy: Optional[str] = None
+    use_hnsw: Optional[bool] = None
+    hnsw_m: Optional[int] = None
+    hnsw_ef_construction: Optional[int] = None
+    embedding_model: Optional[str] = None
+    backend_config_path: Optional[str] = None
+    # Milvus-specific configuration
+    milvus: Optional[Dict[str, Any]] = None
+    # Redis-specific configuration
+    redis: Optional[Dict[str, Any]] = None
+
+
 class UserConfig(BaseModel):
     """Complete user configuration."""
 
@@ -417,6 +442,7 @@ class UserConfig(BaseModel):
     signals: Optional[Signals] = None
     decisions: List[Decision]
     providers: Providers
+    semantic_cache: Optional[SemanticCacheConfig] = None
 
     class Config:
         populate_by_name = True
