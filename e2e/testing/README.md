@@ -45,6 +45,13 @@ This test suite provides a progressive approach to testing the Semantic Router, 
    - Tests Prometheus metrics endpoints
    - Verifies correct metrics are being recorded
 
+9. **08-rag-openai-test.py** - RAG OpenAI E2E (direct_search and tool_based modes).
+
+10. **09-openai-api-validation-test.py** - OpenAI API validation E2E
+    - Validates Files, Vector Stores, and Vector Store Search API contract against upstream.
+    - Requires `OPENAI_API_KEY`. Skips all tests when not set.
+    - Run: `OPENAI_API_KEY=sk-... python e2e/testing/09-openai-api-validation-test.py`
+
 ## Running Tests
 
 ### Development Workflow (LLM Katan - Recommended)
