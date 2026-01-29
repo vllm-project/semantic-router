@@ -608,3 +608,16 @@ func (c *RouterConfig) IsFeedbackDetectorEnabled() bool {
 	return c.InlineModels.FeedbackDetector.Enabled &&
 		c.InlineModels.FeedbackDetector.ModelID != ""
 }
+
+// HasDecisionsWithDynamicSignals returns true if any configured decision uses
+// dynamic signals (latency, user_feedback, preference, context) that can change
+// for the same query text. When true, decision caching keyed only by query text
+// is unsafe and should be bypassed.
+func (c *RouterConfig) HasDecisionsWithDynamicSignals() bool {
+	for _, decision := range c.Decisions {
+		if decision.UsesDynamicSignals() {
+			return true
+		}
+	}
+	return false
+}

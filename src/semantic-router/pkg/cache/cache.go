@@ -5,6 +5,8 @@ import (
 	"fmt"
 )
 
+const DecisionCacheModelKey = "decision-cache"
+
 // ChatMessage represents a message in the OpenAI chat format with role and content
 type ChatMessage struct {
 	Role    string `json:"role"`
