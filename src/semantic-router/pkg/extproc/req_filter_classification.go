@@ -84,6 +84,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	ctx.VSRMatchedLatency = signals.MatchedLatencyRules
 	ctx.VSRMatchedContext = signals.MatchedContextRules
 	ctx.VSRContextTokenCount = signals.TokenCount
+	ctx.VSRMatchedComplexity = signals.MatchedComplexityRules
 
 	// Set fact-check context fields from signal results
 	// This replaces the old performFactCheckClassification call to avoid duplicate computation
@@ -159,10 +160,9 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	// This is critical for hallucination detection and other per-decision plugins
 	ctx.VSRSelectedDecision = result.Decision
 
-	// Set router replay config from system-level configuration if enabled
-	if r.Config.RouterReplay.Enabled {
-		cfgCopy := r.Config.RouterReplay
-		ctx.RouterReplayConfig = &cfgCopy
+	// Set router replay plugin config from per-decision plugin if configured
+	if pluginCfg := result.Decision.GetRouterReplayConfig(); pluginCfg != nil && pluginCfg.Enabled {
+		ctx.RouterReplayPluginConfig = pluginCfg
 	}
 
 	// Extract domain category from matched rules (for VSRSelectedCategory header)
@@ -177,7 +177,6 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	}
 	// Store category in context for response headers
 	ctx.VSRSelectedCategory = categoryName
-	ctx.VSRSelectedDecisionConfidence = evaluationConfidence
 
 	// Note: VSRMatchedKeywords is already set from signals.MatchedKeywordRules (line 61)
 	// We should NOT overwrite it with result.MatchedKeywords which contains actual keywords
@@ -185,6 +184,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 
 	decisionName = result.Decision.Name
 	evaluationConfidence = result.Confidence
+	ctx.VSRSelectedDecisionConfidence = evaluationConfidence
 	logging.Infof("Decision Evaluation Result: decision=%s, category=%s, confidence=%.3f, matched_rules=%v",
 		decisionName, categoryName, evaluationConfidence, result.MatchedRules)
 
@@ -213,6 +213,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 				decisionName, selectedModel, usedMethod)
 		}
 		ctx.VSRSelectedModel = selectedModel
+		ctx.VSRSelectionMethod = usedMethod
 
 		// Determine reasoning mode from the selected model's configuration
 		if selectedModelRef.UseReasoning != nil {
@@ -239,6 +240,8 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	} else {
 		// No model refs in decision, use default model
 		selectedModel = r.Config.DefaultModel
+		ctx.VSRSelectedModel = selectedModel
+		ctx.VSRSelectionMethod = "default"
 		logging.Infof("No model refs in decision %s, using default model: %s", decisionName, selectedModel)
 	}
 

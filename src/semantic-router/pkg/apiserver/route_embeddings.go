@@ -40,7 +40,19 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 	// Validate dimension
 	if !isValidDimension(req.Dimension) {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_DIMENSION",
-			fmt.Sprintf("dimension must be one of: 128, 256, 512, 768, 1024 (got %d)", req.Dimension))
+			fmt.Sprintf("dimension must be one of: 64, 128, 256, 512, 768, 1024 (got %d)", req.Dimension))
+		return
+	}
+
+	// Validate target_layer for mmbert
+	if req.TargetLayer != 0 && req.Model != "mmbert" {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_PARAMETER",
+			"target_layer is only supported for model='mmbert'")
+		return
+	}
+	if req.Model == "mmbert" && req.TargetLayer != 0 && !isValidMmBertLayer(req.TargetLayer) {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_LAYER",
+			fmt.Sprintf("target_layer must be one of: 3, 6, 11, 22 (got %d)", req.TargetLayer))
 		return
 	}
 
@@ -53,7 +65,8 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 		var err error
 
 		// Choose between manual model selection or automatic routing
-		if req.Model == "auto" || req.Model == "" {
+		switch req.Model {
+		case "auto", "":
 			// Automatic routing based on quality/latency priorities
 			output, err = candle_binding.GetEmbeddingWithMetadata(
 				text,
@@ -61,7 +74,15 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 				req.LatencyPriority,
 				req.Dimension,
 			)
-		} else {
+		case "mmbert":
+			// mmBERT with 2D Matryoshka support (layer early exit + dimension)
+			output, err = candle_binding.GetEmbedding2DMatryoshka(
+				text,
+				req.Model,
+				req.TargetLayer,
+				req.Dimension,
+			)
+		default:
 			// Manual model selection ("qwen3" or "gemma")
 			output, err = candle_binding.GetEmbeddingWithModelType(
 				text,
@@ -245,6 +266,12 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 
 // isValidDimension checks if the provided dimension is valid
 func isValidDimension(dim int) bool {
-	validDimensions := map[int]bool{128: true, 256: true, 512: true, 768: true, 1024: true}
+	validDimensions := map[int]bool{64: true, 128: true, 256: true, 512: true, 768: true, 1024: true}
 	return validDimensions[dim]
+}
+
+// isValidMmBertLayer checks if the provided layer is valid for mmBERT early exit
+func isValidMmBertLayer(layer int) bool {
+	validLayers := map[int]bool{3: true, 6: true, 11: true, 22: true}
+	return validLayers[layer]
 }

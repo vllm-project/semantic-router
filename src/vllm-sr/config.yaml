@@ -166,10 +166,10 @@ signals:
 
   latency:
     - name: "low_latency"
-      max_tpot: 0.05  # 50ms per token
+      max_tpot: 0.05
       description: "For real-time chat applications requiring fast responses"
     - name: "medium_latency"
-      max_tpot: 0.15  # 150ms per token
+      max_tpot: 0.15
       description: "For standard applications with moderate latency tolerance"
 
   context_rules:
@@ -401,7 +401,7 @@ providers:
   models:
     - name: "openai/gpt-oss-120b"
       reasoning_family: "gpt-oss"
-      param_size: "120b"  # Used for confidence routing
+      param_size: "120b"
       endpoints:
         - name: "vllm_endpoint"
           weight: 1

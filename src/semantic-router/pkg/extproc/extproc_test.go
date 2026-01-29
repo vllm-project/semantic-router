@@ -477,6 +477,12 @@ func CreateTestConfig() *config.RouterConfig {
 				Threshold: 0.8,
 				UseCPU:    true,
 			},
+			EmbeddingModels: config.EmbeddingModels{
+				HNSWConfig: config.HNSWConfig{
+					ModelType:       "qwen3",
+					TargetDimension: 768,
+				},
+			},
 			Classifier: config.Classifier{
 				CategoryModel: config.CategoryModel{
 					ModelID:             "../../../../models/mom-domain-classifier",
@@ -610,6 +616,8 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 	toolsOptions := tools.ToolsDatabaseOptions{
 		SimilarityThreshold: toolsSimilarityThreshold,
 		Enabled:             cfg.ToolSelection.Tools.Enabled,
+		ModelType:           cfg.EmbeddingModels.HNSWConfig.ModelType,
+		TargetDimension:     cfg.EmbeddingModels.HNSWConfig.TargetDimension,
 	}
 	toolsDatabase := tools.NewToolsDatabase(toolsOptions)
 

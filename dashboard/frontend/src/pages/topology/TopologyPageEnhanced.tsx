@@ -1,6 +1,6 @@
 // topology/TopologyPageEnhanced.tsx - Full Signal-Driven Decision Pipeline Visualization
 
-import React, { useCallback, useEffect } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import ReactFlow, {
   Node,
   Background,
@@ -18,18 +18,15 @@ import 'reactflow/dist/style.css'
 import { useTopologyData, useCollapseState, useTestQuery } from './hooks'
 import { useTheme } from '../../hooks'
 import { customNodeTypes } from './components/CustomNodes'
-import {
-  TestQueryInput,
-  CollapseControls,
-  TopologyLegend,
-} from './components/ControlPanel'
+import { TestQueryInput } from './components/ControlPanel'
+import { ResultCard } from './components/ResultCard'
 import { calculateFullLayout } from './utils/layoutCalculator'
 import styles from './TopologyPageEnhanced.module.css'
 
 // ============== Inner Flow Component ==============
 const TopologyFlow: React.FC = () => {
   const { data, loading, error, refresh } = useTopologyData()
-  const { collapseState, expandAll, collapseAll } = useCollapseState()
+  const { collapseState } = useCollapseState()
   const { isDark } = useTheme()
   const {
     testQuery,
@@ -37,11 +34,13 @@ const TopologyFlow: React.FC = () => {
     testResult,
     isLoading: isTestLoading,
     runTest,
+    clearResult,
   } = useTestQuery(data)
 
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const { fitView } = useReactFlow()
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   // Generate full topology layout
   useEffect(() => {
@@ -58,11 +57,16 @@ const TopologyFlow: React.FC = () => {
     setEdges(newEdges)
   }, [data, collapseState, testResult, setNodes, setEdges])
 
-  // Fit view after nodes change
+  // Fit view after nodes change - with extra bottom padding for input panel
   useEffect(() => {
     if (nodes.length > 0) {
       const timer = setTimeout(() => {
-        fitView({ padding: 0.2, duration: 300 })
+        fitView({
+          padding: 0.1,
+          duration: 300,
+          minZoom: 0.2,
+          maxZoom: 1.0
+        })
       }, 100)
       return () => clearTimeout(timer)
     }
@@ -100,29 +104,7 @@ const TopologyFlow: React.FC = () => {
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <h1 className={styles.title}>
-          Mixture of Models: Signal-Driven Decision Topology
-        </h1>
-        <button onClick={refresh} className={styles.refreshButton}>
-          Refresh
-        </button>
-      </div>
-
       <div className={styles.content}>
-        {/* Control Panel */}
-        <div className={styles.controlPanel}>
-          <TestQueryInput
-            value={testQuery}
-            onChange={setTestQuery}
-            onTest={runTest}
-            isLoading={isTestLoading}
-            result={testResult}
-          />
-          <CollapseControls onExpandAll={expandAll} onCollapseAll={collapseAll} />
-          <TopologyLegend />
-        </div>
-
         {/* Flow Canvas */}
         <div className={styles.flowContainer}>
           <ReactFlow
@@ -137,8 +119,8 @@ const TopologyFlow: React.FC = () => {
               style: { strokeWidth: 1.5 },
             }}
             fitView
-            fitViewOptions={{ padding: 0.3, minZoom: 0.3, maxZoom: 1.5 }}
-            defaultViewport={{ x: 0, y: 0, zoom: 0.6 }}
+            fitViewOptions={{ padding: 0.1, minZoom: 0.2, maxZoom: 1.0 }}
+            defaultViewport={{ x: 0, y: 0, zoom: 0.4 }}
           >
             <Background 
               variant={BackgroundVariant.Dots}
@@ -157,6 +139,34 @@ const TopologyFlow: React.FC = () => {
             />
           </ReactFlow>
         </div>
+
+        {/* Bottom Control Panel */}
+        <div className={`${styles.bottomPanel} ${sidebarCollapsed ? styles.collapsed : ''}`}>
+          {/* Toggle Button */}
+          <button
+            className={styles.bottomToggle}
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            title={sidebarCollapsed ? 'Expand Panel' : 'Collapse Panel'}
+          >
+            {sidebarCollapsed ? '▲' : '▼'}
+          </button>
+
+          {/* Panel Content */}
+          <div className={styles.bottomPanelContent}>
+            <TestQueryInput
+              value={testQuery}
+              onChange={setTestQuery}
+              onTest={runTest}
+              isLoading={isTestLoading}
+            />
+          </div>
+        </div>
+
+        {/* Result Card */}
+        <ResultCard
+          result={testResult}
+          onClose={clearResult}
+        />
       </div>
     </div>
   )

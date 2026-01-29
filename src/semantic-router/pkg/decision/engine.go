@@ -68,6 +68,7 @@ type SignalMatches struct {
 	LanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
 	LatencyRules      []string // Latency rule names that matched based on model TPOT
 	ContextRules      []string // Context rule names matched (e.g. "low_token_count")
+	ComplexityRules   []string // Complexity rules with difficulty level (e.g. "code_complexity:hard")
 }
 
 // DecisionResult represents the result of decision evaluation
@@ -189,6 +190,8 @@ func (e *DecisionEngine) evaluateRuleCombinationWithSignals(
 			conditionMatched = slices.Contains(signals.LatencyRules, condition.Name)
 		case "context":
 			conditionMatched = slices.Contains(signals.ContextRules, condition.Name)
+		case "complexity":
+			conditionMatched = slices.Contains(signals.ComplexityRules, condition.Name)
 		default:
 			continue
 		}

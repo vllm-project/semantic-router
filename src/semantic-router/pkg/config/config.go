@@ -38,6 +38,7 @@ const (
 	SignalTypeLanguage     = "language"
 	SignalTypeLatency      = "latency"
 	SignalTypeContext      = "context"
+	SignalTypeComplexity   = "complexity"
 )
 
 // API format constants for model backends
@@ -328,6 +329,10 @@ type Signals struct {
 	// Context rules for token count-based classification
 	// When matched, outputs the rule name (e.g., "low_token_count", "high_token_count")
 	ContextRules []ContextRule `yaml:"context_rules,omitempty"`
+
+	// Complexity rules for complexity-based classification using embedding similarity
+	// When matched, outputs the rule name with difficulty level (e.g., "code_complexity:hard", "math_complexity:easy")
+	ComplexityRules []ComplexityRule `yaml:"complexity_rules,omitempty"`
 }
 
 // BackendModels represents the configuration for backend models
@@ -390,6 +395,9 @@ type EmbeddingModels struct {
 	Qwen3ModelPath string `yaml:"qwen3_model_path"`
 	// Path to EmbeddingGemma-300M model directory
 	GemmaModelPath string `yaml:"gemma_model_path"`
+	// Path to mmBERT 2D Matryoshka embedding model directory
+	// Supports layer early exit (3/6/11/22 layers) and dimension reduction (64-768)
+	MmBertModelPath string `yaml:"mmbert_model_path"`
 	// Use CPU for inference (default: true, auto-detect GPU if available)
 	UseCPU bool `yaml:"use_cpu"`
 
@@ -404,7 +412,7 @@ type EmbeddingModels struct {
 // This struct is kept for backward compatibility and may be renamed in a future version.
 type HNSWConfig struct {
 	// ModelType specifies which embedding model to use (default: "qwen3")
-	// Options: "qwen3" (high quality, 32K context) or "gemma" (fast, 8K context)
+	// Options: "qwen3" (high quality, 32K context), "gemma" (fast, 8K context), or "mmbert" (multilingual, 2D Matryoshka)
 	// This model will be used for both preloading and runtime embedding generation
 	ModelType string `yaml:"model_type,omitempty"`
 
@@ -414,8 +422,13 @@ type HNSWConfig struct {
 	PreloadEmbeddings bool `yaml:"preload_embeddings"`
 
 	// TargetDimension is the embedding dimension to use (default: 768)
-	// Supports Matryoshka dimensions: 768, 512, 256, 128
+	// Supports Matryoshka dimensions: 768, 512, 256, 128, 64
 	TargetDimension int `yaml:"target_dimension,omitempty"`
+
+	// TargetLayer is the layer for mmBERT early exit (default: 0 = full model)
+	// Only used when ModelType is "mmbert"
+	// Options: 3 (fastest, ~7x speedup), 6 (~3.6x), 11 (~2x), 22 (full model)
+	TargetLayer int `yaml:"target_layer,omitempty"`
 
 	// EnableSoftMatching enables soft matching mode (default: true)
 	// When enabled, if no rule meets its threshold, returns the rule with highest score
@@ -1494,11 +1507,9 @@ type HallucinationPluginConfig struct {
 	IncludeHallucinationDetails bool `json:"include_hallucination_details,omitempty" yaml:"include_hallucination_details,omitempty"`
 }
 
-// RouterReplayConfig configures the router replay system for recording
-// routing decisions and payload snippets for later debugging and replay.
-// This is a system-level configuration with automatic per-decision isolation
-// (separate collection/table/keyspace per decision).
-type RouterReplayConfig struct {
+// RouterReplayPluginConfig represents configuration for router_replay plugin
+// This is the per-decision plugin configuration (overrides global router_replay config)
+type RouterReplayPluginConfig struct {
 	Enabled bool `json:"enabled" yaml:"enabled"`
 
 	// MaxRecords controls the maximum number of replay records kept in memory.
@@ -1516,7 +1527,12 @@ type RouterReplayConfig struct {
 	// MaxBodyBytes caps how many bytes of request/response body are recorded.
 	// Defaults to 4096 bytes.
 	MaxBodyBytes int `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
+}
 
+// RouterReplayConfig configures the router replay system at the system level.
+// This provides storage backend configuration and system-level settings.
+// Per-decision settings (max_records, capture settings) are configured via router_replay plugin.
+type RouterReplayConfig struct {
 	// StoreBackend specifies the storage backend to use.
 	// Options: "memory", "redis", "postgres", "milvus". Defaults to "memory".
 	StoreBackend string `json:"store_backend,omitempty" yaml:"store_backend,omitempty"`
@@ -1749,6 +1765,21 @@ func (d *Decision) GetHallucinationConfig() *HallucinationPluginConfig {
 	return result
 }
 
+// GetRouterReplayConfig returns the router_replay plugin configuration
+func (d *Decision) GetRouterReplayConfig() *RouterReplayPluginConfig {
+	config := d.GetPluginConfig("router_replay")
+	if config == nil {
+		return nil
+	}
+
+	result := &RouterReplayPluginConfig{}
+	if err := unmarshalPluginConfig(config, result); err != nil {
+		logging.Errorf("Failed to unmarshal router_replay config: %v", err)
+		return nil
+	}
+	return result
+}
+
 // RuleCombination defines how to combine multiple rule conditions with AND/OR operators
 type RuleCombination struct {
 	// Operator specifies how to combine conditions: "AND" or "OR"
@@ -1871,6 +1902,28 @@ type ContextRule struct {
 	MinTokens   TokenCount `yaml:"min_tokens"`
 	MaxTokens   TokenCount `yaml:"max_tokens"`
 	Description string     `yaml:"description,omitempty"`
+}
+
+// ComplexityCandidates defines hard and easy candidates for complexity classification
+type ComplexityCandidates struct {
+	Candidates []string `yaml:"candidates"`
+}
+
+// ComplexityRule defines a rule for complexity-based classification using embedding similarity
+// The classifier computes max similarity to hard and easy candidates, then:
+// - If (max_hard_sim - max_easy_sim) > threshold: outputs "rulename:hard"
+// - If (max_hard_sim - max_easy_sim) < -threshold: outputs "rulename:easy"
+// - Otherwise: outputs "rulename:medium"
+//
+// The Composer field allows filtering based on other signals (e.g., only apply code_complexity when domain is "computer_science")
+// This is evaluated after all signals are computed in parallel, enabling signal dependencies.
+type ComplexityRule struct {
+	Name        string               `yaml:"name"`
+	Threshold   float32              `yaml:"threshold"`
+	Hard        ComplexityCandidates `yaml:"hard"`
+	Easy        ComplexityCandidates `yaml:"easy"`
+	Description string               `yaml:"description,omitempty"`
+	Composer    *RuleCombination     `yaml:"composer,omitempty"` // Optional: filter based on other signals
 }
 
 // ModelReasoningControl represents reasoning mode control on model level

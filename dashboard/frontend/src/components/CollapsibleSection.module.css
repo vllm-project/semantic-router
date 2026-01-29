@@ -1,0 +1,74 @@
+/* Collapsible Section Component */
+.container {
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  cursor: pointer;
+  width: 100%;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+  text-align: left;
+}
+
+.header:hover {
+  background: rgba(118, 185, 0, 0.1);
+  border-color: var(--color-primary);
+}
+
+.header:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.icon {
+  font-size: 0.75rem;
+  transition: transform 0.2s ease;
+  display: inline-block;
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.iconExpanded {
+  transform: rotate(90deg);
+}
+
+.title {
+  flex: 1;
+  text-align: left;
+}
+
+.truncatedBadge {
+  padding: 0.125rem 0.5rem;
+  background: rgba(234, 179, 8, 0.15);
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-warning, #eab308);
+  flex-shrink: 0;
+}
+
+.content {
+  margin-top: 0.5rem;
+  animation: expandContent 0.2s ease;
+}
+
+@keyframes expandContent {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 1000px;
+  }
+}

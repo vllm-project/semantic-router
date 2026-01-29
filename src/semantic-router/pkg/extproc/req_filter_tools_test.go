@@ -57,7 +57,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 				gemmaToUse = gemmaPath
 			}
 
-			err = candle_binding.InitEmbeddingModels(qwen3ToUse, gemmaToUse, true)
+			err = candle_binding.InitEmbeddingModels(qwen3ToUse, gemmaToUse, "", true)
 			if err != nil {
 				// Log warning but don't fail - tests will skip if ModelFactory is not initialized
 				GinkgoWriter.Printf("Warning: Failed to initialize embedding models: %v\n", err)
@@ -156,10 +156,15 @@ var _ = Describe("Tool Selection Request Filter", func() {
 
 				allTools := router.ToolsDatabase.GetAllTools()
 				Expect(allTools).To(HaveLen(4))
-				Expect(allTools[0].Function.Name).To(Equal("get_weather"))
-				Expect(allTools[1].Function.Name).To(Equal("search_web"))
-				Expect(allTools[2].Function.Name).To(Equal("calculate"))
-				Expect(allTools[3].Function.Name).To(Equal("send_email"))
+				// Check that all tools are loaded (order may vary due to concurrent processing)
+				toolNames := make([]string, len(allTools))
+				for i, tool := range allTools {
+					toolNames[i] = tool.Function.Name
+				}
+				Expect(toolNames).To(ContainElement("get_weather"))
+				Expect(toolNames).To(ContainElement("search_web"))
+				Expect(toolNames).To(ContainElement("calculate"))
+				Expect(toolNames).To(ContainElement("send_email"))
 			})
 		})
 

@@ -94,18 +94,29 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		logging.Infof("Loaded jailbreak mapping with %d jailbreak types", jailbreakMapping.GetJailbreakTypeCount())
 	}
 
-	// Initialize the BERT model for similarity search (only if configured)
-	if cfg.BertModel.ModelID != "" {
-		if initErr := candle_binding.InitModel(cfg.BertModel.ModelID, cfg.BertModel.UseCPU); initErr != nil {
-			return nil, fmt.Errorf("failed to initialize BERT model: %w", initErr)
-		}
-		logging.Infof("BERT similarity model initialized: %s", cfg.BertModel.ModelID)
-	} else {
-		logging.Infof("BERT model not configured, skipping initialization")
-	}
-
 	categoryDescriptions := cfg.GetCategoryDescriptions()
 	logging.Debugf("Category descriptions: %v", categoryDescriptions)
+
+	// Auto-detect embedding model for semantic cache from embedding_models configuration
+	// This provides a unified configuration entry point
+	embeddingModel := cfg.SemanticCache.EmbeddingModel
+	if embeddingModel == "" {
+		// Auto-select based on embedding_models configuration
+		if cfg.EmbeddingModels.MmBertModelPath != "" {
+			embeddingModel = "mmbert"
+			logging.Infof("Auto-selected mmbert for semantic cache (from embedding_models.mmbert_model_path)")
+		} else if cfg.EmbeddingModels.Qwen3ModelPath != "" {
+			embeddingModel = "qwen3"
+			logging.Infof("Auto-selected qwen3 for semantic cache (from embedding_models.qwen3_model_path)")
+		} else if cfg.EmbeddingModels.GemmaModelPath != "" {
+			embeddingModel = "gemma"
+			logging.Infof("Auto-selected gemma for semantic cache (from embedding_models.gemma_model_path)")
+		} else {
+			// Fallback to bert if no embedding models configured
+			embeddingModel = "bert"
+			logging.Warnf("No embedding models configured, falling back to bert for semantic cache")
+		}
+	}
 
 	// Create semantic cache with config options
 	cacheConfig := cache.CacheConfig{
@@ -118,7 +129,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		Redis:               cfg.SemanticCache.Redis,
 		Milvus:              cfg.SemanticCache.Milvus,
 		BackendConfigPath:   cfg.SemanticCache.BackendConfigPath,
-		EmbeddingModel:      cfg.SemanticCache.EmbeddingModel,
+		EmbeddingModel:      embeddingModel,
 	}
 
 	// Use default backend type if not specified
@@ -151,6 +162,8 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	toolsOptions := tools.ToolsDatabaseOptions{
 		SimilarityThreshold: toolsThreshold,
 		Enabled:             cfg.Tools.Enabled,
+		ModelType:           cfg.EmbeddingModels.HNSWConfig.ModelType,       // Pass model type from config
+		TargetDimension:     cfg.EmbeddingModels.HNSWConfig.TargetDimension, // Pass target dimension from config
 	}
 	toolsDatabase := tools.NewToolsDatabase(toolsOptions)
 
@@ -170,17 +183,11 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		return nil, fmt.Errorf("failed to create classifier: %w", err)
 	}
 
-	// Create global classification service for API access with auto-discovery
-	// This will prioritize LoRA models over legacy ModernBERT
-	autoSvc, err := services.NewClassificationServiceWithAutoDiscovery(cfg)
-	if err != nil {
-		logging.Warnf("Auto-discovery failed during router initialization: %v, using legacy classifier", err)
-		services.NewClassificationService(classifier, cfg)
-	} else {
-		logging.Infof("Router initialization: Using auto-discovered unified classifier")
-		// The service is already set as global in NewUnifiedClassificationService
-		_ = autoSvc
-	}
+	// Immediately set global classification service so API server can access it
+	// This prevents API server from creating a duplicate classifier due to timeout
+	// The API server starts concurrently and may timeout waiting for the global service
+	services.NewClassificationService(classifier, cfg)
+	logging.Infof("Global classification service initialized with legacy classifier")
 
 	// Create Response API filter if enabled
 	var responseAPIFilter *ResponseAPIFilter
@@ -331,19 +338,23 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	return router, nil
 }
 
-// initializeReplayRecorders creates replay recorders for all decisions with router_replay enabled.
+// initializeReplayRecorders creates replay recorders for decisions with router_replay plugin configured.
+// Only decisions with explicit router_replay plugin configuration will have recorders created.
+// System-level settings (store_backend, ttl, etc.) are inherited from global router_replay config.
 func initializeReplayRecorders(cfg *config.RouterConfig) map[string]*routerreplay.Recorder {
 	recorders := make(map[string]*routerreplay.Recorder)
 
-	// Check if router replay
-	if !cfg.RouterReplay.Enabled {
-		return recorders
-	}
-
-	// Create a recorder for each decision
-	// Each decision gets its own storage isolation via collection/table/keyspace naming
+	// Create a recorder only for decisions that have router_replay plugin configured
 	for _, d := range cfg.Decisions {
-		recorder, err := createReplayRecorder(d.Name, &cfg.RouterReplay)
+		// Check if this decision has router_replay plugin configured
+		pluginCfg := d.GetRouterReplayConfig()
+		if pluginCfg == nil || !pluginCfg.Enabled {
+			// No plugin config or not enabled, skip this decision
+			continue
+		}
+
+		// Create recorder with plugin config (per-decision) and global config (system-level)
+		recorder, err := createReplayRecorder(d.Name, pluginCfg, &cfg.RouterReplay)
 		if err != nil {
 			logging.Errorf("Failed to initialize replay recorder for decision %s: %v", d.Name, err)
 			continue
@@ -356,13 +367,15 @@ func initializeReplayRecorders(cfg *config.RouterConfig) map[string]*routerrepla
 }
 
 // createReplayRecorder creates a single replay recorder with the appropriate storage backend.
-func createReplayRecorder(decisionName string, replayCfg *config.RouterReplayConfig) (*routerreplay.Recorder, error) {
-	backend := replayCfg.StoreBackend
+// pluginCfg contains per-decision settings (max_records, capture settings)
+// globalCfg contains system-level settings (store_backend, ttl, connection configs)
+func createReplayRecorder(decisionName string, pluginCfg *config.RouterReplayPluginConfig, globalCfg *config.RouterReplayConfig) (*routerreplay.Recorder, error) {
+	backend := globalCfg.StoreBackend
 	if backend == "" {
 		backend = "memory"
 	}
 
-	maxBodyBytes := replayCfg.MaxBodyBytes
+	maxBodyBytes := pluginCfg.MaxBodyBytes
 	if maxBodyBytes <= 0 {
 		maxBodyBytes = routerreplay.DefaultMaxBodyBytes
 	}
@@ -372,97 +385,97 @@ func createReplayRecorder(decisionName string, replayCfg *config.RouterReplayCon
 
 	switch backend {
 	case "memory":
-		maxRecords := replayCfg.MaxRecords
+		maxRecords := pluginCfg.MaxRecords
 		if maxRecords <= 0 {
 			maxRecords = routerreplay.DefaultMaxRecords
 		}
-		storage = store.NewMemoryStore(maxRecords, replayCfg.TTLSeconds)
+		storage = store.NewMemoryStore(maxRecords, globalCfg.TTLSeconds)
 		logging.Infof("Router replay for %s using memory backend (max_records=%d)", decisionName, maxRecords)
 
 	case "redis":
-		if replayCfg.Redis == nil {
+		if globalCfg.Redis == nil {
 			return nil, fmt.Errorf("redis config required when store_backend is 'redis'")
 		}
 		// Use decision name as key prefix for Redis isolation
 		keyPrefix := decisionName + ":"
-		if replayCfg.Redis.KeyPrefix != "" {
-			keyPrefix = replayCfg.Redis.KeyPrefix + ":" + decisionName + ":"
+		if globalCfg.Redis.KeyPrefix != "" {
+			keyPrefix = globalCfg.Redis.KeyPrefix + ":" + decisionName + ":"
 		}
 		redisConfig := &store.RedisConfig{
-			Address:       replayCfg.Redis.Address,
-			DB:            replayCfg.Redis.DB,
-			Password:      replayCfg.Redis.Password,
-			UseTLS:        replayCfg.Redis.UseTLS,
-			TLSSkipVerify: replayCfg.Redis.TLSSkipVerify,
-			MaxRetries:    replayCfg.Redis.MaxRetries,
-			PoolSize:      replayCfg.Redis.PoolSize,
+			Address:       globalCfg.Redis.Address,
+			DB:            globalCfg.Redis.DB,
+			Password:      globalCfg.Redis.Password,
+			UseTLS:        globalCfg.Redis.UseTLS,
+			TLSSkipVerify: globalCfg.Redis.TLSSkipVerify,
+			MaxRetries:    globalCfg.Redis.MaxRetries,
+			PoolSize:      globalCfg.Redis.PoolSize,
 			KeyPrefix:     keyPrefix,
 		}
-		storage, err = store.NewRedisStore(redisConfig, replayCfg.TTLSeconds, replayCfg.AsyncWrites)
+		storage, err = store.NewRedisStore(redisConfig, globalCfg.TTLSeconds, globalCfg.AsyncWrites)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create redis store: %w", err)
 		}
 		logging.Infof("Router replay for %s using redis backend (address=%s, key_prefix=%s, ttl=%ds, async=%v)",
-			decisionName, redisConfig.Address, keyPrefix, replayCfg.TTLSeconds, replayCfg.AsyncWrites)
+			decisionName, redisConfig.Address, keyPrefix, globalCfg.TTLSeconds, globalCfg.AsyncWrites)
 
 	case "postgres":
-		if replayCfg.Postgres == nil {
+		if globalCfg.Postgres == nil {
 			return nil, fmt.Errorf("postgres config required when store_backend is 'postgres'")
 		}
 		// Use decision name as table name for PostgreSQL isolation
 		tableName := decisionName + "_replay_records"
-		if replayCfg.Postgres.TableName != "" {
-			tableName = replayCfg.Postgres.TableName + "_" + decisionName
+		if globalCfg.Postgres.TableName != "" {
+			tableName = globalCfg.Postgres.TableName + "_" + decisionName
 		}
 		pgConfig := &store.PostgresConfig{
-			Host:            replayCfg.Postgres.Host,
-			Port:            replayCfg.Postgres.Port,
-			Database:        replayCfg.Postgres.Database,
-			User:            replayCfg.Postgres.User,
-			Password:        replayCfg.Postgres.Password,
-			SSLMode:         replayCfg.Postgres.SSLMode,
-			MaxOpenConns:    replayCfg.Postgres.MaxOpenConns,
-			MaxIdleConns:    replayCfg.Postgres.MaxIdleConns,
-			ConnMaxLifetime: replayCfg.Postgres.ConnMaxLifetime,
+			Host:            globalCfg.Postgres.Host,
+			Port:            globalCfg.Postgres.Port,
+			Database:        globalCfg.Postgres.Database,
+			User:            globalCfg.Postgres.User,
+			Password:        globalCfg.Postgres.Password,
+			SSLMode:         globalCfg.Postgres.SSLMode,
+			MaxOpenConns:    globalCfg.Postgres.MaxOpenConns,
+			MaxIdleConns:    globalCfg.Postgres.MaxIdleConns,
+			ConnMaxLifetime: globalCfg.Postgres.ConnMaxLifetime,
 			TableName:       tableName,
 		}
-		storage, err = store.NewPostgresStore(pgConfig, replayCfg.TTLSeconds, replayCfg.AsyncWrites)
+		storage, err = store.NewPostgresStore(pgConfig, globalCfg.TTLSeconds, globalCfg.AsyncWrites)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create postgres store: %w", err)
 		}
 		logging.Infof("Router replay for %s using postgres backend (host=%s, db=%s, table=%s, ttl=%ds, async=%v)",
-			decisionName, pgConfig.Host, pgConfig.Database, pgConfig.TableName, replayCfg.TTLSeconds, replayCfg.AsyncWrites)
+			decisionName, pgConfig.Host, pgConfig.Database, pgConfig.TableName, globalCfg.TTLSeconds, globalCfg.AsyncWrites)
 
 	case "milvus":
-		if replayCfg.Milvus == nil {
+		if globalCfg.Milvus == nil {
 			return nil, fmt.Errorf("milvus config required when store_backend is 'milvus'")
 		}
 		// Use decision name as collection name for Milvus isolation
 		collectionName := decisionName + "_replay_records"
-		if replayCfg.Milvus.CollectionName != "" {
-			collectionName = replayCfg.Milvus.CollectionName + "_" + decisionName
+		if globalCfg.Milvus.CollectionName != "" {
+			collectionName = globalCfg.Milvus.CollectionName + "_" + decisionName
 		}
 		milvusConfig := &store.MilvusConfig{
-			Address:          replayCfg.Milvus.Address,
-			Username:         replayCfg.Milvus.Username,
-			Password:         replayCfg.Milvus.Password,
+			Address:          globalCfg.Milvus.Address,
+			Username:         globalCfg.Milvus.Username,
+			Password:         globalCfg.Milvus.Password,
 			CollectionName:   collectionName,
-			ConsistencyLevel: replayCfg.Milvus.ConsistencyLevel,
-			ShardNum:         replayCfg.Milvus.ShardNum,
+			ConsistencyLevel: globalCfg.Milvus.ConsistencyLevel,
+			ShardNum:         globalCfg.Milvus.ShardNum,
 		}
-		storage, err = store.NewMilvusStore(milvusConfig, replayCfg.TTLSeconds, replayCfg.AsyncWrites)
+		storage, err = store.NewMilvusStore(milvusConfig, globalCfg.TTLSeconds, globalCfg.AsyncWrites)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create milvus store: %w", err)
 		}
 		logging.Infof("Router replay for %s using milvus backend (address=%s, collection=%s, ttl=%ds, async=%v)",
-			decisionName, milvusConfig.Address, milvusConfig.CollectionName, replayCfg.TTLSeconds, replayCfg.AsyncWrites)
+			decisionName, milvusConfig.Address, milvusConfig.CollectionName, globalCfg.TTLSeconds, globalCfg.AsyncWrites)
 
 	default:
 		return nil, fmt.Errorf("unknown store_backend: %s (supported: memory, redis, postgres, milvus)", backend)
 	}
 
 	recorder := routerreplay.NewRecorder(storage)
-	recorder.SetCapturePolicy(replayCfg.CaptureRequestBody, replayCfg.CaptureResponseBody, maxBodyBytes)
+	recorder.SetCapturePolicy(pluginCfg.CaptureRequestBody, pluginCfg.CaptureResponseBody, maxBodyBytes)
 	return recorder, nil
 }
 
