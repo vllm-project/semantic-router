@@ -613,40 +613,6 @@ decisions:
           capture_response_body: true  # Capture response payloads (default: false)
           max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
-  # Priority 140: Deep thinking in English
-  - name: "deep_thinking"
-    description: "Complex reasoning in English"
-    priority: 140
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "embedding"
-          name: "deep_thinking_en"
-        - type: "keyword"
-          name: "thinking_en"
-        - type: "context"
-          name: "long_context"
-        - type: "context"
-          name: "medium_context"
-    modelRefs:
-      - model: "Kimi-K2-Thinking"
-        use_reasoning: true
-        reasoning_effort: "high"
-    plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "You are Kimi-K2-Thinking, an expert analyst. Provide comprehensive, well-reasoned responses with deep insights."
-      - type: "semantic-cache"
-        configuration:
-          enabled: false
-      - type: "router_replay"
-        configuration:
-          enabled: true
-          max_records: 1000              # Maximum records in memory (default: 200)
-          capture_request_body: true   # Capture request payloads (default: false)
-          capture_response_body: true  # Capture response payloads (default: false)
-          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
-
   # Priority 135: Fast coding in English
   - name: "fast_coding"
     description: "Fast coding related queries in English"
@@ -693,12 +659,12 @@ decisions:
         - type: "context"
           name: "short_context"
     modelRefs:
-      - model: "DeepSeek-V3.2"
+      - model: "openai/gpt-oss-20b"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
         configuration:
-          system_prompt: "你是 DeepSeek-V3.2, 一个高效的AI助手。请提供简洁、准确的回答。"
+          system_prompt: "你是由 openai 开发的模型 gpt-oss-20b, 一个高效的AI助手。请提供简洁、准确的回答。"
       - type: "semantic-cache"
         configuration:
           enabled: true
@@ -735,6 +701,40 @@ decisions:
         configuration:
           enabled: true
           similarity_threshold: 0.85
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
+
+  # Priority 110: Deep thinking in English
+  - name: "deep_thinking"
+    description: "Complex reasoning in English"
+    priority: 110
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "embedding"
+          name: "deep_thinking_en"
+        - type: "keyword"
+          name: "thinking_en"
+        - type: "context"
+          name: "long_context"
+        - type: "context"
+          name: "medium_context"
+    modelRefs:
+      - model: "Kimi-K2-Thinking"
+        use_reasoning: true
+        reasoning_effort: "high"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are Kimi-K2-Thinking, an expert analyst. Provide comprehensive, well-reasoned responses with deep insights."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
       - type: "router_replay"
         configuration:
           enabled: true
