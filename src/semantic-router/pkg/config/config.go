@@ -1019,6 +1019,9 @@ type PreferenceModelConfig struct {
 
 	// Use CPU for inference (Candle CPU flag)
 	UseCPU bool `yaml:"use_cpu"`
+
+	// Use Qwen3-0.6B preference classifier (zero-shot / fine-tuned)
+	UseQwen3 bool `yaml:"use_qwen3"`
 }
 
 // ExternalModelConfig represents configuration for external LLM-based models
