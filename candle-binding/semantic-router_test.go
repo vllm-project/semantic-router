@@ -1469,7 +1469,7 @@ func BenchmarkLoRAUnifiedClassifier(b *testing.B) {
 // TestGetEmbeddingSmart tests the intelligent embedding routing function
 func TestGetEmbeddingSmart(t *testing.T) {
 	// Initialize embedding models first
-	err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, true)
+	err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, "", true)
 	if err != nil {
 		t.Fatalf("Failed to initialize embedding models: %v", err)
 	}
@@ -1651,7 +1651,7 @@ func TestInitEmbeddingModels(t *testing.T) {
 	t.Run("InitBothModels", func(t *testing.T) {
 		// Note: ModelFactory may already be initialized by previous tests (e.g., TestGetEmbeddingSmart)
 		// This is expected behavior - OnceLock ensures single initialization
-		err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, true)
+		err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, "", true)
 		if err != nil {
 			// If ModelFactory is already initialized, this is acceptable
 			t.Logf("InitEmbeddingModels returned error (ModelFactory may already be initialized): %v", err)
@@ -1674,7 +1674,7 @@ func TestInitEmbeddingModels(t *testing.T) {
 
 	t.Run("InitQwen3Only", func(t *testing.T) {
 		// Similar to InitBothModels, accept already-initialized state
-		err := InitEmbeddingModels(Qwen3EmbeddingModelPath, "", true)
+		err := InitEmbeddingModels(Qwen3EmbeddingModelPath, "", "", true)
 		if err != nil {
 			t.Logf("InitEmbeddingModels (Qwen3 only) returned error (may already be initialized): %v", err)
 
@@ -1693,7 +1693,7 @@ func TestInitEmbeddingModels(t *testing.T) {
 	})
 
 	t.Run("InitGemmaOnly", func(t *testing.T) {
-		err := InitEmbeddingModels("", GemmaEmbeddingModelPath, true)
+		err := InitEmbeddingModels("", GemmaEmbeddingModelPath, "", true)
 		if err != nil {
 			t.Logf("InitEmbeddingModels (Gemma only) returned error (may already be initialized): %v", err)
 
@@ -1712,7 +1712,7 @@ func TestInitEmbeddingModels(t *testing.T) {
 	})
 
 	t.Run("InitWithInvalidPaths", func(t *testing.T) {
-		err := InitEmbeddingModels("/invalid/path1", "/invalid/path2", true)
+		err := InitEmbeddingModels("/invalid/path1", "/invalid/path2", "", true)
 		if err == nil {
 			t.Error("Expected error for invalid model paths")
 		} else {
@@ -1724,7 +1724,7 @@ func TestInitEmbeddingModels(t *testing.T) {
 // TestGetEmbeddingWithDim tests the Matryoshka embedding generation
 func TestGetEmbeddingWithDim(t *testing.T) {
 	// Initialize embedding models first
-	err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, true)
+	err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, "", true)
 	if err != nil {
 		t.Fatalf("Failed to initialize embedding models: %v", err)
 	}
@@ -1823,7 +1823,7 @@ func TestGetEmbeddingWithDim(t *testing.T) {
 
 // TestEmbeddingConsistency tests that same input produces consistent embeddings
 func TestEmbeddingConsistency(t *testing.T) {
-	err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, true)
+	err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, "", true)
 	if err != nil {
 		t.Fatalf("Failed to initialize embedding models: %v", err)
 	}
@@ -1890,7 +1890,7 @@ func TestEmbeddingConsistency(t *testing.T) {
 
 // TestEmbeddingPriorityRouting tests the intelligent routing based on priorities
 func TestEmbeddingPriorityRouting(t *testing.T) {
-	err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, true)
+	err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, "", true)
 	if err != nil {
 		t.Fatalf("Failed to initialize embedding models: %v", err)
 	}
@@ -1948,7 +1948,7 @@ func TestEmbeddingPriorityRouting(t *testing.T) {
 // TestEmbeddingConcurrency tests thread safety of embedding generation
 func TestEmbeddingConcurrency(t *testing.T) {
 	// Note: ModelFactory may already be initialized by previous tests
-	err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, true)
+	err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, "", true)
 	if err != nil {
 		// If ModelFactory is already initialized, verify it's functional
 		_, testErr := GetEmbeddingSmart("test", 0.5, 0.5)
@@ -2025,7 +2025,7 @@ func TestEmbeddingConcurrency(t *testing.T) {
 
 // BenchmarkGetEmbeddingWithDim benchmarks embedding generation performance
 func BenchmarkGetEmbeddingWithDim(b *testing.B) {
-	err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, true)
+	err := InitEmbeddingModels(Qwen3EmbeddingModelPath, GemmaEmbeddingModelPath, "", true)
 	if err != nil {
 		if isModelInitializationError(err) {
 			b.Skipf("Skipping benchmark due to model initialization error: %v", err)

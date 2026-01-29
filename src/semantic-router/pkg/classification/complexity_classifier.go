@@ -2,6 +2,8 @@ package classification
 
 import (
 	"fmt"
+	"runtime"
+	"sync"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -46,38 +48,137 @@ func NewComplexityClassifier(rules []config.ComplexityRule, modelType string) (*
 }
 
 // preloadCandidateEmbeddings computes embeddings for all hard/easy candidates
+// Uses concurrent processing for better performance
 func (c *ComplexityClassifier) preloadCandidateEmbeddings() error {
 	startTime := time.Now()
-	totalEmbeddings := 0
 
+	logging.Infof("[Complexity Signal] Preloading embeddings for hard/easy candidates using model: %s with concurrent processing...", c.modelType)
+
+	// Collect all candidates to process
+	type candidateTask struct {
+		ruleName  string
+		candidate string
+		isHard    bool
+	}
+
+	var tasks []candidateTask
 	for _, rule := range c.rules {
 		// Initialize maps for this rule
 		c.hardEmbeddings[rule.Name] = make(map[string][]float32)
 		c.easyEmbeddings[rule.Name] = make(map[string][]float32)
 
-		// Precompute hard candidate embeddings
+		// Collect hard candidates
 		for _, candidate := range rule.Hard.Candidates {
-			output, err := getEmbeddingWithModelType(candidate, c.modelType, 0)
-			if err != nil {
-				return fmt.Errorf("failed to compute embedding for hard candidate '%s': %w", candidate, err)
-			}
-			c.hardEmbeddings[rule.Name][candidate] = output.Embedding
-			totalEmbeddings++
+			tasks = append(tasks, candidateTask{
+				ruleName:  rule.Name,
+				candidate: candidate,
+				isHard:    true,
+			})
 		}
 
-		// Precompute easy candidate embeddings
+		// Collect easy candidates
 		for _, candidate := range rule.Easy.Candidates {
-			output, err := getEmbeddingWithModelType(candidate, c.modelType, 0)
-			if err != nil {
-				return fmt.Errorf("failed to compute embedding for easy candidate '%s': %w", candidate, err)
+			tasks = append(tasks, candidateTask{
+				ruleName:  rule.Name,
+				candidate: candidate,
+				isHard:    false,
+			})
+		}
+	}
+
+	if len(tasks) == 0 {
+		logging.Infof("[Complexity Signal] No candidates to preload")
+		return nil
+	}
+
+	// Use worker pool for concurrent embedding generation
+	numWorkers := runtime.NumCPU() * 2
+	if numWorkers > len(tasks) {
+		numWorkers = len(tasks)
+	}
+
+	type result struct {
+		ruleName  string
+		candidate string
+		embedding []float32
+		isHard    bool
+		err       error
+	}
+
+	resultChan := make(chan result, len(tasks))
+	taskChan := make(chan candidateTask, len(tasks))
+
+	// Send all tasks to channel
+	for _, task := range tasks {
+		taskChan <- task
+	}
+	close(taskChan)
+
+	// Start workers
+	var wg sync.WaitGroup
+	var mu sync.Mutex // Protect map writes
+
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			for task := range taskChan {
+				output, err := getEmbeddingWithModelType(task.candidate, c.modelType, 0)
+				if err != nil {
+					resultChan <- result{
+						ruleName:  task.ruleName,
+						candidate: task.candidate,
+						isHard:    task.isHard,
+						err:       err,
+					}
+				} else {
+					resultChan <- result{
+						ruleName:  task.ruleName,
+						candidate: task.candidate,
+						embedding: output.Embedding,
+						isHard:    task.isHard,
+					}
+				}
 			}
-			c.easyEmbeddings[rule.Name][candidate] = output.Embedding
-			totalEmbeddings++
+		}(i)
+	}
+
+	// Close result channel when all workers are done
+	go func() {
+		wg.Wait()
+		close(resultChan)
+	}()
+
+	// Collect results
+	var firstError error
+	successCount := 0
+	for res := range resultChan {
+		if res.err != nil {
+			if firstError == nil {
+				firstError = fmt.Errorf("failed to compute embedding for %s candidate '%s': %w",
+					map[bool]string{true: "hard", false: "easy"}[res.isHard], res.candidate, res.err)
+			}
+			logging.Warnf("Failed to compute embedding for %s candidate '%s': %v",
+				map[bool]string{true: "hard", false: "easy"}[res.isHard], res.candidate, res.err)
+		} else {
+			mu.Lock()
+			if res.isHard {
+				c.hardEmbeddings[res.ruleName][res.candidate] = res.embedding
+			} else {
+				c.easyEmbeddings[res.ruleName][res.candidate] = res.embedding
+			}
+			mu.Unlock()
+			successCount++
 		}
 	}
 
 	elapsed := time.Since(startTime)
-	logging.Infof("Preloaded %d complexity embeddings (hard/easy candidates) in %v", totalEmbeddings, elapsed)
+	logging.Infof("[Complexity Signal] Preloaded %d/%d complexity embeddings (hard/easy candidates) using model %s in %v (workers: %d)",
+		successCount, len(tasks), c.modelType, elapsed, numWorkers)
+
+	if firstError != nil {
+		return firstError
+	}
 
 	return nil
 }

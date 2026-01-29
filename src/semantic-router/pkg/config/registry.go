@@ -205,15 +205,15 @@ var DefaultModelRegistry = []ModelSpec{
 
 	// Embedding Models - mmBERT 2D Matryoshka (Multilingual)
 	{
-		LocalPath:        "models/mmbert-embed-32k-2d-matryoshka",
+		LocalPath:        "models/mom-embedding-ultra",
 		RepoID:           "llm-semantic-router/mmbert-embed-32k-2d-matryoshka",
-		Aliases:          []string{"mmbert-embed-32k-2d-matryoshka", "mmbert-embedding", "embedding-mmbert", "mmbert"},
+		Aliases:          []string{"mmbert-embed-32k-2d-matryoshka", "mmbert-embedding", "embedding-mmbert", "mmbert", "embedding-ultra"},
 		Purpose:          PurposeEmbedding,
-		Description:      "ModernBERT 2D Matryoshka embedding with 32K context, 1800+ languages, layer early exit (3/6/11/22) and dimension reduction (64-768)",
-		ParameterSize:    "149M",
+		Description:      "ModernBERT 2D Matryoshka embedding: 307M params, 32K context, 1800+ languages (Glot500), STS 80.5 (exceeds Qwen3-0.6B), 1.6-3.1× faster than BGE-M3 with FA2",
+		ParameterSize:    "307M",
 		EmbeddingDim:     768, // Default, supports 512/256/128/64 via Matryoshka
 		MaxContextLength: 32768,
-		Tags:             []string{"embedding", "matryoshka", "2d-matryoshka", "multilingual", "modernbert", "long-context", "early-exit"},
+		Tags:             []string{"embedding", "matryoshka", "2d-matryoshka", "multilingual", "modernbert", "long-context", "early-exit", "flash-attention-2"},
 	},
 }
 
@@ -280,4 +280,24 @@ func ToLegacyRegistry() map[string]string {
 		}
 	}
 	return legacy
+}
+
+// ResolveModelPath resolves a model path or alias to its canonical local path
+// This allows users to specify either:
+// - Full path: "models/mom-embedding-pro"
+// - Alias: "qwen3", "embedding-pro", etc.
+//
+// Returns the canonical LocalPath if found, or the original path if not in registry
+func ResolveModelPath(path string) string {
+	if path == "" {
+		return ""
+	}
+
+	// Check if it's already a valid path in the registry
+	if model := GetModelByPath(path); model != nil {
+		return model.LocalPath
+	}
+
+	// Not found in registry, return as-is (might be a custom path)
+	return path
 }

@@ -6,11 +6,6 @@
 # Download model: make download-mmbert-embedding
 # Run: make run-router CONFIG_FILE=config/intelligent-routing/in-tree/embedding-mmbert.yaml
 
-bert_model:
-  model_id: models/mom-embedding-light
-  threshold: 0.6
-  use_cpu: true
-
 semantic_cache:
   enabled: true
   backend_type: "memory"
@@ -21,7 +16,7 @@ semantic_cache:
   use_hnsw: true
   hnsw_m: 16
   hnsw_ef_construction: 200
-  embedding_model: "mmbert"  # Use mmbert for semantic cache
+  # embedding_model is auto-detected from embedding_models configuration
 
 tools:
   enabled: true  # Auto-routing now falls back to mmbert when qwen3/gemma unavailable
@@ -260,7 +255,7 @@ embedding_models:
   qwen3_model_path: ""
   gemma_model_path: ""
   # mmBERT 2D Matryoshka embedding model
-  mmbert_model_path: "models/mmbert-embed-32k-2d-matryoshka"
+  mmbert_model_path: "models/mom-embedding-ultra"
   use_cpu: true  # Set to false for GPU acceleration
   # HNSW config for embedding classification
   hnsw_config:

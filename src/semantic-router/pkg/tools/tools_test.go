@@ -54,7 +54,7 @@ var _ = BeforeSuite(func() {
 		}
 
 		GinkgoWriter.Printf("Initializing ModelFactory with Qwen3=%s, Gemma=%s\n", qwen3ToUse, gemmaToUse)
-		err = candle_binding.InitEmbeddingModels(qwen3ToUse, gemmaToUse, true)
+		err = candle_binding.InitEmbeddingModels(qwen3ToUse, gemmaToUse, "", true)
 		if err != nil {
 			// Log warning but don't fail - tests will skip if ModelFactory is not initialized
 			GinkgoWriter.Printf("Warning: Failed to initialize embedding models: %v\n", err)

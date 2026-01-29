@@ -94,18 +94,29 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		logging.Infof("Loaded jailbreak mapping with %d jailbreak types", jailbreakMapping.GetJailbreakTypeCount())
 	}
 
-	// Initialize the BERT model for similarity search (only if configured)
-	if cfg.BertModel.ModelID != "" {
-		if initErr := candle_binding.InitModel(cfg.BertModel.ModelID, cfg.BertModel.UseCPU); initErr != nil {
-			return nil, fmt.Errorf("failed to initialize BERT model: %w", initErr)
-		}
-		logging.Infof("BERT similarity model initialized: %s", cfg.BertModel.ModelID)
-	} else {
-		logging.Infof("BERT model not configured, skipping initialization")
-	}
-
 	categoryDescriptions := cfg.GetCategoryDescriptions()
 	logging.Debugf("Category descriptions: %v", categoryDescriptions)
+
+	// Auto-detect embedding model for semantic cache from embedding_models configuration
+	// This provides a unified configuration entry point
+	embeddingModel := cfg.SemanticCache.EmbeddingModel
+	if embeddingModel == "" {
+		// Auto-select based on embedding_models configuration
+		if cfg.EmbeddingModels.MmBertModelPath != "" {
+			embeddingModel = "mmbert"
+			logging.Infof("Auto-selected mmbert for semantic cache (from embedding_models.mmbert_model_path)")
+		} else if cfg.EmbeddingModels.Qwen3ModelPath != "" {
+			embeddingModel = "qwen3"
+			logging.Infof("Auto-selected qwen3 for semantic cache (from embedding_models.qwen3_model_path)")
+		} else if cfg.EmbeddingModels.GemmaModelPath != "" {
+			embeddingModel = "gemma"
+			logging.Infof("Auto-selected gemma for semantic cache (from embedding_models.gemma_model_path)")
+		} else {
+			// Fallback to bert if no embedding models configured
+			embeddingModel = "bert"
+			logging.Warnf("No embedding models configured, falling back to bert for semantic cache")
+		}
+	}
 
 	// Create semantic cache with config options
 	cacheConfig := cache.CacheConfig{
@@ -118,7 +129,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		Redis:               cfg.SemanticCache.Redis,
 		Milvus:              cfg.SemanticCache.Milvus,
 		BackendConfigPath:   cfg.SemanticCache.BackendConfigPath,
-		EmbeddingModel:      cfg.SemanticCache.EmbeddingModel,
+		EmbeddingModel:      embeddingModel,
 	}
 
 	// Use default backend type if not specified
@@ -151,6 +162,8 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	toolsOptions := tools.ToolsDatabaseOptions{
 		SimilarityThreshold: toolsThreshold,
 		Enabled:             cfg.Tools.Enabled,
+		ModelType:           cfg.EmbeddingModels.HNSWConfig.ModelType,       // Pass model type from config
+		TargetDimension:     cfg.EmbeddingModels.HNSWConfig.TargetDimension, // Pass target dimension from config
 	}
 	toolsDatabase := tools.NewToolsDatabase(toolsOptions)
 
