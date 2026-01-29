@@ -57,6 +57,11 @@ func Parse(configPath string) (*RouterConfig, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
+	// Process providers config to convert new format to internal structures
+	if err := cfg.ProcessProvidersConfig(); err != nil {
+		return nil, fmt.Errorf("failed to process providers config: %w", err)
+	}
+
 	// Apply default model registry if not specified in config
 	// If user specifies mom_registry in config.yaml, it completely replaces the defaults
 	if len(cfg.MoMRegistry) == 0 {
