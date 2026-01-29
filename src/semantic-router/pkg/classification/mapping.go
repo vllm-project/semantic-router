@@ -25,13 +25,15 @@ type PIIMapping struct {
 }
 
 // JailbreakMapping holds the mapping between indices and jailbreak types
-// Supports both formats: label_to_idx/idx_to_label (legacy) and label_to_id/id_to_label (mmBERT)
+// Supports: label_to_idx/idx_to_label (legacy), label_to_id/id_to_label (mmBERT), id2label (HuggingFace)
 type JailbreakMapping struct {
 	LabelToIdx map[string]int    `json:"label_to_idx"` // Legacy format
 	IdxToLabel map[string]string `json:"idx_to_label"` // Legacy format
 	// mmBERT format (alternative field names)
 	LabelToID map[string]int    `json:"label_to_id,omitempty"` // mmBERT format
 	IDToLabel map[string]string `json:"id_to_label,omitempty"` // mmBERT format
+	// HuggingFace config convention (no underscore)
+	Id2Label map[string]string `json:"id2label,omitempty"`
 }
 
 // LoadCategoryMapping loads the category mapping from a JSON file
@@ -77,10 +79,10 @@ func LoadPIIMapping(path string) (*PIIMapping, error) {
 	return &mapping, nil
 }
 
-// LoadJailbreakMapping loads the jailbreak mapping from a JSON file
-// Supports both formats: label_to_idx/idx_to_label (legacy) and label_to_id/id_to_label (mmBERT)
+// LoadJailbreakMapping loads the jailbreak mapping from a JSON file.
+// Supports: label_to_idx/idx_to_label (legacy), label_to_id/id_to_label (mmBERT), id2label (HuggingFace).
+// If the file uses an unknown structure, falls back to parsing raw JSON for id2label.
 func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
-	// Read the mapping file
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read jailbreak mapping file: %w", err)
@@ -92,12 +94,55 @@ func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 		return nil, fmt.Errorf("failed to parse jailbreak mapping JSON: %w", err)
 	}
 
-	// Normalize: if mmBERT format (label_to_id/id_to_label) is present but legacy format is not, copy it
+	// Normalize: id2label (HuggingFace) -> IdxToLabel
+	if len(mapping.IdxToLabel) == 0 && len(mapping.Id2Label) > 0 {
+		mapping.IdxToLabel = mapping.Id2Label
+	}
+	// Normalize: id_to_label (mmBERT) -> IdxToLabel
+	if len(mapping.IdxToLabel) == 0 && len(mapping.IDToLabel) > 0 {
+		mapping.IdxToLabel = mapping.IDToLabel
+	}
+	// Normalize: label_to_id -> LabelToIdx
 	if len(mapping.LabelToIdx) == 0 && len(mapping.LabelToID) > 0 {
 		mapping.LabelToIdx = mapping.LabelToID
 	}
-	if len(mapping.IdxToLabel) == 0 && len(mapping.IDToLabel) > 0 {
-		mapping.IdxToLabel = mapping.IDToLabel
+
+	// Build label_to_idx from idx_to_label if missing
+	if len(mapping.LabelToIdx) == 0 && len(mapping.IdxToLabel) > 0 {
+		mapping.LabelToIdx = make(map[string]int)
+		for idxStr, label := range mapping.IdxToLabel {
+			var idx int
+			if _, err := fmt.Sscanf(idxStr, "%d", &idx); err == nil {
+				mapping.LabelToIdx[label] = idx
+			}
+		}
+	}
+
+	// Fallback: file may use different key (e.g. only "id2label" at top level with different casing)
+	if mapping.GetJailbreakTypeCount() == 0 {
+		var raw map[string]interface{}
+		if err := json.Unmarshal(data, &raw); err == nil {
+			for _, key := range []string{"id2label", "id_to_label", "idx_to_label"} {
+				if v, ok := raw[key].(map[string]interface{}); ok && len(v) > 0 {
+					mapping.IdxToLabel = make(map[string]string)
+					for k, val := range v {
+						if s, ok := val.(string); ok {
+							mapping.IdxToLabel[k] = s
+						}
+					}
+					if len(mapping.LabelToIdx) == 0 {
+						mapping.LabelToIdx = make(map[string]int)
+						for idxStr, label := range mapping.IdxToLabel {
+							var idx int
+							if _, err := fmt.Sscanf(idxStr, "%d", &idx); err == nil {
+								mapping.LabelToIdx[label] = idx
+							}
+						}
+					}
+					break
+				}
+			}
+		}
 	}
 
 	return &mapping, nil
@@ -200,13 +245,8 @@ func (pm *PIIMapping) GetPIITypeCount() int {
 	return len(pm.LabelToIdx)
 }
 
-// GetJailbreakTypeCount returns the number of jailbreak types in the mapping
-// Supports both label_to_idx and label_to_id field names
+// GetJailbreakTypeCount returns the number of jailbreak types in the mapping.
+// Uses whichever mapping is populated (label_to_idx, idx_to_label, label_to_id, id_to_label, id2label).
 func (jm *JailbreakMapping) GetJailbreakTypeCount() int {
-	// Try standard field first
-	if len(jm.LabelToIdx) > 0 {
-		return len(jm.LabelToIdx)
-	}
-	// Fall back to alternative field
-	return len(jm.LabelToID)
+	return max(len(jm.LabelToIdx), len(jm.IdxToLabel), len(jm.LabelToID), len(jm.IDToLabel), len(jm.Id2Label))
 }
