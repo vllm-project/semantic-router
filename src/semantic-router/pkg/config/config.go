@@ -1503,11 +1503,9 @@ type HallucinationPluginConfig struct {
 	IncludeHallucinationDetails bool `json:"include_hallucination_details,omitempty" yaml:"include_hallucination_details,omitempty"`
 }
 
-// RouterReplayConfig configures the router replay system for recording
-// routing decisions and payload snippets for later debugging and replay.
-// This is a system-level configuration with automatic per-decision isolation
-// (separate collection/table/keyspace per decision).
-type RouterReplayConfig struct {
+// RouterReplayPluginConfig represents configuration for router_replay plugin
+// This is the per-decision plugin configuration (overrides global router_replay config)
+type RouterReplayPluginConfig struct {
 	Enabled bool `json:"enabled" yaml:"enabled"`
 
 	// MaxRecords controls the maximum number of replay records kept in memory.
@@ -1525,7 +1523,12 @@ type RouterReplayConfig struct {
 	// MaxBodyBytes caps how many bytes of request/response body are recorded.
 	// Defaults to 4096 bytes.
 	MaxBodyBytes int `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
+}
 
+// RouterReplayConfig configures the router replay system at the system level.
+// This provides storage backend configuration and system-level settings.
+// Per-decision settings (max_records, capture settings) are configured via router_replay plugin.
+type RouterReplayConfig struct {
 	// StoreBackend specifies the storage backend to use.
 	// Options: "memory", "redis", "postgres", "milvus". Defaults to "memory".
 	StoreBackend string `json:"store_backend,omitempty" yaml:"store_backend,omitempty"`
@@ -1753,6 +1756,21 @@ func (d *Decision) GetHallucinationConfig() *HallucinationPluginConfig {
 	result := &HallucinationPluginConfig{}
 	if err := unmarshalPluginConfig(config, result); err != nil {
 		logging.Errorf("Failed to unmarshal hallucination config: %v", err)
+		return nil
+	}
+	return result
+}
+
+// GetRouterReplayConfig returns the router_replay plugin configuration
+func (d *Decision) GetRouterReplayConfig() *RouterReplayPluginConfig {
+	config := d.GetPluginConfig("router_replay")
+	if config == nil {
+		return nil
+	}
+
+	result := &RouterReplayPluginConfig{}
+	if err := unmarshalPluginConfig(config, result); err != nil {
+		logging.Errorf("Failed to unmarshal router_replay config: %v", err)
 		return nil
 	}
 	return result

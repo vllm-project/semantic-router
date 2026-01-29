@@ -105,9 +105,9 @@ type RequestContext struct {
 	ResponseAPICtx *ResponseAPIContext // Non-nil if this is a Response API request
 
 	// Router replay context
-	RouterReplayID       string                     // ID of the router replay session, if applicable
-	RouterReplayConfig   *config.RouterReplayConfig // Configuration for router replay, if applicable
-	RouterReplayRecorder *routerreplay.Recorder     // The recorder instance for this decision
+	RouterReplayID           string                           // ID of the router replay session, if applicable
+	RouterReplayPluginConfig *config.RouterReplayPluginConfig // Per-decision plugin configuration for router replay
+	RouterReplayRecorder     *routerreplay.Recorder           // The recorder instance for this decision
 
 	// Looper context
 	LooperRequest   bool // True if this request is from looper (internal request, skip plugins)

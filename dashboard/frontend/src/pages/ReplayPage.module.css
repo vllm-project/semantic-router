@@ -1,11 +1,10 @@
 .container {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  min-height: 100vh;
   padding: 1.5rem;
   gap: 1rem;
   background-color: var(--color-bg);
-  overflow: hidden;
 }
 
 .loading {
@@ -148,9 +147,8 @@
 
 /* Records Table - container for DataTable */
 .recordsSection {
-  flex: 1 1 0;
-  min-height: 0;
-  overflow: auto;
+  flex-shrink: 0;
+  /* Allow table to grow naturally, no height restrictions */
 }
 
 /* Filters row - additional dropdowns below TableHeader */
@@ -234,6 +232,27 @@
 .statusError {
   background: rgba(239, 68, 68, 0.15);
   color: var(--color-danger);
+}
+
+/* Reasoning Badge */
+.reasoningBadge {
+  display: inline-block;
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+  min-width: 40px;
+}
+
+.reasoningOn {
+  background: rgba(118, 185, 0, 0.15);
+  color: var(--color-primary);
+}
+
+.reasoningOff {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-secondary);
 }
 
 .indicators {

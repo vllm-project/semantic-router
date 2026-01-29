@@ -20,15 +20,13 @@ response_api:
   ttl_seconds: 86400       # 24 hours
   max_responses: 1000
 
-# Router Replay Configuration
-# Records all routing decisions for debugging and analysis
+# Router Replay Configuration (System-Level)
+# Provides storage backend configuration for router_replay plugin
+# Per-decision settings (max_records, capture settings) are configured via router_replay plugin
 router_replay:
-  enabled: true
-  store_backend: "memory"  # Options: "memory"
-  max_records: 1000
-  capture_request_body: true
-  capture_response_body: true
-  max_body_bytes: 4096
+  store_backend: "memory"  # Options: "memory", "redis", "postgres", "milvus"
+  ttl_seconds: 2592000     # 30 days retention (for persistent backends)
+  async_writes: false      # Enable async writes for better performance
 
 semantic_cache:
   enabled: true

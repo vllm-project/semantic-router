@@ -63,7 +63,7 @@ export const PLUGIN_COLORS: Record<PluginType, { background: string; border: str
   'system_prompt': { background: '#8fd400', border: '#76b900' },   // Light Green
   'header_mutation': { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
   'hallucination': { background: '#556b7d', border: '#3d4a59' },   // Cool Gray
-  'router_replay': { background: '#4a5568', border: '#2d3748' },   // Dark Gray
+  'router_replay': { background: '#6ba300', border: '#5a8f00' },   // Green (consistent with other plugins)
 }
 
 // ============== Algorithm Icons ==============
