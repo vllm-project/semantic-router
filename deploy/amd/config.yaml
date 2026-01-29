@@ -722,8 +722,6 @@ decisions:
           name: "thinking_en"
         - type: "context"
           name: "long_context"
-        - type: "context"
-          name: "medium_context"
     modelRefs:
       - model: "Kimi-K2-Thinking"
         use_reasoning: true
