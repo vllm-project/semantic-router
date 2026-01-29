@@ -4,11 +4,11 @@
 # You can override by specifying your own mappings below:
 mom_registry:
   # mmBERT-32K models (recommended - multilingual, 32K context)
-  "models/mmbert32k-intent-classifier-merged": "llm-semantic-router/mmbert32k-intent-classifier-merged"
-  "models/mmbert32k-pii-detector-merged": "llm-semantic-router/mmbert32k-pii-detector-merged"
-  "models/mmbert32k-jailbreak-detector-merged": "llm-semantic-router/mmbert32k-jailbreak-detector-merged"
-  "models/mmbert32k-factcheck-classifier-merged": "llm-semantic-router/mmbert32k-factcheck-classifier-merged"
-  "models/mmbert32k-feedback-detector-merged": "llm-semantic-router/mmbert32k-feedback-detector-merged"
+  "models/mom-mmbert32k-intent-classifier-merged": "llm-semantic-router/mmbert32k-intent-classifier-merged"
+  "models/mom-mmbert32k-pii-detector-merged": "llm-semantic-router/mmbert32k-pii-detector-merged"
+  "models/mom-mmbert32k-jailbreak-detector-merged": "llm-semantic-router/mmbert32k-jailbreak-detector-merged"
+  "models/mom-mmbert32k-factcheck-classifier-merged": "llm-semantic-router/mmbert32k-factcheck-classifier-merged"
+  "models/mom-mmbert32k-feedback-detector-merged": "llm-semantic-router/mmbert32k-feedback-detector-merged"
   # Legacy models (still supported)
   "models/mom-domain-classifier": "LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model"
   "models/mom-pii-classifier": "LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model"
@@ -70,25 +70,25 @@ tools:
 prompt_guard:
   enabled: true  # Global default - can be overridden per category with jailbreak_enabled
   use_mmbert_32k: true
-  model_id: "models/mmbert32k-jailbreak-detector-merged"
-  jailbreak_mapping_path: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json"
+  model_id: "models/mom-mmbert32k-jailbreak-detector-merged"
+  jailbreak_mapping_path: "models/mom-mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json"
   threshold: 0.7
   use_cpu: true
 
 # Classifier configuration
 classifier:
   category_model:
-    model_id: "models/mmbert32k-intent-classifier-merged"
+    model_id: "models/mom-mmbert32k-intent-classifier-merged"
     use_mmbert_32k: true
     threshold: 0.6
     use_cpu: true
-    category_mapping_path: "models/mmbert32k-intent-classifier-merged/category_mapping.json"
+    category_mapping_path: "models/mom-mmbert32k-intent-classifier-merged/category_mapping.json"
   pii_model:
-    model_id: "models/mmbert32k-pii-detector-merged"
+    model_id: "models/mom-mmbert32k-pii-detector-merged"
     use_mmbert_32k: true
     threshold: 0.9
     use_cpu: true
-    pii_mapping_path: "models/mmbert32k-pii-detector-merged/label_mapping.json"  # mmBERT models use label_mapping.json instead of pii_type_mapping.json
+    pii_mapping_path: "models/mom-mmbert32k-pii-detector-merged/label_mapping.json"  # mmBERT models use label_mapping.json instead of pii_type_mapping.json
 
 # Hallucination mitigation configuration
 # Disabled by default - enable in decisions via hallucination plugin
@@ -96,7 +96,7 @@ hallucination_mitigation:
   enabled: false
   # Fact-check classifier: determines if a prompt needs fact verification
   fact_check_model:
-    model_id: "models/mmbert32k-factcheck-classifier-merged"
+    model_id: "models/mom-mmbert32k-factcheck-classifier-merged"
     threshold: 0.6
     use_cpu: true
     use_mmbert_32k: true
@@ -121,7 +121,7 @@ hallucination_mitigation:
 # Classifies user feedback into 4 types: satisfied, need_clarification, wrong_answer, want_different
 feedback_detector:
   enabled: true
-  model_id: "models/mmbert32k-feedback-detector-merged"
+  model_id: "models/mom-mmbert32k-feedback-detector-merged"
   threshold: 0.7
   use_cpu: true
   use_mmbert_32k: true

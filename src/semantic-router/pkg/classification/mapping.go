@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 // CategoryMapping holds the mapping between indices and domain categories
@@ -81,11 +83,21 @@ func LoadPIIMapping(path string) (*PIIMapping, error) {
 
 // LoadJailbreakMapping loads the jailbreak mapping from a JSON file.
 // Supports: label_to_idx/idx_to_label (legacy), label_to_id/id_to_label (mmBERT), id2label (HuggingFace).
-// If the file uses an unknown structure, falls back to parsing raw JSON for id2label.
+// If the file uses an unknown structure, falls back to parsing raw JSON for id2label, label2id, or labels array.
+// If path contains "mom-mmbert32k-" and the file is missing, tries the same path with "mmbert32k-" (no mom prefix) as fallback.
 func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read jailbreak mapping file: %w", err)
+		// Path fallback: if using mom- prefix and file not found, try without mom- (e.g. model downloaded to old path)
+		if os.IsNotExist(err) && strings.Contains(path, "mom-mmbert32k-") {
+			fallback := strings.Replace(path, "mom-mmbert32k-", "mmbert32k-", 1)
+			if fallback != path {
+				data, err = os.ReadFile(fallback)
+			}
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to read jailbreak mapping file: %w", err)
+		}
 	}
 
 	// Parse the JSON data - will populate whichever fields match
@@ -118,34 +130,112 @@ func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 		}
 	}
 
-	// Fallback: file may use different key (e.g. only "id2label" at top level with different casing)
+	// Fallback: file may use different keys or nested structure (e.g. HuggingFace config)
 	if mapping.GetJailbreakTypeCount() == 0 {
-		var raw map[string]interface{}
-		if err := json.Unmarshal(data, &raw); err == nil {
-			for _, key := range []string{"id2label", "id_to_label", "idx_to_label"} {
-				if v, ok := raw[key].(map[string]interface{}); ok && len(v) > 0 {
-					mapping.IdxToLabel = make(map[string]string)
-					for k, val := range v {
-						if s, ok := val.(string); ok {
-							mapping.IdxToLabel[k] = s
-						}
+		populated := tryRawJailbreakFormats(data, &mapping)
+		if !populated {
+			// Try path fallback for reading: if we used mom- path and got empty, re-read from non-mom path
+			if strings.Contains(path, "mom-mmbert32k-") {
+				fallback := strings.Replace(path, "mom-mmbert32k-", "mmbert32k-", 1)
+				if fallback != path {
+					if data2, err := os.ReadFile(fallback); err == nil {
+						populated = tryRawJailbreakFormats(data2, &mapping)
 					}
-					if len(mapping.LabelToIdx) == 0 {
-						mapping.LabelToIdx = make(map[string]int)
-						for idxStr, label := range mapping.IdxToLabel {
-							var idx int
-							if _, err := fmt.Sscanf(idxStr, "%d", &idx); err == nil {
-								mapping.LabelToIdx[label] = idx
-							}
-						}
-					}
-					break
 				}
 			}
 		}
 	}
 
+	if mapping.GetJailbreakTypeCount() == 0 {
+		absPath, _ := filepath.Abs(path)
+		return nil, fmt.Errorf("jailbreak mapping has 0 types (file: %s); expected JSON with one of: id2label, id_to_label, idx_to_label, label_to_idx, label_to_id, label2id, or labels array (need at least 2 classes)", absPath)
+	}
+
 	return &mapping, nil
+}
+
+// tryRawJailbreakFormats tries to populate mapping from raw JSON (various key names and nested config). Returns true if any format worked.
+func tryRawJailbreakFormats(data []byte, mapping *JailbreakMapping) bool {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return false
+	}
+	// Collect candidate objects to search for id2label/label2id (top-level and nested)
+	var toCheck []map[string]interface{}
+	toCheck = append(toCheck, raw)
+	if c, ok := raw["config"].(map[string]interface{}); ok {
+		toCheck = append(toCheck, c)
+	}
+	if p, ok := raw["preprocessor_config"].(map[string]interface{}); ok {
+		toCheck = append(toCheck, p)
+	}
+	for _, m := range toCheck {
+		// id2label / id_to_label / idx_to_label (index -> label)
+		for _, key := range []string{"id2label", "id_to_label", "idx_to_label"} {
+			if v, ok := m[key].(map[string]interface{}); ok && len(v) > 0 {
+				mapping.IdxToLabel = make(map[string]string)
+				for k, val := range v {
+					var label string
+					switch t := val.(type) {
+					case string:
+						label = t
+					case float64:
+						label = fmt.Sprintf("%.0f", t)
+					default:
+						continue
+					}
+					mapping.IdxToLabel[k] = label
+				}
+				if len(mapping.LabelToIdx) == 0 && len(mapping.IdxToLabel) > 0 {
+					mapping.LabelToIdx = make(map[string]int)
+					for idxStr, label := range mapping.IdxToLabel {
+						var idx int
+						if _, err := fmt.Sscanf(idxStr, "%d", &idx); err == nil {
+							mapping.LabelToIdx[label] = idx
+						}
+					}
+				}
+				return mapping.GetJailbreakTypeCount() >= 2
+			}
+		}
+		// label2id (label -> id): build IdxToLabel by reversing
+		if v, ok := m["label2id"].(map[string]interface{}); ok && len(v) > 0 {
+			mapping.LabelToIdx = make(map[string]int)
+			for label, val := range v {
+				var id int
+				switch t := val.(type) {
+				case float64:
+					id = int(t)
+				case int:
+					id = t
+				default:
+					continue
+				}
+				mapping.LabelToIdx[label] = id
+			}
+			if len(mapping.IdxToLabel) == 0 && len(mapping.LabelToIdx) > 0 {
+				mapping.IdxToLabel = make(map[string]string)
+				for label, id := range mapping.LabelToIdx {
+					mapping.IdxToLabel[fmt.Sprintf("%d", id)] = label
+				}
+			}
+			return mapping.GetJailbreakTypeCount() >= 2
+		}
+		// labels: array of strings ["safe", "jailbreak", ...]
+		if v, ok := m["labels"].([]interface{}); ok && len(v) >= 2 {
+			mapping.IdxToLabel = make(map[string]string)
+			mapping.LabelToIdx = make(map[string]int)
+			for i, val := range v {
+				if s, ok := val.(string); ok {
+					idxStr := fmt.Sprintf("%d", i)
+					mapping.IdxToLabel[idxStr] = s
+					mapping.LabelToIdx[s] = i
+				}
+			}
+			return mapping.GetJailbreakTypeCount() >= 2
+		}
+	}
+	return false
 }
 
 // GetCategoryFromIndex converts a class index to category name using the mapping
