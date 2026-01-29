@@ -342,6 +342,17 @@ func ClassifyJailbreakText(text string) (ClassResult, error) {
 	return ClassResult{Class: 0, Confidence: 0.99}, nil // Default to safe
 }
 
+// InitQwen3PreferenceClassifier initializes the Qwen3 preference classifier
+func InitQwen3PreferenceClassifier(modelPath string, useCPU bool) error {
+	log.Printf("[MOCK] Initializing Qwen3 Preference Classifier: %s", modelPath)
+	return nil
+}
+
+// ClassifyQwen3Preference classifies preferences using Qwen3
+func ClassifyQwen3Preference(text string, labels []string) (ClassResult, error) {
+	return ClassResult{Class: 0, Confidence: 0.95}, nil
+}
+
 // InitModernBertClassifier initializes ModernBERT
 func InitModernBertClassifier(modelPath string, useCPU bool) error {
 	log.Printf("[MOCK] Initializing ModernBERT Classifier")

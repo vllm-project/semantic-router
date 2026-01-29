@@ -34,6 +34,7 @@ type PreferenceClassifier struct {
 	localThresh   float32
 	localInitOnce sync.Once
 	localInitErr  error
+	useQwen       bool
 }
 
 // NewPreferenceClassifier creates a new preference classifier
@@ -43,6 +44,7 @@ func NewPreferenceClassifier(externalCfg *config.ExternalModelConfig, rules []co
 		return &PreferenceClassifier{
 			preferenceRules: rules,
 			useLocal:        true,
+			useQwen:         localCfg.UseQwen3,
 			localModelID:    localCfg.ModelID,
 			localUseCPU:     localCfg.UseCPU,
 			localThresh:     localCfg.Threshold,
@@ -155,7 +157,11 @@ func (p *PreferenceClassifier) Classify(conversationJSON string) (*PreferenceRes
 func (p *PreferenceClassifier) classifyLocal(conversationJSON string) (*PreferenceResult, error) {
 	// Initialize model once
 	p.localInitOnce.Do(func() {
-		p.localInitErr = candle.InitModernBertClassifier(p.localModelID, p.localUseCPU)
+		if p.useQwen {
+			p.localInitErr = candle.InitQwen3PreferenceClassifier(p.localModelID, p.localUseCPU)
+		} else {
+			p.localInitErr = fmt.Errorf("qwen3 preference required but useQwen flag is false")
+		}
 	})
 
 	if p.localInitErr != nil {
@@ -164,8 +170,13 @@ func (p *PreferenceClassifier) classifyLocal(conversationJSON string) (*Preferen
 
 	start := time.Now()
 
-	result, err := candle.ClassifyModernBertTextWithProbabilities(conversationJSON)
-	metrics.RecordClassifierLatency("preference_local", time.Since(start).Seconds())
+	labels := make([]string, 0, len(p.preferenceRules))
+	for _, rule := range p.preferenceRules {
+		labels = append(labels, rule.Name)
+	}
+
+	result, err := candle.ClassifyQwen3Preference(conversationJSON, labels)
+	metrics.RecordClassifierLatency("route", time.Since(start).Seconds())
 
 	if err != nil {
 		return nil, fmt.Errorf("local preference classification failed: %w", err)
