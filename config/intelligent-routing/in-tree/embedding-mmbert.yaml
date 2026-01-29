@@ -1,0 +1,279 @@
+# mmBERT 2D Matryoshka Embedding Configuration
+# This config uses the mmBERT embedding model with 2D Matryoshka support:
+# - Layer early exit: 3/6/11/22 layers (speedup: 7x/3.6x/2x/1x)
+# - Dimension reduction: 64/128/256/512/768
+#
+# Download model: make download-mmbert-embedding
+# Run: make run-router CONFIG_FILE=config/intelligent-routing/in-tree/embedding-mmbert.yaml
+
+bert_model:
+  model_id: models/mom-embedding-light
+  threshold: 0.6
+  use_cpu: true
+
+semantic_cache:
+  enabled: true
+  backend_type: "memory"
+  similarity_threshold: 0.8
+  max_entries: 1000
+  ttl_seconds: 3600
+  eviction_policy: "fifo"
+  use_hnsw: true
+  hnsw_m: 16
+  hnsw_ef_construction: 200
+  embedding_model: "mmbert"  # Use mmbert for semantic cache
+
+tools:
+  enabled: true  # Auto-routing now falls back to mmbert when qwen3/gemma unavailable
+  top_k: 3
+  similarity_threshold: 0.2
+  tools_db_path: "config/tools_db.json"
+  fallback_to_empty: true
+
+prompt_guard:
+  enabled: true
+  use_modernbert: false
+  model_id: "models/mom-jailbreak-classifier"
+  threshold: 0.7
+  use_cpu: true
+  jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
+
+# vLLM Endpoints Configuration
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "172.28.0.20"
+    port: 8002
+    weight: 1
+
+model_config:
+  "qwen3":
+    reasoning_family: "qwen3"
+    preferred_endpoints: ["endpoint1"]
+
+# Classifier configuration
+classifier:
+  category_model:
+    model_id: "models/mom-domain-classifier"
+    use_modernbert: false
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
+  pii_model:
+    model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+    use_modernbert: false
+    threshold: 0.7
+    use_cpu: true
+    pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
+
+# Embedding-based classification rules using mmBERT 2D Matryoshka
+# Uses semantic similarity to match queries against candidate phrases
+embedding_rules:
+  - name: "technical_support"
+    threshold: 0.70
+    candidates:
+      - "how to configure the system"
+      - "installation guide"
+      - "troubleshooting steps"
+      - "error message explanation"
+      - "setup instructions"
+      - "system configuration help"
+      - "technical assistance needed"
+    aggregation_method: "max"
+
+  - name: "product_inquiry"
+    threshold: 0.68
+    candidates:
+      - "product features and specifications"
+      - "pricing information"
+      - "availability and stock"
+      - "product comparison"
+      - "warranty details"
+      - "what does this product do"
+      - "how much does it cost"
+    aggregation_method: "max"
+
+  - name: "account_management"
+    threshold: 0.70
+    candidates:
+      - "password reset"
+      - "account settings"
+      - "profile update"
+      - "subscription management"
+      - "billing information"
+      - "change my password"
+      - "update my account"
+    aggregation_method: "max"
+
+  - name: "multilingual_support"
+    threshold: 0.65
+    candidates:
+      - "多语言支持"           # Chinese: multilingual support
+      - "サポートが必要です"    # Japanese: need support
+      - "도움이 필요합니다"     # Korean: need help
+      - "Necesito ayuda"       # Spanish: I need help
+      - "J'ai besoin d'aide"   # French: I need help
+      - "Ich brauche Hilfe"    # German: I need help
+      - "Мне нужна помощь"     # Russian: I need help
+    aggregation_method: "max"
+
+  - name: "general_inquiry"
+    threshold: 0.60
+    candidates:
+      - "general question"
+      - "information request"
+      - "help needed"
+      - "customer service"
+      - "I have a question"
+      - "can you help me"
+    aggregation_method: "max"
+
+# Categories define domain metadata
+categories:
+  - name: technical_support
+    description: "Technical support and troubleshooting queries"
+    mmlu_categories: ["technical_support"]
+  - name: product_inquiry
+    description: "Product information and specifications"
+    mmlu_categories: ["product_inquiry"]
+  - name: account_management
+    description: "Account and subscription management"
+    mmlu_categories: ["account_management"]
+  - name: multilingual_support
+    description: "Multilingual customer support queries"
+    mmlu_categories: ["multilingual_support"]
+  - name: general_inquiry
+    description: "General questions and information requests"
+    mmlu_categories: ["general_inquiry"]
+
+strategy: "priority"
+
+decisions:
+  - name: "technical_support_decision"
+    description: "Technical support and troubleshooting queries"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "embedding"
+          name: "technical_support"
+    modelRefs:
+      - model: "qwen3"
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a technical support specialist. Provide detailed, step-by-step guidance for technical issues."
+      - type: "jailbreak"
+        configuration:
+          enabled: true
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []
+
+  - name: "product_inquiry_decision"
+    description: "Product information and specifications"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "embedding"
+          name: "product_inquiry"
+    modelRefs:
+      - model: "qwen3"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a product specialist. Provide accurate information about products, features, pricing, and availability."
+      - type: "jailbreak"
+        configuration:
+          enabled: true
+
+  - name: "account_management_decision"
+    description: "Account and subscription management"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "embedding"
+          name: "account_management"
+    modelRefs:
+      - model: "qwen3"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are an account management assistant. Help users with account-related tasks. Prioritize security and privacy."
+      - type: "jailbreak"
+        configuration:
+          enabled: true
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []
+
+  - name: "multilingual_support_decision"
+    description: "Multilingual customer support"
+    priority: 90
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "embedding"
+          name: "multilingual_support"
+    modelRefs:
+      - model: "qwen3"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a multilingual support assistant. Respond in the same language as the user's query. Be helpful and culturally aware."
+      - type: "jailbreak"
+        configuration:
+          enabled: true
+
+  - name: "general_inquiry_decision"
+    description: "General questions and information requests"
+    priority: 50
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "embedding"
+          name: "general_inquiry"
+    modelRefs:
+      - model: "qwen3"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a helpful general assistant. Answer questions clearly and concisely."
+      - type: "jailbreak"
+        configuration:
+          enabled: true
+
+# mmBERT Embedding Models Configuration
+# 2D Matryoshka support:
+# - Layer early exit: 3 (7x faster), 6 (3.6x), 11 (2x), 22 (full)
+# - Dimension: 64, 128, 256, 512, 768
+embedding_models:
+  # Keep qwen3/gemma for backward compatibility (optional)
+  qwen3_model_path: ""
+  gemma_model_path: ""
+  # mmBERT 2D Matryoshka embedding model
+  mmbert_model_path: "models/mmbert-embed-32k-2d-matryoshka"
+  use_cpu: true  # Set to false for GPU acceleration
+  # HNSW config for embedding classification
+  hnsw_config:
+    model_type: "mmbert"      # Use mmBERT for embedding classification
+    preload_embeddings: true  # Precompute candidate embeddings at startup
+    target_dimension: 256     # Default dimension for classification
+    target_layer: 6           # Default layer for classification (3.6x speedup)
+    enable_soft_matching: true
+    min_score_threshold: 0.5
+
+# Default model for fallback
+default_model: "qwen3"
+
+# Entropy-based reasoning configuration
+entropy_threshold: 0.5
+high_entropy_threshold: 0.8

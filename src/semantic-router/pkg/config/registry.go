@@ -202,6 +202,19 @@ var DefaultModelRegistry = []ModelSpec{
 		MaxContextLength: 512,
 		Tags:             []string{"embedding", "sentence-transformer", "fast", "lightweight"},
 	},
+
+	// Embedding Models - mmBERT 2D Matryoshka (Multilingual)
+	{
+		LocalPath:        "models/mmbert-embed-32k-2d-matryoshka",
+		RepoID:           "llm-semantic-router/mmbert-embed-32k-2d-matryoshka",
+		Aliases:          []string{"mmbert-embed-32k-2d-matryoshka", "mmbert-embedding", "embedding-mmbert", "mmbert"},
+		Purpose:          PurposeEmbedding,
+		Description:      "ModernBERT 2D Matryoshka embedding with 32K context, 1800+ languages, layer early exit (3/6/11/22) and dimension reduction (64-768)",
+		ParameterSize:    "149M",
+		EmbeddingDim:     768, // Default, supports 512/256/128/64 via Matryoshka
+		MaxContextLength: 32768,
+		Tags:             []string{"embedding", "matryoshka", "2d-matryoshka", "multilingual", "modernbert", "long-context", "early-exit"},
+	},
 }
 
 // GetModelByPath returns a model spec by its local path or alias

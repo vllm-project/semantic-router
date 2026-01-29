@@ -17,6 +17,7 @@ var getEmbeddingWithModelType = candle_binding.GetEmbeddingWithModelType
 // EmbeddingClassifierInitializer initializes KeywordEmbeddingClassifier for embedding based classification
 type EmbeddingClassifierInitializer interface {
 	Init(qwen3ModelPath string, gemmaModelPath string, useCPU bool) error
+	InitWithMmBert(qwen3ModelPath string, gemmaModelPath string, mmBertModelPath string, useCPU bool) error
 }
 
 type ExternalModelBasedEmbeddingInitializer struct{}
@@ -27,6 +28,15 @@ func (c *ExternalModelBasedEmbeddingInitializer) Init(qwen3ModelPath string, gem
 		return err
 	}
 	logging.Infof("Initialized KeywordEmbedding classifier")
+	return nil
+}
+
+func (c *ExternalModelBasedEmbeddingInitializer) InitWithMmBert(qwen3ModelPath string, gemmaModelPath string, mmBertModelPath string, useCPU bool) error {
+	err := candle_binding.InitEmbeddingModelsWithMmBert(qwen3ModelPath, gemmaModelPath, mmBertModelPath, useCPU)
+	if err != nil {
+		return err
+	}
+	logging.Infof("Initialized KeywordEmbedding classifier with mmBERT 2D Matryoshka support")
 	return nil
 }
 
@@ -140,6 +150,17 @@ func (c *Classifier) initializeKeywordEmbeddingClassifier() error {
 	if !c.IsKeywordEmbeddingClassifierEnabled() || c.keywordEmbeddingInitializer == nil {
 		return fmt.Errorf("keyword embedding similarity match is not properly configured")
 	}
+
+	// Use mmBERT-aware initialization if mmbert model path is configured
+	if c.Config.EmbeddingModels.MmBertModelPath != "" {
+		return c.keywordEmbeddingInitializer.InitWithMmBert(
+			c.Config.Qwen3ModelPath,
+			c.Config.GemmaModelPath,
+			c.Config.EmbeddingModels.MmBertModelPath,
+			c.Config.EmbeddingModels.UseCPU,
+		)
+	}
+
 	return c.keywordEmbeddingInitializer.Init(c.Config.Qwen3ModelPath, c.Config.GemmaModelPath, c.Config.EmbeddingModels.UseCPU)
 }
 

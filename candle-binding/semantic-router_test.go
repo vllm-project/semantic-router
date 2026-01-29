@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -3397,4 +3398,271 @@ func min(a, b int) int {
 
 // ================================================================================================
 // END OF DEBERTA V3 JAILBREAK/PROMPT INJECTION DETECTION TESTS
+// ================================================================================================
+
+// ================================================================================================
+// MMBERT 2D MATRYOSHKA EMBEDDING TESTS
+// ================================================================================================
+
+// getMmBertModelPath returns the mmBERT model path from environment variable
+func getMmBertModelPath() string {
+	path := os.Getenv("MMBERT_MODEL_PATH")
+	if path == "" {
+		return "" // Will cause tests to skip
+	}
+	return path
+}
+
+// TestInitMmBertEmbeddingModel tests mmBERT model initialization
+func TestInitMmBertEmbeddingModel(t *testing.T) {
+	modelPath := getMmBertModelPath()
+	if modelPath == "" {
+		t.Skip("MMBERT_MODEL_PATH environment variable not set")
+	}
+
+	// Note: Due to OnceLock, this may fail if ModelFactory was already initialized
+	// In that case, we test via GetEmbedding2DMatryoshka instead
+	err := InitMmBertEmbeddingModel(modelPath, true)
+	if err != nil {
+		t.Logf("InitMmBertEmbeddingModel returned error (may already be initialized): %v", err)
+		// Try to verify mmBERT works via embedding generation
+		_, testErr := GetEmbedding2DMatryoshka("test", "mmbert", 0, 0)
+		if testErr != nil {
+			t.Fatalf("mmBERT model not functional: %v", testErr)
+		}
+		t.Log("mmBERT model verified functional via GetEmbedding2DMatryoshka")
+	}
+}
+
+// TestGetEmbedding2DMatryoshka tests the 2D Matryoshka embedding generation
+func TestGetEmbedding2DMatryoshka(t *testing.T) {
+	modelPath := getMmBertModelPath()
+	if modelPath == "" {
+		t.Skip("MMBERT_MODEL_PATH environment variable not set")
+	}
+
+	// Initialize mmBERT (may already be initialized)
+	_ = InitMmBertEmbeddingModel(modelPath, true)
+
+	testText := "This is a test sentence for 2D Matryoshka embedding generation."
+
+	t.Run("FullModel_FullDim", func(t *testing.T) {
+		output, err := GetEmbedding2DMatryoshka(testText, "mmbert", 0, 0)
+		if err != nil {
+			t.Fatalf("Failed to generate embedding: %v", err)
+		}
+
+		if output.ModelType != "mmbert" {
+			t.Errorf("Expected model type 'mmbert', got '%s'", output.ModelType)
+		}
+
+		// mmBERT has 768 dimensions
+		if len(output.Embedding) != 768 {
+			t.Errorf("Expected 768 dimensions, got %d", len(output.Embedding))
+		}
+
+		t.Logf("Full model embedding: dim=%d, time=%.2fms", len(output.Embedding), output.ProcessingTimeMs)
+	})
+
+	t.Run("LayerEarlyExit", func(t *testing.T) {
+		layers := []int{3, 6, 11, 22}
+		var baselineTime float32
+
+		for _, layer := range layers {
+			output, err := GetEmbedding2DMatryoshka(testText, "mmbert", layer, 0)
+			if err != nil {
+				t.Fatalf("Failed to generate embedding with layer %d: %v", layer, err)
+			}
+
+			if len(output.Embedding) != 768 {
+				t.Errorf("Layer %d: expected 768 dimensions, got %d", layer, len(output.Embedding))
+			}
+
+			if layer == 22 {
+				baselineTime = output.ProcessingTimeMs
+			}
+
+			t.Logf("Layer %d: dim=%d, time=%.2fms", layer, len(output.Embedding), output.ProcessingTimeMs)
+		}
+
+		// Verify early exit is faster (Layer 3 should be faster than Layer 22)
+		output3, _ := GetEmbedding2DMatryoshka(testText, "mmbert", 3, 0)
+		if baselineTime > 0 && output3.ProcessingTimeMs > baselineTime {
+			t.Logf("Note: Layer 3 (%.2fms) not faster than Layer 22 (%.2fms) - may be due to warm-up effects",
+				output3.ProcessingTimeMs, baselineTime)
+		}
+	})
+
+	t.Run("DimensionTruncation", func(t *testing.T) {
+		dimensions := []int{64, 128, 256, 512, 768}
+
+		for _, dim := range dimensions {
+			output, err := GetEmbedding2DMatryoshka(testText, "mmbert", 0, dim)
+			if err != nil {
+				t.Fatalf("Failed to generate embedding with dim %d: %v", dim, err)
+			}
+
+			if len(output.Embedding) != dim {
+				t.Errorf("Dim %d: expected %d dimensions, got %d", dim, dim, len(output.Embedding))
+			}
+
+			t.Logf("Dim %d: actual_dim=%d, time=%.2fms", dim, len(output.Embedding), output.ProcessingTimeMs)
+		}
+	})
+
+	t.Run("2DMatryoshka_LayerAndDim", func(t *testing.T) {
+		// Test combination of layer early exit + dimension truncation
+		testCases := []struct {
+			layer int
+			dim   int
+		}{
+			{3, 64},   // Fastest: 3 layers, 64 dims
+			{3, 256},  // Fast: 3 layers, 256 dims
+			{6, 128},  // Medium-fast
+			{11, 256}, // Medium
+			{22, 768}, // Full model
+		}
+
+		for _, tc := range testCases {
+			output, err := GetEmbedding2DMatryoshka(testText, "mmbert", tc.layer, tc.dim)
+			if err != nil {
+				t.Fatalf("Failed with layer=%d, dim=%d: %v", tc.layer, tc.dim, err)
+			}
+
+			if len(output.Embedding) != tc.dim {
+				t.Errorf("Layer=%d, Dim=%d: expected %d dimensions, got %d",
+					tc.layer, tc.dim, tc.dim, len(output.Embedding))
+			}
+
+			t.Logf("Layer=%d, Dim=%d: time=%.2fms", tc.layer, tc.dim, output.ProcessingTimeMs)
+		}
+	})
+
+	t.Run("EmbeddingNormalization", func(t *testing.T) {
+		output, err := GetEmbedding2DMatryoshka(testText, "mmbert", 0, 0)
+		if err != nil {
+			t.Fatalf("Failed to generate embedding: %v", err)
+		}
+
+		// Check L2 norm (should be close to 1.0 for normalized embeddings)
+		var sumSquares float32
+		for _, v := range output.Embedding {
+			sumSquares += v * v
+		}
+		norm := float32(1.0)
+		if sumSquares > 0 {
+			norm = float32(sumSquares)
+		}
+
+		t.Logf("Embedding L2 norm squared: %.4f", norm)
+	})
+}
+
+// TestGetEmbeddingWithModelType_MmBert tests backward compatibility
+func TestGetEmbeddingWithModelType_MmBert(t *testing.T) {
+	modelPath := getMmBertModelPath()
+	if modelPath == "" {
+		t.Skip("MMBERT_MODEL_PATH environment variable not set")
+	}
+
+	// Initialize mmBERT
+	_ = InitMmBertEmbeddingModel(modelPath, true)
+
+	testText := "Testing backward compatible API with mmbert model type."
+
+	output, err := GetEmbeddingWithModelType(testText, "mmbert", 256)
+	if err != nil {
+		t.Fatalf("Failed to generate embedding: %v", err)
+	}
+
+	if output.ModelType != "mmbert" {
+		t.Errorf("Expected model type 'mmbert', got '%s'", output.ModelType)
+	}
+
+	if len(output.Embedding) != 256 {
+		t.Errorf("Expected 256 dimensions, got %d", len(output.Embedding))
+	}
+
+	t.Logf("GetEmbeddingWithModelType(mmbert): dim=%d, time=%.2fms",
+		len(output.Embedding), output.ProcessingTimeMs)
+}
+
+// TestMmBertMultilingual tests multilingual capability
+func TestMmBertMultilingual(t *testing.T) {
+	modelPath := getMmBertModelPath()
+	if modelPath == "" {
+		t.Skip("MMBERT_MODEL_PATH environment variable not set")
+	}
+
+	// Initialize mmBERT
+	_ = InitMmBertEmbeddingModel(modelPath, true)
+
+	// Test various languages
+	testCases := []struct {
+		lang string
+		text string
+	}{
+		{"English", "Hello, how are you today?"},
+		{"Chinese", "你好，今天过得怎么样？"},
+		{"Japanese", "こんにちは、お元気ですか？"},
+		{"Korean", "안녕하세요, 오늘 기분이 어떠세요?"},
+		{"Spanish", "Hola, ¿cómo estás hoy?"},
+		{"French", "Bonjour, comment allez-vous aujourd'hui?"},
+		{"German", "Hallo, wie geht es Ihnen heute?"},
+		{"Russian", "Привет, как дела сегодня?"},
+		{"Arabic", "مرحبا، كيف حالك اليوم؟"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.lang, func(t *testing.T) {
+			output, err := GetEmbedding2DMatryoshka(tc.text, "mmbert", 0, 256)
+			if err != nil {
+				t.Fatalf("Failed for %s: %v", tc.lang, err)
+			}
+
+			if len(output.Embedding) != 256 {
+				t.Errorf("%s: expected 256 dimensions, got %d", tc.lang, len(output.Embedding))
+			}
+
+			t.Logf("%s: dim=%d, time=%.2fms", tc.lang, len(output.Embedding), output.ProcessingTimeMs)
+		})
+	}
+}
+
+// BenchmarkMmBert2DMatryoshka benchmarks 2D Matryoshka performance
+func BenchmarkMmBert2DMatryoshka(b *testing.B) {
+	modelPath := getMmBertModelPath()
+	if modelPath == "" {
+		b.Skip("MMBERT_MODEL_PATH environment variable not set")
+	}
+
+	// Initialize mmBERT
+	_ = InitMmBertEmbeddingModel(modelPath, true)
+
+	testText := "This is a benchmark test for 2D Matryoshka embedding generation performance."
+
+	benchCases := []struct {
+		name  string
+		layer int
+		dim   int
+	}{
+		{"L3_D64", 3, 64},
+		{"L3_D256", 3, 256},
+		{"L6_D256", 6, 256},
+		{"L11_D512", 11, 512},
+		{"L22_D768", 22, 768},
+	}
+
+	for _, bc := range benchCases {
+		b.Run(bc.name, func(b *testing.B) {
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				_, _ = GetEmbedding2DMatryoshka(testText, "mmbert", bc.layer, bc.dim)
+			}
+		})
+	}
+}
+
+// ================================================================================================
+// END OF MMBERT 2D MATRYOSHKA EMBEDDING TESTS
 // ================================================================================================

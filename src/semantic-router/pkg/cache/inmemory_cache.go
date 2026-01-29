@@ -194,11 +194,19 @@ func (c *InMemoryCache) generateEmbedding(text string) ([]float32, error) {
 			return nil, err
 		}
 		return output.Embedding, nil
+	case "mmbert":
+		// Use GetEmbedding2DMatryoshka for mmBERT with 2D Matryoshka support
+		// Default to layer 6 (~3.6x speedup) and dimension 256 for good balance
+		output, err := candle_binding.GetEmbedding2DMatryoshka(text, modelName, 6, 256)
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
 	case "bert", "":
 		// Use traditional GetEmbedding for BERT (default)
 		return candle_binding.GetEmbedding(text, 0)
 	default:
-		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', or 'gemma')", c.embeddingModel)
+		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', 'gemma', or 'mmbert')", c.embeddingModel)
 	}
 }
 

@@ -394,6 +394,9 @@ type EmbeddingModels struct {
 	Qwen3ModelPath string `yaml:"qwen3_model_path"`
 	// Path to EmbeddingGemma-300M model directory
 	GemmaModelPath string `yaml:"gemma_model_path"`
+	// Path to mmBERT 2D Matryoshka embedding model directory
+	// Supports layer early exit (3/6/11/22 layers) and dimension reduction (64-768)
+	MmBertModelPath string `yaml:"mmbert_model_path"`
 	// Use CPU for inference (default: true, auto-detect GPU if available)
 	UseCPU bool `yaml:"use_cpu"`
 
@@ -408,7 +411,7 @@ type EmbeddingModels struct {
 // This struct is kept for backward compatibility and may be renamed in a future version.
 type HNSWConfig struct {
 	// ModelType specifies which embedding model to use (default: "qwen3")
-	// Options: "qwen3" (high quality, 32K context) or "gemma" (fast, 8K context)
+	// Options: "qwen3" (high quality, 32K context), "gemma" (fast, 8K context), or "mmbert" (multilingual, 2D Matryoshka)
 	// This model will be used for both preloading and runtime embedding generation
 	ModelType string `yaml:"model_type,omitempty"`
 
@@ -418,8 +421,13 @@ type HNSWConfig struct {
 	PreloadEmbeddings bool `yaml:"preload_embeddings"`
 
 	// TargetDimension is the embedding dimension to use (default: 768)
-	// Supports Matryoshka dimensions: 768, 512, 256, 128
+	// Supports Matryoshka dimensions: 768, 512, 256, 128, 64
 	TargetDimension int `yaml:"target_dimension,omitempty"`
+
+	// TargetLayer is the layer for mmBERT early exit (default: 0 = full model)
+	// Only used when ModelType is "mmbert"
+	// Options: 3 (fastest, ~7x speedup), 6 (~3.6x), 11 (~2x), 22 (full model)
+	TargetLayer int `yaml:"target_layer,omitempty"`
 
 	// EnableSoftMatching enables soft matching mode (default: true)
 	// When enabled, if no rule meets its threshold, returns the rule with highest score
