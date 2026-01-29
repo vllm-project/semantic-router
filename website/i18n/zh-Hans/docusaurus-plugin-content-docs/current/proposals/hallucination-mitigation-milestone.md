@@ -5,73 +5,73 @@ translation:
   outdated: false
 ---
 
-# TruthLens: Real-Time Hallucination Mitigation
+# TruthLens：实时 hallucination 缓解
 
-**Version:** 1.0
-**Authors:** vLLM Semantic Router Team
-**Date:** December 2025
-
----
-
-## Abstract
-
-Large Language Models (LLMs) have demonstrated remarkable capabilities, yet their tendency to generate hallucinations—fluent but factually incorrect or ungrounded content—remains a critical barrier to enterprise AI adoption. Industry surveys consistently show that hallucination risks are among the top concerns preventing organizations from deploying LLM-powered applications in production environments, particularly in high-stakes domains such as healthcare, finance, and legal services.
-
-We propose **TruthLens**, a real-time hallucination detection and mitigation framework integrated into the vLLM Semantic Router. By positioning hallucination control at the inference gateway layer, TruthLens provides a model-agnostic, centralized solution that addresses the "accuracy-latency-cost" triangle through configurable mitigation strategies. Users can select from three operational modes based on their tolerance for cost and accuracy trade-offs: (1) **Lightweight Mode**—single-round detection with warning injection, (2) **Standard Mode**—iterative self-refinement with the same model, and (3) **Premium Mode**—multi-model cross-verification and collaborative correction. This design enables organizations to deploy trustworthy AI systems while maintaining control over operational costs and response latency.
+**版本：** 1.0
+**作者：** vLLM Semantic Router 团队
+**日期：** 2025 年 12 月
 
 ---
 
-## 1. Introduction: The Hallucination Crisis in Enterprise AI
+## 摘要
 
-### 1.1 The Core Problem
+大语言模型 (LLM) 展示了卓越的能力，但其产生 hallucination（流畅但事实错误或无根据的内容）的倾向仍然是企业采用 AI 的关键障碍。行业调查一致表明，hallucination 风险是阻止组织在生产环境中部署 LLM 驱动的应用程序的首要担忧，特别是在医疗保健、金融和法律服务等高风险领域。
 
-Hallucinations represent the most significant barrier to enterprise AI adoption today. Unlike traditional software bugs, LLM hallucinations are:
+我们提出了 **TruthLens**，这是一个集成到 vLLM Semantic Router 中的实时 hallucination 检测和缓解框架。通过在 inference 网关层定位 hallucination 控制，TruthLens 提供了一个与模型无关的集中式解决方案，通过可配置的缓解策略解决“准确率-延迟-成本”三角形问题。用户可以根据对成本和准确率权衡的容忍度从三种操作模式中进行选择：(1) **轻量级模式**——带有警告注入的单轮检测，(2) **标准模式**——使用相同模型的迭代自我细化，以及 (3) **高级模式**——多模型交叉验证和协作纠错。这种设计使组织能够部署值得信赖的 AI 系统，同时保持对运营成本和响应延迟的控制。
 
-- **Unpredictable**: They occur randomly across different queries and contexts
-- **Convincing**: Hallucinated content often appears fluent, confident, and plausible
-- **High-stakes**: A single hallucination in medical, legal, or financial domains can cause irreversible harm
-- **Invisible**: Without specialized detection, users cannot distinguish hallucinations from accurate responses
+---
 
-**Industry Impact by Domain:**
+## 1. 引言：企业级 AI 中的 hallucination 危机
 
-| Domain | Hallucination Risk Tolerance | Typical Mitigation Approach |
+### 1.1 核心问题
+
+hallucination 是当今企业采用 AI 的最重要障碍。与传统的软件错误不同，LLM 的 hallucination 是：
+
+- **不可预测的**：它们在不同的查询和上下文中随机发生
+- **具有说服力的**：hallucination 内容通常看起来流畅、自信且似乎合理
+- **高风险的**：在医疗、法律或金融领域的一次 hallucination 可能会造成不可逆转的损害
+- **隐形的**：如果没有专门的检测，用户无法区分 hallucination 和准确的响应
+
+**按领域划分的行业影响：**
+
+| 领域 | hallucination 风险容忍度 | 典型的缓解方法 |
 |--------|------------------------------|----------------------------|
-| Healthcare | Near-zero (life-critical) | Mandatory human verification, liability concerns |
-| Financial Services | Very low (regulatory) | Compliance-driven review processes |
-| Legal | Very low (liability) | Restricted to internal research and drafting |
-| Customer Support | Moderate | Escalation protocols for uncertain responses |
-| Creative/Marketing | High tolerance | Minimal intervention required |
+| 医疗保健 | 接近于零（生命至关重要） | 强制人工验证、责任担忧 |
+| 金融服务 | 极低（监管） | 合规驱动的审查流程 |
+| 法律 | 极低（责任） | 仅限于内部研究和起草 |
+| 客户支持 | 中等 | 对不确定响应的升级协议 |
+| 创意/营销 | 高容忍度 | 需要最少的干预 |
 
-*Note: Based on enterprise deployment patterns observed across industry surveys (McKinsey 2024, Gartner 2024, Menlo Ventures 2024).*
+*注：基于行业调查中观察到的企业部署模式（麦肯锡 2024、高德纳 2024、Menlo Ventures 2024）。*
 
-### 1.2 Why Existing Solutions Fall Short
+### 1.2 为什么现有解决方案不足
 
-Current approaches to hallucination mitigation operate at the wrong layer of the AI stack:
+目前的 hallucination 缓解方法在 AI 堆栈的错误层级运行：
 
 ```mermaid
 flowchart TB
-    subgraph "Current Approaches (Fragmented)"
+    subgraph "当前方法（碎片化）"
         direction TB
-        A[RAG/Grounding] -->|Pre-generation| B[Reduces but doesn't eliminate]
-        C[Fine-tuning] -->|Training time| D[Expensive, model-specific]
-        E[Prompt Engineering] -->|Per-application| F[Inconsistent, no guarantees]
-        G[Offline Evaluation] -->|Post-hoc| H[Cannot prevent real-time harm]
+        A[RAG/Grounding] -->|生成前| B[减少但不能消除]
+        C[fine-tuning] -->|训练时间| D[昂贵且特定于模型]
+        E[prompt 工程] -->|每个应用程序| F[不一致，无保证]
+        G[离线评估] -->|事后| H[无法防止实时伤害]
     end
 
-    subgraph "The Gap"
-        I[❌ No real-time detection at inference]
-        J[❌ No centralized control point]
-        K[❌ No cost-aware mitigation options]
+    subgraph "差距"
+        I[❌ inference 时没有实时检测]
+        J[❌ 没有集中控制点]
+        K[❌ 没有成本感知的缓解选项]
     end
 ```
 
-### 1.3 Why vLLM Semantic Router is the Ideal Solution Point
+### 1.3 为什么 vLLM Semantic Router 是理想的解决方案点
 
-The vLLM Semantic Router occupies a unique position in the AI infrastructure stack that makes it ideally suited for hallucination mitigation:
+vLLM Semantic Router 在 AI 基础设施堆栈中处于独特的位置，使其非常适合 hallucination 缓解：
 
 ```mermaid
 flowchart LR
-    subgraph "Client Applications"
+    subgraph "客户端应用程序"
         APP1[App 1]
         APP2[App 2]
         APP3[App N]
@@ -79,20 +79,20 @@ flowchart LR
 
     subgraph "vLLM Semantic Router"
         direction TB
-        GW[Unified Gateway]
+        GW[统一网关]
 
-        subgraph "Existing Capabilities"
-            SEC[Security Layer<br/>PII, Jailbreak]
-            ROUTE[Intelligent Routing<br/>Model Selection]
-            CACHE[Semantic Cache<br/>Cost Optimization]
+        subgraph "现有能力"
+            SEC[安全层<br/>pii, jailbreak]
+            ROUTE[智能路由<br/>模型选择]
+            CACHE[semantic-cache<br/>成本优化]
         end
 
-        subgraph "NEW: TruthLens"
-            HALL[Hallucination<br/>Detection & Mitigation]
+        subgraph "新增：TruthLens"
+            HALL[hallucination<br/>检测与缓解]
         end
     end
 
-    subgraph "LLM Backends"
+    subgraph "LLM 后端"
         LLM1[GPT-4]
         LLM2[Claude]
         LLM3[Llama]
@@ -114,207 +114,207 @@ flowchart LR
     HALL --> LLM4
 ```
 
-**Key Advantages of Gateway-Level Hallucination Control:**
+**网关级 hallucination 控制的关键优势：**
 
-| Advantage | Description |
+| 优势 | 描述 |
 |-----------|-------------|
-| **Model-Agnostic** | Works with any LLM backend without modification |
-| **Centralized Policy** | Single configuration point for all applications |
-| **Cost Control** | Organization-wide visibility into accuracy vs. cost trade-offs |
-| **Incremental Adoption** | Enable per-decision, per-domain policies |
-| **Observability** | Unified metrics, logging, and alerting for hallucination events |
-| **Defense in Depth** | Complements (not replaces) RAG and prompt engineering |
+| **模型无关** | 适用于任何 LLM 后端，无需修改 |
+| **集中策略** | 所有应用程序的单一配置点 |
+| **成本控制** | 全组织范围内对准确率与成本权衡的可视化 |
+| **增量采用** | 启用按决策、按领域的策略 |
+| **可观测性** | 针对 hallucination 事件的统一指标、日志和警报 |
+| **深度防御** | 补充（而非取代）RAG 和 prompt 工程 |
 
-### 1.4 Formal Problem Definition
+### 1.4 正式问题定义
 
-We formalize hallucination detection in Retrieval-Augmented Generation (RAG) systems as a **token-level sequence labeling** problem.
+我们将检索增强生成 (RAG) 系统中的 hallucination 检测形式化为 **token 级序列标注**问题。
 
-**Definition 1 (RAG Context).** Let a RAG interaction be defined as a tuple *(C, Q, R)* where:
+**定义 1 (RAG 上下文)。** 设 RAG 交互定义为元组 *(C, Q, R)*，其中：
 
-- *C = \{c₁, c₂, ..., cₘ\}* is the retrieved context (set of documents/passages)
-- *Q* is the user query
-- *R = (r₁, r₂, ..., rₙ)* is the generated response as a sequence of *n* tokens
+- *C = \{c₁, c₂, ..., cₘ\}* 是检索到的上下文（文档/段落集）
+- *Q* 是用户查询
+- *R = (r₁, r₂, ..., rₙ)* 是作为 *n* 个 token 序列生成的响应
 
-**Definition 2 (Grounded vs. Hallucinated Tokens).** A token *rᵢ* in response *R* is:
+**定义 2 (Grounded 与 hallucination token)。** 响应 *R* 中的 token *rᵢ* 是：
 
-- **Grounded** if there exists evidence in *C* that supports the claim containing *rᵢ*
-- **Hallucinated** if *rᵢ* contributes to a claim that:
-  - (a) Contradicts information in *C* (contradiction hallucination), or
-  - (b) Cannot be verified from *C* and is not common knowledge (ungrounded hallucination)
+- **Grounded**：如果在 *C* 中存在支持包含 *rᵢ* 的断言的证据
+- **hallucination**：如果 *rᵢ* 贡献于以下断言：
+  - (a) 与 *C* 中的信息矛盾（矛盾 hallucination），或
+  - (b) 无法从 *C* 中验证且不是常识（无根据 hallucination）
 
-**Definition 3 (Hallucination Detection Function).** The detection task is to learn a function:
+**定义 3 (hallucination 检测函数)。** 检测任务是学习一个函数：
 
 *f: (C, Q, R) → Y*
 
-where *Y = (y₁, y₂, ..., yₙ)* and *yᵢ ∈ \{0, 1\}* indicates whether token *rᵢ* is hallucinated.
+其中 *Y = (y₁, y₂, ..., yₙ)* 且 *yᵢ ∈ \{0, 1\}* 表示 token *rᵢ* 是否为 hallucination。
 
-**Definition 4 (Hallucination Score).** Given predictions *Y* and confidence scores *P = (p₁, ..., pₙ)* where *pᵢ = P(yᵢ = 1)*, we define:
+**定义 4 (hallucination 分数)。** 给定预测 *Y* 和置信度分数 *P = (p₁, ..., pₙ)*，其中 *pᵢ = P(yᵢ = 1)*，我们定义：
 
-- **Token-level score**: *s_token(rᵢ) = pᵢ*
-- **Span-level score**: For a contiguous span *S = (rᵢ, ..., rⱼ)*, *s_span(S) = max(pᵢ, ..., pⱼ)*
-- **Response-level score**: *s_response(R) = 1 - ∏(1 - pᵢ)* for all *i* where *pᵢ > τ_token*
+- **token 级分数**：*s_token(rᵢ) = pᵢ*
+- **片段 (span) 级分数**：对于连续片段 *S = (rᵢ, ..., rⱼ)*，*s_span(S) = max(pᵢ, ..., pⱼ)*
+- **响应级分数**：对于所有满足 *pᵢ > τ_token* 的 *i*，*s_response(R) = 1 - ∏(1 - pᵢ)*
 
-**Definition 5 (Mitigation Decision).** Given threshold *τ*, the system takes action:
+**定义 5 (缓解决策)。** 给定 threshold *τ*，系统采取行动：
 
 ```text
 Action(R) =
-  PASS        if s_response(R) < τ
-  MITIGATE    if s_response(R) ≥ τ
+  通过 (PASS)        如果 s_response(R) < τ
+  缓解 (MITIGATE)    如果 s_response(R) ≥ τ
 ```
 
 ---
 
-## 2. Related Work: State-of-the-Art in Hallucination Mitigation
+## 2. 相关工作：hallucination 缓解的最前沿技术
 
-### 2.1 Taxonomy of Hallucination Types
+### 2.1 hallucination 类型的分类
 
-Before reviewing detection methods, we establish a taxonomy of hallucination types:
+在回顾检测方法之前，我们建立了 hallucination 类型的分类：
 
-**Type 1: Intrinsic Hallucination** — Generated content contradicts the provided context.
+**类型 1：内在 (Intrinsic) hallucination** —— 生成的内容与提供的上下文矛盾。
 
-*Example*: Context says "The meeting is on Tuesday." Response says "The meeting is scheduled for Wednesday."
+*示例*：上下文说“会议在周二”。响应说“会议安排在周三”。
 
-**Type 2: Extrinsic Hallucination** — Generated content cannot be verified from the context and is not common knowledge.
+**类型 2：外在 (Extrinsic) hallucination** —— 生成的内容无法从上下文中验证，且不是常识。
 
-*Example*: Context discusses a company's Q3 earnings. Response includes Q4 projections not mentioned anywhere.
+*示例*：上下文讨论公司的第三季度收益。响应包含了随处都未提及的第四季度预测。
 
-**Type 3: Fabrication** — Entirely invented entities, citations, or facts.
+**类型 3：捏造 (Fabrication)** —— 完全虚构的实体、引用或事实。
 
-*Example*: "According to Smith et al. (2023)..." where no such paper exists.
+*示例*：“根据 Smith 等人 (2023) 的说法……”而实际上不存在这样的论文。
 
-| Type | Detection Difficulty | Mitigation Approach |
+| 类型 | 检测难度 | 缓解方法 |
 |------|---------------------|---------------------|
-| Intrinsic | Easier (direct contradiction) | Context re-grounding |
-| Extrinsic | Medium (requires knowledge boundary) | Uncertainty expression |
-| Fabrication | Harder (requires external verification) | Cross-reference checking |
+| 内在 | 较易（直接矛盾） | 上下文重新 ground |
+| 外在 | 中等（需要知识边界） | 不确定性表达 |
+| 捏造 | 较难（需要外部验证） | 交叉引用检查 |
 
-### 2.2 Detection Methods
+### 2.2 检测方法
 
-| Category | Representative Work | Mechanism | Accuracy | Latency | Cost |
+| 类别 | 代表性工作 | 机制 | 准确率 | 延迟 | 成本 |
 |----------|---------------------|-----------|----------|---------|------|
-| **Encoder-Based** | LettuceDetect (2025), Luna (2025) | Token classification with ModernBERT/DeBERTa | F1: 75-79% | 15-35ms | Low |
-| **Self-Consistency** | SelfCheckGPT (2023) | Multiple sampling + consistency check | Varies | Nx base | High |
-| **Cross-Model** | Finch-Zk (2025) | Multi-model response comparison | F1: +6-39% | 2-3x base | High |
-| **Internal States** | MIND (ACL 2024) | Hidden layer activation analysis | High | \&lt;10ms | Requires instrumentation |
+| **基于编码器** | LettuceDetect (2025), Luna (2025) | 使用 ModernBERT/DeBERTa 进行 token 分类 | F1: 75-79% | 15-35ms | 低 |
+| **自洽性 (Self-Consistency)** | SelfCheckGPT (2023) | 多次采样 + 一致性检查 | 变化 | Nx 基础 | 高 |
+| **跨模型** | Finch-Zk (2025) | 多模型响应比较 | F1: +6-39% | 2-3x 基础 | 高 |
+| **内部状态** | MIND (ACL 2024) | 隐藏层激活分析 | 高 | \&lt;10ms | 需要仪器化 |
 
-#### 2.2.1 Encoder-Based Detection (Deep Dive)
+#### 2.2.1 基于编码器的检测（深度探索）
 
-**LettuceDetect** (Kovács et al., 2025) frames hallucination detection as **token-level sequence labeling**:
+**LettuceDetect** (Kovács 等人, 2025) 将 hallucination 检测框架化为 **token 级序列标注**：
 
-- **Architecture**: ModernBERT-large (395M parameters) with classification head
-- **Input**: Concatenated [Context, Query, Response] with special tokens
-- **Output**: Per-token probability of hallucination
-- **Training**: Fine-tuned on RAGTruth dataset (18K examples)
-- **Key Innovation**: Long-context handling (8K tokens) enables full RAG context inclusion
+- **架构**：带有分类头的 ModernBERT-large（3.95 亿参数）
+- **输入**：连接 [上下文, 查询, 响应] 并带有特殊 token
+- **输出**：每个 token 的 hallucination 概率
+- **训练**：在 RAGTruth 数据集（1.8 万个示例）上进行 fine-tuning
+- **关键创新**：长上下文处理（8K token）能够包含完整的 RAG 上下文
 
-**Performance on RAGTruth Benchmark**:
+**在 RAGTruth 基准测试中的性能：**
 
-| Model | Token F1 | Example F1 | Latency |
+| 模型 | token F1 | 示例 F1 | 延迟 |
 |-------|----------|------------|---------|
 | LettuceDetect-large | 79.22% | 74.8% | ~30ms |
 | LettuceDetect-base | 76.5% | 71.2% | ~15ms |
 | Luna (DeBERTa) | 73.1% | 68.9% | ~25ms |
 | GPT-4 (zero-shot) | 61.2% | 58.4% | ~2s |
 
-**Why Encoder-Based for TruthLens**: The combination of high accuracy, low latency, and fixed cost makes encoder-based detection ideal for gateway-level deployment.
+**为什么 TruthLens 选择基于编码器**：高准确率、低延迟和固定成本的结合使得基于编码器的检测成为网关级部署的理想选择。
 
-#### 2.2.2 Self-Consistency Methods
+#### 2.2.2 自洽性方法
 
-**SelfCheckGPT** (Manakul et al., 2023) exploits the observation that hallucinations are inconsistent across samples:
+**SelfCheckGPT** (Manakul 等人, 2023) 利用了 hallucination 在不同样本中不一致的观察结果：
 
-- **Mechanism**: Generate N responses, measure consistency
-- **Intuition**: Factual content is reproducible; hallucinations vary
-- **Limitation**: Requires N LLM calls (typically N=5-10)
+- **机制**：生成 N 个响应，衡量一致性
+- **直觉**：事实内容是可重复的；hallucination 则各不相同
+- **局限性**：需要 N 次 LLM 调用（通常 N=5-10）
 
-**Theoretical Basis**: If *P(fact)* is high, the fact appears in most samples. If *P(hallucination)* is low per-sample, it rarely repeats.
+**理论基础**：如果 *P(事实)* 很高，该事实会出现在大多数样本中。如果每个样本的 *P(hallucination)* 较低，它很少会重复。
 
-#### 2.2.3 Cross-Model Verification
+#### 2.2.3 跨模型验证
 
-**Finch-Zk** (2025) leverages model diversity:
+**Finch-Zk** (2025) 利用了模型多样性：
 
-- **Mechanism**: Compare responses from different model families
-- **Key Insight**: Different models hallucinate differently
-- **Segment-Level Correction**: Replace inconsistent segments with higher-confidence version
+- **机制**：比较来自不同模型家族的响应
+- **关键见解**：不同的模型以不同的方式产生 hallucination
+- **片段级纠错**：用置信度更高的版本替换不一致的片段
 
-### 2.3 Mitigation Strategies
+### 2.3 缓解策略
 
-| Strategy | Representative Work | Mechanism | Effectiveness | Overhead |
+| 策略 | 代表性工作 | 机制 | 有效性 | 开销 |
 |----------|---------------------|-----------|---------------|----------|
-| **Self-Refinement** | Self-Refine (NeurIPS 2023) | Iterative feedback loop | 40-60% reduction | 2-4x latency |
-| **Chain-of-Verification** | CoVe (ACL 2024) | Generate verification questions | 50-70% reduction | 3-5x latency |
-| **Multi-Agent Debate** | MAD (2024) | Multiple agents argue and converge | 60-80% reduction | 5-10x latency |
-| **Cross-Model Correction** | Finch-Zk (2025) | Targeted segment replacement | Up to 9% accuracy gain | 3x latency |
+| **自我细化 (Self-Refinement)** | Self-Refine (NeurIPS 2023) | 迭代反馈循环 | 减少 40-60% | 2-4x 延迟 |
+| **验证链 (Chain-of-Verification)** | CoVe (ACL 2024) | 生成验证问题 | 减少 50-70% | 3-5x 延迟 |
+| **多智能体辩论** | MAD (2024) | 多个智能体辩论并收敛 | 减少 60-80% | 5-10x 延迟 |
+| **跨模型纠错** | Finch-Zk (2025) | 有针对性的片段替换 | 准确率提升高达 9% | 3x 延迟 |
 
-#### 2.3.1 Self-Refinement (Deep Dive)
+#### 2.3.1 自我细化（深度探索）
 
-**Self-Refine** (Madaan et al., NeurIPS 2023) demonstrates that LLMs can improve their own outputs:
-
-```text
-Loop:
-  1. Generate initial response R₀
-  2. Generate feedback F on R₀ (same model)
-  3. Generate refined response R₁ using F
-  4. Repeat until convergence or max iterations
-```
-
-**Key Findings**:
-
-- Works best when feedback is **specific** (not just "improve this")
-- Diminishing returns after 2-3 iterations
-- Requires the model to have the knowledge to correct itself
-
-**Limitation for Hallucination**: If the model lacks the correct knowledge, self-refinement may not help or may introduce new errors.
-
-#### 2.3.2 Chain-of-Verification (CoVe)
-
-**CoVe** (Dhuliawala et al., ACL 2024) generates verification questions:
+**Self-Refine** (Madaan 等人, NeurIPS 2023) 证明了 LLM 可以改进其自身的输出：
 
 ```text
-1. Generate response R
-2. Extract factual claims from R
-3. For each claim, generate verification question
-4. Answer verification questions using context
-5. Revise R based on verification results
+循环：
+  1. 生成初始响应 R₀
+  2. 对 R₀ 生成反馈 F（使用相同模型）
+  3. 使用 F 生成细化后的响应 R₁
+  4. 重复直到收敛或达到最大迭代次数
 ```
 
-**Advantage**: Explicit verification step catches subtle errors.
-**Disadvantage**: High latency (3-5x) due to multi-step process.
+**关键发现**：
 
-#### 2.3.3 Multi-Agent Debate
+- 当反馈是**具体的**（而不仅仅是“改进这个”）时效果最好
+- 2-3 次迭代后收益递减
+- 要求模型具备纠正自身所需的知识
 
-**Multi-Agent Debate** (Du et al., 2024) uses multiple LLM instances:
+**对 hallucination 的局限性**：如果模型缺乏正确的知识，自我细化可能没有帮助，甚至可能引入新的错误。
+
+#### 2.3.2 验证链 (CoVe)
+
+**CoVe** (Dhuliawala 等人, ACL 2024) 生成验证问题：
 
 ```text
-1. Multiple agents generate responses
-2. Agents critique each other's responses
-3. Agents revise based on critiques
-4. Repeat for N rounds
-5. Synthesize final response
+1. 生成响应 R
+2. 从 R 中提取事实断言
+3. 为每个断言生成验证问题
+4. 使用上下文回答验证问题
+5. 根据验证结果修订 R
 ```
 
-**Theoretical Advantage**: Diverse perspectives catch blind spots.
-**Practical Challenge**: High cost (5-10x) and latency.
+**优点**：显式的验证步骤可以捕捉到细微的错误。
+**缺点**：由于多步骤过程，延迟较高 (3-5x)。
 
-### 2.3 The Accuracy-Latency-Cost Triangle
+#### 2.3.3 多智能体辩论
 
-Research consistently shows a fundamental trade-off:
+**多智能体辩论** (Du 等人, 2024) 使用多个 LLM 实例：
+
+```text
+1. 多个智能体生成响应
+2. 智能体相互评价对方的响应
+3. 智能体根据评价进行修订
+4. 重复 N 轮
+5. 综合最终响应
+```
+
+**理论优势**：多元化的视角可以捕捉到盲点。
+**实际挑战**：高成本 (5-10x) 和高延迟。
+
+### 2.3 准确率-延迟-成本三角形
+
+研究一致表明存在一个基本的权衡：
 
 ```mermaid
 graph TD
-    subgraph "The Trade-off Triangle"
-        ACC[🎯 Accuracy]
-        LAT[⚡ Latency]
-        COST[💰 Cost]
+    subgraph "权衡三角形"
+        ACC[🎯 准确率]
+        LAT[⚡ 延迟]
+        COST[💰 成本]
 
-        ACC ---|Trade-off| LAT
-        LAT ---|Trade-off| COST
-        COST ---|Trade-off| ACC
+        ACC ---|权衡| LAT
+        LAT ---|权衡| COST
+        COST ---|权衡| ACC
     end
 
-    subgraph "Strategy Positioning"
-        L[Lightweight Mode<br/>⚡💰 Fast & Cheap<br/>🎯 Moderate Accuracy]
-        S[Standard Mode<br/>⚡🎯 Balanced<br/>💰 Moderate Cost]
-        P[Premium Mode<br/>🎯💰 High Accuracy<br/>⚡ Higher Latency]
+    subgraph "策略定位"
+        L[轻量级模式<br/>⚡💰 快速且便宜<br/>🎯 中等准确率]
+        S[标准模式<br/>⚡🎯 平衡<br/>💰 中等成本]
+        P[高级模式<br/>🎯💰 高准确率<br/>⚡ 更高延迟]
     end
 
     L --> LAT
@@ -324,793 +324,308 @@ graph TD
     P --> ACC
 ```
 
-**Key Insight**: No single approach optimizes all three dimensions. TruthLens addresses this by offering **user-selectable operational modes** that let organizations choose their position on this trade-off triangle.
+**关键见解**：没有任何一种方法能同时优化这三个维度。TruthLens 通过提供**用户可选择的操作模式**来解决这个问题，让组织在这一权衡三角形中选择自己的位置。
 
 ---
 
-## 3. Theoretical Foundations
+## 3. 理论基础
 
-This section establishes the theoretical basis for TruthLens's three-mode architecture, drawing from sequence labeling, iterative optimization, ensemble learning, and multi-agent systems theory.
+本节建立了 TruthLens 三模式架构的理论基础，借鉴了序列标注、迭代优化、集成学习和多智能体系统理论。
 
-### 3.1 Hallucination Detection as Sequence Labeling
+### 3.1 作为序列标注的 hallucination 检测
 
-#### 3.1.1 Token Classification Architecture
+#### 3.1.1 token 分类架构
 
-Modern hallucination detection leverages transformer-based encoders fine-tuned for token classification. Given input sequence *X = [CLS] C [SEP] Q [SEP] R [SEP]*, the encoder produces contextualized representations:
+现代 hallucination 检测利用针对 token 分类进行了 fine-tuning 的基于 transformer 的编码器。给定输入序列 *X = [CLS] C [SEP] Q [SEP] R [SEP]*，编码器产生上下文表示：
 
 *H = Encoder(X) ∈ ℝ^(L×d)*
 
-where *L* is sequence length and *d* is hidden dimension. For each token *rᵢ* in the response, we compute:
+其中 *L* 是序列长度，*d* 是隐藏维度。对于响应中的每个 token *rᵢ*，我们计算：
 
 *P(yᵢ = 1|X) = σ(W · hᵢ + b)*
 
-where *W ∈ ℝ^d*, *b ∈ ℝ* are learned parameters and *σ* is the sigmoid function.
+其中 *W ∈ ℝ^d*, *b ∈ ℝ* 是学习到的参数，*σ* 是 sigmoid 函数。
 
-#### 3.1.2 Why ModernBERT for Detection
+#### 3.1.2 为什么选择 ModernBERT 进行检测
 
-The choice of encoder architecture significantly impacts detection quality. We adopt ModernBERT (Warner et al., 2024) for the following theoretical advantages:
+编码器架构的选择会显著影响检测质量。我们采用 ModernBERT (Warner 等人, 2024) 是因为它具有以下理论优势：
 
-| Property | ModernBERT | Traditional BERT | Impact on Detection |
+| 属性 | ModernBERT | 传统 BERT | 对检测的影响 |
 |----------|------------|------------------|---------------------|
-| **Context Length** | 8,192 tokens | 512 tokens | Handles full RAG context without truncation |
-| **Attention** | Rotary Position Embeddings (RoPE) | Absolute positional | Better long-range dependency modeling |
-| **Architecture** | GeGLU activations, no biases | GELU, with biases | Improved gradient flow for fine-grained classification |
-| **Efficiency** | Flash Attention, Unpadding | Standard attention | 2x inference speedup enables real-time detection |
+| **上下文长度** | 8,192 token | 512 token | 无需截断即可处理完整的 RAG 上下文 |
+| **注意力机制** | 旋转位置嵌入 (RoPE) | 绝对位置 | 更好的长程依赖建模 |
+| **架构** | GeGLU 激活，无 bias | GELU，有 bias | 改进了细粒度分类的梯度流 |
+| **效率** | Flash Attention, Unpadding | 标准注意力 | 2x inference 加速，实现实时检测 |
 
-#### 3.1.3 Scoring Function Design
+#### 3.1.3 评分函数设计
 
-The aggregation from token-level to response-level scores requires careful design. We propose a **noisy-OR** aggregation model:
+从 token 级到响应级分数的聚合需要仔细设计。我们提出了一个 **Noisy-OR** 聚合模型：
 
 *s_response(R) = 1 - ∏ᵢ(1 - pᵢ · 𝟙[pᵢ > τ_token])*
 
-**Theoretical Justification**: The noisy-OR model assumes independence between hallucination events at different tokens. While this is an approximation, it provides:
+**理论依据**：Noisy-OR 模型假设不同 token 处的 hallucination 事件之间相互独立。虽然这是一个近似，但它提供了：
 
-1. **Monotonicity**: Adding a hallucinated token never decreases the response score
-2. **Sensitivity**: Single high-confidence hallucination triggers detection
-3. **Calibration**: Score approximates *P(∃ hallucination in R)*
+1. **单调性**：增加一个 hallucination token 绝不会降低响应分数
+2. **敏感性**：单个高置信度的 hallucination 就会触发检测
+3. **校准**：分数近似于 *P(R 中存在 hallucination)*
 
-**Alternative: Span-Based Aggregation**
+**替代方案：基于片段 (Span) 的聚合**
 
-For correlated hallucinations (common in fabricated entities), we first group contiguous hallucinated tokens into spans, then aggregate:
+对于相关的 hallucination（在捏造实体中很常见），我们首先将连续的 hallucination token 分组为片段，然后进行聚合：
 
 *s_response(R) = max\{s_span(S₁), s_span(S₂), ..., s_span(Sₖ)\}*
 
-This reduces sensitivity to tokenization artifacts and focuses on semantic units.
+这减少了对分词 (tokenization) 人为因素的敏感性，并专注于语义单元。
 
-#### 3.1.4 Threshold Selection Theory
+#### 3.1.4 threshold 选择理论
 
-The detection threshold *τ* controls the precision-recall trade-off. From decision theory:
+检测 threshold *τ* 控制着精确率与召回率的权衡。根据决策理论：
 
-**Proposition 1 (Optimal Threshold).** *Given cost ratio λ = C_FN / C_FP (cost of false negative vs. false positive), the optimal threshold satisfies:*
+**命题 1 (最优 threshold)。** *给定成本比 λ = C_FN / C_FP（假阴性与假阳性的成本比），最优 threshold 满足：*
 
 *τ* = 1 / (1 + λ · (1-π)/π)*
 
-*where π is the prior probability of hallucination.*
+*其中 π 是 hallucination 的先验概率。*
 
-**Practical Implications**:
+**实际意义：**
 
-| Domain | λ (Cost Ratio) | Recommended τ | Rationale |
+| 领域 | λ (成本比) | 推荐的 τ | 理由 |
 |--------|----------------|---------------|-----------|
-| Medical | 10-100 | 0.3-0.5 | Missing hallucination is catastrophic |
-| Financial | 5-20 | 0.4-0.6 | Regulatory risk from false information |
-| Customer Support | 1-2 | 0.6-0.7 | Balance user experience and accuracy |
-| Creative | 0.1-0.5 | 0.8-0.9 | Over-flagging harms creativity |
+| 医疗 | 10-100 | 0.3-0.5 | 遗漏 hallucination 是灾难性的 |
+| 金融 | 5-20 | 0.4-0.6 | 虚假信息带来的监管风险 |
+| 客户支持 | 1-2 | 0.6-0.7 | 平衡用户体验和准确率 |
+| 创意 | 0.1-0.5 | 0.8-0.9 | 过度标记会损害创造力 |
 
-### 3.2 Self-Refinement Theory
+### 3.2 自我细化理论
 
-#### 3.2.1 Iterative Refinement as Fixed-Point Iteration
+#### 3.2.1 作为不动点迭代的迭代细化
 
-Standard Mode employs iterative self-refinement, which can be formalized as seeking a fixed point of a refinement operator.
+标准模式采用迭代自我细化，这可以形式化为寻找细化算子的不动点。
 
-**Definition 6 (Refinement Operator).** Let *T: R → R* be the refinement operator where:
+**定义 6 (细化算子)。** 设 *T: R → R* 为细化算子，其中：
 
 *T(Rₜ) = LLM(Prompt_refine(C, Q, Rₜ, Detect(Rₜ)))*
 
-The iteration proceeds as: *R₀ → R₁ → R₂ → ... → R**
+迭代过程为：*R₀ → R₁ → R₂ → ... → R**
 
-**Theorem 1 (Convergence Conditions).** *The refinement sequence \{Rₜ\} converges to a fixed point R\* if:*
+**定理 1 (收敛条件)。** *细化序列 \{Rₜ\} 收敛到不动点 R\*，如果：*
 
-1. *The hallucination score sequence \{s(Rₜ)\} is monotonically non-increasing*
-2. *The score is bounded below (s(R) ≥ 0)*
-3. *The LLM exhibits consistency: similar prompts yield similar outputs*
+1. *hallucination 分数序列 \{s(Rₜ)\} 是单调不增的*
+2. *分数有下界 (s(R) ≥ 0)*
+3. *LLM 表现出一致性：相似的 prompt 产生相似的输出*
 
-**Proof Sketch**: Conditions 1 and 2 ensure the score sequence converges by the Monotone Convergence Theorem. Condition 3 (LLM consistency) ensures the response sequence itself converges, not just the scores.
+**证明梗概**：条件 1 和 2 确保分数序列根据单调收敛定理收敛。条件 3 (LLM 一致性) 确保响应序列本身收敛，而不仅仅是分数。
 
-#### 3.2.2 Convergence Rate Analysis
+#### 3.2.2 收敛速度分析
 
-**Empirical Observation**: Self-refinement typically exhibits **sublinear convergence**:
+**经验观察**：自我细化通常表现出**次线性收敛**：
 
 *s(Rₜ) - s(R*) ≤ O(1/t)*
 
-This is because:
+这是因为：
 
-1. **Easy hallucinations** (explicit contradictions) are corrected in early iterations
-2. **Hard hallucinations** (subtle ungrounded claims) may persist or oscillate
-3. **Diminishing returns** after 2-3 iterations in practice
+1. **容易的 hallucination**（显式矛盾）在早期迭代中被纠正
+2. **困难的 hallucination**（微妙的无根据断言）可能会持续存在或震荡
+3. 实践中 2-3 次迭代后**收益递减**
 
 ```mermaid
 graph LR
-    subgraph "Convergence Pattern"
-        R0[R₀<br/>s=0.8] -->|Iteration 1| R1[R₁<br/>s=0.5]
-        R1 -->|Iteration 2| R2[R₂<br/>s=0.35]
-        R2 -->|Iteration 3| R3[R₃<br/>s=0.3]
-        R3 -.->|Diminishing returns| R4[R₄<br/>s=0.28]
+    subgraph "收敛模式"
+        R0[R₀<br/>s=0.8] -->|迭代 1| R1[R₁<br/>s=0.5]
+        R1 -->|迭代 2| R2[R₂<br/>s=0.35]
+        R2 -->|迭代 3| R3[R₃<br/>s=0.3]
+        R3 -.->|收益递减| R4[R₄<br/>s=0.28]
     end
 ```
 
-#### 3.2.3 Prompt Engineering Principles for Correction
+#### 3.2.3 纠错的 prompt 工程原则
 
-Effective refinement prompts must satisfy several theoretical properties:
+有效的细化 prompt 必须满足几个理论特性：
 
-**Principle 1 (Specificity)**: The prompt must identify *which* spans are hallucinated, not just that hallucination exists.
+**原则 1 (特异性)**：prompt 必须识别出*哪些*片段产生了 hallucination，而不仅仅是指出存在 hallucination。
 
-**Principle 2 (Grounding)**: The prompt must provide the original context *C* to enable fact-checking.
+**原则 2 (Grounding)**：prompt 必须提供原始上下文 *C* 以启用事实核查。
 
-**Principle 3 (Preservation)**: The prompt must instruct the model to preserve accurate content.
+**原则 3 (保留)**：prompt 必须指示模型保留准确的内容。
 
-**Principle 4 (Uncertainty)**: When correction is not possible, the model should express uncertainty rather than fabricate alternatives.
+**原则 4 (不确定性)**：当无法纠正时，模型应该表达不确定性，而不是捏造替代方案。
 
-**Refinement Prompt Template Structure**:
+**细化 prompt 模板结构：**
 
 ```text
-Given:
-- Context: [Retrieved passages C]
-- Query: [User question Q]
-- Response: [Current response Rₜ with hallucinated spans marked]
+给定：
+- 上下文：[检索到的段落 C]
+- 查询：[用户问题 Q]
+- 响应：[带有标注出的 hallucination 片段的当前响应 Rₜ]
 
-The following spans may be hallucinated: [List of (span, confidence)]
+以下片段可能存在 hallucination：[ (片段, 置信度) 列表]
 
-Instructions:
-1. For each flagged span, verify against the context
-2. If contradicted: correct using context evidence
-3. If unverifiable and not common knowledge: remove or qualify with uncertainty
-4. Preserve all accurate, well-grounded content
-5. Maintain coherent narrative flow
+指令：
+1. 对于每个标记出的片段，根据上下文进行验证
+2. 如果存在矛盾：使用上下文证据进行纠正
+3. 如果无法验证且不是常识：删除或使用不确定性词汇修饰
+4. 保留所有准确且 grounded 的内容
+5. 保持连贯的叙事流
 ```
 
-### 3.3 Multi-Model Collaboration Theory
+### 3.3 多模型协作理论
 
-Premium Mode leverages multiple LLMs for cross-verification. We ground this in ensemble learning and multi-agent debate theory.
+高级模式利用多个 LLM 进行交叉验证。我们将此建立在集成学习和多智能体辩论理论的基础上。
 
-#### 3.3.1 Ensemble Learning Perspective
+#### 3.3.1 集成学习视角
 
-**Theorem 2 (Diversity-Accuracy Trade-off).** *For an ensemble of M models with individual error rate ε and pairwise correlation ρ, the ensemble error rate under majority voting is:*
+**定理 2 (多样性-准确率权衡)。** *对于一个由 M 个模型组成的集成，其个体错误率为 ε，两两相关性为 ρ，在多数投票下的集成错误率为：*
 
-*ε_ensemble ≈ ε · (1 + (M-1)ρ) / M*    *when ε < 0.5*
+*ε_ensemble ≈ ε · (1 + (M-1)ρ) / M*    *当 ε < 0.5 时*
 
-**Corollary**: Ensemble error approaches zero as M → ∞ only if ρ < 1 (models are diverse).
+**推论**：只有当 ρ < 1（模型是多样化的）时，集成错误率才会随着 M → ∞ 趋于零。
 
-**Implications for TruthLens**:
+**对 TruthLens 的启示：**
 
-| Model Combination | Expected Diversity (1-ρ) | Error Reduction |
+| 模型组合 | 预期多样性 (1-ρ) | 错误减少 |
 |-------------------|--------------------------|-----------------|
-| Same model family (GPT-4 variants) | Low (0.2-0.4) | 10-20% |
-| Different families (GPT-4 + Claude) | Medium (0.4-0.6) | 30-50% |
-| Different architectures (Transformer + other) | High (0.6-0.8) | 50-70% |
+| 相同模型家族 (GPT-4 变体) | 低 (0.2-0.4) | 10-20% |
+| 不同家族 (GPT-4 + Claude) | 中 (0.4-0.6) | 30-50% |
+| 不同架构 (Transformer + 其他) | 高 (0.6-0.8) | 50-70% |
 
-#### 3.3.2 Multi-Agent Debate Framework
+#### 3.3.2 多智能体辩论框架
 
-Beyond simple voting, multi-agent debate enables models to **argue** about factual claims and converge on truth.
+除了简单的投票，多智能体辩论还允许模型对事实断言进行**辩论**并收敛到真相。
 
-**Definition 7 (Argumentation Framework).** An argumentation framework is a pair *AF = (A, →)* where:
+**定义 7 (论证框架)。** 一个论证框架是一个二元组 *AF = (A, →)*，其中：
 
-- *A* is a set of arguments (factual claims from each model)
-- *→ ⊆ A × A* is an attack relation (contradictions between claims)
+- *A* 是一组论点（来自每个模型的事实断言）
+- *→ ⊆ A × A* 是一个攻击关系（论点之间的矛盾）
 
-**Definition 8 (Grounded Extension).** The grounded extension *E* of AF is the maximal conflict-free set of arguments that defends itself against all attacks.
+**定义 8 (Grounded 扩展)。** AF 的 grounded 扩展 *E* 是最大的无冲突论点集，它能抵御所有攻击。
 
-**Multi-Agent Debate Protocol**:
+**多智能体辩论协议：**
 
 ```mermaid
 sequenceDiagram
-    participant Q as Query
-    participant M1 as Model A<br/>(Proponent)
-    participant M2 as Model B<br/>(Critic)
-    participant J as Judge Model
+    participant Q as 查询
+    participant M1 as 模型 A<br/>(支持者)
+    participant M2 as 模型 B<br/>(批评者)
+    participant J as 裁判模型
 
-    Q->>M1: Generate response R₁
-    Q->>M2: Generate response R₂
+    Q->>M1: 生成响应 R₁
+    Q->>M2: 生成响应 R₂
 
-    M1->>M2: "Claim X is supported by context passage P"
-    M2->>M1: "Claim X contradicts passage Q"
+    M1->>M2: "断言 X 得到上下文段落 P 的支持"
+    M2->>M1: "断言 X 与段落 Q 矛盾"
 
-    loop Debate Rounds (max 3)
-        M1->>M2: Refine argument with evidence
-        M2->>M1: Counter-argument or concession
+    loop 辩论轮次 (最多 3 轮)
+        M1->>M2: 使用证据细化论点
+        M2->>M1: 反驳论点或让步
     end
 
-    M1->>J: Final position + evidence
-    M2->>J: Final position + evidence
-    J->>Q: Synthesized response (grounded extension)
+    M1->>J: 最终立场 + 证据
+    M2->>J: 最终立场 + 证据
+    J->>Q: 综合响应 (grounded 扩展)
 ```
 
-#### 3.3.3 Consensus Mechanisms
+#### 3.3.3 共识机制
 
-**Mechanism 1: Majority Voting**
+**机制 1：多数投票**
 
 *y_final(token) = argmax_y |\{m : f_m(token) = y\}|*
 
-- Simple, fast
-- Requires odd number of models
-- Does not account for model confidence
+- 简单、快速
+- 需要奇数个模型
+- 未考虑模型置信度
 
-**Mechanism 2: Weighted Confidence Aggregation**
+**机制 2：加权置信度聚合**
 
 *p_final(token) = Σₘ wₘ · pₘ(token) / Σₘ wₘ*
 
-where *wₘ* is model m's calibrated reliability weight.
+其中 *wₘ* 是模型 m 经过校准的可靠性权重。
 
-- Accounts for varying model expertise
-- Requires calibrated confidence scores
+- 考虑了不同的模型专业知识
+- 需要校准后的置信度分数
 
-**Mechanism 3: Segment-Level Replacement (Finch-Zk)**
+**机制 3：片段级替换 (Finch-Zk)**
 
-For each claim segment *S* in response *R₁*:
+对于响应 *R₁* 中的每个断言片段 *S*：
 
-1. Check if *S* appears (semantically) in *R₂*
-2. If consistent: keep *S*
-3. If inconsistent: replace with version from more reliable model
-4. If only in *R₁*: flag as potentially hallucinated
+1. 将 R₁ 分割为断言 \{S₁, S₂, ..., Sₖ\}
+2. 对于每个 Sᵢ，检查与 R₂ 的一致性
+3. 如果不一致：用更可靠模型的版本替换 Sᵢ
+4. 输出：具有最高置信度片段的混合响应
 
-This mechanism achieves fine-grained correction without full response regeneration.
+#### 5.5.5 准确率-成本权衡分析
 
-### 3.4 Theoretical Justification for Three-Mode Architecture
-
-#### 3.4.1 Pareto Frontier Analysis
-
-The Accuracy-Latency-Cost space admits a Pareto frontier: points where improving one dimension requires sacrificing another.
-
-**Proposition 2 (Three Operating Points).** *The Pareto frontier in the A-L-C space has three natural "knee points" corresponding to:*
-
-1. **Cost-dominated regime** (Lightweight): Minimal intervention, detection-only
-2. **Balanced regime** (Standard): Moderate refinement, single-model
-3. **Accuracy-dominated regime** (Premium): Maximum verification, multi-model
-
-```mermaid
-graph TD
-    subgraph "Pareto Frontier Visualization"
-        direction LR
-
-        A[Accuracy] ---|Trade-off| L[Latency]
-        L ---|Trade-off| C[Cost]
-        C ---|Trade-off| A
-
-        subgraph "Operating Points"
-            L1[🟢 Lightweight<br/>Low A, Low L, Low C]
-            S1[🟡 Standard<br/>Med A, Med L, Med C]
-            P1[🔴 Premium<br/>High A, High L, High C]
-        end
-    end
-```
-
-#### 3.4.2 Why Not Continuous Control?
-
-One might ask: why discrete modes rather than continuous parameters?
-
-**Argument 1 (Cognitive Load)**: Users cannot effectively reason about continuous trade-offs. Three discrete modes map to intuitive concepts: "fast/cheap," "balanced," "best quality."
-
-**Argument 2 (Operational Complexity)**: Each mode involves qualitatively different mechanisms (detection-only vs. iteration vs. multi-model). Intermediate points would require complex interpolation.
-
-**Argument 3 (Empirical Gaps)**: The Pareto frontier is not smooth—there are natural gaps where intermediate configurations offer little benefit over the nearest discrete mode.
-
-#### 3.4.3 Mode Selection as Online Learning
-
-In production, mode selection can be formulated as a **multi-armed bandit** problem:
-
-- **Arms**: \{Lightweight, Standard, Premium\}
-- **Reward**: User satisfaction (proxy: no negative feedback)
-- **Cost**: Latency + API costs
-
-**Thompson Sampling** approach: Maintain Beta distributions over success probability for each mode, sample and select, update based on outcome. This enables adaptive mode selection per query type.
-
----
-
-## 4. System Architecture
-
-### 4.1 High-Level Architecture
-
-TruthLens integrates into the vLLM Semantic Router's ExtProc pipeline, creating a comprehensive request-response security boundary:
-
-```mermaid
-flowchart TB
-    subgraph "Client Layer"
-        C1[Enterprise App]
-        C2[Chatbot]
-        C3[RAG System]
-    end
-
-    subgraph "vLLM Semantic Router"
-        direction TB
-
-        subgraph "Request Phase (Existing)"
-            REQ[Request Processing]
-            SEC[Security Checks<br/>PII Detection<br/>Jailbreak Detection]
-            ROUTE[Intent Classification<br/>Model Selection]
-            CACHE_R[Semantic Cache<br/>Lookup]
-        end
-
-        subgraph "LLM Inference"
-            LLM1[Primary Model]
-            LLM2[Secondary Model]
-            LLM3[Verification Model]
-        end
-
-        subgraph "Response Phase (NEW: TruthLens)"
-            DET[Hallucination<br/>Detection]
-            EVAL[Strategy<br/>Evaluation]
-
-            subgraph "Mitigation Modes"
-                M1[Lightweight<br/>Warning Only]
-                M2[Standard<br/>Self-Refinement]
-                M3[Premium<br/>Multi-Model]
-            end
-
-            FINAL[Response<br/>Finalization]
-        end
-    end
-
-    subgraph "Observability"
-        METRICS[Metrics<br/>Prometheus]
-        TRACE[Tracing<br/>OpenTelemetry]
-        LOG[Logging<br/>Structured]
-    end
-
-    C1 --> REQ
-    C2 --> REQ
-    C3 --> REQ
-
-    REQ --> SEC --> ROUTE --> CACHE_R
-    CACHE_R -->|Miss| LLM1
-    CACHE_R -->|Hit| DET
-
-    LLM1 --> DET
-    DET --> EVAL
-
-    EVAL -->|Lightweight| M1
-    EVAL -->|Standard| M2
-    EVAL -->|Premium| M3
-
-    M2 -->|Refine| LLM1
-    M3 -->|Cross-verify| LLM2
-    M3 -->|Cross-verify| LLM3
-
-    M1 --> FINAL
-    M2 --> FINAL
-    M3 --> FINAL
-
-    FINAL --> C1
-    FINAL --> C2
-    FINAL --> C3
-
-    DET -.-> METRICS
-    DET -.-> TRACE
-    DET -.-> LOG
-```
-
-### 4.2 Detection Flow
-
-The hallucination detection process operates on the complete context-query-response triple:
-
-```mermaid
-flowchart LR
-    subgraph "Input Assembly"
-        SYS[System Prompt<br/>+ RAG Context]
-        HIST[Conversation<br/>History]
-        QUERY[User Query]
-        RESP[LLM Response]
-    end
-
-    subgraph "Detection Engine"
-        ENCODE[Encoder Model<br/>ModernBERT]
-        TOKEN[Token-Level<br/>Classification]
-        AGG[Score<br/>Aggregation]
-    end
-
-    subgraph "Output"
-        SCORE[Hallucination<br/>Score: 0.0-1.0]
-        SPANS[Hallucinated<br/>Spans]
-        META[Detection<br/>Metadata]
-    end
-
-    SYS --> ENCODE
-    HIST --> ENCODE
-    QUERY --> ENCODE
-    RESP --> ENCODE
-
-    ENCODE --> TOKEN --> AGG
-
-    AGG --> SCORE
-    AGG --> SPANS
-    AGG --> META
-```
-
----
-
-## 5. User Strategy Options: The Cost-Accuracy Spectrum
-
-TruthLens provides three operational modes that allow organizations to position themselves on the cost-accuracy trade-off spectrum based on their specific requirements.
-
-### 5.1 Strategy Overview
-
-```mermaid
-flowchart TB
-    subgraph "User Selection"
-        USER[Organization<br/>Requirements]
-    end
-
-    subgraph "Mode Selection"
-        direction LR
-        L[🟢 Lightweight Mode<br/>Cost Priority]
-        S[🟡 Standard Mode<br/>Balanced]
-        P[🔴 Premium Mode<br/>Accuracy Priority]
-    end
-
-    subgraph "Lightweight Mode"
-        L1[Single Detection Pass]
-        L2[Warning Injection Only]
-        L3[No Additional LLM Calls]
-    end
-
-    subgraph "Standard Mode"
-        S1[Detection + Self-Refinement]
-        S2[Same Model Iteration]
-        S3[Max 3-5 Iterations]
-    end
-
-    subgraph "Premium Mode"
-        P1[Multi-Model Detection]
-        P2[Cross-Verification]
-        P3[Collaborative Correction]
-    end
-
-    USER --> L
-    USER --> S
-    USER --> P
-
-    L --> L1 --> L2 --> L3
-    S --> S1 --> S2 --> S3
-    P --> P1 --> P2 --> P3
-```
-
-### 5.2 Mode Comparison Matrix
-
-| Dimension | 🟢 Lightweight | 🟡 Standard | 🔴 Premium |
-|-----------|---------------|-------------|------------|
-| **Primary Goal** | Cost efficiency | Balanced | Maximum accuracy |
-| **Detection Method** | Single encoder pass | Encoder + self-check | Multi-model cross-verification |
-| **Mitigation Action** | Warning injection | Iterative self-refinement | Multi-model collaborative correction |
-| **Latency Overhead** | +15-35ms | +200-500ms (2-4x) | +1-3s (5-10x) |
-| **Cost Multiplier** | 1.0x (detection only) | 1.5-2.5x | 3-5x |
-| **Hallucination Reduction** | Awareness only | 40-60% | 70-85% |
-| **Best For** | Internal tools, chatbots | Business applications | Medical, legal, financial |
-
-### 5.3 Lightweight Mode: Cost-Optimized Detection
-
-**Philosophy**: Minimize operational cost while providing hallucination awareness. This mode treats hallucination detection as an **information service** rather than an intervention system.
-
-#### 5.3.1 Theoretical Basis
-
-Lightweight Mode is grounded in **Bounded Rationality Theory** (Simon, 1955): when optimization costs exceed benefits, satisficing (accepting "good enough") is rational.
-
-**Cost-Benefit Analysis**:
-
-Let *C_detect* = cost of detection, *C_mitigate* = cost of mitigation, *p* = probability of hallucination, *L* = expected loss from undetected hallucination.
-
-Lightweight Mode is optimal when: *C_detect < p · L* but *C_detect + C_mitigate > p · L*
-
-In other words: detection is worth the cost, but full mitigation is not.
-
-#### 5.3.2 Mechanism
-
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant R as Router
-    participant D as Detector<br/>(ModernBERT)
-    participant L as LLM Backend
-
-    C->>R: Request
-    R->>L: Forward Request
-    L->>R: Response
-    R->>D: Detect(context, query, response)
-    D->>R: Score + Spans
-
-    alt Score >= Threshold
-        R->>R: Inject Warning Banner
-        R->>R: Add Metadata Headers
-    end
-
-    R->>C: Response (with warning if detected)
-```
-
-**Characteristics**:
-
-- **No additional LLM calls** after initial generation
-- **Fixed detection cost** regardless of response length
-- **User-facing warning** empowers human verification
-- **Rich metadata** for downstream analytics
-
-#### 5.3.3 Theoretical Guarantees
-
-**Proposition 3 (Detection Latency Bound).** *For ModernBERT-large with sequence length L ≤ 8192:*
-
-*T_detect ≤ O(L²/chunk_size) + O(L · d)*
-
-*In practice: T_detect ≤ 35ms for L ≤ 4096 on modern GPUs.*
-
-**Proposition 4 (No False Negatives on Pass-Through).** *In Lightweight Mode, all hallucinations above threshold τ are flagged. The mode never suppresses detection results.*
-
-#### 5.3.4 Ideal Use Cases
-
-- Internal knowledge bases (users can verify)
-- Developer assistants (technical users)
-- Creative writing tools (hallucination may be desired)
-- Low-stakes customer interactions (human escalation available)
-
----
-
-### 5.4 Standard Mode: Balanced Self-Refinement
-
-**Philosophy**: Leverage the same model to self-correct detected hallucinations through iterative refinement. This mode implements a **closed-loop feedback system** where the LLM serves as both generator and corrector.
-
-#### 5.4.1 Theoretical Basis
-
-Standard Mode is grounded in **Self-Consistency Theory** and **Iterative Refinement**:
-
-**Theorem 3 (Self-Refinement Effectiveness).** *If an LLM has learned the correct answer distribution for a query class, then prompting with explicit error feedback increases the probability of correct output:*
-
-*P(correct | feedback on error) > P(correct | no feedback)*
-
-*provided the feedback is accurate and actionable.*
-
-**Intuition**: LLMs often "know" the right answer but fail to produce it on first attempt due to:
-
-- Sampling noise (temperature > 0)
-- Attention to wrong context regions
-- Competing patterns in weights
-
-Explicit error feedback redirects attention and suppresses incorrect patterns.
-
-#### 5.4.2 Convergence Analysis
-
-**Definition 9 (Refinement Sequence).** The sequence *\{Rₜ\}* for *t = 0, 1, 2, ...* where:
-
-*R₀ = LLM(Q, C)*  (initial response)
-*Rₜ₊₁ = LLM(Prompt_refine(Q, C, Rₜ, Detect(Rₜ)))*  (refined response)
-
-**Lemma 1 (Monotonic Score Decrease).** *Under mild assumptions (consistent LLM, accurate detection), the hallucination score sequence is non-increasing:*
-
-*s(Rₜ₊₁) ≤ s(Rₜ)* with high probability
-
-**Empirical Convergence Pattern**:
-
-| Iteration | Typical Score Reduction | Marginal Improvement |
-|-----------|------------------------|----------------------|
-| 1 → 2 | 30-50% | High |
-| 2 → 3 | 15-25% | Medium |
-| 3 → 4 | 5-15% | Low |
-| 4+ | \&lt;5% | Diminishing |
-
-This motivates the default *max_iterations = 3* setting.
-
-#### 5.4.3 Mechanism
-
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant R as Router
-    participant D as Detector
-    participant L as Primary LLM
-
-    C->>R: Request
-    R->>L: Forward Request
-    L->>R: Response₀
-
-    loop Max N Iterations
-        R->>D: Detect(context, query, responseᵢ)
-        D->>R: Score + Hallucinated Spans
-
-        alt Score >= Threshold
-            R->>R: Build Correction Prompt with:<br/>• Original context<br/>• Detected spans<br/>• Correction instructions
-            R->>L: Correction Request
-            L->>R: Responseᵢ₊₁
-        else Score < Threshold
-            R->>C: Final Response (Verified)
-        end
-    end
-
-    Note over R,C: If max iterations reached,<br/>return best response with disclaimer
-```
-
-**Characteristics**:
-
-- **Iterative improvement** through self-reflection
-- **Same model** maintains consistency
-- **Bounded iterations** control costs
-- **Graceful degradation** if convergence fails
-
-**Research Foundation**: Based on Self-Refine (NeurIPS 2023) and Chain-of-Verification (ACL 2024) principles.
-
-**Ideal Use Cases**:
-
-- Business intelligence reports
-- Customer support (escalated queries)
-- Educational content
-- Technical documentation
-
-### 5.5 Premium Mode: Multi-Model Collaborative Verification
-
-**Philosophy**: Maximum accuracy through diverse model perspectives and collaborative error correction. This mode implements **ensemble verification** and **adversarial debate** mechanisms.
-
-#### 5.5.1 Theoretical Basis: Ensemble Learning
-
-Premium Mode is grounded in **Condorcet's Jury Theorem** (1785) and modern **ensemble learning** theory:
-
-**Theorem 4 (Condorcet's Jury Theorem, adapted).** *For M independent models each with accuracy p > 0.5 on a binary decision, the majority vote accuracy approaches 1 as M → ∞:*
-
-*P(majority correct) = Σ(k=⌈M/2⌉ to M) C(M,k) · pᵏ · (1-p)^(M-k) → 1*
-
-**Corollary (Diversity Requirement)**: The theorem requires **independence**. Correlated models (same training data, architecture) provide diminishing returns.
-
-**Practical Diversity Sources**:
-
-| Diversity Type | Example | Independence Level |
-|----------------|---------|-------------------|
-| Training data | GPT vs Claude | High |
-| Architecture | Transformer vs Mamba | Very High |
-| Fine-tuning | Base vs Instruct | Medium |
-| Prompting | Different system prompts | Low |
-
-#### 5.5.2 Theoretical Basis: Multi-Agent Debate
-
-Beyond voting, **debate** enables models to refine each other's reasoning:
-
-**Definition 10 (Debate Protocol).** A debate between models M₁, M₂ with judge J consists of:
-
-1. **Generation Phase**: Both models produce responses R₁, R₂
-2. **Critique Phase**: Each model critiques the other's response
-3. **Defense Phase**: Models defend their claims with evidence
-4. **Synthesis Phase**: Judge J produces final response based on arguments
-
-**Theorem 5 (Debate Improves Grounding).** *When models must justify claims with evidence from context C, the debate process filters ungrounded claims:*
-
-*An ungrounded claim in R₁ will be challenged by M₂ if M₂ cannot find supporting evidence in C.*
-
-**Information-Theoretic View**: Debate acts as a **lossy compression** of the argument space, preserving only claims that survive cross-examination.
-
-#### 5.5.3 Mechanism
-
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant R as Router
-    participant D as Detector
-    participant L1 as Primary LLM<br/>(e.g., GPT-4)
-    participant L2 as Verifier LLM<br/>(e.g., Claude)
-    participant L3 as Judge LLM<br/>(e.g., Llama-3)
-
-    C->>R: Request
-    R->>L1: Forward Request
-    L1->>R: Response₁
-
-    par Cross-Model Verification
-        R->>L2: Same Request
-        L2->>R: Response₂
-    and
-        R->>D: Detect(context, query, response₁)
-        D->>R: Initial Detection
-    end
-
-    R->>R: Compare Response₁ vs Response₂<br/>Identify Discrepancies
-
-    alt Significant Discrepancies Found
-        R->>L3: Arbitration Request:<br/>• Context + Query<br/>• Response₁ + Response₂<br/>• Discrepancy Analysis
-        L3->>R: Synthesized Response
-        R->>D: Final Verification
-        D->>R: Final Score
-    end
-
-    R->>C: Verified Response with<br/>Confidence Metadata
-```
-
-#### 5.5.4 Consensus Mechanisms
-
-**Mechanism 1: Segment-Level Voting**
-
-For each claim segment *S*:
-
-*vote(S) = Σₘ 𝟙[S ∈ Rₘ] / M*
-
-Accept *S* if *vote(S) > 0.5* (majority agreement).
-
-**Mechanism 2: Confidence-Weighted Fusion**
-
-*R_final = argmax_R Σₘ wₘ · sim(R, Rₘ)*
-
-where *wₘ* is model m's calibrated confidence and *sim* is semantic similarity.
-
-**Mechanism 3: Fine-Grained Replacement (Finch-Zk)**
-
-1. Segment R₁ into claims \{S₁, S₂, ..., Sₖ\}
-2. For each Sᵢ, check consistency with R₂
-3. If inconsistent: replace Sᵢ with version from more reliable model
-4. Output: hybrid response with highest-confidence segments
-
-#### 5.5.5 Cost-Accuracy Trade-off Analysis
-
-| Configuration | Models | Expected Accuracy Gain | Cost Multiplier |
+| 配置 | 模型 | 预期准确率提升 | 成本倍数 |
 |---------------|--------|----------------------|-----------------|
-| Dual-model voting | 2 | +15-25% | 2x |
-| Triple-model voting | 3 | +25-35% | 3x |
-| Dual + Judge | 2+1 | +30-40% | 3x |
-| Full debate (3 rounds) | 2+1 | +40-50% | 5-6x |
+| 双模型投票 | 2 | +15-25% | 2x |
+| 三模型投票 | 3 | +25-35% | 3x |
+| 双模型 + 裁判 | 2+1 | +30-40% | 3x |
+| 全面辩论 (3 轮) | 2+1 | +40-50% | 5-6x |
 
-#### 5.5.6 Ideal Use Cases
+#### 5.5.6 理想用例
 
-- **Medical diagnosis assistance**: Life-critical decisions
-- **Legal document analysis**: Liability implications
-- **Financial advisory**: Regulatory compliance required
-- **Safety-critical systems**: Aerospace, nuclear, etc.
+- **医疗诊断辅助**：生命攸关的决策
+- **法律文件分析**：法律责任影响
+- **财务顾问**：需要合规性
+- **安全关键系统**：航空航天、核能等
 
-### 5.6 Mode Selection Decision Tree
+### 5.6 模式选择决策树
 
 ```mermaid
 flowchart TD
-    START[New Application] --> Q1{Regulatory<br/>Requirements?}
+    START[新应用程序] --> Q1{监管<br/>要求？}
 
-    Q1 -->|Healthcare/Finance/Legal| P[🔴 Premium Mode]
-    Q1 -->|None/Low| Q2{User Impact<br/>of Errors?}
+    Q1 -->|医疗/金融/法律| P[🔴 高级模式]
+    Q1 -->|无/低| Q2{错误的<br/>用户影响？}
 
-    Q2 -->|High| Q3{Budget<br/>Constraints?}
-    Q2 -->|Low| L[🟢 Lightweight Mode]
+    Q2 -->|高| Q3{预算<br/>约束？}
+    Q2 -->|低| L[🟢 轻量级模式]
 
-    Q3 -->|Flexible| S[🟡 Standard Mode]
-    Q3 -->|Tight| Q4{Can Users<br/>Verify?}
+    Q3 -->|灵活| S[🟡 标准模式]
+    Q3 -->|紧张| Q4{用户能否<br/>验证？}
 
-    Q4 -->|Yes| L
-    Q4 -->|No| S
+    Q4 -->|是| L
+    Q4 -->|否| S
 
-    P --> CONFIG_P[Configure:<br/>• Multi-model backends<br/>• Max iterations: 5-10<br/>• Threshold: 0.3-0.5]
+    P --> CONFIG_P[配置：<br/>• 多模型后端<br/>• 最大迭代：5-10<br/>• Threshold：0.3-0.5]
 
-    S --> CONFIG_S[Configure:<br/>• Self-refinement<br/>• Max iterations: 3-5<br/>• Threshold: 0.5-0.7]
+    S --> CONFIG_S[配置：<br/>• 自我细化<br/>• 最大迭代：3-5<br/>• Threshold：0.5-0.7]
 
-    L --> CONFIG_L[Configure:<br/>• Warning template<br/>• Threshold: 0.6-0.8<br/>• Metadata headers]
+    L --> CONFIG_L[配置：<br/>• 警告模板<br/>• Threshold：0.6-0.8<br/>• 元数据 Header]
 ```
 
 ---
 
-## 6. Configuration Design
+## 6. 配置设计
 
-### 6.1 Global Configuration
+### 6.1 全局配置
 
 ```yaml
-# Global hallucination detection settings
+# 全局 hallucination 检测设置
 hallucination:
   enabled: true
 
-  # Detection model (ModernBERT-based)
+  # 检测模型（基于 ModernBERT）
   model_id: "models/lettucedetect-large-modernbert-en-v1"
   use_cpu: false
 
-  # Default operational mode
+  # 默认操作模式
   default_mode: "standard"  # lightweight | standard | premium
 
-  # Detection threshold (0.0 - 1.0)
-  # Lower = more strict, Higher = more lenient
+  # 检测 threshold (0.0 - 1.0)
+  # 越低 = 越严格，越高 = 越宽松
   threshold: 0.6
 
-  # Warning template for lightweight mode
+  # 轻量级模式的警告模板
   warning_template: |
-    ⚠️ **Notice**: This response may contain information that could not be
-    fully verified against the provided context. Please verify critical facts
-    before taking action.
+    ⚠️ **提示**：此响应可能包含无法根据提供的上下文完全验证的信息。
+    请在采取行动前验证关键事实。
 
-  # Standard mode settings
+  # 标准模式设置
   standard:
     max_iterations: 3
-    convergence_threshold: 0.4  # Stop if score drops below this
+    convergence_threshold: 0.4  # 如果分数降至此值以下则停止
 
-  # Premium mode settings
+  # 高级模式设置
   premium:
     verification_models:
       - "claude-3-sonnet"
@@ -1120,13 +635,13 @@ hallucination:
     require_consensus: true
 ```
 
-### 6.2 Per-Decision Plugin Configuration
+### 6.2 按决策的插件配置
 
 ```yaml
 decisions:
-  # Healthcare domain - Maximum accuracy required
+  # 医疗领域 - 需要最高准确率
   - name: "medical_assistant"
-    description: "Medical information queries"
+    description: "医疗信息查询"
     priority: 100
     rules:
       operator: "OR"
@@ -1142,13 +657,13 @@ decisions:
         configuration:
           enabled: true
           mode: "premium"
-          threshold: 0.3           # Very strict
+          threshold: 0.3           # 非常严格
           max_iterations: 5
           require_disclaimer: true
 
-  # Financial services - High accuracy
+  # 金融服务 - 高准确率
   - name: "financial_advisor"
-    description: "Financial analysis and advice"
+    description: "财务分析与建议"
     priority: 90
     rules:
       operator: "OR"
@@ -1163,9 +678,9 @@ decisions:
           threshold: 0.5
           max_iterations: 4
 
-  # General customer support - Balanced
+  # 通用客户支持 - 平衡
   - name: "customer_support"
-    description: "General customer inquiries"
+    description: "通用客户咨询"
     priority: 50
     rules:
       operator: "OR"
@@ -1180,9 +695,9 @@ decisions:
           threshold: 0.6
           max_iterations: 2
 
-  # Internal tools - Cost optimized
+  # 内部工具 - 成本优化
   - name: "internal_assistant"
-    description: "Internal knowledge base queries"
+    description: "内部知识库查询"
     priority: 30
     rules:
       operator: "OR"
@@ -1196,9 +711,9 @@ decisions:
           mode: "lightweight"
           threshold: 0.7
 
-  # Creative writing - Detection disabled
+  # 创意写作 - 禁用检测
   - name: "creative_writing"
-    description: "Creative content generation"
+    description: "创意内容生成"
     priority: 20
     rules:
       operator: "OR"
@@ -1208,37 +723,37 @@ decisions:
     plugins:
       - type: "hallucination"
         configuration:
-          enabled: false  # "Hallucination" is a feature here
+          enabled: false  # 在此处，"hallucination" 是一项特性
 ```
 
-### 6.3 Response Headers
+### 6.3 响应 Header
 
-The following headers are added to all responses when hallucination detection is enabled:
+当启用 hallucination 检测时，以下 Header 会添加到所有响应中：
 
-| Header | Description | Example Values |
+| Header | 描述 | 示例值 |
 |--------|-------------|----------------|
-| `X-TruthLens-Enabled` | Whether detection was performed | `true`, `false` |
-| `X-TruthLens-Mode` | Operational mode used | `lightweight`, `standard`, `premium` |
-| `X-TruthLens-Score` | Hallucination confidence score | `0.0` - `1.0` |
-| `X-TruthLens-Detected` | Whether hallucination exceeded threshold | `true`, `false` |
-| `X-TruthLens-Iterations` | Number of refinement iterations | `0`, `1`, `2`, ... |
-| `X-TruthLens-Latency-Ms` | Detection/mitigation latency | `35`, `450`, `2100` |
+| `X-TruthLens-Enabled` | 是否执行了检测 | `true`, `false` |
+| `X-TruthLens-Mode` | 使用的操作模式 | `lightweight`, `standard`, `premium` |
+| `X-TruthLens-Score` | hallucination 置信度分数 | `0.0` - `1.0` |
+| `X-TruthLens-Detected` | hallucination 是否超过 threshold | `true`, `false` |
+| `X-TruthLens-Iterations` | 细化迭代次数 | `0`, `1`, `2`, ... |
+| `X-TruthLens-Latency-Ms` | 检测/缓解延迟 | `35`, `450`, `2100` |
 
-### 6.4 Metrics and Observability
+### 6.4 指标与可观测性
 
-**Prometheus Metrics:**
+**Prometheus 指标：**
 
-| Metric | Type | Labels | Description |
+| 指标 | 类型 | 标签 | 描述 |
 |--------|------|--------|-------------|
-| `truthlens_detections_total` | Counter | `decision`, `mode`, `detected` | Total detection operations |
-| `truthlens_score` | Histogram | `decision`, `mode` | Score distribution |
-| `truthlens_latency_seconds` | Histogram | `mode`, `operation` | Processing latency |
-| `truthlens_iterations` | Histogram | `decision`, `mode` | Refinement iteration count |
-| `truthlens_models_used` | Counter | `model`, `role` | Model usage in premium mode |
+| `truthlens_detections_total` | Counter | `decision`, `mode`, `detected` | 总检测操作数 |
+| `truthlens_score` | Histogram | `decision`, `mode` | 分数分布 |
+| `truthlens_latency_seconds` | Histogram | `mode`, `operation` | 处理延迟 |
+| `truthlens_iterations` | Histogram | `decision`, `mode` | 细化迭代次数 |
+| `truthlens_models_used` | Counter | `model`, `role` | 高级模式中使用的模型 |
 
 ---
 
-## 7. References
+## 7. 参考文献
 
 1. Kovács, Á., & Recski, G. (2025). *LettuceDetect: A Hallucination Detection Framework for RAG Applications*. arXiv:2502.17125
 
@@ -1262,67 +777,67 @@ The following headers are added to all responses when hallucination detection is
 
 ---
 
-## Appendix A: Full System Flow Diagram
+## 附录 A：完整系统流程图
 
 ```mermaid
 flowchart TB
-    subgraph "Client Layer"
-        CLIENT[Client Application]
+    subgraph "客户端层"
+        CLIENT[客户端应用程序]
     end
 
-    subgraph "Gateway Layer"
-        ENVOY[Envoy Proxy]
+    subgraph "网关层"
+        ENVOY[Envoy 代理]
     end
 
     subgraph "vLLM Semantic Router - ExtProc"
         direction TB
 
-        subgraph "Request Processing"
+        subgraph "请求处理"
             REQ_H[handleRequestHeaders]
             REQ_B[handleRequestBody]
 
-            subgraph "Request Security"
-                PII_REQ[PII Detection]
-                JAIL[Jailbreak Detection]
+            subgraph "请求安全"
+                PII_REQ[pii 检测]
+                JAIL[jailbreak 检测]
             end
 
-            subgraph "Routing"
-                CLASS[Intent Classification]
-                DECISION[Decision Engine]
-                MODEL_SEL[Model Selection]
+            subgraph "路由"
+                CLASS[意图分类]
+                DECISION[决策引擎]
+                MODEL_SEL[模型选择]
             end
 
-            CACHE_CHK[Semantic Cache Check]
+            CACHE_CHK[semantic-cache 检查]
         end
 
-        subgraph "Response Processing"
+        subgraph "响应处理"
             RES_H[handleResponseHeaders]
             RES_B[handleResponseBody]
 
             subgraph "TruthLens"
-                DETECT[Hallucination<br/>Detector]
-                SCORE[Score<br/>Evaluation]
+                DETECT[hallucination<br/>检测器]
+                SCORE[分数<br/>评估]
 
-                subgraph "Mitigation"
-                    WARN[Warning<br/>Injection]
-                    REFINE[Iterative<br/>Refinement]
+                subgraph "缓解"
+                    WARN[警告<br/>注入]
+                    REFINE[迭代<br/>细化]
                 end
             end
 
-            CACHE_UPD[Cache Update]
-            METRICS[Metrics Recording]
+            CACHE_UPD[缓存更新]
+            METRICS[指标记录]
         end
     end
 
-    subgraph "Backend Layer"
-        VLLM1[vLLM Instance 1]
-        VLLM2[vLLM Instance 2]
-        VLLMn[vLLM Instance N]
+    subgraph "后端层"
+        VLLM1[vLLM 实例 1]
+        VLLM2[vLLM 实例 2]
+        VLLMn[vLLM 实例 N]
     end
 
-    subgraph "Storage Layer"
-        REDIS[(Redis Cache)]
-        MODELS[(Model Files)]
+    subgraph "存储层"
+        REDIS[(Redis 缓存)]
+        MODELS[(模型文件)]
     end
 
     CLIENT --> ENVOY
@@ -1335,10 +850,10 @@ flowchart TB
     DECISION --> MODEL_SEL
     MODEL_SEL --> CACHE_CHK
 
-    CACHE_CHK -->|Cache Hit| RES_H
-    CACHE_CHK -->|Cache Miss| VLLM1
-    CACHE_CHK -->|Cache Miss| VLLM2
-    CACHE_CHK -->|Cache Miss| VLLMn
+    CACHE_CHK -->|缓存命中| RES_H
+    CACHE_CHK -->|缓存未命中| VLLM1
+    CACHE_CHK -->|缓存未命中| VLLM2
+    CACHE_CHK -->|缓存未命中| VLLMn
 
     VLLM1 --> RES_H
     VLLM2 --> RES_H
@@ -1348,13 +863,13 @@ flowchart TB
     RES_B --> DETECT
     DETECT --> SCORE
 
-    SCORE -->|Below Threshold| CACHE_UPD
-    SCORE -->|Above Threshold| WARN
-    SCORE -->|Above Threshold| REFINE
+    SCORE -->|低于 Threshold| CACHE_UPD
+    SCORE -->|高于 Threshold| WARN
+    SCORE -->|高于 Threshold| REFINE
 
     WARN --> CACHE_UPD
-    REFINE -->|Retry| VLLM1
-    REFINE -->|Converged| CACHE_UPD
+    REFINE -->|重试| VLLM1
+    REFINE -->|收敛| CACHE_UPD
 
     CACHE_UPD --> METRICS
     METRICS --> ENVOY
@@ -1367,23 +882,23 @@ flowchart TB
 
 ---
 
-## Appendix B: Glossary
+## 附录 B：术语表
 
-| Term | Definition |
+| 术语 | 定义 |
 |------|------------|
-| **Hallucination** | LLM-generated content that is factually incorrect or unsupported by context |
-| **Intrinsic Hallucination** | Fabricated facts from the model's internal parametric knowledge |
-| **Extrinsic Hallucination** | Content not grounded in the provided context (common in RAG) |
-| **ExtProc** | Envoy External Processor - enables request/response modification at the gateway |
-| **Token-Level Detection** | Identifying specific tokens/spans that are hallucinated |
-| **Self-Refinement** | Iterative process where the same model corrects its own hallucinations |
-| **Cross-Model Verification** | Using multiple different models to verify factual consistency |
-| **Multi-Agent Debate** | Multiple LLM agents argue positions to converge on factual truth |
-| **RAG** | Retrieval-Augmented Generation - grounding LLMs with retrieved documents |
-| **ModernBERT** | State-of-the-art encoder architecture with 8K context support |
-| **Accuracy-Latency-Cost Triangle** | Fundamental trade-off in hallucination mitigation strategies |
-| **Convergence Threshold** | Score below which hallucination is considered resolved |
+| **hallucination** | LLM 生成的事实错误或不受上下文支持的内容 |
+| **内在 (Intrinsic) hallucination** | 源自模型内部参数化知识的虚假事实 |
+| **外在 (Extrinsic) hallucination** | 未 grounded 在所提供上下文中的内容（在 RAG 中常见） |
+| **ExtProc** | Envoy 外部处理器 - 允许在网关处修改请求/响应 |
+| **token 级检测** | 识别产生 hallucination 的特定 token/片段 |
+| **自我细化 (Self-Refinement)** | 相同模型纠正自身产生的 hallucination 的迭代过程 |
+| **跨模型验证** | 使用多个不同的模型来验证事实一致性 |
+| **多智能体辩论** | 多个 LLM 智能体通过辩论立场以收敛到事实真相 |
+| **RAG** | 检索增强生成 (Retrieval-Augmented Generation) - 使用检索到的文档来 ground LLM |
+| **ModernBERT** | 支持 8K 上下文的最先进编码器架构 |
+| **准确率-延迟-成本三角形** | hallucination 缓解策略中的基本权衡 |
+| **收敛 threshold** | 低于该分数的 hallucination 被视为已解决 |
 
 ---
 
-**Document Version:** 1.0 | **Last Updated:** December 2025
+**文档版本：** 1.0 | **最后更新：** 2025 年 12 月
