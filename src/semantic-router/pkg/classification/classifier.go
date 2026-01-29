@@ -12,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/scoring"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
 
@@ -1737,25 +1738,48 @@ func (c *Classifier) translateMMLUToGeneric(mmluCategory string) string {
 //
 // modelFilter is optional - if provided, only models passing the filter will be considered
 func (c *Classifier) selectBestModelInternalForDecision(decision *config.Decision, modelFilter func(string) bool) (string, float64) {
-	bestModel := ""
+	if len(decision.ModelRefs) == 0 {
+		return "", 0
+	}
 
-	// With new architecture, we only support one model per decision (first ModelRef)
-	if len(decision.ModelRefs) > 0 {
-		modelRef := decision.ModelRefs[0]
+	// Build list of candidate models
+	candidates := make([]string, 0, len(decision.ModelRefs))
+	modelToLoRA := make(map[string]string) // Map model name to LoRA name if specified
+
+	for _, modelRef := range decision.ModelRefs {
 		model := modelRef.Model
+		if modelFilter != nil && !modelFilter(model) {
+			continue
+		}
+		// Use LoRA name if specified, otherwise use the base model name
+		finalModelName := model
+		if modelRef.LoRAName != "" {
+			finalModelName = modelRef.LoRAName
+			modelToLoRA[finalModelName] = modelRef.LoRAName
+		}
+		candidates = append(candidates, finalModelName)
+	}
 
-		if modelFilter == nil || modelFilter(model) {
-			// Use LoRA name if specified, otherwise use the base model name
-			finalModelName := model
-			if modelRef.LoRAName != "" {
-				finalModelName = modelRef.LoRAName
-				logging.Debugf("Using LoRA adapter '%s' for base model '%s'", finalModelName, model)
-			}
-			bestModel = finalModelName
+	if len(candidates) == 0 {
+		return "", 0
+	}
+
+	// If only one candidate, return it directly
+	if len(candidates) == 1 {
+		return candidates[0], 1.0
+	}
+
+	// If dynamic scoring is enabled, use it to select the best model
+	if scoring.IsDynamicScoringEnabled() {
+		bestModel, bestScore := scoring.SelectBestModelByScore(candidates)
+		if bestModel != "" {
+			logging.Debugf("Dynamic scoring selected model '%s' with score %.4f", bestModel, bestScore)
+			return bestModel, bestScore
 		}
 	}
 
-	return bestModel, 1.0 // Return score 1.0 since we don't have scores anymore
+	// Fallback: return the first candidate (original behavior)
+	return candidates[0], 1.0
 }
 
 // SelectBestModelFromList selects the best model from a list of candidate models for a given decision

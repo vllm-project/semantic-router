@@ -14,6 +14,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/scoring"
 )
 
 // handleResponseBody processes the response body
@@ -158,10 +159,11 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		)
 
 		// Compute and record cost if pricing is configured
+		var costAmount float64
 		if r.Config != nil {
 			promptRatePer1M, completionRatePer1M, currency, ok := r.Config.GetModelPricing(ctx.RequestModel)
 			if ok {
-				costAmount := (float64(promptTokens)*promptRatePer1M + float64(completionTokens)*completionRatePer1M) / 1_000_000.0
+				costAmount = (float64(promptTokens)*promptRatePer1M + float64(completionTokens)*completionRatePer1M) / 1_000_000.0
 				if currency == "" {
 					currency = "USD"
 				}
@@ -190,6 +192,16 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 				})
 			}
 		}
+
+		// Record metrics for dynamic model scoring
+		scoring.RecordModelRequest(
+			ctx.RequestModel,
+			completionLatency.Seconds(),
+			int64(promptTokens),
+			int64(completionTokens),
+			false, // isError - successful response
+			costAmount,
+		)
 	}
 
 	// Update the cache
