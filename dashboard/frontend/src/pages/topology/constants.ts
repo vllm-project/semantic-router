@@ -144,8 +144,8 @@ export const LAYOUT_CONFIG = {
   },
   nodeWidth: 180,
   nodeHeight: 100,
-  verticalSpacing: 25,   // Minimum space between nodes in same column
-  groupSpacing: 35,      // Extra space between signal groups
+  verticalSpacing: 15,   // Minimum space between nodes in same column (reduced from 25)
+  groupSpacing: 20,      // Extra space between signal groups (reduced from 35)
   // Base heights for different node types (actual height = base + content)
   decisionBaseHeight: 120,   // Decision nodes base
   decisionConditionHeight: 22, // Per condition line

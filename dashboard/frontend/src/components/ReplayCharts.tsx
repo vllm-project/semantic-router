@@ -60,9 +60,15 @@ interface PieLabelProps {
   name: string
 }
 
-const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }: PieLabelProps) => {
+const renderCustomLabel = ({ cx, cy, midAngle, outerRadius, percent, name }: PieLabelProps) => {
+  // Only show label if percentage is greater than 8%
+  if (percent < 0.08) {
+    return null
+  }
+
   const RADIAN = Math.PI / 180
-  const radius = innerRadius + (outerRadius - innerRadius) * 0.5
+  // Position label outside the pie chart
+  const radius = outerRadius + 25
   const x = cx + radius * Math.cos(-midAngle * RADIAN)
   const y = cy + radius * Math.sin(-midAngle * RADIAN)
 
@@ -73,7 +79,7 @@ const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent
       fill="white"
       textAnchor={x > cx ? 'start' : 'end'}
       dominantBaseline="central"
-      style={{ fontSize: '12px', fontWeight: '500' }}
+      style={{ fontSize: '11px', fontWeight: '500' }}
     >
       {`${name}: ${(percent * 100).toFixed(0)}%`}
     </text>
@@ -203,9 +209,9 @@ const ReplayCharts: React.FC<ReplayChartsProps> = ({ records }) => {
                 data={decisionData}
                 cx="50%"
                 cy="50%"
-                labelLine={false}
+                labelLine={{ stroke: 'var(--color-text-secondary)', strokeWidth: 1 }}
                 label={renderCustomLabel}
-                outerRadius={80}
+                outerRadius={70}
                 fill="#8884d8"
                 dataKey="value"
               >
@@ -243,9 +249,9 @@ const ReplayCharts: React.FC<ReplayChartsProps> = ({ records }) => {
                 data={signalData}
                 cx="50%"
                 cy="50%"
-                labelLine={false}
+                labelLine={{ stroke: 'var(--color-text-secondary)', strokeWidth: 1 }}
                 label={renderCustomLabel}
-                outerRadius={80}
+                outerRadius={70}
                 fill="#8884d8"
                 dataKey="value"
               >
