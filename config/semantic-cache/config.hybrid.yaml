@@ -118,8 +118,8 @@ semantic_cache:
       auto_create_collection: true
       # Print detailed error messages
       verbose_errors: true
-  # (Deprecated) Or you can set up the milvus connection using the below config:
-  # backend_config_path: "config/semantic-cache/milvus.yaml"
+# (Deprecated) Or you can set up the milvus connection using the below config:
+# backend_config_path: "config/semantic-cache/milvus.yaml"
 
 tools:
   enabled: true
@@ -155,4 +155,3 @@ classifier:
   tokenizer_path: "models/qwen3-router_model"
   use_cpu: true
   threshold: 0.7
-
