@@ -1,0 +1,48 @@
+[package]
+name = "onnx-semantic-router"
+version = "0.1.0"
+edition = "2021"
+description = "Go bindings for ONNX Runtime semantic embedding model with 2D Matryoshka support (AMD GPU via ROCm)"
+license = "MIT OR Apache-2.0"
+
+[lib]
+name = "onnx_semantic_router"
+# Order: rlib for Rust-to-Rust linking, staticlib for C/Go FFI (static), cdylib for dynamic linking
+crate-type = ["rlib", "staticlib", "cdylib"]
+
+[features]
+default = []
+# ROCm support (enables AMD GPU acceleration)
+rocm = ["ort/rocm"]
+# CUDA support (enables NVIDIA GPU acceleration)
+cuda = ["ort/cuda"]
+# DirectML support (Windows GPU acceleration)
+directml = ["ort/directml"]
+# OpenVINO support (Intel acceleration)
+openvino = ["ort/openvino"]
+
+[dependencies]
+# ONNX Runtime via ort crate - supports AMD GPU (ROCm), NVIDIA GPU (CUDA), and more
+ort = { version = "2.0.0-rc.11", default-features = false, features = ["std", "ndarray", "copy-dylibs", "download-binaries", "tls-native"] }
+ndarray = "0.17"
+tokenizers = { version = "0.21.0", features = ["http"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = { version = "1", features = ["backtrace"] }
+tracing = "0.1"
+libc = "0.2"
+parking_lot = "0.12"
+half = "2.4"
+
+[dev-dependencies]
+rstest = "0.18"
+tempfile = "3.8"
+criterion = "0.5"
+
+[[example]]
+name = "test_gpu"
+path = "examples/test_gpu.rs"
+
+[[example]]
+name = "benchmark_cpu_vs_gpu"
+path = "examples/benchmark_cpu_vs_gpu.rs"
