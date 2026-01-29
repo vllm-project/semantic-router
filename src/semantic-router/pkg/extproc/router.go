@@ -183,17 +183,11 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		return nil, fmt.Errorf("failed to create classifier: %w", err)
 	}
 
-	// Create global classification service for API access with auto-discovery
-	// This will prioritize LoRA models over legacy ModernBERT
-	autoSvc, err := services.NewClassificationServiceWithAutoDiscovery(cfg)
-	if err != nil {
-		logging.Warnf("Auto-discovery failed during router initialization: %v, using legacy classifier", err)
-		services.NewClassificationService(classifier, cfg)
-	} else {
-		logging.Infof("Router initialization: Using auto-discovered unified classifier")
-		// The service is already set as global in NewUnifiedClassificationService
-		_ = autoSvc
-	}
+	// Immediately set global classification service so API server can access it
+	// This prevents API server from creating a duplicate classifier due to timeout
+	// The API server starts concurrently and may timeout waiting for the global service
+	services.NewClassificationService(classifier, cfg)
+	logging.Infof("Global classification service initialized with legacy classifier")
 
 	// Create Response API filter if enabled
 	var responseAPIFilter *ResponseAPIFilter
