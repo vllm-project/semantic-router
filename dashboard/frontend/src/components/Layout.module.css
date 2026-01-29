@@ -30,7 +30,7 @@
 /* Brand - positioned left within centered container */
 .brand {
   position: absolute;
-  left: 1.5rem;
+  left: 0.75rem;
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -228,7 +228,7 @@ button.navLink {
 /* Right Actions - positioned right within centered container */
 .headerRight {
   position: absolute;
-  right: 1.5rem;
+  right: 0.75rem;
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -337,8 +337,6 @@ button.navLink {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  min-height: 0;
   background-color: var(--color-bg);
 }
 
@@ -346,8 +344,6 @@ button.navLink {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  min-height: 0;
 }
 
 /* Responsive */

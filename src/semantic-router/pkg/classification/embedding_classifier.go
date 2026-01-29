@@ -3,6 +3,8 @@ package classification
 import (
 	"fmt"
 	"os"
+	"runtime"
+	"sync"
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
@@ -16,27 +18,27 @@ var getEmbeddingWithModelType = candle_binding.GetEmbeddingWithModelType
 
 // EmbeddingClassifierInitializer initializes KeywordEmbeddingClassifier for embedding based classification
 type EmbeddingClassifierInitializer interface {
-	Init(qwen3ModelPath string, gemmaModelPath string, useCPU bool) error
-	InitWithMmBert(qwen3ModelPath string, gemmaModelPath string, mmBertModelPath string, useCPU bool) error
+	Init(qwen3ModelPath string, gemmaModelPath string, mmBertModelPath string, useCPU bool) error
 }
 
 type ExternalModelBasedEmbeddingInitializer struct{}
 
-func (c *ExternalModelBasedEmbeddingInitializer) Init(qwen3ModelPath string, gemmaModelPath string, useCPU bool) error {
-	err := candle_binding.InitEmbeddingModels(qwen3ModelPath, gemmaModelPath, useCPU)
-	if err != nil {
-		return err
-	}
-	logging.Infof("Initialized KeywordEmbedding classifier")
-	return nil
-}
+func (c *ExternalModelBasedEmbeddingInitializer) Init(qwen3ModelPath string, gemmaModelPath string, mmBertModelPath string, useCPU bool) error {
+	// Resolve model paths using registry (supports aliases like "qwen3", "gemma", "mmbert")
+	qwen3ModelPath = config.ResolveModelPath(qwen3ModelPath)
+	gemmaModelPath = config.ResolveModelPath(gemmaModelPath)
+	mmBertModelPath = config.ResolveModelPath(mmBertModelPath)
 
-func (c *ExternalModelBasedEmbeddingInitializer) InitWithMmBert(qwen3ModelPath string, gemmaModelPath string, mmBertModelPath string, useCPU bool) error {
-	err := candle_binding.InitEmbeddingModelsWithMmBert(qwen3ModelPath, gemmaModelPath, mmBertModelPath, useCPU)
+	err := candle_binding.InitEmbeddingModels(qwen3ModelPath, gemmaModelPath, mmBertModelPath, useCPU)
 	if err != nil {
 		return err
 	}
-	logging.Infof("Initialized KeywordEmbedding classifier with mmBERT 2D Matryoshka support")
+
+	if mmBertModelPath != "" {
+		logging.Infof("Initialized KeywordEmbedding classifier with mmBERT 2D Matryoshka support")
+	} else {
+		logging.Infof("Initialized KeywordEmbedding classifier")
+	}
 	return nil
 }
 
@@ -90,6 +92,7 @@ func NewEmbeddingClassifier(cfgRules []config.EmbeddingRule, optConfig config.HN
 }
 
 // preloadCandidateEmbeddings computes embeddings for all unique candidates across all rules
+// Uses concurrent processing for better performance
 func (c *EmbeddingClassifier) preloadCandidateEmbeddings() error {
 	startTime := time.Now()
 
@@ -106,24 +109,84 @@ func (c *EmbeddingClassifier) preloadCandidateEmbeddings() error {
 		return nil
 	}
 
-	logging.Infof("Preloading embeddings for %d unique candidates...", len(uniqueCandidates))
-
 	// Determine model type
 	modelType := c.getModelType()
 
-	// Compute embeddings for each candidate
-	for candidate := range uniqueCandidates {
-		output, err := getEmbeddingWithModelType(candidate, modelType, c.optimizationConfig.TargetDimension)
-		if err != nil {
-			return fmt.Errorf("failed to compute embedding for candidate %q: %w", candidate, err)
-		}
+	logging.Infof("[Embedding Signal] Preloading embeddings for %d unique candidates using model: %s (dimension: %d) with concurrent processing...",
+		len(uniqueCandidates), modelType, c.optimizationConfig.TargetDimension)
 
-		c.candidateEmbeddings[candidate] = output.Embedding
+	// Convert map to slice for concurrent processing
+	candidates := make([]string, 0, len(uniqueCandidates))
+	for candidate := range uniqueCandidates {
+		candidates = append(candidates, candidate)
+	}
+
+	// Use worker pool for concurrent embedding generation
+	numWorkers := runtime.NumCPU() * 2
+	if numWorkers > len(candidates) {
+		numWorkers = len(candidates)
+	}
+
+	type result struct {
+		candidate string
+		embedding []float32
+		err       error
+	}
+
+	resultChan := make(chan result, len(candidates))
+	candidateChan := make(chan string, len(candidates))
+
+	// Send all candidates to channel
+	for _, candidate := range candidates {
+		candidateChan <- candidate
+	}
+	close(candidateChan)
+
+	// Start workers
+	var wg sync.WaitGroup
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			for candidate := range candidateChan {
+				output, err := getEmbeddingWithModelType(candidate, modelType, c.optimizationConfig.TargetDimension)
+				if err != nil {
+					resultChan <- result{candidate: candidate, err: err}
+				} else {
+					resultChan <- result{candidate: candidate, embedding: output.Embedding}
+				}
+			}
+		}(i)
+	}
+
+	// Close result channel when all workers are done
+	go func() {
+		wg.Wait()
+		close(resultChan)
+	}()
+
+	// Collect results
+	var firstError error
+	successCount := 0
+	for res := range resultChan {
+		if res.err != nil {
+			if firstError == nil {
+				firstError = fmt.Errorf("failed to compute embedding for candidate %q: %w", res.candidate, res.err)
+			}
+			logging.Warnf("Failed to compute embedding for candidate %q: %v", res.candidate, res.err)
+		} else {
+			c.candidateEmbeddings[res.candidate] = res.embedding
+			successCount++
+		}
 	}
 
 	elapsed := time.Since(startTime)
-	logging.Infof("Preloaded %d candidate embeddings in %v",
-		len(c.candidateEmbeddings), elapsed)
+	logging.Infof("[Embedding Signal] Preloaded %d/%d candidate embeddings using model %s in %v (workers: %d)",
+		successCount, len(candidates), modelType, elapsed, numWorkers)
+
+	if firstError != nil {
+		return firstError
+	}
 
 	return nil
 }
@@ -151,17 +214,14 @@ func (c *Classifier) initializeKeywordEmbeddingClassifier() error {
 		return fmt.Errorf("keyword embedding similarity match is not properly configured")
 	}
 
-	// Use mmBERT-aware initialization if mmbert model path is configured
-	if c.Config.EmbeddingModels.MmBertModelPath != "" {
-		return c.keywordEmbeddingInitializer.InitWithMmBert(
-			c.Config.Qwen3ModelPath,
-			c.Config.GemmaModelPath,
-			c.Config.EmbeddingModels.MmBertModelPath,
-			c.Config.EmbeddingModels.UseCPU,
-		)
-	}
-
-	return c.keywordEmbeddingInitializer.Init(c.Config.Qwen3ModelPath, c.Config.GemmaModelPath, c.Config.EmbeddingModels.UseCPU)
+	// Initialize with all three model paths (qwen3, gemma, mmbert)
+	// The Init method will handle path resolution and choose the appropriate FFI function
+	return c.keywordEmbeddingInitializer.Init(
+		c.Config.Qwen3ModelPath,
+		c.Config.GemmaModelPath,
+		c.Config.EmbeddingModels.MmBertModelPath,
+		c.Config.EmbeddingModels.UseCPU,
+	)
 }
 
 // Classify performs Embedding similarity classification on the given text.

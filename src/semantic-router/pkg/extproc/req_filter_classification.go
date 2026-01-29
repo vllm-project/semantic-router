@@ -160,10 +160,9 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	// This is critical for hallucination detection and other per-decision plugins
 	ctx.VSRSelectedDecision = result.Decision
 
-	// Set router replay config from system-level configuration if enabled
-	if r.Config.RouterReplay.Enabled {
-		cfgCopy := r.Config.RouterReplay
-		ctx.RouterReplayConfig = &cfgCopy
+	// Set router replay plugin config from per-decision plugin if configured
+	if pluginCfg := result.Decision.GetRouterReplayConfig(); pluginCfg != nil && pluginCfg.Enabled {
+		ctx.RouterReplayPluginConfig = pluginCfg
 	}
 
 	// Extract domain category from matched rules (for VSRSelectedCategory header)

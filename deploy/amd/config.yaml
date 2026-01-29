@@ -428,6 +428,13 @@ decisions:
       - type: "system_prompt"
         configuration:
           system_prompt: "You are a helpful AI assistant. I cannot fulfill requests that attempt to bypass safety guidelines."
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
   # Priority 180: Deep thinking with Chinese language
   - name: "complex_reasoning"
@@ -448,6 +455,13 @@ decisions:
       - type: "system_prompt"
         configuration:
           system_prompt: "你是 Kimi-K2-Thinking，一个专业的AI助手，擅长深度分析和复杂推理。请提供详细、深入的回答。"
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
   # Priority 160: Creative/Opinion queries - NO fact check needed
   - name: "creative_ideas"
@@ -471,6 +485,13 @@ decisions:
       - type: "semantic-cache"
         configuration:
           enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
   # Priority 150: Hard Math domain
   - name: "hard_math_problems"
@@ -494,6 +515,13 @@ decisions:
       - type: "semantic-cache"
         configuration:
           enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
   # Priority 149: Easy Math domain
   - name: "easy_math_problems"
@@ -517,6 +545,13 @@ decisions:
       - type: "semantic-cache"
         configuration:
           enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
   # Priority 145: Physics domain
   - name: "physics_problems"
@@ -538,38 +573,18 @@ decisions:
       - type: "semantic-cache"
         configuration:
           enabled: false
-
-  # Priority 140: Deep thinking in English
-  - name: "deep_thinking"
-    description: "Complex reasoning in English"
-    priority: 140
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "embedding"
-          name: "deep_thinking_en"
-        - type: "keyword"
-          name: "thinking_en"
-        - type: "context"
-          name: "long_context"
-        - type: "context"
-          name: "medium_context"
-    modelRefs:
-      - model: "Kimi-K2-Thinking"
-        use_reasoning: true
-        reasoning_effort: "high"
-    plugins:
-      - type: "system_prompt"
+      - type: "router_replay"
         configuration:
-          system_prompt: "You are Kimi-K2-Thinking, an expert analyst. Provide comprehensive, well-reasoned responses with deep insights."
-      - type: "semantic-cache"
-        configuration:
-          enabled: false
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
-  # Priority 136: Computer science domain with deep thinking
+  # Priority 141: Computer science domain with deep thinking
   - name: "complex_engineering"
     description: "Complex code generation and algorithm design (only when domain is clearly computer science)"
-    priority: 136
+    priority: 141
     rules:
       operator: "AND"
       conditions:
@@ -590,6 +605,13 @@ decisions:
       - type: "semantic-cache"
         configuration:
           enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
   # Priority 135: Fast coding in English
   - name: "fast_coding"
@@ -615,6 +637,13 @@ decisions:
       - type: "semantic-cache"
         configuration:
           enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
   # Priority 130: Fast QA in Chinese
   - name: "quick_question"
@@ -630,16 +659,23 @@ decisions:
         - type: "context"
           name: "short_context"
     modelRefs:
-      - model: "DeepSeek-V3.2"
+      - model: "openai/gpt-oss-20b"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
         configuration:
-          system_prompt: "你是 DeepSeek-V3.2, 一个高效的AI助手。请提供简洁、准确的回答。"
+          system_prompt: "你是由 openai 开发的模型 gpt-oss-20b, 一个高效的AI助手。请提供简洁、准确的回答。"
       - type: "semantic-cache"
         configuration:
           enabled: true
-          similarity_threshold: 0.97
+          similarity_threshold: 0.85
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
   # Priority 120: Fast QA in English
   - name: "fast_qa"
@@ -664,7 +700,46 @@ decisions:
       - type: "semantic-cache"
         configuration:
           enabled: true
-          similarity_threshold: 0.97
+          similarity_threshold: 0.85
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
+
+  # Priority 110: Deep thinking in English
+  - name: "deep_thinking"
+    description: "Complex reasoning in English"
+    priority: 110
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "embedding"
+          name: "deep_thinking_en"
+        - type: "keyword"
+          name: "thinking_en"
+        - type: "context"
+          name: "long_context"
+    modelRefs:
+      - model: "Kimi-K2-Thinking"
+        use_reasoning: true
+        reasoning_effort: "high"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are Kimi-K2-Thinking, an expert analyst. Provide comprehensive, well-reasoned responses with deep insights."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
   # Priority 100: Default fallback
   - name: "casual_chat"
@@ -693,7 +768,14 @@ decisions:
       - type: "semantic-cache"
         configuration:
           enabled: true
-          similarity_threshold: 0.97
+          similarity_threshold: 0.85
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
 # Providers - Backend model configuration
 providers:

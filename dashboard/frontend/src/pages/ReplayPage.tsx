@@ -3,7 +3,9 @@ import { DataTable, Column } from '../components/DataTable'
 import TableHeader from '../components/TableHeader'
 import ViewModal, { ViewSection, ViewField } from '../components/ViewModal'
 import CollapsibleSection from '../components/CollapsibleSection'
+import ReplayCharts from '../components/ReplayCharts'
 import { formatDate } from '../types/evaluation'
+import { useReadonly } from '../contexts/ReadonlyContext'
 import styles from './ReplayPage.module.css'
 
 // Types based on the backend store/store.go
@@ -14,6 +16,9 @@ interface Signal {
   fact_check?: string[]
   user_feedback?: string[]
   preference?: string[]
+  language?: string[]
+  latency?: string[]
+  context?: string[]
 }
 
 interface ReplayRecord {
@@ -46,6 +51,7 @@ interface ReplayListResponse {
 type FilterType = 'all' | 'cached' | 'streamed'
 
 const ReplayPage: React.FC = () => {
+  const { isReadonly } = useReadonly()
   const [records, setRecords] = useState<ReplayRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -329,6 +335,69 @@ const ReplayPage: React.FC = () => {
       })
     }
 
+    if (record.signals?.language?.length) {
+      signalFields.push({
+        label: 'Language signals',
+        value: (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            {record.signals.language.map((lang, i) => (
+              <span key={i} style={{
+                padding: '0.25rem 0.75rem',
+                background: 'rgba(59, 130, 246, 0.1)',
+                borderRadius: '4px',
+                fontSize: '0.875rem'
+              }}>
+                {lang}
+              </span>
+            ))}
+          </div>
+        ),
+        fullWidth: true
+      })
+    }
+
+    if (record.signals?.latency?.length) {
+      signalFields.push({
+        label: 'Latency signals',
+        value: (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            {record.signals.latency.map((lat, i) => (
+              <span key={i} style={{
+                padding: '0.25rem 0.75rem',
+                background: 'rgba(245, 158, 11, 0.1)',
+                borderRadius: '4px',
+                fontSize: '0.875rem'
+              }}>
+                {lat}
+              </span>
+            ))}
+          </div>
+        ),
+        fullWidth: true
+      })
+    }
+
+    if (record.signals?.context?.length) {
+      signalFields.push({
+        label: 'Context signals',
+        value: (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            {record.signals.context.map((ctx, i) => (
+              <span key={i} style={{
+                padding: '0.25rem 0.75rem',
+                background: 'rgba(168, 85, 247, 0.1)',
+                borderRadius: '4px',
+                fontSize: '0.875rem'
+              }}>
+                {ctx}
+              </span>
+            ))}
+          </div>
+        ),
+        fullWidth: true
+      })
+    }
+
     if (signalFields.length > 0) {
       sections.push({
         title: 'Signals',
@@ -367,69 +436,111 @@ const ReplayPage: React.FC = () => {
 
     // 5. Request/Response (Collapsible)
     const requestResponseFields: ViewField[] = []
-    
-    if (record.request_body) {
-      requestResponseFields.push({
-        label: 'Request body',
-        value: (
-          <CollapsibleSection
-            id={`request-${record.id}`}
-            title="request body"
-            isTruncated={record.request_body_truncated || false}
-            defaultExpanded={false}
-            content={
-              <pre style={{
-                margin: 0,
-                padding: '0.75rem',
-                background: 'var(--color-bg-tertiary)',
-                border: '1px solid var(--color-border)',
-                borderRadius: '4px',
-                fontSize: '0.8rem',
-                fontFamily: 'var(--font-mono)',
-                maxHeight: '400px',
-                overflow: 'auto',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word'
-              }}>
-                {formatJson(record.request_body) || record.request_body}
-              </pre>
-            }
-          />
-        ),
-        fullWidth: true
-      })
-    }
 
-    if (record.response_body) {
-      requestResponseFields.push({
-        label: 'Response body',
-        value: (
-          <CollapsibleSection
-            id={`response-${record.id}`}
-            title="response body"
-            isTruncated={record.response_body_truncated || false}
-            defaultExpanded={false}
-            content={
-              <pre style={{
-                margin: 0,
-                padding: '0.75rem',
-                background: 'var(--color-bg-tertiary)',
-                border: '1px solid var(--color-border)',
-                borderRadius: '4px',
-                fontSize: '0.8rem',
-                fontFamily: 'var(--font-mono)',
-                maxHeight: '400px',
-                overflow: 'auto',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word'
-              }}>
-                {formatJson(record.response_body) || record.response_body}
-              </pre>
-            }
-          />
-        ),
-        fullWidth: true
-      })
+    if (isReadonly) {
+      // In readonly mode, show lock icon and message
+      if (record.request_body || record.response_body) {
+        requestResponseFields.push({
+          label: 'Request body',
+          value: (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.5rem 0.75rem',
+              color: 'var(--color-text-tertiary)',
+              fontSize: '0.875rem'
+            }}>
+              <span style={{ fontSize: '1rem' }}>🔒</span>
+              <span>Not available in read-only mode</span>
+            </div>
+          ),
+          fullWidth: false
+        })
+
+        requestResponseFields.push({
+          label: 'Response body',
+          value: (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.5rem 0.75rem',
+              color: 'var(--color-text-tertiary)',
+              fontSize: '0.875rem'
+            }}>
+              <span style={{ fontSize: '1rem' }}>🔒</span>
+              <span>Not available in read-only mode</span>
+            </div>
+          ),
+          fullWidth: false
+        })
+      }
+    } else {
+      // Normal mode: show request/response bodies
+      if (record.request_body) {
+        requestResponseFields.push({
+          label: 'Request body',
+          value: (
+            <CollapsibleSection
+              id={`request-${record.id}`}
+              title="request body"
+              isTruncated={record.request_body_truncated || false}
+              defaultExpanded={false}
+              content={
+                <pre style={{
+                  margin: 0,
+                  padding: '0.75rem',
+                  background: 'var(--color-bg-tertiary)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: '4px',
+                  fontSize: '0.8rem',
+                  fontFamily: 'var(--font-mono)',
+                  maxHeight: '400px',
+                  overflow: 'auto',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word'
+                }}>
+                  {formatJson(record.request_body) || record.request_body}
+                </pre>
+              }
+            />
+          ),
+          fullWidth: true
+        })
+      }
+
+      if (record.response_body) {
+        requestResponseFields.push({
+          label: 'Response body',
+          value: (
+            <CollapsibleSection
+              id={`response-${record.id}`}
+              title="response body"
+              isTruncated={record.response_body_truncated || false}
+              defaultExpanded={false}
+              content={
+                <pre style={{
+                  margin: 0,
+                  padding: '0.75rem',
+                  background: 'var(--color-bg-tertiary)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: '4px',
+                  fontSize: '0.8rem',
+                  fontFamily: 'var(--font-mono)',
+                  maxHeight: '400px',
+                  overflow: 'auto',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word'
+                }}>
+                  {formatJson(record.response_body) || record.response_body}
+                </pre>
+              }
+            />
+          ),
+          fullWidth: true
+        })
+      }
     }
 
     if (requestResponseFields.length > 0) {
@@ -471,6 +582,21 @@ const ReplayPage: React.FC = () => {
     setSelectedRecordForModal(null)
   }
 
+  // Helper function to collect all signal names
+  const collectSignals = (signals: Signal): string[] => {
+    const allSignals: string[] = []
+    if (signals.keyword?.length) allSignals.push(...signals.keyword)
+    if (signals.embedding?.length) allSignals.push(...signals.embedding)
+    if (signals.domain?.length) allSignals.push(...signals.domain)
+    if (signals.fact_check?.length) allSignals.push(...signals.fact_check)
+    if (signals.user_feedback?.length) allSignals.push(...signals.user_feedback)
+    if (signals.preference?.length) allSignals.push(...signals.preference)
+    if (signals.language?.length) allSignals.push(...signals.language)
+    if (signals.latency?.length) allSignals.push(...signals.latency)
+    if (signals.context?.length) allSignals.push(...signals.context)
+    return allSignals
+  }
+
   // Define table columns for DataTable component
   const tableColumns: Column<ReplayRecord>[] = [
     {
@@ -500,21 +626,60 @@ const ReplayPage: React.FC = () => {
       render: (row) => <span className={styles.decision}>{row.decision || '-'}</span>
     },
     {
-      key: 'category',
-      header: 'Category',
-      width: '140px',
+      key: 'signals',
+      header: 'Signals',
+      width: '200px',
+      render: (row) => {
+        const allSignals = collectSignals(row.signals)
+        if (allSignals.length === 0) return <span>-</span>
+
+        return (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+            {allSignals.slice(0, 3).map((signal, i) => (
+              <span key={i} style={{
+                padding: '0.125rem 0.5rem',
+                background: 'rgba(118, 185, 0, 0.15)',
+                border: '1px solid rgba(118, 185, 0, 0.3)',
+                borderRadius: '3px',
+                fontSize: '0.75rem',
+                fontFamily: 'var(--font-mono)',
+                whiteSpace: 'nowrap'
+              }}>
+                {signal}
+              </span>
+            ))}
+            {allSignals.length > 3 && (
+              <span style={{
+                padding: '0.125rem 0.5rem',
+                fontSize: '0.75rem',
+                color: 'var(--color-text-secondary)'
+              }}>
+                +{allSignals.length - 3}
+              </span>
+            )}
+          </div>
+        )
+      }
+    },
+    {
+      key: 'reasoning',
+      header: 'Reasoning',
+      width: '90px',
+      align: 'center',
       render: (row) => (
-        row.signals?.domain?.length ? (
-          <span className={styles.category}>{row.signals.domain[0]}</span>
-        ) : row.category ? (
-          <span className={styles.category}>{row.category}</span>
-        ) : <span>-</span>
+        <span className={`${styles.reasoningBadge} ${
+          row.reasoning_mode === 'on'
+            ? styles.reasoningOn
+            : styles.reasoningOff
+        }`}>
+          {row.reasoning_mode === 'on' ? 'On' : 'Off'}
+        </span>
       )
     },
     {
       key: 'model',
       header: 'Model Change',
-      width: '380px',
+      width: '320px',
       render: (row) => (
         <div className={styles.modelChange}>
           <span className={styles.modelName}>{row.original_model || '-'}</span>
@@ -530,8 +695,8 @@ const ReplayPage: React.FC = () => {
       align: 'center',
       render: (row) => (
         <span className={`${styles.statusBadge} ${
-          row.response_status && row.response_status < 400 
-            ? styles.statusSuccess 
+          row.response_status && row.response_status < 400
+            ? styles.statusSuccess
             : styles.statusError
         }`}>
           {row.response_status || '-'}
@@ -619,6 +784,9 @@ const ReplayPage: React.FC = () => {
           <span>{error}</span>
         </div>
       )}
+
+      {/* Statistics Charts */}
+      {records.length > 0 && <ReplayCharts records={records} />}
 
       <TableHeader
         title="Routing Records"

@@ -18,19 +18,14 @@ response_api:
   ttl_seconds: 86400       # 24 hours
   max_responses: 1000
 
-# Router Replay Configuration
-# Records routing decisions for debugging and analysis
+# Router Replay Configuration (System-Level)
+# Provides storage backend configuration for router_replay plugin
+# Per-decision settings (max_records, capture settings) are configured via router_replay plugin
 # Automatically creates isolated storage per decision (collection/table/keyspace)
 router_replay:
-  enabled: false
   store_backend: "memory"           # Options: "memory", "redis", "postgres", "milvus"
-  ttl_seconds: 2592000             # 30 days
-  capture_request_body: true
-  capture_response_body: true
-  max_body_bytes: 4096
-  async_writes: true
-  # Memory backend settings
-  max_records: 1000
+  ttl_seconds: 2592000             # 30 days retention (for persistent backends)
+  async_writes: true               # Enable async writes for better performance
   # Redis backend settings (uncomment if using Redis)
   # redis:
   #   address: "redis:6379"
@@ -67,9 +62,9 @@ semantic_cache:
   # backend_config_path: "config/milvus.yaml" # Path to Milvus config
 
   # Embedding model for semantic similarity matching
-  # Options: "bert" (fast, 384-dim), "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
-  # Default: "bert" (fastest, lowest memory)
-  embedding_model: "qwen2.5:3b"
+  # If not specified, automatically uses the model configured in embedding_models section
+  # Options: "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context), "mmbert" (multilingual, 768-dim)
+  # embedding_model: "qwen3"  # Optional: explicitly set if you want to override auto-detection
 
 tools:
   enabled: true

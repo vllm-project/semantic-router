@@ -779,15 +779,16 @@ func GetEmbeddingBatched(text string, modelType string, targetDim int) (*Embeddi
 	}, nil
 }
 
-// InitEmbeddingModels initializes Qwen3 and/or Gemma embedding models (standard version).
+// InitEmbeddingModels initializes Qwen3, Gemma, and/or mmBERT embedding models (standard version).
 //
 // Note: For high-concurrency workloads, use InitEmbeddingModelsBatched instead for 2-5x better throughput.
 //
-// This function must be called before using GetEmbeddingWithDim for Qwen3/Gemma models.
+// This function must be called before using GetEmbeddingWithDim for Qwen3/Gemma/mmBERT models.
 //
 // Parameters:
 //   - qwen3ModelPath: Path to Qwen3 model directory (or empty string "" to skip)
 //   - gemmaModelPath: Path to Gemma model directory (or empty string "" to skip)
+//   - mmBertModelPath: Path to mmBERT model directory (or empty string "" to skip)
 //   - useCPU: If true, use CPU for inference; if false, use GPU if available
 //
 // Returns:
@@ -795,18 +796,20 @@ func GetEmbeddingBatched(text string, modelType string, targetDim int) (*Embeddi
 //
 // Example:
 //
-//	// Load both models on GPU
+//	// Load all three models on GPU
 //	err := InitEmbeddingModels(
 //	    "/path/to/qwen3-0.6B",
 //	    "/path/to/embeddinggemma-300m",
+//	    "/path/to/mom-embedding-ultra",
 //	    false,
 //	)
 //
-//	// Load only Gemma on CPU
-//	err := InitEmbeddingModels("", "/path/to/embeddinggemma-300m", true)
-func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath string, useCPU bool) error {
+//	// Load only mmBERT on CPU
+//	err := InitEmbeddingModels("", "", "/path/to/mom-embedding-ultra", true)
+func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath, mmBertModelPath string, useCPU bool) error {
 	var cQwen3Path *C.char
 	var cGemmaPath *C.char
+	var cMmBertPath *C.char
 
 	// Convert paths to C strings (NULL if empty)
 	if qwen3ModelPath != "" {
@@ -819,11 +822,29 @@ func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath string, useCPU bool) err
 		defer C.free(unsafe.Pointer(cGemmaPath))
 	}
 
-	success := C.init_embedding_models(
-		cQwen3Path,
-		cGemmaPath,
-		C.bool(useCPU),
-	)
+	if mmBertModelPath != "" {
+		cMmBertPath = C.CString(mmBertModelPath)
+		defer C.free(unsafe.Pointer(cMmBertPath))
+	}
+
+	// Choose appropriate FFI function based on whether mmBERT is provided
+	var success C.bool
+	if mmBertModelPath != "" {
+		// Use the mmBERT-aware initialization function
+		success = C.init_embedding_models_with_mmbert(
+			cQwen3Path,
+			cGemmaPath,
+			cMmBertPath,
+			C.bool(useCPU),
+		)
+	} else {
+		// Use the original initialization function (backward compatible)
+		success = C.init_embedding_models(
+			cQwen3Path,
+			cGemmaPath,
+			C.bool(useCPU),
+		)
+	}
 
 	if !bool(success) {
 		return fmt.Errorf("failed to initialize embedding models")

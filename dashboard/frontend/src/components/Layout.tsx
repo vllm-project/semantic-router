@@ -16,7 +16,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
   const navigate = useNavigate()
   const isConfigPage = location.pathname === '/config'
   const isSystemPage = isConfigPage && configSection === 'router-config'
-  const isObservabilityPage = ['/status', '/logs', '/monitoring', '/tracing', '/evaluation', '/replay'].includes(location.pathname)
+  const isObservabilityPage = ['/status', '/logs', '/monitoring', '/tracing', '/evaluation'].includes(location.pathname)
 
   // Close system dropdown when clicking outside
   useEffect(() => {
@@ -38,7 +38,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
           {/* Left: Brand */}
           <NavLink to="/" className={styles.brand}>
             <img src="/vllm.png" alt="vLLM" className={styles.logo} />
-            <span className={styles.brandText}>vLLM Semantic Router</span>
+            <span className={styles.brandText}></span>
           </NavLink>
 
           {/* Center: Navigation - Flat structure */}
@@ -88,7 +88,16 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
                 isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
               }
             >
-              Topology
+              Brain
+            </NavLink>
+
+            <NavLink
+              to="/replay"
+              className={({ isActive }) =>
+                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+              }
+            >
+              Replay
             </NavLink>
 
             {/* System Dropdown (includes router-config, observability, and evaluation) */}
@@ -161,13 +170,6 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
                     onClick={() => setSystemDropdownOpen(false)}
                   >
                     Evaluation
-                  </NavLink>
-                  <NavLink
-                    to="/replay"
-                    className={`${styles.dropdownItem} ${location.pathname === '/replay' ? styles.dropdownItemActive : ''}`}
-                    onClick={() => setSystemDropdownOpen(false)}
-                  >
-                    Router Replay
                   </NavLink>
                 </div>
               )}

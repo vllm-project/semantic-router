@@ -99,7 +99,7 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 		embeddingModel = "bert" // Default: BERT (fastest, lowest memory)
 	}
 
-	logging.Debugf("Semantic cache embedding model: %s", embeddingModel)
+	logging.Infof("[Semantic Cache] Initialized with embedding model: %s", embeddingModel)
 
 	cache := &InMemoryCache{
 		entries:             []CacheEntry{},

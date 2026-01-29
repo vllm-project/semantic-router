@@ -96,7 +96,7 @@ func (r *OpenAIRouter) startRouterReplay(
 	selectedModel string,
 	decisionName string,
 ) {
-	if ctx == nil || ctx.RouterReplayConfig == nil || !ctx.RouterReplayConfig.Enabled {
+	if ctx == nil || ctx.RouterReplayPluginConfig == nil || !ctx.RouterReplayPluginConfig.Enabled {
 		return
 	}
 	if ctx.RouterReplayID != "" {
@@ -113,7 +113,7 @@ func (r *OpenAIRouter) startRouterReplay(
 		}
 	}
 
-	cfg := ctx.RouterReplayConfig
+	cfg := ctx.RouterReplayPluginConfig
 	maxBodyBytes := cfg.MaxBodyBytes
 	if maxBodyBytes <= 0 {
 		maxBodyBytes = routerreplay.DefaultMaxBodyBytes
@@ -151,6 +151,9 @@ func (r *OpenAIRouter) startRouterReplay(
 			FactCheck:    ctx.VSRMatchedFactCheck,
 			UserFeedback: ctx.VSRMatchedUserFeedback,
 			Preference:   ctx.VSRMatchedPreference,
+			Language:     ctx.VSRMatchedLanguage,
+			Latency:      ctx.VSRMatchedLatency,
+			Context:      ctx.VSRMatchedContext,
 		},
 		Streaming: ctx.ExpectStreamingResponse,
 		FromCache: ctx.VSRCacheHit,

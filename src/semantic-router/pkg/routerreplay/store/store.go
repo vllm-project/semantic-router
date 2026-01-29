@@ -13,6 +13,9 @@ type Signal struct {
 	FactCheck    []string `json:"fact_check,omitempty"`
 	UserFeedback []string `json:"user_feedback,omitempty"`
 	Preference   []string `json:"preference,omitempty"`
+	Language     []string `json:"language,omitempty"`
+	Latency      []string `json:"latency,omitempty"`
+	Context      []string `json:"context,omitempty"`
 }
 
 // Record represents a routing decision record with metadata and captured payloads.
