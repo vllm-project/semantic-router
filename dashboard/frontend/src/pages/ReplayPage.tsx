@@ -16,6 +16,9 @@ interface Signal {
   fact_check?: string[]
   user_feedback?: string[]
   preference?: string[]
+  language?: string[]
+  latency?: string[]
+  context?: string[]
 }
 
 interface ReplayRecord {
@@ -332,6 +335,69 @@ const ReplayPage: React.FC = () => {
       })
     }
 
+    if (record.signals?.language?.length) {
+      signalFields.push({
+        label: 'Language signals',
+        value: (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            {record.signals.language.map((lang, i) => (
+              <span key={i} style={{
+                padding: '0.25rem 0.75rem',
+                background: 'rgba(59, 130, 246, 0.1)',
+                borderRadius: '4px',
+                fontSize: '0.875rem'
+              }}>
+                {lang}
+              </span>
+            ))}
+          </div>
+        ),
+        fullWidth: true
+      })
+    }
+
+    if (record.signals?.latency?.length) {
+      signalFields.push({
+        label: 'Latency signals',
+        value: (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            {record.signals.latency.map((lat, i) => (
+              <span key={i} style={{
+                padding: '0.25rem 0.75rem',
+                background: 'rgba(245, 158, 11, 0.1)',
+                borderRadius: '4px',
+                fontSize: '0.875rem'
+              }}>
+                {lat}
+              </span>
+            ))}
+          </div>
+        ),
+        fullWidth: true
+      })
+    }
+
+    if (record.signals?.context?.length) {
+      signalFields.push({
+        label: 'Context signals',
+        value: (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            {record.signals.context.map((ctx, i) => (
+              <span key={i} style={{
+                padding: '0.25rem 0.75rem',
+                background: 'rgba(168, 85, 247, 0.1)',
+                borderRadius: '4px',
+                fontSize: '0.875rem'
+              }}>
+                {ctx}
+              </span>
+            ))}
+          </div>
+        ),
+        fullWidth: true
+      })
+    }
+
     if (signalFields.length > 0) {
       sections.push({
         title: 'Signals',
@@ -525,6 +591,9 @@ const ReplayPage: React.FC = () => {
     if (signals.fact_check?.length) allSignals.push(...signals.fact_check)
     if (signals.user_feedback?.length) allSignals.push(...signals.user_feedback)
     if (signals.preference?.length) allSignals.push(...signals.preference)
+    if (signals.language?.length) allSignals.push(...signals.language)
+    if (signals.latency?.length) allSignals.push(...signals.latency)
+    if (signals.context?.length) allSignals.push(...signals.context)
     return allSignals
   }
 

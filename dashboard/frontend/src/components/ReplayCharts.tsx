@@ -20,6 +20,9 @@ interface Signal {
   fact_check?: string[]
   user_feedback?: string[]
   preference?: string[]
+  language?: string[]
+  latency?: string[]
+  context?: string[]
 }
 
 interface ReplayRecord {
@@ -61,11 +64,6 @@ interface PieLabelProps {
 }
 
 const renderCustomLabel = ({ cx, cy, midAngle, outerRadius, percent, name }: PieLabelProps) => {
-  // Only show label if percentage is greater than 8%
-  if (percent < 0.08) {
-    return null
-  }
-
   const RADIAN = Math.PI / 180
   // Position label outside the pie chart
   const radius = outerRadius + 25
@@ -140,6 +138,9 @@ const ReplayCharts: React.FC<ReplayChartsProps> = ({ records }) => {
       if (signals.fact_check?.length) counts['fact_check'] = (counts['fact_check'] || 0) + signals.fact_check.length
       if (signals.user_feedback?.length) counts['user_feedback'] = (counts['user_feedback'] || 0) + signals.user_feedback.length
       if (signals.preference?.length) counts['preference'] = (counts['preference'] || 0) + signals.preference.length
+      if (signals.language?.length) counts['language'] = (counts['language'] || 0) + signals.language.length
+      if (signals.latency?.length) counts['latency'] = (counts['latency'] || 0) + signals.latency.length
+      if (signals.context?.length) counts['context'] = (counts['context'] || 0) + signals.context.length
     })
     return Object.entries(counts)
       .sort((a, b) => b[1] - a[1])

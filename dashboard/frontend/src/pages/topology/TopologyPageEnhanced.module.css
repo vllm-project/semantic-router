@@ -3,7 +3,7 @@
 .container {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: calc(100vh - 52px); /* Subtract navbar height */
   width: 100%;
   background: var(--bg-primary, #1a1a1a);
   overflow: hidden;
