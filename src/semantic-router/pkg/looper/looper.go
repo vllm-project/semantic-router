@@ -83,6 +83,8 @@ func Factory(cfg *config.LooperConfig, algorithmType string) Looper {
 		return NewConfidenceLooper(cfg)
 	case "ratings":
 		return NewRatingsLooper(cfg)
+	case "rl_driven":
+		return NewRLDrivenLooper(cfg)
 	default:
 		// Default to simple looper that just calls models sequentially
 		return NewBaseLooper(cfg)
