@@ -25,6 +25,8 @@ type Record struct {
 	OriginalModel         string    `json:"original_model,omitempty"`
 	SelectedModel         string    `json:"selected_model,omitempty"`
 	ReasoningMode         string    `json:"reasoning_mode,omitempty"`
+	ConfidenceScore       float64   `json:"confidence_score,omitempty"`
+	SelectionMethod       string    `json:"selection_method,omitempty"`
 	Signals               Signal    `json:"signals"`
 	RequestBody           string    `json:"request_body,omitempty"`
 	ResponseBody          string    `json:"response_body,omitempty"`

@@ -30,6 +30,8 @@
   --color-border: #333333;
   --color-border-hover: #444444;
   --color-shadow: rgba(0, 0, 0, 0.5);
+  --color-surface: #1f1f1f;
+  --color-primary-hover: #8fd400;
 
   /* Glow effects */
   --glow-primary: 0 0 20px rgba(118, 185, 0, 0.3);

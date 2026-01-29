@@ -136,12 +136,14 @@ func (r *OpenAIRouter) startRouterReplay(
 	}
 
 	rec := routerreplay.RoutingRecord{
-		RequestID:     ctx.RequestID,
-		Decision:      decisionName,
-		Category:      ctx.VSRSelectedCategory,
-		OriginalModel: originalModel,
-		SelectedModel: modelForRecord,
-		ReasoningMode: reasoningMode,
+		RequestID:       ctx.RequestID,
+		Decision:        decisionName,
+		Category:        ctx.VSRSelectedCategory,
+		OriginalModel:   originalModel,
+		SelectedModel:   modelForRecord,
+		ReasoningMode:   reasoningMode,
+		ConfidenceScore: ctx.VSRSelectedDecisionConfidence,
+		SelectionMethod: ctx.VSRSelectionMethod,
 		Signals: routerreplay.Signal{
 			Keyword:      ctx.VSRMatchedKeywords,
 			Embedding:    ctx.VSRMatchedEmbeddings,

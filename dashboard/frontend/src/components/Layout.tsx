@@ -16,7 +16,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
   const navigate = useNavigate()
   const isConfigPage = location.pathname === '/config'
   const isSystemPage = isConfigPage && configSection === 'router-config'
-  const isObservabilityPage = ['/status', '/logs', '/monitoring', '/tracing', '/evaluation'].includes(location.pathname)
+  const isObservabilityPage = ['/status', '/logs', '/monitoring', '/tracing', '/evaluation', '/replay'].includes(location.pathname)
 
   // Close system dropdown when clicking outside
   useEffect(() => {
@@ -161,6 +161,13 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
                     onClick={() => setSystemDropdownOpen(false)}
                   >
                     Evaluation
+                  </NavLink>
+                  <NavLink
+                    to="/replay"
+                    className={`${styles.dropdownItem} ${location.pathname === '/replay' ? styles.dropdownItemActive : ''}`}
+                    onClick={() => setSystemDropdownOpen(false)}
+                  >
+                    Router Replay
                   </NavLink>
                 </div>
               )}

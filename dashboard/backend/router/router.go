@@ -319,6 +319,17 @@ func Setup(cfg *config.Config) *http.ServeMux {
 				envoyProxy.ServeHTTP(w, r)
 				return
 			}
+			// Route router_replay to Envoy proxy
+			if envoyProxy != nil && strings.HasPrefix(r.URL.Path, "/api/router/v1/router_replay") {
+				// Strip /api/router prefix and forward to Envoy
+				r.URL.Path = strings.TrimPrefix(r.URL.Path, "/api/router")
+				log.Printf("Proxying router_replay to Envoy: %s %s", r.Method, r.URL.Path)
+				if middleware.HandleCORSPreflight(w, r) {
+					return
+				}
+				envoyProxy.ServeHTTP(w, r)
+				return
+			}
 			rp.ServeHTTP(w, r)
 		})
 		log.Printf("Router API proxy configured: %s (excluding /api/router/config/*)", cfg.RouterAPIURL)

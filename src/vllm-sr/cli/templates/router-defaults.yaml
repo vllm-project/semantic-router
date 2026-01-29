@@ -19,6 +19,16 @@ response_api:
   ttl_seconds: 86400       # 24 hours
   max_responses: 1000
 
+# Router Replay Configuration
+# Records all routing decisions for debugging and analysis
+router_replay:
+  enabled: true
+  store_backend: "memory"  # Options: "memory"
+  max_records: 1000
+  capture_request_body: true
+  capture_response_body: true
+  max_body_bytes: 4096
+
 semantic_cache:
   enabled: true
   backend_type: "memory"  # Options: "memory", "milvus", or "hybrid"
