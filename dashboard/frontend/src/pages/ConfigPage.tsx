@@ -27,6 +27,7 @@ interface ModelConfig {
   use_modernbert?: boolean
   threshold: number
   use_cpu: boolean
+  use_qwen3?: boolean
   category_mapping_path?: string
   pii_mapping_path?: string
   jailbreak_mapping_path?: string
@@ -226,6 +227,7 @@ interface ConfigData {
     fallback_to_empty: boolean
   }
   prompt_guard?: ModelConfig & { enabled: boolean }
+  preference_model?: ModelConfig
   vllm_endpoints?: VLLMEndpoint[]
   classifier?: {
     category_model?: ModelConfig
@@ -569,6 +571,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     semantic_cache: routerDefaults?.semantic_cache ?? config?.semantic_cache,
     tools: routerDefaults?.tools ?? config?.tools,
     prompt_guard: routerDefaults?.prompt_guard ?? config?.prompt_guard,
+    preference_model: routerDefaults?.preference_model ?? config?.preference_model,
     classifier: routerDefaults?.classifier ?? config?.classifier,
     observability: routerDefaults?.observability ?? config?.observability,
     api: routerDefaults?.api ?? config?.api,
@@ -1325,6 +1328,104 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
           {!hasInTree && !hasOutTree && (
             <div className={styles.emptyState}>No category classifier configured</div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // ============================================================================
+  // 4b. PREFERENCE MODEL SECTION (LOCAL CANDLE)
+  // ============================================================================
+
+  const renderPreferenceModel = () => {
+    const preferenceModel = routerConfig.preference_model
+
+    return (
+      <div className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <h3 className={styles.sectionTitle}>Preference Model (Local)</h3>
+          <button
+            className={styles.sectionEditButton}
+            onClick={() => {
+              openEditModal(
+                preferenceModel ? 'Edit Preference Model' : 'Add Preference Model',
+                preferenceModel || {
+                  model_id: '',
+                  threshold: 0,
+                  use_cpu: false,
+                  use_qwen3: true,
+                },
+                [
+                  {
+                    name: 'model_id',
+                    label: 'Model ID or Path',
+                    type: 'text',
+                    required: true,
+                    placeholder: 'models/preference-3-0.6b',
+                    description: 'Local Candle model path or HuggingFace ID for preference routing',
+                  },
+                  {
+                    name: 'threshold',
+                    label: 'Confidence Threshold',
+                    type: 'percentage',
+                    placeholder: '0',
+                    description: 'Minimum confidence to accept a preference (0-100%, optional)',
+                    step: 1,
+                  },
+                  {
+                    name: 'use_cpu',
+                    label: 'Use CPU',
+                    type: 'boolean',
+                    description: 'Force CPU inference instead of GPU/Metal when available',
+                  },
+                  {
+                    name: 'use_qwen3',
+                    label: 'Use Qwen3 Model',
+                    type: 'boolean',
+                    description: 'Enable Qwen3-0.6B zero-shot/fine-tuned preference classifier',
+                  },
+                ],
+                async (data) => {
+                  const newConfig = { ...config }
+                  newConfig.preference_model = data
+                  await saveConfig(newConfig)
+                },
+                preferenceModel ? 'edit' : 'add'
+              )
+            }}
+          >
+            {preferenceModel ? 'Edit' : 'Add'}
+          </button>
+        </div>
+        <div className={styles.sectionContent}>
+          {preferenceModel ? (
+            <div className={styles.modelCard}>
+              <div className={styles.modelCardHeader}>
+                <span className={styles.modelCardTitle}>Local Preference Classifier</span>
+                <span className={`${styles.statusBadge} ${styles.statusActive}`}>
+                  {preferenceModel.use_cpu ? 'CPU' : 'GPU'}
+                </span>
+              </div>
+              <div className={styles.modelCardBody}>
+                <div className={styles.configRow}>
+                  <span className={styles.configLabel}>Model ID</span>
+                  <span className={styles.configValue}>{preferenceModel.model_id}</span>
+                </div>
+                <div className={styles.configRow}>
+                  <span className={styles.configLabel}>Threshold</span>
+                  <span className={styles.configValue}>{formatThreshold(preferenceModel.threshold || 0)}</span>
+                </div>
+                <div className={styles.configRow}>
+                  <span className={styles.configLabel}>Qwen3</span>
+                  <span className={`${styles.statusBadge} ${preferenceModel.use_qwen3 ? styles.statusActive : styles.statusInactive}`}>
+                    {preferenceModel.use_qwen3 ? '✓ Enabled' : '✗ Disabled'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className={styles.emptyState}>Preference model not configured</div>
           )}
         </div>
       </div>
@@ -4445,6 +4546,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
       {/* Classifier */}
       {renderClassifyBERT()}
+
+      {/* Preference Model */}
+      {renderPreferenceModel()}
 
       {/* Tools */}
       {renderToolsConfiguration()}
