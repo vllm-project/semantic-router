@@ -14,10 +14,24 @@ import (
 	"testing"
 )
 
+// placeholderKeys are example/placeholder values; validation tests skip when these are set.
+var placeholderKeys = []string{"sk-your-key", "sk-...", "your-api-key"}
+
 func getValidationConfig(t *testing.T) (baseURL, apiKey string, skip bool) {
 	apiKey = os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
 		t.Skip("OPENAI_API_KEY not set; skipping OpenAI API validation tests")
+		return "", "", true
+	}
+	apiKeyLower := strings.ToLower(strings.TrimSpace(apiKey))
+	for _, p := range placeholderKeys {
+		if apiKeyLower == p {
+			t.Skip("OPENAI_API_KEY looks like a placeholder; skipping OpenAI API validation tests (set a real key to run)")
+			return "", "", true
+		}
+	}
+	if len(apiKey) < 20 {
+		t.Skip("OPENAI_API_KEY too short (likely placeholder); skipping OpenAI API validation tests")
 		return "", "", true
 	}
 	baseURL = os.Getenv("OPENAI_BASE_URL")
