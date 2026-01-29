@@ -66,6 +66,12 @@ func (c *FactCheckClassifier) Initialize() error {
 
 	logging.Infof("Initializing fact-check classifier ML model")
 
+	// Use mmBERT auto-detection if use_modernbert is true
+	if c.config.UseModernBERT {
+		logging.Infof("Using mmBERT auto-detection for fact-check classifier")
+	}
+
+	// InitFactCheckClassifier uses load_from_directory, which already auto-detects mmBERT
 	err := candle.InitFactCheckClassifier(c.config.ModelID, c.config.UseCPU)
 	if err != nil {
 		return fmt.Errorf("failed to initialize fact-check ML model from %s: %w", c.config.ModelID, err)
