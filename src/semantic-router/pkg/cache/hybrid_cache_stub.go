@@ -39,17 +39,22 @@ func (h *HybridCache) IsEnabled() bool {
 }
 
 // AddPendingRequest stores a request awaiting its response
-func (h *HybridCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte) error {
+func (h *HybridCache) AddPendingRequest(requestID string, model string, query string, requestBody []byte, ttlSeconds int) error {
 	return nil
 }
 
 // UpdateWithResponse completes a pending request with its response
-func (h *HybridCache) UpdateWithResponse(requestID string, responseBody []byte) error {
+func (h *HybridCache) UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error {
 	return nil
 }
 
 // AddEntry stores a complete request-response pair
-func (h *HybridCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte) error {
+func (h *HybridCache) AddEntry(requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
+	return nil
+}
+
+// AddDecisionEntry stores a complete request-decision pair
+func (h *HybridCache) AddDecisionEntry(requestID string, model string, query string, decision *DecisionEntry, ttlSeconds int) error {
 	return nil
 }
 
@@ -65,6 +70,16 @@ func (h *HybridCache) FindSimilar(model string, query string) ([]byte, bool, err
 
 // FindSimilarWithThreshold searches for semantically similar cached requests with custom threshold
 func (h *HybridCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
+	return nil, false, nil
+}
+
+// FindSimilarDecision searches for semantically similar cached decisions
+func (h *HybridCache) FindSimilarDecision(model string, query string) (*DecisionEntry, bool, error) {
+	return nil, false, nil
+}
+
+// FindSimilarDecisionWithThreshold searches for semantically similar cached decisions with custom threshold
+func (h *HybridCache) FindSimilarDecisionWithThreshold(model string, query string, threshold float32) (*DecisionEntry, bool, error) {
 	return nil, false, nil
 }
 
