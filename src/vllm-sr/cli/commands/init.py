@@ -1,7 +1,10 @@
 """Init command implementation."""
 
 import shutil
+import sys
 from pathlib import Path
+
+import click
 
 from cli.utils import getLogger
 
@@ -63,6 +66,23 @@ def init_command(force: bool = False):
 
     shutil.copy2(template_config, config_file)
     log.info(f"✓ Created config.yaml")
+
+    # Prompt for HuggingFace token (only in interactive mode)
+    if sys.stdin.isatty():
+        hf_token = click.prompt(
+            "Enter your HuggingFace token (optional, press Enter to skip)",
+            default="",
+            show_default=False,
+        )
+
+        if hf_token:
+            # Read config, update HF_TOKEN, write back
+            with open(config_file) as f:
+                content = f.read()
+            content = content.replace('HF_TOKEN: ""', f'HF_TOKEN: "{hf_token}"')
+            with open(config_file, "w") as f:
+                f.write(content)
+            log.info("✓ HF_TOKEN saved to config.yaml")
 
     # Create .vllm-sr directory
     if vllm_sr_dir.exists():

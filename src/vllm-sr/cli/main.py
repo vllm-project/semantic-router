@@ -6,7 +6,7 @@ import sys
 import webbrowser
 from pathlib import Path
 from cli import __version__
-from cli.utils import getLogger
+from cli.utils import getLogger, load_config
 from cli.core import start_vllm_sr, stop_vllm_sr, show_logs, show_status
 from cli.consts import (
     VLLM_SR_DOCKER_IMAGE_DEFAULT,
@@ -142,10 +142,24 @@ def serve(config, image, image_pull_policy, readonly, platform):
 
         log.info(f"Using config file: {config}")
 
+        # Load config to read environment section
+        config_data = load_config(str(config_path)) or {}
+        config_env = config_data.get("environment") or {}
+
         # Collect environment variables to pass to container
         env_vars = {}
 
-        # HuggingFace related environment variables
+        # First, add environment variables from config file (lower priority)
+        for key, value in config_env.items():
+            if value:  # Only if not empty
+                env_vars[key] = str(value)
+                # Mask sensitive tokens/keys in logs
+                if "TOKEN" in key.upper() or "KEY" in key.upper():
+                    log.info(f"Using {key} from config.yaml: ***")
+                else:
+                    log.info(f"Using {key} from config.yaml: {value}")
+
+        # HuggingFace related environment variables (shell env overrides config)
         hf_env_vars = ["HF_ENDPOINT", "HF_TOKEN", "HF_HOME", "HF_HUB_CACHE"]
         for var in hf_env_vars:
             if var in os.environ:
