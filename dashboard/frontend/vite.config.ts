@@ -17,6 +17,11 @@ export default defineConfig({
         target: 'http://localhost:8700',
         changeOrigin: true,
       },
+      '/ws': {
+        target: 'ws://localhost:8700',
+        changeOrigin: true,
+        ws: true,
+      },
       '/embedded': {
         target: 'http://localhost:8700',
         changeOrigin: true,

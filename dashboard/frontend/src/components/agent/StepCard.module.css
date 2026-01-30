@@ -1,0 +1,318 @@
+/* StepCard - Individual step visualization styles */
+
+.container {
+  position: relative;
+  margin-bottom: 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--step-border);
+  background: linear-gradient(to bottom, rgba(30, 30, 35, 0.5), rgba(25, 25, 30, 0.3));
+  overflow: hidden;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.container:hover {
+  border-color: var(--step-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), 0 0 12px rgba(var(--step-primary-rgb), 0.15);
+}
+
+.container.selected {
+  border-color: var(--step-primary);
+  box-shadow: 0 0 0 2px rgba(var(--step-primary-rgb), 0.2);
+}
+
+.container.failed {
+  border-color: #dc2626;
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  min-height: 44px;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 12px;
+}
+
+/* Status Indicator */
+.statusIndicator {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.statusRunning {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.9);
+  }
+}
+
+/* Icon */
+.iconWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Header Info */
+.headerInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.stepIndex {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stepType {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.actionName {
+  font-weight: 500;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+/* Duration */
+.duration {
+  font-size: 12px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.5);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Expand Button */
+.expandButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.5);
+  transition: all 0.15s ease;
+}
+
+.expandButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.expandIcon {
+  transition: transform 0.2s ease;
+}
+
+.expandIcon.expanded {
+  transform: rotate(0deg);
+}
+
+.expandIcon:not(.expanded) {
+  transform: rotate(-90deg);
+}
+
+/* Progress Bar */
+.progressBar {
+  height: 2px;
+  background-color: rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  position: relative;
+}
+
+.progressFill {
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    currentColor 50%,
+    transparent 100%
+  );
+  animation: shimmer 1.5s infinite;
+  width: 100%;
+  opacity: 0.6;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Preview (collapsed state) */
+.preview {
+  padding: 8px 14px 12px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Content (expanded state) */
+.content {
+  padding: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  background-color: rgba(20, 20, 25, 0.4);
+  animation: expandContent 0.2s ease;
+}
+
+@keyframes expandContent {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Action Content */
+.actionContent {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.actionHeader,
+.actionArgs,
+.actionCode {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.actionLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.toolName {
+  font-size: 13px;
+  font-weight: 500;
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.1);
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: inline-block;
+  width: fit-content;
+}
+
+.codeBlock {
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.3);
+  padding: 10px 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Observation Content */
+.observationContent {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.screenshot {
+  max-width: 100%;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.errorMessage {
+  font-size: 13px;
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.1);
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(248, 113, 113, 0.2);
+}
+
+/* Override markdown styles for dark mode */
+.content :global(.markdown) {
+  color: rgba(255, 255, 255, 0.6) !important;
+  font-size: 13px;
+}
+
+.content :global(.markdown) h1,
+.content :global(.markdown) h2,
+.content :global(.markdown) h3,
+.content :global(.markdown) h4,
+.content :global(.markdown) h5,
+.content :global(.markdown) h6 {
+  color: rgba(255, 255, 255, 0.75) !important;
+}
+
+.content :global(.markdown) p,
+.content :global(.markdown) li,
+.content :global(.markdown) span,
+.content :global(.markdown) div {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.content :global(.markdown) strong {
+  color: rgba(255, 255, 255, 0.75) !important;
+}
+
+.content :global(.markdown) code {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.content :global(.markdown) pre {
+  background-color: rgba(0, 0, 0, 0.3) !important;
+  border-radius: 6px;
+}

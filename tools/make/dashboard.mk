@@ -5,6 +5,7 @@
 DASHBOARD_DIR := dashboard
 DASHBOARD_FRONTEND_DIR := $(DASHBOARD_DIR)/frontend
 DASHBOARD_BACKEND_DIR := $(DASHBOARD_DIR)/backend
+DASHBOARD_AGENT_DIR := $(DASHBOARD_DIR)/agent-service
 
 ##@ Dashboard
 
@@ -90,17 +91,52 @@ dashboard-check: dashboard-lint dashboard-type-check dashboard-go-mod-tidy ## Ru
 	@$(LOG_TARGET)
 	@echo "✅ All dashboard checks passed"
 
+## Agent Service (E2B Computer-Use)
+
+dashboard-agent-install: ## Install agent service Python dependencies
+	@$(LOG_TARGET)
+	@echo "Installing agent service dependencies..."
+	@if [ ! -d "$(DASHBOARD_AGENT_DIR)/venv" ]; then \
+		python3 -m venv $(DASHBOARD_AGENT_DIR)/venv; \
+	fi
+	@$(DASHBOARD_AGENT_DIR)/venv/bin/pip install --upgrade pip
+	@$(DASHBOARD_AGENT_DIR)/venv/bin/pip install -e $(DASHBOARD_AGENT_DIR)[dev]
+	@echo "✅ agent service dependencies installed"
+
+dashboard-agent-dev: ## Start agent service in dev mode (requires E2B_API_KEY)
+	@$(LOG_TARGET)
+	@if [ ! -f "$(DASHBOARD_AGENT_DIR)/venv/bin/python" ]; then \
+		echo "❌ Agent service virtualenv not found. Run 'make dashboard-agent-install' first."; \
+		exit 1; \
+	fi
+	@echo "Starting agent service on port 8000..."
+	@echo "Ensure E2B_API_KEY and HF_TOKEN environment variables are set."
+	cd $(DASHBOARD_AGENT_DIR) && ./venv/bin/python -m cua_agent.main
+
+dashboard-dev-all: ## Start all dashboard services (frontend + backend + agent)
+	@$(LOG_TARGET)
+	@echo "Starting all dashboard services..."
+	@echo "Run these commands in separate terminals:"
+	@echo "  Terminal 1: make dashboard-dev-frontend"
+	@echo "  Terminal 2: make dashboard-dev-backend"
+	@echo "  Terminal 3: make dashboard-agent-dev"
+	@echo ""
+	@echo "Or use a process manager like 'concurrently' or 'tmux'"
+
 ## Clean
 
-dashboard-clean: ## Clean dashboard build artifacts (frontend dist + backend bin)
+dashboard-clean: ## Clean dashboard build artifacts (frontend dist + backend bin + agent venv)
 	@$(LOG_TARGET)
 	rm -rf $(DASHBOARD_FRONTEND_DIR)/dist
 	rm -rf $(DASHBOARD_FRONTEND_DIR)/node_modules
 	rm -rf $(DASHBOARD_BACKEND_DIR)/bin
+	rm -rf $(DASHBOARD_AGENT_DIR)/venv
+	rm -rf $(DASHBOARD_AGENT_DIR)/*.egg-info
 	@echo "✅ dashboard cleaned"
 
 .PHONY: dashboard-install dashboard-dev-frontend dashboard-dev-backend \
 	dashboard-build dashboard-build-frontend dashboard-build-backend \
 	dashboard-lint dashboard-lint-fix dashboard-type-check dashboard-go-mod-tidy \
-	dashboard-check dashboard-clean
+	dashboard-check dashboard-clean \
+	dashboard-agent-install dashboard-agent-dev dashboard-dev-all
 

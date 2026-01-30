@@ -52,6 +52,15 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
               Playground
             </NavLink>
 
+            <NavLink
+              to="/agent"
+              className={({ isActive }) =>
+                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+              }
+            >
+              Agent
+            </NavLink>
+
             <button
               className={`${styles.navLink} ${isConfigPage && configSection === 'models' ? styles.navLinkActive : ''}`}
               onClick={() => {
@@ -225,6 +234,9 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
           <div className={styles.mobileNav}>
             <NavLink to="/playground" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
               Playground
+            </NavLink>
+            <NavLink to="/agent" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+              Agent
             </NavLink>
             <button
               className={styles.mobileNavLink}

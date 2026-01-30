@@ -33,7 +33,8 @@ download-models: ## Download models using router's built-in download logic
 	@echo ""
 	@echo "Running router with --download-only flag..."
 	@echo "This may take a few minutes depending on your network speed..."
-	@./bin/router -config=config/config.yaml --download-only
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+		./bin/router -config=config/config.yaml --download-only
 	@echo ""
 	@echo "✅ Models downloaded successfully"
 
