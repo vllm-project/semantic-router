@@ -925,6 +925,34 @@ type PromptGuardConfig struct {
 	// When true, vLLM configuration must be provided in external_models with model_role="guardrail"
 	// When false (default), uses Candle-based classification with ModelID, UseCPU, and UseModernBERT
 	UseVLLM bool `yaml:"use_vllm,omitempty"`
+
+	// ContrastiveJailbreak enables multi-turn jailbreak detection using contrastive embedding similarity
+	// This is separate from the BERT classifier and runs as an additional filter
+	ContrastiveJailbreak *ContrastiveJailbreakConfig `yaml:"contrastive_jailbreak,omitempty"`
+}
+
+// ContrastiveJailbreakConfig represents configuration for multi-turn contrastive jailbreak detection
+// This detector analyzes the maximum contrastive score across all conversation turns to detect
+// gradual escalation attacks that evade per-message classifiers
+type ContrastiveJailbreakConfig struct {
+	// Enable contrastive multi-turn jailbreak detection
+	Enabled bool `yaml:"enabled"`
+
+	// Threshold for contrastive score (default: 0.06)
+	// Score = max_sim(msg, jailbreak_kb) - max_sim(msg, benign_kb)
+	// Messages with score > threshold are flagged as potential jailbreak
+	Threshold float32 `yaml:"threshold"`
+
+	// Embedding model type to use ("qwen3", "gemma", or "" for auto-detection)
+	EmbeddingModel string `yaml:"embedding_model,omitempty"`
+
+	// JailbreakPatterns are example jailbreak prompts for the KB
+	// These are used to compute similarity - messages similar to these are flagged
+	JailbreakPatterns []string `yaml:"jailbreak_patterns"`
+
+	// BenignPatterns are example benign prompts for the KB
+	// These help reduce false positives - messages similar to these are considered safe
+	BenignPatterns []string `yaml:"benign_patterns"`
 }
 
 // FeedbackDetectorConfig represents configuration for user feedback detection

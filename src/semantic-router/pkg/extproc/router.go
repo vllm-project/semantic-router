@@ -37,6 +37,9 @@ type OpenAIRouter struct {
 	// Initialized from config.IntelligentRouting.ModelSelection
 	ModelSelector   *selection.Registry
 	ReplayRecorders map[string]*routerreplay.Recorder
+	// ContrastiveJailbreakClassifier for multi-turn jailbreak detection
+	// This is separate from the BERT classifier and runs as an additional filter
+	ContrastiveJailbreakClassifier *classification.ContrastiveJailbreakClassifier
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls
@@ -183,6 +186,32 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		return nil, fmt.Errorf("failed to create classifier: %w", err)
 	}
 
+	// Initialize contrastive jailbreak classifier if configured
+	var contrastiveJailbreakClassifier *classification.ContrastiveJailbreakClassifier
+	if cfg.PromptGuard.ContrastiveJailbreak != nil && cfg.PromptGuard.ContrastiveJailbreak.Enabled {
+		// Get model type from embedding config or use default
+		modelType := cfg.PromptGuard.ContrastiveJailbreak.EmbeddingModel
+		if modelType == "" {
+			modelType = cfg.HNSWConfig.ModelType // Reuse embedding model config
+		}
+		if modelType == "" {
+			modelType = "qwen3" // Default
+		}
+
+		contrastiveJailbreakClassifier, err = classification.NewContrastiveJailbreakClassifier(
+			cfg.PromptGuard.ContrastiveJailbreak,
+			modelType,
+		)
+		if err != nil {
+			logging.Warnf("Failed to create contrastive jailbreak classifier: %v (multi-turn detection disabled)", err)
+			// Non-fatal - continue without contrastive detection
+		} else {
+			jbSize, bnSize := contrastiveJailbreakClassifier.GetKBSizes()
+			logging.Infof("Contrastive jailbreak classifier initialized (threshold=%.3f, jailbreak_kb=%d, benign_kb=%d)",
+				cfg.PromptGuard.ContrastiveJailbreak.Threshold, jbSize, bnSize)
+		}
+	}
+
 	// Immediately set global classification service so API server can access it
 	// This prevents API server from creating a duplicate classifier due to timeout
 	// The API server starts concurrently and may timeout waiting for the global service
@@ -323,16 +352,17 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	logging.Infof("[Router] Initialized model selection registry (per-decision algorithm config)")
 
 	router := &OpenAIRouter{
-		Config:               cfg,
-		CategoryDescriptions: categoryDescriptions,
-		Classifier:           classifier,
-		PIIChecker:           piiChecker,
-		Cache:                semanticCache,
-		ToolsDatabase:        toolsDatabase,
-		ResponseAPIFilter:    responseAPIFilter,
-		ReplayRecorder:       replayRecorder,
-		ModelSelector:        modelSelectorRegistry,
-		ReplayRecorders:      replayRecorders,
+		Config:                         cfg,
+		CategoryDescriptions:           categoryDescriptions,
+		Classifier:                     classifier,
+		PIIChecker:                     piiChecker,
+		Cache:                          semanticCache,
+		ToolsDatabase:                  toolsDatabase,
+		ResponseAPIFilter:              responseAPIFilter,
+		ReplayRecorder:                 replayRecorder,
+		ModelSelector:                  modelSelectorRegistry,
+		ReplayRecorders:                replayRecorders,
+		ContrastiveJailbreakClassifier: contrastiveJailbreakClassifier,
 	}
 
 	return router, nil

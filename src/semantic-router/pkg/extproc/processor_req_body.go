@@ -104,6 +104,12 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		return response, nil
 	}
 
+	// Perform contrastive multi-turn jailbreak detection (separate from BERT classifier)
+	// This detects gradual escalation attacks across conversation turns
+	if response, shouldReturn := r.performContrastiveJailbreakCheck(ctx, userContent, nonUserMessages, decisionName); shouldReturn {
+		return response, nil
+	}
+
 	// Perform PII detection and policy check (if PII policy is enabled for the decision)
 	piiResponse := r.performPIIDetection(ctx, userContent, nonUserMessages, decisionName)
 	if piiResponse != nil {
