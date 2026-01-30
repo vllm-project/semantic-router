@@ -85,6 +85,11 @@ type RouterConfig struct {
 	LLMObservability `yaml:",inline"`
 	// API server configuration
 	APIServer `yaml:",inline"`
+
+	// MCPConfigServer starts an internal MCP server (HTTP transport) to expose
+	// read-only config introspection tools to agentic clients.
+	MCPConfigServer MCPConfigServer `yaml:"mcp_config_server,omitempty"`
+
 	// Router-specific options
 	RouterOptions `yaml:",inline"`
 	/*
@@ -109,6 +114,16 @@ type ToolSelection struct {
 type APIServer struct {
 	// API configuration for classification endpoints
 	API APIConfig `yaml:"api"`
+}
+
+// MCPConfigServer configures the optional internal MCP server.
+//
+// Note: Path is reserved for future use. The current HTTP transport implementation
+// in mcp-go may not support configurable base paths.
+type MCPConfigServer struct {
+	Enabled bool   `yaml:"enabled"`
+	Addr    string `yaml:"addr,omitempty"` // e.g. ":8088"
+	Path    string `yaml:"path,omitempty"` // e.g. "/mcp" (best-effort)
 }
 
 // LLMObservability represents the configuration for LLM observability
