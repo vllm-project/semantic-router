@@ -155,4 +155,3 @@ classifier:
   tokenizer_path: "models/qwen3-router_model"
   use_cpu: true
   threshold: 0.7
-

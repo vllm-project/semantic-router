@@ -33,6 +33,9 @@ type Config struct {
 	EvaluationDBPath     string
 	EvaluationResultsDir string
 	PythonPath           string
+
+	// MCP configuration
+	MCPEnabled bool
 }
 
 // env returns the env var or default
@@ -72,6 +75,9 @@ func LoadConfig() (*Config, error) {
 	evaluationResultsDir := flag.String("evaluation-results", env("EVALUATION_RESULTS_DIR", "./data/results"), "evaluation results directory")
 	pythonPath := flag.String("python", env("PYTHON_PATH", "python3"), "path to Python interpreter")
 
+	// MCP configuration
+	mcpEnabled := flag.Bool("mcp", env("MCP_ENABLED", "true") == "true", "enable MCP (Model Context Protocol) feature")
+
 	flag.Parse()
 
 	cfg.Port = *port
@@ -89,6 +95,7 @@ func LoadConfig() (*Config, error) {
 	cfg.EvaluationDBPath = *evaluationDBPath
 	cfg.EvaluationResultsDir = *evaluationResultsDir
 	cfg.PythonPath = *pythonPath
+	cfg.MCPEnabled = *mcpEnabled
 
 	// Resolve config file path to absolute path
 	absConfigPath, err := filepath.Abs(cfg.ConfigFile)
