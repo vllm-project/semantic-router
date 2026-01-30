@@ -4,6 +4,15 @@
 
 version: v0.1
 
+# Environment variables passed to the container
+# These are used for authentication and API access
+environment:
+  # HuggingFace token for downloading models and datasets
+  # Get your token from: https://huggingface.co/settings/tokens
+  HF_TOKEN: ""
+  # Uncomment to use a custom HuggingFace endpoint
+  # HF_ENDPOINT: "https://huggingface.co"
+
 # Listeners - Network configuration
 listeners:
   - name: "http-8888"
