@@ -2,6 +2,7 @@ config_source: kubernetes
 embedding_models:
   qwen3_model_path: models/mom-embedding-pro
   gemma_model_path: models/mom-embedding-flash
+  mmbert_model_path: ""
   use_cpu: true
 bert_model:
   model_id: models/mom-embedding-light
@@ -57,6 +58,7 @@ semantic_cache:
   embedding_model: bert
 response_api:
   enabled: false
+router_replay: {}
 observability:
   tracing:
     enabled: false
