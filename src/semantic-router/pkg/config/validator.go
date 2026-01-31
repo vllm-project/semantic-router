@@ -5,6 +5,8 @@ import (
 	"net"
 	"regexp"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 var (
@@ -143,8 +145,31 @@ func validateLatencyRules(rules []LatencyRule) error {
 		if rule.Name == "" {
 			return fmt.Errorf("latency_rules[%d]: name cannot be empty", i)
 		}
-		if rule.MaxTPOT <= 0 {
-			return fmt.Errorf("latency_rules[%d] (%s): max_tpot must be > 0, got: %.4f", i, rule.Name, rule.MaxTPOT)
+
+		// At least one of tpot_percentile or ttft_percentile must be set
+		hasTPOTPercentile := rule.TPOTPercentile > 0
+		hasTTFTPercentile := rule.TTFTPercentile > 0
+
+		if !hasTPOTPercentile && !hasTTFTPercentile {
+			return fmt.Errorf("latency_rules[%d] (%s): must specify at least one of tpot_percentile (1-100) or ttft_percentile (1-100). RECOMMENDED: use both for comprehensive latency evaluation", i, rule.Name)
+		}
+
+		// Warn (but don't error) if only one is set - recommend using both
+		if hasTPOTPercentile && !hasTTFTPercentile {
+			logging.Warnf("latency_rules[%d] (%s): only tpot_percentile is set. RECOMMENDED: also set ttft_percentile for comprehensive latency evaluation (user-perceived latency)", i, rule.Name)
+		}
+		if !hasTPOTPercentile && hasTTFTPercentile {
+			logging.Warnf("latency_rules[%d] (%s): only ttft_percentile is set. RECOMMENDED: also set tpot_percentile for comprehensive latency evaluation (token generation throughput)", i, rule.Name)
+		}
+
+		// Validate TPOT percentile if set
+		if hasTPOTPercentile && (rule.TPOTPercentile < 1 || rule.TPOTPercentile > 100) {
+			return fmt.Errorf("latency_rules[%d] (%s): tpot_percentile must be between 1 and 100, got: %d", i, rule.Name, rule.TPOTPercentile)
+		}
+
+		// Validate TTFT percentile if set
+		if hasTTFTPercentile && (rule.TTFTPercentile < 1 || rule.TTFTPercentile > 100) {
+			return fmt.Errorf("latency_rules[%d] (%s): ttft_percentile must be between 1 and 100, got: %d", i, rule.Name, rule.TTFTPercentile)
 		}
 	}
 	return nil
