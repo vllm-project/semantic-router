@@ -1171,7 +1171,10 @@ impl Qwen3MultiLoRAClassifier {
                 total_log_prob += prob.ln();
             }
 
-            category_log_probs.push(total_log_prob);
+            // Length-normalize to avoid bias toward shorter labels
+            // this is because longer labels multiply more probabilities < 1.0
+            let norm_log_prob = total_log_prob / (token_seq.len() as f32);
+            category_log_probs.push(norm_log_prob);
         }
 
         // Normalize log-probabilities across categories
