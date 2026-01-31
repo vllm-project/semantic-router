@@ -16,7 +16,8 @@ echo -e "${BLUE}  mmBERT GPU Training (Optimized)     ${NC}"
 echo -e "${BLUE}========================================${NC}"
 
 # OPTIMIZED Training configuration for high accuracy
-MODEL="mmbert-base"
+# Base model selector (see training_lora/common_lora_utils.py for mappings)
+MODEL="mmbert-32k-yarn"
 EPOCHS=10             # More epochs for better convergence
 BATCH_SIZE=64         # Balanced batch size (not too large)
 LORA_RANK=32          # Higher rank for more capacity

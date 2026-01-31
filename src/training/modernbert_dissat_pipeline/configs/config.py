@@ -41,7 +41,9 @@ class ModelConfig:
     """Model configuration."""
 
     # Base model - mmBERT (multilingual ModernBERT)
-    model_name: str = "jhu-clsp/mmBERT-base"
+    # Base model - mmBERT (multilingual ModernBERT)
+    # Default to our long-context YaRN variant.
+    model_name: str = "llm-semantic-router/mmbert-32k-yarn"
     # Alternative: "answerdotai/ModernBERT-base" for English-only
 
     # Sequence length (mmBERT supports up to 8192)

@@ -50,9 +50,13 @@ def get_target_modules_for_model(model_name: str) -> List[str]:
     if model_name in ["modernbert-base", "answerdotai/ModernBERT-base"]:
         # ModernBERT architecture
         return modernbert_modules
-    elif model_name in ["mmbert-base", "jhu-clsp/mmBERT-base"]:
-        # mmBERT (Multilingual ModernBERT) - same architecture as ModernBERT
-        # Supports 1800+ languages with 256K vocab and 8192 max length
+    elif model_name in [
+        "mmbert-base",
+        "jhu-clsp/mmBERT-base",
+        "mmbert-32k-yarn",
+        "llm-semantic-router/mmbert-32k-yarn",
+    ]:
+        # mmBERT family (Multilingual ModernBERT) - same architecture as ModernBERT
         return modernbert_modules
     elif model_name == "bert-base-uncased":
         # Standard BERT architecture - Enhanced for better performance
@@ -69,6 +73,8 @@ def get_target_modules_for_model(model_name: str) -> List[str]:
             "answerdotai/ModernBERT-base",
             "mmbert-base",
             "jhu-clsp/mmBERT-base",
+            "mmbert-32k-yarn",
+            "llm-semantic-router/mmbert-32k-yarn",
         ]
         raise ValueError(
             f"Unsupported model: {model_name}. "
@@ -370,7 +376,8 @@ def get_model_mapping() -> Dict[str, str]:
     return {
         "modernbert-base": "answerdotai/ModernBERT-base",
         "modernbert-large": "answerdotai/ModernBERT-large",
-        "mmbert-base": "jhu-clsp/mmBERT-base",  # Multilingual ModernBERT (1800+ languages)
+        "mmbert-base": "jhu-clsp/mmBERT-base",  # Multilingual ModernBERT
+        "mmbert-32k-yarn": "llm-semantic-router/mmbert-32k-yarn",  # mmBERT 32k context (YaRN)
         "bert-base-uncased": "bert-base-uncased",
         "bert-large-uncased": "bert-large-uncased",
         "roberta-base": "roberta-base",
@@ -392,7 +399,14 @@ def get_max_length_for_model(model_name: str) -> int:
         Maximum sequence length supported by the model
     """
     # mmBERT supports 8192 tokens, others typically 512
-    if model_name in ["mmbert-base", "jhu-clsp/mmBERT-base"]:
+    if model_name in [
+        "mmbert-base",
+        "jhu-clsp/mmBERT-base",
+        "mmbert-32k-yarn",
+        "llm-semantic-router/mmbert-32k-yarn",
+    ]:
+        # Note: YaRN variants may support longer context windows (e.g. 32k).
+        # Training scripts should set max_seq_length explicitly per task.
         return 8192
     elif model_name in ["modernbert-base", "answerdotai/ModernBERT-base"]:
         return 8192  # ModernBERT also supports long context
