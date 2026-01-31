@@ -7,7 +7,7 @@ metadata:
     component: envoy
 data:
   envoy.yaml: |
-    # Envoy configuration for KServe InferenceService integration
+    # Envoy configuration for KServe LLMInferenceService integration
     # This config routes traffic to KServe predictors based on semantic router decisions
     static_resources:
       listeners:
@@ -138,6 +138,8 @@ data:
 
       # Dynamic cluster using ORIGINAL_DST with header-based destination
       # The semantic router sets x-vsr-destination-endpoint header (IP:port)
+      # NOTE: This simulator config uses HTTP (no TLS). Use the main
+      # configmap-envoy-config.yaml if you switch simulator backends to TLS.
       - name: kserve_dynamic_cluster
         connect_timeout: 300s
         per_connection_buffer_limit_bytes: 52428800

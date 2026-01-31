@@ -4,11 +4,15 @@ metadata:
   name: llm-katan
 spec:
   selector:
-    matchLabels: {}
+    matchLabels:
+      app: llm-katan
+      app.kubernetes.io/name: llm-katan
   replicas: 1
   template:
     metadata:
-      labels: {}
+      labels:
+        app: llm-katan
+        app.kubernetes.io/name: llm-katan
     spec:
       # Create a non-root user for security (matching Dockerfile)
       securityContext:

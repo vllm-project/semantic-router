@@ -1,6 +1,6 @@
 # Semantic Router Integration with OpenShift AI KServe
 
-Deploy vLLM Semantic Router as an intelligent gateway for your OpenShift AI KServe InferenceServices.
+Deploy vLLM Semantic Router as an intelligent gateway for your OpenShift AI KServe LLMInferenceServices.
 
 > **Deployment Focus**: This guide is specifically for deploying semantic router on **OpenShift AI with KServe**.
 >
@@ -22,7 +22,7 @@ The semantic router acts as an intelligent API gateway that provides:
 Before deploying, ensure you have:
 
 1. **OpenShift Cluster** with OpenShift AI (RHOAI) installed
-2. **KServe InferenceService** already deployed and running
+2. **KServe LLMInferenceService** already deployed and running
 3. **OpenShift CLI (oc)** installed and logged in
 4. **Cluster admin or namespace admin** permissions
 
@@ -44,16 +44,16 @@ The script validates prerequisites, creates a stable service for your predictor,
 
 ## Manual Deployment
 
-### Step 1: Verify InferenceService
+### Step 1: Verify LLMInferenceService
 
-Check that your InferenceService is deployed and ready:
+Check that your LLMInferenceService is deployed and ready:
 
 ```bash
 NAMESPACE=<your-namespace>
-INFERENCESERVICE_NAME=<your-inferenceservice-name>
+INFERENCESERVICE_NAME=<your-llminferenceservice-name>
 
-# List InferenceServices
-oc get inferenceservice -n $NAMESPACE
+# List LLMInferenceServices
+oc get llminferenceservice -n $NAMESPACE
 
 # Create stable ClusterIP service for predictor
 cat <<EOF | oc apply -f - -n $NAMESPACE
@@ -64,11 +64,11 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    serving.kserve.io/inferenceservice: ${INFERENCESERVICE_NAME}
+    serving.kserve.io/llm-inferenceservice: ${INFERENCESERVICE_NAME}
   ports:
   - name: http
-    port: 8080
-    targetPort: 8080
+    port: 8000
+    targetPort: 8000
 EOF
 
 # Get the stable ClusterIP
@@ -87,7 +87,7 @@ Edit `configmap-router-config.yaml`:
 
 Edit `configmap-envoy-config.yaml`:
 
-1. Update `kserve_dynamic_cluster` address to: `<inferenceservice>-predictor.<namespace>.svc.cluster.local`
+1. Update `kserve_dynamic_cluster` address to: `<llminferenceservice>-predictor.<namespace>.svc.cluster.local`
 
 ### Step 3: Deploy Resources
 
@@ -119,7 +119,7 @@ oc get pods -l app=semantic-router -n $NAMESPACE -w
 oc logs -l app=semantic-router -c semantic-router -n $NAMESPACE -f
 ```
 
-The pod will download models (~2-3 minutes) then start serving traffic.
+The pod will download models, then start serving traffic.
 
 ## Accessing Services
 
@@ -136,14 +136,15 @@ Test the deployment:
 # Test models endpoint
 curl -k "https://$ROUTER_URL/v1/models"
 
-# Test chat completion
-curl -k "https://$ROUTER_URL/v1/chat/completions" \
+# Domain-specific auto-routing (law -> Model-B)
+curl -k -X POST "https://$ROUTER_URL/v1/chat/completions" \
   -H "Content-Type: application/json" \
-  -d '{
-    "model": "<your-model>",
-    "messages": [{"role": "user", "content": "What is 2+2?"}],
-    "max_tokens": 50
-  }'
+  -d '{"model":"auto","messages":[{"role":"user","content":"Explain the elements of a contract under common law and give a simple example."}]}'
+
+# Domain-specific auto-routing (math -> Model-A)
+curl -k -X POST "https://$ROUTER_URL/v1/chat/completions" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"auto","messages":[{"role":"user","content":"What is 2+2?"}]}'
 ```
 
 Run validation tests:
@@ -242,19 +243,19 @@ oc logs -l app=semantic-router -c semantic-router -n $NAMESPACE --previous
 - Invalid IP address - use ClusterIP not DNS in `vllm_endpoints.address`
 - Missing models - verify init container completed
 
-### Cannot Connect to InferenceService
+### Cannot Connect to LLMInferenceService
 
 ```bash
 # Test from router pod
 POD=$(oc get pods -l app=semantic-router -n $NAMESPACE -o jsonpath='{.items[0].metadata.name}')
 oc exec $POD -c semantic-router -n $NAMESPACE -- \
-  curl -v http://<inferenceservice>-predictor.$NAMESPACE.svc.cluster.local:8080/v1/models
+  curl -v http://<llminferenceservice>-predictor.$NAMESPACE.svc.cluster.local:8000/v1/models
 ```
 
 **Common causes:**
 
-- InferenceService not ready - check `oc get inferenceservice -n $NAMESPACE`
-- Wrong DNS name - verify format: `<inferenceservice>-predictor.<namespace>.svc.cluster.local`
+- LLMInferenceService not ready - check `oc get llminferenceservice -n $NAMESPACE`
+- Wrong DNS name - verify format: `<llminferenceservice>-predictor.<namespace>.svc.cluster.local`
 - Network policy blocking traffic
 - mTLS mode mismatch - ensure PERMISSIVE mode in PeerAuthentication
 

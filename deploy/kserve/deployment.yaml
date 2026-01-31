@@ -109,12 +109,12 @@ spec:
           ls -la /app/models/
 
           echo "Setting proper permissions..."
-          find /app/models -type f -exec chmod 644 {} \; || true
-          find /app/models -type d -exec chmod 755 {} \; || true
+          find /app/models -type f -exec chmod 644 {} \; 2>/dev/null || true
+          find /app/models -type d -exec chmod 755 {} \; 2>/dev/null || true
 
           echo "Creating cache directories..."
           mkdir -p /app/cache/hf /app/cache/transformers /app/cache/sentence_transformers /app/cache/xdg /app/cache/bert
-          chmod -R 777 /app/cache/ || true
+          chmod -R 777 /app/cache/ 2>/dev/null || true
 
           echo "Model download complete!"
         env:
