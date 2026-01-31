@@ -359,6 +359,21 @@ impl Model {
         }
     }
 
+    /// Snapshot KV caches for all layers (clone, cheap metadata copy)
+    pub fn kv_cache_snapshot(&self) -> Vec<candle_nn::kv_cache::KvCache> {
+        self.layers
+            .iter()
+            .map(|l| l.self_attn.kv_cache.clone())
+            .collect()
+    }
+
+    /// Restore KV caches from a prior snapshot
+    pub fn kv_cache_restore(&mut self, caches: &[candle_nn::kv_cache::KvCache]) {
+        for (layer, cache) in self.layers.iter_mut().zip(caches.iter()) {
+            layer.self_attn.kv_cache = cache.clone();
+        }
+    }
+
     /// Process prefix tokens and return for caching
     ///
     /// This processes the prefix through the model and the KV cache is automatically
@@ -482,6 +497,16 @@ impl ModelForCausalLM {
 
     pub fn clear_kv_cache(&mut self) {
         self.base.clear_kv_cache();
+    }
+
+    /// Snapshot KV caches for reuse (e.g., to reuse prompt prefix)
+    pub fn kv_cache_snapshot(&self) -> Vec<candle_nn::kv_cache::KvCache> {
+        self.base.kv_cache_snapshot()
+    }
+
+    /// Restore KV caches from a prior snapshot
+    pub fn kv_cache_restore(&mut self, caches: &[candle_nn::kv_cache::KvCache]) {
+        self.base.kv_cache_restore(caches);
     }
 
     /// Process prefix tokens for caching
