@@ -151,9 +151,6 @@ type InlineModels struct {
 
 	// Feedback detector configuration for user satisfaction detection
 	FeedbackDetector FeedbackDetectorConfig `yaml:"feedback_detector"`
-
-	// Preference model configuration for local preference classification
-	PreferenceModel PreferenceModelConfig `yaml:"preference_model,omitempty"`
 }
 
 // IntelligentRouting represents the configuration for intelligent routing
@@ -410,6 +407,8 @@ type Classifier struct {
 	MCPCategoryModel `yaml:"mcp_category_model,omitempty"`
 	// PII detection model
 	PIIModel `yaml:"pii_model"`
+	// Preference model configuration for local preference classification
+	PreferenceModel PreferenceModelConfig `yaml:"preference_model,omitempty"`
 }
 
 type BertModel struct {
