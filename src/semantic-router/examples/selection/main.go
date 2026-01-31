@@ -202,6 +202,47 @@ func main() {
 
 	demoSelectorWithEmbedding(hybridSelector, candidates, "Write an efficient sorting algorithm", []float32{0.8, 0.85, 0.9, 0.5, 0.4})
 
+	// Demo 6: ML-based Selectors (KNN, KMeans, SVM)
+	fmt.Println()
+	fmt.Println("┌────────────────────────────────────────────────────────────────────────────────┐")
+	fmt.Println("│ DEMO 6: ML-based Selectors (KNN, KMeans, SVM)                                  │")
+	fmt.Println("│ Machine learning algorithms for query-to-model routing                        │")
+	fmt.Println("└────────────────────────────────────────────────────────────────────────────────┘")
+
+	fmt.Println("\nML Selectors require training data (embeddings + quality scores).")
+	fmt.Println("These are created via Factory.CreateAll() and use pretrained models.")
+	fmt.Println()
+	fmt.Println("Available ML methods (configured per-decision in YAML):")
+	fmt.Println("  - knn:    Quality-weighted voting among K nearest neighbors")
+	fmt.Println("  - kmeans: Cluster-based routing with quality+latency scores")
+	fmt.Println("  - svm:    RBF kernel decision boundaries between model preferences")
+	fmt.Println()
+	fmt.Println("Example config:")
+	fmt.Println("  decisions:")
+	fmt.Println("    - name: \"math_decision\"")
+	fmt.Println("      algorithm:")
+	fmt.Println("        type: \"knn\"")
+	fmt.Println("        knn:")
+	fmt.Println("          k: 5")
+	fmt.Println()
+
+	// Create ML adapters (without pretrained models, they use fallback selection)
+	knnAdapter, err := selection.CreateKNNSelector(selection.DefaultMLSelectorConfig(), nil)
+	if err != nil {
+		fmt.Printf("⚠️  Failed to create KNN adapter: %v\n", err)
+	} else {
+		fmt.Println(">>> KNN Selector (without training data - uses fallback)")
+		demoSelector(knnAdapter, candidates, "What is machine learning?")
+	}
+
+	fmt.Println()
+	fmt.Println("📝 NOTE: For full ML selector functionality, train models using Python:")
+	fmt.Println("   cd src/training/ml_model_selection")
+	fmt.Println("   python train.py --data-file benchmark.jsonl --output-dir models/")
+	fmt.Println("   Or download from HuggingFace:")
+	fmt.Println("   python download_model.py --output-dir models/")
+	fmt.Println("   Then configure pretrained_path in your config YAML.")
+
 	fmt.Println()
 	fmt.Println("════════════════════════════════════════════════════════════════════════════════")
 	fmt.Println("✅ DEMO COMPLETE - All selection methods demonstrated with REAL code execution")

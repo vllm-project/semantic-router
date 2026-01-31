@@ -40,7 +40,7 @@ jobs:
              [[ "${{ needs.changes.outputs.core }}" == "true" ]] || \
              [[ "${{ github.event_name }}" == "schedule" ]] || \
              [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo 'profiles=["ai-gateway", "aibrix", "routing-strategies", "dynamic-config", "llm-d", "istio", "production-stack", "response-api", "response-api-redis", "response-api-redis-cluster"]' >> $GITHUB_OUTPUT                          
+            echo 'profiles=["ai-gateway", "aibrix", "routing-strategies", "dynamic-config", "llm-d", "istio", "production-stack", "response-api", "response-api-redis", "response-api-redis-cluster", "ml-model-selection"]' >> $GITHUB_OUTPUT                          
             echo 'should_run=true' >> $GITHUB_OUTPUT
             echo "Running all profiles due to common/core changes or push/schedule/manual trigger"
             exit 0
@@ -58,6 +58,7 @@ jobs:
           [[ "${{ needs.changes.outputs.e2e_response_api }}" == "true" ]] && profiles+=("response-api")
           [[ "${{ needs.changes.outputs.e2e_response_api_redis }}" == "true" ]] && profiles+=("response-api-redis")
           [[ "${{ needs.changes.outputs.e2e_response_api_redis_cluster }}" == "true" ]] && profiles+=("response-api-redis-cluster")
+          [[ "${{ needs.changes.outputs.e2e_ml_model_selection }}" == "true" ]] && profiles+=("ml-model-selection")
 
           # Convert to JSON array
           if [ ${#profiles[@]} -eq 0 ]; then
