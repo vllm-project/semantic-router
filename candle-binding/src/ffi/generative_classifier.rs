@@ -1006,25 +1006,27 @@ pub extern "C" fn classify_qwen3_preference(
     };
 
     match classifier_mutex.lock() {
-        Ok(mut classifier) => match classifier.classify_zero_shot(text_str, labels.clone()) {
-            Ok(result) => {
-                let class_idx = labels
-                    .iter()
-                    .position(|label| label == &result.category)
-                    .map(|idx| idx as i32)
-                    .unwrap_or(-1);
+        Ok(mut classifier) => {
+            match classifier.classify_zero_shot_multi_tokens(text_str, labels.clone()) {
+                Ok(result) => {
+                    let class_idx = labels
+                        .iter()
+                        .position(|label| label == &result.category)
+                        .map(|idx| idx as i32)
+                        .unwrap_or(-1);
 
-                ClassificationResult {
-                    predicted_class: class_idx,
-                    confidence: result.confidence,
-                    label: ptr::null_mut(),
+                    ClassificationResult {
+                        predicted_class: class_idx,
+                        confidence: result.confidence,
+                        label: ptr::null_mut(),
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error: Qwen3 preference classification failed: {}", e);
+                    default_result
                 }
             }
-            Err(e) => {
-                eprintln!("Error: Qwen3 preference classification failed: {}", e);
-                default_result
-            }
-        },
+        }
         Err(e) => {
             eprintln!("Error: failed to acquire preference classifier lock: {}", e);
             default_result
