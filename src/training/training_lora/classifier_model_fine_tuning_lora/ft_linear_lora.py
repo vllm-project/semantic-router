@@ -747,12 +747,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model",
         choices=[
-            "mmbert-base",  # mmBERT - Multilingual ModernBERT (1800+ languages, recommended)
+            "mmbert-32k",  # mmBERT-32K YaRN - 32K context, multilingual (RECOMMENDED)
+            "mmbert-base",  # mmBERT - Multilingual ModernBERT (1800+ languages, 8K context)
             "modernbert-base",  # ModernBERT base model - latest architecture
             "bert-base-uncased",  # BERT base model - most stable and CPU-friendly
             "roberta-base",  # RoBERTa base model - best intent classification performance
         ],
-        default="mmbert-base",  # Default to mmBERT for multilingual support
+        default="mmbert-32k",  # Default to mmBERT-32K for extended context support
     )
     parser.add_argument("--lora-rank", type=int, default=8)
     parser.add_argument("--lora-alpha", type=int, default=16)

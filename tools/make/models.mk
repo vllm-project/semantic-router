@@ -151,3 +151,238 @@ clean-mmbert: ## Remove downloaded mmBERT models
 	@rm -rf $(MODELS_DIR)/$(MMBERT_EMBEDDING_MODEL)
 	@rm -rf $(MODELS_DIR)/$(MMBERT_32K_BASE_MODEL)
 	@echo "✅ mmBERT models removed"
+
+# ======== mmBERT-32K Training ========
+# Training targets for mmBERT-32K-YaRN fine-tuned models
+# Base model: llm-semantic-router/mmbert-32k-yarn (32K context, multilingual)
+
+##@ mmBERT-32K Training
+
+# Training configuration
+TRAIN_EPOCHS ?= 5
+TRAIN_BATCH_SIZE ?= 8
+TRAIN_LR ?= 3e-5
+LORA_RANK ?= 8
+LORA_ALPHA ?= 16
+MAX_SAMPLES ?= 5000
+
+# Training script paths
+TRAINING_DIR := src/training
+LORA_DIR := $(TRAINING_DIR)/training_lora
+
+# Output directories for 32K models
+MMBERT32K_MODELS_DIR := models/mmbert32k
+
+train-mmbert32k-all: ## Train all mmBERT-32K models (LoRA + Merged)
+	@echo "🚀 Training all mmBERT-32K models..."
+	@echo "   Base model: llm-semantic-router/mmbert-32k-yarn"
+	@echo "   Epochs: $(TRAIN_EPOCHS), Batch size: $(TRAIN_BATCH_SIZE)"
+	@echo ""
+	@$(MAKE) train-mmbert32k-feedback
+	@$(MAKE) train-mmbert32k-intent
+	@$(MAKE) train-mmbert32k-pii
+	@$(MAKE) train-mmbert32k-jailbreak
+	@$(MAKE) train-mmbert32k-factcheck
+	@echo ""
+	@echo "✅ All mmBERT-32K models trained successfully!"
+	@echo ""
+	@$(MAKE) list-mmbert32k-models
+
+train-mmbert32k-feedback: ## Train Feedback Detector (4-class satisfaction)
+	@echo "📊 Training Feedback Detector with mmBERT-32K..."
+	@mkdir -p $(MMBERT32K_MODELS_DIR)
+	python $(TRAINING_DIR)/modernbert_dissat_pipeline/train_feedback_detector.py \
+		--model_name llm-semantic-router/mmbert-32k-yarn \
+		--output_dir $(MMBERT32K_MODELS_DIR)/feedback-detector \
+		--epochs $(TRAIN_EPOCHS) \
+		--batch_size $(TRAIN_BATCH_SIZE) \
+		--lr $(TRAIN_LR) \
+		--use_lora \
+		--lora_rank $(LORA_RANK) \
+		--lora_alpha $(LORA_ALPHA) \
+		--merge_lora
+	@echo "✅ Feedback Detector training complete"
+	@echo "   LoRA: $(MMBERT32K_MODELS_DIR)/feedback-detector_lora"
+	@echo "   Merged: $(MMBERT32K_MODELS_DIR)/feedback-detector_merged"
+
+train-mmbert32k-intent: ## Train Intent Classifier (MMLU-Pro categories)
+	@echo "🎯 Training Intent Classifier with mmBERT-32K..."
+	@mkdir -p $(MMBERT32K_MODELS_DIR)
+	python $(LORA_DIR)/classifier_model_fine_tuning_lora/ft_linear_lora.py \
+		--mode train \
+		--model mmbert-32k \
+		--lora-rank $(LORA_RANK) \
+		--lora-alpha $(LORA_ALPHA) \
+		--epochs $(TRAIN_EPOCHS) \
+		--batch-size $(TRAIN_BATCH_SIZE) \
+		--learning-rate $(TRAIN_LR) \
+		--max-samples $(MAX_SAMPLES)
+	@echo "✅ Intent Classifier training complete"
+	@# Move to organized directory
+	@if [ -d "lora_intent_classifier_mmbert-32k_r$(LORA_RANK)_model" ]; then \
+		mv lora_intent_classifier_mmbert-32k_r$(LORA_RANK)_model $(MMBERT32K_MODELS_DIR)/intent-classifier-lora; \
+	fi
+
+train-mmbert32k-pii: ## Train PII Detector (token classification)
+	@echo "🔒 Training PII Detector with mmBERT-32K..."
+	@mkdir -p $(MMBERT32K_MODELS_DIR)
+	python $(LORA_DIR)/pii_model_fine_tuning_lora/pii_bert_finetuning_lora.py \
+		--mode train \
+		--model mmbert-32k \
+		--lora-rank $(LORA_RANK) \
+		--lora-alpha $(LORA_ALPHA) \
+		--epochs $(TRAIN_EPOCHS) \
+		--batch-size $(TRAIN_BATCH_SIZE) \
+		--learning-rate $(TRAIN_LR)
+	@echo "✅ PII Detector training complete"
+	@# Move to organized directory
+	@if [ -d "lora_pii_classifier_mmbert-32k_r$(LORA_RANK)_model" ]; then \
+		mv lora_pii_classifier_mmbert-32k_r$(LORA_RANK)_model $(MMBERT32K_MODELS_DIR)/pii-detector-lora; \
+	fi
+
+train-mmbert32k-jailbreak: ## Train Jailbreak Detector (security classification)
+	@echo "🛡️  Training Jailbreak Detector with mmBERT-32K..."
+	@mkdir -p $(MMBERT32K_MODELS_DIR)
+	python $(LORA_DIR)/prompt_guard_fine_tuning_lora/jailbreak_bert_finetuning_lora.py \
+		--mode train \
+		--model mmbert-32k \
+		--lora-rank $(LORA_RANK) \
+		--lora-alpha $(LORA_ALPHA) \
+		--epochs $(TRAIN_EPOCHS) \
+		--batch-size $(TRAIN_BATCH_SIZE) \
+		--learning-rate $(TRAIN_LR)
+	@echo "✅ Jailbreak Detector training complete"
+	@# Move to organized directory
+	@if [ -d "lora_jailbreak_classifier_mmbert-32k_r$(LORA_RANK)_model" ]; then \
+		mv lora_jailbreak_classifier_mmbert-32k_r$(LORA_RANK)_model $(MMBERT32K_MODELS_DIR)/jailbreak-detector-lora; \
+	fi
+
+train-mmbert32k-factcheck: ## Train Fact Check Classifier
+	@echo "✓ Training Fact Check Classifier with mmBERT-32K..."
+	@mkdir -p $(MMBERT32K_MODELS_DIR)
+	python $(LORA_DIR)/fact_check_fine_tuning_lora/fact_check_bert_finetuning_lora.py \
+		--mode train \
+		--model mmbert-32k \
+		--lora-rank 16 \
+		--lora-alpha 32 \
+		--epochs $(TRAIN_EPOCHS) \
+		--batch-size $(TRAIN_BATCH_SIZE) \
+		--learning-rate $(TRAIN_LR) \
+		--max-samples $(MAX_SAMPLES)
+	@echo "✅ Fact Check Classifier training complete"
+	@# Move to organized directory
+	@if [ -d "lora_fact_check_classifier_mmbert-32k_r16_model" ]; then \
+		mv lora_fact_check_classifier_mmbert-32k_r16_model $(MMBERT32K_MODELS_DIR)/fact-check-lora; \
+	fi
+
+merge-mmbert32k-all: ## Merge all LoRA adapters into full models for Rust inference
+	@echo "🔗 Merging all mmBERT-32K LoRA adapters..."
+	@echo ""
+	@$(MAKE) merge-mmbert32k-intent
+	@$(MAKE) merge-mmbert32k-pii
+	@$(MAKE) merge-mmbert32k-jailbreak
+	@$(MAKE) merge-mmbert32k-factcheck
+	@echo ""
+	@echo "✅ All LoRA adapters merged!"
+	@$(MAKE) list-mmbert32k-models
+
+merge-mmbert32k-intent: ## Merge Intent Classifier LoRA adapter
+	@echo "🔗 Merging Intent Classifier..."
+	@if [ -d "$(MMBERT32K_MODELS_DIR)/intent-classifier-lora" ]; then \
+		python -c "from src.training.training_lora.classifier_model_fine_tuning_lora.ft_linear_lora import merge_lora_adapter_to_full_model; \
+			merge_lora_adapter_to_full_model('$(MMBERT32K_MODELS_DIR)/intent-classifier-lora', \
+				'$(MMBERT32K_MODELS_DIR)/intent-classifier-merged', \
+				'llm-semantic-router/mmbert-32k-yarn')"; \
+	else \
+		echo "   ⚠️  LoRA adapter not found, skipping..."; \
+	fi
+
+merge-mmbert32k-pii: ## Merge PII Detector LoRA adapter
+	@echo "🔗 Merging PII Detector..."
+	@if [ -d "$(MMBERT32K_MODELS_DIR)/pii-detector-lora" ]; then \
+		python -c "from src.training.training_lora.pii_model_fine_tuning_lora.pii_bert_finetuning_lora import merge_lora_adapter_to_full_model; \
+			merge_lora_adapter_to_full_model('$(MMBERT32K_MODELS_DIR)/pii-detector-lora', \
+				'$(MMBERT32K_MODELS_DIR)/pii-detector-merged', \
+				'llm-semantic-router/mmbert-32k-yarn')"; \
+	else \
+		echo "   ⚠️  LoRA adapter not found, skipping..."; \
+	fi
+
+merge-mmbert32k-jailbreak: ## Merge Jailbreak Detector LoRA adapter
+	@echo "🔗 Merging Jailbreak Detector..."
+	@if [ -d "$(MMBERT32K_MODELS_DIR)/jailbreak-detector-lora" ]; then \
+		python -c "from src.training.training_lora.prompt_guard_fine_tuning_lora.jailbreak_bert_finetuning_lora import merge_lora_adapter_to_full_model; \
+			merge_lora_adapter_to_full_model('$(MMBERT32K_MODELS_DIR)/jailbreak-detector-lora', \
+				'$(MMBERT32K_MODELS_DIR)/jailbreak-detector-merged', \
+				'llm-semantic-router/mmbert-32k-yarn')"; \
+	else \
+		echo "   ⚠️  LoRA adapter not found, skipping..."; \
+	fi
+
+merge-mmbert32k-factcheck: ## Merge Fact Check Classifier LoRA adapter
+	@echo "🔗 Merging Fact Check Classifier..."
+	@if [ -d "$(MMBERT32K_MODELS_DIR)/fact-check-lora" ]; then \
+		python -c "from src.training.training_lora.fact_check_fine_tuning_lora.fact_check_bert_finetuning_lora import merge_lora_adapter_to_full_model; \
+			merge_lora_adapter_to_full_model('$(MMBERT32K_MODELS_DIR)/fact-check-lora', \
+				'$(MMBERT32K_MODELS_DIR)/fact-check-merged', \
+				'llm-semantic-router/mmbert-32k-yarn')"; \
+	else \
+		echo "   ⚠️  LoRA adapter not found, skipping..."; \
+	fi
+
+list-mmbert32k-models: ## List all trained mmBERT-32K models
+	@echo ""
+	@echo "📦 Trained mmBERT-32K Models:"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@if [ -d "$(MMBERT32K_MODELS_DIR)" ]; then \
+		ls -la $(MMBERT32K_MODELS_DIR)/ 2>/dev/null || echo "   (empty)"; \
+	else \
+		echo "   No models trained yet. Run: make train-mmbert32k-all"; \
+	fi
+	@echo ""
+
+clean-mmbert32k: ## Remove all trained mmBERT-32K models
+	@echo "🗑️  Removing trained mmBERT-32K models..."
+	@rm -rf $(MMBERT32K_MODELS_DIR)
+	@rm -rf lora_*_mmbert-32k_*
+	@echo "✅ mmBERT-32K models removed"
+
+##@ mmBERT-32K GPU Training (ROCm)
+
+# Docker image for GPU training
+ROCM_IMAGE ?= rocm/vllm:v0.14.0_amd_dev
+
+train-mmbert32k-gpu: ## Train all mmBERT-32K models on GPU (ROCm Docker)
+	@echo "🚀 Training mmBERT-32K models on GPU..."
+	@./scripts/train-mmbert32k-gpu.sh
+
+train-mmbert32k-gpu-quick: ## Quick GPU training (fewer samples, 3 epochs)
+	@echo "🚀 Quick GPU training (3 epochs, 2000 samples)..."
+	TRAIN_EPOCHS=3 MAX_SAMPLES=2000 ./scripts/train-mmbert32k-gpu.sh
+
+train-mmbert32k-gpu-full: ## Full GPU training (more samples, 10 epochs)
+	@echo "🚀 Full GPU training (10 epochs, 20000 samples)..."
+	TRAIN_EPOCHS=10 MAX_SAMPLES=20000 TRAIN_BATCH_SIZE=32 ./scripts/train-mmbert32k-gpu.sh
+
+train-mmbert32k-gpu-shell: ## Open interactive shell in GPU training container
+	@echo "🐚 Opening interactive shell in ROCm container..."
+	@docker run --rm -it \
+		--device=/dev/kfd \
+		--device=/dev/dri \
+		--group-add video \
+		--shm-size=16g \
+		-v "$(CURDIR):/workspace" \
+		-v "$(HOME)/.cache/huggingface:/root/.cache/huggingface" \
+		-w /workspace \
+		-e HF_HOME="/root/.cache/huggingface" \
+		$(ROCM_IMAGE) \
+		/bin/bash
+
+check-gpu: ## Check GPU availability in Docker container
+	@echo "🔍 Checking GPU availability..."
+	@docker run --rm \
+		--device=/dev/kfd \
+		--device=/dev/dri \
+		--group-add video \
+		$(ROCM_IMAGE) \
+		python3 -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'ROCm: {torch.cuda.is_available()}'); print(f'GPUs: {torch.cuda.device_count()}'); [print(f'  GPU {i}: {torch.cuda.get_device_name(i)} ({torch.cuda.get_device_properties(i).total_memory/1024**3:.0f}GB)') for i in range(torch.cuda.device_count())]"
