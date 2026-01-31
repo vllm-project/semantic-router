@@ -101,12 +101,12 @@ func (r *OpenAIRouter) performContrastiveJailbreakCheck(ctx *RequestContext, use
 
 		// Structured log for security block
 		logging.LogEvent("security_block", map[string]interface{}{
-			"reason_code":    "multi_turn_jailbreak_detected",
-			"max_score":      result.MaxScore,
-			"threshold":      r.ContrastiveJailbreakClassifier.GetThreshold(),
-			"flagged_turn":   result.FlaggedIndex,
-			"total_turns":    len(result.ScoresPerTurn),
-			"request_id":     ctx.RequestID,
+			"reason_code":  "multi_turn_jailbreak_detected",
+			"max_score":    result.MaxScore,
+			"threshold":    r.ContrastiveJailbreakClassifier.GetThreshold(),
+			"flagged_turn": result.FlaggedIndex,
+			"total_turns":  len(result.ScoresPerTurn),
+			"request_id":   ctx.RequestID,
 		})
 
 		// Count this as a blocked request

@@ -78,7 +78,7 @@ func (c *ContrastiveJailbreakClassifier) preloadKBEmbeddings() error {
 
 	// Collect all patterns to process
 	type embeddingTask struct {
-		pattern    string
+		pattern     string
 		isJailbreak bool
 	}
 
