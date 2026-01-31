@@ -6,15 +6,16 @@ import "strings"
 type ModelPurpose string
 
 const (
-	PurposeDomainClassification   ModelPurpose = "domain-classification"   // Classify text into domains/categories
-	PurposePIIDetection           ModelPurpose = "pii-detection"           // Detect personally identifiable information
-	PurposeJailbreakDetection     ModelPurpose = "jailbreak-detection"     // Detect prompt injection/jailbreak attempts
-	PurposeHallucinationSentinel  ModelPurpose = "hallucination-sentinel"  // Detect potential hallucinations
-	PurposeHallucinationDetector  ModelPurpose = "hallucination-detector"  // Verify factual accuracy
-	PurposeHallucinationExplainer ModelPurpose = "hallucination-explainer" // Explain hallucination reasoning
-	PurposeFeedbackDetection      ModelPurpose = "feedback-detection"      // Detect user feedback type
-	PurposeEmbedding              ModelPurpose = "embedding"               // Generate text embeddings
-	PurposeSemanticSimilarity     ModelPurpose = "semantic-similarity"     // Compute semantic similarity
+	PurposeDomainClassification     ModelPurpose = "domain-classification"     // Classify text into domains/categories
+	PurposePIIDetection             ModelPurpose = "pii-detection"             // Detect personally identifiable information
+	PurposeJailbreakDetection       ModelPurpose = "jailbreak-detection"       // Detect prompt injection/jailbreak attempts
+	PurposeHallucinationSentinel    ModelPurpose = "hallucination-sentinel"    // Detect potential hallucinations
+	PurposeHallucinationDetector    ModelPurpose = "hallucination-detector"    // Verify factual accuracy
+	PurposeHallucinationExplainer   ModelPurpose = "hallucination-explainer"   // Explain hallucination reasoning
+	PurposeFeedbackDetection        ModelPurpose = "feedback-detection"        // Detect user feedback type
+	PurposeEmbedding                ModelPurpose = "embedding"                 // Generate text embeddings
+	PurposeSemanticSimilarity       ModelPurpose = "semantic-similarity"       // Compute semantic similarity
+	PurposePreferenceClassification ModelPurpose = "preference-classification" // Route preference matching
 )
 
 // ModelSpec defines a model's metadata and capabilities
