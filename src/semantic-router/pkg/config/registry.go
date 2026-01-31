@@ -6,15 +6,16 @@ import "strings"
 type ModelPurpose string
 
 const (
-	PurposeDomainClassification   ModelPurpose = "domain-classification"   // Classify text into domains/categories
-	PurposePIIDetection           ModelPurpose = "pii-detection"           // Detect personally identifiable information
-	PurposeJailbreakDetection     ModelPurpose = "jailbreak-detection"     // Detect prompt injection/jailbreak attempts
-	PurposeHallucinationSentinel  ModelPurpose = "hallucination-sentinel"  // Detect potential hallucinations
-	PurposeHallucinationDetector  ModelPurpose = "hallucination-detector"  // Verify factual accuracy
-	PurposeHallucinationExplainer ModelPurpose = "hallucination-explainer" // Explain hallucination reasoning
-	PurposeFeedbackDetection      ModelPurpose = "feedback-detection"      // Detect user feedback type
-	PurposeEmbedding              ModelPurpose = "embedding"               // Generate text embeddings
-	PurposeSemanticSimilarity     ModelPurpose = "semantic-similarity"     // Compute semantic similarity
+	PurposeDomainClassification     ModelPurpose = "domain-classification"     // Classify text into domains/categories
+	PurposePIIDetection             ModelPurpose = "pii-detection"             // Detect personally identifiable information
+	PurposeJailbreakDetection       ModelPurpose = "jailbreak-detection"       // Detect prompt injection/jailbreak attempts
+	PurposeHallucinationSentinel    ModelPurpose = "hallucination-sentinel"    // Detect potential hallucinations
+	PurposeHallucinationDetector    ModelPurpose = "hallucination-detector"    // Verify factual accuracy
+	PurposeHallucinationExplainer   ModelPurpose = "hallucination-explainer"   // Explain hallucination reasoning
+	PurposeFeedbackDetection        ModelPurpose = "feedback-detection"        // Detect user feedback type
+	PurposeEmbedding                ModelPurpose = "embedding"                 // Generate text embeddings
+	PurposeSemanticSimilarity       ModelPurpose = "semantic-similarity"       // Compute semantic similarity
+	PurposePreferenceClassification ModelPurpose = "preference-classification" // Route preference matching
 )
 
 // ModelSpec defines a model's metadata and capabilities
@@ -214,6 +215,16 @@ var DefaultModelRegistry = []ModelSpec{
 		EmbeddingDim:     768, // Default, supports 512/256/128/64 via Matryoshka
 		MaxContextLength: 32768,
 		Tags:             []string{"embedding", "matryoshka", "2d-matryoshka", "multilingual", "modernbert", "long-context", "early-exit", "flash-attention-2"},
+	},
+
+	// Preference Classification (route preference matching)
+	{
+		LocalPath:   "models/mom-preference-classifier",
+		RepoID:      "ppppqp/vLLM-SR-Preference-V1",
+		Aliases:     []string{"vLLM-SR-Preference-V1", "preference-classifier", "ppppqp/vLLM-SR-Preference-V1"},
+		Purpose:     PurposePreferenceClassification,
+		Description: "Preference classifier for routing (Qwen3-based)",
+		Tags:        []string{"preference", "routing", "classification", "qwen3"},
 	},
 }
 
