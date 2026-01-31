@@ -495,6 +495,12 @@ impl ModelForCausalLM {
             .apply(&self.lm_head)
     }
 
+    /// Forward over all time steps (returns logits for each position)
+    pub fn forward_all(&mut self, input: &Tensor, offset: usize) -> Result<Tensor> {
+        let h = self.base.forward(input, offset)?;
+        h.apply(&self.lm_head)
+    }
+
     pub fn clear_kv_cache(&mut self) {
         self.base.clear_kv_cache();
     }

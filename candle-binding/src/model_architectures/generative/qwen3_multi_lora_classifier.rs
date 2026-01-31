@@ -1055,8 +1055,8 @@ impl Qwen3MultiLoRAClassifier {
             instruction
         );
 
-        // Tokenize
-        let encoding = self.tokenizer.encode(prompt.as_str(), true).map_err(|e| {
+        // Tokenize prompt
+        let prompt_encoding = self.tokenizer.encode(prompt.as_str(), true).map_err(|e| {
             UnifiedError::Configuration {
                 operation: "tokenize".to_string(),
                 source: ConfigErrorType::ParseError(e.to_string()),
@@ -1065,17 +1065,15 @@ impl Qwen3MultiLoRAClassifier {
         })?;
 
         // Keep prompt tokens to reuse across category scoring
-        let prompt_token_ids: Vec<u32> = encoding.get_ids().to_vec();
-
-        // Prefill once to build KV cache for the shared prompt
-        let prompt_len = self
-            .base_model
-            .process_prefix(&prompt_token_ids)
-            .map_err(|e| UnifiedError::Processing {
-                operation: "process prompt prefix".to_string(),
-                source: e.to_string(),
-                input_context: None,
-            })?;
+        let prompt_ids: Vec<u32> = prompt_encoding.get_ids().to_vec();
+        let prompt_len =
+            self.base_model
+                .process_prefix(&prompt_ids)
+                .map_err(|e| UnifiedError::Processing {
+                    operation: "process prompt prefix".to_string(),
+                    source: e.to_string(),
+                    input_context: None,
+                })?;
 
         // Snapshot prompt KV cache so each category can start from the same state
         let prompt_cache = self.base_model.kv_cache_snapshot();
@@ -1104,55 +1102,45 @@ impl Qwen3MultiLoRAClassifier {
             category_token_seqs.push(ids.to_vec());
         }
 
-        // Compute log-probability for each category by walking all tokens
+        // Compute log-probability for each category with a single forward per category,
+        // reusing the prompt KV cache.
         let mut category_log_probs = Vec::with_capacity(categories.len());
 
         for (cat_idx, token_seq) in category_token_seqs.iter().enumerate() {
-            // Restore prompt cache so each category shares the same prefix state
+            // Restore prompt cache so each category starts from identical prefix state
             self.base_model.kv_cache_restore(&prompt_cache);
 
+            let label_ids = Tensor::from_vec(token_seq.clone(), (1, token_seq.len()), &self.device)
+                .map_err(|e| UnifiedError::Processing {
+                    operation: "create label tensor".to_string(),
+                    source: e.to_string(),
+                    input_context: Some(format!("category={}", categories[cat_idx])),
+                })?;
+
+            // Forward all label tokens with prefix cache already populated
+            let logits = self
+                .base_model
+                .forward_all(&label_ids, prompt_len)
+                .map_err(|e| UnifiedError::Model {
+                    model_type: crate::core::ModelErrorType::Embedding,
+                    operation: "full forward".to_string(),
+                    source: e.to_string(),
+                    context: Some(format!("category={}", categories[cat_idx])),
+                })?;
+
+            // logits shape: [1, label_len, vocab]; score each label token
             let mut total_log_prob = 0f32;
-            let mut offset = prompt_len;
-
-            for &token_id in token_seq {
-                // Single-token step conditioned on existing KV cache
-                let token_tensor =
-                    Tensor::from_vec(vec![token_id], (1, 1), &self.device).map_err(|e| {
-                        UnifiedError::Processing {
-                            operation: "create token tensor".to_string(),
-                            source: e.to_string(),
-                            input_context: Some(format!("category={}", categories[cat_idx])),
-                        }
-                    })?;
-
-                let step_logits = self
-                    .base_model
-                    .forward(&token_tensor, offset)
-                    .map_err(|e| UnifiedError::Model {
-                        model_type: crate::core::ModelErrorType::Embedding,
-                        operation: "base forward".to_string(),
-                        source: e.to_string(),
-                        context: Some(format!("category={}", categories[cat_idx])),
-                    })?;
-
-                let step_logits = step_logits
-                    .squeeze(1)
+            for (tok_idx, &token_id) in token_seq.iter().enumerate() {
+                let step_logits = logits
+                    .i((0, tok_idx))
                     .map_err(|e| UnifiedError::Processing {
-                        operation: "squeeze logits".to_string(),
-                        source: e.to_string(),
-                        input_context: Some(format!("category={}", categories[cat_idx])),
-                    })?;
-
-                let step_logits = step_logits
-                    .i(0)
-                    .map_err(|e| UnifiedError::Processing {
-                        operation: "index batch".to_string(),
+                        operation: "index logits".to_string(),
                         source: e.to_string(),
                         input_context: Some(format!("category={}", categories[cat_idx])),
                     })?
                     .to_dtype(DType::F32)
                     .map_err(|e| UnifiedError::Processing {
-                        operation: "convert to f32".to_string(),
+                        operation: "convert logits to f32".to_string(),
                         source: e.to_string(),
                         input_context: Some(format!("category={}", categories[cat_idx])),
                     })?;
@@ -1177,12 +1165,10 @@ impl Qwen3MultiLoRAClassifier {
                         input_context: Some(format!("category={}", categories[cat_idx])),
                     });
                 }
-
+                // for each label token, compute log-probability
                 let probs = softmax(&logits_vec);
                 let prob = probs[token_id as usize].max(f32::MIN_POSITIVE);
                 total_log_prob += prob.ln();
-
-                offset += 1;
             }
 
             category_log_probs.push(total_log_prob);
