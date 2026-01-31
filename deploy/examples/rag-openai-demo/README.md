@@ -124,7 +124,7 @@ response = ask_with_rag(
 
 ## Configuration
 
-The demo uses the following Semantic Router configuration:
+The demo uses the following Semantic Router configuration. **Note**: The router automatically selects decisions based on signals (keywords, embeddings, etc.) - no HTTP headers are required in production.
 
 ```yaml
 decisions:

@@ -57,6 +57,20 @@ def main():
             help="direct_search: Synchronous retrieval\n\ntool_based: LLM-controlled retrieval",
         )
 
+        # Optional: Explicit decision selection (for testing)
+        # In production, router automatically selects decisions based on signals
+        use_explicit_decision = st.checkbox(
+            "Use explicit decision header",
+            value=False,
+            help="If enabled, uses X-VSR-Selected-Decision header. "
+            "Otherwise, router automatically matches decisions based on signals.",
+        )
+        explicit_decision_name = st.text_input(
+            "Decision Name",
+            value="rag-openai-decision",
+            disabled=not use_explicit_decision,
+        )
+
         st.divider()
         st.header("Vector Store")
 
@@ -228,17 +242,28 @@ def main():
                         try:
                             import requests
 
-                            headers = {
-                                "Content-Type": "application/json",
-                                "X-VSR-Selected-Decision": "rag-openai-decision",
-                            }
+                            # Use Responses API with file_search tool
+                            # Router automatically selects decision based on signals (keywords, etc.)
+                            # No need for X-VSR-Selected-Decision header in production
+                            vs_id = st.session_state["vector_store_id"]
                             request_body = {
                                 "model": "gpt-4o-mini",
-                                "messages": [{"role": "user", "content": prompt}],
+                                "input": prompt,
+                                "tools": [
+                                    {
+                                        "type": "file_search",
+                                        "vector_store_ids": [vs_id],
+                                    }
+                                ],
                             }
 
+                            # Build headers - only include decision header if explicitly requested
+                            headers = {"Content-Type": "application/json"}
+                            if use_explicit_decision and explicit_decision_name:
+                                headers["X-VSR-Selected-Decision"] = explicit_decision_name
+
                             response = requests.post(
-                                f"{semantic_router_url}/v1/chat/completions",
+                                f"{semantic_router_url}/v1/responses",
                                 headers=headers,
                                 json=request_body,
                                 timeout=60,
@@ -246,7 +271,21 @@ def main():
                             response.raise_for_status()
                             result = response.json()
 
-                            answer = result["choices"][0]["message"]["content"]
+                            # Extract response content from Responses API format
+                            # Response API returns output array with content items
+                            if "output" in result and len(result["output"]) > 0:
+                                output_item = result["output"][0]
+                                if "content" in output_item:
+                                    content = output_item["content"]
+                                    if isinstance(content, list) and len(content) > 0:
+                                        answer = content[0].get("text", "")
+                                    else:
+                                        answer = str(content)
+                                else:
+                                    answer = str(output_item)
+                            else:
+                                answer = "No response content found"
+
                             st.markdown(answer)
                             st.session_state.messages.append(
                                 {"role": "assistant", "content": answer}
@@ -294,29 +333,52 @@ def main():
                         st.error(f"Error: {e}")
 
         with col2:
-            st.subheader("With RAG")
+            st.subheader("With RAG (Responses API)")
             if st.button("Get RAG Response") and "vector_store_id" in st.session_state:
                 with st.spinner("Getting RAG response..."):
                     try:
                         import requests
 
+                        vs_id = st.session_state["vector_store_id"]
+                        # Use Responses API with file_search tool
+                        # Router automatically selects decision based on signals
+                        headers = {"Content-Type": "application/json"}
+                        if use_explicit_decision and explicit_decision_name:
+                            headers["X-VSR-Selected-Decision"] = explicit_decision_name
+
                         response = requests.post(
-                            f"{semantic_router_url}/v1/chat/completions",
-                            headers={
-                                "Content-Type": "application/json",
-                                "X-VSR-Selected-Decision": "rag-openai-decision",
-                            },
+                            f"{semantic_router_url}/v1/responses",
+                            headers=headers,
                             json={
                                 "model": "gpt-4o-mini",
-                                "messages": [
-                                    {"role": "user", "content": comparison_query}
+                                "input": comparison_query,
+                                "tools": [
+                                    {
+                                        "type": "file_search",
+                                        "vector_store_ids": [vs_id],
+                                    }
                                 ],
                             },
                             timeout=60,
                         )
                         response.raise_for_status()
                         result = response.json()
-                        st.markdown(result["choices"][0]["message"]["content"])
+
+                        # Extract response content from Responses API format
+                        if "output" in result and len(result["output"]) > 0:
+                            output_item = result["output"][0]
+                            if "content" in output_item:
+                                content = output_item["content"]
+                                if isinstance(content, list) and len(content) > 0:
+                                    answer = content[0].get("text", "")
+                                else:
+                                    answer = str(content)
+                            else:
+                                answer = str(output_item)
+                        else:
+                            answer = "No response content found"
+
+                        st.markdown(answer)
                     except Exception as e:
                         st.error(f"Error: {e}")
             elif "vector_store_id" not in st.session_state:
