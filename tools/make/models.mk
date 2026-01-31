@@ -21,6 +21,9 @@ MMBERT_MODELS := \
 # mmBERT embedding model with 2D Matryoshka support
 MMBERT_EMBEDDING_MODEL := mmbert-embed-32k-2d-matryoshka
 
+# mmBERT base 32K YaRN model (extended context MLM model)
+MMBERT_32K_BASE_MODEL := mmbert-32k-yarn
+
 # mmBERT LoRA adapters (for Python fine-tuning)
 MMBERT_LORA_ADAPTERS := \
 	mmbert-intent-classifier-lora \
@@ -73,7 +76,7 @@ download-mmbert-lora: ## Download mmBERT LoRA adapters for Python fine-tuning
 	@echo "✅ mmBERT LoRA adapters downloaded to $(MODELS_DIR)/"
 	@ls -la $(MODELS_DIR)/
 
-download-mmbert-all: download-mmbert download-mmbert-lora download-mmbert-embedding ## Download all mmBERT models, LoRA adapters, and embedding model
+download-mmbert-all: download-mmbert download-mmbert-lora download-mmbert-embedding download-mmbert-32k ## Download all mmBERT models, LoRA adapters, embedding, and 32K base model
 
 download-mmbert-embedding: ## Download mmBERT 2D Matryoshka embedding model
 	@echo "📦 Downloading mmBERT 2D Matryoshka embedding model..."
@@ -94,6 +97,49 @@ download-mmbert-embedding: ## Download mmBERT 2D Matryoshka embedding model
 	@echo "Usage example:"
 	@echo "  make run-router CONFIG_FILE=config/intelligent-routing/in-tree/embedding-mmbert.yaml"
 
+download-mmbert-32k: ## Download mmBERT 32K YaRN base model (extended context MLM)
+	@echo "📦 Downloading mmBERT 32K YaRN base model..."
+	@mkdir -p $(MODELS_DIR)
+	@echo ""
+	@echo "⬇️  Downloading $(MMBERT_32K_BASE_MODEL)..."
+	@echo "   This model supports:"
+	@echo "   - 32K context length (extended from 8K via YaRN RoPE scaling)"
+	@echo "   - YaRN theta: 160000 (4x scaling from original)"
+	@echo "   - Multilingual (1800+ languages via Glot500)"
+	@echo "   - 307M parameters"
+	@if [ -d "$(MODELS_DIR)/$(MMBERT_32K_BASE_MODEL)" ]; then \
+		echo "   Already exists, updating..."; \
+	fi
+	@huggingface-cli download $(HF_ORG)/$(MMBERT_32K_BASE_MODEL) --local-dir $(MODELS_DIR)/$(MMBERT_32K_BASE_MODEL) --local-dir-use-symlinks False
+	@echo ""
+	@echo "✅ mmBERT 32K YaRN model downloaded to $(MODELS_DIR)/$(MMBERT_32K_BASE_MODEL)"
+	@echo ""
+	@echo "Model details:"
+	@echo "  - Max context: 32,768 tokens"
+	@echo "  - RoPE theta: 160,000 (YaRN-scaled)"
+	@echo "  - Architecture: ModernBERT with Flash Attention 2"
+	@echo "  - Reference: https://huggingface.co/$(HF_ORG)/$(MMBERT_32K_BASE_MODEL)"
+
+test-mmbert-32k: ## Test mmBERT 32K context with AVX512 optimization
+	@echo "🧪 Testing mmBERT 32K context length support..."
+	@echo "   Using release mode + native CPU optimization (AVX512)"
+	@echo ""
+	cd candle-binding && \
+		MMBERT_MODEL_PATH=../$(MODELS_DIR)/mmbert-embed-32k-2d-matryoshka \
+		RUSTFLAGS="-C target-cpu=native" \
+		cargo test --release --no-default-features --lib test_32k_context_length -- --ignored --nocapture
+	@echo ""
+	@echo "✅ mmBERT 32K context test completed"
+
+test-mmbert-32k-all: ## Run all 32K-related tests with optimization
+	@echo "🧪 Running all 32K tests with AVX512 optimization..."
+	cd candle-binding && \
+		MMBERT_MODEL_PATH=../$(MODELS_DIR)/mmbert-embed-32k-2d-matryoshka \
+		RUSTFLAGS="-C target-cpu=native" \
+		cargo test --release --no-default-features --lib "32k" -- --nocapture
+	@echo ""
+	@echo "✅ All 32K tests completed"
+
 clean-minimal-models: ## No-op target for backward compatibility
 	@echo "ℹ️  This target is no longer needed"
 
@@ -103,4 +149,5 @@ clean-mmbert: ## Remove downloaded mmBERT models
 		rm -rf $(MODELS_DIR)/$$model; \
 	done
 	@rm -rf $(MODELS_DIR)/$(MMBERT_EMBEDDING_MODEL)
+	@rm -rf $(MODELS_DIR)/$(MMBERT_32K_BASE_MODEL)
 	@echo "✅ mmBERT models removed"
