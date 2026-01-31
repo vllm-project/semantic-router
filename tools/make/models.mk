@@ -24,12 +24,20 @@ MMBERT_EMBEDDING_MODEL := mmbert-embed-32k-2d-matryoshka
 # mmBERT base 32K YaRN model (extended context MLM model)
 MMBERT_32K_BASE_MODEL := mmbert-32k-yarn
 
-# mmBERT LoRA adapters (for Python fine-tuning)
+# mmBERT LoRA adapters (for Python fine-tuning) - 8K context
 MMBERT_LORA_ADAPTERS := \
 	mmbert-intent-classifier-lora \
 	mmbert-fact-check-lora \
 	mmbert-pii-detector-lora \
 	mmbert-jailbreak-detector-lora
+
+# mmBERT-32K LoRA adapters (32K context, YaRN-scaled)
+MMBERT_32K_LORA_ADAPTERS := \
+	mmbert32k-feedback-detector-lora \
+	mmbert32k-intent-classifier-lora \
+	mmbert32k-pii-detector-lora \
+	mmbert32k-jailbreak-detector-lora \
+	mmbert32k-factcheck-classifier-lora
 
 # Download models by running the router with --download-only flag
 download-models: ## Download models using router's built-in download logic
@@ -76,7 +84,28 @@ download-mmbert-lora: ## Download mmBERT LoRA adapters for Python fine-tuning
 	@echo "✅ mmBERT LoRA adapters downloaded to $(MODELS_DIR)/"
 	@ls -la $(MODELS_DIR)/
 
-download-mmbert-all: download-mmbert download-mmbert-lora download-mmbert-embedding download-mmbert-32k ## Download all mmBERT models, LoRA adapters, embedding, and 32K base model
+download-mmbert-all: download-mmbert download-mmbert-lora download-mmbert-32k-lora download-mmbert-embedding download-mmbert-32k ## Download all mmBERT models, LoRA adapters, embedding, and 32K base model
+
+download-mmbert-32k-lora: ## Download mmBERT-32K LoRA adapters (32K context models)
+	@echo "📦 Downloading mmBERT-32K LoRA adapters from Hugging Face..."
+	@mkdir -p $(MODELS_DIR)
+	@for adapter in $(MMBERT_32K_LORA_ADAPTERS); do \
+		echo ""; \
+		echo "⬇️  Downloading $$adapter..."; \
+		if [ -d "$(MODELS_DIR)/$$adapter" ]; then \
+			echo "   Already exists, updating..."; \
+		fi; \
+		huggingface-cli download $(HF_ORG)/$$adapter --local-dir $(MODELS_DIR)/$$adapter --local-dir-use-symlinks False; \
+	done
+	@echo ""
+	@echo "✅ mmBERT-32K LoRA adapters downloaded to $(MODELS_DIR)/"
+	@echo ""
+	@echo "Available 32K models:"
+	@echo "  - mmbert32k-feedback-detector-lora   (4-class satisfaction)"
+	@echo "  - mmbert32k-intent-classifier-lora   (MMLU-Pro categories)"
+	@echo "  - mmbert32k-pii-detector-lora        (17 PII entity types)"
+	@echo "  - mmbert32k-jailbreak-detector-lora  (prompt injection)"
+	@echo "  - mmbert32k-factcheck-classifier-lora (fact-check routing)"
 
 download-mmbert-embedding: ## Download mmBERT 2D Matryoshka embedding model
 	@echo "📦 Downloading mmBERT 2D Matryoshka embedding model..."
@@ -145,7 +174,7 @@ clean-minimal-models: ## No-op target for backward compatibility
 
 clean-mmbert: ## Remove downloaded mmBERT models
 	@echo "🗑️  Removing mmBERT models..."
-	@for model in $(MMBERT_MODELS) $(MMBERT_LORA_ADAPTERS); do \
+	@for model in $(MMBERT_MODELS) $(MMBERT_LORA_ADAPTERS) $(MMBERT_32K_LORA_ADAPTERS); do \
 		rm -rf $(MODELS_DIR)/$$model; \
 	done
 	@rm -rf $(MODELS_DIR)/$(MMBERT_EMBEDDING_MODEL)

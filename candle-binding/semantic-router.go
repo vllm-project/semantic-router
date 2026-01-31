@@ -51,6 +51,14 @@ extern bool init_mmbert_classifier_auto(const char* model_id, bool use_cpu);
 extern bool init_mmbert_token_classifier(const char* model_id, bool use_cpu);
 extern bool is_mmbert_model(const char* config_path);
 
+// mmBERT-32K (YaRN RoPE scaled, 32K context) initialization functions
+extern bool init_mmbert_32k_intent_classifier(const char* model_id, bool use_cpu);
+extern bool init_mmbert_32k_factcheck_classifier(const char* model_id, bool use_cpu);
+extern bool init_mmbert_32k_jailbreak_classifier(const char* model_id, bool use_cpu);
+extern bool init_mmbert_32k_feedback_classifier(const char* model_id, bool use_cpu);
+extern bool init_mmbert_32k_pii_classifier(const char* model_id, bool use_cpu);
+extern bool is_mmbert_32k_model(const char* config_path);
+
 // Token classification structures
 typedef struct {
     char* entity_type;
@@ -245,6 +253,13 @@ extern ModernBertClassificationResult classify_modernbert_jailbreak_text(const c
 extern ClassificationResult classify_deberta_jailbreak_text(const char* text);
 extern ModernBertClassificationResult classify_fact_check_text(const char* text);
 extern ModernBertClassificationResult classify_feedback_text(const char* text);
+
+// mmBERT-32K classification functions (32K context, YaRN RoPE scaling)
+extern ModernBertClassificationResult classify_mmbert_32k_intent(const char* text);
+extern ModernBertClassificationResult classify_mmbert_32k_factcheck(const char* text);
+extern ModernBertClassificationResult classify_mmbert_32k_jailbreak(const char* text);
+extern ModernBertClassificationResult classify_mmbert_32k_feedback(const char* text);
+extern ModernBertTokenClassificationResult classify_mmbert_32k_pii_tokens(const char* text, const char* model_config_path);
 
 // New official Candle BERT functions
 extern bool init_candle_bert_classifier(const char* model_path, int num_classes, bool use_cpu);
@@ -1902,6 +1917,266 @@ func IsMmBertModel(configPath string) bool {
 	defer C.free(unsafe.Pointer(cConfigPath))
 
 	return bool(C.is_mmbert_model(cConfigPath))
+}
+
+// ============================================================================
+// mmBERT-32K (32K Context, YaRN RoPE Scaling) Functions
+// Reference: https://huggingface.co/llm-semantic-router/mmbert-32k-yarn
+// ============================================================================
+
+var (
+	mmBert32KIntentClassifierInitOnce    sync.Once
+	mmBert32KFactcheckClassifierInitOnce sync.Once
+	mmBert32KJailbreakClassifierInitOnce sync.Once
+	mmBert32KFeedbackClassifierInitOnce  sync.Once
+	mmBert32KPIIClassifierInitOnce       sync.Once
+)
+
+// IsMmBert32KModel checks if a model is mmBERT-32K (YaRN scaled) based on its config.json
+// Returns true if the model has max_position_embeddings >= 16384 or rope_theta >= 100000
+func IsMmBert32KModel(configPath string) bool {
+	cConfigPath := C.CString(configPath)
+	defer C.free(unsafe.Pointer(cConfigPath))
+
+	return bool(C.is_mmbert_32k_model(cConfigPath))
+}
+
+// InitMmBert32KIntentClassifier initializes the mmBERT-32K intent classifier
+// This model classifies text into MMLU-Pro academic categories for request routing.
+// Reference: https://huggingface.co/llm-semantic-router/mmbert32k-intent-classifier-lora
+func InitMmBert32KIntentClassifier(modelPath string, useCPU bool) error {
+	var err error
+	mmBert32KIntentClassifierInitOnce.Do(func() {
+		if modelPath == "" {
+			modelPath = "./models/mmbert32k-intent-classifier-lora"
+		}
+
+		log.Printf("🎯 Initializing mmBERT-32K intent classifier: %s", modelPath)
+
+		cModelID := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelID))
+
+		success := C.init_mmbert_32k_intent_classifier(cModelID, C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize mmBERT-32K intent classifier")
+		} else {
+			log.Printf("   ✓ mmBERT-32K intent classifier initialized (32K context)")
+		}
+	})
+	return err
+}
+
+// ClassifyMmBert32KIntent classifies text using mmBERT-32K intent classifier
+// Returns the predicted category and confidence
+func ClassifyMmBert32KIntent(text string) (ClassResult, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_mmbert_32k_intent(cText)
+
+	if result.class < 0 {
+		return ClassResult{}, fmt.Errorf("failed to classify intent with mmBERT-32K")
+	}
+
+	return ClassResult{
+		Class:      int(result.class),
+		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// InitMmBert32KFactcheckClassifier initializes the mmBERT-32K fact-check classifier
+// This model determines if text needs fact-checking.
+// Outputs: 0=NO_FACT_CHECK_NEEDED, 1=FACT_CHECK_NEEDED
+// Reference: https://huggingface.co/llm-semantic-router/mmbert32k-factcheck-classifier-lora
+func InitMmBert32KFactcheckClassifier(modelPath string, useCPU bool) error {
+	var err error
+	mmBert32KFactcheckClassifierInitOnce.Do(func() {
+		if modelPath == "" {
+			modelPath = "./models/mmbert32k-factcheck-classifier-lora"
+		}
+
+		log.Printf("✓ Initializing mmBERT-32K fact-check classifier: %s", modelPath)
+
+		cModelID := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelID))
+
+		success := C.init_mmbert_32k_factcheck_classifier(cModelID, C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize mmBERT-32K fact-check classifier")
+		} else {
+			log.Printf("   ✓ mmBERT-32K fact-check classifier initialized")
+		}
+	})
+	return err
+}
+
+// ClassifyMmBert32KFactcheck classifies text using mmBERT-32K fact-check classifier
+// Returns: 0=NO_FACT_CHECK_NEEDED, 1=FACT_CHECK_NEEDED
+func ClassifyMmBert32KFactcheck(text string) (ClassResult, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_mmbert_32k_factcheck(cText)
+
+	if result.class < 0 {
+		return ClassResult{}, fmt.Errorf("failed to classify fact-check with mmBERT-32K")
+	}
+
+	return ClassResult{
+		Class:      int(result.class),
+		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// InitMmBert32KJailbreakClassifier initializes the mmBERT-32K jailbreak detector
+// This model detects prompt injection/jailbreak attempts.
+// Outputs: 0=benign, 1=jailbreak
+// Reference: https://huggingface.co/llm-semantic-router/mmbert32k-jailbreak-detector-lora
+func InitMmBert32KJailbreakClassifier(modelPath string, useCPU bool) error {
+	var err error
+	mmBert32KJailbreakClassifierInitOnce.Do(func() {
+		if modelPath == "" {
+			modelPath = "./models/mmbert32k-jailbreak-detector-lora"
+		}
+
+		log.Printf("🛡️  Initializing mmBERT-32K jailbreak detector: %s", modelPath)
+
+		cModelID := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelID))
+
+		success := C.init_mmbert_32k_jailbreak_classifier(cModelID, C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize mmBERT-32K jailbreak detector")
+		} else {
+			log.Printf("   ✓ mmBERT-32K jailbreak detector initialized")
+		}
+	})
+	return err
+}
+
+// ClassifyMmBert32KJailbreak classifies text using mmBERT-32K jailbreak detector
+// Returns: 0=benign, 1=jailbreak
+func ClassifyMmBert32KJailbreak(text string) (ClassResult, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_mmbert_32k_jailbreak(cText)
+
+	if result.class < 0 {
+		return ClassResult{}, fmt.Errorf("failed to classify jailbreak with mmBERT-32K")
+	}
+
+	return ClassResult{
+		Class:      int(result.class),
+		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// InitMmBert32KFeedbackClassifier initializes the mmBERT-32K feedback detector
+// This model detects user satisfaction from follow-up messages.
+// Outputs: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT
+// Reference: https://huggingface.co/llm-semantic-router/mmbert32k-feedback-detector-lora
+func InitMmBert32KFeedbackClassifier(modelPath string, useCPU bool) error {
+	var err error
+	mmBert32KFeedbackClassifierInitOnce.Do(func() {
+		if modelPath == "" {
+			modelPath = "./models/mmbert32k-feedback-detector-lora"
+		}
+
+		log.Printf("📊 Initializing mmBERT-32K feedback detector: %s", modelPath)
+
+		cModelID := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelID))
+
+		success := C.init_mmbert_32k_feedback_classifier(cModelID, C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize mmBERT-32K feedback detector")
+		} else {
+			log.Printf("   ✓ mmBERT-32K feedback detector initialized")
+		}
+	})
+	return err
+}
+
+// ClassifyMmBert32KFeedback classifies text using mmBERT-32K feedback detector
+// Returns: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT
+func ClassifyMmBert32KFeedback(text string) (ClassResult, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_mmbert_32k_feedback(cText)
+
+	if result.class < 0 {
+		return ClassResult{}, fmt.Errorf("failed to classify feedback with mmBERT-32K")
+	}
+
+	return ClassResult{
+		Class:      int(result.class),
+		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// InitMmBert32KPIIClassifier initializes the mmBERT-32K PII detector
+// This model detects 17 types of PII entities using BIO tagging.
+// Reference: https://huggingface.co/llm-semantic-router/mmbert32k-pii-detector-lora
+func InitMmBert32KPIIClassifier(modelPath string, useCPU bool) error {
+	var err error
+	mmBert32KPIIClassifierInitOnce.Do(func() {
+		if modelPath == "" {
+			modelPath = "./models/mmbert32k-pii-detector-lora"
+		}
+
+		log.Printf("🔒 Initializing mmBERT-32K PII detector: %s", modelPath)
+
+		cModelID := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelID))
+
+		success := C.init_mmbert_32k_pii_classifier(cModelID, C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize mmBERT-32K PII detector")
+		} else {
+			log.Printf("   ✓ mmBERT-32K PII detector initialized")
+		}
+	})
+	return err
+}
+
+// ClassifyMmBert32KPII detects PII entities in text using mmBERT-32K
+// Returns a list of detected PII entities with their types and positions
+func ClassifyMmBert32KPII(text string, modelConfigPath string) ([]TokenEntity, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	var cConfigPath *C.char
+	if modelConfigPath != "" {
+		cConfigPath = C.CString(modelConfigPath)
+		defer C.free(unsafe.Pointer(cConfigPath))
+	}
+
+	result := C.classify_mmbert_32k_pii_tokens(cText, cConfigPath)
+	defer C.free_modernbert_token_result(C.ModernBertTokenClassificationResult{
+		entities:     (*C.ModernBertTokenEntity)(unsafe.Pointer(result.entities)),
+		num_entities: result.num_entities,
+	})
+
+	if result.num_entities == 0 {
+		return []TokenEntity{}, nil
+	}
+
+	entities := make([]TokenEntity, result.num_entities)
+	entityPtr := result.entities
+	for i := 0; i < int(result.num_entities); i++ {
+		entity := (*C.ModernBertTokenEntity)(unsafe.Pointer(uintptr(unsafe.Pointer(entityPtr)) + uintptr(i)*unsafe.Sizeof(*entityPtr)))
+		entities[i] = TokenEntity{
+			EntityType: C.GoString(entity.entity_type),
+			Start:      int(entity.start),
+			End:        int(entity.end),
+			Text:       C.GoString(entity.text),
+			Confidence: float32(entity.confidence),
+		}
+	}
+
+	return entities, nil
 }
 
 // InitFactCheckClassifier initializes the halugate-sentinel fact-check classifier
