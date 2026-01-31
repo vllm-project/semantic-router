@@ -1977,7 +1977,7 @@ func (c *Classifier) IsPreferenceClassifierEnabled() bool {
 		return false
 	}
 
-	if c.Config.PreferenceModel.ModelID != "" {
+	if c.Config.Classifier.PreferenceModel.ModelID != "" {
 		return true
 	}
 
@@ -1994,7 +1994,7 @@ func (c *Classifier) initializePreferenceClassifier() error {
 	}
 
 	externalCfg := c.Config.FindExternalModelByRole(config.ModelRolePreference)
-	classifier, err := NewPreferenceClassifier(externalCfg, c.Config.PreferenceRules, &c.Config.PreferenceModel)
+	classifier, err := NewPreferenceClassifier(externalCfg, c.Config.PreferenceRules, &c.Config.Classifier.PreferenceModel)
 	if err != nil {
 		return fmt.Errorf("failed to create preference classifier: %w", err)
 	}
