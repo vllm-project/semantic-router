@@ -19,7 +19,8 @@ const (
 
 // EmbeddingConfig holds the embedding model configuration
 type EmbeddingConfig struct {
-	Model EmbeddingModelType
+	Model     EmbeddingModelType
+	Dimension int // Target dimension for Matryoshka models (default: 256 for mmbert)
 }
 
 // GenerateEmbedding generates an embedding using the configured model
@@ -44,8 +45,14 @@ func GenerateEmbedding(text string, cfg EmbeddingConfig) ([]float32, error) {
 		return output.Embedding, nil
 
 	case "mmbert":
-		// Use GetEmbedding2DMatryoshka for mmBERT (layer 6, 384-dim)
-		output, err := candle_binding.GetEmbedding2DMatryoshka(text, modelName, 6, 384)
+		// Use GetEmbedding2DMatryoshka for mmBERT with configurable dimension
+		// Default to 256 if not specified (99% quality retention)
+		targetDim := cfg.Dimension
+		if targetDim <= 0 {
+			targetDim = 256
+		}
+		// Use layer 6 for early exit (good balance of speed/quality)
+		output, err := candle_binding.GetEmbedding2DMatryoshka(text, modelName, 6, targetDim)
 		if err != nil {
 			return nil, fmt.Errorf("mmbert embedding failed: %w", err)
 		}

@@ -344,6 +344,7 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCom
 	ctx.VSRSelectedModel = originalModel
 	ctx.VSRReasoningMode = "off" // Non-auto models don't use reasoning mode by default
 	// PII policy check already done in performPIIDetection
+	// Memory injection already happened in handleMemoryRetrieval (before routing diverged)
 
 	// Select endpoint for the specified model
 	selectedEndpoint := r.selectEndpointForModel(ctx, originalModel)
@@ -401,31 +402,30 @@ func (r *OpenAIRouter) modifyRequestBodyForAutoRouting(openAIRequest *openai.Cha
 		return nil, status.Errorf(codes.Internal, "error serializing modified request: %v", err)
 	}
 
-	if decisionName == "" {
-		return modifiedBody, nil
-	}
-	// Set reasoning mode
-	modifiedBody, err = r.setReasoningModeToRequestBody(modifiedBody, useReasoning, decisionName)
-	if err != nil {
-		logging.Errorf("Error setting reasoning mode %v to request: %v", useReasoning, err)
-		metrics.RecordRequestError(matchedModel, "serialization_error")
-		return nil, status.Errorf(codes.Internal, "error setting reasoning mode: %v", err)
-	}
+	// Only apply decision-specific modifications if a decision was matched
+	if decisionName != "" {
+		// Set reasoning mode
+		modifiedBody, err = r.setReasoningModeToRequestBody(modifiedBody, useReasoning, decisionName)
+		if err != nil {
+			logging.Errorf("Error setting reasoning mode %v to request: %v", useReasoning, err)
+			metrics.RecordRequestError(matchedModel, "serialization_error")
+			return nil, status.Errorf(codes.Internal, "error setting reasoning mode: %v", err)
+		}
 
-	// Add decision-specific system prompt if configured
-	modifiedBody, err = r.addSystemPromptIfConfigured(modifiedBody, decisionName, matchedModel, ctx)
-	if err != nil {
-		return nil, err
+		// Add decision-specific system prompt if configured
+		modifiedBody, err = r.addSystemPromptIfConfigured(modifiedBody, decisionName, matchedModel, ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Inject memory context AFTER system prompt (so it appends, not gets overwritten)
+	// NOTE: Memory injection must happen regardless of whether a decision was matched
 	if ctx.MemoryContext != "" {
 		modifiedBody, err = injectSystemMessage(modifiedBody, ctx.MemoryContext)
 		if err != nil {
 			logging.Warnf("Memory: Failed to inject memory context: %v", err)
 			// Graceful degradation: continue without memory injection
-		} else {
-			logging.Infof("Memory: Injected memory context after system prompt")
 		}
 	}
 
@@ -791,11 +791,21 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 	}
 	logging.Infof("╚══════════════════════════════════════════════════════════════════╝")
 
-	// Step 6: Store formatted memory context for later injection
-	// Memory is injected AFTER system prompt in modifyRequestBodyForAutoRouting
-	// to ensure it appends to (not gets overwritten by) system prompt
+	// Step 6: Format memory context and inject into request body
 	ctx.MemoryContext = FormatMemoriesAsContext(memories)
-	logging.Infof("Memory: Stored %d memories in context for later injection", len(memories))
+
+	// Step 7: Inject memory into request body as system message
+	// This happens here (before routing diverges) so it works for BOTH auto and specified models
+	if ctx.MemoryContext != "" {
+		injectedBody, err := injectSystemMessage(requestBody, ctx.MemoryContext)
+		if err != nil {
+			logging.Warnf("Memory: Failed to inject memory context: %v", err)
+			// Graceful degradation: continue without injection
+			return requestBody, nil
+		}
+		logging.Infof("Memory: Injected %d memories into request", len(memories))
+		return injectedBody, nil
+	}
 
 	return requestBody, nil
 }
@@ -809,15 +819,8 @@ func (r *OpenAIRouter) getMemoryStore() *memory.MilvusStore {
 // getUserIDFromContext extracts user ID from Response API context or request.
 func (r *OpenAIRouter) getUserIDFromContext(ctx *RequestContext) string {
 	// Check Response API context first
+	// userID is provided via metadata.user_id (OpenAI API spec-compliant)
 	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.OriginalRequest != nil {
-		// Check MemoryContext first (primary source for agentic memory)
-		if ctx.ResponseAPICtx.OriginalRequest.MemoryContext != nil {
-			if ctx.ResponseAPICtx.OriginalRequest.MemoryContext.UserID != "" {
-				return ctx.ResponseAPICtx.OriginalRequest.MemoryContext.UserID
-			}
-		}
-
-		// Fallback to metadata
 		if ctx.ResponseAPICtx.OriginalRequest.Metadata != nil {
 			if userID, ok := ctx.ResponseAPICtx.OriginalRequest.Metadata["user_id"]; ok {
 				return userID

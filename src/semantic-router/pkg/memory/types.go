@@ -122,11 +122,12 @@ type RetrieveOptions struct {
 	Threshold float32
 }
 
-// DefaultMemoryConfig returns a default memory configuration
+// DefaultMemoryConfig returns a default memory configuration.
+// EmbeddingModel is intentionally omitted - let router auto-detect from embedding_models config.
 func DefaultMemoryConfig() config.MemoryConfig {
 	return config.MemoryConfig{
-		Embedding: config.MemoryEmbeddingConfig{
-			Dimension: 384,
+		Milvus: config.MemoryMilvusConfig{
+			Dimension: 384, // Safe default, will be overridden by router
 		},
 		DefaultRetrievalLimit:      5,
 		DefaultSimilarityThreshold: 0.70,

@@ -1,5 +1,5 @@
 name: Integration Test [Memory]
-
+description: Integration tests for memory features with Milvus storage backend
 on:
   pull_request:
     branches:
@@ -46,10 +46,17 @@ jobs:
           toolchain: "1.90"
 
       - name: Install Python dependencies
-        run: pip install -U "huggingface_hub[cli]" hf_transfer requests
+        run: pip install -U "huggingface_hub[cli]" hf_transfer requests pymilvus
 
-      # NOTE: Model download skipped - using echo backend which doesn't need a real model
-      # Echo backend returns the full prompt for keyword verification in memory tests
+      # Download BERT embedding model for memory (required even with echo backend)
+      # Memory needs embeddings to store/retrieve from Milvus - can't skip this
+      - name: Download BERT embedding model
+        run: |
+          mkdir -p models
+          python -c "from huggingface_hub import snapshot_download; snapshot_download('sentence-transformers/all-MiniLM-L12-v2', local_dir='models/mom-embedding-light', local_dir_use_symlinks=False)"
+          echo "✅ BERT model downloaded to models/mom-embedding-light"
+        env:
+          HF_HUB_ENABLE_HF_TRANSFER: "1"
 
       - name: Start Milvus
         run: |
@@ -80,10 +87,37 @@ jobs:
           cp config/testing/config.memory-user.yaml config.yaml
           vllm-sr validate --config config.yaml || true
 
+      # Free up disk space for large Docker build (CUDA + PyTorch dependencies)
+      - name: Free disk space
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h /
+          
+          # Remove unnecessary tools and libraries
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          
+          # Clean apt cache
+          sudo apt-get clean
+          
+          # Clean Docker (unused images, containers, volumes)
+          docker system prune -af --volumes || true
+          
+          echo "=== Disk space after cleanup ==="
+          df -h /
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build vllm-sr Docker image
-        run: make vllm-sr-build VLLM_SR_IMAGE=vllm-sr:ci
-        env:
-          CI: true
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: src/vllm-sr/Dockerfile
+          tags: vllm-sr:ci
+          load: true
 
       - name: Start vllm-sr serve
         run: |
@@ -107,29 +141,38 @@ jobs:
       - name: Run memory integration tests
         run: |
           cd e2e/testing
-          ROUTER_ENDPOINT=http://localhost:8888 python 09-memory-features-test.py
+          python 09-memory-features-test.py
         env:
           PYTHONUNBUFFERED: 1
+          ROUTER_ENDPOINT: http://localhost:8888
+          MILVUS_ADDRESS: localhost:19530
+          MILVUS_COLLECTION: memory_test_ci
 
-      - name: Show logs on failure
-        if: failure()
+      - name: Collect logs
+        if: always()
         run: |
-          echo "=== Service Status ==="
-          docker ps -a
-          vllm-sr status || true
+          mkdir -p logs
           
-          echo "=== Router Logs ==="
-          docker exec vllm-sr-container cat /var/log/supervisor/router.log 2>&1 | tail -100 || true
-          docker exec vllm-sr-container cat /var/log/supervisor/router-error.log 2>&1 | tail -50 || true
+          # Router logs (full)
+          docker exec vllm-sr-container cat /var/log/supervisor/router.log 2>&1 > logs/router.log || true
+          docker exec vllm-sr-container cat /var/log/supervisor/router-error.log 2>&1 > logs/router-error.log || true
           
-          echo "=== Envoy Logs ==="
-          docker logs vllm-sr-container 2>&1 | tail -100 || true
+          # llm-katan logs
+          docker logs llm-katan 2>&1 > logs/llm-katan.log || true
           
-          echo "=== llm-katan Logs ==="
-          docker logs llm-katan 2>&1 | tail -50 || true
+          # Milvus logs
+          docker logs milvus-semantic-cache 2>&1 > logs/milvus.log || true
           
-          echo "=== Milvus Logs ==="
-          docker logs milvus-semantic-cache 2>&1 | tail -30 || true
+          # Container status
+          docker ps -a > logs/docker-status.txt || true
+
+      - name: Upload logs as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-test-logs
+          path: logs/
+          retention-days: 7
 
       - name: Clean up
         if: always()

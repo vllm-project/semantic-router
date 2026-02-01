@@ -51,6 +51,7 @@ from test_base import SemanticRouterTestBase
 # Milvus client for direct verification of memory storage
 try:
     from pymilvus import MilvusClient
+
     MILVUS_AVAILABLE = True
 except ImportError:
     MILVUS_AVAILABLE = False
@@ -60,7 +61,9 @@ except ImportError:
 class MilvusVerifier:
     """Helper to verify memory storage in Milvus directly."""
 
-    def __init__(self, address: str = "localhost:19530", collection: str = "memory_test_ci"):
+    def __init__(
+        self, address: str = "localhost:19530", collection: str = "memory_test_ci"
+    ):
         self.address = address
         self.collection = collection
         self.client = None
@@ -70,11 +73,29 @@ class MilvusVerifier:
             except Exception as e:
                 print(f"⚠️  Failed to connect to Milvus: {e}")
 
+    def flush(self) -> bool:
+        """Flush the collection to make data searchable."""
+        if not self.client:
+            return False
+        try:
+            # Force flush to make recently inserted data available for search
+            from pymilvus import connections, Collection
+
+            connections.connect(uri=f"http://{self.address}")
+            collection = Collection(self.collection)
+            collection.flush()
+            return True
+        except Exception as e:
+            print(f"⚠️  Milvus flush failed: {e}")
+            return False
+
     def count_memories(self, user_id: str) -> int:
         """Count memories stored for a user."""
         if not self.client:
             return -1  # Milvus not available
         try:
+            # Flush before querying to ensure data is available
+            self.flush()
             # Query by user_id filter
             results = self.client.query(
                 collection_name=self.collection,
@@ -86,21 +107,69 @@ class MilvusVerifier:
             print(f"⚠️  Milvus query failed: {e}")
             return -1
 
-    def search_memories(self, user_id: str, keyword: str) -> List[Dict]:
-        """Search for memories containing a keyword (in content field)."""
+    def search_memories(
+        self, user_id: str, keyword: str, max_retries: int = 3
+    ) -> List[Dict]:
+        """Search for memories containing a keyword (in content field).
+
+        Uses retry logic with flush between attempts to handle Milvus consistency delays.
+        """
         if not self.client:
             return []
-        try:
-            results = self.client.query(
-                collection_name=self.collection,
-                filter=f'user_id == "{user_id}"',
-                output_fields=["id", "content", "created_at"],
-            )
-            # Filter by keyword in content
-            return [r for r in results if keyword.lower() in r.get("content", "").lower()]
-        except Exception as e:
-            print(f"⚠️  Milvus search failed: {e}")
-            return []
+
+        import time
+
+        for attempt in range(max_retries):
+            try:
+                # Flush before querying to ensure data is available
+                self.flush()
+
+                # Small delay after flush for segments to be searchable
+                if attempt > 0:
+                    time.sleep(2)
+
+                results = self.client.query(
+                    collection_name=self.collection,
+                    filter=f'user_id == "{user_id}"',
+                    output_fields=["id", "content", "created_at"],
+                )
+
+                # Filter by keyword in content
+                matches = [
+                    r
+                    for r in results
+                    if keyword.lower() in r.get("content", "").lower()
+                ]
+
+                if matches:
+                    return matches
+
+                # If no matches but there are results, log for debugging
+                if results and not matches:
+                    print(
+                        f"   ⚠️  Found {len(results)} memories but none contain '{keyword}'"
+                    )
+                    for r in results[:3]:
+                        print(f"      - {r.get('content', '')[:50]}...")
+
+                # If no results at all, retry
+                if not results and attempt < max_retries - 1:
+                    print(
+                        f"   ⏳ Milvus search attempt {attempt+1}/{max_retries}: no results, retrying..."
+                    )
+                    time.sleep(2)
+                    continue
+
+                return matches
+
+            except Exception as e:
+                print(f"⚠️  Milvus search failed (attempt {attempt+1}): {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(2)
+                    continue
+                return []
+
+        return []
 
     def is_available(self) -> bool:
         """Check if Milvus verification is available."""
@@ -121,13 +190,16 @@ class MemoryFeaturesTest(SemanticRouterTestBase):
         # Test user for this suite
         self.test_user = f"memory_features_test_{int(time.time())}"
 
-        # Memory extraction wait time (reduced for CI speed)
-        self.extraction_wait = 2
+        # Memory extraction wait time (needs time for extraction + Milvus flush + segment load)
+        # Increased from 6 to 10 seconds - Milvus standalone needs time for new segments
+        self.extraction_wait = 10
 
         # Milvus verifier for direct storage verification
         milvus_address = os.environ.get("MILVUS_ADDRESS", "localhost:19530")
         milvus_collection = os.environ.get("MILVUS_COLLECTION", "memory_test_ci")
-        self.milvus = MilvusVerifier(address=milvus_address, collection=milvus_collection)
+        self.milvus = MilvusVerifier(
+            address=milvus_address, collection=milvus_collection
+        )
 
     def send_memory_request(
         self,
@@ -142,17 +214,13 @@ class MemoryFeaturesTest(SemanticRouterTestBase):
         """Send a request with memory context."""
         user = user_id or self.test_user
 
+        # Memory config is now server-side via plugin configuration.
+        # User ID is passed via metadata (OpenAI API spec-compliant).
         payload = {
             "model": "MoM",
             "input": message,
             "instructions": "You are a helpful assistant with memory. Use retrieved memories to answer questions accurately.",
-            "memory_config": {
-                "enabled": True,
-                "auto_store": auto_store,
-                "retrieval_limit": retrieval_limit,
-                "similarity_threshold": similarity_threshold,
-            },
-            "memory_context": {"user_id": user},
+            "metadata": {"user_id": user},
         }
 
         # Chain conversation for memory extraction
@@ -230,15 +298,26 @@ class MemoryRetrievalTest(MemoryFeaturesTest):
             "Store a specific fact and verify it can be retrieved from Milvus",
         )
 
-        # Store a specific fact
+        # STEP 1: Store a specific fact (creates turn 1)
         fact = "My car is a blue Tesla Model 3 from 2023"
-        result = self.send_memory_request(
+        result1 = self.send_memory_request(
             message=f"Please remember this: {fact}", auto_store=True
         )
+        self.assertIsNotNone(result1, "Failed to store fact")
+        self.assertEqual(result1.get("status"), "completed")
+        first_response_id = result1.get("id")
+        print(f"   ✓ Turn 1: Fact stored (response_id: {first_response_id[:20]}...)")
 
-        self.assertIsNotNone(result, "Failed to store fact")
-        self.assertEqual(result.get("status"), "completed")
-        print("   ✓ Request completed successfully")
+        # STEP 2: Send follow-up to trigger extraction (turn 2 extracts turn 1)
+        # Extraction needs history, so we chain with previous_response_id
+        result2 = self.send_memory_request(
+            message="Got it, thanks for remembering that.",
+            auto_store=True,
+            previous_response_id=first_response_id,
+            verbose=False,
+        )
+        self.assertIsNotNone(result2, "Failed to send follow-up")
+        print("   ✓ Turn 2: Follow-up sent (triggers extraction of turn 1)")
 
         self.wait_for_extraction()
 
@@ -246,12 +325,16 @@ class MemoryRetrievalTest(MemoryFeaturesTest):
         if self.milvus.is_available():
             memories = self.milvus.search_memories(self.test_user, "tesla")
             if memories:
-                self.print_test_result(True, f"Fact stored in Milvus: found {len(memories)} memory(ies)")
+                self.print_test_result(
+                    True, f"Fact stored in Milvus: found {len(memories)} memory(ies)"
+                )
             else:
                 # Check if any memories exist for this user
                 count = self.milvus.count_memories(self.test_user)
                 if count > 0:
-                    print(f"   ⚠️  {count} memories stored but 'tesla' not found in content")
+                    print(
+                        f"   ⚠️  {count} memories stored but 'tesla' not found in content"
+                    )
                 else:
                     self.print_test_result(False, "No memories stored in Milvus")
                     self.fail("Memory extraction failed: no memories in Milvus")
@@ -306,16 +389,28 @@ class MemoryRetrievalTest(MemoryFeaturesTest):
             "My dog's name is Max and he is a golden retriever",
         ]
 
-        # Store all facts (each in its own request for extraction)
+        # Store all facts with conversation chaining for extraction
+        # Each turn extracts the previous turn's content
+        last_response_id = None
         for i, fact in enumerate(facts):
             result = self.send_memory_request(
                 message=f"Remember: {fact}",
                 auto_store=True,
+                previous_response_id=last_response_id,
+                verbose=(i == 0),
             )
             self.assertIsNotNone(result, f"Failed to store fact {i+1}")
+            last_response_id = result.get("id")
             print(f"   ✓ Stored fact {i+1}")
-            # Small wait between stores for extraction
-            time.sleep(1)
+
+        # Send one more follow-up to extract the last fact
+        result = self.send_memory_request(
+            message="Thanks, I've told you all my facts.",
+            auto_store=True,
+            previous_response_id=last_response_id,
+            verbose=False,
+        )
+        print("   ✓ Follow-up sent (triggers extraction of last fact)")
 
         self.wait_for_extraction(3)  # Wait for extractions to complete
 
@@ -331,7 +426,9 @@ class MemoryRetrievalTest(MemoryFeaturesTest):
         output = result.get("_output_text", "").lower()
 
         if "max" in output or "golden" in output or "retriever" in output:
-            self.print_test_result(True, "Correctly retrieved dog-related memory from Milvus")
+            self.print_test_result(
+                True, "Correctly retrieved dog-related memory from Milvus"
+            )
         else:
             self.print_test_result(
                 False,
@@ -350,12 +447,21 @@ class QueryRewritingTest(MemoryFeaturesTest):
             "Store context, then ask a vague question in NEW session",
         )
 
-        # Store some context
+        # Store some context (turn 1)
         result = self.send_memory_request(
             message="I'm planning a trip to Japan next month. My budget is $5000.",
             auto_store=True,
         )
         self.assertIsNotNone(result, "Failed to store context")
+        first_response_id = result.get("id")
+
+        # Send follow-up to trigger extraction (turn 2)
+        result2 = self.send_memory_request(
+            message="I'm so excited about this trip!",
+            auto_store=True,
+            previous_response_id=first_response_id,
+            verbose=False,
+        )
 
         self.wait_for_extraction()
 
@@ -390,11 +496,20 @@ class QueryRewritingTest(MemoryFeaturesTest):
             "Pronoun Resolution", "Store info about a person, query in NEW session"
         )
 
-        # Store info about a person
+        # Store info about a person (turn 1)
         result = self.send_memory_request(
             message="My friend Sarah is a doctor who lives in Boston.", auto_store=True
         )
         self.assertIsNotNone(result, "Failed to store info")
+        first_response_id = result.get("id")
+
+        # Send follow-up to trigger extraction (turn 2)
+        result2 = self.send_memory_request(
+            message="She's a great friend.",
+            auto_store=True,
+            previous_response_id=first_response_id,
+            verbose=False,
+        )
 
         self.wait_for_extraction()
 
@@ -411,7 +526,9 @@ class QueryRewritingTest(MemoryFeaturesTest):
 
         # Check if Boston or Sarah is mentioned (from Milvus memory)
         if "boston" in output or "sarah" in output:
-            self.print_test_result(True, "Memory context retrieved, pronoun can be resolved")
+            self.print_test_result(
+                True, "Memory context retrieved, pronoun can be resolved"
+            )
         else:
             self.print_test_result(
                 False,
@@ -432,17 +549,30 @@ class DeduplicationTest(MemoryFeaturesTest):
 
         fact = "My phone number is 555-123-4567"
 
-        # Store the same fact multiple times (each in own request)
+        # Store the same fact multiple times with conversation chaining
+        # Each turn extracts the previous turn's content
+        last_response_id = None
         for i in range(3):
             result = self.send_memory_request(
                 message=f"Remember: {fact}",
                 auto_store=True,
+                previous_response_id=last_response_id,
                 verbose=(i == 0),  # Only verbose on first
             )
             self.assertIsNotNone(result, f"Failed to store (attempt {i+1})")
+            last_response_id = result.get("id")
             if i > 0:
                 print(f"   ✓ Stored attempt {i+1}")
             time.sleep(1)  # Small wait between stores
+
+        # Send follow-up to trigger extraction of the last fact
+        result = self.send_memory_request(
+            message="Got it, you've told me your phone number.",
+            auto_store=True,
+            previous_response_id=last_response_id,
+            verbose=False,
+        )
+        print("   ✓ Follow-up sent (triggers extraction)")
 
         self.wait_for_extraction(3)
 
@@ -454,11 +584,15 @@ class DeduplicationTest(MemoryFeaturesTest):
                 self.print_test_result(False, "No memories stored in Milvus")
                 self.fail("Memory storage failed: phone number not in Milvus")
             elif count == 1:
-                self.print_test_result(True, f"Deduplication working: only 1 memory stored (not 3)")
+                self.print_test_result(
+                    True, f"Deduplication working: only 1 memory stored (not 3)"
+                )
             elif count <= 3:
                 print(f"   ⚠️  Found {count} memories - some duplicates exist")
             else:
-                self.print_test_result(False, f"Deduplication broken: {count} duplicates stored")
+                self.print_test_result(
+                    False, f"Deduplication broken: {count} duplicates stored"
+                )
                 self.fail(f"Deduplication failed: {count} copies stored instead of 1")
         else:
             print("   ⚠️  Milvus verification skipped (not available)")
@@ -480,7 +614,9 @@ class DeduplicationTest(MemoryFeaturesTest):
         )
 
         if phone_count <= 1:
-            self.print_test_result(True, "No duplicate phone numbers in Milvus retrieval")
+            self.print_test_result(
+                True, "No duplicate phone numbers in Milvus retrieval"
+            )
         elif phone_count > 3:
             self.print_test_result(
                 False,
@@ -500,19 +636,31 @@ class DeduplicationTest(MemoryFeaturesTest):
             "Store similar facts with different values, query from Milvus",
         )
 
-        # Store similar but different facts (each in own request)
+        # Store similar but different facts with conversation chaining
         result1 = self.send_memory_request(
             message="My home address is 123 Main Street, New York", auto_store=True
         )
         self.assertIsNotNone(result1, "Failed to store address 1")
+        first_response_id = result1.get("id")
 
         time.sleep(1)
 
         result2 = self.send_memory_request(
             message="My work address is 456 Business Ave, Boston",
             auto_store=True,
+            previous_response_id=first_response_id,
         )
         self.assertIsNotNone(result2, "Failed to store address 2")
+        second_response_id = result2.get("id")
+
+        # Send follow-up to trigger extraction of the last fact
+        result3 = self.send_memory_request(
+            message="Those are my two addresses.",
+            auto_store=True,
+            previous_response_id=second_response_id,
+            verbose=False,
+        )
+        print("   ✓ Follow-up sent (triggers extraction)")
 
         self.wait_for_extraction()
 
@@ -528,9 +676,7 @@ class DeduplicationTest(MemoryFeaturesTest):
 
         # Should mention work address from Milvus
         if "456" in output or "business" in output or "boston" in output:
-            self.print_test_result(
-                True, "Work address correctly retrieved from Milvus"
-            )
+            self.print_test_result(True, "Work address correctly retrieved from Milvus")
         else:
             self.print_test_result(
                 False,
@@ -549,23 +695,41 @@ class FullConversationFlowTest(MemoryFeaturesTest):
             "Store facts, then query in NEW sessions to verify Milvus retrieval",
         )
 
-        # Store facts (separate requests for extraction)
+        # Store facts with conversation chaining
         store_messages = [
-            ("Hi! I'm planning my wedding for June 15th, 2026. My fiancée's name is Emily.", "wedding plans"),
-            ("We're thinking of having it at a beach venue. Our guest count is around 150 people.", "venue/guests"),
+            (
+                "Hi! I'm planning my wedding for June 15th, 2026. My fiancée's name is Emily.",
+                "wedding plans",
+            ),
+            (
+                "We're thinking of having it at a beach venue. Our guest count is around 150 people.",
+                "venue/guests",
+            ),
             ("Our total budget is $50,000 for everything.", "budget"),
         ]
 
         print("\n--- Storing facts ---")
+        last_response_id = None
         for message, description in store_messages:
             print(f"   Storing: {description}")
             result = self.send_memory_request(
                 message=message,
                 auto_store=True,
+                previous_response_id=last_response_id,
                 verbose=False,
             )
             self.assertIsNotNone(result, f"Failed to store: {description}")
+            last_response_id = result.get("id")
             time.sleep(1)  # Small wait between stores
+
+        # Send follow-up to trigger extraction of the last fact
+        result = self.send_memory_request(
+            message="I'm so excited about the wedding!",
+            auto_store=True,
+            previous_response_id=last_response_id,
+            verbose=False,
+        )
+        print("   ✓ Follow-up sent (triggers extraction)")
 
         self.wait_for_extraction(3)
 
@@ -613,12 +777,21 @@ class SimilarityThresholdTest(MemoryFeaturesTest):
             "Store a fact, ask unrelated question in NEW session",
         )
 
-        # Store a specific fact
+        # Store a specific fact (turn 1)
         result = self.send_memory_request(
             message="Remember: My favorite restaurant is The Italian Place on 5th Avenue",
             auto_store=True,
         )
         self.assertIsNotNone(result, "Failed to store")
+        first_response_id = result.get("id")
+
+        # Send follow-up to trigger extraction (turn 2)
+        result2 = self.send_memory_request(
+            message="Great restaurant, right?",
+            auto_store=True,
+            previous_response_id=first_response_id,
+            verbose=False,
+        )
 
         self.wait_for_extraction()
 
@@ -652,12 +825,21 @@ class SimilarityThresholdTest(MemoryFeaturesTest):
             "Related Query - Memory Retrieved", "Store fact, query in NEW session"
         )
 
-        # Store a specific fact
+        # Store a specific fact (turn 1)
         result = self.send_memory_request(
             message="Remember: I graduated from MIT in 2020 with a degree in Computer Science",
             auto_store=True,
         )
         self.assertIsNotNone(result, "Failed to store")
+        first_response_id = result.get("id")
+
+        # Send follow-up to trigger extraction (turn 2)
+        result2 = self.send_memory_request(
+            message="It was a great experience.",
+            auto_store=True,
+            previous_response_id=first_response_id,
+            verbose=False,
+        )
 
         self.wait_for_extraction()
 
@@ -675,7 +857,9 @@ class SimilarityThresholdTest(MemoryFeaturesTest):
 
         # Should mention MIT or education details from Milvus
         if "mit" in output or "computer science" in output or "2020" in output:
-            self.print_test_result(True, "Related query correctly retrieved memory from Milvus")
+            self.print_test_result(
+                True, "Related query correctly retrieved memory from Milvus"
+            )
         else:
             self.print_test_result(
                 False,
@@ -696,11 +880,12 @@ class UserIsolationTest(MemoryFeaturesTest):
         self.user_b_secret = "My password is hunter2"
 
     def test_01_store_user_a_memory(self):
-        """Store a secret for User A."""
+        """Store a secret for User A using 2-turn pattern for extraction."""
         self.print_test_header(
             "Store User A Secret", f"Storing: '{self.user_a_secret}'"
         )
 
+        # Turn 1: Store the secret
         result = self.send_memory_request(
             message=f"Remember this: {self.user_a_secret}",
             auto_store=True,
@@ -709,7 +894,21 @@ class UserIsolationTest(MemoryFeaturesTest):
 
         self.assertIsNotNone(result, "Failed to store User A memory")
         self.assertEqual(result.get("status"), "completed")
-        self.print_test_result(True, "User A secret stored")
+        first_response_id = result.get("id")
+        print(f"   ✓ Turn 1: Secret stored (response_id: {first_response_id[:20]}...)")
+
+        # Turn 2: Follow-up to trigger extraction
+        result2 = self.send_memory_request(
+            message="Got it, I'll keep that safe.",
+            auto_store=True,
+            user_id=self.user_a,
+            previous_response_id=first_response_id,
+            verbose=False,
+        )
+        self.assertIsNotNone(result2, "Failed to send follow-up")
+        print("   ✓ Turn 2: Follow-up sent (triggers extraction)")
+
+        self.print_test_result(True, "User A secret stored with extraction triggered")
 
         self.wait_for_extraction()
 
@@ -720,13 +919,26 @@ class UserIsolationTest(MemoryFeaturesTest):
             "User B should NOT see User A's PIN",
         )
 
-        # First store User A's memory
-        self.send_memory_request(
+        # First store User A's memory with 2-turn pattern
+        result1 = self.send_memory_request(
             message=f"Remember this: {self.user_a_secret}",
             auto_store=True,
             user_id=self.user_a,
             verbose=False,
         )
+        first_response_id = result1.get("id") if result1 else None
+
+        # Turn 2: Follow-up to trigger extraction
+        if first_response_id:
+            self.send_memory_request(
+                message="That's my secret PIN.",
+                auto_store=True,
+                user_id=self.user_a,
+                previous_response_id=first_response_id,
+                verbose=False,
+            )
+            print("   ✓ User A's secret stored with extraction triggered")
+
         self.wait_for_extraction()
 
         # User B tries to access
@@ -756,13 +968,26 @@ class UserIsolationTest(MemoryFeaturesTest):
             "User A Queries Own Memory", "User A should see their own PIN from Milvus"
         )
 
-        # First store User A's memory
+        # First store User A's memory with 2-turn pattern
         store_result = self.send_memory_request(
             message=f"Remember this: {self.user_a_secret}",
             auto_store=True,
             user_id=self.user_a,
             verbose=False,
         )
+        self.assertIsNotNone(store_result, "Failed to store User A secret")
+        first_response_id = store_result.get("id")
+
+        # Turn 2: Follow-up to trigger extraction
+        result2 = self.send_memory_request(
+            message="That's my secret PIN.",
+            auto_store=True,
+            user_id=self.user_a,
+            previous_response_id=first_response_id,
+            verbose=False,
+        )
+        print("   ✓ User A's secret stored with extraction triggered")
+
         self.wait_for_extraction()
 
         # User A queries their own memory in NEW SESSION (no previous_response_id)
@@ -779,7 +1004,9 @@ class UserIsolationTest(MemoryFeaturesTest):
 
         # Check if PIN is in response (from Milvus, not conversation history)
         if "9876" in output:
-            self.print_test_result(True, "User A correctly retrieved their own PIN from Milvus")
+            self.print_test_result(
+                True, "User A correctly retrieved their own PIN from Milvus"
+            )
         else:
             self.print_test_result(
                 False,
@@ -790,23 +1017,50 @@ class UserIsolationTest(MemoryFeaturesTest):
     def test_04_bidirectional_isolation(self):
         """Test isolation works both ways - query in NEW sessions."""
         self.print_test_header(
-            "Bidirectional Isolation", "Neither user should see the other's secrets from Milvus"
+            "Bidirectional Isolation",
+            "Neither user should see the other's secrets from Milvus",
         )
 
-        # Store secrets for both users (separate requests)
-        result_a = self.send_memory_request(
+        # Store secrets for both users with 2-turn pattern each
+        # User A: Turn 1
+        result_a1 = self.send_memory_request(
             message=f"Remember: {self.user_a_secret}",
             auto_store=True,
             user_id=self.user_a,
             verbose=False,
         )
+        response_id_a = result_a1.get("id") if result_a1 else None
 
-        result_b = self.send_memory_request(
+        # User B: Turn 1
+        result_b1 = self.send_memory_request(
             message=f"Remember: {self.user_b_secret}",
             auto_store=True,
             user_id=self.user_b,
             verbose=False,
         )
+        response_id_b = result_b1.get("id") if result_b1 else None
+
+        # User A: Turn 2 (triggers extraction)
+        if response_id_a:
+            self.send_memory_request(
+                message="That's my secret PIN.",
+                auto_store=True,
+                user_id=self.user_a,
+                previous_response_id=response_id_a,
+                verbose=False,
+            )
+
+        # User B: Turn 2 (triggers extraction)
+        if response_id_b:
+            self.send_memory_request(
+                message="That's my password.",
+                auto_store=True,
+                user_id=self.user_b,
+                previous_response_id=response_id_b,
+                verbose=False,
+            )
+
+        print("   ✓ Both users' secrets stored with extraction triggered")
 
         self.wait_for_extraction(3)
 
@@ -821,11 +1075,15 @@ class UserIsolationTest(MemoryFeaturesTest):
             user_b_leak = self.milvus.search_memories(self.user_b, "9876")
 
             if user_a_leak:
-                self.fail(f"SECURITY: User A's Milvus partition contains User B's password!")
+                self.fail(
+                    f"SECURITY: User A's Milvus partition contains User B's password!"
+                )
             if user_b_leak:
                 self.fail(f"SECURITY: User B's Milvus partition contains User A's PIN!")
 
-            print(f"   ✓ Milvus isolation verified: User A has {len(user_a_memories)} memories, User B has {len(user_b_memories)}")
+            print(
+                f"   ✓ Milvus isolation verified: User A has {len(user_a_memories)} memories, User B has {len(user_b_memories)}"
+            )
         else:
             print("   ⚠️  Milvus verification skipped (not available)")
 
@@ -860,7 +1118,9 @@ class UserIsolationTest(MemoryFeaturesTest):
         if b_saw_a_pin:
             self.fail("SECURITY VIOLATION: User B saw User A's PIN from Milvus")
 
-        self.print_test_result(True, "✅ Bidirectional isolation verified at Milvus level")
+        self.print_test_result(
+            True, "✅ Bidirectional isolation verified at Milvus level"
+        )
 
 
 class MemoryExtractionTest(MemoryFeaturesTest):
@@ -873,7 +1133,7 @@ class MemoryExtractionTest(MemoryFeaturesTest):
             "Natural conversation, query in NEW sessions to verify Milvus storage",
         )
 
-        # Natural conversation (not explicit "remember this")
+        # Natural conversation (not explicit "remember this") - turn 1
         conversation_message = """
         I had a great day today! Had lunch with my brother Tom at the new sushi place
         downtown. He told me he's getting married next spring to his girlfriend Anna.
@@ -883,6 +1143,16 @@ class MemoryExtractionTest(MemoryFeaturesTest):
 
         result = self.send_memory_request(message=conversation_message, auto_store=True)
         self.assertIsNotNone(result, "Failed to process conversation")
+        first_response_id = result.get("id")
+
+        # Send follow-up to trigger extraction (turn 2)
+        result2 = self.send_memory_request(
+            message="What a great day it was!",
+            auto_store=True,
+            previous_response_id=first_response_id,
+            verbose=False,
+        )
+        print("   ✓ Follow-up sent (triggers extraction)")
 
         self.wait_for_extraction(3)  # Wait longer for extraction
 
@@ -931,12 +1201,11 @@ class MemoryExtractionTest(MemoryFeaturesTest):
 
         if successful_queries >= 1:
             self.print_test_result(
-                True, f"Extracted and retrieved {successful_queries}/3 facts from Milvus"
+                True,
+                f"Extracted and retrieved {successful_queries}/3 facts from Milvus",
             )
         else:
-            self.print_test_result(
-                False, "No facts extracted or retrieved from Milvus"
-            )
+            self.print_test_result(False, "No facts extracted or retrieved from Milvus")
             self.fail("Memory extraction failed: no facts found in Milvus")
 
 
@@ -952,7 +1221,7 @@ class PluginCombinationTest(MemoryFeaturesTest):
         """
         self.print_test_header("Memory + System Prompt: Both Present (NEW SESSION)")
 
-        # Step 1: Store a unique fact that can only come from memory
+        # Step 1: Store a unique fact (turn 1)
         unique_fact = "Phoenix-2026"
         store_message = f"Please remember this important code: my secret project codename is {unique_fact}"
 
@@ -965,15 +1234,30 @@ class PluginCombinationTest(MemoryFeaturesTest):
         if not result:
             self.fail("Failed to store memory")
 
-        print(f"   Response: {result.get('_output_text', '')[:100]}...")
+        first_response_id = result.get("id")
+        print(
+            f"   Turn 1: Stored (response_id: {first_response_id[:20] if first_response_id else 'N/A'}...)"
+        )
 
-        # Step 2: Wait for extraction to complete
-        print(f"\n⏳ Step 2: Waiting for memory extraction...")
+        # Step 2: Send follow-up to trigger extraction (turn 2 extracts turn 1)
+        print(f"\n📝 Step 2: Sending follow-up to trigger extraction...")
+        result2 = self.send_memory_request(
+            message="Got it, I'll remember that code.",
+            auto_store=True,
+            previous_response_id=first_response_id,
+            verbose=False,
+        )
+        if not result2:
+            self.fail("Failed to send follow-up")
+        print("   Turn 2: Follow-up sent (triggers extraction)")
+
+        # Step 3: Wait for extraction to complete
+        print(f"\n⏳ Step 3: Waiting for memory extraction...")
         time.sleep(self.extraction_wait + 1)
 
-        # Step 3: Query for the fact in NEW SESSION (no previous_response_id)
+        # Step 4: Query for the fact in NEW SESSION (no previous_response_id)
         # This is critical - it ensures we're testing Milvus retrieval, not conversation history
-        print(f"\n🔍 Step 3: Querying for the fact (NEW SESSION)...")
+        print(f"\n🔍 Step 4: Querying for the fact (NEW SESSION)...")
         query_result = self.send_memory_request(
             message="What is my secret project codename?",
             auto_store=False,
@@ -987,7 +1271,7 @@ class PluginCombinationTest(MemoryFeaturesTest):
         output = query_result.get("_output_text", "").lower()
         print(f"   Response: {query_result.get('_output_text', '')[:200]}...")
 
-        # Step 4: Verify the unique fact is in the response
+        # Step 5: Verify the unique fact is in the response
         # Since this is a NEW session, "phoenix" can ONLY come from Milvus memory
         if "phoenix" in output:
             self.print_test_result(

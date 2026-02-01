@@ -449,6 +449,9 @@ type EmbeddingModels struct {
 	// Path to mmBERT 2D Matryoshka embedding model directory
 	// Supports layer early exit (3/6/11/22 layers) and dimension reduction (64-768)
 	MmBertModelPath string `yaml:"mmbert_model_path"`
+	// Path to BERT/MiniLM embedding model directory (e.g., all-MiniLM-L6-v2, all-MiniLM-L12-v2)
+	// Produces 384-dim embeddings, recommended for memory retrieval due to forgiving semantic matching
+	BertModelPath string `yaml:"bert_model_path"`
 	// Use CPU for inference (default: true, auto-detect GPU if available)
 	UseCPU bool `yaml:"use_cpu"`
 
@@ -718,8 +721,9 @@ type SemanticCache struct {
 
 // MemoryConfig represents the configuration for agentic memory
 type MemoryConfig struct {
-	// Enable memory features
-	Enabled bool `yaml:"enabled"`
+	// Enable memory features globally.
+	// Auto-enabled if any decision uses memory plugin.
+	Enabled bool `yaml:"enabled,omitempty"`
 
 	// AutoStore enables automatic memory extraction from conversations
 	AutoStore bool `yaml:"auto_store,omitempty"`
@@ -731,9 +735,6 @@ type MemoryConfig struct {
 	// If not set, auto-detected from embedding_models section
 	// Options: "bert", "mmbert", "qwen3", "gemma"
 	EmbeddingModel string `yaml:"embedding_model,omitempty"`
-
-	// Embedding configuration (deprecated, use embedding_model instead)
-	Embedding MemoryEmbeddingConfig `yaml:"embedding,omitempty"`
 
 	// ExtractionBatchSize is the number of turns between extraction runs (default: 10)
 	ExtractionBatchSize int `yaml:"extraction_batch_size,omitempty"`
@@ -761,29 +762,6 @@ type MemoryMilvusConfig struct {
 
 	// Embedding dimension (default: 384 for all-MiniLM-L6-v2)
 	Dimension int `yaml:"dimension,omitempty"`
-}
-
-// MemoryEmbeddingConfig contains configuration for embedding generation in memory operations.
-//
-// Supported models:
-//   - "bert": all-MiniLM-L6-v2 (384-dim) - forgiving matching, legacy default
-//   - "mmbert": ModernBERT (768-dim, 32K context) - recommended unified model
-//   - "qwen3": Qwen3-Embedding-0.6B (1024-dim) - high precision
-//   - "gemma": EmbeddingGemma-300M (768-dim) - fast inference
-//
-// Default: "mmbert" with 768-dim for unified embedding across memory and cache
-type MemoryEmbeddingConfig struct {
-	// Model is the embedding model type: "bert", "mmbert", "qwen3", or "gemma"
-	// Default: "mmbert" (unified embedding with semantic cache)
-	Model string `yaml:"model,omitempty"`
-
-	// Dimension is the embedding dimension
-	// Defaults: bert=384, mmbert=768, qwen3=1024, gemma=768
-	Dimension int `yaml:"dimension,omitempty"`
-
-	// Layer is the transformer layer for 2D Matryoshka models (mmbert only)
-	// Lower layers = faster but less accurate (range: 1-22, default: 6)
-	Layer int `yaml:"layer,omitempty"`
 }
 
 // ResponseAPIConfig configures the Response API for stateful conversations.

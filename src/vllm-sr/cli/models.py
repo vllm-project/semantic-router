@@ -485,28 +485,46 @@ class MemoryMilvusConfig(BaseModel):
     dimension: int = 384
 
 
-class MemoryEmbeddingConfig(BaseModel):
-    """Embedding configuration for memory."""
-
-    model: str = "all-MiniLM-L6-v2"
-    dimension: int = 384
-
-
 class MemoryConfig(BaseModel):
     """Agentic Memory configuration for cross-session memory.
 
     Query rewriting and fact extraction are enabled by adding external_models
-    with model_role="memory_rewrite" or model_role="memory_extraction".
-    See external_models configuration for details.
+    with role="memory_rewrite" or role="memory_extraction".
+    See external_models configuration in providers section for details.
+
+    The embedding_model is auto-detected from embedding_models if not specified.
+    Priority: bert > mmbert > qwen3 > gemma
     """
 
     enabled: bool = True
     auto_store: bool = False  # Auto-store extracted facts after each response
     milvus: Optional[MemoryMilvusConfig] = None
-    embedding: Optional[MemoryEmbeddingConfig] = None
+    # Embedding model to use for memory vectors
+    # Options: "bert", "mmbert", "qwen3", "gemma"
+    # If not set, auto-detected from embedding_models section (bert preferred)
+    embedding_model: Optional[str] = None
     default_retrieval_limit: int = 5
     default_similarity_threshold: float = 0.70
     extraction_batch_size: int = 10  # Extract every N turns
+
+
+class EmbeddingModelsConfig(BaseModel):
+    """Embedding models configuration for memory and semantic features."""
+
+    qwen3_model_path: Optional[str] = Field(
+        None, description="Path to Qwen3-Embedding model"
+    )
+    gemma_model_path: Optional[str] = Field(
+        None, description="Path to EmbeddingGemma model"
+    )
+    mmbert_model_path: Optional[str] = Field(
+        None, description="Path to mmBERT 2D Matryoshka model"
+    )
+    bert_model_path: Optional[str] = Field(
+        None,
+        description="Path to BERT/MiniLM model (recommended for memory retrieval)",
+    )
+    use_cpu: bool = Field(True, description="Use CPU for inference")
 
 
 class UserConfig(BaseModel):
@@ -518,6 +536,9 @@ class UserConfig(BaseModel):
     decisions: List[Decision]
     providers: Providers
     memory: Optional[MemoryConfig] = None  # Agentic Memory config
+    embedding_models: Optional[EmbeddingModelsConfig] = (
+        None  # Embedding models for memory
+    )
 
     class Config:
         populate_by_name = True

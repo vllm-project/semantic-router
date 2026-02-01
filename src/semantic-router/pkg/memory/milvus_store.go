@@ -66,7 +66,7 @@ func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 
 	// Use default config if not provided
 	cfg := options.Config
-	if cfg.Embedding.Model == "" {
+	if cfg.EmbeddingModel == "" {
 		cfg = DefaultMemoryConfig()
 	}
 
@@ -117,7 +117,7 @@ func (m *MilvusStore) ensureCollection(ctx context.Context) error {
 		return nil
 	}
 
-	logging.Infof("MilvusStore: creating collection '%s' with dimension %d", m.collectionName, m.config.Embedding.Dimension)
+	logging.Infof("MilvusStore: creating collection '%s' with dimension %d", m.collectionName, m.config.Milvus.Dimension)
 
 	// Define schema for agentic memory
 	schema := &entity.Schema{
@@ -165,7 +165,7 @@ func (m *MilvusStore) ensureCollection(ctx context.Context) error {
 				Name:     "embedding",
 				DataType: entity.FieldTypeFloatVector,
 				TypeParams: map[string]string{
-					"dim": fmt.Sprintf("%d", m.config.Embedding.Dimension),
+					"dim": fmt.Sprintf("%d", m.config.Milvus.Dimension),
 				},
 			},
 			{

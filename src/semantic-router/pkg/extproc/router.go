@@ -357,9 +357,21 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 
 	logging.Infof("[Router] Initialized model selection registry (per-decision algorithm config)")
 
+	// Auto-enable memory if any decision uses memory plugin
+	memoryEnabled := cfg.Memory.Enabled
+	if !memoryEnabled {
+		for _, decision := range cfg.Decisions {
+			if decision.GetPluginConfig("memory") != nil {
+				memoryEnabled = true
+				logging.Infof("Memory auto-enabled: decision '%s' uses memory plugin", decision.Name)
+				break
+			}
+		}
+	}
+
 	// Create memory store if enabled
 	var memoryStore *memory.MilvusStore
-	if cfg.Memory.Enabled {
+	if memoryEnabled {
 		memStore, err := createMemoryStore(cfg)
 		if err != nil {
 			logging.Warnf("Failed to create memory store: %v, Memory will be disabled", err)
@@ -371,7 +383,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 
 	// Create memory extractor if memory_extraction external model is configured
 	var memoryExtractor *memory.MemoryExtractor
-	if cfg.Memory.Enabled && cfg.FindExternalModelByRole(config.ModelRoleMemoryExtraction) != nil {
+	if memoryEnabled && cfg.FindExternalModelByRole(config.ModelRoleMemoryExtraction) != nil {
 		if memoryStore != nil {
 			memoryExtractor = memory.NewMemoryExtractorWithStore(cfg, cfg.Memory.ExtractionBatchSize, memoryStore)
 			if memoryExtractor != nil {
@@ -722,9 +734,13 @@ func createMemoryStore(cfg *config.RouterConfig) (*memory.MilvusStore, error) {
 	}
 
 	// Auto-detect embedding model from embedding_models configuration
+	// Priority: bert (384-dim, best for memory) > mmbert > qwen3 > gemma
 	embeddingModel := cfg.Memory.EmbeddingModel
 	if embeddingModel == "" {
-		if cfg.EmbeddingModels.MmBertModelPath != "" {
+		if cfg.EmbeddingModels.BertModelPath != "" {
+			embeddingModel = "bert"
+			logging.Infof("Memory: Auto-selected bert from embedding_models config (384-dim, recommended for memory)")
+		} else if cfg.EmbeddingModels.MmBertModelPath != "" {
 			embeddingModel = "mmbert"
 			logging.Infof("Memory: Auto-selected mmbert from embedding_models config")
 		} else if cfg.EmbeddingModels.Qwen3ModelPath != "" {
@@ -735,12 +751,13 @@ func createMemoryStore(cfg *config.RouterConfig) (*memory.MilvusStore, error) {
 			logging.Infof("Memory: Auto-selected gemma from embedding_models config")
 		} else {
 			embeddingModel = "bert"
-			logging.Warnf("Memory: No embedding models configured, using bert")
+			logging.Warnf("Memory: No embedding models configured, bert will be used but may fail without bert_model_path")
 		}
 	}
 
 	embeddingConfig := memory.EmbeddingConfig{
-		Model: memory.EmbeddingModelType(embeddingModel),
+		Model:     memory.EmbeddingModelType(embeddingModel),
+		Dimension: cfg.Memory.Milvus.Dimension, // Pass dimension from config for Matryoshka models
 	}
 
 	logging.Infof("Memory: Connecting to Milvus at %s, collection=%s", milvusAddress, collectionName)
@@ -771,7 +788,7 @@ func createMemoryStore(cfg *config.RouterConfig) (*memory.MilvusStore, error) {
 		Client:          milvusClient,
 		CollectionName:  collectionName,
 		Config:          cfg.Memory,
-		Enabled:         cfg.Memory.Enabled,
+		Enabled:         true, // Always enabled if we reach here (auto-detected or explicit)
 		EmbeddingConfig: &embeddingConfig,
 	})
 	if err != nil {

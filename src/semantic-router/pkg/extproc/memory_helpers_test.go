@@ -15,52 +15,21 @@ import (
 // extractAutoStore Tests
 // =============================================================================
 
-func TestExtractAutoStore_ResponseAPI_WithAutoStore(t *testing.T) {
+// Note: Request-level MemoryConfig was removed for OpenAI API compatibility.
+// Memory configuration is now controlled server-side via plugin config.
+// See: extractAutoStore_PerDecisionPlugin tests below.
+
+func TestExtractAutoStore_ResponseAPI_NoPluginConfig(t *testing.T) {
+	// Without plugin config, auto_store defaults to false
 	ctx := &RequestContext{
 		ResponseAPICtx: &ResponseAPIContext{
 			IsResponseAPIRequest: true,
-			OriginalRequest: &responseapi.ResponseAPIRequest{
-				MemoryConfig: &responseapi.MemoryConfig{
-					Enabled:   true,
-					AutoStore: true,
-				},
-			},
+			OriginalRequest:      &responseapi.ResponseAPIRequest{},
 		},
 	}
 
 	result := extractAutoStore(ctx)
-	assert.True(t, result, "should return true when auto_store is enabled")
-}
-
-func TestExtractAutoStore_ResponseAPI_WithoutAutoStore(t *testing.T) {
-	ctx := &RequestContext{
-		ResponseAPICtx: &ResponseAPIContext{
-			IsResponseAPIRequest: true,
-			OriginalRequest: &responseapi.ResponseAPIRequest{
-				MemoryConfig: &responseapi.MemoryConfig{
-					Enabled:   true,
-					AutoStore: false,
-				},
-			},
-		},
-	}
-
-	result := extractAutoStore(ctx)
-	assert.False(t, result, "should return false when auto_store is false")
-}
-
-func TestExtractAutoStore_ResponseAPI_NoMemoryConfig(t *testing.T) {
-	ctx := &RequestContext{
-		ResponseAPICtx: &ResponseAPIContext{
-			IsResponseAPIRequest: true,
-			OriginalRequest:      &responseapi.ResponseAPIRequest{
-				// No MemoryConfig
-			},
-		},
-	}
-
-	result := extractAutoStore(ctx)
-	assert.False(t, result, "should return false when MemoryConfig is nil")
+	assert.False(t, result, "should return false when no memory plugin config")
 }
 
 func TestExtractAutoStore_ResponseAPI_NilOriginalRequest(t *testing.T) {
@@ -143,19 +112,16 @@ func TestExtractAutoStore_PerDecisionPlugin_Disabled(t *testing.T) {
 		VSRSelectedDecisionName: "coding_task",
 		ResponseAPICtx: &ResponseAPIContext{
 			IsResponseAPIRequest: true,
-			OriginalRequest: &responseapi.ResponseAPIRequest{
-				MemoryConfig: &responseapi.MemoryConfig{
-					AutoStore: true, // Request-level says true
-				},
-			},
+			OriginalRequest:      &responseapi.ResponseAPIRequest{},
 		},
 	}
 
 	result := extractAutoStore(ctx)
-	assert.False(t, result, "per-decision plugin config should override request-level")
+	assert.False(t, result, "per-decision plugin config should control auto_store")
 }
 
-func TestExtractAutoStore_PerDecisionPlugin_NotSet_FallbackToRequest(t *testing.T) {
+func TestExtractAutoStore_PerDecisionPlugin_NotSet_DefaultsFalse(t *testing.T) {
+	// When plugin doesn't set auto_store, it defaults to false (server controls)
 	ctx := &RequestContext{
 		VSRSelectedDecision: &config.Decision{
 			Name: "general",
@@ -164,7 +130,7 @@ func TestExtractAutoStore_PerDecisionPlugin_NotSet_FallbackToRequest(t *testing.
 					Type: "memory",
 					Configuration: map[string]interface{}{
 						"enabled": true,
-						// auto_store NOT set - should fall back to request
+						// auto_store NOT set - defaults to false
 					},
 				},
 			},
@@ -172,19 +138,16 @@ func TestExtractAutoStore_PerDecisionPlugin_NotSet_FallbackToRequest(t *testing.
 		VSRSelectedDecisionName: "general",
 		ResponseAPICtx: &ResponseAPIContext{
 			IsResponseAPIRequest: true,
-			OriginalRequest: &responseapi.ResponseAPIRequest{
-				MemoryConfig: &responseapi.MemoryConfig{
-					AutoStore: true,
-				},
-			},
+			OriginalRequest:      &responseapi.ResponseAPIRequest{},
 		},
 	}
 
 	result := extractAutoStore(ctx)
-	assert.True(t, result, "should fall back to request-level when plugin doesn't set auto_store")
+	assert.False(t, result, "should return false when plugin doesn't set auto_store")
 }
 
-func TestExtractAutoStore_NoMemoryPlugin_FallbackToRequest(t *testing.T) {
+func TestExtractAutoStore_NoMemoryPlugin_ReturnsFalse(t *testing.T) {
+	// Without memory plugin, auto_store is always false
 	ctx := &RequestContext{
 		VSRSelectedDecision: &config.Decision{
 			Name: "no_memory_decision",
@@ -196,16 +159,12 @@ func TestExtractAutoStore_NoMemoryPlugin_FallbackToRequest(t *testing.T) {
 		VSRSelectedDecisionName: "no_memory_decision",
 		ResponseAPICtx: &ResponseAPIContext{
 			IsResponseAPIRequest: true,
-			OriginalRequest: &responseapi.ResponseAPIRequest{
-				MemoryConfig: &responseapi.MemoryConfig{
-					AutoStore: true,
-				},
-			},
+			OriginalRequest:      &responseapi.ResponseAPIRequest{},
 		},
 	}
 
 	result := extractAutoStore(ctx)
-	assert.True(t, result, "should fall back to request-level when no memory plugin configured")
+	assert.False(t, result, "should return false when no memory plugin configured")
 }
 
 // =============================================================================
@@ -215,6 +174,7 @@ func TestExtractAutoStore_NoMemoryPlugin_FallbackToRequest(t *testing.T) {
 func TestExtractMemoryInfo_WithConversationID(t *testing.T) {
 	// ConversationID is now set during TranslateRequest, not extractMemoryInfo.
 	// Tests must set ConversationID in ResponseAPIContext.
+	// userID is provided via metadata (OpenAI API spec-compliant)
 	ctx := &RequestContext{
 		RequestID: "req_123",
 		ResponseAPICtx: &ResponseAPIContext{
@@ -222,8 +182,8 @@ func TestExtractMemoryInfo_WithConversationID(t *testing.T) {
 			ConversationID:       "conv_456", // Set by TranslateRequest
 			OriginalRequest: &responseapi.ResponseAPIRequest{
 				ConversationID: "conv_456",
-				MemoryContext: &responseapi.MemoryContext{
-					UserID: "user_789",
+				Metadata: map[string]string{
+					"user_id": "user_789",
 				},
 			},
 		},
@@ -233,13 +193,14 @@ func TestExtractMemoryInfo_WithConversationID(t *testing.T) {
 
 	require.NoError(t, err, "should not return error when userID is provided")
 	assert.Equal(t, "conv_456", sessionID, "should use ConversationID from context")
-	assert.Equal(t, "user_789", userID, "should extract userID from MemoryContext")
+	assert.Equal(t, "user_789", userID, "should extract userID from metadata")
 	assert.Empty(t, history, "should return empty history when ConversationHistory is nil")
 }
 
 func TestExtractMemoryInfo_WithoutConversationID_WithUserID(t *testing.T) {
 	// When no ConversationID in request, TranslateRequest generates one.
 	// extractMemoryInfo just reads it from context.
+	// userID is provided via metadata (OpenAI API spec-compliant)
 	ctx := &RequestContext{
 		RequestID: "req_123",
 		ResponseAPICtx: &ResponseAPIContext{
@@ -247,8 +208,8 @@ func TestExtractMemoryInfo_WithoutConversationID_WithUserID(t *testing.T) {
 			ConversationID:       "conv_generated_by_translate", // Set by TranslateRequest
 			OriginalRequest: &responseapi.ResponseAPIRequest{
 				// No ConversationID in request = new conversation
-				MemoryContext: &responseapi.MemoryContext{
-					UserID: "user_789",
+				Metadata: map[string]string{
+					"user_id": "user_789",
 				},
 			},
 		},
@@ -258,7 +219,7 @@ func TestExtractMemoryInfo_WithoutConversationID_WithUserID(t *testing.T) {
 
 	require.NoError(t, err, "should not return error when userID is provided")
 	assert.Equal(t, "conv_generated_by_translate", sessionID, "should use ConversationID from context")
-	assert.Equal(t, "user_789", userID, "should extract userID from MemoryContext")
+	assert.Equal(t, "user_789", userID, "should extract userID from metadata")
 	assert.Empty(t, history)
 }
 
@@ -285,26 +246,30 @@ func TestExtractMemoryInfo_UserIDFromMetadata(t *testing.T) {
 	assert.Empty(t, history)
 }
 
-func TestExtractMemoryInfo_UserIDFromHeaders(t *testing.T) {
+func TestExtractMemoryInfo_HeadersNotSupported(t *testing.T) {
+	// Headers are NOT supported for userID - must use metadata["user_id"]
+	// This ensures consistent behavior between extraction and retrieval
 	ctx := &RequestContext{
 		RequestID: "req_123",
 		Headers: map[string]string{
-			"x-user-id": "user_from_header",
+			"x-user-id": "user_from_header", // This should be ignored
 		},
 		ResponseAPICtx: &ResponseAPIContext{
 			IsResponseAPIRequest: true,
-			ConversationID:       "conv_from_translate", // Set by TranslateRequest
+			ConversationID:       "conv_from_translate",
 			OriginalRequest:      &responseapi.ResponseAPIRequest{
-				// No MemoryContext or Metadata
+				// No Metadata - userID must come from metadata, not headers
 			},
 		},
 	}
 
 	sessionID, userID, history, err := extractMemoryInfo(ctx)
 
-	require.NoError(t, err, "should not return error when userID is provided")
-	assert.Equal(t, "conv_from_translate", sessionID, "should use ConversationID from context")
-	assert.Equal(t, "user_from_header", userID, "should extract userID from header")
+	require.Error(t, err, "should return error when userID is only in headers (not supported)")
+	assert.Contains(t, err.Error(), "userID is required", "error should mention userID requirement")
+	assert.Contains(t, err.Error(), "metadata", "error should mention metadata as the correct source")
+	assert.Empty(t, sessionID)
+	assert.Empty(t, userID)
 	assert.Empty(t, history)
 }
 
@@ -333,6 +298,7 @@ func TestExtractMemoryInfo_MissingUserID(t *testing.T) {
 func TestExtractMemoryInfo_ContinuationFromChain(t *testing.T) {
 	// Test case: continuation of conversation (has PreviousResponseID)
 	// TranslateRequest finds ConversationID from the chain and sets it in context
+	// userID is provided via metadata (OpenAI API spec-compliant)
 	storedResponses := []*responseapi.StoredResponse{
 		{
 			ID:             "resp_1",
@@ -368,8 +334,8 @@ func TestExtractMemoryInfo_ContinuationFromChain(t *testing.T) {
 			PreviousResponseID:   "resp_2",        // Has PreviousResponseID = continuation
 			OriginalRequest: &responseapi.ResponseAPIRequest{
 				// No ConversationID in request - TranslateRequest found it from chain
-				MemoryContext: &responseapi.MemoryContext{
-					UserID: "user_789",
+				Metadata: map[string]string{
+					"user_id": "user_789",
 				},
 			},
 			ConversationHistory: storedResponses,
@@ -380,11 +346,12 @@ func TestExtractMemoryInfo_ContinuationFromChain(t *testing.T) {
 
 	require.NoError(t, err, "should not return error when userID is provided")
 	assert.Equal(t, "conv_existing", sessionID, "should use ConversationID from context (found from chain)")
-	assert.Equal(t, "user_789", userID, "should extract userID from MemoryContext")
+	assert.Equal(t, "user_789", userID, "should extract userID from metadata")
 	assert.Len(t, history, 4, "should extract history from ConversationHistory")
 }
 
 func TestExtractMemoryInfo_WithConversationHistory(t *testing.T) {
+	// userID is provided via metadata (OpenAI API spec-compliant)
 	storedResponses := []*responseapi.StoredResponse{
 		{
 			ID: "resp_1",
@@ -417,8 +384,8 @@ func TestExtractMemoryInfo_WithConversationHistory(t *testing.T) {
 			ConversationID:       "conv_456", // Set by TranslateRequest
 			OriginalRequest: &responseapi.ResponseAPIRequest{
 				ConversationID: "conv_456",
-				MemoryContext: &responseapi.MemoryContext{
-					UserID: "user_789",
+				Metadata: map[string]string{
+					"user_id": "user_789",
 				},
 			},
 			ConversationHistory: storedResponses,
@@ -854,6 +821,7 @@ func TestExtractTextFromContentParts_EmptySlice(t *testing.T) {
 
 func TestExtractMemoryInfo_RealisticScenario(t *testing.T) {
 	// Simulate a realistic conversation with multiple turns
+	// userID is provided via metadata (OpenAI API spec-compliant)
 	storedResponses := []*responseapi.StoredResponse{
 		{
 			ID: "resp_1",
@@ -897,8 +865,8 @@ func TestExtractMemoryInfo_RealisticScenario(t *testing.T) {
 			ConversationID:       "conv_hawaii_trip", // Set by TranslateRequest
 			OriginalRequest: &responseapi.ResponseAPIRequest{
 				ConversationID: "conv_hawaii_trip",
-				MemoryContext: &responseapi.MemoryContext{
-					UserID: "user_alice",
+				Metadata: map[string]string{
+					"user_id": "user_alice",
 				},
 			},
 			ConversationHistory: storedResponses,
