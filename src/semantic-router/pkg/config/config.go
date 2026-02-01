@@ -363,6 +363,8 @@ type Classifier struct {
 	MCPCategoryModel `yaml:"mcp_category_model,omitempty"`
 	// PII detection model
 	PIIModel `yaml:"pii_model"`
+	// Preference model configuration for local preference classification
+	PreferenceModel PreferenceModelConfig `yaml:"preference_model,omitempty"`
 }
 
 type BertModel struct {
@@ -948,6 +950,23 @@ type FeedbackDetectorConfig struct {
 
 	// Path to the feedback type mapping file
 	FeedbackMappingPath string `yaml:"feedback_mapping_path"`
+}
+
+// PreferenceModelConfig represents configuration for local (Candle) preference classification
+// This enables running the preference classifier without an external vLLM endpoint.
+type PreferenceModelConfig struct {
+	// Model ID/path for the preference classification model (Candle model path)
+	ModelID string `yaml:"model_id"`
+
+	// Confidence threshold for accepting the predicted preference (0.0-1.0)
+	// If 0, no thresholding is applied.
+	Threshold float32 `yaml:"threshold,omitempty"`
+
+	// Use CPU for inference (Candle CPU flag)
+	UseCPU bool `yaml:"use_cpu"`
+
+	// Use Qwen3-0.6B preference classifier (zero-shot / fine-tuned)
+	UseQwen3 bool `yaml:"use_qwen3"`
 }
 
 // ExternalModelConfig represents configuration for external LLM-based models
