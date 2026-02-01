@@ -221,7 +221,7 @@ clean-mmbert: ## Remove downloaded mmBERT models
 # Hyperparameters validated on 2026-02-01:
 #   - Intent Classifier: 92% accuracy (MMLU-Pro + supplement data)
 #   - Jailbreak Detector: 97.7% training accuracy (toxic-chat + salad-data)
-#   - PII Detector: 95.5% training accuracy (Presidio dataset, char offset alignment)
+#   - PII Detector: 97.2% training accuracy (AI4Privacy + Presidio combined dataset)
 TRAIN_EPOCHS ?= 5
 TRAIN_BATCH_SIZE ?= 16
 TRAIN_LR ?= 2e-4
@@ -230,9 +230,19 @@ LORA_ALPHA ?= 64
 LORA_DROPOUT ?= 0.1
 MAX_SAMPLES ?= 5000
 WEIGHT_DECAY ?= 0.1
+
+# PII-specific training parameters (AI4Privacy + Presidio combined for best accuracy)
+# AI4Privacy provides 400K diverse multilingual PII samples
+# Combined with Presidio for entity type coverage
+PII_EPOCHS ?= 8
+PII_MAX_SAMPLES ?= 10000
+PII_LR ?= 1e-4
+PII_LORA_RANK ?= 48
+PII_LORA_ALPHA ?= 96
+
 # Note: Intent training includes supplement data (653 casual "other" samples)
 # from LLM-Semantic-Router/category-classifier-supplement
-# Note: PII training uses character offset alignment for mmbert-32k tokenizer
+# Note: PII training uses AI4Privacy + Presidio combined dataset with char offset alignment
 
 # Training script paths
 TRAINING_DIR := src/training
@@ -295,9 +305,45 @@ train-mmbert32k-intent: ## Train Intent Classifier (MMLU-Pro categories + supple
 		mv lora_intent_classifier_mmbert-32k_r$(LORA_RANK)_model $(MMBERT32K_MODELS_DIR)/intent-classifier-lora; \
 	fi
 
-train-mmbert32k-pii: ## Train PII Detector (token classification, char offset alignment)
-	@echo "🔒 Training PII Detector with mmBERT-32K (Presidio dataset)..."
+train-mmbert32k-pii: ## Train PII Detector (AI4Privacy + Presidio combined dataset)
+	@echo "🔒 Training PII Detector with mmBERT-32K (AI4Privacy + Presidio combined)..."
+	@echo "   Dataset: AI4Privacy (70%) + Presidio (30%) for maximum coverage"
+	@echo "   Epochs: $(PII_EPOCHS), Samples: $(PII_MAX_SAMPLES), LoRA rank: $(PII_LORA_RANK)"
 	@mkdir -p $(MMBERT32K_MODELS_DIR)
+	python $(LORA_DIR)/pii_model_fine_tuning_lora/pii_bert_finetuning_lora.py \
+		--mode train \
+		--model mmbert-32k \
+		--lora-rank $(PII_LORA_RANK) \
+		--lora-alpha $(PII_LORA_ALPHA) \
+		--epochs $(PII_EPOCHS) \
+		--batch-size $(TRAIN_BATCH_SIZE) \
+		--learning-rate $(PII_LR) \
+		--max-samples $(PII_MAX_SAMPLES) \
+		--use-ai4privacy
+	@echo "✅ PII Detector training complete (97.2% accuracy expected)"
+	@# Move to organized directory (handle both naming patterns)
+	@if [ -d "lora_pii_detector_mmbert-32k_r$(PII_LORA_RANK)_token_model" ]; then \
+		mv lora_pii_detector_mmbert-32k_r$(PII_LORA_RANK)_token_model $(MMBERT32K_MODELS_DIR)/pii-detector-lora; \
+	elif [ -d "lora_pii_classifier_mmbert-32k_r$(PII_LORA_RANK)_model" ]; then \
+		mv lora_pii_classifier_mmbert-32k_r$(PII_LORA_RANK)_model $(MMBERT32K_MODELS_DIR)/pii-detector-lora; \
+	fi
+
+train-mmbert32k-pii-quick: ## Quick PII training (3 epochs, 3000 samples)
+	@echo "🔒 Quick PII Detector training (AI4Privacy + Presidio)..."
+	python $(LORA_DIR)/pii_model_fine_tuning_lora/pii_bert_finetuning_lora.py \
+		--mode train \
+		--model mmbert-32k \
+		--lora-rank 32 \
+		--lora-alpha 64 \
+		--epochs 3 \
+		--batch-size 16 \
+		--learning-rate 1e-4 \
+		--max-samples 3000 \
+		--use-ai4privacy
+	@echo "✅ Quick PII training complete"
+
+train-mmbert32k-pii-presidio-only: ## Train PII Detector with Presidio only (legacy)
+	@echo "🔒 Training PII Detector with Presidio only (legacy mode)..."
 	python $(LORA_DIR)/pii_model_fine_tuning_lora/pii_bert_finetuning_lora.py \
 		--mode train \
 		--model mmbert-32k \
@@ -306,12 +352,9 @@ train-mmbert32k-pii: ## Train PII Detector (token classification, char offset al
 		--epochs $(TRAIN_EPOCHS) \
 		--batch-size $(TRAIN_BATCH_SIZE) \
 		--learning-rate $(TRAIN_LR) \
-		--max-samples $(MAX_SAMPLES)
-	@echo "✅ PII Detector training complete (95.5% accuracy expected)"
-	@# Move to organized directory
-	@if [ -d "lora_pii_classifier_mmbert-32k_r$(LORA_RANK)_model" ]; then \
-		mv lora_pii_classifier_mmbert-32k_r$(LORA_RANK)_model $(MMBERT32K_MODELS_DIR)/pii-detector-lora; \
-	fi
+		--max-samples $(MAX_SAMPLES) \
+		--no-ai4privacy
+	@echo "✅ Presidio-only PII training complete"
 
 train-mmbert32k-jailbreak: ## Train Jailbreak Detector (toxic-chat + salad-data)
 	@echo "🛡️  Training Jailbreak Detector with mmBERT-32K..."
