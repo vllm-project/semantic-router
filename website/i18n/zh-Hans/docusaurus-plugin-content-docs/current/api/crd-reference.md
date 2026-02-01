@@ -2,7 +2,7 @@
 translation:
   source_commit: "a149800"
   source_file: "docs/api/crd-reference.md"
-  outdated: false
+  outdated: true
 sidebar_position: 3
 title: CRD API 参考
 description: vLLM Semantic Router 的 Kubernetes 自定义资源定义 (CRD) API 参考
