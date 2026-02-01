@@ -14,9 +14,10 @@ use crate::model_error;
 use anyhow::{Error as E, Result};
 use candle_core::{DType, Device, IndexOp, Tensor, D};
 use candle_nn::{ops, LayerNorm, Linear, Module, VarBuilder};
-use candle_transformers::models::modernbert::{
-    ClassifierConfig, ClassifierPooling, Config, ModernBert,
-};
+
+// Use local ModernBERT core with F16/BF16 dtype fixes
+// (candle-transformers hardcodes F32 for attention masks, causing dtype mismatch)
+use super::modernbert_core::{ClassifierConfig, ClassifierPooling, Config, ModernBert};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 use tokenizers::{PaddingParams, PaddingStrategy, Tokenizer};
@@ -223,10 +224,11 @@ impl FixedModernBertHead {
         );
 
         // Load layer norm - following old architecture pattern
+        // Use VarBuilder's dtype to match model weights (F16/BF16/F32)
         let layer_norm = candle_nn::LayerNorm::new(
             vb.get((config.hidden_size,), "norm.weight")?,
-            // Create a zero bias tensor since LayerNorm::new requires it but the model doesn't have one
-            candle_core::Tensor::zeros((config.hidden_size,), DType::F32, vb.device())?,
+            // Create a zero bias tensor with matching dtype
+            candle_core::Tensor::zeros((config.hidden_size,), vb.dtype(), vb.device())?,
             1e-12,
         );
 
@@ -489,7 +491,7 @@ impl TraditionalModernBertClassifier {
     }
 
     /// Load from directory with explicit variant specification
-    /// Default uses F16 for CPU (~23x faster than F32), BF16 for GPU (better range than F16)
+    /// Uses local ModernBERT core with F16/BF16 dtype fixes for optimal performance
     pub fn load_from_directory_with_variant(
         model_path: &str,
         use_cpu: bool,
@@ -720,6 +722,7 @@ impl TraditionalModernBertClassifier {
                 // Mean pooling over sequence length
                 // Ensure attention_mask has the same number of dimensions as model_output
                 let model_dims = model_output.dims().len();
+                let model_dtype = model_output.dtype();
                 let mut mask_expanded = attention_mask.clone();
 
                 // Add dimensions to match model_output
@@ -727,12 +730,13 @@ impl TraditionalModernBertClassifier {
                     mask_expanded = mask_expanded.unsqueeze(mask_expanded.dims().len())?;
                 }
 
-                let mask_expanded = mask_expanded.to_dtype(candle_core::DType::F32)?;
+                // Convert mask to same dtype as model output (F16/BF16/F32)
+                let mask_expanded = mask_expanded.to_dtype(model_dtype)?;
                 let masked_output = model_output.broadcast_mul(&mask_expanded)?;
                 let sum_output = masked_output.sum(1)?;
                 let mask_sum = attention_mask
                     .sum_keepdim(1)?
-                    .to_dtype(candle_core::DType::F32)?;
+                    .to_dtype(model_dtype)?;
                 sum_output.broadcast_div(&mask_sum)?
             }
         };
@@ -749,7 +753,8 @@ impl TraditionalModernBertClassifier {
         let probabilities = self.classifier.forward(&classifier_input)?;
 
         // 8. Extract prediction (highest probability class)
-        let probabilities_vec = probabilities.squeeze(0)?.to_vec1::<f32>()?;
+        // Convert to F32 for extraction (model may use F16/BF16 internally)
+        let probabilities_vec = probabilities.squeeze(0)?.to_dtype(DType::F32)?.to_vec1::<f32>()?;
 
         let mut max_prob = 0.0f32;
         let mut predicted_class = 0usize;
@@ -807,6 +812,10 @@ impl TraditionalModernBertTokenClassifier {
             Device::cuda_if_available(0)?
         };
 
+        // CPU: F16 provides ~23x speedup over F32 (better SIMD, lower bandwidth)
+        // GPU: BF16 preferred (same range as F32, native tensor core support)
+        let dtype = if use_cpu { DType::F16 } else { DType::BF16 };
+
         // Load model configuration
         let config_path = std::path::Path::new(model_id).join("config.json");
         let config_str = std::fs::read_to_string(&config_path)
@@ -835,10 +844,10 @@ impl TraditionalModernBertTokenClassifier {
             }
         };
 
-        // Load model weights
+        // Load model weights with optimal dtype (F16 for CPU, BF16 for GPU)
         let weights_path = std::path::Path::new(model_id).join("model.safetensors");
         let vb =
-            unsafe { VarBuilder::from_mmaped_safetensors(&[weights_path], DType::F32, &device)? };
+            unsafe { VarBuilder::from_mmaped_safetensors(&[weights_path], dtype, &device)? };
 
         // Load ModernBERT model (following old architecture pattern)
         let model = ModernBert::load(vb.clone(), &config)?;
@@ -945,7 +954,8 @@ impl TraditionalModernBertTokenClassifier {
 
         // Extract entities from BIO tags (following old architecture pattern)
         let mut results = Vec::new();
-        let probs_data = probabilities.squeeze(0)?.to_vec2::<f32>()?;
+        // Convert to F32 for extraction (model may use F16/BF16 internally)
+        let probs_data = probabilities.squeeze(0)?.to_dtype(DType::F32)?.to_vec2::<f32>()?;
 
         // Get predictions for each token
         let logits_squeezed = logits.squeeze(0)?;

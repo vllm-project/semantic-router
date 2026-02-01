@@ -17,6 +17,7 @@ pub mod deberta_v3;
 
 pub mod base_model;
 pub mod modernbert;
+pub mod modernbert_core;  // Local ModernBERT with F16/BF16 dtype fixes
 
 // Re-export main traditional models
 pub use bert::TraditionalBertClassifier;
