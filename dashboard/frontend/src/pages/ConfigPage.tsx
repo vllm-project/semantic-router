@@ -1382,7 +1382,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                     name: 'use_qwen3',
                     label: 'Use Qwen3 Model',
                     type: 'boolean',
-                    description: 'Enable Qwen3-0.6B zero-shot/fine-tuned preference classifier',
+                    description: 'Enable Qwen3-1.7B zero-shot/fine-tuned preference classifier',
                   },
                 ],
                 async (data) => {
