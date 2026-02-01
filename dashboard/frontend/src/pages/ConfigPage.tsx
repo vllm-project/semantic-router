@@ -227,12 +227,12 @@ interface ConfigData {
     fallback_to_empty: boolean
   }
   prompt_guard?: ModelConfig & { enabled: boolean }
-  preference_model?: ModelConfig
   vllm_endpoints?: VLLMEndpoint[]
   classifier?: {
     category_model?: ModelConfig
     mcp_category_model?: MCPCategoryModel
     pii_model?: ModelConfig
+    preference_model?: ModelConfig
   }
   categories?: Category[]
   default_reasoning_effort?: string
@@ -571,7 +571,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     semantic_cache: routerDefaults?.semantic_cache ?? config?.semantic_cache,
     tools: routerDefaults?.tools ?? config?.tools,
     prompt_guard: routerDefaults?.prompt_guard ?? config?.prompt_guard,
-    preference_model: routerDefaults?.preference_model ?? config?.preference_model,
     classifier: routerDefaults?.classifier ?? config?.classifier,
     observability: routerDefaults?.observability ?? config?.observability,
     api: routerDefaults?.api ?? config?.api,
@@ -999,50 +998,50 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                               name: 'backend_type',
                               label: 'Backend Type',
                               type: 'select',
-                            options: ['memory', 'redis', 'memcached'],
-                            description: 'Cache backend storage type'
-                          },
-                          {
-                            name: 'similarity_threshold',
-                            label: 'Similarity Threshold',
-                            type: 'percentage',
-                            required: true,
-                            placeholder: '90',
-                            description: 'Minimum similarity score for cache hits (0-100%)',
-                            step: 1
-                          },
-                          {
-                            name: 'max_entries',
-                            label: 'Max Entries',
-                            type: 'number',
-                            placeholder: '10000',
-                            description: 'Maximum number of cached entries'
-                          },
-                          {
-                            name: 'ttl_seconds',
-                            label: 'TTL (seconds)',
-                            type: 'number',
-                            placeholder: '3600',
-                            description: 'Time-to-live for cached entries'
-                          },
-                          {
-                            name: 'eviction_policy',
-                            label: 'Eviction Policy',
-                            type: 'select',
-                            options: ['lru', 'lfu', 'fifo'],
-                            description: 'Cache eviction policy when max entries reached'
+                              options: ['memory', 'redis', 'memcached'],
+                              description: 'Cache backend storage type'
+                            },
+                            {
+                              name: 'similarity_threshold',
+                              label: 'Similarity Threshold',
+                              type: 'percentage',
+                              required: true,
+                              placeholder: '90',
+                              description: 'Minimum similarity score for cache hits (0-100%)',
+                              step: 1
+                            },
+                            {
+                              name: 'max_entries',
+                              label: 'Max Entries',
+                              type: 'number',
+                              placeholder: '10000',
+                              description: 'Maximum number of cached entries'
+                            },
+                            {
+                              name: 'ttl_seconds',
+                              label: 'TTL (seconds)',
+                              type: 'number',
+                              placeholder: '3600',
+                              description: 'Time-to-live for cached entries'
+                            },
+                            {
+                              name: 'eviction_policy',
+                              label: 'Eviction Policy',
+                              type: 'select',
+                              options: ['lru', 'lfu', 'fifo'],
+                              description: 'Cache eviction policy when max entries reached'
+                            }
+                          ],
+                          async (data) => {
+                            const newConfig = { ...config }
+                            newConfig.semantic_cache = data
+                            await saveConfig(newConfig)
                           }
-                        ],
-                        async (data) => {
-                          const newConfig = { ...config }
-                          newConfig.semantic_cache = data
-                          await saveConfig(newConfig)
-                        }
-                      )
-                    }}
-                  >
-                    Edit
-                  </button>
+                        )
+                      }}
+                    >
+                      Edit
+                    </button>
                   )}
                 </div>
               </div>
@@ -1110,54 +1109,54 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                           'Edit In-tree Category Classifier',
                           routerConfig.classifier?.category_model || {},
                           [
-                          {
-                            name: 'model_id',
-                            label: 'Model ID',
-                            type: 'text',
-                            required: true,
-                            placeholder: 'e.g., answerdotai/ModernBERT-base',
-                            description: 'HuggingFace model ID for category classification'
-                          },
-                          {
-                            name: 'threshold',
-                            label: 'Classification Threshold',
-                            type: 'percentage',
-                            required: true,
-                            placeholder: '70',
-                            description: 'Confidence threshold for category classification (0-100%)',
-                            step: 1
-                          },
-                          {
-                            name: 'use_cpu',
-                            label: 'Use CPU',
-                            type: 'boolean',
-                            description: 'Use CPU instead of GPU for inference'
-                          },
-                          {
-                            name: 'use_modernbert',
-                            label: 'Use ModernBERT',
-                            type: 'boolean',
-                            description: 'Enable ModernBERT-based classification'
-                          },
-                          {
-                            name: 'category_mapping_path',
-                            label: 'Category Mapping Path',
-                            type: 'text',
-                            placeholder: 'config/category_mapping.json',
-                            description: 'Path to category mapping configuration'
+                            {
+                              name: 'model_id',
+                              label: 'Model ID',
+                              type: 'text',
+                              required: true,
+                              placeholder: 'e.g., answerdotai/ModernBERT-base',
+                              description: 'HuggingFace model ID for category classification'
+                            },
+                            {
+                              name: 'threshold',
+                              label: 'Classification Threshold',
+                              type: 'percentage',
+                              required: true,
+                              placeholder: '70',
+                              description: 'Confidence threshold for category classification (0-100%)',
+                              step: 1
+                            },
+                            {
+                              name: 'use_cpu',
+                              label: 'Use CPU',
+                              type: 'boolean',
+                              description: 'Use CPU instead of GPU for inference'
+                            },
+                            {
+                              name: 'use_modernbert',
+                              label: 'Use ModernBERT',
+                              type: 'boolean',
+                              description: 'Enable ModernBERT-based classification'
+                            },
+                            {
+                              name: 'category_mapping_path',
+                              label: 'Category Mapping Path',
+                              type: 'text',
+                              placeholder: 'config/category_mapping.json',
+                              description: 'Path to category mapping configuration'
+                            }
+                          ],
+                          async (data) => {
+                            const newConfig = { ...config }
+                            if (!newConfig.classifier) newConfig.classifier = {}
+                            newConfig.classifier.category_model = data
+                            await saveConfig(newConfig)
                           }
-                        ],
-                        async (data) => {
-                          const newConfig = { ...config }
-                          if (!newConfig.classifier) newConfig.classifier = {}
-                          newConfig.classifier.category_model = data
-                          await saveConfig(newConfig)
-                        }
-                      )
-                    }}
-                  >
+                        )
+                      }}
+                    >
 
-                  </button>
+                    </button>
                   )}
                 </div>
               </div>
@@ -1205,83 +1204,83 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                           'Edit Out-tree MCP Category Classifier',
                           routerConfig.classifier?.mcp_category_model || {},
                           [
-                          {
-                            name: 'enabled',
-                            label: 'Enable MCP Classifier',
-                            type: 'boolean',
-                            description: 'Enable or disable MCP-based classification'
-                          },
-                          {
-                            name: 'transport_type',
-                            label: 'Transport Type',
-                            type: 'select',
-                            options: ['stdio', 'http'],
-                            required: true,
-                            description: 'MCP transport protocol type'
-                          },
-                          {
-                            name: 'command',
-                            label: 'Command',
-                            type: 'text',
-                            placeholder: 'e.g., python mcp_server.py',
-                            description: 'Command to start MCP server (for stdio transport)'
-                          },
-                          {
-                            name: 'args',
-                            label: 'Arguments (JSON)',
-                            type: 'json',
-                            placeholder: '["--port", "8080"]',
-                            description: 'Command line arguments as JSON array'
-                          },
-                          {
-                            name: 'env',
-                            label: 'Environment Variables (JSON)',
-                            type: 'json',
-                            placeholder: '{"API_KEY": "xxx"}',
-                            description: 'Environment variables as JSON object'
-                          },
-                          {
-                            name: 'url',
-                            label: 'URL',
-                            type: 'text',
-                            placeholder: 'http://localhost:8080',
-                            description: 'MCP server URL (for http transport)'
-                          },
-                          {
-                            name: 'tool_name',
-                            label: 'Tool Name',
-                            type: 'text',
-                            placeholder: 'classify_category',
-                            description: 'Name of the MCP tool to call'
-                          },
-                          {
-                            name: 'threshold',
-                            label: 'Classification Threshold',
-                            type: 'percentage',
-                            required: true,
-                            placeholder: '70',
-                            description: 'Confidence threshold for classification (0-100%)',
-                            step: 1
-                          },
-                          {
-                            name: 'timeout_seconds',
-                            label: 'Timeout (seconds)',
-                            type: 'number',
-                            placeholder: '30',
-                            description: 'Request timeout in seconds'
+                            {
+                              name: 'enabled',
+                              label: 'Enable MCP Classifier',
+                              type: 'boolean',
+                              description: 'Enable or disable MCP-based classification'
+                            },
+                            {
+                              name: 'transport_type',
+                              label: 'Transport Type',
+                              type: 'select',
+                              options: ['stdio', 'http'],
+                              required: true,
+                              description: 'MCP transport protocol type'
+                            },
+                            {
+                              name: 'command',
+                              label: 'Command',
+                              type: 'text',
+                              placeholder: 'e.g., python mcp_server.py',
+                              description: 'Command to start MCP server (for stdio transport)'
+                            },
+                            {
+                              name: 'args',
+                              label: 'Arguments (JSON)',
+                              type: 'json',
+                              placeholder: '["--port", "8080"]',
+                              description: 'Command line arguments as JSON array'
+                            },
+                            {
+                              name: 'env',
+                              label: 'Environment Variables (JSON)',
+                              type: 'json',
+                              placeholder: '{"API_KEY": "xxx"}',
+                              description: 'Environment variables as JSON object'
+                            },
+                            {
+                              name: 'url',
+                              label: 'URL',
+                              type: 'text',
+                              placeholder: 'http://localhost:8080',
+                              description: 'MCP server URL (for http transport)'
+                            },
+                            {
+                              name: 'tool_name',
+                              label: 'Tool Name',
+                              type: 'text',
+                              placeholder: 'classify_category',
+                              description: 'Name of the MCP tool to call'
+                            },
+                            {
+                              name: 'threshold',
+                              label: 'Classification Threshold',
+                              type: 'percentage',
+                              required: true,
+                              placeholder: '70',
+                              description: 'Confidence threshold for classification (0-100%)',
+                              step: 1
+                            },
+                            {
+                              name: 'timeout_seconds',
+                              label: 'Timeout (seconds)',
+                              type: 'number',
+                              placeholder: '30',
+                              description: 'Request timeout in seconds'
+                            }
+                          ],
+                          async (data) => {
+                            const newConfig = { ...config }
+                            if (!newConfig.classifier) newConfig.classifier = {}
+                            newConfig.classifier.mcp_category_model = data
+                            await saveConfig(newConfig)
                           }
-                        ],
-                        async (data) => {
-                          const newConfig = { ...config }
-                          if (!newConfig.classifier) newConfig.classifier = {}
-                          newConfig.classifier.mcp_category_model = data
-                          await saveConfig(newConfig)
-                        }
-                      )
-                    }}
-                  >
+                        )
+                      }}
+                    >
 
-                  </button>
+                    </button>
                   )}
                 </div>
               </div>
@@ -1339,7 +1338,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   // ============================================================================
 
   const renderPreferenceModel = () => {
-    const preferenceModel = routerConfig.preference_model
+    const preferenceModel = routerConfig.classifier?.preference_model
 
     return (
       <div className={styles.section}>
@@ -1388,7 +1387,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                 ],
                 async (data) => {
                   const newConfig = { ...config }
-                  newConfig.preference_model = data
+                  if (!newConfig.classifier) newConfig.classifier = {}
+                  newConfig.classifier.preference_model = data
                   await saveConfig(newConfig)
                 },
                 preferenceModel ? 'edit' : 'add'
