@@ -324,20 +324,53 @@ impl MmBertEmbeddingModel {
                 .commit_from_file(onnx_path.as_ref())
                 .map_err(|e: ort::Error| errors::model_load(&onnx_path_str, &e.to_string()))?
         } else {
-            // Try to use GPU execution providers
-            #[cfg(feature = "rocm")]
+            // Try ROCm first (primary AMD GPU provider in onnxruntime-rocm)
+            #[cfg(any(feature = "rocm", feature = "migraphx"))]
             {
                 use ort::execution_providers::ROCmExecutionProvider;
+                println!("INFO: Attempting ROCm execution provider...");
                 let result = Session::builder()
                     .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
                     .with_execution_providers([ROCmExecutionProvider::default().build()])
-                    .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
+                    .map_err(|e: ort::Error| {
+                        println!("WARN: ROCm EP registration error: {}", e);
+                        errors::ort_error(&e.to_string())
+                    })?
                     .commit_from_file(onnx_path.as_ref())
                     .map_err(|e: ort::Error| errors::model_load(&onnx_path_str, &e.to_string()));
                 
                 if let Ok(session) = result {
                     println!("INFO: Using ROCm execution provider (AMD GPU)");
                     return Ok(session);
+                } else {
+                    println!("WARN: ROCm session failed, trying MIGraphX...");
+                }
+            }
+
+            // Try MIGraphX as alternative
+            #[cfg(feature = "migraphx")]
+            {
+                use ort::execution_providers::MIGraphXExecutionProvider;
+                println!("INFO: Attempting MIGraphX execution provider...");
+                let result = Session::builder()
+                    .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
+                    .with_execution_providers([
+                        MIGraphXExecutionProvider::default()
+                            .with_fp16(true)
+                            .build()
+                    ])
+                    .map_err(|e: ort::Error| {
+                        println!("WARN: MIGraphX EP registration error: {}", e);
+                        errors::ort_error(&e.to_string())
+                    })?
+                    .commit_from_file(onnx_path.as_ref())
+                    .map_err(|e: ort::Error| errors::model_load(&onnx_path_str, &e.to_string()));
+                
+                if let Ok(session) = result {
+                    println!("INFO: Using MIGraphX execution provider (AMD GPU - FAST)");
+                    return Ok(session);
+                } else {
+                    println!("WARN: MIGraphX failed, trying fallback...");
                 }
             }
             
