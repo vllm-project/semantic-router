@@ -915,7 +915,7 @@ mod tests {
     #[test]
     fn test_32k_rope_computation() {
         let device = Device::Cpu;
-        
+
         // Create a minimal config for 32K context
         let config = MmBertEmbeddingConfig {
             vocab_size: 256000,
@@ -923,28 +923,28 @@ mod tests {
             num_hidden_layers: 22,
             num_attention_heads: 12,
             intermediate_size: 1152,
-            max_position_embeddings: 32768,  // 32K!
+            max_position_embeddings: 32768, // 32K!
             layer_norm_eps: 1e-5,
             pad_token_id: 0,
             global_attn_every_n_layers: 3,
-            global_rope_theta: 160000.0,  // YaRN-scaled
+            global_rope_theta: 160000.0, // YaRN-scaled
             local_attention: 128,
             local_rope_theta: 160000.0,
         };
-        
+
         // Verify config values
         assert_eq!(config.max_position_embeddings, 32768);
         assert_eq!(config.global_rope_theta, 160000.0);
         assert_eq!(config.head_dim(), 64); // 768 / 12
-        
+
         // Create RoPE embeddings for 32K positions
         let rope = RotaryEmbedding::new(DType::F32, &config, config.global_rope_theta, &device)
             .expect("Failed to create RoPE for 32K");
-        
+
         // Verify sin/cos tensors have correct shape
         assert_eq!(rope.sin.dims(), &[32768, 32]); // (max_seq_len, head_dim/2)
         assert_eq!(rope.cos.dims(), &[32768, 32]);
-        
+
         // Verify values at position 0 (cos=1, sin=0)
         let cos_0: Vec<f32> = rope.cos.i(0).unwrap().to_vec1().unwrap();
         let sin_0: Vec<f32> = rope.sin.i(0).unwrap().to_vec1().unwrap();
@@ -952,7 +952,7 @@ mod tests {
             assert!((cos_0[i] - 1.0).abs() < 1e-5, "cos[0][{}]={}", i, cos_0[i]);
             assert!(sin_0[i].abs() < 1e-5, "sin[0][{}]={}", i, sin_0[i]);
         }
-        
+
         // Verify values at position 32767 (last position) are finite
         let cos_last: Vec<f32> = rope.cos.i(32767).unwrap().to_vec1().unwrap();
         let sin_last: Vec<f32> = rope.sin.i(32767).unwrap().to_vec1().unwrap();
@@ -961,37 +961,41 @@ mod tests {
             assert!(sin_last[i].is_finite(), "sin[32767][{}] not finite", i);
             // sin²+cos² = 1
             let sum_sq = sin_last[i] * sin_last[i] + cos_last[i] * cos_last[i];
-            assert!((sum_sq - 1.0).abs() < 1e-4, "sin²+cos²={} at pos 32767", sum_sq);
+            assert!(
+                (sum_sq - 1.0).abs() < 1e-4,
+                "sin²+cos²={} at pos 32767",
+                sum_sq
+            );
         }
-        
+
         println!("✓ 32K RoPE computation verified");
         println!("  - sin/cos shape: [{}, {}]", 32768, 32);
         println!("  - Position 0: cos=1, sin=0 ✓");
         println!("  - Position 32767: finite values, sin²+cos²=1 ✓");
     }
-    
+
     /// Test local attention mask generation for 32K sequences
     #[test]
     fn test_32k_local_attention_mask() {
         let device = Device::Cpu;
-        let seq_len = 1024;  // Test with manageable size
+        let seq_len = 1024; // Test with manageable size
         let local_window = 128;
         let half_window = local_window / 2;
-        
+
         // Generate mask (same logic as get_local_attention_mask)
         let mask = get_local_attention_mask(seq_len, half_window, &device)
             .expect("Failed to create local attention mask");
-        
+
         assert_eq!(mask.dims(), &[seq_len, seq_len]);
-        
+
         let mask_data: Vec<f32> = mask.flatten_all().unwrap().to_vec1().unwrap();
-        
+
         // Verify diagonal is 0 (can attend to self)
         for i in 0..seq_len {
             let idx = i * seq_len + i;
             assert_eq!(mask_data[idx], 0.0, "Diagonal should be 0");
         }
-        
+
         // Verify positions outside window are -inf
         let test_pos = seq_len / 2;
         let far_pos = test_pos + half_window + 10;
@@ -999,7 +1003,7 @@ mod tests {
             let idx = test_pos * seq_len + far_pos;
             assert!(mask_data[idx].is_infinite() && mask_data[idx].is_sign_negative());
         }
-        
+
         println!("✓ Local attention mask verified for seq_len={}", seq_len);
     }
 
@@ -1156,14 +1160,14 @@ mod integration_tests {
 
     /// Test 32K context length support with actual model
     /// This test verifies the model can handle extended sequences
-    /// 
+    ///
     /// For best performance, run with release mode and native CPU optimization:
     /// ```bash
     /// MMBERT_MODEL_PATH=models/mmbert-embed-32k-2d-matryoshka \
     /// RUSTFLAGS="-C target-cpu=native" \
     /// cargo test --release --no-default-features --lib test_32k_context_length -- --ignored --nocapture
     /// ```
-    /// 
+    ///
     /// Performance (Intel Xeon Platinum 8568Y+ with AVX512):
     /// - 512 tokens: ~1.4s (release+AVX512) vs ~44s (debug)
     /// - 1024 tokens: ~4s (release+AVX512)
@@ -1173,23 +1177,30 @@ mod integration_tests {
     fn test_32k_context_length() {
         let model_path = get_model_path().expect("MMBERT_MODEL_PATH not set");
         let device = Device::Cpu;
-        
+
         println!("Loading model from: {}", model_path);
         let model = MmBertEmbeddingModel::load(&model_path, &device).expect("Failed to load");
 
         // Verify config supports 32K
         assert_eq!(
-            model.config().max_position_embeddings, 32768,
+            model.config().max_position_embeddings,
+            32768,
             "Model should support 32K positions"
         );
         assert!(
             model.config().global_rope_theta >= 100000.0,
             "Model should use YaRN-scaled RoPE theta"
         );
-        
+
         println!("✓ Config verified:");
-        println!("  - max_position_embeddings: {}", model.config().max_position_embeddings);
-        println!("  - global_rope_theta: {} (YaRN)", model.config().global_rope_theta);
+        println!(
+            "  - max_position_embeddings: {}",
+            model.config().max_position_embeddings
+        );
+        println!(
+            "  - global_rope_theta: {} (YaRN)",
+            model.config().global_rope_theta
+        );
 
         let tokenizer_path = format!("{}/tokenizer.json", model_path);
         let tokenizer = Tokenizer::from_file(&tokenizer_path).expect("Failed to load tokenizer");
@@ -1201,43 +1212,56 @@ mod integration_tests {
         let test_lengths = vec![128, 512];
         #[cfg(not(debug_assertions))]
         let test_lengths = vec![128, 512, 1024, 2048];
-        
+
         for target_len in test_lengths {
             let base_text = "This is a test sentence for context length verification. ";
             let long_text = base_text.repeat(target_len / 8);
-            
+
             let encoding = tokenizer
                 .encode(long_text.as_str(), true)
                 .expect("Failed to encode");
-            
+
             let seq_len = encoding.get_ids().len().min(target_len);
             let input_ids: Vec<u32> = encoding.get_ids()[..seq_len].to_vec();
             let attention_mask: Vec<u32> = vec![1u32; seq_len];
-            
+
             let input_ids = Tensor::from_vec(input_ids, (1, seq_len), &device)
                 .expect("Failed to create input_ids tensor");
             let attention_mask = Tensor::from_vec(attention_mask, (1, seq_len), &device)
                 .expect("Failed to create attention_mask tensor");
-            
+
             println!("Testing seq_len={}...", seq_len);
-            
+
             let start = std::time::Instant::now();
             let embeddings = model
                 .embedding_forward(&input_ids, Some(&attention_mask))
                 .expect(&format!("Failed at seq_len={}", seq_len));
             let elapsed = start.elapsed();
-            
+
             let shape = embeddings.dims();
             assert_eq!(shape[0], 1);
             assert_eq!(shape[1], 768);
-            
+
             // Verify normalized
-            let norm: f32 = embeddings.sqr().unwrap().sum(1).unwrap().sqrt().unwrap().to_vec1().unwrap()[0];
+            let norm: f32 = embeddings
+                .sqr()
+                .unwrap()
+                .sum(1)
+                .unwrap()
+                .sqrt()
+                .unwrap()
+                .to_vec1()
+                .unwrap()[0];
             assert!((norm - 1.0).abs() < 0.01, "norm={}", norm);
-            
-            println!("  ✓ shape={:?}, norm={:.4}, time={:.2}s", shape, norm, elapsed.as_secs_f32());
+
+            println!(
+                "  ✓ shape={:?}, norm={:.4}, time={:.2}s",
+                shape,
+                norm,
+                elapsed.as_secs_f32()
+            );
         }
-        
+
         println!("✅ Context length test passed (32K support verified via config)");
     }
 
@@ -1248,7 +1272,7 @@ mod integration_tests {
         // Try to load config from default model path
         let model_path = std::env::var("MMBERT_MODEL_PATH")
             .unwrap_or_else(|_| "../models/mmbert-embed-32k-2d-matryoshka".to_string());
-        
+
         let config_path = format!("{}/config.json", model_path);
         if !std::path::Path::new(&config_path).exists() {
             println!("Skipping config test - model not found at: {}", model_path);
@@ -1256,10 +1280,10 @@ mod integration_tests {
             println!("  make download-mmbert-embedding");
             return;
         }
-        
-        let config = MmBertEmbeddingConfig::from_pretrained(&model_path)
-            .expect("Failed to load config");
-        
+
+        let config =
+            MmBertEmbeddingConfig::from_pretrained(&model_path).expect("Failed to load config");
+
         // Verify 32K YaRN parameters
         assert_eq!(
             config.max_position_embeddings, 32768,
@@ -1274,15 +1298,33 @@ mod integration_tests {
             "local_rope_theta should be 160000"
         );
         assert_eq!(config.hidden_size, 768, "hidden_size should be 768");
-        assert_eq!(config.num_hidden_layers, 22, "num_hidden_layers should be 22");
-        assert_eq!(config.num_attention_heads, 12, "num_attention_heads should be 12");
+        assert_eq!(
+            config.num_hidden_layers, 22,
+            "num_hidden_layers should be 22"
+        );
+        assert_eq!(
+            config.num_attention_heads, 12,
+            "num_attention_heads should be 12"
+        );
         assert_eq!(config.local_attention, 128, "local_attention should be 128");
-        assert_eq!(config.global_attn_every_n_layers, 3, "global_attn_every_n_layers should be 3");
-        assert!(config.vocab_size >= 200000, "vocab_size should be >= 200000 (mmBERT)");
-        
+        assert_eq!(
+            config.global_attn_every_n_layers, 3,
+            "global_attn_every_n_layers should be 3"
+        );
+        assert!(
+            config.vocab_size >= 200000,
+            "vocab_size should be >= 200000 (mmBERT)"
+        );
+
         println!("✅ 32K YaRN config loaded and verified:");
-        println!("   - max_position_embeddings: {}", config.max_position_embeddings);
-        println!("   - global_rope_theta: {} (YaRN 4x scaling)", config.global_rope_theta);
+        println!(
+            "   - max_position_embeddings: {}",
+            config.max_position_embeddings
+        );
+        println!(
+            "   - global_rope_theta: {} (YaRN 4x scaling)",
+            config.global_rope_theta
+        );
         println!("   - vocab_size: {} (Gemma 2 tokenizer)", config.vocab_size);
         println!("   - hidden_size: {}", config.hidden_size);
         println!("   - num_layers: {}", config.num_hidden_layers);

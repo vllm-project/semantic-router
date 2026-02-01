@@ -613,13 +613,16 @@ pub extern "C" fn is_mmbert_model(config_path: *const c_char) -> bool {
 // ============================================================================
 
 /// Initialize mmBERT-32K intent classifier
-/// 
+///
 /// Model classifies text into MMLU-Pro academic categories for request routing.
-/// 
+///
 /// # Safety
 /// - `model_id` must be a valid null-terminated C string
 #[no_mangle]
-pub extern "C" fn init_mmbert_32k_intent_classifier(model_id: *const c_char, use_cpu: bool) -> bool {
+pub extern "C" fn init_mmbert_32k_intent_classifier(
+    model_id: *const c_char,
+    use_cpu: bool,
+) -> bool {
     use crate::model_architectures::traditional::modernbert::ModernBertVariant;
 
     let model_id = unsafe {
@@ -629,7 +632,10 @@ pub extern "C" fn init_mmbert_32k_intent_classifier(model_id: *const c_char, use
         }
     };
 
-    eprintln!("🎯 Initializing mmBERT-32K intent classifier from: {}", model_id);
+    eprintln!(
+        "🎯 Initializing mmBERT-32K intent classifier from: {}",
+        model_id
+    );
 
     match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant(
         model_id,
@@ -648,14 +654,17 @@ pub extern "C" fn init_mmbert_32k_intent_classifier(model_id: *const c_char, use
 }
 
 /// Initialize mmBERT-32K fact-check classifier
-/// 
+///
 /// Model classifies if text needs fact-checking.
 /// Outputs: 0=NO_FACT_CHECK_NEEDED, 1=FACT_CHECK_NEEDED
-/// 
+///
 /// # Safety
 /// - `model_id` must be a valid null-terminated C string
 #[no_mangle]
-pub extern "C" fn init_mmbert_32k_factcheck_classifier(model_id: *const c_char, use_cpu: bool) -> bool {
+pub extern "C" fn init_mmbert_32k_factcheck_classifier(
+    model_id: *const c_char,
+    use_cpu: bool,
+) -> bool {
     use crate::model_architectures::traditional::modernbert::ModernBertVariant;
 
     let model_id = unsafe {
@@ -665,7 +674,10 @@ pub extern "C" fn init_mmbert_32k_factcheck_classifier(model_id: *const c_char, 
         }
     };
 
-    eprintln!("✓ Initializing mmBERT-32K fact-check classifier from: {}", model_id);
+    eprintln!(
+        "✓ Initializing mmBERT-32K fact-check classifier from: {}",
+        model_id
+    );
 
     match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant(
         model_id,
@@ -684,14 +696,17 @@ pub extern "C" fn init_mmbert_32k_factcheck_classifier(model_id: *const c_char, 
 }
 
 /// Initialize mmBERT-32K jailbreak detector
-/// 
+///
 /// Model detects prompt injection/jailbreak attempts.
 /// Outputs: 0=benign, 1=jailbreak
-/// 
+///
 /// # Safety
 /// - `model_id` must be a valid null-terminated C string
 #[no_mangle]
-pub extern "C" fn init_mmbert_32k_jailbreak_classifier(model_id: *const c_char, use_cpu: bool) -> bool {
+pub extern "C" fn init_mmbert_32k_jailbreak_classifier(
+    model_id: *const c_char,
+    use_cpu: bool,
+) -> bool {
     use crate::model_architectures::traditional::modernbert::ModernBertVariant;
 
     let model_id = unsafe {
@@ -701,7 +716,10 @@ pub extern "C" fn init_mmbert_32k_jailbreak_classifier(model_id: *const c_char, 
         }
     };
 
-    eprintln!("🛡️  Initializing mmBERT-32K jailbreak detector from: {}", model_id);
+    eprintln!(
+        "🛡️  Initializing mmBERT-32K jailbreak detector from: {}",
+        model_id
+    );
 
     match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant(
         model_id,
@@ -720,14 +738,17 @@ pub extern "C" fn init_mmbert_32k_jailbreak_classifier(model_id: *const c_char, 
 }
 
 /// Initialize mmBERT-32K feedback detector
-/// 
+///
 /// Model detects user satisfaction from follow-up messages.
 /// Outputs: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT
-/// 
+///
 /// # Safety
 /// - `model_id` must be a valid null-terminated C string
 #[no_mangle]
-pub extern "C" fn init_mmbert_32k_feedback_classifier(model_id: *const c_char, use_cpu: bool) -> bool {
+pub extern "C" fn init_mmbert_32k_feedback_classifier(
+    model_id: *const c_char,
+    use_cpu: bool,
+) -> bool {
     use crate::model_architectures::traditional::modernbert::ModernBertVariant;
 
     let model_id = unsafe {
@@ -737,7 +758,10 @@ pub extern "C" fn init_mmbert_32k_feedback_classifier(model_id: *const c_char, u
         }
     };
 
-    eprintln!("📊 Initializing mmBERT-32K feedback detector from: {}", model_id);
+    eprintln!(
+        "📊 Initializing mmBERT-32K feedback detector from: {}",
+        model_id
+    );
 
     match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant(
         model_id,
@@ -756,9 +780,9 @@ pub extern "C" fn init_mmbert_32k_feedback_classifier(model_id: *const c_char, u
 }
 
 /// Initialize mmBERT-32K PII detector (token classification)
-/// 
+///
 /// Model detects 17 types of PII entities using BIO tagging.
-/// 
+///
 /// # Safety
 /// - `model_id` must be a valid null-terminated C string
 #[no_mangle]

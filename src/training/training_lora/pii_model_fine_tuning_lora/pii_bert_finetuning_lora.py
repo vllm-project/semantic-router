@@ -38,7 +38,7 @@ Datasets:
       * 400K+ diverse multilingual samples
       * Entity types: EMAIL, PHONE, SSN, CREDITCARD, NAME, ADDRESS, DATE, USERNAME, etc.
       * Mixed with 30% Presidio data for entity type coverage
-      
+
     - Presidio (legacy, use --no-ai4privacy):
       * Source: Microsoft Presidio research dataset from GitHub
       * Entity types: PERSON, EMAIL_ADDRESS, PHONE_NUMBER, STREET_ADDRESS, CREDIT_CARD, US_SSN
@@ -530,56 +530,60 @@ def analyze_data_quality(texts, token_labels, sample_size=5):
         logger.info("✅ No obvious data quality issues detected")
 
 
-def create_presidio_pii_dataset(max_samples=1000, return_raw=False, use_ai4privacy=False):
+def create_presidio_pii_dataset(
+    max_samples=1000, return_raw=False, use_ai4privacy=False
+):
     """Create PII dataset using real Presidio data, optionally combined with AI4Privacy.
-    
+
     Args:
         max_samples: Maximum number of samples to load
         return_raw: If True, also return raw data with full_text and spans for char offset alignment
         use_ai4privacy: If True, combine Presidio data with AI4Privacy for better accuracy
-    
+
     Returns:
         If return_raw=False: (sample_data, label_to_id, id_to_label)
         If return_raw=True: (sample_data, label_to_id, id_to_label, raw_data)
     """
     if use_ai4privacy:
         # Use combined dataset for improved accuracy
-        logger.info("Using combined Presidio + AI4Privacy dataset for improved accuracy")
+        logger.info(
+            "Using combined Presidio + AI4Privacy dataset for improved accuracy"
+        )
         raw_data, entity_types = load_combined_pii_dataset(
             max_samples=max_samples,
             presidio_ratio=0.3,  # 30% Presidio for quality annotations
-            ai4privacy_ratio=0.7  # 70% AI4Privacy for volume and diversity
+            ai4privacy_ratio=0.7,  # 70% AI4Privacy for volume and diversity
         )
-        
+
         # Process raw data to tokens and labels
         texts = []
         token_labels = []
-        
+
         for sample in raw_data:
             text = sample["full_text"]
             spans = sample.get("spans", [])
-            
+
             # Use robust tokenization
             tokens, token_spans = tokenize_with_positions(text)
             labels = ["O"] * len(tokens)
-            
+
             # Sort spans by start position
             sorted_spans = sorted(
                 spans, key=lambda x: (x["start_position"], x["end_position"])
             )
-            
+
             # Convert spans to BIO labels
             for span in sorted_spans:
                 entity_type = span["entity_type"]
                 start_pos = span["start_position"]
                 end_pos = span["end_position"]
-                
+
                 # Find tokens that overlap with this span
                 entity_token_indices = []
                 for i, (token_start, token_end) in enumerate(token_spans):
                     if token_start < end_pos and token_end > start_pos:
                         entity_token_indices.append(i)
-                
+
                 # Apply BIO labeling
                 if entity_token_indices:
                     first_idx = entity_token_indices[0]
@@ -588,10 +592,10 @@ def create_presidio_pii_dataset(max_samples=1000, return_raw=False, use_ai4priva
                     for idx in entity_token_indices[1:]:
                         if labels[idx] == "O":
                             labels[idx] = f"I-{entity_type}"
-            
+
             texts.append(tokens)
             token_labels.append(labels)
-        
+
         logger.info(f"Processed {len(texts)} samples from combined dataset")
         validate_bio_labels(texts, token_labels)
     else:
@@ -614,7 +618,9 @@ def create_presidio_pii_dataset(max_samples=1000, return_raw=False, use_ai4priva
 
     logger.info(f"Created dataset with {len(sample_data)} samples")
     logger.info(f"Number of label classes: {len(label_to_id)}")
-    logger.info(f"Entity types ({len(entity_types)}): {entity_types[:10]}{'...' if len(entity_types) > 10 else ''}")
+    logger.info(
+        f"Entity types ({len(entity_types)}): {entity_types[:10]}{'...' if len(entity_types) > 10 else ''}"
+    )
 
     if return_raw:
         # For char offset alignment, use raw_data if available
@@ -623,7 +629,7 @@ def create_presidio_pii_dataset(max_samples=1000, return_raw=False, use_ai4priva
         else:
             raw_data = load_presidio_raw_data(max_samples)
             return sample_data, label_to_id, id_to_label, raw_data
-    
+
     return sample_data, label_to_id, id_to_label
 
 
@@ -666,17 +672,18 @@ def load_presidio_raw_data(max_samples=1000):
     # Convert spans format to use standard keys
     raw_data = []
     for sample in data:
-        raw_sample = {
-            "full_text": sample["full_text"],
-            "spans": []
-        }
+        raw_sample = {"full_text": sample["full_text"], "spans": []}
         for span in sample.get("spans", []):
-            raw_sample["spans"].append({
-                "entity_type": span.get("label", span.get("entity_type", "UNKNOWN")),
-                "start_position": span.get("start_position", span.get("start", 0)),
-                "end_position": span.get("end_position", span.get("end", 0)),
-                "entity_value": span.get("entity_value", span.get("value", ""))
-            })
+            raw_sample["spans"].append(
+                {
+                    "entity_type": span.get(
+                        "label", span.get("entity_type", "UNKNOWN")
+                    ),
+                    "start_position": span.get("start_position", span.get("start", 0)),
+                    "end_position": span.get("end_position", span.get("end", 0)),
+                    "entity_value": span.get("entity_value", span.get("value", "")),
+                }
+            )
         raw_data.append(raw_sample)
 
     return raw_data
@@ -767,70 +774,83 @@ AI4PRIVACY_ENTITY_MAPPING = {
 }
 
 
-def load_ai4privacy_dataset(max_samples=5000, dataset_name="ai4privacy/pii-masking-400k"):
+def load_ai4privacy_dataset(
+    max_samples=5000, dataset_name="ai4privacy/pii-masking-400k"
+):
     """
     Load AI4Privacy PII dataset from Hugging Face.
-    
+
     Args:
         max_samples: Maximum number of samples to load
         dataset_name: Hugging Face dataset name (default: ai4privacy/pii-masking-400k)
-    
+
     Returns:
         List of samples with full_text and spans format (compatible with Presidio format)
     """
     logger.info(f"Loading AI4Privacy dataset: {dataset_name}")
-    
+
     try:
         # Load dataset from Hugging Face
         dataset = load_dataset(dataset_name, split="train")
         logger.info(f"Loaded {len(dataset)} samples from AI4Privacy")
-        
+
         # Convert to our standard format
         raw_data = []
         entity_counts = {}
-        
+
         for i, sample in enumerate(dataset):
             if max_samples and i >= max_samples * 2:  # Load more for balanced sampling
                 break
-                
+
             text = sample.get("source_text", sample.get("text", ""))
             if not text:
                 continue
-                
+
             # Extract spans from privacy_mask field
             privacy_mask = sample.get("privacy_mask", [])
             spans = []
-            
+
             for entity in privacy_mask:
                 # AI4Privacy format: {"label": "EMAIL", "start": 10, "end": 25, "value": "john@example.com"}
-                original_type = entity.get("label", entity.get("entity_type", "UNKNOWN")).upper()
-                
+                original_type = entity.get(
+                    "label", entity.get("entity_type", "UNKNOWN")
+                ).upper()
+
                 # Map to standardized entity type
-                mapped_type = AI4PRIVACY_ENTITY_MAPPING.get(original_type, original_type)
-                
+                mapped_type = AI4PRIVACY_ENTITY_MAPPING.get(
+                    original_type, original_type
+                )
+
                 # Track entity counts
                 entity_counts[mapped_type] = entity_counts.get(mapped_type, 0) + 1
-                
-                spans.append({
-                    "entity_type": mapped_type,
-                    "start_position": entity.get("start", entity.get("start_position", 0)),
-                    "end_position": entity.get("end", entity.get("end_position", 0)),
-                    "entity_value": entity.get("value", entity.get("entity_value", ""))
-                })
-            
-            raw_data.append({
-                "full_text": text,
-                "spans": spans
-            })
-        
+
+                spans.append(
+                    {
+                        "entity_type": mapped_type,
+                        "start_position": entity.get(
+                            "start", entity.get("start_position", 0)
+                        ),
+                        "end_position": entity.get(
+                            "end", entity.get("end_position", 0)
+                        ),
+                        "entity_value": entity.get(
+                            "value", entity.get("entity_value", "")
+                        ),
+                    }
+                )
+
+            raw_data.append({"full_text": text, "spans": spans})
+
         logger.info(f"Converted {len(raw_data)} AI4Privacy samples")
-        logger.info(f"Entity type distribution: {sorted(entity_counts.items(), key=lambda x: -x[1])[:10]}")
-        
+        logger.info(
+            f"Entity type distribution: {sorted(entity_counts.items(), key=lambda x: -x[1])[:10]}"
+        )
+
         # Balanced sampling by entity type
         if max_samples and len(raw_data) > max_samples:
             entity_samples = {}
             samples_without_entities = []
-            
+
             for sample in raw_data:
                 entities = sample.get("spans", [])
                 if not entities:
@@ -841,7 +861,7 @@ def load_ai4privacy_dataset(max_samples=5000, dataset_name="ai4privacy/pii-maski
                     if entity_type not in entity_samples:
                         entity_samples[entity_type] = []
                     entity_samples[entity_type].append(sample)
-            
+
             entity_types_available = list(entity_samples.keys())
             if entity_types_available:
                 samples_per_type = max_samples // (len(entity_types_available) + 1)
@@ -852,59 +872,66 @@ def load_ai4privacy_dataset(max_samples=5000, dataset_name="ai4privacy/pii-maski
                 if remaining > 0:
                     balanced_data.extend(samples_without_entities[:remaining])
                 raw_data = balanced_data
-                logger.info(f"Balanced AI4Privacy to {len(raw_data)} samples across {len(entity_types_available)} entity types")
-        
+                logger.info(
+                    f"Balanced AI4Privacy to {len(raw_data)} samples across {len(entity_types_available)} entity types"
+                )
+
         return raw_data
-        
+
     except Exception as e:
         logger.warning(f"Failed to load AI4Privacy dataset: {e}")
         logger.info("Falling back to Presidio-only data")
         return []
 
 
-def load_combined_pii_dataset(max_samples=5000, presidio_ratio=0.4, ai4privacy_ratio=0.6):
+def load_combined_pii_dataset(
+    max_samples=5000, presidio_ratio=0.4, ai4privacy_ratio=0.6
+):
     """
     Load combined PII dataset from both Presidio and AI4Privacy sources.
     AI4Privacy provides more diverse, multilingual PII examples to improve accuracy.
-    
+
     Args:
         max_samples: Total maximum samples
         presidio_ratio: Proportion of samples from Presidio (default 40%)
         ai4privacy_ratio: Proportion of samples from AI4Privacy (default 60%)
-    
+
     Returns:
         (raw_data, entity_types) - Combined dataset with all unique entity types
     """
-    logger.info(f"Loading combined PII dataset (Presidio: {presidio_ratio*100:.0f}%, AI4Privacy: {ai4privacy_ratio*100:.0f}%)")
-    
+    logger.info(
+        f"Loading combined PII dataset (Presidio: {presidio_ratio*100:.0f}%, AI4Privacy: {ai4privacy_ratio*100:.0f}%)"
+    )
+
     presidio_samples = int(max_samples * presidio_ratio)
     ai4privacy_samples = int(max_samples * ai4privacy_ratio)
-    
+
     # Load Presidio data
     presidio_data = load_presidio_raw_data(presidio_samples)
     logger.info(f"Loaded {len(presidio_data)} samples from Presidio")
-    
+
     # Load AI4Privacy data
     ai4privacy_data = load_ai4privacy_dataset(ai4privacy_samples)
     logger.info(f"Loaded {len(ai4privacy_data)} samples from AI4Privacy")
-    
+
     # Combine datasets
     combined_data = presidio_data + ai4privacy_data
-    
+
     # Shuffle combined data
     import random
+
     random.seed(42)
     random.shuffle(combined_data)
-    
+
     # Collect all unique entity types
     entity_types = set()
     for sample in combined_data:
         for span in sample.get("spans", []):
             entity_types.add(span.get("entity_type", "UNKNOWN"))
-    
+
     logger.info(f"Combined dataset: {len(combined_data)} total samples")
     logger.info(f"Unique entity types: {sorted(entity_types)}")
-    
+
     return combined_data, sorted(entity_types)
 
 
@@ -944,14 +971,14 @@ def tokenize_with_char_offsets(text, spans, tokenizer, label_to_id, max_length=5
     """
     Tokenize text and align labels using character offsets.
     This works better with mmbert-32k tokenizer than is_split_into_words.
-    
+
     Args:
         text: Raw text string
         spans: List of entity spans with start_position, end_position, entity_type
         tokenizer: The tokenizer to use
         label_to_id: Mapping from label string to ID
         max_length: Maximum sequence length
-    
+
     Returns:
         Dictionary with input_ids, attention_mask, labels
     """
@@ -963,7 +990,7 @@ def tokenize_with_char_offsets(text, spans, tokenizer, label_to_id, max_length=5
         padding="max_length",
         return_offsets_mapping=True,
     )
-    
+
     # Initialize all labels to O (except special tokens)
     labels = []
     for i, (start, end) in enumerate(encoding["offset_mapping"]):
@@ -972,28 +999,28 @@ def tokenize_with_char_offsets(text, spans, tokenizer, label_to_id, max_length=5
             labels.append(-100)
         else:
             labels.append(label_to_id.get("O", 0))
-    
+
     # Sort spans by position
     sorted_spans = sorted(spans, key=lambda x: (x["start_position"], x["end_position"]))
-    
+
     # Align entity labels using character offsets
     for span in sorted_spans:
         entity_type = span["entity_type"]
         span_start = span["start_position"]
         span_end = span["end_position"]
-        
+
         b_label = f"B-{entity_type}"
         i_label = f"I-{entity_type}"
-        
+
         if b_label not in label_to_id:
             continue  # Skip unknown entity types
-        
+
         first_token = True
         for i, (tok_start, tok_end) in enumerate(encoding["offset_mapping"]):
             # Skip special tokens
             if tok_start == 0 and tok_end == 0:
                 continue
-            
+
             # Check if token overlaps with entity span
             if tok_start < span_end and tok_end > span_start:
                 if first_token:
@@ -1001,7 +1028,7 @@ def tokenize_with_char_offsets(text, spans, tokenizer, label_to_id, max_length=5
                     first_token = False
                 else:
                     labels[i] = label_to_id.get(i_label, label_to_id[b_label])
-    
+
     return {
         "input_ids": encoding["input_ids"],
         "attention_mask": encoding["attention_mask"],
@@ -1021,39 +1048,45 @@ def prepare_token_dataset(data, tokenizer, label_to_id):
     return Dataset.from_dict(tokenized)
 
 
-def prepare_token_dataset_char_offsets(raw_data, tokenizer, label_to_id, max_length=512):
+def prepare_token_dataset_char_offsets(
+    raw_data, tokenizer, label_to_id, max_length=512
+):
     """
     Prepare dataset for token classification using character offset alignment.
     This is more accurate for mmbert-32k and other non-BERT tokenizers.
-    
+
     Args:
         raw_data: List of samples with 'full_text' and 'spans' keys
         tokenizer: The tokenizer to use
         label_to_id: Mapping from label string to ID
         max_length: Maximum sequence length
-    
+
     Returns:
         Dataset ready for training
     """
     all_input_ids = []
     all_attention_masks = []
     all_labels = []
-    
+
     for sample in raw_data:
         text = sample["full_text"]
         spans = sample.get("spans", [])
-        
-        result = tokenize_with_char_offsets(text, spans, tokenizer, label_to_id, max_length)
-        
+
+        result = tokenize_with_char_offsets(
+            text, spans, tokenizer, label_to_id, max_length
+        )
+
         all_input_ids.append(result["input_ids"])
         all_attention_masks.append(result["attention_mask"])
         all_labels.append(result["labels"])
-    
-    return Dataset.from_dict({
-        "input_ids": all_input_ids,
-        "attention_mask": all_attention_masks,
-        "labels": all_labels,
-    })
+
+    return Dataset.from_dict(
+        {
+            "input_ids": all_input_ids,
+            "attention_mask": all_attention_masks,
+            "labels": all_labels,
+        }
+    )
 
 
 def compute_token_metrics(eval_pred):
@@ -1100,7 +1133,7 @@ def main(
     use_ai4privacy: bool = True,  # Enable AI4Privacy by default for better accuracy
 ):
     """Main training function for LoRA PII detection.
-    
+
     Args:
         model_name: Base model to fine-tune
         lora_rank: LoRA rank (higher = more capacity)
@@ -1114,7 +1147,9 @@ def main(
     """
     logger.info("Starting Enhanced LoRA PII Detection Training")
     if use_ai4privacy:
-        logger.info("📊 Using AI4Privacy + Presidio combined dataset for improved accuracy")
+        logger.info(
+            "📊 Using AI4Privacy + Presidio combined dataset for improved accuracy"
+        )
     else:
         logger.info("📊 Using Presidio dataset only")
 
@@ -1139,7 +1174,7 @@ def main(
     # Create dataset using Presidio data, optionally combined with AI4Privacy
     # For mmbert-32k, use char offset alignment which works better with subword tokenizers
     use_char_offsets = "mmbert-32k" in model_name or "mmbert32k" in model_name
-    
+
     if use_char_offsets:
         logger.info("Using character offset alignment for mmbert-32k tokenizer")
         sample_data, label_to_id, id_to_label, raw_data = create_presidio_pii_dataset(
@@ -1155,7 +1190,7 @@ def main(
     train_size = int(0.8 * len(sample_data))
     train_data = sample_data[:train_size]
     val_data = sample_data[train_size:]
-    
+
     if raw_data:
         raw_train = raw_data[:train_size]
         raw_val = raw_data[train_size:]
@@ -1171,8 +1206,12 @@ def main(
     # Prepare datasets
     if use_char_offsets and raw_data:
         logger.info("Preparing datasets with character offset alignment...")
-        train_dataset = prepare_token_dataset_char_offsets(raw_train, tokenizer, label_to_id)
-        val_dataset = prepare_token_dataset_char_offsets(raw_val, tokenizer, label_to_id)
+        train_dataset = prepare_token_dataset_char_offsets(
+            raw_train, tokenizer, label_to_id
+        )
+        val_dataset = prepare_token_dataset_char_offsets(
+            raw_val, tokenizer, label_to_id
+        )
     else:
         train_dataset = prepare_token_dataset(train_data, tokenizer, label_to_id)
         val_dataset = prepare_token_dataset(val_data, tokenizer, label_to_id)
@@ -1471,7 +1510,7 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    
+
     # Handle ai4privacy flag
     use_ai4privacy = args.use_ai4privacy and not args.no_ai4privacy
 

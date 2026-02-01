@@ -3,7 +3,6 @@
 //! This module contains all C FFI classification functions for dual-path architecture.
 //! Provides 16 classification functions with 100% backward compatibility.
 
-use std::ffi::CString;
 use crate::core::UnifiedError;
 use crate::ffi::memory::{
     allocate_bert_token_entity_array, allocate_c_float_array, allocate_c_string,
@@ -21,6 +20,7 @@ use crate::model_architectures::traditional::modernbert::{
     TRADITIONAL_MODERNBERT_TOKEN_CLASSIFIER,
 };
 use crate::BertClassifier;
+use std::ffi::CString;
 use std::ffi::{c_char, CStr};
 use std::sync::{Arc, OnceLock};
 
@@ -2047,9 +2047,8 @@ pub extern "C" fn detect_hallucinations_with_nli(
 // ============================================================================
 
 use crate::ffi::init::{
-    MMBERT_32K_INTENT_CLASSIFIER, MMBERT_32K_FACTCHECK_CLASSIFIER,
-    MMBERT_32K_JAILBREAK_CLASSIFIER, MMBERT_32K_FEEDBACK_CLASSIFIER,
-    MMBERT_32K_PII_CLASSIFIER,
+    MMBERT_32K_FACTCHECK_CLASSIFIER, MMBERT_32K_FEEDBACK_CLASSIFIER, MMBERT_32K_INTENT_CLASSIFIER,
+    MMBERT_32K_JAILBREAK_CLASSIFIER, MMBERT_32K_PII_CLASSIFIER,
 };
 
 /// Classify text using mmBERT-32K intent classifier
@@ -2064,7 +2063,9 @@ use crate::ffi::init::{
 /// - `predicted_class`: category index (0-13), -1 for error
 /// - `confidence`: confidence score (0.0-1.0)
 #[no_mangle]
-pub extern "C" fn classify_mmbert_32k_intent(text: *const c_char) -> ModernBertClassificationResult {
+pub extern "C" fn classify_mmbert_32k_intent(
+    text: *const c_char,
+) -> ModernBertClassificationResult {
     let default_result = ModernBertClassificationResult {
         predicted_class: -1,
         confidence: 0.0,
@@ -2109,7 +2110,9 @@ pub extern "C" fn classify_mmbert_32k_intent(text: *const c_char) -> ModernBertC
 /// - `predicted_class`: 0=NO_FACT_CHECK_NEEDED, 1=FACT_CHECK_NEEDED, -1=error
 /// - `confidence`: confidence score (0.0-1.0)
 #[no_mangle]
-pub extern "C" fn classify_mmbert_32k_factcheck(text: *const c_char) -> ModernBertClassificationResult {
+pub extern "C" fn classify_mmbert_32k_factcheck(
+    text: *const c_char,
+) -> ModernBertClassificationResult {
     let default_result = ModernBertClassificationResult {
         predicted_class: -1,
         confidence: 0.0,
@@ -2154,7 +2157,9 @@ pub extern "C" fn classify_mmbert_32k_factcheck(text: *const c_char) -> ModernBe
 /// - `predicted_class`: 0=benign, 1=jailbreak, -1=error
 /// - `confidence`: confidence score (0.0-1.0)
 #[no_mangle]
-pub extern "C" fn classify_mmbert_32k_jailbreak(text: *const c_char) -> ModernBertClassificationResult {
+pub extern "C" fn classify_mmbert_32k_jailbreak(
+    text: *const c_char,
+) -> ModernBertClassificationResult {
     let default_result = ModernBertClassificationResult {
         predicted_class: -1,
         confidence: 0.0,
@@ -2199,7 +2204,9 @@ pub extern "C" fn classify_mmbert_32k_jailbreak(text: *const c_char) -> ModernBe
 /// - `predicted_class`: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT, -1=error
 /// - `confidence`: confidence score (0.0-1.0)
 #[no_mangle]
-pub extern "C" fn classify_mmbert_32k_feedback(text: *const c_char) -> ModernBertClassificationResult {
+pub extern "C" fn classify_mmbert_32k_feedback(
+    text: *const c_char,
+) -> ModernBertClassificationResult {
     let default_result = ModernBertClassificationResult {
         predicted_class: -1,
         confidence: 0.0,
@@ -2282,25 +2289,32 @@ pub extern "C" fn classify_mmbert_32k_pii_tokens(
                 }
 
                 // Allocate memory for entities
-                let layout = std::alloc::Layout::array::<ModernBertTokenEntity>(num_entities as usize).unwrap();
+                let layout =
+                    std::alloc::Layout::array::<ModernBertTokenEntity>(num_entities as usize)
+                        .unwrap();
                 let ptr = unsafe { std::alloc::alloc(layout) as *mut ModernBertTokenEntity };
 
                 // Load label mapping if config path provided
-                let label_map: Option<std::collections::HashMap<usize, String>> = config_path.and_then(|path| {
-                    let label_path = std::path::Path::new(path)
-                        .parent()
-                        .map(|p| p.join("label_mapping.json"))
-                        .unwrap_or_else(|| std::path::PathBuf::from("label_mapping.json"));
-                    std::fs::read_to_string(&label_path).ok().and_then(|s| serde_json::from_str(&s).ok())
-                });
+                let label_map: Option<std::collections::HashMap<usize, String>> = config_path
+                    .and_then(|path| {
+                        let label_path = std::path::Path::new(path)
+                            .parent()
+                            .map(|p| p.join("label_mapping.json"))
+                            .unwrap_or_else(|| std::path::PathBuf::from("label_mapping.json"));
+                        std::fs::read_to_string(&label_path)
+                            .ok()
+                            .and_then(|s| serde_json::from_str(&s).ok())
+                    });
 
-                for (i, (_label, class_id, confidence, start, end)) in entities.into_iter().enumerate() {
+                for (i, (_label, class_id, confidence, start, end)) in
+                    entities.into_iter().enumerate()
+                {
                     let entity_type = label_map
                         .as_ref()
                         .and_then(|m| m.get(&class_id))
                         .cloned()
                         .unwrap_or_else(|| format!("LABEL_{}", class_id));
-                    
+
                     let entity_text = if start < text.len() && end <= text.len() {
                         &text[start..end]
                     } else {

@@ -564,11 +564,11 @@ fn test_mmbert_32k_expected_config_values() {
         ("num_hidden_layers", "22"),
         ("num_attention_heads", "12"),
         ("intermediate_size", "1152"),
-        ("max_position_embeddings", "32768"),   // Extended from 8192
+        ("max_position_embeddings", "32768"), // Extended from 8192
         ("position_embedding_type", "sans_pos"),
         ("local_attention", "128"),
         ("global_attn_every_n_layers", "3"),
-        ("global_rope_theta", "160000"),        // YaRN-scaled (4x from original)
+        ("global_rope_theta", "160000"), // YaRN-scaled (4x from original)
         ("local_rope_theta", "160000"),
         ("pad_token_id", "0"),
         ("bos_token_id", "2"),
@@ -581,11 +581,23 @@ fn test_mmbert_32k_expected_config_values() {
     }
 
     // Verify critical 32K-specific values
-    let max_pos = expected_config.iter().find(|(k, _)| *k == "max_position_embeddings");
-    assert_eq!(max_pos.unwrap().1, "32768", "max_position_embeddings should be 32768");
+    let max_pos = expected_config
+        .iter()
+        .find(|(k, _)| *k == "max_position_embeddings");
+    assert_eq!(
+        max_pos.unwrap().1,
+        "32768",
+        "max_position_embeddings should be 32768"
+    );
 
-    let rope_theta = expected_config.iter().find(|(k, _)| *k == "global_rope_theta");
-    assert_eq!(rope_theta.unwrap().1, "160000", "global_rope_theta should be 160000 (YaRN)");
+    let rope_theta = expected_config
+        .iter()
+        .find(|(k, _)| *k == "global_rope_theta");
+    assert_eq!(
+        rope_theta.unwrap().1,
+        "160000",
+        "global_rope_theta should be 160000 (YaRN)"
+    );
 
     println!("mmBERT-32K config values test passed");
 }
@@ -619,7 +631,7 @@ fn test_mmbert_32k_integration_with_model() {
     let config_path = format!("{}/config.json", model_path);
     let detected_variant = ModernBertVariant::detect_from_config(&config_path)
         .expect("Failed to detect variant from config");
-    
+
     assert_eq!(
         detected_variant,
         ModernBertVariant::Multilingual32K,
@@ -629,25 +641,38 @@ fn test_mmbert_32k_integration_with_model() {
 
     // Verify config values match expected 32K YaRN parameters
     let config_str = std::fs::read_to_string(&config_path).expect("Failed to read config");
-    let config_json: serde_json::Value = serde_json::from_str(&config_str).expect("Failed to parse config");
-    
+    let config_json: serde_json::Value =
+        serde_json::from_str(&config_str).expect("Failed to parse config");
+
     let max_pos = config_json["max_position_embeddings"].as_u64().unwrap_or(0);
     let rope_theta = config_json["global_rope_theta"].as_f64().unwrap_or(0.0);
     let vocab_size = config_json["vocab_size"].as_u64().unwrap_or(0);
-    
-    assert!(max_pos >= 32768, "max_position_embeddings should be >= 32768, got {}", max_pos);
-    assert!(rope_theta >= 100000.0, "global_rope_theta should be >= 100000 (YaRN), got {}", rope_theta);
-    assert!(vocab_size >= 200000, "vocab_size should be >= 200000 (mmBERT), got {}", vocab_size);
-    
+
+    assert!(
+        max_pos >= 32768,
+        "max_position_embeddings should be >= 32768, got {}",
+        max_pos
+    );
+    assert!(
+        rope_theta >= 100000.0,
+        "global_rope_theta should be >= 100000 (YaRN), got {}",
+        rope_theta
+    );
+    assert!(
+        vocab_size >= 200000,
+        "vocab_size should be >= 200000 (mmBERT), got {}",
+        vocab_size
+    );
+
     println!("✓ Config values verified:");
     println!("  - max_position_embeddings: {}", max_pos);
     println!("  - global_rope_theta: {} (YaRN-scaled)", rope_theta);
     println!("  - vocab_size: {}", vocab_size);
-    
+
     // Note: The base mmbert-32k-yarn model is an MLM model, not a classifier
     // For classification, you would need a fine-tuned version
     // Here we just verify the config detection and loading works
-    
+
     println!("");
     println!("✅ mmBERT-32K model config validation passed");
     println!("   Model supports 32K context with YaRN RoPE scaling");
@@ -767,7 +792,10 @@ fn test_yarn_vs_base_rope_theta_difference() {
 
     // Calculate the ratio - YaRN with 16x theta (160000/10000) should have lower frequencies
     let ratio_at_dim_30 = yarn_inv_freq[15] / base_inv_freq[15];
-    println!("Ratio of YaRN/base inv_freq at dim 30: {:.4}", ratio_at_dim_30);
+    println!(
+        "Ratio of YaRN/base inv_freq at dim 30: {:.4}",
+        ratio_at_dim_30
+    );
 
     // The ratio should be < 1 (YaRN has lower inv_freq values)
     assert!(
@@ -827,7 +855,10 @@ fn test_yarn_vs_base_rope_theta_difference() {
     println!("  Base theta: {}", base_theta);
     println!("  YaRN theta: {}", yarn_theta);
     println!("  Theta ratio: {:.0}x", theta_ratio);
-    println!("  Context extension at high-dim: {:.2}x", context_extension_factor_high);
+    println!(
+        "  Context extension at high-dim: {:.2}x",
+        context_extension_factor_high
+    );
 }
 
 /// Test local attention mask generation for long sequences
@@ -874,7 +905,8 @@ fn test_local_attention_mask_32k_context() {
 
         // Verify positions within window are 0 (can attend)
         let test_pos = seq_len / 2;
-        for j in test_pos.saturating_sub(half_window)..std::cmp::min(test_pos + half_window, seq_len)
+        for j in
+            test_pos.saturating_sub(half_window)..std::cmp::min(test_pos + half_window, seq_len)
         {
             let idx = test_pos * seq_len + j;
             assert_eq!(
@@ -920,13 +952,13 @@ fn test_4d_attention_mask_expansion_32k() {
 
     // Test various batch sizes and sequence lengths
     let test_cases = vec![
-        (1, 128),    // Single sample, short
-        (1, 1024),   // Single sample, medium
-        (1, 8192),   // Single sample, original mmBERT max
-        (1, 16384),  // Single sample, extended
-        (1, 32768),  // Single sample, full 32K
-        (2, 4096),   // Batch of 2, 4K each
-        (4, 8192),   // Batch of 4, 8K each (memory permitting)
+        (1, 128),   // Single sample, short
+        (1, 1024),  // Single sample, medium
+        (1, 8192),  // Single sample, original mmBERT max
+        (1, 16384), // Single sample, extended
+        (1, 32768), // Single sample, full 32K
+        (2, 4096),  // Batch of 2, 4K each
+        (4, 8192),  // Batch of 4, 8K each (memory permitting)
     ];
 
     for (batch_size, seq_len) in test_cases {
@@ -943,9 +975,7 @@ fn test_4d_attention_mask_expansion_32k() {
         // Simulate some padding at the end
         let padding_start = seq_len - seq_len / 10; // Last 10% is padding
         let mask_data: Vec<u32> = (0..batch_size)
-            .flat_map(|_| {
-                (0..seq_len).map(|j| if j < padding_start { 1u32 } else { 0u32 })
-            })
+            .flat_map(|_| (0..seq_len).map(|j| if j < padding_start { 1u32 } else { 0u32 }))
             .collect();
 
         let mask = Tensor::from_vec(mask_data, (batch_size, seq_len), &device)
@@ -1076,8 +1106,16 @@ fn test_rope_sin_cos_computation_32k() {
     assert_eq!(cos.dims(), &[max_seq_len, inv_freq_len]);
 
     // Verify sin/cos are in valid range [-1, 1]
-    let sin_data = sin.flatten_all().expect("flatten").to_vec1::<f32>().expect("to_vec1");
-    let cos_data = cos.flatten_all().expect("flatten").to_vec1::<f32>().expect("to_vec1");
+    let sin_data = sin
+        .flatten_all()
+        .expect("flatten")
+        .to_vec1::<f32>()
+        .expect("to_vec1");
+    let cos_data = cos
+        .flatten_all()
+        .expect("flatten")
+        .to_vec1::<f32>()
+        .expect("to_vec1");
 
     for (i, (&s, &c)) in sin_data.iter().zip(cos_data.iter()).enumerate() {
         assert!(
@@ -1103,8 +1141,16 @@ fn test_rope_sin_cos_computation_32k() {
     }
 
     // Verify position 0 has cos=1, sin=0 for all frequencies
-    let sin_pos0: Vec<f32> = sin.i(0).expect("sin pos 0").to_vec1::<f32>().expect("to_vec1");
-    let cos_pos0: Vec<f32> = cos.i(0).expect("cos pos 0").to_vec1::<f32>().expect("to_vec1");
+    let sin_pos0: Vec<f32> = sin
+        .i(0)
+        .expect("sin pos 0")
+        .to_vec1::<f32>()
+        .expect("to_vec1");
+    let cos_pos0: Vec<f32> = cos
+        .i(0)
+        .expect("cos pos 0")
+        .to_vec1::<f32>()
+        .expect("to_vec1");
 
     for (i, (&s, &c)) in sin_pos0.iter().zip(cos_pos0.iter()).enumerate() {
         assert!(

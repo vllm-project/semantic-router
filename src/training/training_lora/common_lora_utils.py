@@ -54,7 +54,11 @@ def get_target_modules_for_model(model_name: str) -> List[str]:
         # mmBERT (Multilingual ModernBERT) - same architecture as ModernBERT
         # Supports 1800+ languages with 256K vocab and 8192 max length
         return modernbert_modules
-    elif model_name in ["mmbert-32k", "mmbert-32k-yarn", "llm-semantic-router/mmbert-32k-yarn"]:
+    elif model_name in [
+        "mmbert-32k",
+        "mmbert-32k-yarn",
+        "llm-semantic-router/mmbert-32k-yarn",
+    ]:
         # mmBERT-32K YaRN - Extended context (32K tokens) with YaRN RoPE scaling
         # Same architecture as mmBERT/ModernBERT, but with 32K context support
         return modernbert_modules
@@ -401,7 +405,11 @@ def get_max_length_for_model(model_name: str) -> int:
         Maximum sequence length supported by the model
     """
     # mmBERT-32K supports 32768 tokens (YaRN RoPE scaling)
-    if model_name in ["mmbert-32k", "mmbert-32k-yarn", "llm-semantic-router/mmbert-32k-yarn"]:
+    if model_name in [
+        "mmbert-32k",
+        "mmbert-32k-yarn",
+        "llm-semantic-router/mmbert-32k-yarn",
+    ]:
         return 32768
     # mmBERT supports 8192 tokens
     elif model_name in ["mmbert-base", "jhu-clsp/mmBERT-base"]:

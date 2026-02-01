@@ -648,7 +648,11 @@ impl TraditionalModernBertClassifier {
         model_path: &str,
         use_cpu: bool,
     ) -> Result<Self, candle_core::Error> {
-        Self::load_from_directory_with_variant(model_path, use_cpu, ModernBertVariant::Multilingual32K)
+        Self::load_from_directory_with_variant(
+            model_path,
+            use_cpu,
+            ModernBertVariant::Multilingual32K,
+        )
     }
 
     /// Get the model variant (Standard, Multilingual, or Multilingual32K)
@@ -658,7 +662,10 @@ impl TraditionalModernBertClassifier {
 
     /// Check if this is a multilingual (mmBERT) model (8K or 32K)
     pub fn is_multilingual(&self) -> bool {
-        matches!(self.variant, ModernBertVariant::Multilingual | ModernBertVariant::Multilingual32K)
+        matches!(
+            self.variant,
+            ModernBertVariant::Multilingual | ModernBertVariant::Multilingual32K
+        )
     }
 
     /// Check if this is a 32K YaRN-scaled model
@@ -885,7 +892,10 @@ impl TraditionalModernBertTokenClassifier {
 
     /// Check if this is a multilingual (mmBERT) model (8K or 32K)
     pub fn is_multilingual(&self) -> bool {
-        matches!(self.variant, ModernBertVariant::Multilingual | ModernBertVariant::Multilingual32K)
+        matches!(
+            self.variant,
+            ModernBertVariant::Multilingual | ModernBertVariant::Multilingual32K
+        )
     }
 
     /// Check if this is a 32K YaRN-scaled model

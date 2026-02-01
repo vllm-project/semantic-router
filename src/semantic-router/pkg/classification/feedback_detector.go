@@ -32,11 +32,11 @@ type FeedbackMapping struct {
 
 // FeedbackDetector handles user feedback classification from follow-up messages
 type FeedbackDetector struct {
-	config        *config.FeedbackDetectorConfig
-	mapping       *FeedbackMapping
-	initialized   bool
-	useMmBERT32K  bool // Track if mmBERT-32K is used for inference
-	mu            sync.RWMutex
+	config       *config.FeedbackDetectorConfig
+	mapping      *FeedbackMapping
+	initialized  bool
+	useMmBERT32K bool // Track if mmBERT-32K is used for inference
+	mu           sync.RWMutex
 }
 
 // NewFeedbackDetector creates a new feedback detector
