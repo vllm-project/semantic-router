@@ -55,6 +55,9 @@ tempfile = "3.8"
 serial_test = "3.0"
 criterion = "0.5"
 async-std = { version = "1.12", features = ["attributes"] }
+# For benchmark configuration of threading thresholds
+# IMPORTANT: Must match candle-core's gemm version (0.18) to affect the same static variables
+gemm = { version = "0.18", features = ["rayon"] }
 
 # Example demonstrating Qwen3 Multi-LoRA classification
 [[example]]
@@ -70,6 +73,21 @@ path = "../deploy/examples/candle-binding/deberta_prompt_injection_example.rs"
 [[example]]
 name = "test_raw_confidence"
 path = "../deploy/examples/candle-binding/test_raw_confidence.rs"
+
+# mmBERT-32K Scalability Benchmark (CPU multi-core, long sequences, batch sizes)
+[[example]]
+name = "mmbert_32k_scalability_bench"
+path = "examples/mmbert_32k_scalability_bench.rs"
+
+# mmBERT 2D Matryoshka Embedding Benchmark
+[[example]]
+name = "mmbert_2d_matryoshka_bench"
+path = "examples/mmbert_2d_matryoshka_bench.rs"
+
+# Embedding Benchmark
+[[example]]
+name = "embedding_benchmark"
+path = "examples/embedding_benchmark.rs"
 
 # Note: Benchmark binaries are located in ../bench/scripts/rust/candle-binding/
 # They are not included in the library build to keep it self-contained.

@@ -199,6 +199,39 @@ test-mmbert-32k-all: ## Run all 32K-related tests with optimization
 	@echo ""
 	@echo "✅ All 32K tests completed"
 
+bench-mmbert32k-scalability: ## Run mmBERT-32K scalability benchmark (AVX512 + multi-core)
+	@echo "📊 mmBERT-32K Scalability Benchmark"
+	@echo "   Testing long sequences, batch sizes, and multi-core scaling"
+	@echo "   AVX512 enabled via -C target-cpu=native"
+	@echo ""
+	cd candle-binding && \
+		MMBERT_32K_MODEL_PATH=../$(MODELS_DIR)/mmbert32k-intent-classifier-merged \
+		RUSTFLAGS="-C target-cpu=native" \
+		cargo run --release --no-default-features --example mmbert_32k_scalability_bench
+	@echo ""
+	@echo "✅ Scalability benchmark completed"
+
+bench-mmbert32k-scalability-quick: ## Quick mmBERT-32K scalability test
+	@echo "📊 mmBERT-32K Scalability Benchmark (Quick Mode)"
+	@echo ""
+	cd candle-binding && \
+		MMBERT_32K_MODEL_PATH=../$(MODELS_DIR)/mmbert32k-intent-classifier-merged \
+		RUSTFLAGS="-C target-cpu=native" \
+		cargo run --release --no-default-features --example mmbert_32k_scalability_bench -- --quick
+	@echo ""
+	@echo "✅ Quick benchmark completed"
+
+bench-mmbert32k-scalability-mkl: ## Run mmBERT-32K benchmark with Intel MKL (Intel CPUs)
+	@echo "📊 mmBERT-32K Scalability Benchmark (Intel MKL)"
+	@echo "   Using Intel MKL for optimized BLAS operations"
+	@echo ""
+	cd candle-binding && \
+		MMBERT_32K_MODEL_PATH=../$(MODELS_DIR)/mmbert32k-intent-classifier-merged \
+		RUSTFLAGS="-C target-cpu=native" \
+		cargo run --release --no-default-features --features mkl --example mmbert_32k_scalability_bench
+	@echo ""
+	@echo "✅ MKL benchmark completed"
+
 clean-minimal-models: ## No-op target for backward compatibility
 	@echo "ℹ️  This target is no longer needed"
 
