@@ -54,6 +54,14 @@ def get_target_modules_for_model(model_name: str) -> List[str]:
         # mmBERT (Multilingual ModernBERT) - same architecture as ModernBERT
         # Supports 1800+ languages with 256K vocab and 8192 max length
         return modernbert_modules
+    elif model_name in [
+        "mmbert-32k",
+        "mmbert-32k-yarn",
+        "llm-semantic-router/mmbert-32k-yarn",
+    ]:
+        # mmBERT-32K YaRN - Extended context (32K tokens) with YaRN RoPE scaling
+        # Same architecture as mmBERT/ModernBERT, but with 32K context support
+        return modernbert_modules
     elif model_name == "bert-base-uncased":
         # Standard BERT architecture - Enhanced for better performance
         return bert_modules
@@ -69,6 +77,9 @@ def get_target_modules_for_model(model_name: str) -> List[str]:
             "answerdotai/ModernBERT-base",
             "mmbert-base",
             "jhu-clsp/mmBERT-base",
+            "mmbert-32k",
+            "mmbert-32k-yarn",
+            "llm-semantic-router/mmbert-32k-yarn",
         ]
         raise ValueError(
             f"Unsupported model: {model_name}. "
@@ -370,7 +381,9 @@ def get_model_mapping() -> Dict[str, str]:
     return {
         "modernbert-base": "answerdotai/ModernBERT-base",
         "modernbert-large": "answerdotai/ModernBERT-large",
-        "mmbert-base": "jhu-clsp/mmBERT-base",  # Multilingual ModernBERT (1800+ languages)
+        "mmbert-base": "jhu-clsp/mmBERT-base",  # Multilingual ModernBERT (1800+ languages, 8K context)
+        "mmbert-32k": "llm-semantic-router/mmbert-32k-yarn",  # 32K context with YaRN RoPE (RECOMMENDED)
+        "mmbert-32k-yarn": "llm-semantic-router/mmbert-32k-yarn",  # Alias for mmbert-32k
         "bert-base-uncased": "bert-base-uncased",
         "bert-large-uncased": "bert-large-uncased",
         "roberta-base": "roberta-base",
@@ -391,8 +404,15 @@ def get_max_length_for_model(model_name: str) -> int:
     Returns:
         Maximum sequence length supported by the model
     """
-    # mmBERT supports 8192 tokens, others typically 512
-    if model_name in ["mmbert-base", "jhu-clsp/mmBERT-base"]:
+    # mmBERT-32K supports 32768 tokens (YaRN RoPE scaling)
+    if model_name in [
+        "mmbert-32k",
+        "mmbert-32k-yarn",
+        "llm-semantic-router/mmbert-32k-yarn",
+    ]:
+        return 32768
+    # mmBERT supports 8192 tokens
+    elif model_name in ["mmbert-base", "jhu-clsp/mmBERT-base"]:
         return 8192
     elif model_name in ["modernbert-base", "answerdotai/ModernBERT-base"]:
         return 8192  # ModernBERT also supports long context

@@ -20,6 +20,7 @@ use crate::model_architectures::traditional::modernbert::{
     TRADITIONAL_MODERNBERT_TOKEN_CLASSIFIER,
 };
 use crate::BertClassifier;
+use std::ffi::CString;
 use std::ffi::{c_char, CStr};
 use std::sync::{Arc, OnceLock};
 
@@ -2037,5 +2038,315 @@ pub extern "C" fn detect_hallucinations_with_nli(
         num_spans,
         error: false,
         error_message: std::ptr::null_mut(),
+    }
+}
+
+// ============================================================================
+// mmBERT-32K Classification Functions (32K context, YaRN RoPE scaling)
+// Reference: https://huggingface.co/llm-semantic-router/mmbert-32k-yarn
+// ============================================================================
+
+use crate::ffi::init::{
+    MMBERT_32K_FACTCHECK_CLASSIFIER, MMBERT_32K_FEEDBACK_CLASSIFIER, MMBERT_32K_INTENT_CLASSIFIER,
+    MMBERT_32K_JAILBREAK_CLASSIFIER, MMBERT_32K_PII_CLASSIFIER,
+};
+
+/// Classify text using mmBERT-32K intent classifier
+///
+/// Classifies text into MMLU-Pro academic categories for intelligent request routing.
+///
+/// # Safety
+/// - `text` must be a valid null-terminated C string
+///
+/// # Returns
+/// `ModernBertClassificationResult` with:
+/// - `predicted_class`: category index (0-13), -1 for error
+/// - `confidence`: confidence score (0.0-1.0)
+#[no_mangle]
+pub extern "C" fn classify_mmbert_32k_intent(
+    text: *const c_char,
+) -> ModernBertClassificationResult {
+    let default_result = ModernBertClassificationResult {
+        predicted_class: -1,
+        confidence: 0.0,
+    };
+
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                eprintln!("Failed to convert text from C string");
+                return default_result;
+            }
+        }
+    };
+
+    if let Some(classifier) = MMBERT_32K_INTENT_CLASSIFIER.get() {
+        match classifier.classify_text(text) {
+            Ok((class_id, confidence)) => ModernBertClassificationResult {
+                predicted_class: class_id as i32,
+                confidence,
+            },
+            Err(e) => {
+                eprintln!("mmBERT-32K intent classification failed: {}", e);
+                default_result
+            }
+        }
+    } else {
+        eprintln!("mmBERT-32K intent classifier not initialized");
+        default_result
+    }
+}
+
+/// Classify text using mmBERT-32K fact-check classifier
+///
+/// Determines if text needs fact-checking.
+///
+/// # Safety
+/// - `text` must be a valid null-terminated C string
+///
+/// # Returns
+/// `ModernBertClassificationResult` with:
+/// - `predicted_class`: 0=NO_FACT_CHECK_NEEDED, 1=FACT_CHECK_NEEDED, -1=error
+/// - `confidence`: confidence score (0.0-1.0)
+#[no_mangle]
+pub extern "C" fn classify_mmbert_32k_factcheck(
+    text: *const c_char,
+) -> ModernBertClassificationResult {
+    let default_result = ModernBertClassificationResult {
+        predicted_class: -1,
+        confidence: 0.0,
+    };
+
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                eprintln!("Failed to convert text from C string");
+                return default_result;
+            }
+        }
+    };
+
+    if let Some(classifier) = MMBERT_32K_FACTCHECK_CLASSIFIER.get() {
+        match classifier.classify_text(text) {
+            Ok((class_id, confidence)) => ModernBertClassificationResult {
+                predicted_class: class_id as i32,
+                confidence,
+            },
+            Err(e) => {
+                eprintln!("mmBERT-32K fact-check classification failed: {}", e);
+                default_result
+            }
+        }
+    } else {
+        eprintln!("mmBERT-32K fact-check classifier not initialized");
+        default_result
+    }
+}
+
+/// Classify text using mmBERT-32K jailbreak detector
+///
+/// Detects prompt injection/jailbreak attempts.
+///
+/// # Safety
+/// - `text` must be a valid null-terminated C string
+///
+/// # Returns
+/// `ModernBertClassificationResult` with:
+/// - `predicted_class`: 0=benign, 1=jailbreak, -1=error
+/// - `confidence`: confidence score (0.0-1.0)
+#[no_mangle]
+pub extern "C" fn classify_mmbert_32k_jailbreak(
+    text: *const c_char,
+) -> ModernBertClassificationResult {
+    let default_result = ModernBertClassificationResult {
+        predicted_class: -1,
+        confidence: 0.0,
+    };
+
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                eprintln!("Failed to convert text from C string");
+                return default_result;
+            }
+        }
+    };
+
+    if let Some(classifier) = MMBERT_32K_JAILBREAK_CLASSIFIER.get() {
+        match classifier.classify_text(text) {
+            Ok((class_id, confidence)) => ModernBertClassificationResult {
+                predicted_class: class_id as i32,
+                confidence,
+            },
+            Err(e) => {
+                eprintln!("mmBERT-32K jailbreak classification failed: {}", e);
+                default_result
+            }
+        }
+    } else {
+        eprintln!("mmBERT-32K jailbreak classifier not initialized");
+        default_result
+    }
+}
+
+/// Classify text using mmBERT-32K feedback detector
+///
+/// Detects user satisfaction from follow-up messages.
+///
+/// # Safety
+/// - `text` must be a valid null-terminated C string
+///
+/// # Returns
+/// `ModernBertClassificationResult` with:
+/// - `predicted_class`: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT, -1=error
+/// - `confidence`: confidence score (0.0-1.0)
+#[no_mangle]
+pub extern "C" fn classify_mmbert_32k_feedback(
+    text: *const c_char,
+) -> ModernBertClassificationResult {
+    let default_result = ModernBertClassificationResult {
+        predicted_class: -1,
+        confidence: 0.0,
+    };
+
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                eprintln!("Failed to convert text from C string");
+                return default_result;
+            }
+        }
+    };
+
+    if let Some(classifier) = MMBERT_32K_FEEDBACK_CLASSIFIER.get() {
+        match classifier.classify_text(text) {
+            Ok((class_id, confidence)) => ModernBertClassificationResult {
+                predicted_class: class_id as i32,
+                confidence,
+            },
+            Err(e) => {
+                eprintln!("mmBERT-32K feedback classification failed: {}", e);
+                default_result
+            }
+        }
+    } else {
+        eprintln!("mmBERT-32K feedback classifier not initialized");
+        default_result
+    }
+}
+
+/// Classify tokens for PII detection using mmBERT-32K
+///
+/// Detects 17 types of PII entities using BIO tagging.
+///
+/// # Safety
+/// - `text` must be a valid null-terminated C string
+/// - `model_config_path` must be a valid null-terminated C string or null
+///
+/// # Returns
+/// `ModernBertTokenClassificationResult` with detected PII entities
+#[no_mangle]
+pub extern "C" fn classify_mmbert_32k_pii_tokens(
+    text: *const c_char,
+    model_config_path: *const c_char,
+) -> ModernBertTokenClassificationResult {
+    let default_result = ModernBertTokenClassificationResult {
+        entities: std::ptr::null_mut(),
+        num_entities: 0,
+    };
+
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                eprintln!("Failed to convert text from C string");
+                return default_result;
+            }
+        }
+    };
+
+    let config_path = if model_config_path.is_null() {
+        None
+    } else {
+        unsafe {
+            match CStr::from_ptr(model_config_path).to_str() {
+                Ok(s) => Some(s),
+                Err(_) => None,
+            }
+        }
+    };
+
+    if let Some(classifier) = MMBERT_32K_PII_CLASSIFIER.get() {
+        match classifier.classify_tokens(text) {
+            Ok(entities) => {
+                let num_entities = entities.len() as i32;
+                if num_entities == 0 {
+                    return default_result;
+                }
+
+                // Allocate memory for entities
+                let layout =
+                    std::alloc::Layout::array::<ModernBertTokenEntity>(num_entities as usize)
+                        .unwrap();
+                let ptr = unsafe { std::alloc::alloc(layout) as *mut ModernBertTokenEntity };
+
+                // Load label mapping if config path provided
+                let label_map: Option<std::collections::HashMap<usize, String>> = config_path
+                    .and_then(|path| {
+                        let label_path = std::path::Path::new(path)
+                            .parent()
+                            .map(|p| p.join("label_mapping.json"))
+                            .unwrap_or_else(|| std::path::PathBuf::from("label_mapping.json"));
+                        std::fs::read_to_string(&label_path)
+                            .ok()
+                            .and_then(|s| serde_json::from_str(&s).ok())
+                    });
+
+                for (i, (_label, class_id, confidence, start, end)) in
+                    entities.into_iter().enumerate()
+                {
+                    let entity_type = label_map
+                        .as_ref()
+                        .and_then(|m| m.get(&class_id))
+                        .cloned()
+                        .unwrap_or_else(|| format!("LABEL_{}", class_id));
+
+                    let entity_text = if start < text.len() && end <= text.len() {
+                        &text[start..end]
+                    } else {
+                        ""
+                    };
+
+                    unsafe {
+                        std::ptr::write(
+                            ptr.add(i),
+                            ModernBertTokenEntity {
+                                entity_type: CString::new(entity_type).unwrap().into_raw(),
+                                start: start as i32,
+                                end: end as i32,
+                                text: CString::new(entity_text).unwrap().into_raw(),
+                                confidence,
+                            },
+                        );
+                    }
+                }
+
+                ModernBertTokenClassificationResult {
+                    entities: ptr,
+                    num_entities,
+                }
+            }
+            Err(e) => {
+                eprintln!("mmBERT-32K PII classification failed: {}", e);
+                default_result
+            }
+        }
+    } else {
+        eprintln!("mmBERT-32K PII classifier not initialized");
+        default_result
     }
 }

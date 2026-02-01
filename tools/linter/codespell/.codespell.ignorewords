@@ -7,6 +7,8 @@ alle
 Meu
 meu
 hava
+hace
+Calle
 tread
 ot
 Sie
@@ -41,3 +43,5 @@ NotIn
 notin
 # Cloud provider acronyms (not spelling errors)
 AKS
+# Rust programming terms (not spelling errors)
+statics

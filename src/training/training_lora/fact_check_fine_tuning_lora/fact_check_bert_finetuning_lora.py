@@ -1508,12 +1508,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model",
         choices=[
-            "mmbert-base",  # mmBERT - Multilingual ModernBERT (1800+ languages, recommended)
+            "mmbert-32k",  # mmBERT-32K YaRN - 32K context, multilingual (RECOMMENDED)
+            "mmbert-base",  # mmBERT - Multilingual ModernBERT (1800+ languages, 8K context)
             "modernbert-base",
             "bert-base-uncased",
             "roberta-base",
         ],
-        default="mmbert-base",  # Default to mmBERT for multilingual support
+        default="mmbert-32k",  # Default to mmBERT-32K for extended context support
         help="Model to use for fine-tuning",
     )
     parser.add_argument("--lora-rank", type=int, default=16)

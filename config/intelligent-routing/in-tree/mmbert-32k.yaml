@@ -1,0 +1,164 @@
+# mmBERT-32K Configuration
+# Uses mmBERT-32K-YaRN models with 32K context length for all classifiers
+
+bert_model:
+  model_id: models/mmbert-embed-32k-2d-matryoshka
+  threshold: 0.6
+  use_cpu: true
+
+semantic_cache:
+  enabled: true
+  backend_type: "memory"
+  similarity_threshold: 0.8
+  max_entries: 1000
+  ttl_seconds: 3600
+  eviction_policy: "fifo"
+  use_hnsw: true
+  hnsw_m: 16
+  hnsw_ef_construction: 200
+  embedding_model: "bert"
+
+tools:
+  enabled: true
+  top_k: 3
+  similarity_threshold: 0.2
+  tools_db_path: "config/tools_db.json"
+  fallback_to_empty: true
+
+prompt_guard:
+  enabled: true
+  use_modernbert: false
+  use_mmbert_32k: true
+  model_id: "models/mmbert32k-jailbreak-detector-merged"
+  threshold: 0.7
+  use_cpu: true
+  jailbreak_mapping_path: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json"
+
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "172.28.0.20"
+    port: 8002
+    weight: 1
+
+model_config:
+  "qwen3":
+    reasoning_family: "qwen3"
+    preferred_endpoints: ["endpoint1"]
+
+# Classifier configuration - using mmBERT-32K models
+classifier:
+  category_model:
+    model_id: "models/mmbert32k-intent-classifier-merged"
+    use_modernbert: false
+    use_mmbert_32k: true
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: "models/mmbert32k-intent-classifier-merged/category_mapping.json"
+  pii_model:
+    model_id: "models/mmbert32k-pii-detector-merged"
+    use_modernbert: false
+    use_mmbert_32k: true
+    threshold: 0.3
+    use_cpu: true
+    pii_mapping_path: "models/mmbert32k-pii-detector-merged/pii_type_mapping.json"
+  feedback_model:
+    model_id: "models/mmbert32k-feedback-detector-merged"
+    use_modernbert: false
+    use_mmbert_32k: true
+    threshold: 0.6
+    use_cpu: true
+  factcheck_model:
+    model_id: "models/mmbert32k-factcheck-classifier-merged"
+    use_modernbert: false
+    use_mmbert_32k: true
+    threshold: 0.6
+    use_cpu: true
+
+# Categories define domain metadata
+categories:
+  - name: business
+    description: "Business and management related queries"
+    mmlu_categories: ["business"]
+  - name: law
+    description: "Legal questions and law-related topics"
+    mmlu_categories: ["law"]
+  - name: psychology
+    description: "Psychology and mental health topics"
+    mmlu_categories: ["psychology"]
+  - name: biology
+    description: "Biology and life sciences questions"
+    mmlu_categories: ["biology"]
+  - name: chemistry
+    description: "Chemistry and chemical sciences questions"
+    mmlu_categories: ["chemistry"]
+  - name: history
+    description: "Historical questions and cultural topics"
+    mmlu_categories: ["history"]
+  - name: other
+    description: "General knowledge and miscellaneous topics"
+    mmlu_categories: ["other"]
+  - name: health
+    description: "Health and medical information queries"
+    mmlu_categories: ["health"]
+  - name: economics
+    description: "Economics and financial topics"
+    mmlu_categories: ["economics"]
+  - name: math
+    description: "Mathematics and quantitative problems"
+    mmlu_categories: ["math"]
+  - name: physics
+    description: "Physics and physical sciences questions"
+    mmlu_categories: ["physics"]
+  - name: computer_science
+    description: "Computer science and programming topics"
+    mmlu_categories: ["computer_science"]
+  - name: engineering
+    description: "Engineering and technical questions"
+    mmlu_categories: ["engineering"]
+  - name: philosophy
+    description: "Philosophy and ethical discussions"
+    mmlu_categories: ["philosophy"]
+
+# Decision tree for routing based on classification results
+decision_tree:
+  - decision_name: default
+    model_name: qwen3
+    enable_reasoning: false
+
+# Jailbreak types for the prompt guard
+jailbreak_types:
+  - name: safe
+    description: "Safe content, no jailbreak attempt"
+  - name: jailbreak
+    description: "Potential jailbreak or prompt injection attempt"
+
+# PII types for the PII detector (mmBERT-32K supports 50+ entity types)
+pii_types:
+  - name: EMAIL_ADDRESS
+    description: "Email addresses"
+  - name: PHONE_NUMBER
+    description: "Phone numbers"
+  - name: PERSON
+    description: "Person names"
+  - name: US_SSN
+    description: "US Social Security Numbers"
+  - name: CREDIT_CARD
+    description: "Credit card numbers"
+  - name: STREET_ADDRESS
+    description: "Street addresses"
+  - name: LOCATION
+    description: "Location/city/state/country"
+  - name: DATE_TIME
+    description: "Dates and times"
+  - name: IP_ADDRESS
+    description: "IP addresses"
+  - name: URL
+    description: "URLs"
+  - name: IBAN_CODE
+    description: "IBAN bank codes"
+  - name: USERNAME
+    description: "Usernames"
+  - name: PASSWORD
+    description: "Passwords"
+  - name: ORG
+    description: "Organization names"
