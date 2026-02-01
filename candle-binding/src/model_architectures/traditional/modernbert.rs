@@ -1020,8 +1020,9 @@ impl TraditionalModernBertTokenClassifier {
             .zip(tokenization_result.offsets.iter())
             .enumerate()
         {
-            // Skip special tokens (they have offset (0,0))
-            if offset.0 == 0 && offset.1 == 0 && i > 0 {
+            // Skip special tokens (BOS, EOS, PAD, etc. have offset (0,0))
+            // Note: All special tokens have zero-length offsets, including BOS at index 0
+            if offset.0 == 0 && offset.1 == 0 {
                 continue;
             }
 
