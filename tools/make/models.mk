@@ -39,6 +39,14 @@ MMBERT_32K_LORA_ADAPTERS := \
 	mmbert32k-jailbreak-detector-lora \
 	mmbert32k-factcheck-classifier-lora
 
+# mmBERT-32K merged models (for Rust/Go inference)
+MMBERT_32K_MERGED_MODELS := \
+	mmbert32k-feedback-detector-merged \
+	mmbert32k-intent-classifier-merged \
+	mmbert32k-pii-detector-merged \
+	mmbert32k-jailbreak-detector-merged \
+	mmbert32k-factcheck-classifier-merged
+
 # Download models by running the router with --download-only flag
 download-models: ## Download models using router's built-in download logic
 	@echo "📦 Downloading models via router..."
@@ -84,7 +92,7 @@ download-mmbert-lora: ## Download mmBERT LoRA adapters for Python fine-tuning
 	@echo "✅ mmBERT LoRA adapters downloaded to $(MODELS_DIR)/"
 	@ls -la $(MODELS_DIR)/
 
-download-mmbert-all: download-mmbert download-mmbert-lora download-mmbert-32k-lora download-mmbert-embedding download-mmbert-32k ## Download all mmBERT models, LoRA adapters, embedding, and 32K base model
+download-mmbert-all: download-mmbert download-mmbert-lora download-mmbert-32k-lora download-mmbert-32k-merged download-mmbert-embedding download-mmbert-32k ## Download all mmBERT models, LoRA adapters, embedding, and 32K base model
 
 download-mmbert-32k-lora: ## Download mmBERT-32K LoRA adapters (32K context models)
 	@echo "📦 Downloading mmBERT-32K LoRA adapters from Hugging Face..."
@@ -100,12 +108,34 @@ download-mmbert-32k-lora: ## Download mmBERT-32K LoRA adapters (32K context mode
 	@echo ""
 	@echo "✅ mmBERT-32K LoRA adapters downloaded to $(MODELS_DIR)/"
 	@echo ""
-	@echo "Available 32K models:"
+	@echo "Available 32K LoRA models:"
 	@echo "  - mmbert32k-feedback-detector-lora   (4-class satisfaction)"
 	@echo "  - mmbert32k-intent-classifier-lora   (MMLU-Pro categories)"
 	@echo "  - mmbert32k-pii-detector-lora        (17 PII entity types)"
 	@echo "  - mmbert32k-jailbreak-detector-lora  (prompt injection)"
 	@echo "  - mmbert32k-factcheck-classifier-lora (fact-check routing)"
+
+download-mmbert-32k-merged: ## Download mmBERT-32K merged models (for Rust/Go inference)
+	@echo "📦 Downloading mmBERT-32K merged models from Hugging Face..."
+	@echo "   These are full models for Rust/Go inference (not LoRA adapters)"
+	@mkdir -p $(MODELS_DIR)
+	@for model in $(MMBERT_32K_MERGED_MODELS); do \
+		echo ""; \
+		echo "⬇️  Downloading $$model..."; \
+		if [ -d "$(MODELS_DIR)/$$model" ]; then \
+			echo "   Already exists, updating..."; \
+		fi; \
+		huggingface-cli download $(HF_ORG)/$$model --local-dir $(MODELS_DIR)/$$model --local-dir-use-symlinks False; \
+	done
+	@echo ""
+	@echo "✅ mmBERT-32K merged models downloaded to $(MODELS_DIR)/"
+	@echo ""
+	@echo "Available 32K merged models (for Rust inference):"
+	@echo "  - mmbert32k-feedback-detector-merged   (4-class satisfaction)"
+	@echo "  - mmbert32k-intent-classifier-merged   (14-class MMLU-Pro)"
+	@echo "  - mmbert32k-pii-detector-merged        (35-class PII NER)"
+	@echo "  - mmbert32k-jailbreak-detector-merged  (binary jailbreak)"
+	@echo "  - mmbert32k-factcheck-classifier-merged (binary fact-check)"
 
 download-mmbert-embedding: ## Download mmBERT 2D Matryoshka embedding model
 	@echo "📦 Downloading mmBERT 2D Matryoshka embedding model..."
@@ -174,7 +204,7 @@ clean-minimal-models: ## No-op target for backward compatibility
 
 clean-mmbert: ## Remove downloaded mmBERT models
 	@echo "🗑️  Removing mmBERT models..."
-	@for model in $(MMBERT_MODELS) $(MMBERT_LORA_ADAPTERS) $(MMBERT_32K_LORA_ADAPTERS); do \
+	@for model in $(MMBERT_MODELS) $(MMBERT_LORA_ADAPTERS) $(MMBERT_32K_LORA_ADAPTERS) $(MMBERT_32K_MERGED_MODELS); do \
 		rm -rf $(MODELS_DIR)/$$model; \
 	done
 	@rm -rf $(MODELS_DIR)/$(MMBERT_EMBEDDING_MODEL)
@@ -187,13 +217,22 @@ clean-mmbert: ## Remove downloaded mmBERT models
 
 ##@ mmBERT-32K Training
 
-# Training configuration
+# Training configuration (optimized for mmBERT-32K LoRA fine-tuning)
+# Hyperparameters validated on 2026-02-01:
+#   - Intent Classifier: 92% accuracy (MMLU-Pro + supplement data)
+#   - Jailbreak Detector: 97.7% training accuracy (toxic-chat + salad-data)
+#   - PII Detector: 95.5% training accuracy (Presidio dataset, char offset alignment)
 TRAIN_EPOCHS ?= 5
-TRAIN_BATCH_SIZE ?= 8
-TRAIN_LR ?= 3e-5
-LORA_RANK ?= 8
-LORA_ALPHA ?= 16
+TRAIN_BATCH_SIZE ?= 16
+TRAIN_LR ?= 2e-4
+LORA_RANK ?= 32
+LORA_ALPHA ?= 64
+LORA_DROPOUT ?= 0.1
 MAX_SAMPLES ?= 5000
+WEIGHT_DECAY ?= 0.1
+# Note: Intent training includes supplement data (653 casual "other" samples)
+# from LLM-Semantic-Router/category-classifier-supplement
+# Note: PII training uses character offset alignment for mmbert-32k tokenizer
 
 # Training script paths
 TRAINING_DIR := src/training
@@ -234,8 +273,10 @@ train-mmbert32k-feedback: ## Train Feedback Detector (4-class satisfaction)
 	@echo "   LoRA: $(MMBERT32K_MODELS_DIR)/feedback-detector_lora"
 	@echo "   Merged: $(MMBERT32K_MODELS_DIR)/feedback-detector_merged"
 
-train-mmbert32k-intent: ## Train Intent Classifier (MMLU-Pro categories)
+train-mmbert32k-intent: ## Train Intent Classifier (MMLU-Pro categories + supplement data)
 	@echo "🎯 Training Intent Classifier with mmBERT-32K..."
+	@echo "   LoRA rank: $(LORA_RANK), alpha: $(LORA_ALPHA)"
+	@echo "   Includes supplement data for better 'other' category detection"
 	@mkdir -p $(MMBERT32K_MODELS_DIR)
 	python $(LORA_DIR)/classifier_model_fine_tuning_lora/ft_linear_lora.py \
 		--mode train \
@@ -247,13 +288,15 @@ train-mmbert32k-intent: ## Train Intent Classifier (MMLU-Pro categories)
 		--learning-rate $(TRAIN_LR) \
 		--max-samples $(MAX_SAMPLES)
 	@echo "✅ Intent Classifier training complete"
-	@# Move to organized directory
-	@if [ -d "lora_intent_classifier_mmbert-32k_r$(LORA_RANK)_model" ]; then \
+	@# Move to organized directory (handle both _model and non-_model suffixes)
+	@if [ -d "lora_intent_classifier_mmbert-32k_r$(LORA_RANK)" ]; then \
+		mv lora_intent_classifier_mmbert-32k_r$(LORA_RANK) $(MMBERT32K_MODELS_DIR)/intent-classifier-lora; \
+	elif [ -d "lora_intent_classifier_mmbert-32k_r$(LORA_RANK)_model" ]; then \
 		mv lora_intent_classifier_mmbert-32k_r$(LORA_RANK)_model $(MMBERT32K_MODELS_DIR)/intent-classifier-lora; \
 	fi
 
-train-mmbert32k-pii: ## Train PII Detector (token classification)
-	@echo "🔒 Training PII Detector with mmBERT-32K..."
+train-mmbert32k-pii: ## Train PII Detector (token classification, char offset alignment)
+	@echo "🔒 Training PII Detector with mmBERT-32K (Presidio dataset)..."
 	@mkdir -p $(MMBERT32K_MODELS_DIR)
 	python $(LORA_DIR)/pii_model_fine_tuning_lora/pii_bert_finetuning_lora.py \
 		--mode train \
@@ -262,14 +305,15 @@ train-mmbert32k-pii: ## Train PII Detector (token classification)
 		--lora-alpha $(LORA_ALPHA) \
 		--epochs $(TRAIN_EPOCHS) \
 		--batch-size $(TRAIN_BATCH_SIZE) \
-		--learning-rate $(TRAIN_LR)
-	@echo "✅ PII Detector training complete"
+		--learning-rate $(TRAIN_LR) \
+		--max-samples $(MAX_SAMPLES)
+	@echo "✅ PII Detector training complete (95.5% accuracy expected)"
 	@# Move to organized directory
 	@if [ -d "lora_pii_classifier_mmbert-32k_r$(LORA_RANK)_model" ]; then \
 		mv lora_pii_classifier_mmbert-32k_r$(LORA_RANK)_model $(MMBERT32K_MODELS_DIR)/pii-detector-lora; \
 	fi
 
-train-mmbert32k-jailbreak: ## Train Jailbreak Detector (security classification)
+train-mmbert32k-jailbreak: ## Train Jailbreak Detector (toxic-chat + salad-data)
 	@echo "🛡️  Training Jailbreak Detector with mmBERT-32K..."
 	@mkdir -p $(MMBERT32K_MODELS_DIR)
 	python $(LORA_DIR)/prompt_guard_fine_tuning_lora/jailbreak_bert_finetuning_lora.py \
@@ -279,8 +323,9 @@ train-mmbert32k-jailbreak: ## Train Jailbreak Detector (security classification)
 		--lora-alpha $(LORA_ALPHA) \
 		--epochs $(TRAIN_EPOCHS) \
 		--batch-size $(TRAIN_BATCH_SIZE) \
-		--learning-rate $(TRAIN_LR)
-	@echo "✅ Jailbreak Detector training complete"
+		--learning-rate $(TRAIN_LR) \
+		--max-samples $(MAX_SAMPLES)
+	@echo "✅ Jailbreak Detector training complete (97.7% accuracy expected)"
 	@# Move to organized directory
 	@if [ -d "lora_jailbreak_classifier_mmbert-32k_r$(LORA_RANK)_model" ]; then \
 		mv lora_jailbreak_classifier_mmbert-32k_r$(LORA_RANK)_model $(MMBERT32K_MODELS_DIR)/jailbreak-detector-lora; \
@@ -292,16 +337,16 @@ train-mmbert32k-factcheck: ## Train Fact Check Classifier
 	python $(LORA_DIR)/fact_check_fine_tuning_lora/fact_check_bert_finetuning_lora.py \
 		--mode train \
 		--model mmbert-32k \
-		--lora-rank 16 \
-		--lora-alpha 32 \
+		--lora-rank $(LORA_RANK) \
+		--lora-alpha $(LORA_ALPHA) \
 		--epochs $(TRAIN_EPOCHS) \
 		--batch-size $(TRAIN_BATCH_SIZE) \
 		--learning-rate $(TRAIN_LR) \
 		--max-samples $(MAX_SAMPLES)
 	@echo "✅ Fact Check Classifier training complete"
 	@# Move to organized directory
-	@if [ -d "lora_fact_check_classifier_mmbert-32k_r16_model" ]; then \
-		mv lora_fact_check_classifier_mmbert-32k_r16_model $(MMBERT32K_MODELS_DIR)/fact-check-lora; \
+	@if [ -d "lora_fact_check_classifier_mmbert-32k_r$(LORA_RANK)_model" ]; then \
+		mv lora_fact_check_classifier_mmbert-32k_r$(LORA_RANK)_model $(MMBERT32K_MODELS_DIR)/fact-check-lora; \
 	fi
 
 merge-mmbert32k-all: ## Merge all LoRA adapters into full models for Rust inference

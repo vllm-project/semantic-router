@@ -517,8 +517,17 @@ def analyze_data_quality(texts, token_labels, sample_size=5):
         logger.info("✅ No obvious data quality issues detected")
 
 
-def create_presidio_pii_dataset(max_samples=1000):
-    """Create PII dataset using real Presidio data."""
+def create_presidio_pii_dataset(max_samples=1000, return_raw=False):
+    """Create PII dataset using real Presidio data.
+    
+    Args:
+        max_samples: Maximum number of samples to load
+        return_raw: If True, also return raw data with full_text and spans for char offset alignment
+    
+    Returns:
+        If return_raw=False: (sample_data, label_to_id, id_to_label)
+        If return_raw=True: (sample_data, label_to_id, id_to_label, raw_data)
+    """
     texts, token_labels, entity_types = load_presidio_dataset(max_samples)
 
     # Create label mapping
@@ -538,7 +547,67 @@ def create_presidio_pii_dataset(max_samples=1000):
     logger.info(f"Created dataset with {len(sample_data)} samples")
     logger.info(f"Label mapping: {label_to_id}")
 
+    if return_raw:
+        # Also load raw data with full_text and spans for char offset alignment
+        raw_data = load_presidio_raw_data(max_samples)
+        return sample_data, label_to_id, id_to_label, raw_data
+    
     return sample_data, label_to_id, id_to_label
+
+
+def load_presidio_raw_data(max_samples=1000):
+    """Load raw Presidio data with full_text and spans for char offset alignment."""
+    dataset_path = download_presidio_dataset()
+
+    with open(dataset_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # Use same balanced sampling as load_presidio_dataset
+    if max_samples and len(data) > max_samples:
+        entity_samples = {}
+        samples_without_entities = []
+
+        for sample in data:
+            entities = sample.get("spans", [])
+            if not entities:
+                samples_without_entities.append(sample)
+                continue
+            for entity in entities:
+                entity_type = entity.get("label", "UNKNOWN")
+                if entity_type not in entity_samples:
+                    entity_samples[entity_type] = []
+                entity_samples[entity_type].append(sample)
+
+        entity_types_available = list(entity_samples.keys())
+        if entity_types_available:
+            samples_per_type = max_samples // (len(entity_types_available) + 1)
+            balanced_data = []
+            for entity_type in entity_types_available:
+                balanced_data.extend(entity_samples[entity_type][:samples_per_type])
+            remaining = max_samples - len(balanced_data)
+            if remaining > 0:
+                balanced_data.extend(samples_without_entities[:remaining])
+            data = balanced_data
+        else:
+            data = data[:max_samples]
+
+    # Convert spans format to use standard keys
+    raw_data = []
+    for sample in data:
+        raw_sample = {
+            "full_text": sample["full_text"],
+            "spans": []
+        }
+        for span in sample.get("spans", []):
+            raw_sample["spans"].append({
+                "entity_type": span.get("label", span.get("entity_type", "UNKNOWN")),
+                "start_position": span.get("start_position", span.get("start", 0)),
+                "end_position": span.get("end_position", span.get("end", 0)),
+                "entity_value": span.get("entity_value", span.get("value", ""))
+            })
+        raw_data.append(raw_sample)
+
+    return raw_data
 
 
 def tokenize_and_align_labels(examples, tokenizer, label_to_id, max_length=512):
@@ -573,6 +642,75 @@ def tokenize_and_align_labels(examples, tokenizer, label_to_id, max_length=512):
     return tokenized_inputs
 
 
+def tokenize_with_char_offsets(text, spans, tokenizer, label_to_id, max_length=512):
+    """
+    Tokenize text and align labels using character offsets.
+    This works better with mmbert-32k tokenizer than is_split_into_words.
+    
+    Args:
+        text: Raw text string
+        spans: List of entity spans with start_position, end_position, entity_type
+        tokenizer: The tokenizer to use
+        label_to_id: Mapping from label string to ID
+        max_length: Maximum sequence length
+    
+    Returns:
+        Dictionary with input_ids, attention_mask, labels
+    """
+    # Tokenize with offset mapping
+    encoding = tokenizer(
+        text,
+        truncation=True,
+        max_length=max_length,
+        padding="max_length",
+        return_offsets_mapping=True,
+    )
+    
+    # Initialize all labels to O (except special tokens)
+    labels = []
+    for i, (start, end) in enumerate(encoding["offset_mapping"]):
+        if start == 0 and end == 0:
+            # Special token (BOS, EOS, PAD)
+            labels.append(-100)
+        else:
+            labels.append(label_to_id.get("O", 0))
+    
+    # Sort spans by position
+    sorted_spans = sorted(spans, key=lambda x: (x["start_position"], x["end_position"]))
+    
+    # Align entity labels using character offsets
+    for span in sorted_spans:
+        entity_type = span["entity_type"]
+        span_start = span["start_position"]
+        span_end = span["end_position"]
+        
+        b_label = f"B-{entity_type}"
+        i_label = f"I-{entity_type}"
+        
+        if b_label not in label_to_id:
+            continue  # Skip unknown entity types
+        
+        first_token = True
+        for i, (tok_start, tok_end) in enumerate(encoding["offset_mapping"]):
+            # Skip special tokens
+            if tok_start == 0 and tok_end == 0:
+                continue
+            
+            # Check if token overlaps with entity span
+            if tok_start < span_end and tok_end > span_start:
+                if first_token:
+                    labels[i] = label_to_id[b_label]
+                    first_token = False
+                else:
+                    labels[i] = label_to_id.get(i_label, label_to_id[b_label])
+    
+    return {
+        "input_ids": encoding["input_ids"],
+        "attention_mask": encoding["attention_mask"],
+        "labels": labels,
+    }
+
+
 def prepare_token_dataset(data, tokenizer, label_to_id):
     """Prepare dataset for token classification."""
     # Convert to format expected by tokenizer
@@ -583,6 +721,41 @@ def prepare_token_dataset(data, tokenizer, label_to_id):
     tokenized = tokenize_and_align_labels(examples, tokenizer, label_to_id)
 
     return Dataset.from_dict(tokenized)
+
+
+def prepare_token_dataset_char_offsets(raw_data, tokenizer, label_to_id, max_length=512):
+    """
+    Prepare dataset for token classification using character offset alignment.
+    This is more accurate for mmbert-32k and other non-BERT tokenizers.
+    
+    Args:
+        raw_data: List of samples with 'full_text' and 'spans' keys
+        tokenizer: The tokenizer to use
+        label_to_id: Mapping from label string to ID
+        max_length: Maximum sequence length
+    
+    Returns:
+        Dataset ready for training
+    """
+    all_input_ids = []
+    all_attention_masks = []
+    all_labels = []
+    
+    for sample in raw_data:
+        text = sample["full_text"]
+        spans = sample.get("spans", [])
+        
+        result = tokenize_with_char_offsets(text, spans, tokenizer, label_to_id, max_length)
+        
+        all_input_ids.append(result["input_ids"])
+        all_attention_masks.append(result["attention_mask"])
+        all_labels.append(result["labels"])
+    
+    return Dataset.from_dict({
+        "input_ids": all_input_ids,
+        "attention_mask": all_attention_masks,
+        "labels": all_labels,
+    })
 
 
 def compute_token_metrics(eval_pred):
@@ -649,12 +822,26 @@ def main(
         raise
 
     # Create dataset using real Presidio data
-    sample_data, label_to_id, id_to_label = create_presidio_pii_dataset(max_samples)
+    # For mmbert-32k, use char offset alignment which works better with subword tokenizers
+    use_char_offsets = "mmbert-32k" in model_name or "mmbert32k" in model_name
+    
+    if use_char_offsets:
+        logger.info("Using character offset alignment for mmbert-32k tokenizer")
+        sample_data, label_to_id, id_to_label, raw_data = create_presidio_pii_dataset(
+            max_samples, return_raw=True
+        )
+    else:
+        sample_data, label_to_id, id_to_label = create_presidio_pii_dataset(max_samples)
+        raw_data = None
 
     # Split data
     train_size = int(0.8 * len(sample_data))
     train_data = sample_data[:train_size]
     val_data = sample_data[train_size:]
+    
+    if raw_data:
+        raw_train = raw_data[:train_size]
+        raw_val = raw_data[train_size:]
 
     logger.info(f"Training samples: {len(train_data)}")
     logger.info(f"Validation samples: {len(val_data)}")
@@ -665,8 +852,13 @@ def main(
     )
 
     # Prepare datasets
-    train_dataset = prepare_token_dataset(train_data, tokenizer, label_to_id)
-    val_dataset = prepare_token_dataset(val_data, tokenizer, label_to_id)
+    if use_char_offsets and raw_data:
+        logger.info("Preparing datasets with character offset alignment...")
+        train_dataset = prepare_token_dataset_char_offsets(raw_train, tokenizer, label_to_id)
+        val_dataset = prepare_token_dataset_char_offsets(raw_val, tokenizer, label_to_id)
+    else:
+        train_dataset = prepare_token_dataset(train_data, tokenizer, label_to_id)
+        val_dataset = prepare_token_dataset(val_data, tokenizer, label_to_id)
 
     # Setup output directory - save to project root models/ for consistency with traditional training
     output_dir = f"lora_pii_detector_{model_name}_r{lora_rank}_token_model"
