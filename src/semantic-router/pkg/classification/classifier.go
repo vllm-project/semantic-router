@@ -21,7 +21,6 @@ type CategoryInitializer interface {
 
 type CategoryInitializerImpl struct {
 	usedModernBERT bool // Track which init path succeeded for inference routing
-	usedMmBERT32K  bool // Track if mmBERT-32K was used
 }
 
 func (c *CategoryInitializerImpl) Init(modelID string, useCPU bool, numClasses ...int) error {
