@@ -220,8 +220,8 @@ var DefaultModelRegistry = []ModelSpec{
 	// Preference Classification (route preference matching)
 	{
 		LocalPath:   "models/mom-preference-classifier",
-		RepoID:      "ppppqp/vLLM-SR-Preference-V1",
-		Aliases:     []string{"vLLM-SR-Preference-V1", "preference-classifier", "ppppqp/vLLM-SR-Preference-V1"},
+		RepoID:      "Qwen/Qwen3-1.7B",
+		Aliases:     []string{"vLLM-SR-Preference-V1", "preference-classifier"},
 		Purpose:     PurposePreferenceClassification,
 		Description: "Preference classifier for routing (Qwen3-based)",
 		Tags:        []string{"preference", "routing", "classification", "qwen3"},
