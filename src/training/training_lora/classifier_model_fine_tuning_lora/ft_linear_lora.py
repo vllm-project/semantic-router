@@ -130,22 +130,60 @@ def create_tokenizer_for_model(model_path: str, base_model_name: str = None):
         return AutoTokenizer.from_pretrained(model_path)
 
 
-class MMLU_Dataset:
-    """Dataset class for MMLU-Pro category classification fine-tuning."""
+DEFAULT_SUPPLEMENT_DATASET = "LLM-Semantic-Router/category-classifier-supplement"
 
-    def __init__(self, dataset_name="TIGER-Lab/MMLU-Pro"):
+
+class MMLU_Dataset:
+    """Dataset class for MMLU-Pro category classification fine-tuning with supplement data."""
+
+    def __init__(
+        self,
+        dataset_name="TIGER-Lab/MMLU-Pro",
+        supplement_dataset: str = DEFAULT_SUPPLEMENT_DATASET,
+    ):
         """
         Initialize the dataset loader.
 
         Args:
             dataset_name: HuggingFace dataset name for MMLU-Pro
+            supplement_dataset: HuggingFace dataset ID for supplementary data (set to None to disable)
         """
         self.dataset_name = dataset_name
+        self.supplement_dataset = supplement_dataset
         self.label2id = {}
         self.id2label = {}
 
+    def _load_supplement_data(self) -> list:
+        """
+        Load supplementary training data from HuggingFace Hub.
+        Includes casual "other" examples for better fallback detection.
+
+        Returns:
+            List of (text, label) tuples
+        """
+        if not self.supplement_dataset:
+            return []
+
+        try:
+            logger.info(f"Loading supplement data from: {self.supplement_dataset}")
+            supplement = load_dataset(self.supplement_dataset)
+
+            # Get the train split
+            data = (
+                supplement["train"]
+                if "train" in supplement
+                else supplement[list(supplement.keys())[0]]
+            )
+
+            samples = [(item["text"], item["label"]) for item in data]
+            logger.info(f"Loaded {len(samples)} supplement samples")
+            return samples
+        except Exception as e:
+            logger.warning(f"Failed to load supplement dataset: {e}")
+            return []
+
     def load_huggingface_dataset(self, max_samples=1000):
-        """Load the MMLU-Pro dataset from HuggingFace with balanced category sampling."""
+        """Load the MMLU-Pro dataset from HuggingFace with balanced category sampling and supplement data."""
         logger.info(f"Loading dataset from HuggingFace: {self.dataset_name}")
 
         try:
@@ -155,8 +193,19 @@ class MMLU_Dataset:
 
             # Extract questions and categories from the test split
             # Note: MMLU-Pro typically uses 'test' split for training data
-            all_texts = dataset["test"]["question"]
-            all_labels = dataset["test"]["category"]
+            all_texts = list(dataset["test"]["question"])
+            all_labels = list(dataset["test"]["category"])
+
+            logger.info(f"MMLU-Pro base samples: {len(all_texts)}")
+
+            # Load and merge supplementary training data
+            # This includes casual "other" examples for better fallback detection
+            supplement_samples = self._load_supplement_data()
+            if supplement_samples:
+                supp_texts, supp_labels = zip(*supplement_samples)
+                all_texts.extend(supp_texts)
+                all_labels.extend(supp_labels)
+                logger.info(f"Added {len(supplement_samples)} supplement samples")
 
             logger.info(f"Total samples in dataset: {len(all_texts)}")
 
@@ -505,12 +554,13 @@ def main(
     logger.info(f"Model will be saved to: {output_dir}")
 
     # Training arguments optimized for LoRA sequence classification based on PEFT best practices
+    # Enhanced with anti-overfitting measures from ft_linear.py
     training_args = TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=num_epochs,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
-        weight_decay=0.01,
+        weight_decay=0.1,  # Higher weight decay for better regularization (was 0.01)
         logging_dir=f"{output_dir}/logs",
         logging_steps=10,
         eval_strategy="epoch",
@@ -526,6 +576,7 @@ def main(
         # Additional stability measures for intent classification
         dataloader_drop_last=False,
         eval_accumulation_steps=1,
+        gradient_accumulation_steps=2,  # Effective larger batch size for stability
     )
 
     # Create trainer
@@ -747,15 +798,26 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model",
         choices=[
-            "mmbert-base",  # mmBERT - Multilingual ModernBERT (1800+ languages, recommended)
+            "mmbert-32k",  # mmBERT-32K YaRN - 32K context, multilingual (RECOMMENDED)
+            "mmbert-base",  # mmBERT - Multilingual ModernBERT (1800+ languages, 8K context)
             "modernbert-base",  # ModernBERT base model - latest architecture
             "bert-base-uncased",  # BERT base model - most stable and CPU-friendly
             "roberta-base",  # RoBERTa base model - best intent classification performance
         ],
-        default="mmbert-base",  # Default to mmBERT for multilingual support
+        default="mmbert-32k",  # Default to mmBERT-32K for extended context support
     )
-    parser.add_argument("--lora-rank", type=int, default=8)
-    parser.add_argument("--lora-alpha", type=int, default=16)
+    parser.add_argument(
+        "--lora-rank",
+        type=int,
+        default=32,
+        help="LoRA rank (8=small, 16=medium, 32=large, 64=xlarge). Higher = more parameters",
+    )
+    parser.add_argument(
+        "--lora-alpha",
+        type=int,
+        default=64,
+        help="LoRA alpha scaling (typically 2x rank). Higher = stronger adaptation",
+    )
     parser.add_argument("--lora-dropout", type=float, default=0.1)
     parser.add_argument("--enable-feature-alignment", action="store_true")
     parser.add_argument("--alignment-weight", type=float, default=0.1)

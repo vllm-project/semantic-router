@@ -19,10 +19,11 @@ type FactCheckResult struct {
 // FactCheckClassifier handles fact-check classification to determine if a prompt
 // requires external factual verification using the halugate-sentinel ML model
 type FactCheckClassifier struct {
-	config      *config.FactCheckModelConfig
-	mapping     *FactCheckMapping
-	initialized bool
-	mu          sync.RWMutex
+	config       *config.FactCheckModelConfig
+	mapping      *FactCheckMapping
+	initialized  bool
+	useMmBERT32K bool // Track if mmBERT-32K is used for inference
+	mu           sync.RWMutex
 }
 
 // NewFactCheckClassifier creates a new fact-check classifier
@@ -66,6 +67,19 @@ func (c *FactCheckClassifier) Initialize() error {
 
 	logging.Infof("Initializing fact-check classifier ML model")
 
+	// Check if mmBERT-32K is configured (takes precedence)
+	if c.config.UseMmBERT32K {
+		logging.Infof("Using mmBERT-32K for fact-check classification (32K context, YaRN RoPE)")
+		err := candle.InitMmBert32KFactcheckClassifier(c.config.ModelID, c.config.UseCPU)
+		if err != nil {
+			return fmt.Errorf("failed to initialize mmBERT-32K fact-check model from %s: %w", c.config.ModelID, err)
+		}
+		c.useMmBERT32K = true
+		c.initialized = true
+		logging.Infof("Fact-check classifier initialized with mmBERT-32K model")
+		return nil
+	}
+
 	err := candle.InitFactCheckClassifier(c.config.ModelID, c.config.UseCPU)
 	if err != nil {
 		return fmt.Errorf("failed to initialize fact-check ML model from %s: %w", c.config.ModelID, err)
@@ -94,7 +108,13 @@ func (c *FactCheckClassifier) Classify(text string) (*FactCheckResult, error) {
 		}, nil
 	}
 
-	result, err := candle.ClassifyFactCheckText(text)
+	var result candle.ClassResult
+	var err error
+	if c.useMmBERT32K {
+		result, err = candle.ClassifyMmBert32KFactcheck(text)
+	} else {
+		result, err = candle.ClassifyFactCheckText(text)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("fact-check ML classification failed: %w", err)
 	}

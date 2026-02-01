@@ -40,15 +40,17 @@ class DataConfig:
 class ModelConfig:
     """Model configuration."""
 
-    # Base model - mmBERT (multilingual ModernBERT)
-    model_name: str = "jhu-clsp/mmBERT-base"
-    # Alternative: "answerdotai/ModernBERT-base" for English-only
+    # Base model - mmBERT-32K YaRN (multilingual ModernBERT with 32K context)
+    model_name: str = "llm-semantic-router/mmbert-32k-yarn"
+    # Alternatives:
+    #   - "jhu-clsp/mmBERT-base" for 8K context
+    #   - "answerdotai/ModernBERT-base" for English-only
 
-    # Sequence length (mmBERT supports up to 8192)
-    max_seq_length: int = 512
+    # Sequence length (mmBERT-32K supports up to 32768, but use smaller for training efficiency)
+    max_seq_length: int = 1024  # Increased from 512 to leverage longer context
 
     # Output
-    output_dir: str = "models/mmbert_feedback_detector"
+    output_dir: str = "models/mmbert32k_feedback_detector"
 
     # Labels (4-class)
     num_labels: int = 4
@@ -123,5 +125,5 @@ def get_lora_config() -> PipelineConfig:
     """Get configuration for LoRA training."""
     config = PipelineConfig()
     config.lora.enabled = True
-    config.model.output_dir = "models/mmbert_feedback_detector_lora"
+    config.model.output_dir = "models/mmbert32k_feedback_detector_lora"
     return config

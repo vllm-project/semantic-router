@@ -290,11 +290,11 @@ def main():
     parser.add_argument(
         "--model_name",
         type=str,
-        default="jhu-clsp/mmBERT-base",
-        help="Base model (default: mmBERT)",
+        default="llm-semantic-router/mmbert-32k-yarn",
+        help="Base model (default: mmBERT-32K YaRN with 32K context)",
     )
     parser.add_argument(
-        "--output_dir", type=str, default="models/mmbert_feedback_detector"
+        "--output_dir", type=str, default="models/mmbert32k_feedback_detector"
     )
 
     # Data

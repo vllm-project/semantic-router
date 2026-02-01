@@ -376,6 +376,7 @@ type CategoryModel struct {
 	Threshold           float32 `yaml:"threshold"`
 	UseCPU              bool    `yaml:"use_cpu"`
 	UseModernBERT       bool    `yaml:"use_modernbert"`
+	UseMmBERT32K        bool    `yaml:"use_mmbert_32k"` // Use mmBERT-32K (YaRN, 32K context) instead of ModernBERT
 	CategoryMappingPath string  `yaml:"category_mapping_path"`
 	// FallbackCategory is returned when classification confidence is below threshold.
 	// Default is "other" if not specified.
@@ -386,6 +387,7 @@ type PIIModel struct {
 	ModelID        string  `yaml:"model_id"`
 	Threshold      float32 `yaml:"threshold"`
 	UseCPU         bool    `yaml:"use_cpu"`
+	UseMmBERT32K   bool    `yaml:"use_mmbert_32k"` // Use mmBERT-32K (YaRN, 32K context) for PII detection
 	PIIMappingPath string  `yaml:"pii_mapping_path"`
 }
 
@@ -918,12 +920,16 @@ type PromptGuardConfig struct {
 	// Ignored when use_vllm is true
 	UseModernBERT bool `yaml:"use_modernbert"`
 
+	// Use mmBERT-32K for jailbreak detection (32K context, YaRN RoPE, multilingual)
+	// Takes precedence over UseModernBERT when both are true
+	UseMmBERT32K bool `yaml:"use_mmbert_32k"`
+
 	// Path to the jailbreak type mapping file
 	JailbreakMappingPath string `yaml:"jailbreak_mapping_path"`
 
 	// Use vLLM REST API instead of Candle for guardrail/safety checks
 	// When true, vLLM configuration must be provided in external_models with model_role="guardrail"
-	// When false (default), uses Candle-based classification with ModelID, UseCPU, and UseModernBERT
+	// When false (default), uses Candle-based classification with ModelID, UseCPU, and UseModernBERT/UseMmBERT32K
 	UseVLLM bool `yaml:"use_vllm,omitempty"`
 }
 
@@ -945,6 +951,10 @@ type FeedbackDetectorConfig struct {
 
 	// Use ModernBERT for feedback detection (Candle ModernBERT flag)
 	UseModernBERT bool `yaml:"use_modernbert"`
+
+	// Use mmBERT-32K for feedback detection (32K context, YaRN RoPE, multilingual)
+	// Takes precedence over UseModernBERT when both are true
+	UseMmBERT32K bool `yaml:"use_mmbert_32k"`
 
 	// Path to the feedback type mapping file
 	FeedbackMappingPath string `yaml:"feedback_mapping_path"`
@@ -1070,6 +1080,9 @@ type FactCheckModelConfig struct {
 
 	// Use CPU for inference
 	UseCPU bool `yaml:"use_cpu"`
+
+	// Use mmBERT-32K for fact-check classification (32K context, YaRN RoPE, multilingual)
+	UseMmBERT32K bool `yaml:"use_mmbert_32k"`
 }
 
 // HallucinationModelConfig represents configuration for hallucination detection model
