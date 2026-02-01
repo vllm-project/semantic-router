@@ -168,16 +168,12 @@ func (p *PreferenceClassifier) classifyLocal(conversationJSON string) (*Preferen
 		return nil, fmt.Errorf("failed to initialize local preference model: %w", p.localInitErr)
 	}
 
-	start := time.Now()
-
 	labels := make([]string, 0, len(p.preferenceRules))
 	for _, rule := range p.preferenceRules {
 		labels = append(labels, rule.Name)
 	}
 
 	result, err := candle.ClassifyQwen3Preference(conversationJSON, labels)
-	metrics.RecordClassifierLatency("route", time.Since(start).Seconds())
-
 	if err != nil {
 		return nil, fmt.Errorf("local preference classification failed: %w", err)
 	}
