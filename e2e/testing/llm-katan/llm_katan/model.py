@@ -80,9 +80,9 @@ class TransformersBackend(ModelBackend):
         is_gpu_device = device in ["xpu", "cuda"]
         torch_dtype = torch.float16 if is_gpu_device else torch.float32
         if device == "xpu":
-            device_map = f"xpu:0"
+            device_map = "xpu:0"
         else:
-            device_map = ("auto" if device == "cuda" else None,)
+            device_map = "auto" if device == "cuda" else None
         self.model = AutoModelForCausalLM.from_pretrained(
             self.config.model_name,
             torch_dtype=torch_dtype,
