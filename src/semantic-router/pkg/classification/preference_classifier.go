@@ -107,14 +107,20 @@ Return ONLY the JSON in the exact format:
 
 // Classify determines the best route preference for the given conversation
 func (p *PreferenceClassifier) Classify(conversationJSON string) (*PreferenceResult, error) {
-	if p.useLocal {
-		return p.classifyLocal(conversationJSON)
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), p.timeout)
 	defer cancel()
 
 	start := time.Now()
+
+	if p.useLocal {
+		result, err := p.classifyLocal(conversationJSON)
+		if err != nil {
+			return nil, err
+		}
+		logging.Infof("Preference classification: preference=%s, latency=%.3fs",
+			result.Preference, time.Since(start).Seconds())
+		return result, nil
+	}
 
 	// Build routes JSON
 	routesJSON, err := p.buildRoutesJSON()
