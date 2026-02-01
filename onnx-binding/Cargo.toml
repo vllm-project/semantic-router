@@ -18,8 +18,10 @@ rocm = ["ort/rocm"]
 cuda = ["ort/cuda"]
 # DirectML support (Windows GPU acceleration)
 directml = ["ort/directml"]
-# OpenVINO support (Intel acceleration)
+# OpenVINO support (Intel acceleration) - requires building ORT with OpenVINO
 openvino = ["ort/openvino"]
+# OpenVINO support via dynamic loading (use with onnxruntime-openvino Python package)
+openvino-dynamic = ["ort/load-dynamic", "ort/openvino"]
 
 [dependencies]
 # ONNX Runtime via ort crate - supports AMD GPU (ROCm), NVIDIA GPU (CUDA), and more
@@ -46,3 +48,7 @@ path = "examples/test_gpu.rs"
 [[example]]
 name = "benchmark_cpu_vs_gpu"
 path = "examples/benchmark_cpu_vs_gpu.rs"
+
+[[example]]
+name = "benchmark_f16_openvino"
+path = "examples/benchmark_f16_openvino.rs"
