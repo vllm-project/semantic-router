@@ -1361,7 +1361,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                     label: 'Model ID or Path',
                     type: 'text',
                     required: true,
-                    placeholder: 'models/preference-3-0.6b',
+                    placeholder: '',
                     description: 'Local Candle model path or HuggingFace ID for preference routing',
                   },
                   {
