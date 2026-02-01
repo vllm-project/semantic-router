@@ -58,9 +58,18 @@ func Parse(configPath string) (*RouterConfig, error) {
 	}
 
 	// Apply default model registry if not specified in config
-	// If user specifies mom_registry in config.yaml, it completely replaces the defaults
+	// If user specifies mom_registry in config.yaml, merge it with defaults to ensure all aliases are available
 	if len(cfg.MoMRegistry) == 0 {
 		cfg.MoMRegistry = ToLegacyRegistry()
+	} else {
+		// Merge user's mom_registry with defaults to ensure backward compatibility
+		// User's entries take precedence, but defaults fill in any missing aliases
+		defaults := ToLegacyRegistry()
+		for key, value := range defaults {
+			if _, exists := cfg.MoMRegistry[key]; !exists {
+				cfg.MoMRegistry[key] = value
+			}
+		}
 	}
 
 	// Validation after parsing

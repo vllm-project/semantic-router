@@ -17,6 +17,7 @@ import (
 
 type CategoryInitializer interface {
 	Init(modelID string, useCPU bool, numClasses ...int) error
+	InitWithModernBERT(modelID string, useCPU bool, useModernBERT bool, numClasses ...int) error
 }
 
 type CategoryInitializerImpl struct {
@@ -24,6 +25,23 @@ type CategoryInitializerImpl struct {
 }
 
 func (c *CategoryInitializerImpl) Init(modelID string, useCPU bool, numClasses ...int) error {
+	return c.InitWithModernBERT(modelID, useCPU, false, numClasses...)
+}
+
+func (c *CategoryInitializerImpl) InitWithModernBERT(modelID string, useCPU bool, useModernBERT bool, numClasses ...int) error {
+	// If useModernBERT is true, use ModernBERT init which auto-detects mmBERT models
+	// init_modernbert_classifier uses load_from_directory which auto-detects mmBERT
+	if useModernBERT {
+		logging.Infof("Initializing category classifier with ModernBERT/mmBERT (auto-detects mmBERT)")
+		err := candle_binding.InitModernBertClassifier(modelID, useCPU)
+		if err == nil {
+			c.usedModernBERT = true
+			logging.Infof("Initialized category classifier with ModernBERT/mmBERT auto-detection")
+			return nil
+		}
+		logging.Warnf("ModernBERT/mmBERT initialization failed: %v", err)
+	}
+
 	// Try auto-detecting Candle BERT init first - checks for lora_config.json
 	// This enables LoRA Intent/Category models when available
 	success := candle_binding.InitCandleBertClassifier(modelID, numClasses[0], useCPU)
@@ -80,6 +98,7 @@ func createCategoryInference() CategoryInference {
 
 type JailbreakInitializer interface {
 	Init(modelID string, useCPU bool, numClasses ...int) error
+	InitWithModernBERT(modelID string, useCPU bool, useModernBERT bool, numClasses ...int) error
 }
 
 type JailbreakInitializerImpl struct {
@@ -87,6 +106,23 @@ type JailbreakInitializerImpl struct {
 }
 
 func (c *JailbreakInitializerImpl) Init(modelID string, useCPU bool, numClasses ...int) error {
+	return c.InitWithModernBERT(modelID, useCPU, false, numClasses...)
+}
+
+func (c *JailbreakInitializerImpl) InitWithModernBERT(modelID string, useCPU bool, useModernBERT bool, numClasses ...int) error {
+	// If useModernBERT is true, use ModernBERT init which auto-detects mmBERT models
+	// init_modernbert_jailbreak_classifier uses load_from_directory which auto-detects mmBERT
+	if useModernBERT {
+		logging.Infof("Initializing jailbreak classifier with ModernBERT/mmBERT (auto-detects mmBERT)")
+		err := candle_binding.InitModernBertJailbreakClassifier(modelID, useCPU)
+		if err == nil {
+			c.usedModernBERT = true
+			logging.Infof("Initialized jailbreak classifier with ModernBERT/mmBERT auto-detection")
+			return nil
+		}
+		logging.Warnf("ModernBERT/mmBERT initialization failed: %v", err)
+	}
+
 	// Try auto-detecting jailbreak classifier init first - checks for lora_config.json
 	// This enables LoRA Jailbreak models when available
 	// Use InitJailbreakClassifier which routes to LORA_JAILBREAK_CLASSIFIER or BERT_JAILBREAK_CLASSIFIER
@@ -166,6 +202,7 @@ func createJailbreakInference(promptGuardCfg *config.PromptGuardConfig, routerCf
 
 type PIIInitializer interface {
 	Init(modelID string, useCPU bool, numClasses int) error
+	InitWithModernBERT(modelID string, useCPU bool, useModernBERT bool, numClasses int) error
 }
 
 type PIIInitializerImpl struct {
@@ -173,6 +210,23 @@ type PIIInitializerImpl struct {
 }
 
 func (c *PIIInitializerImpl) Init(modelID string, useCPU bool, numClasses int) error {
+	return c.InitWithModernBERT(modelID, useCPU, false, numClasses)
+}
+
+func (c *PIIInitializerImpl) InitWithModernBERT(modelID string, useCPU bool, useModernBERT bool, numClasses int) error {
+	// If useModernBERT is true, use ModernBERT init which auto-detects mmBERT models
+	// init_modernbert_pii_token_classifier uses load_from_directory which auto-detects mmBERT
+	if useModernBERT {
+		logging.Infof("Initializing PII token classifier with ModernBERT/mmBERT (auto-detects mmBERT)")
+		err := candle_binding.InitModernBertPIITokenClassifier(modelID, useCPU)
+		if err == nil {
+			c.usedModernBERT = true
+			logging.Infof("Initialized PII token classifier with ModernBERT/mmBERT auto-detection")
+			return nil
+		}
+		logging.Warnf("ModernBERT/mmBERT initialization failed: %v", err)
+	}
+
 	// Try auto-detecting Candle BERT init first - checks for lora_config.json
 	// This enables LoRA PII models when available
 	success := candle_binding.InitCandleBertTokenClassifier(modelID, numClasses, useCPU)
@@ -545,6 +599,10 @@ func (c *Classifier) initializeCategoryClassifier() error {
 		return fmt.Errorf("not enough categories for classification, need at least 2, got %d", numClasses)
 	}
 
+	// Use mmBERT auto-detection if use_modernbert is true
+	if initializer, ok := c.categoryInitializer.(*CategoryInitializerImpl); ok && c.Config.CategoryModel.UseModernBERT {
+		return initializer.InitWithModernBERT(c.Config.CategoryModel.ModelID, c.Config.CategoryModel.UseCPU, true, numClasses)
+	}
 	return c.categoryInitializer.Init(c.Config.CategoryModel.ModelID, c.Config.CategoryModel.UseCPU, numClasses)
 }
 
@@ -592,6 +650,10 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 		return fmt.Errorf("not enough jailbreak types for classification, need at least 2, got %d", numClasses)
 	}
 
+	// Use mmBERT auto-detection if use_modernbert is true
+	if initializer, ok := c.jailbreakInitializer.(*JailbreakInitializerImpl); ok && c.Config.PromptGuard.UseModernBERT {
+		return initializer.InitWithModernBERT(c.Config.PromptGuard.ModelID, c.Config.PromptGuard.UseCPU, true, numClasses)
+	}
 	return c.jailbreakInitializer.Init(c.Config.PromptGuard.ModelID, c.Config.PromptGuard.UseCPU, numClasses)
 }
 
@@ -700,6 +762,10 @@ func (c *Classifier) initializePIIClassifier() error {
 	}
 
 	// Pass numClasses to support auto-detection
+	// Use mmBERT auto-detection if use_modernbert is true
+	if initializer, ok := c.piiInitializer.(*PIIInitializerImpl); ok && c.Config.PIIModel.UseModernBERT {
+		return initializer.InitWithModernBERT(c.Config.PIIModel.ModelID, c.Config.PIIModel.UseCPU, true, numPIIClasses)
+	}
 	return c.piiInitializer.Init(c.Config.PIIModel.ModelID, c.Config.PIIModel.UseCPU, numPIIClasses)
 }
 
