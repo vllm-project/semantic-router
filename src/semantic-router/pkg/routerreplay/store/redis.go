@@ -341,6 +341,41 @@ func (r *RedisStore) AttachResponse(ctx context.Context, id string, body string,
 	return fn()
 }
 
+// UpdateHallucinationStatus updates hallucination detection results for a record.
+func (r *RedisStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string) error {
+	record, found, err := r.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+
+	record.HallucinationDetected = detected
+	record.HallucinationConfidence = confidence
+	record.HallucinationSpans = spans
+
+	data, err := json.Marshal(record)
+	if err != nil {
+		return fmt.Errorf("failed to marshal record: %w", err)
+	}
+
+	key := r.keyPrefix + id
+	fn := func() error {
+		if r.ttl > 0 {
+			return r.client.Set(ctx, key, data, r.ttl).Err()
+		}
+		return r.client.Set(ctx, key, data, 0).Err()
+	}
+
+	if r.asyncWrites {
+		r.asyncChan <- asyncOp{fn: fn}
+		return nil
+	}
+
+	return fn()
+}
+
 // Close closes the Redis client and stops async writer.
 func (r *RedisStore) Close() error {
 	if r.asyncWrites {

@@ -23,6 +23,7 @@ interface Signal {
   language?: string[]
   latency?: string[]
   context?: string[]
+  complexity?: string[]
 }
 
 interface ReplayRecord {
@@ -141,6 +142,7 @@ const ReplayCharts: React.FC<ReplayChartsProps> = ({ records }) => {
       if (signals.language?.length) counts['language'] = (counts['language'] || 0) + signals.language.length
       if (signals.latency?.length) counts['latency'] = (counts['latency'] || 0) + signals.latency.length
       if (signals.context?.length) counts['context'] = (counts['context'] || 0) + signals.context.length
+      if (signals.complexity?.length) counts['complexity'] = (counts['complexity'] || 0) + signals.complexity.length
     })
     return Object.entries(counts)
       .sort((a, b) => b[1] - a[1])

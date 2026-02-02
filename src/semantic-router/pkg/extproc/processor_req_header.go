@@ -97,6 +97,16 @@ type RequestContext struct {
 	EnhancedHallucinationInfo *EnhancedHallucinationInfo // Detailed NLI info (when use_nli enabled)
 	UnverifiedFactualResponse bool                       // True if fact-check needed but no tools to verify against
 
+	// Jailbreak Detection Results
+	JailbreakDetected   bool    // True if jailbreak was detected
+	JailbreakType       string  // Type of jailbreak detected
+	JailbreakConfidence float32 // Confidence score of jailbreak detection
+
+	// PII Detection Results
+	PIIDetected bool     // True if PII was detected
+	PIIEntities []string // PII entity types detected (e.g., ["EMAIL", "PHONE_NUMBER"])
+	PIIBlocked  bool     // True if request was blocked due to PII policy violation
+
 	// Tracing context
 	TraceContext context.Context // OpenTelemetry trace context for span propagation
 	UpstreamSpan trace.Span      // Span for tracking upstream vLLM request duration

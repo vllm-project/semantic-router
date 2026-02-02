@@ -101,12 +101,18 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 
 	// Perform security checks with decision-specific settings
 	if response, shouldReturn := r.performJailbreaks(ctx, userContent, nonUserMessages, decisionName); shouldReturn {
+		// Record blocked request to replay before returning
+		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
+		r.updateRouterReplayStatus(ctx, 403, false) // 403 Forbidden for jailbreak block
 		return response, nil
 	}
 
 	// Perform PII detection and policy check (if PII policy is enabled for the decision)
 	piiResponse := r.performPIIDetection(ctx, userContent, nonUserMessages, decisionName)
 	if piiResponse != nil {
+		// Record blocked request to replay before returning
+		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
+		r.updateRouterReplayStatus(ctx, 403, false) // 403 Forbidden for PII block
 		// PII policy violation - return error response
 		return piiResponse, nil
 	}

@@ -295,6 +295,9 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		}
 	}
 
+	// Update router replay with hallucination detection results if enabled
+	r.updateRouterReplayHallucinationStatus(ctx)
+
 	// Capture replay response payload if enabled
 	r.attachRouterReplayResponse(ctx, finalBody, true)
 

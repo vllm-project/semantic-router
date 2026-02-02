@@ -134,6 +134,17 @@ func (p *PostgresStore) createTable(ctx context.Context) error {
 			streaming BOOLEAN DEFAULT FALSE,
 			request_body_truncated BOOLEAN DEFAULT FALSE,
 			response_body_truncated BOOLEAN DEFAULT FALSE,
+			guardrails_enabled BOOLEAN DEFAULT FALSE,
+			jailbreak_enabled BOOLEAN DEFAULT FALSE,
+			pii_enabled BOOLEAN DEFAULT FALSE,
+			rag_enabled BOOLEAN DEFAULT FALSE,
+			rag_backend VARCHAR(255),
+			rag_context_length INTEGER DEFAULT 0,
+			rag_similarity_score REAL DEFAULT 0,
+			hallucination_enabled BOOLEAN DEFAULT FALSE,
+			hallucination_detected BOOLEAN DEFAULT FALSE,
+			hallucination_confidence REAL DEFAULT 0,
+			hallucination_spans JSONB,
 			created_at TIMESTAMP DEFAULT NOW()
 		);
 		CREATE INDEX IF NOT EXISTS idx_%s_timestamp ON %s (timestamp DESC);
@@ -178,14 +189,22 @@ func (p *PostgresStore) Add(ctx context.Context, record Record) (string, error) 
 		return "", fmt.Errorf("failed to marshal signals: %w", err)
 	}
 
+	hallucinationSpansJSON, err := json.Marshal(record.HallucinationSpans)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal hallucination spans: %w", err)
+	}
+
 	//nolint:gosec // tableName is validated during store creation
 	query := fmt.Sprintf(`
 		INSERT INTO %s (
 			id, timestamp, request_id, decision, category,
 			original_model, selected_model, reasoning_mode,
 			signals, request_body, response_body, response_status,
-			from_cache, streaming, request_body_truncated, response_body_truncated
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+			from_cache, streaming, request_body_truncated, response_body_truncated,
+			guardrails_enabled, jailbreak_enabled, pii_enabled,
+			rag_enabled, rag_backend, rag_context_length, rag_similarity_score,
+			hallucination_enabled, hallucination_detected, hallucination_confidence, hallucination_spans
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
 	`, p.tableName)
 
 	fn := func() error {
@@ -194,6 +213,9 @@ func (p *PostgresStore) Add(ctx context.Context, record Record) (string, error) 
 			record.OriginalModel, record.SelectedModel, record.ReasoningMode,
 			signalsJSON, record.RequestBody, record.ResponseBody, record.ResponseStatus,
 			record.FromCache, record.Streaming, record.RequestBodyTruncated, record.ResponseBodyTruncated,
+			record.GuardrailsEnabled, record.JailbreakEnabled, record.PIIEnabled,
+			record.RAGEnabled, record.RAGBackend, record.RAGContextLength, record.RAGSimilarityScore,
+			record.HallucinationEnabled, record.HallucinationDetected, record.HallucinationConfidence, hallucinationSpansJSON,
 		)
 		return err
 	}
@@ -225,18 +247,25 @@ func (p *PostgresStore) Get(ctx context.Context, id string) (Record, bool, error
 		SELECT id, timestamp, request_id, decision, category,
 		       original_model, selected_model, reasoning_mode,
 		       signals, request_body, response_body, response_status,
-		       from_cache, streaming, request_body_truncated, response_body_truncated
+		       from_cache, streaming, request_body_truncated, response_body_truncated,
+		       guardrails_enabled, jailbreak_enabled, pii_enabled,
+		       rag_enabled, rag_backend, rag_context_length, rag_similarity_score,
+		       hallucination_enabled, hallucination_detected, hallucination_confidence, hallucination_spans
 		FROM %s WHERE id = $1
 	`, p.tableName)
 
 	var record Record
 	var signalsJSON []byte
+	var hallucinationSpansJSON []byte
 
 	err := p.db.QueryRowContext(ctx, query, id).Scan(
 		&record.ID, &record.Timestamp, &record.RequestID, &record.Decision, &record.Category,
 		&record.OriginalModel, &record.SelectedModel, &record.ReasoningMode,
 		&signalsJSON, &record.RequestBody, &record.ResponseBody, &record.ResponseStatus,
 		&record.FromCache, &record.Streaming, &record.RequestBodyTruncated, &record.ResponseBodyTruncated,
+		&record.GuardrailsEnabled, &record.JailbreakEnabled, &record.PIIEnabled,
+		&record.RAGEnabled, &record.RAGBackend, &record.RAGContextLength, &record.RAGSimilarityScore,
+		&record.HallucinationEnabled, &record.HallucinationDetected, &record.HallucinationConfidence, &hallucinationSpansJSON,
 	)
 
 	if err == sql.ErrNoRows {
@@ -250,6 +279,13 @@ func (p *PostgresStore) Get(ctx context.Context, id string) (Record, bool, error
 		return Record{}, false, fmt.Errorf("failed to unmarshal signals: %w", err)
 	}
 
+	if len(hallucinationSpansJSON) > 0 {
+		if err := json.Unmarshal(hallucinationSpansJSON, &record.HallucinationSpans); err != nil {
+			// Non-fatal - just log and continue with empty spans
+			record.HallucinationSpans = nil
+		}
+	}
+
 	return record, true, nil
 }
 
@@ -260,7 +296,10 @@ func (p *PostgresStore) List(ctx context.Context) ([]Record, error) {
 		SELECT id, timestamp, request_id, decision, category,
 		       original_model, selected_model, reasoning_mode,
 		       signals, request_body, response_body, response_status,
-		       from_cache, streaming, request_body_truncated, response_body_truncated
+		       from_cache, streaming, request_body_truncated, response_body_truncated,
+		       guardrails_enabled, jailbreak_enabled, pii_enabled,
+		       rag_enabled, rag_backend, rag_context_length, rag_similarity_score,
+		       hallucination_enabled, hallucination_detected, hallucination_confidence, hallucination_spans
 		FROM %s
 		ORDER BY timestamp DESC
 		LIMIT 10000
@@ -276,12 +315,16 @@ func (p *PostgresStore) List(ctx context.Context) ([]Record, error) {
 	for rows.Next() {
 		var record Record
 		var signalsJSON []byte
+		var hallucinationSpansJSON []byte
 
 		err := rows.Scan(
 			&record.ID, &record.Timestamp, &record.RequestID, &record.Decision, &record.Category,
 			&record.OriginalModel, &record.SelectedModel, &record.ReasoningMode,
 			&signalsJSON, &record.RequestBody, &record.ResponseBody, &record.ResponseStatus,
 			&record.FromCache, &record.Streaming, &record.RequestBodyTruncated, &record.ResponseBodyTruncated,
+			&record.GuardrailsEnabled, &record.JailbreakEnabled, &record.PIIEnabled,
+			&record.RAGEnabled, &record.RAGBackend, &record.RAGContextLength, &record.RAGSimilarityScore,
+			&record.HallucinationEnabled, &record.HallucinationDetected, &record.HallucinationConfidence, &hallucinationSpansJSON,
 		)
 		if err != nil {
 			continue // Skip malformed records
@@ -289,6 +332,10 @@ func (p *PostgresStore) List(ctx context.Context) ([]Record, error) {
 
 		if err := json.Unmarshal(signalsJSON, &record.Signals); err != nil {
 			continue
+		}
+
+		if len(hallucinationSpansJSON) > 0 {
+			_ = json.Unmarshal(hallucinationSpansJSON, &record.HallucinationSpans)
 		}
 
 		records = append(records, record)
@@ -382,6 +429,47 @@ func (p *PostgresStore) AttachResponse(ctx context.Context, id string, body stri
 		result, err := p.db.ExecContext(ctx, query, id, body, truncated)
 		if err != nil {
 			return fmt.Errorf("failed to update response: %w", err)
+		}
+
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
+			return fmt.Errorf("record with ID %s not found", id)
+		}
+
+		return nil
+	}
+
+	if p.asyncWrites {
+		p.asyncChan <- asyncOp{fn: fn}
+		return nil
+	}
+
+	return fn()
+}
+
+// UpdateHallucinationStatus updates hallucination detection results for a record.
+func (p *PostgresStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string) error {
+	spansJSON, err := json.Marshal(spans)
+	if err != nil {
+		return fmt.Errorf("failed to marshal hallucination spans: %w", err)
+	}
+
+	//nolint:gosec // tableName is validated during store creation
+	query := fmt.Sprintf(`
+		UPDATE %s
+		SET hallucination_detected = $2,
+		    hallucination_confidence = $3,
+		    hallucination_spans = $4
+		WHERE id = $1
+	`, p.tableName)
+
+	fn := func() error {
+		result, err := p.db.ExecContext(ctx, query, id, detected, confidence, spansJSON)
+		if err != nil {
+			return fmt.Errorf("failed to update hallucination status: %w", err)
 		}
 
 		rows, err := result.RowsAffected()

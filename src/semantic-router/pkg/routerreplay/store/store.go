@@ -16,6 +16,7 @@ type Signal struct {
 	Language     []string `json:"language,omitempty"`
 	Latency      []string `json:"latency,omitempty"`
 	Context      []string `json:"context,omitempty"`
+	Complexity   []string `json:"complexity,omitempty"`
 }
 
 // Record represents a routing decision record with metadata and captured payloads.
@@ -38,6 +39,33 @@ type Record struct {
 	Streaming             bool      `json:"streaming,omitempty"`
 	RequestBodyTruncated  bool      `json:"request_body_truncated,omitempty"`
 	ResponseBodyTruncated bool      `json:"response_body_truncated,omitempty"`
+
+	// Guardrails
+	GuardrailsEnabled bool `json:"guardrails_enabled,omitempty"`
+	JailbreakEnabled  bool `json:"jailbreak_enabled,omitempty"`
+	PIIEnabled        bool `json:"pii_enabled,omitempty"`
+
+	// Jailbreak Detection Results
+	JailbreakDetected   bool    `json:"jailbreak_detected,omitempty"`
+	JailbreakType       string  `json:"jailbreak_type,omitempty"`
+	JailbreakConfidence float32 `json:"jailbreak_confidence,omitempty"`
+
+	// PII Detection Results
+	PIIDetected bool     `json:"pii_detected,omitempty"`
+	PIIEntities []string `json:"pii_entities,omitempty"`
+	PIIBlocked  bool     `json:"pii_blocked,omitempty"`
+
+	// RAG (Retrieval-Augmented Generation)
+	RAGEnabled         bool    `json:"rag_enabled,omitempty"`
+	RAGBackend         string  `json:"rag_backend,omitempty"`
+	RAGContextLength   int     `json:"rag_context_length,omitempty"`
+	RAGSimilarityScore float32 `json:"rag_similarity_score,omitempty"`
+
+	// Hallucination Detection
+	HallucinationEnabled    bool     `json:"hallucination_enabled,omitempty"`
+	HallucinationDetected   bool     `json:"hallucination_detected,omitempty"`
+	HallucinationConfidence float32  `json:"hallucination_confidence,omitempty"`
+	HallucinationSpans      []string `json:"hallucination_spans,omitempty"`
 }
 
 // Storage is the interface that all storage backends must implement.
@@ -59,6 +87,9 @@ type Storage interface {
 
 	// AttachResponse updates the response body for an existing record.
 	AttachResponse(ctx context.Context, id string, body string, truncated bool) error
+
+	// UpdateHallucinationStatus updates hallucination detection results for an existing record.
+	UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string) error
 
 	// Close releases resources held by the storage backend.
 	Close() error

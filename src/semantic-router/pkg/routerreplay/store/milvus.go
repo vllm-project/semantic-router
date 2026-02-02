@@ -436,6 +436,23 @@ func (m *MilvusStore) AttachResponse(ctx context.Context, id string, body string
 	return m.upsertRecord(ctx, record)
 }
 
+// UpdateHallucinationStatus updates hallucination detection results for a record.
+func (m *MilvusStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string) error {
+	record, found, err := m.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+
+	record.HallucinationDetected = detected
+	record.HallucinationConfidence = confidence
+	record.HallucinationSpans = spans
+
+	return m.upsertRecord(ctx, record)
+}
+
 // upsertRecord updates a record by deleting and reinserting.
 func (m *MilvusStore) upsertRecord(ctx context.Context, record Record) error {
 	// Marshal record

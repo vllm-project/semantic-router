@@ -143,6 +143,23 @@ func (m *MemoryStore) AttachResponse(ctx context.Context, id string, body string
 	return nil
 }
 
+// UpdateHallucinationStatus updates hallucination detection results for a record.
+func (m *MemoryStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	rec, ok := m.byID[id]
+	if !ok {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+
+	rec.HallucinationDetected = detected
+	rec.HallucinationConfidence = confidence
+	rec.HallucinationSpans = spans
+
+	return nil
+}
+
 // Close is a no-op for memory storage.
 func (m *MemoryStore) Close() error {
 	return nil
