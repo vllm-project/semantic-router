@@ -15,7 +15,7 @@ import (
 )
 
 // placeholderKeys are example/placeholder values; validation tests skip when these are set.
-var placeholderKeys = []string{"sk-your-key", "sk-...", "your-api-key"}
+var placeholderKeys = []string{"sk-your-key", "sk-your-real-key", "sk-...", "your-api-key"}
 
 func getValidationConfig(t *testing.T) (baseURL, apiKey string, skip bool) {
 	apiKey = os.Getenv("OPENAI_API_KEY")

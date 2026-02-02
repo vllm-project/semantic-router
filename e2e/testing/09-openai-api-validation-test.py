@@ -39,6 +39,14 @@ class OpenAIAPIValidationTest:
         self._created_file_id: Optional[str] = None
         self._created_vector_store_id: Optional[str] = None
 
+    # Placeholder/example keys; skip validation when these are set (avoid 401s).
+    _PLACEHOLDER_KEYS = (
+        "sk-your-key",
+        "sk-your-real-key",
+        "sk-...",
+        "your-api-key",
+    )
+
     def _headers(self) -> Dict[str, str]:
         return {
             "Authorization": f"Bearer {self.api_key}",
@@ -49,6 +57,18 @@ class OpenAIAPIValidationTest:
         if not self.api_key:
             self.log(
                 "SKIP: OPENAI_API_KEY not set. Set it to run OpenAI API validation tests."
+            )
+            return True
+        key_lower = self.api_key.strip().lower()
+        for placeholder in self._PLACEHOLDER_KEYS:
+            if key_lower == placeholder:
+                self.log(
+                    "SKIP: OPENAI_API_KEY looks like a placeholder. Set a real key to run OpenAI API validation tests."
+                )
+                return True
+        if len(self.api_key) < 20:
+            self.log(
+                "SKIP: OPENAI_API_KEY too short (likely placeholder). Set a real key to run OpenAI API validation tests."
             )
             return True
         return False
@@ -331,7 +351,7 @@ class OpenAIAPIValidationTest:
             search_r = requests.post(
                 f"{self.base_url}/vector_stores/{vs_id}/search",
                 headers=self._headers(),
-                json={"query": "test query", "limit": 5},
+                json={"query": "test query"},
                 timeout=30,
             )
             if search_r.status_code != 200:
@@ -374,7 +394,7 @@ class OpenAIAPIValidationTest:
         self.log("Adapted from openai-python/tests")
         self.log("=" * 60)
         if self._skip_no_key():
-            self.log("All tests skipped (no OPENAI_API_KEY).")
+            self.log("All tests skipped.")
             return True
 
         results: List[tuple] = []
