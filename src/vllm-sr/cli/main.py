@@ -72,6 +72,21 @@ def init(force):
         sys.exit(1)
 
 
+# Valid algorithm types for model selection
+# Original algorithms (PR #1089, #1104)
+# RL-driven algorithms (PR #1196 - issue #994)
+ALGORITHM_TYPES = [
+    "static",  # First model (default)
+    "elo",  # Elo rating with feedback
+    "router_dc",  # Embedding similarity
+    "automix",  # POMDP cost-quality optimization
+    "hybrid",  # Combined methods
+    "thompson",  # Thompson Sampling (RL-driven)
+    "gmtrouter",  # Graph-based personalized routing
+    "router_r1",  # LLM-as-router with think/route
+]
+
+
 @click.command()
 @click.option(
     "--config",
@@ -107,11 +122,31 @@ def init(force):
     default=None,
     help="Platform branding (e.g., 'amd' for AMD GPU deployments)",
 )
-def serve(config, image, image_pull_policy, readonly, platform):
+@click.option(
+    "--algorithm",
+    type=click.Choice(ALGORITHM_TYPES, case_sensitive=False),
+    default=None,
+    help="Model selection algorithm: static (default), elo (rating-based), "
+    "router_dc (embedding similarity), automix (cost-quality optimization), "
+    "hybrid (combined methods). Overrides config file setting.",
+)
+def serve(config, image, image_pull_policy, readonly, platform, algorithm):
     """
     Start vLLM Semantic Router.
 
     Ports are configured in config.yaml under 'listeners' section.
+
+    MODEL SELECTION ALGORITHMS:
+
+    \b
+    static     - Use first configured model (default, no learning)
+    elo        - Rating-based selection using user feedback
+    router_dc  - Query-model matching via embedding similarity
+    automix    - Cost-quality optimization using POMDP
+    hybrid     - Combine multiple methods with configurable weights
+    thompson   - Thompson Sampling with exploration/exploitation (RL-driven)
+    gmtrouter  - Graph neural network for personalized routing (RL-driven)
+    router_r1  - LLM-as-router with think/route actions (RL-driven)
 
     Examples:
         # Basic usage (uses config.yaml)
@@ -119,6 +154,12 @@ def serve(config, image, image_pull_policy, readonly, platform):
 
         # Custom config file
         vllm-sr serve --config my-config.yaml
+
+        # Use Elo rating selection (learns from feedback)
+        vllm-sr serve --algorithm elo
+
+        # Use cost-optimized selection
+        vllm-sr serve --algorithm automix
 
         # Custom image
         vllm-sr serve --image ghcr.io/vllm-project/semantic-router/vllm-sr:latest
@@ -172,6 +213,27 @@ def serve(config, image, image_pull_policy, readonly, platform):
         if platform:
             env_vars["DASHBOARD_PLATFORM"] = platform
             log.info(f"Platform branding: {platform}")
+
+        # Model selection algorithm override
+        if algorithm:
+            env_vars["VSR_ALGORITHM_TYPE"] = algorithm.lower()
+            log.info(f"Model selection algorithm: {algorithm}")
+            # Log algorithm-specific hints
+            algo = algorithm.lower()
+            if algo == "elo":
+                log.info("  Tip: Submit feedback via POST /api/v1/feedback")
+            elif algo == "router_dc":
+                log.info("  Tip: Ensure models have 'description' fields")
+            elif algo == "automix":
+                log.info("  Tip: Configure model 'pricing' for cost optimization")
+            elif algo == "hybrid":
+                log.info("  Tip: Configure weights in decision.algorithm.hybrid")
+            elif algo == "thompson":
+                log.info("  Tip: Balances exploration vs exploitation automatically")
+            elif algo == "gmtrouter":
+                log.info("  Tip: Learns user preferences via graph neural network")
+            elif algo == "router_r1":
+                log.info("  Tip: Requires Router-R1 server (see training docs)")
 
         # Start container
         start_vllm_sr(

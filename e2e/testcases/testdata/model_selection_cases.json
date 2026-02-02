@@ -1,0 +1,66 @@
+[
+  {
+    "name": "simple-math",
+    "description": "Simple math query for cost-efficient routing",
+    "query": "What is 2+2?",
+    "category": "general",
+    "algorithm": "automix",
+    "expected_models": ["llama3.2:3b", "llama3.2:8b"]
+  },
+  {
+    "name": "complex-reasoning",
+    "description": "Complex reasoning query requiring advanced model",
+    "query": "Explain the mathematical proof of Fermat's Last Theorem",
+    "category": "tech",
+    "algorithm": "automix",
+    "expected_models": ["gemma3:27b", "phi4"]
+  },
+  {
+    "name": "code-generation",
+    "description": "Code generation query for RouterDC specialty matching",
+    "query": "Write a Python function to implement quicksort",
+    "category": "tech",
+    "algorithm": "router_dc",
+    "expected_models": ["phi4", "gemma3:27b"]
+  },
+  {
+    "name": "simple-chat",
+    "description": "Simple conversational query",
+    "query": "Hello, how are you today?",
+    "category": "general",
+    "algorithm": "static",
+    "expected_models": ["llama3.2:3b"]
+  },
+  {
+    "name": "elo-preference",
+    "description": "Query after Elo training for preference",
+    "query": "Explain machine learning algorithms",
+    "category": "tech",
+    "algorithm": "elo",
+    "expected_models": ["gemma3:27b"]
+  },
+  {
+    "name": "hybrid-balanced",
+    "description": "Query for hybrid selection combining all methods",
+    "query": "Describe the architecture of a neural network",
+    "category": "tech",
+    "algorithm": "hybrid",
+    "expected_models": ["phi4", "gemma3:27b", "llama3.2:8b"]
+  },
+  {
+    "name": "science-reasoning",
+    "description": "Scientific reasoning query",
+    "query": "Explain quantum entanglement and its implications",
+    "category": "tech",
+    "algorithm": "router_dc",
+    "expected_models": ["gemma3:27b", "phi4"]
+  },
+  {
+    "name": "cost-sensitive",
+    "description": "Query where cost optimization matters",
+    "query": "What time is it?",
+    "category": "general",
+    "algorithm": "automix",
+    "expected_models": ["llama3.2:3b"]
+  }
+]
