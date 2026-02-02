@@ -22,6 +22,7 @@ RUN npm run build
 
 # Stage 1c: Build dashboard backend with Go
 # Note: dashboard/backend/go.mod has a replace directive for src/semantic-router
+# Use golang image (not alpine) for CGO support - go-sqlite3 requires CGO
 FROM golang:1.24 AS dashboard-builder
 WORKDIR /app
 
@@ -39,8 +40,9 @@ WORKDIR /app/dashboard/backend
 RUN go mod download
 
 # Copy source code and build
+# CGO_ENABLED=1 is required for go-sqlite3 (evaluation database)
 COPY dashboard/backend/ /app/dashboard/backend/
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/dashboard-backend main.go
+RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s" -o /app/dashboard-backend main.go
 
 # Stage 2: Build Go semantic router
 FROM golang:1.24 AS go-builder
@@ -97,8 +99,12 @@ COPY src/vllm-sr/requirements.txt /app/requirements.txt
 # Copy tools database to config directory
 COPY src/vllm-sr/cli/templates/tools_db.json /app/config/tools_db.json
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy bench directory for evaluation benchmarks
+COPY bench/ /app/bench/
+
+# Install Python dependencies (CLI + bench)
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir -r /app/bench/requirements.txt
 
 # Copy start scripts
 COPY src/vllm-sr/start-router.sh /app/start-router.sh
