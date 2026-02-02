@@ -154,7 +154,7 @@ pub extern "C" fn init_sequence_classifier(
         Ok(model) => {
             println!("INFO: Loaded sequence classifier '{}' from {}", name_str, path_str);
             println!("INFO: {}", model.model_info());
-            
+
             let mut classifiers = get_seq_classifiers().lock();
             classifiers.insert(name_str, model);
             true
@@ -210,7 +210,7 @@ pub extern "C" fn init_token_classifier(
         Ok(model) => {
             println!("INFO: Loaded token classifier '{}' from {}", name_str, path_str);
             println!("INFO: {}", model.model_info());
-            
+
             let mut classifiers = get_tok_classifiers().lock();
             classifiers.insert(name_str, model);
             true
@@ -445,12 +445,12 @@ pub extern "C" fn free_classification_result(result: *mut ClassificationResultFF
 
     unsafe {
         let r = &mut *result;
-        
+
         if !r.label.is_null() {
             let _ = CString::from_raw(r.label);
             r.label = std::ptr::null_mut();
         }
-        
+
         if !r.probabilities.is_null() && r.num_classes > 0 {
             let _ = Box::from_raw(std::slice::from_raw_parts_mut(
                 r.probabilities,
@@ -470,10 +470,10 @@ pub extern "C" fn free_pii_result(result: *mut PIIResultFFI) {
 
     unsafe {
         let r = &mut *result;
-        
+
         if !r.entities.is_null() && r.num_entities > 0 {
             let entities = std::slice::from_raw_parts_mut(r.entities, r.num_entities as usize);
-            
+
             for entity in entities.iter_mut() {
                 if !entity.text.is_null() {
                     let _ = CString::from_raw(entity.text);
@@ -482,7 +482,7 @@ pub extern "C" fn free_pii_result(result: *mut PIIResultFFI) {
                     let _ = CString::from_raw(entity.entity_type);
                 }
             }
-            
+
             let _ = Box::from_raw(entities);
             r.entities = std::ptr::null_mut();
         }

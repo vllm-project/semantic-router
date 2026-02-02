@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for (model_dir, model_name) in &models {
         let model_path = format!("./{}", model_dir);
-        
+
         if !std::path::Path::new(&model_path).exists() {
             println!("Skipping {} - not found", model_path);
             continue;
@@ -46,10 +46,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("--- CPU ---");
         if let Ok(mut model) = MmBertEmbeddingModel::load(&model_path, true) {
             println!("Model loaded: {}", model.model_info());
-            
+
             // Single text benchmark
             benchmark_single(&mut model, &test_texts[0]);
-            
+
             // Batch benchmark
             let text_refs: Vec<&str> = test_texts.iter().map(|s| *s).collect();
             benchmark_batch(&mut model, &text_refs);
@@ -61,10 +61,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("\n--- GPU (Auto) ---");
         if let Ok(mut model) = MmBertEmbeddingModel::load(&model_path, false) {
             println!("Model loaded: {}", model.model_info());
-            
+
             // Single text benchmark
             benchmark_single(&mut model, &test_texts[0]);
-            
+
             // Batch benchmark
             let text_refs: Vec<&str> = test_texts.iter().map(|s| *s).collect();
             benchmark_batch(&mut model, &text_refs);

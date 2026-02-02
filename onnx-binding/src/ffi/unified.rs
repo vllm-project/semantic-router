@@ -166,12 +166,12 @@ pub extern "C" fn free_unified_batch_result(result: *mut CUnifiedBatchResult) {
 
     unsafe {
         let r = &mut *result;
-        
+
         if !r.error_message.is_null() {
             let _ = CString::from_raw(r.error_message);
             r.error_message = ptr::null_mut();
         }
-        
+
         if !r.results.is_null() && r.num_results > 0 {
             let results = std::slice::from_raw_parts_mut(r.results, r.num_results as usize);
             for res in results.iter_mut() {
@@ -192,12 +192,12 @@ pub extern "C" fn free_lora_batch_result(result: *mut CLoRABatchResult) {
 
     unsafe {
         let r = &mut *result;
-        
+
         if !r.error_message.is_null() {
             let _ = CString::from_raw(r.error_message);
             r.error_message = ptr::null_mut();
         }
-        
+
         if !r.results.is_null() && r.num_results > 0 {
             let results = std::slice::from_raw_parts_mut(r.results, r.num_results as usize);
             for res in results.iter_mut() {
@@ -223,7 +223,7 @@ unsafe fn free_unified_result_inner(result: &mut CUnifiedResult) {
         ));
         result.intent.probabilities = ptr::null_mut();
     }
-    
+
     // Free PII
     if !result.pii.pii_types.is_null() && result.pii.num_pii_types > 0 {
         let types = std::slice::from_raw_parts_mut(result.pii.pii_types, result.pii.num_pii_types as usize);
@@ -235,13 +235,13 @@ unsafe fn free_unified_result_inner(result: &mut CUnifiedResult) {
         let _ = Box::from_raw(types);
         result.pii.pii_types = ptr::null_mut();
     }
-    
+
     // Free security
     if !result.security.threat_type.is_null() {
         let _ = CString::from_raw(result.security.threat_type);
         result.security.threat_type = ptr::null_mut();
     }
-    
+
     // Free error message
     if !result.error_message.is_null() {
         let _ = CString::from_raw(result.error_message);
@@ -262,7 +262,7 @@ mod tests {
     fn test_create_error_message() {
         let msg = create_error_message("test error");
         assert!(!msg.is_null());
-        
+
         // Clean up
         unsafe {
             let _ = CString::from_raw(msg);
@@ -326,7 +326,7 @@ mod tests {
         assert!(result.error);
         assert!(result.results.is_null());
         assert_eq!(result.num_results, 0);
-        
+
         // Clean up
         if !result.error_message.is_null() {
             unsafe {
@@ -341,7 +341,7 @@ mod tests {
         assert!(result.error);
         assert!(result.results.is_null());
         assert_eq!(result.num_results, 0);
-        
+
         // Clean up
         if !result.error_message.is_null() {
             unsafe {

@@ -183,22 +183,22 @@ impl ExecutionProvider {
         {
             return ExecutionProvider::Rocm;
         }
-        
+
         #[cfg(feature = "cuda")]
         {
             return ExecutionProvider::Cuda;
         }
-        
+
         #[cfg(feature = "directml")]
         {
             return ExecutionProvider::DirectMl;
         }
-        
+
         #[cfg(feature = "openvino")]
         {
             return ExecutionProvider::OpenVino;
         }
-        
+
         #[allow(unreachable_code)]
         ExecutionProvider::Cpu
     }
@@ -244,28 +244,28 @@ impl MmBertEmbeddingModel {
     /// * `UnifiedResult<Self>` - The loaded model or an error
     pub fn load<P: AsRef<Path>>(model_path: P, use_cpu: bool) -> UnifiedResult<Self> {
         let model_path_str = model_path.as_ref().display().to_string();
-        
+
         // Load configuration
         let config = MmBertEmbeddingConfig::from_pretrained(&model_path)?;
-        
+
         // Load tokenizer
         let tokenizer_path = model_path.as_ref().join("tokenizer.json");
         if !tokenizer_path.exists() {
             return Err(errors::file_not_found(&tokenizer_path.display().to_string()));
         }
-        
+
         let tokenizer = Tokenizer::from_file(&tokenizer_path)
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
-        
+
         // Find ONNX model file
         let onnx_path = Self::find_onnx_model(&model_path)?;
-        
+
         // Create ONNX Runtime session
         let session = Self::create_session(&onnx_path, use_cpu)?;
-        
+
         // Check for layer-specific ONNX files (for early exit support)
         let (supports_layer_exit, layer_sessions) = Self::load_layer_sessions(&model_path, use_cpu);
-        
+
         Ok(Self {
             session,
             tokenizer: Arc::new(tokenizer),
@@ -280,7 +280,7 @@ impl MmBertEmbeddingModel {
     /// Find the ONNX model file in the model directory
     fn find_onnx_model<P: AsRef<Path>>(model_path: P) -> UnifiedResult<std::path::PathBuf> {
         let dir = model_path.as_ref();
-        
+
         // Try common ONNX file names
         let candidates = [
             "model.onnx",
@@ -288,14 +288,14 @@ impl MmBertEmbeddingModel {
             "mmbert.onnx",
             "model_optimized.onnx",
         ];
-        
+
         for candidate in &candidates {
             let path = dir.join(candidate);
             if path.exists() {
                 return Ok(path);
             }
         }
-        
+
         // Look for any .onnx file
         if let Ok(entries) = std::fs::read_dir(dir) {
             for entry in entries.flatten() {
@@ -306,7 +306,7 @@ impl MmBertEmbeddingModel {
                 }
             }
         }
-        
+
         Err(errors::file_not_found(&format!(
             "No ONNX model found in {}",
             dir.display()
@@ -316,7 +316,7 @@ impl MmBertEmbeddingModel {
     /// Create an ONNX Runtime session with appropriate execution provider
     fn create_session<P: AsRef<Path>>(onnx_path: P, use_cpu: bool) -> UnifiedResult<Session> {
         let onnx_path_str = onnx_path.as_ref().display().to_string();
-        
+
         // Build session with execution providers
         let session = if use_cpu {
             Session::builder()
@@ -338,7 +338,7 @@ impl MmBertEmbeddingModel {
                     })?
                     .commit_from_file(onnx_path.as_ref())
                     .map_err(|e: ort::Error| errors::model_load(&onnx_path_str, &e.to_string()));
-                
+
                 if let Ok(session) = result {
                     println!("INFO: Using ROCm execution provider (AMD GPU)");
                     return Ok(session);
@@ -365,7 +365,7 @@ impl MmBertEmbeddingModel {
                     })?
                     .commit_from_file(onnx_path.as_ref())
                     .map_err(|e: ort::Error| errors::model_load(&onnx_path_str, &e.to_string()));
-                
+
                 if let Ok(session) = result {
                     println!("INFO: Using MIGraphX execution provider (AMD GPU - FAST)");
                     return Ok(session);
@@ -373,7 +373,7 @@ impl MmBertEmbeddingModel {
                     println!("WARN: MIGraphX failed, trying fallback...");
                 }
             }
-            
+
             #[cfg(feature = "cuda")]
             {
                 use ort::execution_providers::CUDAExecutionProvider;
@@ -383,13 +383,13 @@ impl MmBertEmbeddingModel {
                     .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
                     .commit_from_file(onnx_path.as_ref())
                     .map_err(|e: ort::Error| errors::model_load(&onnx_path_str, &e.to_string()));
-                
+
                 if let Ok(session) = result {
                     println!("INFO: Using CUDA execution provider (NVIDIA GPU)");
                     return Ok(session);
                 }
             }
-            
+
             // Fallback to CPU
             println!("INFO: Using CPU execution provider");
             Session::builder()
@@ -397,7 +397,7 @@ impl MmBertEmbeddingModel {
                 .commit_from_file(onnx_path.as_ref())
                 .map_err(|e: ort::Error| errors::model_load(&onnx_path_str, &e.to_string()))?
         };
-        
+
         Ok(session)
     }
 
@@ -406,7 +406,7 @@ impl MmBertEmbeddingModel {
         let matryoshka = MatryoshkaConfig::default();
         let mut sessions = Vec::new();
         let mut any_loaded = false;
-        
+
         for layer in &matryoshka.layers {
             let layer_path = model_path.as_ref().join(format!("model_layer_{}.onnx", layer));
             if layer_path.exists() {
@@ -421,7 +421,7 @@ impl MmBertEmbeddingModel {
                 sessions.push(None);
             }
         }
-        
+
         (any_loaded, sessions)
     }
 
@@ -573,14 +573,14 @@ impl MmBertEmbeddingModel {
         };
         let batch_size = input_ids.shape()[0];
         let seq_len = input_ids.shape()[1];
-        
+
         // Create ort tensors from ndarray - ort 2.x requires (shape, data) tuple
         let input_ids_flat: Vec<i64> = input_ids.iter().copied().collect();
         let attention_mask_flat: Vec<i64> = attention_mask.iter().copied().collect();
-        
+
         let input_ids_tensor = Tensor::from_array(([batch_size, seq_len], input_ids_flat))
             .map_err(|e: ort::Error| errors::inference_error("create_input_ids_tensor", &e.to_string()))?;
-        
+
         let attention_mask_tensor = Tensor::from_array(([batch_size, seq_len], attention_mask_flat))
             .map_err(|e: ort::Error| errors::inference_error("create_attention_mask_tensor", &e.to_string()))?;
 
@@ -597,12 +597,12 @@ impl MmBertEmbeddingModel {
         // 1. Direct pooled output [batch, hidden_dim]
         // 2. Sequence output [batch, seq_len, hidden_dim] - needs pooling
         let output_names = ["last_hidden_state", "sentence_embedding", "pooler_output", "embeddings"];
-        
+
         for name in &output_names {
             if let Some(output_value) = outputs.get(*name) {
                 if let Ok((shape, data)) = output_value.try_extract_tensor::<f32>() {
                     let dims: Vec<usize> = shape.iter().map(|&d| d as usize).collect();
-                    
+
                     if dims.len() == 2 {
                         // Already pooled: [batch, hidden_dim]
                         let flat: Vec<f32> = data.to_vec();
@@ -613,26 +613,26 @@ impl MmBertEmbeddingModel {
                         let out_batch_size = dims[0];
                         let out_seq_len = dims[1];
                         let hidden_dim = dims[2];
-                        
+
                         let flat: Vec<f32> = data.to_vec();
                         let hidden_states = Array3::from_shape_vec((out_batch_size, out_seq_len, hidden_dim), flat)
                             .map_err(|e| errors::inference_error("reshape_hidden_states", &e.to_string()))?;
-                        
+
                         // Convert attention_mask to f32
                         let attention_mask_f32: Array2<f32> = attention_mask.mapv(|x| x as f32);
-                        
+
                         // Mean pooling
                         return Ok(mean_pool_3d(&hidden_states, &attention_mask_f32));
                     }
                 }
             }
         }
-        
+
         // Try first output if named outputs not found
         if let Some((_, output_value)) = outputs.iter().next() {
             if let Ok((shape, data)) = output_value.try_extract_tensor::<f32>() {
                 let dims: Vec<usize> = shape.iter().map(|&d| d as usize).collect();
-                
+
                 if dims.len() == 2 {
                     let flat: Vec<f32> = data.to_vec();
                     return Array2::from_shape_vec((dims[0], dims[1]), flat)
@@ -641,11 +641,11 @@ impl MmBertEmbeddingModel {
                     let out_batch_size = dims[0];
                     let out_seq_len = dims[1];
                     let hidden_dim = dims[2];
-                    
+
                     let flat: Vec<f32> = data.to_vec();
                     let hidden_states = Array3::from_shape_vec((out_batch_size, out_seq_len, hidden_dim), flat)
                         .map_err(|e| errors::inference_error("reshape_hidden_states", &e.to_string()))?;
-                    
+
                     let attention_mask_f32: Array2<f32> = attention_mask.mapv(|x| x as f32);
                     return Ok(mean_pool_3d(&hidden_states, &attention_mask_f32));
                 }

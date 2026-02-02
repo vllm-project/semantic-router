@@ -110,7 +110,7 @@ impl MmBertClassifierConfig {
         // Parse id2label
         let mut id2label = HashMap::new();
         let mut label2id = HashMap::new();
-        
+
         if let Some(id2label_obj) = config_json.get("id2label").and_then(|v| v.as_object()) {
             for (k, v) in id2label_obj {
                 if let (Ok(id), Some(label)) = (k.parse::<i32>(), v.as_str()) {
@@ -267,7 +267,7 @@ impl MmBertSequenceClassifier {
                 #[cfg(feature = "rocm")]
                 {
                     use ort::execution_providers::{ROCmExecutionProvider, MIGraphXExecutionProvider};
-                    
+
                     // Try MIGraphX first (better for MI300X)
                     if let Ok(session) = Session::builder()
                         .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
@@ -277,7 +277,7 @@ impl MmBertSequenceClassifier {
                         println!("INFO: Using MIGraphX execution provider (AMD GPU)");
                         return Ok(session);
                     }
-                    
+
                     // Try ROCm
                     if let Ok(session) = Session::builder()
                         .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
@@ -634,7 +634,7 @@ fn bio_decode_entities(
         if i >= offsets.len() {
             break;
         }
-        
+
         let (start, end) = offsets[i];
         if start == 0 && end == 0 {
             // Special token, skip
@@ -752,7 +752,7 @@ mod tests {
             confidence: 0.95,
             probabilities: vec![0.05, 0.95],
         };
-        
+
         assert_eq!(result.label, "positive");
         assert_eq!(result.class_id, 1);
         assert!((result.confidence - 0.95).abs() < 0.001);
@@ -768,7 +768,7 @@ mod tests {
             end: 26,
             confidence: 0.99,
         };
-        
+
         assert_eq!(entity.text, "john@example.com");
         assert_eq!(entity.entity_type, "EMAIL");
         assert_eq!(entity.start, 10);
@@ -796,7 +796,7 @@ mod tests {
                 },
             ],
         };
-        
+
         assert_eq!(result.entities.len(), 2);
         assert_eq!(result.entities[0].entity_type, "US_SSN");
         assert_eq!(result.entities[1].entity_type, "EMAIL");
@@ -825,7 +825,7 @@ mod tests {
         config.label2id.insert("negative".to_string(), 0);
         config.label2id.insert("neutral".to_string(), 1);
         config.label2id.insert("positive".to_string(), 2);
-        
+
         assert_eq!(config.num_labels, 3);
         assert_eq!(config.id2label.len(), 3);
         assert_eq!(config.label2id.len(), 3);
@@ -841,7 +841,7 @@ mod tests {
             confidence: 0.8,
             probabilities: vec![0.8, 0.2],
         };
-        
+
         let cloned = result.clone();
         assert_eq!(cloned.label, result.label);
         assert_eq!(cloned.class_id, result.class_id);
@@ -858,7 +858,7 @@ mod tests {
             end: 4,
             confidence: 0.9,
         };
-        
+
         let cloned = entity.clone();
         assert_eq!(cloned.text, entity.text);
         assert_eq!(cloned.entity_type, entity.entity_type);
