@@ -169,7 +169,7 @@ func (h *EvaluationHandler) CreateTaskHandler() http.HandlerFunc {
 			req.Config.MaxSamples = 50
 		}
 		if req.Config.Endpoint == "" {
-			req.Config.Endpoint = "http://localhost:8801"
+			req.Config.Endpoint = "http://localhost:8888"
 		}
 		if req.Config.SamplesPerCat <= 0 {
 			req.Config.SamplesPerCat = 10
@@ -519,7 +519,9 @@ func (h *EvaluationHandler) ExportResultsHandler() http.HandlerFunc {
 }
 
 // GetDatasetsHandler returns available datasets grouped by dimension.
-func (h *EvaluationHandler) GetDatasetsHandler() http.HandlerFunc {
+// This is a standalone function that doesn't require database initialization,
+// allowing datasets to be served even when the evaluation DB fails to initialize.
+func GetDatasetsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {
 			return

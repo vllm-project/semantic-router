@@ -220,8 +220,8 @@ func ensureV1Suffix(endpoint string) string {
 func (r *Runner) runHallucinationBenchmark(ctx context.Context, taskID string, cfg models.EvaluationConfig, dataset, outputDir string) (*models.EvaluationResult, error) {
 	outputPath := filepath.Join(outputDir, fmt.Sprintf("hallucination_%s.json", dataset))
 
-	// Ensure endpoint has /v1 suffix for OpenAI client compatibility
-	endpoint := ensureV1Suffix(cfg.Endpoint)
+	// Use endpoint as-is - the Python script adds /v1 internally
+	endpoint := strings.TrimSuffix(cfg.Endpoint, "/")
 
 	// Build command arguments
 	args := []string{
@@ -322,7 +322,7 @@ func (r *Runner) runAccuracyBenchmark(ctx context.Context, taskID string, cfg mo
 	// Ensure endpoint has /v1 suffix for OpenAI client compatibility
 	endpoint := ensureV1Suffix(cfg.Endpoint)
 	if endpoint == "/v1" {
-		endpoint = "http://localhost:8801/v1"
+		endpoint = "http://localhost:8888/v1"
 	}
 
 	// Model to test - default to MoM
