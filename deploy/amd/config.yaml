@@ -260,8 +260,28 @@ signals:
       description: "Mathematics, statistics, and quantitative reasoning"
     - name: "physics"
       description: "Physics and physical sciences"
+    - name: "chemistry"
+      description: "Chemistry and chemical sciences questions"
+    - name: "biology"
+      description: "Biology and life sciences questions"
+    - name: "engineering"
+      description: "Engineering and technical problem-solving"
+    - name: "business"
+      description: "Business and management related queries"
+    - name: "economics"
+      description: "Economics and financial topics"
+    - name: "law"
+      description: "Legal questions and law-related topics"
+    - name: "psychology"
+      description: "Psychology and mental health topics"
+    - name: "philosophy"
+      description: "Philosophy and ethical questions"
+    - name: "history"
+      description: "Historical questions and cultural topics"
+    - name: "health"
+      description: "Health and medical information queries"
     - name: "other"
-      description: "Creative writing, opinion-based, brainstorming, or general queries that don't fit specific domains"
+      description: "General knowledge and miscellaneous topics"
 
   # latency - Latency-based routing signals (TPOT-based)
   latency:
@@ -299,9 +319,9 @@ signals:
   # complexity - Complexity signals (Embedding-based difficulty detection)
   # IMPORTANT: It is strongly recommended to configure a composer for each complexity rule
   # to filter based on other signals (e.g., domain). This prevents misclassification where
-  # a math question might match code_complexity or vice versa.
+  # a math question might match computer_science or vice versa.
   complexity:
-    - name: "code_complexity"
+    - name: "computer_science"
       composer:
         operator: "AND"
         conditions:
@@ -353,7 +373,7 @@ signals:
           - "write comment"
           - "format string"
       description: "Programming and software development tasks including coding problems, algorithm implementation, system design, debugging, software architecture, data structures, code optimization, testing, and technical questions about programming languages, frameworks, APIs, databases, and software engineering practices ranging from simple scripts to complex distributed systems"
-    - name: "math_complexity"
+    - name: "math_problem"
       composer:
         operator: "AND"
         conditions:
@@ -503,9 +523,9 @@ decisions:
         - type: "domain"
           name: "math"
         - type: "complexity"
-          name: "math_complexity:hard"
+          name: "math_problem:hard"
     modelRefs:
-      - model: "Qwen/Qwen3-235B"
+      - model: "DeepSeek-V3.2"
         use_reasoning: true
         reasoning_effort: "high"
     plugins:
@@ -528,12 +548,14 @@ decisions:
     description: "Easy Mathematical queries with low reasoning"
     priority: 149
     rules:
-      operator: "AND"
+      operator: "OR"
       conditions:
         - type: "domain"
           name: "math"
         - type: "complexity"
-          name: "math_complexity:easy"
+          name: "math_problem:easy"
+        - type: "complexity"
+          name: "math_problem:medium"
     modelRefs:
       - model: "Qwen/Qwen3-235B"
         use_reasoning: true
@@ -552,6 +574,90 @@ decisions:
           capture_request_body: true   # Capture request payloads (default: false)
           capture_response_body: true  # Capture response payloads (default: false)
           max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
+
+  # Priority 148: Chemistry domain
+  - name: "chemistry_problems"
+    description: "Chemistry queries with reasoning"
+    priority: 148
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "chemistry"
+    modelRefs:
+      - model: "Qwen/Qwen3-235B"
+        use_reasoning: true
+        reasoning_effort: "medium"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are Qwen3-235B, a chemistry expert. Explain chemical reactions, molecular structures, and laboratory techniques with scientific rigor."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000
+          capture_request_body: true
+          capture_response_body: true
+          max_body_bytes: 4096
+
+  # Priority 147: Biology domain
+  - name: "biology_problems"
+    description: "Biology and life sciences queries"
+    priority: 147
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "biology"
+    modelRefs:
+      - model: "Qwen/Qwen3-235B"
+        use_reasoning: true
+        reasoning_effort: "medium"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are Qwen3-235B, a biology expert. Explain molecular biology, genetics, ecology, and life sciences with detailed scientific explanations."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000
+          capture_request_body: true
+          capture_response_body: true
+          max_body_bytes: 4096
+
+  # Priority 146: Health and Medical domain
+  - name: "health_medical"
+    description: "Health and medical information queries"
+    priority: 146
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "health"
+    modelRefs:
+      - model: "GLM-4.7"
+        use_reasoning: true
+        reasoning_effort: "medium"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are GLM-4.7, a medical information assistant. Provide accurate health information based on scientific evidence. Always remind users to consult healthcare professionals for medical advice."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000
+          capture_request_body: true
+          capture_response_body: true
+          max_body_bytes: 4096
 
   # Priority 145: Physics domain
   - name: "physics_problems"
@@ -581,6 +687,92 @@ decisions:
           capture_response_body: true  # Capture response payloads (default: false)
           max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
+  # Priority 144: Engineering domain
+  - name: "engineering_problems"
+    description: "Engineering and technical problem-solving"
+    priority: 144
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "engineering"
+    modelRefs:
+      - model: "DeepSeek-V3.2"
+        use_reasoning: true
+        reasoning_effort: "medium"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are DeepSeek-V3.2, an engineering expert. Provide technical solutions with practical considerations, calculations, and design principles."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000
+          capture_request_body: true
+          capture_response_body: true
+          max_body_bytes: 4096
+
+  # Priority 143: Law domain
+  - name: "law_legal"
+    description: "Legal questions and law-related topics"
+    priority: 143
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "law"
+    modelRefs:
+      - model: "Qwen/Qwen3-235B"
+        use_reasoning: true
+        reasoning_effort: "medium"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are Qwen3-235B, a legal information assistant. Provide information about legal principles and concepts. Always remind users to consult qualified legal professionals for legal advice."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000
+          capture_request_body: true
+          capture_response_body: true
+          max_body_bytes: 4096
+
+  # Priority 142: Business and Economics domain
+  - name: "business_economics"
+    description: "Business, management, and economics queries"
+    priority: 142
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "business"
+        - type: "domain"
+          name: "economics"
+    modelRefs:
+      - model: "Qwen/Qwen3-235B"
+        use_reasoning: true
+        reasoning_effort: "medium"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are Qwen3-235B, a business and economics expert. Provide insights on business strategy, management, economics, and financial topics with practical analysis."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000
+          capture_request_body: true
+          capture_response_body: true
+          max_body_bytes: 4096
+
   # Priority 141: Computer science domain with deep thinking
   - name: "complex_engineering"
     description: "Complex code generation and algorithm design (only when domain is clearly computer science)"
@@ -593,7 +785,7 @@ decisions:
         - type: "embedding"
           name: "deep_thinking_en"
         - type: "complexity"
-          name: "code_complexity:hard"
+          name: "computer_science:hard"
     modelRefs:
       - model: "DeepSeek-V3.2"
         use_reasoning: true
@@ -623,9 +815,9 @@ decisions:
         - type: "domain"
           name: "computer science"
         - type: "complexity"
-          name: "code_complexity:easy"
+          name: "computer_science:easy"
         - type: "complexity"
-          name: "code_complexity:medium"
+          name: "computer_science:medium"
     modelRefs:
       - model: "openai/gpt-oss-120b"
         use_reasoning: true
@@ -644,6 +836,90 @@ decisions:
           capture_request_body: true   # Capture request payloads (default: false)
           capture_response_body: true  # Capture response payloads (default: false)
           max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
+
+  # Priority 138: Psychology domain
+  - name: "psychology_queries"
+    description: "Psychology and mental health topics"
+    priority: 138
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "psychology"
+    modelRefs:
+      - model: "Qwen/Qwen3-235B"
+        use_reasoning: true
+        reasoning_effort: "medium"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are Qwen3-235B, a psychology expert. Explain cognitive processes, behavioral patterns, and mental health topics with empathy and scientific accuracy."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000
+          capture_request_body: true
+          capture_response_body: true
+          max_body_bytes: 4096
+
+  # Priority 137: Philosophy domain
+  - name: "philosophy_queries"
+    description: "Philosophy and ethical questions"
+    priority: 137
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "philosophy"
+    modelRefs:
+      - model: "Qwen/Qwen3-235B"
+        use_reasoning: true
+        reasoning_effort: "high"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are Qwen3-235B, a philosophy expert. Explore philosophical concepts, ethical dilemmas, and logical reasoning with depth and clarity."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000
+          capture_request_body: true
+          capture_response_body: true
+          max_body_bytes: 4096
+
+  # Priority 136: History domain
+  - name: "history_queries"
+    description: "Historical questions and cultural topics"
+    priority: 136
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "history"
+    modelRefs:
+      - model: "GLM-4.7"
+        use_reasoning: true
+        reasoning_effort: "medium"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are GLM-4.7, a history expert. Provide accurate historical information about events, time periods, cultures, and civilizations with context and analysis."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000
+          capture_request_body: true
+          capture_response_body: true
+          max_body_bytes: 4096
 
   # Priority 130: Fast QA in Chinese
   - name: "quick_question"

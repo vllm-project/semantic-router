@@ -65,28 +65,31 @@ func (c *FactCheckClassifier) Initialize() error {
 		return fmt.Errorf("fact-check classifier requires ModelID to be configured")
 	}
 
-	logging.Infof("Initializing fact-check classifier ML model")
+	logging.Infof("✅ Initializing Fact-Check Classifier:")
+	logging.Infof("Model: %s", c.config.ModelID)
+	logging.Infof("CPU Mode: %v", c.config.UseCPU)
 
 	// Check if mmBERT-32K is configured (takes precedence)
 	if c.config.UseMmBERT32K {
-		logging.Infof("Using mmBERT-32K for fact-check classification (32K context, YaRN RoPE)")
+		logging.Infof("Type: mmBERT-32K (32K context, YaRN RoPE)")
 		err := candle.InitMmBert32KFactcheckClassifier(c.config.ModelID, c.config.UseCPU)
 		if err != nil {
 			return fmt.Errorf("failed to initialize mmBERT-32K fact-check model from %s: %w", c.config.ModelID, err)
 		}
 		c.useMmBERT32K = true
 		c.initialized = true
-		logging.Infof("Fact-check classifier initialized with mmBERT-32K model")
+		logging.Infof("✓ Fact-check classifier initialized successfully")
 		return nil
 	}
 
+	logging.Infof("Type: halugate-sentinel (ML-based)")
 	err := candle.InitFactCheckClassifier(c.config.ModelID, c.config.UseCPU)
 	if err != nil {
 		return fmt.Errorf("failed to initialize fact-check ML model from %s: %w", c.config.ModelID, err)
 	}
 
 	c.initialized = true
-	logging.Infof("Fact-check classifier initialized with ML model (halugate-sentinel)")
+	logging.Infof("✓ Fact-check classifier initialized successfully")
 
 	return nil
 }

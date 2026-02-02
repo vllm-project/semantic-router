@@ -1,17 +1,3 @@
-# You can override by specifying your own mappings below:
-# Uncomment and customize if you need different model mappings:
-# mom_registry:
-#   "models/mom-domain-classifier": "LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model"
-#   "models/mom-pii-classifier": "LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model"
-#   "models/mom-jailbreak-classifier": "LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model"
-#   "models/mom-halugate-detector": "KRLabsOrg/lettucedect-base-modernbert-en-v1"
-#   "models/mom-halugate-sentinel": "LLM-Semantic-Router/halugate-sentinel"
-#   "models/mom-halugate-explainer": "tasksource/ModernBERT-base-nli"
-#   "models/mom-feedback-detector": "llm-semantic-router/feedback-detector"
-#   "models/mom-embedding-pro": "Qwen/Qwen3-Embedding-0.6B"
-#   "models/mom-embedding-flash": "google/embeddinggemma-300m"
-#   "models/mom-embedding-ultra": "llm-semantic-router/mmbert-embed-32k-2d-matryoshka"
-
 # Response API Configuration
 # Enables OpenAI Response API support with conversation chaining
 response_api:
@@ -59,25 +45,26 @@ tools:
 
 prompt_guard:
   enabled: true  # Global default - can be overridden per category with jailbreak_enabled
-  use_modernbert: false
-  model_id: "models/mom-jailbreak-classifier"
-  jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
+  use_mmbert_32k: true
+  model_id: "models/mmbert32k-jailbreak-detector-merged"
+  jailbreak_mapping_path: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json"
   threshold: 0.7
   use_cpu: true
 
 # Classifier configuration
 classifier:
   category_model:
-    model_id: "models/mom-domain-classifier"
+    model_id: "models/mmbert32k-intent-classifier-merged"
+    use_mmbert_32k: true
     threshold: 0.6
     use_cpu: true
-    category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
+    category_mapping_path: "models/mmbert32k-intent-classifier-merged/category_mapping.json"
   pii_model:
-    model_id: "models/mom-pii-classifier"
-    use_modernbert: false
+    model_id: "models/mmbert32k-pii-detector-merged"
+    use_mmbert_32k: true
     threshold: 0.9
     use_cpu: true
-    pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
+    pii_mapping_path: "models/mmbert32k-pii-detector-merged/pii_type_mapping.json"
 
 # Hallucination mitigation configuration
 # Disabled by default - enable in decisions via hallucination plugin
@@ -85,9 +72,10 @@ hallucination_mitigation:
   enabled: false
   # Fact-check classifier: determines if a prompt needs fact verification
   fact_check_model:
-    model_id: "models/mom-halugate-sentinel"
+    model_id: "models/mmbert32k-factcheck-classifier-merged"
     threshold: 0.6
     use_cpu: true
+    use_mmbert_32k: true
   # Hallucination detector: verifies if LLM response is grounded in context
   hallucination_model:
     model_id: "models/mom-halugate-detector"
@@ -109,9 +97,10 @@ hallucination_mitigation:
 # Classifies user feedback into 4 types: satisfied, need_clarification, wrong_answer, want_different
 feedback_detector:
   enabled: true
-  model_id: "models/mom-feedback-detector"
+  model_id: "models/mmbert32k-feedback-detector-merged"
   threshold: 0.7
   use_cpu: true
+  use_mmbert_32k: true
 
 # External models configuration
 # Used for advanced routing signals like preference-based routing via external LLM
