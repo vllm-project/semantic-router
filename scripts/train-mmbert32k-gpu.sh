@@ -15,12 +15,19 @@ CONTAINER_WORKDIR="/workspace"
 MODELS_DIR="${MODELS_DIR:-models/mmbert32k}"
 
 # Training parameters (can be overridden)
+# Updated 2026-02-02 with validated hyperparameters
 TRAIN_EPOCHS="${TRAIN_EPOCHS:-5}"
-TRAIN_BATCH_SIZE="${TRAIN_BATCH_SIZE:-16}"  # Larger batch size with GPU
-TRAIN_LR="${TRAIN_LR:-3e-5}"
-LORA_RANK="${LORA_RANK:-8}"
-LORA_ALPHA="${LORA_ALPHA:-16}"
-MAX_SAMPLES="${MAX_SAMPLES:-10000}"  # More samples with GPU
+TRAIN_BATCH_SIZE="${TRAIN_BATCH_SIZE:-16}"
+TRAIN_LR="${TRAIN_LR:-2e-5}"
+LORA_RANK="${LORA_RANK:-32}"
+LORA_ALPHA="${LORA_ALPHA:-64}"
+MAX_SAMPLES="${MAX_SAMPLES:-10000}"
+
+# Feedback-specific parameters (higher capacity for 4-class)
+FEEDBACK_EPOCHS="${FEEDBACK_EPOCHS:-10}"
+FEEDBACK_LR="${FEEDBACK_LR:-2e-5}"
+FEEDBACK_LORA_RANK="${FEEDBACK_LORA_RANK:-64}"
+FEEDBACK_LORA_ALPHA="${FEEDBACK_LORA_ALPHA:-128}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -34,8 +41,9 @@ echo -e "${BLUE}  mmBERT-32K GPU Training (ROCm)${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 echo -e "Docker image: ${YELLOW}${DOCKER_IMAGE}${NC}"
-echo -e "Epochs: ${TRAIN_EPOCHS}, Batch size: ${TRAIN_BATCH_SIZE}"
-echo -e "LoRA rank: ${LORA_RANK}, Alpha: ${LORA_ALPHA}"
+echo -e "General: Epochs=${TRAIN_EPOCHS}, Batch=${TRAIN_BATCH_SIZE}, LR=${TRAIN_LR}"
+echo -e "General LoRA: rank=${LORA_RANK}, alpha=${LORA_ALPHA}"
+echo -e "Feedback: Epochs=${FEEDBACK_EPOCHS}, rank=${FEEDBACK_LORA_RANK}, alpha=${FEEDBACK_LORA_ALPHA}"
 echo ""
 
 # Verify project root has expected structure
@@ -113,11 +121,17 @@ def main():
     # Get environment variables
     epochs = os.environ.get('TRAIN_EPOCHS', '5')
     batch_size = os.environ.get('TRAIN_BATCH_SIZE', '16')
-    lr = os.environ.get('TRAIN_LR', '3e-5')
-    lora_rank = os.environ.get('LORA_RANK', '8')
-    lora_alpha = os.environ.get('LORA_ALPHA', '16')
+    lr = os.environ.get('TRAIN_LR', '2e-5')
+    lora_rank = os.environ.get('LORA_RANK', '32')
+    lora_alpha = os.environ.get('LORA_ALPHA', '64')
     max_samples = os.environ.get('MAX_SAMPLES', '10000')
     models_dir = os.environ.get('MODELS_DIR', 'models/mmbert32k')
+    
+    # Feedback-specific (higher capacity for 4-class classification)
+    feedback_epochs = os.environ.get('FEEDBACK_EPOCHS', '10')
+    feedback_lr = os.environ.get('FEEDBACK_LR', '2e-5')
+    feedback_lora_rank = os.environ.get('FEEDBACK_LORA_RANK', '64')
+    feedback_lora_alpha = os.environ.get('FEEDBACK_LORA_ALPHA', '128')
     
     # Check GPU
     import torch
@@ -135,19 +149,20 @@ def main():
     results = {}
     total_start = time.time()
     
-    # 1. Feedback Detector
+    # 1. Feedback Detector (uses higher rank for 4-class classification)
+    print(f"\n📊 Feedback Detector: rank={feedback_lora_rank}, alpha={feedback_lora_alpha}, epochs={feedback_epochs}")
     results['feedback'] = train_model(
         "Feedback Detector",
         "src/training/modernbert_dissat_pipeline/train_feedback_detector.py",
         [
             "--model_name", "llm-semantic-router/mmbert-32k-yarn",
             "--output_dir", f"{models_dir}/feedback-detector",
-            "--epochs", epochs,
+            "--epochs", feedback_epochs,
             "--batch_size", batch_size,
-            "--lr", lr,
+            "--lr", feedback_lr,
             "--use_lora",
-            "--lora_rank", lora_rank,
-            "--lora_alpha", lora_alpha,
+            "--lora_rank", feedback_lora_rank,
+            "--lora_alpha", feedback_lora_alpha,
             "--merge_lora",
         ]
     )
@@ -259,6 +274,10 @@ docker run --rm \
     -e LORA_ALPHA="${LORA_ALPHA}" \
     -e MAX_SAMPLES="${MAX_SAMPLES}" \
     -e MODELS_DIR="${MODELS_DIR}" \
+    -e FEEDBACK_EPOCHS="${FEEDBACK_EPOCHS}" \
+    -e FEEDBACK_LR="${FEEDBACK_LR}" \
+    -e FEEDBACK_LORA_RANK="${FEEDBACK_LORA_RANK}" \
+    -e FEEDBACK_LORA_ALPHA="${FEEDBACK_LORA_ALPHA}" \
     -e HF_HOME="/root/.cache/huggingface" \
     -e TRANSFORMERS_CACHE="/root/.cache/huggingface/hub" \
     "${DOCKER_IMAGE}" \
