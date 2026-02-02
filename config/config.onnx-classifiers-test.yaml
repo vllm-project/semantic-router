@@ -1,0 +1,120 @@
+# Test configuration for onnx-binding with classifiers
+# Uses ONNX models for both embeddings and classification
+
+# Model-On-Demand Registry - maps local paths to HuggingFace repos
+# The ONNX models are stored in the onnx/ subdirectory of the merged model repos
+mom_registry:
+  # ONNX classifier models (already downloaded locally)
+  "models/mmbert32k-intent-classifier-merged-onnx": "llm-semantic-router/mmbert32k-intent-classifier-merged"
+  "models/mmbert32k-jailbreak-detector-merged-onnx": "llm-semantic-router/mmbert32k-jailbreak-detector-merged"
+  "models/mmbert32k-pii-detector-merged-onnx": "llm-semantic-router/mmbert32k-pii-detector-merged"
+
+# Response API Configuration
+response_api:
+  enabled: true
+  store_backend: "memory"
+  ttl_seconds: 86400
+  max_responses: 1000
+
+# Router Replay Configuration
+router_replay:
+  store_backend: "memory"
+  ttl_seconds: 2592000
+  async_writes: true
+
+# Semantic Cache Configuration - uses mmBERT embeddings
+semantic_cache:
+  enabled: true
+  backend_type: "memory"
+  similarity_threshold: 0.85
+  max_entries: 1000
+  ttl_seconds: 3600
+  eviction_policy: "fifo"
+  embedding_model: "mmbert"
+
+# Embedding Models Configuration - mmBERT 32K via ONNX Runtime
+embedding_models:
+  use_cpu: true
+  # mmBERT 32K YaRN model path (local ONNX)
+  mmbert_model_path: "onnx-binding/mmbert-32k-yarn-onnx"
+
+# Tools Configuration - uses embeddings for semantic matching
+tools:
+  enabled: true
+  tools_db_path: "config/tools_db.json"
+  model_type: "mmbert"
+  target_dim: 0
+  similarity_threshold: 0.7
+
+# Classification Models Configuration - ONNX Runtime via mmBERT-32K
+# Enable classifiers with mmBERT-32K (uses onnx-binding)
+prompt_guard:
+  enabled: true
+  use_mmbert_32k: true  # Enable mmBERT-32K for jailbreak detection
+  model_id: "models/mmbert32k-jailbreak-detector-merged-onnx"
+  jailbreak_mapping_path: "models/mmbert32k-jailbreak-detector-merged-onnx/jailbreak_mapping.json"
+  use_cpu: true
+  threshold: 0.5
+
+classifier:
+  category_model:
+    enabled: true
+    use_mmbert_32k: true  # Enable mmBERT-32K for intent classification
+    model_id: "models/mmbert32k-intent-classifier-merged-onnx"
+    category_mapping_path: "models/mmbert32k-intent-classifier-merged-onnx/category_mapping.json"
+    use_cpu: true
+    threshold: 0.5
+  pii_model:
+    enabled: true
+    use_mmbert_32k: true  # Enable mmBERT-32K for PII detection
+    model_id: "models/mmbert32k-pii-detector-merged-onnx"
+    pii_mapping_path: "models/mmbert32k-pii-detector-merged-onnx/pii_mapping.json"
+    use_cpu: true
+    threshold: 0.5
+
+feedback_detector:
+  enabled: false
+
+hallucination_mitigation:
+  enabled: false
+
+# vLLM Endpoints Configuration
+vllm_endpoints:
+  - name: "ollama"
+    address: "127.0.0.1"
+    port: 11434
+    weight: 1
+
+model_config:
+  "qwen2.5:3b":
+    reasoning_family: "qwen3"
+    preferred_endpoints: ["ollama"]
+
+# Categories for testing
+categories:
+  - name: general
+    description: "General queries"
+  - name: technical
+    description: "Technical questions"
+  - name: biology
+    description: "Biology questions"
+  - name: math
+    description: "Math questions"
+  - name: physics
+    description: "Physics questions"
+  - name: computer_science
+    description: "Computer science questions"
+
+decisions:
+  - name: "default"
+    description: "Default routing"
+    priority: 100
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "general"
+    modelRefs:
+      - model: "qwen2.5:3b"
+        use_reasoning: false
+        weight: 100
