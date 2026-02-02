@@ -218,18 +218,27 @@ clean-mmbert: ## Remove downloaded mmBERT models
 ##@ mmBERT-32K Training
 
 # Training configuration (optimized for mmBERT-32K LoRA fine-tuning)
-# Hyperparameters validated on 2026-02-01:
+# Hyperparameters validated on 2026-02-02:
 #   - Intent Classifier: 92% accuracy (MMLU-Pro + supplement data)
 #   - Jailbreak Detector: 97.7% training accuracy (toxic-chat + salad-data)
 #   - PII Detector: 97.2% training accuracy (AI4Privacy + Presidio combined dataset)
+#   - Feedback Detector: 98.8% accuracy (4-class, requires higher rank)
 TRAIN_EPOCHS ?= 5
 TRAIN_BATCH_SIZE ?= 16
-TRAIN_LR ?= 2e-4
+TRAIN_LR ?= 2e-5
 LORA_RANK ?= 32
 LORA_ALPHA ?= 64
 LORA_DROPOUT ?= 0.1
 MAX_SAMPLES ?= 5000
-WEIGHT_DECAY ?= 0.1
+WEIGHT_DECAY ?= 0.01
+
+# Feedback Detector specific parameters (4-class requires higher capacity)
+# Validated 2026-02-02: 98.83% accuracy, F1 macro 98.24%
+# Higher rank needed to distinguish SAT/NEED_CLARIFICATION/WRONG_ANSWER/WANT_DIFFERENT
+FEEDBACK_EPOCHS ?= 10
+FEEDBACK_LR ?= 2e-5
+FEEDBACK_LORA_RANK ?= 64
+FEEDBACK_LORA_ALPHA ?= 128
 
 # PII-specific training parameters (AI4Privacy + Presidio combined for best accuracy)
 # AI4Privacy provides 400K diverse multilingual PII samples
@@ -268,18 +277,21 @@ train-mmbert32k-all: ## Train all mmBERT-32K models (LoRA + Merged)
 
 train-mmbert32k-feedback: ## Train Feedback Detector (4-class satisfaction)
 	@echo "📊 Training Feedback Detector with mmBERT-32K..."
+	@echo "   LoRA rank: $(FEEDBACK_LORA_RANK), alpha: $(FEEDBACK_LORA_ALPHA)"
+	@echo "   Epochs: $(FEEDBACK_EPOCHS), LR: $(FEEDBACK_LR)"
+	@echo "   (Higher rank needed for 4-class classification)"
 	@mkdir -p $(MMBERT32K_MODELS_DIR)
 	python $(TRAINING_DIR)/modernbert_dissat_pipeline/train_feedback_detector.py \
 		--model_name llm-semantic-router/mmbert-32k-yarn \
 		--output_dir $(MMBERT32K_MODELS_DIR)/feedback-detector \
-		--epochs $(TRAIN_EPOCHS) \
+		--epochs $(FEEDBACK_EPOCHS) \
 		--batch_size $(TRAIN_BATCH_SIZE) \
-		--lr $(TRAIN_LR) \
+		--lr $(FEEDBACK_LR) \
 		--use_lora \
-		--lora_rank $(LORA_RANK) \
-		--lora_alpha $(LORA_ALPHA) \
+		--lora_rank $(FEEDBACK_LORA_RANK) \
+		--lora_alpha $(FEEDBACK_LORA_ALPHA) \
 		--merge_lora
-	@echo "✅ Feedback Detector training complete"
+	@echo "✅ Feedback Detector training complete (98.8% accuracy expected)"
 	@echo "   LoRA: $(MMBERT32K_MODELS_DIR)/feedback-detector_lora"
 	@echo "   Merged: $(MMBERT32K_MODELS_DIR)/feedback-detector_merged"
 
