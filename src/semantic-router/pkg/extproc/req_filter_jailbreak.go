@@ -70,6 +70,11 @@ func (r *OpenAIRouter) performJailbreaks(ctx *RequestContext, userContent string
 				}
 			}
 
+			// Track jailbreak detection in context for replay recording
+			ctx.JailbreakDetected = true
+			ctx.JailbreakType = jailbreakType
+			ctx.JailbreakConfidence = confidence
+
 			// Keep legacy attributes for backward compatibility
 			tracing.SetSpanAttributes(span,
 				attribute.Bool(tracing.AttrJailbreakDetected, true),

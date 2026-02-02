@@ -103,6 +103,12 @@ func (r *Recorder) AttachResponse(id string, responseBody []byte) error {
 	return r.storage.AttachResponse(ctx, id, body, truncated)
 }
 
+// UpdateHallucinationStatus updates hallucination detection results for a record.
+func (r *Recorder) UpdateHallucinationStatus(id string, detected bool, confidence float32, spans []string) error {
+	ctx := context.Background()
+	return r.storage.UpdateHallucinationStatus(ctx, id, detected, confidence, spans)
+}
+
 // GetRecord returns a copy of the record with the given ID.
 func (r *Recorder) GetRecord(id string) (RoutingRecord, bool) {
 	ctx := context.Background()
@@ -155,6 +161,10 @@ func LogFields(r RoutingRecord, event string) map[string]interface{} {
 			"fact_check":    r.Signals.FactCheck,
 			"user_feedback": r.Signals.UserFeedback,
 			"preference":    r.Signals.Preference,
+			"language":      r.Signals.Language,
+			"latency":       r.Signals.Latency,
+			"context":       r.Signals.Context,
+			"complexity":    r.Signals.Complexity,
 		},
 	}
 
@@ -165,6 +175,45 @@ func LogFields(r RoutingRecord, event string) map[string]interface{} {
 	if r.ResponseBody != "" {
 		fields["response_body"] = r.ResponseBody
 		fields["response_body_truncated"] = r.ResponseBodyTruncated
+	}
+
+	// Guardrails
+	if r.GuardrailsEnabled || r.JailbreakEnabled || r.PIIEnabled {
+		fields["guardrails_enabled"] = r.GuardrailsEnabled
+		fields["jailbreak_enabled"] = r.JailbreakEnabled
+		fields["pii_enabled"] = r.PIIEnabled
+
+		// Jailbreak detection results
+		if r.JailbreakDetected {
+			fields["jailbreak_detected"] = r.JailbreakDetected
+			fields["jailbreak_type"] = r.JailbreakType
+			fields["jailbreak_confidence"] = r.JailbreakConfidence
+		}
+
+		// PII detection results
+		if r.PIIDetected {
+			fields["pii_detected"] = r.PIIDetected
+			fields["pii_entities"] = r.PIIEntities
+			fields["pii_blocked"] = r.PIIBlocked
+		}
+	}
+
+	// RAG
+	if r.RAGEnabled {
+		fields["rag_enabled"] = r.RAGEnabled
+		fields["rag_backend"] = r.RAGBackend
+		fields["rag_context_length"] = r.RAGContextLength
+		fields["rag_similarity_score"] = r.RAGSimilarityScore
+	}
+
+	// Hallucination detection
+	if r.HallucinationEnabled {
+		fields["hallucination_enabled"] = r.HallucinationEnabled
+		fields["hallucination_detected"] = r.HallucinationDetected
+		fields["hallucination_confidence"] = r.HallucinationConfidence
+		if len(r.HallucinationSpans) > 0 {
+			fields["hallucination_spans"] = r.HallucinationSpans
+		}
 	}
 
 	return fields

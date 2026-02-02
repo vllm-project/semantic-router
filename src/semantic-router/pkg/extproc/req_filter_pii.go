@@ -27,6 +27,10 @@ func (r *OpenAIRouter) performPIIDetection(ctx *RequestContext, userContent stri
 		return nil
 	}
 
+	// Track PII detection in context for replay recording
+	ctx.PIIDetected = true
+	ctx.PIIEntities = detectedPII
+
 	// Check PII policy
 	return r.checkPIIPolicy(ctx, detectedPII, decisionName)
 }
@@ -121,6 +125,9 @@ func (r *OpenAIRouter) checkPIIPolicy(ctx *RequestContext, detectedPII []string,
 	if allowed {
 		return nil
 	}
+
+	// Track PII blocked in context for replay recording
+	ctx.PIIBlocked = true
 
 	// Decision violates PII policy - return error
 	logging.Warnf("Decision %s violates PII policy, blocking request", decisionName)

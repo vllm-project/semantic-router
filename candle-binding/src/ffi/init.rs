@@ -427,11 +427,28 @@ pub extern "C" fn init_modernbert_jailbreak_classifier(
 // mmBERT (Multilingual ModernBERT) Initialization Functions
 // ============================================================================
 
-// Global static for mmBERT classifier
+// Global static for mmBERT classifier (8K context)
 pub static MMBERT_CLASSIFIER: OnceLock<
     Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>,
 > = OnceLock::new();
 pub static MMBERT_TOKEN_CLASSIFIER: OnceLock<
+    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier>,
+> = OnceLock::new();
+
+// Global statics for mmBERT-32K classifiers (32K context with YaRN RoPE scaling)
+pub static MMBERT_32K_INTENT_CLASSIFIER: OnceLock<
+    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>,
+> = OnceLock::new();
+pub static MMBERT_32K_FACTCHECK_CLASSIFIER: OnceLock<
+    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>,
+> = OnceLock::new();
+pub static MMBERT_32K_JAILBREAK_CLASSIFIER: OnceLock<
+    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>,
+> = OnceLock::new();
+pub static MMBERT_32K_FEEDBACK_CLASSIFIER: OnceLock<
+    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>,
+> = OnceLock::new();
+pub static MMBERT_32K_PII_CLASSIFIER: OnceLock<
     Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier>,
 > = OnceLock::new();
 
@@ -585,6 +602,237 @@ pub extern "C" fn is_mmbert_model(config_path: *const c_char) -> bool {
 
     match ModernBertVariant::detect_from_config(config_path) {
         Ok(variant) => variant == ModernBertVariant::Multilingual,
+        Err(_) => false,
+    }
+}
+
+// ============================================================================
+// mmBERT-32K (YaRN RoPE scaling) FFI functions
+// These support 32K context length with multilingual capabilities
+// Reference: https://huggingface.co/llm-semantic-router/mmbert-32k-yarn
+// ============================================================================
+
+/// Initialize mmBERT-32K intent classifier
+///
+/// Model classifies text into MMLU-Pro academic categories for request routing.
+///
+/// # Safety
+/// - `model_id` must be a valid null-terminated C string
+#[no_mangle]
+pub extern "C" fn init_mmbert_32k_intent_classifier(
+    model_id: *const c_char,
+    use_cpu: bool,
+) -> bool {
+    use crate::model_architectures::traditional::modernbert::ModernBertVariant;
+
+    let model_id = unsafe {
+        match CStr::from_ptr(model_id).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
+
+    eprintln!(
+        "🎯 Initializing mmBERT-32K intent classifier from: {}",
+        model_id
+    );
+
+    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant(
+        model_id,
+        use_cpu,
+        ModernBertVariant::Multilingual32K,
+    ) {
+        Ok(model) => {
+            eprintln!("   ✓ mmBERT-32K intent classifier loaded (32K context, YaRN RoPE)");
+            MMBERT_32K_INTENT_CLASSIFIER.set(Arc::new(model)).is_ok()
+        }
+        Err(e) => {
+            eprintln!("   ✗ Failed to initialize mmBERT-32K intent classifier: {}", e);
+            false
+        }
+    }
+}
+
+/// Initialize mmBERT-32K fact-check classifier
+///
+/// Model classifies if text needs fact-checking.
+/// Outputs: 0=NO_FACT_CHECK_NEEDED, 1=FACT_CHECK_NEEDED
+///
+/// # Safety
+/// - `model_id` must be a valid null-terminated C string
+#[no_mangle]
+pub extern "C" fn init_mmbert_32k_factcheck_classifier(
+    model_id: *const c_char,
+    use_cpu: bool,
+) -> bool {
+    use crate::model_architectures::traditional::modernbert::ModernBertVariant;
+
+    let model_id = unsafe {
+        match CStr::from_ptr(model_id).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
+
+    eprintln!(
+        "✓ Initializing mmBERT-32K fact-check classifier from: {}",
+        model_id
+    );
+
+    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant(
+        model_id,
+        use_cpu,
+        ModernBertVariant::Multilingual32K,
+    ) {
+        Ok(model) => {
+            eprintln!("   ✓ mmBERT-32K fact-check classifier loaded");
+            MMBERT_32K_FACTCHECK_CLASSIFIER.set(Arc::new(model)).is_ok()
+        }
+        Err(e) => {
+            eprintln!("   ✗ Failed to initialize mmBERT-32K fact-check classifier: {}", e);
+            false
+        }
+    }
+}
+
+/// Initialize mmBERT-32K jailbreak detector
+///
+/// Model detects prompt injection/jailbreak attempts.
+/// Outputs: 0=benign, 1=jailbreak
+///
+/// # Safety
+/// - `model_id` must be a valid null-terminated C string
+#[no_mangle]
+pub extern "C" fn init_mmbert_32k_jailbreak_classifier(
+    model_id: *const c_char,
+    use_cpu: bool,
+) -> bool {
+    use crate::model_architectures::traditional::modernbert::ModernBertVariant;
+
+    let model_id = unsafe {
+        match CStr::from_ptr(model_id).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
+
+    eprintln!(
+        "🛡️  Initializing mmBERT-32K jailbreak detector from: {}",
+        model_id
+    );
+
+    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant(
+        model_id,
+        use_cpu,
+        ModernBertVariant::Multilingual32K,
+    ) {
+        Ok(model) => {
+            eprintln!("   ✓ mmBERT-32K jailbreak detector loaded");
+            MMBERT_32K_JAILBREAK_CLASSIFIER.set(Arc::new(model)).is_ok()
+        }
+        Err(e) => {
+            eprintln!("   ✗ Failed to initialize mmBERT-32K jailbreak detector: {}", e);
+            false
+        }
+    }
+}
+
+/// Initialize mmBERT-32K feedback detector
+///
+/// Model detects user satisfaction from follow-up messages.
+/// Outputs: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT
+///
+/// # Safety
+/// - `model_id` must be a valid null-terminated C string
+#[no_mangle]
+pub extern "C" fn init_mmbert_32k_feedback_classifier(
+    model_id: *const c_char,
+    use_cpu: bool,
+) -> bool {
+    use crate::model_architectures::traditional::modernbert::ModernBertVariant;
+
+    let model_id = unsafe {
+        match CStr::from_ptr(model_id).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
+
+    eprintln!(
+        "📊 Initializing mmBERT-32K feedback detector from: {}",
+        model_id
+    );
+
+    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant(
+        model_id,
+        use_cpu,
+        ModernBertVariant::Multilingual32K,
+    ) {
+        Ok(model) => {
+            eprintln!("   ✓ mmBERT-32K feedback detector loaded");
+            MMBERT_32K_FEEDBACK_CLASSIFIER.set(Arc::new(model)).is_ok()
+        }
+        Err(e) => {
+            eprintln!("   ✗ Failed to initialize mmBERT-32K feedback detector: {}", e);
+            false
+        }
+    }
+}
+
+/// Initialize mmBERT-32K PII detector (token classification)
+///
+/// Model detects 17 types of PII entities using BIO tagging.
+///
+/// # Safety
+/// - `model_id` must be a valid null-terminated C string
+#[no_mangle]
+pub extern "C" fn init_mmbert_32k_pii_classifier(model_id: *const c_char, use_cpu: bool) -> bool {
+    use crate::model_architectures::traditional::modernbert::ModernBertVariant;
+
+    let model_id = unsafe {
+        match CStr::from_ptr(model_id).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
+
+    eprintln!("🔒 Initializing mmBERT-32K PII detector from: {}", model_id);
+
+    match crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier::new_with_variant(
+        model_id,
+        use_cpu,
+        ModernBertVariant::Multilingual32K,
+    ) {
+        Ok(classifier) => {
+            eprintln!("   ✓ mmBERT-32K PII detector loaded");
+            MMBERT_32K_PII_CLASSIFIER.set(Arc::new(classifier)).is_ok()
+        }
+        Err(e) => {
+            eprintln!("   ✗ Failed to initialize mmBERT-32K PII detector: {}", e);
+            false
+        }
+    }
+}
+
+/// Check if a model is mmBERT-32K (YaRN scaled) based on config.json
+///
+/// Returns true if the model has max_position_embeddings >= 16384 or rope_theta >= 100000
+///
+/// # Safety
+/// - `config_path` must be a valid null-terminated C string pointing to config.json
+#[no_mangle]
+pub extern "C" fn is_mmbert_32k_model(config_path: *const c_char) -> bool {
+    use crate::model_architectures::traditional::modernbert::ModernBertVariant;
+
+    let config_path = unsafe {
+        match CStr::from_ptr(config_path).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
+
+    match ModernBertVariant::detect_from_config(config_path) {
+        Ok(variant) => variant == ModernBertVariant::Multilingual32K,
         Err(_) => false,
     }
 }
