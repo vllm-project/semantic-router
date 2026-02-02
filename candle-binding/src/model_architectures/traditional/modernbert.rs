@@ -35,6 +35,10 @@ pub enum ModernBertVariant {
     /// mmBERT - Multilingual ModernBERT (1800+ languages, 256k vocab, 8192 max length)
     /// Reference: https://huggingface.co/jhu-clsp/mmBERT-base
     Multilingual,
+    /// mmBERT-32K - YaRN-scaled Multilingual ModernBERT (32768 max length)
+    /// Extended from 8K to 32K using YaRN RoPE scaling (theta=160000)
+    /// Reference: https://huggingface.co/llm-semantic-router/mmbert-32k-yarn
+    Multilingual32K,
 }
 
 impl ModernBertVariant {
@@ -43,6 +47,7 @@ impl ModernBertVariant {
         match self {
             ModernBertVariant::Standard => 512,
             ModernBertVariant::Multilingual => 8192,
+            ModernBertVariant::Multilingual32K => 32768,
         }
     }
 
@@ -52,7 +57,7 @@ impl ModernBertVariant {
             ModernBertVariant::Standard => {
                 crate::core::tokenization::TokenizationStrategy::ModernBERT
             }
-            ModernBertVariant::Multilingual => {
+            ModernBertVariant::Multilingual | ModernBertVariant::Multilingual32K => {
                 crate::core::tokenization::TokenizationStrategy::MmBERT
             }
         }
@@ -62,11 +67,31 @@ impl ModernBertVariant {
     pub fn pad_token(&self) -> &'static str {
         match self {
             ModernBertVariant::Standard => "[PAD]",
-            ModernBertVariant::Multilingual => "<pad>",
+            ModernBertVariant::Multilingual | ModernBertVariant::Multilingual32K => "<pad>",
+        }
+    }
+
+    /// Check if this variant uses YaRN RoPE scaling
+    pub fn uses_yarn_scaling(&self) -> bool {
+        matches!(self, ModernBertVariant::Multilingual32K)
+    }
+
+    /// Get the expected RoPE theta for this variant
+    pub fn expected_rope_theta(&self) -> f64 {
+        match self {
+            ModernBertVariant::Standard => 10000.0,
+            ModernBertVariant::Multilingual => 10000.0,
+            ModernBertVariant::Multilingual32K => 160000.0, // YaRN-scaled
         }
     }
 
     /// Detect variant from config.json
+    ///
+    /// Detection logic:
+    /// 1. Standard ModernBERT: vocab_size < 200000 or not using RoPE (sans_pos)
+    /// 2. mmBERT-32K (YaRN): vocab_size >= 200000, sans_pos, max_position_embeddings >= 16384
+    ///    OR global_rope_theta >= 100000 (YaRN-scaled)
+    /// 3. mmBERT (8K): vocab_size >= 200000, sans_pos, max_position_embeddings < 16384
     pub fn detect_from_config(config_path: &str) -> Result<Self, candle_core::Error> {
         let config_str = std::fs::read_to_string(config_path).map_err(|_e| {
             let unified_err = config_errors::file_not_found(config_path);
@@ -88,9 +113,26 @@ impl ModernBertVariant {
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
+        let max_position_embeddings = config_json
+            .get("max_position_embeddings")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(512);
+
+        let global_rope_theta = config_json
+            .get("global_rope_theta")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(10000.0);
+
         // mmBERT has vocab_size >= 200000 and uses sans_pos (RoPE)
         if vocab_size >= 200000 && position_embedding_type == "sans_pos" {
-            Ok(ModernBertVariant::Multilingual)
+            // Check for 32K YaRN-scaled variant:
+            // - max_position_embeddings >= 16384 (extended context)
+            // - OR global_rope_theta >= 100000 (YaRN scaling indicator)
+            if max_position_embeddings >= 16384 || global_rope_theta >= 100000.0 {
+                Ok(ModernBertVariant::Multilingual32K)
+            } else {
+                Ok(ModernBertVariant::Multilingual)
+            }
         } else {
             Ok(ModernBertVariant::Standard)
         }
@@ -133,6 +175,10 @@ pub struct TraditionalModernBertTokenClassifier {
 pub type MmBertClassifier = TraditionalModernBertClassifier;
 /// mmBERT token classifier (alias for TraditionalModernBertTokenClassifier with Multilingual variant)
 pub type MmBertTokenClassifier = TraditionalModernBertTokenClassifier;
+/// mmBERT-32K sequence classifier (alias for TraditionalModernBertClassifier with Multilingual32K variant)
+pub type MmBert32KClassifier = TraditionalModernBertClassifier;
+/// mmBERT-32K token classifier (alias for TraditionalModernBertTokenClassifier with Multilingual32K variant)
+pub type MmBert32KTokenClassifier = TraditionalModernBertTokenClassifier;
 
 // Global static instances using OnceLock pattern for zero-cost reads after initialization
 pub static TRADITIONAL_MODERNBERT_CLASSIFIER: OnceLock<Arc<TraditionalModernBertClassifier>> =
@@ -594,14 +640,37 @@ impl TraditionalModernBertClassifier {
         Self::load_from_directory_with_variant(model_path, use_cpu, ModernBertVariant::Multilingual)
     }
 
-    /// Get the model variant (Standard or Multilingual)
+    /// Load mmBERT-32K (YaRN-scaled multilingual) model from directory
+    /// Convenience method that explicitly loads as Multilingual32K variant
+    /// This variant supports 32K context length with YaRN RoPE scaling (theta=160000)
+    /// Reference: https://huggingface.co/llm-semantic-router/mmbert-32k-yarn
+    pub fn load_mmbert_32k_from_directory(
+        model_path: &str,
+        use_cpu: bool,
+    ) -> Result<Self, candle_core::Error> {
+        Self::load_from_directory_with_variant(
+            model_path,
+            use_cpu,
+            ModernBertVariant::Multilingual32K,
+        )
+    }
+
+    /// Get the model variant (Standard, Multilingual, or Multilingual32K)
     pub fn variant(&self) -> ModernBertVariant {
         self.variant
     }
 
-    /// Check if this is a multilingual (mmBERT) model
+    /// Check if this is a multilingual (mmBERT) model (8K or 32K)
     pub fn is_multilingual(&self) -> bool {
-        self.variant == ModernBertVariant::Multilingual
+        matches!(
+            self.variant,
+            ModernBertVariant::Multilingual | ModernBertVariant::Multilingual32K
+        )
+    }
+
+    /// Check if this is a 32K YaRN-scaled model
+    pub fn is_32k_yarn(&self) -> bool {
+        self.variant == ModernBertVariant::Multilingual32K
     }
 
     /// Classify text using real model inference - REAL IMPLEMENTATION
@@ -736,7 +805,7 @@ impl TraditionalModernBertTokenClassifier {
 
         // Create dual-path compatible tokenizer based on variant
         let tokenizer = match variant {
-            ModernBertVariant::Multilingual => {
+            ModernBertVariant::Multilingual | ModernBertVariant::Multilingual32K => {
                 crate::core::tokenization::create_mmbert_compatibility_tokenizer(
                     base_tokenizer,
                     device.clone(),
@@ -809,14 +878,29 @@ impl TraditionalModernBertTokenClassifier {
         Self::new_with_variant(model_id, use_cpu, ModernBertVariant::Multilingual)
     }
 
-    /// Get the model variant
+    /// Create mmBERT-32K (YaRN-scaled multilingual) token classifier
+    /// This variant supports 32K context length with YaRN RoPE scaling (theta=160000)
+    /// Reference: https://huggingface.co/llm-semantic-router/mmbert-32k-yarn
+    pub fn new_mmbert_32k(model_id: &str, use_cpu: bool) -> Result<Self> {
+        Self::new_with_variant(model_id, use_cpu, ModernBertVariant::Multilingual32K)
+    }
+
+    /// Get the model variant (Standard, Multilingual, or Multilingual32K)
     pub fn variant(&self) -> ModernBertVariant {
         self.variant
     }
 
-    /// Check if this is a multilingual (mmBERT) model
+    /// Check if this is a multilingual (mmBERT) model (8K or 32K)
     pub fn is_multilingual(&self) -> bool {
-        self.variant == ModernBertVariant::Multilingual
+        matches!(
+            self.variant,
+            ModernBertVariant::Multilingual | ModernBertVariant::Multilingual32K
+        )
+    }
+
+    /// Check if this is a 32K YaRN-scaled model
+    pub fn is_32k_yarn(&self) -> bool {
+        self.variant == ModernBertVariant::Multilingual32K
     }
 
     /// Classify tokens in text
@@ -936,8 +1020,9 @@ impl TraditionalModernBertTokenClassifier {
             .zip(tokenization_result.offsets.iter())
             .enumerate()
         {
-            // Skip special tokens (they have offset (0,0))
-            if offset.0 == 0 && offset.1 == 0 && i > 0 {
+            // Skip special tokens (BOS, EOS, PAD, etc. have offset (0,0))
+            // Note: All special tokens have zero-length offsets, including BOS at index 0
+            if offset.0 == 0 && offset.1 == 0 {
                 continue;
             }
 

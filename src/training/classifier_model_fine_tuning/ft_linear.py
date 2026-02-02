@@ -111,6 +111,7 @@ MODEL_CONFIGS = {
     "deberta-v3-large": "microsoft/deberta-v3-large",
     "modernbert-base": "answerdotai/ModernBERT-base",
     "modernbert-large": "answerdotai/ModernBERT-large",
+    "mmbert-32k": "llm-semantic-router/mmbert-32k-yarn",  # 32K context YaRN scaled
     "minilm": "sentence-transformers/all-MiniLM-L12-v2",  # Default fallback
     "distilbert": "distilbert-base-uncased",
     "electra-base": "google/electra-base-discriminator",

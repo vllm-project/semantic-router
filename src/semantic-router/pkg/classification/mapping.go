@@ -112,6 +112,14 @@ func (pm *PIIMapping) TranslatePIIType(rawType string) string {
 		}
 	}
 
+	// Check if it's in LABEL_X format (from Rust binding)
+	if len(rawType) > 6 && rawType[:6] == "LABEL_" {
+		indexStr := rawType[6:]
+		if label, ok := pm.IdxToLabel[indexStr]; ok {
+			return label
+		}
+	}
+
 	// Strip BIO prefix if present (B-PERSON → PERSON, I-DATE_TIME → DATE_TIME)
 	if len(rawType) > 2 && rawType[1] == '-' {
 		prefix := rawType[0]

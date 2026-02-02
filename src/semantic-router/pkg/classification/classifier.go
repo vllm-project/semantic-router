@@ -45,9 +45,30 @@ func (c *CategoryInitializerImpl) Init(modelID string, useCPU bool, numClasses .
 	return nil
 }
 
+// MmBERT32KCategoryInitializerImpl uses mmBERT-32K (YaRN RoPE, 32K context) for intent classification
+type MmBERT32KCategoryInitializerImpl struct {
+	usedMmBERT32K bool
+}
+
+func (c *MmBERT32KCategoryInitializerImpl) Init(modelID string, useCPU bool, numClasses ...int) error {
+	logging.Infof("Initializing mmBERT-32K intent classifier from: %s", modelID)
+	err := candle_binding.InitMmBert32KIntentClassifier(modelID, useCPU)
+	if err != nil {
+		return fmt.Errorf("failed to initialize mmBERT-32K intent classifier: %w", err)
+	}
+	c.usedMmBERT32K = true
+	logging.Infof("Initialized mmBERT-32K intent classifier (32K context, YaRN RoPE)")
+	return nil
+}
+
 // createCategoryInitializer creates the category initializer (auto-detecting)
 func createCategoryInitializer() CategoryInitializer {
 	return &CategoryInitializerImpl{}
+}
+
+// createMmBERT32KCategoryInitializer creates an mmBERT-32K category initializer
+func createMmBERT32KCategoryInitializer() CategoryInitializer {
+	return &MmBERT32KCategoryInitializerImpl{}
 }
 
 type CategoryInference interface {
@@ -76,6 +97,30 @@ func (c *CategoryInferenceImpl) ClassifyWithProbabilities(text string) (candle_b
 // createCategoryInference creates the category inference (auto-detecting)
 func createCategoryInference() CategoryInference {
 	return &CategoryInferenceImpl{}
+}
+
+// MmBERT32KCategoryInferenceImpl uses mmBERT-32K for intent classification
+type MmBERT32KCategoryInferenceImpl struct{}
+
+func (c *MmBERT32KCategoryInferenceImpl) Classify(text string) (candle_binding.ClassResult, error) {
+	return candle_binding.ClassifyMmBert32KIntent(text)
+}
+
+func (c *MmBERT32KCategoryInferenceImpl) ClassifyWithProbabilities(text string) (candle_binding.ClassResultWithProbs, error) {
+	// mmBERT-32K doesn't have WithProbabilities yet, use basic classification
+	result, err := candle_binding.ClassifyMmBert32KIntent(text)
+	if err != nil {
+		return candle_binding.ClassResultWithProbs{}, err
+	}
+	return candle_binding.ClassResultWithProbs{
+		Class:      result.Class,
+		Confidence: result.Confidence,
+	}, nil
+}
+
+// createMmBERT32KCategoryInference creates mmBERT-32K category inference
+func createMmBERT32KCategoryInference() CategoryInference {
+	return &MmBERT32KCategoryInferenceImpl{}
 }
 
 type JailbreakInitializer interface {
@@ -114,6 +159,27 @@ func createJailbreakInitializer() JailbreakInitializer {
 	return &JailbreakInitializerImpl{}
 }
 
+// MmBERT32KJailbreakInitializerImpl uses mmBERT-32K (YaRN RoPE, 32K context) for jailbreak detection
+type MmBERT32KJailbreakInitializerImpl struct {
+	usedMmBERT32K bool
+}
+
+func (c *MmBERT32KJailbreakInitializerImpl) Init(modelID string, useCPU bool, numClasses ...int) error {
+	logging.Infof("Initializing mmBERT-32K jailbreak detector from: %s", modelID)
+	err := candle_binding.InitMmBert32KJailbreakClassifier(modelID, useCPU)
+	if err != nil {
+		return fmt.Errorf("failed to initialize mmBERT-32K jailbreak detector: %w", err)
+	}
+	c.usedMmBERT32K = true
+	logging.Infof("Initialized mmBERT-32K jailbreak detector (32K context, YaRN RoPE)")
+	return nil
+}
+
+// createMmBERT32KJailbreakInitializer creates an mmBERT-32K jailbreak initializer
+func createMmBERT32KJailbreakInitializer() JailbreakInitializer {
+	return &MmBERT32KJailbreakInitializerImpl{}
+}
+
 type JailbreakInference interface {
 	Classify(text string) (candle_binding.ClassResult, error)
 }
@@ -135,10 +201,29 @@ func createJailbreakInferenceCandle() JailbreakInference {
 	return &JailbreakInferenceImpl{}
 }
 
+// MmBERT32KJailbreakInferenceImpl uses mmBERT-32K for jailbreak detection
+type MmBERT32KJailbreakInferenceImpl struct{}
+
+func (c *MmBERT32KJailbreakInferenceImpl) Classify(text string) (candle_binding.ClassResult, error) {
+	return candle_binding.ClassifyMmBert32KJailbreak(text)
+}
+
+// createMmBERT32KJailbreakInference creates mmBERT-32K jailbreak inference
+func createMmBERT32KJailbreakInference() JailbreakInference {
+	return &MmBERT32KJailbreakInferenceImpl{}
+}
+
 // createJailbreakInference creates the appropriate jailbreak inference based on configuration
-// Checks UseVLLM flag to decide between vLLM or Candle implementation
+// Checks UseMmBERT32K and UseVLLM flags to decide between mmBERT-32K, vLLM, or Candle implementation
+// When UseMmBERT32K is true, uses mmBERT-32K (32K context, YaRN RoPE, multilingual)
 // When UseVLLM is true, it will try to find external model config with role="guardrail"
 func createJailbreakInference(promptGuardCfg *config.PromptGuardConfig, routerCfg *config.RouterConfig) (JailbreakInference, error) {
+	// Check for mmBERT-32K first (takes precedence)
+	if promptGuardCfg.UseMmBERT32K {
+		logging.Infof("Using mmBERT-32K for jailbreak detection (32K context, YaRN RoPE)")
+		return createMmBERT32KJailbreakInference(), nil
+	}
+
 	if promptGuardCfg.UseVLLM {
 		// Try to find external model configuration with role="guardrail"
 		externalCfg := routerCfg.FindExternalModelByRole(config.ModelRoleGuardrail)
@@ -199,6 +284,27 @@ func createPIIInitializer() PIIInitializer {
 	return &PIIInitializerImpl{}
 }
 
+// MmBERT32KPIIInitializerImpl uses mmBERT-32K (YaRN RoPE, 32K context) for PII detection
+type MmBERT32KPIIInitializerImpl struct {
+	usedMmBERT32K bool
+}
+
+func (c *MmBERT32KPIIInitializerImpl) Init(modelID string, useCPU bool, numClasses int) error {
+	logging.Infof("Initializing mmBERT-32K PII detector from: %s", modelID)
+	err := candle_binding.InitMmBert32KPIIClassifier(modelID, useCPU)
+	if err != nil {
+		return fmt.Errorf("failed to initialize mmBERT-32K PII detector: %w", err)
+	}
+	c.usedMmBERT32K = true
+	logging.Infof("Initialized mmBERT-32K PII detector (32K context, YaRN RoPE)")
+	return nil
+}
+
+// createMmBERT32KPIIInitializer creates an mmBERT-32K PII initializer
+func createMmBERT32KPIIInitializer() PIIInitializer {
+	return &MmBERT32KPIIInitializerImpl{}
+}
+
 type PIIInference interface {
 	ClassifyTokens(text string, configPath string) (candle_binding.TokenClassificationResult, error)
 }
@@ -213,6 +319,22 @@ func (c *PIIInferenceImpl) ClassifyTokens(text string, configPath string) (candl
 // createPIIInference creates the PII inference (auto-detecting)
 func createPIIInference() PIIInference {
 	return &PIIInferenceImpl{}
+}
+
+// MmBERT32KPIIInferenceImpl uses mmBERT-32K for PII token classification
+type MmBERT32KPIIInferenceImpl struct{}
+
+func (c *MmBERT32KPIIInferenceImpl) ClassifyTokens(text string, configPath string) (candle_binding.TokenClassificationResult, error) {
+	entities, err := candle_binding.ClassifyMmBert32KPII(text, configPath)
+	if err != nil {
+		return candle_binding.TokenClassificationResult{}, err
+	}
+	return candle_binding.TokenClassificationResult{Entities: entities}, nil
+}
+
+// createMmBERT32KPIIInference creates mmBERT-32K PII inference
+func createMmBERT32KPIIInference() PIIInference {
+	return &MmBERT32KPIIInferenceImpl{}
 }
 
 // JailbreakDetection represents the result of jailbreak analysis for a piece of content
@@ -458,12 +580,28 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 	// Create jailbreak initializer (only needed for Candle, nil for vLLM)
 	var jailbreakInitializer JailbreakInitializer
 	if !cfg.PromptGuard.UseVLLM {
-		jailbreakInitializer = createJailbreakInitializer()
+		if cfg.PromptGuard.UseMmBERT32K {
+			jailbreakInitializer = createMmBERT32KJailbreakInitializer()
+		} else {
+			jailbreakInitializer = createJailbreakInitializer()
+		}
+	}
+
+	// Create PII initializer and inference based on config
+	var piiInitializer PIIInitializer
+	var piiInference PIIInference
+	if cfg.PIIModel.UseMmBERT32K {
+		logging.Infof("Using mmBERT-32K for PII detection (32K context, YaRN RoPE)")
+		piiInitializer = createMmBERT32KPIIInitializer()
+		piiInference = createMmBERT32KPIIInference()
+	} else {
+		piiInitializer = createPIIInitializer()
+		piiInference = createPIIInference()
 	}
 
 	options := []option{
 		withJailbreak(jailbreakMapping, jailbreakInitializer, jailbreakInference),
-		withPII(piiMapping, createPIIInitializer(), createPIIInference()),
+		withPII(piiMapping, piiInitializer, piiInference),
 	}
 
 	// Add keyword classifier if configured
@@ -513,7 +651,17 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 
 	// Add in-tree classifier if configured
 	if cfg.CategoryModel.ModelID != "" {
-		options = append(options, withCategory(categoryMapping, createCategoryInitializer(), createCategoryInference()))
+		var categoryInitializer CategoryInitializer
+		var categoryInference CategoryInference
+		if cfg.CategoryModel.UseMmBERT32K {
+			logging.Infof("Using mmBERT-32K for intent/category classification (32K context, YaRN RoPE)")
+			categoryInitializer = createMmBERT32KCategoryInitializer()
+			categoryInference = createMmBERT32KCategoryInference()
+		} else {
+			categoryInitializer = createCategoryInitializer()
+			categoryInference = createCategoryInference()
+		}
+		options = append(options, withCategory(categoryMapping, categoryInitializer, categoryInference))
 	}
 
 	// Add MCP classifier if configured

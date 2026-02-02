@@ -19,6 +19,7 @@ interface Signal {
   language?: string[]
   latency?: string[]
   context?: string[]
+  complexity?: string[]
 }
 
 interface ReplayRecord {
@@ -40,6 +41,33 @@ interface ReplayRecord {
   streaming?: boolean
   request_body_truncated?: boolean
   response_body_truncated?: boolean
+
+  // Guardrails
+  guardrails_enabled?: boolean
+  jailbreak_enabled?: boolean
+  pii_enabled?: boolean
+
+  // Jailbreak Detection Results
+  jailbreak_detected?: boolean
+  jailbreak_type?: string
+  jailbreak_confidence?: number
+
+  // PII Detection Results
+  pii_detected?: boolean
+  pii_entities?: string[]
+  pii_blocked?: boolean
+
+  // RAG
+  rag_enabled?: boolean
+  rag_backend?: string
+  rag_context_length?: number
+  rag_similarity_score?: number
+
+  // Hallucination Detection
+  hallucination_enabled?: boolean
+  hallucination_detected?: boolean
+  hallucination_confidence?: number
+  hallucination_spans?: string[]
 }
 
 interface ReplayListResponse {
@@ -398,6 +426,32 @@ const ReplayPage: React.FC = () => {
       })
     }
 
+    if (record.signals?.complexity?.length) {
+      signalFields.push({
+        label: 'Complexity signals',
+        value: (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            {record.signals.complexity.map((cplx, i) => (
+              <span key={i} style={{
+                padding: '0.25rem 0.75rem',
+                background: cplx.includes(':hard') 
+                  ? 'rgba(239, 68, 68, 0.15)' 
+                  : cplx.includes(':easy') 
+                    ? 'rgba(34, 197, 94, 0.15)' 
+                    : 'rgba(245, 158, 11, 0.15)',
+                borderRadius: '4px',
+                fontSize: '0.875rem',
+                fontWeight: 500
+              }}>
+                {cplx}
+              </span>
+            ))}
+          </div>
+        ),
+        fullWidth: true
+      })
+    }
+
     if (signalFields.length > 0) {
       sections.push({
         title: 'Signals',
@@ -406,32 +460,171 @@ const ReplayPage: React.FC = () => {
     }
 
     // 4. Plugin Status
-    sections.push({
-      title: 'Plugin Status',
-      fields: [
-        {
-          label: 'Cache',
-          value: record.from_cache ? 'Hit' : 'Miss'
-        },
-        {
-          label: 'Streaming',
-          value: record.streaming ? 'On' : 'Off'
-        },
-        {
-          label: 'Response status code',
-          value: record.response_status ? (
-            <span style={{
+    const pluginFields: ViewField[] = [
+      {
+        label: 'Cache',
+        value: record.from_cache ? 'Hit' : 'Miss'
+      },
+      {
+        label: 'Streaming',
+        value: record.streaming ? 'On' : 'Off'
+      }
+    ]
+
+    // Add Guardrails status with detection results
+    if (record.guardrails_enabled || record.jailbreak_enabled || record.pii_enabled) {
+      // Check if anything was actually detected
+      const hasDetection = record.jailbreak_detected || record.pii_detected
+      
+      if (hasDetection) {
+        // Show detection results with warning/danger colors
+        const detectionDetails: React.ReactNode[] = []
+        
+        if (record.jailbreak_detected) {
+          detectionDetails.push(
+            <span key="jailbreak" style={{
               padding: '0.25rem 0.75rem',
-              background: record.response_status < 400 ? 'rgba(118, 185, 0, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+              background: 'rgba(255, 59, 48, 0.2)',
+              color: '#ff6b6b',
               borderRadius: '4px',
               fontSize: '0.875rem',
-              fontWeight: 600
+              marginRight: '0.5rem'
             }}>
-              {record.response_status}
+              🚫 Jailbreak: {record.jailbreak_type || 'detected'} ({((record.jailbreak_confidence || 0) * 100).toFixed(1)}%)
             </span>
-          ) : '-'
+          )
         }
-      ]
+        
+        if (record.pii_detected) {
+          const piiLabel = record.pii_blocked ? '🛑 PII Blocked' : '⚠️ PII Found'
+          detectionDetails.push(
+            <span key="pii" style={{
+              padding: '0.25rem 0.75rem',
+              background: record.pii_blocked ? 'rgba(255, 59, 48, 0.2)' : 'rgba(255, 159, 10, 0.2)',
+              color: record.pii_blocked ? '#ff6b6b' : '#ffcc00',
+              borderRadius: '4px',
+              fontSize: '0.875rem'
+            }}>
+              {piiLabel}: {record.pii_entities?.join(', ') || 'detected'}
+            </span>
+          )
+        }
+        
+        pluginFields.push({
+          label: 'Guardrails',
+          value: <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>{detectionDetails}</div>
+        })
+      } else {
+        // Just enabled, nothing detected
+        const guardrailDetails: string[] = []
+        if (record.jailbreak_enabled) guardrailDetails.push('Jailbreak')
+        if (record.pii_enabled) guardrailDetails.push('PII')
+        
+        pluginFields.push({
+          label: 'Guardrails',
+          value: (
+            <span style={{
+              padding: '0.25rem 0.75rem',
+              background: 'rgba(118, 185, 0, 0.15)',
+              borderRadius: '4px',
+              fontSize: '0.875rem'
+            }}>
+              ✓ Clean ({guardrailDetails.join(', ')} checked)
+            </span>
+          )
+        })
+      }
+    } else {
+      pluginFields.push({
+        label: 'Guardrails',
+        value: 'Disabled'
+      })
+    }
+
+    // Add RAG status
+    if (record.rag_enabled) {
+      pluginFields.push({
+        label: 'RAG',
+        value: (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+            <span style={{
+              padding: '0.25rem 0.75rem',
+              background: 'rgba(0, 212, 255, 0.15)',
+              borderRadius: '4px',
+              fontSize: '0.875rem'
+            }}>
+              Context Retrieved
+            </span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
+              Backend: {record.rag_backend || 'unknown'} | 
+              Length: {record.rag_context_length || 0} chars |
+              Score: {record.rag_similarity_score?.toFixed(3) || '-'}
+            </span>
+          </div>
+        )
+      })
+    } else {
+      pluginFields.push({
+        label: 'RAG',
+        value: 'Not used'
+      })
+    }
+
+    // Add Hallucination Detection status
+    if (record.hallucination_enabled) {
+      const hallucinationContent = record.hallucination_detected ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <span style={{
+            padding: '0.25rem 0.75rem',
+            background: 'rgba(239, 68, 68, 0.15)',
+            color: 'var(--color-danger)',
+            borderRadius: '4px',
+            fontSize: '0.875rem',
+            fontWeight: 600
+          }}>
+            Detected (confidence: {((record.hallucination_confidence || 0) * 100).toFixed(1)}%)
+          </span>
+          {record.hallucination_spans && record.hallucination_spans.length > 0 && (
+            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
+              <strong>Unsupported spans:</strong>
+              <ul style={{ margin: '0.25rem 0 0 1rem', padding: 0 }}>
+                {record.hallucination_spans.slice(0, 5).map((span, i) => (
+                  <li key={i} style={{ marginBottom: '0.125rem' }}>
+                    {span.length > 100 ? span.substring(0, 100) + '...' : span}
+                  </li>
+                ))}
+                {record.hallucination_spans.length > 5 && (
+                  <li>...and {record.hallucination_spans.length - 5} more</li>
+                )}
+              </ul>
+            </div>
+          )}
+        </div>
+      ) : (
+        <span style={{
+          padding: '0.25rem 0.75rem',
+          background: 'rgba(118, 185, 0, 0.15)',
+          borderRadius: '4px',
+          fontSize: '0.875rem'
+        }}>
+          Not detected
+        </span>
+      )
+
+      pluginFields.push({
+        label: 'Hallucination Detection',
+        value: hallucinationContent
+      })
+    } else {
+      pluginFields.push({
+        label: 'Hallucination Detection',
+        value: 'Disabled'
+      })
+    }
+
+    sections.push({
+      title: 'Plugin Status',
+      fields: pluginFields
     })
 
     // 5. Request/Response (Collapsible)
@@ -594,6 +787,7 @@ const ReplayPage: React.FC = () => {
     if (signals.language?.length) allSignals.push(...signals.language)
     if (signals.latency?.length) allSignals.push(...signals.latency)
     if (signals.context?.length) allSignals.push(...signals.context)
+    if (signals.complexity?.length) allSignals.push(...signals.complexity)
     return allSignals
   }
 
