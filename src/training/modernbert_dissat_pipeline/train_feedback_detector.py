@@ -319,16 +319,30 @@ def main():
 
     # Training (optimized for 4-class feedback detection, validated 2026-02-02)
     parser.add_argument("--batch_size", type=int, default=16)
-    parser.add_argument("--epochs", type=int, default=10, help="10 epochs recommended for 98%+ accuracy")
-    parser.add_argument("--lr", type=float, default=2e-5, help="Learning rate (2e-5 optimal for feedback)")
+    parser.add_argument(
+        "--epochs", type=int, default=10, help="10 epochs recommended for 98%+ accuracy"
+    )
+    parser.add_argument(
+        "--lr",
+        type=float,
+        default=2e-5,
+        help="Learning rate (2e-5 optimal for feedback)",
+    )
     parser.add_argument("--warmup_ratio", type=float, default=0.1)
     parser.add_argument("--weight_decay", type=float, default=0.01)
     parser.add_argument("--use_class_weights", action="store_true", default=True)
 
     # LoRA
     parser.add_argument("--use_lora", action="store_true", help="Use LoRA training")
-    parser.add_argument("--lora_rank", type=int, default=64, help="LoRA rank (higher for 4-class feedback)")
-    parser.add_argument("--lora_alpha", type=int, default=128, help="LoRA alpha (2x rank recommended)")
+    parser.add_argument(
+        "--lora_rank",
+        type=int,
+        default=64,
+        help="LoRA rank (higher for 4-class feedback)",
+    )
+    parser.add_argument(
+        "--lora_alpha", type=int, default=128, help="LoRA alpha (2x rank recommended)"
+    )
     parser.add_argument(
         "--merge_lora", action="store_true", help="Merge LoRA weights after training"
     )
