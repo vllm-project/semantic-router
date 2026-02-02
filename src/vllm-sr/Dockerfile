@@ -10,6 +10,16 @@ RUN cargo build --release --no-default-features && \
     find target -name "*.so" -type f && \
     ls -la target/release/
 
+# Stage 1a: Build Rust ml-binding (for ML model selection: KNN, KMeans, SVM)
+FROM rustlang/rust:nightly AS ml-rust-builder
+WORKDIR /build
+COPY ml-binding/ .
+# Build ml-binding library
+RUN cargo build --release && \
+    echo "Checking ml-binding library:" && \
+    find target -name "*.so" -type f && \
+    ls -la target/release/
+
 # Stage 1b: Build dashboard frontend with Node.js
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
@@ -51,10 +61,18 @@ WORKDIR /build
 # Copy candle-binding library for CGO linking
 COPY --from=rust-builder /build/target/release/libcandle_semantic_router.so /usr/local/lib/
 COPY --from=rust-builder /build/target/release/libcandle_semantic_router.a /usr/local/lib/
+
+# Copy ml-binding library for CGO linking (ML model selection: KNN, KMeans, SVM)
+# Note: ml-binding only produces .so (shared library), not .a (static library)
+COPY --from=ml-rust-builder /build/target/release/libml_semantic_router.so /usr/local/lib/
+
 ENV LD_LIBRARY_PATH=/usr/local/lib
 
 # Copy candle-binding Go files (needed for go.mod replace directive)
 COPY --from=rust-builder /build/go.mod /build/semantic-router.go /build/../candle-binding/
+
+# Copy ml-binding Go files (needed for ML model selection - go.mod replace directive)
+COPY --from=ml-rust-builder /build/go.mod /build/ml_binding.go /build/../ml-binding/
 
 # Copy Go source
 COPY src/semantic-router/ .
@@ -81,6 +99,7 @@ RUN set -eux; \
 # Copy binaries from builders
 COPY --from=go-builder /build/router /usr/local/bin/router
 COPY --from=rust-builder /build/target/release/libcandle_semantic_router.so /usr/local/lib/
+COPY --from=ml-rust-builder /build/target/release/libml_semantic_router.so /usr/local/lib/
 COPY --from=envoy /usr/local/bin/envoy /usr/local/bin/envoy
 COPY --from=dashboard-builder /app/dashboard-backend /usr/local/bin/dashboard-backend
 COPY --from=frontend-builder /app/frontend/dist /app/frontend

@@ -2475,3 +2475,28 @@ func (c *Classifier) evaluateComposerCondition(
 		return false
 	}
 }
+
+// GetQueryEmbedding returns the embedding vector for a query text as float64
+// This is used by model selection algorithms for similarity-based selection
+// Returns float64 for compatibility with numerical operations
+func (c *Classifier) GetQueryEmbedding(text string) []float64 {
+	if text == "" {
+		return nil
+	}
+
+	// Use the candle binding to get the embedding
+	// GetEmbedding returns ([]float32, error) with auto-detected dimension
+	embedding32, err := candle_binding.GetEmbedding(text, 0)
+	if err != nil {
+		logging.Debugf("Failed to get query embedding: %v", err)
+		return nil
+	}
+
+	// Convert float32 to float64 for numerical operations
+	embedding64 := make([]float64, len(embedding32))
+	for i, v := range embedding32 {
+		embedding64[i] = float64(v)
+	}
+
+	return embedding64
+}

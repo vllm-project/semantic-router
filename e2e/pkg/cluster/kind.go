@@ -263,7 +263,15 @@ func (k *KindCluster) createClusterConfig() (string, error) {
 		return "", err
 	}
 
+	// Ensure ML models mount directory exists BEFORE Kind cluster creation
+	// This is required because Kind mounts are set up at cluster creation time
+	mlModelsDir := "/tmp/kind-ml-models"
+	if err := os.MkdirAll(mlModelsDir, 0755); err != nil {
+		k.log("Warning: failed to create ML models directory %s: %v", mlModelsDir, err)
+	}
+
 	// Base config with host mount for storage (always included)
+	// Also mount /tmp/kind-ml-models for ML model selection E2E tests
 	kindConfig := fmt.Sprintf(`kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: %s
@@ -271,7 +279,9 @@ nodes:
   - role: control-plane
     extraMounts:
       - hostPath: %s
-        containerPath: /mnt`, k.Name, hostPath)
+        containerPath: /mnt
+      - hostPath: /tmp/kind-ml-models
+        containerPath: /tmp/ml-models`, k.Name, hostPath)
 
 	// Add GPU mount to worker if GPU is enabled
 	if k.GPUEnabled {
@@ -280,6 +290,8 @@ nodes:
     extraMounts:
       - hostPath: %s
         containerPath: /mnt
+      - hostPath: /tmp/kind-ml-models
+        containerPath: /tmp/ml-models
       - hostPath: /dev/null
         containerPath: /var/run/nvidia-container-devices/all
 `, hostPath)
@@ -289,6 +301,8 @@ nodes:
     extraMounts:
       - hostPath: %s
         containerPath: /mnt
+      - hostPath: /tmp/kind-ml-models
+        containerPath: /tmp/ml-models
 `, hostPath)
 	}
 
