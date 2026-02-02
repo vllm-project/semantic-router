@@ -83,28 +83,31 @@ func (d *FeedbackDetector) Initialize() error {
 		return fmt.Errorf("feedback detector requires ModelID to be configured")
 	}
 
-	logging.Infof("Initializing feedback detector ML model from: %s", d.config.ModelID)
+	logging.Infof("💬 Initializing Feedback Detector:")
+	logging.Infof("Model: %s", d.config.ModelID)
+	logging.Infof("CPU Mode: %v", d.config.UseCPU)
 
 	// Check if mmBERT-32K is configured (takes precedence)
 	if d.config.UseMmBERT32K {
-		logging.Infof("Using mmBERT-32K for feedback detection (32K context, YaRN RoPE)")
+		logging.Infof("Type: mmBERT-32K (32K context, YaRN RoPE)")
 		err := candle.InitMmBert32KFeedbackClassifier(d.config.ModelID, d.config.UseCPU)
 		if err != nil {
 			return fmt.Errorf("failed to initialize mmBERT-32K feedback detector from %s: %w", d.config.ModelID, err)
 		}
 		d.useMmBERT32K = true
 		d.initialized = true
-		logging.Infof("Feedback detector initialized with mmBERT-32K model")
+		logging.Infof("✓ Feedback detector initialized successfully")
 		return nil
 	}
 
+	logging.Infof("Type: ModernBERT (ML-based)")
 	err := candle.InitFeedbackDetector(d.config.ModelID, d.config.UseCPU)
 	if err != nil {
 		return fmt.Errorf("failed to initialize feedback detector ML model from %s: %w", d.config.ModelID, err)
 	}
 
 	d.initialized = true
-	logging.Infof("Feedback detector initialized with ML model")
+	logging.Infof("✓ Feedback detector initialized successfully")
 
 	return nil
 }

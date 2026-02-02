@@ -463,9 +463,12 @@ func initializeLegacyUnifiedClassifier(paths *ModelPaths) (*UnifiedClassifier, e
 			return nil, fmt.Errorf("failed to load jailbreak mapping from %s: %w", securityMappingPath, loadErr2)
 		}
 		// Extract labels from jailbreak mapping (ordered by index)
-		securityLabels = make([]string, len(jailbreakMapping.IdxToLabel))
-		for i := 0; i < len(jailbreakMapping.IdxToLabel); i++ {
-			if label, exists := jailbreakMapping.IdxToLabel[fmt.Sprintf("%d", i)]; exists {
+		// Use GetJailbreakTypeCount() to support both naming conventions
+		numLabels := jailbreakMapping.GetJailbreakTypeCount()
+		securityLabels = make([]string, numLabels)
+		for i := 0; i < numLabels; i++ {
+			// Use GetJailbreakTypeFromIndex() to support both naming conventions
+			if label, exists := jailbreakMapping.GetJailbreakTypeFromIndex(i); exists {
 				securityLabels[i] = label
 			} else {
 				return nil, fmt.Errorf("missing security label for index %d", i)

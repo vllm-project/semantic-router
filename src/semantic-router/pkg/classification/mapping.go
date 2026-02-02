@@ -21,9 +21,13 @@ type PIIMapping struct {
 }
 
 // JailbreakMapping holds the mapping between indices and jailbreak types
+// Supports both naming conventions: label_to_idx/idx_to_label and label_to_id/id_to_label
 type JailbreakMapping struct {
 	LabelToIdx map[string]int    `json:"label_to_idx"`
 	IdxToLabel map[string]string `json:"idx_to_label"`
+	// Alternative naming (for HuggingFace compatibility)
+	LabelToID map[string]int    `json:"label_to_id"`
+	IDToLabel map[string]string `json:"id_to_label"`
 }
 
 // LoadCategoryMapping loads the category mapping from a JSON file
@@ -61,6 +65,7 @@ func LoadPIIMapping(path string) (*PIIMapping, error) {
 }
 
 // LoadJailbreakMapping loads the jailbreak mapping from a JSON file
+// Supports both label_to_idx/idx_to_label and label_to_id/id_to_label formats
 func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 	// Read the mapping file
 	data, err := os.ReadFile(path)
@@ -68,10 +73,19 @@ func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 		return nil, fmt.Errorf("failed to read jailbreak mapping file: %w", err)
 	}
 
-	// Parse the JSON data
+	// Parse the JSON data - will populate whichever fields match
 	var mapping JailbreakMapping
 	if err := json.Unmarshal(data, &mapping); err != nil {
 		return nil, fmt.Errorf("failed to parse jailbreak mapping JSON: %w", err)
+	}
+
+	// If standard fields are empty but alternative fields are populated,
+	// copy from alternative fields to standard fields for internal use
+	if len(mapping.LabelToIdx) == 0 && len(mapping.LabelToID) > 0 {
+		mapping.LabelToIdx = mapping.LabelToID
+	}
+	if len(mapping.IdxToLabel) == 0 && len(mapping.IDToLabel) > 0 {
+		mapping.IdxToLabel = mapping.IDToLabel
 	}
 
 	return &mapping, nil
@@ -132,8 +146,17 @@ func (pm *PIIMapping) TranslatePIIType(rawType string) string {
 }
 
 // GetJailbreakTypeFromIndex converts a class index to jailbreak type name using the mapping
+// Supports both idx_to_label and id_to_label field names
 func (jm *JailbreakMapping) GetJailbreakTypeFromIndex(classIndex int) (string, bool) {
-	jailbreakType, ok := jm.IdxToLabel[fmt.Sprintf("%d", classIndex)]
+	indexStr := fmt.Sprintf("%d", classIndex)
+
+	// Try standard field first
+	if jailbreakType, ok := jm.IdxToLabel[indexStr]; ok {
+		return jailbreakType, true
+	}
+
+	// Fall back to alternative field
+	jailbreakType, ok := jm.IDToLabel[indexStr]
 	return jailbreakType, ok
 }
 
@@ -166,6 +189,12 @@ func (pm *PIIMapping) GetPIITypeCount() int {
 }
 
 // GetJailbreakTypeCount returns the number of jailbreak types in the mapping
+// Supports both label_to_idx and label_to_id field names
 func (jm *JailbreakMapping) GetJailbreakTypeCount() int {
-	return len(jm.LabelToIdx)
+	// Try standard field first
+	if len(jm.LabelToIdx) > 0 {
+		return len(jm.LabelToIdx)
+	}
+	// Fall back to alternative field
+	return len(jm.LabelToID)
 }
