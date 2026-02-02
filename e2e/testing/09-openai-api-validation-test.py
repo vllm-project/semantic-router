@@ -33,9 +33,9 @@ class OpenAIAPIValidationTest:
     def __init__(self, base_url: Optional[str] = None, verbose: bool = True):
         # base_url ignored when validating against OpenAI directly; kept for CLI compat
         self.api_key = os.getenv("OPENAI_API_KEY")
-        self.base_url = (
-            os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
-        )
+        self.base_url = os.getenv(
+            "OPENAI_BASE_URL", "https://api.openai.com/v1"
+        ).rstrip("/")
         self._created_file_id: Optional[str] = None
         self._created_vector_store_id: Optional[str] = None
 
@@ -116,7 +116,9 @@ class OpenAIAPIValidationTest:
             return True
         try:
             with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".txt", delete=False
+                mode="w",
+                suffix=".txt",
+                delete=False,
             ) as tmp:
                 tmp.write("OpenAI API validation test content.\n")
                 tmp_path = tmp.name
@@ -248,7 +250,9 @@ class OpenAIAPIValidationTest:
                 timeout=30,
             )
             if r3.status_code != 200:
-                self.log(f"ERROR: update vector store status {r3.status_code}: {r3.text}")
+                self.log(
+                    f"ERROR: update vector store status {r3.status_code}: {r3.text}"
+                )
                 return False
 
             # Delete
@@ -258,10 +262,14 @@ class OpenAIAPIValidationTest:
                 timeout=30,
             )
             if r4.status_code != 200:
-                self.log(f"ERROR: delete vector store status {r4.status_code}: {r4.text}")
+                self.log(
+                    f"ERROR: delete vector store status {r4.status_code}: {r4.text}"
+                )
                 return False
             self._created_vector_store_id = None
-            self.log("[OpenAI API Validation] Vector Stores create/get/update/delete: OK")
+            self.log(
+                "[OpenAI API Validation] Vector Stores create/get/update/delete: OK"
+            )
             return True
         except Exception as e:
             self.log(f"ERROR: Vector Stores lifecycle failed: {e}")
@@ -271,7 +279,9 @@ class OpenAIAPIValidationTest:
 
     def test_vector_store_files_lifecycle(self) -> bool:
         """Create vector store, add file (if we have one), list files, delete."""
-        self.log("[OpenAI API Validation] Vector Store Files: create vs -> list files...")
+        self.log(
+            "[OpenAI API Validation] Vector Store Files: create vs -> list files..."
+        )
         if self._skip_no_key():
             return True
         vs_id = None
@@ -342,7 +352,9 @@ class OpenAIAPIValidationTest:
                 timeout=30,
             )
             if r.status_code != 200:
-                self.log(f"ERROR: create vs for search status {r.status_code}: {r.text}")
+                self.log(
+                    f"ERROR: create vs for search status {r.status_code}: {r.text}"
+                )
                 return False
             vs_id = r.json()["id"]
             # Wait for vector store to be ready (empty vs is quickly ready)
