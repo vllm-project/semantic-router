@@ -248,3 +248,128 @@ unsafe fn free_unified_result_inner(result: &mut CUnifiedResult) {
         result.error_message = ptr::null_mut();
     }
 }
+
+// ============================================================================
+// Unit Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ffi::CString;
+
+    #[test]
+    fn test_create_error_message() {
+        let msg = create_error_message("test error");
+        assert!(!msg.is_null());
+        
+        // Clean up
+        unsafe {
+            let _ = CString::from_raw(msg);
+        }
+    }
+
+    #[test]
+    fn test_create_default_intent() {
+        let intent = create_default_intent();
+        assert!(intent.category.is_null());
+        assert_eq!(intent.confidence, 0.0);
+        assert!(intent.probabilities.is_null());
+        assert_eq!(intent.num_probabilities, 0);
+    }
+
+    #[test]
+    fn test_create_default_pii() {
+        let pii = create_default_pii();
+        assert!(!pii.has_pii);
+        assert!(pii.pii_types.is_null());
+        assert_eq!(pii.num_pii_types, 0);
+        assert_eq!(pii.confidence, 0.0);
+    }
+
+    #[test]
+    fn test_create_default_security() {
+        let security = create_default_security();
+        assert!(!security.is_jailbreak);
+        assert!(security.threat_type.is_null());
+        assert_eq!(security.confidence, 0.0);
+    }
+
+    #[test]
+    fn test_init_unified_classifier_returns_false() {
+        // Should return false since models don't exist
+        let result = init_unified_classifier_c(
+            ptr::null(),
+            ptr::null(),
+            ptr::null(),
+            ptr::null(),
+            true,
+        );
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_init_lora_unified_classifier_returns_false() {
+        let result = init_lora_unified_classifier(
+            ptr::null(),
+            ptr::null(),
+            ptr::null(),
+            ptr::null(),
+            true,
+        );
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_classify_unified_batch_returns_error() {
+        let result = classify_unified_batch(ptr::null(), 0);
+        assert!(result.error);
+        assert!(result.results.is_null());
+        assert_eq!(result.num_results, 0);
+        
+        // Clean up
+        if !result.error_message.is_null() {
+            unsafe {
+                let _ = CString::from_raw(result.error_message);
+            }
+        }
+    }
+
+    #[test]
+    fn test_classify_batch_with_lora_returns_error() {
+        let result = classify_batch_with_lora(ptr::null(), 0);
+        assert!(result.error);
+        assert!(result.results.is_null());
+        assert_eq!(result.num_results, 0);
+        
+        // Clean up
+        if !result.error_message.is_null() {
+            unsafe {
+                let _ = CString::from_raw(result.error_message);
+            }
+        }
+    }
+
+    #[test]
+    fn test_free_unified_batch_result_null_safe() {
+        // Should not panic when called with null
+        free_unified_batch_result(ptr::null_mut());
+    }
+
+    #[test]
+    fn test_free_lora_batch_result_null_safe() {
+        // Should not panic when called with null
+        free_lora_batch_result(ptr::null_mut());
+    }
+
+    #[test]
+    fn test_struct_sizes() {
+        // Ensure FFI structs have non-zero size
+        assert!(std::mem::size_of::<CIntentResult>() > 0);
+        assert!(std::mem::size_of::<CPIIResult>() > 0);
+        assert!(std::mem::size_of::<CSecurityResult>() > 0);
+        assert!(std::mem::size_of::<CUnifiedResult>() > 0);
+        assert!(std::mem::size_of::<CUnifiedBatchResult>() > 0);
+        assert!(std::mem::size_of::<CLoRABatchResult>() > 0);
+    }
+}

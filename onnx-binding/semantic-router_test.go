@@ -618,3 +618,424 @@ func BenchmarkBatchEmbeddings(b *testing.B) {
 		}
 	})
 }
+
+// ============================================================================
+// Tests for candle_binding compatible API
+// ============================================================================
+
+// TestInitEmbeddingModels tests the candle_binding compatible initialization
+func TestInitEmbeddingModels(t *testing.T) {
+	modelPath := getModelPath(t)
+
+	t.Run("InitWithMmBertOnly", func(t *testing.T) {
+		// Only mmbert path provided (qwen3 and gemma empty)
+		err := InitEmbeddingModels("", "", modelPath, true)
+		if err != nil {
+			t.Fatalf("Failed to initialize with mmbert only: %v", err)
+		}
+
+		rustState, goState := IsModelInitialized()
+		if !rustState || !goState {
+			t.Errorf("Model should be initialized: rust=%v, go=%v", rustState, goState)
+		}
+	})
+
+	t.Run("InitWithMissingMmBert", func(t *testing.T) {
+		err := InitEmbeddingModels("", "", "", true)
+		if err == nil {
+			t.Fatal("Expected error when mmbert path is empty")
+		}
+	})
+}
+
+// TestInitEmbeddingModelsBatched tests batched initialization
+func TestInitEmbeddingModelsBatched(t *testing.T) {
+	modelPath := getModelPath(t)
+
+	t.Run("BatchedInit", func(t *testing.T) {
+		err := InitEmbeddingModelsBatched(modelPath, 64, 10, true)
+		if err != nil {
+			t.Fatalf("Failed batched init: %v", err)
+		}
+
+		if !IsMmBertModelInitialized() {
+			t.Fatal("Model should be initialized after batched init")
+		}
+	})
+}
+
+// TestGetEmbeddingBatched tests the batched embedding API
+func TestGetEmbeddingBatched(t *testing.T) {
+	modelPath := getModelPath(t)
+	err := InitMmBertEmbeddingModel(modelPath, true)
+	if err != nil {
+		t.Fatalf("Failed to initialize model: %v", err)
+	}
+
+	t.Run("BatchedEmbedding", func(t *testing.T) {
+		output, err := GetEmbeddingBatched(TestText1, "mmbert", 0)
+		if err != nil {
+			t.Fatalf("GetEmbeddingBatched failed: %v", err)
+		}
+
+		if len(output.Embedding) != 768 {
+			t.Errorf("Expected 768 dims, got %d", len(output.Embedding))
+		}
+
+		if output.ModelType != "mmbert" {
+			t.Errorf("Expected model type 'mmbert', got '%s'", output.ModelType)
+		}
+	})
+}
+
+// TestGetEmbeddingWithModelType tests model type selection
+func TestGetEmbeddingWithModelType(t *testing.T) {
+	modelPath := getModelPath(t)
+	err := InitMmBertEmbeddingModel(modelPath, true)
+	if err != nil {
+		t.Fatalf("Failed to initialize model: %v", err)
+	}
+
+	modelTypes := []string{"mmbert", "qwen3", "gemma", "unknown"}
+
+	for _, modelType := range modelTypes {
+		t.Run(fmt.Sprintf("ModelType_%s", modelType), func(t *testing.T) {
+			// All model types should work (they all use mmbert internally)
+			output, err := GetEmbeddingWithModelType(TestText1, modelType, 0)
+			if err != nil {
+				t.Fatalf("GetEmbeddingWithModelType(%s) failed: %v", modelType, err)
+			}
+
+			if len(output.Embedding) != 768 {
+				t.Errorf("Expected 768 dims, got %d", len(output.Embedding))
+			}
+		})
+	}
+}
+
+// TestFindMostSimilar tests the legacy similarity API
+func TestFindMostSimilar(t *testing.T) {
+	modelPath := getModelPath(t)
+	err := InitMmBertEmbeddingModel(modelPath, true)
+	if err != nil {
+		t.Fatalf("Failed to initialize model: %v", err)
+	}
+
+	query := "machine learning algorithms"
+	candidates := []string{
+		"artificial intelligence methods",
+		"cooking recipes",
+		"deep neural networks",
+		"gardening tips",
+	}
+
+	t.Run("FindMostSimilarIndex", func(t *testing.T) {
+		idx, score := FindMostSimilar(query, candidates, 0)
+		if idx < 0 {
+			t.Fatal("Expected valid index")
+		}
+		if score <= 0 {
+			t.Errorf("Expected positive score, got %f", score)
+		}
+		t.Logf("Most similar: [%d] '%s' with score %.4f", idx, candidates[idx], score)
+	})
+
+	t.Run("FindMostSimilarDefault", func(t *testing.T) {
+		result := FindMostSimilarDefault(query, candidates)
+		if result.Index < 0 {
+			t.Fatal("Expected valid index")
+		}
+		t.Logf("Most similar (default): [%d] score %.4f", result.Index, result.Score)
+	})
+}
+
+// TestCalculateSimilarity tests the legacy similarity functions
+func TestCalculateSimilarity(t *testing.T) {
+	modelPath := getModelPath(t)
+	err := InitMmBertEmbeddingModel(modelPath, true)
+	if err != nil {
+		t.Fatalf("Failed to initialize model: %v", err)
+	}
+
+	t.Run("CalculateSimilarity", func(t *testing.T) {
+		sim := CalculateSimilarity(TestText1, TestText2, 0)
+		if sim <= 0 || sim > 1.0 {
+			t.Errorf("Expected similarity in (0, 1], got %f", sim)
+		}
+		t.Logf("Similarity: %.4f", sim)
+	})
+
+	t.Run("CalculateSimilarityDefault", func(t *testing.T) {
+		sim := CalculateSimilarityDefault(TestText1, TestText2)
+		if sim <= 0 || sim > 1.0 {
+			t.Errorf("Expected similarity in (0, 1], got %f", sim)
+		}
+	})
+}
+
+// ============================================================================
+// Tests for Classification API (stubs return errors, but should not panic)
+// ============================================================================
+
+// TestClassificationStubs tests that classification stubs work without panic
+func TestClassificationStubs(t *testing.T) {
+	// These are stub tests - the classifiers are not initialized,
+	// so they should return errors, but not panic
+
+	t.Run("ClassifyMmBert32KIntent", func(t *testing.T) {
+		result, err := ClassifyMmBert32KIntent("test text")
+		// Expected to fail since classifier not initialized
+		if err == nil {
+			t.Logf("Unexpected success: class=%d, confidence=%.2f", result.Class, result.Confidence)
+		}
+	})
+
+	t.Run("ClassifyMmBert32KJailbreak", func(t *testing.T) {
+		result, err := ClassifyMmBert32KJailbreak("test text")
+		if err == nil {
+			t.Logf("Unexpected success: class=%d, confidence=%.2f", result.Class, result.Confidence)
+		}
+	})
+
+	t.Run("ClassifyMmBert32KFeedback", func(t *testing.T) {
+		result, err := ClassifyMmBert32KFeedback("test text")
+		if err == nil {
+			t.Logf("Unexpected success: class=%d, confidence=%.2f", result.Class, result.Confidence)
+		}
+	})
+
+	t.Run("ClassifyMmBert32KFactcheck", func(t *testing.T) {
+		result, err := ClassifyMmBert32KFactcheck("test text")
+		if err == nil {
+			t.Logf("Unexpected success: class=%d, confidence=%.2f", result.Class, result.Confidence)
+		}
+	})
+
+	t.Run("ClassifyMmBert32KPII", func(t *testing.T) {
+		entities, err := ClassifyMmBert32KPII("My SSN is 123-45-6789", "")
+		if err == nil {
+			t.Logf("Unexpected success: %d entities", len(entities))
+		}
+	})
+}
+
+// TestIsClassifierLoaded tests classifier status check
+func TestIsClassifierLoaded(t *testing.T) {
+	classifiers := []string{"intent", "jailbreak", "feedback", "factcheck", "pii"}
+
+	for _, name := range classifiers {
+		t.Run(name, func(t *testing.T) {
+			// Should return false since classifiers are not initialized
+			loaded := IsClassifierLoaded(name)
+			if loaded {
+				t.Errorf("Classifier %s should not be loaded", name)
+			}
+		})
+	}
+}
+
+// ============================================================================
+// Tests for NLI and Hallucination stubs
+// ============================================================================
+
+// TestNLIStubs tests NLI-related stub functions
+func TestNLIStubs(t *testing.T) {
+	t.Run("NLIConstants", func(t *testing.T) {
+		// Verify NLI constants are defined correctly
+		if NLIEntailment != 0 {
+			t.Errorf("NLIEntailment should be 0, got %d", NLIEntailment)
+		}
+		if NLINeutral != 1 {
+			t.Errorf("NLINeutral should be 1, got %d", NLINeutral)
+		}
+		if NLIContradiction != 2 {
+			t.Errorf("NLIContradiction should be 2, got %d", NLIContradiction)
+		}
+		if NLIError != -1 {
+			t.Errorf("NLIError should be -1, got %d", NLIError)
+		}
+	})
+
+	t.Run("InitHallucinationModel", func(t *testing.T) {
+		err := InitHallucinationModel("/fake/path", true)
+		if err == nil {
+			t.Fatal("Expected error for unimplemented function")
+		}
+	})
+
+	t.Run("InitNLIModel", func(t *testing.T) {
+		err := InitNLIModel("/fake/path", true)
+		if err == nil {
+			t.Fatal("Expected error for unimplemented function")
+		}
+	})
+
+	t.Run("DetectHallucinations", func(t *testing.T) {
+		result, err := DetectHallucinations("context", "question", "answer", 0.5)
+		if err == nil {
+			t.Fatalf("Expected error, got result: %v", result)
+		}
+	})
+
+	t.Run("DetectHallucinationsWithNLI", func(t *testing.T) {
+		result, err := DetectHallucinationsWithNLI("context", "question", "answer", 0.5)
+		if err == nil {
+			t.Fatalf("Expected error, got result: %v", result)
+		}
+	})
+
+	t.Run("ClassifyNLI", func(t *testing.T) {
+		result, err := ClassifyNLI("premise", "hypothesis")
+		if err == nil {
+			t.Fatalf("Expected error, got result: %v", result)
+		}
+	})
+}
+
+// ============================================================================
+// Tests for legacy BERT classifier stubs
+// ============================================================================
+
+// TestLegacyClassifierStubs tests candle_binding compatible classifier stubs
+func TestLegacyClassifierStubs(t *testing.T) {
+	t.Run("InitCandleBertClassifier", func(t *testing.T) {
+		// Should return false since model doesn't exist
+		success := InitCandleBertClassifier("/fake/path", 2, true)
+		if success {
+			t.Error("Expected failure for non-existent model")
+		}
+	})
+
+	t.Run("InitCandleBertTokenClassifier", func(t *testing.T) {
+		success := InitCandleBertTokenClassifier("/fake/path", 10, true)
+		if success {
+			t.Error("Expected failure for non-existent model")
+		}
+	})
+
+	t.Run("InitFactCheckClassifier", func(t *testing.T) {
+		err := InitFactCheckClassifier("/fake/path", true)
+		// Expected to fail since path doesn't exist
+		if err == nil {
+			t.Log("Unexpected success for non-existent model")
+		}
+	})
+
+	t.Run("InitFeedbackDetector", func(t *testing.T) {
+		err := InitFeedbackDetector("/fake/path", true)
+		if err == nil {
+			t.Log("Unexpected success for non-existent model")
+		}
+	})
+}
+
+// ============================================================================
+// Tests for type definitions
+// ============================================================================
+
+// TestTypeDefinitions tests that all types are properly defined
+func TestTypeDefinitions(t *testing.T) {
+	t.Run("ClassResult", func(t *testing.T) {
+		result := ClassResult{
+			Class:      1,
+			Confidence: 0.95,
+			Categories: []string{"cat1", "cat2"},
+		}
+		if result.Class != 1 {
+			t.Errorf("Expected Class=1, got %d", result.Class)
+		}
+		if result.Confidence != 0.95 {
+			t.Errorf("Expected Confidence=0.95, got %f", result.Confidence)
+		}
+		if len(result.Categories) != 2 {
+			t.Errorf("Expected 2 categories, got %d", len(result.Categories))
+		}
+	})
+
+	t.Run("ClassResultWithProbs", func(t *testing.T) {
+		result := ClassResultWithProbs{
+			Class:         0,
+			Confidence:    0.8,
+			Probabilities: []float32{0.8, 0.15, 0.05},
+		}
+		if len(result.Probabilities) != 3 {
+			t.Errorf("Expected 3 probabilities, got %d", len(result.Probabilities))
+		}
+	})
+
+	t.Run("TokenEntity", func(t *testing.T) {
+		entity := TokenEntity{
+			Text:       "John",
+			EntityType: "PERSON",
+			Start:      0,
+			End:        4,
+			Confidence: 0.99,
+		}
+		if entity.Text != "John" {
+			t.Errorf("Expected Text='John', got '%s'", entity.Text)
+		}
+	})
+
+	t.Run("TokenClassificationResult", func(t *testing.T) {
+		result := TokenClassificationResult{
+			Entities: []TokenEntity{
+				{Text: "test", EntityType: "ORG", Start: 0, End: 4, Confidence: 0.9},
+			},
+		}
+		if len(result.Entities) != 1 {
+			t.Errorf("Expected 1 entity, got %d", len(result.Entities))
+		}
+	})
+
+	t.Run("EmbeddingOutput", func(t *testing.T) {
+		output := EmbeddingOutput{
+			Embedding:        make([]float32, 768),
+			ModelType:        "mmbert",
+			SequenceLength:   128,
+			ProcessingTimeMs: 10.5,
+		}
+		if output.ModelType != "mmbert" {
+			t.Errorf("Expected ModelType='mmbert', got '%s'", output.ModelType)
+		}
+	})
+
+	t.Run("SimilarityOutput", func(t *testing.T) {
+		output := SimilarityOutput{
+			Similarity:       0.85,
+			ModelType:        "mmbert",
+			ProcessingTimeMs: 5.0,
+		}
+		if output.Similarity != 0.85 {
+			t.Errorf("Expected Similarity=0.85, got %f", output.Similarity)
+		}
+	})
+
+	t.Run("BatchSimilarityOutput", func(t *testing.T) {
+		output := BatchSimilarityOutput{
+			Matches: []SimilarityMatchResult{
+				{Index: 0, Similarity: 0.9},
+				{Index: 2, Similarity: 0.8},
+			},
+			ModelType:        "mmbert",
+			ProcessingTimeMs: 15.0,
+		}
+		if len(output.Matches) != 2 {
+			t.Errorf("Expected 2 matches, got %d", len(output.Matches))
+		}
+	})
+
+	t.Run("NLIResult", func(t *testing.T) {
+		result := NLIResult{
+			Label:             NLIEntailment,
+			LabelStr:          "entailment",
+			Confidence:        0.95,
+			EntailmentProb:    0.95,
+			NeutralProb:       0.03,
+			ContradictionProb: 0.02,
+			ContradictProb:    0.02,
+		}
+		if result.Label != NLIEntailment {
+			t.Errorf("Expected Label=NLIEntailment, got %d", result.Label)
+		}
+	})
+}

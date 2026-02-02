@@ -727,6 +727,10 @@ mod tests {
         let config = MmBertClassifierConfig::default();
         assert_eq!(config.hidden_size, 768);
         assert_eq!(config.max_position_embeddings, 32768);
+        assert_eq!(config.num_hidden_layers, 22);
+        assert_eq!(config.num_attention_heads, 12);
+        // vocab_size varies by model (256000 for mmBERT-32K)
+        assert!(config.vocab_size > 0);
     }
 
     #[test]
@@ -738,5 +742,128 @@ mod tests {
         assert_eq!(config.get_label(0), "BENIGN");
         assert_eq!(config.get_label(1), "JAILBREAK");
         assert_eq!(config.get_label(99), "LABEL_99");
+    }
+
+    #[test]
+    fn test_classification_result_creation() {
+        let result = ClassificationResult {
+            label: "positive".to_string(),
+            class_id: 1,
+            confidence: 0.95,
+            probabilities: vec![0.05, 0.95],
+        };
+        
+        assert_eq!(result.label, "positive");
+        assert_eq!(result.class_id, 1);
+        assert!((result.confidence - 0.95).abs() < 0.001);
+        assert_eq!(result.probabilities.len(), 2);
+    }
+
+    #[test]
+    fn test_detected_entity_creation() {
+        let entity = DetectedEntity {
+            text: "john@example.com".to_string(),
+            entity_type: "EMAIL".to_string(),
+            start: 10,
+            end: 26,
+            confidence: 0.99,
+        };
+        
+        assert_eq!(entity.text, "john@example.com");
+        assert_eq!(entity.entity_type, "EMAIL");
+        assert_eq!(entity.start, 10);
+        assert_eq!(entity.end, 26);
+        assert!((entity.confidence - 0.99).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_token_classification_result() {
+        let result = TokenClassificationResult {
+            entities: vec![
+                DetectedEntity {
+                    text: "123-45-6789".to_string(),
+                    entity_type: "US_SSN".to_string(),
+                    start: 0,
+                    end: 11,
+                    confidence: 0.98,
+                },
+                DetectedEntity {
+                    text: "test@test.com".to_string(),
+                    entity_type: "EMAIL".to_string(),
+                    start: 20,
+                    end: 33,
+                    confidence: 0.95,
+                },
+            ],
+        };
+        
+        assert_eq!(result.entities.len(), 2);
+        assert_eq!(result.entities[0].entity_type, "US_SSN");
+        assert_eq!(result.entities[1].entity_type, "EMAIL");
+    }
+
+    #[test]
+    fn test_classifier_execution_provider_cpu() {
+        let provider = ClassifierExecutionProvider::Cpu;
+        // Should always be valid
+        assert!(matches!(provider, ClassifierExecutionProvider::Cpu));
+    }
+
+    #[test]
+    fn test_classifier_execution_provider_auto() {
+        let provider = ClassifierExecutionProvider::Auto;
+        assert!(matches!(provider, ClassifierExecutionProvider::Auto));
+    }
+
+    #[test]
+    fn test_config_with_labels() {
+        let mut config = MmBertClassifierConfig::default();
+        config.num_labels = 3;
+        config.id2label.insert(0, "negative".to_string());
+        config.id2label.insert(1, "neutral".to_string());
+        config.id2label.insert(2, "positive".to_string());
+        config.label2id.insert("negative".to_string(), 0);
+        config.label2id.insert("neutral".to_string(), 1);
+        config.label2id.insert("positive".to_string(), 2);
+        
+        assert_eq!(config.num_labels, 3);
+        assert_eq!(config.id2label.len(), 3);
+        assert_eq!(config.label2id.len(), 3);
+        assert_eq!(config.get_label(0), "negative");
+        assert_eq!(config.get_label(2), "positive");
+    }
+
+    #[test]
+    fn test_classification_result_clone() {
+        let result = ClassificationResult {
+            label: "test".to_string(),
+            class_id: 0,
+            confidence: 0.8,
+            probabilities: vec![0.8, 0.2],
+        };
+        
+        let cloned = result.clone();
+        assert_eq!(cloned.label, result.label);
+        assert_eq!(cloned.class_id, result.class_id);
+        assert_eq!(cloned.confidence, result.confidence);
+        assert_eq!(cloned.probabilities, result.probabilities);
+    }
+
+    #[test]
+    fn test_detected_entity_clone() {
+        let entity = DetectedEntity {
+            text: "test".to_string(),
+            entity_type: "ORG".to_string(),
+            start: 0,
+            end: 4,
+            confidence: 0.9,
+        };
+        
+        let cloned = entity.clone();
+        assert_eq!(cloned.text, entity.text);
+        assert_eq!(cloned.entity_type, entity.entity_type);
+        assert_eq!(cloned.start, entity.start);
+        assert_eq!(cloned.end, entity.end);
+        assert_eq!(cloned.confidence, entity.confidence);
     }
 }

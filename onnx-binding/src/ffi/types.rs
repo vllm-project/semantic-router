@@ -142,3 +142,69 @@ pub struct MatryoshkaInfo {
     /// Whether 2D Matryoshka is fully supported
     pub supports_2d: bool,
 }
+
+// ============================================================================
+// Unit Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_embedding_result_default() {
+        let result = EmbeddingResult::default();
+        assert!(result.data.is_null());
+        assert_eq!(result.length, 0);
+        assert!(result.error);
+        assert_eq!(result.model_type, -1);
+        assert_eq!(result.sequence_length, 0);
+        assert_eq!(result.processing_time_ms, 0.0);
+    }
+
+    #[test]
+    fn test_embedding_similarity_result_default() {
+        let result = EmbeddingSimilarityResult::default();
+        assert_eq!(result.similarity, 0.0);
+        assert_eq!(result.model_type, -1);
+        assert_eq!(result.processing_time_ms, 0.0);
+        assert!(result.error);
+    }
+
+    #[test]
+    fn test_batch_similarity_result_default() {
+        let result = BatchSimilarityResult::default();
+        assert!(result.matches.is_null());
+        assert_eq!(result.num_matches, 0);
+        assert_eq!(result.model_type, -1);
+        assert!(result.error);
+    }
+
+    #[test]
+    fn test_embedding_models_info_result_default() {
+        let result = EmbeddingModelsInfoResult::default();
+        assert!(result.models.is_null());
+        assert_eq!(result.num_models, 0);
+        assert!(result.error);
+    }
+
+    #[test]
+    fn test_similarity_match_struct() {
+        let match_result = SimilarityMatch {
+            index: 5,
+            similarity: 0.95,
+        };
+        assert_eq!(match_result.index, 5);
+        assert!((match_result.similarity - 0.95).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_embedding_result_struct_size() {
+        // Ensure struct has expected layout for FFI
+        assert!(std::mem::size_of::<EmbeddingResult>() > 0);
+        assert!(std::mem::size_of::<EmbeddingSimilarityResult>() > 0);
+        assert!(std::mem::size_of::<BatchSimilarityResult>() > 0);
+        assert!(std::mem::size_of::<EmbeddingModelInfo>() > 0);
+        assert!(std::mem::size_of::<MatryoshkaInfo>() > 0);
+    }
+}
