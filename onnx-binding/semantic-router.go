@@ -3,482 +3,462 @@
 // +build cgo
 // +build amd64 arm64
 
-// Package onnx_binding provides Go bindings for ONNX Runtime-based semantic embedding
-// with 2D Matryoshka support for AMD GPU (ROCm), NVIDIA GPU (CUDA), and CPU inference.
+// Package onnx_binding provides Go bindings for mmBERT ONNX Runtime inference.
+// This mirrors the candle_binding API for drop-in compatibility.
 package onnx_binding
 
-import (
-	"fmt"
-	"log"
-	"sync"
-	"unsafe"
-)
-
 /*
-#cgo LDFLAGS: -L${SRCDIR}/target/release -lonnx_semantic_router -ldl -lm
+#cgo LDFLAGS: -L${SRCDIR}/target/release -lonnx_semantic_router -ldl -lm -lpthread
 #include <stdlib.h>
 #include <stdbool.h>
 
-// Embedding result structure
+// ============================================================================
+// Embedding Types
+// ============================================================================
+
 typedef struct {
     float* data;
     int length;
     bool error;
-    int model_type;           // 0=mmbert, -1=error
-    int sequence_length;      // Sequence length in tokens
-    float processing_time_ms; // Processing time in milliseconds
+    int model_type;
+    int sequence_length;
+    float processing_time_ms;
 } EmbeddingResult;
 
-// Embedding similarity result structure
 typedef struct {
-    float similarity;         // Cosine similarity score (-1.0 to 1.0)
-    int model_type;           // 0=mmbert, -1=error
-    float processing_time_ms; // Processing time in milliseconds
-    bool error;               // Whether an error occurred
+    float similarity;
+    int model_type;
+    float processing_time_ms;
+    bool error;
 } EmbeddingSimilarityResult;
 
-// Batch similarity match structure
 typedef struct {
-    int index;        // Index of the candidate in the input array
-    float similarity; // Cosine similarity score
+    int index;
+    float similarity;
 } SimilarityMatch;
 
-// Batch similarity result structure
 typedef struct {
-    SimilarityMatch* matches; // Array of top-k matches, sorted by similarity (descending)
-    int num_matches;          // Number of matches returned (≤ top_k)
-    int model_type;           // 0=mmbert, -1=error
-    float processing_time_ms; // Processing time in milliseconds
-    bool error;               // Whether an error occurred
+    SimilarityMatch* matches;
+    int num_matches;
+    int model_type;
+    float processing_time_ms;
+    bool error;
 } BatchSimilarityResult;
 
-// Single embedding model information
 typedef struct {
-    char* model_name;          // "mmbert"
-    bool is_loaded;            // Whether the model is loaded
-    int max_sequence_length;   // Maximum sequence length
-    int default_dimension;     // Default embedding dimension
-    char* model_path;          // Model path (can be null if not loaded)
-    bool supports_layer_exit;  // Whether layer early exit is supported
-    char* available_layers;    // Available exit layers (comma-separated)
+    char* model_name;
+    bool is_loaded;
+    int max_sequence_length;
+    int default_dimension;
+    char* model_path;
+    bool supports_layer_exit;
+    char* available_layers;
 } EmbeddingModelInfo;
 
-// Embedding models information result
 typedef struct {
-    EmbeddingModelInfo* models; // Array of model info
-    int num_models;             // Number of models
-    bool error;                 // Whether an error occurred
+    EmbeddingModelInfo* models;
+    int num_models;
+    bool error;
 } EmbeddingModelsInfoResult;
 
-// Matryoshka configuration info
-typedef struct {
-    char* dimensions;  // Supported dimensions (comma-separated)
-    char* layers;      // Supported layers (comma-separated)
-    bool supports_2d;  // Whether 2D Matryoshka is supported
-} MatryoshkaInfo;
+// ============================================================================
+// Classification Types
+// ============================================================================
 
-// FFI function declarations
+typedef struct {
+    char* label;
+    int class_id;
+    float confidence;
+    int num_classes;
+    float* probabilities;
+    float processing_time_ms;
+    bool error;
+} ClassificationResultFFI;
+
+typedef struct {
+    char* text;
+    char* entity_type;
+    int start;
+    int end;
+    float confidence;
+} PIIEntityFFI;
+
+typedef struct {
+    PIIEntityFFI* entities;
+    int num_entities;
+    float processing_time_ms;
+    bool error;
+} PIIResultFFI;
+
+// ============================================================================
+// Embedding Functions
+// ============================================================================
+
 extern bool init_mmbert_embedding_model(const char* model_path, bool use_cpu);
 extern bool is_mmbert_model_initialized();
-extern int get_embedding_2d_matryoshka(const char* text, int target_layer, int target_dim, EmbeddingResult* result);
 extern int get_embedding(const char* text, EmbeddingResult* result);
 extern int get_embedding_with_dim(const char* text, int target_dim, EmbeddingResult* result);
+extern int get_embedding_2d_matryoshka(const char* text, int target_layer, int target_dim, EmbeddingResult* result);
 extern int get_embeddings_batch(const char** texts, int num_texts, int target_layer, int target_dim, EmbeddingResult* results);
 extern int calculate_embedding_similarity(const char* text1, const char* text2, int target_layer, int target_dim, EmbeddingSimilarityResult* result);
 extern int calculate_similarity_batch(const char* query, const char** candidates, int num_candidates, int top_k, int target_layer, int target_dim, BatchSimilarityResult* result);
 extern int get_embedding_models_info(EmbeddingModelsInfoResult* result);
-extern int get_matryoshka_info(MatryoshkaInfo* result);
 extern void free_embedding(float* data, int length);
 extern void free_batch_similarity_result(BatchSimilarityResult* result);
 extern void free_embedding_models_info(EmbeddingModelsInfoResult* result);
-extern void free_matryoshka_info(MatryoshkaInfo* result);
-extern void free_cstring(char* s);
+
+// ============================================================================
+// Classification Functions
+// ============================================================================
+
+extern bool init_sequence_classifier(const char* name, const char* model_path, bool use_gpu);
+extern bool init_token_classifier(const char* name, const char* model_path, bool use_gpu);
+extern bool is_classifier_loaded(const char* name);
+extern int classify_text(const char* classifier_name, const char* text, ClassificationResultFFI* result);
+extern int classify_batch(const char* classifier_name, const char** texts, int num_texts, ClassificationResultFFI* results);
+extern int detect_pii(const char* classifier_name, const char* text, PIIResultFFI* result);
+extern void free_classification_result(ClassificationResultFFI* result);
+extern void free_pii_result(PIIResultFFI* result);
 */
 import "C"
 
-var (
-	initOnce         sync.Once
-	initErr          error
-	modelInitialized bool
+import (
+	"errors"
+	"fmt"
+	"sync"
+	"unsafe"
 )
 
-// EmbeddingOutput represents the complete embedding generation result with metadata
+// ============================================================================
+// Go Types (matching candle_binding)
+// ============================================================================
+
+// EmbeddingOutput contains embedding result with metadata
 type EmbeddingOutput struct {
-	Embedding        []float32 // The embedding vector
-	ModelType        string    // Model used: "mmbert"
-	SequenceLength   int       // Sequence length in tokens
-	ProcessingTimeMs float32   // Processing time in milliseconds
+	Embedding        []float32
+	ModelType        string // "mmbert", "unknown"
+	SequenceLength   int
+	ProcessingTimeMs float32
 }
 
-// SimilarityOutput represents the result of embedding similarity calculation
+// SimilarityOutput contains similarity result with metadata
 type SimilarityOutput struct {
-	Similarity       float32 // Cosine similarity score (-1.0 to 1.0)
-	ModelType        string  // Model used: "mmbert"
-	ProcessingTimeMs float32 // Processing time in milliseconds
+	Similarity       float32
+	ModelType        string // "mmbert", "unknown"
+	ProcessingTimeMs float32
 }
 
-// BatchSimilarityMatch represents a single match in batch similarity matching
-type BatchSimilarityMatch struct {
-	Index      int     // Index of the candidate in the input array
-	Similarity float32 // Cosine similarity score
+// SimilarityMatchResult represents a single similarity match
+type SimilarityMatchResult struct {
+	Index      int
+	Similarity float32
 }
 
-// BatchSimilarityOutput holds the result of batch similarity matching
+// BatchSimilarityOutput contains batch similarity results
 type BatchSimilarityOutput struct {
-	Matches          []BatchSimilarityMatch // Top-k matches, sorted by similarity (descending)
-	ModelType        string                 // Model used: "mmbert"
-	ProcessingTimeMs float32                // Processing time in milliseconds
+	Matches          []SimilarityMatchResult
+	ModelType        string // "mmbert", "unknown"
+	ProcessingTimeMs float32
 }
 
-// ModelInfo represents information about a single embedding model
-type ModelInfo struct {
-	ModelName         string // "mmbert"
-	IsLoaded          bool   // Whether the model is loaded
-	MaxSequenceLength int    // Maximum sequence length
-	DefaultDimension  int    // Default embedding dimension
-	ModelPath         string // Model path
-	SupportsLayerExit bool   // Whether layer early exit is supported
-	AvailableLayers   string // Available exit layers (comma-separated)
+// ClassResult contains classification result (candle_binding compatible)
+type ClassResult struct {
+	Class      int
+	Confidence float32
+	Categories []string // Optional: categories for jailbreak detection
 }
 
-// ModelsInfoOutput holds information about all embedding models
+// ClassResultWithProbs contains classification result with probabilities
+type ClassResultWithProbs struct {
+	Class         int
+	Confidence    float32
+	Probabilities []float32
+}
+
+// TokenEntity represents a detected PII entity (candle_binding compatible)
+type TokenEntity struct {
+	Text       string
+	EntityType string
+	Start      int
+	End        int
+	Confidence float32
+}
+
+// TokenClassificationResult contains token classification results
+type TokenClassificationResult struct {
+	Entities []TokenEntity
+}
+
+// SimResult contains similarity result (legacy API)
+type SimResult struct {
+	Index int
+	Score float32
+}
+
+// ModelsInfoOutput contains model information
 type ModelsInfoOutput struct {
-	Models []ModelInfo // Array of model information
+	Models []ModelInfo
 }
 
-// MatryoshkaConfig holds the 2D Matryoshka configuration
-type MatryoshkaConfig struct {
-	Dimensions string // Supported dimensions (comma-separated, e.g., "768,512,256,128,64")
-	Layers     string // Supported layers (comma-separated, e.g., "3,6,11,22")
-	Supports2D bool   // Whether 2D Matryoshka is supported
+// ModelInfo contains info about a single model
+type ModelInfo struct {
+	ModelName         string
+	IsLoaded          bool
+	MaxSequenceLength int
+	DefaultDimension  int
+	ModelPath         string
+	SupportsLayerExit bool
+	AvailableLayers   string
 }
 
-// InitMmBertEmbeddingModel initializes the mmBERT embedding model with 2D Matryoshka support.
-//
-// This model supports:
-//   - 32K context length (YaRN-scaled RoPE)
-//   - Multilingual (1800+ languages via Glot500)
-//   - 2D Matryoshka: dimension reduction (768→64) AND layer early exit (22→3 layers)
-//   - AMD GPU via ROCm, NVIDIA GPU via CUDA, or CPU
-//
-// After initialization, use GetEmbedding2DMatryoshka to generate embeddings.
-//
-// Parameters:
-//   - modelPath: Path to the mmBERT model directory (must contain model.onnx and tokenizer.json)
-//   - useCPU: If true, use CPU for inference; if false, use best available GPU (ROCm/CUDA)
-//
-// Returns:
-//   - error: Non-nil if initialization fails
-//
-// Example:
-//
-//	err := InitMmBertEmbeddingModel("/path/to/mmbert-embed-32k-2d-matryoshka", false)
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	// Generate embedding with early exit (6 layers, 256 dimensions)
-//	output, err := GetEmbedding2DMatryoshka("Hello world", 6, 256)
+// ============================================================================
+// Initialization Functions
+// ============================================================================
+
+var (
+	initMu sync.Mutex
+)
+
+// InitMmBertEmbeddingModel initializes the mmBERT embedding model
+// This is the ONNX Runtime equivalent of candle_binding.InitMmBertEmbeddingModel
 func InitMmBertEmbeddingModel(modelPath string, useCPU bool) error {
-	// Check if already initialized
-	if bool(C.is_mmbert_model_initialized()) {
-		modelInitialized = true
-		return nil
+	initMu.Lock()
+	defer initMu.Unlock()
+
+	cPath := C.CString(modelPath)
+	defer C.free(unsafe.Pointer(cPath))
+
+	if !C.init_mmbert_embedding_model(cPath, C.bool(useCPU)) {
+		return fmt.Errorf("failed to initialize mmBERT embedding model from %s", modelPath)
 	}
-
-	initOnce.Do(func() {
-		if modelPath == "" {
-			initErr = fmt.Errorf("modelPath cannot be empty")
-			return
-		}
-
-		log.Printf("Initializing mmBERT embedding model (ONNX Runtime): %s", modelPath)
-
-		cModelPath := C.CString(modelPath)
-		defer C.free(unsafe.Pointer(cModelPath))
-
-		success := C.init_mmbert_embedding_model(cModelPath, C.bool(useCPU))
-		if !bool(success) {
-			initErr = fmt.Errorf("failed to initialize mmBERT embedding model")
-			return
-		}
-
-		modelInitialized = true
-		log.Printf("INFO: mmBERT embedding model initialized with 2D Matryoshka support (ONNX Runtime)")
-	})
-
-	if initErr != nil {
-		initOnce = sync.Once{}
-		modelInitialized = false
-	}
-
-	return initErr
+	return nil
 }
 
-// IsModelInitialized returns whether the mmBERT model is initialized
-func IsModelInitialized() bool {
+// IsMmBertModelInitialized checks if the embedding model is loaded
+func IsMmBertModelInitialized() bool {
 	return bool(C.is_mmbert_model_initialized())
 }
 
-// cFloatArrayToGoSlice converts a C array of floats to a Go slice and frees the C memory
-func cFloatArrayToGoSlice(data *C.float, length C.int) []float32 {
-	if data == nil || length == 0 {
-		return nil
+// InitEmbeddingModels initializes embedding models (candle_binding compatible API)
+// For onnx_binding, only mmBERT is supported. qwen3 and gemma paths are ignored.
+func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath, mmBertModelPath string, useCPU bool) error {
+	// Only initialize mmBERT - qwen3 and gemma are not supported in onnx_binding
+	if mmBertModelPath == "" {
+		return fmt.Errorf("mmBERT model path is required for onnx_binding")
 	}
-
-	l := int(length)
-	out := make([]float32, l)
-
-	// Create a slice that refers to the C array
-	cArray := (*[1 << 30]C.float)(unsafe.Pointer(data))[:l:l]
-
-	// Copy and convert each value
-	for i := 0; i < l; i++ {
-		out[i] = float32(cArray[i])
-	}
-
-	// Free the memory allocated in Rust
-	C.free_embedding(data, length)
-	return out
+	return InitMmBertEmbeddingModel(mmBertModelPath, useCPU)
 }
 
-// GetEmbedding2DMatryoshka generates embeddings with 2D Matryoshka support.
-//
-// This function supports the full 2D Matryoshka API:
-//   - Layer early exit: Use fewer layers (3, 6, 11, or 22) for faster inference
-//   - Dimension truncation: Use smaller dimensions (64, 128, 256, 512, 768)
-//
-// Parameters:
-//   - text: Input text to generate embedding for
-//   - targetLayer: Target layer for early exit (0 for full model, recommended: 3/6/11/22)
-//   - targetDim: Target embedding dimension (0 for default 768, recommended: 64/128/256/512/768)
-//
-// Returns:
-//   - EmbeddingOutput containing the embedding vector and metadata
-//   - error if embedding generation fails
-//
-// Example for early exit (6 layers, 256 dimensions):
-//
-//	output, err := GetEmbedding2DMatryoshka("Hello world", 6, 256)
-//	fmt.Printf("Embedding dim: %d, took %.2fms\n", len(output.Embedding), output.ProcessingTimeMs)
-//
-// Quality vs Speed Tradeoffs:
-//   - Layer 22, Dim 768: Best quality (100%), baseline speed
-//   - Layer 11, Dim 512: Good quality (~67%), ~2x faster
-//   - Layer 6, Dim 256: Moderate quality (~56%), ~3.7x faster
-//   - Layer 3, Dim 64: Fastest (~55%), ~7.3x faster
-func GetEmbedding2DMatryoshka(text string, targetLayer int, targetDim int) (*EmbeddingOutput, error) {
-	if !modelInitialized {
-		return nil, fmt.Errorf("mmBERT model not initialized. Call InitMmBertEmbeddingModel first")
-	}
+// InitEmbeddingModelsWithMmBert is an alias for InitEmbeddingModels
+func InitEmbeddingModelsWithMmBert(qwen3ModelPath, gemmaModelPath, mmBertModelPath string, useCPU bool) error {
+	return InitEmbeddingModels(qwen3ModelPath, gemmaModelPath, mmBertModelPath, useCPU)
+}
 
+// InitEmbeddingModelsBatched initializes batched embedding (candle_binding compatible API)
+// For onnx_binding, batching is handled internally. This uses mmBERT.
+func InitEmbeddingModelsBatched(qwen3ModelPath string, maxBatchSize int, maxWaitMs uint64, useCPU bool) error {
+	// onnx_binding handles batching internally, so we just initialize mmBERT
+	// Use qwen3ModelPath as the model path for compatibility (caller should pass mmBERT path)
+	if qwen3ModelPath == "" {
+		return fmt.Errorf("model path is required")
+	}
+	return InitMmBertEmbeddingModel(qwen3ModelPath, useCPU)
+}
+
+// InitModel initializes the similarity model (legacy API)
+func InitModel(modelID string, useCPU bool) error {
+	return InitMmBertEmbeddingModel(modelID, useCPU)
+}
+
+// IsModelInitialized returns whether the model is initialized (rust state, go state)
+func IsModelInitialized() (bool, bool) {
+	initialized := IsMmBertModelInitialized()
+	return initialized, initialized
+}
+
+// InitMmBert32KIntentClassifier initializes the intent classifier
+func InitMmBert32KIntentClassifier(modelPath string, useCPU bool) error {
+	return initClassifier("intent", modelPath, !useCPU)
+}
+
+// InitMmBert32KFactcheckClassifier initializes the factcheck classifier
+func InitMmBert32KFactcheckClassifier(modelPath string, useCPU bool) error {
+	return initClassifier("factcheck", modelPath, !useCPU)
+}
+
+// InitMmBert32KJailbreakClassifier initializes the jailbreak classifier
+func InitMmBert32KJailbreakClassifier(modelPath string, useCPU bool) error {
+	return initClassifier("jailbreak", modelPath, !useCPU)
+}
+
+// InitMmBert32KFeedbackClassifier initializes the feedback classifier
+func InitMmBert32KFeedbackClassifier(modelPath string, useCPU bool) error {
+	return initClassifier("feedback", modelPath, !useCPU)
+}
+
+// InitMmBert32KPIIClassifier initializes the PII token classifier
+func InitMmBert32KPIIClassifier(modelPath string, useCPU bool) error {
+	return initTokenClassifier("pii", modelPath, !useCPU)
+}
+
+func initClassifier(name, modelPath string, useGPU bool) error {
+	cName := C.CString(name)
+	defer C.free(unsafe.Pointer(cName))
+	cPath := C.CString(modelPath)
+	defer C.free(unsafe.Pointer(cPath))
+
+	if !C.init_sequence_classifier(cName, cPath, C.bool(useGPU)) {
+		return fmt.Errorf("failed to initialize %s classifier from %s", name, modelPath)
+	}
+	return nil
+}
+
+func initTokenClassifier(name, modelPath string, useGPU bool) error {
+	cName := C.CString(name)
+	defer C.free(unsafe.Pointer(cName))
+	cPath := C.CString(modelPath)
+	defer C.free(unsafe.Pointer(cPath))
+
+	if !C.init_token_classifier(cName, cPath, C.bool(useGPU)) {
+		return fmt.Errorf("failed to initialize %s token classifier from %s", name, modelPath)
+	}
+	return nil
+}
+
+// ============================================================================
+// Embedding Functions
+// ============================================================================
+
+// GetEmbedding generates an embedding for the given text
+func GetEmbedding(text string, maxLength int) ([]float32, error) {
+	output, err := GetEmbeddingWithMetadata(text, 0, 0, 0)
+	if err != nil {
+		return nil, err
+	}
+	return output.Embedding, nil
+}
+
+// GetEmbeddingDefault generates an embedding with default settings
+func GetEmbeddingDefault(text string) ([]float32, error) {
+	return GetEmbedding(text, 0)
+}
+
+// GetEmbeddingWithDim generates an embedding with target dimension (Matryoshka)
+func GetEmbeddingWithDim(text string, qualityPriority, latencyPriority float32, targetDim int) ([]float32, error) {
+	output, err := GetEmbeddingWithMetadata(text, qualityPriority, latencyPriority, targetDim)
+	if err != nil {
+		return nil, err
+	}
+	return output.Embedding, nil
+}
+
+// GetEmbeddingWithMetadata generates embedding with full metadata
+func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority float32, targetDim int) (*EmbeddingOutput, error) {
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
 	var result C.EmbeddingResult
-	status := C.get_embedding_2d_matryoshka(
-		cText,
-		C.int(targetLayer),
-		C.int(targetDim),
-		&result,
-	)
+	status := C.get_embedding_with_dim(cText, C.int(targetDim), &result)
 
-	// Check status code (0 = success, -1 = error)
 	if status != 0 || result.error {
-		return nil, fmt.Errorf("failed to generate embedding (status: %d)", status)
+		return nil, errors.New("embedding generation failed")
 	}
 
-	// Convert C array to Go slice
-	embedding := cFloatArrayToGoSlice(result.data, result.length)
+	defer C.free_embedding(result.data, result.length)
+
+	// Copy embedding data
+	embedding := make([]float32, int(result.length))
+	cData := (*[1 << 30]float32)(unsafe.Pointer(result.data))[:result.length:result.length]
+	copy(embedding, cData)
 
 	return &EmbeddingOutput{
 		Embedding:        embedding,
-		ModelType:        "mmbert",
+		ModelType:        modelTypeToString(int(result.model_type)),
 		SequenceLength:   int(result.sequence_length),
 		ProcessingTimeMs: float32(result.processing_time_ms),
 	}, nil
 }
 
-// GetEmbedding generates an embedding using the full model with default dimension (768).
-//
-// This is a convenience function equivalent to GetEmbedding2DMatryoshka(text, 0, 0).
-//
-// Parameters:
-//   - text: Input text to generate embedding for
-//
-// Returns:
-//   - EmbeddingOutput containing the 768-dimensional embedding vector and metadata
-//   - error if embedding generation fails
-func GetEmbedding(text string) (*EmbeddingOutput, error) {
-	return GetEmbedding2DMatryoshka(text, 0, 0)
+// modelTypeToString converts model type int to string
+func modelTypeToString(modelType int) string {
+	switch modelType {
+	case 0:
+		return "mmbert"
+	default:
+		return "unknown"
+	}
 }
 
-// GetEmbeddingWithDim generates an embedding with Matryoshka dimension truncation.
-//
-// This is a convenience function equivalent to GetEmbedding2DMatryoshka(text, 0, targetDim).
-// Uses the full model (all layers) but truncates to the specified dimension.
-//
-// Parameters:
-//   - text: Input text to generate embedding for
-//   - targetDim: Target embedding dimension (768, 512, 256, 128, or 64; 0 for default 768)
-//
-// Returns:
-//   - EmbeddingOutput containing the embedding vector and metadata
-//   - error if embedding generation fails
-func GetEmbeddingWithDim(text string, targetDim int) (*EmbeddingOutput, error) {
-	return GetEmbedding2DMatryoshka(text, 0, targetDim)
-}
+// GetEmbedding2DMatryoshka generates embedding with 2D Matryoshka (layer + dimension)
+func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, targetDim int) (*EmbeddingOutput, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
 
-// GetEmbeddingsBatch generates embeddings for multiple texts in batch.
-//
-// This is more efficient than calling GetEmbedding2DMatryoshka in a loop.
-//
-// Parameters:
-//   - texts: Array of input texts to generate embeddings for
-//   - targetLayer: Target layer for early exit (0 for full model)
-//   - targetDim: Target embedding dimension (0 for default 768)
-//
-// Returns:
-//   - []EmbeddingOutput containing the embeddings and metadata for each text
-//   - error if embedding generation fails
-func GetEmbeddingsBatch(texts []string, targetLayer int, targetDim int) ([]EmbeddingOutput, error) {
-	if !modelInitialized {
-		return nil, fmt.Errorf("mmBERT model not initialized. Call InitMmBertEmbeddingModel first")
-	}
+	var result C.EmbeddingResult
+	status := C.get_embedding_2d_matryoshka(cText, C.int(targetLayer), C.int(targetDim), &result)
 
-	if len(texts) == 0 {
-		return nil, fmt.Errorf("texts array cannot be empty")
-	}
-
-	// Convert texts to C strings
-	cTexts := make([]*C.char, len(texts))
-	for i, text := range texts {
-		cTexts[i] = C.CString(text)
-		defer C.free(unsafe.Pointer(cTexts[i]))
-	}
-
-	// Allocate results array
-	results := make([]C.EmbeddingResult, len(texts))
-
-	status := C.get_embeddings_batch(
-		(**C.char)(unsafe.Pointer(&cTexts[0])),
-		C.int(len(texts)),
-		C.int(targetLayer),
-		C.int(targetDim),
-		(*C.EmbeddingResult)(unsafe.Pointer(&results[0])),
-	)
-
-	// Check status code
-	if status != 0 {
-		return nil, fmt.Errorf("failed to generate batch embeddings (status: %d)", status)
-	}
-
-	// Convert results
-	outputs := make([]EmbeddingOutput, len(texts))
-	for i := range results {
-		if results[i].error {
-			return nil, fmt.Errorf("error generating embedding for text %d", i)
-		}
-
-		outputs[i] = EmbeddingOutput{
-			Embedding:        cFloatArrayToGoSlice(results[i].data, results[i].length),
-			ModelType:        "mmbert",
-			SequenceLength:   int(results[i].sequence_length),
-			ProcessingTimeMs: float32(results[i].processing_time_ms),
-		}
-	}
-
-	return outputs, nil
-}
-
-// CalculateEmbeddingSimilarity calculates cosine similarity between two texts.
-//
-// This function:
-// 1. Generates embeddings for both texts using the specified layer/dimension
-// 2. Calculates cosine similarity between the embeddings
-// 3. Returns similarity score along with metadata
-//
-// Parameters:
-//   - text1, text2: The two texts to compare
-//   - targetLayer: Target layer for early exit (0 for full model)
-//   - targetDim: Target embedding dimension (0 for default 768)
-//
-// Returns:
-//   - *SimilarityOutput: Contains similarity score, model used, and processing time
-//   - error: If embedding generation or similarity calculation fails
-//
-// Example:
-//
-//	result, err := CalculateEmbeddingSimilarity("Hello world", "Hi there", 0, 0)
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	fmt.Printf("Similarity: %.4f (took: %.2fms)\n", result.Similarity, result.ProcessingTimeMs)
-func CalculateEmbeddingSimilarity(text1, text2 string, targetLayer, targetDim int) (*SimilarityOutput, error) {
-	if !modelInitialized {
-		return nil, fmt.Errorf("mmBERT model not initialized. Call InitMmBertEmbeddingModel first")
-	}
-
-	cText1 := C.CString(text1)
-	defer C.free(unsafe.Pointer(cText1))
-
-	cText2 := C.CString(text2)
-	defer C.free(unsafe.Pointer(cText2))
-
-	var result C.EmbeddingSimilarityResult
-	status := C.calculate_embedding_similarity(
-		cText1,
-		cText2,
-		C.int(targetLayer),
-		C.int(targetDim),
-		&result,
-	)
-
-	// Check status code
 	if status != 0 || result.error {
-		return nil, fmt.Errorf("failed to calculate similarity (status: %d)", status)
+		return nil, errors.New("2D matryoshka embedding generation failed")
 	}
 
-	return &SimilarityOutput{
-		Similarity:       float32(result.similarity),
-		ModelType:        "mmbert",
+	defer C.free_embedding(result.data, result.length)
+
+	embedding := make([]float32, int(result.length))
+	cData := (*[1 << 30]float32)(unsafe.Pointer(result.data))[:result.length:result.length]
+	copy(embedding, cData)
+
+	return &EmbeddingOutput{
+		Embedding:        embedding,
+		ModelType:        modelTypeToString(int(result.model_type)),
+		SequenceLength:   int(result.sequence_length),
 		ProcessingTimeMs: float32(result.processing_time_ms),
 	}, nil
 }
 
-// CalculateSimilarityBatch finds top-k most similar candidates for a query.
-//
-// This function uses batch processing for efficiency:
-// 1. Generates embeddings for query and all candidates in a single batch
-// 2. Calculates cosine similarity between query and each candidate
-// 3. Returns top-k matches sorted by similarity (descending)
-//
-// Parameters:
-//   - query: The query text
-//   - candidates: Array of candidate texts
-//   - topK: Maximum number of matches to return (0 = return all, sorted by similarity)
-//   - targetLayer: Target layer for early exit (0 for full model)
-//   - targetDim: Target dimension (0 for default 768)
-//
-// Returns:
-//   - BatchSimilarityOutput: Top-k matches sorted by similarity (descending)
-//   - error: Error message if operation failed
-func CalculateSimilarityBatch(query string, candidates []string, topK, targetLayer, targetDim int) (*BatchSimilarityOutput, error) {
-	if !modelInitialized {
-		return nil, fmt.Errorf("mmBERT model not initialized. Call InitMmBertEmbeddingModel first")
+// GetEmbeddingWithModelType generates embedding with specific model type
+func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
+	// ORT binding only supports mmbert, ignore modelType
+	return GetEmbeddingWithMetadata(text, 0, 0, targetDim)
+}
+
+// ============================================================================
+// Similarity Functions
+// ============================================================================
+
+// CalculateEmbeddingSimilarity calculates cosine similarity between two texts
+func CalculateEmbeddingSimilarity(text1, text2 string, modelType string, targetDim int) (*SimilarityOutput, error) {
+	cText1 := C.CString(text1)
+	defer C.free(unsafe.Pointer(cText1))
+	cText2 := C.CString(text2)
+	defer C.free(unsafe.Pointer(cText2))
+
+	var result C.EmbeddingSimilarityResult
+	status := C.calculate_embedding_similarity(cText1, cText2, 0, C.int(targetDim), &result)
+
+	if status != 0 || result.error {
+		return nil, errors.New("similarity calculation failed")
 	}
 
+	return &SimilarityOutput{
+		Similarity:       float32(result.similarity),
+		ModelType:        modelTypeToString(int(result.model_type)),
+		ProcessingTimeMs: float32(result.processing_time_ms),
+	}, nil
+}
+
+// CalculateSimilarityBatch finds top-k most similar candidates for a query
+func CalculateSimilarityBatch(query string, candidates []string, topK int, modelType string, targetDim int) (*BatchSimilarityOutput, error) {
 	if len(candidates) == 0 {
-		return nil, fmt.Errorf("candidates array cannot be empty")
+		return nil, errors.New("no candidates provided")
 	}
 
-	// Convert query to C string
 	cQuery := C.CString(query)
 	defer C.free(unsafe.Pointer(cQuery))
 
-	// Convert candidates to C string array
+	// Convert candidates to C strings
 	cCandidates := make([]*C.char, len(candidates))
-	for i, candidate := range candidates {
-		cCandidates[i] = C.CString(candidate)
+	for i, c := range candidates {
+		cCandidates[i] = C.CString(c)
 		defer C.free(unsafe.Pointer(cCandidates[i]))
 	}
 
@@ -488,103 +468,397 @@ func CalculateSimilarityBatch(query string, candidates []string, topK, targetLay
 		(**C.char)(unsafe.Pointer(&cCandidates[0])),
 		C.int(len(candidates)),
 		C.int(topK),
-		C.int(targetLayer),
+		0, // target_layer
 		C.int(targetDim),
 		&result,
 	)
 
-	// Check status code
 	if status != 0 || result.error {
-		return nil, fmt.Errorf("failed to calculate batch similarity (status: %d)", status)
+		return nil, errors.New("batch similarity calculation failed")
 	}
 
-	// Convert matches to Go slice
-	numMatches := int(result.num_matches)
-	matches := make([]BatchSimilarityMatch, numMatches)
+	defer C.free_batch_similarity_result(&result)
 
-	if numMatches > 0 && result.matches != nil {
-		matchesSlice := (*[1 << 30]C.SimilarityMatch)(unsafe.Pointer(result.matches))[:numMatches:numMatches]
-		for i := 0; i < numMatches; i++ {
-			matches[i] = BatchSimilarityMatch{
-				Index:      int(matchesSlice[i].index),
-				Similarity: float32(matchesSlice[i].similarity),
+	// Copy matches
+	matches := make([]SimilarityMatchResult, int(result.num_matches))
+	if result.num_matches > 0 {
+		cMatches := (*[1 << 20]C.SimilarityMatch)(unsafe.Pointer(result.matches))[:result.num_matches:result.num_matches]
+		for i, m := range cMatches {
+			matches[i] = SimilarityMatchResult{
+				Index:      int(m.index),
+				Similarity: float32(m.similarity),
 			}
 		}
 	}
 
-	// Free the result
-	C.free_batch_similarity_result(&result)
-
 	return &BatchSimilarityOutput{
 		Matches:          matches,
-		ModelType:        "mmbert",
+		ModelType:        modelTypeToString(int(result.model_type)),
 		ProcessingTimeMs: float32(result.processing_time_ms),
 	}, nil
 }
 
-// GetEmbeddingModelsInfo retrieves information about the loaded embedding model.
-//
-// Returns:
-//   - ModelsInfoOutput: Information about the mmBERT model
-//   - error: Error message if operation failed
-func GetEmbeddingModelsInfo() (*ModelsInfoOutput, error) {
-	var result C.EmbeddingModelsInfoResult
-	status := C.get_embedding_models_info(&result)
+// FindMostSimilar finds the most similar candidate (legacy API)
+func FindMostSimilar(query string, candidates []string, maxLength int) (int, float32) {
+	result, err := CalculateSimilarityBatch(query, candidates, 1, "mmbert", 0)
+	if err != nil || len(result.Matches) == 0 {
+		return -1, 0.0
+	}
+	return result.Matches[0].Index, result.Matches[0].Similarity
+}
 
-	// Check status code
+// ============================================================================
+// Classification Functions
+// ============================================================================
+
+// ClassifyMmBert32KIntent classifies text for intent
+func ClassifyMmBert32KIntent(text string) (ClassResult, error) {
+	return classifyWithClassifier("intent", text)
+}
+
+// ClassifyMmBert32KFactcheck classifies text for factcheck
+func ClassifyMmBert32KFactcheck(text string) (ClassResult, error) {
+	return classifyWithClassifier("factcheck", text)
+}
+
+// ClassifyMmBert32KJailbreak classifies text for jailbreak detection
+func ClassifyMmBert32KJailbreak(text string) (ClassResult, error) {
+	return classifyWithClassifier("jailbreak", text)
+}
+
+// ClassifyMmBert32KFeedback classifies text for feedback detection
+func ClassifyMmBert32KFeedback(text string) (ClassResult, error) {
+	return classifyWithClassifier("feedback", text)
+}
+
+// ClassifyMmBert32KPII detects PII entities in text
+func ClassifyMmBert32KPII(text string, modelConfigPath string) ([]TokenEntity, error) {
+	cName := C.CString("pii")
+	defer C.free(unsafe.Pointer(cName))
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	var result C.PIIResultFFI
+	status := C.detect_pii(cName, cText, &result)
+
 	if status != 0 || result.error {
-		return nil, fmt.Errorf("failed to get embedding models info (status: %d)", status)
+		return nil, errors.New("PII detection failed")
 	}
 
-	// Convert models to Go slice
-	numModels := int(result.num_models)
-	models := make([]ModelInfo, numModels)
+	defer C.free_pii_result(&result)
 
-	if numModels > 0 && result.models != nil {
-		modelsSlice := (*[1 << 30]C.EmbeddingModelInfo)(unsafe.Pointer(result.models))[:numModels:numModels]
-		for i := 0; i < numModels; i++ {
-			modelInfo := modelsSlice[i]
-			models[i] = ModelInfo{
-				ModelName:         C.GoString(modelInfo.model_name),
-				IsLoaded:          bool(modelInfo.is_loaded),
-				MaxSequenceLength: int(modelInfo.max_sequence_length),
-				DefaultDimension:  int(modelInfo.default_dimension),
-				ModelPath:         C.GoString(modelInfo.model_path),
-				SupportsLayerExit: bool(modelInfo.supports_layer_exit),
-				AvailableLayers:   C.GoString(modelInfo.available_layers),
+	// Copy entities
+	entities := make([]TokenEntity, int(result.num_entities))
+	if result.num_entities > 0 {
+		cEntities := (*[1 << 20]C.PIIEntityFFI)(unsafe.Pointer(result.entities))[:result.num_entities:result.num_entities]
+		for i, e := range cEntities {
+			entities[i] = TokenEntity{
+				Text:       C.GoString(e.text),
+				EntityType: C.GoString(e.entity_type),
+				Start:      int(e.start),
+				End:        int(e.end),
+				Confidence: float32(e.confidence),
 			}
 		}
 	}
 
-	// Free the result
-	C.free_embedding_models_info(&result)
+	return entities, nil
+}
 
-	return &ModelsInfoOutput{
-		Models: models,
+func classifyWithClassifier(name, text string) (ClassResult, error) {
+	cName := C.CString(name)
+	defer C.free(unsafe.Pointer(cName))
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	var result C.ClassificationResultFFI
+	status := C.classify_text(cName, cText, &result)
+
+	if status != 0 || result.error {
+		return ClassResult{Class: -1, Confidence: 0}, fmt.Errorf("%s classification failed", name)
+	}
+
+	defer C.free_classification_result(&result)
+
+	return ClassResult{
+		Class:      int(result.class_id),
+		Confidence: float32(result.confidence),
 	}, nil
 }
 
-// GetMatryoshkaConfig retrieves the 2D Matryoshka configuration.
-//
-// Returns:
-//   - MatryoshkaConfig: The supported dimensions and layers
-//   - error: Error message if operation failed
-func GetMatryoshkaConfig() (*MatryoshkaConfig, error) {
-	var result C.MatryoshkaInfo
-	status := C.get_matryoshka_info(&result)
+// ============================================================================
+// Model Info Functions
+// ============================================================================
 
-	if status != 0 {
-		return nil, fmt.Errorf("failed to get Matryoshka config")
+// GetEmbeddingModelsInfo returns information about loaded embedding models
+func GetEmbeddingModelsInfo() (*ModelsInfoOutput, error) {
+	var result C.EmbeddingModelsInfoResult
+	status := C.get_embedding_models_info(&result)
+
+	if status != 0 || result.error {
+		return nil, errors.New("failed to get model info")
 	}
 
-	config := &MatryoshkaConfig{
-		Dimensions: C.GoString(result.dimensions),
-		Layers:     C.GoString(result.layers),
-		Supports2D: bool(result.supports_2d),
+	defer C.free_embedding_models_info(&result)
+
+	models := make([]ModelInfo, int(result.num_models))
+	if result.num_models > 0 {
+		cModels := (*[1 << 10]C.EmbeddingModelInfo)(unsafe.Pointer(result.models))[:result.num_models:result.num_models]
+		for i, m := range cModels {
+			models[i] = ModelInfo{
+				ModelName:         C.GoString(m.model_name),
+				IsLoaded:          bool(m.is_loaded),
+				MaxSequenceLength: int(m.max_sequence_length),
+				DefaultDimension:  int(m.default_dimension),
+				ModelPath:         C.GoString(m.model_path),
+				SupportsLayerExit: bool(m.supports_layer_exit),
+				AvailableLayers:   C.GoString(m.available_layers),
+			}
+		}
 	}
 
-	// Free the result
-	C.free_matryoshka_info(&result)
+	return &ModelsInfoOutput{Models: models}, nil
+}
 
-	return config, nil
+// IsClassifierLoaded checks if a classifier is loaded
+func IsClassifierLoaded(name string) bool {
+	cName := C.CString(name)
+	defer C.free(unsafe.Pointer(cName))
+	return bool(C.is_classifier_loaded(cName))
+}
+
+// ============================================================================
+// Batched Embedding Functions (candle_binding compatible)
+// ============================================================================
+
+// GetEmbeddingBatched generates embedding using batched inference
+// In onnx_binding, batching is handled transparently
+func GetEmbeddingBatched(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
+	return GetEmbeddingWithModelType(text, modelType, targetDim)
+}
+
+// ============================================================================
+// Additional candle_binding Compatible Functions
+// ============================================================================
+
+// InitCandleBertClassifier initializes a BERT classifier (stub for compatibility)
+func InitCandleBertClassifier(modelPath string, numClasses int, useCPU bool) bool {
+	// Map to mmBERT intent classifier
+	err := initClassifier("bert", modelPath, !useCPU)
+	return err == nil
+}
+
+// InitModernBertClassifier initializes ModernBERT classifier
+func InitModernBertClassifier(modelPath string, useCPU bool) error {
+	return initClassifier("modernbert", modelPath, !useCPU)
+}
+
+// InitModernBertJailbreakClassifier initializes ModernBERT jailbreak classifier
+func InitModernBertJailbreakClassifier(modelPath string, useCPU bool) error {
+	return initClassifier("jailbreak", modelPath, !useCPU)
+}
+
+// InitModernBertPIITokenClassifier initializes ModernBERT PII classifier
+func InitModernBertPIITokenClassifier(modelPath string, useCPU bool) error {
+	return initTokenClassifier("pii", modelPath, !useCPU)
+}
+
+// InitJailbreakClassifier initializes a jailbreak classifier
+func InitJailbreakClassifier(modelPath string, numClasses int, useCPU bool) error {
+	return initClassifier("jailbreak", modelPath, !useCPU)
+}
+
+// InitCandleBertTokenClassifier initializes token classifier
+func InitCandleBertTokenClassifier(modelPath string, numClasses int, useCPU bool) bool {
+	err := initTokenClassifier("bert_token", modelPath, !useCPU)
+	return err == nil
+}
+
+// ClassifyCandleBertText classifies text using BERT
+func ClassifyCandleBertText(text string) (ClassResult, error) {
+	return classifyWithClassifier("bert", text)
+}
+
+// ClassifyModernBertText classifies text using ModernBERT
+func ClassifyModernBertText(text string) (ClassResult, error) {
+	return classifyWithClassifier("modernbert", text)
+}
+
+// ClassifyModernBertTextWithProbabilities classifies with probabilities
+func ClassifyModernBertTextWithProbabilities(text string) (ClassResultWithProbs, error) {
+	result, err := classifyWithClassifier("modernbert", text)
+	if err != nil {
+		return ClassResultWithProbs{}, err
+	}
+	return ClassResultWithProbs{
+		Class:         result.Class,
+		Confidence:    result.Confidence,
+		Probabilities: []float32{}, // TODO: implement probability extraction
+	}, nil
+}
+
+// ClassifyModernBertJailbreakText classifies for jailbreak
+func ClassifyModernBertJailbreakText(text string) (ClassResult, error) {
+	return classifyWithClassifier("jailbreak", text)
+}
+
+// ClassifyJailbreakText classifies for jailbreak (legacy)
+func ClassifyJailbreakText(text string) (ClassResult, error) {
+	return classifyWithClassifier("jailbreak", text)
+}
+
+// ClassifyCandleBertTokens classifies tokens
+func ClassifyCandleBertTokens(text string) (TokenClassificationResult, error) {
+	entities, err := ClassifyMmBert32KPII(text, "")
+	if err != nil {
+		return TokenClassificationResult{}, err
+	}
+	return TokenClassificationResult{Entities: entities}, nil
+}
+
+// CalculateSimilarity calculates similarity between two texts (legacy)
+func CalculateSimilarity(text1, text2 string, maxLength int) float32 {
+	result, err := CalculateEmbeddingSimilarity(text1, text2, "mmbert", 0)
+	if err != nil {
+		return 0.0
+	}
+	return result.Similarity
+}
+
+// CalculateSimilarityDefault calculates similarity with defaults
+func CalculateSimilarityDefault(text1, text2 string) float32 {
+	return CalculateSimilarity(text1, text2, 0)
+}
+
+// FindMostSimilarDefault finds most similar with default settings
+func FindMostSimilarDefault(query string, candidates []string) SimResult {
+	idx, score := FindMostSimilar(query, candidates, 0)
+	return SimResult{Index: idx, Score: score}
+}
+
+// ============================================================================
+// NLI Types and Constants (candle_binding compatible)
+// ============================================================================
+
+// NLILabel represents NLI classification label
+type NLILabel int
+
+const (
+	// NLIEntailment means the premise supports the hypothesis
+	NLIEntailment NLILabel = 0
+	// NLINeutral means the premise neither supports nor contradicts
+	NLINeutral NLILabel = 1
+	// NLIContradiction means the premise contradicts the hypothesis
+	NLIContradiction NLILabel = 2
+	// NLIError means an error occurred during classification
+	NLIError NLILabel = -1
+)
+
+// ============================================================================
+// Hallucination Detection (stub - not implemented in onnx_binding)
+// ============================================================================
+
+// HallucinationDetectionResult represents hallucination detection output
+type HallucinationDetectionResult struct {
+	HasHallucination bool
+	Confidence       float32
+	Spans            []HallucinationSpan
+}
+
+// HallucinationSpan represents a detected hallucination span
+type HallucinationSpan struct {
+	Text       string
+	Start      int
+	End        int
+	Confidence float32
+	Label      string
+}
+
+// EnhancedHallucinationDetectionResult with NLI explanations
+type EnhancedHallucinationDetectionResult struct {
+	HasHallucination bool
+	Confidence       float32
+	Spans            []EnhancedHallucinationSpan
+}
+
+// EnhancedHallucinationSpan with NLI info
+type EnhancedHallucinationSpan struct {
+	Text                    string
+	Start                   int
+	End                     int
+	HallucinationConfidence float32
+	NLILabel                NLILabel
+	NLILabelStr             string
+	NLIConfidence           float32
+	Severity                int
+	Explanation             string
+}
+
+// NLIResult represents NLI classification result
+type NLIResult struct {
+	Label             NLILabel
+	LabelStr          string
+	Confidence        float32
+	EntailmentProb    float32
+	NeutralProb       float32
+	ContradictionProb float32
+	ContradictProb    float32 // alias for ContradictionProb
+}
+
+// InitHallucinationModel initializes the hallucination detection model
+// Note: Not yet implemented in onnx_binding
+func InitHallucinationModel(modelPath string, useCPU bool) error {
+	return fmt.Errorf("hallucination model not yet implemented in onnx_binding")
+}
+
+// InitNLIModel initializes the NLI model
+// Note: Not yet implemented in onnx_binding
+func InitNLIModel(modelPath string, useCPU bool) error {
+	return fmt.Errorf("NLI model not yet implemented in onnx_binding")
+}
+
+// DetectHallucinations detects hallucinations in text
+// Note: Not yet implemented in onnx_binding
+func DetectHallucinations(context, question, answer string, threshold float32) (*HallucinationDetectionResult, error) {
+	return nil, fmt.Errorf("hallucination detection not yet implemented in onnx_binding")
+}
+
+// DetectHallucinationsWithNLI detects hallucinations with NLI explanations
+// Note: Not yet implemented in onnx_binding
+func DetectHallucinationsWithNLI(context, question, answer string, threshold float32) (*EnhancedHallucinationDetectionResult, error) {
+	return nil, fmt.Errorf("enhanced hallucination detection not yet implemented in onnx_binding")
+}
+
+// ClassifyNLI performs NLI classification
+// Note: Not yet implemented in onnx_binding
+func ClassifyNLI(premise, hypothesis string) (*NLIResult, error) {
+	return nil, fmt.Errorf("NLI classification not yet implemented in onnx_binding")
+}
+
+// ============================================================================
+// FactCheck Classifier Functions
+// ============================================================================
+
+// InitFactCheckClassifier initializes the fact-check classifier
+func InitFactCheckClassifier(modelPath string, useCPU bool) error {
+	return initClassifier("factcheck", modelPath, !useCPU)
+}
+
+// ClassifyFactCheckText classifies text for fact-checking
+func ClassifyFactCheckText(text string) (ClassResult, error) {
+	return classifyWithClassifier("factcheck", text)
+}
+
+// ============================================================================
+// Feedback Detector Functions
+// ============================================================================
+
+// InitFeedbackDetector initializes the feedback detector
+func InitFeedbackDetector(modelPath string, useCPU bool) error {
+	return initClassifier("feedback", modelPath, !useCPU)
+}
+
+// ClassifyFeedbackText classifies text for feedback detection
+func ClassifyFeedbackText(text string) (ClassResult, error) {
+	return classifyWithClassifier("feedback", text)
 }

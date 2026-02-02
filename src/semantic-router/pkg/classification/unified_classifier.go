@@ -3,7 +3,7 @@
 package classification
 
 /*
-#cgo LDFLAGS: -L../../../../../candle-binding/target/release -lcandle_semantic_router
+#cgo LDFLAGS: -L../../../../../onnx-binding/target/release -lonnx_semantic_router
 #include <stdlib.h>
 #include <stdbool.h>
 

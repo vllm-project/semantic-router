@@ -1,3 +1,3 @@
 module github.com/vllm-project/semantic-router/onnx-binding
 
-go 1.24.1
+go 1.21
