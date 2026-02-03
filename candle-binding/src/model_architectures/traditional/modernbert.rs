@@ -513,10 +513,45 @@ impl TraditionalModernBertClassifier {
             candle_core::Error::from(unified_err)
         })?;
 
-        let config: Config = serde_json::from_str(&config_str).map_err(|e| {
+        let mut config: Config = serde_json::from_str(&config_str).map_err(|e| {
             let unified_err = config_errors::invalid_json(&config_path, &e.to_string());
             candle_core::Error::from(unified_err)
         })?;
+
+        // Debug: Print original config value
+        eprintln!(
+            "🔍 Original max_position_embeddings from config.json: {}",
+            config.max_position_embeddings
+        );
+
+        // 2.5. Override max_position_embeddings for Extended32K variant to support full 32K context
+        // The Candle library's ModernBERT uses config.max_position_embeddings to initialize RoPE cache
+        // For Extended32K variant, we need to ensure it's set to 32768 even if config.json has a lower value
+        if variant == ModernBertVariant::Extended32K {
+            let expected_max_len = variant.max_length(); // 32768
+            eprintln!(
+                "🔍 Detected variant: Extended32K, expected max_len: {}",
+                expected_max_len
+            );
+            if config.max_position_embeddings < expected_max_len {
+                eprintln!(
+                    "⚠️  Overriding max_position_embeddings from {} to {} for Extended32K variant",
+                    config.max_position_embeddings, expected_max_len
+                );
+                config.max_position_embeddings = expected_max_len;
+            } else {
+                eprintln!(
+                    "✅ max_position_embeddings already set to {} (no override needed)",
+                    config.max_position_embeddings
+                );
+            }
+        }
+
+        // Debug: Print final config value before model loading
+        eprintln!(
+            "🔍 Final max_position_embeddings before model load: {}",
+            config.max_position_embeddings
+        );
 
         // 3. Dynamic class detection from id2label using unified config loader
         let num_classes = Self::load_modernbert_num_classes(model_path)?;
@@ -662,27 +697,27 @@ impl TraditionalModernBertClassifier {
     }
 
     /// Load classifier with custom base model from separate paths
-    /// 
+    ///
     /// This method allows loading a base model from one path and classifier weights from another path.
     /// This is useful when you have a base model (e.g., Extended32K) and want to use classifier weights
     /// from a different model (e.g., Standard ModernBERT classifier).
-    /// 
+    ///
     /// # Arguments
     /// * `base_model_path` - Path to the base model directory (contains config.json, tokenizer.json, model.safetensors)
     /// * `classifier_path` - Path to the classifier model directory (contains config.json with id2label, model.safetensors with classifier weights)
     /// * `variant` - The ModernBERT variant to use (should match the base model)
     /// * `use_cpu` - Whether to use CPU instead of GPU
-    /// 
+    ///
     /// # Returns
     /// * `Result<Self>` - The loaded classifier with custom base model
-    /// 
+    ///
     /// # Example
-    /// 
+    ///
     /// ```rust,no_run
     /// use candle_semantic_router::model_architectures::traditional::modernbert::{
     ///     ModernBertVariant, TraditionalModernBertClassifier
     /// };
-    /// 
+    ///
     /// // Load Extended32K base model with PII classifier weights
     /// let classifier = TraditionalModernBertClassifier::load_with_custom_base_model(
     ///     "/path/to/modernbert-base-32k",           // Base model path
@@ -690,7 +725,7 @@ impl TraditionalModernBertClassifier {
     ///     ModernBertVariant::Extended32K,
     ///     true, // use_cpu
     /// )?;
-    /// 
+    ///
     /// // Now classify text with 32K context support
     /// let (class_id, confidence) = classifier.classify_text("My email is john@example.com")?;
     /// ```
@@ -751,14 +786,17 @@ impl TraditionalModernBertClassifier {
         let base_vb = unsafe {
             VarBuilder::from_mmaped_safetensors(&[base_weights_path.clone()], DType::F32, &device)
                 .map_err(|e| {
-                    let unified_err = model_error!(
-                        ModelErrorType::ModernBERT,
-                        "base model weights loading",
-                        format!("Failed to load base model weights from {}: {}", base_weights_path, e),
-                        &base_weights_path
-                    );
-                    candle_core::Error::from(unified_err)
-                })?
+                let unified_err = model_error!(
+                    ModelErrorType::ModernBERT,
+                    "base model weights loading",
+                    format!(
+                        "Failed to load base model weights from {}: {}",
+                        base_weights_path, e
+                    ),
+                    &base_weights_path
+                );
+                candle_core::Error::from(unified_err)
+            })?
         };
 
         // 6. Load base ModernBERT model - try both with and without prefix
@@ -784,16 +822,23 @@ impl TraditionalModernBertClassifier {
         }
 
         let classifier_vb = unsafe {
-            VarBuilder::from_mmaped_safetensors(&[classifier_weights_path.clone()], DType::F32, &device)
-                .map_err(|e| {
-                    let unified_err = model_error!(
-                        ModelErrorType::Classifier,
-                        "classifier weights loading",
-                        format!("Failed to load classifier weights from {}: {}", classifier_weights_path, e),
-                        &classifier_weights_path
-                    );
-                    candle_core::Error::from(unified_err)
-                })?
+            VarBuilder::from_mmaped_safetensors(
+                &[classifier_weights_path.clone()],
+                DType::F32,
+                &device,
+            )
+            .map_err(|e| {
+                let unified_err = model_error!(
+                    ModelErrorType::Classifier,
+                    "classifier weights loading",
+                    format!(
+                        "Failed to load classifier weights from {}: {}",
+                        classifier_weights_path, e
+                    ),
+                    &classifier_weights_path
+                );
+                candle_core::Error::from(unified_err)
+            })?
         };
 
         // Try to load head from classifier (if exists)
@@ -887,7 +932,7 @@ impl TraditionalModernBertClassifier {
         let classifier_config_str = std::fs::read_to_string(&classifier_config_path)
             .ok()
             .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
-        
+
         let classifier_pooling = if let Some(config_json) = &classifier_config_str {
             if config_json
                 .get("classifier_pooling")
