@@ -1,0 +1,133 @@
+# Example configuration for RL-driven model selection
+#
+# This demonstrates how to use reinforcement learning-based model selection
+# with Thompson Sampling for exploration/exploitation balance and per-user
+# preference learning.
+#
+# Reference papers:
+#   - Router-R1 (arXiv:2506.09033) - RL multi-round routing
+#   - GMTRouter (arXiv:2511.08590) - Graph-based personalized routing
+
+backend_models:
+  # Define the models available for selection
+  model_config:
+    # High-quality reasoning model
+    gpt-4:
+      description: "Advanced reasoning model with strong coding and math capabilities"
+      capabilities: ["coding", "math", "reasoning", "analysis"]
+      quality_score: 0.95
+      pricing:
+        prompt_per_1m: 30.0
+        completion_per_1m: 60.0
+
+    # Balanced model for general queries
+    claude-3.5-sonnet:
+      description: "Balanced model for general-purpose tasks with good reasoning"
+      capabilities: ["general", "reasoning", "writing"]
+      quality_score: 0.85
+      pricing:
+        prompt_per_1m: 3.0
+        completion_per_1m: 15.0
+
+    # Fast and efficient model for simple queries
+    mistral-7b:
+      description: "Fast and efficient model for simple queries and quick answers"
+      capabilities: ["chat", "simple_qa"]
+      quality_score: 0.70
+      pricing:
+        prompt_per_1m: 0.50
+        completion_per_1m: 0.50
+
+    # Code-specialized model
+    deepseek-coder:
+      description: "Specialized model for code generation and debugging"
+      capabilities: ["coding", "debugging", "code_review"]
+      quality_score: 0.80
+      pricing:
+        prompt_per_1m: 0.25
+        completion_per_1m: 0.25
+
+# Decision configuration with RL-driven selection
+decisions:
+  # Technical queries use RL-driven selection
+  - name: technical
+    triggers:
+      - type: keyword
+        keywords: ["code", "programming", "debug", "algorithm", "function"]
+    modelRefs:
+      - model: "gpt-4"
+      - model: "deepseek-coder"
+      - model: "mistral-7b"
+    algorithm:
+      type: "rl_driven"
+      rl_driven:
+        # Use Thompson Sampling for exploration/exploitation balance
+        use_thompson_sampling: true
+
+        # Initial exploration rate (30% of selections are exploratory)
+        exploration_rate: 0.3
+
+        # Exploration decay (1% decay per 100 selections)
+        exploration_decay: 0.99
+
+        # Minimum exploration to maintain (always explore 5% of the time)
+        min_exploration: 0.05
+
+        # Enable per-user preference learning
+        enable_personalization: true
+
+        # Blend between global and user preferences (0.7 = 70% personalized)
+        personalization_blend: 0.7
+
+        # Weight for within-session performance (0.3 = 30% session influence)
+        session_context_weight: 0.3
+
+        # Weight for auto-detected feedback signals (implicit feedback)
+        implicit_feedback_weight: 0.5
+
+        # Enable cost-aware exploration (prefer cheaper models for exploration)
+        cost_awareness: true
+        cost_weight: 0.2
+
+        # Persist learned preferences to disk
+        storage_path: "/var/lib/vsr/rl_preferences.json"
+        auto_save_interval: "5m"
+
+  # General queries use RL-driven with different settings
+  - name: general
+    triggers:
+      - type: keyword
+        keywords: ["explain", "what", "how", "why", "tell me"]
+    modelRefs:
+      - model: "claude-3.5-sonnet"
+      - model: "mistral-7b"
+    algorithm:
+      type: "rl_driven"
+      rl_driven:
+        use_thompson_sampling: true
+        exploration_rate: 0.2
+        enable_personalization: true
+        personalization_blend: 0.5
+        cost_awareness: true
+        cost_weight: 0.3
+
+# Feedback detector for automatic feedback classification
+# This enables implicit feedback learning from user follow-up messages
+feedback_detector:
+  enabled: true
+  model_id: "vllm-project/feedback-mmbert"
+  threshold: 0.6
+  use_cpu: false
+
+# API server settings
+api_server:
+  enabled: true
+  port: 8082
+
+# Observability
+observability:
+  metrics:
+    enabled: true
+  tracing:
+    enabled: true
+    sampling_rate: 0.1

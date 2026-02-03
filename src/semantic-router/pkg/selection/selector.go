@@ -69,6 +69,16 @@ const (
 	// Learns decision boundaries between model preferences using RBF kernel
 	// Reference: FusionFactory (arXiv:2507.10540), Avengers-Pro (arXiv:2508.12631)
 	MethodSVM SelectionMethod = "svm"
+
+	// MethodRLDriven uses reinforcement learning for personalized model selection
+	// Implements Router-R1 reward structure (format, outcome, cost) for RL training
+	// Reference: Router-R1 (arXiv:2506.09033)
+	MethodRLDriven SelectionMethod = "rl_driven"
+
+	// MethodGMTRouter uses heterogeneous graph learning for personalized routing
+	// Learns user preferences from multi-turn interactions using HGT message passing
+	// Reference: GMTRouter (arXiv:2511.08590)
+	MethodGMTRouter SelectionMethod = "gmtrouter"
 )
 
 // SelectionContext provides context for model selection decisions
@@ -100,6 +110,14 @@ type SelectionContext struct {
 	// QualityWeight indicates how much to weight quality/score (0.0-1.0)
 	// Higher values prefer higher-quality models
 	QualityWeight float64
+
+	// UserID identifies the user for personalized selection (optional)
+	// When set, enables per-user preference learning in RL-driven selection
+	UserID string
+
+	// SessionID identifies the conversation session for multi-turn context (optional)
+	// Used to track within-session model performance
+	SessionID string
 }
 
 // SelectionResult contains the result of a model selection decision
@@ -144,6 +162,10 @@ type Feedback struct {
 	// Query is the original query that was processed
 	Query string
 
+	// Response is the model's response text (optional)
+	// Used for response embedding in GMTRouter (Paper G4)
+	Response string
+
 	// WinnerModel is the model that was preferred
 	WinnerModel string
 
@@ -158,6 +180,21 @@ type Feedback struct {
 
 	// Timestamp is when the feedback was recorded
 	Timestamp int64
+
+	// UserID identifies the user providing feedback (optional)
+	// When set, enables per-user preference learning
+	UserID string
+
+	// SessionID identifies the session for multi-turn context (optional)
+	SessionID string
+
+	// FeedbackType indicates the type of implicit feedback (optional)
+	// Values: "satisfied", "need_clarification", "wrong_answer", "want_different"
+	FeedbackType string
+
+	// Confidence indicates the confidence in this feedback (0.0-1.0)
+	// Used for implicit feedback where detection may be uncertain
+	Confidence float64
 }
 
 // Registry maintains available selection methods and their configurations
