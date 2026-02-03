@@ -456,33 +456,6 @@ decisions:
           capture_response_body: true  # Capture response payloads (default: false)
           max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
-  # Priority 180: Deep thinking with Chinese language
-  - name: "complex_reasoning"
-    description: "Complex reasoning in Chinese requiring advanced models"
-    priority: 180
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "embedding"
-          name: "deep_thinking_zh"
-        - type: "keyword"
-          name: "thinking_zh"
-    modelRefs:
-      - model: "Kimi-K2-Thinking"
-        use_reasoning: true
-        reasoning_effort: "high"
-    plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "你是 Kimi-K2-Thinking，一个专业的AI助手，擅长深度分析和复杂推理。请提供详细、深入的回答。"
-      - type: "router_replay"
-        configuration:
-          enabled: true
-          max_records: 1000              # Maximum records in memory (default: 200)
-          capture_request_body: true   # Capture request payloads (default: false)
-          capture_response_body: true  # Capture response payloads (default: false)
-          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
-
   # Priority 160: Creative/Opinion queries - NO fact check needed
   - name: "creative_ideas"
     description: "Creative writing, opinion-based, or brainstorming queries that don't require factual verification"
@@ -805,38 +778,6 @@ decisions:
           capture_response_body: true  # Capture response payloads (default: false)
           max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
-  # Priority 135: Fast coding in English
-  - name: "fast_coding"
-    description: "Fast coding related queries in English"
-    priority: 135
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "domain"
-          name: "computer science"
-        - type: "complexity"
-          name: "computer_science:easy"
-        - type: "complexity"
-          name: "computer_science:medium"
-    modelRefs:
-      - model: "openai/gpt-oss-120b"
-        use_reasoning: true
-        reasoning_effort: "low"
-    plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "You are a fast coding assistant. Provide code solutions quickly."
-      - type: "semantic-cache"
-        configuration:
-          enabled: false
-      - type: "router_replay"
-        configuration:
-          enabled: true
-          max_records: 1000              # Maximum records in memory (default: 200)
-          capture_request_body: true   # Capture request payloads (default: false)
-          capture_response_body: true  # Capture response payloads (default: false)
-          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
-
   # Priority 138: Psychology domain
   - name: "psychology_queries"
     description: "Psychology and mental health topics"
@@ -920,6 +861,65 @@ decisions:
           capture_request_body: true
           capture_response_body: true
           max_body_bytes: 4096
+
+  # Priority 131: Deep thinking with Chinese language
+  - name: "complex_reasoning"
+    description: "Complex reasoning in Chinese requiring advanced models"
+    priority: 131
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "embedding"
+          name: "deep_thinking_zh"
+        - type: "keyword"
+          name: "thinking_zh"
+    modelRefs:
+      - model: "Kimi-K2-Thinking"
+        use_reasoning: true
+        reasoning_effort: "high"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "你是 Kimi-K2-Thinking，一个专业的AI助手，擅长深度分析和复杂推理。请提供详细、深入的回答。"
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
+
+  # Priority 131: Fast coding in English
+  - name: "fast_coding"
+    description: "Fast coding related queries in English"
+    priority: 131
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "computer science"
+        - type: "complexity"
+          name: "computer_science:easy"
+        - type: "complexity"
+          name: "computer_science:medium"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
+        reasoning_effort: "low"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a fast coding assistant. Provide code solutions quickly."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
   # Priority 130: Fast QA in Chinese
   - name: "quick_question"

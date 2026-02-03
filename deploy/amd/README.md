@@ -433,10 +433,16 @@ Write a story for children, a fairy tale about a robot learning to paint.
 
 ### Example 6: Physics Domain
 
-**Query to test in Playground:**
+**Query to test in Playground (English):**
 
 ```text
-Explain the photoelectric effect and derive Einstein's equation for it.
+Calculate the gravitational force between two objects with masses 5kg and 10kg separated by a distance of 2 meters using Newton's law of universal gravitation.
+```
+
+**Query to test in Playground (中文):**
+
+```text
+使用牛顿万有引力定律计算质量分别为 5kg 和 10kg、相距 2 米的两个物体之间的引力。
 ```
 
 **Expected Routing:**
@@ -444,7 +450,7 @@ Explain the photoelectric effect and derive Einstein's equation for it.
 - **Signals Matched:** `domain: physics`
 - **Decision:** `physics_route` (Priority 145)
 - **Model Selected:** `GLM-4.7`
-- **Reasoning:** Physics derivation → physics-specialized model with reasoning
+- **Reasoning:** Physics calculation → physics-specialized model with reasoning
 
 ---
 
@@ -536,10 +542,16 @@ Design a distributed consensus algorithm for a multi-datacenter database system.
 
 ### Example 13: Chemistry Domain
 
-**Query to test in Playground:**
+**Query to test in Playground (English):**
 
 ```text
 Calculate the pH of a 0.1M solution of acetic acid (Ka = 1.8 × 10^-5).
+```
+
+**Query to test in Playground (中文):**
+
+```text
+计算浓度为 0.1M 的醋酸溶液的 pH 值（Ka = 1.8 × 10^-5）。
 ```
 
 **Expected Routing:**
@@ -553,10 +565,16 @@ Calculate the pH of a 0.1M solution of acetic acid (Ka = 1.8 × 10^-5).
 
 ### Example 14: Biology Domain
 
-**Query to test in Playground:**
+**Query to test in Playground (English):**
 
 ```text
 Explain the process of photosynthesis in plants, including the light-dependent and light-independent reactions.
+```
+
+**Query to test in Playground (中文):**
+
+```text
+解释植物光合作用的过程，包括光反应和暗反应。
 ```
 
 **Expected Routing:**
@@ -570,10 +588,16 @@ Explain the process of photosynthesis in plants, including the light-dependent a
 
 ### Example 15: Health Domain
 
-**Query to test in Playground:**
+**Query to test in Playground (English):**
 
 ```text
 What are the symptoms and treatment options for type 2 diabetes?
+```
+
+**Query to test in Playground (中文):**
+
+```text
+2 型糖尿病的症状和治疗方案有哪些？
 ```
 
 **Expected Routing:**
@@ -587,10 +611,16 @@ What are the symptoms and treatment options for type 2 diabetes?
 
 ### Example 16: Engineering Domain
 
-**Query to test in Playground:**
+**Query to test in Playground (English):**
 
 ```text
-Calculate the stress and strain in a steel beam with Young's modulus 200 GPa under a 1000N load.
+Design a hydraulic system for a construction crane with lifting capacity of 50 tons. Calculate the required hydraulic pressure and cylinder dimensions.
+```
+
+**Query to test in Playground (中文):**
+
+```text
+解释四冲程内燃机的工作原理，并计算压缩比为 10:1 时的热效率。
 ```
 
 **Expected Routing:**
@@ -598,16 +628,22 @@ Calculate the stress and strain in a steel beam with Young's modulus 200 GPa und
 - **Signals Matched:** `domain: engineering`
 - **Decision:** `engineering_problems` (Priority 144)
 - **Model Selected:** `DeepSeek-V3.2` with `reasoning_effort: medium`
-- **Reasoning:** Engineering calculation → engineering-specialized model
+- **Reasoning:** Engineering design → engineering-specialized model
 
 ---
 
 ### Example 17: Law Domain
 
-**Query to test in Playground:**
+**Query to test in Playground (English):**
 
 ```text
 What are the key differences between civil law and criminal law?
+```
+
+**Query to test in Playground (中文):**
+
+```text
+民法和刑法的主要区别是什么？
 ```
 
 **Expected Routing:**
@@ -621,10 +657,16 @@ What are the key differences between civil law and criminal law?
 
 ### Example 18: Business/Economics Domain
 
-**Query to test in Playground:**
+**Query to test in Playground (English):**
 
 ```text
 Explain the concept of supply and demand in market economics.
+```
+
+**Query to test in Playground (中文):**
+
+```text
+解释市场经济学中的供求关系概念。
 ```
 
 **Expected Routing:**
@@ -638,10 +680,16 @@ Explain the concept of supply and demand in market economics.
 
 ### Example 19: Psychology Domain
 
-**Query to test in Playground:**
+**Query to test in Playground (English):**
 
 ```text
 Describe the stages of cognitive development according to Piaget's theory.
+```
+
+**Query to test in Playground (中文):**
+
+```text
+描述皮亚杰理论中的认知发展阶段。
 ```
 
 **Expected Routing:**
@@ -655,10 +703,16 @@ Describe the stages of cognitive development according to Piaget's theory.
 
 ### Example 20: Philosophy Domain
 
-**Query to test in Playground:**
+**Query to test in Playground (English):**
 
 ```text
 Explain Kant's categorical imperative and its implications for moral philosophy.
+```
+
+**Query to test in Playground (中文):**
+
+```text
+解释康德的绝对命令及其对道德哲学的影响。
 ```
 
 **Expected Routing:**
@@ -672,10 +726,16 @@ Explain Kant's categorical imperative and its implications for moral philosophy.
 
 ### Example 21: History Domain
 
-**Query to test in Playground:**
+**Query to test in Playground (English):**
 
 ```text
-What were the main causes of World War I?
+Analyze the historical significance of the Silk Road in facilitating cultural exchange between East and West during the Han Dynasty and Roman Empire period.
+```
+
+**Query to test in Playground (中文):**
+
+```text
+分析丝绸之路在汉朝和罗马帝国时期促进东西方文化交流的历史意义。
 ```
 
 **Expected Routing:**
