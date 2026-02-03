@@ -617,7 +617,7 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 	// Add keyword embedding classifier if configured
 	if len(cfg.EmbeddingRules) > 0 {
 		// Get optimization config from embedding models configuration
-		optConfig := cfg.HNSWConfig
+		optConfig := cfg.EmbeddingModels.HNSWConfig
 		keywordEmbeddingClassifier, err := NewEmbeddingClassifier(cfg.EmbeddingRules, optConfig)
 		if err != nil {
 			logging.Errorf("Failed to create keyword embedding classifier: %v", err)
@@ -637,7 +637,7 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 	// Add complexity classifier if configured
 	if len(cfg.ComplexityRules) > 0 {
 		// Get model type from embedding models configuration (reuse same model as embedding classifier)
-		modelType := cfg.HNSWConfig.ModelType
+		modelType := cfg.EmbeddingModels.HNSWConfig.ModelType
 		if modelType == "" {
 			modelType = "qwen3" // Default to qwen3
 		}
@@ -2474,4 +2474,29 @@ func (c *Classifier) evaluateComposerCondition(
 		logging.Warnf("Unknown composer condition type: %s", condition.Type)
 		return false
 	}
+}
+
+// GetQueryEmbedding returns the embedding vector for a query text as float64
+// This is used by model selection algorithms for similarity-based selection
+// Returns float64 for compatibility with numerical operations
+func (c *Classifier) GetQueryEmbedding(text string) []float64 {
+	if text == "" {
+		return nil
+	}
+
+	// Use the candle binding to get the embedding
+	// GetEmbedding returns ([]float32, error) with auto-detected dimension
+	embedding32, err := candle_binding.GetEmbedding(text, 0)
+	if err != nil {
+		logging.Debugf("Failed to get query embedding: %v", err)
+		return nil
+	}
+
+	// Convert float32 to float64 for numerical operations
+	embedding64 := make([]float64, len(embedding32))
+	for i, v := range embedding32 {
+		embedding64[i] = float64(v)
+	}
+
+	return embedding64
 }

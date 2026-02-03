@@ -168,13 +168,25 @@ func main() {
 
 		// Check if semantic cache uses qwen3 and needs batched initialization
 		// The cache uses GetEmbeddingBatched() which requires InitEmbeddingModelsBatched()
-		useBatchedInit := cfg.SemanticCache.Enabled &&
+		semanticCacheNeedsBatched := cfg.SemanticCache.Enabled &&
 			strings.ToLower(strings.TrimSpace(cfg.SemanticCache.EmbeddingModel)) == "qwen3" &&
 			qwen3Path != ""
 
-		// If semantic cache uses qwen3, use batched initialization for better performance
+		// ML model selection (KNN, KMeans, SVM) also needs batched embeddings for query embedding
+		mlSelectionNeedsBatched := cfg.ModelSelection.Enabled &&
+			cfg.ModelSelection.ML.ModelsPath != "" &&
+			cfg.Qwen3ModelPath != ""
+
+		useBatchedInit := semanticCacheNeedsBatched || mlSelectionNeedsBatched
+
+		// If semantic cache or ML model selection uses qwen3, use batched initialization for better performance
 		if useBatchedInit {
-			logging.Infof("Semantic cache uses qwen3, initializing with batched embedding model...")
+			if semanticCacheNeedsBatched {
+				logging.Infof("Semantic cache uses qwen3, initializing with batched embedding model...")
+			}
+			if mlSelectionNeedsBatched {
+				logging.Infof("ML model selection enabled, initializing with batched embedding model...")
+			}
 			maxBatchSize := 64      // Batch up to 64 requests together
 			maxWaitMs := uint64(10) // Wait max 10ms for batch to fill
 			initErr = candle_binding.InitEmbeddingModelsBatched(
@@ -184,7 +196,7 @@ func main() {
 				cfg.EmbeddingModels.UseCPU,
 			)
 			if initErr == nil {
-				logging.Infof("Batched embedding model initialized successfully (qwen3 for semantic cache)")
+				logging.Infof("Batched embedding model initialized successfully")
 			}
 
 			// Also initialize standard ModelFactory for classification and other features
@@ -225,6 +237,39 @@ func main() {
 		logging.Infof("    mmbert_model_path: 'models/mom-embedding-ultra'")
 		logging.Infof("    use_cpu: true")
 		embeddingModelsInitialized = false
+	}
+
+	// Initialize BERT model if semantic cache is configured to use it
+	// This is required because Redis/Milvus caches call candle_binding.GetEmbedding() for "bert" embeddings
+	// which requires the BERT model to be initialized via InitModel()
+	if cfg.SemanticCache.Enabled {
+		embeddingModel := strings.ToLower(strings.TrimSpace(cfg.SemanticCache.EmbeddingModel))
+		// Auto-detect embedding model if not explicitly set (matches router.go logic)
+		if embeddingModel == "" {
+			if cfg.EmbeddingModels.MmBertModelPath != "" {
+				embeddingModel = "mmbert"
+			} else if cfg.Qwen3ModelPath != "" {
+				embeddingModel = "qwen3"
+			} else if cfg.GemmaModelPath != "" {
+				embeddingModel = "gemma"
+			} else {
+				embeddingModel = "bert"
+			}
+		}
+
+		if embeddingModel == "bert" {
+			bertModelID := cfg.BertModel.ModelID
+			if bertModelID == "" {
+				bertModelID = "sentence-transformers/all-MiniLM-L6-v2" // Default BERT model
+			}
+			bertModelID = config.ResolveModelPath(bertModelID)
+
+			logging.Infof("Semantic cache uses BERT embeddings, initializing BERT model: %s", bertModelID)
+			if initErr := candle_binding.InitModel(bertModelID, cfg.BertModel.UseCPU); initErr != nil {
+				logging.Fatalf("Failed to initialize BERT model for semantic cache: %v", initErr)
+			}
+			logging.Infof("BERT model initialized successfully for semantic cache")
+		}
 	}
 
 	// Create and start the ExtProc server

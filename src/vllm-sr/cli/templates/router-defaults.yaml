@@ -177,3 +177,51 @@ looper:
   headers: {}  # Optional headers (e.g., {"Authorization": "Bearer xxx"})
 
 clear_route_cache: true
+
+# Model Selection Configuration
+# ML-based algorithms for intelligent model routing within decisions
+# Reference: https://github.com/ulab-uiuc/LLMRouter
+model_selection:
+  enabled: true
+  # Default algorithm: knn, kmeans, svm
+  default_algorithm: "knn"
+
+  # LLM candidates configuration
+  llm_candidates_path: "config/model_selection/llm_candidates.json"
+
+  # Pre-trained models path (contains saved model weights)
+  models_path: "models/model_selection"
+
+  # Training data path (for custom training)
+  training_data_path: "config/model_selection/routing_training_data.jsonl"
+
+  # Algorithm-specific configurations
+  knn:
+    k: 5  # Number of neighbors
+    weights: "distance"  # "uniform" or "distance"
+    metric: "cosine"  # "cosine", "euclidean", "manhattan"
+    # Pre-trained model file (relative to models_path)
+    model_file: "knn_model.json"
+
+  kmeans:
+    num_clusters: 8
+    efficiency_weight: 0.3  # Balance between quality (0) and efficiency (1)
+    max_iterations: 100
+    model_file: "kmeans_model.json"
+
+  svm:
+    kernel: "rbf"  # "linear", "rbf", "poly"
+    c: 1.0  # Regularization parameter
+    gamma: "auto"  # Kernel coefficient
+    model_file: "svm_model.json"
+
+  # Custom training options
+  # Allows customers to train on their own models
+  custom_training:
+    enabled: false
+    # Path to customer-provided training data
+    custom_data_path: ""
+    # Whether to merge with pre-trained data or replace
+    merge_with_pretrained: true
+    # Minimum training samples required
+    min_samples: 50

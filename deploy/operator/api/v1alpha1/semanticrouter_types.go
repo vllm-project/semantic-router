@@ -20,6 +20,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -256,6 +257,10 @@ type ConfigSpec struct {
 	// +optional
 	BertModel *BertModelConfig `json:"bert_model,omitempty"`
 
+	// Embedding models configuration (qwen3, gemma, mmbert)
+	// +optional
+	EmbeddingModels *EmbeddingModelsConfig `json:"embedding_models,omitempty"`
+
 	// Semantic cache configuration
 	// +optional
 	SemanticCache *SemanticCacheConfig `json:"semantic_cache,omitempty"`
@@ -271,6 +276,19 @@ type ConfigSpec struct {
 	// Classifier configuration
 	// +optional
 	Classifier *ClassifierConfig `json:"classifier,omitempty"`
+
+	// Complexity rules for complexity-aware routing
+	// +optional
+	ComplexityRules []ComplexityRulesConfig `json:"complexity_rules,omitempty"`
+
+	// Decision routing strategy ("priority" for priority-based matching)
+	// +kubebuilder:validation:Enum=priority
+	// +optional
+	Strategy string `json:"strategy,omitempty" yaml:"strategy,omitempty"`
+
+	// Routing decisions based on signals (domain, complexity, etc.)
+	// +optional
+	Decisions []DecisionConfig `json:"decisions,omitempty"`
 
 	// Reasoning families
 	// +optional
@@ -350,9 +368,9 @@ type SemanticCacheConfig struct {
 	Milvus *MilvusCacheConfig `json:"milvus,omitempty"`
 
 	// EmbeddingModel specifies which embedding model to use for semantic similarity
-	// Options: "bert" (default), "qwen3", "gemma"
+	// Options: "bert" (default), "qwen3", "gemma", "mmbert"
 	// +kubebuilder:default="bert"
-	// +kubebuilder:validation:Enum=bert;qwen3;gemma
+	// +kubebuilder:validation:Enum=bert;qwen3;gemma;mmbert
 	// +optional
 	EmbeddingModel string `json:"embedding_model,omitempty"`
 
@@ -867,6 +885,189 @@ type HNSWCacheConfig struct {
 	// +kubebuilder:validation:Minimum=0
 	// +optional
 	MaxMemoryEntries int `json:"max_memory_entries,omitempty"`
+}
+
+// EmbeddingModelsConfig defines configuration for embedding models
+type EmbeddingModelsConfig struct {
+	// Path to Qwen3-Embedding-0.6B model directory
+	// Qwen3 provides 32K context and high quality embeddings (1024 dimensions)
+	// +optional
+	Qwen3ModelPath string `json:"qwen3_model_path,omitempty"`
+
+	// Path to EmbeddingGemma-300M model directory
+	// Gemma provides 8K context and fast embeddings (768 dimensions)
+	// +optional
+	GemmaModelPath string `json:"gemma_model_path,omitempty"`
+
+	// Path to mmBERT 2D Matryoshka embedding model directory
+	// Supports layer early exit (3/6/11/22) and dimension reduction (64-768)
+	// +optional
+	MmBertModelPath string `json:"mmbert_model_path,omitempty"`
+
+	// Use CPU for inference (default: true)
+	// +kubebuilder:default=true
+	// +optional
+	UseCPU bool `json:"use_cpu,omitempty"`
+
+	// HNSW configuration for embedding-based classification
+	// +optional
+	HNSWConfig *HNSWEmbeddingConfig `json:"hnsw_config,omitempty"`
+}
+
+// HNSWEmbeddingConfig contains settings for embedding classification with HNSW indexing
+type HNSWEmbeddingConfig struct {
+	// ModelType specifies which embedding model to use
+	// Options: "qwen3" (1024-dim, 32K context), "gemma" (768-dim, 8K context), "mmbert" (64-768-dim, multilingual)
+	// +kubebuilder:validation:Enum=qwen3;gemma;mmbert
+	// +optional
+	ModelType string `json:"model_type,omitempty"`
+
+	// PreloadEmbeddings enables precomputing candidate embeddings at startup
+	// +kubebuilder:default=true
+	// +optional
+	PreloadEmbeddings bool `json:"preload_embeddings,omitempty"`
+
+	// TargetDimension is the embedding dimension to use (default: 768)
+	// Supported dimensions: 64, 128, 256, 512, 768
+	// For mmBERT, lower dimensions provide faster performance with slight accuracy trade-off
+	// +kubebuilder:validation:Enum=64;128;256;512;768
+	// +optional
+	TargetDimension int `json:"target_dimension,omitempty"`
+
+	// TargetLayer is the layer for mmBERT early exit (only used when ModelType is "mmbert")
+	// Layer 3: ~7x speedup, Layer 6: ~3.6x speedup, Layer 11: ~2x speedup, Layer 22: full accuracy
+	// +kubebuilder:validation:Enum=3;6;11;22
+	// +optional
+	TargetLayer int `json:"target_layer,omitempty"`
+
+	// EnableSoftMatching enables soft matching mode
+	// +kubebuilder:default=true
+	// +optional
+	EnableSoftMatching bool `json:"enable_soft_matching,omitempty"`
+
+	// MinScoreThreshold for matching (0.0-1.0). Stored as string to avoid float precision issues.
+	// +kubebuilder:default="0.5"
+	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
+	// +optional
+	MinScoreThreshold string `json:"min_score_threshold,omitempty"`
+}
+
+// ComplexityRulesConfig defines complexity-based signal classification
+type ComplexityRulesConfig struct {
+	// Name of the complexity rule (e.g., "code-complexity", "reasoning-complexity")
+	Name string `json:"name"`
+
+	// Description of what this rule classifies
+	// +optional
+	Description string `json:"description,omitempty"`
+
+	// Threshold for difficulty classification (0.0-1.0). Stored as string to avoid float precision issues.
+	// Queries scoring above this threshold are classified as "hard"
+	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
+	// +optional
+	Threshold string `json:"threshold,omitempty"`
+
+	// Hard candidates represent complex/difficult examples
+	Hard ComplexityCandidates `json:"hard"`
+
+	// Easy candidates represent simple/easy examples
+	Easy ComplexityCandidates `json:"easy"`
+
+	// Composer allows filtering based on other signals (e.g., only apply this rule if domain:medical)
+	// +optional
+	Composer *RuleComposition `json:"composer,omitempty"`
+}
+
+// ComplexityCandidates defines candidate examples for complexity classification
+type ComplexityCandidates struct {
+	// List of candidate phrases or examples
+	Candidates []string `json:"candidates"`
+}
+
+// RuleComposition defines how to compose/filter rules based on other signals
+type RuleComposition struct {
+	// Operator for combining conditions (AND, OR)
+	// +kubebuilder:validation:Enum=AND;OR
+	Operator string `json:"operator"`
+
+	// List of conditions that must be met
+	Conditions []CompositionCondition `json:"conditions"`
+}
+
+// CompositionCondition defines a single composition condition
+type CompositionCondition struct {
+	// Type of signal to check (e.g., "domain", "language", "category")
+	Type string `json:"type"`
+
+	// Name of the specific signal/rule value to match
+	Name string `json:"name"`
+}
+
+// DecisionConfig defines a routing decision
+type DecisionConfig struct {
+	// Name is the unique identifier for this decision
+	Name string `json:"name" yaml:"name"`
+
+	// Description provides information about what this decision handles
+	// +optional
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+
+	// Priority is used for decision ordering - higher priority decisions are evaluated first
+	// +optional
+	Priority int `json:"priority,omitempty" yaml:"priority,omitempty"`
+
+	// Rules defines the combination of conditions using AND/OR logic
+	Rules RuleCombinationConfig `json:"rules" yaml:"rules"`
+
+	// ModelRefs contains model references for this decision
+	// +optional
+	ModelRefs []ModelRefConfig `json:"modelRefs,omitempty" yaml:"modelRefs,omitempty"`
+
+	// PreferredEndpoints specifies which vLLM endpoints to prefer for this decision
+	// +optional
+	PreferredEndpoints []string `json:"preferred_endpoints,omitempty" yaml:"preferred_endpoints,omitempty"`
+
+	// Plugins contains policy configurations applied after rule matching
+	// +optional
+	Plugins []runtime.RawExtension `json:"plugins,omitempty" yaml:"plugins,omitempty"`
+}
+
+// RuleCombinationConfig defines how to combine multiple rule conditions
+type RuleCombinationConfig struct {
+	// Operator specifies how to combine conditions: "AND" or "OR"
+	// +kubebuilder:validation:Enum=AND;OR
+	Operator string `json:"operator" yaml:"operator"`
+
+	// Conditions is the list of rule references to evaluate
+	Conditions []RuleConditionConfig `json:"conditions" yaml:"conditions"`
+}
+
+// RuleConditionConfig references a specific rule by type and name
+type RuleConditionConfig struct {
+	// Type specifies the rule type: "keyword", "embedding", "domain", "complexity", or "fact_check"
+	// +kubebuilder:validation:Enum=keyword;embedding;domain;complexity;fact_check;context
+	Type string `json:"type" yaml:"type"`
+
+	// Name is the name of the rule to reference
+	Name string `json:"name" yaml:"name"`
+}
+
+// ModelRefConfig defines a model reference for routing
+type ModelRefConfig struct {
+	// Model name to route to
+	Model string `json:"model" yaml:"model"`
+
+	// LoRAName is the optional LoRA adapter name
+	// +optional
+	LoRAName string `json:"lora_name,omitempty" yaml:"lora_name,omitempty"`
+
+	// UseReasoning enables reasoning mode for this model
+	// +optional
+	UseReasoning *bool `json:"use_reasoning,omitempty" yaml:"use_reasoning,omitempty"`
+
+	// ReasoningEffort specifies the reasoning effort level (low, medium, high)
+	// +optional
+	ReasoningEffort string `json:"reasoning_effort,omitempty" yaml:"reasoning_effort,omitempty"`
 }
 
 // ToolsConfig defines tools configuration

@@ -600,7 +600,7 @@ func TestGenerateVolumes(t *testing.T) {
 			sr: &vllmv1alpha1.SemanticRouter{
 				Spec: vllmv1alpha1.SemanticRouterSpec{},
 			},
-			expectedVolume: 3, // config-volume + cache-volume + models-volume (emptyDir)
+			expectedVolume: 6, // config-volume + cache-volume + router-workdir + var-run + var-log + models-volume (emptyDir)
 		},
 		{
 			name: "config, cache and PVC volumes",
@@ -611,7 +611,7 @@ func TestGenerateVolumes(t *testing.T) {
 					},
 				},
 			},
-			expectedVolume: 3, // config-volume + cache-volume + models-volume
+			expectedVolume: 6, // config-volume + cache-volume + router-workdir + var-run + var-log + models-volume
 		},
 	}
 

@@ -77,67 +77,129 @@ fi
 
 success "Logged in as $(oc whoami)"
 
-if [[ "$USE_KSERVE" == "true" && "$USE_SIMULATOR" != "true" ]]; then
-    error "--kserve currently supports simulator mode only via this script. Use deploy/kserve/deploy.sh for non-simulator KServe deploys."
-    exit 1
-fi
+# GPU mode (--kserve without --simulator) requires GPU resources
+# Simulator mode (--kserve --simulator) works without GPU
 
 # Create namespace
 log "Creating namespace: $NAMESPACE"
 oc create namespace "$NAMESPACE" --dry-run=client -o yaml | oc apply -f -
+for i in {1..30}; do
+    if oc get namespace "$NAMESPACE" -o jsonpath='{.metadata.deletionTimestamp}' 2>/dev/null | grep -q .; then
+        warn "Namespace $NAMESPACE is terminating, waiting..."
+        sleep 2
+        continue
+    fi
+    break
+done
 success "Namespace ready"
 
-# KServe mode: deploy simulator InferenceService and semantic-router using KServe backend
+# KServe mode: deploy LLMInferenceService and semantic-router
 if [[ "$USE_KSERVE" == "true" ]]; then
     KSERVE_SCRIPT="$SCRIPT_DIR/../kserve/deploy.sh"
     KSERVE_INSTALL_SCRIPT="$SCRIPT_DIR/../kserve/install-kserve.sh"
-    KSERVE_ISVC_MANIFEST_A="$SCRIPT_DIR/../kserve/inference-examples/inferenceservice-llm-d-sim-model-a.yaml"
-    KSERVE_ISVC_MANIFEST_B="$SCRIPT_DIR/../kserve/inference-examples/inferenceservice-llm-d-sim-model-b.yaml"
 
     if [[ ! -x "$KSERVE_SCRIPT" ]]; then
         error "KServe deploy script not found: $KSERVE_SCRIPT"
         exit 1
     fi
 
-    if ! oc get crd inferenceservices.serving.kserve.io &>/dev/null; then
-        if [[ -x "$KSERVE_INSTALL_SCRIPT" ]]; then
-            log "KServe CRD missing; installing KServe dependencies..."
-            "$KSERVE_INSTALL_SCRIPT"
-        else
-            error "KServe CRD missing and installer not found: $KSERVE_INSTALL_SCRIPT"
-            exit 1
-        fi
-    fi
-
-    if [[ ! -f "$KSERVE_ISVC_MANIFEST_A" || ! -f "$KSERVE_ISVC_MANIFEST_B" ]]; then
-        error "KServe simulator InferenceService manifests not found in $SCRIPT_DIR/../kserve/inference-examples"
+    if [[ ! -x "$KSERVE_INSTALL_SCRIPT" ]]; then
+        error "KServe install script not found: $KSERVE_INSTALL_SCRIPT"
         exit 1
     fi
 
-    if ! oc get inferenceservice model-a -n "$NAMESPACE" &>/dev/null; then
-        log "Creating KServe simulator InferenceService: model-a"
-        oc apply -n "$NAMESPACE" -f "$KSERVE_ISVC_MANIFEST_A"
-    else
-        log "KServe InferenceService already exists: model-a"
+    log "Installing KServe and LLMInferenceService CRDs..."
+    "$KSERVE_INSTALL_SCRIPT"
+
+    # Ensure LLMInferenceServiceConfig templates exist before creating LLMInferenceServices
+    if oc get crd llminferenceserviceconfigs.serving.kserve.io &>/dev/null; then
+        if ! oc get llminferenceserviceconfig kserve-config-llm-template -n kserve &>/dev/null; then
+            log "Applying LLMInferenceServiceConfig templates..."
+            if [[ -d /home/ubuntu/tmp/kserve/config/llmisvcconfig ]]; then
+                for f in /home/ubuntu/tmp/kserve/config/llmisvcconfig/config-llm-*.yaml; do
+                    oc apply -n kserve -f "$f" 2>/dev/null || true
+                done
+            else
+                warn "Local kserve repo not found at /home/ubuntu/tmp/kserve; LLMInferenceServiceConfig templates may be missing."
+            fi
+        fi
     fi
 
-    if ! oc get inferenceservice model-b -n "$NAMESPACE" &>/dev/null; then
-        log "Creating KServe simulator InferenceService: model-b"
-        oc apply -n "$NAMESPACE" -f "$KSERVE_ISVC_MANIFEST_B"
+    # Wait briefly for llmisvc controller and webhook to settle before creating LLMInferenceServices
+    oc wait --for=condition=Available deployment/llmisvc-controller-manager -n kserve --timeout=3m 2>/dev/null || true
+    for i in {1..30}; do
+        ENDPOINTS=$(oc get endpoints llmisvc-webhook-server-service -n kserve -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null || echo "")
+        if [[ -n "$ENDPOINTS" ]]; then
+            break
+        fi
+        sleep 2
+    done
+
+    if [[ "$USE_SIMULATOR" == "true" ]]; then
+        # Simulator mode: deploy LLMInferenceServices for Model-A and Model-B
+        SIM_ISVC_A="$SCRIPT_DIR/../kserve/inference-examples/inferenceservice-llm-d-sim-model-a.yaml"
+        SIM_ISVC_B="$SCRIPT_DIR/../kserve/inference-examples/inferenceservice-llm-d-sim-model-b.yaml"
+
+        if [[ ! -f "$SIM_ISVC_A" || ! -f "$SIM_ISVC_B" ]]; then
+            error "Simulator LLMInferenceService manifests not found."
+            exit 1
+        fi
+
+        log "Ensuring simulator service account and SCC..."
+        oc create serviceaccount llmisvc-workload -n "$NAMESPACE" 2>/dev/null || true
+        oc adm policy add-scc-to-user anyuid -z llmisvc-workload -n "$NAMESPACE" 2>/dev/null || true
+        oc adm policy add-scc-to-user privileged -z llmisvc-workload -n "$NAMESPACE" 2>/dev/null || true
+        oc adm policy add-scc-to-user privileged system:serviceaccount:kserve:llmisvc-controller-manager -n "$NAMESPACE" 2>/dev/null || true
+
+        log "Deploying simulator LLMInferenceServices..."
+        oc apply -n "$NAMESPACE" -f "$SIM_ISVC_A"
+        oc apply -n "$NAMESPACE" -f "$SIM_ISVC_B"
+
+        log "Waiting for simulator LLMInferenceServices to be ready..."
+        oc wait --for=condition=Ready llminferenceservice/model-a -n "$NAMESPACE" --timeout=10m
+        oc wait --for=condition=Ready llminferenceservice/model-b -n "$NAMESPACE" --timeout=10m
+
+        KSERVE_ARGS=(--simulator -n "$NAMESPACE")
     else
-        log "KServe InferenceService already exists: model-b"
+        # GPU mode: deploy real Qwen model on GPU
+        QWEN_LLMISVC="$SCRIPT_DIR/../kserve/inference-examples/inferenceservice-qwen-0.6b-gpu.yaml"
+
+        if [[ ! -f "$QWEN_LLMISVC" ]]; then
+            error "Qwen LLMInferenceService manifest not found: $QWEN_LLMISVC"
+            exit 1
+        fi
+
+        # Check for GPU resources
+        GPU_NODES=$(oc get nodes -o jsonpath='{.items[*].status.allocatable.nvidia\.com/gpu}' 2>/dev/null | tr ' ' '\n' | grep -v '^$' | grep -v '<none>' -c)
+        if [[ "$GPU_NODES" -eq 0 ]]; then
+            warn "No GPU resources detected. Install GPU operator first:"
+            warn "  ./deploy/kserve/install-gpu-operator.sh"
+            error "GPU required for non-simulator KServe deployment"
+            exit 1
+        fi
+        log "Found $GPU_NODES node(s) with GPU resources"
+
+        log "Granting privileged SCC to default service account for model download..."
+        oc adm policy add-scc-to-user privileged -z default -n "$NAMESPACE" 2>/dev/null || true
+
+        log "Deploying Qwen 0.6B LLMInferenceService on GPU..."
+        for i in {1..3}; do
+            if oc apply -n "$NAMESPACE" -f "$QWEN_LLMISVC"; then
+                break
+            fi
+            warn "Failed to apply Qwen LLMInferenceService (attempt $i); retrying..."
+            sleep 5
+        done
+
+        log "Waiting for Qwen LLMInferenceService to be ready (this may take several minutes for model download)..."
+        oc wait --for=condition=Ready llminferenceservice/qwen-0-6b -n "$NAMESPACE" --timeout=15m
+
+        KSERVE_ARGS=(-n "$NAMESPACE" --inferenceservice qwen-0-6b --model "Qwen/Qwen3-0.6B")
     fi
-
-    log "Waiting for KServe simulator InferenceServices to be ready..."
-    oc wait --for=condition=Ready "inferenceservice/model-a" -n "$NAMESPACE" --timeout=10m
-    oc wait --for=condition=Ready "inferenceservice/model-b" -n "$NAMESPACE" --timeout=10m
-
-    KSERVE_ARGS=(--simulator -n "$NAMESPACE")
 
     log "KServe mode: Deploying semantic-router with KServe backend..."
     "$KSERVE_SCRIPT" "${KSERVE_ARGS[@]}"
     success "KServe deployment complete"
-    log "KServe mode finished; skipping vLLM model deployment and OpenShift routes."
     exit 0
 fi
 

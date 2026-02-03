@@ -87,6 +87,12 @@ kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/
 
 # Hybrid cache backend for optimal performance
 kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_hybrid_cache.yaml
+
+# mmBERT 2D Matryoshka embeddings with layer early exit
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_mmbert.yaml
+
+# Complexity-aware routing for intelligent model selection
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_complexity.yaml
 ```
 
 ### Custom Configuration
@@ -174,6 +180,189 @@ Apply the configuration:
 ```bash
 kubectl apply -f my-router.yaml
 ```
+
+## Advanced Features
+
+### Embedding Models Configuration
+
+The operator supports three high-performance embedding models for semantic understanding and caching. You can configure these models to optimize for your specific use case.
+
+#### Available Embedding Models
+
+1. **Qwen3-Embedding** (1024 dimensions, 32K context)
+   - Best for: High-quality semantic understanding with long context
+   - Use case: Complex queries, research documents, detailed analysis
+
+2. **EmbeddingGemma** (768 dimensions, 8K context)
+   - Best for: Fast performance with good accuracy
+   - Use case: Real-time applications, high-throughput scenarios
+
+3. **mmBERT 2D Matryoshka** (64-768 dimensions, multilingual)
+   - Best for: Adaptive performance with layer early exit
+   - Use case: Multilingual deployments, flexible quality/speed trade-offs
+
+#### Example: mmBERT with Layer Early Exit
+
+```yaml
+spec:
+  config:
+    # Configure mmBERT 2D Matryoshka embeddings
+    embedding_models:
+      mmbert_model_path: "models/mmbert-embedding"
+      use_cpu: true
+
+      # HNSW configuration for embedding-based classification
+      hnsw_config:
+        model_type: "mmbert"
+
+        # Layer early exit: balance speed vs accuracy
+        # Layer 3: ~7x speedup (fast, good for high-volume queries)
+        # Layer 6: ~3.6x speedup (balanced - recommended)
+        # Layer 11: ~2x speedup (higher accuracy)
+        # Layer 22: full model (maximum accuracy)
+        target_layer: 6
+
+        # Dimension reduction for faster similarity search
+        # Options: 64, 128, 256, 512, 768
+        target_dimension: 256
+
+        preload_embeddings: true
+        enable_soft_matching: true
+        min_score_threshold: "0.5"
+
+    # Use mmBERT in semantic cache
+    semantic_cache:
+      enabled: true
+      backend_type: "memory"
+      embedding_model: "mmbert"
+      similarity_threshold: "0.85"
+      max_entries: 5000
+      ttl_seconds: 7200
+```
+
+See [mmbert sample configuration](https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_mmbert.yaml) for a complete example.
+
+#### Example: Qwen3 with Redis Cache
+
+```yaml
+spec:
+  config:
+    embedding_models:
+      qwen3_model_path: "models/qwen3-embedding"
+      use_cpu: true
+
+    semantic_cache:
+      enabled: true
+      backend_type: "redis"
+      embedding_model: "qwen3"
+      redis:
+        connection:
+          host: redis.cache-backends.svc.cluster.local
+          port: 6379
+        index:
+          vector_field:
+            dimension: 1024  # Qwen3 dimension
+```
+
+See [redis cache sample configuration](https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_redis_cache.yaml) for a complete example.
+
+### Complexity-Aware Routing
+
+Route queries to different models based on complexity classification. Simple queries go to fast models, complex queries go to powerful models.
+
+#### Example Configuration
+
+```yaml
+spec:
+  # Configure multiple backends with different capabilities
+  vllmEndpoints:
+    - name: llama-8b-fast
+      model: llama3-8b
+      reasoningFamily: qwen3
+      backend:
+        type: kserve
+        inferenceServiceName: llama-3-8b
+      weight: 2  # Prefer for simple queries
+
+    - name: llama-70b-reasoning
+      model: llama3-70b
+      reasoningFamily: deepseek
+      backend:
+        type: kserve
+        inferenceServiceName: llama-3-70b
+      weight: 1  # Use for complex queries
+
+  config:
+    # Define complexity rules
+    complexity_rules:
+      # Rule 1: Code complexity
+      - name: "code-complexity"
+        description: "Classify coding tasks by complexity"
+        threshold: "0.3"  # Lower threshold works better for embedding-based similarity
+
+        # Examples of complex coding tasks
+        hard:
+          candidates:
+            - "Implement a distributed lock manager with leader election"
+            - "Design a database migration system with rollback support"
+            - "Create a compiler optimization pass for loop unrolling"
+
+        # Examples of simple coding tasks
+        easy:
+          candidates:
+            - "Write a function to reverse a string"
+            - "Create a class to represent a rectangle"
+            - "Implement a simple counter with increment/decrement"
+
+      # Rule 2: Reasoning complexity
+      - name: "reasoning-complexity"
+        description: "Classify reasoning and problem-solving tasks"
+        threshold: "0.3"  # Lower threshold works better for embedding-based similarity
+
+        hard:
+          candidates:
+            - "Analyze the geopolitical implications of renewable energy adoption"
+            - "Evaluate the ethical considerations of AI in healthcare"
+            - "Design a multi-stage marketing strategy for a new product launch"
+
+        easy:
+          candidates:
+            - "What is the capital of France?"
+            - "How many days are in a week?"
+            - "Name three common pets"
+
+      # Rule 3: Domain-specific complexity with conditional application
+      - name: "medical-complexity"
+        description: "Classify medical queries (only for medical domain)"
+        threshold: "0.3"  # Lower threshold works better for embedding-based similarity
+
+        hard:
+          candidates:
+            - "Differential diagnosis for chest pain with dyspnea"
+            - "Treatment protocol for multi-drug resistant tuberculosis"
+
+        easy:
+          candidates:
+            - "What is the normal body temperature?"
+            - "What are common symptoms of a cold?"
+
+        # Only apply this rule if domain signal indicates medical domain
+        composer:
+          operator: "AND"
+          conditions:
+            - type: "domain"
+              name: "medical"
+```
+
+**How it works:**
+
+1. Incoming query is compared against `hard` and `easy` candidate examples
+2. Similarity scores determine complexity classification
+3. Output signals: `{rule-name}:hard`, `{rule-name}:easy`, or `{rule-name}:medium`
+4. Router uses signals to select appropriate backend model
+5. Composer allows conditional rule application based on other signals
+
+See [complexity routing sample configuration](https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_complexity.yaml) for a complete example.
 
 ## Verify Deployment
 
