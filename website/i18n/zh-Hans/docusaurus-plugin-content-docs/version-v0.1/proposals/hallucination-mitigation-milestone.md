@@ -488,8 +488,8 @@ Premium Mode 利用多个 LLM 进行交叉验证。我们将此建立在集成�
 
 **定义 7 (论证框架).** 论证框架是一对 *AF = (A, →)* 其中：
 
-- *A* 是一组论点（来自每个模型的事实主张）
-- *→ ⊆ A × A* 是攻击关系（主张之间的矛盾）
+- *A* is a set of arguments (factual claims from each model)
+- *→ ⊆ A × A* is an attack relation (contradictions between claims)
 
 **定义 8 (Grounded Extension).** AF 的 Grounded Extension *E* 是最大的无冲突论点集，它能抵御所有攻击。
 
@@ -541,8 +541,8 @@ sequenceDiagram
 
 对于响应 *R₁* 中的每个主张分段 *S*：
 
-1. 检查 *S* 是否（语义上）出现在 *R₂* 中
-2. 如果一致：保留 *S*
+1. 将 R₁ 分段为主张 \{S₁, S₂, ..., Sₖ\}
+2. 对于每个 Sᵢ，检查与 R₂ 的一致性
 3. 如果不一致：用更可靠模型的版本替换 Sᵢ
 4. 输出：具有最高置信度分段的混合响应
 
@@ -556,6 +556,504 @@ sequenceDiagram
 | 全辩论 (3 轮) | 2+1 | +40-50% | 5-6x |
 
 #### 3.3.6 理想用例
+
+- **医疗诊断辅助**: 生命攸关的决策
+- **法律文档分析**: 责任影响
+- **金融咨询**: 需要监管合规
+- **安全关键系统**: 航空航天、核能等
+
+### 3.4 三种模式架构的理论论证
+
+#### 3.4.1 帕累托前沿分析
+
+准确率-延迟-成本空间存在一个帕累托前沿：提高一个维度需要牺牲另一个维度。
+
+**命题 2 (三个操作点).** *A-L-C 空间中的帕累托前沿有三个自然的“拐点”，对应于：*
+
+1. **成本主导机制** (Lightweight): 最小干预，仅检测
+2. **平衡机制** (Standard): 中度完善，单模型
+3. **准确率主导机制** (Premium): 最大验证，多模型
+
+```mermaid
+graph TD
+    subgraph "帕累托前沿可视化"
+        direction LR
+
+        A[准确率] ---|权衡| L[延迟]
+        L ---|权衡| C[成本]
+        C ---|权衡| A
+
+        subgraph "操作点"
+            L1[🟢 Lightweight<br/>低 A, 低 L, 低 C]
+            S1[🟡 Standard<br/>中 A, 中 L, 中 C]
+            P1[🔴 Premium<br/>高 A, 高 L, 高 C]
+        end
+    end
+```
+
+#### 3.4.2 为什么不是连续控制？
+
+有人可能会问：为什么是离散模式而不是连续参数？
+
+**论点 1 (认知负荷)**: 用户无法有效地推理连续的权衡。三种离散模式映射到直观的概念：“快速/便宜”、“平衡”、“最佳质量”。
+
+**论点 2 (操作复杂性)**: 每种模式涉及性质不同的机制（仅检测 vs. 迭代 vs. 多模型）。中间点需要复杂的插值。
+
+**论点 3 (实证差距)**: 帕累托前沿不是平滑的——存在自然的间隙，中间配置相对于最近的离散模式提供的收益很少。
+
+#### 3.4.3 模式选择作为在线学习
+
+在生产中，模式选择可以公式化为 **Multi-armed Bandit** 问题：
+
+- **Arm**: \{Lightweight, Standard, Premium\}
+- **奖励**: 用户满意度（代理：无负面反馈）
+- **成本**: 延迟 + API 成本
+
+**Thompson Sampling** 方法：维护每种模式成功概率的 Beta 分布，采样并选择，根据结果更新。这实现了每种查询类型的自适应模式选择。
+
+---
+
+## 4. 系统架构
+
+### 4.1 高级架构
+
+TruthLens 集成到 vLLM Semantic Router 的 ExtProc 管道中，创建一个全面的请求-响应安全边界：
+
+```mermaid
+flowchart TB
+    subgraph "客户端层"
+        C1[企业应用]
+        C2[聊天机器人]
+        C3[RAG 系统]
+    end
+
+    subgraph "vLLM Semantic Router"
+        direction TB
+
+        subgraph "请求阶段（现有）"
+            REQ[请求处理]
+            SEC[安全检查<br/>PII 检测<br/>越狱检测]
+            ROUTE[意图分类<br/>模型选择]
+            CACHE_R[语义缓存<br/>查找]
+        end
+
+        subgraph "LLM 推理"
+            LLM1[主模型]
+            LLM2[次要模型]
+            LLM3[验证模型]
+        end
+
+        subgraph "响应阶段（新功能: TruthLens）"
+            DET[幻觉<br/>检测]
+            EVAL[策略<br/>评估]
+
+            subgraph "缓解模式"
+                M1[Lightweight<br/>仅警告]
+                M2[Standard<br/>自我完善]
+                M3[Premium<br/>多模型]
+            end
+
+            FINAL[响应<br/>最终化]
+        end
+    end
+
+    subgraph "可观测性"
+        METRICS[指标<br/>Prometheus]
+        TRACE[追踪<br/>OpenTelemetry]
+        LOG[日志<br/>结构化]
+    end
+
+    C1 --> REQ
+    C2 --> REQ
+    C3 --> REQ
+
+    REQ --> SEC --> ROUTE --> CACHE_R
+    CACHE_R -->|Miss| LLM1
+    CACHE_R -->|Hit| DET
+
+    LLM1 --> DET
+    DET --> EVAL
+
+    EVAL -->|Lightweight| M1
+    EVAL -->|Standard| M2
+    EVAL -->|Premium| M3
+
+    M2 -->|完善| LLM1
+    M3 -->|交叉验证| LLM2
+    M3 -->|交叉验证| LLM3
+
+    M1 --> FINAL
+    M2 --> FINAL
+    M3 --> FINAL
+
+    FINAL --> C1
+    FINAL --> C2
+    FINAL --> C3
+
+    DET -.-> METRICS
+    DET -.-> TRACE
+    DET -.-> LOG
+```
+
+### 4.2 检测流程
+
+幻觉检测过程对完整的上下文-查询-响应三元组进行操作：
+
+```mermaid
+flowchart LR
+    subgraph "输入组装"
+        SYS[System Prompt<br/>+ RAG 上下文]
+        HIST[对话<br/>历史]
+        QUERY[用户查询]
+        RESP[LLM 响应]
+    end
+
+    subgraph "检测引擎"
+        ENCODE[Encoder 模型<br/>ModernBERT]
+        TOKEN[Token 级<br/>分类]
+        AGG[分数<br/>聚合]
+    end
+
+    subgraph "输出"
+        SCORE[幻觉<br/>分数: 0.0-1.0]
+        SPANS[幻觉<br/>Spans]
+        META[检测<br/>元数据]
+    end
+
+    SYS --> ENCODE
+    HIST --> ENCODE
+    QUERY --> ENCODE
+    RESP --> ENCODE
+
+    ENCODE --> TOKEN --> AGG
+
+    AGG --> SCORE
+    AGG --> SPANS
+    AGG --> META
+```
+
+---
+
+## 5. 用户策略选项：成本-准确率谱系
+
+TruthLens 提供三种操作模式，允许组织根据其特定需求在成本-准确率权衡谱系上定位自己。
+
+### 5.1 策略概览
+
+```mermaid
+flowchart TB
+    subgraph "用户选择"
+        USER[组织<br/>需求]
+    end
+
+    subgraph "模式选择"
+        direction LR
+        L[🟢 Lightweight Mode<br/>成本优先]
+        S[🟡 Standard Mode<br/>平衡]
+        P[🔴 Premium Mode<br/>准确率优先]
+    end
+
+    subgraph "Lightweight Mode"
+        L1[单次检测通过]
+        L2[仅警告注入]
+        L3[无额外 LLM 调用]
+    end
+
+    subgraph "Standard Mode"
+        S1[检测 + 自我完善]
+        S2[同一模型迭代]
+        S3[最多 3-5 次迭代]
+    end
+
+    subgraph "Premium Mode"
+        P1[多模型检测]
+        P2[交叉验证]
+        P3[协作修正]
+    end
+
+    USER --> L
+    USER --> S
+    USER --> P
+
+    L --> L1 --> L2 --> L3
+    S --> S1 --> S2 --> S3
+    P --> P1 --> P2 --> P3
+```
+
+### 5.2 模式比较矩阵
+
+| 维度 | 🟢 Lightweight | 🟡 Standard | 🔴 Premium |
+|-----------|---------------|-------------|------------|
+| **主要目标** | 成本效率 | 平衡 | 最大准确率 |
+| **检测方法** | 单次 Encoder 通过 | Encoder + 自查 | 多模型交叉验证 |
+| **缓解行动** | 警告注入 | 迭代自我完善 | 多模型协作修正 |
+| **延迟开销** | +15-35ms | +200-500ms (2-4x) | +1-3s (5-10x) |
+| **成本倍数** | 1.0x (仅检测) | 1.5-2.5x | 3-5x |
+| **幻觉减少** | 仅意识 | 40-60% | 70-85% |
+| **最适合** | 内部工具，聊天机器人 | 商业应用 | 医疗，法律，金融 |
+
+### 5.3 Lightweight Mode: 成本优化的检测
+
+**理念**: 在提供幻觉意识的同时最小化运营成本。此模式将幻觉检测视为一种**信息服务**，而不是干预系统。
+
+#### 5.3.1 理论基础
+
+Lightweight Mode 建立在 **有限理性理论 (Bounded Rationality Theory)** (Simon, 1955) 之上：当优化成本超过收益时，满足（接受“足够好”）是理性的。
+
+**成本效益分析**:
+
+令 *C_detect* = 检测成本，*C_mitigate* = 缓解成本，*p* = 幻觉概率，*L* = 未检测到的幻觉带来的预期损失。
+
+Lightweight Mode 是最优的，当：*C_detect < p · L* 但 *C_detect + C_mitigate > p · L*
+
+换句话说：检测值得付出成本，但完全缓解不值得。
+
+#### 5.3.2 机制
+
+```mermaid
+sequenceDiagram
+    participant C as 客户端
+    participant R as Router
+    participant D as 检测器<br/>(ModernBERT)
+    participant L as LLM 后端
+
+    C->>R: 请求
+    R->>L: 转发请求
+    L->>R: 响应
+    R->>D: Detect(context, query, response)
+    D->>R: 分数 + Spans
+
+    alt 分数 >= 阈值
+        R->>R: 注入警告横幅
+        R->>R: 添加元数据 Header
+    end
+
+    R->>C: 响应（如果检测到则带警告）
+```
+
+**特点**:
+
+- 初始生成后**无额外 LLM 调用**
+- **固定检测成本**，无论响应长度如何
+- **面向用户的警告** 赋予人工验证能力
+- **丰富的元数据** 用于下游分析
+
+#### 5.3.3 理论保证
+
+**命题 3 (检测延迟界限).** *对于序列长度 L ≤ 8192 的 ModernBERT-large:*
+
+*T_detect ≤ O(L²/chunk_size) + O(L · d)*
+
+*实际上: 对于 L ≤ 4096，现代 GPU 上 T_detect ≤ 35ms。*
+
+**命题 4 (直通模式无假阴性).** *在 Lightweight Mode 中，所有超过阈值 τ 的幻觉都会被标记。该模式从不抑制检测结果。*
+
+#### 5.3.4 理想用例
+
+- 内部知识库（用户可以验证）
+- 开发者助手（技术用户）
+- 创意写作工具（幻觉可能是期望的）
+- 低风险客户互动（有人工升级可用）
+
+---
+
+### 5.4 Standard Mode: 平衡的自我完善
+
+**理念**: 利用同一模型通过迭代完善来自我修正检测到的幻觉。此模式实现了一个**闭环反馈系统**，其中 LLM 既充当生成器又充当修正器。
+
+#### 5.4.1 理论基础
+
+Standard Mode 建立在 **自我一致性理论 (Self-Consistency Theory)** 和 **迭代完善 (Iterative Refinement)** 之上：
+
+**定理 3 (自我完善有效性).** *如果 LLM 已经学习了查询类的正确答案分布，那么使用显式错误反馈进行 Prompt 会增加正确输出的概率：*
+
+*P(correct | feedback on error) > P(correct | no feedback)*
+
+*前提是反馈是准确且可操作的。*
+
+**直觉**: LLM 通常“知道”正确答案，但由于以下原因未能在第一次尝试时产生它：
+
+- 采样噪声 (Temperature > 0)
+- 注意力集中在错误的上下文区域
+- 权重中的竞争模式
+
+显式错误反馈重定向注意力并抑制不正确的模式。
+
+#### 5.4.2 收敛分析
+
+**定义 9 (完善序列).** 序列 *\{Rₜ\}* 对于 *t = 0, 1, 2, ...* 其中：
+
+*R₀ = LLM(Q, C)*  (初始响应)
+*Rₜ₊₁ = LLM(Prompt_refine(Q, C, Rₜ, Detect(Rₜ)))*  (完善后的响应)
+
+**引理 1 (单调分数下降).** *在温和假设（一致的 LLM，准确的检测）下，幻觉分数序列是非递增的：*
+
+*s(Rₜ₊₁) ≤ s(Rₜ)* 以高概率
+
+**实证收敛模式**:
+
+| 迭代 | 典型分数减少 | 边际改进 |
+|-----------|------------------------|----------------------|
+| 1 → 2 | 30-50% | 高 |
+| 2 → 3 | 15-25% | 中 |
+| 3 → 4 | 5-15% | 低 |
+| 4+ | \<5% | 递减 |
+
+这促使默认 *max_iterations = 3* 的设置。
+
+#### 5.4.3 机制
+
+```mermaid
+sequenceDiagram
+    participant C as 客户端
+    participant R as Router
+    participant D as 检测器
+    participant L as 主 LLM
+
+    C->>R: 请求
+    R->>L: 转发请求
+    L->>R: 响应₀
+
+    loop 最多 N 次迭代
+        R->>D: Detect(context, query, responseᵢ)
+        D->>R: 分数 + 幻觉 Spans
+
+        alt 分数 >= 阈值
+            R->>R: 构建修正 Prompt，包含:<br/>• 原始上下文<br/>• 检测到的 Spans<br/>• 修正指令
+            R->>L: 修正请求
+            L->>R: 响应ᵢ₊₁
+        else 分数 < 阈值
+            R->>C: 最终响应 (已验证)
+        end
+    end
+
+    Note over R,C: 如果达到最大迭代次数，<br/>返回最佳响应并带免责声明
+```
+
+**特点**:
+
+- 通过自我反思进行**迭代改进**
+- **同一模型**保持一致性
+- **有界迭代**控制成本
+- 如果收敛失败，**优雅降级**
+
+**研究基础**: 基于 Self-Refine (NeurIPS 2023) 和 Chain-of-Verification (ACL 2024) 原则。
+
+**理想用例**:
+
+- 商业智能报告
+- 客户支持（升级查询）
+- 教育内容
+- 技术文档
+
+### 5.5 Premium Mode: 多模型协作验证
+
+**理念**: 通过多样化的模型视角和协作错误修正实现最大准确率。此模式实现了**集成验证**和**对抗性辩论**机制。
+
+#### 5.5.1 理论基础：集成学习
+
+Premium Mode 建立在 **Condorcet 陪审团定理 (Condorcet's Jury Theorem)** (1785) 和现代**集成学习**理论之上：
+
+**定理 4 (Condorcet 陪审团定理，改编).** *对于 M 个在二元决策上准确率 p > 0.5 的独立模型，多数投票准确率随 M → ∞ 趋近于 1：*
+
+*P(majority correct) = Σ(k=⌈M/2⌉ to M) C(M,k) · pᵏ · (1-p)^(M-k) → 1*
+
+**推论 (多样性要求)**: 该定理需要**独立性**。相关的模型（相同的训练数据、架构）提供的收益递减。
+
+**实际多样性来源**:
+
+| 多样性类型 | 示例 | 独立性水平 |
+|----------------|---------|-------------------|
+| 训练数据 | GPT vs Claude | 高 |
+| 架构 | Transformer vs Mamba | 非常高 |
+| 微调 | Base vs Instruct | 中 |
+| Prompting | 不同的 System Prompt | 低 |
+
+#### 5.5.2 理论基础：Multi-Agent Debate
+
+除了投票，**辩论**使模型能够完善彼此的推理：
+
+**定义 10 (辩论协议).** 模型 M₁, M₂ 与法官 J 之间的辩论包括：
+
+1. **生成阶段**: 两个模型生成响应 R₁, R₂
+2. **批评阶段**: 每个模型批评对方的响应
+3. **辩护阶段**: 模型用证据为自己的主张辩护
+4. **综合阶段**: 法官 J 根据论点产生最终响应
+
+**定理 5 (辩论改进 Grounding).** *当模型必须用上下文 C 中的证据证明主张时，辩论过程会过滤无根据的主张：*
+
+*如果 M₂ 无法在 C 中找到支持证据，R₁ 中的无根据主张将受到 M₂ 的挑战。*
+
+**信息论观点**: 辩论充当论证空间的**有损压缩**，仅保留经受住交叉审查的主张。
+
+#### 5.5.3 机制
+
+```mermaid
+sequenceDiagram
+    participant C as 客户端
+    participant R as Router
+    participant D as 检测器
+    participant L1 as 主 LLM<br/>(例如, GPT-4)
+    participant L2 as 验证器 LLM<br/>(例如, Claude)
+    participant L3 as 法官 LLM<br/>(例如, Llama-3)
+
+    C->>R: 请求
+    R->>L1: 转发请求
+    L1->>R: 响应₁
+
+    par 交叉模型验证
+        R->>L2: 相同请求
+        L2->>R: 响应₂
+    and
+        R->>D: Detect(context, query, response₁)
+        D->>R: 初始检测
+    end
+
+    R->>R: 比较 响应₁ vs 响应₂<br/>识别差异
+
+    alt 发现显著差异
+        R->>L3: 仲裁请求:<br/>• 上下文 + 查询<br/>• 响应₁ + 响应₂<br/>• 差异分析
+        L3->>R: 综合响应
+        R->>D: 最终验证
+        D->>R: 最终分数
+    end
+
+    R->>C: 已验证响应带<br/>置信度元数据
+```
+
+#### 5.5.4 共识机制
+
+**机制 1: 分段级投票**
+
+对于每个主张分段 *S*:
+
+*vote(S) = Σₘ 𝟙[S ∈ Rₘ] / M*
+
+如果 *vote(S) > 0.5*（多数一致），则接受 *S*。
+
+**机制 2: 加权置信度融合**
+
+*R_final = argmax_R Σₘ wₘ · sim(R, Rₘ)*
+
+其中 *wₘ* 是模型 m 的校准置信度，*sim* 是语义相似度。
+
+**机制 3: 细粒度替换 (Finch-Zk)**
+
+1. 将 R₁ 分段为主张 \{S₁, S₂, ..., Sₖ\}
+2. 对于每个 Sᵢ，检查与 R₂ 的一致性
+3. 如果不一致：用更可靠模型的版本替换 Sᵢ
+4. 输出：具有最高置信度分段的混合响应
+
+#### 5.5.5 成本-准确率权衡分析
+
+| 配置 | 模型 | 预期准确率提升 | 成本倍数 |
+|---------------|--------|----------------------|-----------------|
+| 双模型投票 | 2 | +15-25% | 2x |
+| 三模型投票 | 3 | +25-35% | 3x |
+| 双模型 + 法官 | 2+1 | +30-40% | 3x |
+| 全辩论 (3 轮) | 2+1 | +40-50% | 5-6x |
+
+#### 5.5.6 理想用例
 
 - **医疗诊断辅助**: 生命攸关的决策
 - **法律文档分析**: 责任影响
@@ -863,7 +1361,7 @@ flowchart TB
 
     WARN --> CACHE_UPD
     REFINE -->|重试| VLLM1
-    REFINE -->|收敛| CACHE_UPD
+    REFINE -->|Converged| CACHE_UPD
 
     CACHE_UPD --> METRICS
     METRICS --> ENVOY
