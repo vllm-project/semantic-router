@@ -210,6 +210,179 @@ where
     Ok(result_embeddings)
 }
 
+/// Initialize mmBERT embedding model with 2D Matryoshka support
+///
+/// This model supports:
+/// - 32K context length
+/// - Multilingual (1800+ languages via Glot500)
+/// - 2D Matryoshka: dimension reduction (768→64) AND layer early exit (22→3 layers)
+///
+/// # Safety
+/// - `model_path` must be a valid null-terminated C string
+///
+/// # Returns
+/// - `true` if initialization succeeded
+/// - `false` if initialization failed
+#[no_mangle]
+pub extern "C" fn init_mmbert_embedding_model(model_path: *const c_char, use_cpu: bool) -> bool {
+    use candle_core::Device;
+
+    if model_path.is_null() {
+        eprintln!("Error: model_path is null");
+        return false;
+    }
+
+    let path = unsafe {
+        match CStr::from_ptr(model_path).to_str() {
+            Ok(s) if !s.is_empty() => s.to_string(),
+            _ => {
+                eprintln!("Error: invalid model_path");
+                return false;
+            }
+        }
+    };
+
+    // Check if already initialized
+    if let Some(factory) = GLOBAL_MODEL_FACTORY.get() {
+        if factory.get_mmbert_model().is_some() {
+            eprintln!("WARNING: mmBERT model already initialized");
+            return true;
+        }
+    }
+
+    // Determine device
+    let device = if use_cpu {
+        Device::Cpu
+    } else {
+        Device::cuda_if_available(0).unwrap_or(Device::Cpu)
+    };
+
+    // Create or get factory
+    let factory = if let Some(_) = GLOBAL_MODEL_FACTORY.get() {
+        // Factory exists but mmbert not loaded - we can't modify OnceLock
+        eprintln!("Error: ModelFactory already initialized without mmBERT. Initialize mmBERT first or use init_embedding_models_with_mmbert.");
+        return false;
+    } else {
+        let mut factory = ModelFactory::new(device);
+        match factory.register_mmbert_embedding_model(&path) {
+            Ok(_) => {
+                println!("INFO: mmBERT embedding model registered successfully");
+            }
+            Err(e) => {
+                eprintln!("ERROR: Failed to register mmBERT model: {:?}", e);
+                return false;
+            }
+        }
+        factory
+    };
+
+    match GLOBAL_MODEL_FACTORY.set(factory) {
+        Ok(_) => true,
+        Err(_) => {
+            eprintln!("Error: Failed to set global model factory");
+            false
+        }
+    }
+}
+
+/// Initialize embedding models with given paths (including mmBERT)
+///
+/// # Safety
+/// - All paths must be valid null-terminated C strings or null
+/// - Must be called before any embedding generation functions
+///
+/// # Returns
+/// - `true` if initialization succeeded
+/// - `false` if initialization failed
+#[no_mangle]
+pub extern "C" fn init_embedding_models_with_mmbert(
+    qwen3_model_path: *const c_char,
+    gemma_model_path: *const c_char,
+    mmbert_model_path: *const c_char,
+    use_cpu: bool,
+) -> bool {
+    use candle_core::Device;
+
+    if GLOBAL_MODEL_FACTORY.get().is_some() {
+        eprintln!("WARNING: ModelFactory already initialized");
+        return true;
+    }
+
+    // Parse paths
+    let qwen3_path = if qwen3_model_path.is_null() {
+        None
+    } else {
+        unsafe {
+            match CStr::from_ptr(qwen3_model_path).to_str() {
+                Ok(s) if !s.is_empty() => Some(s.to_string()),
+                _ => None,
+            }
+        }
+    };
+
+    let gemma_path = if gemma_model_path.is_null() {
+        None
+    } else {
+        unsafe {
+            match CStr::from_ptr(gemma_model_path).to_str() {
+                Ok(s) if !s.is_empty() => Some(s.to_string()),
+                _ => None,
+            }
+        }
+    };
+
+    let mmbert_path = if mmbert_model_path.is_null() {
+        None
+    } else {
+        unsafe {
+            match CStr::from_ptr(mmbert_model_path).to_str() {
+                Ok(s) if !s.is_empty() => Some(s.to_string()),
+                _ => None,
+            }
+        }
+    };
+
+    if qwen3_path.is_none() && gemma_path.is_none() && mmbert_path.is_none() {
+        eprintln!("Error: at least one model path must be provided");
+        return false;
+    }
+
+    let device = if use_cpu {
+        Device::Cpu
+    } else {
+        Device::cuda_if_available(0).unwrap_or(Device::Cpu)
+    };
+
+    let mut factory = ModelFactory::new(device);
+
+    // Register models
+    if let Some(path) = qwen3_path {
+        if let Err(e) = factory.register_qwen3_embedding_model(&path) {
+            eprintln!("ERROR: Failed to register Qwen3 model: {:?}", e);
+            return false;
+        }
+    }
+
+    if let Some(path) = gemma_path {
+        if let Err(e) = factory.register_gemma_embedding_model(&path) {
+            eprintln!("WARNING: Failed to register Gemma model: {:?}", e);
+        }
+    }
+
+    if let Some(path) = mmbert_path {
+        if let Err(e) = factory.register_mmbert_embedding_model(&path) {
+            eprintln!("ERROR: Failed to register mmBERT model: {:?}", e);
+            return false;
+        }
+        println!("INFO: mmBERT embedding model registered with 2D Matryoshka support");
+    }
+
+    match GLOBAL_MODEL_FACTORY.set(factory) {
+        Ok(_) => true,
+        Err(_) => true, // Already initialized
+    }
+}
+
 /// Initialize embedding models with given paths
 ///
 /// # Safety
@@ -504,6 +677,87 @@ fn generate_gemma_embedding(
     )
 }
 
+/// Internal helper to generate embedding for mmBERT with 2D Matryoshka
+fn generate_mmbert_embedding(
+    factory: &ModelFactory,
+    text: &str,
+    target_layer: Option<usize>,
+    target_dim: Option<usize>,
+) -> Result<Vec<f32>, String> {
+    use candle_core::Tensor;
+
+    let model = factory
+        .get_mmbert_model()
+        .ok_or_else(|| "mmBERT model not available".to_string())?;
+
+    let tokenizer = factory
+        .get_mmbert_tokenizer()
+        .ok_or_else(|| "mmBERT tokenizer not available".to_string())?;
+
+    // Tokenize
+    let encoding = tokenizer
+        .encode(text, true)
+        .map_err(|e| format!("Tokenization failed: {:?}", e))?;
+
+    let token_ids: Vec<u32> = encoding.get_ids().to_vec();
+    let attention_mask: Vec<u32> = encoding
+        .get_attention_mask()
+        .iter()
+        .map(|&x| x as u32)
+        .collect();
+    let seq_len = token_ids.len();
+
+    // Create tensors
+    let device = model.device();
+    let input_ids = Tensor::from_vec(token_ids, (1, seq_len), device)
+        .map_err(|e| format!("Failed to create input_ids tensor: {:?}", e))?;
+    let attention_mask_tensor = Tensor::from_vec(attention_mask, (1, seq_len), device)
+        .map_err(|e| format!("Failed to create attention_mask tensor: {:?}", e))?;
+
+    // Forward pass with 2D Matryoshka (layer early exit + dimension truncation)
+    let embedding = model
+        .embedding_forward_with_matryoshka(
+            &input_ids,
+            Some(&attention_mask_tensor),
+            target_layer,
+            target_dim,
+        )
+        .map_err(|e| format!("mmBERT forward failed: {:?}", e))?;
+
+    // Convert to Vec<f32>
+    embedding
+        .squeeze(0)
+        .map_err(|e| format!("Failed to squeeze: {:?}", e))?
+        .to_vec1::<f32>()
+        .map_err(|e| format!("Failed to convert to vec: {:?}", e))
+}
+
+/// Generate embeddings for multiple texts in a single batch (mmBERT)
+fn generate_mmbert_embeddings_batch(
+    factory: &ModelFactory,
+    texts: &[&str],
+    target_layer: Option<usize>,
+    target_dim: Option<usize>,
+) -> Result<Vec<Vec<f32>>, String> {
+    let model = factory
+        .get_mmbert_model()
+        .ok_or_else(|| "mmBERT model not available".to_string())?;
+
+    let tokenizer = factory
+        .get_mmbert_tokenizer()
+        .ok_or_else(|| "mmBERT tokenizer not available".to_string())?;
+
+    // Batch encode
+    let embeddings = model
+        .encode_batch_with_matryoshka(tokenizer, texts, 8192, target_layer, target_dim)
+        .map_err(|e| format!("mmBERT batch encoding failed: {:?}", e))?;
+
+    // Convert to Vec<Vec<f32>>
+    embeddings
+        .to_vec2::<f32>()
+        .map_err(|e| format!("Failed to convert embeddings: {:?}", e))
+}
+
 /// Get embedding with automatic model selection (smart routing)
 ///
 /// This function automatically selects the best embedding model based on:
@@ -599,10 +853,61 @@ pub extern "C" fn get_embedding_with_dim(
         }
     };
 
+    // Get model factory to check availability
+    let factory = GLOBAL_MODEL_FACTORY.get();
+
     // Convert ModelType to string for get_embedding_with_model_type
+    // Check if selected model is available, fall back to mmbert if not
     let model_type_str = match model_type {
-        ModelType::Qwen3Embedding => "qwen3",
-        ModelType::GemmaEmbedding => "gemma",
+        ModelType::Qwen3Embedding => {
+            if factory.map_or(false, |f| f.get_qwen3_model().is_some()) {
+                "qwen3"
+            } else if factory.map_or(false, |f| f.get_mmbert_model().is_some()) {
+                eprintln!("INFO: Qwen3 not available, falling back to mmbert");
+                "mmbert"
+            } else if factory.map_or(false, |f| f.get_gemma_model().is_some()) {
+                eprintln!("INFO: Qwen3 not available, falling back to gemma");
+                "gemma"
+            } else {
+                eprintln!(
+                    "Error: Qwen3Embedding selected but not available and no fallback available"
+                );
+                unsafe {
+                    (*result) = create_error_result();
+                }
+                return -1;
+            }
+        }
+        ModelType::GemmaEmbedding => {
+            if factory.map_or(false, |f| f.get_gemma_model().is_some()) {
+                "gemma"
+            } else if factory.map_or(false, |f| f.get_mmbert_model().is_some()) {
+                eprintln!("INFO: Gemma not available, falling back to mmbert");
+                "mmbert"
+            } else if factory.map_or(false, |f| f.get_qwen3_model().is_some()) {
+                eprintln!("INFO: Gemma not available, falling back to qwen3");
+                "qwen3"
+            } else {
+                eprintln!(
+                    "Error: GemmaEmbedding selected but not available and no fallback available"
+                );
+                unsafe {
+                    (*result) = create_error_result();
+                }
+                return -1;
+            }
+        }
+        ModelType::MmBertEmbedding => {
+            if factory.map_or(false, |f| f.get_mmbert_model().is_some()) {
+                "mmbert"
+            } else {
+                eprintln!("Error: MmBertEmbedding selected but not available");
+                unsafe {
+                    (*result) = create_error_result();
+                }
+                return -1;
+            }
+        }
         _ => {
             eprintln!("Error: unsupported model type: {:?}", model_type);
             unsafe {
@@ -612,9 +917,9 @@ pub extern "C" fn get_embedding_with_dim(
         }
     };
 
-    // Call get_embedding_with_model_type
+    // Call get_embedding_2d_matryoshka which handles all model types
     let model_type_cstr = std::ffi::CString::new(model_type_str).unwrap();
-    get_embedding_with_model_type(text, model_type_cstr.as_ptr(), target_dim, result)
+    get_embedding_2d_matryoshka(text, model_type_cstr.as_ptr(), 0, target_dim, result)
 }
 
 /// Get embedding with manually specified model type (no automatic routing)
@@ -624,7 +929,7 @@ pub extern "C" fn get_embedding_with_dim(
 ///
 /// # Parameters
 /// - `text`: Input text (C string)
-/// - `model_type_str`: "qwen3" or "gemma"
+/// - `model_type_str`: "qwen3", "gemma", or "mmbert"
 /// - `target_dim`: Target dimension (768, 512, 256, or 128, 0 for default)
 /// - `result`: Output pointer for embedding result
 ///
@@ -637,8 +942,37 @@ pub extern "C" fn get_embedding_with_model_type(
     target_dim: i32,
     result: *mut EmbeddingResult,
 ) -> i32 {
+    // Forward to 2D Matryoshka function with target_layer=0 (full layers)
+    get_embedding_2d_matryoshka(text, model_type_str, 0, target_dim, result)
+}
+
+/// Get embedding with 2D Matryoshka support (layer early exit + dimension truncation)
+///
+/// This function supports the full 2D Matryoshka API for mmBERT models:
+/// - Layer early exit: Use fewer layers (3, 6, 11, or 22) for faster inference
+/// - Dimension truncation: Use smaller dimensions (64, 128, 256, 512, 768)
+///
+/// For qwen3 and gemma models, only dimension truncation is supported (target_layer is ignored).
+///
+/// # Parameters
+/// - `text`: Input text (C string)
+/// - `model_type_str`: "qwen3", "gemma", or "mmbert"
+/// - `target_layer`: Target layer for early exit (0 for full model, only mmbert supports this)
+/// - `target_dim`: Target dimension (0 for default)
+/// - `result`: Output pointer for embedding result
+///
+/// # Returns
+/// 0 on success, -1 on error
+#[no_mangle]
+pub extern "C" fn get_embedding_2d_matryoshka(
+    text: *const c_char,
+    model_type_str: *const c_char,
+    target_layer: i32,
+    target_dim: i32,
+    result: *mut EmbeddingResult,
+) -> i32 {
     if text.is_null() || model_type_str.is_null() || result.is_null() {
-        eprintln!("Error: null pointer passed to get_embedding_with_model_type");
+        eprintln!("Error: null pointer passed to get_embedding_2d_matryoshka");
         return -1;
     }
 
@@ -668,9 +1002,10 @@ pub extern "C" fn get_embedding_with_model_type(
     let model_type = match model_type_str {
         "qwen3" => ModelType::Qwen3Embedding,
         "gemma" => ModelType::GemmaEmbedding,
+        "mmbert" => ModelType::MmBertEmbedding,
         _ => {
             eprintln!(
-                "Error: invalid model type '{}' (must be 'qwen3' or 'gemma')",
+                "Error: invalid model type '{}' (must be 'qwen3', 'gemma', or 'mmbert')",
                 model_type_str
             );
             unsafe {
@@ -680,15 +1015,16 @@ pub extern "C" fn get_embedding_with_model_type(
         }
     };
 
-    let requirements = EmbeddingRequirements {
-        sequence_length: text_str.split_whitespace().count(),
-        quality_priority: 0.5,
-        latency_priority: 0.5,
-        target_dimension: if target_dim > 0 {
-            Some(target_dim as usize)
-        } else {
-            None
-        },
+    let target_dimension = if target_dim > 0 {
+        Some(target_dim as usize)
+    } else {
+        None
+    };
+
+    let layer = if target_layer > 0 {
+        Some(target_layer as usize)
+    } else {
+        None
     };
 
     // Get model factory
@@ -707,11 +1043,10 @@ pub extern "C" fn get_embedding_with_model_type(
 
     // Generate embedding based on model type
     let embedding_result = match model_type {
-        ModelType::Qwen3Embedding => {
-            generate_qwen3_embedding(factory, text_str, requirements.target_dimension)
-        }
-        ModelType::GemmaEmbedding => {
-            generate_gemma_embedding(factory, text_str, requirements.target_dimension)
+        ModelType::Qwen3Embedding => generate_qwen3_embedding(factory, text_str, target_dimension),
+        ModelType::GemmaEmbedding => generate_gemma_embedding(factory, text_str, target_dimension),
+        ModelType::MmBertEmbedding => {
+            generate_mmbert_embedding(factory, text_str, layer, target_dimension)
         }
         _ => {
             eprintln!("Error: unsupported model type: {:?}", model_type);
@@ -728,10 +1063,11 @@ pub extern "C" fn get_embedding_with_model_type(
             let data = Box::into_raw(embedding_vec.into_boxed_slice()) as *mut f32;
             let processing_time_ms = start_time.elapsed().as_secs_f32() * 1000.0;
 
-            // Map ModelType enum to FFI integer values
+            // Map ModelType enum to FFI integer values (0=qwen3, 1=gemma, 2=mmbert)
             let model_type_id = match model_type {
                 ModelType::Qwen3Embedding => 0,
                 ModelType::GemmaEmbedding => 1,
+                ModelType::MmBertEmbedding => 2,
                 _ => -1,
             };
 
@@ -741,7 +1077,7 @@ pub extern "C" fn get_embedding_with_model_type(
                     length,
                     error: false,
                     model_type: model_type_id,
-                    sequence_length: requirements.sequence_length as i32,
+                    sequence_length: text_str.split_whitespace().count() as i32,
                     processing_time_ms,
                 };
             }

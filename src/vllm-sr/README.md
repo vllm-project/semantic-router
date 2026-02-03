@@ -24,7 +24,8 @@ pip install -e .
 vllm-sr init
 
 # Start the router (includes dashboard)
-vllm-sr serve
+# Provide your HF_TOKEN to run the evaluation tests; this is required for downloading the necessary datasets
+HF_TOKEN=hf_xxx vllm-sr serve
 
 # Open dashboard in browser
 vllm-sr dashboard

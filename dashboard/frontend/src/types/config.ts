@@ -153,7 +153,7 @@ export interface ModelRef {
 }
 
 export interface PluginConfig {
-  type: 'system_prompt' | 'semantic-cache' | 'pii' | 'hallucination'
+  type: 'system_prompt' | 'semantic-cache' | 'pii' | 'hallucination' | 'jailbreak' | 'header_mutation' | 'router_replay'
   configuration: Record<string, any>
 }
 

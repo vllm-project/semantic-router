@@ -57,11 +57,16 @@ const TopologyFlow: React.FC = () => {
     setEdges(newEdges)
   }, [data, collapseState, testResult, setNodes, setEdges])
 
-  // Fit view after nodes change
+  // Fit view after nodes change - with extra bottom padding for input panel
   useEffect(() => {
     if (nodes.length > 0) {
       const timer = setTimeout(() => {
-        fitView({ padding: 0.2, duration: 300 })
+        fitView({
+          padding: 0.1,
+          duration: 300,
+          minZoom: 0.2,
+          maxZoom: 1.0
+        })
       }, 100)
       return () => clearTimeout(timer)
     }
@@ -114,8 +119,8 @@ const TopologyFlow: React.FC = () => {
               style: { strokeWidth: 1.5 },
             }}
             fitView
-            fitViewOptions={{ padding: 0.3, minZoom: 0.3, maxZoom: 1.5 }}
-            defaultViewport={{ x: 0, y: 0, zoom: 0.6 }}
+            fitViewOptions={{ padding: 0.1, minZoom: 0.2, maxZoom: 1.0 }}
+            defaultViewport={{ x: 0, y: 0, zoom: 0.4 }}
           >
             <Background 
               variant={BackgroundVariant.Dots}

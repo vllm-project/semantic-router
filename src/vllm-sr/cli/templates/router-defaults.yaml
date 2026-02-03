@@ -1,16 +1,3 @@
-# You can override by specifying your own mappings below:
-# Uncomment and customize if you need different model mappings:
-# mom_registry:
-#   "models/mom-domain-classifier": "LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model"
-#   "models/mom-pii-classifier": "LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model"
-#   "models/mom-jailbreak-classifier": "LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model"
-#   "models/mom-halugate-detector": "KRLabsOrg/lettucedect-base-modernbert-en-v1"
-#   "models/mom-halugate-sentinel": "LLM-Semantic-Router/halugate-sentinel"
-#   "models/mom-halugate-explainer": "tasksource/ModernBERT-base-nli"
-#   "models/mom-feedback-detector": "llm-semantic-router/feedback-detector"
-#   "models/mom-embedding-pro": "Qwen/Qwen3-Embedding-0.6B"
-#   "models/mom-embedding-flash": "google/embeddinggemma-300m"
-
 # Response API Configuration
 # Enables OpenAI Response API support with conversation chaining
 response_api:
@@ -18,6 +5,14 @@ response_api:
   store_backend: "memory"  # Options: "memory", "milvus", "redis"
   ttl_seconds: 86400       # 24 hours
   max_responses: 1000
+
+# Router Replay Configuration (System-Level)
+# Provides storage backend configuration for router_replay plugin
+# Per-decision settings (max_records, capture settings) are configured via router_replay plugin
+router_replay:
+  store_backend: "memory"  # Options: "memory", "redis", "postgres", "milvus"
+  ttl_seconds: 2592000     # 30 days retention (for persistent backends)
+  async_writes: false      # Enable async writes for better performance
 
 semantic_cache:
   enabled: true
@@ -37,14 +32,9 @@ semantic_cache:
   # backend_config_path: "config/milvus.yaml" # Path to Milvus config
 
   # Embedding model for semantic similarity matching
-  # Options: "bert" (fast, 384-dim), "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
-  # Default: "bert" (fastest, lowest memory)
-  embedding_model: "bert"
-
-bert_model:
-  model_id: models/mom-embedding-light
-  threshold: 0.6
-  use_cpu: true
+  # If not specified, automatically uses the model configured in embedding_models section
+  # Options: "mmbert" (multilingual, 768-dim), "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
+  # embedding_model: "mmbert"  # Optional: explicitly set if you want to override auto-detection
 
 tools:
   enabled: true
@@ -55,25 +45,26 @@ tools:
 
 prompt_guard:
   enabled: true  # Global default - can be overridden per category with jailbreak_enabled
-  use_modernbert: false
-  model_id: "models/mom-jailbreak-classifier"
-  jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
+  use_mmbert_32k: true
+  model_id: "models/mmbert32k-jailbreak-detector-merged"
+  jailbreak_mapping_path: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json"
   threshold: 0.7
   use_cpu: true
 
 # Classifier configuration
 classifier:
   category_model:
-    model_id: "models/mom-domain-classifier"
+    model_id: "models/mmbert32k-intent-classifier-merged"
+    use_mmbert_32k: true
     threshold: 0.6
     use_cpu: true
-    category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
+    category_mapping_path: "models/mmbert32k-intent-classifier-merged/category_mapping.json"
   pii_model:
-    model_id: "models/mom-pii-classifier"
-    use_modernbert: false
+    model_id: "models/mmbert32k-pii-detector-merged"
+    use_mmbert_32k: true
     threshold: 0.9
     use_cpu: true
-    pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
+    pii_mapping_path: "models/mmbert32k-pii-detector-merged/pii_type_mapping.json"
 
 # Hallucination mitigation configuration
 # Disabled by default - enable in decisions via hallucination plugin
@@ -81,9 +72,10 @@ hallucination_mitigation:
   enabled: false
   # Fact-check classifier: determines if a prompt needs fact verification
   fact_check_model:
-    model_id: "models/mom-halugate-sentinel"
+    model_id: "models/mmbert32k-factcheck-classifier-merged"
     threshold: 0.6
     use_cpu: true
+    use_mmbert_32k: true
   # Hallucination detector: verifies if LLM response is grounded in context
   hallucination_model:
     model_id: "models/mom-halugate-detector"
@@ -105,9 +97,10 @@ hallucination_mitigation:
 # Classifies user feedback into 4 types: satisfied, need_clarification, wrong_answer, want_different
 feedback_detector:
   enabled: true
-  model_id: "models/mom-feedback-detector"
+  model_id: "models/mmbert32k-feedback-detector-merged"
   threshold: 0.7
   use_cpu: true
+  use_mmbert_32k: true
 
 # External models configuration
 # Used for advanced routing signals like preference-based routing via external LLM
@@ -125,20 +118,29 @@ feedback_detector:
 #     access_key: ""  # Optional: for Authorization header (Bearer token)
 
 # Embedding Models Configuration
-# These models provide intelligent embedding generation with automatic routing:
-# - Qwen3-Embedding-0.6B: Up to 32K context, high quality,
-# - EmbeddingGemma-300M: Up to 8K context, fast inference, Matryoshka support (768/512/256/128)
+# This is the UNIFIED configuration for all embedding-related features:
+# - Semantic Cache: Automatically uses the configured model
+# - Tool Selection: Uses the configured model for tool matching
+# - Embedding Signal: Uses the model specified in hnsw_config.model_type
+# - Complexity Signal: Uses the model specified in hnsw_config.model_type
+#
+# Available models:
+# - Qwen3-Embedding-0.6B (Pro): Up to 32K context, high quality, 1024-dim
+# - EmbeddingGemma-300M (Flash): Up to 8K context, fast inference, Matryoshka support (768/512/256/128)
+# - mmBERT-Embed-32K-2D-Matryoshka (Ultra): Up to 32K context, 1800+ languages, 2D Matryoshka (layer early exit + dimension reduction)
 embedding_models:
-  qwen3_model_path: "models/mom-embedding-pro"
+  # qwen3_model_path: "models/mom-embedding-pro"
   # gemma_model_path: "models/mom-embedding-flash"
+  mmbert_model_path: "models/mom-embedding-ultra"
   use_cpu: true  # Set to false for GPU acceleration (requires CUDA)
   # HNSW Configuration
   # Improves performance by preloading candidate embeddings at startup
   # and using HNSW index for O(log n) similarity search
   hnsw_config:
-    model_type: "qwen3"         # Which model to use: "qwen3" (high quality) or "gemma" (fast)
+    model_type: "mmbert"         # Which model to use: "qwen3" (high quality), "gemma" (fast), or "mmbert" (multilingual)
     preload_embeddings: true    # Precompute candidate embeddings at startup
-    target_dimension: 1024       # Embedding dimension
+    target_dimension: 768        # Embedding dimension (1024 for qwen3, 768 for gemma/mmbert)
+    # For mmbert only: target_layer (3/6/11/22) for layer early exit
     enable_soft_matching: true
     min_score_threshold: 0.5
 
@@ -175,3 +177,51 @@ looper:
   headers: {}  # Optional headers (e.g., {"Authorization": "Bearer xxx"})
 
 clear_route_cache: true
+
+# Model Selection Configuration
+# ML-based algorithms for intelligent model routing within decisions
+# Reference: https://github.com/ulab-uiuc/LLMRouter
+model_selection:
+  enabled: true
+  # Default algorithm: knn, kmeans, svm
+  default_algorithm: "knn"
+
+  # LLM candidates configuration
+  llm_candidates_path: "config/model_selection/llm_candidates.json"
+
+  # Pre-trained models path (contains saved model weights)
+  models_path: "models/model_selection"
+
+  # Training data path (for custom training)
+  training_data_path: "config/model_selection/routing_training_data.jsonl"
+
+  # Algorithm-specific configurations
+  knn:
+    k: 5  # Number of neighbors
+    weights: "distance"  # "uniform" or "distance"
+    metric: "cosine"  # "cosine", "euclidean", "manhattan"
+    # Pre-trained model file (relative to models_path)
+    model_file: "knn_model.json"
+
+  kmeans:
+    num_clusters: 8
+    efficiency_weight: 0.3  # Balance between quality (0) and efficiency (1)
+    max_iterations: 100
+    model_file: "kmeans_model.json"
+
+  svm:
+    kernel: "rbf"  # "linear", "rbf", "poly"
+    c: 1.0  # Regularization parameter
+    gamma: "auto"  # Kernel coefficient
+    model_file: "svm_model.json"
+
+  # Custom training options
+  # Allows customers to train on their own models
+  custom_training:
+    enabled: false
+    # Path to customer-provided training data
+    custom_data_path: ""
+    # Whether to merge with pre-trained data or replace
+    merge_with_pretrained: true
+    # Minimum training samples required
+    min_samples: 50

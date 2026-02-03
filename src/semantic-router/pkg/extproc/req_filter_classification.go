@@ -160,10 +160,9 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	// This is critical for hallucination detection and other per-decision plugins
 	ctx.VSRSelectedDecision = result.Decision
 
-	// Set router replay config from system-level configuration if enabled
-	if r.Config.RouterReplay.Enabled {
-		cfgCopy := r.Config.RouterReplay
-		ctx.RouterReplayConfig = &cfgCopy
+	// Set router replay plugin config from per-decision plugin if configured
+	if pluginCfg := result.Decision.GetRouterReplayConfig(); pluginCfg != nil && pluginCfg.Enabled {
+		ctx.RouterReplayPluginConfig = pluginCfg
 	}
 
 	// Extract domain category from matched rules (for VSRSelectedCategory header)
@@ -178,7 +177,6 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	}
 	// Store category in context for response headers
 	ctx.VSRSelectedCategory = categoryName
-	ctx.VSRSelectedDecisionConfidence = evaluationConfidence
 
 	// Note: VSRMatchedKeywords is already set from signals.MatchedKeywordRules (line 61)
 	// We should NOT overwrite it with result.MatchedKeywords which contains actual keywords
@@ -186,6 +184,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 
 	decisionName = result.Decision.Name
 	evaluationConfidence = result.Confidence
+	ctx.VSRSelectedDecisionConfidence = evaluationConfidence
 	logging.Infof("Decision Evaluation Result: decision=%s, category=%s, confidence=%.3f, matched_rules=%v",
 		decisionName, categoryName, evaluationConfidence, result.MatchedRules)
 
@@ -201,7 +200,8 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	if len(result.Decision.ModelRefs) > 0 {
 		// Use advanced model selection (Elo, RouterDC, AutoMix, Hybrid, or Static)
 		// Pass decision's algorithm config for per-decision algorithm override
-		selectedModelRef, usedMethod := r.selectModelFromCandidates(result.Decision.ModelRefs, decisionName, userContent, result.Decision.Algorithm)
+		// Pass categoryName for ML selectors to create feature vectors with category one-hot encoding
+		selectedModelRef, usedMethod := r.selectModelFromCandidates(result.Decision.ModelRefs, decisionName, userContent, result.Decision.Algorithm, categoryName)
 
 		// Use LoRA name if specified, otherwise use the base model name
 		selectedModel = selectedModelRef.Model
@@ -214,6 +214,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 				decisionName, selectedModel, usedMethod)
 		}
 		ctx.VSRSelectedModel = selectedModel
+		ctx.VSRSelectionMethod = usedMethod
 
 		// Determine reasoning mode from the selected model's configuration
 		if selectedModelRef.UseReasoning != nil {
@@ -240,6 +241,8 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	} else {
 		// No model refs in decision, use default model
 		selectedModel = r.Config.DefaultModel
+		ctx.VSRSelectedModel = selectedModel
+		ctx.VSRSelectionMethod = "default"
 		logging.Infof("No model refs in decision %s, using default model: %s", decisionName, selectedModel)
 	}
 
@@ -249,8 +252,9 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 // selectModelFromCandidates uses the configured selection algorithm to choose the best model
 // from the decision's candidate models. Falls back to first model if selection fails.
 // The algorithm parameter allows per-decision algorithm override (aligned with looper pattern).
+// The categoryName parameter is the detected domain category (e.g., "physics", "math") for ML feature vectors.
 // Returns the selected model and the method name used for logging.
-func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, decisionName string, query string, algorithm *config.AlgorithmConfig) (*config.ModelRef, string) {
+func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, decisionName string, query string, algorithm *config.AlgorithmConfig, categoryName string) (*config.ModelRef, string) {
 	if len(modelRefs) == 0 {
 		return nil, ""
 	}
@@ -281,6 +285,7 @@ func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, de
 	selCtx := &selection.SelectionContext{
 		Query:           query,
 		DecisionName:    decisionName,
+		CategoryName:    categoryName,
 		CandidateModels: modelRefs,
 		CostWeight:      costWeight,
 		QualityWeight:   qualityWeight,
@@ -327,6 +332,12 @@ func (r *OpenAIRouter) getSelectionMethod(algorithm *config.AlgorithmConfig) sel
 			return selection.MethodHybrid
 		case "static":
 			return selection.MethodStatic
+		case "knn":
+			return selection.MethodKNN
+		case "kmeans":
+			return selection.MethodKMeans
+		case "svm":
+			return selection.MethodSVM
 		case "confidence", "ratings":
 			// These are looper algorithms, not selection algorithms
 			// Fall through to default

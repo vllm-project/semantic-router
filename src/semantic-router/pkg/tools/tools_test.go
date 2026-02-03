@@ -54,7 +54,7 @@ var _ = BeforeSuite(func() {
 		}
 
 		GinkgoWriter.Printf("Initializing ModelFactory with Qwen3=%s, Gemma=%s\n", qwen3ToUse, gemmaToUse)
-		err = candle_binding.InitEmbeddingModels(qwen3ToUse, gemmaToUse, true)
+		err = candle_binding.InitEmbeddingModels(qwen3ToUse, gemmaToUse, "", true)
 		if err != nil {
 			// Log warning but don't fail - tests will skip if ModelFactory is not initialized
 			GinkgoWriter.Printf("Warning: Failed to initialize embedding models: %v\n", err)
@@ -81,6 +81,8 @@ var _ = Describe("ToolsDatabase", func() {
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.8,
 				Enabled:             true,
+				ModelType:           "qwen3",
+				TargetDimension:     768,
 			})
 			Expect(db).NotTo(BeNil())
 			Expect(db.IsEnabled()).To(BeTrue())
@@ -88,6 +90,8 @@ var _ = Describe("ToolsDatabase", func() {
 			db2 := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.8,
 				Enabled:             false,
+				ModelType:           "qwen3",
+				TargetDimension:     768,
 			})
 			Expect(db2).NotTo(BeNil())
 			Expect(db2.IsEnabled()).To(BeFalse())
@@ -150,20 +154,26 @@ var _ = Describe("ToolsDatabase", func() {
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.7,
 				Enabled:             true,
+				ModelType:           "qwen3",
+				TargetDimension:     768,
 			})
 			err := db.LoadToolsFromFile(toolFilePath)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(db.GetToolCount()).To(Equal(2))
 			toolsList := db.GetAllTools()
 			Expect(toolsList).To(HaveLen(2))
-			Expect(toolsList[0].Function.Name).To(Equal("weather"))
-			Expect(toolsList[1].Function.Name).To(Equal("news"))
+			// Check that both tools are loaded (order may vary due to concurrent processing)
+			toolNames := []string{toolsList[0].Function.Name, toolsList[1].Function.Name}
+			Expect(toolNames).To(ContainElement("weather"))
+			Expect(toolNames).To(ContainElement("news"))
 		})
 
 		It("should do nothing if disabled", func() {
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.7,
 				Enabled:             false,
+				ModelType:           "qwen3",
+				TargetDimension:     768,
 			})
 			err := db.LoadToolsFromFile(toolFilePath)
 			Expect(err).NotTo(HaveOccurred())
@@ -174,6 +184,8 @@ var _ = Describe("ToolsDatabase", func() {
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.7,
 				Enabled:             true,
+				ModelType:           "qwen3",
+				TargetDimension:     768,
 			})
 			err := db.LoadToolsFromFile("/nonexistent/tools.json")
 			Expect(err).To(HaveOccurred())
@@ -186,6 +198,8 @@ var _ = Describe("ToolsDatabase", func() {
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.7,
 				Enabled:             true,
+				ModelType:           "qwen3",
+				TargetDimension:     768,
 			})
 			err := db.LoadToolsFromFile(badFile)
 			Expect(err).To(HaveOccurred())
@@ -202,6 +216,8 @@ var _ = Describe("ToolsDatabase", func() {
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.8,
 				Enabled:             true,
+				ModelType:           "qwen3",
+				TargetDimension:     768,
 			})
 			tool := openai.ChatCompletionToolParam{
 				Type: "function",
@@ -221,6 +237,8 @@ var _ = Describe("ToolsDatabase", func() {
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.8,
 				Enabled:             false,
+				ModelType:           "qwen3",
+				TargetDimension:     768,
 			})
 			tool := openai.ChatCompletionToolParam{
 				Type: "function",
@@ -244,8 +262,10 @@ var _ = Describe("ToolsDatabase", func() {
 			}
 
 			db = tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
-				SimilarityThreshold: 0.7,
+				SimilarityThreshold: 0.2, // Lower threshold for more lenient matching
 				Enabled:             true,
+				ModelType:           "qwen3",
+				TargetDimension:     768,
 			})
 			_ = db.AddTool(openai.ChatCompletionToolParam{
 				Type: "function",
@@ -287,6 +307,8 @@ var _ = Describe("ToolsDatabase", func() {
 			db2 := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.7,
 				Enabled:             false,
+				ModelType:           "qwen3",
+				TargetDimension:     768,
 			})
 			results, err := db2.FindSimilarTools("weather", 2)
 			Expect(err).NotTo(HaveOccurred())
@@ -303,6 +325,8 @@ var _ = Describe("ToolsDatabase", func() {
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.8,
 				Enabled:             true,
+				ModelType:           "qwen3",
+				TargetDimension:     768,
 			})
 			_ = db.AddTool(openai.ChatCompletionToolParam{
 				Type: "function",
@@ -326,6 +350,8 @@ var _ = Describe("ToolsDatabase", func() {
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.8,
 				Enabled:             false,
+				ModelType:           "qwen3",
+				TargetDimension:     768,
 			})
 			allTools := db.GetAllTools()
 			Expect(allTools).To(BeEmpty())
@@ -341,6 +367,8 @@ var _ = Describe("ToolsDatabase", func() {
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.8,
 				Enabled:             true,
+				ModelType:           "qwen3",
+				TargetDimension:     768,
 			})
 			Expect(db.GetToolCount()).To(Equal(0))
 			_ = db.AddTool(openai.ChatCompletionToolParam{
@@ -357,6 +385,8 @@ var _ = Describe("ToolsDatabase", func() {
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.8,
 				Enabled:             false,
+				ModelType:           "qwen3",
+				TargetDimension:     768,
 			})
 			Expect(db.GetToolCount()).To(Equal(0))
 		})

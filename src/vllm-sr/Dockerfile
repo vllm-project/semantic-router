@@ -10,6 +10,16 @@ RUN cargo build --release --no-default-features && \
     find target -name "*.so" -type f && \
     ls -la target/release/
 
+# Stage 1a: Build Rust ml-binding (for ML model selection: KNN, KMeans, SVM)
+FROM rustlang/rust:nightly AS ml-rust-builder
+WORKDIR /build
+COPY ml-binding/ .
+# Build ml-binding library
+RUN cargo build --release && \
+    echo "Checking ml-binding library:" && \
+    find target -name "*.so" -type f && \
+    ls -la target/release/
+
 # Stage 1b: Build dashboard frontend with Node.js
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
@@ -22,6 +32,7 @@ RUN npm run build
 
 # Stage 1c: Build dashboard backend with Go
 # Note: dashboard/backend/go.mod has a replace directive for src/semantic-router
+# Use golang image (not alpine) for CGO support - go-sqlite3 requires CGO
 FROM golang:1.24 AS dashboard-builder
 WORKDIR /app
 
@@ -39,8 +50,9 @@ WORKDIR /app/dashboard/backend
 RUN go mod download
 
 # Copy source code and build
+# CGO_ENABLED=1 is required for go-sqlite3 (evaluation database)
 COPY dashboard/backend/ /app/dashboard/backend/
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/dashboard-backend main.go
+RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s" -o /app/dashboard-backend main.go
 
 # Stage 2: Build Go semantic router
 FROM golang:1.24 AS go-builder
@@ -49,10 +61,18 @@ WORKDIR /build
 # Copy candle-binding library for CGO linking
 COPY --from=rust-builder /build/target/release/libcandle_semantic_router.so /usr/local/lib/
 COPY --from=rust-builder /build/target/release/libcandle_semantic_router.a /usr/local/lib/
+
+# Copy ml-binding library for CGO linking (ML model selection: KNN, KMeans, SVM)
+# Note: ml-binding only produces .so (shared library), not .a (static library)
+COPY --from=ml-rust-builder /build/target/release/libml_semantic_router.so /usr/local/lib/
+
 ENV LD_LIBRARY_PATH=/usr/local/lib
 
 # Copy candle-binding Go files (needed for go.mod replace directive)
 COPY --from=rust-builder /build/go.mod /build/semantic-router.go /build/../candle-binding/
+
+# Copy ml-binding Go files (needed for ML model selection - go.mod replace directive)
+COPY --from=ml-rust-builder /build/go.mod /build/ml_binding.go /build/../ml-binding/
 
 # Copy Go source
 COPY src/semantic-router/ .
@@ -79,6 +99,7 @@ RUN set -eux; \
 # Copy binaries from builders
 COPY --from=go-builder /build/router /usr/local/bin/router
 COPY --from=rust-builder /build/target/release/libcandle_semantic_router.so /usr/local/lib/
+COPY --from=ml-rust-builder /build/target/release/libml_semantic_router.so /usr/local/lib/
 COPY --from=envoy /usr/local/bin/envoy /usr/local/bin/envoy
 COPY --from=dashboard-builder /app/dashboard-backend /usr/local/bin/dashboard-backend
 COPY --from=frontend-builder /app/frontend/dist /app/frontend
@@ -97,8 +118,12 @@ COPY src/vllm-sr/requirements.txt /app/requirements.txt
 # Copy tools database to config directory
 COPY src/vllm-sr/cli/templates/tools_db.json /app/config/tools_db.json
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy bench directory for evaluation benchmarks
+COPY bench/ /app/bench/
+
+# Install Python dependencies (CLI + bench)
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir -r /app/bench/requirements.txt
 
 # Copy start scripts
 COPY src/vllm-sr/start-router.sh /app/start-router.sh

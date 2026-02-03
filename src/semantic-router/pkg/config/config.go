@@ -186,6 +186,9 @@ type ModelSelectionConfig struct {
 	// Default: "static" (uses static scores from configuration)
 	Method string `yaml:"method,omitempty"`
 
+	// Enabled indicates if model selection is enabled
+	Enabled bool `yaml:"enabled,omitempty"`
+
 	// Elo configuration for Elo rating-based selection
 	Elo EloSelectionConfig `yaml:"elo,omitempty"`
 
@@ -197,6 +200,47 @@ type ModelSelectionConfig struct {
 
 	// Hybrid configuration for combined selection methods
 	Hybrid HybridSelectionConfig `yaml:"hybrid,omitempty"`
+
+	// ML configuration for ML-based selection (KNN, KMeans, SVM)
+	ML MLSelectionConfig `yaml:"ml,omitempty"`
+}
+
+// MLSelectionConfig holds configuration for all ML-based selectors
+type MLSelectionConfig struct {
+	// ModelsPath is the base path for pretrained model files
+	ModelsPath string `yaml:"models_path,omitempty"`
+
+	// EmbeddingDim is the embedding dimension (default: 1024 for Qwen3)
+	EmbeddingDim int `yaml:"embedding_dim,omitempty"`
+
+	// KNN configuration
+	KNN MLKNNConfig `yaml:"knn,omitempty"`
+
+	// KMeans configuration
+	KMeans MLKMeansConfig `yaml:"kmeans,omitempty"`
+
+	// SVM configuration
+	SVM MLSVMConfig `yaml:"svm,omitempty"`
+}
+
+// MLKNNConfig holds KNN-specific configuration
+type MLKNNConfig struct {
+	K              int    `yaml:"k,omitempty"`
+	PretrainedPath string `yaml:"pretrained_path,omitempty"`
+}
+
+// MLKMeansConfig holds KMeans-specific configuration
+type MLKMeansConfig struct {
+	NumClusters      int     `yaml:"num_clusters,omitempty"`
+	EfficiencyWeight float64 `yaml:"efficiency_weight,omitempty"`
+	PretrainedPath   string  `yaml:"pretrained_path,omitempty"`
+}
+
+// MLSVMConfig holds SVM-specific configuration
+type MLSVMConfig struct {
+	Kernel         string  `yaml:"kernel,omitempty"`
+	Gamma          float64 `yaml:"gamma,omitempty"`
+	PretrainedPath string  `yaml:"pretrained_path,omitempty"`
 }
 
 // EloSelectionConfig configures Elo rating-based model selection
@@ -376,6 +420,7 @@ type CategoryModel struct {
 	Threshold           float32 `yaml:"threshold"`
 	UseCPU              bool    `yaml:"use_cpu"`
 	UseModernBERT       bool    `yaml:"use_modernbert"`
+	UseMmBERT32K        bool    `yaml:"use_mmbert_32k"` // Use mmBERT-32K (YaRN, 32K context) instead of ModernBERT
 	CategoryMappingPath string  `yaml:"category_mapping_path"`
 	// FallbackCategory is returned when classification confidence is below threshold.
 	// Default is "other" if not specified.
@@ -386,6 +431,7 @@ type PIIModel struct {
 	ModelID        string  `yaml:"model_id"`
 	Threshold      float32 `yaml:"threshold"`
 	UseCPU         bool    `yaml:"use_cpu"`
+	UseMmBERT32K   bool    `yaml:"use_mmbert_32k"` // Use mmBERT-32K (YaRN, 32K context) for PII detection
 	PIIMappingPath string  `yaml:"pii_mapping_path"`
 }
 
@@ -394,6 +440,9 @@ type EmbeddingModels struct {
 	Qwen3ModelPath string `yaml:"qwen3_model_path"`
 	// Path to EmbeddingGemma-300M model directory
 	GemmaModelPath string `yaml:"gemma_model_path"`
+	// Path to mmBERT 2D Matryoshka embedding model directory
+	// Supports layer early exit (3/6/11/22 layers) and dimension reduction (64-768)
+	MmBertModelPath string `yaml:"mmbert_model_path"`
 	// Use CPU for inference (default: true, auto-detect GPU if available)
 	UseCPU bool `yaml:"use_cpu"`
 
@@ -408,7 +457,7 @@ type EmbeddingModels struct {
 // This struct is kept for backward compatibility and may be renamed in a future version.
 type HNSWConfig struct {
 	// ModelType specifies which embedding model to use (default: "qwen3")
-	// Options: "qwen3" (high quality, 32K context) or "gemma" (fast, 8K context)
+	// Options: "qwen3" (high quality, 32K context), "gemma" (fast, 8K context), or "mmbert" (multilingual, 2D Matryoshka)
 	// This model will be used for both preloading and runtime embedding generation
 	ModelType string `yaml:"model_type,omitempty"`
 
@@ -418,8 +467,13 @@ type HNSWConfig struct {
 	PreloadEmbeddings bool `yaml:"preload_embeddings"`
 
 	// TargetDimension is the embedding dimension to use (default: 768)
-	// Supports Matryoshka dimensions: 768, 512, 256, 128
+	// Supports Matryoshka dimensions: 768, 512, 256, 128, 64
 	TargetDimension int `yaml:"target_dimension,omitempty"`
+
+	// TargetLayer is the layer for mmBERT early exit (default: 0 = full model)
+	// Only used when ModelType is "mmbert"
+	// Options: 3 (fastest, ~7x speedup), 6 (~3.6x), 11 (~2x), 22 (full model)
+	TargetLayer int `yaml:"target_layer,omitempty"`
 
 	// EnableSoftMatching enables soft matching mode (default: true)
 	// When enabled, if no rule meets its threshold, returns the rule with highest score
@@ -910,12 +964,16 @@ type PromptGuardConfig struct {
 	// Ignored when use_vllm is true
 	UseModernBERT bool `yaml:"use_modernbert"`
 
+	// Use mmBERT-32K for jailbreak detection (32K context, YaRN RoPE, multilingual)
+	// Takes precedence over UseModernBERT when both are true
+	UseMmBERT32K bool `yaml:"use_mmbert_32k"`
+
 	// Path to the jailbreak type mapping file
 	JailbreakMappingPath string `yaml:"jailbreak_mapping_path"`
 
 	// Use vLLM REST API instead of Candle for guardrail/safety checks
 	// When true, vLLM configuration must be provided in external_models with model_role="guardrail"
-	// When false (default), uses Candle-based classification with ModelID, UseCPU, and UseModernBERT
+	// When false (default), uses Candle-based classification with ModelID, UseCPU, and UseModernBERT/UseMmBERT32K
 	UseVLLM bool `yaml:"use_vllm,omitempty"`
 }
 
@@ -937,6 +995,10 @@ type FeedbackDetectorConfig struct {
 
 	// Use ModernBERT for feedback detection (Candle ModernBERT flag)
 	UseModernBERT bool `yaml:"use_modernbert"`
+
+	// Use mmBERT-32K for feedback detection (32K context, YaRN RoPE, multilingual)
+	// Takes precedence over UseModernBERT when both are true
+	UseMmBERT32K bool `yaml:"use_mmbert_32k"`
 
 	// Path to the feedback type mapping file
 	FeedbackMappingPath string `yaml:"feedback_mapping_path"`
@@ -1062,6 +1124,9 @@ type FactCheckModelConfig struct {
 
 	// Use CPU for inference
 	UseCPU bool `yaml:"use_cpu"`
+
+	// Use mmBERT-32K for fact-check classification (32K context, YaRN RoPE, multilingual)
+	UseMmBERT32K bool `yaml:"use_mmbert_32k"`
 }
 
 // HallucinationModelConfig represents configuration for hallucination detection model
@@ -1158,6 +1223,17 @@ type VLLMEndpoint struct {
 
 	// Load balancing weight for this endpoint
 	Weight int `yaml:"weight,omitempty"`
+
+	// Type of endpoint API: "vllm" (default), "openai", "ollama", "huggingface", "openrouter"
+	// This determines how requests are formatted and which API format to use
+	// +optional
+	// +kubebuilder:default=vllm
+	Type string `yaml:"type,omitempty"`
+
+	// API key for authenticated endpoints (HuggingFace, OpenRouter, etc.)
+	// Can also be set via environment variables: HF_API_KEY, OPENROUTER_API_KEY
+	// +optional
+	APIKey string `yaml:"api_key,omitempty"`
 }
 
 // ModelPricing represents configuration for model-specific parameters
@@ -1214,6 +1290,12 @@ type ModelParams struct {
 	// Default: 0.8 if not specified
 	// Example: 0.95 for a high-quality model, 0.6 for a fast but less capable model
 	QualityScore float64 `yaml:"quality_score,omitempty"`
+
+	// ExternalModelIDs maps endpoint types to their model identifiers
+	// This allows mapping the internal model name to different external model IDs
+	// Example: {"huggingface": "meta-llama/Llama-3.1-8B-Instruct", "ollama": "llama3.1:8b"}
+	// +optional
+	ExternalModelIDs map[string]string `yaml:"external_model_ids,omitempty"`
 }
 
 // LoRAAdapter represents a LoRA adapter configuration for a model
@@ -1291,7 +1373,12 @@ type Decision struct {
 	// Rules defines the combination of keyword/embedding/domain rules using AND/OR logic
 	Rules RuleCombination `yaml:"rules"`
 
-	// ModelRefs contains model references for this decision (currently only supports one model)
+	// ModelSelectionAlgorithm configures how to select from multiple models in ModelRefs
+	// If not specified, defaults to selecting the first model
+	ModelSelectionAlgorithm *ModelSelectionConfig `yaml:"modelSelectionAlgorithm,omitempty"`
+
+	// ModelRefs contains model references for this decision
+	// When multiple models are specified, ModelSelectionAlgorithm determines which to use
 	ModelRefs []ModelRef `yaml:"modelRefs,omitempty"`
 
 	// Algorithm defines the multi-model execution strategy when multiple ModelRefs are configured.
@@ -1392,6 +1479,38 @@ type RatingsAlgorithmConfig struct {
 	// - "skip": Skip the failed model and return remaining results (default)
 	// - "fail": Return error if any model fails
 	OnError string `yaml:"on_error,omitempty"`
+}
+
+// MLModelSelectionConfig configures the ML-based model selection algorithm
+// Supported types: knn, kmeans, svm
+type MLModelSelectionConfig struct {
+	// Type specifies the algorithm: "knn", "kmeans", "svm"
+	Type string `yaml:"type"`
+
+	// ModelsPath is the path to pre-trained model files (e.g., "trained_models/")
+	// If specified, loads pre-trained models instead of creating empty selectors
+	// The algorithm will look for {ModelsPath}/{type}_model.json
+	ModelsPath string `yaml:"models_path,omitempty"`
+
+	// K is the number of neighbors for KNN algorithm (default: 3)
+	K int `yaml:"k,omitempty"`
+
+	// NumClusters is the number of clusters for KMeans algorithm (default: equals number of models)
+	NumClusters int `yaml:"num_clusters,omitempty"`
+
+	// Kernel specifies the SVM kernel type: "linear", "rbf", "poly" (default: "rbf")
+	Kernel string `yaml:"kernel,omitempty"`
+
+	// Gamma is the RBF kernel parameter for SVM (default: 1.0)
+	Gamma float64 `yaml:"gamma,omitempty"`
+
+	// EfficiencyWeight controls the performance-efficiency tradeoff for KMeans (default: 0.3)
+	// 0 = pure performance (quality), 1 = pure efficiency (latency)
+	// Use pointer to distinguish "not set" (nil, uses default 0.3) from "explicitly 0"
+	EfficiencyWeight *float64 `yaml:"efficiency_weight,omitempty"`
+
+	// FeatureWeights allows custom weighting of features for selection
+	FeatureWeights map[string]float64 `yaml:"feature_weights,omitempty"`
 }
 
 // ModelRef represents a reference to a model (without score field)
@@ -1495,11 +1614,9 @@ type HallucinationPluginConfig struct {
 	IncludeHallucinationDetails bool `json:"include_hallucination_details,omitempty" yaml:"include_hallucination_details,omitempty"`
 }
 
-// RouterReplayConfig configures the router replay system for recording
-// routing decisions and payload snippets for later debugging and replay.
-// This is a system-level configuration with automatic per-decision isolation
-// (separate collection/table/keyspace per decision).
-type RouterReplayConfig struct {
+// RouterReplayPluginConfig represents configuration for router_replay plugin
+// This is the per-decision plugin configuration (overrides global router_replay config)
+type RouterReplayPluginConfig struct {
 	Enabled bool `json:"enabled" yaml:"enabled"`
 
 	// MaxRecords controls the maximum number of replay records kept in memory.
@@ -1517,7 +1634,12 @@ type RouterReplayConfig struct {
 	// MaxBodyBytes caps how many bytes of request/response body are recorded.
 	// Defaults to 4096 bytes.
 	MaxBodyBytes int `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
+}
 
+// RouterReplayConfig configures the router replay system at the system level.
+// This provides storage backend configuration and system-level settings.
+// Per-decision settings (max_records, capture settings) are configured via router_replay plugin.
+type RouterReplayConfig struct {
 	// StoreBackend specifies the storage backend to use.
 	// Options: "memory", "redis", "postgres", "milvus". Defaults to "memory".
 	StoreBackend string `json:"store_backend,omitempty" yaml:"store_backend,omitempty"`
@@ -1745,6 +1867,21 @@ func (d *Decision) GetHallucinationConfig() *HallucinationPluginConfig {
 	result := &HallucinationPluginConfig{}
 	if err := unmarshalPluginConfig(config, result); err != nil {
 		logging.Errorf("Failed to unmarshal hallucination config: %v", err)
+		return nil
+	}
+	return result
+}
+
+// GetRouterReplayConfig returns the router_replay plugin configuration
+func (d *Decision) GetRouterReplayConfig() *RouterReplayPluginConfig {
+	config := d.GetPluginConfig("router_replay")
+	if config == nil {
+		return nil
+	}
+
+	result := &RouterReplayPluginConfig{}
+	if err := unmarshalPluginConfig(config, result); err != nil {
+		logging.Errorf("Failed to unmarshal router_replay config: %v", err)
 		return nil
 	}
 	return result

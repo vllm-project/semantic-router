@@ -65,6 +65,7 @@ type RequestContext struct {
 	VSRSelectedDecisionConfidence float64          // Confidence score from DecisionEngine evaluation
 	VSRReasoningMode              string           // "on" or "off" - whether reasoning mode was determined to be used
 	VSRSelectedModel              string           // The model selected by VSR
+	VSRSelectionMethod            string           // Model selection algorithm used (e.g., "elo", "static", "router_dc")
 	VSRCacheHit                   bool             // Whether this request hit the cache
 	VSRInjectedSystemPrompt       bool             // Whether a system prompt was injected into the request
 	VSRSelectedDecision           *config.Decision // The decision object selected by DecisionEngine (for plugins)
@@ -96,6 +97,16 @@ type RequestContext struct {
 	EnhancedHallucinationInfo *EnhancedHallucinationInfo // Detailed NLI info (when use_nli enabled)
 	UnverifiedFactualResponse bool                       // True if fact-check needed but no tools to verify against
 
+	// Jailbreak Detection Results
+	JailbreakDetected   bool    // True if jailbreak was detected
+	JailbreakType       string  // Type of jailbreak detected
+	JailbreakConfidence float32 // Confidence score of jailbreak detection
+
+	// PII Detection Results
+	PIIDetected bool     // True if PII was detected
+	PIIEntities []string // PII entity types detected (e.g., ["EMAIL", "PHONE_NUMBER"])
+	PIIBlocked  bool     // True if request was blocked due to PII policy violation
+
 	// Tracing context
 	TraceContext context.Context // OpenTelemetry trace context for span propagation
 	UpstreamSpan trace.Span      // Span for tracking upstream vLLM request duration
@@ -104,9 +115,9 @@ type RequestContext struct {
 	ResponseAPICtx *ResponseAPIContext // Non-nil if this is a Response API request
 
 	// Router replay context
-	RouterReplayID       string                     // ID of the router replay session, if applicable
-	RouterReplayConfig   *config.RouterReplayConfig // Configuration for router replay, if applicable
-	RouterReplayRecorder *routerreplay.Recorder     // The recorder instance for this decision
+	RouterReplayID           string                           // ID of the router replay session, if applicable
+	RouterReplayPluginConfig *config.RouterReplayPluginConfig // Per-decision plugin configuration for router replay
+	RouterReplayRecorder     *routerreplay.Recorder           // The recorder instance for this decision
 
 	// Looper context
 	LooperRequest   bool // True if this request is from looper (internal request, skip plugins)

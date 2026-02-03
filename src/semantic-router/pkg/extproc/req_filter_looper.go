@@ -96,6 +96,7 @@ func (r *OpenAIRouter) handleLooperExecution(
 	// Update context with looper results
 	reqCtx.RequestModel = resp.Model
 	reqCtx.VSRSelectedModel = resp.Model
+	reqCtx.VSRSelectionMethod = resp.AlgorithmType
 
 	// Capture router replay information if enabled
 	// Use first model from ModelsUsed as the "selected" model for replay
@@ -104,6 +105,12 @@ func (r *OpenAIRouter) handleLooperExecution(
 		selectedModel = resp.ModelsUsed[0]
 	}
 	r.startRouterReplay(reqCtx, openAIRequest.Model, selectedModel, decision.Name)
+
+	// Update router replay with success status (looper returns immediate response with 200)
+	r.updateRouterReplayStatus(reqCtx, 200, false)
+
+	// Attach response body to router replay record
+	r.attachRouterReplayResponse(reqCtx, resp.Body, true)
 
 	// Create immediate response with detailed headers
 	return r.createLooperResponse(resp), nil

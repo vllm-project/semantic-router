@@ -19,10 +19,11 @@ type FactCheckResult struct {
 // FactCheckClassifier handles fact-check classification to determine if a prompt
 // requires external factual verification using the halugate-sentinel ML model
 type FactCheckClassifier struct {
-	config      *config.FactCheckModelConfig
-	mapping     *FactCheckMapping
-	initialized bool
-	mu          sync.RWMutex
+	config       *config.FactCheckModelConfig
+	mapping      *FactCheckMapping
+	initialized  bool
+	useMmBERT32K bool // Track if mmBERT-32K is used for inference
+	mu           sync.RWMutex
 }
 
 // NewFactCheckClassifier creates a new fact-check classifier
@@ -64,15 +65,31 @@ func (c *FactCheckClassifier) Initialize() error {
 		return fmt.Errorf("fact-check classifier requires ModelID to be configured")
 	}
 
-	logging.Infof("Initializing fact-check classifier ML model")
+	logging.Infof("✅ Initializing Fact-Check Classifier:")
+	logging.Infof("Model: %s", c.config.ModelID)
+	logging.Infof("CPU Mode: %v", c.config.UseCPU)
 
+	// Check if mmBERT-32K is configured (takes precedence)
+	if c.config.UseMmBERT32K {
+		logging.Infof("Type: mmBERT-32K (32K context, YaRN RoPE)")
+		err := candle.InitMmBert32KFactcheckClassifier(c.config.ModelID, c.config.UseCPU)
+		if err != nil {
+			return fmt.Errorf("failed to initialize mmBERT-32K fact-check model from %s: %w", c.config.ModelID, err)
+		}
+		c.useMmBERT32K = true
+		c.initialized = true
+		logging.Infof("✓ Fact-check classifier initialized successfully")
+		return nil
+	}
+
+	logging.Infof("Type: halugate-sentinel (ML-based)")
 	err := candle.InitFactCheckClassifier(c.config.ModelID, c.config.UseCPU)
 	if err != nil {
 		return fmt.Errorf("failed to initialize fact-check ML model from %s: %w", c.config.ModelID, err)
 	}
 
 	c.initialized = true
-	logging.Infof("Fact-check classifier initialized with ML model (halugate-sentinel)")
+	logging.Infof("✓ Fact-check classifier initialized successfully")
 
 	return nil
 }
@@ -94,7 +111,13 @@ func (c *FactCheckClassifier) Classify(text string) (*FactCheckResult, error) {
 		}, nil
 	}
 
-	result, err := candle.ClassifyFactCheckText(text)
+	var result candle.ClassResult
+	var err error
+	if c.useMmBERT32K {
+		result, err = candle.ClassifyMmBert32KFactcheck(text)
+	} else {
+		result, err = candle.ClassifyFactCheckText(text)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("fact-check ML classification failed: %w", err)
 	}
