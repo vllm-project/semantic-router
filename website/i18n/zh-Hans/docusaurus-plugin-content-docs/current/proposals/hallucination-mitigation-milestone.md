@@ -5,7 +5,7 @@ translation:
   outdated: false
 ---
 
-# TruthLens：实时 hallucination 缓解
+# TruthLens：实时幻觉 (Hallucination) 缓解
 
 **版本：** 1.0
 **作者：** vLLM Semantic Router 团队
@@ -15,26 +15,26 @@ translation:
 
 ## 摘要
 
-大语言模型 (LLM) 展示了卓越的能力，但其产生 hallucination（流畅但事实错误或无根据的内容）的倾向仍然是企业采用 AI 的关键障碍。行业调查一致表明，hallucination 风险是阻止组织在生产环境中部署 LLM 驱动的应用程序的首要担忧，特别是在医疗保健、金融和法律服务等高风险领域。
+大语言模型 (LLM) 展示了卓越的能力，但其产生幻觉（流畅但事实错误或无根据的内容）的倾向仍然是企业采用 AI 的关键障碍。行业调查一致表明，幻觉风险是阻止组织在生产环境中部署 LLM 驱动的应用程序的首要担忧，特别是在医疗保健、金融和法律服务等高风险领域。
 
-我们提出了 **TruthLens**，这是一个集成到 vLLM Semantic Router 中的实时 hallucination 检测和缓解框架。通过在 inference 网关层定位 hallucination 控制，TruthLens 提供了一个与模型无关的集中式解决方案，通过可配置的缓解策略解决“准确率-延迟-成本”三角形问题。用户可以根据对成本和准确率权衡的容忍度从三种操作模式中进行选择：(1) **轻量级模式**——带有警告注入的单轮检测，(2) **标准模式**——使用相同模型的迭代自我细化，以及 (3) **高级模式**——多模型交叉验证和协作纠错。这种设计使组织能够部署值得信赖的 AI 系统，同时保持对运营成本和响应延迟的控制。
+我们提出了 **TruthLens**，这是一个集成到 vLLM Semantic Router 中的实时幻觉检测和缓解框架。通过在 inference 网关层定位幻觉控制，TruthLens 提供了一个与模型无关的集中式解决方案，通过可配置的缓解策略解决“准确率-延迟-成本”三角形问题。用户可以根据对成本和准确率权衡的容忍度从三种操作模式中进行选择：(1) **轻量级模式**——带有警告注入的单轮检测，(2) **标准模式**——使用相同模型的迭代自我细化，以及 (3) **高级模式**——多模型交叉验证和协作纠错。这种设计使组织能够部署值得信赖的 AI 系统，同时保持对运营成本和响应延迟的控制。
 
 ---
 
-## 1. 引言：企业级 AI 中的 hallucination 危机
+## 1. 引言：企业级 AI 中的幻觉危机
 
 ### 1.1 核心问题
 
-hallucination 是当今企业采用 AI 的最重要障碍。与传统的软件错误不同，LLM 的 hallucination 是：
+幻觉是当今企业采用 AI 的最重要障碍。与传统的软件错误不同，LLM 的幻觉是：
 
 - **不可预测的**：它们在不同的查询和上下文中随机发生
-- **具有说服力的**：hallucination 内容通常看起来流畅、自信且似乎合理
-- **高风险的**：在医疗、法律或金融领域的一次 hallucination 可能会造成不可逆转的损害
-- **隐形的**：如果没有专门的检测，用户无法区分 hallucination 和准确的响应
+- **具有说服力的**：幻觉内容通常看起来流畅、自信且似乎合理
+- **高风险的**：在医疗、法律或金融领域的一次幻觉可能会造成不可逆转的损害
+- **隐形的**：如果没有专门的检测，用户无法区分幻觉和准确的响应
 
 **按领域划分的行业影响：**
 
-| 领域 | hallucination 风险容忍度 | 典型的缓解方法 |
+| 领域 | 幻觉风险容忍度 | 典型的缓解方法 |
 |--------|------------------------------|----------------------------|
 | 医疗保健 | 接近于零（生命至关重要） | 强制人工验证、责任担忧 |
 | 金融服务 | 极低（监管） | 合规驱动的审查流程 |
@@ -46,7 +46,7 @@ hallucination 是当今企业采用 AI 的最重要障碍。与传统的软件�
 
 ### 1.2 为什么现有解决方案不足
 
-目前的 hallucination 缓解方法在 AI 堆栈的错误层级运行：
+目前的幻觉缓解方法在 AI 堆栈的错误层级运行：
 
 ```mermaid
 flowchart TB
@@ -67,7 +67,7 @@ flowchart TB
 
 ### 1.3 为什么 vLLM Semantic Router 是理想的解决方案点
 
-vLLM Semantic Router 在 AI 基础设施堆栈中处于独特的位置，使其非常适合 hallucination 缓解：
+vLLM Semantic Router 在 AI 基础设施堆栈中处于独特的位置，使其非常适合幻觉缓解：
 
 ```mermaid
 flowchart LR
@@ -88,7 +88,7 @@ flowchart LR
         end
 
         subgraph "新增：TruthLens"
-            HALL[hallucination<br/>检测与缓解]
+            HALL[幻觉<br/>检测与缓解]
         end
     end
 
@@ -114,7 +114,7 @@ flowchart LR
     HALL --> LLM4
 ```
 
-**网关级 hallucination 控制的关键优势：**
+**网关级幻觉控制的关键优势：**
 
 | 优势 | 描述 |
 |-----------|-------------|
@@ -122,12 +122,12 @@ flowchart LR
 | **集中策略** | 所有应用程序的单一配置点 |
 | **成本控制** | 全组织范围内对准确率与成本权衡的可视化 |
 | **增量采用** | 启用按决策、按领域的策略 |
-| **可观测性** | 针对 hallucination 事件的统一指标、日志和警报 |
+| **可观测性** | 针对幻觉事件的统一指标、日志和警报 |
 | **深度防御** | 补充（而非取代）RAG 和 prompt 工程 |
 
 ### 1.4 正式问题定义
 
-我们将检索增强生成 (RAG) 系统中的 hallucination 检测形式化为 **token 级序列标注**问题。
+我们将检索增强生成 (RAG) 系统中的幻觉检测形式化为 **token 级序列标注**问题。
 
 **定义 1 (RAG 上下文)。** 设 RAG 交互定义为元组 *(C, Q, R)*，其中：
 
@@ -135,26 +135,26 @@ flowchart LR
 - *Q* 是用户查询
 - *R = (r₁, r₂, ..., rₙ)* 是作为 *n* 个 token 序列生成的响应
 
-**定义 2 (Grounded 与 hallucination token)。** 响应 *R* 中的 token *rᵢ* 是：
+**定义 2 (Grounded 与幻觉 token)。** 响应 *R* 中的 token *rᵢ* 是：
 
-- **Grounded**：如果在 *C* 中存在支持包含 *rᵢ* 的断言的证据
-- **hallucination**：如果 *rᵢ* 贡献于以下断言：
-  - (a) 与 *C* 中的信息矛盾（矛盾 hallucination），或
-  - (b) 无法从 *C* 中验证且不是常识（无根据 hallucination）
+- **Grounded (有据可查)**：如果在 *C* 中存在支持包含 *rᵢ* 的断言的证据
+- **幻觉 (Hallucination)**：如果 *rᵢ* 贡献于以下断言：
+  - (a) 与 *C* 中的信息矛盾（矛盾幻觉），或
+  - (b) 无法从 *C* 中验证且不是常识（无根据幻觉）
 
-**定义 3 (hallucination 检测函数)。** 检测任务是学习一个函数：
+**定义 3 (幻觉检测函数)。** 检测任务是学习一个函数：
 
 *f: (C, Q, R) → Y*
 
-其中 *Y = (y₁, y₂, ..., yₙ)* 且 *yᵢ ∈ \{0, 1\}* 表示 token *rᵢ* 是否为 hallucination。
+其中 *Y = (y₁, y₂, ..., yₙ)* 且 *yᵢ ∈ \{0, 1\}* 表示 token *rᵢ* 是否为幻觉。
 
-**定义 4 (hallucination 分数)。** 给定预测 *Y* 和置信度分数 *P = (p₁, ..., pₙ)*，其中 *pᵢ = P(yᵢ = 1)*，我们定义：
+**定义 4 (幻觉分数)。** 给定预测 *Y* 和置信度分数 *P = (p₁, ..., pₙ)*，其中 *pᵢ = P(yᵢ = 1)*，我们定义：
 
 - **token 级分数**：*s_token(rᵢ) = pᵢ*
 - **片段 (span) 级分数**：对于连续片段 *S = (rᵢ, ..., rⱼ)*，*s_span(S) = max(pᵢ, ..., pⱼ)*
 - **响应级分数**：对于所有满足 *pᵢ > τ_token* 的 *i*，*s_response(R) = 1 - ∏(1 - pᵢ)*
 
-**定义 5 (缓解决策)。** 给定 threshold *τ*，系统采取行动：
+**定义 5 (缓解决策)。** 给定阈值 (threshold) *τ*，系统采取行动：
 
 ```text
 Action(R) =
@@ -164,17 +164,17 @@ Action(R) =
 
 ---
 
-## 2. 相关工作：hallucination 缓解的最前沿技术
+## 2. 相关工作：幻觉缓解的最前沿技术
 
-### 2.1 hallucination 类型的分类
+### 2.1 幻觉类型的分类
 
-在回顾检测方法之前，我们建立了 hallucination 类型的分类：
+在回顾检测方法之前，我们建立了幻觉类型的分类：
 
-**类型 1：内在 (Intrinsic) hallucination** —— 生成的内容与提供的上下文矛盾。
+**类型 1：内在 (Intrinsic) 幻觉** —— 生成的内容与提供的上下文矛盾。
 
 *示例*：上下文说“会议在周二”。响应说“会议安排在周三”。
 
-**类型 2：外在 (Extrinsic) hallucination** —— 生成的内容无法从上下文中验证，且不是常识。
+**类型 2：外在 (Extrinsic) 幻觉** —— 生成的内容无法从上下文中验证，且不是常识。
 
 *示例*：上下文讨论公司的第三季度收益。响应包含了随处都未提及的第四季度预测。
 
@@ -195,15 +195,15 @@ Action(R) =
 | **基于编码器** | LettuceDetect (2025), Luna (2025) | 使用 ModernBERT/DeBERTa 进行 token 分类 | F1: 75-79% | 15-35ms | 低 |
 | **自洽性 (Self-Consistency)** | SelfCheckGPT (2023) | 多次采样 + 一致性检查 | 变化 | Nx 基础 | 高 |
 | **跨模型** | Finch-Zk (2025) | 多模型响应比较 | F1: +6-39% | 2-3x 基础 | 高 |
-| **内部状态** | MIND (ACL 2024) | 隐藏层激活分析 | 高 | \&lt;10ms | 需要仪器化 |
+| **内部状态** | MIND (ACL 2024) | 隐藏层激活分析 | 高 | &lt;10ms | 需要仪器化 |
 
 #### 2.2.1 基于编码器的检测（深度探索）
 
-**LettuceDetect** (Kovács 等人, 2025) 将 hallucination 检测框架化为 **token 级序列标注**：
+**LettuceDetect** (Kovács 等人, 2025) 将幻觉检测框架化为 **token 级序列标注**：
 
 - **架构**：带有分类头的 ModernBERT-large（3.95 亿参数）
 - **输入**：连接 [上下文, 查询, 响应] 并带有特殊 token
-- **输出**：每个 token 的 hallucination 概率
+- **输出**：每个 token 的幻觉概率
 - **训练**：在 RAGTruth 数据集（1.8 万个示例）上进行 fine-tuning
 - **关键创新**：长上下文处理（8K token）能够包含完整的 RAG 上下文
 
@@ -220,20 +220,20 @@ Action(R) =
 
 #### 2.2.2 自洽性方法
 
-**SelfCheckGPT** (Manakul 等人, 2023) 利用了 hallucination 在不同样本中不一致的观察结果：
+**SelfCheckGPT** (Manakul 等人, 2023) 利用了幻觉在不同样本中不一致的观察结果：
 
 - **机制**：生成 N 个响应，衡量一致性
-- **直觉**：事实内容是可重复的；hallucination 则各不相同
+- **直觉**：事实内容是可重复的；幻觉则各不相同
 - **局限性**：需要 N 次 LLM 调用（通常 N=5-10）
 
-**理论基础**：如果 *P(事实)* 很高，该事实会出现在大多数样本中。如果每个样本的 *P(hallucination)* 较低，它很少会重复。
+**理论基础**：如果 *P(事实)* 很高，该事实会出现在大多数样本中。如果每个样本的 *P(幻觉)* 较低，它很少会重复。
 
 #### 2.2.3 跨模型验证
 
 **Finch-Zk** (2025) 利用了模型多样性：
 
 - **机制**：比较来自不同模型家族的响应
-- **关键见解**：不同的模型以不同的方式产生 hallucination
+- **关键见解**：不同的模型以不同的方式产生幻觉
 - **片段级纠错**：用置信度更高的版本替换不一致的片段
 
 ### 2.3 缓解策略
@@ -263,7 +263,7 @@ Action(R) =
 - 2-3 次迭代后收益递减
 - 要求模型具备纠正自身所需的知识
 
-**对 hallucination 的局限性**：如果模型缺乏正确的知识，自我细化可能没有帮助，甚至可能引入新的错误。
+**对幻觉的局限性**：如果模型缺乏正确的知识，自我细化可能没有帮助，甚至可能引入新的错误。
 
 #### 2.3.2 验证链 (CoVe)
 
@@ -332,11 +332,11 @@ graph TD
 
 本节建立了 TruthLens 三模式架构的理论基础，借鉴了序列标注、迭代优化、集成学习和多智能体系统理论。
 
-### 3.1 作为序列标注的 hallucination 检测
+### 3.1 作为序列标注的幻觉检测
 
 #### 3.1.1 token 分类架构
 
-现代 hallucination 检测利用针对 token 分类进行了 fine-tuning 的基于 transformer 的编码器。给定输入序列 *X = [CLS] C [SEP] Q [SEP] R [SEP]*，编码器产生上下文表示：
+现代幻觉检测利用针对 token 分类进行了 fine-tuning 的基于 transformer 的编码器。给定输入序列 *X = [CLS] C [SEP] Q [SEP] R [SEP]*，编码器产生上下文表示：
 
 *H = Encoder(X) ∈ ℝ^(L×d)*
 
@@ -363,35 +363,35 @@ graph TD
 
 *s_response(R) = 1 - ∏ᵢ(1 - pᵢ · 𝟙[pᵢ > τ_token])*
 
-**理论依据**：Noisy-OR 模型假设不同 token 处的 hallucination 事件之间相互独立。虽然这是一个近似，但它提供了：
+**理论依据**：Noisy-OR 模型假设不同 token 处的幻觉事件之间相互独立。虽然这是一个近似，但它提供了：
 
-1. **单调性**：增加一个 hallucination token 绝不会降低响应分数
-2. **敏感性**：单个高置信度的 hallucination 就会触发检测
-3. **校准**：分数近似于 *P(R 中存在 hallucination)*
+1. **单调性**：增加一个幻觉 token 绝不会降低响应分数
+2. **敏感性**：单个高置信度的幻觉就会触发检测
+3. **校准**：分数近似于 *P(R 中存在幻觉)*
 
 **替代方案：基于片段 (Span) 的聚合**
 
-对于相关的 hallucination（在捏造实体中很常见），我们首先将连续的 hallucination token 分组为片段，然后进行聚合：
+对于相关的幻觉（在捏造实体中很常见），我们首先将连续的幻觉 token 分组为片段，然后进行聚合：
 
 *s_response(R) = max\{s_span(S₁), s_span(S₂), ..., s_span(Sₖ)\}*
 
 这减少了对分词 (tokenization) 人为因素的敏感性，并专注于语义单元。
 
-#### 3.1.4 threshold 选择理论
+#### 3.1.4 阈值 (Threshold) 选择理论
 
-检测 threshold *τ* 控制着精确率与召回率的权衡。根据决策理论：
+检测阈值 *τ* 控制着精确率与召回率的权衡。根据决策理论：
 
-**命题 1 (最优 threshold)。** *给定成本比 λ = C_FN / C_FP（假阴性与假阳性的成本比），最优 threshold 满足：*
+**命题 1 (最优阈值)。** *给定成本比 λ = C_FN / C_FP（假阴性与假阳性的成本比），最优阈值满足：*
 
 *τ* = 1 / (1 + λ · (1-π)/π)*
 
-*其中 π 是 hallucination 的先验概率。*
+*其中 π 是幻觉的先验概率。*
 
 **实际意义：**
 
 | 领域 | λ (成本比) | 推荐的 τ | 理由 |
 |--------|----------------|---------------|-----------|
-| 医疗 | 10-100 | 0.3-0.5 | 遗漏 hallucination 是灾难性的 |
+| 医疗 | 10-100 | 0.3-0.5 | 遗漏幻觉是灾难性的 |
 | 金融 | 5-20 | 0.4-0.6 | 虚假信息带来的监管风险 |
 | 客户支持 | 1-2 | 0.6-0.7 | 平衡用户体验和准确率 |
 | 创意 | 0.1-0.5 | 0.8-0.9 | 过度标记会损害创造力 |
@@ -410,7 +410,7 @@ graph TD
 
 **定理 1 (收敛条件)。** *细化序列 \{Rₜ\} 收敛到不动点 R\*，如果：*
 
-1. *hallucination 分数序列 \{s(Rₜ)\} 是单调不增的*
+1. *幻觉分数序列 \{s(Rₜ)\} 是单调不增的*
 2. *分数有下界 (s(R) ≥ 0)*
 3. *LLM 表现出一致性：相似的 prompt 产生相似的输出*
 
@@ -424,8 +424,8 @@ graph TD
 
 这是因为：
 
-1. **容易的 hallucination**（显式矛盾）在早期迭代中被纠正
-2. **困难的 hallucination**（微妙的无根据断言）可能会持续存在或震荡
+1. **容易的幻觉**（显式矛盾）在早期迭代中被纠正
+2. **困难的幻觉**（微妙的无根据断言）可能会持续存在或震荡
 3. 实践中 2-3 次迭代后**收益递减**
 
 ```mermaid
@@ -442,7 +442,7 @@ graph LR
 
 有效的细化 prompt 必须满足几个理论特性：
 
-**原则 1 (特异性)**：prompt 必须识别出*哪些*片段产生了 hallucination，而不仅仅是指出存在 hallucination。
+**原则 1 (特异性)**：prompt 必须识别出*哪些*片段产生了幻觉，而不仅仅是指出存在幻觉。
 
 **原则 2 (Grounding)**：prompt 必须提供原始上下文 *C* 以启用事实核查。
 
@@ -456,9 +456,9 @@ graph LR
 给定：
 - 上下文：[检索到的段落 C]
 - 查询：[用户问题 Q]
-- 响应：[带有标注出的 hallucination 片段的当前响应 Rₜ]
+- 响应：[带有标注出的幻觉片段的当前响应 Rₜ]
 
-以下片段可能存在 hallucination：[ (片段, 置信度) 列表]
+以下片段可能存在幻觉：[ (片段, 置信度) 列表]
 
 指令：
 1. 对于每个标记出的片段，根据上下文进行验证
@@ -600,7 +600,7 @@ flowchart TD
 ### 6.1 全局配置
 
 ```yaml
-# 全局 hallucination 检测设置
+# 全局幻觉检测设置
 hallucination:
   enabled: true
 
@@ -611,7 +611,7 @@ hallucination:
   # 默认操作模式
   default_mode: "standard"  # lightweight | standard | premium
 
-  # 检测 threshold (0.0 - 1.0)
+  # 检测阈值 (0.0 - 1.0)
   # 越低 = 越严格，越高 = 越宽松
   threshold: 0.6
 
@@ -728,14 +728,14 @@ decisions:
 
 ### 6.3 响应 Header
 
-当启用 hallucination 检测时，以下 Header 会添加到所有响应中：
+当启用幻觉检测时，以下 Header 会添加到所有响应中：
 
 | Header | 描述 | 示例值 |
 |--------|-------------|----------------|
 | `X-TruthLens-Enabled` | 是否执行了检测 | `true`, `false` |
 | `X-TruthLens-Mode` | 使用的操作模式 | `lightweight`, `standard`, `premium` |
-| `X-TruthLens-Score` | hallucination 置信度分数 | `0.0` - `1.0` |
-| `X-TruthLens-Detected` | hallucination 是否超过 threshold | `true`, `false` |
+| `X-TruthLens-Score` | 幻觉置信度分数 | `0.0` - `1.0` |
+| `X-TruthLens-Detected` | 幻觉是否超过阈值 | `true`, `false` |
 | `X-TruthLens-Iterations` | 细化迭代次数 | `0`, `1`, `2`, ... |
 | `X-TruthLens-Latency-Ms` | 检测/缓解延迟 | `35`, `450`, `2100` |
 
@@ -815,7 +815,7 @@ flowchart TB
             RES_B[handleResponseBody]
 
             subgraph "TruthLens"
-                DETECT[hallucination<br/>检测器]
+                DETECT[幻觉<br/>检测器]
                 SCORE[分数<br/>评估]
 
                 subgraph "缓解"
@@ -863,9 +863,9 @@ flowchart TB
     RES_B --> DETECT
     DETECT --> SCORE
 
-    SCORE -->|低于 Threshold| CACHE_UPD
-    SCORE -->|高于 Threshold| WARN
-    SCORE -->|高于 Threshold| REFINE
+    SCORE -->|低于阈值| CACHE_UPD
+    SCORE -->|高于阈值| WARN
+    SCORE -->|高于阈值| REFINE
 
     WARN --> CACHE_UPD
     REFINE -->|重试| VLLM1
@@ -886,18 +886,18 @@ flowchart TB
 
 | 术语 | 定义 |
 |------|------------|
-| **hallucination** | LLM 生成的事实错误或不受上下文支持的内容 |
-| **内在 (Intrinsic) hallucination** | 源自模型内部参数化知识的虚假事实 |
-| **外在 (Extrinsic) hallucination** | 未 grounded 在所提供上下文中的内容（在 RAG 中常见） |
+| **幻觉 (Hallucination)** | LLM 生成的事实错误或不受上下文支持的内容 |
+| **内在 (Intrinsic) 幻觉** | 源自模型内部参数化知识的虚假事实 |
+| **外在 (Extrinsic) 幻觉** | 未 grounded 在所提供上下文中的内容（在 RAG 中常见） |
 | **ExtProc** | Envoy 外部处理器 - 允许在网关处修改请求/响应 |
-| **token 级检测** | 识别产生 hallucination 的特定 token/片段 |
-| **自我细化 (Self-Refinement)** | 相同模型纠正自身产生的 hallucination 的迭代过程 |
+| **token 级检测** | 识别产生幻觉的特定 token/片段 |
+| **自我细化 (Self-Refinement)** | 相同模型纠正自身产生的幻觉的迭代过程 |
 | **跨模型验证** | 使用多个不同的模型来验证事实一致性 |
 | **多智能体辩论** | 多个 LLM 智能体通过辩论立场以收敛到事实真相 |
 | **RAG** | 检索增强生成 (Retrieval-Augmented Generation) - 使用检索到的文档来 ground LLM |
 | **ModernBERT** | 支持 8K 上下文的最先进编码器架构 |
-| **准确率-延迟-成本三角形** | hallucination 缓解策略中的基本权衡 |
-| **收敛 threshold** | 低于该分数的 hallucination 被视为已解决 |
+| **准确率-延迟-成本三角形** | 幻觉缓解策略中的基本权衡 |
+| **收敛阈值 (Convergence Threshold)** | 低于该分数的幻觉被视为已解决 |
 
 ---
 
