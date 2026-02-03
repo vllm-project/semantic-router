@@ -54,7 +54,7 @@ test-rust-flash-attn-module: rust-flash-attn
 test-binding-minimal: $(if $(CI),rust-ci,rust) ## Run Go tests with minimal models (BERT, ModernBERT)
 	@$(LOG_TARGET)
 	@echo "Running candle-binding tests with minimal models (BERT, ModernBERT classifiers)..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release && \
 		cd candle-binding && CGO_ENABLED=1 go test -v -race \
 		-run "^Test(InitModel|Tokenization|Embeddings|Similarity|FindMostSimilar|ModernBERTClassifiers|ModernBertClassifier_ConcurrentClassificationSafety|ModernBERTPIITokenClassification|UtilityFunctions|ErrorHandling|Concurrency)$$"
 
@@ -62,32 +62,32 @@ test-binding-minimal: $(if $(CI),rust-ci,rust) ## Run Go tests with minimal mode
 test-binding-lora: $(if $(CI),rust-ci,rust) ## Run Go tests with LoRA and advanced embedding models
 	@$(LOG_TARGET)
 	@echo "Running candle-binding tests with LoRA and advanced embedding models..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release && \
 		cd candle-binding && CGO_ENABLED=1 go test -v -race \
 		-run "^Test(BertTokenClassification|BertSequenceClassification|CandleBertClassifier|CandleBertTokenClassifier|CandleBertTokensWithLabels|LoRAUnifiedClassifier|GetEmbeddingSmart|InitEmbeddingModels|GetEmbeddingWithDim|EmbeddingConsistency|EmbeddingPriorityRouting|EmbeddingConcurrency)$$" \
 		|| { echo "⚠️  Warning: Some LoRA/embedding tests failed (may be due to missing restricted models), continuing..."; $(if $(CI),true,exit 1); }
 # Test the Rust library - all tests (conditionally use rust-ci in CI environments)
 test-binding: $(if $(CI),rust-ci,rust) ## Run all Go tests with the Rust static library
 	@$(LOG_TARGET)
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release && \
 		cd candle-binding && CGO_ENABLED=1 go test -v -race
 
 # Test with the candle-binding library (conditionally use rust-ci in CI environments)
 test-category-classifier: $(if $(CI),rust-ci,rust) ## Test domain classifier with candle-binding
 	@$(LOG_TARGET)
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release && \
 		cd src/training/classifier_model_fine_tuning && CGO_ENABLED=1 go run test_linear_classifier.go
 
 # Test the PII classifier (conditionally use rust-ci in CI environments)
 test-pii-classifier: $(if $(CI),rust-ci,rust) ## Test PII classifier with candle-binding
 	@$(LOG_TARGET)
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release && \
 		cd src/training/pii_model_fine_tuning && CGO_ENABLED=1 go run pii_classifier_verifier.go
 
 # Test the jailbreak classifier (conditionally use rust-ci in CI environments)
 test-jailbreak-classifier: $(if $(CI),rust-ci,rust) ## Test jailbreak classifier with candle-binding
 	@$(LOG_TARGET)
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release && \
 		cd src/training/prompt_guard_fine_tuning && CGO_ENABLED=1 go run jailbreak_classifier_verifier.go
 
 # Build the Rust library (with CUDA by default, Flash Attention optional)
@@ -142,7 +142,9 @@ rust-ci: ## Build the Rust library without CUDA support (for GitHub Actions/CI)
 		echo "Error: cargo not found in PATH" && exit 1; \
 	fi && \
 	echo "Building Rust library without CUDA (CPU-only)..." && \
-	cd candle-binding && cargo build --release --no-default-features'
+	cd candle-binding && cargo build --release --no-default-features && \
+	echo "Building ml-binding Rust library..." && \
+	cd ../ml-binding && cargo build --release'
 
 rust-flash-attn: ## Build Rust library with Flash Attention 2 (requires CUDA environment)
 	@$(LOG_TARGET)

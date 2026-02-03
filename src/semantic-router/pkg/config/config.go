@@ -186,6 +186,9 @@ type ModelSelectionConfig struct {
 	// Default: "static" (uses static scores from configuration)
 	Method string `yaml:"method,omitempty"`
 
+	// Enabled indicates if model selection is enabled
+	Enabled bool `yaml:"enabled,omitempty"`
+
 	// Elo configuration for Elo rating-based selection
 	Elo EloSelectionConfig `yaml:"elo,omitempty"`
 
@@ -197,6 +200,47 @@ type ModelSelectionConfig struct {
 
 	// Hybrid configuration for combined selection methods
 	Hybrid HybridSelectionConfig `yaml:"hybrid,omitempty"`
+
+	// ML configuration for ML-based selection (KNN, KMeans, SVM)
+	ML MLSelectionConfig `yaml:"ml,omitempty"`
+}
+
+// MLSelectionConfig holds configuration for all ML-based selectors
+type MLSelectionConfig struct {
+	// ModelsPath is the base path for pretrained model files
+	ModelsPath string `yaml:"models_path,omitempty"`
+
+	// EmbeddingDim is the embedding dimension (default: 1024 for Qwen3)
+	EmbeddingDim int `yaml:"embedding_dim,omitempty"`
+
+	// KNN configuration
+	KNN MLKNNConfig `yaml:"knn,omitempty"`
+
+	// KMeans configuration
+	KMeans MLKMeansConfig `yaml:"kmeans,omitempty"`
+
+	// SVM configuration
+	SVM MLSVMConfig `yaml:"svm,omitempty"`
+}
+
+// MLKNNConfig holds KNN-specific configuration
+type MLKNNConfig struct {
+	K              int    `yaml:"k,omitempty"`
+	PretrainedPath string `yaml:"pretrained_path,omitempty"`
+}
+
+// MLKMeansConfig holds KMeans-specific configuration
+type MLKMeansConfig struct {
+	NumClusters      int     `yaml:"num_clusters,omitempty"`
+	EfficiencyWeight float64 `yaml:"efficiency_weight,omitempty"`
+	PretrainedPath   string  `yaml:"pretrained_path,omitempty"`
+}
+
+// MLSVMConfig holds SVM-specific configuration
+type MLSVMConfig struct {
+	Kernel         string  `yaml:"kernel,omitempty"`
+	Gamma          float64 `yaml:"gamma,omitempty"`
+	PretrainedPath string  `yaml:"pretrained_path,omitempty"`
 }
 
 // EloSelectionConfig configures Elo rating-based model selection
@@ -1179,6 +1223,17 @@ type VLLMEndpoint struct {
 
 	// Load balancing weight for this endpoint
 	Weight int `yaml:"weight,omitempty"`
+
+	// Type of endpoint API: "vllm" (default), "openai", "ollama", "huggingface", "openrouter"
+	// This determines how requests are formatted and which API format to use
+	// +optional
+	// +kubebuilder:default=vllm
+	Type string `yaml:"type,omitempty"`
+
+	// API key for authenticated endpoints (HuggingFace, OpenRouter, etc.)
+	// Can also be set via environment variables: HF_API_KEY, OPENROUTER_API_KEY
+	// +optional
+	APIKey string `yaml:"api_key,omitempty"`
 }
 
 // ModelPricing represents configuration for model-specific parameters
@@ -1235,6 +1290,12 @@ type ModelParams struct {
 	// Default: 0.8 if not specified
 	// Example: 0.95 for a high-quality model, 0.6 for a fast but less capable model
 	QualityScore float64 `yaml:"quality_score,omitempty"`
+
+	// ExternalModelIDs maps endpoint types to their model identifiers
+	// This allows mapping the internal model name to different external model IDs
+	// Example: {"huggingface": "meta-llama/Llama-3.1-8B-Instruct", "ollama": "llama3.1:8b"}
+	// +optional
+	ExternalModelIDs map[string]string `yaml:"external_model_ids,omitempty"`
 }
 
 // LoRAAdapter represents a LoRA adapter configuration for a model
@@ -1312,7 +1373,12 @@ type Decision struct {
 	// Rules defines the combination of keyword/embedding/domain rules using AND/OR logic
 	Rules RuleCombination `yaml:"rules"`
 
-	// ModelRefs contains model references for this decision (currently only supports one model)
+	// ModelSelectionAlgorithm configures how to select from multiple models in ModelRefs
+	// If not specified, defaults to selecting the first model
+	ModelSelectionAlgorithm *ModelSelectionConfig `yaml:"modelSelectionAlgorithm,omitempty"`
+
+	// ModelRefs contains model references for this decision
+	// When multiple models are specified, ModelSelectionAlgorithm determines which to use
 	ModelRefs []ModelRef `yaml:"modelRefs,omitempty"`
 
 	// Algorithm defines the multi-model execution strategy when multiple ModelRefs are configured.
@@ -1413,6 +1479,38 @@ type RatingsAlgorithmConfig struct {
 	// - "skip": Skip the failed model and return remaining results (default)
 	// - "fail": Return error if any model fails
 	OnError string `yaml:"on_error,omitempty"`
+}
+
+// MLModelSelectionConfig configures the ML-based model selection algorithm
+// Supported types: knn, kmeans, svm
+type MLModelSelectionConfig struct {
+	// Type specifies the algorithm: "knn", "kmeans", "svm"
+	Type string `yaml:"type"`
+
+	// ModelsPath is the path to pre-trained model files (e.g., "trained_models/")
+	// If specified, loads pre-trained models instead of creating empty selectors
+	// The algorithm will look for {ModelsPath}/{type}_model.json
+	ModelsPath string `yaml:"models_path,omitempty"`
+
+	// K is the number of neighbors for KNN algorithm (default: 3)
+	K int `yaml:"k,omitempty"`
+
+	// NumClusters is the number of clusters for KMeans algorithm (default: equals number of models)
+	NumClusters int `yaml:"num_clusters,omitempty"`
+
+	// Kernel specifies the SVM kernel type: "linear", "rbf", "poly" (default: "rbf")
+	Kernel string `yaml:"kernel,omitempty"`
+
+	// Gamma is the RBF kernel parameter for SVM (default: 1.0)
+	Gamma float64 `yaml:"gamma,omitempty"`
+
+	// EfficiencyWeight controls the performance-efficiency tradeoff for KMeans (default: 0.3)
+	// 0 = pure performance (quality), 1 = pure efficiency (latency)
+	// Use pointer to distinguish "not set" (nil, uses default 0.3) from "explicitly 0"
+	EfficiencyWeight *float64 `yaml:"efficiency_weight,omitempty"`
+
+	// FeatureWeights allows custom weighting of features for selection
+	FeatureWeights map[string]float64 `yaml:"feature_weights,omitempty"`
 }
 
 // ModelRef represents a reference to a model (without score field)

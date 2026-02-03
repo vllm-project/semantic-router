@@ -15,6 +15,7 @@ import (
 	dynamo "github.com/vllm-project/semantic-router/e2e/profiles/dynamo"
 	istio "github.com/vllm-project/semantic-router/e2e/profiles/istio"
 	llmd "github.com/vllm-project/semantic-router/e2e/profiles/llm-d"
+	mlmodelselection "github.com/vllm-project/semantic-router/e2e/profiles/ml-model-selection"
 	productionstack "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
 	responseapi "github.com/vllm-project/semantic-router/e2e/profiles/response-api"
 	responseapiredis "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis"
@@ -32,6 +33,9 @@ import (
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis-cluster"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/routing-strategies"
+
+	// ML-based model selection profile
+	_ "github.com/vllm-project/semantic-router/e2e/profiles/ml-model-selection"
 )
 
 const version = "v1.0.0"
@@ -135,6 +139,8 @@ func getProfile(name string) (framework.Profile, error) {
 		return responseapirediscluster.NewProfile(), nil
 	case "routing-strategies":
 		return routingstrategies.NewProfile(), nil
+	case "ml-model-selection":
+		return mlmodelselection.NewProfile(), nil
 	default:
 		return nil, fmt.Errorf("unknown profile: %s", name)
 	}
