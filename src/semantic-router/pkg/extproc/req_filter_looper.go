@@ -40,19 +40,29 @@ func (r *OpenAIRouter) isLooperRequest(ctx *RequestContext) bool {
 
 // shouldUseLooper checks if the decision requires looper execution
 // Returns true if:
-// - Decision has multiple ModelRefs AND
 // - Decision has an Algorithm configured AND
+// - Decision has at least one ModelRef (ReMoM supports single model) AND
 // - Looper endpoint is configured in router config
 func (r *OpenAIRouter) shouldUseLooper(decision *config.Decision) bool {
 	if decision == nil {
 		return false
 	}
-	if len(decision.ModelRefs) <= 1 {
-		return false
-	}
 	if decision.Algorithm == nil {
 		return false
 	}
+
+	// ReMoM algorithm can work with single model (first_only strategy)
+	// Other algorithms (confidence, ratings) require multiple models
+	if decision.Algorithm.Type == "remom" {
+		if len(decision.ModelRefs) < 1 {
+			return false
+		}
+	} else {
+		if len(decision.ModelRefs) <= 1 {
+			return false
+		}
+	}
+
 	if !r.Config.Looper.IsEnabled() {
 		logging.Warnf("Decision %s has algorithm configured but looper endpoint is not set", decision.Name)
 		return false
@@ -113,12 +123,156 @@ func (r *OpenAIRouter) handleLooperExecution(
 	r.attachRouterReplayResponse(reqCtx, resp.Body, true)
 
 	// Create immediate response with detailed headers
-	return r.createLooperResponse(resp), nil
+	return r.createLooperResponse(resp, reqCtx), nil
 }
 
 // createLooperResponse creates an ImmediateResponse from looper output
-// Includes headers for: model used, all models called, iteration count, algorithm type
-func (r *OpenAIRouter) createLooperResponse(resp *looper.Response) *ext_proc.ProcessingResponse {
+// Includes headers for: model used, all models called, iteration count, algorithm type, and signal headers
+func (r *OpenAIRouter) createLooperResponse(resp *looper.Response, reqCtx *RequestContext) *ext_proc.ProcessingResponse {
+	// Build header list starting with looper-specific headers
+	setHeaders := []*core.HeaderValueOption{
+		{
+			Header: &core.HeaderValue{
+				Key:      "content-type",
+				RawValue: []byte(resp.ContentType),
+			},
+		},
+		{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRLooperModel,
+				RawValue: []byte(resp.Model),
+			},
+		},
+		{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRLooperModelsUsed,
+				RawValue: []byte(strings.Join(resp.ModelsUsed, ",")),
+			},
+		},
+		{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRLooperIterations,
+				RawValue: []byte(fmt.Sprintf("%d", resp.Iterations)),
+			},
+		},
+		{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRLooperAlgorithm,
+				RawValue: []byte(resp.AlgorithmType),
+			},
+		},
+	}
+
+	// Add signal tracking headers from RequestContext
+	if len(reqCtx.VSRMatchedKeywords) > 0 {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRMatchedKeywords,
+				RawValue: []byte(strings.Join(reqCtx.VSRMatchedKeywords, ",")),
+			},
+		})
+	}
+
+	if len(reqCtx.VSRMatchedEmbeddings) > 0 {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRMatchedEmbeddings,
+				RawValue: []byte(strings.Join(reqCtx.VSRMatchedEmbeddings, ",")),
+			},
+		})
+	}
+
+	if len(reqCtx.VSRMatchedDomains) > 0 {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRMatchedDomains,
+				RawValue: []byte(strings.Join(reqCtx.VSRMatchedDomains, ",")),
+			},
+		})
+	}
+
+	if len(reqCtx.VSRMatchedFactCheck) > 0 {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRMatchedFactCheck,
+				RawValue: []byte(strings.Join(reqCtx.VSRMatchedFactCheck, ",")),
+			},
+		})
+	}
+
+	if len(reqCtx.VSRMatchedUserFeedback) > 0 {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRMatchedUserFeedback,
+				RawValue: []byte(strings.Join(reqCtx.VSRMatchedUserFeedback, ",")),
+			},
+		})
+	}
+
+	if len(reqCtx.VSRMatchedPreference) > 0 {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRMatchedPreference,
+				RawValue: []byte(strings.Join(reqCtx.VSRMatchedPreference, ",")),
+			},
+		})
+	}
+
+	if len(reqCtx.VSRMatchedLanguage) > 0 {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRMatchedLanguage,
+				RawValue: []byte(strings.Join(reqCtx.VSRMatchedLanguage, ",")),
+			},
+		})
+	}
+
+	if len(reqCtx.VSRMatchedLatency) > 0 {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRMatchedLatency,
+				RawValue: []byte(strings.Join(reqCtx.VSRMatchedLatency, ",")),
+			},
+		})
+	}
+
+	if len(reqCtx.VSRMatchedContext) > 0 {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRMatchedContext,
+				RawValue: []byte(strings.Join(reqCtx.VSRMatchedContext, ",")),
+			},
+		})
+	}
+
+	if reqCtx.VSRContextTokenCount > 0 {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRContextTokenCount,
+				RawValue: []byte(fmt.Sprintf("%d", reqCtx.VSRContextTokenCount)),
+			},
+		})
+	}
+
+	// Add decision-related headers
+	if reqCtx.VSRSelectedDecisionName != "" {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRSelectedDecision,
+				RawValue: []byte(reqCtx.VSRSelectedDecisionName),
+			},
+		})
+	}
+
+	if reqCtx.VSRSelectedCategory != "" {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      headers.VSRSelectedCategory,
+				RawValue: []byte(reqCtx.VSRSelectedCategory),
+			},
+		})
+	}
+
 	return &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_ImmediateResponse{
 			ImmediateResponse: &ext_proc.ImmediateResponse{
@@ -126,38 +280,7 @@ func (r *OpenAIRouter) createLooperResponse(resp *looper.Response) *ext_proc.Pro
 					Code: typev3.StatusCode_OK,
 				},
 				Headers: &ext_proc.HeaderMutation{
-					SetHeaders: []*core.HeaderValueOption{
-						{
-							Header: &core.HeaderValue{
-								Key:      "content-type",
-								RawValue: []byte(resp.ContentType),
-							},
-						},
-						{
-							Header: &core.HeaderValue{
-								Key:      headers.VSRLooperModel,
-								RawValue: []byte(resp.Model),
-							},
-						},
-						{
-							Header: &core.HeaderValue{
-								Key:      headers.VSRLooperModelsUsed,
-								RawValue: []byte(strings.Join(resp.ModelsUsed, ",")),
-							},
-						},
-						{
-							Header: &core.HeaderValue{
-								Key:      headers.VSRLooperIterations,
-								RawValue: []byte(fmt.Sprintf("%d", resp.Iterations)),
-							},
-						},
-						{
-							Header: &core.HeaderValue{
-								Key:      headers.VSRLooperAlgorithm,
-								RawValue: []byte(resp.AlgorithmType),
-							},
-						},
-					},
+					SetHeaders: setHeaders,
 				},
 				Body: resp.Body,
 			},

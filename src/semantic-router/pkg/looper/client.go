@@ -60,6 +60,11 @@ type ModelResponse struct {
 	// Content is the extracted text content from the response
 	Content string
 
+	// ReasoningContent is the extracted reasoning/thinking content from vLLM models
+	// This field is populated when vLLM returns reasoning in extra response fields
+	// (e.g., reasoning_content, reasoning)
+	ReasoningContent string
+
 	// Model is the model name from the response
 	Model string
 
@@ -186,7 +191,7 @@ func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*Mode
 	result := &ModelResponse{
 		Raw:         body,
 		Parsed:      &completion,
-		Model:       completion.Model,
+		Model:       modelName, // Use the requested model name, not the backend's response
 		IsStreaming: false,
 	}
 
@@ -202,8 +207,11 @@ func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*Mode
 		result.AverageMargin = analysis.AverageMargin
 	}
 
-	logging.Infof("[Looper] Model %s responded: content_len=%d, avg_logprob=%.4f, avg_margin=%.4f",
-		modelName, len(result.Content), result.AverageLogprob, result.AverageMargin)
+	// Extract reasoning content from vLLM extra fields
+	result.ReasoningContent = extractReasoningFromRaw(body)
+
+	logging.Infof("[Looper] Model %s responded: content_len=%d, reasoning_len=%d, avg_logprob=%.4f, avg_margin=%.4f",
+		modelName, len(result.Content), len(result.ReasoningContent), result.AverageLogprob, result.AverageMargin)
 
 	return result, nil
 }
@@ -350,6 +358,52 @@ func setStreamParam(body []byte, streaming bool) ([]byte, error) {
 	}
 	reqMap["stream"] = streaming
 	return json.Marshal(reqMap)
+}
+
+// extractReasoningFromRaw extracts reasoning content from vLLM response
+// vLLM returns reasoning in extra response fields (not tags), which can be in multiple locations:
+// - choices[0].reasoning
+// - choices[0].reasoning_content
+// - choices[0].message.reasoning
+// - choices[0].message.reasoning_content
+func extractReasoningFromRaw(rawBody []byte) string {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(rawBody, &raw); err != nil {
+		return ""
+	}
+
+	choices, ok := raw["choices"].([]interface{})
+	if !ok || len(choices) == 0 {
+		return ""
+	}
+
+	choice, ok := choices[0].(map[string]interface{})
+	if !ok {
+		return ""
+	}
+
+	// Try choice-level fields first
+	if reasoning, ok := choice["reasoning"].(string); ok {
+		return reasoning
+	}
+	if reasoning, ok := choice["reasoning_content"].(string); ok {
+		return reasoning
+	}
+
+	// Try message-level fields
+	message, ok := choice["message"].(map[string]interface{})
+	if !ok {
+		return ""
+	}
+
+	if reasoning, ok := message["reasoning"].(string); ok {
+		return reasoning
+	}
+	if reasoning, ok := message["reasoning_content"].(string); ok {
+		return reasoning
+	}
+
+	return ""
 }
 
 // cloneRequest creates a shallow copy of the request
