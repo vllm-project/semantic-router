@@ -124,7 +124,6 @@ const ReplayCharts: React.FC<ReplayChartsProps> = ({ records }) => {
     })
     return Object.entries(counts)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 8)
       .map(([name, value]) => ({ name, value }))
   }, [records])
 
