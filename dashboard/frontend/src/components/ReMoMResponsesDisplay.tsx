@@ -64,7 +64,7 @@ const ReMoMResponsesDisplay = ({ rounds }: ReMoMResponsesDisplayProps) => {
           <div key={roundIndex} className={styles.round}>
             <div className={styles.roundHeader}>
               <span className={styles.roundTitle}>Round {round.round}</span>
-              <span className={styles.roundBreadth}>{round.breadth} parallel explores{round.breadth > 1 ? 's' : ''}</span>
+              <span className={styles.roundBreadth}>{round.breadth} parallel explore{round.breadth > 1 ? 's' : ''}</span>
             </div>
 
             <div className={styles.responses}>
