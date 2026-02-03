@@ -1,10 +1,3 @@
----
-translation:
-  source_commit: "bac2743"
-  source_file: "docs/proposals/hallucination-mitigation-milestone.md"
-  outdated: false
----
-
 # TruthLens：实时幻觉 (Hallucination) 缓解
 
 **版本：** 1.0
@@ -17,7 +10,7 @@ translation:
 
 大语言模型 (LLM) 展示了卓越的能力，但其产生幻觉（流畅但事实错误或无根据的内容）的倾向仍然是企业采用 AI 的关键障碍。行业调查一致表明，幻觉风险是阻止组织在生产环境中部署 LLM 驱动的应用程序的首要担忧，特别是在医疗保健、金融和法律服务等高风险领域。
 
-我们提出了 **TruthLens**，这是一个集成到 vLLM Semantic Router 中的实时幻觉检测和缓解框架。通过在 inference 网关层定位幻觉控制，TruthLens 提供了一个与模型无关的集中式解决方案，通过可配置的缓解策略解决“准确率-延迟-成本”三角形问题。用户可以根据对成本和准确率权衡的容忍度从三种操作模式中进行选择：(1) **轻量级模式**——带有警告注入的单轮检测，(2) **标准模式**——使用相同模型的迭代自我细化，以及 (3) **高级模式**——多模型交叉验证和协作纠错。这种设计使组织能够部署值得信赖的 AI 系统，同时保持对运营成本和响应延迟的控制。
+我们提出了 **TruthLens**，这是一个集成到 vLLM Semantic Router 中的实时幻觉检测和缓解框架。通过在 Inference 网关层定位幻觉控制，TruthLens 提供了一个与模型无关的集中式解决方案，通过可配置的缓解策略解决“准确率-延迟-成本”三角形问题。用户可以根据对成本和准确率权衡的容忍度从三种操作模式中进行选择：(1) **轻量级模式**——带有警告注入的单轮检测，(2) **标准模式**——使用相同模型的迭代自我细化，以及 (3) **高级模式**——多模型交叉验证和协作纠错。这种设计使组织能够部署值得信赖的 AI 系统，同时保持对运营成本和响应延迟的控制。
 
 ---
 
@@ -42,7 +35,7 @@ translation:
 | 客户支持 | 中等 | 对不确定响应的升级协议 |
 | 创意/营销 | 高容忍度 | 需要最少的干预 |
 
-*注：基于行业调查中观察到的企业部署模式（麦肯锡 2024、高德纳 2024、Menlo Ventures 2024）。*
+*注：基于行业调查中观察到的企业部署模式（McKinsey 2024、Gartner 2024、Menlo Ventures 2024）。*
 
 ### 1.2 为什么现有解决方案不足
 
@@ -53,13 +46,13 @@ flowchart TB
     subgraph "当前方法（碎片化）"
         direction TB
         A[RAG/Grounding] -->|生成前| B[减少但不能消除]
-        C[fine-tuning] -->|训练时间| D[昂贵且特定于模型]
-        E[prompt 工程] -->|每个应用程序| F[不一致，无保证]
+        C[Fine-tuning] -->|训练时间| D[昂贵且特定于模型]
+        E[Prompt 工程] -->|每个应用程序| F[不一致，无保证]
         G[离线评估] -->|事后| H[无法防止实时伤害]
     end
 
     subgraph "差距"
-        I[❌ inference 时没有实时检测]
+        I[❌ Inference 时没有实时检测]
         J[❌ 没有集中控制点]
         K[❌ 没有成本感知的缓解选项]
     end
@@ -82,9 +75,9 @@ flowchart LR
         GW[统一网关]
 
         subgraph "现有能力"
-            SEC[安全层<br/>pii, jailbreak]
+            SEC[安全层<br/>PII, Jailbreak]
             ROUTE[智能路由<br/>模型选择]
-            CACHE[semantic-cache<br/>成本优化]
+            CACHE[Semantic Cache<br/>成本优化]
         end
 
         subgraph "新增：TruthLens"
@@ -123,19 +116,19 @@ flowchart LR
 | **成本控制** | 全组织范围内对准确率与成本权衡的可视化 |
 | **增量采用** | 启用按决策、按领域的策略 |
 | **可观测性** | 针对幻觉事件的统一指标、日志和警报 |
-| **深度防御** | 补充（而非取代）RAG 和 prompt 工程 |
+| **深度防御** | 补充（而非取代）RAG 和 Prompt 工程 |
 
 ### 1.4 正式问题定义
 
-我们将检索增强生成 (RAG) 系统中的幻觉检测形式化为 **token 级序列标注**问题。
+我们将检索增强生成 (RAG) 系统中的幻觉检测形式化为 **Token 级序列标注**问题。
 
 **定义 1 (RAG 上下文)。** 设 RAG 交互定义为元组 *(C, Q, R)*，其中：
 
 - *C = \{c₁, c₂, ..., cₘ\}* 是检索到的上下文（文档/段落集）
 - *Q* 是用户查询
-- *R = (r₁, r₂, ..., rₙ)* 是作为 *n* 个 token 序列生成的响应
+- *R = (r₁, r₂, ..., rₙ)* 是作为 *n* 个 Token 序列生成的响应
 
-**定义 2 (Grounded 与幻觉 token)。** 响应 *R* 中的 token *rᵢ* 是：
+**定义 2 (Grounded 与幻觉 Token)。** 响应 *R* 中的 Token *rᵢ* 是：
 
 - **Grounded (有据可查)**：如果在 *C* 中存在支持包含 *rᵢ* 的断言的证据
 - **幻觉 (Hallucination)**：如果 *rᵢ* 贡献于以下断言：
@@ -146,15 +139,15 @@ flowchart LR
 
 *f: (C, Q, R) → Y*
 
-其中 *Y = (y₁, y₂, ..., yₙ)* 且 *yᵢ ∈ \{0, 1\}* 表示 token *rᵢ* 是否为幻觉。
+其中 *Y = (y₁, y₂, ..., yₙ)* 且 *yᵢ ∈ \{0, 1\}* 表示 Token *rᵢ* 是否为幻觉。
 
 **定义 4 (幻觉分数)。** 给定预测 *Y* 和置信度分数 *P = (p₁, ..., pₙ)*，其中 *pᵢ = P(yᵢ = 1)*，我们定义：
 
-- **token 级分数**：*s_token(rᵢ) = pᵢ*
-- **片段 (span) 级分数**：对于连续片段 *S = (rᵢ, ..., rⱼ)*，*s_span(S) = max(pᵢ, ..., pⱼ)*
+- **Token 级分数**：*s_token(rᵢ) = pᵢ*
+- **片段 (Span) 级分数**：对于连续片段 *S = (rᵢ, ..., rⱼ)*，*s_span(S) = max(pᵢ, ..., pⱼ)*
 - **响应级分数**：对于所有满足 *pᵢ > τ_token* 的 *i*，*s_response(R) = 1 - ∏(1 - pᵢ)*
 
-**定义 5 (缓解决策)。** 给定阈值 (threshold) *τ*，系统采取行动：
+**定义 5 (缓解决策)。** 给定阈值 (Threshold) *τ*，系统采取行动：
 
 ```text
 Action(R) =
@@ -184,7 +177,7 @@ Action(R) =
 
 | 类型 | 检测难度 | 缓解方法 |
 |------|---------------------|---------------------|
-| 内在 | 较易（直接矛盾） | 上下文重新 ground |
+| 内在 | 较易（直接矛盾） | 上下文重新 Ground |
 | 外在 | 中等（需要知识边界） | 不确定性表达 |
 | 捏造 | 较难（需要外部验证） | 交叉引用检查 |
 
@@ -192,24 +185,24 @@ Action(R) =
 
 | 类别 | 代表性工作 | 机制 | 准确率 | 延迟 | 成本 |
 |----------|---------------------|-----------|----------|---------|------|
-| **基于编码器** | LettuceDetect (2025), Luna (2025) | 使用 ModernBERT/DeBERTa 进行 token 分类 | F1: 75-79% | 15-35ms | 低 |
+| **基于编码器** | LettuceDetect (2025), Luna (2025) | 使用 ModernBERT/DeBERTa 进行 Token 分类 | F1: 75-79% | 15-35ms | 低 |
 | **自洽性 (Self-Consistency)** | SelfCheckGPT (2023) | 多次采样 + 一致性检查 | 变化 | Nx 基础 | 高 |
 | **跨模型** | Finch-Zk (2025) | 多模型响应比较 | F1: +6-39% | 2-3x 基础 | 高 |
 | **内部状态** | MIND (ACL 2024) | 隐藏层激活分析 | 高 | &lt;10ms | 需要仪器化 |
 
 #### 2.2.1 基于编码器的检测（深度探索）
 
-**LettuceDetect** (Kovács 等人, 2025) 将幻觉检测框架化为 **token 级序列标注**：
+**LettuceDetect** (Kovács 等人, 2025) 将幻觉检测框架化为 **Token 级序列标注**：
 
 - **架构**：带有分类头的 ModernBERT-large（3.95 亿参数）
-- **输入**：连接 [上下文, 查询, 响应] 并带有特殊 token
-- **输出**：每个 token 的幻觉概率
-- **训练**：在 RAGTruth 数据集（1.8 万个示例）上进行 fine-tuning
-- **关键创新**：长上下文处理（8K token）能够包含完整的 RAG 上下文
+- **输入**：连接 [上下文, 查询, 响应] 并带有特殊 Token
+- **输出**：每个 Token 的幻觉概率
+- **训练**：在 RAGTruth 数据集（1.8 万个示例）上进行 Fine-tuning
+- **关键创新**：长上下文处理（8K Token）能够包含完整的 RAG 上下文
 
 **在 RAGTruth 基准测试中的性能：**
 
-| 模型 | token F1 | 示例 F1 | 延迟 |
+| 模型 | Token F1 | 示例 F1 | 延迟 |
 |-------|----------|------------|---------|
 | LettuceDetect-large | 79.22% | 74.8% | ~30ms |
 | LettuceDetect-base | 76.5% | 71.2% | ~15ms |
@@ -334,17 +327,17 @@ graph TD
 
 ### 3.1 作为序列标注的幻觉检测
 
-#### 3.1.1 token 分类架构
+#### 3.1.1 Token 分类架构
 
-现代幻觉检测利用针对 token 分类进行了 fine-tuning 的基于 transformer 的编码器。给定输入序列 *X = [CLS] C [SEP] Q [SEP] R [SEP]*，编码器产生上下文表示：
+现代幻觉检测利用针对 Token 分类进行了 Fine-tuning 的基于 Transformer 的编码器。给定输入序列 *X = [CLS] C [SEP] Q [SEP] R [SEP]*，编码器产生上下文表示：
 
 *H = Encoder(X) ∈ ℝ^(L×d)*
 
-其中 *L* 是序列长度，*d* 是隐藏维度。对于响应中的每个 token *rᵢ*，我们计算：
+其中 *L* 是序列长度，*d* 是隐藏维度。对于响应中的每个 Token *rᵢ*，我们计算：
 
 *P(yᵢ = 1|X) = σ(W · hᵢ + b)*
 
-其中 *W ∈ ℝ^d*, *b ∈ ℝ* 是学习到的参数，*σ* 是 sigmoid 函数。
+其中 *W ∈ ℝ^d*, *b ∈ ℝ* 是学习到的参数，*σ* 是 Sigmoid 函数。
 
 #### 3.1.2 为什么选择 ModernBERT 进行检测
 
@@ -352,30 +345,30 @@ graph TD
 
 | 属性 | ModernBERT | 传统 BERT | 对检测的影响 |
 |----------|------------|------------------|---------------------|
-| **上下文长度** | 8,192 token | 512 token | 无需截断即可处理完整的 RAG 上下文 |
+| **上下文长度** | 8,192 Token | 512 Token | 无需截断即可处理完整的 RAG 上下文 |
 | **注意力机制** | 旋转位置嵌入 (RoPE) | 绝对位置 | 更好的长程依赖建模 |
-| **架构** | GeGLU 激活，无 bias | GELU，有 bias | 改进了细粒度分类的梯度流 |
-| **效率** | Flash Attention, Unpadding | 标准注意力 | 2x inference 加速，实现实时检测 |
+| **架构** | GeGLU 激活，无 Bias | GELU，有 Bias | 改进了细粒度分类的梯度流 |
+| **效率** | Flash Attention, Unpadding | 标准注意力 | 2x Inference 加速，实现实时检测 |
 
 #### 3.1.3 评分函数设计
 
-从 token 级到响应级分数的聚合需要仔细设计。我们提出了一个 **Noisy-OR** 聚合模型：
+从 Token 级到响应级分数的聚合需要仔细设计。我们提出了一个 **Noisy-OR** 聚合模型：
 
 *s_response(R) = 1 - ∏ᵢ(1 - pᵢ · 𝟙[pᵢ > τ_token])*
 
-**理论依据**：Noisy-OR 模型假设不同 token 处的幻觉事件之间相互独立。虽然这是一个近似，但它提供了：
+**理论依据**：Noisy-OR 模型假设不同 Token 处的幻觉事件之间相互独立。虽然这是一个近似，但它提供了：
 
-1. **单调性**：增加一个幻觉 token 绝不会降低响应分数
+1. **单调性**：增加一个幻觉 Token 绝不会降低响应分数
 2. **敏感性**：单个高置信度的幻觉就会触发检测
 3. **校准**：分数近似于 *P(R 中存在幻觉)*
 
 **替代方案：基于片段 (Span) 的聚合**
 
-对于相关的幻觉（在捏造实体中很常见），我们首先将连续的幻觉 token 分组为片段，然后进行聚合：
+对于相关的幻觉（在捏造实体中很常见），我们首先将连续的幻觉 Token 分组为片段，然后进行聚合：
 
 *s_response(R) = max\{s_span(S₁), s_span(S₂), ..., s_span(Sₖ)\}*
 
-这减少了对分词 (tokenization) 人为因素的敏感性，并专注于语义单元。
+这减少了对分词 (Tokenization) 人为因素的敏感性，并专注于语义单元。
 
 #### 3.1.4 阈值 (Threshold) 选择理论
 
@@ -412,7 +405,7 @@ graph TD
 
 1. *幻觉分数序列 \{s(Rₜ)\} 是单调不增的*
 2. *分数有下界 (s(R) ≥ 0)*
-3. *LLM 表现出一致性：相似的 prompt 产生相似的输出*
+3. *LLM 表现出一致性：相似的 Prompt 产生相似的输出*
 
 **证明梗概**：条件 1 和 2 确保分数序列根据单调收敛定理收敛。条件 3 (LLM 一致性) 确保响应序列本身收敛，而不仅仅是分数。
 
@@ -438,19 +431,19 @@ graph LR
     end
 ```
 
-#### 3.2.3 纠错的 prompt 工程原则
+#### 3.2.3 纠错的 Prompt 工程原则
 
-有效的细化 prompt 必须满足几个理论特性：
+有效的细化 Prompt 必须满足几个理论特性：
 
-**原则 1 (特异性)**：prompt 必须识别出*哪些*片段产生了幻觉，而不仅仅是指出存在幻觉。
+**原则 1 (特异性)**：Prompt 必须识别出*哪些*片段产生了幻觉，而不仅仅是指出存在幻觉。
 
-**原则 2 (Grounding)**：prompt 必须提供原始上下文 *C* 以启用事实核查。
+**原则 2 (Grounding)**：Prompt 必须提供原始上下文 *C* 以启用事实核查。
 
-**原则 3 (保留)**：prompt 必须指示模型保留准确的内容。
+**原则 3 (保留)**：Prompt 必须指示模型保留准确的内容。
 
 **原则 4 (不确定性)**：当无法纠正时，模型应该表达不确定性，而不是捏造替代方案。
 
-**细化 prompt 模板结构：**
+**细化 Prompt 模板结构：**
 
 ```text
 给定：
@@ -464,7 +457,7 @@ graph LR
 1. 对于每个标记出的片段，根据上下文进行验证
 2. 如果存在矛盾：使用上下文证据进行纠正
 3. 如果无法验证且不是常识：删除或使用不确定性词汇修饰
-4. 保留所有准确且 grounded 的内容
+4. 保留所有准确且 Grounded 的内容
 5. 保持连贯的叙事流
 ```
 
@@ -497,7 +490,7 @@ graph LR
 - *A* 是一组论点（来自每个模型的事实断言）
 - *→ ⊆ A × A* 是一个攻击关系（论点之间的矛盾）
 
-**定义 8 (Grounded 扩展)。** AF 的 grounded 扩展 *E* 是最大的无冲突论点集，它能抵御所有攻击。
+**定义 8 (Grounded 扩展)。** AF 的 Grounded 扩展 *E* 是最大的无冲突论点集，它能抵御所有攻击。
 
 **多智能体辩论协议：**
 
@@ -521,14 +514,14 @@ sequenceDiagram
 
     M1->>J: 最终立场 + 证据
     M2->>J: 最终立场 + 证据
-    J->>Q: 综合响应 (grounded 扩展)
+    J->>Q: 综合响应 (Grounded 扩展)
 ```
 
 #### 3.3.3 共识机制
 
 **机制 1：多数投票**
 
-*y_final(token) = argmax_y |\{m : f_m(token) = y\}|*
+*y_final(Token) = argmax_y |\{m : f_m(Token) = y\}|*
 
 - 简单、快速
 - 需要奇数个模型
@@ -536,7 +529,7 @@ sequenceDiagram
 
 **机制 2：加权置信度聚合**
 
-*p_final(token) = Σₘ wₘ · pₘ(token) / Σₘ wₘ*
+*p_final(Token) = Σₘ wₘ · pₘ(Token) / Σₘ wₘ*
 
 其中 *wₘ* 是模型 m 经过校准的可靠性权重。
 
@@ -797,8 +790,8 @@ flowchart TB
             REQ_B[handleRequestBody]
 
             subgraph "请求安全"
-                PII_REQ[pii 检测]
-                JAIL[jailbreak 检测]
+                PII_REQ[PII 检测]
+                JAIL[Jailbreak 检测]
             end
 
             subgraph "路由"
@@ -807,7 +800,7 @@ flowchart TB
                 MODEL_SEL[模型选择]
             end
 
-            CACHE_CHK[semantic-cache 检查]
+            CACHE_CHK[Semantic Cache 检查]
         end
 
         subgraph "响应处理"
@@ -849,6 +842,7 @@ flowchart TB
     CLASS --> DECISION
     DECISION --> MODEL_SEL
     MODEL_SEL --> CACHE_CHK
+    MODEL_SEL --> CACHE_CHK
 
     CACHE_CHK -->|缓存命中| RES_H
     CACHE_CHK -->|缓存未命中| VLLM1
@@ -888,13 +882,13 @@ flowchart TB
 |------|------------|
 | **幻觉 (Hallucination)** | LLM 生成的事实错误或不受上下文支持的内容 |
 | **内在 (Intrinsic) 幻觉** | 源自模型内部参数化知识的虚假事实 |
-| **外在 (Extrinsic) 幻觉** | 未 grounded 在所提供上下文中的内容（在 RAG 中常见） |
+| **外在 (Extrinsic) 幻觉** | 未 Grounded 在所提供上下文中的内容（在 RAG 中常见） |
 | **ExtProc** | Envoy 外部处理器 - 允许在网关处修改请求/响应 |
-| **token 级检测** | 识别产生幻觉的特定 token/片段 |
+| **Token 级检测** | 识别产生幻觉的特定 Token/片段 |
 | **自我细化 (Self-Refinement)** | 相同模型纠正自身产生的幻觉的迭代过程 |
 | **跨模型验证** | 使用多个不同的模型来验证事实一致性 |
 | **多智能体辩论** | 多个 LLM 智能体通过辩论立场以收敛到事实真相 |
-| **RAG** | 检索增强生成 (Retrieval-Augmented Generation) - 使用检索到的文档来 ground LLM |
+| **RAG** | 检索增强生成 (Retrieval-Augmented Generation) - 使用检索到的文档来 Ground LLM |
 | **ModernBERT** | 支持 8K 上下文的最先进编码器架构 |
 | **准确率-延迟-成本三角形** | 幻觉缓解策略中的基本权衡 |
 | **收敛阈值 (Convergence Threshold)** | 低于该分数的幻觉被视为已解决 |
