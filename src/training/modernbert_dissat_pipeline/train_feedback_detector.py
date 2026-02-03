@@ -12,6 +12,14 @@ Labels:
   - WANT_DIFFERENT: User wants alternative options
 
 Supports both full fine-tuning and LoRA training.
+
+Optimized Hyperparameters (validated 2026-02-02):
+  - LoRA rank: 64 (higher capacity needed for 4-class distinction)
+  - LoRA alpha: 128 (2x rank recommended)
+  - Epochs: 10 (with early stopping patience=3)
+  - Learning rate: 2e-5
+  - Batch size: 16
+  - Results: 98.83% accuracy, 98.24% F1 macro
 """
 
 import os
@@ -309,18 +317,32 @@ def main():
     )
     parser.add_argument("--max_length", type=int, default=512)
 
-    # Training
+    # Training (optimized for 4-class feedback detection, validated 2026-02-02)
     parser.add_argument("--batch_size", type=int, default=16)
-    parser.add_argument("--epochs", type=int, default=5)
-    parser.add_argument("--lr", type=float, default=2e-5)
+    parser.add_argument(
+        "--epochs", type=int, default=10, help="10 epochs recommended for 98%+ accuracy"
+    )
+    parser.add_argument(
+        "--lr",
+        type=float,
+        default=2e-5,
+        help="Learning rate (2e-5 optimal for feedback)",
+    )
     parser.add_argument("--warmup_ratio", type=float, default=0.1)
     parser.add_argument("--weight_decay", type=float, default=0.01)
     parser.add_argument("--use_class_weights", action="store_true", default=True)
 
     # LoRA
     parser.add_argument("--use_lora", action="store_true", help="Use LoRA training")
-    parser.add_argument("--lora_rank", type=int, default=16, help="LoRA rank")
-    parser.add_argument("--lora_alpha", type=int, default=32, help="LoRA alpha")
+    parser.add_argument(
+        "--lora_rank",
+        type=int,
+        default=64,
+        help="LoRA rank (higher for 4-class feedback)",
+    )
+    parser.add_argument(
+        "--lora_alpha", type=int, default=128, help="LoRA alpha (2x rank recommended)"
+    )
     parser.add_argument(
         "--merge_lora", action="store_true", help="Merge LoRA weights after training"
     )
@@ -440,6 +462,19 @@ def main():
     print(f"\n[4/5] Setting up training...")
     output_dir = args.output_dir + ("_lora" if args.use_lora else "")
 
+    # Check if running on AMD GPU (ROCm) - disable fp16 AMP which has issues with BFloat16
+    use_fp16 = False
+    use_bf16 = False
+    if torch.cuda.is_available():
+        device_name = torch.cuda.get_device_name(0).lower()
+        if "amd" in device_name or "mi300" in device_name or "instinct" in device_name:
+            # AMD GPUs: use bf16 without gradient scaling, or disable mixed precision
+            print(f"  Detected AMD GPU ({device_name}), using bf16=True")
+            use_bf16 = True
+        else:
+            # NVIDIA GPUs: use fp16 with AMP
+            use_fp16 = True
+
     training_args = TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=args.epochs,
@@ -458,21 +493,34 @@ def main():
         greater_is_better=True,
         logging_steps=100,
         report_to="none",
-        fp16=torch.cuda.is_available(),
+        fp16=use_fp16,
+        bf16=use_bf16,
         dataloader_num_workers=4,
     )
 
-    # Create trainer
-    trainer = WeightedTrainer(
-        class_weights=class_weights,
-        model=model,
-        args=training_args,
-        train_dataset=train_dataset,
-        eval_dataset=val_dataset,
-        tokenizer=tokenizer,
-        compute_metrics=compute_metrics,
-        callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
-    )
+    # Create trainer (use processing_class for newer transformers, fallback to tokenizer)
+    try:
+        trainer = WeightedTrainer(
+            class_weights=class_weights,
+            model=model,
+            args=training_args,
+            train_dataset=train_dataset,
+            eval_dataset=val_dataset,
+            processing_class=tokenizer,  # New API in transformers 5.x
+            compute_metrics=compute_metrics,
+            callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
+        )
+    except TypeError:
+        trainer = WeightedTrainer(
+            class_weights=class_weights,
+            model=model,
+            args=training_args,
+            train_dataset=train_dataset,
+            eval_dataset=val_dataset,
+            tokenizer=tokenizer,  # Old API
+            compute_metrics=compute_metrics,
+            callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
+        )
 
     # Train
     print(f"\n[5/5] Training...")

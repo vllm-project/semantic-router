@@ -66,6 +66,9 @@ spec:
         - name: config-volume
           mountPath: /app/config
           readOnly: true
+        {{- with .Values.extraVolumeMounts }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
         {{- if .Values.persistence.enabled }}
         - name: models-volume
           mountPath: /app/models
@@ -107,6 +110,9 @@ spec:
       - name: models-volume
         persistentVolumeClaim:
           claimName: {{ include "semantic-router.pvcName" . }}
+      {{- end }}
+      {{- with .Values.extraVolumes }}
+      {{- toYaml . | nindent 6 }}
       {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
