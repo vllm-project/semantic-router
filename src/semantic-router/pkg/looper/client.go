@@ -383,10 +383,10 @@ func extractReasoningFromRaw(rawBody []byte) string {
 	}
 
 	// Try choice-level fields first
-	if reasoning, ok := choice["reasoning"].(string); ok {
+	if reasoning, reasoningOk := choice["reasoning"].(string); reasoningOk {
 		return reasoning
 	}
-	if reasoning, ok := choice["reasoning_content"].(string); ok {
+	if reasoning, reasoningOk := choice["reasoning_content"].(string); reasoningOk {
 		return reasoning
 	}
 

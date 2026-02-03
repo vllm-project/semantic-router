@@ -10,9 +10,10 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/openai/openai-go"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+
+	"github.com/openai/openai-go"
 )
 
 // ReMoMLooper implements the ReMoM (Reasoning for Mixture of Models) algorithm
@@ -714,7 +715,7 @@ func replaceLastMessage(req *openai.ChatCompletionNewParams, newContent string) 
 	}
 
 	var reqMap map[string]interface{}
-	if err := json.Unmarshal(data, &reqMap); err != nil {
+	if unmarshalErr := json.Unmarshal(data, &reqMap); unmarshalErr != nil {
 		return req
 	}
 
