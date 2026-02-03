@@ -7,7 +7,7 @@ metadata:
     component: envoy
 data:
   envoy.yaml: |
-    # Envoy configuration for KServe InferenceService integration
+    # Envoy configuration for KServe LLMInferenceService integration
     # This config routes traffic to KServe predictors based on semantic router decisions
     static_resources:
       listeners:
@@ -136,8 +136,8 @@ data:
             explicit_http_config:
               http_protocol_options: {}
 
-      # DNS-based cluster for KServe InferenceService (headless service)
-      # Uses service DNS name with container port (8080) for Istio routing
+      # DNS-based cluster for KServe LLMInferenceService (stable ClusterIP)
+      # Uses service DNS name with container port (8000) for HTTP routing
       # Template variables: {{INFERENCESERVICE_NAME}}, {{NAMESPACE}}
       - name: kserve_dynamic_cluster
         connect_timeout: 300s
@@ -152,8 +152,8 @@ data:
             - endpoint:
                 address:
                   socket_address:
-                    address: {{INFERENCESERVICE_NAME}}-predictor.{{NAMESPACE}}.svc.cluster.local
-                    port_value: 8080
+                    address: {{INFERENCESERVICE_NAME}}-predictor-stable.{{NAMESPACE}}.svc.cluster.local
+                    port_value: 8000
         typed_extension_protocol_options:
           envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
             "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions

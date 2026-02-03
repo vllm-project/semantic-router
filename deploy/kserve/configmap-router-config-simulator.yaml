@@ -43,11 +43,11 @@ data:
     vllm_endpoints:
       - name: "model-a-endpoint"
         address: "{{PREDICTOR_SERVICE_IP_A}}"
-        port: 8080
+        port: 8000
         weight: 1
       - name: "model-b-endpoint"
         address: "{{PREDICTOR_SERVICE_IP_B}}"
-        port: 8080
+        port: 8000
         weight: 1
 
     model_config:

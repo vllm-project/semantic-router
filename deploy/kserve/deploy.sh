@@ -1,6 +1,6 @@
 #!/bin/bash
 # Semantic Router KServe Deployment Helper Script
-# This script simplifies deploying the semantic router to work with OpenShift AI KServe InferenceServices
+# This script simplifies deploying the semantic router to work with OpenShift AI KServe LLMInferenceServices
 # It handles variable substitution, validation, and deployment
 
 set -e
@@ -42,19 +42,19 @@ usage() {
     cat << EOF
 Usage: $0 [OPTIONS]
 
-Deploy vLLM Semantic Router for OpenShift AI KServe InferenceServices
+Deploy vLLM Semantic Router for OpenShift AI KServe LLMInferenceServices
 
 Required Options:
   -n, --namespace NAMESPACE          OpenShift namespace to deploy to
 
 Required Options (non-simulator):
-  -i, --inferenceservice NAME        Name of the KServe InferenceService
-  -m, --model MODEL_NAME             Model name as reported by the InferenceService
+  -i, --inferenceservice NAME        Name of the KServe LLMInferenceService
+  -m, --model MODEL_NAME             Model name as reported by the LLMInferenceService
 
 Optional:
   --simulator                        Use KServe simulator with Model-A and Model-B
-  --sim-inferenceservice-a NAME      Simulator InferenceService A name (default: model-a)
-  --sim-inferenceservice-b NAME      Simulator InferenceService B name (default: model-b)
+  --sim-inferenceservice-a NAME      Simulator LLMInferenceService A name (default: model-a)
+  --sim-inferenceservice-b NAME      Simulator LLMInferenceService B name (default: model-b)
   --sim-model-a NAME                 Simulator model name for A (default: Model-A)
   --sim-model-b NAME                 Simulator model name for B (default: Model-B)
   -s, --storage-class CLASS          StorageClass for PVCs (default: cluster default)
@@ -81,7 +81,7 @@ Examples:
 Prerequisites:
   - OpenShift CLI (oc) installed and logged in
   - KServe installed
-  - InferenceService already deployed
+  - LLMInferenceService already deployed
   - Cluster admin or namespace admin permissions
 
 For more information, see README.md
@@ -213,13 +213,13 @@ echo -e "${BLUE}Configuration:${NC}"
 echo "  Namespace:              $NAMESPACE"
 if [ "$SIMULATOR" = true ]; then
     echo "  Simulator Mode:         true"
-    echo "  InferenceService A:     $SIM_INFERENCESERVICE_A"
-    echo "  InferenceService B:     $SIM_INFERENCESERVICE_B"
+    echo "  LLMInferenceService A:  $SIM_INFERENCESERVICE_A"
+    echo "  LLMInferenceService B:  $SIM_INFERENCESERVICE_B"
     echo "  Model A Name:           $MODEL_NAME_A"
     echo "  Model B Name:           $MODEL_NAME_B"
 else
     echo "  Simulator Mode:         false"
-    echo "  InferenceService:       $INFERENCESERVICE_NAME"
+    echo "  LLMInferenceService:    $INFERENCESERVICE_NAME"
     echo "  Model Name:             $MODEL_NAME"
 fi
 echo "  Embedding Model:        $EMBEDDING_MODEL"
@@ -265,45 +265,86 @@ if [ "$SKIP_VALIDATION" = false ]; then
 
     validate_inferenceservice() {
         local name="$1"
-        if ! oc get inferenceservice "$name" -n "$NAMESPACE" &> /dev/null; then
-            echo -e "${RED}✗ Error: InferenceService '$name' not found in namespace '$NAMESPACE'${NC}"
-            echo "  Please deploy your InferenceService first."
+        if ! oc get llminferenceservice "$name" -n "$NAMESPACE" &> /dev/null; then
+            echo -e "${RED}✗ Error: LLMInferenceService '$name' not found in namespace '$NAMESPACE'${NC}"
+            echo "  Please deploy your LLMInferenceService first."
             exit 1
         fi
-        echo -e "${GREEN}✓${NC} InferenceService exists: $name"
+        echo -e "${GREEN}✓${NC} LLMInferenceService exists: $name"
 
         local isvc_ready
-        isvc_ready=$(oc get inferenceservice "$name" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+        isvc_ready=$(oc get llminferenceservice "$name" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
         if [ "$isvc_ready" != "True" ]; then
-            echo -e "${YELLOW}⚠ Warning: InferenceService '$name' is not ready yet${NC}"
-            echo "  Status: $(oc get inferenceservice "$name" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}')"
+            echo -e "${YELLOW}⚠ Warning: LLMInferenceService '$name' is not ready yet${NC}"
+            echo "  Status: $(oc get llminferenceservice "$name" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].message}')"
             read -p "Continue anyway? (y/n) " -n 1 -r
             echo
             if [[ ! $REPLY =~ ^[Yy]$ ]]; then
                 exit 1
             fi
         else
-            echo -e "${GREEN}✓${NC} InferenceService is ready"
+            echo -e "${GREEN}✓${NC} LLMInferenceService is ready"
         fi
 
         local predictor_url
-        predictor_url=$(oc get inferenceservice "$name" -n "$NAMESPACE" -o jsonpath='{.status.components.predictor.address.url}' 2>/dev/null || echo "")
+        predictor_url=$(oc get llminferenceservice "$name" -n "$NAMESPACE" -o jsonpath='{.status.url}' 2>/dev/null || echo "")
         if [ -n "$predictor_url" ]; then
             echo -e "${GREEN}✓${NC} Predictor URL: $predictor_url"
         fi
     }
 
+    detect_predictor_selector_label() {
+        local name="$1"
+        local pods
+
+        pods=$(oc get pods -n "$NAMESPACE" -l "serving.kserve.io/llm-inferenceservice=${name}" --no-headers 2>/dev/null || true)
+        if [[ -n "$pods" ]]; then
+            echo "serving.kserve.io/llm-inferenceservice"
+            return
+        fi
+
+        pods=$(oc get pods -n "$NAMESPACE" -l "app.kubernetes.io/name=${name}" --no-headers 2>/dev/null || true)
+        if [[ -n "$pods" ]]; then
+            echo "app.kubernetes.io/name"
+            return
+        fi
+
+        pods=$(oc get pods -n "$NAMESPACE" -l "serving.kserve.io/inferenceservice=${name}" --no-headers 2>/dev/null || true)
+        if [[ -n "$pods" ]]; then
+            echo "serving.kserve.io/inferenceservice"
+            return
+        fi
+
+        pods=$(oc get pods -n "$NAMESPACE" -l "app=${name}" --no-headers 2>/dev/null || true)
+        if [[ -n "$pods" ]]; then
+            echo "app"
+            return
+        fi
+
+        echo "serving.kserve.io/llm-inferenceservice"
+    }
+
     create_stable_service() {
         local name="$1"
         local output
+        local selector_label
+        local selector_value
 
         echo "Creating stable ClusterIP service for predictor: $name" >&2
+        selector_label=$(detect_predictor_selector_label "$name")
+        selector_value="$name"
         if [ -f "$SCRIPT_DIR/service-predictor-stable.yaml" ]; then
             output="$TEMP_DIR/service-predictor-stable-${name}.yaml.tmp"
             sed -e "s|{{INFERENCESERVICE_NAME}}|$name|g" \
                 -e "s|{{NAMESPACE}}|$NAMESPACE|g" \
+                -e "s|{{PREDICTOR_SELECTOR_LABEL}}|$selector_label|g" \
+                -e "s|{{PREDICTOR_SELECTOR_VALUE}}|$selector_value|g" \
                 "$SCRIPT_DIR/service-predictor-stable.yaml" > "$output"
             oc apply -f "$output" -n "$NAMESPACE" > /dev/null 2>&1
+            # Ensure selector is replaced (not merged) in case a previous selector exists.
+            oc patch svc "${name}-predictor-stable" -n "$NAMESPACE" --type='json' \
+                -p="[{'op':'replace','path':'/spec/selector','value':{'${selector_label}':'${selector_value}'}}]" \
+                > /dev/null 2>&1 || true
         else
             cat <<EOF | oc apply -f - -n "$NAMESPACE" > /dev/null 2>&1
 apiVersion: v1
@@ -319,11 +360,11 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    serving.kserve.io/inferenceservice: ${name}
+    ${selector_label}: ${selector_value}
   ports:
   - name: http
-    port: 8080
-    targetPort: 8080
+    port: 8000
+    targetPort: 8000
     protocol: TCP
 EOF
         fi
@@ -351,6 +392,34 @@ EOF
 
         PREDICTOR_SERVICE_IP=$(create_stable_service "$INFERENCESERVICE_NAME")
         echo -e "${GREEN}✓${NC} Predictor service ClusterIP: $PREDICTOR_SERVICE_IP (stable across pod restarts)"
+    fi
+
+    echo ""
+else
+    # When validation is skipped, we still need to get the service ClusterIPs
+    # for the config template substitution
+    echo -e "${BLUE}Skipping validation, retrieving existing service IPs...${NC}"
+
+    get_existing_service_ip() {
+        local name="$1"
+        local ip
+        ip=$(oc get svc "${name}-predictor-stable" -n "$NAMESPACE" -o jsonpath='{.spec.clusterIP}' 2>/dev/null || echo "")
+        if [ -z "$ip" ]; then
+            echo -e "${YELLOW}⚠ Warning: Could not get ClusterIP for ${name}-predictor-stable${NC}" >&2
+            echo "10.0.0.1"  # fallback
+        else
+            echo "$ip"
+        fi
+    }
+
+    if [ "$SIMULATOR" = true ]; then
+        PREDICTOR_SERVICE_IP_A=$(get_existing_service_ip "$SIM_INFERENCESERVICE_A")
+        echo -e "${GREEN}✓${NC} Predictor service ClusterIP A: $PREDICTOR_SERVICE_IP_A"
+        PREDICTOR_SERVICE_IP_B=$(get_existing_service_ip "$SIM_INFERENCESERVICE_B")
+        echo -e "${GREEN}✓${NC} Predictor service ClusterIP B: $PREDICTOR_SERVICE_IP_B"
+    else
+        PREDICTOR_SERVICE_IP=$(get_existing_service_ip "$INFERENCESERVICE_NAME")
+        echo -e "${GREEN}✓${NC} Predictor service ClusterIP: $PREDICTOR_SERVICE_IP"
     fi
 
     echo ""
@@ -409,6 +478,18 @@ fi
 # Deploy manifests
 echo -e "${BLUE}Step 3: Deploying to OpenShift...${NC}"
 
+# If we have RWO PVCs and an existing deployment, scale down first to avoid multi-attach.
+if oc get deployment semantic-router-kserve -n "$NAMESPACE" &>/dev/null; then
+    current_replicas=$(oc get deployment semantic-router-kserve -n "$NAMESPACE" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0")
+    models_mode=$(oc get pvc semantic-router-models -n "$NAMESPACE" -o jsonpath='{.spec.accessModes[0]}' 2>/dev/null || echo "")
+    cache_mode=$(oc get pvc semantic-router-cache -n "$NAMESPACE" -o jsonpath='{.spec.accessModes[0]}' 2>/dev/null || echo "")
+    if [[ "$current_replicas" -gt 0 ]] && { [[ "$models_mode" == "ReadWriteOnce" ]] || [[ "$cache_mode" == "ReadWriteOnce" ]]; }; then
+        echo "Scaling down semantic-router to avoid RWO PVC multi-attach..."
+        oc scale deployment/semantic-router-kserve -n "$NAMESPACE" --replicas=0 >/dev/null 2>&1 || true
+        oc wait --for=delete pod -l app=semantic-router -n "$NAMESPACE" --timeout=3m >/dev/null 2>&1 || true
+    fi
+fi
+
 oc apply -f "$TEMP_DIR/serviceaccount.yaml" -n "$NAMESPACE"
 oc apply -f "$TEMP_DIR/pvc.yaml" -n "$NAMESPACE"
 oc apply -f "$TEMP_DIR/configmap-router-config.yaml" -n "$NAMESPACE"
@@ -431,7 +512,7 @@ echo "This may take a few minutes while models are downloaded..."
 echo ""
 
 # Monitor pod status
-for i in {1..60}; do
+for i in {1..36}; do
     POD_STATUS=$(oc get pods -l app=semantic-router -n "$NAMESPACE" -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
     POD_NAME=$(oc get pods -l app=semantic-router -n "$NAMESPACE" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
 
@@ -446,9 +527,16 @@ for i in {1..60}; do
     # Show init container progress
     INIT_STATUS=$(oc get pods -l app=semantic-router -n "$NAMESPACE" -o jsonpath='{.items[0].status.initContainerStatuses[0].state.running}' 2>/dev/null || echo "")
     if [ -n "$INIT_STATUS" ]; then
-        echo -ne "\r  Initializing... (downloading models - this takes 2-3 minutes)"
+        echo "  Initializing... (downloading models)"
     else
-        echo -ne "\r  Waiting for pod... ($i/60)"
+        echo "  Waiting for pod... ($i/36)"
+    fi
+
+    if [ "$i" -eq 12 ]; then
+        echo ""
+        echo "  Quick status (init logs):"
+        oc logs -l app=semantic-router -n "$NAMESPACE" -c model-downloader --tail=15 2>/dev/null || true
+        echo ""
     fi
 
     sleep 5
@@ -458,9 +546,10 @@ echo ""
 
 # Check final status
 if ! oc get pods -l app=semantic-router -n "$NAMESPACE" -o jsonpath='{.items[0].status.containerStatuses[*].ready}' 2>/dev/null | grep -q "true true"; then
-    echo -e "${YELLOW}⚠ Warning: Pod may not be fully ready yet${NC}"
+    echo -e "${YELLOW}Warning: Pod may not be fully ready yet${NC}"
     echo "  Check status with: oc get pods -l app=semantic-router -n $NAMESPACE"
     echo "  View logs with: oc logs -l app=semantic-router -c semantic-router -n $NAMESPACE"
+    echo "  Init logs with: oc logs -l app=semantic-router -c model-downloader -n $NAMESPACE --tail=30"
 fi
 
 echo ""
@@ -480,46 +569,17 @@ echo "=================================================="
 echo ""
 echo "Next steps:"
 echo ""
-echo "1. Test the deployment:"
-echo "   curl -k \"https://$ROUTE_URL/v1/models\""
+echo "1. Set the route:"
+echo "   ENVOY_ROUTE=$ROUTE_URL"
 echo ""
-echo "2. Try a chat completion:"
-if [ "$SIMULATOR" = true ]; then
-    TEST_MODEL_NAME="$MODEL_NAME_B"
-else
-    TEST_MODEL_NAME="$MODEL_NAME"
-fi
-echo "   curl -k \"https://$ROUTE_URL/v1/chat/completions\" \\"
-echo "     -H 'Content-Type: application/json' \\"
-echo "     -d '{\"model\": \"$TEST_MODEL_NAME\", \"messages\": [{\"role\": \"user\", \"content\": \"Hello!\"}]}'"
+echo "2. Test model auto-routing:"
+echo "   curl -k -X POST https://${ROUTE_URL}/v1/chat/completions \\"
+echo "     -H \"Content-Type: application/json\" \\"
+echo "     -d '{\"model\":\"auto\",\"messages\":[{\"role\":\"user\",\"content\":\"Explain the elements of a contract under common law and give a simple example.\"}]}'"
 echo ""
-echo "3. Run validation tests:"
-echo "   NAMESPACE=$NAMESPACE MODEL_NAME=$TEST_MODEL_NAME $SCRIPT_DIR/test-semantic-routing.sh"
-echo ""
-echo "4. View logs:"
+echo "3. View logs:"
 echo "   oc logs -l app=semantic-router -c semantic-router -n $NAMESPACE -f"
 echo ""
-echo "5. Monitor metrics:"
-echo "   oc port-forward -n $NAMESPACE svc/semantic-router-kserve 9190:9190"
-echo "   curl http://localhost:9190/metrics"
-echo ""
-
-# Offer to run tests (interactive only)
-if [ "$SKIP_VALIDATION" = false ]; then
-    if [ -t 0 ]; then
-        echo ""
-        read -p "Run validation tests now? (y/n) " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            echo ""
-            MODEL_NAME="$TEST_MODEL_NAME"
-            export NAMESPACE MODEL_NAME
-            bash "$SCRIPT_DIR/test-semantic-routing.sh" || true
-        fi
-    else
-        echo "Skipping interactive validation prompt (non-interactive shell)."
-    fi
-fi
 
 echo ""
 echo "For more information, see: $SCRIPT_DIR/README.md"
