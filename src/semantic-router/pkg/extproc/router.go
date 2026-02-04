@@ -182,6 +182,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create classifier: %w", err)
 	}
+	classifier.SetDecisionCache(semanticCache)
 
 	// Immediately set global classification service so API server can access it
 	// This prevents API server from creating a duplicate classifier due to timeout

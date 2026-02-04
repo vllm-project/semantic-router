@@ -6,6 +6,7 @@ services:
     container_name: semantic-router
     ports:
       - "50051:50051"
+      - "9190:9190"
     volumes:
       - ../../config:/app/config:ro,z
       - ../../models:/app/models:ro,z
@@ -199,13 +200,13 @@ services:
 
   # Redis for router replay storage
   redis:
-    image: redis:7-alpine
+    image: redis/redis-stack-server:latest
     container_name: semantic-router-redis
     ports:
       - "6379:6379"
     volumes:
       - redis-data:/data
-    command: redis-server --appendonly yes
+    command: redis-stack-server --appendonly yes --protected-mode no
     networks:
       - semantic-network
     healthcheck:

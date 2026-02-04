@@ -6,11 +6,20 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+// DecisionEntry represents a cached decision evaluation result
+type DecisionEntry struct {
+	Name            string   `json:"name"`
+	Confidence      float64  `json:"confidence"`
+	MatchedRules    []string `json:"matched_rules,omitempty"`
+	MatchedKeywords []string `json:"matched_keywords,omitempty"`
+}
+
 // CacheEntry represents a complete cached request-response pair with associated metadata
 type CacheEntry struct {
 	RequestID    string
 	RequestBody  []byte
 	ResponseBody []byte
+	Decision     *DecisionEntry
 	Model        string
 	Query        string
 	Embedding    []float32
@@ -40,6 +49,9 @@ type CacheBackend interface {
 	// AddEntry stores a complete request-response pair in the cache
 	AddEntry(requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error
 
+	// AddDecisionEntry stores a complete request-decision pair in the cache
+	AddDecisionEntry(requestID string, model string, query string, decision *DecisionEntry, ttlSeconds int) error
+
 	// FindSimilar searches for semantically similar cached requests
 	// Returns the cached response, match status, and any error
 	FindSimilar(model string, query string) ([]byte, bool, error)
@@ -48,6 +60,14 @@ type CacheBackend interface {
 	// This allows category-specific similarity thresholds
 	// Returns the cached response, match status, and any error
 	FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error)
+
+	// FindSimilarDecision searches for semantically similar cached decisions
+	// Returns the cached decision, match status, and any error
+	FindSimilarDecision(model string, query string) (*DecisionEntry, bool, error)
+
+	// FindSimilarDecisionWithThreshold searches for semantically similar cached decisions using a specific threshold
+	// Returns the cached decision, match status, and any error
+	FindSimilarDecisionWithThreshold(model string, query string, threshold float32) (*DecisionEntry, bool, error)
 
 	// Close releases all resources held by the cache backend
 	Close() error
