@@ -125,7 +125,9 @@ rust: ## Ensure Rust is installed and build the Rust library with CUDA support (
 			echo "Building Rust library for CPU (nvcc not found)..." && \
 			cd candle-binding && cargo build --release --no-default-features; \
 		fi; \
-	fi'
+	fi && \
+	echo "Building ml-binding Rust library..." && \
+	cd ../ml-binding && cargo build --release'
 
 # Build the Rust library without CUDA (for CI/CD environments)
 rust-ci: ## Build the Rust library without CUDA support (for GitHub Actions/CI)
@@ -156,3 +158,5 @@ rust-flash-attn: ## Build Rust library with Flash Attention 2 (requires CUDA env
 		exit 1; \
 	fi
 	@cd candle-binding && cargo build --release --features flash-attn
+	@echo "Building ml-binding Rust library..."
+	@cd ml-binding && cargo build --release
