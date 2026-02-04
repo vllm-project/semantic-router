@@ -322,15 +322,15 @@ spec:
     # Example: GPU nodes
     # accelerator: gpu
 
+  # Example: GPU taints
+  #   - key: "nvidia.com/gpu"
+  #     operator: "Exists"
+  #     effect: "NoSchedule"
   tolerations:
     - key: "node.kubernetes.io/not-ready"
       operator: "Exists"
       effect: "NoExecute"
       tolerationSeconds: 300
-    # Example: GPU taints
-    # - key: "nvidia.com/gpu"
-    #   operator: "Exists"
-    #   effect: "NoSchedule"
 
   affinity:
     podAntiAffinity:
@@ -356,17 +356,17 @@ spec:
   # ====================
   # Environment Variables
   # ====================
+  # Example: External service credentials
+  #   - name: API_KEY
+  #     valueFrom:
+  #       secretKeyRef:
+  #         name: api-credentials
+  #         key: api-key
   env:
     - name: RUST_LOG
       value: info
     - name: RUST_BACKTRACE
       value: "1"
-    # Example: External service credentials
-    # - name: API_KEY
-    #   valueFrom:
-    #     secretKeyRef:
-    #       name: api-credentials
-    #       key: api-key
 
   # ====================
   # Service Account
@@ -374,6 +374,7 @@ spec:
   serviceAccount:
     create: true
     name: semantic-router
-    annotations:
-      # Example: AWS IAM role for service account
-      # eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/semantic-router-role
+    # Example: AWS IAM role for service account
+    # annotations:
+    #   eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/semantic-router-role
+    annotations: {}
