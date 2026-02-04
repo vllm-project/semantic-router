@@ -36,6 +36,7 @@ CACHE_PVC_SIZE="5Gi"
 EMBEDDING_MODEL="all-MiniLM-L12-v2"
 DRY_RUN=false
 SKIP_VALIDATION=false
+CLASSIFIER_GPU=false
 
 # Usage function
 usage() {
@@ -57,6 +58,7 @@ Optional:
   --sim-inferenceservice-b NAME      Simulator LLMInferenceService B name (default: model-b)
   --sim-model-a NAME                 Simulator model name for A (default: Model-A)
   --sim-model-b NAME                 Simulator model name for B (default: Model-B)
+  --classifier-gpu                   Run semantic router classifier on GPU
   -s, --storage-class CLASS          StorageClass for PVCs (default: cluster default)
   --models-pvc-size SIZE             Size for models PVC (default: 10Gi)
   --cache-pvc-size SIZE              Size for cache PVC (default: 5Gi)
@@ -71,6 +73,9 @@ Examples:
 
   # Deploy with KServe simulator (Model-A / Model-B)
   $0 -n semantic --simulator
+
+  # Deploy simulator with GPU-backed classifier
+  $0 -n semantic --simulator --classifier-gpu
 
   # Deploy with custom storage class and embedding model
   $0 -n myproject -i llama3-70b -m llama3-70b -s gp3-csi --embedding-model all-mpnet-base-v2
@@ -151,6 +156,10 @@ while [[ $# -gt 0 ]]; do
             MODEL_NAME_B="$2"
             shift 2
             ;;
+        --classifier-gpu)
+            CLASSIFIER_GPU=true
+            shift
+            ;;
         -s|--storage-class)
             STORAGE_CLASS="$2"
             shift 2
@@ -198,6 +207,7 @@ if [ "$SIMULATOR" = false ]; then
     fi
 fi
 
+
 TEMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
@@ -217,6 +227,7 @@ if [ "$SIMULATOR" = true ]; then
     echo "  LLMInferenceService B:  $SIM_INFERENCESERVICE_B"
     echo "  Model A Name:           $MODEL_NAME_A"
     echo "  Model B Name:           $MODEL_NAME_B"
+    echo "  Classifier GPU:         $CLASSIFIER_GPU"
 else
     echo "  Simulator Mode:         false"
     echo "  LLMInferenceService:    $INFERENCESERVICE_NAME"
@@ -246,6 +257,16 @@ if [ "$SKIP_VALIDATION" = false ]; then
         exit 1
     fi
     echo -e "${GREEN}✓${NC} Logged in as $(oc whoami)"
+
+    if [ "$CLASSIFIER_GPU" = true ]; then
+        GPU_NODES=$(oc get nodes -o jsonpath='{.items[*].status.allocatable.nvidia\.com/gpu}' 2>/dev/null | tr ' ' '\n' | grep -v '^$' | grep -v '<none>' -c)
+        if [ "$GPU_NODES" -eq 0 ]; then
+            echo -e "${RED}✗ Error: No GPU resources detected for --classifier-gpu${NC}"
+            echo "  Install the GPU operator first: ./deploy/kserve/install-gpu-operator.sh"
+            exit 1
+        fi
+        echo -e "${GREEN}✓${NC} GPU nodes available: $GPU_NODES"
+    fi
 
     # Check if namespace exists
     if ! oc get namespace "$NAMESPACE" &> /dev/null; then
@@ -442,6 +463,18 @@ else
     echo -e "${YELLOW}⚠ Missing configmap source: $CONFIGMAP_SRC${NC}"
 fi
 
+if [ "$CLASSIFIER_GPU" = true ]; then
+    # Patch use_cpu settings for GPU classifier (bert_model, prompt_guard, category_model, pii_model)
+    sed -i.bak \
+      -e '/bert_model:/,/^[^ ]/ s/use_cpu: true/use_cpu: false/' \
+      -e '/prompt_guard:/,/^[^ ]/ s/use_cpu: true/use_cpu: false/' \
+      -e '/category_model:/,/^[^ ]/ s/use_cpu: true/use_cpu: false/' \
+      -e '/pii_model:/,/^[^ ]/ s/use_cpu: true/use_cpu: false/' \
+      "$TEMP_DIR/configmap-router-config.yaml"
+    rm -f "$TEMP_DIR/configmap-router-config.yaml.bak"
+    echo -e "${GREEN}✓${NC} Patched configmap-router-config.yaml for GPU classifier"
+fi
+
 if [ -f "$ENVOY_CONFIG_SRC" ]; then
     substitute_vars "$ENVOY_CONFIG_SRC" "$TEMP_DIR/configmap-envoy-config.yaml"
     echo -e "${GREEN}✓${NC} Generated: configmap-envoy-config.yaml"
@@ -457,6 +490,26 @@ for file in serviceaccount.yaml pvc.yaml peerauthentication.yaml deployment.yaml
         echo -e "${YELLOW}⚠ Skipping missing file: $file${NC}"
     fi
 done
+
+if [ "$CLASSIFIER_GPU" = true ]; then
+    # Patch deployment for GPU scheduling using yq (4.2.0 compatible syntax)
+    # Add nodeSelector
+    yq eval '.spec.template.spec.nodeSelector."nvidia.com/gpu.present" = "true"' -i "$TEMP_DIR/deployment.yaml"
+
+    # Add GPU toleration
+    yq eval '.spec.template.spec.tolerations = [{"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}]' -i "$TEMP_DIR/deployment.yaml"
+
+    # Add NVIDIA env vars to semantic-router container
+    yq eval '(.spec.template.spec.containers[] | select(.name == "semantic-router") | .env) += [{"name": "NVIDIA_VISIBLE_DEVICES", "value": "all"}]' -i "$TEMP_DIR/deployment.yaml"
+    yq eval '(.spec.template.spec.containers[] | select(.name == "semantic-router") | .env) += [{"name": "NVIDIA_DRIVER_CAPABILITIES", "value": "compute,utility"}]' -i "$TEMP_DIR/deployment.yaml"
+    yq eval '(.spec.template.spec.containers[] | select(.name == "semantic-router") | .env) += [{"name": "CUDA_VISIBLE_DEVICES", "value": "0"}]' -i "$TEMP_DIR/deployment.yaml"
+
+    # Add GPU resource requests and limits
+    yq eval '(.spec.template.spec.containers[] | select(.name == "semantic-router") | .resources.requests."nvidia.com/gpu") = "1"' -i "$TEMP_DIR/deployment.yaml"
+    yq eval '(.spec.template.spec.containers[] | select(.name == "semantic-router") | .resources.limits."nvidia.com/gpu") = "1"' -i "$TEMP_DIR/deployment.yaml"
+
+    echo -e "${GREEN}✓${NC} Patched deployment.yaml for GPU classifier"
+fi
 
 echo ""
 
@@ -512,7 +565,7 @@ echo "This may take a few minutes while models are downloaded..."
 echo ""
 
 # Monitor pod status
-for i in {1..36}; do
+for i in {1..60}; do
     POD_STATUS=$(oc get pods -l app=semantic-router -n "$NAMESPACE" -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
     POD_NAME=$(oc get pods -l app=semantic-router -n "$NAMESPACE" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
 
@@ -529,7 +582,7 @@ for i in {1..36}; do
     if [ -n "$INIT_STATUS" ]; then
         echo "  Initializing... (downloading models)"
     else
-        echo "  Waiting for pod... ($i/36)"
+        echo "  Waiting for pod... ($i/60)"
     fi
 
     if [ "$i" -eq 12 ]; then
@@ -562,25 +615,35 @@ else
     echo -e "${YELLOW}⚠ Could not determine route URL${NC}"
 fi
 
+# Get API route URL
+API_ROUTE_URL=$(oc get route semantic-router-kserve-api -n "$NAMESPACE" -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
+
 echo ""
 echo "=================================================="
 echo "  Deployment Complete!"
 echo "=================================================="
 echo ""
-echo "Next steps:"
+echo "Routes:"
+echo "  ENVOY_ROUTE: https://$ROUTE_URL"
+echo "  API_ROUTE:   https://$API_ROUTE_URL"
 echo ""
-echo "1. Set the route:"
-echo "   ENVOY_ROUTE=$ROUTE_URL"
+echo "Validate deployment:"
 echo ""
-echo "2. Test model auto-routing:"
-echo "   curl -k -X POST https://${ROUTE_URL}/v1/chat/completions \\"
-echo "     -H \"Content-Type: application/json\" \\"
-echo "     -d '{\"model\":\"auto\",\"messages\":[{\"role\":\"user\",\"content\":\"Explain the elements of a contract under common law and give a simple example.\"}]}'"
+echo "# 1. Test health endpoint"
+echo "curl -sk https://$API_ROUTE_URL/health"
 echo ""
-echo "3. View logs:"
-echo "   oc logs -l app=semantic-router -c semantic-router -n $NAMESPACE -f"
+echo "# 2. Test classifier API"
+echo "curl -sk -X POST https://$API_ROUTE_URL/api/v1/classify/intent \\"
+echo "  -H \"Content-Type: application/json\" \\"
+echo "  -d '{\"text\": \"What is machine learning?\"}'"
 echo ""
-
+echo "# 3. Test chat completions (auto-routing)"
+echo "curl -sk -X POST https://$ROUTE_URL/v1/chat/completions \\"
+echo "  -H \"Content-Type: application/json\" \\"
+echo "  -d '{\"model\":\"auto\",\"messages\":[{\"role\":\"user\",\"content\":\"What is 2+2?\"}]}'"
+echo ""
+echo "# 4. View logs"
+echo "oc logs -l app=semantic-router -c semantic-router -n $NAMESPACE -f"
 echo ""
 echo "For more information, see: $SCRIPT_DIR/README.md"
 echo ""

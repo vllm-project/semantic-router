@@ -56,8 +56,14 @@ This deploys only the core components without Dashboard, OpenWebUI, Grafana, and
 |------|-------------|
 | `--no-observability` | Skip deploying Dashboard, OpenWebUI, Grafana, and Prometheus |
 | `--kserve` | Deploy semantic-router with a KServe backend (add `--simulator` for KServe simulator) |
+| `--simulator` | Use mock-vllm or KServe simulator backends (CPU) |
+| `--classifier-gpu` | Run semantic-router classifier on GPU |
 | *(auto)* | If the KServe CRD is missing, the script installs upstream KServe and cert-manager |
 | `--help`, `-h` | Show help message |
+
+**GPU Classifier**
+
+Use `--classifier-gpu` to run the semantic-router classifier and prompt guard on a GPU node. This patches the config to set `use_cpu: false` for all classifier models (bert_model, prompt_guard, category_model, pii_model) and patches the semantic-router deployment to request a GPU and schedule onto GPU nodes. Can be combined with `--simulator` (models on CPU, classifier on GPU) or used alone (both models and classifier on GPU).
 
 ### Manual Deployment (Advanced)
 
@@ -196,6 +202,9 @@ curl -k -X POST https://$ENVOY_ROUTE/v1/chat/completions \
 
 # 3) Deploy KServe simulator (CPU) or GPU model (run from repo root)
 ./deploy/openshift/deploy-to-openshift.sh --kserve --simulator --no-observability
+
+# (Optional) GPU classifier with CPU backends
+./deploy/openshift/deploy-to-openshift.sh --kserve --simulator --classifier-gpu --no-observability
 
 # GPU (Qwen 0.6B)
 ./deploy/openshift/deploy-to-openshift.sh --kserve --no-observability
