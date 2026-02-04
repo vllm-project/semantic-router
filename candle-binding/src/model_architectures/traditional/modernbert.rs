@@ -477,6 +477,64 @@ impl TraditionalModernBertClassifier {
         }
     }
 
+    /// Normalize config JSON to handle different HuggingFace model config formats
+    /// Some models (e.g., mmbert-32k-yarn) use top-level global_rope_theta/local_rope_theta
+    /// Other models (e.g., feedback-detector) use nested rope_parameters structure
+    /// This function extracts rope_theta from rope_parameters if top-level fields are missing
+    pub fn normalize_config_json(config_str: &str) -> String {
+        let Ok(mut config_json) = serde_json::from_str::<serde_json::Value>(config_str) else {
+            return config_str.to_string();
+        };
+
+        let obj = match config_json.as_object_mut() {
+            Some(obj) => obj,
+            None => return config_str.to_string(),
+        };
+
+        // If global_rope_theta is missing, try to extract from rope_parameters
+        if !obj.contains_key("global_rope_theta") {
+            if let Some(rope_params) = obj.get("rope_parameters") {
+                // Try to get from full_attention or sliding_attention
+                let theta = rope_params
+                    .get("full_attention")
+                    .and_then(|v| v.get("rope_theta"))
+                    .and_then(|v| v.as_f64())
+                    .or_else(|| {
+                        rope_params
+                            .get("sliding_attention")
+                            .and_then(|v| v.get("rope_theta"))
+                            .and_then(|v| v.as_f64())
+                    })
+                    .unwrap_or(160000.0); // Default for mmBERT-32K
+
+                obj.insert(
+                    "global_rope_theta".to_string(),
+                    serde_json::Value::from(theta),
+                );
+            } else {
+                // No rope_parameters either, use default
+                obj.insert(
+                    "global_rope_theta".to_string(),
+                    serde_json::Value::from(160000.0),
+                );
+            }
+        }
+
+        // If local_rope_theta is missing, use the same value as global_rope_theta
+        if !obj.contains_key("local_rope_theta") {
+            let global_theta = obj
+                .get("global_rope_theta")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(160000.0);
+            obj.insert(
+                "local_rope_theta".to_string(),
+                serde_json::Value::from(global_theta),
+            );
+        }
+
+        serde_json::to_string(&config_json).unwrap_or_else(|_| config_str.to_string())
+    }
+
     /// Load from directory with auto-detected variant (Standard or Multilingual/mmBERT)
     pub fn load_from_directory(
         model_path: &str,
@@ -506,6 +564,10 @@ impl TraditionalModernBertClassifier {
             let unified_err = config_errors::file_not_found(&config_path);
             candle_core::Error::from(unified_err)
         })?;
+
+        // Pre-process config to handle different HuggingFace config formats
+        // Some models use top-level global_rope_theta/local_rope_theta, others use nested rope_parameters
+        let config_str = Self::normalize_config_json(&config_str);
 
         let config: Config = serde_json::from_str(&config_str).map_err(|e| {
             let unified_err = config_errors::invalid_json(&config_path, &e.to_string());
@@ -795,6 +857,8 @@ impl TraditionalModernBertTokenClassifier {
         let config_path = std::path::Path::new(model_id).join("config.json");
         let config_str = std::fs::read_to_string(&config_path)
             .map_err(|e| E::msg(format!("Failed to read config.json: {}", e)))?;
+        // Pre-process config to handle different HuggingFace config formats
+        let config_str = TraditionalModernBertClassifier::normalize_config_json(&config_str);
         let config: Config = serde_json::from_str(&config_str)
             .map_err(|e| E::msg(format!("Failed to parse config.json: {}", e)))?;
 
