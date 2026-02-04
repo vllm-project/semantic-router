@@ -1,0 +1,75 @@
+apiVersion: serving.kserve.io/v1alpha2
+kind: LLMInferenceService
+metadata:
+  name: qwen-0-6b
+  annotations:
+    alpha.maas.opendatahub.io/tiers: '[]'
+spec:
+  model:
+    uri: hf://Qwen/Qwen3-0.6B
+    name: Qwen/Qwen3-0.6B
+  replicas: 1
+  template:
+    nodeSelector:
+      nvidia.com/gpu.present: "true"
+    securityContext:
+      runAsUser: 0
+    tolerations:
+      - effect: NoSchedule
+        key: nvidia.com/gpu
+        operator: Exists
+    containers:
+      - name: main
+        image: "vllm/vllm-openai:latest"
+        securityContext:
+          runAsUser: 0
+        command: ["sh", "-c"]
+        args:
+          - |
+            exec vllm serve /mnt/models \
+              --served-model-name "Qwen/Qwen3-0.6B" \
+              --port 8000 \
+              --trust-remote-code \
+              --disable-log-requests \
+              --enforce-eager \
+              --max-model-len 8192
+        env:
+          - name: VLLM_ATTENTION_BACKEND
+            value: "FLASH_ATTN"
+          - name: VLLM_USE_TRITON_FLASH_ATTN
+            value: "false"
+          - name: VLLM_WORKER_MULTIPROC_METHOD
+            value: "spawn"
+          - name: NVIDIA_VISIBLE_DEVICES
+            value: "all"
+          - name: NVIDIA_DRIVER_CAPABILITIES
+            value: "compute,utility"
+          - name: PYTHONHTTPSVERIFY
+            value: "0"
+        resources:
+          limits:
+            cpu: "4"
+            memory: 12Gi
+            nvidia.com/gpu: "1"
+          requests:
+            cpu: "1"
+            memory: 8Gi
+            nvidia.com/gpu: "1"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 240
+          periodSeconds: 30
+          timeoutSeconds: 30
+          failureThreshold: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 240
+          periodSeconds: 10
+          timeoutSeconds: 10
+          failureThreshold: 30
