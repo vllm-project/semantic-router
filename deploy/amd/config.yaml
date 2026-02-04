@@ -9,7 +9,7 @@ listeners:
   - name: "http-8899"
     address: "0.0.0.0"
     port: 8899
-    timeout: "300s"
+    timeout: "1200s"
 
 # Signals - Classification signals for routing
 signals:
