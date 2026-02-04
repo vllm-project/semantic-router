@@ -457,15 +457,18 @@ decisions:
         - type: "keyword"
           name: "remom_high"
     modelRefs:
+      - model: "DeepSeek-V3.2"
+        use_reasoning: true
+        reasoning_effort: "high"
+        weight: 0.5
       - model: "openai/gpt-oss-20b"
-        use_reasoning: false
+        use_reasoning: true
+        reasoning_effort: "high"
         weight: 0.3
       - model: "Qwen/Qwen3-235B"
-        use_reasoning: false
+        use_reasoning: true
+        reasoning_effort: "high"
         weight: 0.2
-      - model: "DeepSeek-V3.2"
-        use_reasoning: false
-        weight: 0.5
     plugins:
       - type: "semantic-cache"
         configuration:
@@ -501,13 +504,17 @@ decisions:
           name: "remom_medium"
     modelRefs:
       - model: "Kimi-K2-Thinking"
-        use_reasoning: false
+        use_reasoning: true
+        reasoning_effort: "medium"
       - model: "GLM-4.7"
-        use_reasoning: false
+        use_reasoning: true
+        reasoning_effort: "medium"
       - model: "DeepSeek-V3.2"
-        use_reasoning: false
+        use_reasoning: true
+        reasoning_effort: "medium"
       - model: "openai/gpt-oss-120b"
-        use_reasoning: false
+        use_reasoning: true
+        reasoning_effort: "medium"
     plugins:
       - type: "semantic-cache"
         configuration:
@@ -543,7 +550,8 @@ decisions:
           name: "remom_low"
     modelRefs:
       - model: "openai/gpt-oss-120b"
-        use_reasoning: false
+        use_reasoning: true
+        reasoning_effort: "low"
     plugins:
       - type: "semantic-cache"
         configuration:

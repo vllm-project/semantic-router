@@ -91,6 +91,7 @@ func (r *OpenAIRouter) handleLooperExecution(
 		ModelParams:     r.getModelParams(),
 		Algorithm:       decision.Algorithm,
 		IsStreaming:     reqCtx.ExpectStreamingResponse,
+		DecisionName:    decision.Name, // Pass decision name for extproc lookup
 	}
 
 	// Execute looper
@@ -288,8 +289,154 @@ func (r *OpenAIRouter) createLooperResponse(resp *looper.Response, reqCtx *Reque
 	}
 }
 
+// findDecisionByName finds a decision by name in the router configuration
+func (r *OpenAIRouter) findDecisionByName(name string) *config.Decision {
+	if r.Config == nil || r.Config.Decisions == nil {
+		return nil
+	}
+
+	for i := range r.Config.Decisions {
+		if r.Config.Decisions[i].Name == name {
+			return &r.Config.Decisions[i]
+		}
+	}
+
+	return nil
+}
+
+// getReasoningInfoFromDecision extracts reasoning configuration from a decision for a specific model
+// Returns (useReasoning, reasoningEffort)
+func (r *OpenAIRouter) getReasoningInfoFromDecision(
+	decision *config.Decision,
+	modelName string,
+) (bool, string) {
+	// 1. Check ModelRefs for model-specific reasoning configuration
+	for _, ref := range decision.ModelRefs {
+		// Match by model name or LoRA name
+		if ref.Model == modelName || ref.LoRAName == modelName {
+			// If ModelRef has UseReasoning configured, use it
+			if ref.UseReasoning != nil {
+				useReasoning := *ref.UseReasoning
+				reasoningEffort := ref.ReasoningEffort
+				if reasoningEffort == "" {
+					reasoningEffort = "medium" // Default effort
+				}
+				logging.Infof("[Looper] Found reasoning config in ModelRef: use=%v, effort=%s", useReasoning, reasoningEffort)
+				return useReasoning, reasoningEffort
+			}
+			break
+		}
+	}
+
+	// 2. Check ModelParams for reasoning_family
+	if r.Config != nil && r.Config.ModelConfig != nil {
+		if params, ok := r.Config.ModelConfig[modelName]; ok {
+			if params.ReasoningFamily != "" {
+				// Model has reasoning_family, so it supports reasoning
+				// Use default effort from global config or "medium"
+				reasoningEffort := "medium"
+				if r.Config.DefaultReasoningEffort != "" {
+					reasoningEffort = r.Config.DefaultReasoningEffort
+				}
+				logging.Infof("[Looper] Found reasoning_family in ModelParams: %s, effort=%s", params.ReasoningFamily, reasoningEffort)
+				return true, reasoningEffort
+			}
+		}
+	}
+
+	// 3. No reasoning configuration found
+	return false, ""
+}
+
+// modifyRequestBodyForLooper modifies the request body for looper internal requests
+// Similar to modifyRequestBodyForAutoRouting but for looper context
+func (r *OpenAIRouter) modifyRequestBodyForLooper(
+	openAIRequest *openai.ChatCompletionNewParams,
+	modelName string,
+	decisionName string,
+	useReasoning bool,
+	ctx *RequestContext,
+) ([]byte, error) {
+	// 1. Set model name in request
+	openAIRequest.Model = modelName
+
+	// 2. Serialize the modified request
+	modifiedBody, err := serializeOpenAIRequestWithStream(openAIRequest, ctx.ExpectStreamingResponse)
+	if err != nil {
+		logging.Errorf("[Looper] Error serializing modified request: %v", err)
+		return nil, fmt.Errorf("error serializing modified request: %w", err)
+	}
+
+	// 3. Apply reasoning mode if decision name is provided
+	if decisionName != "" {
+		modifiedBody, err = r.setReasoningModeToRequestBody(modifiedBody, useReasoning, decisionName)
+		if err != nil {
+			logging.Errorf("[Looper] Error setting reasoning mode %v to request: %v", useReasoning, err)
+			return nil, fmt.Errorf("error setting reasoning mode: %w", err)
+		}
+	}
+
+	// 4. Add decision-specific system prompt if configured
+	if decisionName != "" {
+		modifiedBody, err = r.addSystemPromptIfConfigured(modifiedBody, decisionName, modelName, ctx)
+		if err != nil {
+			logging.Errorf("[Looper] Error adding system prompt: %v", err)
+			return nil, fmt.Errorf("error adding system prompt: %w", err)
+		}
+	}
+
+	// Note: Memory context injection is skipped for looper requests
+	// Memory plugin should skip looper requests internally
+
+	return modifiedBody, nil
+}
+
+// buildHeaderMutationsForLooper builds header mutations for looper internal requests
+func (r *OpenAIRouter) buildHeaderMutationsForLooper(
+	decision *config.Decision,
+	modelName string,
+) ([]*core.HeaderValueOption, []string) {
+	setHeaders := []*core.HeaderValueOption{}
+	removeHeaders := []string{"content-length"} // Always remove old content-length when body is modified
+
+	// 1. Add standard routing headers
+	setHeaders = append(setHeaders, &core.HeaderValueOption{
+		Header: &core.HeaderValue{
+			Key:      headers.VSRSelectedModel,
+			RawValue: []byte(modelName),
+		},
+	})
+
+	// 2. Add Authorization header if model has access_key configured
+	if accessKey := r.getModelAccessKey(modelName); accessKey != "" {
+		setHeaders = append(setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{
+				Key:      "Authorization",
+				RawValue: []byte(fmt.Sprintf("Bearer %s", accessKey)),
+			},
+		})
+		logging.Infof("[Looper] Added Authorization header for model %s", modelName)
+	}
+
+	// 3. Apply header mutations from decision's header_mutation plugin
+	if decision != nil {
+		pluginSetHeaders, pluginRemoveHeaders := r.buildHeaderMutations(decision)
+		if len(pluginSetHeaders) > 0 {
+			setHeaders = append(setHeaders, pluginSetHeaders...)
+			logging.Infof("[Looper] Applied %d header mutations from decision %s", len(pluginSetHeaders), decision.Name)
+		}
+		if len(pluginRemoveHeaders) > 0 {
+			removeHeaders = append(removeHeaders, pluginRemoveHeaders...)
+			logging.Infof("[Looper] Applied %d header deletions from decision %s", len(pluginRemoveHeaders), decision.Name)
+		}
+	}
+
+	return setHeaders, removeHeaders
+}
+
 // handleLooperInternalRequest handles requests from looper to extproc
 // This bypasses all plugin processing and routes directly to the specified model
+// DEPRECATED: Use handleLooperInternalRequestWithPlugins instead
 func (r *OpenAIRouter) handleLooperInternalRequest(
 	modelName string,
 	ctx *RequestContext,
@@ -321,6 +468,114 @@ func (r *OpenAIRouter) handleLooperInternalRequest(
 					Status:          ext_proc.CommonResponse_CONTINUE,
 					HeaderMutation:  &ext_proc.HeaderMutation{SetHeaders: setHeaders},
 					BodyMutation:    &ext_proc.BodyMutation{Mutation: &ext_proc.BodyMutation_Body{Body: modifiedBody}},
+					ClearRouteCache: true,
+				},
+			},
+		},
+	}, nil
+}
+
+// handleLooperInternalRequestWithPlugins handles looper internal requests with plugin execution
+// It looks up the decision by name and executes all configured plugins
+func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
+	modelName string,
+	ctx *RequestContext,
+) (*ext_proc.ProcessingResponse, error) {
+	// 1. Extract decision name from header
+	decisionName := ctx.Headers[headers.VSRLooperDecision]
+	if decisionName == "" {
+		logging.Warnf("[Looper] No decision name in looper request, falling back to simple routing")
+		return r.handleLooperInternalRequest(modelName, ctx)
+	}
+
+	logging.Infof("[Looper] Processing internal request for model: %s, decision: %s", modelName, decisionName)
+
+	// 2. Find decision by name
+	decision := r.findDecisionByName(decisionName)
+	if decision == nil {
+		logging.Warnf("[Looper] Decision %s not found, falling back to simple routing", decisionName)
+		return r.handleLooperInternalRequest(modelName, ctx)
+	}
+
+	// 3. Set context fields
+	ctx.VSRSelectedDecision = decision
+	ctx.VSRSelectedDecisionName = decisionName
+	ctx.VSRSelectedModel = modelName
+	ctx.RequestModel = modelName
+
+	// 4. Get reasoning info from decision
+	useReasoning, reasoningEffort := r.getReasoningInfoFromDecision(decision, modelName)
+	if useReasoning {
+		ctx.VSRReasoningMode = "on"
+		logging.Infof("[Looper] Reasoning enabled for model %s, effort: %s", modelName, reasoningEffort)
+	} else {
+		ctx.VSRReasoningMode = "off"
+	}
+
+	// 5. Parse OpenAI request
+	openAIRequest, err := parseOpenAIRequest(ctx.OriginalRequestBody)
+	if err != nil {
+		logging.Errorf("[Looper] Failed to parse request body: %v", err)
+		return r.createErrorResponse(400, "Invalid request body"), nil
+	}
+
+	// 6. Get user content for plugin processing
+	userContent, nonUserMessages := extractUserAndNonUserContent(openAIRequest)
+	ctx.UserContent = userContent
+
+	// 7. Execute plugins according to decision configuration
+	// Note: Plugins will check ctx.LooperRequest internally for special handling
+
+	// 7.1 Jailbreak detection
+	if response, shouldReturn := r.performJailbreaks(ctx, userContent, nonUserMessages, decisionName); shouldReturn {
+		return response, nil
+	}
+
+	// 7.2 PII detection
+	if piiResponse := r.performPIIDetection(ctx, userContent, nonUserMessages, decisionName); piiResponse != nil {
+		return piiResponse, nil
+	}
+
+	// 7.3 Semantic Cache (plugin will skip read for looper requests)
+	if response, shouldReturn := r.handleCaching(ctx, decisionName); shouldReturn {
+		return response, nil
+	}
+
+	// 7.4 RAG (plugin will skip for looper requests)
+	if err := r.executeRAGPlugin(ctx, decisionName); err != nil {
+		return r.createErrorResponse(503, fmt.Sprintf("RAG failed: %v", err)), nil
+	}
+
+	// Note: Memory plugin is skipped for looper requests
+	// Memory plugin should check ctx.LooperRequest internally and skip retrieval
+
+	// 8. Modify request body with model, reasoning, and system prompt
+	modifiedBody, err := r.modifyRequestBodyForLooper(openAIRequest, modelName, decisionName, useReasoning, ctx)
+	if err != nil {
+		logging.Errorf("[Looper] Failed to modify request body: %v", err)
+		return r.createErrorResponse(500, "Failed to process looper request"), nil
+	}
+
+	// 9. Build header mutations
+	setHeaders, removeHeaders := r.buildHeaderMutationsForLooper(decision, modelName)
+
+	// 10. Start router replay if enabled (for looper internal requests)
+	// Note: This captures each individual model call within the looper
+	r.startRouterReplay(ctx, ctx.Headers[headers.VSRLooperDecision], modelName, decisionName)
+
+	// 11. Return response with mutations
+	return &ext_proc.ProcessingResponse{
+		Response: &ext_proc.ProcessingResponse_RequestBody{
+			RequestBody: &ext_proc.BodyResponse{
+				Response: &ext_proc.CommonResponse{
+					Status: ext_proc.CommonResponse_CONTINUE,
+					HeaderMutation: &ext_proc.HeaderMutation{
+						SetHeaders:    setHeaders,
+						RemoveHeaders: removeHeaders,
+					},
+					BodyMutation: &ext_proc.BodyMutation{
+						Mutation: &ext_proc.BodyMutation_Body{Body: modifiedBody},
+					},
 					ClearRouteCache: true,
 				},
 			},

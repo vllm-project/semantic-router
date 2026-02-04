@@ -47,6 +47,9 @@ func (l *BaseLooper) Execute(ctx context.Context, req *Request) (*Response, erro
 		return nil, fmt.Errorf("no models configured")
 	}
 
+	// Set decision name in client for header transmission
+	l.client.SetDecisionName(req.DecisionName)
+
 	logging.Infof("[BaseLooper] Starting execution with %d models, streaming=%v",
 		len(req.ModelRefs), req.IsStreaming)
 

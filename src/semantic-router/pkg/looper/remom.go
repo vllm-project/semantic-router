@@ -115,7 +115,10 @@ Now, analyze these reasoning processes and reference responses, then provide you
 
 // Execute implements the Looper interface for ReMoM
 func (l *ReMoMLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
-	// 1. Get config from request
+	// 1. Set decision name in client for header transmission
+	l.client.SetDecisionName(req.DecisionName)
+
+	// 2. Get config from request
 	var cfg *config.ReMoMAlgorithmConfig
 	if req.Algorithm != nil && req.Algorithm.ReMoM != nil {
 		cfg = req.Algorithm.ReMoM
@@ -123,7 +126,7 @@ func (l *ReMoMLooper) Execute(ctx context.Context, req *Request) (*Response, err
 		cfg = getDefaultReMoMConfig()
 	}
 
-	// 2. Validate
+	// 3. Validate
 	// Note: ReMoM internally uses non-streaming calls even if client expects streaming
 	// This is because we need complete responses for synthesis across rounds
 	// The final response will be returned as a complete (non-streaming) response

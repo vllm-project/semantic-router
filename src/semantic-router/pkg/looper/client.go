@@ -33,9 +33,10 @@ import (
 
 // Client handles HTTP requests to OpenAI-compatible endpoints
 type Client struct {
-	httpClient *http.Client
-	endpoint   string
-	headers    map[string]string
+	httpClient   *http.Client
+	endpoint     string
+	headers      map[string]string
+	decisionName string // Decision name to pass in looper requests
 }
 
 // NewClient creates a new looper HTTP client
@@ -47,6 +48,11 @@ func NewClient(cfg *config.LooperConfig) *Client {
 		endpoint: cfg.Endpoint,
 		headers:  cfg.Headers,
 	}
+}
+
+// SetDecisionName sets the decision name for this client
+func (c *Client) SetDecisionName(name string) {
+	c.decisionName = name
 }
 
 // ModelResponse contains the parsed response from a model call
@@ -153,9 +159,14 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 	}
 
 	// Add looper identification headers
-	// These allow extproc to identify and skip plugin processing for looper requests
+	// These allow extproc to identify looper requests and lookup decision configuration
 	httpReq.Header.Set("x-vsr-looper-request", "true")
 	httpReq.Header.Set("x-vsr-looper-iteration", fmt.Sprintf("%d", iteration))
+
+	// Add decision name header for extproc to lookup decision configuration
+	if c.decisionName != "" {
+		httpReq.Header.Set("x-vsr-looper-decision", c.decisionName)
+	}
 
 	// Execute request
 	resp, err := c.httpClient.Do(httpReq)

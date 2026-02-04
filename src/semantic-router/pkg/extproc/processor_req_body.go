@@ -76,13 +76,11 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		ctx.RequestModel = originalModel
 	}
 
-	// Check if this is a looper internal request - if so, skip all plugin processing
-	// and route directly to the specified model (looper already did decision evaluation)
+	// Check if this is a looper internal request - if so, execute decision plugins
+	// (lookup decision by name and apply configured plugins)
 	if r.isLooperRequest(ctx) {
-		logging.Infof("[Looper] Internal request detected, skipping plugin processing, routing to model: %s", originalModel)
-		ctx.RequestModel = originalModel
-		ctx.VSRSelectedModel = originalModel
-		return r.handleLooperInternalRequest(originalModel, ctx)
+		logging.Infof("[Looper] Internal request detected, executing decision plugins for model: %s", originalModel)
+		return r.handleLooperInternalRequestWithPlugins(originalModel, ctx)
 	}
 
 	// Get content from messages

@@ -44,6 +44,10 @@ type Request struct {
 
 	// IsStreaming indicates if the client expects a streaming response
 	IsStreaming bool
+
+	// DecisionName is the name of the decision that triggered this looper execution
+	// Used by extproc to lookup decision configuration and apply plugins
+	DecisionName string
 }
 
 // Response contains the output from looper execution
