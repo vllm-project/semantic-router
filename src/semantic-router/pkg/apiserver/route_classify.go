@@ -277,3 +277,37 @@ func validateTaskType(taskType string) error {
 
 	return fmt.Errorf("invalid task_type '%s'. Supported values: %v", taskType, validTaskTypes)
 }
+
+// handleFactCheckClassification handles fact-check classification requests
+func (s *ClassificationAPIServer) handleFactCheckClassification(w http.ResponseWriter, r *http.Request) {
+	var req services.FactCheckRequest
+	if err := s.parseJSONRequest(r, &req); err != nil {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		return
+	}
+
+	response, err := s.classificationSvc.ClassifyFactCheck(req)
+	if err != nil {
+		s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
+		return
+	}
+
+	s.writeJSONResponse(w, http.StatusOK, response)
+}
+
+// handleUserFeedbackClassification handles user feedback classification requests
+func (s *ClassificationAPIServer) handleUserFeedbackClassification(w http.ResponseWriter, r *http.Request) {
+	var req services.UserFeedbackRequest
+	if err := s.parseJSONRequest(r, &req); err != nil {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		return
+	}
+
+	response, err := s.classificationSvc.ClassifyUserFeedback(req)
+	if err != nil {
+		s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
+		return
+	}
+
+	s.writeJSONResponse(w, http.StatusOK, response)
+}
