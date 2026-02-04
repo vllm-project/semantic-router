@@ -86,7 +86,8 @@ export interface LanguageSignal {
 
 export interface LatencySignal {
   name: string
-  max_tpot: number
+  tpot_percentile?: number
+  ttft_percentile?: number
   description?: string
 }
 
