@@ -878,11 +878,11 @@ jobs:
                 targetPort: 8080
             resources:
               limits:
-                memory: "2Gi"
-                cpu: "1"
+                memory: "8Gi"
+                cpu: "4000m"
               requests:
-                memory: "1Gi"
-                cpu: "500m"
+                memory: "4Gi"
+                cpu: "2000m"
             persistence:
               enabled: false
             startupProbe:
