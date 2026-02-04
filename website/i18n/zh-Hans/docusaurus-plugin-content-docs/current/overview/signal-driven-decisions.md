@@ -1,8 +1,9 @@
 ---
 translation:
-  source_commit: "bac2743"
+  source_commit: "dd5c06f"
   source_file: "docs/overview/signal-driven-decisions.md"
   outdated: false
+is_mtpe: true
 sidebar_position: 4
 ---
 
@@ -30,7 +31,7 @@ if (keyword_match AND domain_match) OR high_embedding_similarity:
 
 **为什么这很重要**：多个 signal 共同投票比任何单一 signal 做出更准确的决策。
 
-## 7 种 Signal 类型
+## 10 种 Signal 类型
 
 ### 1. Keyword Signal
 
@@ -151,6 +152,83 @@ signals:
 
 - **示例 1**："Hola, ¿cómo estás?" → Spanish (es) → Spanish model
 - **示例 2**："你好，世界" → Chinese (zh) → Chinese model
+
+### 8. Latency Signal - 基于 TPOT 的路由
+
+- **内容**：使用 TPOT（每输出 Token 时间）的模型延迟评估
+- **延迟**：小于 1ms（缓存查找）
+- **用例**：将延迟敏感的查询路由到更快的模型
+
+```yaml
+signals:
+  latency:
+    - name: "low_latency"
+      max_tpot: 0.05  # 每 token 50ms
+      description: "用于实时聊天应用"
+```
+
+**示例**：实时聊天查询 → low_latency signal → 路由到快速模型 (TPOT < 50ms/token)
+
+**工作原理**：TPOT 从每个响应中自动跟踪。延迟分类器在路由前评估可用模型是否满足 TPOT 阈值。
+
+### 9. Context Signal
+
+- **内容**：基于 token 计数的短/长请求处理路由
+- **延迟**：1ms（处理过程中计算）
+- **用例**：将长上下文请求路由到具有更大上下文窗口的模型
+- **指标**：使用 `llm_context_token_count` 直方图跟踪输入 token 计数
+
+```yaml
+signals:
+  context_rules:
+    - name: "low_token_count"
+      min_tokens: "0"
+      max_tokens: "1K"
+      description: "短请求"
+    - name: "high_token_count"
+      min_tokens: "1K"
+      max_tokens: "128K"
+      description: "需要大上下文窗口的长请求"
+```
+
+**示例**：一个包含 5,000 个 token 的请求 → 匹配 "high_token_count" → 路由到 `claude-3-opus`
+
+### 10. Complexity Signal
+
+- **内容**：基于 embedding 的查询复杂度分类（困难/简单/中等）
+- **延迟**：50-100ms（embedding 计算）
+- **用例**：将复杂查询路由到强大模型，简单查询路由到高效模型
+- **逻辑**：两步分类：
+  1. 通过将查询与规则描述进行比较，找到最匹配的规则
+  2. 使用困难/简单候选 embedding 在该规则内分类难度
+
+```yaml
+signals:
+  complexity:
+    - name: "code_complexity"
+      threshold: 0.1
+      description: "检测代码复杂度级别"
+      hard:
+        candidates:
+          - "design distributed system"
+          - "implement consensus algorithm"
+          - "optimize for scale"
+      easy:
+        candidates:
+          - "print hello world"
+          - "loop through array"
+          - "read file"
+```
+
+**示例**："How do I implement a distributed consensus algorithm?" → 匹配 "code_complexity" 规则 → 与困难候选高度相似 → 返回 "code_complexity:hard"
+
+**工作原理**：
+
+1. 将查询 embedding 与每个规则的描述进行比较
+2. 选择最匹配的规则（描述相似度最高）
+3. 在该规则内，将查询与困难和简单候选进行比较
+4. 难度信号 = max_hard_similarity - max_easy_similarity
+5. 如果信号 > 阈值："hard"，如果信号 < -阈值："easy"，否则："medium"
 
 ## Signal 如何组合
 
