@@ -420,27 +420,48 @@ signals:
 - Support multilingual applications
 - Supports 100+ languages via whatlanggo library
 
-### 8. Latency Signals - TPOT-based Routing
+### 8. Latency Signals - Percentile-based Routing
 
 ```yaml
 signals:
   latency:
-    - name: "low_latency"
-      max_tpot: 0.05  # 50ms per token
-      description: "For real-time chat applications"
-    - name: "medium_latency"
-      max_tpot: 0.15  # 150ms per token
-      description: "For standard applications"
+    # RECOMMENDED: Use both TPOT and TTFT percentiles for comprehensive evaluation
+    - name: "low_latency_comprehensive"
+      tpot_percentile: 10  # 10th percentile for TPOT (top 10% fastest token generation)
+      ttft_percentile: 10  # 10th percentile for TTFT (top 10% fastest first token)
+      description: "For real-time applications - fast start and fast generation"
+    
+    # Different percentiles for different priorities
+    - name: "balanced_latency"
+      tpot_percentile: 50  # Median TPOT (top 50%)
+      ttft_percentile: 10  # Top 10% TTFT (prioritize fast start)
+      description: "Prioritize fast start, accept moderate generation speed"
+    
+    # TPOT percentile only (use case: batch processing)
+    - name: "batch_processing_optimized"
+      tpot_percentile: 10  # 10th percentile for TPOT
+      description: "For batch processing where throughput (TPOT) is critical"
+    
+    # TTFT percentile only (use case: real-time chat)
+    - name: "chat_fast_start"
+      ttft_percentile: 10  # 10th percentile for TTFT
+      description: "For chat applications where fast first token (TTFT) is critical"
 ```
 
 **Use Cases:**
 
-- Route latency-sensitive queries to faster models
+- Route latency-sensitive queries to faster models based on adaptive percentile thresholds
 - Optimize for real-time applications (chat, streaming)
 - Balance latency vs. capability based on query requirements
-- TPOT (Time Per Output Token) is automatically tracked from responses
+- TPOT (Time Per Output Token) and TTFT (Time To First Token) are automatically tracked from responses
 
-**How it works**: The latency classifier evaluates available models' TPOT values against configured thresholds. Models with TPOT ≤ max_tpot match the latency rule.
+**How it works**:
+
+- Percentile-based thresholds adapt to each model's actual performance distribution
+- Works with any number of observations: uses average for 1-2 observations, percentile calculation for 3+
+- When both TPOT and TTFT percentiles are set, model must meet BOTH thresholds (AND logic)
+- **Performance**: Typically 2-5ms for 10 models (runs asynchronously in goroutine, doesn't block requests) - percentile calculation with O(n log n) complexity where n = observations per model (typically 10-100, max 1000)
+- **Recommendation**: Use both TPOT and TTFT percentiles for comprehensive latency evaluation
 
 ### 9. Context Signals - Token Count Routing
 

@@ -280,7 +280,8 @@ function extractSignals(config: ConfigData): SignalConfig[] {
       description: rule.description,
       latency: SIGNAL_LATENCY.latency,
       config: {
-        max_tpot: rule.max_tpot,
+        tpot_percentile: rule.tpot_percentile,
+        ttft_percentile: rule.ttft_percentile,
       },
     })
   })
@@ -292,7 +293,8 @@ function extractSignals(config: ConfigData): SignalConfig[] {
       description: rule.description,
       latency: SIGNAL_LATENCY.latency,
       config: {
-        max_tpot: rule.max_tpot,
+        tpot_percentile: rule.tpot_percentile,
+        ttft_percentile: rule.ttft_percentile,
       },
     })
   })

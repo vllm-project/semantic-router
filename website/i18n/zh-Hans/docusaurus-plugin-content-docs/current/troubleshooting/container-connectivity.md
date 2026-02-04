@@ -2,7 +2,7 @@
 title: 容器连通性故障排除
 sidebar_label: 容器连通性
 translation:
-  source_commit: "aa7b7cb"
+  source_commit: "2644304"
   source_file: "docs/troubleshooting/container-connectivity.md"
   outdated: false
 ---

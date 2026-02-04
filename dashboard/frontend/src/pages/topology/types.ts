@@ -50,6 +50,11 @@ export interface ComplexitySignalConfig {
   easy_candidates?: string[]
 }
 
+export interface LatencySignalConfig {
+  tpot_percentile?: number
+  ttft_percentile?: number
+}
+
 export interface GenericSignalConfig {
   [key: string]: unknown
 }
@@ -86,6 +91,7 @@ export type AlgorithmType =
   | 'router_dc'
   | 'automix'
   | 'hybrid'
+  | 'remom'
 
 export interface AlgorithmConfig {
   type: AlgorithmType
@@ -322,7 +328,8 @@ export interface ConfigData {
   latency_rules?: Array<{
     name: string
     description?: string
-    max_tpot?: number
+    tpot_percentile?: number
+    ttft_percentile?: number
   }>
   context_rules?: Array<{
     name: string
@@ -395,7 +402,8 @@ export interface ConfigData {
     latency?: Array<{
       name: string
       description?: string
-      max_tpot?: number
+      tpot_percentile?: number
+      ttft_percentile?: number
     }>
     context?: Array<{
       name: string
