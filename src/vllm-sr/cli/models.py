@@ -72,7 +72,8 @@ class Latency(BaseModel):
     """Latency signal configuration."""
 
     name: str
-    max_tpot: float
+    tpot_percentile: Optional[int] = None
+    ttft_percentile: Optional[int] = None
     description: str
 
 
@@ -192,18 +193,63 @@ class ConcurrentAlgorithmConfig(BaseModel):
     on_error: Optional[str] = "skip"
 
 
+class ReMoMAlgorithmConfig(BaseModel):
+    """Configuration for ReMoM (Reasoning for Mixture of Models) algorithm.
+
+    This algorithm performs multi-round parallel reasoning with intelligent synthesis.
+    Inspired by PaCoRe (arXiv:2601.05593) but extended to support mixture of models.
+    """
+
+    # Breadth schedule: array of parallel calls per round (e.g., [32, 4] means 32 calls in round 1, 4 in round 2, then 1 final)
+    breadth_schedule: list[int]
+
+    # Model distribution strategy: "weighted", "equal", or "first_only"
+    model_distribution: Optional[str] = "weighted"
+
+    # Temperature for model calls (default: 1.0 for diverse exploration)
+    temperature: Optional[float] = 1.0
+
+    # Whether to include reasoning content in synthesis prompts
+    include_reasoning: Optional[bool] = False
+
+    # Compaction strategy: "full" or "last_n_tokens"
+    compaction_strategy: Optional[str] = "full"
+
+    # Number of tokens to keep when using last_n_tokens compaction
+    compaction_tokens: Optional[int] = 1000
+
+    # Custom synthesis template (uses default if not provided)
+    synthesis_template: Optional[str] = None
+
+    # Maximum concurrent model calls per round
+    max_concurrent: Optional[int] = None
+
+    # Behavior on model call failure: "skip" or "fail"
+    on_error: Optional[str] = "skip"
+
+    # Random seed for shuffling responses (for reproducibility)
+    shuffle_seed: Optional[int] = 42
+
+    # Whether to include intermediate responses in the response body for visualization
+    include_intermediate_responses: Optional[bool] = True
+
+    # Maximum number of responses to keep per round (for memory efficiency)
+    max_responses_per_round: Optional[int] = None
+
+
 class AlgorithmConfig(BaseModel):
     """Algorithm configuration for multi-model decisions.
 
     Specifies how multiple models in a decision should be orchestrated.
     """
 
-    # Algorithm type: "sequential", "confidence", "concurrent"
+    # Algorithm type: "sequential", "confidence", "concurrent", "remom"
     type: str
 
     # Algorithm-specific configurations (only one should be set based on type)
     confidence: Optional[ConfidenceAlgorithmConfig] = None
     concurrent: Optional[ConcurrentAlgorithmConfig] = None
+    remom: Optional[ReMoMAlgorithmConfig] = None
 
 
 class PluginType(str, Enum):

@@ -18,6 +18,13 @@ import (
 // executeRAGPlugin executes the RAG plugin if enabled for the decision
 // Returns error if retrieval fails and on_failure is "block", nil otherwise
 func (r *OpenAIRouter) executeRAGPlugin(ctx *RequestContext, decisionName string) error {
+	// Skip RAG retrieval for looper internal requests
+	// RAG context should only be retrieved once for the original request
+	if ctx.LooperRequest {
+		logging.Debugf("[RAG] Skipping RAG retrieval for looper internal request")
+		return nil
+	}
+
 	// Get decision
 	decision := ctx.VSRSelectedDecision
 	if decision == nil {

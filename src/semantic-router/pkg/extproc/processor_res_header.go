@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
@@ -18,8 +19,17 @@ import (
 
 // handleResponseHeaders processes the response headers
 func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_ResponseHeaders, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
-	// If this is a looper internal request, skip most processing and just continue
+	// If this is a looper internal request, update router replay status and continue
 	if ctx.LooperRequest {
+		// Extract status code from response headers
+		statusCode := 200 // Default
+		if v.ResponseHeaders != nil && v.ResponseHeaders.Headers != nil {
+			statusCode = getStatusFromHeaders(v.ResponseHeaders.Headers)
+		}
+
+		// Update router replay with status code
+		r.updateRouterReplayStatus(ctx, statusCode, false)
+
 		return &ext_proc.ProcessingResponse{
 			Response: &ext_proc.ProcessingResponse_ResponseHeaders{
 				ResponseHeaders: &ext_proc.HeadersResponse{
@@ -75,6 +85,8 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 			metrics.RecordModelTTFT(ctx.RequestModel, ttft)
 			ctx.TTFTSeconds = ttft
 			ctx.TTFTRecorded = true
+			// Update TTFT cache for latency signal evaluation
+			classification.UpdateTTFT(ctx.RequestModel, ttft)
 		}
 	}
 

@@ -143,11 +143,6 @@ func (h *EvaluationHandler) CreateTaskHandler() http.HandlerFunc {
 			return
 		}
 
-		if h.readonlyMode {
-			http.Error(w, "readonly_mode", http.StatusForbidden)
-			return
-		}
-
 		var req models.CreateTaskRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
@@ -207,11 +202,6 @@ func (h *EvaluationHandler) DeleteTaskHandler() http.HandlerFunc {
 			return
 		}
 
-		if h.readonlyMode {
-			http.Error(w, "readonly_mode", http.StatusForbidden)
-			return
-		}
-
 		// Extract task ID from URL path
 		pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/evaluation/tasks/"), "/")
 		if len(pathParts) == 0 || pathParts[0] == "" {
@@ -244,11 +234,6 @@ func (h *EvaluationHandler) RunTaskHandler() http.HandlerFunc {
 
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		if h.readonlyMode {
-			http.Error(w, "readonly_mode", http.StatusForbidden)
 			return
 		}
 
@@ -308,11 +293,6 @@ func (h *EvaluationHandler) CancelTaskHandler() http.HandlerFunc {
 
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		if h.readonlyMode {
-			http.Error(w, "readonly_mode", http.StatusForbidden)
 			return
 		}
 

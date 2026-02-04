@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react';
 import type { EvaluationTask, CreateTaskRequest } from '../types/evaluation';
 import { useTasks, useTaskMutations, useResults } from '../hooks/useEvaluation';
-import { useReadonly } from '../contexts/ReadonlyContext';
 import {
   TaskList,
   TaskCreationForm,
@@ -19,7 +18,6 @@ interface TabState {
 }
 
 export function EvaluationPage() {
-  const { isReadonly } = useReadonly();
   const { tasks, loading: tasksLoading, refresh: refreshTasks } = useTasks(true);
   const { loading: mutationLoading, error: mutationError, createTask, runTask, cancelTask, deleteTask, clearError } = useTaskMutations();
 
@@ -91,7 +89,7 @@ export function EvaluationPage() {
 
   const tabs = [
     { id: 'tasks' as const, label: 'Tasks', icon: '📋' },
-    { id: 'create' as const, label: 'Create', icon: '➕', hidden: isReadonly },
+    { id: 'create' as const, label: 'Create', icon: '➕' },
     { id: 'history' as const, label: 'History', icon: '📊' },
   ];
 
@@ -140,7 +138,7 @@ export function EvaluationPage() {
       {tabState.active !== 'progress' && tabState.active !== 'report' && (
         <>
           <div className={styles.tabs}>
-            {tabs.filter(t => !t.hidden).map((tab) => (
+            {tabs.map((tab) => (
               <button
                 key={tab.id}
                 className={`${styles.tab} ${tabState.active === tab.id ? styles.activeTab : ''}`}
@@ -165,7 +163,7 @@ export function EvaluationPage() {
               />
             )}
 
-            {tabState.active === 'create' && !isReadonly && (
+            {tabState.active === 'create' && (
               <TaskCreationForm
                 onSubmit={handleCreateTask}
                 onCancel={handleCancelCreate}

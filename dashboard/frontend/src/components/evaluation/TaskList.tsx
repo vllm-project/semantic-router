@@ -1,7 +1,6 @@
 import { useCallback } from 'react';
 import type { EvaluationTask } from '../../types/evaluation';
 import { STATUS_INFO, formatDate, formatDuration } from '../../types/evaluation';
-import { useReadonly } from '../../contexts/ReadonlyContext';
 import styles from './TaskList.module.css';
 
 interface TaskListProps {
@@ -15,7 +14,6 @@ interface TaskListProps {
 }
 
 export function TaskList({ tasks, loading, onView, onRun, onCancel, onDelete, onRefresh }: TaskListProps) {
-  const { isReadonly } = useReadonly();
 
   const getStatusBadge = useCallback((status: EvaluationTask['status']) => {
     const info = STATUS_INFO[status];
@@ -114,7 +112,7 @@ export function TaskList({ tasks, loading, onView, onRun, onCancel, onDelete, on
                     >
                       View
                     </button>
-                    {!isReadonly && canRun(task) && (
+                    {canRun(task) && (
                       <button
                         className={`${styles.actionButton} ${styles.runButton}`}
                         onClick={() => onRun(task)}
@@ -123,7 +121,7 @@ export function TaskList({ tasks, loading, onView, onRun, onCancel, onDelete, on
                         Run
                       </button>
                     )}
-                    {!isReadonly && canCancel(task) && (
+                    {canCancel(task) && (
                       <button
                         className={`${styles.actionButton} ${styles.cancelButton}`}
                         onClick={() => onCancel(task)}
@@ -132,16 +130,14 @@ export function TaskList({ tasks, loading, onView, onRun, onCancel, onDelete, on
                         Cancel
                       </button>
                     )}
-                    {!isReadonly && (
-                      <button
-                        className={`${styles.actionButton} ${styles.deleteButton}`}
-                        onClick={() => onDelete(task)}
-                        title="Delete Task"
-                        disabled={task.status === 'running'}
-                      >
-                        Delete
-                      </button>
-                    )}
+                    <button
+                      className={`${styles.actionButton} ${styles.deleteButton}`}
+                      onClick={() => onDelete(task)}
+                      title="Delete Task"
+                      disabled={task.status === 'running'}
+                    >
+                      Delete
+                    </button>
                   </div>
                 </td>
               </tr>

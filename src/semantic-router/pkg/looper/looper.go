@@ -44,6 +44,10 @@ type Request struct {
 
 	// IsStreaming indicates if the client expects a streaming response
 	IsStreaming bool
+
+	// DecisionName is the name of the decision that triggered this looper execution
+	// Used by extproc to lookup decision configuration and apply plugins
+	DecisionName string
 }
 
 // Response contains the output from looper execution
@@ -68,6 +72,10 @@ type Response struct {
 
 	// Logprobs contains the logprobs from the final response (if available)
 	Logprobs []float64
+
+	// IntermediateResponses contains intermediate responses from multi-round algorithms (e.g., ReMoM)
+	// This is used for visualization in the dashboard
+	IntermediateResponses interface{} `json:"intermediate_responses,omitempty"`
 }
 
 // Looper defines the interface for multi-model execution strategies
@@ -83,6 +91,8 @@ func Factory(cfg *config.LooperConfig, algorithmType string) Looper {
 		return NewConfidenceLooper(cfg)
 	case "ratings":
 		return NewRatingsLooper(cfg)
+	case "remom":
+		return NewReMoMLooper(cfg)
 	default:
 		// Default to simple looper that just calls models sequentially
 		return NewBaseLooper(cfg)
