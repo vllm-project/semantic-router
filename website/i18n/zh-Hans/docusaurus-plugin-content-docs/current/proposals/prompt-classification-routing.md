@@ -1,67 +1,60 @@
----
-translation:
-  source_commit: "4328db1"
-  source_file: "docs/proposals/prompt-classification-routing.md"
-  outdated: false
----
+﻿# Prompt 分类路由
 
-# Prompt Classification Routing
+**相关问题：** [#313](https://github.com/vllm-project/semantic-router/issues/313), [#200](https://github.com/vllm-project/semantic-router/issues/200)
 
-**Related Issues:** [#313](https://github.com/vllm-project/semantic-router/issues/313), [#200](https://github.com/vllm-project/semantic-router/issues/200)
+该提议引入了一个**统一的内容扫描和路由框架**，通过三个互补的信号源扩展了 vLLM Semantic Router：
 
-This proposal introduces a **unified content scanning and routing framework** that extends the vLLM Semantic Router with three complementary signal sources:
+1. **基于关键字的路由** - 确定性的、快速的、用于精确术语匹配的布尔逻辑 (Boolean Logic)。
+2. **Regex 内容扫描** - 基于模式的检测，用于安全、合规和结构化数据。
+3. **嵌入相似度扫描** - 对改写具有鲁棒性的语义概念检测。
 
-1. **Keyword-Based Routing** - Deterministic, fast, Boolean logic for exact term matching
-2. **Regex Content Scanning** - Pattern-based detection for safety, compliance, and structured data
-3. **Embedding Similarity Scanning** - Semantic concept detection robust to paraphrasing
+所有这三个信号都通过**信号融合层 (Signal Fusion Layer)**与现有的**基于 BERT 的分类**集成，在保持与当前架构向后兼容的同时，为用户提供强大、灵活的路由控制平面。
 
-All three signals integrate with the existing **BERT-based classification** through a **Signal Fusion Layer**, providing users with a powerful, flexible routing control plane while maintaining backward compatibility with the current architecture.
+## 关键设计原则
 
-## Key Design Principles
+- **互补而非替代**：增强现有的 BERT 分类，而不是取代它。
+- **双重执行路径**：支持树内 (In-Tree)（低延迟）和通过 MCP 实现的树外 (Out-of-Tree)（高灵活性）模式。
+- **策略驱动融合**：允许用户使用布尔表达式、阈值和加权规则组合信号。
+- **性能意识**：为常见情况提供快速路径，同时支持复杂场景。
+- **安全第一**：ReDoS 防护、输入验证和全面的审计日志记录。
 
-- **Complementary, Not Replacement**: Augment existing BERT classification rather than replacing it
-- **Dual Execution Paths**: Support both in-tree (low-latency) and out-of-tree via MCP (high-flexibility) modes
-- **Policy-Driven Fusion**: Allow users to compose signals using Boolean expressions, thresholds, and weighted rules
-- **Performance-Conscious**: Provide fast paths for common cases while supporting complex scenarios
-- **Security-First**: ReDoS protection, input validation, and comprehensive audit logging
+## 问题陈述与动机
 
-## Problem Statement & Motivation
+### 当前局限性
 
-### Current Limitations
+vLLM Semantic Router 目前完全依赖 **ModernBERT 分类**进行语义类别检测。虽然功能强大，但这种方法有几个局限性：
 
-The vLLM Semantic Router currently relies exclusively on **ModernBERT classification** for semantic category detection. While powerful, this approach has several limitations:
+#### 来自 Issue #313：缺乏确定性路由
 
-#### From Issue #313: No Deterministic Routing
+**问题：** 无法根据特定关键字或技术术语路由查询。
 
-**Problem:** Cannot route queries based on specific keywords or technology terms
+- 查询：“如何使用 RBAC 保护 Kubernetes 集群？”
+- 当前：必须运行 ML 推理（~20-30ms）→ 分类为“计算机科学”→ 路由到通用模型。
+- 期望：匹配关键字 `["kubernetes", "k8s", "RBAC"]` → 直接路由到 `[k8s-expert, devops-model]`。
 
-- Query: "How to secure a Kubernetes cluster with RBAC?"
-- Current: Must run ML inference (~20-30ms) → Classify as "computer science" → Route to general models
-- Desired: Match keywords `["kubernetes", "k8s", "RBAC"]` → Route directly to `[k8s-expert, devops-model]`
+**影响：**
 
-**Impact:**
+- 对于可以 1-2ms 内确定性路由的查询，产生了不必要的延迟（~20-30ms）。
+- 路由精度较低（“计算机科学”类别过于宽泛）。
+- 无法利用领域知识（例如，“CVE-”模式总是指向安全模型）。
+- 复杂匹配缺乏布尔逻辑（例如，“Kubernetes AND 安全” vs “Kubernetes OR Docker”）。
 
-- Unnecessary latency (~20-30ms) for queries that could be routed deterministically in ~1-2ms
-- Less precise routing (category "computer science" is too broad)
-- Cannot leverage domain knowledge (e.g., "CVE-" patterns always go to security models)
-- No Boolean logic for complex matching (e.g., "Kubernetes AND security" vs "Kubernetes OR Docker")
+#### 缺乏类别之外的语义概念检测
 
-#### No Semantic Concept Detection Beyond Categories
+**问题：** 无法检测查询中是否存在特定概念/主题。
 
-**Problem:** Cannot detect presence of specific concepts/topics within a query
+- 无法基于“多步推理”概念检测进行路由。
+- 无法检测特定领域的意图，如“情感分析”或“代码生成”。
+- 嵌入相似度仅用于缓存，而不用于路由决策。
 
-- Cannot route based on "multi-step reasoning" concept detection
-- Cannot detect domain-specific intents like "sentiment analysis" or "code generation"
-- Embedding similarity is used for caching but not for routing decisions
+### 使用场景
 
-### Use Cases
+#### 场景 1：技术特定路由 (Issue #313)
 
-#### Use Case 1: Technology-Specific Routing (Issue #313)
-
-**Scenario:** Enterprise AI gateway routing to specialized infrastructure models
+**场景：** 企业 AI 网关路由到专门的基础设施模型。
 
 ```yaml
-# Desired Configuration
+# 期望配置
 keyword_routing:
   rules:
     - name: "kubernetes-infrastructure"
@@ -71,15 +64,15 @@ keyword_routing:
       priority: 100
 ```
 
-**Benefits:**
+**优势：**
 
-- Deterministic routing in ~1-2ms vs ~20-30ms for ML inference
-- Precise model selection based on domain expertise
-- Easy to update and maintain without ML retraining
+- 确定性路由仅需 ~1-2ms，而 ML 推理需 ~20-30ms。
+- 基于领域专业知识的精确模型选择。
+- 易于更新和维护，无需 ML 重新训练。
 
-#### Use Case 2: Security-Critical Pattern Detection
+#### 场景 2：安全关键模式检测
 
-**Scenario:** Prevent data exfiltration and compliance violations
+**场景：** 防止数据泄露和合规违规。
 
 ```yaml
 regex_scanning:
@@ -95,15 +88,15 @@ regex_scanning:
       models: ["security-hardened-model"]
 ```
 
-**Benefits:**
+**优势：**
 
-- Guaranteed blocking of PII/sensitive patterns (no ML false negatives)
-- Compliance audit trail
-- Sub-millisecond detection
+- 保证拦截 PII/敏感模式（无 ML 漏报）。
+- 合规审计追踪。
+- 亚毫秒级检测。
 
-#### Use Case 3: Semantic Intent Detection
+#### 场景 3：语义意图检测
 
-**Scenario:** Route queries requiring multi-step reasoning
+**场景：** 路由需要多步推理的查询。
 
 ```yaml
 embedding_similarity:
@@ -118,22 +111,22 @@ embedding_similarity:
       category: "reasoning"
 ```
 
-**Benefits:**
+**优势：**
 
-- Robust to paraphrasing ("explain thoroughly" → similar to "step-by-step")
-- Can detect semantic presence without exact word matches
-- Complements BERT classification with fine-grained intent detection
+- 对改写具有鲁棒性（“详细解释” → 类似于“逐步”）。
+- 无需精确词匹配即可检测语义存在。
+- 通过细粒度的意图检测补充 BERT 分类。
 
-## Proposed Solution Architecture
+## 提议的解决方案架构
 
-### High-Level System Design
+### 高层系统设计
 
 import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
 
 <ZoomableMermaid title="System Architecture Overview" defaultZoom={5.5}>
 {`graph TD
     A[Envoy External Processor<br/>semantic-router ExtProc] --> B[Request Handler<br/>handleModelRouting]
-
+    
     B --> C{Execution Path}
     
     C -->|In-Tree<br/>Low Latency| D[In-Tree Signal Providers]
@@ -178,368 +171,368 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
     style M fill:#c8e6c9`}
 </ZoomableMermaid>
 
-### Component Breakdown
+### 组件分解
 
-#### In-Tree Signal Providers (Low-Latency Path)
+#### 树内 (In-Tree) 信号提供者（低延迟路径）
 
-The in-tree path provides four core signal providers that run directly within the router process for minimal latency:
+树内路径提供了四个核心信号提供者，它们直接在路由进程内运行，以实现最小延迟：
 
-**A. Keyword Matcher**
+**A. 关键字匹配器 (Keyword Matcher)**
 
-The Keyword Matcher performs fast, deterministic matching of exact terms or phrases within queries.
+关键字匹配器对查询中的精确术语或短语执行快速、确定性的匹配。
 
-**How it Works:**
+**工作原理：**
 
-- Maintains a collection of keyword rules, each containing a list of terms to match
-- Scans incoming queries for the presence of these keywords
-- Supports Boolean operators (AND/OR) to combine multiple keywords
-- Can be case-sensitive or case-insensitive
-- Returns matched rules along with their associated candidate models
+- 维护一个关键字规则集合，每个规则包含一个待匹配的术语列表。
+- 扫描传入查询中是否存在这些关键字。
+- 支持布尔运算符（AND/OR）以组合多个关键字。
+- 可以是大小写敏感或大小写不敏感的。
+- 返回匹配的规则及其关联的候选模型。
 
-**Characteristics:**
+**特性：**
 
-- **Performance:** ~1-2ms for dozens of rules with hundreds of keywords
-- **Use Case:** Technology terms (kubernetes, SQL), product names, domain-specific vocabulary
-- **Complexity:** O(n×m) where n=rules, m=keywords per rule
-- **Limitations:** No fuzzy matching, no regex patterns, exact term matching only
+- **性能：** 处理包含数百个关键字的数十条规则约为 ~1-2ms。
+- **使用场景：** 技术术语（Kubernetes, SQL）、产品名称、领域特定词汇。
+- **复杂度：** O(n×m)，其中 n=规则数，m=每条规则的关键字数。
+- **局限性：** 无模糊匹配，无正则表达式模式，仅限精确术语匹配。
 
-**Example Use:** Route queries containing "kubernetes" or "k8s" to infrastructure expert models.
+**示例用途：** 将包含“Kubernetes”或“k8s”的查询路由到基础设施专家模型。
 
-**B. Regex Scanner**
+**B. Regex 扫描器 (Regex Scanner)**
 
-The Regex Scanner uses regular expression patterns to detect structured data and specific patterns within queries.
+Regex 扫描器使用正则表达式模式来检测查询中的结构化数据和特定模式。
 
-**How it Works:**
+**工作原理：**
 
-- Compiles regex patterns at startup using RE2 engine (guaranteed linear-time matching)
-- Scans query content against all patterns
-- Each pattern can specify an action (block, route, or log)
-- Returns matches with associated actions
+- 启动时使用 RE2 引擎编译正则表达式模式（保证线性时间匹配）。
+- 针对所有模式扫描查询内容。
+- 每个模式可以指定一个动作（拦截、路由或记录）。
+- 返回带有相关动作的匹配项。
 
-**Characteristics:**
+**特性：**
 
-- **Performance:** ~2-5ms for dozens of patterns
-- **Use Case:** PII patterns (SSN, credit cards), CVE IDs, email addresses, structured data
-- **Safety:** RE2 engine prevents catastrophic backtracking (ReDoS protection)
-- **Limitations:** Best for fewer than 100 patterns; for larger rule sets, use MCP with Hyperscan
+- **性能：** 处理数十个模式约为 ~2-5ms。
+- **使用场景：** PII 模式（SSN、信用卡）、CVE ID、电子邮件地址、结构化数据。
+- **安全：** RE2 引擎防止灾难性回溯（ReDoS 防护）。
+- **局限性：** 适用于少于 100 个模式；对于更大的规则集，请使用带有 Hyperscan 的 MCP。
 
-**Example Use:** Detect and block Social Security Numbers, route CVE IDs to security models.
+**示例用途：** 检测并拦截社会安全号码，将 CVE ID 路由到安全模型。
 
-**C. Embedding Similarity Scanner**
+**C. 嵌入相似度扫描器 (Embedding Similarity Scanner)**
 
-The Embedding Similarity Scanner detects semantic concepts and intents that may be expressed in different ways.
+嵌入相似度扫描器检测可能以不同方式表达的语义概念和意图。
 
-**How it Works:**
+**工作原理：**
 
-- Reuses the existing BERT embedder from the router
-- Pre-computes embeddings for concept keywords at startup
-- Embeds the incoming query once
-- Computes cosine similarity between query embedding and each concept's keyword embeddings
-- Aggregates similarities (mean, max, or any threshold)
-- Returns concepts that exceed their configured similarity thresholds
+- 复用路由中现有的 BERT 嵌入器。
+- 启动时预先计算概念关键字的嵌入。
+- 对传入查询进行一次嵌入。
+- 计算查询嵌入与每个概念关键字嵌入之间的余弦相似度。
+- 聚合相似度（均值、最大值或任何阈值）。
+- 返回超过其配置相似度阈值的概念。
 
-**Characteristics:**
+**特性：**
 
-- **Performance:** ~5-10ms (one-time embedding + fast cosine similarity)
-- **Use Case:** Semantic intent detection (multi-step reasoning, code generation, sentiment analysis)
-- **Advantages:** Robust to paraphrasing and word choice variations
-- **Limitations:** Requires threshold calibration; less interpretable than keyword/regex
+- **性能：** ~5-10ms（一次性嵌入 + 快速余弦相似度）。
+- **使用场景：** 语义意图检测（多步推理、代码生成、情感分析）。
+- **优势：** 对改写和词选择变化具有鲁棒性。
+- **局限性：** 需要阈值校准；可解释性低于关键字/Regex。
 
-**Example Use:** Detect "multi-step reasoning" requests even when phrased as "explain thoroughly" or "walk me through".
+**示例用途：** 检测“多步推理”请求，即使其表述为“详细解释”或“引导我完成”。
 
-**D. BERT Classifier (Existing)**
+**D. BERT 分类器（现有）**
 
-The existing BERT-based classifier remains a core signal provider, now treated as an equal peer to the new scanning methods.
+现有的基于 BERT 的分类器仍然是一个核心信号提供者，现在被视为与新扫描方法平等的同行。
 
-**How it Works:**
+**工作原理：**
 
-- Uses ModernBERT model to classify queries into semantic categories
-- Returns category name and confidence score
-- Categories mapped to model pools with scoring
+- 使用 ModernBERT 模型将查询分类为语义类别。
+- 返回类别名称和置信度分数。
+- 类别映射到带有评分的模型池。
 
-**Characteristics:**
+**特性：**
 
-- **Performance:** ~20-30ms
-- **Use Case:** Broad semantic categorization (computer science, reasoning, biology, etc.)
-- **Advantages:** Well-established, handles nuanced semantic understanding
-- **Role:** Serves as both a signal and a fallback when other signals don't match
+- **性能：** ~20-30ms。
+- **使用场景：** 广泛的语义分类（计算机科学、推理、生物学等）。
+- **优势：** 成熟稳定，处理细微的语义理解。
+- **角色：** 既作为信号，也作为其他信号不匹配时的回退方案。
 
-#### Out-of-Tree Signal Providers (MCP Path)
+#### 树外 (Out-of-Tree) 信号提供者（MCP 路径）
 
-MCP (Model Context Protocol) servers run as separate processes or services, providing flexibility and scalability at the cost of modest added latency.
+MCP（模型上下文协议）服务器作为独立的进程或服务运行，以适度增加延迟为代价提供灵活性和可扩展性。
 
-**A. MCP Keyword Scanner**
+**A. MCP 关键字扫描器**
 
-External keyword scanning service that can handle massive rule sets and specialized matching engines.
+外部关键字扫描服务，可以处理海量规则集和专门的匹配引擎。
 
-**Capabilities:**
+**能力：**
 
-- **Aho-Corasick Algorithm**: Efficiently searches for thousands to tens of thousands of literal keywords simultaneously
-- **Hyperscan Engine**: Handles tens of thousands to hundreds of thousands of complex regex patterns with compiled pattern databases
-- **Custom Matching Logic**: Domain-specific algorithms (e.g., SQL injection detection, code analysis)
+- **Aho-Corasick 算法**：高效地同时搜索数千到数万个字面关键字。
+- **Hyperscan 引擎**：使用编译好的模式数据库处理数万到数十万个复杂的 Regex 模式。
+- **自定义匹配逻辑**：领域特定算法（例如 SQL 注入检测、代码分析）。
 
-**Benefits:**
+**优势：**
 
-- Hot-reload rule sets without router restart
-- Scale to massive pattern databases (100K+ patterns)
-- Offload CPU-intensive matching to dedicated services
-- Independent versioning and lifecycle management
-- A/B test different rule configurations
+- 无需重启路由即可热重载规则集。
+- 扩展到海量模式数据库（100K+ 模式）。
+- 将 CPU 密集型匹配卸载到专用服务。
+- 独立的版本控制和生命周期管理。
+- 对不同规则配置进行 A/B 测试。
 
-**Tradeoffs:**
+**权衡：**
 
-- Added network latency (~2-5ms for localhost/cluster-local)
-- Additional operational complexity
-- Requires separate deployment and monitoring
+- 增加了网络延迟（本地主机/集群内部约为 ~2-5ms）。
+- 额外的运维复杂度。
+- 需要独立的部署和监控。
 
-**B. MCP Similarity Scorer**
+**B. MCP 相似度评分器**
 
-External semantic similarity service with customizable embedding models and advanced capabilities.
+具有可定制嵌入模型和高级功能的外部语义相似度服务。
 
-**Capabilities:**
+**能力：**
 
-- **Custom Embedding Models**: Domain-tuned SBERT, Embedding Gemma, multilingual models
-- **GPU Batching**: Batch multiple requests for higher throughput
-- **Vector Database Integration**: Use Milvus, Qdrant, or other vector DBs for large-scale concept search
-- **Fine-Tuned Models**: Deploy models specifically trained for your domain
+- **自定义嵌入模型**：领域微调的 SBERT、Embedding Gemma、多语言模型。
+- **GPU 批处理**：批量处理多个请求以获得更高的吞吐量。
+- **向量数据库集成**：使用 Milvus、Qdrant 或其他向量数据库进行大规模概念搜索。
+- **微调模型**：部署专门为您的领域训练的模型。
 
-**Benefits:**
+**优势：**
 
-- Bring your own embedding model
-- Domain-specific fine-tuning for better accuracy
-- Advanced aggregation strategies
-- Multilingual support
-- Scale embedding inference independently
+- 自带嵌入模型。
+- 领域特定微调以获得更好的准确性。
+- 高级聚合策略。
+- 多语言支持。
+- 独立扩展嵌入推理。
 
-**Tradeoffs:**
+**权衡：**
 
-- Higher latency than in-tree (~10-20ms additional)
-- Requires GPU resources for optimal performance
-- More complex deployment architecture
+- 延迟高于树内（额外增加 ~10-20ms）。
+- 需要 GPU 资源以获得最佳性能。
+- 更复杂的部署架构。
 
-#### Signal Fusion Layer
+#### 信号融合层 (Signal Fusion Layer)
 
-The Signal Fusion Layer is the decision-making engine that combines all signals (keyword, regex, embedding similarity, and BERT) into actionable routing decisions.
+信号融合层是将所有信号（关键字、Regex、嵌入相似度和 BERT）组合成可执行路由决策的决策引擎。
 
-**How it Works:**
+**工作原理：**
 
-1. **Gather Signals**: Collect results from all active signal providers (in-tree and MCP)
-2. **Evaluate Policy Rules**: Process rules in priority order (highest first)
-3. **Match Conditions**: Evaluate Boolean expressions that reference signal results
-4. **Execute Actions**: Perform the action of the first matching rule
-5. **Return Decision**: Block, route to specific models, boost categories, or fallthrough to BERT
+1. **收集信号**：收集所有活动信号提供者（树内和 MCP）的结果。
+2. **评估策略规则**：按优先级顺序（最高优先）处理规则。
+3. **匹配条件**：评估引用信号结果的布尔表达式。
+4. **执行动作**：执行第一个匹配规则的动作。
+5. **返回决策**：拦截、路由到特定模型、提升类别权重或回退到 BERT。
 
-**Policy Types:**
+**策略类型：**
 
-**1. Block Actions**
+**1. 拦截动作 (Block Actions)**
 
-- Immediately reject requests that violate safety or compliance rules
-- Example: Block all queries containing SSN patterns
+- 立即拒绝违反安全或合规规则的请求。
+- 示例：拦截所有包含 SSN 模式的查询。
 
-**2. Route Actions**
+**2. 路由动作 (Route Actions)**
 
-- Directly route to specific model candidates based on signal matches
-- Example: Route Kubernetes queries to k8s-expert models
+- 根据信号匹配直接路由到特定的候选模型。
+- 示例：将 Kubernetes 查询路由到 k8s-expert 模型。
 
-**3. Boost Actions**
+**3. 提升动作 (Boost Actions)**
 
-- Apply weight multipliers to BERT categories based on signal presence
-- Example: Boost "reasoning" category weight by 1.5x when multi-step reasoning is detected
+- 根据信号的存在对 BERT 类别应用权重乘数。
+- 示例：检测到多步推理时，将“推理”类别的权重提升 1.5 倍。
 
-**4. Fallthrough Actions**
+**4. 回退动作 (Fallthrough Actions)**
 
-- Use standard BERT classification when no specific rules match
-- Acts as the default catch-all
+- 当没有特定规则匹配时使用标准 BERT 分类。
+- 作为默认的兜底方案。
 
-**Policy Evaluation:**
+**策略评估：**
 
-- **Priority-Based**: Rules evaluated from highest to lowest priority (200 → 0)
-- **Short-Circuit**: First matching rule wins, no further evaluation
-- **Boolean Expressions**: Combine multiple signal conditions with AND, OR, NOT
-- **Flexible Comparisons**: Support `==`, `!=`, `>`, `<`, `>=`, `<=` for numeric thresholds
+- **基于优先级**：规则从最高到最低优先级评估 (200 → 0)。
+- **短路机制**：第一个匹配的规则获胜，不再进行进一步评估。
+- **布尔表达式**：使用 AND、OR、NOT 组合多个信号条件。
+- **灵活比较**：支持数字阈值的 `==`, `!=`, `>`, `<`, `>=`, `<=`。
 
-**Expression Capabilities:**
+**表达式能力：**
 
-- Reference keyword matches: `keyword.kubernetes-infrastructure.matched`
-- Check similarity scores: `similarity.multi-step-reasoning.score > 0.75`
-- Use BERT results: `bert.category == 'computer science'`
-- Combine signals: `keyword.security.matched && bert.category == 'security'`
+- 引用关键字匹配：`keyword.<rule>.matched`
+- 检查相似度分数：`similarity.<concept>.score > 0.75`
+- 使用 BERT 结果：`bert.category == 'computer science'`
+- 组合信号：`keyword.security.matched && bert.category == 'security'`
 
-## Configuration Schema
+## 配置架构
 
-The content scanning framework is configured through several interconnected configuration files that define rules, patterns, concepts, and policies.
+内容扫描框架通过几个相互关联的配置文件进行配置，这些文件定义了规则、模式、概念和策略。
 
-### Top-Level Configuration
+### 顶层配置
 
-The main router configuration extends with a new `content_scanning` section that controls:
+主路由配置通过一个新的 `content_scanning` 部分进行扩展，该部分控制：
 
-**Framework Control:**
+**框架控制：**
 
-- Enable/disable the entire content scanning system
-- Default action when no rules match (fallthrough to BERT or block)
-- Audit logging toggle
+- 启用/禁用整个内容扫描系统。
+- 无规则匹配时的默认动作（回退到 BERT 或拦截）。
+- 审计日志开关。
 
-**In-Tree Providers:**
+**树内 (In-Tree) 提供者：**
 
-- **Keyword Matching:** Enable/disable, path to rules file
-- **Regex Scanning:** Enable/disable, path to patterns file, choice of regex engine (RE2 recommended)
-- **Embedding Similarity:** Enable/disable, path to concepts file, default similarity threshold
+- **关键字匹配：** 启用/禁用，规则文件路径。
+- **Regex 扫描：** 启用/禁用，模式文件路径，Regex 引擎选择（推荐 RE2）。
+- **嵌入相似度：** 启用/禁用，概念文件路径，默认相似度阈值。
 
-**MCP Providers (Optional):**
+**MCP 提供者（可选）：**
 
-- **Keyword Scanner:** Endpoint URL, authentication, rule set version ID, timeout
-- **Similarity Scorer:** Endpoint URL, authentication, concept set version ID, timeout
+- **关键字扫描器：** 端点 URL、身份验证、规则集版本 ID、超时。
+- **相似度评分器：** 端点 URL、身份验证、概念集版本 ID、超时。
 
-**Fusion Policy:**
+**融合策略：**
 
-- Path to fusion policy file
-- Default action behavior
-- Audit logging configuration
+- 融合策略文件路径。
+- 默认动作行为。
+- 审计日志配置。
 
-### Keyword Rules Configuration
+### 关键字规则配置
 
-Keyword rules define exact term matching for deterministic routing:
+关键字规则为确定性路由定义精确术语匹配：
 
-**Per Rule:**
+**每条规则：**
 
-- **Name:** Unique identifier for the rule
-- **Description:** Human-readable explanation
-- **Keywords:** List of terms to match (e.g., "kubernetes", "k8s", "kubectl")
-- **Operator:** Boolean logic (OR = any keyword, AND = all keywords)
-- **Case Sensitivity:** Whether to match case-sensitively
-- **Candidate Models:** List of models to route to when matched
-- **Priority:** Numeric priority for conflict resolution (higher = evaluated first)
+- **名称：** 规则的唯一标识符。
+- **描述：** 人类可读的解释。
+- **关键字：** 要匹配的术语列表（例如 "kubernetes", "k8s", "kubectl"）。
+- **运算符：** 布尔逻辑（OR = 任何关键字，AND = 所有关键字）。
+- **大小写敏感性：** 是否进行大小写敏感匹配。
+- **候选模型：** 匹配时路由到的模型列表。
+- **优先级：** 用于冲突解决的数字优先级（越高 = 越先评估）。
 
-**Example Rules:**
+**示例规则：**
 
-- Kubernetes infrastructure (OR operator, case-insensitive)
-- Database operations (OR operator, case-insensitive)
-- Security critical terms (OR operator, case-sensitive for CVE IDs)
+- Kubernetes 基础设施（OR 运算符，大小写不敏感）。
+- 数据库操作（OR 运算符，大小写不敏感）。
+- 安全关键术语（OR 运算符，对于 CVE ID 大小写敏感）。
 
-### Regex Patterns Configuration
+### Regex 模式配置
 
-Regex patterns define structured data detection and safety checks:
+Regex 模式定义结构化数据检测和安全检查：
 
-**Per Pattern:**
+**每个模式：**
 
-- **Name:** Unique identifier
-- **Description:** What the pattern detects
-- **Pattern:** Regular expression (RE2 syntax)
-- **Action:** What to do on match (block, route, log)
-- **Block Message:** Error message if action is block
-- **Candidate Models:** Models to route to if action is route
-- **Priority:** Numeric priority (higher = evaluated first)
+- **名称：** 唯一标识符。
+- **描述：** 模式检测的内容。
+- **模式：** 正则表达式（RE2 语法）。
+- **动作：** 匹配时的操作（拦截、路由、记录）。
+- **拦截消息：** 动作为拦截时的错误消息。
+- **候选模型：** 动作为路由时路由到的模型。
+- **优先级：** 数字优先级（越高 = 越先评估）。
 
-**Example Patterns:**
+**示例模式：**
 
-- SSN detection (block action, high priority)
-- Credit card detection (block action, high priority)
-- CVE ID routing (route action to security models)
-- Email detection (log action for audit)
+- SSN 检测（拦截动作，高优先级）。
+- 信用卡检测（拦截动作，高优先级）。
+- CVE ID 路由（对安全模型的路由动作）。
+- 电子邮件检测（用于审计的记录动作）。
 
-### Embedding Similarity Concepts Configuration
+### 嵌入相似度概念配置
 
-Concepts define semantic intents that may be expressed in various ways:
+概念定义了可以以各种方式表达的语义意图：
 
-**Per Concept:**
+**每个概念：**
 
-- **Name:** Unique identifier
-- **Description:** What intent this detects
-- **Keywords:** Reference phrases that represent the concept
-- **Threshold:** Minimum similarity score to match (0.0-1.0)
-- **Aggregate Method:** How to combine keyword similarities (mean, max, any)
-- **Action:** What to do on match (boost_category, route)
-- **Category/Models:** Target category to boost or models to route to
-- **Boost Weight:** Multiplier for category boosting
+- **名称：** 唯一标识符。
+- **描述：** 此意图检测的内容。
+- **关键字：** 代表该概念的参考短语。
+- **阈值：** 匹配的最小相似度分数 (0.0-1.0)。
+- **聚合方法：** 如何组合关键字相似度（均值、最大值、任何）。
+- **动作：** 匹配时的操作 (boost_category, route)。
+- **类别/模型：** 目标提升类别或路由到的模型。
+- **提升权重：** 类别提升的乘数。
 
-**Example Concepts:**
+**示例概念：**
 
-- Multi-step reasoning (mean aggregation, boost reasoning category by 1.5x)
-- Code generation (max aggregation, route to code models)
-- Sentiment analysis (mean aggregation, route to NLP specialists)
+- 多步推理（均值聚合，将推理类别提升 1.5 倍）。
+- 代码生成（最大值聚合，路由到代码模型）。
+- 情感分析（均值聚合，路由到 NLP 专家）。
 
-### Fusion Policy Configuration
+### 融合策略配置
 
-Fusion policies combine all signals into routing decisions:
+融合策略将所有信号组合成路由决策：
 
-**Policy Structure:**
+**策略结构：**
 
-- Rules evaluated in priority order (200 → 0)
-- First matching rule wins (short-circuit evaluation)
+- 规则按优先级顺序评估 (200 → 0)。
+- 第一个匹配的规则获胜（短路评估）。
 
-**Per Rule:**
+**每条规则：**
 
-- **Name:** Unique identifier
-- **Condition:** Boolean expression referencing signals
-- **Action:** Decision type (block, route, boost_category, fallthrough)
-- **Priority:** Numeric priority (200=safety, 150=routing, 100=boost, 50=consensus, 0=default)
-- **Models/Category:** Target for route or boost actions
-- **Message:** Block message if action is block
+- **名称：** 唯一标识符。
+- **条件：** 引用信号的布尔表达式。
+- **动作：** 决策类型 (block, route, boost_category, fallthrough)。
+- **优先级：** 数字优先级（200=安全，150=路由，100=提升，50=共识，0=默认）。
+- **模型/类别：** 路由或提升动作的目标。
+- **消息：** 动作为拦截时的拦截消息。
 
-**Priority Levels:**
+**优先级级别：**
 
-- **200:** Safety blocks (SSN, credit cards, PII)
-- **150:** High-confidence routing overrides (keyword + regex matches)
-- **100:** Category boosting (embedding similarity signals)
-- **50:** Consensus requirements (multiple signals must agree)
-- **0:** Default fallthrough to BERT
+- **200：** 安全拦截（SSN、信用卡、PII）。
+- **150：** 高置信度路由覆盖（关键字 + Regex 匹配）。
+- **100：** 类别提升（嵌入相似度信号）。
+- **50：** 共识要求（多个信号必须一致）。
+- **0：** 默认回退到 BERT。
 
-**Expression Language:**
+**表达式语言：**
 
-- Reference signals: `keyword.<rule>.matched`, `regex.<pattern>.matched`, `similarity.<concept>.score`
-- Boolean operators: `&&` (AND), `||` (OR), `!` (NOT)
-- Comparisons: `==`, `!=`, `>`, `<`, `>=`, `<=`
-- BERT results: `bert.category`, `bert.confidence`
+- 引用信号：`keyword.<rule>.matched`, `regex.<pattern>.matched`, `similarity.<concept>.score`
+- 布尔运算符：`&&` (AND), `||` (OR), `!` (NOT)
+- 比较：`==`, `!=`, `>`, `<`, `>=`, `<=`
+- BERT 结果：`bert.category`, `bert.confidence`
 
-## Integration with Existing Router
+## 与现有路由器的集成
 
-### Request Processing Flow
+### 请求处理流程
 
-The content scanning framework integrates seamlessly into the existing router's request handling flow:
+内容扫描框架无缝集成到现有路由器的请求处理流程中：
 
-**Integration Point:** The `handleModelRouting()` function in the request handler
+**集成点：** 请求处理器中的 `handleModelRouting` 函数。
 
-**Processing Steps:**
+**处理步骤：**
 
-1. **Check if Content Scanning is Enabled**
-   - If disabled, use existing BERT-only routing (backward compatible)
-   - If enabled, proceed with signal gathering
+1. **检查内容扫描是否启用**
+    - 如果禁用，使用现有的仅 BERT 路由（向后兼容）。
+    - 如果启用，继续进行信号收集。
 
-2. **Gather Signals in Parallel**
-   - Launch concurrent signal providers (keyword, regex, embedding, BERT)
-   - Each provider runs independently to minimize latency
-   - MCP providers called with timeout protection
-   - BERT classification always runs as a fallback option
+2. **并行收集信号**
+    - 启动并发信号提供者（关键字、Regex、嵌入、BERT）。
+    - 每个提供者独立运行以最小化延迟。
+    - 调用 MCP 提供者时带有超时保护。
+    - BERT 分类始终作为回退选项运行。
 
-3. **Evaluate Fusion Policy**
-   - Collect all signal results into a unified input structure
-   - Pass to Signal Fusion Layer for policy evaluation
-   - Policy engine processes rules in priority order
-   - First matching rule determines the action
+3. **评估融合策略**
+    - 将所有信号结果收集到一个统一的输入结构中。
+    - 传递给信号融合层进行策略评估。
+    - 策略引擎按优先级顺序处理规则。
+    - 第一个匹配的规则决定动作。
 
-4. **Handle Fusion Decision**
-   - **Block Decision:** Immediately return 403 error with explanation
-   - **Route Decision:** Select best model from candidate list
-   - **Boost Decision:** Apply weight multipliers to BERT categories, then classify
-   - **Fallthrough Decision:** Use standard BERT classification
+4. **处理融合决策**
+    - **拦截决策：** 立即返回 403 错误并附带说明。
+    - **路由决策：** 从候选列表中选择最佳模型。
+    - **提升决策：** 对 BERT 类别应用权重乘数，然后进行分类。
+    - **回退决策：** 使用标准 BERT 分类。
 
-5. **Continue Normal Flow**
-   - Selected model passed to endpoint selection
-   - Request modified with new model and routing headers
-   - Forwarded to appropriate vLLM backend
+5. **继续正常流程**
+    - 选择的模型传递给端点选择。
+    - 请求被修改，包含新的模型和路由标头。
+    - 转发到适当的 vLLM 后端。
 
-**Key Design Principles:**
+**关键设计原则：**
 
-- Non-blocking parallel execution for minimum latency
-- Graceful degradation if components fail
-- Comprehensive observability at each step
-- Backward compatible with existing routing logic
+- 非阻塞并行执行，实现最小延迟。
+- 组件失败时的优雅降级。
+- 每一步的全面可观测性。
+- 与现有路由逻辑向后兼容。
 
-### Backward Compatibility
+### 向后兼容性
 
-**Guarantee:** Existing deployments continue to work without changes.
+**保证：** 现有部署无需更改即可继续工作。
 
-- **Default behavior:** `content_scanning.enabled: false` → Uses existing BERT-only routing
-- **Opt-in model:** Users explicitly enable content scanning in configuration
-- **Fallthrough policy:** If no scanning rules match, system falls back to BERT classification
-- **Configuration validation:** Invalid scanning configs are rejected at startup with clear error messages
+- **默认行为：** `content_scanning.enabled: false` → 使用现有的仅 BERT 路由。
+- **选择性加入模式：** 用户在配置中明确启用内容扫描。
+- **回退策略：** 如果没有扫描规则匹配，系统将回退到 BERT 分类。
+- **配置验证：** 无效的扫描配置在启动时会被拒绝，并显示清晰的错误消息。
