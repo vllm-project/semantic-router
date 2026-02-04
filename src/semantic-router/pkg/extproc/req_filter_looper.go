@@ -436,7 +436,7 @@ func (r *OpenAIRouter) buildHeaderMutationsForLooper(
 
 // handleLooperInternalRequest handles requests from looper to extproc
 // This bypasses all plugin processing and routes directly to the specified model
-// DEPRECATED: Use handleLooperInternalRequestWithPlugins instead
+// Deprecated: Use handleLooperInternalRequestWithPlugins instead
 func (r *OpenAIRouter) handleLooperInternalRequest(
 	modelName string,
 	ctx *RequestContext,
@@ -553,7 +553,7 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	}
 
 	// 7.4 RAG (plugin will skip for looper requests)
-	if err := r.executeRAGPlugin(ctx, decisionName); err != nil {
+	if err = r.executeRAGPlugin(ctx, decisionName); err != nil {
 		return r.createErrorResponse(503, fmt.Sprintf("RAG failed: %v", err)), nil
 	}
 
