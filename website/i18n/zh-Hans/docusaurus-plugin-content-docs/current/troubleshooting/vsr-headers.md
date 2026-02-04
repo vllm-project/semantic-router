@@ -2,7 +2,7 @@
 title: VSR 决策追踪 Header
 sidebar_label: VSR Header
 translation:
-  source_commit: "aa7b7cb"
+  source_commit: "c7d360e"
   source_file: "docs/troubleshooting/vsr-headers.md"
   outdated: false
 ---

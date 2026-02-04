@@ -1,8 +1,9 @@
 ---
 translation:
-  source_commit: "bac2743"
+  source_commit: "b5ce25d"
   source_file: "docs/overview/collective-intelligence.md"
   outdated: false
+is_mtpe: true
 sidebar_position: 3
 ---
 
@@ -32,7 +33,7 @@ sidebar_position: 3
 ```
 用户查询 → Signal Extraction → Decision Engine → 最佳模型 → 响应
               ↓          ↓            ↓
-           7 种 signal 类型   AND/OR 规则   专业化模型
+           8 种 signal 类型   AND/OR 规则   专业化模型
               ↓          ↓            ↓
            上下文分析     智能选择      Plugin Chain
 ```

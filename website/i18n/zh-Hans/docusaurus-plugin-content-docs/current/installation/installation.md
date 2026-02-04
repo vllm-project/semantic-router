@@ -1,8 +1,9 @@
 ---
 translation:
-  source_commit: "a0e504f"
+  source_commit: "81f4f0e"
   source_file: "docs/installation/installation.md"
   outdated: false
+is_mtpe: true
 sidebar_position: 2
 ---
 
@@ -176,6 +177,48 @@ vllm-sr serve --image ghcr.io/vllm-project/semantic-router/vllm-sr:latest
 # 控制镜像拉取策略
 vllm-sr serve --image-pull-policy always
 ```
+
+## Kubernetes 部署
+
+在 Kubernetes 或 OpenShift 上进行生产部署时，请使用 **Kubernetes Operator**：
+
+### 使用 Operator 快速开始
+
+```bash
+# 克隆仓库
+git clone https://github.com/vllm-project/semantic-router
+cd semantic-router/deploy/operator
+
+# 安装 CRDs 和 operator
+make install
+make deploy IMG=ghcr.io/vllm-project/semantic-router-operator:latest
+
+# 部署一个 semantic router 实例
+kubectl apply -f config/samples/vllm_v1alpha1_semanticrouter.yaml
+```
+
+**优势：**
+
+- ✅ 使用 Kubernetes CRDs 进行声明式配置
+- ✅ 自动检测平台（OpenShift/Kubernetes）
+- ✅ 内置高可用性和扩展能力
+- ✅ 集成监控和可观测性
+- ✅ 生命周期管理和升级
+
+详情请参阅 **[Kubernetes Operator 指南](k8s/operator)**。
+
+### 其他 Kubernetes 部署选项
+
+- **[Istio 集成](k8s/istio.md)** - 服务网格部署
+- **[AI Gateway](k8s/ai-gateway.md)** - Gateway API 集成
+- **[生产环境堆栈](k8s/production-stack.md)** - 完整的生产环境设置
+- **[Dynamo](k8s/dynamo.md)** - 动态配置管理
+
+## Docker Compose
+
+用于本地开发和测试：
+
+- **[Docker Compose](docker-compose.md)** - 快速本地部署
 
 ## 下一步
 

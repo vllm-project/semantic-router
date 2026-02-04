@@ -1,8 +1,9 @@
 ---
 translation:
-  source_commit: "bac2743"
+  source_commit: "dd5c06f"
   source_file: "docs/installation/configuration.md"
   outdated: false
+is_mtpe: true
 sidebar_position: 4
 ---
 
@@ -14,7 +15,7 @@ sidebar_position: 4
 
 配置定义了三个主要层：
 
-1. **Signal Extraction Layer（信号提取层）**：定义 7 种类型的信号（keyword、embedding、domain、fact_check、user_feedback、preference、language）
+1. **Signal Extraction Layer（信号提取层）**：定义 9 种类型的信号（keyword、embedding、domain、fact_check、user_feedback、preference、language、latency、context）
 2. **Decision Engine（决策引擎）**：使用 AND/OR 运算符组合信号以做出路由决策
 3. **Plugin Chain（插件链）**：配置用于缓存、安全和优化的插件
 
@@ -295,7 +296,7 @@ default_reasoning_effort: "medium"
 
 ## 信号配置
 
-信号是智能路由的基础。系统支持 7 种类型的信号，可以组合起来做出路由决策。
+信号是智能路由的基础。系统支持 10 种类型的信号，可以组合起来做出路由决策。
 
 ### 1. 关键词信号 - 快速模式匹配
 
@@ -423,6 +424,155 @@ signals:
 - 应用特定语言的策略
 - 支持多语言应用
 - 通过 whatlanggo 库支持 100 多种本地化语言
+
+### 8. 延迟信号 - 基于 TPOT 的路由
+
+```yaml
+signals:
+  latency:
+    - name: "low_latency"
+      max_tpot: 0.05  # 每个 token 50ms
+      description: "用于实时聊天应用"
+    - name: "medium_latency"
+      max_tpot: 0.15  # 每个 token 150ms
+      description: "用于标准应用"
+```
+
+**用例：**
+
+- 将延迟敏感的查询路由到更快的模型
+- 为实时应用进行优化（聊天、流式输出）
+- 根据查询需求平衡延迟与能力
+- TPOT（每个输出 Token 的时间）自动从响应中跟踪
+
+**工作原理**：延迟分类器评估可用模型的 TPOT 值与配置的阈值进行对比。TPOT ≤ max_tpot 的模型匹配该延迟规则。
+
+### 9. 上下文信号 - Token 计数路由
+
+```yaml
+signals:
+  context_rules:
+    - name: "low_token_count"
+      min_tokens: "0"
+      max_tokens: "1K"
+      description: "短请求"
+    - name: "high_token_count"
+      min_tokens: "1K"
+      max_tokens: "128K"
+      description: "长上下文请求"
+```
+
+**用例：**
+
+- 将长文档路由到具有更大上下文窗口的模型
+- 将短查询发送到更快、更小的模型
+- 根据请求大小优化成本
+- 支持 "K"（千）和 "M"（百万）后缀
+
+### 10. 复杂度信号 - 查询难度分类
+
+**重要提示**：**强烈建议**为每个复杂度规则配置 `composer` 来基于其他信号进行过滤（例如 domain）。这可以防止误分类，例如数学问题可能匹配 `code_complexity` 或反之亦然。
+
+```yaml
+signals:
+  complexity:
+    - name: "code_complexity"
+      composer:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "computer_science"
+      threshold: 0.1
+      description: "根据任务难度检测代码复杂度级别"
+      hard:
+        candidates:
+          - "design distributed system"
+          - "implement consensus algorithm"
+          - "optimize for scale"
+          - "architect microservices"
+      easy:
+        candidates:
+          - "print hello world"
+          - "loop through array"
+          - "read file"
+          - "sort list"
+
+    - name: "math_complexity"
+      composer:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "math"
+      threshold: 0.1
+      description: "检测数学问题复杂度"
+      hard:
+        candidates:
+          - "prove mathematically"
+          - "derive the equation"
+          - "formal proof"
+          - "solve differential equation"
+      easy:
+        candidates:
+          - "add two numbers"
+          - "calculate percentage"
+          - "simple arithmetic"
+          - "basic algebra"
+```
+
+**用例：**
+
+- 将复杂查询路由到强大的专业模型
+- 将简单查询路由到快速、高效的模型
+- 通过为简单任务使用更便宜的模型来优化成本
+- 通过将查询难度与模型能力匹配来提高响应质量
+- 与 domain 信号结合以避免跨领域误分类
+
+**工作原理：**
+
+1. **并行信号评估**：所有复杂度规则与其他信号并行独立评估
+2. **难度分类**：对于每个规则：
+   - 使用嵌入相似度将查询与 hard 和 easy candidates 进行比较
+   - 难度信号 = max_hard_similarity - max_easy_similarity
+   - 如果 signal > threshold: "hard"，如果 signal < -threshold: "easy"，否则: "medium"
+3. **Composer 过滤**（第 2 阶段）：在所有信号计算后：
+   - 如果规则有 `composer`，则根据其他信号结果评估其条件
+   - 只保留 composer 条件满足的规则
+   - 这可以防止跨领域误分类（例如数学查询匹配 code_complexity）
+4. **结果格式**：为每个匹配的规则返回 "rule_name:difficulty"（例如 "code_complexity:hard"）
+
+**配置参数：**
+
+- `name`：规则的唯一标识符
+- `threshold`：相似度差异阈值（默认：0.1）
+- `composer`（可选但**强烈建议**）：基于其他信号进行过滤
+  - `operator`：组合条件的 "AND" 或 "OR"
+  - `conditions`：信号条件数组（type 和 name）
+- `description`：人类可读的描述（可选，仅用于文档）
+- `hard.candidates`：代表复杂查询的短语列表
+- `easy.candidates`：代表简单查询的短语列表
+
+**带 Composer 的示例：**
+
+```yaml
+decisions:
+  - name: "hard_code_problems"
+    description: "将复杂编码问题路由到专业模型"
+    priority: 15
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "complexity"
+          name: "code_complexity:hard"
+    modelRefs:
+      - model: "deepseek-coder-v3"
+        use_reasoning: true
+        reasoning_effort: "high"
+```
+
+在此示例中，复杂度信号仅在以下情况下匹配：
+
+1. 查询根据 hard/easy candidates 被分类为 "hard"
+2. domain 信号已匹配 "computer_science"（由于 composer）
 
 ## 决策规则 - 信号融合
 

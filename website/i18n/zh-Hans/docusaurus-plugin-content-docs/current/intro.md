@@ -1,9 +1,10 @@
 ---
 sidebar_position: 1
 translation:
-  source_commit: "bac2743"
+  source_commit: "b5ce25d"
   source_file: "docs/intro.md"
   outdated: false
+is_mtpe: true
 ---
 
 # vLLM Semantic Router
@@ -24,7 +25,7 @@ translation:
 
 ### Signal-Driven Decision Engine
 
-捕获并结合 **7 种类型的信号**以做出智能路由决策：
+捕获并结合 **8 种类型的信号**以做出智能路由决策：
 
 | 信号类型 | 描述 | 用例 |
 |------------|-------------|----------|
@@ -35,6 +36,7 @@ translation:
 | **user_feedback** | 用户满意度和反馈分类 | 处理后续消息和更正 |
 | **preference** | 基于 LLM 的路由偏好匹配 | 通过外部 LLM 进行复杂意图分析 |
 | **language** | 多语言检测（100 多种本地化语言） | 路由查询特定语言的模型 |
+| **latency** | 基于 TPOT 的延迟评估 | 根据实时 TPOT 将延迟敏感的查询路由到更快的模型 |
 
 **工作原理**：从请求中提取信号，在决策规则中使用 AND/OR 运算符进行组合，并用于选择最佳模型和配置。
 
@@ -71,6 +73,7 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
         Feedback[User Feedback Signals<br/>Satisfaction Analysis]
         Preference[Preference Signals<br/>LLM-based Matching]
         Language[Language Signals<br/>Multi-language Detection]
+        Latency[Latency Signals<br/>TPOT-based Routing]
     end
 
     subgraph "Decision Engine"
@@ -95,6 +98,7 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
     Router --> Feedback
     Router --> Preference
     Router --> Language
+    Router --> Latency
 
     Keyword --> Rules
     Embedding --> Rules
@@ -103,6 +107,7 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
     Feedback --> Rules
     Preference --> Rules
     Language --> Rules
+    Latency --> Rules
 
     Rules --> ModelSelect
     ModelSelect --> Cache

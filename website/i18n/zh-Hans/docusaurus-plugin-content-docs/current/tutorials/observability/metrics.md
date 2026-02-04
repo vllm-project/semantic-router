@@ -2,7 +2,7 @@
 title: 指标与监控
 sidebar_label: 指标
 translation:
-  source_commit: "bac2743"
+  source_commit: "a6e1910"
   source_file: "docs/tutorials/observability/metrics.md"
   outdated: false
 ---

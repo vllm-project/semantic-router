@@ -1,8 +1,9 @@
 ---
 translation:
-  source_commit: "bac2743"
+  source_commit: "b5ce25d"
   source_file: "docs/overview/goals.md"
   outdated: false
+is_mtpe: true
 sidebar_position: 1
 ---
 
@@ -22,7 +23,7 @@ sidebar_position: 1
 - **质量信号**：这个查询需要事实核查吗？用户是否在提供反馈？
 - **用户信号**：用户的偏好是什么？他们的满意度如何？
 
-**我们的解决方案**：一个全面的信号提取系统，从请求、响应和上下文中捕获 7 种类型的信号。
+**我们的解决方案**：一个全面的信号提取系统，从请求、响应和上下文中捕获 8 种类型的信号。
 
 ### 2. 如何结合这些信号？
 
