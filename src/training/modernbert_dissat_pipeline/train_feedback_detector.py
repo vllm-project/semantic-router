@@ -563,7 +563,7 @@ def main():
 
         # Merge and save if requested
         if args.merge_lora:
-            merged_dir = output_dir.replace("_lora", "_merged")
+            merged_dir = output_dir.replace("-lora", "-merged")
             print(f"Merging LoRA weights to {merged_dir}")
             merged_model = model.merge_and_unload()
             merged_model.save_pretrained(merged_dir)

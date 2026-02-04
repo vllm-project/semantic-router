@@ -281,10 +281,10 @@ train-mmbert32k-feedback: ## Train Feedback Detector (4-class satisfaction)
 	@echo "   LoRA rank: $(FEEDBACK_LORA_RANK), alpha: $(FEEDBACK_LORA_ALPHA)"
 	@echo "   Epochs: $(FEEDBACK_EPOCHS), LR: $(FEEDBACK_LR)"
 	@echo "   (Higher rank needed for 4-class classification)"
-	@mkdir -p $(MMBERT32K_MODELS_DIR)
+	@mkdir -p models
 	python $(TRAINING_DIR)/modernbert_dissat_pipeline/train_feedback_detector.py \
 		--model_name llm-semantic-router/mmbert-32k-yarn \
-		--output_dir $(MMBERT32K_MODELS_DIR)/feedback-detector \
+		--output_dir models/mmbert32k-feedback-detector \
 		--epochs $(FEEDBACK_EPOCHS) \
 		--batch_size $(TRAIN_BATCH_SIZE) \
 		--lr $(FEEDBACK_LR) \
@@ -293,8 +293,8 @@ train-mmbert32k-feedback: ## Train Feedback Detector (4-class satisfaction)
 		--lora_alpha $(FEEDBACK_LORA_ALPHA) \
 		--merge_lora
 	@echo "✅ Feedback Detector training complete (98.8% accuracy expected)"
-	@echo "   LoRA: $(MMBERT32K_MODELS_DIR)/feedback-detector_lora"
-	@echo "   Merged: $(MMBERT32K_MODELS_DIR)/feedback-detector_merged"
+	@echo "   LoRA: models/mmbert32k-feedback-detector-lora"
+	@echo "   Merged: models/mmbert32k-feedback-detector-merged"
 
 train-mmbert32k-intent: ## Train Intent Classifier (MMLU-Pro categories + supplement data)
 	@echo "🎯 Training Intent Classifier with mmBERT-32K..."
