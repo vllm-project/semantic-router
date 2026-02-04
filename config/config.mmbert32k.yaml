@@ -152,8 +152,81 @@ categories:
     description: "Engineering and technical design"
     mmlu_categories: ["engineering"]
 
-# Simple routing decision
+# Fact Check Rules - defines signal names for fact-check classification
+fact_check_rules:
+  - name: "needs_fact_check"
+    description: "Query contains factual claims that should be verified"
+  - name: "no_fact_check_needed"
+    description: "Query is creative, subjective, or doesn't need fact verification"
+
+# User Feedback Rules - defines signal names for user feedback classification
+user_feedback_rules:
+  - name: "satisfied"
+    description: "User is satisfied with the response"
+  - name: "need_clarification"
+    description: "User needs more clarification or explanation"
+  - name: "wrong_answer"
+    description: "User indicates the answer is incorrect"
+  - name: "want_different"
+    description: "User wants a different approach or alternative"
+
+# Routing decisions
 decisions:
+  # Fact check decision - triggers when query needs fact verification
+  - name: "fact_check_needed"
+    description: "Route queries that need fact verification"
+    priority: 90
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "fact_check"
+          name: "needs_fact_check"
+    modelRefs:
+      - model: "qwen2.5:3b"
+        use_reasoning: true
+        weight: 100
+
+  # User feedback decisions
+  - name: "handle_clarification"
+    description: "User needs clarification"
+    priority: 85
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "user_feedback"
+          name: "need_clarification"
+    modelRefs:
+      - model: "qwen2.5:3b"
+        use_reasoning: false
+        weight: 100
+
+  - name: "handle_wrong_answer"
+    description: "User indicates wrong answer"
+    priority: 85
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "user_feedback"
+          name: "wrong_answer"
+    modelRefs:
+      - model: "qwen2.5:3b"
+        use_reasoning: true
+        weight: 100
+
+  - name: "handle_want_different"
+    description: "User wants different approach"
+    priority: 85
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "user_feedback"
+          name: "want_different"
+    modelRefs:
+      - model: "qwen2.5:3b"
+        use_reasoning: false
+        weight: 100
+
+  # Default routing
   - name: "default"
     description: "Default routing decision"
     priority: 100
