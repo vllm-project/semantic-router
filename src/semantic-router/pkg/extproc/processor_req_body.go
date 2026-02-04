@@ -23,7 +23,6 @@ import (
 
 // handleRequestBody processes the request body
 func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBody, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
-	logging.Infof("Processing request body: %s", string(v.RequestBody.GetBody()))
 	// Record start time for model routing
 	ctx.ProcessingStartTime = time.Now()
 	// Save the original request body

@@ -503,6 +503,13 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	ctx.VSRSelectedModel = modelName
 	ctx.RequestModel = modelName
 
+	// 3.1 Set router replay config from decision (required for startRouterReplay)
+	if replayCfg := decision.GetRouterReplayConfig(); replayCfg != nil && replayCfg.Enabled {
+		cfgCopy := *replayCfg
+		ctx.RouterReplayPluginConfig = &cfgCopy
+		logging.Debugf("[Looper] Router replay enabled for decision %s", decisionName)
+	}
+
 	// 4. Get reasoning info from decision
 	useReasoning, reasoningEffort := r.getReasoningInfoFromDecision(decision, modelName)
 	if useReasoning {
@@ -561,6 +568,9 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 
 	// 10. Start router replay if enabled (for looper internal requests)
 	// Note: This captures each individual model call within the looper
+	// Clear RouterReplayID to allow creating a new record for each looper internal call
+	// (startRouterReplay skips if RouterReplayID is already set)
+	ctx.RouterReplayID = "" // Clear to allow new record creation
 	r.startRouterReplay(ctx, ctx.Headers[headers.VSRLooperDecision], modelName, decisionName)
 
 	// 11. Return response with mutations
