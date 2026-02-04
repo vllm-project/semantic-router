@@ -510,6 +510,10 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 		logging.Debugf("[Looper] Router replay enabled for decision %s", decisionName)
 	}
 
+	// Note: Signals are NOT re-evaluated for looper internal requests to avoid latency
+	// The signals from the original external request are already in the context
+	// Router replay will use those signals for all looper internal calls
+
 	// 4. Get reasoning info from decision
 	useReasoning, reasoningEffort := r.getReasoningInfoFromDecision(decision, modelName)
 	if useReasoning {
@@ -571,7 +575,8 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	// Clear RouterReplayID to allow creating a new record for each looper internal call
 	// (startRouterReplay skips if RouterReplayID is already set)
 	ctx.RouterReplayID = "" // Clear to allow new record creation
-	r.startRouterReplay(ctx, ctx.Headers[headers.VSRLooperDecision], modelName, decisionName)
+	// For looper internal requests, both originalModel and selectedModel are the same (the actual model being called)
+	r.startRouterReplay(ctx, "ReMoM", modelName, decisionName)
 
 	// 11. Return response with mutations
 	return &ext_proc.ProcessingResponse{
