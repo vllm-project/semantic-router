@@ -2,7 +2,7 @@
 title: 常见错误
 sidebar_label: 常见错误
 translation:
-  source_commit: "aa7b7cb"
+  source_commit: "1d1439a"
   source_file: "docs/troubleshooting/common-errors.md"
   outdated: false
 ---
