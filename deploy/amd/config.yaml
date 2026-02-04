@@ -305,13 +305,16 @@ signals:
   # latency - Latency-based routing signals (TPOT-based)
   latency:
     - name: "low_latency"
-      max_tpot: 0.005  # 5ms per token
+      tpot_percentile: 20
+      ttft_percentile: 20
       description: "For real-time chat applications requiring fast responses"
     - name: "medium_latency"
-      max_tpot: 0.05  # 50ms per token
+      tpot_percentile: 50
+      ttft_percentile: 50
       description: "For standard applications with moderate latency tolerance"
     - name: "high_latency"
-      max_tpot: 0.20  # 200ms per token
+      tpot_percentile: 80
+      ttft_percentile: 80
       description: "For applications with high latency tolerance"
 
   # Fact-check signals for verification needs
