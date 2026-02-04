@@ -8,6 +8,7 @@ import ThinkingBlock from './ThinkingBlock'
 import ErrorBoundary from './ErrorBoundary'
 import ReMoMResponsesDisplay from './ReMoMResponsesDisplay'
 import { useToolRegistry } from '../tools'
+import { useMCPToolSync } from '../tools/mcp'
 import { getTranslateAttr } from '../hooks/useNoTranslate'
 import type { ToolCall, ToolResult, WebSearchResult } from '../tools'
 
@@ -692,6 +693,9 @@ const [enableWebSearch, setEnableWebSearch] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
+
+  // MCP 工具同步 - 自动将 MCP 服务器的工具同步到 toolRegistry
+  useMCPToolSync({ enabled: true, pollInterval: 30000 })
 
   // Tool Registry integration
   // Search tools (controlled by web search toggle)

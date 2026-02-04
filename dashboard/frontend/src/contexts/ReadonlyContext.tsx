@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { preloadPlatformAssets } from '../components/PlatformBranding'
+import { preloadPlatformAssets } from '../utils/platformAssets'
 
 interface ReadonlyContextType {
   isReadonly: boolean
@@ -15,6 +15,7 @@ const ReadonlyContext = createContext<ReadonlyContextType>({
   envoyUrl: '',
 })
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useReadonly = (): ReadonlyContextType => useContext(ReadonlyContext)
 
 interface ReadonlyProviderProps {

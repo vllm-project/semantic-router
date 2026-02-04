@@ -2548,7 +2548,7 @@ var _ = Describe("IP Address Validation", func() {
 				for _, addr := range domainPortAddresses {
 					err := validateIPAddress(addr)
 					Expect(err).To(HaveOccurred(), "Expected %s to be rejected", addr)
-					// 这些会被域名检测捕获，而不是端口检测
+					// These will be caught by domain detection, not port detection
 					Expect(err.Error()).To(ContainSubstring("invalid IP address format"))
 				}
 			})

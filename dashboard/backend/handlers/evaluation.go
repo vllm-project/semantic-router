@@ -370,7 +370,7 @@ func (h *EvaluationHandler) StreamProgressHandler() http.HandlerFunc {
 		}()
 
 		// Send initial connection message
-		fmt.Fprintf(w, "event: connected\ndata: {\"task_id\":\"%s\"}\n\n", taskID)
+		_, _ = fmt.Fprintf(w, "event: connected\ndata: {\"task_id\":\"%s\"}\n\n", taskID)
 		flusher.Flush()
 
 		// Stream updates
@@ -388,12 +388,12 @@ func (h *EvaluationHandler) StreamProgressHandler() http.HandlerFunc {
 					log.Printf("Error marshaling progress update: %v", err)
 					continue
 				}
-				fmt.Fprintf(w, "event: progress\ndata: %s\n\n", data)
+				_, _ = fmt.Fprintf(w, "event: progress\ndata: %s\n\n", data)
 				flusher.Flush()
 
 				// Close stream if task completed
 				if update.ProgressPercent >= 100 {
-					fmt.Fprintf(w, "event: completed\ndata: {\"task_id\":\"%s\"}\n\n", taskID)
+					_, _ = fmt.Fprintf(w, "event: completed\ndata: {\"task_id\":\"%s\"}\n\n", taskID)
 					flusher.Flush()
 					return
 				}

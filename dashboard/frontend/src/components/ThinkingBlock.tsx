@@ -35,7 +35,7 @@ const ThinkingBlock = ({ content, isStreaming = false, thinkingTime }: ThinkingB
       setIsExpanded(false)
       setHasAutoCollapsed(true)
     }
-  }, [content.length, hasAutoCollapsed])
+  }, [content.length, hasAutoCollapsed, isExpanded, isStreaming])
 
   // Simulate thinking time counter when streaming
   useEffect(() => {

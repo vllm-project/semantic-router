@@ -199,7 +199,7 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	mux.HandleFunc("/api/tools/web-search", handlers.WebSearchHandler())
 	log.Printf("Web Search API endpoint registered: /api/tools/web-search")
 
-	// Open Web endpoint for Playground tool execution (避免CORS问题)
+	// Open Web endpoint for Playground tool execution (avoid CORS issues)
 	mux.HandleFunc("/api/tools/open-web", handlers.OpenWebHandler())
 	log.Printf("Open Web API endpoint registered: /api/tools/open-web")
 
@@ -290,6 +290,9 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	} else {
 		log.Printf("Evaluation feature disabled")
 	}
+
+	// MCP endpoints (if enabled)
+	SetupMCP(mux, cfg)
 
 	// Envoy proxy for chat completions (if configured)
 	// Chat completions must go through Envoy's ext_proc pipeline
