@@ -77,6 +77,7 @@ export const ALGORITHM_ICONS: Record<AlgorithmType, string> = {
   router_dc: '🔀',
   automix: '🤖',
   hybrid: '🔄',
+  remom: '🧠',  // Brain icon for reasoning/thinking
 }
 
 // ============== Algorithm Colors (NVIDIA Dark Theme) ==============
@@ -88,6 +89,7 @@ export const ALGORITHM_COLORS: Record<AlgorithmType, { background: string; borde
   static: { background: '#606c7a', border: '#3d4a59' },        // Slate Gray
   elo: { background: '#718096', border: '#4a5568' },           // Medium Gray
   router_dc: { background: '#556b7d', border: '#3d4a59' },     // Cool Gray
+  remom: { background: '#76b900', border: '#5a8f00' },         // NVIDIA Green (same as plugins)
   automix: { background: '#5d6d7e', border: '#3d4a59' },       // Steel Gray
   hybrid: { background: '#4a5568', border: '#2d3748' },        // Dark Gray
 }

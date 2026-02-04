@@ -47,6 +47,9 @@ func (l *RatingsLooper) Execute(ctx context.Context, req *Request) (*Response, e
 		return nil, fmt.Errorf("no models configured")
 	}
 
+	// Set decision name in client for header transmission
+	l.client.SetDecisionName(req.DecisionName)
+
 	// Get config from algorithm
 	maxConcurrent := len(req.ModelRefs)
 	onError := "skip"

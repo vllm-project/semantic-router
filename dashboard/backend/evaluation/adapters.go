@@ -263,17 +263,25 @@ func extractAccuracyMetrics(raw map[string]interface{}) map[string]interface{} {
 
 	// Copy over standard accuracy metrics
 	keys := []string{
-		"accuracy", "true_positives", "false_positives",
+		"overall_accuracy", "accuracy", "true_positives", "false_positives",
 		"true_negatives", "false_negatives",
 		"precision", "recall", "f1_score",
-		"total_samples", "correct_predictions",
-		"category_accuracy",
+		"total_samples", "total_questions", "correct_predictions",
+		"successful_queries", "failed_queries",
+		"category_metrics", "category_accuracy",
+		"avg_response_time", "avg_prompt_tokens", "avg_completion_tokens", "avg_total_tokens",
+		"by_mode",
 	}
 
 	for _, key := range keys {
 		if val, ok := raw[key]; ok {
 			metrics[key] = val
 		}
+	}
+
+	// Map overall_accuracy to accuracy for consistency
+	if overallAcc, ok := raw["overall_accuracy"]; ok {
+		metrics["accuracy"] = overallAcc
 	}
 
 	metrics["status"] = "success"

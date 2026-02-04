@@ -12,7 +12,7 @@ static_resources:
       socket_address:
         address: {{ listener.address }}
         port_value: {{ listener.port }}
-    perConnectionBufferLimitBytes: 52428800
+    perConnectionBufferLimitBytes: 524288000
     filter_chains:
     - filters:
       - name: envoy.filters.network.http_connection_manager
@@ -36,8 +36,8 @@ static_resources:
                       exact: "{{ model.name }}"
                 route:
                   cluster: {{ model.cluster_name }}_cluster
-                  timeout: {{ listener.timeout | default('300s') }}
-                  idleTimeout: 300s
+                  timeout: {{ listener.timeout | default('600s') }}
+                  idleTimeout: 600s
                   # Rewrite Host header to match upstream server
                   host_rewrite_literal: "{{ model.endpoints[0].address }}"
                   {% if model.path_prefix %}
@@ -59,8 +59,8 @@ static_resources:
                       exact: "{{ model.name }}"
                 route:
                   cluster: anthropic_api_cluster
-                  timeout: {{ listener.timeout | default('300s') }}
-                  idleTimeout: 300s
+                  timeout: {{ listener.timeout | default('600s') }}
+                  idleTimeout: 600s
                   host_rewrite_literal: "api.anthropic.com"
               {% endfor %}
               # Default route (no x-selected-model header)
@@ -73,7 +73,7 @@ static_resources:
                   {% else %}
                   cluster: vllm_static_cluster
                   {% endif %}
-                  timeout: {{ listener.timeout | default('300s') }}
+                  timeout: {{ listener.timeout | default('600s') }}
                   {% if models %}
                   # Rewrite Host header to match upstream server
                   host_rewrite_literal: "{{ models[0].endpoints[0].address }}"
@@ -94,13 +94,13 @@ static_resources:
               grpc_service:
                 envoy_grpc:
                   cluster_name: extproc_service
-                timeout: 300s
+                timeout: 600s
               processing_mode:
                 request_header_mode: "SEND"
                 response_header_mode: "SEND"
                 request_body_mode: "BUFFERED"
                 response_body_mode: "BUFFERED"
-              message_timeout: {{ listener.timeout | default('300s') }}
+              message_timeout: {{ listener.timeout | default('600s') }}
           - name: envoy.filters.http.router
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
@@ -115,7 +115,7 @@ static_resources:
   clusters:
   # ExtProc service (semantic router)
   - name: extproc_service
-    connect_timeout: 300s
+    connect_timeout: 600s
     type: STATIC
     lb_policy: ROUND_ROBIN
     http2_protocol_options: {}
@@ -150,7 +150,7 @@ static_resources:
   {% for model in models %}
   # Cluster for model: {{ model.name }}
   - name: {{ model.cluster_name }}_cluster
-    connect_timeout: 300s
+    connect_timeout: 600s
     type: {{ model.cluster_type }}
     {% if model.cluster_type == 'LOGICAL_DNS' %}
     dns_lookup_family: V4_ONLY
@@ -189,7 +189,7 @@ static_resources:
   - name: anthropic_api_cluster
     type: LOGICAL_DNS
     dns_lookup_family: V4_ONLY
-    connect_timeout: 60s
+    connect_timeout: 600s
     lb_policy: ROUND_ROBIN
     load_assignment:
       cluster_name: anthropic_api_cluster

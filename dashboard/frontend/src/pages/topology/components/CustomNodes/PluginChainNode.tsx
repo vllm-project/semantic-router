@@ -2,13 +2,14 @@
 
 import React, { memo } from 'react'
 import { Handle, Position, NodeProps } from 'reactflow'
-import { PluginConfig } from '../../types'
-import { PLUGIN_ICONS, PLUGIN_COLORS } from '../../constants'
+import { PluginConfig, AlgorithmConfig } from '../../types'
+import { PLUGIN_ICONS, PLUGIN_COLORS, ALGORITHM_ICONS, ALGORITHM_COLORS } from '../../constants'
 import styles from './CustomNodes.module.css'
 
 interface PluginChainNodeData {
   decisionName: string
   plugins: PluginConfig[]
+  algorithm?: AlgorithmConfig  // Optional algorithm to display at the top
   collapsed?: boolean
   isHighlighted?: boolean
   onToggleCollapse?: () => void
@@ -37,7 +38,10 @@ function getPluginOverrideInfo(plugin: PluginConfig, data: PluginChainNodeData):
 }
 
 export const PluginChainNode = memo<NodeProps<PluginChainNodeData>>(({ data }) => {
-  const { plugins, collapsed = false, isHighlighted, onToggleCollapse } = data
+  const { plugins, algorithm, collapsed = false, isHighlighted, onToggleCollapse } = data
+
+  // Calculate total items (algorithm + plugins)
+  const totalItems = (algorithm ? 1 : 0) + plugins.length
 
   return (
     <div
@@ -51,12 +55,30 @@ export const PluginChainNode = memo<NodeProps<PluginChainNodeData>>(({ data }) =
       >
         <span className={styles.collapseIcon}>{collapsed ? '▶' : '▼'}</span>
         <span className={styles.pluginChainTitle}>
-          🔌 Plugin Chain ({plugins.length})
+          🔌 Plugin Chain ({totalItems})
         </span>
       </div>
 
       {!collapsed && (
         <div className={styles.pluginChain}>
+          {/* Display algorithm first if present */}
+          {algorithm && (
+            <>
+              <div
+                className={styles.chainPlugin}
+                style={{ background: ALGORITHM_COLORS[algorithm.type]?.background || '#76b900' }}
+                title={algorithm.type}
+              >
+                <span>{ALGORITHM_ICONS[algorithm.type] || '🔄'}</span>
+                <span>{algorithm.type}</span>
+              </div>
+              {plugins.length > 0 && (
+                <span className={styles.chainArrow}>↓</span>
+              )}
+            </>
+          )}
+
+          {/* Display plugins */}
           {plugins.map((plugin, idx) => {
             const colors = PLUGIN_COLORS[plugin.type] || { background: '#607D8B', border: '#455A64' }
             const icon = PLUGIN_ICONS[plugin.type] || '🔌'

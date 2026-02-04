@@ -366,8 +366,12 @@ export function calculateFullLayout(
 
     let currentSourceId = decisionId
 
-    // ============== 5. Algorithm Node ==============
-    if (decision.algorithm && decision.algorithm.type !== 'static' && decision.modelRefs.length > 1) {
+    // ============== 5. Algorithm Node (only for non-ReMoM algorithms) ==============
+    // ReMoM is displayed in the plugin chain, not as a separate node
+    const hasAlgorithm = decision.algorithm && decision.algorithm.type !== 'static' && decision.modelRefs.length > 1
+    const isRemomAlgorithm = hasAlgorithm && decision.algorithm?.type === 'remom'
+
+    if (hasAlgorithm && !isRemomAlgorithm) {
       const algorithmId = `algorithm-${decision.name}`
       nodeDimensions.set(algorithmId, { width: 140, height: 60 })
 
@@ -394,10 +398,17 @@ export function calculateFullLayout(
     }
 
     // ============== 6. Plugin Chain Node ==============
-    if (decision.plugins && decision.plugins.length > 0) {
+    // Include ReMoM algorithm in the plugin chain if present
+    const hasPluginsOrRemom = (decision.plugins && decision.plugins.length > 0) || isRemomAlgorithm
+
+    if (hasPluginsOrRemom) {
       const pluginChainId = `plugin-chain-${decision.name}`
       const isPluginCollapsed = collapseState.pluginChains[decision.name]
-      const pluginHeight = getPluginChainHeight(decision.plugins, isPluginCollapsed)
+      const plugins = decision.plugins || []
+
+      // Calculate height including algorithm if present
+      const baseHeight = isRemomAlgorithm ? 30 : 0  // Extra height for algorithm
+      const pluginHeight = getPluginChainHeight(plugins, isPluginCollapsed) + baseHeight
 
       nodeDimensions.set(pluginChainId, { width: 160, height: pluginHeight })
 
@@ -409,7 +420,8 @@ export function calculateFullLayout(
         position: { x: 0, y: 0 },
         data: {
           decisionName: decision.name,
-          plugins: decision.plugins,
+          plugins,
+          algorithm: isRemomAlgorithm ? decision.algorithm : undefined,  // Pass algorithm to plugin chain
           collapsed: isPluginCollapsed,
           isHighlighted: isHighlighted(pluginChainId),
           globalCacheEnabled: globalCachePlugin?.enabled,
@@ -541,20 +553,32 @@ export function calculateFullLayout(
     fallbackDecisionSourceId = fallbackDecisionId
   }
 
-  // ============== 7. Model Nodes (Aggregated by physical model) ==============
-  // Group connections by physical model (base model + LoRA), not by reasoning config
+  // ============== 7. Model Nodes ==============
+  // For multi-model decisions (with algorithms), create separate nodes for each modelRef
+  // For single-model decisions, aggregate by physical model
   const modelConnections: Map<string, ModelConnection[]> = new Map()
 
   topology.decisions.forEach(decision => {
     const finalSourceId = decisionFinalSources[decision.name]
+    const hasAlgorithm = decision.algorithm && decision.algorithm.type !== 'static'
+    const isMultiModel = decision.modelRefs.length > 1
 
-    decision.modelRefs.forEach(modelRef => {
-      // Use physical model key for aggregation (same model, different reasoning = same node)
-      const physicalKey = getPhysicalModelKey(modelRef)
-      if (!modelConnections.has(physicalKey)) {
-        modelConnections.set(physicalKey, [])
+    decision.modelRefs.forEach((modelRef, index) => {
+      // For multi-model decisions with algorithms, use unique key per decision+model
+      // For single-model decisions, use physical model key for aggregation
+      let modelKey: string
+      if (hasAlgorithm && isMultiModel) {
+        // Unique key: decision name + model + index
+        modelKey = `${decision.name}|${modelRef.model}|${index}`
+      } else {
+        // Physical model key for aggregation
+        modelKey = getPhysicalModelKey(modelRef)
       }
-      modelConnections.get(physicalKey)!.push({
+
+      if (!modelConnections.has(modelKey)) {
+        modelConnections.set(modelKey, [])
+      }
+      modelConnections.get(modelKey)!.push({
         modelRef,
         decisionName: decision.name,
         sourceId: finalSourceId,
@@ -655,18 +679,26 @@ export function calculateFullLayout(
     const defaultModelKey = topology.defaultModel
     const normalizedDefaultKey = defaultModelKey.replace(/[^a-zA-Z0-9]/g, '-')
     const defaultModelId = `model-${normalizedDefaultKey}`
-    
+
     // Check if default model node already exists (it might be used by a decision too)
-    const existingModelNode = nodes.find(n => n.id === defaultModelId)
-    
+    // Need to check both exact match and model nodes that contain this model name
+    const existingModelNode = nodes.find(n => {
+      if (n.type !== 'modelNode') return false
+      // Check exact ID match
+      if (n.id === defaultModelId) return true
+      // Check if the node's model name matches (for multi-model decisions with unique IDs)
+      const nodeModelName = n.data.modelRef?.model
+      return nodeModelName === topology.defaultModel
+    })
+
     if (existingModelNode) {
       // Default model already exists, just connect to it
-      const edgeHighlighted = isHighlighted(defaultRouteId) && isHighlighted(defaultModelId)
-      
+      const edgeHighlighted = isHighlighted(defaultRouteId) && isHighlighted(existingModelNode.id)
+
       edges.push(createVerticalEdge({
-        id: `e-${defaultRouteId}-${defaultModelId}`,
+        id: `e-${defaultRouteId}-${existingModelNode.id}`,
         source: defaultRouteId,
-        target: defaultModelId,
+        target: existingModelNode.id,
         animated: edgeHighlighted,
         style: {
           stroke: edgeHighlighted ? EDGE_COLORS.highlighted : EDGE_COLORS.normal,
@@ -679,11 +711,11 @@ export function calculateFullLayout(
         },
       }))
     } else {
-      // Create a new model node for the default model
+      // Create a new model node for the default model only if it doesn't exist
       nodeDimensions.set(defaultModelId, { width: 180, height: 80 })
-      
+
       const modelHighlighted = isHighlighted(defaultModelId)
-      
+
       nodes.push({
         id: defaultModelId,
         type: 'modelNode',
@@ -697,9 +729,9 @@ export function calculateFullLayout(
           hasMultipleModes: false,
         },
       })
-      
+
       const edgeHighlighted = isHighlighted(defaultRouteId) && modelHighlighted
-      
+
       edges.push(createVerticalEdge({
         id: `e-${defaultRouteId}-${defaultModelId}`,
         source: defaultRouteId,
@@ -802,8 +834,9 @@ export function calculateFullLayout(
     client: 0,           // Layer 1: User Query
     signals: 280,        // Layer 2: Signals (increased from 200)
     decisions: 680,      // Layer 3: Decisions (increased from 500)
-    pluginChains: 1000,  // Layer 4: Plugin Chains (increased from 800)
-    models: 1300,        // Layer 5: Models (increased from 1100)
+    algorithms: 900,     // Layer 3.5: Algorithms (between decisions and plugin chains)
+    pluginChains: 1100,  // Layer 4: Plugin Chains (increased from 1000)
+    models: 1400,        // Layer 5: Models (increased from 1300)
   }
 
   // Group nodes by layer
@@ -811,6 +844,7 @@ export function calculateFullLayout(
     client: [],
     signals: [],
     decisions: [],
+    algorithms: [],
     pluginChains: [],
     models: [],
   }
@@ -822,6 +856,8 @@ export function calculateFullLayout(
       nodesByLayer.signals.push(node)
     } else if (node.id.startsWith('decision-') || node.id === 'default-route' || node.id === 'fallback-decision') {
       nodesByLayer.decisions.push(node)
+    } else if (node.id.startsWith('algorithm-')) {
+      nodesByLayer.algorithms.push(node)
     } else if (node.id.startsWith('plugin-chain-')) {
       nodesByLayer.pluginChains.push(node)
     } else if (node.id.startsWith('model-')) {
@@ -849,6 +885,8 @@ export function calculateFullLayout(
       spacing = 120  // More spacing for models
     } else if (layerName === 'decisions') {
       spacing = 100  // Slightly more spacing for decisions
+    } else if (layerName === 'algorithms') {
+      spacing = 100  // Same spacing as decisions
     }
 
     const totalSpacing = (layerNodes.length - 1) * spacing

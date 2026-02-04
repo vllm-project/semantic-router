@@ -483,6 +483,59 @@ decisions:
         configuration:
           enabled: false
 
+  # ReMoM algorithm example: Multi-round parallel reasoning with intelligent synthesis
+  - name: "remom_route"
+    description: "Complex reasoning using ReMoM (Reasoning for Mixture of Models)"
+    priority: 70
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "keyword"
+          name: "looper_keywords"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+      - model: "gpt-5.2"
+    algorithm:
+      type: "remom"
+      remom:
+        # Breadth schedule: [32, 4] means 32 parallel calls in round 1, 4 in round 2, then 1 final
+        # Low intensity: [4], Medium: [16], High: [32, 4]
+        breadth_schedule: [4]  # Low intensity for demonstration
+
+        # Model distribution strategy:
+        # - "weighted": Distribute calls based on model weights (default)
+        # - "equal": Distribute evenly across all models
+        # - "first_only": Use only the first model (PaCoRe-compatible)
+        model_distribution: "equal"
+
+        # Temperature for diverse exploration (default: 1.0)
+        temperature: 1.0
+
+        # Include reasoning content from vLLM in synthesis prompts
+        include_reasoning: true
+
+        # Compaction strategy: "full" or "last_n_tokens"
+        compaction_strategy: "last_n_tokens"
+        compaction_tokens: 1000  # Keep last 1000 tokens when compacting
+
+        # Custom synthesis template (optional, uses default if not provided)
+        # synthesis_template: "Your custom template here"
+
+        # Maximum concurrent model calls per round (optional, defaults to all)
+        max_concurrent: 4
+
+        # Behavior on model call failure: "skip" or "fail"
+        on_error: "skip"
+
+        # Random seed for reproducibility
+        shuffle_seed: 42
+
+        # Include intermediate responses for visualization in dashboard
+        include_intermediate_responses: true
+
+        # Maximum responses to keep per round (optional, for memory efficiency)
+        # max_responses_per_round: 10
+
 # LLM - Backend model configuration
 providers:
   # Model configuration

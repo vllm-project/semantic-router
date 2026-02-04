@@ -442,6 +442,9 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 		return nil, fmt.Errorf("no models configured")
 	}
 
+	// Set decision name in client for header transmission
+	l.client.SetDecisionName(req.DecisionName)
+
 	// Get config from algorithm
 	onError := "skip"
 	var sizeAwareCfg *config.ConfidenceAlgorithmConfig

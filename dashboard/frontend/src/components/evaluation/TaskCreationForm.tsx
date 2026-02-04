@@ -69,18 +69,6 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
         />
       </div>
 
-      <div className={styles.formGroup}>
-        <label htmlFor="endpoint">Router Endpoint</label>
-        <input
-          id="endpoint"
-          type="text"
-          value={form.endpoint}
-          onChange={(e) => form.setEndpoint(e.target.value)}
-          placeholder="http://localhost:8801"
-          className={styles.input}
-        />
-      </div>
-
       <div className={styles.formRow}>
         <div className={styles.formGroup}>
           <label htmlFor="maxSamples">Max Samples</label>

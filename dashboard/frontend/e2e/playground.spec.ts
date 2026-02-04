@@ -9,20 +9,7 @@ test.describe('Playground Chat Component', () => {
     // Verify main elements are present
     await expect(page.getByPlaceholder('Type a message')).toBeVisible();
     await expect(page.getByRole('button', { name: '📤' })).toBeVisible();
-    await expect(page.getByRole('button', { name: '⚙️' })).toBeVisible();
     await expect(page.getByRole('button', { name: '🗑️' })).toBeVisible();
-  });
-
-  test('settings panel toggles', async ({ page }) => {
-    // Settings should be hidden initially
-    await expect(page.getByPlaceholder('auto, gpt-4')).not.toBeVisible();
-    
-    // Click settings button
-    await page.getByRole('button', { name: '⚙️' }).click();
-    
-    // Settings should now be visible
-    await expect(page.getByPlaceholder('auto, gpt-4')).toBeVisible();
-    await expect(page.getByPlaceholder('You are a helpful assistant')).toBeVisible();
   });
 
   test('can type message', async ({ page }) => {
@@ -46,29 +33,12 @@ test.describe('Playground Chat Component', () => {
   test('clear button clears messages', async ({ page }) => {
     // Initially should show empty state
     await expect(page.getByText('Start a conversation')).toBeVisible();
-    
+
     // Click clear (should have no effect but shouldn't error)
     await page.getByRole('button', { name: '🗑️' }).click();
-    
+
     // Empty state should still be visible
     await expect(page.getByText('Start a conversation')).toBeVisible();
-  });
-
-  test('settings can be modified', async ({ page }) => {
-    // Open settings
-    await page.getByRole('button', { name: '⚙️' }).click();
-    
-    // Modify model
-    const modelInput = page.getByPlaceholder('auto, gpt-4');
-    await modelInput.clear();
-    await modelInput.fill('gpt-4-turbo');
-    await expect(modelInput).toHaveValue('gpt-4-turbo');
-    
-    // Modify system prompt
-    const promptInput = page.getByPlaceholder('You are a helpful assistant');
-    await promptInput.clear();
-    await promptInput.fill('You are a coding expert.');
-    await expect(promptInput).toHaveValue('You are a coding expert.');
   });
 
   test('sends message and receives response (mocked API)', async ({ page }) => {

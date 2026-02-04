@@ -168,15 +168,6 @@ func LogFields(r RoutingRecord, event string) map[string]interface{} {
 		},
 	}
 
-	if r.RequestBody != "" {
-		fields["request_body"] = r.RequestBody
-		fields["request_body_truncated"] = r.RequestBodyTruncated
-	}
-	if r.ResponseBody != "" {
-		fields["response_body"] = r.ResponseBody
-		fields["response_body_truncated"] = r.ResponseBodyTruncated
-	}
-
 	// Guardrails
 	if r.GuardrailsEnabled || r.JailbreakEnabled || r.PIIEnabled {
 		fields["guardrails_enabled"] = r.GuardrailsEnabled

@@ -23,10 +23,15 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	// Decrement active request count for queue depth estimation
 	defer metrics.DecrementModelActiveRequests(ctx.RequestModel)
 
-	// If this is a looper internal request, skip all processing and just continue
+	// If this is a looper internal request, capture response body for router replay and continue
 	// The response will be handled by the looper client directly
 	if ctx.LooperRequest {
-		logging.Debugf("[Looper] Skipping response body processing for internal request")
+		logging.Debugf("[Looper] Capturing response body for router replay")
+
+		// Capture response body for router replay if enabled
+		responseBody := v.ResponseBody.Body
+		r.attachRouterReplayResponse(ctx, responseBody, true)
+
 		return &ext_proc.ProcessingResponse{
 			Response: &ext_proc.ProcessingResponse_ResponseBody{
 				ResponseBody: &ext_proc.BodyResponse{
