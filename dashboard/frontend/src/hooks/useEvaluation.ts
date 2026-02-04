@@ -10,6 +10,7 @@ import type {
   EvaluationDimension,
 } from '../types/evaluation';
 import * as api from '../utils/evaluationApi';
+import { useReadonly } from '../contexts/ReadonlyContext';
 
 // Hook for managing tasks list
 export function useTasks(autoRefresh = false, refreshInterval = 5000) {
@@ -249,16 +250,24 @@ export function useTaskMutations() {
 
 // Hook for managing task creation form state
 export function useTaskCreationForm() {
+  const { envoyUrl } = useReadonly();
   const [step, setStep] = useState(1);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [dimensions, setDimensions] = useState<EvaluationDimension[]>(['hallucination']);
   const [selectedDatasets, setSelectedDatasets] = useState<Record<string, string[]>>({});
   const [maxSamples, setMaxSamples] = useState(50);
-  const [endpoint, setEndpoint] = useState('http://localhost:8801');
+  const [endpoint, setEndpoint] = useState(envoyUrl || 'http://localhost:8801');
   const [model, setModel] = useState('MoM');
   const [concurrent, setConcurrent] = useState(1);
   const [samplesPerCat, setSamplesPerCat] = useState(10);
+
+  // Update endpoint when envoyUrl becomes available
+  useEffect(() => {
+    if (envoyUrl && endpoint === 'http://localhost:8801') {
+      setEndpoint(envoyUrl);
+    }
+  }, [envoyUrl, endpoint]);
 
   const toggleDimension = useCallback((dim: EvaluationDimension) => {
     setDimensions((prev) => {
@@ -312,11 +321,11 @@ export function useTaskCreationForm() {
     setDimensions(['hallucination']);
     setSelectedDatasets({});
     setMaxSamples(50);
-    setEndpoint('http://localhost:8801');
+    setEndpoint(envoyUrl || 'http://localhost:8801');
     setModel('MoM');
     setConcurrent(1);
     setSamplesPerCat(10);
-  }, []);
+  }, [envoyUrl]);
 
   const isStepValid = useCallback(
     (stepNum: number): boolean => {

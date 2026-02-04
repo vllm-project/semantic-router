@@ -86,6 +86,7 @@ export type AlgorithmType =
   | 'router_dc'
   | 'automix'
   | 'hybrid'
+  | 'remom'
 
 export interface AlgorithmConfig {
   type: AlgorithmType

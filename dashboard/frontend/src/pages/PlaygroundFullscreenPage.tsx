@@ -17,8 +17,6 @@ const PlaygroundFullscreenPage = () => {
     <div className={styles.container}>
       <ChatComponent
         endpoint="/api/router/v1/chat/completions"
-        defaultModel="MoM"
-        defaultSystemPrompt="You are a helpful assistant."
         isFullscreenMode={true}
       />
     </div>
