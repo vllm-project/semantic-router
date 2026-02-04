@@ -408,6 +408,104 @@ spec:
 
 **Example:** See [`vllm.ai_v1alpha1_semanticrouter_gateway.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_gateway.yaml)
 
+## Complexity-Aware Routing
+
+Route queries to different models based on complexity classification. Simple queries go to fast models, complex queries go to powerful models.
+
+### Example Configuration
+
+```yaml
+spec:
+  # Configure multiple backends with different capabilities
+  vllmEndpoints:
+    - name: llama-8b-fast
+      model: llama3-8b
+      reasoningFamily: qwen3
+      backend:
+        type: kserve
+        inferenceServiceName: llama-3-8b
+      weight: 2  # Prefer for simple queries
+
+    - name: llama-70b-reasoning
+      model: llama3-70b
+      reasoningFamily: deepseek
+      backend:
+        type: kserve
+        inferenceServiceName: llama-3-70b
+      weight: 1  # Use for complex queries
+
+  config:
+    # Define complexity rules
+    complexity_rules:
+      # Rule 1: Code complexity
+      - name: "code-complexity"
+        description: "Classify coding tasks by complexity"
+        threshold: "0.3"  # Lower threshold works better for embedding-based similarity
+
+        # Examples of complex coding tasks
+        hard:
+          candidates:
+            - "Implement a distributed lock manager with leader election"
+            - "Design a database migration system with rollback support"
+            - "Create a compiler optimization pass for loop unrolling"
+
+        # Examples of simple coding tasks
+        easy:
+          candidates:
+            - "Write a function to reverse a string"
+            - "Create a class to represent a rectangle"
+            - "Implement a simple counter with increment/decrement"
+
+      # Rule 2: Reasoning complexity
+      - name: "reasoning-complexity"
+        description: "Classify reasoning and problem-solving tasks"
+        threshold: "0.3"  # Lower threshold works better for embedding-based similarity
+
+        hard:
+          candidates:
+            - "Analyze the geopolitical implications of renewable energy adoption"
+            - "Evaluate the ethical considerations of AI in healthcare"
+            - "Design a multi-stage marketing strategy for a new product launch"
+
+        easy:
+          candidates:
+            - "What is the capital of France?"
+            - "How many days are in a week?"
+            - "Name three common pets"
+
+      # Rule 3: Domain-specific complexity with conditional application
+      - name: "medical-complexity"
+        description: "Classify medical queries (only for medical domain)"
+        threshold: "0.3"  # Lower threshold works better for embedding-based similarity
+
+        hard:
+          candidates:
+            - "Differential diagnosis for chest pain with dyspnea"
+            - "Treatment protocol for multi-drug resistant tuberculosis"
+
+        easy:
+          candidates:
+            - "What is the normal body temperature?"
+            - "What are common symptoms of a cold?"
+
+        # Only apply this rule if domain signal indicates medical domain
+        composer:
+          operator: "AND"
+          conditions:
+            - type: "domain"
+              name: "medical"
+```
+
+**How it works:**
+
+1. Incoming query is compared against `hard` and `easy` candidate examples
+2. Similarity scores determine complexity classification
+3. Output signals: `{rule-name}:hard`, `{rule-name}:easy`, or `{rule-name}:medium`
+4. Router uses signals to select appropriate backend model
+5. Composer allows conditional rule application based on other signals
+
+See [complexity routing sample configuration](https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_complexity.yaml) for a complete example.
+
 ## OpenShift Routes
 
 For OpenShift deployments, the operator can create Routes for external access with TLS termination.

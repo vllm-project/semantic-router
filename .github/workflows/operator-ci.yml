@@ -148,6 +148,7 @@ jobs:
         run: |
           echo "operator=semantic-router-operator:test" >> $GITHUB_OUTPUT
           echo "bundle=semantic-router-operator-bundle:test" >> $GITHUB_OUTPUT
+          echo "extproc=semantic-router-extproc:test" >> $GITHUB_OUTPUT
 
       - name: Generate remote tags for operator
         id: operator-remote-tags
@@ -211,11 +212,26 @@ jobs:
           tags: ${{ steps.bundle-remote-tags.outputs.tags }}
           cache-from: type=gha,scope=operator-bundle
 
+      - name: Build extproc image (local for tests)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./tools/docker/Dockerfile.extproc
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: ${{ steps.local-tags.outputs.extproc }}
+          cache-from: type=gha,scope=extproc
+          cache-to: type=gha,mode=max,scope=extproc
+
       - name: Save operator image for integration tests
         run: docker save -o /tmp/operator-image.tar ${{ steps.local-tags.outputs.operator }}
 
       - name: Save bundle image for validation
         run: docker save -o /tmp/bundle-image.tar ${{ steps.local-tags.outputs.bundle }}
+
+      - name: Save extproc image for integration tests
+        run: docker save -o /tmp/extproc-image.tar ${{ steps.local-tags.outputs.extproc }}
 
       - name: Upload operator image artifact
         uses: actions/upload-artifact@v4
@@ -229,6 +245,13 @@ jobs:
         with:
           name: bundle-image
           path: /tmp/bundle-image.tar
+          retention-days: 1
+
+      - name: Upload extproc image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: extproc-image
+          path: /tmp/extproc-image.tar
           retention-days: 1
 
   bundle-validate:
@@ -261,7 +284,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        cache-backend: [memory, redis, milvus, hybrid]
+        cache-backend: [memory, redis, milvus, hybrid, mmbert, complexity]
         include:
           - cache-backend: memory
             deploy-redis: false
@@ -279,6 +302,14 @@ jobs:
             deploy-redis: false
             deploy-milvus: true
             router-name: test-router-hybrid
+          - cache-backend: mmbert
+            deploy-redis: false
+            deploy-milvus: false
+            router-name: test-router-mmbert
+          - cache-backend: complexity
+            deploy-redis: false
+            deploy-milvus: false
+            router-name: test-router-complexity
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -483,6 +514,38 @@ jobs:
           echo "Verifying operator image is available in kind cluster..."
           docker exec operator-test-${{ matrix.cache-backend }}-control-plane crictl images | grep semantic-router-operator || {
             echo "ERROR: semantic-router-operator:test image not found in kind!"
+            echo "Available images in kind:"
+            docker exec operator-test-${{ matrix.cache-backend }}-control-plane crictl images
+            exit 1
+          }
+
+      - name: Download extproc image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: extproc-image
+          path: /tmp
+
+      - name: Load extproc image into Docker
+        run: docker load --input /tmp/extproc-image.tar
+
+      - name: Verify extproc image loaded
+        run: |
+          echo "Verifying extproc image is available..."
+          docker images | grep semantic-router-extproc || {
+            echo "ERROR: semantic-router-extproc:test image not found!"
+            echo "Available images:"
+            docker images
+            exit 1
+          }
+
+      - name: Load extproc image into kind
+        run: kind load docker-image semantic-router-extproc:test --name operator-test-${{ matrix.cache-backend }}
+
+      - name: Verify extproc image in kind
+        run: |
+          echo "Verifying extproc image is available in kind cluster..."
+          docker exec operator-test-${{ matrix.cache-backend }}-control-plane crictl images | grep semantic-router-extproc || {
+            echo "ERROR: semantic-router-extproc:test image not found in kind!"
             echo "Available images in kind:"
             docker exec operator-test-${{ matrix.cache-backend }}-control-plane crictl images
             exit 1
@@ -727,6 +790,70 @@ jobs:
                     auto_create_collection: true
                     verbose_errors: false'
               ;;
+            mmbert)
+              CACHE_CONFIG='
+              embedding_models:
+                mmbert_model_path: "models/mmbert-embedding"
+                use_cpu: true
+                hnsw_config:
+                  model_type: "mmbert"
+                  target_layer: 6
+                  target_dimension: 256
+                  preload_embeddings: true
+                  enable_soft_matching: true
+                  min_score_threshold: "0.5"
+              semantic_cache:
+                enabled: true
+                backend_type: "memory"
+                embedding_model: "mmbert"
+                similarity_threshold: "0.85"
+                max_entries: 1000
+                ttl_seconds: 3600
+                hnsw:
+                  use_hnsw: true
+                  hnsw_m: 16
+                  hnsw_ef_construction: 200
+                  max_memory_entries: 1000'
+              ;;
+            complexity)
+              CACHE_CONFIG='
+              embedding_models:
+                qwen3_model_path: "models/mom-embedding-pro"
+                use_cpu: true
+                hnsw_config:
+                  model_type: "qwen3"
+                  preload_embeddings: true
+                  enable_soft_matching: true
+                  min_score_threshold: "0.5"
+              semantic_cache:
+                enabled: true
+                backend_type: "memory"
+                embedding_model: "qwen3"
+                max_entries: 5000
+                similarity_threshold: "0.85"
+                ttl_seconds: 7200
+              complexity_rules:
+                - name: "code-complexity"
+                  description: "Classify coding tasks by complexity"
+                  threshold: "0.3"
+                  hard:
+                    candidates:
+                      - "Implement a distributed lock manager"
+                      - "Design a database migration system"
+                  easy:
+                    candidates:
+                      - "Write a function to reverse a string"
+                      - "Create a simple counter"
+                - name: "reasoning-complexity"
+                  description: "Classify reasoning tasks"
+                  threshold: "0.3"
+                  hard:
+                    candidates:
+                      - "Analyze geopolitical implications"
+                  easy:
+                    candidates:
+                      - "What is the capital of France?"'
+              ;;
           esac
 
           cat <<EOF | kubectl apply -f -
@@ -738,9 +865,9 @@ jobs:
           spec:
             replicas: 1
             image:
-              repository: ghcr.io/vllm-project/semantic-router/extproc
-              tag: latest
-              pullPolicy: IfNotPresent
+              repository: semantic-router-extproc
+              tag: test
+              pullPolicy: Never
             service:
               type: ClusterIP
               grpc:
@@ -751,11 +878,11 @@ jobs:
                 targetPort: 8080
             resources:
               limits:
-                memory: "2Gi"
-                cpu: "1"
+                memory: "8Gi"
+                cpu: "4000m"
               requests:
-                memory: "1Gi"
-                cpu: "500m"
+                memory: "4Gi"
+                cpu: "2000m"
             persistence:
               enabled: false
             startupProbe:

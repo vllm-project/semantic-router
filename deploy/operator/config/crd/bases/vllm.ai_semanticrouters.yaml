@@ -1106,6 +1106,190 @@ spec:
                             type: boolean
                         type: object
                     type: object
+                  complexity_rules:
+                    description: Complexity rules for complexity-aware routing
+                    items:
+                      description: ComplexityRulesConfig defines complexity-based
+                        signal classification
+                      properties:
+                        composer:
+                          description: Composer allows filtering based on other signals
+                            (e.g., only apply this rule if domain:medical)
+                          properties:
+                            conditions:
+                              description: List of conditions that must be met
+                              items:
+                                description: CompositionCondition defines a single
+                                  composition condition
+                                properties:
+                                  name:
+                                    description: Name of the specific signal/rule
+                                      value to match
+                                    type: string
+                                  type:
+                                    description: Type of signal to check (e.g., "domain",
+                                      "language", "category")
+                                    type: string
+                                required:
+                                - name
+                                - type
+                                type: object
+                              type: array
+                            operator:
+                              description: Operator for combining conditions (AND,
+                                OR)
+                              enum:
+                              - AND
+                              - OR
+                              type: string
+                          required:
+                          - conditions
+                          - operator
+                          type: object
+                        description:
+                          description: Description of what this rule classifies
+                          type: string
+                        easy:
+                          description: Easy candidates represent simple/easy examples
+                          properties:
+                            candidates:
+                              description: List of candidate phrases or examples
+                              items:
+                                type: string
+                              type: array
+                          required:
+                          - candidates
+                          type: object
+                        hard:
+                          description: Hard candidates represent complex/difficult
+                            examples
+                          properties:
+                            candidates:
+                              description: List of candidate phrases or examples
+                              items:
+                                type: string
+                              type: array
+                          required:
+                          - candidates
+                          type: object
+                        name:
+                          description: Name of the complexity rule (e.g., "code-complexity",
+                            "reasoning-complexity")
+                          type: string
+                        threshold:
+                          description: |-
+                            Threshold for difficulty classification (0.0-1.0). Stored as string to avoid float precision issues.
+                            Queries scoring above this threshold are classified as "hard"
+                          pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
+                          type: string
+                      required:
+                      - easy
+                      - hard
+                      - name
+                      type: object
+                    type: array
+                  decisions:
+                    description: Routing decisions based on signals (domain, complexity,
+                      etc.)
+                    items:
+                      description: DecisionConfig defines a routing decision
+                      properties:
+                        description:
+                          description: Description provides information about what
+                            this decision handles
+                          type: string
+                        modelRefs:
+                          description: ModelRefs contains model references for this
+                            decision
+                          items:
+                            description: ModelRefConfig defines a model reference
+                              for routing
+                            properties:
+                              lora_name:
+                                description: LoRAName is the optional LoRA adapter
+                                  name
+                                type: string
+                              model:
+                                description: Model name to route to
+                                type: string
+                              reasoning_effort:
+                                description: ReasoningEffort specifies the reasoning
+                                  effort level (low, medium, high)
+                                type: string
+                              use_reasoning:
+                                description: UseReasoning enables reasoning mode for
+                                  this model
+                                type: boolean
+                            required:
+                            - model
+                            type: object
+                          type: array
+                        name:
+                          description: Name is the unique identifier for this decision
+                          type: string
+                        plugins:
+                          description: Plugins contains policy configurations applied
+                            after rule matching
+                          items:
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                          type: array
+                        preferred_endpoints:
+                          description: PreferredEndpoints specifies which vLLM endpoints
+                            to prefer for this decision
+                          items:
+                            type: string
+                          type: array
+                        priority:
+                          description: Priority is used for decision ordering - higher
+                            priority decisions are evaluated first
+                          type: integer
+                        rules:
+                          description: Rules defines the combination of conditions
+                            using AND/OR logic
+                          properties:
+                            conditions:
+                              description: Conditions is the list of rule references
+                                to evaluate
+                              items:
+                                description: RuleConditionConfig references a specific
+                                  rule by type and name
+                                properties:
+                                  name:
+                                    description: Name is the name of the rule to reference
+                                    type: string
+                                  type:
+                                    description: 'Type specifies the rule type: "keyword",
+                                      "embedding", "domain", "complexity", or "fact_check"'
+                                    enum:
+                                    - keyword
+                                    - embedding
+                                    - domain
+                                    - complexity
+                                    - fact_check
+                                    - context
+                                    type: string
+                                required:
+                                - name
+                                - type
+                                type: object
+                              type: array
+                            operator:
+                              description: 'Operator specifies how to combine conditions:
+                                "AND" or "OR"'
+                              enum:
+                              - AND
+                              - OR
+                              type: string
+                          required:
+                          - conditions
+                          - operator
+                          type: object
+                      required:
+                      - name
+                      - rules
+                      type: object
+                    type: array
                   default_reasoning_effort:
                     description: Default reasoning effort
                     enum:
@@ -1113,6 +1297,80 @@ spec:
                     - medium
                     - high
                     type: string
+                  embedding_models:
+                    description: Embedding models configuration (qwen3, gemma, mmbert)
+                    properties:
+                      gemma_model_path:
+                        description: |-
+                          Path to EmbeddingGemma-300M model directory
+                          Gemma provides 8K context and fast embeddings (768 dimensions)
+                        type: string
+                      hnsw_config:
+                        description: HNSW configuration for embedding-based classification
+                        properties:
+                          enable_soft_matching:
+                            default: true
+                            description: EnableSoftMatching enables soft matching
+                              mode
+                            type: boolean
+                          min_score_threshold:
+                            default: "0.5"
+                            description: MinScoreThreshold for matching (0.0-1.0).
+                              Stored as string to avoid float precision issues.
+                            pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
+                            type: string
+                          model_type:
+                            description: |-
+                              ModelType specifies which embedding model to use
+                              Options: "qwen3" (1024-dim, 32K context), "gemma" (768-dim, 8K context), "mmbert" (64-768-dim, multilingual)
+                            enum:
+                            - qwen3
+                            - gemma
+                            - mmbert
+                            type: string
+                          preload_embeddings:
+                            default: true
+                            description: PreloadEmbeddings enables precomputing candidate
+                              embeddings at startup
+                            type: boolean
+                          target_dimension:
+                            description: |-
+                              TargetDimension is the embedding dimension to use (default: 768)
+                              Supported dimensions: 64, 128, 256, 512, 768
+                              For mmBERT, lower dimensions provide faster performance with slight accuracy trade-off
+                            enum:
+                            - 64
+                            - 128
+                            - 256
+                            - 512
+                            - 768
+                            type: integer
+                          target_layer:
+                            description: |-
+                              TargetLayer is the layer for mmBERT early exit (only used when ModelType is "mmbert")
+                              Layer 3: ~7x speedup, Layer 6: ~3.6x speedup, Layer 11: ~2x speedup, Layer 22: full accuracy
+                            enum:
+                            - 3
+                            - 6
+                            - 11
+                            - 22
+                            type: integer
+                        type: object
+                      mmbert_model_path:
+                        description: |-
+                          Path to mmBERT 2D Matryoshka embedding model directory
+                          Supports layer early exit (3/6/11/22) and dimension reduction (64-768)
+                        type: string
+                      qwen3_model_path:
+                        description: |-
+                          Path to Qwen3-Embedding-0.6B model directory
+                          Qwen3 provides 32K context and high quality embeddings (1024 dimensions)
+                        type: string
+                      use_cpu:
+                        default: true
+                        description: 'Use CPU for inference (default: true)'
+                        type: boolean
+                    type: object
                   observability:
                     description: Observability configuration
                     properties:
@@ -1220,11 +1478,12 @@ spec:
                         default: bert
                         description: |-
                           EmbeddingModel specifies which embedding model to use for semantic similarity
-                          Options: "bert" (default), "qwen3", "gemma"
+                          Options: "bert" (default), "qwen3", "gemma", "mmbert"
                         enum:
                         - bert
                         - qwen3
                         - gemma
+                        - mmbert
                         type: string
                       enabled:
                         default: true
@@ -1734,6 +1993,12 @@ spec:
                           in seconds
                         type: integer
                     type: object
+                  strategy:
+                    description: Decision routing strategy ("priority" for priority-based
+                      matching)
+                    enum:
+                    - priority
+                    type: string
                   tools:
                     description: Tools configuration
                     properties:

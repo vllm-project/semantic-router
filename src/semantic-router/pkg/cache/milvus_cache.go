@@ -31,6 +31,7 @@ type MilvusCache struct {
 	missCount           int64
 	lastCleanupTime     *time.Time
 	mu                  sync.RWMutex
+	embeddingModel      string // "bert", "qwen3", "gemma", or "mmbert"
 }
 
 // MilvusCacheOptions contains configuration parameters for Milvus cache initialization
@@ -40,6 +41,7 @@ type MilvusCacheOptions struct {
 	Enabled             bool
 	Config              *config.MilvusConfig
 	ConfigPath          string
+	EmbeddingModel      string
 }
 
 // NewMilvusCache initializes a new Milvus-backed semantic cache instance
@@ -85,6 +87,12 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 		return nil, fmt.Errorf("failed to create Milvus client: %w", err)
 	}
 
+	// Default to "bert" if no embedding model specified
+	embeddingModel := options.EmbeddingModel
+	if embeddingModel == "" {
+		embeddingModel = "bert"
+	}
+
 	cache := &MilvusCache{
 		client:              milvusClient,
 		config:              milvusConfig,
@@ -92,6 +100,7 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 		similarityThreshold: options.SimilarityThreshold,
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
+		embeddingModel:      embeddingModel,
 	}
 
 	// Test connection using the new CheckConnection method
@@ -244,12 +253,49 @@ func (c *MilvusCache) initializeCollection() error {
 	return nil
 }
 
+// getEmbedding generates an embedding based on the configured embedding model
+func (c *MilvusCache) getEmbedding(text string) ([]float32, error) {
+	modelName := c.embeddingModel
+	if modelName == "" {
+		modelName = "bert"
+	}
+
+	switch modelName {
+	case "qwen3":
+		// Use GetEmbeddingBatched for Qwen3 with batching support
+		output, err := candle_binding.GetEmbeddingBatched(text, modelName, 0)
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
+	case "gemma":
+		// Use GetEmbeddingWithModelType for Gemma
+		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, 0)
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
+	case "mmbert":
+		// Use GetEmbedding2DMatryoshka for mmBERT
+		output, err := candle_binding.GetEmbedding2DMatryoshka(text, modelName, 0, 0)
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
+	case "bert", "":
+		// Use traditional GetEmbedding for BERT (default)
+		return candle_binding.GetEmbedding(text, 0)
+	default:
+		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', 'gemma', or 'mmbert')", c.embeddingModel)
+	}
+}
+
 // createCollection builds the Milvus collection with the appropriate schema
 func (c *MilvusCache) createCollection() error {
 	ctx := context.Background()
 
 	// Determine embedding dimension automatically
-	testEmbedding, err := candle_binding.GetEmbedding("test", 0) // Auto-detect
+	testEmbedding, err := c.getEmbedding("test")
 	if err != nil {
 		return fmt.Errorf("failed to detect embedding dimension: %w", err)
 	}
@@ -543,7 +589,7 @@ func (c *MilvusCache) AddEntriesBatch(entries []CacheEntry) error {
 	// Generate embeddings and prepare data for all entries
 	for i, entry := range entries {
 		// Generate semantic embedding for the query
-		embedding, err := candle_binding.GetEmbedding(entry.Query, 0)
+		embedding, err := c.getEmbedding(entry.Query)
 		if err != nil {
 			return fmt.Errorf("failed to generate embedding for entry %d: %w", i, err)
 		}
@@ -621,7 +667,7 @@ func (c *MilvusCache) addEntry(id string, requestID string, model string, query 
 	}
 
 	// Generate semantic embedding for the query
-	embedding, err := candle_binding.GetEmbedding(query, 0) // Auto-detect dimension
+	embedding, err := c.getEmbedding(query)
 	if err != nil {
 		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
@@ -713,7 +759,7 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 		model, queryPreview, len(query), threshold)
 
 	// Generate semantic embedding for similarity comparison
-	queryEmbedding, err := candle_binding.GetEmbedding(query, 0) // Auto-detect dimension
+	queryEmbedding, err := c.getEmbedding(query)
 	if err != nil {
 		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
 		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)

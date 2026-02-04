@@ -239,6 +239,39 @@ func main() {
 		embeddingModelsInitialized = false
 	}
 
+	// Initialize BERT model if semantic cache is configured to use it
+	// This is required because Redis/Milvus caches call candle_binding.GetEmbedding() for "bert" embeddings
+	// which requires the BERT model to be initialized via InitModel()
+	if cfg.SemanticCache.Enabled {
+		embeddingModel := strings.ToLower(strings.TrimSpace(cfg.SemanticCache.EmbeddingModel))
+		// Auto-detect embedding model if not explicitly set (matches router.go logic)
+		if embeddingModel == "" {
+			if cfg.EmbeddingModels.MmBertModelPath != "" {
+				embeddingModel = "mmbert"
+			} else if cfg.Qwen3ModelPath != "" {
+				embeddingModel = "qwen3"
+			} else if cfg.GemmaModelPath != "" {
+				embeddingModel = "gemma"
+			} else {
+				embeddingModel = "bert"
+			}
+		}
+
+		if embeddingModel == "bert" {
+			bertModelID := cfg.BertModel.ModelID
+			if bertModelID == "" {
+				bertModelID = "sentence-transformers/all-MiniLM-L6-v2" // Default BERT model
+			}
+			bertModelID = config.ResolveModelPath(bertModelID)
+
+			logging.Infof("Semantic cache uses BERT embeddings, initializing BERT model: %s", bertModelID)
+			if initErr := candle_binding.InitModel(bertModelID, cfg.BertModel.UseCPU); initErr != nil {
+				logging.Fatalf("Failed to initialize BERT model for semantic cache: %v", initErr)
+			}
+			logging.Infof("BERT model initialized successfully for semantic cache")
+		}
+	}
+
 	// Create and start the ExtProc server
 	server, err := extproc.NewServer(*configPath, *port, *secure, *certPath)
 	if err != nil {

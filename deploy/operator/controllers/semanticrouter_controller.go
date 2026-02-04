@@ -608,7 +608,28 @@ func (r *SemanticRouterReconciler) updateStatus(ctx context.Context, sr *vllmv1a
 }
 
 func (r *SemanticRouterReconciler) generateConfigYAML(ctx context.Context, sr *vllmv1alpha1.SemanticRouter) (string, error) {
-	config := map[string]interface{}{}
+	config := map[string]interface{}{
+		// Add required fields for router config
+		"version": "v0.1",
+		"listeners": []map[string]interface{}{
+			{
+				"name":    "grpc-50051",
+				"address": "0.0.0.0",
+				"port":    50051,
+				"timeout": "300s",
+			},
+		},
+		// Add default signals/domains section for category classification
+		"signals": map[string]interface{}{
+			"domains": []map[string]interface{}{
+				{
+					"name":            "general",
+					"description":     "General queries",
+					"mmlu_categories": []string{"other"},
+				},
+			},
+		},
+	}
 
 	// Generate vLLM endpoints and model configs if specified
 	if len(sr.Spec.VLLMEndpoints) > 0 {
@@ -627,6 +648,60 @@ func (r *SemanticRouterReconciler) generateConfigYAML(ctx context.Context, sr *v
 		// Add model_config section
 		if len(modelConfigs) > 0 {
 			config["model_config"] = modelConfigs
+		}
+
+		// Add providers section with models and default_model if vLLM endpoints exist
+		if len(modelConfigs) > 0 {
+			var defaultModel string
+			models := []map[string]interface{}{}
+
+			// Build models array from vllm_endpoints
+			if vllmEndpoints, ok := config["vllm_endpoints"].([]interface{}); ok {
+				for _, ep := range vllmEndpoints {
+					if epMap, ok := ep.(map[string]interface{}); ok {
+						endpointName := epMap["name"].(string)
+						models = append(models, map[string]interface{}{
+							"name": endpointName,
+							"endpoints": []map[string]interface{}{
+								{
+									"name":     endpointName,
+									"weight":   1,
+									"endpoint": "localhost:8000", // Placeholder - will be overridden by vllm_endpoints
+									"protocol": "http",
+								},
+							},
+						})
+						if defaultModel == "" {
+							defaultModel = endpointName
+						}
+					}
+				}
+			}
+
+			// If no vllm_endpoints, use model_config
+			if len(models) == 0 {
+				for modelName := range modelConfigs {
+					models = append(models, map[string]interface{}{
+						"name": modelName,
+						"endpoints": []map[string]interface{}{
+							{
+								"name":     modelName,
+								"weight":   1,
+								"endpoint": "localhost:8000",
+								"protocol": "http",
+							},
+						},
+					})
+					if defaultModel == "" {
+						defaultModel = modelName
+					}
+				}
+			}
+
+			config["providers"] = map[string]interface{}{
+				"default_model": defaultModel,
+				"models":        models,
+			}
 		}
 	}
 
@@ -656,6 +731,21 @@ func (r *SemanticRouterReconciler) generateConfigYAML(ctx context.Context, sr *v
 	}
 	if sr.Spec.Config.Observability != nil {
 		config["observability"] = r.convertToConfigMap(sr.Spec.Config.Observability)
+	}
+	if sr.Spec.Config.EmbeddingModels != nil {
+		config["embedding_models"] = r.convertToConfigMap(sr.Spec.Config.EmbeddingModels)
+	}
+	// Add complexity_rules under signals section
+	if len(sr.Spec.Config.ComplexityRules) > 0 {
+		if signals, ok := config["signals"].(map[string]interface{}); ok {
+			signals["complexity"] = r.convertToConfigMap(sr.Spec.Config.ComplexityRules)
+		}
+	}
+	if sr.Spec.Config.Strategy != "" {
+		config["strategy"] = sr.Spec.Config.Strategy
+	}
+	if len(sr.Spec.Config.Decisions) > 0 {
+		config["decisions"] = r.convertToConfigMap(sr.Spec.Config.Decisions)
 	}
 
 	data, err := yaml.Marshal(config)
@@ -752,6 +842,7 @@ func (r *SemanticRouterReconciler) generateDeployment(sr *vllmv1alpha1.SemanticR
 					ServiceAccountName: saName,
 					SecurityContext:    podSecurityContext,
 					ImagePullSecrets:   sr.Spec.ImagePullSecrets,
+					InitContainers:     r.generateInitContainers(),
 					Containers:         r.generateContainers(sr, gatewayMode),
 					Volumes:            r.generateVolumes(sr, gatewayMode),
 					NodeSelector:       sr.Spec.NodeSelector,
@@ -1012,6 +1103,26 @@ func (r *SemanticRouterReconciler) generateVolumes(sr *vllmv1alpha1.SemanticRout
 				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
 		},
+		{
+			Name: "router-workdir",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		},
+		// Writable /var/run for supervisord socket and pid files
+		{
+			Name: "var-run",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		},
+		// Writable /var/log for supervisord and application logs
+		{
+			Name: "var-log",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		},
 	}
 
 	// Add Envoy config volume only in standalone mode
@@ -1063,9 +1174,31 @@ func (r *SemanticRouterReconciler) generateVolumeMounts(sr *vllmv1alpha1.Semanti
 			MountPath: "/app/config",
 			ReadOnly:  true,
 		},
+		// Mount config.yaml directly to /app/config.yaml for supervisord scripts
+		{
+			Name:      "config-volume",
+			MountPath: "/app/config.yaml",
+			SubPath:   "config.yaml",
+			ReadOnly:  true,
+		},
 		{
 			Name:      "cache-volume",
 			MountPath: "/.cache",
+		},
+		// Writable directory for router generated configs
+		{
+			Name:      "router-workdir",
+			MountPath: "/app/.vllm-sr",
+		},
+		// Writable /var/run for supervisord socket and pid files (non-root compatibility)
+		{
+			Name:      "var-run",
+			MountPath: "/var/run",
+		},
+		// Writable /var/log for supervisord and application logs (non-root compatibility)
+		{
+			Name:      "var-log",
+			MountPath: "/var/log",
 		},
 		// Always mount models volume (backed by PVC or emptyDir depending on persistence setting)
 		{
@@ -1075,6 +1208,37 @@ func (r *SemanticRouterReconciler) generateVolumeMounts(sr *vllmv1alpha1.Semanti
 	}
 
 	return mounts
+}
+
+// generateInitContainers creates init containers to set up directory structure in emptyDir volumes
+func (r *SemanticRouterReconciler) generateInitContainers() []corev1.Container {
+	return []corev1.Container{
+		{
+			Name:  "setup-dirs",
+			Image: "registry.access.redhat.com/ubi9/ubi-minimal:latest",
+			Command: []string{
+				"sh",
+				"-c",
+				"mkdir -p /var/log/supervisor",
+			},
+			VolumeMounts: []corev1.VolumeMount{
+				{
+					Name:      "var-log",
+					MountPath: "/var/log",
+				},
+				{
+					Name:      "var-run",
+					MountPath: "/var/run",
+				},
+			},
+			SecurityContext: &corev1.SecurityContext{
+				AllowPrivilegeEscalation: func() *bool { b := false; return &b }(),
+				Capabilities: &corev1.Capabilities{
+					Drop: []corev1.Capability{"ALL"},
+				},
+			},
+		},
+	}
 }
 
 func (r *SemanticRouterReconciler) generateService(sr *vllmv1alpha1.SemanticRouter, gatewayMode string) *corev1.Service {

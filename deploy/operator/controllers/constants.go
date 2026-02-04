@@ -30,7 +30,7 @@ const (
 	DefaultReplicas = int32(1)
 
 	// DefaultPVCSize is the default PVC storage size
-	DefaultPVCSize = "10Gi"
+	DefaultPVCSize = "15Gi"
 
 	// Port numbers
 	DefaultGRPCPort    = int32(50051)

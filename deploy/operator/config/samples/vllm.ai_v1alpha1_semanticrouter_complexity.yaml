@@ -1,0 +1,159 @@
+---
+# SemanticRouter example with complexity-aware routing
+# This example demonstrates few-shot complexity classification for intelligent routing
+# Route simple queries to fast models and complex queries to powerful models
+apiVersion: vllm.ai/v1alpha1
+kind: SemanticRouter
+metadata:
+  name: semantic-router-complexity
+  namespace: default
+spec:
+  # Basic deployment settings
+  replicas: 1
+
+  # Configure vLLM backend endpoints with different reasoning families
+  vllmEndpoints:
+    # Fast model for simple queries
+    - name: llama-8b-fast
+      model: llama3-8b
+      reasoningFamily: qwen3
+      backend:
+        type: kserve
+        inferenceServiceName: llama-3-8b
+      weight: 2  # Prefer this for simple queries
+
+    # Powerful model for complex queries
+    - name: llama-70b-reasoning
+      model: llama3-70b
+      reasoningFamily: deepseek
+      backend:
+        type: kserve
+        inferenceServiceName: llama-3-70b
+      weight: 1
+
+  # Persistence for model cache
+  persistence:
+    enabled: true
+    size: 10Gi
+
+  # Resource allocation
+  resources:
+    requests:
+      cpu: 2000m
+      memory: 4Gi
+    limits:
+      cpu: 4000m
+      memory: 8Gi
+
+  # Semantic router configuration
+  config:
+    # Embedding models for classification
+    embedding_models:
+      qwen3_model_path: "models/mom-embedding-pro"
+      use_cpu: true
+
+      hnsw_config:
+        model_type: "qwen3"
+        preload_embeddings: true
+        enable_soft_matching: true
+        min_score_threshold: "0.5"
+
+    # Complexity rules for intelligent routing
+    complexity_rules:
+      # Rule 1: Code complexity classification
+      - name: "code-complexity"
+        description: "Classify coding tasks by complexity"
+        threshold: "0.3"  # Lower threshold works better for embedding-based similarity
+
+        # Hard examples: complex coding tasks
+        hard:
+          candidates:
+            - "Implement a distributed lock manager with leader election"
+            - "Design a database migration system with rollback support"
+            - "Create a compiler optimization pass for loop unrolling"
+            - "Build a graph algorithm for strongly connected components"
+            - "Develop a custom memory allocator with fragmentation handling"
+
+        # Easy examples: simple coding tasks
+        easy:
+          candidates:
+            - "Write a function to reverse a string"
+            - "Create a class to represent a rectangle"
+            - "Implement a simple counter with increment/decrement"
+            - "Write a function to check if a number is even"
+            - "Create a basic TODO list with add/remove operations"
+
+      # Rule 2: Reasoning complexity classification
+      - name: "reasoning-complexity"
+        description: "Classify reasoning and problem-solving tasks"
+        threshold: "0.3"  # Lower threshold works better for embedding-based similarity
+
+        # Hard examples: complex reasoning
+        hard:
+          candidates:
+            - "Analyze the geopolitical implications of renewable energy adoption"
+            - "Evaluate the ethical considerations of AI in healthcare decision-making"
+            - "Design a multi-stage marketing strategy for a new product launch"
+            - "Explain quantum entanglement and its applications in cryptography"
+            - "Propose solutions for traffic congestion in urban environments"
+
+        # Easy examples: simple reasoning
+        easy:
+          candidates:
+            - "What is the capital of France?"
+            - "How many days are in a week?"
+            - "What color is the sky on a clear day?"
+            - "Name three common pets"
+            - "What is 5 + 3?"
+
+      # Rule 3: Domain-specific complexity (with composer for conditional application)
+      - name: "medical-complexity"
+        description: "Classify medical queries by complexity (only for medical domain)"
+        threshold: "0.3"  # Lower threshold works better for embedding-based similarity
+
+        # Hard examples: complex medical scenarios
+        hard:
+          candidates:
+            - "Differential diagnosis for chest pain with dyspnea and elevated troponin"
+            - "Treatment protocol for multi-drug resistant tuberculosis"
+            - "Surgical approach for complex congenital heart defect repair"
+            - "Management of acute liver failure with hepatic encephalopathy"
+            - "Immunotherapy selection for metastatic melanoma"
+
+        # Easy examples: simple medical queries
+        easy:
+          candidates:
+            - "What is the normal body temperature?"
+            - "How often should I brush my teeth?"
+            - "What are common symptoms of a cold?"
+            - "How much water should I drink daily?"
+            - "What is a fever?"
+
+        # Composer: only apply this rule if domain is medical
+        composer:
+          operator: "AND"
+          conditions:
+            - type: "domain"
+              name: "medical"
+
+    # Semantic cache configuration
+    semantic_cache:
+      enabled: true
+      backend_type: "memory"
+      embedding_model: "qwen3"
+      similarity_threshold: "0.85"
+      max_entries: 5000
+      ttl_seconds: 7200
+
+    # Prompt guard
+    prompt_guard:
+      enabled: true
+      threshold: "0.7"
+
+    # Tools configuration
+    tools:
+      enabled: true
+      top_k: 3
+
+    # Default reasoning effort for queries without complexity classification
+    default_reasoning_effort: "medium"

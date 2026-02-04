@@ -133,8 +133,10 @@ RUN chmod +x /app/start-router.sh /app/start-dashboard.sh
 # Copy supervisord configuration
 COPY src/vllm-sr/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Create log files
-RUN touch /var/log/envoy_access.log /var/log/supervisor/supervisord.log
+# Create log files and directories with proper permissions for non-root
+RUN touch /var/log/envoy_access.log /var/log/supervisor/supervisord.log && \
+    chmod 666 /var/log/envoy_access.log /var/log/supervisor/supervisord.log && \
+    chmod 777 /var/log /var/log/supervisor /var/run
 
 # Expose ports
 # Note: Listener ports are configured in config.yaml and mapped dynamically

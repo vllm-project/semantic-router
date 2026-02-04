@@ -37,7 +37,13 @@ spec:
 
   # Semantic router configuration
   config:
-    # BERT model for embeddings (required for semantic cache)
+    # Embedding models configuration
+    # Using Qwen3 for high-quality embeddings with 32K context support
+    embedding_models:
+      qwen3_model_path: "models/mom-embedding-pro"
+      use_cpu: true
+
+    # Legacy BERT model configuration (can be removed if using embedding_models)
     bert_model:
       model_id: models/mom-embedding-light
       threshold: "0.6"
@@ -49,7 +55,8 @@ spec:
       backend_type: redis
       similarity_threshold: "0.85"
       ttl_seconds: 3600
-      embedding_model: bert
+      # Use Qwen3 embeddings for better semantic understanding
+      embedding_model: qwen3
 
       # Redis configuration
       # NOTE: Update host to match your Redis deployment namespace
@@ -73,7 +80,7 @@ spec:
           prefix: "cache:"
           vector_field:
             name: embedding
-            dimension: 384  # For BERT embeddings
+            dimension: 1024  # For Qwen3 embeddings (384 for BERT, 768 for Gemma)
             metric_type: COSINE
           index_type: HNSW
           params:

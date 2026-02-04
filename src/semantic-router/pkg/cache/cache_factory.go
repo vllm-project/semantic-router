@@ -43,22 +43,24 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 	case MilvusCacheType:
 		var options MilvusCacheOptions
 		if config.Milvus != nil {
-			logging.Debugf("Creating Milvus cache backend - Config: %v, TTL: %ds, Threshold: %.3f",
-				config.Milvus, config.TTLSeconds, config.SimilarityThreshold)
+			logging.Debugf("Creating Milvus cache backend - Config: %v, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s",
+				config.Milvus, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel)
 			options = MilvusCacheOptions{
 				Enabled:             config.Enabled,
 				SimilarityThreshold: config.SimilarityThreshold,
 				TTLSeconds:          config.TTLSeconds,
 				Config:              config.Milvus,
+				EmbeddingModel:      config.EmbeddingModel,
 			}
 		} else {
-			logging.Debugf("(Deprecated) Creating Milvus cache backend - ConfigPath: %s, TTL: %ds, Threshold: %.3f",
-				config.BackendConfigPath, config.TTLSeconds, config.SimilarityThreshold)
+			logging.Debugf("(Deprecated) Creating Milvus cache backend - ConfigPath: %s, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s",
+				config.BackendConfigPath, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel)
 			options = MilvusCacheOptions{
 				Enabled:             config.Enabled,
 				SimilarityThreshold: config.SimilarityThreshold,
 				TTLSeconds:          config.TTLSeconds,
 				ConfigPath:          config.BackendConfigPath,
+				EmbeddingModel:      config.EmbeddingModel,
 			}
 		}
 		return NewMilvusCache(options)
@@ -66,22 +68,24 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 	case RedisCacheType:
 		var options RedisCacheOptions
 		if config.Redis != nil {
-			logging.Debugf("Creating Redis cache backend - Config: %v, TTL: %ds, Threshold: %.3f",
-				config.Redis, config.TTLSeconds, config.SimilarityThreshold)
+			logging.Debugf("Creating Redis cache backend - Config: %v, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s",
+				config.Redis, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel)
 			options = RedisCacheOptions{
 				Enabled:             config.Enabled,
 				SimilarityThreshold: config.SimilarityThreshold,
 				TTLSeconds:          config.TTLSeconds,
 				Config:              config.Redis,
+				EmbeddingModel:      config.EmbeddingModel,
 			}
 		} else {
-			logging.Debugf("(Deprecated) Creating Redis cache backend - ConfigPath: %s, TTL: %ds, Threshold: %.3f",
-				config.BackendConfigPath, config.TTLSeconds, config.SimilarityThreshold)
+			logging.Debugf("(Deprecated) Creating Redis cache backend - ConfigPath: %s, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s",
+				config.BackendConfigPath, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel)
 			options = RedisCacheOptions{
 				Enabled:             config.Enabled,
 				SimilarityThreshold: config.SimilarityThreshold,
 				TTLSeconds:          config.TTLSeconds,
 				ConfigPath:          config.BackendConfigPath,
+				EmbeddingModel:      config.EmbeddingModel,
 			}
 		}
 		return NewRedisCache(options)

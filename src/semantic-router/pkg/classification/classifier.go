@@ -617,7 +617,7 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 	// Add keyword embedding classifier if configured
 	if len(cfg.EmbeddingRules) > 0 {
 		// Get optimization config from embedding models configuration
-		optConfig := cfg.HNSWConfig
+		optConfig := cfg.EmbeddingModels.HNSWConfig
 		keywordEmbeddingClassifier, err := NewEmbeddingClassifier(cfg.EmbeddingRules, optConfig)
 		if err != nil {
 			logging.Errorf("Failed to create keyword embedding classifier: %v", err)
@@ -637,7 +637,7 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 	// Add complexity classifier if configured
 	if len(cfg.ComplexityRules) > 0 {
 		// Get model type from embedding models configuration (reuse same model as embedding classifier)
-		modelType := cfg.HNSWConfig.ModelType
+		modelType := cfg.EmbeddingModels.HNSWConfig.ModelType
 		if modelType == "" {
 			modelType = "qwen3" // Default to qwen3
 		}
