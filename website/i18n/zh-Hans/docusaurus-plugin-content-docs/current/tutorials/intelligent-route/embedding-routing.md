@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "bac2743"
+  source_commit: "657f43d"
   source_file: "docs/tutorials/intelligent-route/embedding-routing.md"
   outdated: false
 ---
@@ -225,10 +225,10 @@ dimension: 768  # 或使用 512, 256, 128 实现 Matryoshka
 
 | 模型 | 维度 | 延迟 | 准确度 | 内存 |
 |-------|-----------|---------|----------|--------|
-| Qwen3 | 1024 | 30-50ms | 最高 | 600MB |
-| Gemma | 768 | 10-20ms | 高 | 300MB |
-| Gemma | 512 | 8-15ms | 中 | 300MB |
-| Gemma | 256 | 5-10ms | 较低 | 300MB |
+| Qwen3 | 1024 | 30-50ms | 最高 | ~2.4GB |
+| Gemma | 768 | 10-20ms | 高 | ~1.2GB |
+| Gemma | 512 | 8-15ms | 中 | ~1.2GB |
+| Gemma | 256 | 5-10ms | 较低 | ~1.2GB |
 
 ## 参考
 

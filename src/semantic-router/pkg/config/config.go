@@ -1395,6 +1395,7 @@ type AlgorithmConfig struct {
 	// Looper algorithms (multi-model execution):
 	// - "confidence": Try smaller models first, escalate to larger models if confidence is low
 	// - "ratings": Execute all models concurrently and return multiple choices for comparison
+	// - "remom": Multi-round parallel reasoning with intelligent synthesis (Reasoning for Mixture of Models)
 	// Selection algorithms (single model selection from candidates):
 	// - "static": Use static scores from configuration (default)
 	// - "elo": Use Elo rating system with Bradley-Terry model
@@ -1406,6 +1407,7 @@ type AlgorithmConfig struct {
 	// Looper algorithm configurations (for multi-model execution)
 	Confidence *ConfidenceAlgorithmConfig `yaml:"confidence,omitempty"`
 	Ratings    *RatingsAlgorithmConfig    `yaml:"ratings,omitempty"`
+	ReMoM      *ReMoMAlgorithmConfig      `yaml:"remom,omitempty"`
 
 	// Selection algorithm configurations (for single model selection)
 	// These align with the global ModelSelectionConfig but can be overridden per-decision
@@ -1479,6 +1481,70 @@ type RatingsAlgorithmConfig struct {
 	// - "skip": Skip the failed model and return remaining results (default)
 	// - "fail": Return error if any model fails
 	OnError string `yaml:"on_error,omitempty"`
+}
+
+// ReMoMAlgorithmConfig configures the ReMoM (Reasoning for Mixture of Models) algorithm
+// This algorithm performs multi-round parallel reasoning with intelligent synthesis
+// Inspired by PaCoRe (arXiv:2601.05593) but extended to support mixture of models
+type ReMoMAlgorithmConfig struct {
+	// BreadthSchedule defines the number of parallel calls per round
+	// The final round (K=1) is automatically appended
+	// Examples:
+	//   [4]      -> Low intensity: 2 rounds (4 → 1)
+	//   [16]     -> Medium intensity: 2 rounds (16 → 1)
+	//   [32, 4]  -> High intensity: 3 rounds (32 → 4 → 1)
+	BreadthSchedule []int `yaml:"breadth_schedule"`
+
+	// ModelDistribution specifies how to distribute calls among multiple models
+	// - "weighted": Distribute proportionally based on model weights (default)
+	// - "equal": Distribute evenly among all models
+	// - "first_only": Use only the first model (PaCoRe-compatible mode)
+	ModelDistribution string `yaml:"model_distribution,omitempty"`
+
+	// Temperature for generation (default: 1.0)
+	Temperature float64 `yaml:"temperature,omitempty"`
+
+	// IncludeReasoning determines whether to include reasoning content in synthesis
+	// When true, extracts vLLM reasoning fields and includes them in synthesis prompts
+	// Default: false
+	IncludeReasoning bool `yaml:"include_reasoning,omitempty"`
+
+	// CompactionStrategy defines how to compact responses between rounds
+	// - "full": Use complete responses (default)
+	// - "last_n_tokens": Keep only the last N tokens
+	CompactionStrategy string `yaml:"compaction_strategy,omitempty"`
+
+	// CompactionTokens specifies how many tokens to keep when using "last_n_tokens" strategy
+	// Default: 1000
+	CompactionTokens int `yaml:"compaction_tokens,omitempty"`
+
+	// SynthesisTemplate is a custom Go text/template for building synthesis prompts
+	// Available variables: .OriginalContent, .ReferenceResponses
+	// If empty, uses default template
+	SynthesisTemplate string `yaml:"synthesis_template,omitempty"`
+
+	// MaxConcurrent limits the number of concurrent model calls per round
+	// Default: no limit (all calls in a round execute concurrently)
+	MaxConcurrent int `yaml:"max_concurrent,omitempty"`
+
+	// OnError defines behavior when a model call fails: "skip" or "fail"
+	// - "skip": Skip the failed call and continue with remaining responses (default)
+	// - "fail": Return error immediately
+	OnError string `yaml:"on_error,omitempty"`
+
+	// ShuffleSeed for reproducible shuffling of responses
+	// Default: 42
+	ShuffleSeed int `yaml:"shuffle_seed,omitempty"`
+
+	// IncludeIntermediateResponses determines whether to include intermediate responses
+	// in the response body for visualization in the dashboard
+	// Default: true
+	IncludeIntermediateResponses bool `yaml:"include_intermediate_responses,omitempty"`
+
+	// MaxResponsesPerRound limits how many responses to save per round
+	// Useful to avoid large response bodies
+	// Default: no limit (save all responses)
+	MaxResponsesPerRound int `yaml:"max_responses_per_round,omitempty"`
 }
 
 // MLModelSelectionConfig configures the ML-based model selection algorithm
@@ -1966,10 +2032,20 @@ type LatencyRule struct {
 	// Name is the latency rule name that can be referenced in decision rules
 	Name string `yaml:"name"`
 
-	// MaxTPOT is the maximum acceptable TPOT (Time Per Output Token) in seconds
-	// Models with TPOT <= MaxTPOT will match this rule
-	// Example: 0.05 means 50ms per token
-	MaxTPOT float64 `yaml:"max_tpot"`
+	// TPOTPercentile is the percentile bucket to use for TPOT (Time Per Output Token) evaluation (1-100)
+	// Models with current TPOT <= the calculated TPOT percentile threshold will match this rule
+	// Example: 10 means 10th percentile (top 10% fastest TPOT)
+	// Example: 50 means median (top 50% fastest TPOT)
+	// Works with any number of observations (1+), adapts to model's actual performance
+	TPOTPercentile int `yaml:"tpot_percentile,omitempty"`
+
+	// TTFTPercentile is the percentile bucket to use for TTFT (Time To First Token) evaluation (1-100)
+	// Models with current TTFT <= the calculated TTFT percentile threshold will match this rule
+	// Example: 10 means 10th percentile (top 10% fastest TTFT)
+	// Example: 50 means median (top 50% fastest TTFT)
+	// Works with any number of observations (1+), adapts to model's actual performance
+	// At least one of TPOTPercentile or TTFTPercentile must be set
+	TTFTPercentile int `yaml:"ttft_percentile,omitempty"`
 
 	// Description provides human-readable explanation of the latency requirement
 	Description string `yaml:"description,omitempty"`

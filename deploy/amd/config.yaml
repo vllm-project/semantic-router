@@ -28,6 +28,25 @@ signals:
         - "forget your guidelines"
       case_sensitive: false
 
+    # ReMoM detection
+    - name: "remom_low"
+      operator: "OR"
+      keywords:
+        - "think step by step"
+      case_sensitive: false
+
+    - name: "remom_medium"
+      operator: "OR"
+      keywords:
+        - "think carefully step by step"
+      case_sensitive: false
+
+    - name: "remom_high"
+      operator: "OR"
+      keywords:
+        - "think deeply and systematically"
+      case_sensitive: false
+
     # Creative/opinion keywords
     - name: "creative_keywords"
       operator: "OR"
@@ -285,14 +304,17 @@ signals:
 
   # latency - Latency-based routing signals (TPOT-based)
   latency:
-    - name: "low_latency"
-      max_tpot: 0.005  # 5ms per token
+    - name: "top10"
+      tpot_percentile: 10
+      ttft_percentile: 10
       description: "For real-time chat applications requiring fast responses"
-    - name: "medium_latency"
-      max_tpot: 0.05  # 50ms per token
+    - name: "top50"
+      tpot_percentile: 50
+      ttft_percentile: 50
       description: "For standard applications with moderate latency tolerance"
-    - name: "high_latency"
-      max_tpot: 0.20  # 200ms per token
+    - name: "top90"
+      tpot_percentile: 90
+      ttft_percentile: 90
       description: "For applications with high latency tolerance"
 
   # Fact-check signals for verification needs
@@ -428,6 +450,135 @@ signals:
 
 # Decisions - Intelligent routing rules
 decisions:
+  # Priority 203: ReMoM Algorithm with high effort
+  - name: "remom_high_effort"
+    description: "ReMoM Algorithm with high effort"
+    priority: 203
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "keyword"
+          name: "remom_high"
+    modelRefs:
+      - model: "DeepSeek-V3.2"
+        use_reasoning: true
+        reasoning_effort: "high"
+        weight: 0.5
+      - model: "openai/gpt-oss-20b"
+        use_reasoning: true
+        reasoning_effort: "high"
+        weight: 0.3
+      - model: "Qwen/Qwen3-235B"
+        use_reasoning: true
+        reasoning_effort: "high"
+        weight: 0.2
+    plugins:
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 10000           # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096         # Max bytes per body, truncates if exceeded (default: 4096)
+    algorithm:
+      type: "remom"
+      remom:
+        breadth_schedule: [32, 4]  # Low intensity for demonstration
+        # Model distribution strategy:
+        # - "weighted": Distribute calls based on model weights (default)
+        # - "equal": Distribute evenly across all models
+        # - "first_only": Use only the first model (PaCoRe-compatible)
+        model_distribution: "weighted"
+        compaction_strategy: "full"
+        # Behavior on model call failure: "skip" or "fail"
+        on_error: "skip"
+
+  # Priority 202: ReMoM Algorithm with medium effort
+  - name: "remom_medium_effort"
+    description: "ReMoM Algorithm with medium effort"
+    priority: 202
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "keyword"
+          name: "remom_medium"
+    modelRefs:
+      - model: "Kimi-K2-Thinking"
+        use_reasoning: true
+        reasoning_effort: "medium"
+      - model: "GLM-4.7"
+        use_reasoning: true
+        reasoning_effort: "medium"
+      - model: "DeepSeek-V3.2"
+        use_reasoning: true
+        reasoning_effort: "medium"
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
+        reasoning_effort: "medium"
+    plugins:
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 10000           # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096         # Max bytes per body, truncates if exceeded (default: 4096)
+    algorithm:
+      type: "remom"
+      remom:
+        breadth_schedule: [16, 4]  # Low intensity for demonstration
+        # Model distribution strategy:
+        # - "weighted": Distribute calls based on model weights (default)
+        # - "equal": Distribute evenly across all models
+        # - "first_only": Use only the first model (PaCoRe-compatible)
+        model_distribution: "equal"
+        compaction_strategy: "full"
+        # Behavior on model call failure: "skip" or "fail"
+        on_error: "skip"
+
+  # Priority 201: ReMoM Algorithm with low effort
+  - name: "remom_low_effort"
+    description: "ReMoM Algorithm with low effort"
+    priority: 201
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "keyword"
+          name: "remom_low"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
+        reasoning_effort: "low"
+    plugins:
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 10000           # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096         # Max bytes per body, truncates if exceeded (default: 4096)
+    algorithm:
+      type: "remom"
+      remom:
+        breadth_schedule: [8]  # Low intensity for demonstration
+        # Model distribution strategy:
+        # - "weighted": Distribute calls based on model weights (default)
+        # - "equal": Distribute evenly across all models
+        # - "first_only": Use only the first model (PaCoRe-compatible)
+        model_distribution: "first_only"
+        compaction_strategy: "full"
+        # Behavior on model call failure: "skip" or "fail"
+        on_error: "skip"
+
   # Priority 200: Jailbreak detection - highest priority
   - name: "guardrails"
     description: "Block jailbreak attempts with security measures"
@@ -1031,7 +1182,7 @@ decisions:
         - type: "language"
           name: "zh"
         - type: "latency"
-          name: "medium_latency"
+          name: "top50"
         - type: "context"
           name: "short_context"
     modelRefs:

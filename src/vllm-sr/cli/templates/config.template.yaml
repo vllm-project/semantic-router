@@ -177,14 +177,48 @@ signals:
     - name: "ja"
       description: "Japanese language queries"
 
-  # latency - Latency-based routing signals (TPOT-based)
+  # latency - Latency-based routing signals (TPOT and TTFT percentile-based)
+  # Percentile-based rules adapt to each model's actual performance distribution
+  # Works with any number of observations (1+): uses average for 1-2, percentile for 3+
+  # 
+  # ⚠️  RECOMMENDATION: Use BOTH tpot_percentile AND ttft_percentile for comprehensive latency evaluation
+  #    - TPOT: Measures token generation speed (throughput)
+  #    - TTFT: Measures first token latency (user-perceived latency)
+  #    - Together: Complete latency picture for optimal routing decisions
+  # 
+  # You CAN use only one if needed for specific use cases:
+  #   - TPOT only: Batch processing, cost optimization (throughput matters)
+  #   - TTFT only: Real-time chat (user perception matters)
+  #   - Both: RECOMMENDED for most applications (comprehensive evaluation)
+  # 
+  # At least one of tpot_percentile or ttft_percentile must be set (validation requirement)
+  # When both are set, model must meet BOTH thresholds (AND logic)
   latency:
-    - name: "low_latency"
-      max_tpot: 0.05  # 50ms per token
-      description: "For real-time chat applications requiring fast responses"
-    - name: "medium_latency"
-      max_tpot: 0.15  # 150ms per token
-      description: "For standard applications with moderate latency tolerance"
+    # Example 1: RECOMMENDED - Both TPOT and TTFT percentiles (comprehensive latency evaluation)
+    - name: "low_latency_comprehensive"
+      tpot_percentile: 10  # 10th percentile for TPOT (top 10% fastest token generation)
+      ttft_percentile: 10  # 10th percentile for TTFT (top 10% fastest first token)
+      description: "RECOMMENDED: For real-time applications - fast start and fast generation"
+    
+    # Example 2: Different percentiles for different priorities
+    - name: "balanced_latency"
+      tpot_percentile: 50  # Median TPOT (top 50%)
+      ttft_percentile: 10  # Top 10% TTFT (prioritize fast start)
+      description: "Prioritize fast start, accept moderate generation speed"
+    
+    # Example 3: TPOT percentile only (use case: batch processing, cost optimization)
+    # ⚠️  Note: Only using one metric is allowed but not recommended for most use cases
+    - name: "batch_processing_optimized"
+      tpot_percentile: 10  # 10th percentile for TPOT (top 10% fastest token generation)
+      # ttft_percentile: not set - acceptable for batch processing where throughput matters
+      description: "For batch processing where throughput (TPOT) is critical, TTFT less important"
+    
+    # Example 4: TTFT percentile only (use case: real-time chat where first token matters)
+    # ⚠️  Note: Only using one metric is allowed but not recommended for most use cases
+    - name: "chat_fast_start"
+      ttft_percentile: 10  # 10th percentile for TTFT (top 10% fastest first token)
+      # tpot_percentile: not set - acceptable for chat apps where user perception matters
+      description: "For chat applications where fast first token (TTFT) is critical for UX"
 
   # context - Context length signals (Token Count)
   context:
@@ -431,6 +465,39 @@ decisions:
           enabled: true
           similarity_threshold: 0.85
 
+  # Latency-based routing example: Route to models that meet latency requirements
+  - name: "low_latency_route"
+    description: "Route to models with low latency (fast TPOT and TTFT)"
+    priority: 90
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "latency"
+          name: "low_latency_comprehensive"  # Requires both TPOT and TTFT percentiles
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "Provide fast, concise responses suitable for real-time applications."
+
+  - name: "fast_start_route"
+    description: "Route to models with fast first token (prioritize TTFT for chat apps)"
+    priority: 85
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "latency"
+          name: "chat_fast_start"  # Only requires TTFT percentile
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "Start responding quickly. User is waiting for immediate feedback."
+
   # Size-aware routing example: Try smaller models first, escalate if confidence is low
   - name: "confidence_route"
     description: "Cost-efficient routing: try small model first, escalate if needed"
@@ -482,6 +549,59 @@ decisions:
       - type: "semantic-cache"
         configuration:
           enabled: false
+
+  # ReMoM algorithm example: Multi-round parallel reasoning with intelligent synthesis
+  - name: "remom_route"
+    description: "Complex reasoning using ReMoM (Reasoning for Mixture of Models)"
+    priority: 70
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "keyword"
+          name: "looper_keywords"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+      - model: "gpt-5.2"
+    algorithm:
+      type: "remom"
+      remom:
+        # Breadth schedule: [32, 4] means 32 parallel calls in round 1, 4 in round 2, then 1 final
+        # Low intensity: [4], Medium: [16], High: [32, 4]
+        breadth_schedule: [4]  # Low intensity for demonstration
+
+        # Model distribution strategy:
+        # - "weighted": Distribute calls based on model weights (default)
+        # - "equal": Distribute evenly across all models
+        # - "first_only": Use only the first model (PaCoRe-compatible)
+        model_distribution: "equal"
+
+        # Temperature for diverse exploration (default: 1.0)
+        temperature: 1.0
+
+        # Include reasoning content from vLLM in synthesis prompts
+        include_reasoning: true
+
+        # Compaction strategy: "full" or "last_n_tokens"
+        compaction_strategy: "last_n_tokens"
+        compaction_tokens: 1000  # Keep last 1000 tokens when compacting
+
+        # Custom synthesis template (optional, uses default if not provided)
+        # synthesis_template: "Your custom template here"
+
+        # Maximum concurrent model calls per round (optional, defaults to all)
+        max_concurrent: 4
+
+        # Behavior on model call failure: "skip" or "fail"
+        on_error: "skip"
+
+        # Random seed for reproducibility
+        shuffle_seed: 42
+
+        # Include intermediate responses for visualization in dashboard
+        include_intermediate_responses: true
+
+        # Maximum responses to keep per round (optional, for memory efficiency)
+        # max_responses_per_round: 10
 
 # LLM - Backend model configuration
 providers:

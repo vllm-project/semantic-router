@@ -15,6 +15,34 @@ import (
 
 // handleCaching handles cache lookup and storage with category-specific settings
 func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (*ext_proc.ProcessingResponse, bool) {
+	// Skip cache read for looper internal requests
+	// Looper requests should not return cached responses, but should still write to cache
+	if ctx.LooperRequest {
+		logging.Debugf("[Cache] Skipping cache read for looper internal request")
+		// Still extract model and query for potential cache write later
+		requestModel, requestQuery, err := cache.ExtractQueryFromOpenAIRequest(ctx.OriginalRequestBody)
+		if err != nil {
+			logging.Errorf("Error extracting query from request: %v", err)
+			return nil, false
+		}
+		ctx.RequestModel = requestModel
+		ctx.RequestQuery = requestQuery
+
+		// Add pending request for cache write (if caching is enabled)
+		cacheEnabled := r.Config.SemanticCache.Enabled
+		if categoryName != "" {
+			cacheEnabled = r.Config.IsCacheEnabledForDecision(categoryName)
+		}
+		if requestQuery != "" && r.Cache.IsEnabled() && cacheEnabled {
+			ttlSeconds := r.Config.GetCacheTTLSecondsForDecision(categoryName)
+			err = r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody, ttlSeconds)
+			if err != nil {
+				logging.Errorf("Error adding pending request to cache: %v", err)
+			}
+		}
+		return nil, false
+	}
+
 	// Extract the model and query for cache lookup
 	requestModel, requestQuery, err := cache.ExtractQueryFromOpenAIRequest(ctx.OriginalRequestBody)
 	if err != nil {

@@ -169,11 +169,6 @@
   font-family: var(--font-mono);
   font-size: 0.75rem;
   color: var(--color-text-secondary);
-  cursor: help;
-}
-
-.requestId span:hover {
-  color: var(--color-primary);
 }
 
 .decision {

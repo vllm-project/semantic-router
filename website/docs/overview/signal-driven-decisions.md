@@ -148,23 +148,34 @@ signals:
 - **Example 1**: "Hola, ¿cómo estás?" → Spanish (es) → Spanish model
 - **Example 2**: "你好，世界" → Chinese (zh) → Chinese model
 
-### 8. Latency Signals - TPOT-based Routing
+### 8. Latency Signals - Percentile-based Routing
 
-**What**: Model latency evaluation using TPOT (Time Per Output Token)
-**Latency**: Less than 1ms (cache lookup)
-**Use Case**: Route latency-sensitive queries to faster models
+**What**: Model latency evaluation using TPOT (Time Per Output Token) and TTFT (Time To First Token) percentiles
+**Latency**: Typically 2-5ms for 10 models (runs asynchronously) - percentile calculation with O(n log n) complexity where n = observations per model (typically 10-100, max 1000)
+**Use Case**: Route latency-sensitive queries to faster models based on adaptive percentile thresholds
 
 ```yaml
 signals:
   latency:
-    - name: "low_latency"
-      max_tpot: 0.05  # 50ms per token
-      description: "For real-time chat applications"
+    - name: "low_latency_comprehensive"
+      tpot_percentile: 10  # 10th percentile for TPOT (top 10% fastest token generation)
+      ttft_percentile: 10  # 10th percentile for TTFT (top 10% fastest first token)
+      description: "For real-time applications - fast start and fast generation"
+    - name: "balanced_latency"
+      tpot_percentile: 50  # Median TPOT
+      ttft_percentile: 10  # Top 10% TTFT (prioritize fast start)
+      description: "Prioritize fast start, accept moderate generation speed"
 ```
 
-**Example**: Real-time chat query → low_latency signal → Route to fast model (TPOT < 50ms/token)
+**Example**: Real-time chat query → low_latency_comprehensive signal → Route to model meeting both TPOT and TTFT percentile thresholds
 
-**How it works**: TPOT is automatically tracked from each response. The latency classifier evaluates if available models meet the TPOT threshold before routing.
+**How it works**:
+
+- TPOT and TTFT are automatically tracked from each response
+- Percentile-based thresholds adapt to each model's actual performance distribution
+- Works with any number of observations: uses average for 1-2 observations, percentile calculation for 3+
+- When both TPOT and TTFT percentiles are set, model must meet BOTH thresholds (AND logic)
+- **Recommendation**: Use both TPOT and TTFT percentiles for comprehensive latency evaluation
 
 ### 9. Context Signals
 

@@ -172,7 +172,7 @@ looper:
   enabled: true  # Enable looper for multi-model decisions
   # Endpoint points to Envoy (same container), which handles load balancing and auth
   # Port should match listener port (default: 8888)
-  endpoint: "http://localhost:8888/v1/chat/completions"
+  endpoint: "http://localhost:8899/v1/chat/completions"
   timeout_seconds: 120  # Timeout in seconds for each model call
   headers: {}  # Optional headers (e.g., {"Authorization": "Bearer xxx"})
 
