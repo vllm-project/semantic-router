@@ -15,6 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOY_OBSERVABILITY=true
 USE_SIMULATOR=false
 USE_KSERVE=false
+USE_CLASSIFIER_GPU=false
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -31,17 +32,23 @@ while [[ $# -gt 0 ]]; do
             USE_KSERVE=true
             shift
             ;;
+        --classifier-gpu)
+            USE_CLASSIFIER_GPU=true
+            shift
+            ;;
         --help|-h)
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
             echo "  --simulator           Use mock-vllm simulator instead of llm-katan (no GPU required)"
             echo "  --kserve              Deploy semantic-router with a KServe backend (use --simulator for KServe sim)"
+            echo "  --classifier-gpu      Run semantic router classifier on GPU"
             echo "  --no-observability    Skip deploying dashboard, OpenWebUI, Grafana, and Prometheus"
             echo "  --help, -h            Show this help message"
             echo ""
             echo "By default, deploys the full stack with llm-katan (requires GPU)."
             echo "Use --simulator for CPU-only clusters without GPUs."
+            echo "Use --classifier-gpu with --simulator to run classifier on GPU but vLLM models on CPU."
             exit 0
             ;;
         *)
@@ -77,8 +84,17 @@ fi
 
 success "Logged in as $(oc whoami)"
 
+
+if [[ "$USE_CLASSIFIER_GPU" == "true" ]]; then
+    if ! command -v yq >/dev/null 2>&1; then
+        error "yq is required for --classifier-gpu. Install mikefarah/yq and retry."
+        exit 1
+    fi
+fi
+
 # GPU mode (--kserve without --simulator) requires GPU resources
 # Simulator mode (--kserve --simulator) works without GPU
+# --classifier-gpu requires GPU resources (can be used with or without --simulator)
 
 # Create namespace
 log "Creating namespace: $NAMESPACE"
@@ -197,10 +213,34 @@ if [[ "$USE_KSERVE" == "true" ]]; then
         KSERVE_ARGS=(-n "$NAMESPACE" --inferenceservice qwen-0-6b --model "Qwen/Qwen3-0.6B")
     fi
 
+    if [[ "$USE_CLASSIFIER_GPU" == "true" ]]; then
+        GPU_NODES=$(oc get nodes -o jsonpath='{.items[*].status.allocatable.nvidia\.com/gpu}' 2>/dev/null | tr ' ' '\n' | grep -v '^$' | grep -v '<none>' -c)
+        if [[ "$GPU_NODES" -eq 0 ]]; then
+            warn "No GPU resources detected. Install GPU operator first:"
+            warn "  ./deploy/kserve/install-gpu-operator.sh"
+            error "GPU required for --classifier-gpu deployment"
+            exit 1
+        fi
+        log "Found $GPU_NODES node(s) with GPU resources for semantic router classifier"
+        KSERVE_ARGS+=(--classifier-gpu)
+    fi
+
     log "KServe mode: Deploying semantic-router with KServe backend..."
     "$KSERVE_SCRIPT" "${KSERVE_ARGS[@]}"
     success "KServe deployment complete"
     exit 0
+fi
+
+# Check for GPU resources when --classifier-gpu is used
+if [[ "$USE_CLASSIFIER_GPU" == "true" ]]; then
+    GPU_NODES=$(oc get nodes -o jsonpath='{.items[*].status.allocatable.nvidia\.com/gpu}' 2>/dev/null | tr ' ' '\n' | grep -v '^$' | grep -v '<none>' -c)
+    if [[ "$GPU_NODES" -eq 0 ]]; then
+        warn "No GPU resources detected. Install GPU operator first:"
+        warn "  ./deploy/kserve/install-gpu-operator.sh"
+        error "GPU required for --classifier-gpu deployment"
+        exit 1
+    fi
+    log "Found $GPU_NODES node(s) with GPU resources for semantic router classifier"
 fi
 
 # Build model backend image based on mode
@@ -342,6 +382,32 @@ else
     oc apply -f "$SCRIPT_DIR/deployment.yaml" -n "$NAMESPACE"
 fi
 
+if [[ "$USE_CLASSIFIER_GPU" == "true" ]]; then
+    oc patch deployment/semantic-router -n "$NAMESPACE" --type='merge' -p '{
+      "spec": {
+        "template": {
+          "spec": {
+            "nodeSelector": {"nvidia.com/gpu.present": "true"},
+            "tolerations": [{"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}],
+            "containers": [{
+              "name": "semantic-router",
+              "env": [
+                {"name": "NVIDIA_VISIBLE_DEVICES", "value": "all"},
+                {"name": "NVIDIA_DRIVER_CAPABILITIES", "value": "compute,utility"},
+                {"name": "CUDA_VISIBLE_DEVICES", "value": "0"}
+              ],
+              "resources": {
+                "requests": {"nvidia.com/gpu": 1},
+                "limits": {"nvidia.com/gpu": 1}
+              }
+            }]
+          }
+        }
+      }
+    }' >/dev/null
+    log "Patched semantic-router deployment for GPU classifier"
+fi
+
 # Wait for services to be created and get ClusterIPs
 log "Waiting for vLLM services to get ClusterIPs..."
 for i in {1..30}; do
@@ -364,9 +430,20 @@ done
 # Generate dynamic config with actual ClusterIPs
 log "Generating dynamic configuration with ClusterIPs..."
 TEMP_CONFIG="/tmp/config-openshift-dynamic.yaml"
+
 sed -e "s/DYNAMIC_MODEL_A_IP/$MODEL_A_IP/g" \
     -e "s/DYNAMIC_MODEL_B_IP/$MODEL_B_IP/g" \
     "$SCRIPT_DIR/config-openshift.yaml" > "$TEMP_CONFIG"
+
+if [[ "$USE_CLASSIFIER_GPU" == "true" ]]; then
+    yq eval \
+      '.bert_model.use_cpu = false |
+       .prompt_guard.use_cpu = false |
+       .classifier.category_model.use_cpu = false |
+       .classifier.pii_model.use_cpu = false' \
+      -i "$TEMP_CONFIG"
+    log "Patched config for GPU classifier (use_cpu=false)"
+fi
 
 # Verify the IPs were substituted
 if ! grep -q "$MODEL_A_IP" "$TEMP_CONFIG" || ! grep -q "$MODEL_B_IP" "$TEMP_CONFIG"; then
@@ -586,7 +663,13 @@ else
     log "Skipping observability components (--no-observability flag provided)"
 fi
 
-success "Deployment initiated! Check status with the following commands:"
+if [[ "$USE_CLASSIFIER_GPU" == "true" ]]; then
+    success "GPU-enabled classifier deployment initiated! Semantic router classifier will run on GPU."
+else
+    success "Deployment initiated!"
+fi
+echo ""
+echo "Check status with the following commands:"
 echo ""
 echo "  # View all pods"
 echo "  oc get pods -n $NAMESPACE"
