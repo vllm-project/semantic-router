@@ -129,24 +129,9 @@ func (d *FeedbackDetector) Initialize() error {
 		return fmt.Errorf("feedback detector requires ModelID to be configured")
 	}
 
-	// Load mapping from model's config.json
+	// Load mapping from model's config.json (required - no hardcoded fallback)
 	if err := d.loadMappingFromConfig(d.config.ModelID); err != nil {
-		logging.Warnf("Failed to load mapping from config.json, using defaults: %v", err)
-		// Fallback to default mapping
-		d.mapping = &FeedbackMapping{
-			LabelToIdx: map[string]int{
-				FeedbackLabelSatisfied:         0,
-				FeedbackLabelNeedClarification: 1,
-				FeedbackLabelWrongAnswer:       2,
-				FeedbackLabelWantDifferent:     3,
-			},
-			IdxToLabel: map[string]string{
-				"0": FeedbackLabelSatisfied,
-				"1": FeedbackLabelNeedClarification,
-				"2": FeedbackLabelWrongAnswer,
-				"3": FeedbackLabelWantDifferent,
-			},
-		}
+		return fmt.Errorf("failed to load id2label mapping from %s/config.json: %w", d.config.ModelID, err)
 	}
 
 	logging.Infof("💬 Initializing Feedback Detector:")
