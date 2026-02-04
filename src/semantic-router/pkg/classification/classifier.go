@@ -909,11 +909,9 @@ type SignalResults struct {
 // analyzeRuleCombination recursively analyzes rule combinations to find used signals
 func (c *Classifier) analyzeRuleCombination(rules config.RuleCombination, usedSignals map[string]bool) {
 	for _, condition := range rules.Conditions {
-		// Normalize condition type and name (trim whitespace, lowercase type)
-		// All signal types are normalized to lowercase for consistency with constants
-		// and decision engine switch statements (which all use lowercase)
+		// Normalize condition type and name (trim whitespace, lowercase) for consistent matching
 		t := strings.ToLower(strings.TrimSpace(condition.Type))
-		n := strings.TrimSpace(condition.Name)
+		n := strings.ToLower(strings.TrimSpace(condition.Name))
 		signalKey := t + ":" + n
 		usedSignals[signalKey] = true
 	}

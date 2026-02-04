@@ -163,7 +163,7 @@ interface ConfigData {
     user_feedbacks?: Array<{ name: string; description: string }>
     preferences?: Array<{ name: string; description: string }>
     language?: Array<{ name: string }>
-    latency?: Array<{ name: string; max_tpot?: number; description?: string }>
+    latency?: Array<{ name: string; tpot_percentile?: number; ttft_percentile?: number; description?: string }>
     context?: Array<{ name: string; min_tokens: string; max_tokens: string; description?: string }>
     complexity?: Array<{
       name: string
@@ -272,7 +272,8 @@ interface AddSignalFormState {
   candidates: string
   aggregation_method: string
   mmlu_categories: string
-  max_tpot?: number
+  tpot_percentile?: number
+  ttft_percentile?: number
   min_tokens?: string
   max_tokens?: string
   complexity_threshold?: number
@@ -2235,10 +2236,17 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
     // Latency
     signals?.latency?.forEach(lat => {
+      const parts: string[] = []
+      if (lat.tpot_percentile) {
+        parts.push(`TPOT: ${lat.tpot_percentile}th percentile`)
+      }
+      if (lat.ttft_percentile) {
+        parts.push(`TTFT: ${lat.ttft_percentile}th percentile`)
+      }
       allSignals.push({
         name: lat.name,
         type: 'Latency',
-        summary: `Max TPOT: ${lat.max_tpot}s`,
+        summary: parts.length > 0 ? parts.join(', ') : 'Latency signal',
         rawData: lat
       })
     })
@@ -2428,7 +2436,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         sections.push({
           title: 'Latency Signal',
           fields: [
-            { label: 'Max TPOT', value: signal.rawData.max_tpot ? `${signal.rawData.max_tpot}s (${(signal.rawData.max_tpot * 1000).toFixed(0)}ms per token)` : 'N/A', fullWidth: true },
+            { label: 'TPOT Percentile', value: signal.rawData.tpot_percentile ? `${signal.rawData.tpot_percentile}th percentile` : 'N/A', fullWidth: true },
+            { label: 'TTFT Percentile', value: signal.rawData.ttft_percentile ? `${signal.rawData.ttft_percentile}th percentile` : 'N/A', fullWidth: true },
             { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
           ]
         })
@@ -2532,7 +2541,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         candidates: '',
         aggregation_method: 'mean',
         mmlu_categories: '',
-        max_tpot: 0.05,
+        tpot_percentile: undefined,
+        ttft_percentile: undefined,
         min_tokens: '0',
         max_tokens: '8K',
         complexity_threshold: 0.1,
@@ -2553,7 +2563,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         candidates: (signal.rawData.candidates || []).join('\n'),
         aggregation_method: signal.rawData.aggregation_method || 'mean',
         mmlu_categories: (signal.rawData.mmlu_categories || []).join('\n'),
-        max_tpot: signal.rawData.max_tpot ?? 0.05,
+        tpot_percentile: signal.rawData.tpot_percentile,
+        ttft_percentile: signal.rawData.ttft_percentile,
         min_tokens: signal.rawData.min_tokens || '0',
         max_tokens: signal.rawData.max_tokens || '8K',
         complexity_threshold: signal.rawData.threshold ?? 0.1,
@@ -2631,13 +2642,25 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
       const latencyFields: FieldConfig[] = [
         {
-          name: 'max_tpot',
-          label: 'Max TPOT (latency only)',
+          name: 'tpot_percentile',
+          label: 'TPOT Percentile (latency only)',
           type: 'number',
-          min: 0,
-          step: 0.001,
-          placeholder: '0.05',
-          description: 'Maximum Time Per Output Token in seconds (e.g., 0.05 = 50ms per token)',
+          min: 1,
+          max: 100,
+          step: 1,
+          placeholder: '10',
+          description: 'TPOT (Time Per Output Token) percentile bucket (1-100). Example: 10 = 10th percentile (top 10% fastest TPOT). Works with any number of observations, adapts to model performance. ⚠️ RECOMMENDED: Use both TPOT and TTFT for comprehensive latency evaluation.',
+          shouldHide: conditionallyHideFieldExceptType('Latency')
+        },
+        {
+          name: 'ttft_percentile',
+          label: 'TTFT Percentile (latency only)',
+          type: 'number',
+          min: 1,
+          max: 100,
+          step: 1,
+          placeholder: '10',
+          description: 'TTFT (Time To First Token) percentile bucket (1-100). Example: 10 = 10th percentile (top 10% fastest TTFT). Works with any number of observations, adapts to model performance. ⚠️ RECOMMENDED: Use both TPOT and TTFT for comprehensive latency evaluation. At least one of TPOT or TTFT percentile must be set.',
           shouldHide: conditionallyHideFieldExceptType('Latency')
         }
       ]
@@ -2849,17 +2872,36 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             break
           }
           case 'Latency': {
-            const max_tpot = formData.max_tpot ?? 0.05
-            if (max_tpot <= 0) {
-              throw new Error('Max TPOT must be greater than 0.')
+            const tpot_percentile = formData.tpot_percentile
+            const ttft_percentile = formData.ttft_percentile
+
+            // Validate: at least one of tpot_percentile or ttft_percentile must be set
+            if ((tpot_percentile === undefined || tpot_percentile <= 0) && (ttft_percentile === undefined || ttft_percentile <= 0)) {
+              throw new Error('Either TPOT Percentile or TTFT Percentile must be set for latency signals (or both)')
             }
+            if (tpot_percentile !== undefined && (tpot_percentile < 1 || tpot_percentile > 100)) {
+              throw new Error('TPOT Percentile must be between 1 and 100')
+            }
+            if (ttft_percentile !== undefined && (ttft_percentile < 1 || ttft_percentile > 100)) {
+              throw new Error('TTFT Percentile must be between 1 and 100')
+            }
+
+            const latencySignal: { name: string; description?: string; tpot_percentile?: number; ttft_percentile?: number } = {
+              name,
+            }
+            if (formData.description) {
+              latencySignal.description = formData.description
+            }
+            if (tpot_percentile !== undefined && tpot_percentile > 0) {
+              latencySignal.tpot_percentile = tpot_percentile
+            }
+            if (ttft_percentile !== undefined && ttft_percentile > 0) {
+              latencySignal.ttft_percentile = ttft_percentile
+            }
+
             newConfig.signals.latency = [
               ...(newConfig.signals.latency || []),
-              {
-                name,
-                max_tpot,
-                description: formData.description || undefined
-              }
+              latencySignal
             ]
             break
           }

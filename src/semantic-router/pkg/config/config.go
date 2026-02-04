@@ -2032,10 +2032,20 @@ type LatencyRule struct {
 	// Name is the latency rule name that can be referenced in decision rules
 	Name string `yaml:"name"`
 
-	// MaxTPOT is the maximum acceptable TPOT (Time Per Output Token) in seconds
-	// Models with TPOT <= MaxTPOT will match this rule
-	// Example: 0.05 means 50ms per token
-	MaxTPOT float64 `yaml:"max_tpot"`
+	// TPOTPercentile is the percentile bucket to use for TPOT (Time Per Output Token) evaluation (1-100)
+	// Models with current TPOT <= the calculated TPOT percentile threshold will match this rule
+	// Example: 10 means 10th percentile (top 10% fastest TPOT)
+	// Example: 50 means median (top 50% fastest TPOT)
+	// Works with any number of observations (1+), adapts to model's actual performance
+	TPOTPercentile int `yaml:"tpot_percentile,omitempty"`
+
+	// TTFTPercentile is the percentile bucket to use for TTFT (Time To First Token) evaluation (1-100)
+	// Models with current TTFT <= the calculated TTFT percentile threshold will match this rule
+	// Example: 10 means 10th percentile (top 10% fastest TTFT)
+	// Example: 50 means median (top 50% fastest TTFT)
+	// Works with any number of observations (1+), adapts to model's actual performance
+	// At least one of TPOTPercentile or TTFTPercentile must be set
+	TTFTPercentile int `yaml:"ttft_percentile,omitempty"`
 
 	// Description provides human-readable explanation of the latency requirement
 	Description string `yaml:"description,omitempty"`
