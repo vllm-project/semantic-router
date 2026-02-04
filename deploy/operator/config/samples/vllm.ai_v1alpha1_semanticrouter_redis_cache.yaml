@@ -40,7 +40,7 @@ spec:
     # Embedding models configuration
     # Using Qwen3 for high-quality embeddings with 32K context support
     embedding_models:
-      qwen3_model_path: "models/qwen3-embedding"
+      qwen3_model_path: "models/mom-embedding-pro"
       use_cpu: true
 
     # Legacy BERT model configuration (can be removed if using embedding_models)

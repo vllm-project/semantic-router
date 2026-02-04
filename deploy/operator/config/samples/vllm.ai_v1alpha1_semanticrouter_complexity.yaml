@@ -49,7 +49,7 @@ spec:
   config:
     # Embedding models for classification
     embedding_models:
-      qwen3_model_path: "models/qwen3-embedding"
+      qwen3_model_path: "models/mom-embedding-pro"
       use_cpu: true
 
       hnsw_config:

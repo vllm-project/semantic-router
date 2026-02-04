@@ -818,13 +818,20 @@ jobs:
             complexity)
               CACHE_CONFIG='
               embedding_models:
-                qwen3_model_path: "models/qwen3-embedding"
+                qwen3_model_path: "models/mom-embedding-pro"
                 use_cpu: true
+                hnsw_config:
+                  model_type: "qwen3"
+                  preload_embeddings: true
+                  enable_soft_matching: true
+                  min_score_threshold: "0.5"
               semantic_cache:
                 enabled: true
                 backend_type: "memory"
                 embedding_model: "qwen3"
-                max_entries: 100
+                max_entries: 5000
+                similarity_threshold: "0.85"
+                ttl_seconds: 7200
               complexity_rules:
                 - name: "code-complexity"
                   description: "Classify coding tasks by complexity"
