@@ -98,6 +98,8 @@ var endpointRegistry = []EndpointMetadata{
 	{Path: "/api/v1/classify/intent", Method: "POST", Description: "Classify user queries into routing categories"},
 	{Path: "/api/v1/classify/pii", Method: "POST", Description: "Detect personally identifiable information in text"},
 	{Path: "/api/v1/classify/security", Method: "POST", Description: "Detect jailbreak attempts and security threats"},
+	{Path: "/api/v1/classify/fact-check", Method: "POST", Description: "Classify if text needs fact-checking"},
+	{Path: "/api/v1/classify/user-feedback", Method: "POST", Description: "Classify user feedback type (satisfied, need_clarification, wrong_answer, want_different)"},
 	{Path: "/api/v1/classify/combined", Method: "POST", Description: "Perform combined classification (intent, PII, and security)"},
 	{Path: "/api/v1/classify/batch", Method: "POST", Description: "Batch classification with configurable task_type parameter"},
 	{Path: "/info/models", Method: "GET", Description: "Get information about loaded models"},

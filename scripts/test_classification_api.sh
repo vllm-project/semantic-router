@@ -787,6 +787,137 @@ echo "**Multilingual User Feedback Accuracy: $ml_feedback_correct/$ml_feedback_t
 echo ""
 
 # ============================================================================
+# FACT CHECK CLASSIFIER (Direct API)
+# ============================================================================
+echo "## 5. Fact Check Classifier (Direct API)"
+echo ""
+echo "| Query | Expected | Needs Fact Check | Label | Confidence | Result |"
+echo "|-------|----------|------------------|-------|------------|--------|"
+
+declare -a fact_check_tests=(
+    # Needs fact check (factual queries)
+    "What is the capital of France?|true"
+    "How many planets are in our solar system?|true"
+    "When did World War II end?|true"
+    "Who invented the telephone?|true"
+    "What is the speed of light?|true"
+    "What is the population of China?|true"
+    "Who wrote Romeo and Juliet?|true"
+    "What year did the Titanic sink?|true"
+    # No fact check needed (creative/subjective)
+    "Write a poem about nature|false"
+    "Tell me a story about a dragon|false"
+    "What do you think about modern art?|false"
+    "Create a Python function to sort a list|false"
+    "Write a SQL query to join two tables|false"
+    "Give me cooking tips|false"
+    "How can I improve my writing?|false"
+    "What's the best way to learn programming?|false"
+)
+
+fc_correct=0
+fc_total=0
+for test in "${fact_check_tests[@]}"; do
+    IFS='|' read -r query expected <<< "$test"
+    resp=$(curl -s -X POST "$ROUTER_URL/api/v1/classify/fact-check" \
+        -H "Content-Type: application/json" \
+        -d "{\"text\": \"$query\"}" 2>/dev/null)
+    
+    if [[ -z "$resp" ]] || echo "$resp" | grep -q '"error"'; then
+        echo "| ${query:0:40} | $expected | ERROR | - | - | ❌ |"
+        fc_total=$((fc_total + 1))
+        continue
+    fi
+    
+    needs_fact_check=$(echo "$resp" | jq -r 'if .needs_fact_check == true then "true" elif .needs_fact_check == false then "false" else "null" end')
+    label=$(echo "$resp" | jq -r '.label // "unknown"')
+    confidence=$(echo "$resp" | jq -r '.confidence // 0')
+    conf_pct=$(awk "BEGIN {printf \"%.1f%%\", $confidence * 100}")
+    
+    if [[ "$needs_fact_check" == "$expected" ]]; then
+        fc_correct=$((fc_correct + 1))
+        mark="✅"
+    else
+        mark="❌"
+    fi
+    fc_total=$((fc_total + 1))
+    echo "| ${query:0:40} | $expected | $needs_fact_check | ${label:0:20} | $conf_pct | $mark |"
+done
+
+echo ""
+fc_pct=$(awk "BEGIN {printf \"%.0f\", $fc_correct/$fc_total*100}")
+echo "**Fact Check Classifier Accuracy: $fc_correct/$fc_total ($fc_pct%)**"
+echo ""
+
+# ============================================================================
+# USER FEEDBACK CLASSIFIER (Direct API)
+# ============================================================================
+echo "## 6. User Feedback Classifier (Direct API)"
+echo ""
+echo "| Query | Expected | Feedback Type | Confidence | Result |"
+echo "|-------|----------|---------------|------------|--------|"
+
+declare -a user_feedback_tests=(
+    # Satisfied
+    "Thank you, that was very helpful!|satisfied"
+    "Perfect, that answers my question|satisfied"
+    "Great explanation, thanks!|satisfied"
+    "Excellent answer, I understand now|satisfied"
+    "That's exactly what I needed|satisfied"
+    # Need clarification
+    "I don't understand your explanation|need_clarification"
+    "Can you explain that in simpler terms?|need_clarification"
+    "What do you mean by that?|need_clarification"
+    "I'm confused, can you clarify?|need_clarification"
+    "Could you elaborate on that?|need_clarification"
+    # Wrong answer
+    "That's incorrect, the answer should be different|wrong_answer"
+    "Your previous response was wrong|wrong_answer"
+    "That's not right, please try again|wrong_answer"
+    "This answer is inaccurate|wrong_answer"
+    "You made a mistake in your response|wrong_answer"
+    # Want different
+    "Can you give me another answer?|want_different"
+    "I'd like a different approach|want_different"
+    "Show me an alternative solution|want_different"
+    "Can you try a different method?|want_different"
+    "Give me a different perspective|want_different"
+)
+
+uf_correct=0
+uf_total=0
+for test in "${user_feedback_tests[@]}"; do
+    IFS='|' read -r query expected <<< "$test"
+    resp=$(curl -s -X POST "$ROUTER_URL/api/v1/classify/user-feedback" \
+        -H "Content-Type: application/json" \
+        -d "{\"text\": \"$query\"}" 2>/dev/null)
+    
+    if [[ -z "$resp" ]] || echo "$resp" | grep -q '"error"'; then
+        echo "| ${query:0:40} | $expected | ERROR | - | ❌ |"
+        uf_total=$((uf_total + 1))
+        continue
+    fi
+    
+    feedback_type=$(echo "$resp" | jq -r '.feedback_type // "unknown"')
+    confidence=$(echo "$resp" | jq -r '.confidence // 0')
+    conf_pct=$(awk "BEGIN {printf \"%.1f%%\", $confidence * 100}")
+    
+    if [[ "$feedback_type" == "$expected" ]]; then
+        uf_correct=$((uf_correct + 1))
+        mark="✅"
+    else
+        mark="❌"
+    fi
+    uf_total=$((uf_total + 1))
+    echo "| ${query:0:40} | $expected | $feedback_type | $conf_pct | $mark |"
+done
+
+echo ""
+uf_pct=$(awk "BEGIN {printf \"%.0f\", $uf_correct/$uf_total*100}")
+echo "**User Feedback Classifier Accuracy: $uf_correct/$uf_total ($uf_pct%)**"
+echo ""
+
+# ============================================================================
 # SUMMARY
 # ============================================================================
 echo "## Summary"
@@ -818,9 +949,29 @@ else
     pii_status="❌ Limited"
 fi
 
+# Fact Check status
+if [[ $fc_pct -ge 70 ]]; then
+    fc_status="✅ Good"
+elif [[ $fc_pct -ge 50 ]]; then
+    fc_status="⚠️ Partial"
+else
+    fc_status="❌ Limited"
+fi
+
+# User Feedback status
+if [[ $uf_pct -ge 70 ]]; then
+    uf_status="✅ Good"
+elif [[ $uf_pct -ge 50 ]]; then
+    uf_status="⚠️ Partial"
+else
+    uf_status="❌ Limited"
+fi
+
 echo "| Signal Extraction | $intent_correct/$intent_total ($intent_pct%) | $intent_status |"
 echo "| Jailbreak | $jb_correct/$jb_total ($jb_pct%) | $jb_status |"
 echo "| PII | $pii_detected/$pii_total detected | $pii_status |"
+echo "| Fact Check (Direct API) | $fc_correct/$fc_total ($fc_pct%) | $fc_status |"
+echo "| User Feedback (Direct API) | $uf_correct/$uf_total ($uf_pct%) | $uf_status |"
 
 # Multilingual status
 if [[ $ml_intent_pct -ge 70 ]]; then
