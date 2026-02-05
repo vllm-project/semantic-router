@@ -134,6 +134,7 @@ The documentation includes:
 
 - **[Installation Guide](https://vllm-semantic-router.com/docs/installation/)** - Complete setup instructions
 - **[System Architecture](https://vllm-semantic-router.com/docs/intro/#architecture-overview)** - Technical deep dive
+- **[Adapter Configuration](docs/ADAPTER_CONFIGURATION.md)** - Multi-protocol adapter setup (Envoy ExtProc, HTTP REST)
 - **[Model Training](https://vllm-semantic-router.com/docs/training/training-overview/)** - How classification models work
 - **[API Reference](https://vllm-semantic-router.com/docs/api/router/)** - Complete API documentation
 

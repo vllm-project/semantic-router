@@ -14,15 +14,16 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/adapter"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiserver"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/logo"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/router/engine"
 )
 
 func main() {
@@ -32,18 +33,20 @@ func main() {
 	// Parse command-line flags
 	var (
 		configPath            = flag.String("config", "config/config.yaml", "Path to the configuration file")
-		port                  = flag.Int("port", 50051, "Port to listen on for gRPC ExtProc")
 		apiPort               = flag.Int("api-port", 8080, "Port to listen on for Classification API")
 		metricsPort           = flag.Int("metrics-port", 9190, "Port for Prometheus metrics")
 		enableAPI             = flag.Bool("enable-api", true, "Enable Classification API server")
 		enableSystemPromptAPI = flag.Bool("enable-system-prompt-api", false, "Enable system prompt configuration endpoints (SECURITY: only enable in trusted environments)")
-		secure                = flag.Bool("secure", false, "Enable secure gRPC server with TLS")
-		certPath              = flag.String("cert-path", "", "Path to TLS certificate directory (containing tls.crt and tls.key)")
 		kubeconfig            = flag.String("kubeconfig", "", "Path to kubeconfig file (optional, uses in-cluster config if not specified)")
 		namespace             = flag.String("namespace", "default", "Kubernetes namespace to watch for CRDs")
 		downloadOnly          = flag.Bool("download-only", false, "Download required models and exit (useful for CI/testing)")
+		secure                = flag.Bool("secure", false, "Enable secure mode with TLS (deprecated, configure TLS per-adapter in config.yaml instead)")
 	)
 	flag.Parse()
+
+	if *secure {
+		logging.Warnf("Secure mode enabled via command-line flag, but TLS should be configured per-adapter in config.yaml for better security and flexibility")
+	}
 
 	// Initialize logging (zap) from environment.
 	if _, err := logging.InitLoggerFromEnv(); err != nil {
@@ -288,28 +291,68 @@ func main() {
 		}
 	}
 
-	// Create and start the ExtProc server
-	server, err := extproc.NewServer(*configPath, *port, *secure, *certPath)
-	if err != nil {
-		logging.Fatalf("Failed to create ExtProc server: %v", err)
+	// Initialize BERT model if semantic cache is configured to use it
+	// This is required because Redis/Milvus caches call candle_binding.GetEmbedding() for "bert" embeddings
+	// which requires the BERT model to be initialized via InitModel()
+	if cfg.SemanticCache.Enabled {
+		embeddingModel := strings.ToLower(strings.TrimSpace(cfg.SemanticCache.EmbeddingModel))
+		// Auto-detect embedding model if not explicitly set (matches router.go logic)
+		if embeddingModel == "" {
+			if cfg.EmbeddingModels.MmBertModelPath != "" {
+				embeddingModel = "mmbert"
+			} else if cfg.Qwen3ModelPath != "" {
+				embeddingModel = "qwen3"
+			} else if cfg.GemmaModelPath != "" {
+				embeddingModel = "gemma"
+			} else {
+				embeddingModel = "bert"
+			}
+		}
+
+		if embeddingModel == "bert" {
+			bertModelID := cfg.BertModel.ModelID
+			if bertModelID == "" {
+				bertModelID = "sentence-transformers/all-MiniLM-L6-v2" // Default BERT model
+			}
+			bertModelID = config.ResolveModelPath(bertModelID)
+
+			logging.Infof("Semantic cache uses BERT embeddings, initializing BERT model: %s", bertModelID)
+			if initErr := candle_binding.InitModel(bertModelID, cfg.BertModel.UseCPU); initErr != nil {
+				logging.Fatalf("Failed to initialize BERT model for semantic cache: %v", initErr)
+			}
+			logging.Infof("BERT model initialized successfully for semantic cache")
+		}
 	}
 
-	logging.Infof("Starting vLLM Semantic Router ExtProc with config: %s", *configPath)
+	// Create router engine
+	eng, err := engine.NewRouterEngine(*configPath)
+	if err != nil {
+		logging.Fatalf("Failed to create router engine: %v", err)
+	}
+
+	logging.Infof("Starting vLLM Semantic Router with config: %s", *configPath)
 
 	// Load tools database after server initialization
 	// Note: Tools database requires embedding models to be initialized first
 	// If embedding models failed to initialize, tools will not be loaded
-	router := server.GetRouter()
-	if router != nil {
-		// Only load tools if embedding models were successfully initialized
-		if embeddingModelsInitialized {
-			logging.Infof("Loading tools database (embedding models are ready)...")
-			if err := router.LoadToolsDatabase(); err != nil {
-				logging.Warnf("Failed to load tools database: %v", err)
-			}
-		} else {
-			logging.Infof("Skipping tools database loading (embedding models not initialized)")
+	if embeddingModelsInitialized && cfg.Tools.Enabled {
+		logging.Infof("Loading tools database (embedding models are ready)...")
+		if err := eng.LoadToolsDatabase(cfg.Tools.ToolsDBPath); err != nil {
+			logging.Warnf("Failed to load tools database: %v", err)
 		}
+	} else if !embeddingModelsInitialized {
+		logging.Infof("Skipping tools database loading (embedding models not initialized)")
+	}
+
+	// Create and configure protocol adapters based on configuration
+	adapterMgr := adapter.NewManager()
+	if err := adapterMgr.CreateAdapters(cfg, eng, *configPath); err != nil {
+		logging.Fatalf("Failed to create adapters: %v", err)
+	}
+
+	// Start all adapters in separate goroutines
+	if err := adapterMgr.StartAll(); err != nil {
+		logging.Fatalf("Failed to start adapters: %v", err)
 	}
 
 	// Start API server if enabled
@@ -330,9 +373,8 @@ func main() {
 		logging.Infof("ConfigSource is file (or not specified), using file-based configuration")
 	}
 
-	if err := server.Start(); err != nil {
-		logging.Fatalf("ExtProc server error: %v", err)
-	}
+	// Wait for adapters to complete (blocks until shutdown)
+	adapterMgr.Wait()
 }
 
 // ensureModelsDownloaded checks and downloads required models
