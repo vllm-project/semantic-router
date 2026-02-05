@@ -30,16 +30,20 @@ fn main() -> Result<()> {
     // Step 1: Download Extended32K base model
     println!("\n1️⃣  Downloading Extended32K base model...");
     let base_model_id = "llm-semantic-router/modernbert-base-32k";
-    let repo = Repo::with_revision(base_model_id.to_string(), RepoType::Model, "main".to_string());
+    let repo = Repo::with_revision(
+        base_model_id.to_string(),
+        RepoType::Model,
+        "main".to_string(),
+    );
     let api = Api::new()?;
     let api = api.repo(repo);
 
-    let base_config_path = api.get("config.json").map_err(|e| {
-        anyhow!("Failed to download config.json: {}", e)
-    })?;
-    let base_tokenizer_path = api.get("tokenizer.json").map_err(|e| {
-        anyhow!("Failed to download tokenizer.json: {}", e)
-    })?;
+    let base_config_path = api
+        .get("config.json")
+        .map_err(|e| anyhow!("Failed to download config.json: {}", e))?;
+    let base_tokenizer_path = api
+        .get("tokenizer.json")
+        .map_err(|e| anyhow!("Failed to download tokenizer.json: {}", e))?;
     let base_weights_path = match api.get("model.safetensors") {
         Ok(path) => {
             println!("   ✓ Base model downloaded (safetensors)");
@@ -47,9 +51,8 @@ fn main() -> Result<()> {
         }
         Err(_) => {
             println!("   ⚠️  Safetensors not found, trying PyTorch format...");
-            api.get("pytorch_model.bin").map_err(|e| {
-                anyhow!("Failed to download model weights: {}", e)
-            })?
+            api.get("pytorch_model.bin")
+                .map_err(|e| anyhow!("Failed to download model weights: {}", e))?
         }
     };
 
@@ -73,8 +76,9 @@ fn main() -> Result<()> {
         "../models/pii_classifier_modernbert-base_model",
         "models/pii_classifier_modernbert-base_model",
     ];
-    
-    let pii_classifier_path = pii_classifier_paths.iter()
+
+    let pii_classifier_path = pii_classifier_paths
+        .iter()
         .find(|path| std::path::Path::new(path).exists())
         .copied()
         .ok_or_else(|| anyhow!("PII classifier not found"))?;
@@ -122,12 +126,9 @@ fn main() -> Result<()> {
 
     // Step 5: Load classifier weights
     println!("\n5️⃣  Loading classifier weights...");
-    let classifier = FixedModernBertClassifier::load_with_classes(
-        pii_vb.pp("classifier"),
-        &config,
-        num_classes,
-    )
-    .map_err(|e| anyhow!("Failed to load classifier weights: {}", e))?;
+    let classifier =
+        FixedModernBertClassifier::load_with_classes(pii_vb.pp("classifier"), &config, num_classes)
+            .map_err(|e| anyhow!("Failed to load classifier weights: {}", e))?;
     println!("   ✅ Classifier weights loaded successfully!");
 
     // Step 6: Load optional head (if exists in PII model)
@@ -143,22 +144,22 @@ fn main() -> Result<()> {
     // But we need to manually combine base model + classifier weights
     // For now, let's use a workaround: create a temporary model directory structure
     println!("\n7️⃣  Creating combined classifier with Extended32K base model...");
-    
+
     // We'll use the PII classifier path but need to ensure it uses Extended32K variant
     // Actually, let's manually construct the classifier using the pattern from load_from_directory_with_variant
     let variant = ModernBertVariant::Extended32K;
-    
+
     // Load tokenizer from base model
     let mut tokenizer = tokenizers::Tokenizer::from_file(&base_tokenizer_path)
         .map_err(|e| anyhow!("Failed to load tokenizer: {}", e))?;
-    
+
     // Configure padding
     if let Some(pad_token) = tokenizer.get_padding() {
         let mut padding_params = pad_token.clone();
         padding_params.strategy = tokenizers::PaddingStrategy::BatchLongest;
         tokenizer.with_padding(Some(padding_params));
     }
-    
+
     // Get effective max length from training_config.json
     let training_config_path = base_model_dir.join("training_config.json");
     let effective_max_length = if let Ok(tc_str) = std::fs::read_to_string(&training_config_path) {
@@ -190,11 +191,7 @@ fn main() -> Result<()> {
     };
 
     // Create unified tokenizer
-    let unified_tokenizer = UnifiedTokenizer::new(
-        tokenizer,
-        tokenizer_config,
-        device.clone(),
-    )?;
+    let unified_tokenizer = UnifiedTokenizer::new(tokenizer, tokenizer_config, device.clone())?;
     println!("   ✅ Tokenizer configured for 32K tokens!");
 
     // Step 8: Use load_from_directory_with_variant but we need to combine base model + classifier
@@ -202,7 +199,7 @@ fn main() -> Result<()> {
     // Actually, let's use the existing load_from_directory_with_variant but modify the approach
     // For now, let's test if we can load PII classifier and then manually replace base model
     // But that's complex. Let's use a simpler approach: test with Extended32K variant detection
-    
+
     println!("\n8️⃣  Creating combined Extended32K classifier...");
     println!("   ℹ️  Note: TraditionalModernBertClassifier fields are private");
     println!("   ℹ️  Using load_from_directory_with_variant with Extended32K variant");
@@ -211,19 +208,22 @@ fn main() -> Result<()> {
     println!("   💡 and use the existing PII classifier to verify inference works");
     println!("   💡 Full integration requires modifying load_from_directory_with_variant");
     println!("   💡 to support loading base model from one path and classifier from another");
-    
+
     // For now, let's just verify that the components can be loaded separately
     // and document that full integration needs code changes
     println!("\n   ✅ Components loaded successfully:");
     println!("      - Extended32K base model: ✅");
     println!("      - Classifier weights: ✅");
-    println!("      - Head layer: {}", if head.is_some() { "✅" } else { "None" });
+    println!(
+        "      - Head layer: {}",
+        if head.is_some() { "✅" } else { "None" }
+    );
     println!("      - Tokenizer (32K): ✅");
     println!("\n   ⚠️  Full integration requires code changes to support:");
     println!("      - Loading base model from Extended32K path");
     println!("      - Loading classifier weights from PII model path");
     println!("      - Combining them into TraditionalModernBertClassifier");
-    
+
     // For testing purposes, let's load the PII classifier normally
     // and document that we need to integrate Extended32K base model
     let pii_classifier = TraditionalModernBertClassifier::load_from_directory(
@@ -231,50 +231,58 @@ fn main() -> Result<()> {
         true, // use_cpu
     )
     .map_err(|e| anyhow!("Failed to load PII classifier: {}", e))?;
-    
+
     println!("\n   ✅ PII classifier loaded (Standard ModernBERT, 512 tokens)");
     println!("   ℹ️  This is for comparison - Extended32K integration needs code changes");
 
     // Step 10: Test inference on sample texts (including long texts)
     println!("\n9️⃣  Testing inference on sample texts...");
-    
+
     // Create test texts
     let short_text = "My email is john@example.com".to_string();
-    let medium_text = "Please contact me at john.doe@company.com or call 555-1234. My SSN is 123-45-6789.".to_string();
-    let long_text_no_pii = format!("{} This is a long text without PII. ", "Lorem ipsum dolor sit amet. ".repeat(50));
-    
+    let medium_text =
+        "Please contact me at john.doe@company.com or call 555-1234. My SSN is 123-45-6789."
+            .to_string();
+    let long_text_no_pii = format!(
+        "{} This is a long text without PII. ",
+        "Lorem ipsum dolor sit amet. ".repeat(50)
+    );
+
     // Create a realistic long text with PII (simulating a long document)
     let long_text_with_pii = format!(
         "{} Please contact John Doe at john.doe@company.com or call 555-1234. His SSN is 123-45-6789. {}",
         "This is a long document that contains multiple paragraphs. ".repeat(100),
         "For billing inquiries, contact billing@company.com. For support, call 1-800-555-0199."
     );
-    
+
     // Create a very long text with PII (testing 32K context)
     let very_long_text_with_pii = format!(
         "{} Please contact John Doe at john.doe@company.com or call 555-1234. His SSN is 123-45-6789. {}",
         "This is a very long document that contains many paragraphs and sections. ".repeat(500),
         "For billing inquiries, contact billing@company.com. For support, call 1-800-555-0199."
     );
-    
+
     let test_texts = vec![
         ("Short text", short_text.as_str()),
         ("Medium text", medium_text.as_str()),
         ("Long text (no PII)", long_text_no_pii.as_str()),
         ("Long text (with PII)", long_text_with_pii.as_str()),
-        ("Very long text (with PII)", very_long_text_with_pii.as_str()),
+        (
+            "Very long text (with PII)",
+            very_long_text_with_pii.as_str(),
+        ),
     ];
 
     for (name, text) in test_texts {
         println!("\n   Testing: {}", name);
         println!("   Text length: {} characters", text.len());
-        
+
         match pii_classifier.classify_text(text) {
             Ok((class_id, confidence)) => {
                 println!("   ✅ Classification successful!");
                 println!("      Class ID: {}", class_id);
                 println!("      Confidence: {:.4}", confidence);
-                
+
                 // Highlight if confidence is low
                 if confidence < 0.5 {
                     println!("      ⚠️  Low confidence - may need investigation");
@@ -287,7 +295,7 @@ fn main() -> Result<()> {
             }
         }
     }
-    
+
     println!("\n✅ Component loading test completed!");
     println!("\n📝 Summary:");
     println!("   - Extended32K base model: ✅ Loaded successfully");
@@ -308,6 +316,6 @@ fn main() -> Result<()> {
     println!("   2. Or create a new method: load_with_custom_base_model()");
     println!("   3. Test full inference with Extended32K base model + classifier weights");
     println!("   4. Compare results with Standard ModernBERT to verify improvement");
-    
+
     Ok(())
 }

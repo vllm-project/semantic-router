@@ -14,7 +14,8 @@ use crate::model_error;
 use anyhow::{Error as E, Result};
 use candle_core::{DType, Device, IndexOp, Tensor, D};
 use candle_nn::{ops, LayerNorm, Linear, Module, VarBuilder};
-use candle_transformers::models::modernbert::{
+// Use local copy of ModernBERT with Flash Attention support
+use crate::model_architectures::traditional::candle_models::modernbert::{
     ClassifierConfig, ClassifierPooling, Config, ModernBert,
 };
 use std::collections::HashMap;

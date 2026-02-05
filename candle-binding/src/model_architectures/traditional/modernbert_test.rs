@@ -614,7 +614,7 @@ fn test_load_with_custom_base_model_error_handling() {
 }
 
 /// Test load_with_custom_base_model with Extended32K variant
-/// 
+///
 /// This test verifies that the method correctly handles Extended32K variant
 /// and attempts to read training_config.json for model_max_length.
 /// Note: This test will fail if the actual model files are not present,
@@ -622,20 +622,18 @@ fn test_load_with_custom_base_model_error_handling() {
 #[rstest]
 #[serial]
 #[ignore] // Ignore by default - requires actual model files
-fn test_load_with_custom_base_model_extended32k(
-    traditional_pii_model_path: String,
-) {
+fn test_load_with_custom_base_model_extended32k(traditional_pii_model_path: String) {
     // This test requires:
     // 1. Extended32K base model at a known path (or downloaded)
     // 2. PII classifier model at traditional_pii_model_path
-    
+
     // For now, we'll just verify the method signature and error handling
     // Actual integration test would require model files
-    
+
     // Test that Extended32K variant is accepted
     let extended32k_variant = ModernBertVariant::Extended32K;
     assert_eq!(extended32k_variant.max_length(), 32768);
-    
+
     // Test error handling with Extended32K variant
     let result = TraditionalModernBertClassifier::load_with_custom_base_model(
         "/nonexistent/extended32k/base",
@@ -643,10 +641,10 @@ fn test_load_with_custom_base_model_extended32k(
         extended32k_variant,
         true,
     );
-    
+
     // Should fail because base model path doesn't exist
     assert!(result.is_err());
-    
+
     println!("load_with_custom_base_model Extended32K variant test passed (error handling)");
 }
 
@@ -659,7 +657,7 @@ fn test_load_with_custom_base_model_parameter_validation() {
         ModernBertVariant::Multilingual,
         ModernBertVariant::Extended32K,
     ];
-    
+
     for variant in variants {
         // All variants should be accepted (even if loading fails due to missing files)
         let result = TraditionalModernBertClassifier::load_with_custom_base_model(
@@ -668,10 +666,10 @@ fn test_load_with_custom_base_model_parameter_validation() {
             variant,
             true,
         );
-        
+
         // Should fail due to missing files, but variant should be accepted
         assert!(result.is_err());
-        
+
         // Verify variant max_length is correct
         match variant {
             ModernBertVariant::Standard => assert_eq!(variant.max_length(), 512),
@@ -679,6 +677,6 @@ fn test_load_with_custom_base_model_parameter_validation() {
             ModernBertVariant::Extended32K => assert_eq!(variant.max_length(), 32768),
         }
     }
-    
+
     println!("load_with_custom_base_model parameter validation test passed");
 }

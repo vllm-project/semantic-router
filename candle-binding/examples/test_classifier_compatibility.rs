@@ -20,16 +20,20 @@ fn main() -> Result<()> {
     // Step 1: Download Extended32K base model
     println!("\n1️⃣  Downloading Extended32K base model...");
     let base_model_id = "llm-semantic-router/modernbert-base-32k";
-    let repo = Repo::with_revision(base_model_id.to_string(), RepoType::Model, "main".to_string());
+    let repo = Repo::with_revision(
+        base_model_id.to_string(),
+        RepoType::Model,
+        "main".to_string(),
+    );
     let api = Api::new()?;
     let api = api.repo(repo);
 
-    let base_config_path = api.get("config.json").map_err(|e| {
-        anyhow!("Failed to download config.json: {}", e)
-    })?;
-    let _base_tokenizer_path = api.get("tokenizer.json").map_err(|e| {
-        anyhow!("Failed to download tokenizer.json: {}", e)
-    })?;
+    let base_config_path = api
+        .get("config.json")
+        .map_err(|e| anyhow!("Failed to download config.json: {}", e))?;
+    let _base_tokenizer_path = api
+        .get("tokenizer.json")
+        .map_err(|e| anyhow!("Failed to download tokenizer.json: {}", e))?;
     let base_weights_path = match api.get("model.safetensors") {
         Ok(path) => {
             println!("   ✓ Base model downloaded (safetensors)");
@@ -37,9 +41,8 @@ fn main() -> Result<()> {
         }
         Err(_) => {
             println!("   ⚠️  Safetensors not found, trying PyTorch format...");
-            api.get("pytorch_model.bin").map_err(|e| {
-                anyhow!("Failed to download model weights: {}", e)
-            })?
+            api.get("pytorch_model.bin")
+                .map_err(|e| anyhow!("Failed to download model weights: {}", e))?
         }
     };
 
@@ -56,7 +59,10 @@ fn main() -> Result<()> {
     println!("   ✓ Config loaded:");
     println!("     - hidden_size: {}", config.hidden_size);
     println!("     - vocab_size: {}", config.vocab_size);
-    println!("     - max_position_embeddings: {}", config.max_position_embeddings);
+    println!(
+        "     - max_position_embeddings: {}",
+        config.max_position_embeddings
+    );
 
     // Step 3: Load base model
     println!("\n3️⃣  Loading Extended32K base model...");
@@ -78,11 +84,12 @@ fn main() -> Result<()> {
         "models/pii_classifier_modernbert-base_model",
         "./models/pii_classifier_modernbert-base_model",
     ];
-    
-    let pii_classifier_path = pii_classifier_paths.iter()
+
+    let pii_classifier_path = pii_classifier_paths
+        .iter()
         .find(|path| std::path::Path::new(path).exists())
         .copied();
-    
+
     let pii_classifier_path = match pii_classifier_path {
         Some(path) => {
             println!("   ✓ Found PII classifier at: {}", path);
@@ -125,7 +132,10 @@ fn main() -> Result<()> {
     // Try to load classifier weights from PII model
     let pii_weights_path = format!("{}/model.safetensors", pii_classifier_path);
     if !std::path::Path::new(&pii_weights_path).exists() {
-        println!("   ⚠️  PII classifier weights not found at: {}", pii_weights_path);
+        println!(
+            "   ⚠️  PII classifier weights not found at: {}",
+            pii_weights_path
+        );
         println!("   ℹ️  Skipping classifier loading test");
         return Ok(());
     }
@@ -147,7 +157,10 @@ fn main() -> Result<()> {
             println!("   ✅ Compatibility test PASSED!");
             println!("\n   📝 Conclusion:");
             println!("      Existing classifier weights CAN be used with Extended32K base model");
-            println!("      The classifier head is compatible (same hidden_size: {})", config.hidden_size);
+            println!(
+                "      The classifier head is compatible (same hidden_size: {})",
+                config.hidden_size
+            );
         }
         Err(e) => {
             println!("   ❌ Failed to load classifier weights: {}", e);

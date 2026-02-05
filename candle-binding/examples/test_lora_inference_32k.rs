@@ -29,19 +29,23 @@ fn main() -> Result<()> {
     // Step 1: Download and load ModernBERT-base-32k
     println!("\n1️⃣  Downloading ModernBERT-base-32k base model...");
     let base_model_id = "llm-semantic-router/modernbert-base-32k";
-    let repo = Repo::with_revision(base_model_id.to_string(), RepoType::Model, "main".to_string());
+    let repo = Repo::with_revision(
+        base_model_id.to_string(),
+        RepoType::Model,
+        "main".to_string(),
+    );
     let api = Api::new()?;
     let api = api.repo(repo);
 
-    let base_config_path = api.get("config.json").map_err(|e| {
-        anyhow!("Failed to download config.json: {}", e)
-    })?;
-    let base_tokenizer_path = api.get("tokenizer.json").map_err(|e| {
-        anyhow!("Failed to download tokenizer.json: {}", e)
-    })?;
-    let base_weights_path = api.get("model.safetensors").map_err(|e| {
-        anyhow!("Failed to download model.safetensors: {}", e)
-    })?;
+    let base_config_path = api
+        .get("config.json")
+        .map_err(|e| anyhow!("Failed to download config.json: {}", e))?;
+    let base_tokenizer_path = api
+        .get("tokenizer.json")
+        .map_err(|e| anyhow!("Failed to download tokenizer.json: {}", e))?;
+    let base_weights_path = api
+        .get("model.safetensors")
+        .map_err(|e| anyhow!("Failed to download model.safetensors: {}", e))?;
 
     let base_model_dir = base_config_path.parent().unwrap();
     println!("   ✓ Base model directory: {:?}", base_model_dir);
@@ -69,7 +73,7 @@ fn main() -> Result<()> {
     println!("\n3️⃣  Loading tokenizer...");
     let mut tokenizer = Tokenizer::from_file(&base_tokenizer_path)
         .map_err(|e| anyhow!("Failed to load tokenizer: {}", e))?;
-    
+
     // Configure padding
     if let Some(pad_token) = tokenizer.get_padding_mut() {
         pad_token.strategy = tokenizers::PaddingStrategy::BatchLongest;
@@ -86,7 +90,8 @@ fn main() -> Result<()> {
         "./models/lora_intent_classifier_bert-base-uncased_model",
     ];
 
-    let lora_adapter_path = lora_adapter_paths.iter()
+    let lora_adapter_path = lora_adapter_paths
+        .iter()
         .find(|path| Path::new(path).exists())
         .copied();
 
@@ -94,7 +99,7 @@ fn main() -> Result<()> {
         Some(path) => {
             println!("   ✓ Found LoRA adapter at: {}", path);
             let lora_weights_path = format!("{}/model.safetensors", path);
-            
+
             if !Path::new(&lora_weights_path).exists() {
                 println!("   ⚠️  LoRA weights not found at: {}", lora_weights_path);
                 println!("   ℹ️  Skipping LoRA inference test");
@@ -106,7 +111,10 @@ fn main() -> Result<()> {
             let lora_rank = if Path::new(&lora_config_path).exists() {
                 let lora_config_str = std::fs::read_to_string(&lora_config_path)?;
                 let lora_config_json: serde_json::Value = serde_json::from_str(&lora_config_str)?;
-                lora_config_json.get("r").and_then(|v| v.as_u64()).unwrap_or(8) as usize
+                lora_config_json
+                    .get("r")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(8) as usize
             } else {
                 8 // Default rank
             };
@@ -115,8 +123,12 @@ fn main() -> Result<()> {
 
             // Load LoRA weights
             let lora_vb = unsafe {
-                VarBuilder::from_mmaped_safetensors(&[lora_weights_path.clone()], DType::F32, &device)
-                    .map_err(|e| anyhow!("Failed to load LoRA weights: {}", e))?
+                VarBuilder::from_mmaped_safetensors(
+                    &[lora_weights_path.clone()],
+                    DType::F32,
+                    &device,
+                )
+                .map_err(|e| anyhow!("Failed to load LoRA weights: {}", e))?
             };
 
             // Create LoRA config
@@ -131,13 +143,14 @@ fn main() -> Result<()> {
                     "output".to_string(),
                 ],
                 use_bias: false,
-                init_method: candle_semantic_router::model_architectures::lora::LoRAInitMethod::Kaiming,
+                init_method:
+                    candle_semantic_router::model_architectures::lora::LoRAInitMethod::Kaiming,
             };
 
             // Check if this is a LoRA adapter or traditional classifier
-            let has_lora = lora_vb.get((1, 1), "lora_intent.lora_A.weight").is_ok() ||
-                           lora_vb.get((1, 1), "lora_A.weight").is_ok();
-            
+            let has_lora = lora_vb.get((1, 1), "lora_intent.lora_A.weight").is_ok()
+                || lora_vb.get((1, 1), "lora_A.weight").is_ok();
+
             if has_lora {
                 // Load LoRA adapter (for intent classification)
                 let adapter = LoRAAdapter::new(
@@ -146,16 +159,20 @@ fn main() -> Result<()> {
                     &lora_config,
                     lora_vb.pp("lora_intent"),
                     &device,
-                ).map_err(|e| anyhow!("Failed to load LoRA adapter: {}", e))?;
+                )
+                .map_err(|e| anyhow!("Failed to load LoRA adapter: {}", e))?;
                 println!("   ✅ LoRA adapter loaded successfully!");
 
                 // Load classification head
                 let num_classes: usize = 10; // Typical intent classification classes
-                let classifier_weight = lora_vb.get(
-                    (num_classes, config.hidden_size),
-                    "intent_classifier.weight",
-                ).map_err(|e| anyhow!("Failed to load classifier weight: {}", e))?;
-                let classifier_bias = lora_vb.get(num_classes, "intent_classifier.bias")
+                let classifier_weight = lora_vb
+                    .get(
+                        (num_classes, config.hidden_size),
+                        "intent_classifier.weight",
+                    )
+                    .map_err(|e| anyhow!("Failed to load classifier weight: {}", e))?;
+                let classifier_bias = lora_vb
+                    .get(num_classes, "intent_classifier.bias")
                     .map_err(|e| anyhow!("Failed to load classifier bias: {}", e))?;
                 let classifier_head = Linear::new(classifier_weight.t()?, Some(classifier_bias));
                 println!("   ✅ Classification head loaded successfully!");
@@ -165,20 +182,18 @@ fn main() -> Result<()> {
             } else {
                 // This is a traditional classifier, not a LoRA adapter
                 println!("   ℹ️  This is a traditional classifier, not a LoRA adapter");
-                
+
                 // Load traditional classifier head
                 let num_classes: usize = 3; // From config.json: business, law, psychology
-                // Classifier weight is stored as [num_classes, hidden_size] in safetensors
-                // But Linear expects [out_features, in_features] = [num_classes, hidden_size]
-                // So we need to load it correctly
-                let classifier_weight = lora_vb.get(
-                    (num_classes, config.hidden_size),
-                    "classifier.weight",
-                ).map_err(|e| anyhow!("Failed to load classifier weight: {}", e))?;
-                let classifier_bias = lora_vb.get(num_classes, "classifier.bias")
-                    .ok(); // Bias might not exist
-                // Linear::new expects (out_features, in_features) = (num_classes, hidden_size)
-                // The weight is already in the correct shape [num_classes, hidden_size]
+                                            // Classifier weight is stored as [num_classes, hidden_size] in safetensors
+                                            // But Linear expects [out_features, in_features] = [num_classes, hidden_size]
+                                            // So we need to load it correctly
+                let classifier_weight = lora_vb
+                    .get((num_classes, config.hidden_size), "classifier.weight")
+                    .map_err(|e| anyhow!("Failed to load classifier weight: {}", e))?;
+                let classifier_bias = lora_vb.get(num_classes, "classifier.bias").ok(); // Bias might not exist
+                                                                                        // Linear::new expects (out_features, in_features) = (num_classes, hidden_size)
+                                                                                        // The weight is already in the correct shape [num_classes, hidden_size]
                 let classifier_head = Linear::new(classifier_weight, classifier_bias);
                 println!("   ✅ Traditional classifier head loaded successfully!");
                 println!("   ✓ Number of classes: {}", num_classes);
@@ -198,12 +213,14 @@ fn main() -> Result<()> {
 
     // Step 5: Test inference
     println!("\n5️⃣  Testing inference with LoRA adapter...");
-    
+
     // Create long text as owned string
-    let long_text = format!("{} I want to buy a product. {}", 
+    let long_text = format!(
+        "{} I want to buy a product. {}",
         "This is a long document that contains multiple sentences. ".repeat(50),
-        "Please help me with my purchase decision.");
-    
+        "Please help me with my purchase decision."
+    );
+
     let test_texts = vec![
         ("Short text", "I want to buy a product"),
         ("Medium text", "I would like to purchase a new laptop computer for my home office. Please help me find the best option."),
@@ -213,56 +230,60 @@ fn main() -> Result<()> {
     for (name, text) in test_texts {
         println!("\n   Testing: {}", name);
         println!("   Text length: {} characters", text.len());
-        
+
         let start = std::time::Instant::now();
-        
+
         // Tokenize
-        let encoding = tokenizer.encode(text, true)
+        let encoding = tokenizer
+            .encode(text, true)
             .map_err(|e| anyhow!("Failed to encode text: {}", e))?;
         let input_ids: Vec<u32> = encoding.get_ids().to_vec();
         let attention_mask: Vec<u32> = encoding.get_attention_mask().to_vec();
-        
+
         println!("   Tokens: {}", input_ids.len());
-        
+
         // Create tensors
         let input_ids_tensor = Tensor::new(&input_ids[..], &device)?.unsqueeze(0)?;
         let attention_mask_tensor = Tensor::new(&attention_mask[..], &device)?.unsqueeze(0)?;
-        
+
         // Forward through base model
-        let model_output = base_model.forward(&input_ids_tensor, &attention_mask_tensor)
+        let model_output = base_model
+            .forward(&input_ids_tensor, &attention_mask_tensor)
             .map_err(|e| anyhow!("Base model forward failed: {}", e))?;
-        
+
         // Pool: Use CLS token (first token)
         // ModernBert forward returns (batch_size, seq_len, hidden_size)
         let pooled = model_output.i((.., 0, ..))?; // Take first token (CLS) -> (batch_size, hidden_size)
-        
+
         // Apply LoRA adapter (if available)
         let enhanced = if let Some(ref adapter) = lora_adapter {
-            let adapted = adapter.forward(&pooled, false) // inference mode
+            let adapted = adapter
+                .forward(&pooled, false) // inference mode
                 .map_err(|e| anyhow!("LoRA adapter forward failed: {}", e))?;
             (&pooled + &adapted) // Residual connection
                 .map_err(|e| anyhow!("Residual connection failed: {}", e))?
         } else {
             pooled
         };
-        
+
         // Apply classification head (if available)
         if let Some(ref classifier) = classifier_head {
-            let logits = classifier.forward(&enhanced)
+            let logits = classifier
+                .forward(&enhanced)
                 .map_err(|e| anyhow!("Classifier forward failed: {}", e))?;
-            
+
             // Apply softmax
             let probabilities = candle_nn::ops::softmax(&logits, 1)
                 .map_err(|e| anyhow!("Softmax failed: {}", e))?;
-            
+
             let probabilities_vec = probabilities.squeeze(0)?.to_vec1::<f32>()?;
-            
+
             let (predicted_class, max_prob) = probabilities_vec
                 .iter()
                 .enumerate()
                 .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
                 .unwrap_or((0, &0.0));
-            
+
             let elapsed = start.elapsed();
             println!("   ✅ Inference successful!");
             println!("      Predicted class: {}", predicted_class);
