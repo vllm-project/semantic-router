@@ -153,23 +153,39 @@ signals:
 - **示例 1**："Hola, ¿cómo estás?" → Spanish (es) → Spanish model
 - **示例 2**："你好，世界" → Chinese (zh) → Chinese model
 
-### 8. Latency Signal - 基于 TPOT 的路由
+### 8. 延迟信号 — 基于百分位的路由
 
-- **内容**：使用 TPOT（每输出 Token 时间）的模型延迟评估
-- **延迟**：小于 1ms（缓存查找）
-- **用例**：将延迟敏感的查询路由到更快的模型
+- **内容**：使用 TPOT（Time Per Output Token，每个输出 Token 的耗时）和
+  TTFT（Time To First Token，首 Token 延迟）的百分位数对模型延迟进行评估。
+- **延迟**：通常为 2–5ms（针对 10 个模型，异步运行）。百分位计算的时间复杂度为
+  O(n log n)，其中 n 为每个模型的观测样本数（通常 10–100，最大 1000）。
+- **用例**：基于自适应的百分位阈值，将对延迟敏感的请求路由到更快的模型。
 
 ```yaml
 signals:
   latency:
-    - name: "low_latency"
-      max_tpot: 0.05  # 每 token 50ms
-      description: "用于实时聊天应用"
+    - name: "low_latency_comprehensive"
+      tpot_percentile: 10  # TPOT 的第 10 百分位（最快的前 10% Token 生成速度）
+      ttft_percentile: 10  # TTFT 的第 10 百分位（最快的前 10% 首 Token）
+      description: "适用于实时应用——启动快、生成快"
+    - name: "balanced_latency"
+      tpot_percentile: 50  # TPOT 的中位数
+      ttft_percentile: 10  # TTFT 的前 10%（优先保证快速启动）
+      description: "优先快速启动，接受中等的生成速度"
 ```
 
-**示例**：实时聊天查询 → low_latency signal → 路由到快速模型 (TPOT < 50ms/token)
+**示例**：
+实时聊天请求 → `low_latency_comprehensive` 信号 → 路由到同时满足 TPOT 和 TTFT 百分位阈值的模型。
 
-**工作原理**：TPOT 从每个响应中自动跟踪。延迟分类器在路由前评估可用模型是否满足 TPOT 阈值。
+**工作原理**：
+
+- TPOT 和 TTFT 会从每一次模型响应中自动采集和统计
+- 基于百分位的阈值会自适应每个模型的实际性能分布
+- 支持任意数量的观测样本：
+  - 1–2 个样本时使用平均值
+  - 3 个及以上样本时使用百分位计算
+- 当同时设置 TPOT 和 TTFT 百分位时，模型必须**同时满足两个条件**（AND 逻辑）
+- **推荐做法**：同时使用 TPOT 和 TTFT 百分位，以获得更全面的延迟评估
 
 ### 9. Context Signal
 
