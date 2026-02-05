@@ -203,11 +203,11 @@ type EvalDecisionResult struct {
 // EvalResponse represents the response from eval classification
 // This is specifically designed for evaluation scenarios with comprehensive signal information
 type EvalResponse struct {
-	OriginalText     string                                  `json:"original_text"` // The original query text
-	DecisionResult   *EvalDecisionResult                     `json:"decision_result,omitempty"`
-	RecommendedModel string                                  `json:"recommended_model,omitempty"`
-	RoutingDecision  string                                  `json:"routing_decision,omitempty"`
-	Metrics          *classification.SignalMetricsCollection `json:"metrics"` // Performance and confidence for each signal
+	OriginalText      string                                  `json:"original_text"` // The original query text
+	DecisionResult    *EvalDecisionResult                     `json:"decision_result,omitempty"`
+	RecommendedModels []string                                `json:"recommended_models,omitempty"` // All models from matched decision's modelRefs
+	RoutingDecision   string                                  `json:"routing_decision,omitempty"`
+	Metrics           *classification.SignalMetricsCollection `json:"metrics"` // Performance and confidence for each signal
 }
 
 // IntentResponse represents the response from intent classification
@@ -914,9 +914,14 @@ func (s *ClassificationService) buildEvalResponse(
 			UnmatchedSignals: unmatchedSignals,
 		}
 
-		// Set recommended model and routing decision
+		// Set recommended models and routing decision
 		if len(decisionResult.Decision.ModelRefs) > 0 {
-			response.RecommendedModel = decisionResult.Decision.ModelRefs[0].Model
+			// Collect all models from modelRefs
+			models := make([]string, 0, len(decisionResult.Decision.ModelRefs))
+			for _, modelRef := range decisionResult.Decision.ModelRefs {
+				models = append(models, modelRef.Model)
+			}
+			response.RecommendedModels = models
 			response.RoutingDecision = decisionResult.Decision.Name
 		}
 	} else {
