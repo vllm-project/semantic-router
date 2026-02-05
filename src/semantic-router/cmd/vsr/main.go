@@ -18,16 +18,18 @@ func main() {
 
 	rootCmd := &cobra.Command{
 		Use:   "vsr",
-		Short: "vLLM Semantic Router Training CLI",
-		Long: `vsr train is a command-line tool for training model selection algorithms.
+		Short: "vLLM Semantic Router CLI",
+		Long: `vsr is a command-line tool for testing model selection algorithms.
 
 Commands:
-  vsr train              # Train model selection algorithms
-  vsr test-selector      # Test model selector with a query`,
+  vsr test-selector      # Test model selector with a query
+
+For training and validation, use the scripts in src/training/ml_model_selection/:
+  python train.py --data-file benchmark.jsonl --output-dir models/
+  go run validate.go --models-dir .cache/ml-models`,
 	}
 
-	// Add training commands
-	rootCmd.AddCommand(commands.GetTrainCmd())
+	// Add commands
 	rootCmd.AddCommand(commands.NewTestSelectorCmd())
 
 	if err := rootCmd.Execute(); err != nil {

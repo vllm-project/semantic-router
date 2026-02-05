@@ -159,7 +159,7 @@ type SVMConfig struct {
 // DefaultMLSelectorConfig returns default ML selector configuration.
 func DefaultMLSelectorConfig() *MLSelectorConfig {
 	return &MLSelectorConfig{
-		ModelsPath:   "src/semantic-router/pkg/modelselection/data/trained_models",
+		ModelsPath:   ".cache/ml-models",
 		EmbeddingDim: 1024,
 		KNN: &KNNConfig{
 			K: 5,

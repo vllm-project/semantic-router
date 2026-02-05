@@ -3,34 +3,41 @@
 Benchmark script for ML model selection training data generation.
 
 This script:
-1. Takes input queries (JSONL format with 'query' and optionally 'ground_truth')
-2. Runs each query against multiple LLM endpoints
-3. Measures performance (accuracy) and response_time
-4. Outputs benchmark_training_data.jsonl for training
+1. Takes input file (JSONL format) - can be queries or existing training data
+2. Automatically extracts unique queries with their metadata (category, ground_truth, etc.)
+3. Runs each query against multiple LLM endpoints
+4. Measures performance (accuracy) and response_time
+5. Outputs training-ready JSONL with category preserved
+
+Input formats supported:
+- Simple queries: {"query": "...", "ground_truth": "...", "category": "..."}
+- Existing training data: {"query": "...", "model_name": "...", "performance": ..., "category": "..."}
+  (Will extract unique queries and re-benchmark against YOUR models)
 
 Usage:
-    # Simple: All models on same endpoint (e.g., vLLM serving multiple models)
-    python benchmark.py --queries queries.jsonl --models llama-3.2-1b,mistral-7b
+    # Use existing training data file - extracts queries and benchmarks your models
+    python benchmark.py --queries training_data.jsonl --model-config models.yaml
+
+    # Simple: All models on same endpoint (e.g., vLLM or Ollama)
+    python benchmark.py --queries queries.jsonl --models llama3.2:1b,mistral:7b
 
     # Different endpoints/auth per model: Use config file
     python benchmark.py --queries queries.jsonl --model-config models.yaml
 
     # Output to specific file
-    python benchmark.py --queries queries.jsonl --models llama-3.2-1b --output my_benchmark.jsonl
+    python benchmark.py --queries queries.jsonl --models llama3.2:1b --output my_benchmark.jsonl
 
 Config file format (models.yaml):
     models:
-      - name: llama-3.2-1b
-        endpoint: http://localhost:8000/v1
-        # No auth needed for local model
+      - name: llama3.2:1b
+        endpoint: http://localhost:11434/v1  # Ollama
+
+      - name: llama3.2:3b
+        endpoint: http://localhost:11434/v1
 
       - name: gpt-4
         endpoint: https://api.openai.com/v1
         api_key: ${OPENAI_API_KEY}  # Environment variable
-
-      - name: claude-3
-        endpoint: https://api.anthropic.com/v1
-        api_key: sk-ant-xxx  # Direct value
 
       - name: custom-model
         endpoint: https://custom.api.com/v1
@@ -38,12 +45,11 @@ Config file format (models.yaml):
           Authorization: Bearer ${CUSTOM_TOKEN}
           X-Custom-Header: value
 
-After benchmarking, run add_category_to_training_data.py to add category field:
-    python ../../../src/semantic-router/pkg/modelselection/data/add_category_to_training_data.py \\
-        --input my_benchmark.jsonl --output my_benchmark_with_category.jsonl
+Output is training-ready (includes category if present in input):
+    {"query": "...", "model_name": "...", "performance": 0.85, "response_time": 1.2, "category": "math"}
 
 Then train with:
-    python train.py --data-file my_benchmark_with_category.jsonl --output-dir models/
+    python train.py --data-file benchmark_output.jsonl --output-dir models/
 """
 
 import argparse
@@ -172,6 +178,7 @@ class QueryRecord:
     metric: Optional[str] = None
     embedding_id: Optional[int] = None
     choices: Optional[str] = None
+    category: Optional[str] = None  # Domain category (e.g., "math", "physics")
     extra_fields: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -189,6 +196,7 @@ class BenchmarkResult:
     metric: Optional[str] = None
     embedding_id: Optional[int] = None
     choices: Optional[str] = None
+    category: Optional[str] = None  # Domain category (preserved from input)
     extra_fields: Dict[str, Any] = field(default_factory=dict)
 
     def to_jsonl_dict(self) -> Dict[str, Any]:
@@ -212,6 +220,8 @@ class BenchmarkResult:
             result["embedding_id"] = self.embedding_id
         if self.choices is not None:
             result["choices"] = self.choices
+        if self.category is not None:
+            result["category"] = self.category
 
         # Add any extra fields from input
         result.update(self.extra_fields)
@@ -219,9 +229,51 @@ class BenchmarkResult:
         return result
 
 
-def load_queries(file_path: Path) -> List[QueryRecord]:
-    """Load queries from JSONL file."""
-    records = []
+def format_concise_query(
+    query: str, metric: Optional[str] = None, choices: Optional[str] = None
+) -> str:
+    """
+    Format query with concise prompts to get shorter responses.
+    Similar to Go benchmark runner's formatQueryForTask.
+    """
+    # Multiple choice questions
+    if choices or metric == "em_mc":
+        return f"Answer with ONLY the letter of the correct choice (A, B, C, or D). Do not explain.\n\nQuestion: {query}"
+
+    # Math problems
+    if metric in ("MATH", "GSM8K"):
+        return (
+            f"{query}\n\nAnswer with ONLY the final number or expression. Be concise."
+        )
+
+    # Code generation
+    if metric == "code_eval":
+        return f"Write code to solve this problem. Output ONLY the code, no explanations:\n\n{query}"
+
+    # QA and general questions
+    return f"Answer the following question concisely in one sentence:\n\n{query}"
+
+
+def load_queries(file_path: Path, deduplicate: bool = True) -> List[QueryRecord]:
+    """
+    Load queries from JSONL file.
+
+    Supports both formats:
+    - Simple queries: {"query": "...", "ground_truth": "...", "category": "..."}
+    - Full training data: {"query": "...", "model_name": "...", "performance": ..., "category": "..."}
+
+    If deduplicate=True (default), extracts unique queries and preserves their metadata.
+    This allows using existing training data files as input for benchmarking new models.
+
+    Args:
+        file_path: Path to JSONL file
+        deduplicate: If True, return only unique queries (first occurrence wins for metadata)
+
+    Returns:
+        List of QueryRecord objects
+    """
+    seen_queries: Dict[str, QueryRecord] = {}  # query text -> record
+    total_records = 0
 
     with open(file_path, "r", encoding="utf-8") as f:
         for line_num, line in enumerate(f, 1):
@@ -231,10 +283,15 @@ def load_queries(file_path: Path) -> List[QueryRecord]:
 
             try:
                 data = json.loads(line)
+                total_records += 1
 
                 query = data.get("query", "")
                 if not query:
                     print(f"Warning: Skipping line {line_num} - no query field")
+                    continue
+
+                # Skip if we've seen this query and deduplication is enabled
+                if deduplicate and query in seen_queries:
                     continue
 
                 # Extract known fields
@@ -245,9 +302,10 @@ def load_queries(file_path: Path) -> List[QueryRecord]:
                     metric=data.get("metric"),
                     embedding_id=data.get("embedding_id"),
                     choices=data.get("choices"),
+                    category=data.get("category"),  # Preserve category from input
                 )
 
-                # Store any extra fields
+                # Store any extra fields (excluding benchmark-specific fields)
                 known_fields = {
                     "query",
                     "ground_truth",
@@ -265,12 +323,27 @@ def load_queries(file_path: Path) -> List[QueryRecord]:
                     if key not in known_fields:
                         record.extra_fields[key] = value
 
-                records.append(record)
+                seen_queries[query] = record
 
             except json.JSONDecodeError as e:
                 print(f"Warning: Skipping invalid JSON at line {line_num}: {e}")
 
-    print(f"Loaded {len(records)} queries from {file_path}")
+    records = list(seen_queries.values())
+
+    if deduplicate and total_records != len(records):
+        print(f"Loaded {total_records} records from {file_path}")
+        print(f"Extracted {len(records)} unique queries (deduplicated)")
+    else:
+        print(f"Loaded {len(records)} queries from {file_path}")
+
+    # Print category distribution if categories exist
+    categories = [r.category for r in records if r.category]
+    if categories:
+        from collections import Counter
+
+        cat_counts = Counter(categories)
+        print(f"Categories: {dict(cat_counts)}")
+
     return records
 
 
@@ -281,7 +354,7 @@ def evaluate_response(
     choices: Optional[str] = None,
 ) -> float:
     """
-    Evaluate response against ground truth.
+    Evaluate response against ground truth using metric-specific logic.
 
     Returns:
         Performance score between 0.0 and 1.0
@@ -293,49 +366,459 @@ def evaluate_response(
     response_lower = response.lower().strip()
     truth_lower = ground_truth.lower().strip()
 
-    # Exact match
+    # Exact match (works for any metric)
     if response_lower == truth_lower:
         return 1.0
 
-    # Check if ground truth is in response
-    if truth_lower in response_lower:
-        return 0.9
+    # Metric-specific evaluation
+    if metric == "em_mc" or choices:
+        # Multiple choice - extract letter from response
+        return _evaluate_multiple_choice(response, ground_truth, choices)
 
-    # For multiple choice questions
-    if choices:
-        # Extract answer letter from response (e.g., "A", "B", "C", "D")
-        answer_pattern = re.compile(r"(?:answer(?:\s*is)?:?\s*)([A-J])", re.IGNORECASE)
-        match = answer_pattern.search(response)
-        if match:
-            predicted = match.group(1).upper()
-            # Ground truth might be just the letter
-            if predicted == truth_lower.upper():
-                return 1.0
-            # Or it might be the full answer text
-            if predicted in truth_lower.upper():
-                return 1.0
+    elif metric == "GSM8K":
+        # GSM8K - extract number after #### delimiter
+        return _evaluate_gsm8k(response, ground_truth)
 
-    # For boxed math answers
-    boxed_pattern = re.compile(r"\\boxed\{([^}]+)\}")
-    response_boxed = boxed_pattern.search(response)
-    truth_boxed = boxed_pattern.search(ground_truth)
+    elif metric == "MATH":
+        # MATH - extract from \boxed{} with LaTeX normalization
+        return _evaluate_math(response, ground_truth)
 
-    if response_boxed and truth_boxed:
-        if response_boxed.group(1).strip() == truth_boxed.group(1).strip():
-            return 1.0
-    elif truth_boxed:
-        # Ground truth has boxed, check if response contains the answer
-        truth_answer = truth_boxed.group(1).strip()
-        if truth_answer.lower() in response_lower:
+    elif metric == "f1_score":
+        # F1 score based on word overlap
+        return _evaluate_f1(response, ground_truth)
+
+    elif metric == "code_eval":
+        # Code evaluation - try to run assertions
+        return _evaluate_code(response, ground_truth)
+
+    elif metric == "commongen_coverage":
+        # Check how many required words appear in response
+        return _evaluate_commongen(response, ground_truth)
+
+    else:
+        # Default: CEM (Conditional Exact Match) - LLMRouter's default
+        return _evaluate_cem(response, ground_truth)
+
+
+def _evaluate_multiple_choice(
+    response: str, ground_truth: str, choices: Optional[str]
+) -> float:
+    """
+    Evaluate multiple choice questions by extracting answer letter.
+    Aligned with LLMRouter's em_mc metric.
+    """
+    response_text = response.strip()
+    truth_upper = ground_truth.upper().strip()
+
+    # If ground truth is a single letter, look for it in response
+    if len(truth_upper) == 1 and truth_upper in "ABCDEFGHIJ":
+        # LLMRouter's approach: look for (A), (B), etc. pattern
+        parenthesis_pattern = re.findall(r"\(\s*([a-zA-Z])\s*\)", response_text)
+        if parenthesis_pattern:
+            # Take the last match (usually the final answer)
+            found_letter = parenthesis_pattern[-1].upper()
+            return 1.0 if found_letter == truth_upper else 0.0
+
+        # Additional patterns for various response styles
+        patterns = [
+            r"(?:answer(?:\s*is)?:?\s*)([A-J])\b",  # "answer is X"
+            r"(?:it['\u2019]?s|is)\s+([A-J])\b",  # "it's X" or "is X"
+            r"['\u2019]s\s+([A-J])\b",  # "'s X" pattern
+            r"\b([A-J])\s+(?:because|since|as)",  # "X because..."
+            r"(?:think|believe|choose)\s+([A-J])\b",  # "think X"
+            r"\b([A-J])\s*[.)\]:]",  # Letter followed by punctuation
+            r"^([A-J])[.)\]:\s]*$",  # Just the letter (with optional punctuation)
+            r"\b([A-J])$",  # Ends with letter
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, response_text, re.IGNORECASE)
+            if match:
+                found_letter = match.group(1).upper()
+                # Skip "I" as a pronoun unless it's clearly an answer
+                if found_letter == "I" and not re.match(
+                    r"^I[.)\]:\s]*$", response_text.strip(), re.IGNORECASE
+                ):
+                    continue
+                if found_letter == truth_upper:
+                    return 1.0
+                else:
+                    return 0.0  # Wrong letter
+
+        # Fallback: check if the letter appears standalone
+        if truth_upper != "I" and re.search(
+            r"\b" + truth_upper + r"\b", response_text.upper()
+        ):
+            return 0.8
+        if truth_upper == "I" and re.search(
+            r"(?:answer|choice|option)[:\s]+I\b", response_text, re.IGNORECASE
+        ):
             return 0.8
 
-    # Partial match based on word overlap
-    response_words = set(response_lower.split())
-    truth_words = set(truth_lower.split())
+    return 0.0
 
-    if truth_words:
-        overlap = len(response_words & truth_words) / len(truth_words)
-        return min(overlap, 0.7)  # Cap at 0.7 for partial matches
+
+def _evaluate_gsm8k(response: str, ground_truth: str) -> float:
+    """
+    Evaluate GSM8K math problems.
+    Aligned with LLMRouter's gsm8k metric - splits on #### delimiter.
+    """
+    # Extract answer from ground truth (format: "explanation #### answer")
+    if "####" in ground_truth:
+        ground_truth_processed = ground_truth.split("####")[-1]
+    else:
+        ground_truth_processed = ground_truth
+
+    # Clean the ground truth answer
+    ground_truth_processed = (
+        ground_truth_processed.replace(",", "")
+        .replace("$", "")
+        .replace(".", "")
+        .strip()
+    )
+
+    # Extract numbers from response
+    numbers = re.findall(r"(\-?[0-9\.\,]+)", response)
+    if not numbers:
+        return 0.0
+
+    # Find the last valid number (usually the final answer)
+    invalid_str = ["", "."]
+    final_answer = None
+    for answer in reversed(numbers):
+        if answer not in invalid_str:
+            final_answer = answer
+            break
+
+    if final_answer is None:
+        return 0.0
+
+    # Clean the predicted answer
+    final_answer = (
+        final_answer.replace(",", "").replace("$", "").replace(".", "").strip()
+    )
+
+    return 1.0 if final_answer == ground_truth_processed else 0.0
+
+
+def _strip_latex_string(string: str) -> str:
+    """
+    Normalize LaTeX string for comparison.
+    Aligned with LLMRouter's strip_string function.
+    """
+    # Remove linebreaks and spaces
+    string = string.replace("\n", "")
+    string = string.replace("\\!", "")
+    string = string.replace("\\\\", "\\")
+
+    # Normalize fractions
+    string = string.replace("tfrac", "frac")
+    string = string.replace("dfrac", "frac")
+
+    # Remove \left and \right
+    string = string.replace("\\left", "")
+    string = string.replace("\\right", "")
+
+    # Remove degrees
+    string = string.replace("^{\\circ}", "")
+    string = string.replace("^\\circ", "")
+
+    # Remove dollar signs and percentage
+    string = string.replace("\\$", "")
+    string = string.replace("\\%", "")
+    string = string.replace("%", "")
+
+    # Handle decimal points
+    string = string.replace(" .", " 0.")
+    string = string.replace("{.", "{0.")
+    if string and string[0] == ".":
+        string = "0" + string
+
+    # Remove "x = " or "k = " at beginning
+    if len(string.split("=")) == 2:
+        if len(string.split("=")[0]) <= 2:
+            string = string.split("=")[1]
+
+    # Remove spaces
+    string = string.replace(" ", "")
+
+    return string.strip()
+
+
+def _last_boxed_string(text: str) -> Optional[str]:
+    """
+    Extract the last \\boxed{} content from text.
+    Aligned with LLMRouter's last_boxed_only_string function.
+    """
+    idx = text.rfind("\\boxed")
+    if idx < 0:
+        idx = text.rfind("\\fbox")
+    if idx < 0:
+        return None
+
+    # Find matching braces
+    i = idx
+    num_left_braces = 0
+    right_brace_idx = None
+
+    while i < len(text):
+        if text[i] == "{":
+            num_left_braces += 1
+        if text[i] == "}":
+            num_left_braces -= 1
+            if num_left_braces == 0:
+                right_brace_idx = i
+                break
+        i += 1
+
+    if right_brace_idx is None:
+        return None
+
+    return text[idx : right_brace_idx + 1]
+
+
+def _remove_boxed(text: str) -> str:
+    """Remove \\boxed{} wrapper and return content."""
+    if "\\boxed{" in text:
+        # Find the content inside \boxed{}
+        start = text.find("\\boxed{") + len("\\boxed{")
+        depth = 1
+        end = start
+        while end < len(text) and depth > 0:
+            if text[end] == "{":
+                depth += 1
+            elif text[end] == "}":
+                depth -= 1
+            end += 1
+        return text[start : end - 1]
+    elif "\\boxed " in text:
+        return text.split("\\boxed ")[-1].split()[0]
+    return text
+
+
+def _evaluate_math(response: str, ground_truth: str) -> float:
+    """
+    Evaluate MATH problems by extracting \\boxed{} answers.
+    Aligned with LLMRouter's math metric with LaTeX normalization.
+    """
+    # Extract ground truth from \boxed{} if present
+    gt_boxed = _last_boxed_string(ground_truth)
+    if gt_boxed:
+        ground_truth_processed = _remove_boxed(gt_boxed)
+    else:
+        ground_truth_processed = ground_truth.strip()
+
+    # Try to extract answer from response's \boxed{}
+    try:
+        response_boxed = _last_boxed_string(response)
+        if response_boxed:
+            response_answer = _remove_boxed(response_boxed)
+            # Compare with LaTeX normalization
+            if _strip_latex_string(response_answer) == _strip_latex_string(
+                ground_truth_processed
+            ):
+                return 1.0
+    except Exception:
+        pass
+
+    # Fallback: check if normalized ground truth appears in response
+    gt_normalized = _strip_latex_string(ground_truth_processed)
+    response_normalized = _strip_latex_string(response)
+
+    if gt_normalized and gt_normalized in response_normalized:
+        return 0.8
+
+    # Try numeric comparison
+    try:
+        gt_nums = re.findall(r"-?\d+\.?\d*", ground_truth_processed)
+        resp_nums = re.findall(r"-?\d+\.?\d*", response)
+        if gt_nums and resp_nums:
+            if gt_nums[-1] in resp_nums:
+                return 0.7
+    except Exception:
+        pass
+
+    return 0.0
+
+
+def _evaluate_f1(response: str, ground_truth: str) -> float:
+    """Calculate F1 score based on word overlap."""
+    # Clean punctuation and normalize
+    import string
+
+    def clean_words(text: str) -> set:
+        # Remove punctuation and split
+        text = text.lower()
+        for p in string.punctuation:
+            text = text.replace(p, " ")
+        return set(text.split())
+
+    response_words = clean_words(response)
+    truth_words = clean_words(ground_truth)
+
+    if not truth_words:
+        return 0.0
+
+    # For short ground truths (1-2 words), check containment first
+    if len(truth_words) <= 2:
+        truth_text = ground_truth.lower()
+        for p in string.punctuation:
+            truth_text = truth_text.replace(p, "")
+        if truth_text.strip() in response.lower():
+            return 1.0
+
+    # Remove common stopwords for better matching
+    stopwords = {
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "of",
+        "in",
+        "to",
+        "and",
+        "or",
+    }
+    response_content = response_words - stopwords
+    truth_content = truth_words - stopwords
+
+    # If truth was only stopwords, use original
+    if not truth_content:
+        truth_content = truth_words
+    if not response_content:
+        response_content = response_words
+
+    overlap = response_content & truth_content
+
+    if not overlap:
+        return 0.0
+
+    precision = len(overlap) / len(response_content) if response_content else 0
+    recall = len(overlap) / len(truth_content)
+
+    if precision + recall == 0:
+        return 0.0
+
+    f1 = 2 * precision * recall / (precision + recall)
+    return f1
+
+
+def _evaluate_code(response: str, ground_truth: str, timeout: int = 5) -> float:
+    """
+    Evaluate code by trying to run assertions.
+    Aligned with LLMRouter's evaluate_code with timeout protection.
+    """
+    import signal
+    import sys
+
+    # Try to extract code from response
+    code_patterns = [
+        r"```python\n(.*?)```",
+        r"```\n(.*?)```",
+        r"def\s+\w+\s*\([^)]*\):.*?(?=\n\n|\Z)",
+    ]
+
+    code = response
+    for pattern in code_patterns:
+        match = re.search(pattern, response, re.DOTALL)
+        if match:
+            code = match.group(1) if match.lastindex else match.group(0)
+            break
+
+    # Try to run assertions from ground truth
+    try:
+        # Ground truth is usually a list of assertions like:
+        # "['assert func([1,2])==3', 'assert func([4])==4']"
+        if ground_truth.startswith("[") and "assert" in ground_truth:
+            assertions = eval(ground_truth)
+            if isinstance(assertions, list):
+                passed = 0
+                total = len(assertions)
+
+                # Timeout handler (Unix only)
+                def timeout_handler(signum, frame):
+                    raise TimeoutError("Code execution timed out")
+
+                # Set timeout if signal.SIGALRM is available (Unix)
+                alarm_supported = hasattr(signal, "SIGALRM")
+
+                for assertion in assertions:
+                    try:
+                        if alarm_supported:
+                            signal.signal(signal.SIGALRM, timeout_handler)
+                            signal.alarm(timeout)
+
+                        # Execute the code first, then the assertion
+                        local_vars = {}
+                        exec(code, {}, local_vars)
+                        exec(assertion, local_vars)
+                        passed += 1
+
+                    except (AssertionError, TimeoutError):
+                        pass
+                    except Exception:
+                        pass
+                    finally:
+                        if alarm_supported:
+                            signal.alarm(0)
+
+                return passed / total if total > 0 else 0.0
+    except Exception:
+        pass
+
+    # Fallback: check if function structure matches
+    func_match = re.search(r"def\s+(\w+)", response)
+    if func_match:
+        func_name = func_match.group(1)
+        if func_name in ground_truth.lower():
+            return 0.5
+
+    return 0.3  # Gave some code response
+
+
+def _evaluate_commongen(response: str, ground_truth: str) -> float:
+    """Evaluate commongen by checking word coverage."""
+    # Ground truth is a comma-separated list of words
+    required_words = set(w.strip().lower() for w in ground_truth.split(","))
+    response_lower = response.lower()
+
+    found = sum(1 for word in required_words if word in response_lower)
+
+    return found / len(required_words) if required_words else 0.0
+
+
+def _normalize_answer(text: str) -> str:
+    """
+    Normalize text for evaluation.
+    Aligned with LLMRouter's normalize_answer function.
+    """
+    import string
+
+    # Lowercase
+    text = text.lower()
+    # Remove articles
+    text = re.sub(r"\b(a|an|the)\b", " ", text)
+    # Remove punctuation
+    text = "".join(ch for ch in text if ch not in string.punctuation)
+    # Fix whitespace
+    text = " ".join(text.split())
+
+    return text
+
+
+def _evaluate_cem(response: str, ground_truth: str) -> float:
+    """
+    CEM (Conditional Exact Match) evaluation - LLMRouter's default.
+    Returns 1.0 if exact match OR ground_truth contained in response, else 0.0
+    """
+    norm_response = _normalize_answer(response)
+    norm_gt = _normalize_answer(ground_truth)
+
+    # Exact match or containment
+    if norm_response == norm_gt or norm_gt in norm_response:
+        return 1.0
 
     return 0.0
 
@@ -343,17 +826,29 @@ def evaluate_response(
 def benchmark_query(
     model_config: ModelConfig,
     query: QueryRecord,
+    concise: bool = False,
 ) -> BenchmarkResult:
     """Benchmark a single query against a model."""
 
     client = model_config.get_client()
     start_time = time.time()
 
+    # Format query with concise prompts if enabled
+    # But skip concise for code_eval - code needs full response
+    query_text = query.query
+    if concise and query.metric != "code_eval":
+        query_text = format_concise_query(query.query, query.metric, query.choices)
+
+    # Use higher max_tokens for code_eval (code needs more tokens)
+    max_tokens = model_config.max_tokens
+    if query.metric == "code_eval" and max_tokens < 256:
+        max_tokens = 256
+
     try:
         response = client.chat.completions.create(
             model=model_config.name,
-            messages=[{"role": "user", "content": query.query}],
-            max_tokens=model_config.max_tokens,
+            messages=[{"role": "user", "content": query_text}],
+            max_tokens=max_tokens,
             temperature=model_config.temperature,
         )
 
@@ -389,6 +884,7 @@ def benchmark_query(
         metric=query.metric,
         embedding_id=query.embedding_id,
         choices=query.choices,
+        category=query.category,  # Preserve category from input
         extra_fields=query.extra_fields,
     )
 
@@ -398,13 +894,15 @@ def run_benchmark(
     model_configs: List[ModelConfig],
     concurrency: int = 4,
     progress: bool = True,
+    concise: bool = False,
 ) -> List[BenchmarkResult]:
     """Run benchmark for all queries against all models."""
 
     results = []
 
     # Create tasks: (query, model_config) pairs
-    tasks = [(q, m) for q in queries for m in model_configs]
+    # Group by model to minimize model reloading (important for Ollama/local inference)
+    tasks = [(q, m) for m in model_configs for q in queries]
     total_tasks = len(tasks)
 
     # Group models by endpoint for display
@@ -436,6 +934,7 @@ def run_benchmark(
                 benchmark_query,
                 model_config,
                 query,
+                concise,
             )
             futures[future] = (query, model_config)
 
@@ -526,43 +1025,44 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Simple: All models on same endpoint (local vLLM)
-  python benchmark.py --queries queries.jsonl --models llama-3.2-1b,mistral-7b,codellama-7b
+  # Use existing training data - extracts unique queries and benchmarks your models
+  python benchmark.py --queries training_data_with_category.jsonl --model-config models.yaml
 
-  # With custom endpoint and API key
+  # Ollama models (recommended config file approach)
+  python benchmark.py --queries queries.jsonl --model-config ollama_models.yaml
+
+  # Simple: All models on same endpoint (local vLLM)
+  python benchmark.py --queries queries.jsonl --models llama-3.2-1b,mistral-7b
+
+  # With custom endpoint and API key (OpenAI)
   python benchmark.py --queries queries.jsonl --models gpt-4 \\
       --endpoint https://api.openai.com/v1 --api-key $OPENAI_API_KEY
-
-  # Mixed models with config file (different endpoints/auth per model)
-  python benchmark.py --queries queries.jsonl --model-config models.yaml
 
   # High concurrency for faster benchmarking
   python benchmark.py --queries queries.jsonl --models model1,model2 --concurrency 16
 
-Config file format (models.yaml):
+Config file format (models.yaml) - supports Ollama, vLLM, OpenAI, etc:
   models:
-    - name: llama-3.2-1b           # Local model, no auth
-      endpoint: http://localhost:8000/v1
+    - name: llama3.2:1b            # Ollama models (all same endpoint)
+      endpoint: http://localhost:11434/v1
+    - name: llama3.2:3b
+      endpoint: http://localhost:11434/v1
+    - name: mistral:7b
+      endpoint: http://localhost:11434/v1
+    - name: codellama:7b
+      endpoint: http://localhost:11434/v1
 
     - name: gpt-4                   # OpenAI with API key
       endpoint: https://api.openai.com/v1
       api_key: ${OPENAI_API_KEY}
-
-    - name: claude-3                # Anthropic with direct key
-      endpoint: https://api.anthropic.com/v1
-      api_key: sk-ant-xxx
 
     - name: custom-model            # Custom headers
       endpoint: https://custom.api.com/v1
       headers:
         Authorization: Bearer ${CUSTOM_TOKEN}
 
-After benchmarking:
-  # Add categories using VSR classifier
-  python add_category_to_training_data.py --input benchmark_output.jsonl --output benchmark_with_category.jsonl
-
-  # Train models
-  python train.py --data-file benchmark_with_category.jsonl --output-dir models/
+After benchmarking, train directly (category is preserved from input):
+  python train.py --data-file benchmark_output.jsonl --output-dir models/ --device cuda
         """,
     )
 
@@ -570,7 +1070,8 @@ After benchmarking:
         "--queries",
         type=str,
         required=True,
-        help="Path to JSONL file with queries (must have 'query' field, optionally 'ground_truth')",
+        help="Path to JSONL input file. Can be simple queries or existing training data. "
+        "Unique queries are extracted automatically. Supports: query, ground_truth, category fields.",
     )
 
     # Model specification (mutually exclusive)
@@ -629,6 +1130,17 @@ After benchmarking:
         action="store_true",
         help="Disable progress bar",
     )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Limit number of queries to process (for testing). Default: no limit",
+    )
+    parser.add_argument(
+        "--concise",
+        action="store_true",
+        help="Use concise prompts to get shorter responses (faster inference)",
+    )
 
     args = parser.parse_args()
 
@@ -643,6 +1155,12 @@ After benchmarking:
     if not queries:
         print("Error: No queries loaded")
         sys.exit(1)
+
+    # Apply limit if specified
+    if args.limit and args.limit > 0:
+        original_count = len(queries)
+        queries = queries[: args.limit]
+        print(f"Limited to {len(queries)} queries (from {original_count})")
 
     # Load model configs
     if args.model_config:
@@ -672,11 +1190,15 @@ After benchmarking:
         sys.exit(1)
 
     # Run benchmark
+    if args.concise:
+        print("Using concise prompts for faster inference")
+
     results = run_benchmark(
         queries=queries,
         model_configs=model_configs,
         concurrency=args.concurrency,
         progress=not args.no_progress,
+        concise=args.concise,
     )
 
     # Save results
