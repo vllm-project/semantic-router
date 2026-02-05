@@ -1072,8 +1072,8 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 			// Record signal extraction metrics
 			metrics.RecordSignalExtraction(config.SignalTypeKeyword, category, latencySeconds)
 
-			// Record metrics
-			results.Metrics.Keyword.ExecutionTimeMs = float64(elapsed.Milliseconds())
+			// Record metrics (use microseconds for better precision)
+			results.Metrics.Keyword.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
 			results.Metrics.Keyword.Confidence = 1.0 // Rule-based, always 1.0
 
 			logging.Infof("[Signal Computation] Keyword signal evaluation completed in %v", elapsed)
@@ -1106,8 +1106,8 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 			// Record signal extraction metrics
 			metrics.RecordSignalExtraction(config.SignalTypeEmbedding, category, latencySeconds)
 
-			// Record metrics
-			results.Metrics.Embedding.ExecutionTimeMs = float64(elapsed.Milliseconds())
+			// Record metrics (use microseconds for better precision)
+			results.Metrics.Embedding.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
 			if category != "" && err == nil && confidence > 0 {
 				results.Metrics.Embedding.Confidence = confidence
 			}
@@ -1149,8 +1149,8 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 			// Record signal extraction metrics
 			metrics.RecordSignalExtraction(config.SignalTypeDomain, categoryName, latencySeconds)
 
-			// Record metrics
-			results.Metrics.Domain.ExecutionTimeMs = float64(elapsed.Milliseconds())
+			// Record metrics (use microseconds for better precision)
+			results.Metrics.Domain.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
 			if categoryName != "" && err == nil {
 				results.Metrics.Domain.Confidence = float64(result.Confidence)
 			}
@@ -1196,8 +1196,8 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 			// Record signal extraction metrics
 			metrics.RecordSignalExtraction(config.SignalTypeFactCheck, signalName, latencySeconds)
 
-			// Record metrics
-			results.Metrics.FactCheck.ExecutionTimeMs = float64(elapsed.Milliseconds())
+			// Record metrics (use microseconds for better precision)
+			results.Metrics.FactCheck.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
 			if signalName != "" && err == nil && factCheckResult != nil {
 				results.Metrics.FactCheck.Confidence = float64(factCheckResult.Confidence)
 			}
@@ -1244,8 +1244,8 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 			// Record signal extraction metrics
 			metrics.RecordSignalExtraction(config.SignalTypeUserFeedback, signalName, latencySeconds)
 
-			// Record metrics
-			results.Metrics.UserFeedback.ExecutionTimeMs = float64(elapsed.Milliseconds())
+			// Record metrics (use microseconds for better precision)
+			results.Metrics.UserFeedback.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
 			if signalName != "" && err == nil && feedbackResult != nil {
 				results.Metrics.UserFeedback.Confidence = float64(feedbackResult.Confidence)
 			}
@@ -1295,8 +1295,8 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 			// Record signal extraction metrics
 			metrics.RecordSignalExtraction(config.SignalTypePreference, preferenceName, latencySeconds)
 
-			// Record metrics
-			results.Metrics.Preference.ExecutionTimeMs = float64(elapsed.Milliseconds())
+			// Record metrics (use microseconds for better precision)
+			results.Metrics.Preference.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
 			if preferenceName != "" && err == nil && preferenceResult != nil && preferenceResult.Confidence > 0 {
 				results.Metrics.Preference.Confidence = float64(preferenceResult.Confidence)
 			}
@@ -1344,8 +1344,8 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 			// Record signal extraction metrics
 			metrics.RecordSignalExtraction(config.SignalTypeLanguage, languageCode, latencySeconds)
 
-			// Record metrics
-			results.Metrics.Language.ExecutionTimeMs = float64(elapsed.Milliseconds())
+			// Record metrics (use microseconds for better precision)
+			results.Metrics.Language.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
 			if languageCode != "" && err == nil && languageResult != nil {
 				results.Metrics.Language.Confidence = languageResult.Confidence
 			}
@@ -1399,8 +1399,8 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 					metrics.RecordSignalExtraction(config.SignalTypeLatency, "", latencySeconds)
 				}
 
-				// Record metrics
-				results.Metrics.Latency.ExecutionTimeMs = float64(elapsed.Milliseconds())
+				// Record metrics (use microseconds for better precision)
+				results.Metrics.Latency.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
 				results.Metrics.Latency.Confidence = 1.0 // Rule-based, always 1.0
 
 				logging.Infof("[Signal Computation] Latency signal evaluation completed in %v", elapsed)
@@ -1437,8 +1437,8 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 			matchedRules, count, err := c.contextClassifier.Classify(contextText)
 			elapsed := time.Since(start)
 
-			// Record metrics
-			results.Metrics.Context.ExecutionTimeMs = float64(elapsed.Milliseconds())
+			// Record metrics (use microseconds for better precision)
+			results.Metrics.Context.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
 			results.Metrics.Context.Confidence = 1.0 // Rule-based, always 1.0
 
 			logging.Infof("[Signal Computation] Context signal evaluation completed in %v (count=%d)", elapsed, count)
@@ -1471,8 +1471,8 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 				metrics.RecordSignalMatch(config.SignalTypeComplexity, ruleName)
 			}
 
-			// Record metrics
-			results.Metrics.Complexity.ExecutionTimeMs = float64(elapsed.Milliseconds())
+			// Record metrics (use microseconds for better precision)
+			results.Metrics.Complexity.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
 			results.Metrics.Complexity.Confidence = 1.0 // Rule-based, always 1.0
 
 			logging.Infof("[Signal Computation] Complexity signal evaluation completed in %v", elapsed)

@@ -203,6 +203,7 @@ type EvalDecisionResult struct {
 // EvalResponse represents the response from eval classification
 // This is specifically designed for evaluation scenarios with comprehensive signal information
 type EvalResponse struct {
+	OriginalText     string                                  `json:"original_text"` // The original query text
 	DecisionResult   *EvalDecisionResult                     `json:"decision_result,omitempty"`
 	RecommendedModel string                                  `json:"recommended_model,omitempty"`
 	RoutingDecision  string                                  `json:"routing_decision,omitempty"`
@@ -846,7 +847,8 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 	if s.classifier == nil {
 		// Return placeholder response
 		return &EvalResponse{
-			Metrics: &classification.SignalMetricsCollection{},
+			OriginalText: req.Text,
+			Metrics:      &classification.SignalMetricsCollection{},
 		}, nil
 	}
 
@@ -867,18 +869,20 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 	}
 
 	// Build eval response
-	response := s.buildEvalResponse(signals, decisionResult)
+	response := s.buildEvalResponse(req.Text, signals, decisionResult)
 
 	return response, nil
 }
 
 // buildEvalResponse builds an EvalResponse from signal results and decision result
 func (s *ClassificationService) buildEvalResponse(
+	text string,
 	signals *classification.SignalResults,
 	decisionResult *decision.DecisionResult,
 ) *EvalResponse {
 	response := &EvalResponse{
-		Metrics: signals.Metrics,
+		OriginalText: text,
+		Metrics:      signals.Metrics,
 	}
 
 	// Build matched signals
