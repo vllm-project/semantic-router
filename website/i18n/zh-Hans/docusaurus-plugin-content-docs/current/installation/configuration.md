@@ -425,17 +425,32 @@ signals:
 - 支持多语言应用
 - 通过 whatlanggo 库支持 100 多种本地化语言
 
-### 8. 延迟信号 - 基于 TPOT 的路由
+### 8. 延迟信号 — 基于百分位的路由
 
 ```yaml
 signals:
   latency:
-    - name: "low_latency"
-      max_tpot: 0.05  # 每个 token 50ms
-      description: "用于实时聊天应用"
-    - name: "medium_latency"
-      max_tpot: 0.15  # 每个 token 150ms
-      description: "用于标准应用"
+    # 推荐：同时使用 TPOT 和 TTFT 的百分位，以获得更全面的评估
+    - name: "low_latency_comprehensive"
+      tpot_percentile: 10  # TPOT 的第 10 百分位（最快的前 10% Token 生成速度）
+      ttft_percentile: 10  # TTFT 的第 10 百分位（最快的前 10% 首 Token）
+      description: "适用于实时应用——启动快、生成快"
+    
+    # 针对不同优先级使用不同的百分位
+    - name: "balanced_latency"
+      tpot_percentile: 50  # TPOT 的中位数（前 50%）
+      ttft_percentile: 10  # TTFT 的前 10%（优先保证快速启动）
+      description: "优先快速启动，接受中等的生成速度"
+    
+    # 仅使用 TPOT 百分位（使用场景：批处理）
+    - name: "batch_processing_optimized"
+      tpot_percentile: 10  # TPOT 的第 10 百分位
+      description: "适用于对吞吐量（TPOT）要求较高的批处理场景"
+    
+    # 仅使用 TTFT 百分位（使用场景：实时聊天）
+    - name: "chat_fast_start"
+      ttft_percentile: 10  # TTFT 的第 10 百分位
+      description: "适用于对首 Token 延迟（TTFT）要求极高的聊天应用"
 ```
 
 **用例：**
