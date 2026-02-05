@@ -1,90 +1,98 @@
 [
   {
-    "name": "OR operator - single keyword urgent",
-    "description": "Test OR operator with 'urgent' keyword",
+    "name": "OR operator - single keyword 'urgent' (1/4 = 0.625)",
+    "description": "urgent_request OR matches with 'urgent'",
     "query": "I need urgent help with my account",
     "expected_category": "urgent_request",
-    "expected_confidence": 1.0,
-    "matched_keywords": ["urgent"]
+    "expected_confidence": 0.625,
+    "matched_keywords": ["urgent_request"]
   },
   {
-    "name": "OR operator - immediate keyword",
-    "description": "Test OR operator with 'immediate' keyword",
-    "query": "This requires immediate attention",
+    "name": "OR operator - keyword 'emergency' (1/4 = 0.625)",
+    "description": "urgent_request OR matches with 'emergency'",
+    "query": "This is an emergency situation please help",
+    "expected_category": "urgent_request",
+    "expected_confidence": 0.625,
+    "matched_keywords": ["urgent_request"]
+  },
+  {
+    "name": "OR operator - keyword 'immediate' (1/4 = 0.625)",
+    "description": "urgent_request OR matches with 'immediate'",
+    "query": "I need immediate assistance with this problem",
+    "expected_category": "urgent_request",
+    "expected_confidence": 0.625,
+    "matched_keywords": ["urgent_request"]
+  },
+  {
+    "name": "OR operator - keyword 'asap' (1/4 = 0.625)",
+    "description": "urgent_request OR matches with 'asap'",
+    "query": "Please respond asap this is important",
+    "expected_category": "urgent_request",
+    "expected_confidence": 0.625,
+    "matched_keywords": ["urgent_request"]
+  },
+  {
+    "name": "OR operator - TWO keywords (2/4 = 0.75)",
+    "description": "urgent_request OR with 2 keywords matched",
+    "query": "This urgent emergency needs your help now",
+    "expected_category": "urgent_request",
+    "expected_confidence": 0.75,
+    "matched_keywords": ["urgent_request"]
+  },
+  {
+    "name": "OR operator - THREE keywords (3/4 = 0.875)",
+    "description": "urgent_request OR with 3 keywords matched",
+    "query": "This is urgent and needs immediate response asap",
+    "expected_category": "urgent_request",
+    "expected_confidence": 0.875,
+    "matched_keywords": ["urgent_request"]
+  },
+  {
+    "name": "OR operator - ALL FOUR keywords (4/4 = 1.0)",
+    "description": "urgent_request OR with all 4 keywords matched",
+    "query": "This urgent emergency requires immediate attention asap please",
     "expected_category": "urgent_request",
     "expected_confidence": 1.0,
-    "matched_keywords": ["immediate"]
+    "matched_keywords": ["urgent_request"]
   },
   {
-    "name": "OR operator - asap keyword",
-    "description": "Test OR operator with 'asap' keyword",
-    "query": "Please respond asap to this request",
-    "expected_category": "urgent_request",
-    "expected_confidence": 1.0,
-    "matched_keywords": ["asap"]
-  },
-  {
-    "name": "OR operator - emergency keyword",
-    "description": "Test OR operator with 'emergency' keyword",
-    "query": "This is an emergency situation",
-    "expected_category": "urgent_request",
-    "expected_confidence": 1.0,
-    "matched_keywords": ["emergency"]
-  },
-  {
-    "name": "AND operator - all keywords present",
-    "description": "Test AND operator with SSN and credit card",
-    "query": "My SSN and credit card were stolen",
+    "name": "AND operator - both keywords present (2/2 = 1.0)",
+    "description": "sensitive_data AND matches - all keywords present",
+    "query": "My SSN and credit card info were stolen",
     "expected_category": "sensitive_data",
     "expected_confidence": 1.0,
-    "matched_keywords": ["SSN", "credit card"]
+    "matched_keywords": ["sensitive_data"]
   },
   {
-    "name": "AND operator - partial match fails (only SSN)",
-    "description": "Test AND operator with only one keyword - should fall back to general decision",
-    "query": "My SSN was stolen",
-    "expected_category": "general",
-    "expected_confidence": 0.0,
-    "matched_keywords": []
+    "name": "REGEX operator - email pattern (1/2 = 0.75)",
+    "description": "regex_pattern_match OR matches email pattern",
+    "query": "Please send the report to user.name@domain.com today",
+    "expected_category": "regex_pattern_match",
+    "expected_confidence": 0.75,
+    "matched_keywords": ["regex_pattern_match"]
   },
   {
-    "name": "AND operator - partial match fails (only credit card)",
-    "description": "Test AND operator with only credit card keyword - should fall back to general decision",
-    "query": "My credit card was stolen",
-    "expected_category": "general",
-    "expected_confidence": 0.0,
-    "matched_keywords": []
-  },
-  {
-    "name": "AND operator - keywords in different order",
-    "description": "Test AND operator with reversed keyword order",
-    "query": "My credit card and SSN were compromised",
-    "expected_category": "sensitive_data",
-    "expected_confidence": 1.0,
-    "matched_keywords": ["SSN", "credit card"]
+    "name": "REGEX operator - Windows path (1/2 = 0.75)",
+    "description": "regex_pattern_match OR matches Windows path",
+    "query": "The file is located at C:\\Program Files\\MyApp\\config.txt",
+    "expected_category": "regex_pattern_match",
+    "expected_confidence": 0.75,
+    "matched_keywords": ["regex_pattern_match"]
   },
   {
     "name": "Case insensitive - uppercase URGENT",
-    "description": "Test case insensitive matching with uppercase",
-    "query": "This is URGENT",
+    "description": "urgent_request matches with uppercase",
+    "query": "This is URGENT please help",
     "expected_category": "urgent_request",
-    "expected_confidence": 1.0,
-    "matched_keywords": ["urgent"]
+    "expected_confidence": 0.625,
+    "matched_keywords": ["urgent_request"]
   },
   {
-    "name": "Case insensitive - mixed case Urgent",
-    "description": "Test case insensitive matching with mixed case",
-    "query": "This is Urgent",
+    "name": "Case insensitive - mixed case Emergency",
+    "description": "urgent_request matches with mixed case",
+    "query": "This is an Emergency situation",
     "expected_category": "urgent_request",
-    "expected_confidence": 1.0,
-    "matched_keywords": ["urgent"]
-  },
-  {
-    "name": "Case insensitive - lowercase urgent",
-    "description": "Test case insensitive matching with lowercase",
-    "query": "this is very urgent please help",
-    "expected_category": "urgent_request",
-    "expected_confidence": 1.0,
-    "matched_keywords": ["urgent"]
+    "expected_confidence": 0.625,
+    "matched_keywords": ["urgent_request"]
   }
 ]

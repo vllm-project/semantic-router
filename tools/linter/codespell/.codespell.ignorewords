@@ -45,3 +45,6 @@ notin
 AKS
 # Rust programming terms (not spelling errors)
 statics
+# Intentional typos for fuzzy matching tests (keyword_accuracy_test.go)
+immedaite
+pasword

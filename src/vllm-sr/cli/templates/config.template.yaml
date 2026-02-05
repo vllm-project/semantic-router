@@ -21,6 +21,8 @@ signals:
         - "calculate"
         - "equation"
       case_sensitive: false
+      fuzzy_match: false      # Enable fuzzy matching for typo tolerance (default: false)
+      # fuzzy_threshold: 2    # Max character edits allowed (default: 2)
 
     - name: "code_keywords"
       operator: "OR"
@@ -28,6 +30,7 @@ signals:
         - "function"
         - "class"
       case_sensitive: false
+      fuzzy_match: false
 
     - name: "looper_keywords"
       operator: "OR"
@@ -35,6 +38,7 @@ signals:
         - "looper"
         - "collaborative"
       case_sensitive: false
+      fuzzy_match: false
 
   # Embedding-based signals (semantic similarity)
   embeddings:

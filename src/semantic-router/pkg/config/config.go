@@ -794,6 +794,17 @@ type KeywordRule struct {
 	Operator      string   `yaml:"operator"`
 	Keywords      []string `yaml:"keywords"`
 	CaseSensitive bool     `yaml:"case_sensitive"`
+
+	// FuzzyMatch enables approximate string matching using Levenshtein distance.
+	// When enabled, keywords will match even with typos (e.g., "urgnt" matches "urgent").
+	// Default: false (exact matching only)
+	FuzzyMatch bool `yaml:"fuzzy_match,omitempty"`
+
+	// FuzzyThreshold sets the maximum Levenshtein distance for fuzzy matching.
+	// Lower values = stricter matching (1-2 recommended for short words, 2-3 for longer).
+	// Only used when FuzzyMatch is true.
+	// Default: 2
+	FuzzyThreshold int `yaml:"fuzzy_threshold,omitempty"`
 }
 
 // Aggregation method used in keyword embedding rule
