@@ -1742,7 +1742,7 @@ func InitQwen3PreferenceClassifier(modelPath string, useCPU bool) error {
 	var err error
 	qwenPreferenceInitOnce.Do(func() {
 		if modelPath == "" {
-			// Default to Qwen3 preference classifier model if path is empty			// Default to the jailbreak classification model if path is empty
+			// Default to Qwen3 preference classifier model if path is empty
 			modelPath = "./models/mom-preference-classifier"
 		}
 
