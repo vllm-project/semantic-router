@@ -890,6 +890,80 @@ func (c *Classifier) getUsedSignals() map[string]bool {
 	return usedSignals
 }
 
+// getAllSignalTypes returns a map containing all configured signal types
+// This is used when forceEvaluateAll is true to evaluate all signals regardless of decision usage
+func (c *Classifier) getAllSignalTypes() map[string]bool {
+	allSignals := make(map[string]bool)
+
+	// Add all configured keyword rules
+	for _, rule := range c.Config.KeywordRules {
+		key := strings.ToLower(config.SignalTypeKeyword + ":" + rule.Name)
+		allSignals[key] = true
+	}
+
+	// Add all configured embedding rules
+	for _, rule := range c.Config.EmbeddingRules {
+		key := strings.ToLower(config.SignalTypeEmbedding + ":" + rule.Name)
+		allSignals[key] = true
+	}
+
+	// Add all configured domain categories
+	for _, category := range c.Config.Categories {
+		key := strings.ToLower(config.SignalTypeDomain + ":" + category.Name)
+		allSignals[key] = true
+	}
+
+	// Add all configured fact-check rules
+	for _, rule := range c.Config.FactCheckRules {
+		key := strings.ToLower(config.SignalTypeFactCheck + ":" + rule.Name)
+		allSignals[key] = true
+	}
+
+	// Add all configured user feedback rules
+	for _, rule := range c.Config.UserFeedbackRules {
+		key := strings.ToLower(config.SignalTypeUserFeedback + ":" + rule.Name)
+		allSignals[key] = true
+	}
+
+	// Add all configured preference rules
+	for _, rule := range c.Config.PreferenceRules {
+		key := strings.ToLower(config.SignalTypePreference + ":" + rule.Name)
+		allSignals[key] = true
+	}
+
+	// Add all configured language rules
+	for _, rule := range c.Config.LanguageRules {
+		key := strings.ToLower(config.SignalTypeLanguage + ":" + rule.Name)
+		allSignals[key] = true
+	}
+
+	// Add all configured latency rules
+	for _, rule := range c.Config.LatencyRules {
+		key := strings.ToLower(config.SignalTypeLatency + ":" + rule.Name)
+		allSignals[key] = true
+	}
+
+	// Add all configured context rules
+	for _, rule := range c.Config.ContextRules {
+		key := strings.ToLower(config.SignalTypeContext + ":" + rule.Name)
+		allSignals[key] = true
+	}
+
+	// Add all configured complexity rules
+	for _, rule := range c.Config.ComplexityRules {
+		key := strings.ToLower(config.SignalTypeComplexity + ":" + rule.Name)
+		allSignals[key] = true
+	}
+
+	return allSignals
+}
+
+// SignalMetrics contains performance and probability metrics for a single signal
+type SignalMetrics struct {
+	ExecutionTimeMs float64 `json:"execution_time_ms"` // Execution time in milliseconds
+	Confidence      float64 `json:"confidence"`        // Confidence score (0.0-1.0), 0 if not applicable
+}
+
 // SignalResults contains all evaluated signal results
 type SignalResults struct {
 	MatchedKeywordRules      []string
@@ -904,6 +978,23 @@ type SignalResults struct {
 	MatchedContextRules      []string // Matched context rule names (e.g. "low_token_count")
 	TokenCount               int      // Total token count
 	MatchedComplexityRules   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
+
+	// Signal metrics (only populated in eval mode)
+	Metrics *SignalMetricsCollection
+}
+
+// SignalMetricsCollection contains metrics for all signal types
+type SignalMetricsCollection struct {
+	Keyword      SignalMetrics `json:"keyword"`
+	Embedding    SignalMetrics `json:"embedding"`
+	Domain       SignalMetrics `json:"domain"`
+	FactCheck    SignalMetrics `json:"fact_check"`
+	UserFeedback SignalMetrics `json:"user_feedback"`
+	Preference   SignalMetrics `json:"preference"`
+	Language     SignalMetrics `json:"language"`
+	Latency      SignalMetrics `json:"latency"`
+	Context      SignalMetrics `json:"context"`
+	Complexity   SignalMetrics `json:"complexity"`
 }
 
 // analyzeRuleCombination recursively analyzes rule combinations to find used signals
@@ -936,17 +1027,35 @@ func isSignalTypeUsed(usedSignals map[string]bool, signalType string) bool {
 // This is the new method that includes fact_check signals
 func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 	// For backward compatibility, use the same text for both evaluation and context counting
-	return c.EvaluateAllSignalsWithContext(text, text)
+	return c.EvaluateAllSignalsWithContext(text, text, false)
+}
+
+// EvaluateAllSignalsWithForceOption evaluates signals with option to force evaluate all
+// forceEvaluateAll: if true, evaluates all configured signals regardless of decision usage
+func (c *Classifier) EvaluateAllSignalsWithForceOption(text string, forceEvaluateAll bool) *SignalResults {
+	return c.EvaluateAllSignalsWithContext(text, text, forceEvaluateAll)
 }
 
 // EvaluateAllSignalsWithContext evaluates all signal types with separate text for context counting
 // text: text to use for signal evaluation (usually latest user message)
 // contextText: text to use for context token counting (usually all messages combined)
-func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string) *SignalResults {
-	// Determine which signals (type:name) are actually used in decisions
-	usedSignals := c.getUsedSignals()
+// forceEvaluateAll: if true, evaluates all configured signals regardless of decision usage (for eval scenarios)
+func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string, forceEvaluateAll bool) *SignalResults {
+	// Determine which signals (type:name) should be evaluated
+	var usedSignals map[string]bool
+	if forceEvaluateAll {
+		// Eval mode: evaluate all configured signals
+		usedSignals = c.getAllSignalTypes()
+		logging.Infof("[Signal Computation] Force evaluate all signals mode enabled")
+	} else {
+		// Normal mode: only evaluate signals used in decisions
+		usedSignals = c.getUsedSignals()
+	}
 
-	results := &SignalResults{}
+	results := &SignalResults{
+		Metrics: &SignalMetricsCollection{}, // Always initialize, no overhead
+	}
+
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
@@ -962,6 +1071,10 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 
 			// Record signal extraction metrics
 			metrics.RecordSignalExtraction(config.SignalTypeKeyword, category, latencySeconds)
+
+			// Record metrics (use microseconds for better precision)
+			results.Metrics.Keyword.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
+			results.Metrics.Keyword.Confidence = 1.0 // Rule-based, always 1.0
 
 			logging.Infof("[Signal Computation] Keyword signal evaluation completed in %v", elapsed)
 			if err != nil {
@@ -986,12 +1099,18 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			category, _, err := c.keywordEmbeddingClassifier.Classify(text)
+			category, confidence, err := c.keywordEmbeddingClassifier.Classify(text)
 			elapsed := time.Since(start)
 			latencySeconds := elapsed.Seconds()
 
 			// Record signal extraction metrics
 			metrics.RecordSignalExtraction(config.SignalTypeEmbedding, category, latencySeconds)
+
+			// Record metrics (use microseconds for better precision)
+			results.Metrics.Embedding.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
+			if category != "" && err == nil && confidence > 0 {
+				results.Metrics.Embedding.Confidence = confidence
+			}
 
 			logging.Infof("[Signal Computation] Embedding signal evaluation completed in %v", elapsed)
 			if err != nil {
@@ -1029,6 +1148,12 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 
 			// Record signal extraction metrics
 			metrics.RecordSignalExtraction(config.SignalTypeDomain, categoryName, latencySeconds)
+
+			// Record metrics (use microseconds for better precision)
+			results.Metrics.Domain.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
+			if categoryName != "" && err == nil {
+				results.Metrics.Domain.Confidence = float64(result.Confidence)
+			}
 
 			logging.Infof("[Signal Computation] Domain signal evaluation completed in %v", elapsed)
 			if err != nil {
@@ -1071,6 +1196,12 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 			// Record signal extraction metrics
 			metrics.RecordSignalExtraction(config.SignalTypeFactCheck, signalName, latencySeconds)
 
+			// Record metrics (use microseconds for better precision)
+			results.Metrics.FactCheck.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
+			if signalName != "" && err == nil && factCheckResult != nil {
+				results.Metrics.FactCheck.Confidence = float64(factCheckResult.Confidence)
+			}
+
 			logging.Infof("[Signal Computation] Fact-check signal evaluation completed in %v", elapsed)
 			if err != nil {
 				logging.Errorf("fact-check rule evaluation failed: %v", err)
@@ -1112,6 +1243,12 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 
 			// Record signal extraction metrics
 			metrics.RecordSignalExtraction(config.SignalTypeUserFeedback, signalName, latencySeconds)
+
+			// Record metrics (use microseconds for better precision)
+			results.Metrics.UserFeedback.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
+			if signalName != "" && err == nil && feedbackResult != nil {
+				results.Metrics.UserFeedback.Confidence = float64(feedbackResult.Confidence)
+			}
 
 			logging.Infof("[Signal Computation] User feedback signal evaluation completed in %v", elapsed)
 			if err != nil {
@@ -1158,6 +1295,12 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 			// Record signal extraction metrics
 			metrics.RecordSignalExtraction(config.SignalTypePreference, preferenceName, latencySeconds)
 
+			// Record metrics (use microseconds for better precision)
+			results.Metrics.Preference.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
+			if preferenceName != "" && err == nil && preferenceResult != nil && preferenceResult.Confidence > 0 {
+				results.Metrics.Preference.Confidence = float64(preferenceResult.Confidence)
+			}
+
 			logging.Infof("[Signal Computation] Preference signal evaluation completed in %v", elapsed)
 			if err != nil {
 				logging.Errorf("preference rule evaluation failed: %v", err)
@@ -1200,6 +1343,12 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 
 			// Record signal extraction metrics
 			metrics.RecordSignalExtraction(config.SignalTypeLanguage, languageCode, latencySeconds)
+
+			// Record metrics (use microseconds for better precision)
+			results.Metrics.Language.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
+			if languageCode != "" && err == nil && languageResult != nil {
+				results.Metrics.Language.Confidence = languageResult.Confidence
+			}
 
 			logging.Infof("[Signal Computation] Language signal evaluation completed in %v", elapsed)
 			if err != nil {
@@ -1250,6 +1399,10 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 					metrics.RecordSignalExtraction(config.SignalTypeLatency, "", latencySeconds)
 				}
 
+				// Record metrics (use microseconds for better precision)
+				results.Metrics.Latency.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
+				results.Metrics.Latency.Confidence = 1.0 // Rule-based, always 1.0
+
 				logging.Infof("[Signal Computation] Latency signal evaluation completed in %v", elapsed)
 				if err != nil {
 					logging.Errorf("latency rule evaluation failed: %v", err)
@@ -1283,6 +1436,11 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 			start := time.Now()
 			matchedRules, count, err := c.contextClassifier.Classify(contextText)
 			elapsed := time.Since(start)
+
+			// Record metrics (use microseconds for better precision)
+			results.Metrics.Context.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
+			results.Metrics.Context.Confidence = 1.0 // Rule-based, always 1.0
+
 			logging.Infof("[Signal Computation] Context signal evaluation completed in %v (count=%d)", elapsed, count)
 			if err != nil {
 				logging.Errorf("context rule evaluation failed: %v", err)
@@ -1312,6 +1470,10 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 				metrics.RecordSignalExtraction(config.SignalTypeComplexity, ruleName, latencySeconds)
 				metrics.RecordSignalMatch(config.SignalTypeComplexity, ruleName)
 			}
+
+			// Record metrics (use microseconds for better precision)
+			results.Metrics.Complexity.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
+			results.Metrics.Complexity.Confidence = 1.0 // Rule-based, always 1.0
 
 			logging.Infof("[Signal Computation] Complexity signal evaluation completed in %v", elapsed)
 			if err != nil {

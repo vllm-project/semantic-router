@@ -32,6 +32,32 @@ func (s *ClassificationAPIServer) handleIntentClassification(w http.ResponseWrit
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
 
+// handleEvalClassification handles evaluation classification requests
+// This endpoint is specifically designed for evaluation scenarios where all configured signals
+// should be evaluated regardless of whether they are used in decisions
+func (s *ClassificationAPIServer) handleEvalClassification(w http.ResponseWriter, r *http.Request) {
+	var req services.IntentRequest
+	if err := s.parseJSONRequest(r, &req); err != nil {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		return
+	}
+
+	// Force evaluate all signals for eval scenarios
+	if req.Options == nil {
+		req.Options = &services.IntentOptions{}
+	}
+	req.Options.EvaluateAllSignals = true
+
+	// Use signal-driven classification with all signals evaluated
+	response, err := s.classificationSvc.ClassifyIntentForEval(req)
+	if err != nil {
+		s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
+		return
+	}
+
+	s.writeJSONResponse(w, http.StatusOK, response)
+}
+
 // handlePIIDetection handles PII detection requests
 func (s *ClassificationAPIServer) handlePIIDetection(w http.ResponseWriter, r *http.Request) {
 	var req services.PIIRequest

@@ -168,6 +168,7 @@ type IntentOptions struct {
 	ReturnProbabilities bool    `json:"return_probabilities,omitempty"`
 	ConfidenceThreshold float64 `json:"confidence_threshold,omitempty"`
 	IncludeExplanation  bool    `json:"include_explanation,omitempty"`
+	EvaluateAllSignals  bool    `json:"evaluate_all_signals,omitempty"` // Force evaluate all configured signals (for eval scenarios)
 }
 
 // MatchedSignals represents all matched signals from signal evaluation
@@ -189,6 +190,24 @@ type DecisionResult struct {
 	DecisionName string   `json:"decision_name"`
 	Confidence   float64  `json:"confidence"`
 	MatchedRules []string `json:"matched_rules"`
+}
+
+// EvalDecisionResult represents the decision result for eval scenarios (without confidence)
+type EvalDecisionResult struct {
+	DecisionName     string          `json:"decision_name"`
+	UsedSignals      *MatchedSignals `json:"used_signals"`      // Signals used by this decision (from decision rules)
+	MatchedSignals   *MatchedSignals `json:"matched_signals"`   // Signals that matched
+	UnmatchedSignals *MatchedSignals `json:"unmatched_signals"` // Signals that didn't match
+}
+
+// EvalResponse represents the response from eval classification
+// This is specifically designed for evaluation scenarios with comprehensive signal information
+type EvalResponse struct {
+	OriginalText      string                                  `json:"original_text"` // The original query text
+	DecisionResult    *EvalDecisionResult                     `json:"decision_result,omitempty"`
+	RecommendedModels []string                                `json:"recommended_models,omitempty"` // All models from matched decision's modelRefs
+	RoutingDecision   string                                  `json:"routing_decision,omitempty"`
+	Metrics           *classification.SignalMetricsCollection `json:"metrics"` // Performance and confidence for each signal
 }
 
 // IntentResponse represents the response from intent classification
@@ -305,7 +324,9 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 	}
 
 	// Use signal-driven architecture: evaluate all signals first
-	signals := s.classifier.EvaluateAllSignals(req.Text)
+	// Check if we should force evaluate all signals (for eval scenarios)
+	forceEvaluateAll := req.Options != nil && req.Options.EvaluateAllSignals
+	signals := s.classifier.EvaluateAllSignalsWithForceOption(req.Text, forceEvaluateAll)
 
 	// Evaluate decision with engine (if decisions are configured)
 	// Pass pre-computed signals to avoid re-evaluation
@@ -813,4 +834,269 @@ func (s *ClassificationService) UpdateConfig(newConfig *config.RouterConfig) {
 	s.config = newConfig
 	// Update the global config as well
 	config.Replace(newConfig)
+}
+
+// ClassifyIntentForEval performs intent classification specifically for evaluation scenarios
+// This method forces evaluation of all signals and returns comprehensive signal information
+func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalResponse, error) {
+	if req.Text == "" {
+		return nil, fmt.Errorf("text cannot be empty")
+	}
+
+	// Check if classifier is available
+	if s.classifier == nil {
+		// Return placeholder response
+		return &EvalResponse{
+			OriginalText: req.Text,
+			Metrics:      &classification.SignalMetricsCollection{},
+		}, nil
+	}
+
+	// Force evaluate all signals
+	signals := s.classifier.EvaluateAllSignalsWithForceOption(req.Text, true)
+
+	// Evaluate decision with engine (if decisions are configured)
+	var decisionResult *decision.DecisionResult
+	var err error
+	if s.config != nil && len(s.config.IntelligentRouting.Decisions) > 0 {
+		decisionResult, err = s.classifier.EvaluateDecisionWithEngine(signals)
+		if err != nil {
+			// Log error but continue
+			if !strings.Contains(err.Error(), "no decisions configured") {
+				logging.Warnf("Decision evaluation failed: %v", err)
+			}
+		}
+	}
+
+	// Build eval response
+	response := s.buildEvalResponse(req.Text, signals, decisionResult)
+
+	return response, nil
+}
+
+// buildEvalResponse builds an EvalResponse from signal results and decision result
+func (s *ClassificationService) buildEvalResponse(
+	text string,
+	signals *classification.SignalResults,
+	decisionResult *decision.DecisionResult,
+) *EvalResponse {
+	response := &EvalResponse{
+		OriginalText: text,
+		Metrics:      signals.Metrics,
+	}
+
+	// Build matched signals
+	matchedSignals := &MatchedSignals{
+		Keywords:     signals.MatchedKeywordRules,
+		Embeddings:   signals.MatchedEmbeddingRules,
+		Domains:      signals.MatchedDomainRules,
+		FactCheck:    signals.MatchedFactCheckRules,
+		UserFeedback: signals.MatchedUserFeedbackRules,
+		Preferences:  signals.MatchedPreferenceRules,
+		Language:     signals.MatchedLanguageRules,
+		Latency:      signals.MatchedLatencyRules,
+		Context:      signals.MatchedContextRules,
+		Complexity:   signals.MatchedComplexityRules,
+	}
+
+	// Build unmatched signals by comparing all configured signals with matched signals
+	unmatchedSignals := s.getUnmatchedSignals(signals)
+
+	// Build decision result
+	if decisionResult != nil && decisionResult.Decision != nil {
+		// Extract used signals from decision's rule configuration (not just matched rules)
+		usedSignals := s.extractUsedSignalsFromDecision(decisionResult.Decision)
+
+		response.DecisionResult = &EvalDecisionResult{
+			DecisionName:     decisionResult.Decision.Name,
+			UsedSignals:      usedSignals,
+			MatchedSignals:   matchedSignals,
+			UnmatchedSignals: unmatchedSignals,
+		}
+
+		// Set recommended models and routing decision
+		if len(decisionResult.Decision.ModelRefs) > 0 {
+			// Collect all models from modelRefs
+			models := make([]string, 0, len(decisionResult.Decision.ModelRefs))
+			for _, modelRef := range decisionResult.Decision.ModelRefs {
+				models = append(models, modelRef.Model)
+			}
+			response.RecommendedModels = models
+			response.RoutingDecision = decisionResult.Decision.Name
+		}
+	} else {
+		// No decision matched
+		response.DecisionResult = &EvalDecisionResult{
+			DecisionName:     "",
+			UsedSignals:      &MatchedSignals{}, // Empty used signals
+			MatchedSignals:   matchedSignals,
+			UnmatchedSignals: unmatchedSignals,
+		}
+	}
+
+	return response
+}
+
+// extractUsedSignalsFromDecision extracts all signals used in a decision's rule configuration
+// This includes ALL signals defined in the decision rules, not just the ones that matched
+func (s *ClassificationService) extractUsedSignalsFromDecision(decision *config.Decision) *MatchedSignals {
+	usedSignals := &MatchedSignals{}
+
+	// Recursively extract signals from rule combination
+	s.extractSignalsFromRuleCombination(decision.Rules, usedSignals)
+
+	return usedSignals
+}
+
+// extractSignalsFromRuleCombination recursively extracts signals from a rule combination
+func (s *ClassificationService) extractSignalsFromRuleCombination(rules config.RuleCombination, usedSignals *MatchedSignals) {
+	for _, condition := range rules.Conditions {
+		signalType := strings.ToLower(strings.TrimSpace(condition.Type))
+		signalName := strings.TrimSpace(condition.Name)
+
+		// Add to appropriate field based on type
+		switch signalType {
+		case "keyword":
+			if !contains(usedSignals.Keywords, signalName) {
+				usedSignals.Keywords = append(usedSignals.Keywords, signalName)
+			}
+		case "embedding":
+			if !contains(usedSignals.Embeddings, signalName) {
+				usedSignals.Embeddings = append(usedSignals.Embeddings, signalName)
+			}
+		case "domain":
+			if !contains(usedSignals.Domains, signalName) {
+				usedSignals.Domains = append(usedSignals.Domains, signalName)
+			}
+		case "fact_check":
+			if !contains(usedSignals.FactCheck, signalName) {
+				usedSignals.FactCheck = append(usedSignals.FactCheck, signalName)
+			}
+		case "user_feedback":
+			if !contains(usedSignals.UserFeedback, signalName) {
+				usedSignals.UserFeedback = append(usedSignals.UserFeedback, signalName)
+			}
+		case "preference":
+			if !contains(usedSignals.Preferences, signalName) {
+				usedSignals.Preferences = append(usedSignals.Preferences, signalName)
+			}
+		case "language":
+			if !contains(usedSignals.Language, signalName) {
+				usedSignals.Language = append(usedSignals.Language, signalName)
+			}
+		case "latency":
+			if !contains(usedSignals.Latency, signalName) {
+				usedSignals.Latency = append(usedSignals.Latency, signalName)
+			}
+		case "context":
+			if !contains(usedSignals.Context, signalName) {
+				usedSignals.Context = append(usedSignals.Context, signalName)
+			}
+		case "complexity":
+			if !contains(usedSignals.Complexity, signalName) {
+				usedSignals.Complexity = append(usedSignals.Complexity, signalName)
+			}
+		}
+	}
+}
+
+// contains checks if a string slice contains a specific string
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
+// getUnmatchedSignals returns all configured signals that were not matched
+func (s *ClassificationService) getUnmatchedSignals(signals *classification.SignalResults) *MatchedSignals {
+	unmatched := &MatchedSignals{}
+
+	if s.classifier == nil || s.config == nil {
+		return unmatched
+	}
+
+	// Helper function to check if a signal is matched
+	isMatched := func(signalName string, matchedList []string) bool {
+		for _, matched := range matchedList {
+			if matched == signalName {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Check keyword rules
+	for _, rule := range s.classifier.Config.KeywordRules {
+		if !isMatched(rule.Name, signals.MatchedKeywordRules) {
+			unmatched.Keywords = append(unmatched.Keywords, rule.Name)
+		}
+	}
+
+	// Check embedding rules
+	for _, rule := range s.classifier.Config.EmbeddingRules {
+		if !isMatched(rule.Name, signals.MatchedEmbeddingRules) {
+			unmatched.Embeddings = append(unmatched.Embeddings, rule.Name)
+		}
+	}
+
+	// Check domain rules (categories)
+	for _, category := range s.classifier.Config.Categories {
+		if !isMatched(category.Name, signals.MatchedDomainRules) {
+			unmatched.Domains = append(unmatched.Domains, category.Name)
+		}
+	}
+
+	// Check fact-check rules
+	for _, rule := range s.classifier.Config.FactCheckRules {
+		if !isMatched(rule.Name, signals.MatchedFactCheckRules) {
+			unmatched.FactCheck = append(unmatched.FactCheck, rule.Name)
+		}
+	}
+
+	// Check user feedback rules
+	for _, rule := range s.classifier.Config.UserFeedbackRules {
+		if !isMatched(rule.Name, signals.MatchedUserFeedbackRules) {
+			unmatched.UserFeedback = append(unmatched.UserFeedback, rule.Name)
+		}
+	}
+
+	// Check preference rules
+	for _, rule := range s.classifier.Config.PreferenceRules {
+		if !isMatched(rule.Name, signals.MatchedPreferenceRules) {
+			unmatched.Preferences = append(unmatched.Preferences, rule.Name)
+		}
+	}
+
+	// Check language rules
+	for _, rule := range s.classifier.Config.LanguageRules {
+		if !isMatched(rule.Name, signals.MatchedLanguageRules) {
+			unmatched.Language = append(unmatched.Language, rule.Name)
+		}
+	}
+
+	// Check latency rules
+	for _, rule := range s.classifier.Config.LatencyRules {
+		if !isMatched(rule.Name, signals.MatchedLatencyRules) {
+			unmatched.Latency = append(unmatched.Latency, rule.Name)
+		}
+	}
+
+	// Check context rules
+	for _, rule := range s.classifier.Config.ContextRules {
+		if !isMatched(rule.Name, signals.MatchedContextRules) {
+			unmatched.Context = append(unmatched.Context, rule.Name)
+		}
+	}
+
+	// Check complexity rules
+	for _, rule := range s.classifier.Config.ComplexityRules {
+		if !isMatched(rule.Name, signals.MatchedComplexityRules) {
+			unmatched.Complexity = append(unmatched.Complexity, rule.Name)
+		}
+	}
+
+	return unmatched
 }
