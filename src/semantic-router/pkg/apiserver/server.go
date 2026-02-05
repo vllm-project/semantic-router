@@ -114,6 +114,9 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	mux.HandleFunc("POST /api/v1/classify/combined", s.handleCombinedClassification)
 	mux.HandleFunc("POST /api/v1/classify/batch", s.handleBatchClassification)
 
+	// Evaluation endpoint - evaluates all configured signals regardless of decision usage
+	mux.HandleFunc("POST /api/v1/eval", s.handleEvalClassification)
+
 	// Embedding endpoints
 	mux.HandleFunc("POST /api/v1/embeddings", s.handleEmbeddings)
 	mux.HandleFunc("POST /api/v1/similarity", s.handleSimilarity)
