@@ -12,9 +12,9 @@ import (
 )
 
 var (
-	prefOnce sync.Once
-	prefErr  error
-	prefPath string
+	prefOnce  sync.Once
+	prefError error
+	prefPath  string
 
 	adapterOnce sync.Once
 	adapterErr  error
@@ -42,13 +42,13 @@ func initPreference(b *testing.B) {
 		var ok bool
 		prefPath, ok = resolvePrefModelPath()
 		if !ok {
-			prefErr = os.ErrNotExist
+			prefError = os.ErrNotExist
 			return
 		}
-		prefErr = binding.InitQwen3PreferenceClassifier(prefPath, true)
+		prefError = binding.InitQwen3PreferenceClassifier(prefPath, true)
 	})
-	if prefErr != nil {
-		b.Skipf("preference classifier not ready (%v); set QWEN3_PREF_MODEL_DIR or place weights at ./models/mom-preference-classifier", prefErr)
+	if prefError != nil {
+		b.Skipf("preference classifier not ready (%v); set QWEN3_PREF_MODEL_DIR or place weights at ./models/mom-preference-classifier", prefError)
 	}
 }
 
