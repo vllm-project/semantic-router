@@ -1188,7 +1188,6 @@ impl Qwen3MultiLoRAClassifier {
                         input_context: Some(format!("category={}", categories[cat_idx])),
                     });
                 }
-                let logit = logits_vec[token_id as usize];
                 // for each label token, compute log-probability
                 let probs = softmax(&logits_vec);
                 let prob = probs[token_id as usize].max(f32::MIN_POSITIVE);
