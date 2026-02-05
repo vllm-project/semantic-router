@@ -2305,9 +2305,13 @@ func (c *Classifier) IsLanguageEnabled() bool {
 
 // IsPreferenceClassifierEnabled checks if preference classification is enabled and properly configured
 func (c *Classifier) IsPreferenceClassifierEnabled() bool {
-	// Need preference rules configured and external model with role="preference"
+	// Need preference rules configured and either a local Candle model or an external model
 	if len(c.Config.PreferenceRules) == 0 {
 		return false
+	}
+
+	if c.Config.Classifier.PreferenceModel.ModelID != "" {
+		return true
 	}
 
 	externalCfg := c.Config.FindExternalModelByRole(config.ModelRolePreference)
@@ -2323,11 +2327,7 @@ func (c *Classifier) initializePreferenceClassifier() error {
 	}
 
 	externalCfg := c.Config.FindExternalModelByRole(config.ModelRolePreference)
-	if externalCfg == nil {
-		return fmt.Errorf("external model with role='preference' not found")
-	}
-
-	classifier, err := NewPreferenceClassifier(externalCfg, c.Config.PreferenceRules)
+	classifier, err := NewPreferenceClassifier(externalCfg, c.Config.PreferenceRules, &c.Config.Classifier.PreferenceModel)
 	if err != nil {
 		return fmt.Errorf("failed to create preference classifier: %w", err)
 	}

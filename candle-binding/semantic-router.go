@@ -6,6 +6,7 @@
 package candle_binding
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"regexp"
@@ -245,6 +246,8 @@ extern void free_probabilities(float* probabilities, int num_classes);
 extern ClassificationResult classify_pii_text(const char* text);
 extern ClassificationResult classify_jailbreak_text(const char* text);
 extern ClassificationResult classify_bert_text(const char* text);
+extern bool init_qwen3_preference_classifier(const char* model_path, bool use_cpu);
+extern ClassificationResult classify_qwen3_preference(const char* text, const char* labels_json);
 extern ModernBertClassificationResult classify_modernbert_text(const char* text);
 extern ModernBertClassificationResultWithProbs classify_modernbert_text_with_probabilities(const char* text);
 extern void free_modernbert_probabilities(float* probabilities, int num_classes);
@@ -438,6 +441,8 @@ var (
 	factCheckClassifierInitErr            error
 	feedbackDetectorInitOnce              sync.Once
 	feedbackDetectorInitErr               error
+	qwenPreferenceInitOnce                sync.Once
+	qwenPreferenceInitErr                 error
 )
 
 // TokenizeResult represents the result of tokenization
@@ -1724,6 +1729,63 @@ func ClassifyJailbreakText(text string) (ClassResult, error) {
 
 	if result.class < 0 {
 		return ClassResult{}, fmt.Errorf("failed to classify jailbreak text")
+	}
+
+	return ClassResult{
+		Class:      int(result.class),
+		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// InitQwen3PreferenceClassifier initializes the Qwen3 preference classifier model
+func InitQwen3PreferenceClassifier(modelPath string, useCPU bool) error {
+	var err error
+	qwenPreferenceInitOnce.Do(func() {
+		if modelPath == "" {
+			// Default to Qwen3 preference classifier model if path is empty
+			modelPath = "./models/mom-preference-classifier"
+		}
+
+		log.Printf("Initializing Qwen3 preference classifier model: %s", modelPath)
+
+		cModelID := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelID))
+
+		success := C.init_qwen3_preference_classifier(cModelID, C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize Qwen3 preference classifier model")
+		}
+	})
+
+	if err != nil {
+		qwenPreferenceInitOnce = sync.Once{}
+	}
+
+	return err
+}
+
+// ClassifyQwen3Preference classifies a conversation using Qwen3 preference model
+// labels must match the preference_rules order (label names only)
+func ClassifyQwen3Preference(text string, labels []string) (ClassResult, error) {
+	if len(labels) == 0 {
+		return ClassResult{}, fmt.Errorf("labels cannot be empty")
+	}
+
+	labelsJSON, err := json.Marshal(labels)
+	if err != nil {
+		return ClassResult{}, fmt.Errorf("failed to marshal labels: %w", err)
+	}
+
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	cLabels := C.CString(string(labelsJSON))
+	defer C.free(unsafe.Pointer(cLabels))
+
+	result := C.classify_qwen3_preference(cText, cLabels)
+
+	if result.class < 0 {
+		return ClassResult{}, fmt.Errorf("qwen3 preference classification failed")
 	}
 
 	return ClassResult{
