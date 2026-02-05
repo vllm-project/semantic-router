@@ -1343,7 +1343,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     return (
       <div className={styles.section}>
         <div className={styles.sectionHeader}>
-          <h3 className={styles.sectionTitle}>Preference Model (Local)</h3>
+          <h3 className={styles.sectionTitle}>Preference Model (Work In Progress)</h3>
           <button
             className={styles.sectionEditButton}
             onClick={() => {
@@ -1382,7 +1382,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                     name: 'use_qwen3',
                     label: 'Use Qwen3 Model',
                     type: 'boolean',
-                    description: 'Enable Qwen3-1.7B zero-shot/fine-tuned preference classifier',
+                    description: 'Enable Qwen3 zero-shot/fine-tuned preference classifier',
                   },
                 ],
                 async (data) => {
