@@ -227,6 +227,15 @@ persistence:
 
 # Application configuration
 config:
+  # Protocol adapters configuration
+  adapters:
+    - type: "envoy"
+      enabled: true
+      port: 50051
+    - type: "http"
+      enabled: false
+      port: 9000
+
   # BERT model configuration
   bert_model:
     model_id: models/mom-embedding-light
