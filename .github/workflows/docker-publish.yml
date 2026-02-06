@@ -157,18 +157,6 @@ jobs:
       - name: Set lowercase repository owner
         run: echo "REPOSITORY_OWNER_LOWER=$(echo $GITHUB_REPOSITORY_OWNER | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      - name: Detect binding type for extproc
-        id: binding
-        run: |
-          # Auto-detect: if go.mod replaces candle-binding with onnx-binding, use onnx
-          if [ -d "onnx-binding" ] && grep -q 'candle-binding => .*onnx-binding' src/semantic-router/go.mod 2>/dev/null; then
-            echo "name=onnx-binding" >> $GITHUB_OUTPUT
-            echo "lib=libonnx_semantic_router.so" >> $GITHUB_OUTPUT
-          else
-            echo "name=candle-binding" >> $GITHUB_OUTPUT
-            echo "lib=libcandle_semantic_router.so" >> $GITHUB_OUTPUT
-          fi
-
       - name: Set build parameters
         id: build-params
         run: |
@@ -233,8 +221,6 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
           build-args: |
-            BINDING=${{ steps.binding.outputs.name }}
-            BINDING_LIB=${{ steps.binding.outputs.lib }}
             BUILDKIT_INLINE_CACHE=1
             CARGO_BUILD_JOBS=${{ github.event_name == 'pull_request' && '8' || '16' }}
             CARGO_INCREMENTAL=1
