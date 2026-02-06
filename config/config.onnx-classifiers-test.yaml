@@ -145,8 +145,7 @@ user_feedback_rules:
     description: "User wants a different answer"
 
 decisions:
-  - name: "fact_check_routing"
-    description: "Route queries that need fact-checking to a reasoning model"
+  - name: "needs_fact_check"
     priority: 90
     rules:
       operator: "AND"
@@ -155,26 +154,64 @@ decisions:
           name: "needs_fact_check"
     modelRefs:
       - model: "qwen2.5:3b"
-        use_reasoning: true
+        use_reasoning: false
         weight: 100
-
-  - name: "wrong_answer_routing"
-    description: "Route corrections to reasoning model"
-    priority: 85
+  - name: "no_fact_check_needed"
+    priority: 89
     rules:
-      operator: "OR"
+      operator: "AND"
+      conditions:
+        - type: "fact_check"
+          name: "no_fact_check_needed"
+    modelRefs:
+      - model: "qwen2.5:3b"
+        use_reasoning: false
+        weight: 100
+  - name: "satisfied"
+    priority: 88
+    rules:
+      operator: "AND"
       conditions:
         - type: "user_feedback"
-          name: "wrong_answer"
+          name: "satisfied"
+    modelRefs:
+      - model: "qwen2.5:3b"
+        use_reasoning: false
+        weight: 100
+  - name: "need_clarification"
+    priority: 87
+    rules:
+      operator: "AND"
+      conditions:
         - type: "user_feedback"
           name: "need_clarification"
     modelRefs:
       - model: "qwen2.5:3b"
-        use_reasoning: true
+        use_reasoning: false
         weight: 100
-
+  - name: "wrong_answer"
+    priority: 86
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "user_feedback"
+          name: "wrong_answer"
+    modelRefs:
+      - model: "qwen2.5:3b"
+        use_reasoning: false
+        weight: 100
+  - name: "want_different"
+    priority: 85
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "user_feedback"
+          name: "want_different"
+    modelRefs:
+      - model: "qwen2.5:3b"
+        use_reasoning: false
+        weight: 100
   - name: "default"
-    description: "Default routing"
     priority: 100
     rules:
       operator: "OR"
