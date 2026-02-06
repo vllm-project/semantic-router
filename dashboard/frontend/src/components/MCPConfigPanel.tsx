@@ -1095,8 +1095,10 @@ const MCPServerDialog: React.FC<MCPServerDialogProps> = ({
                   checked={transport === 'stdio'}
                   onChange={() => setTransport('stdio')}
                 />
-                <span>Stdio</span>
-                <small>Local command line (filesystem, git, etc.)</small>
+                <div>
+                  <span>Stdio</span>
+                  <small>Local command line (filesystem, git, etc.)</small>
+                </div>
               </label>
               <label className={styles.radioLabel}>
                 <input
@@ -1106,8 +1108,10 @@ const MCPServerDialog: React.FC<MCPServerDialogProps> = ({
                   checked={transport === 'streamable-http'}
                   onChange={() => setTransport('streamable-http')}
                 />
-                <span>Streamable HTTP</span>
-                <small>Remote service with streaming support</small>
+                <div>
+                  <span>Streamable HTTP</span>
+                  <small>Remote service with streaming support</small>
+                </div>
               </label>
             </div>
           </div>

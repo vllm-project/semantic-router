@@ -20,16 +20,20 @@ type EvaluationHandler struct {
 	db           *evaluation.DB
 	runner       *evaluation.Runner
 	readonlyMode bool
+	routerAPIURL string   // Router API URL for signal evaluation
+	envoyURL     string   // Envoy URL for model evaluation
 	sseClients   sync.Map // map[taskID]map[clientID]chan models.ProgressUpdate
 	cancelFuncs  sync.Map // map[taskID]context.CancelFunc
 }
 
 // NewEvaluationHandler creates a new evaluation handler.
-func NewEvaluationHandler(db *evaluation.DB, runner *evaluation.Runner, readonlyMode bool) *EvaluationHandler {
+func NewEvaluationHandler(db *evaluation.DB, runner *evaluation.Runner, readonlyMode bool, routerAPIURL, envoyURL string) *EvaluationHandler {
 	h := &EvaluationHandler{
 		db:           db,
 		runner:       runner,
 		readonlyMode: readonlyMode,
+		routerAPIURL: routerAPIURL,
+		envoyURL:     envoyURL,
 	}
 
 	// Start background goroutine to forward progress updates to SSE clients
@@ -159,15 +163,60 @@ func (h *EvaluationHandler) CreateTaskHandler() http.HandlerFunc {
 			return
 		}
 
+		// Validate level
+		if req.Config.Level == "" {
+			http.Error(w, "Evaluation level is required (router or mom)", http.StatusBadRequest)
+			return
+		}
+		if req.Config.Level != models.LevelRouter && req.Config.Level != models.LevelMoM {
+			http.Error(w, "Invalid evaluation level. Must be 'router' or 'mom'", http.StatusBadRequest)
+			return
+		}
+
+		// Validate dimensions match the level
+		for _, dim := range req.Config.Dimensions {
+			if req.Config.Level == models.LevelRouter {
+				// Router-level only supports signal dimensions
+				if dim != models.DimensionDomain && dim != models.DimensionFactCheck && dim != models.DimensionUserFeedback {
+					http.Error(w, fmt.Sprintf("Dimension '%s' is not valid for router-level evaluation", dim), http.StatusBadRequest)
+					return
+				}
+			} else {
+				// MoM-level doesn't support signal dimensions
+				if dim == models.DimensionDomain || dim == models.DimensionFactCheck || dim == models.DimensionUserFeedback {
+					http.Error(w, fmt.Sprintf("Dimension '%s' is not valid for mom-level evaluation", dim), http.StatusBadRequest)
+					return
+				}
+			}
+		}
+
 		// Set defaults
 		if req.Config.MaxSamples <= 0 {
 			req.Config.MaxSamples = 50
 		}
 		if req.Config.Endpoint == "" {
-			req.Config.Endpoint = "http://localhost:8888"
+			// Choose default endpoint based on evaluation level
+			if req.Config.Level == models.LevelRouter {
+				// Router-level: use Router's eval API
+				if h.routerAPIURL != "" {
+					req.Config.Endpoint = strings.TrimSuffix(h.routerAPIURL, "/") + "/api/v1/eval"
+				} else {
+					req.Config.Endpoint = "http://localhost:8080/api/v1/eval"
+				}
+			} else {
+				// MoM-level: use Envoy's chat completions API
+				if h.envoyURL != "" {
+					req.Config.Endpoint = h.envoyURL
+				} else {
+					req.Config.Endpoint = "http://localhost:8801"
+				}
+			}
 		}
 		if req.Config.SamplesPerCat <= 0 {
 			req.Config.SamplesPerCat = 10
+		}
+		if req.Config.Concurrent <= 0 {
+			req.Config.Concurrent = 1 // Default to sequential execution
 		}
 
 		task := &models.EvaluationTask{

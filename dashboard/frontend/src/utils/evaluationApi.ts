@@ -156,10 +156,11 @@ export async function downloadExport(taskId: string, format: 'json' | 'csv' = 'j
 // Utility to create default config
 export function createDefaultConfig(): CreateTaskRequest['config'] {
   return {
-    dimensions: ['hallucination'],
-    datasets: { hallucination: ['halueval'] },
+    level: 'router',
+    dimensions: ['domain'],
+    datasets: { domain: ['mmlu-pro-en'] },
     max_samples: 50,
-    endpoint: 'http://localhost:8801',
+    endpoint: 'http://localhost:8080/v1/eval',
     model: 'MoM',
     concurrent: 1,
     samples_per_cat: 10,

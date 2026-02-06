@@ -530,7 +530,7 @@
 .radioLabel {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 12px;
   padding: 10px 12px;
   background: var(--bg-tertiary, #181825);
   border: 1px solid var(--border-color, #313244);
@@ -545,6 +545,13 @@
 
 .radioLabel input[type="radio"] {
   margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.radioLabel > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .radioLabel span {

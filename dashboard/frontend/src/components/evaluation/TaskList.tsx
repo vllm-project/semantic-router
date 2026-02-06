@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { EvaluationTask } from '../../types/evaluation';
-import { STATUS_INFO, formatDate, formatDuration } from '../../types/evaluation';
+import { STATUS_INFO, LEVEL_INFO, formatDate, formatDuration } from '../../types/evaluation';
 import styles from './TaskList.module.css';
 
 interface TaskListProps {
@@ -68,6 +68,7 @@ export function TaskList({ tasks, loading, onView, onRun, onCancel, onDelete, on
           <thead>
             <tr>
               <th>Name</th>
+              <th>Level</th>
               <th>Status</th>
               <th>Progress</th>
               <th>Created</th>
@@ -85,6 +86,14 @@ export function TaskList({ tasks, loading, onView, onRun, onCancel, onDelete, on
                       <span className={styles.description}>{task.description}</span>
                     )}
                   </div>
+                </td>
+                <td>
+                  <span
+                    className={styles.levelBadge}
+                    style={{ color: LEVEL_INFO[task.config.level].color }}
+                  >
+                    {LEVEL_INFO[task.config.level].label}
+                  </span>
                 </td>
                 <td>{getStatusBadge(task.status)}</td>
                 <td>

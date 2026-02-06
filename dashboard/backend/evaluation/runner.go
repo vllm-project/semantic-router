@@ -135,37 +135,29 @@ func (r *Runner) RunTask(ctx context.Context, taskID string) error {
 		step := fmt.Sprintf("Evaluating %s", dimension)
 		r.sendProgress(taskID, progressBase, step, fmt.Sprintf("Starting %s evaluation", dimension))
 
+		// Get datasets for this dimension
 		datasets := task.Config.Datasets[string(dimension)]
 		if len(datasets) == 0 {
-			// Use default dataset
-			datasets = []string{"default"}
+			// Use default dataset based on dimension
+			datasets = []string{getDefaultDataset(dimension)}
 		}
 
+		// Evaluate each dataset for this dimension
 		for _, dataset := range datasets {
 			var result *models.EvaluationResult
 			var runErr error
 
 			switch dimension {
-			case models.DimensionHallucination:
-				result, runErr = r.runHallucinationBenchmark(ctx, taskID, task.Config, dataset, taskOutputDir)
-			case models.DimensionReasoning:
-				result, runErr = r.runReasoningBenchmark(ctx, taskID, task.Config, dataset, taskOutputDir)
-			case models.DimensionAccuracy:
-				result, runErr = r.runAccuracyBenchmark(ctx, taskID, task.Config, dataset, taskOutputDir)
-			case models.DimensionLatency:
-				result, runErr = r.runLatencyBenchmark(ctx, taskID, task.Config)
-			case models.DimensionCost:
-				result, runErr = r.runCostBenchmark(ctx, taskID, task.Config)
-			case models.DimensionSecurity:
-				result, runErr = r.runSecurityBenchmark(ctx, taskID, task.Config, dataset, taskOutputDir)
+			case models.DimensionDomain, models.DimensionFactCheck, models.DimensionUserFeedback:
+				result, runErr = r.runSignalEvaluation(ctx, taskID, task.Config, string(dimension), dataset, taskOutputDir)
 			default:
 				log.Printf("Unknown dimension: %s", dimension)
 				continue
 			}
 
 			if runErr != nil {
-				log.Printf("Error running %s benchmark for dataset %s: %v", dimension, dataset, runErr)
-				// Continue with other dimensions/datasets
+				log.Printf("Error running %s evaluation on dataset %s: %v", dimension, dataset, runErr)
+				// Continue with other datasets
 				continue
 			}
 
@@ -207,84 +199,42 @@ func (r *Runner) CancelTask(taskID string) error {
 	return r.db.UpdateTaskStatus(taskID, models.StatusCancelled, "Task cancelled by user")
 }
 
-// ensureV1Suffix ensures the endpoint has /v1 suffix for OpenAI client compatibility.
-func ensureV1Suffix(endpoint string) string {
-	endpoint = strings.TrimSuffix(endpoint, "/")
-	if !strings.HasSuffix(endpoint, "/v1") {
-		endpoint += "/v1"
+// getDefaultDataset returns the default dataset ID for a given dimension.
+func getDefaultDataset(dimension models.EvaluationDimension) string {
+	switch dimension {
+	case models.DimensionDomain:
+		return "mmlu-pro-en"
+	case models.DimensionFactCheck:
+		return "fact-check-en"
+	case models.DimensionUserFeedback:
+		return "feedback-en"
+	default:
+		return "default"
 	}
-	return endpoint
 }
 
-// runHallucinationBenchmark runs the hallucination detection benchmark.
-func (r *Runner) runHallucinationBenchmark(ctx context.Context, taskID string, cfg models.EvaluationConfig, dataset, outputDir string) (*models.EvaluationResult, error) {
-	outputPath := filepath.Join(outputDir, fmt.Sprintf("hallucination_%s.json", dataset))
+// runSignalEvaluation runs the signal evaluation for a specific dataset.
+func (r *Runner) runSignalEvaluation(ctx context.Context, taskID string, cfg models.EvaluationConfig, dimension, datasetID, outputDir string) (*models.EvaluationResult, error) {
+	outputPath := filepath.Join(outputDir, fmt.Sprintf("signal_eval_%s.json", datasetID))
 
-	// Use endpoint as-is - the Python script adds /v1 internally
+	// Use endpoint as-is for eval API
 	endpoint := strings.TrimSuffix(cfg.Endpoint, "/")
 
 	// Build command arguments
 	args := []string{
-		"-m", "bench.hallucination.evaluate",
+		"src/training/model_eval/signal_eval.py",
+		"--dataset", datasetID,
 		"--endpoint", endpoint,
-		"--dataset", dataset,
-		"--max-samples", fmt.Sprintf("%d", cfg.MaxSamples),
-		"--output-dir", outputDir,
-		"--quiet",
+		"--output", outputPath,
 	}
 
-	if cfg.Model != "" {
-		args = append(args, "--model", cfg.Model)
+	if cfg.MaxSamples > 0 {
+		args = append(args, "--max_samples", fmt.Sprintf("%d", cfg.MaxSamples))
 	}
 
-	cmd := exec.CommandContext(ctx, r.pythonPath, args...) //nolint:gosec // pythonPath is configured at startup, not user input
-	cmd.Dir = r.projectRoot
-	cmd.Env = append(os.Environ(), "PYTHONPATH="+r.projectRoot)
-
-	r.activeProcesses.Store(taskID, cmd)
-	defer r.activeProcesses.Delete(taskID)
-
-	output, err := r.runCommandWithProgress(ctx, cmd, taskID, "hallucination")
-	if err != nil {
-		return nil, fmt.Errorf("hallucination benchmark failed: %w", err)
-	}
-
-	// Parse output JSON
-	metrics, err := ParseHallucinationOutput(output, outputPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse hallucination output: %w", err)
-	}
-
-	return &models.EvaluationResult{
-		TaskID:         taskID,
-		Dimension:      models.DimensionHallucination,
-		DatasetName:    dataset,
-		Metrics:        metrics,
-		RawResultsPath: outputPath,
-	}, nil
-}
-
-// runReasoningBenchmark runs the reasoning mode evaluation benchmark.
-func (r *Runner) runReasoningBenchmark(ctx context.Context, taskID string, cfg models.EvaluationConfig, dataset, outputDir string) (*models.EvaluationResult, error) {
-	// Build command arguments
-	// Note: --generate-plots and --generate-report use action="store_true" with default=True
-	// so we don't need to pass them explicitly
-	// Ensure endpoint has /v1 suffix for OpenAI client compatibility
-	endpoint := ensureV1Suffix(cfg.Endpoint)
-	args := []string{
-		"-m", "bench.reasoning.reasoning_mode_eval",
-		"--endpoint", endpoint,
-		"--datasets", dataset,
-		"--samples-per-category", fmt.Sprintf("%d", cfg.SamplesPerCat),
-		"--output-dir", outputDir,
-	}
-
-	if cfg.Model != "" {
-		args = append(args, "--model", cfg.Model)
-	}
-
+	// Add concurrent parameter if specified
 	if cfg.Concurrent > 0 {
-		args = append(args, "--concurrent-requests", fmt.Sprintf("%d", cfg.Concurrent))
+		args = append(args, "--concurrent", fmt.Sprintf("%d", cfg.Concurrent))
 	}
 
 	cmd := exec.CommandContext(ctx, r.pythonPath, args...) //nolint:gosec // pythonPath is configured at startup, not user input
@@ -294,148 +244,23 @@ func (r *Runner) runReasoningBenchmark(ctx context.Context, taskID string, cfg m
 	r.activeProcesses.Store(taskID, cmd)
 	defer r.activeProcesses.Delete(taskID)
 
-	output, err := r.runCommandWithProgress(ctx, cmd, taskID, "reasoning")
+	_, err := r.runCommandWithProgress(ctx, cmd, taskID, datasetID)
 	if err != nil {
-		return nil, fmt.Errorf("reasoning benchmark failed: %w", err)
+		return nil, fmt.Errorf("signal evaluation failed: %w", err)
 	}
 
 	// Parse output JSON
-	summaryPath := filepath.Join(outputDir, "reasoning_mode_eval_summary.json")
-	metrics, err := ParseReasoningOutput(output, summaryPath)
+	metrics, err := ParseSignalEvalOutput(outputPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse reasoning output: %w", err)
+		return nil, fmt.Errorf("failed to parse signal evaluation output: %w", err)
 	}
 
 	return &models.EvaluationResult{
 		TaskID:         taskID,
-		Dimension:      models.DimensionReasoning,
-		DatasetName:    dataset,
-		Metrics:        metrics,
-		RawResultsPath: summaryPath,
-	}, nil
-}
-
-// runAccuracyBenchmark runs the accuracy evaluation using the router benchmark.
-func (r *Runner) runAccuracyBenchmark(ctx context.Context, taskID string, cfg models.EvaluationConfig, dataset, outputDir string) (*models.EvaluationResult, error) {
-	outputPath := filepath.Join(outputDir, fmt.Sprintf("accuracy_%s.json", dataset))
-
-	// Ensure endpoint has /v1 suffix for OpenAI client compatibility
-	endpoint := ensureV1Suffix(cfg.Endpoint)
-	if endpoint == "/v1" {
-		endpoint = "http://localhost:8888/v1"
-	}
-
-	// Model to test - default to MoM
-	model := cfg.Model
-	if model == "" {
-		model = "MoM"
-	}
-
-	args := []string{
-		"-m", "bench.reasoning.router_reason_bench_multi_dataset",
-		"--dataset", dataset, // Note: singular --dataset, not --datasets
-		"--samples-per-category", fmt.Sprintf("%d", cfg.SamplesPerCat),
-		"--output-dir", outputDir,
-		"--run-router", // Flag to run against router
-		"--router-endpoint", endpoint,
-		"--router-models", model,
-	}
-
-	cmd := exec.CommandContext(ctx, r.pythonPath, args...) //nolint:gosec // pythonPath is configured at startup, not user input
-	cmd.Dir = r.projectRoot
-	cmd.Env = append(os.Environ(), "PYTHONPATH="+r.projectRoot)
-
-	r.activeProcesses.Store(taskID, cmd)
-	defer r.activeProcesses.Delete(taskID)
-
-	output, err := r.runCommandWithProgress(ctx, cmd, taskID, "accuracy")
-	if err != nil {
-		return nil, fmt.Errorf("accuracy benchmark failed: %w", err)
-	}
-
-	metrics, err := ParseAccuracyOutput(output, outputPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse accuracy output: %w", err)
-	}
-
-	return &models.EvaluationResult{
-		TaskID:         taskID,
-		Dimension:      models.DimensionAccuracy,
-		DatasetName:    dataset,
+		Dimension:      models.EvaluationDimension(dimension),
+		DatasetName:    datasetID,
 		Metrics:        metrics,
 		RawResultsPath: outputPath,
-	}, nil
-}
-
-// runLatencyBenchmark queries Prometheus for latency metrics.
-func (r *Runner) runLatencyBenchmark(ctx context.Context, taskID string, cfg models.EvaluationConfig) (*models.EvaluationResult, error) {
-	// Query Prometheus for latency metrics
-	// This is a placeholder - in a real implementation, you'd query the embedded Prometheus
-	metrics := map[string]interface{}{
-		"avg_latency_ms": 0.0,
-		"p50_latency_ms": 0.0,
-		"p95_latency_ms": 0.0,
-		"p99_latency_ms": 0.0,
-		"ttft_avg_ms":    0.0,
-		"tpot_avg_ms":    0.0,
-		"source":         "prometheus",
-		"timestamp":      time.Now().Format(time.RFC3339),
-		"status":         "not_implemented",
-		"message":        "Latency benchmarks require Prometheus integration",
-	}
-
-	r.sendProgress(taskID, 50, "latency", "Latency metrics collection not yet implemented")
-
-	return &models.EvaluationResult{
-		TaskID:      taskID,
-		Dimension:   models.DimensionLatency,
-		DatasetName: "prometheus",
-		Metrics:     metrics,
-	}, nil
-}
-
-// runCostBenchmark queries Prometheus for cost metrics.
-func (r *Runner) runCostBenchmark(ctx context.Context, taskID string, cfg models.EvaluationConfig) (*models.EvaluationResult, error) {
-	// Query Prometheus for cost metrics
-	metrics := map[string]interface{}{
-		"total_cost":       0.0,
-		"cost_per_request": 0.0,
-		"cost_by_model":    map[string]float64{},
-		"source":           "prometheus",
-		"timestamp":        time.Now().Format(time.RFC3339),
-		"status":           "not_implemented",
-		"message":          "Cost benchmarks require Prometheus integration",
-	}
-
-	r.sendProgress(taskID, 50, "cost", "Cost metrics collection not yet implemented")
-
-	return &models.EvaluationResult{
-		TaskID:      taskID,
-		Dimension:   models.DimensionCost,
-		DatasetName: "prometheus",
-		Metrics:     metrics,
-	}, nil
-}
-
-// runSecurityBenchmark runs the jailbreak detection benchmark.
-func (r *Runner) runSecurityBenchmark(ctx context.Context, taskID string, cfg models.EvaluationConfig, dataset, outputDir string) (*models.EvaluationResult, error) {
-	// Security benchmarks use the jailbreak classifier
-	metrics := map[string]interface{}{
-		"detection_rate":      0.0,
-		"false_positive_rate": 0.0,
-		"source":              "jailbreak_classifier",
-		"timestamp":           time.Now().Format(time.RFC3339),
-		"status":              "not_implemented",
-		"message":             "Security benchmarks require jailbreak classifier integration",
-	}
-
-	r.sendProgress(taskID, 50, "security", "Security metrics collection not yet implemented")
-
-	return &models.EvaluationResult{
-		TaskID:      taskID,
-		Dimension:   models.DimensionSecurity,
-		DatasetName: dataset,
-		Metrics:     metrics,
 	}, nil
 }
 
@@ -554,25 +379,59 @@ func (r *Runner) saveHistoricalMetrics(result *models.EvaluationResult) {
 // GetAvailableDatasets returns a list of available datasets grouped by dimension.
 func GetAvailableDatasets() map[string][]models.DatasetInfo {
 	return map[string][]models.DatasetInfo{
-		string(models.DimensionHallucination): {
-			{Name: "halueval", Description: "HaluEval hallucination detection benchmark", Dimension: models.DimensionHallucination},
+		string(models.DimensionDomain): {
+			{
+				Name:        "mmlu-pro-en",
+				Description: "MMLU-Pro (English)",
+				Dimension:   models.DimensionDomain,
+				Level:       models.LevelRouter,
+			},
+			// MMLU-ProX multilingual datasets (29 languages)
+			{Name: "mmlu-prox-zh", Description: "MMLU-ProX (Chinese)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-de", Description: "MMLU-ProX (German)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-en", Description: "MMLU-ProX (English)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-es", Description: "MMLU-ProX (Spanish)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-fr", Description: "MMLU-ProX (French)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-it", Description: "MMLU-ProX (Italian)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-ja", Description: "MMLU-ProX (Japanese)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-ko", Description: "MMLU-ProX (Korean)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-af", Description: "MMLU-ProX (Afrikaans)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-ar", Description: "MMLU-ProX (Arabic)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-bn", Description: "MMLU-ProX (Bengali)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-cs", Description: "MMLU-ProX (Czech)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-hi", Description: "MMLU-ProX (Hindi)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-hu", Description: "MMLU-ProX (Hungarian)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-id", Description: "MMLU-ProX (Indonesian)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-mr", Description: "MMLU-ProX (Marathi)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-ne", Description: "MMLU-ProX (Nepali)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-pt", Description: "MMLU-ProX (Portuguese)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-ru", Description: "MMLU-ProX (Russian)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-sr", Description: "MMLU-ProX (Serbian)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-sw", Description: "MMLU-ProX (Swahili)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-te", Description: "MMLU-ProX (Telugu)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-th", Description: "MMLU-ProX (Thai)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-uk", Description: "MMLU-ProX (Ukrainian)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-ur", Description: "MMLU-ProX (Urdu)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-vi", Description: "MMLU-ProX (Vietnamese)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-wo", Description: "MMLU-ProX (Wolof)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-yo", Description: "MMLU-ProX (Yoruba)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
+			{Name: "mmlu-prox-zu", Description: "MMLU-ProX (Zulu)", Dimension: models.DimensionDomain, Level: models.LevelRouter},
 		},
-		string(models.DimensionReasoning): {
-			{Name: "mmlu", Description: "Massive Multitask Language Understanding", Dimension: models.DimensionReasoning},
-			{Name: "gpqa", Description: "Graduate-level Google-Proof Q&A", Dimension: models.DimensionReasoning},
+		string(models.DimensionFactCheck): {
+			{
+				Name:        "fact-check-en",
+				Description: "Fact Check (English) - Binary classification",
+				Dimension:   models.DimensionFactCheck,
+				Level:       models.LevelRouter,
+			},
 		},
-		string(models.DimensionAccuracy): {
-			{Name: "mmlu", Description: "MMLU benchmark for accuracy testing", Dimension: models.DimensionAccuracy},
-			{Name: "gpqa", Description: "GPQA benchmark for accuracy testing", Dimension: models.DimensionAccuracy},
-		},
-		string(models.DimensionLatency): {
-			{Name: "prometheus", Description: "Prometheus metrics (live data)", Dimension: models.DimensionLatency},
-		},
-		string(models.DimensionCost): {
-			{Name: "prometheus", Description: "Prometheus cost metrics (live data)", Dimension: models.DimensionCost},
-		},
-		string(models.DimensionSecurity): {
-			{Name: "jailbreak", Description: "Jailbreak detection test set", Dimension: models.DimensionSecurity},
+		string(models.DimensionUserFeedback): {
+			{
+				Name:        "feedback-en",
+				Description: "User Feedback (English) - 4-class detection",
+				Dimension:   models.DimensionUserFeedback,
+				Level:       models.LevelRouter,
+			},
 		},
 	}
 }
@@ -591,7 +450,7 @@ func (r *Runner) ExportResults(taskID string, format models.ExportFormat) ([]byt
 
 	switch format {
 	case models.ExportJSON:
-		export := map[string]interface{}{
+		export := map[string]any{
 			"task":    task,
 			"results": results,
 		}

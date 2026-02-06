@@ -244,11 +244,11 @@ func Setup(cfg *config.Config) *http.ServeMux {
 				ProjectRoot:   projectRoot,
 				PythonPath:    cfg.PythonPath,
 				ResultsDir:    cfg.EvaluationResultsDir,
-				MaxConcurrent: 3,
+				MaxConcurrent: 10,
 			})
 
 			// Create evaluation handler
-			evalHandler := handlers.NewEvaluationHandler(evalDB, runner, cfg.ReadonlyMode)
+			evalHandler := handlers.NewEvaluationHandler(evalDB, runner, cfg.ReadonlyMode, cfg.RouterAPIURL, cfg.EnvoyURL)
 
 			// Register evaluation endpoints that require the database
 			// /api/evaluation/tasks - GET for list, POST for create

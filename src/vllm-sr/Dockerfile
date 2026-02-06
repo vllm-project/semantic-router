@@ -121,9 +121,13 @@ COPY src/vllm-sr/cli/templates/tools_db.json /app/config/tools_db.json
 # Copy bench directory for evaluation benchmarks
 COPY bench/ /app/bench/
 
-# Install Python dependencies (CLI + bench)
+# Copy training/model_eval directory for signal evaluation
+COPY src/training/model_eval/ /app/src/training/model_eval/
+
+# Install Python dependencies (CLI + bench + model_eval)
 RUN pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir -r /app/bench/requirements.txt
+    pip install --no-cache-dir -r /app/bench/requirements.txt && \
+    pip install --no-cache-dir -r /app/src/training/model_eval/requirements.txt
 
 # Copy start scripts
 COPY src/vllm-sr/start-router.sh /app/start-router.sh
