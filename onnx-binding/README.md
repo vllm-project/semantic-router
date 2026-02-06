@@ -26,6 +26,7 @@ Benchmarks show **CPU and GPU have equivalent performance** for this model:
 **The real optimization is layer early-exit (3-4x speedup), not GPU acceleration.**
 
 This makes CPU the preferred choice because:
+
 - No GPU driver dependencies
 - Simpler deployment (no CUDA/ROCm setup)
 - Works in any container or VM
@@ -77,7 +78,6 @@ The mmBERT model supports two dimensions of flexibility:
 | Linux (any) | CPU | 2.38+ | ✓ Recommended |
 | `rocm/pytorch:latest` | AMD MI300X | 2.39 | ✓ Working |
 | NVIDIA containers | CUDA | varies | ✓ Working |
-
 
 ## Quick Start: CPU (Recommended)
 
@@ -217,6 +217,7 @@ huggingface-cli download llm-semantic-router/mmbert-embed-32k-2d-matryoshka --in
 ### Model Directory Structure
 
 The ONNX models are organized as:
+
 ```
 mmbert-onnx/onnx/
 ├── layer-6/
@@ -281,6 +282,7 @@ go test -bench=. -benchtime=10s
 ### Use CPU (Default)
 
 For this model size (307M params), **CPU inference matches GPU performance**. The ONNX Runtime CPU backend is highly optimized with:
+
 - AVX512/AVX2 SIMD instructions
 - Multi-threaded execution
 - Optimized BLAS operations
@@ -298,6 +300,7 @@ The **biggest speedup comes from layer early-exit**, not GPU acceleration:
 ### When to Use GPU
 
 Consider GPU only if:
+
 - You're running many models and need to share GPU memory
 - Your deployment already has GPU infrastructure
 - You're processing very large batches (100+ concurrent requests)
