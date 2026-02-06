@@ -42,20 +42,15 @@ build-ml-binding: ## Build the ml-binding Rust library
 	@echo "ml-binding built successfully"
 
 # Build the router with ONNX binding support
-# Temporarily switches go.mod and CGO flags from candle-binding to onnx-binding for the build
+# Uses -modfile=go.onnx.mod (candle-binding => ../../onnx-binding)
+# Uses -tags=onnx to select onnx-binding CGO flags at compile time
 build-router-onnx: ## Build the router binary with ONNX binding
 build-router-onnx: build-onnx-binding build-ml-binding
 	@$(LOG_TARGET)
 	@mkdir -p bin
 	@cd src/semantic-router && \
-		sed -i 's|candle-binding => ../../candle-binding|candle-binding => ../../onnx-binding|' go.mod && \
-		sed -i 's|candle-binding/target/release -lcandle_semantic_router|onnx-binding/target/release -lonnx_semantic_router|g' pkg/classification/unified_classifier.go && \
 		CGO_LDFLAGS="-L../../onnx-binding/target/release" \
-		go build --tags=milvus -o ../../bin/router-onnx cmd/main.go; \
-		BUILD_EXIT=$$?; \
-		sed -i 's|onnx-binding/target/release -lonnx_semantic_router|candle-binding/target/release -lcandle_semantic_router|g' pkg/classification/unified_classifier.go && \
-		sed -i 's|candle-binding => ../../onnx-binding|candle-binding => ../../candle-binding|' go.mod; \
-		exit $$BUILD_EXIT
+		go build -modfile=go.onnx.mod -tags=onnx,milvus -o ../../bin/router-onnx cmd/main.go
 	@echo "Router built with ONNX binding support"
 
 # Run the router with ONNX binding (uses mmBERT 32K via ONNX Runtime)
