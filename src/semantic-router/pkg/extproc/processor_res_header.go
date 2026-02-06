@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -116,6 +117,16 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 				Header: &core.HeaderValue{
 					Key:      headers.VSRSelectedDecision,
 					RawValue: []byte(ctx.VSRSelectedDecisionName),
+				},
+			})
+		}
+
+		// Add x-vsr-selected-confidence header (from decision evaluation)
+		if ctx.VSRSelectedDecisionConfidence > 0 {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.VSRSelectedConfidence,
+					RawValue: []byte(fmt.Sprintf("%.4f", ctx.VSRSelectedDecisionConfidence)),
 				},
 			})
 		}

@@ -34,6 +34,10 @@ const (
 	// Example values: "math_decision", "business_decision", "thinking_decision"
 	VSRSelectedDecision = "x-vsr-selected-decision"
 
+	// VSRSelectedConfidence indicates the confidence score of the selected decision.
+	// Value: decimal between 0.0 and 1.0 (e.g., "0.75")
+	VSRSelectedConfidence = "x-vsr-selected-confidence"
+
 	// VSRSelectedReasoning indicates whether reasoning mode was determined to be used.
 	// Values: "on" (reasoning enabled) or "off" (reasoning disabled)
 	VSRSelectedReasoning = "x-vsr-selected-reasoning"

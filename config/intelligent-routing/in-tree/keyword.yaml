@@ -70,23 +70,30 @@ classifier:
     use_cpu: true
     pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
 
+# Keyword Rules Configuration
+# New in v0.2: fuzzy_match and fuzzy_threshold for typo tolerance
 keyword_rules:
-  - category: "urgent_request"
+  - name: "urgent_request"
     operator: "OR"
-    keywords: ["urgent", "immediate", "asap"]
+    keywords: ["urgent", "immediate", "asap", "emergency"]
     case_sensitive: false
-  - category: "sensitive_data"
+    fuzzy_match: false      # Enable fuzzy matching for typo tolerance (default: false)
+    # fuzzy_threshold: 2    # Max character edits allowed (default: 2)
+  - name: "sensitive_data"
     operator: "AND"
     keywords: ["SSN", "social security number", "credit card"]
     case_sensitive: false
-  - category: "exclude_spam"
+    fuzzy_match: false
+  - name: "exclude_spam"
     operator: "NOR"
     keywords: ["buy now", "free money"]
     case_sensitive: false
-  - category: "regex_pattern_match"
+    fuzzy_match: false
+  - name: "regex_pattern_match"
     operator: "OR"
-    keywords: ["user\\.name@domain\\.com", "C:\\Program Files\\\\"]  # Keywords are treated as regex
+    keywords: ["user.name@domain.com", "C:\\Program Files\\"]  # Exact text (QuoteMeta escapes special chars)
     case_sensitive: false
+    fuzzy_match: false
 
 # Categories define domain metadata only (no routing logic)
 categories:

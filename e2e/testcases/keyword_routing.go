@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -36,15 +37,18 @@ type KeywordRoutingCase struct {
 
 // KeywordRoutingResult tracks the result of a single keyword routing test
 type KeywordRoutingResult struct {
-	Name             string
-	Query            string
-	ExpectedCategory string
-	ActualCategory   string
-	ExpectedKeywords []string
-	ActualKeywords   []string
-	Correct          bool
-	KeywordsMatch    bool
-	Error            string
+	Name               string
+	Query              string
+	ExpectedCategory   string
+	ActualCategory     string
+	ExpectedKeywords   []string
+	ActualKeywords     []string
+	ExpectedConfidence float64
+	ActualConfidence   float64
+	Correct            bool
+	KeywordsMatch      bool
+	ConfidenceMatch    bool
+	Error              string
 }
 
 func testKeywordRouting(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
@@ -217,6 +221,15 @@ func testSingleKeywordRouting(ctx context.Context, testCase KeywordRoutingCase, 
 		result.ActualKeywords = []string{}
 	}
 
+	// Parse confidence from header
+	result.ExpectedConfidence = testCase.ExpectedConfidence
+	confidenceHeader := resp.Header.Get("x-vsr-selected-confidence")
+	if confidenceHeader != "" {
+		if parsed, err := strconv.ParseFloat(confidenceHeader, 64); err == nil {
+			result.ActualConfidence = parsed
+		}
+	}
+
 	// Check if category is correct
 	result.Correct = (result.ActualCategory == testCase.ExpectedCategory)
 
@@ -229,6 +242,14 @@ func testSingleKeywordRouting(ctx context.Context, testCase KeywordRoutingCase, 
 		result.KeywordsMatch = keywordListsMatch(testCase.MatchedKeywords, result.ActualKeywords)
 	}
 
+	// Check confidence (allow 0.1 tolerance for floating point comparison)
+	if testCase.ExpectedConfidence == 0.0 {
+		result.ConfidenceMatch = result.ActualConfidence == 0.0
+	} else {
+		// For positive confidence, we expect at least 0.5 (minimum match confidence)
+		result.ConfidenceMatch = result.ActualConfidence >= 0.5
+	}
+
 	if verbose && (!result.Correct || !result.KeywordsMatch) {
 		fmt.Printf("[Test] Test case failed: %s\n", testCase.Name)
 		if !result.Correct {
@@ -238,6 +259,10 @@ func testSingleKeywordRouting(ctx context.Context, testCase KeywordRoutingCase, 
 		if !result.KeywordsMatch {
 			fmt.Printf("  Keywords mismatch: expected=%v, actual=%v\n",
 				testCase.MatchedKeywords, result.ActualKeywords)
+		}
+		if !result.ConfidenceMatch {
+			fmt.Printf("  Confidence mismatch: expected=%.2f, actual=%.2f\n",
+				testCase.ExpectedConfidence, result.ActualConfidence)
 		}
 	}
 
