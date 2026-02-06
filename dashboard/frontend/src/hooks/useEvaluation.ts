@@ -8,6 +8,7 @@ import type {
   TaskResults,
   CreateTaskRequest,
   EvaluationDimension,
+  EvaluationLevel,
 } from '../types/evaluation';
 import * as api from '../utils/evaluationApi';
 import { useReadonly } from '../contexts/ReadonlyContext';
@@ -252,22 +253,25 @@ export function useTaskMutations() {
 export function useTaskCreationForm() {
   const { envoyUrl } = useReadonly();
   const [step, setStep] = useState(1);
+  const [level, setLevel] = useState<EvaluationLevel>('router');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [dimensions, setDimensions] = useState<EvaluationDimension[]>(['hallucination']);
+  const [dimensions, setDimensions] = useState<EvaluationDimension[]>(['domain']);
   const [selectedDatasets, setSelectedDatasets] = useState<Record<string, string[]>>({});
   const [maxSamples, setMaxSamples] = useState(50);
-  const [endpoint, setEndpoint] = useState(envoyUrl || 'http://localhost:8801');
+  const [endpoint, setEndpoint] = useState('');
   const [model, setModel] = useState('MoM');
   const [concurrent, setConcurrent] = useState(1);
   const [samplesPerCat, setSamplesPerCat] = useState(10);
 
-  // Update endpoint when envoyUrl becomes available
+  // Update endpoint based on level
   useEffect(() => {
-    if (envoyUrl && endpoint === 'http://localhost:8801') {
-      setEndpoint(envoyUrl);
+    if (level === 'router') {
+      setEndpoint('http://localhost:8080/api/v1/eval');
+    } else if (level === 'mom') {
+      setEndpoint(envoyUrl || 'http://localhost:8801');
     }
-  }, [envoyUrl, endpoint]);
+  }, [level, envoyUrl]);
 
   const toggleDimension = useCallback((dim: EvaluationDimension) => {
     setDimensions((prev) => {
@@ -303,6 +307,7 @@ export function useTaskCreationForm() {
       name,
       description,
       config: {
+        level,
         dimensions,
         datasets,
         max_samples: maxSamples,
@@ -312,26 +317,27 @@ export function useTaskCreationForm() {
         samples_per_cat: samplesPerCat,
       },
     };
-  }, [name, description, dimensions, selectedDatasets, maxSamples, endpoint, model, concurrent, samplesPerCat]);
+  }, [level, name, description, dimensions, selectedDatasets, maxSamples, endpoint, model, concurrent, samplesPerCat]);
 
   const reset = useCallback(() => {
     setStep(1);
+    setLevel('router');
     setName('');
     setDescription('');
-    setDimensions(['hallucination']);
+    setDimensions(['domain']);
     setSelectedDatasets({});
     setMaxSamples(50);
-    setEndpoint(envoyUrl || 'http://localhost:8801');
+    setEndpoint('http://localhost:8080/v1/eval');
     setModel('MoM');
     setConcurrent(1);
     setSamplesPerCat(10);
-  }, [envoyUrl]);
+  }, []);
 
   const isStepValid = useCallback(
     (stepNum: number): boolean => {
       switch (stepNum) {
         case 1:
-          return name.trim().length > 0;
+          return level.trim().length > 0 && name.trim().length > 0;
         case 2:
           return dimensions.length > 0;
         case 3:
@@ -342,11 +348,13 @@ export function useTaskCreationForm() {
           return false;
       }
     },
-    [name, dimensions]
+    [level, name, dimensions]
   );
 
   return {
     step,
+    level,
+    setLevel,
     name,
     setName,
     description,

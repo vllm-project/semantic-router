@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { DIMENSION_INFO, STATUS_INFO, formatDuration } from '../../types/evaluation';
+import { DIMENSION_INFO, STATUS_INFO, LEVEL_INFO, formatDuration } from '../../types/evaluation';
 import { useProgress, useTask } from '../../hooks/useEvaluation';
 import styles from './ProgressTracker.module.css';
 
@@ -73,6 +73,12 @@ export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTracke
       </div>
 
       <div className={styles.details}>
+        <div className={styles.detailItem}>
+          <span className={styles.detailLabel}>Level</span>
+          <span className={styles.detailValue} style={{ color: LEVEL_INFO[task.config.level].color }}>
+            {LEVEL_INFO[task.config.level].label}
+          </span>
+        </div>
         <div className={styles.detailItem}>
           <span className={styles.detailLabel}>Started</span>
           <span className={styles.detailValue}>

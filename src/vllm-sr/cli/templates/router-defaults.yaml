@@ -56,7 +56,7 @@ classifier:
   category_model:
     model_id: "models/mmbert32k-intent-classifier-merged"
     use_mmbert_32k: true
-    threshold: 0.6
+    threshold: 0.5
     use_cpu: true
     category_mapping_path: "models/mmbert32k-intent-classifier-merged/category_mapping.json"
   pii_model:

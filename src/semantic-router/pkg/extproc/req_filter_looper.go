@@ -436,8 +436,6 @@ func (r *OpenAIRouter) buildHeaderMutationsForLooper(
 
 // handleLooperInternalRequest handles requests from looper to extproc
 // This bypasses all plugin processing and routes directly to the specified model
-
-// Deprecated: Use handleLooperInternalRequestWithPlugins instead
 func (r *OpenAIRouter) handleLooperInternalRequest(
 	modelName string,
 	ctx *RequestContext,

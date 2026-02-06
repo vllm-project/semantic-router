@@ -97,8 +97,8 @@ export function EvaluationPage() {
     <div className={styles.container}>
       <div className={styles.header}>
         <div className={styles.titleSection}>
-          <h1>MoM Evaluation</h1>
-          <p>Assess the Mixture-of-Models system performance across multiple dimensions.</p>
+          <h1>Evaluation</h1>
+          <p>Evaluate the Mixture-of-Models across multiple dimensions at Signal and System Level.</p>
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
-import type { CreateTaskRequest, DatasetInfo, EvaluationDimension } from '../../types/evaluation';
-import { DIMENSION_INFO } from '../../types/evaluation';
+import type { CreateTaskRequest, DatasetInfo, EvaluationDimension, EvaluationLevel } from '../../types/evaluation';
+import { DIMENSION_INFO, LEVEL_INFO } from '../../types/evaluation';
 import { useTaskCreationForm, useDatasets } from '../../hooks/useEvaluation';
 import styles from './TaskCreationForm.module.css';
 
@@ -43,7 +43,31 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
   const renderStep1 = () => (
     <div className={styles.stepContent}>
       <h3>Basic Information</h3>
-      <p className={styles.stepDescription}>Enter a name and description for your evaluation task.</p>
+      <p className={styles.stepDescription}>Enter a name, description, and evaluation level for your task.</p>
+
+      <div className={styles.formGroup}>
+        <label>Evaluation Level *</label>
+        <div className={styles.levelSelector}>
+          {Object.entries(LEVEL_INFO).map(([level, info]) => (
+            <button
+              key={level}
+              type="button"
+              className={`${styles.levelButton} ${form.level === level ? styles.levelButtonActive : ''}`}
+              onClick={() => form.setLevel(level as EvaluationLevel)}
+              style={{
+                '--level-color': info.color,
+              } as React.CSSProperties}
+            >
+              <span className={styles.levelButtonLabel}>{info.label}</span>
+            </button>
+          ))}
+        </div>
+        {form.level && (
+          <p className={styles.hint} style={{ color: LEVEL_INFO[form.level].color }}>
+            {LEVEL_INFO[form.level].description}
+          </p>
+        )}
+      </div>
 
       <div className={styles.formGroup}>
         <label htmlFor="name">Task Name *</label>
@@ -98,31 +122,49 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
     </div>
   );
 
-  const renderStep2 = () => (
-    <div className={styles.stepContent}>
-      <h3>Select Evaluation Dimensions</h3>
-      <p className={styles.stepDescription}>Choose which aspects of the MoM system to evaluate.</p>
+  const renderStep2 = () => {
+    // Filter dimensions based on level
+    const routerDimensions: EvaluationDimension[] = ['domain', 'fact_check', 'user_feedback'];
+    const momDimensions: EvaluationDimension[] = []; // To be added when MoM dimensions are implemented
 
-      <div className={styles.dimensionGrid}>
-        {(Object.entries(DIMENSION_INFO) as [EvaluationDimension, typeof DIMENSION_INFO[EvaluationDimension]][]).map(
-          ([dim, info]) => (
-            <button
-              key={dim}
-              className={`${styles.dimensionCard} ${form.dimensions.includes(dim) ? styles.selected : ''}`}
-              onClick={() => form.toggleDimension(dim)}
-              style={{ '--dim-color': info.color } as React.CSSProperties}
-            >
-              <div className={styles.dimensionHeader}>
-                <span className={styles.dimensionIndicator} style={{ backgroundColor: info.color }} />
-                <span className={styles.dimensionLabel}>{info.label}</span>
-              </div>
-              <p className={styles.dimensionDescription}>{info.description}</p>
-            </button>
-          )
+    const availableDimensions = form.level === 'router' ? routerDimensions : momDimensions;
+    const filteredDimensionInfo = Object.entries(DIMENSION_INFO).filter(([dim]) =>
+      availableDimensions.includes(dim as EvaluationDimension)
+    ) as [EvaluationDimension, typeof DIMENSION_INFO[EvaluationDimension]][];
+
+    return (
+      <div className={styles.stepContent}>
+        <h3>Select Evaluation Dimensions</h3>
+        <p className={styles.stepDescription}>
+          Choose which {form.level === 'router' ? 'signal types' : 'model performance metrics'} to evaluate.
+        </p>
+
+        {filteredDimensionInfo.length === 0 ? (
+          <div className={styles.noDimensions}>
+            <p>No dimensions available for {form.level} level evaluation yet.</p>
+            <p>Please select a different evaluation level.</p>
+          </div>
+        ) : (
+          <div className={styles.dimensionGrid}>
+            {filteredDimensionInfo.map(([dim, info]) => (
+              <button
+                key={dim}
+                className={`${styles.dimensionCard} ${form.dimensions.includes(dim) ? styles.selected : ''}`}
+                onClick={() => form.toggleDimension(dim)}
+                style={{ '--dim-color': info.color } as React.CSSProperties}
+              >
+                <div className={styles.dimensionHeader}>
+                  <span className={styles.dimensionIndicator} style={{ backgroundColor: info.color }} />
+                  <span className={styles.dimensionLabel}>{info.label}</span>
+                </div>
+                <p className={styles.dimensionDescription}>{info.description}</p>
+              </button>
+            ))}
+          </div>
         )}
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderStep3 = () => (
     <div className={styles.stepContent}>
@@ -134,13 +176,16 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
       ) : (
         <div className={styles.datasetGroups}>
           {form.dimensions.map((dim) => {
-            const datasets = availableDatasets[dim] || [];
+            // Filter datasets by level
+            const allDatasets = availableDatasets[dim] || [];
+            const datasets = allDatasets.filter((ds: DatasetInfo) => ds.level === form.level);
+
             return (
               <div key={dim} className={styles.datasetGroup}>
                 <h4 style={{ color: DIMENSION_INFO[dim].color }}>{DIMENSION_INFO[dim].label}</h4>
                 <div className={styles.datasetList}>
                   {datasets.length === 0 ? (
-                    <p className={styles.noDatasets}>No datasets available for this dimension.</p>
+                    <p className={styles.noDatasets}>No datasets available for this dimension at {form.level} level.</p>
                   ) : (
                     datasets.map((ds: DatasetInfo) => (
                       <label key={ds.name} className={styles.datasetItem}>
@@ -179,6 +224,12 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
             <dd>{config.name}</dd>
             <dt>Description</dt>
             <dd>{config.description || '-'}</dd>
+            <dt>Evaluation Level</dt>
+            <dd>
+              <span style={{ color: LEVEL_INFO[config.config.level].color }}>
+                {LEVEL_INFO[config.config.level].label}
+              </span>
+            </dd>
             <dt>Endpoint</dt>
             <dd>{config.config.endpoint}</dd>
             <dt>Max Samples</dt>

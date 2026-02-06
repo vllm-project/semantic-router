@@ -266,11 +266,13 @@ func extractAccuracyMetrics(raw map[string]interface{}) map[string]interface{} {
 		"overall_accuracy", "accuracy", "true_positives", "false_positives",
 		"true_negatives", "false_negatives",
 		"precision", "recall", "f1_score",
-		"total_samples", "total_questions", "correct_predictions",
+		"total_samples", "total_questions", "correct_predictions", "correct", "incorrect", "skipped",
 		"successful_queries", "failed_queries",
 		"category_metrics", "category_accuracy",
 		"avg_response_time", "avg_prompt_tokens", "avg_completion_tokens", "avg_total_tokens",
 		"by_mode",
+		"details",  // Test case details
+		"metadata", // Dataset metadata (name, description, etc.)
 	}
 
 	for _, key := range keys {
@@ -361,4 +363,46 @@ func getFloat(m map[string]interface{}, key string) (float64, bool) {
 		}
 	}
 	return 0, false
+}
+
+// ParseSignalEvalOutput parses the output from the signal evaluation script.
+func ParseSignalEvalOutput(outputPath string) (map[string]interface{}, error) {
+	// Read the JSON output file
+	data, err := os.ReadFile(outputPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read output file: %w", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	return extractSignalEvalMetrics(result), nil
+}
+
+// extractSignalEvalMetrics extracts the relevant metrics from signal evaluation results.
+func extractSignalEvalMetrics(raw map[string]interface{}) map[string]interface{} {
+	metrics := make(map[string]interface{})
+
+	// Extract top-level metrics
+	keys := []string{
+		"dimension",
+		"total_samples",
+		"correct",
+		"incorrect",
+		"skipped",
+		"accuracy",
+		"details",  // Include full details array for frontend display
+		"metadata", // Include metadata for frontend display
+	}
+
+	for _, key := range keys {
+		if val, ok := raw[key]; ok {
+			metrics[key] = val
+		}
+	}
+
+	metrics["status"] = "success"
+	return metrics
 }
