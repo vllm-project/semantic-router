@@ -2,18 +2,21 @@
 
 Python-based training for KNN, KMeans, and SVM model selection algorithms.
 
-> **📝 Important: Training Data Location**
+> **📝 Important: Data and Model Locations**
 >
-> The training data file `benchmark_training_data.jsonl` is **NOT included in this repository**.
-> It must be downloaded from HuggingFace Hub:
+> **Models** and **Data** are stored in separate directories:
 >
-> ```bash
-> python download_model.py --output-dir models/ --file benchmark_training_data.jsonl
-> ```
+> | Type | HuggingFace Repo | Local Path |
+> |------|------------------|------------|
+> | **Trained Models** | `abdallah1008/semantic-router-ml-models` | `.cache/ml-models/` |
+> | **Benchmark Data** | `abdallah1008/ml-selection-benchmark-data` | `.cache/ml-models/` |
 >
-> Or download directly from: https://huggingface.co/vllm-project/semantic-router-ml-models
+> **Files:**
 >
-> This file is deployment-specific and should be generated based on your own LLMs, queries, and benchmarks.
+> - Models: `knn_model.json`, `kmeans_model.json`, `svm_model.json`
+> - Data: `validation_benchmark_with_gt.jsonl`, `benchmark_data.jsonl`
+>
+> These files are deployment-specific and should be generated based on your own LLMs, queries, and benchmarks.
 
 ## Overview
 
@@ -40,13 +43,13 @@ pip install -r requirements.txt
 ### Option 1: Download Pretrained Models from HuggingFace
 
 ```bash
-# Download all models
-python download_model.py --output-dir models/
-
-# Download to specific location
+# Download models to .cache/ml-models/ (repo root)
 python download_model.py \
-  --output-dir ../../semantic-router/pkg/modelselection/data/trained_models \
+  --output-dir ../../../.cache/ml-models \
   --repo-id abdallah1008/semantic-router-ml-models
+
+# Download to custom location
+python download_model.py --output-dir my_models/
 ```
 
 ### Option 2: Train with Your Own Custom LLMs
@@ -54,33 +57,55 @@ python download_model.py \
 If you have your own LLMs and want to train model selection for them:
 
 ```bash
-# Step 1: Prepare queries file (JSONL with query and ground_truth)
+# Step 1: Prepare queries file (JSONL with query, ground_truth, and optionally category)
 cat > my_queries.jsonl << 'EOF'
-{"query": "Write a Python function to sort a list", "ground_truth": "def sort_list(lst): return sorted(lst)"}
-{"query": "What is the derivative of x^2?", "ground_truth": "2x"}
-{"query": "Explain photosynthesis", "ground_truth": "Process where plants convert sunlight to energy"}
+{"query": "Write a Python function to sort a list", "ground_truth": "def sort_list(lst): return sorted(lst)", "category": "computer science"}
+{"query": "What is the derivative of x^2?", "ground_truth": "2x", "category": "math"}
+{"query": "Explain photosynthesis", "ground_truth": "Process where plants convert sunlight to energy", "category": "biology"}
 EOF
 
 # Step 2: Benchmark your LLMs (generates performance + response_time)
+# Category is preserved from input - no separate step needed!
 python benchmark.py \
   --queries my_queries.jsonl \
   --models my-llm-v1,my-llm-v2,my-llm-v3 \
   --endpoint http://localhost:8000/v1 \
   --output benchmark_output.jsonl
 
-# Step 3: Add categories using VSR classifier (requires VSR running)
-python ../../../src/semantic-router/pkg/modelselection/data/add_category_to_training_data.py \
-  --input benchmark_output.jsonl \
-  --output benchmark_with_category.jsonl \
-  --vsr-url http://localhost:8080
-
-# Step 4: Train models
+# Step 3: Train models directly (category already in output)
 python train.py \
-  --data-file benchmark_with_category.jsonl \
+  --data-file benchmark_output.jsonl \
   --output-dir models/
 
-# Step 5: (Optional) Upload to HuggingFace
+# Step 4: (Optional) Upload to HuggingFace
 python upload_model.py --model-dir models/ --repo-id your-org/your-models
+```
+
+### Option 2b: Using Ollama Models
+
+```bash
+# Create models.yaml for Ollama
+cat > models.yaml << 'EOF'
+models:
+  - name: llama3.2:1b
+    endpoint: http://localhost:11434/v1
+  - name: llama3.2:3b
+    endpoint: http://localhost:11434/v1
+  - name: mistral:7b
+    endpoint: http://localhost:11434/v1
+  - name: codellama:7b
+    endpoint: http://localhost:11434/v1
+EOF
+
+# Run benchmark with config file
+python benchmark.py \
+  --queries my_queries.jsonl \
+  --model-config models.yaml \
+  --output benchmark_output.jsonl \
+  --concurrency 4
+
+# Train
+python train.py --data-file benchmark_output.jsonl --output-dir models/
 ```
 
 ### Option 3: Train from Existing Benchmark Data
@@ -135,38 +160,19 @@ python train.py \
 └─────────────────────────────────────────────────────────────────────┘
                                 ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│  STEP 3: ADD CATEGORIES (VSR Classifier)                            │
-│  ─────────────────────────────────────────────────────────────────  │
-│                                                                     │
-│  # Start VSR router first, then:                                    │
-│  python add_category_to_training_data.py \                          │
-│    --input benchmark_output.jsonl \                                 │
-│    --output benchmark_with_category.jsonl \                         │
-│    --vsr-url http://localhost:8080                                  │
-│                                                                     │
-│  Adds 'category' field (math, physics, computer science, etc.)      │
-└─────────────────────────────────────────────────────────────────────┘
-                                ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│  STEP 4: TRAIN ML MODELS                                            │
+│  STEP 3: TRAIN ML MODELS                                            │
 │  ─────────────────────────────────────────────────────────────────  │
 │                                                                     │
 │  python train.py \                                                  │
-│    --data-file benchmark_with_category.jsonl \                      │
+│    --data-file benchmark_output.jsonl \                             │
 │    --output-dir models/                                             │
 │                                                                     │
-│  Training process:                                                  │
-│  1. Load benchmark data                                             │
-│  2. Generate 1024-dim embeddings (Qwen3)                            │
-│  3. Create feature vectors (embedding + category one-hot = 1038)    │
-│  4. Train KNN, KMeans, SVM with quality+speed weighting             │
-│  5. Save models as JSON files                                       │
-│                                                                     │
-│  Output: knn_model.json, kmeans_model.json, svm_model.json          │
+│  Note: If input queries had 'category' field, it's preserved in     │
+│  benchmark output - no separate category step needed!               │
 └─────────────────────────────────────────────────────────────────────┘
                                 ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│  STEP 5: UPLOAD TO HUGGINGFACE (Optional)                           │
+│  STEP 4: UPLOAD TO HUGGINGFACE (Optional)                           │
 │  ─────────────────────────────────────────────────────────────────  │
 │                                                                     │
 │  export HF_TOKEN=your_token                                         │
@@ -176,7 +182,7 @@ python train.py \
 └─────────────────────────────────────────────────────────────────────┘
                                 ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│  STEP 6: INFERENCE (Go/Rust)                                        │
+│  STEP 5: INFERENCE (Go/Rust)                                        │
 │  ─────────────────────────────────────────────────────────────────  │
 │                                                                     │
 │  Router loads pretrained models:                                    │
@@ -195,8 +201,17 @@ python train.py \
 
 ### benchmark.py
 
+**Key Features:**
+
+- **Automatic deduplication**: Extracts unique queries from input (supports existing training data files)
+- **Category preservation**: If input has `category` field, it's preserved in output (no separate step needed)
+- **Flexible input**: Accepts both simple queries and full training data format
+
 ```
---queries           Path to JSONL file with queries (required)
+--queries           Path to JSONL input file (required)
+                    Supports: {"query": "...", "category": "...", "ground_truth": "..."}
+                    Also supports existing training data with model_name, performance fields
+                    Automatically deduplicates and extracts unique queries
 
 Model specification (one required):
 --models            Comma-separated list of model names (all use same endpoint)
@@ -211,7 +226,19 @@ For --models:
 General:
 --output            Output file path (default: benchmark_output.jsonl)
 --concurrency       Number of concurrent requests (default: 4)
+--limit             Limit number of queries to process (for testing)
 --no-progress       Disable progress bar
+```
+
+**Example with existing training data:**
+
+```bash
+# Use existing training data - extracts unique queries, preserves categories
+python benchmark.py \
+  --queries existing_training_data.jsonl \
+  --model-config models.yaml \
+  --output benchmark_output.jsonl \
+  --limit 500  # Test with 500 queries first
 ```
 
 #### Model Config File (models.yaml)
@@ -272,6 +299,122 @@ See `models.example.yaml` for more examples.
 --repo-id           HuggingFace repository ID (default: vllm-project/semantic-router-ml-models)
 --private           Create private repository
 --token             HuggingFace token (uses HF_TOKEN env var if not provided)
+```
+
+### validate.go (Go) - **Primary Validation Tool**
+
+Validates that ML routing provides benefit over baselines using the **actual production Go/Rust code**.
+
+This uses the same inference path as production:
+
+- **Embeddings**: Qwen3-Embedding-0.6B via `candle-binding` (Rust)
+- **ML Inference**: KNN/KMeans/SVM via `ml-binding` → **Linfa** (Rust)
+
+**Automatically downloads from HuggingFace:**
+
+- **Models**: `abdallah1008/semantic-router-ml-models` → `.cache/ml-models/`
+  - `knn_model.json`, `kmeans_model.json`, `svm_model.json`
+- **Benchmark Data**: `abdallah1008/ml-selection-benchmark-data` → `.cache/ml-models/`
+  - `validation_benchmark_with_gt.jsonl`
+
+```
+--data-file         Path to benchmark data JSONL file (optional - downloads from HF if not provided)
+--models-dir        Directory for model files (default: .cache/ml-models)
+--algorithm         Algorithm to validate: knn, kmeans, svm, all (default: all)
+--test-split        Fraction of data to use for testing (default: 1.0 = all data)
+--seed              Random seed for reproducibility (default: 42)
+--models-repo       HuggingFace repo for models (default: abdallah1008/semantic-router-ml-models)
+--data-repo         HuggingFace dataset repo for data (default: abdallah1008/ml-selection-benchmark-data)
+--qwen3-model       Path to Qwen3 model (default: auto-download from HuggingFace)
+--no-download       Skip HuggingFace download, use local files only
+--no-embeddings     Skip embedding generation (use random vectors for testing)
+```
+
+**Example:**
+
+```bash
+# Run from the training directory
+cd src/training/ml_model_selection
+
+# Set library paths for Rust bindings (WSL/Linux)
+export LD_LIBRARY_PATH=$PWD/../../../candle-binding/target/release:$PWD/../../../ml-binding/target/release:$LD_LIBRARY_PATH
+
+# Run validation (downloads models automatically)
+go run validate.go
+
+# Run with specific Qwen3 model path
+go run validate.go --qwen3-model /path/to/Qwen3-Embedding-0.6B
+
+# Validate specific algorithm
+go run validate.go --algorithm knn
+
+# Use local data file (still downloads models)
+go run validate.go --data-file my_benchmark.jsonl
+
+# Skip downloads, use local files only
+go run validate.go --no-download --data-file local.jsonl
+
+# Quick test without embeddings (random vectors)
+go run validate.go --no-embeddings
+```
+
+**Output:**
+
+```
+======================================================================
+  ML Model Selection Validation (Production Go/Rust Code)
+======================================================================
+Downloading from HuggingFace...
+  Downloaded knn_model.json
+  Downloaded kmeans_model.json
+  Downloaded svm_model.json
+  Downloaded validation_benchmark_with_gt.jsonl
+
+Data file:   .cache/ml-models/validation_benchmark_with_gt.jsonl
+Models dir:  .cache/ml-models
+Algorithm:   all
+Test split:  100%
+
+Loading benchmark data...
+Loaded 109 test queries with 4 models
+Models: codellama-7b, llama-3.2-1b, llama-3.2-3b, mistral-7b
+
+Initializing Qwen3 embedding model...
+Loaded Qwen3 embedding model: /path/to/models/Qwen3-Embedding-0.6B
+
+Generating embeddings for test queries...
+  Generated embeddings: 109/109
+
+Loaded KNN selector from .cache/ml-models
+Loaded KMEANS selector from .cache/ml-models
+Loaded SVM selector from .cache/ml-models
+
+Evaluating strategies...
+
+Validation Results (109 test queries, 4 models)
+======================================================================
+Strategy                    Avg Quality  Avg Latency   Best Model %
+----------------------------------------------------------------------
+Oracle (best)                     0.495       10.57s         100.0%
+KMEANS Selection                  0.252       20.23s          23.9%
+Always llama-3.2-3b               0.242       25.08s          15.6%
+SVM Selection                     0.233       25.83s          14.7%
+Always mistral-7b                 0.215       70.08s          13.8%
+Always llama-3.2-1b               0.212        3.65s          26.6%
+KNN Selection                     0.196       36.62s          13.8%
+Random Selection                  0.175       40.46s          13.8%
+Always codellama-7b               0.161       53.78s           4.6%
+======================================================================
+
+ML Routing Benefit:
+  - KMEANS Selection improves quality by +44.4% over random
+  - KMEANS Selection selects best model 1.7x more often than random
+  - SVM Selection improves quality by +33.3% over random
+  - SVM Selection selects best model 1.1x more often than random
+  - KNN Selection improves quality by +12.2% over random
+  - KNN Selection selects best model 1.0x more often than random
+
+Note: This validation uses the ACTUAL production Go/Rust selectors.
 ```
 
 ## Data Format

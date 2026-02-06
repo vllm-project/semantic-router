@@ -7,7 +7,13 @@
 > The E2E test automatically downloads pretrained ML models (KNN, KMeans, SVM) from HuggingFace
 > during setup. No local training or Python virtual environment setup is required.
 >
-> Models are downloaded from: https://huggingface.co/abdallah1008/semantic-router-ml-models
+> | Type | HuggingFace Repo | Local Path |
+> |------|------------------|------------|
+> | **Trained Models** | `abdallah1008/semantic-router-ml-models` | `.cache/ml-models/` |
+> | **Benchmark Data** | `abdallah1008/ml-selection-benchmark-data` | `.cache/ml-models/` |
+>
+> **Model Files:** `knn_model.json`, `kmeans_model.json`, `svm_model.json`
+> **Data Files:** `validation_benchmark_with_gt.jsonl`
 
 This profile demonstrates how to use pretrained ML models for intelligent model selection at runtime, implementing concepts from FusionFactory and Avengers-Pro papers.
 
@@ -33,11 +39,16 @@ The profile uses custom gateway resources in `gateway-resources/` that match the
 │  ─────────────────────────────────────────────────────────────────  │
 │                                                                     │
 │  E2E profile setup automatically downloads from HuggingFace:        │
-│  • knn_model.json - K-Nearest Neighbors model                       │
-│  • kmeans_model.json - KMeans clustering model                      │
-│  • svm_model.json - Support Vector Machine model                    │
 │                                                                     │
-│  Source: abdallah1008/semantic-router-ml-models                     │
+│  From: abdallah1008/semantic-router-ml-models                       │
+│  To:   .cache/ml-models/                                            │
+│    • knn_model.json - K-Nearest Neighbors model                     │
+│    • kmeans_model.json - KMeans clustering model                    │
+│    • svm_model.json - Support Vector Machine model                  │
+│                                                                     │
+│  From: abdallah1008/ml-selection-benchmark-data                     │
+│  To:   .cache/ml-models/                                            │
+│    • validation_benchmark_with_gt.jsonl - Validation data           │
 └─────────────────────────────────────────────────────────────────────┘
                                 ↓
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -83,10 +94,15 @@ The profile uses custom gateway resources in `gateway-resources/` that match the
 │                    PRETRAINED MODELS (HuggingFace)            │
 ├──────────────────────────────────────────────────────────────┤
 │                                                              │
-│  HuggingFace Hub    →    Download    →    Local Models       │
-│  (abdallah1008/       (automatic)      (knn_model.json       │
-│   semantic-router-                      kmeans_model.json    │
-│   ml-models)                            svm_model.json)      │
+│  HuggingFace Hub         →    Download    →    Local Path    │
+│                                                              │
+│  abdallah1008/semantic-     (automatic)     .cache/ml-models/
+│   router-ml-models                          ├── knn_model.json
+│                                             ├── kmeans_model.json
+│                                             └── svm_model.json
+│                                                              │
+│  abdallah1008/ml-selection- (automatic)     .cache/ml-models/
+│   benchmark-data                            └── validation_benchmark_with_gt.jsonl
 └──────────────────────────────────────────────────────────────┘
                               ↓
 ┌──────────────────────────────────────────────────────────────┐
@@ -127,9 +143,16 @@ If you want to download models manually before running tests:
 pip install huggingface-hub
 
 cd src/training/ml_model_selection
+
+# Download trained models to .cache/ml-models/ (repo root)
 python download_model.py \
-  --output-dir ../../semantic-router/pkg/modelselection/data/trained_models \
+  --output-dir ../../../.cache/ml-models \
   --repo-id abdallah1008/semantic-router-ml-models
+
+# Models will be saved to:
+# - <repo-root>/.cache/ml-models/knn_model.json
+# - <repo-root>/.cache/ml-models/kmeans_model.json
+# - <repo-root>/.cache/ml-models/svm_model.json
 ```
 
 ### 3. Verify Selection
@@ -139,6 +162,40 @@ The test sends queries and verifies:
 - Decision matches expected category (e.g., `math_decision`)
 - Selected model is one of the expected models
 - Algorithm header shows `knn`, `kmeans`, or `svm`
+
+### 4. Validate ML Models (Optional)
+
+To validate that ML routing provides benefit over baselines, use the `validate.go` script:
+
+```bash
+# Run from the training directory
+cd src/training/ml_model_selection
+
+# Set library paths for Rust bindings (WSL/Linux)
+export LD_LIBRARY_PATH=$PWD/../../../candle-binding/target/release:$PWD/../../../ml-binding/target/release:$LD_LIBRARY_PATH
+
+# Run validation (downloads models automatically)
+go run validate.go
+
+# Or with specific Qwen3 model path
+go run validate.go --qwen3-model /path/to/Qwen3-Embedding-0.6B
+```
+
+This uses the **actual production inference path**:
+
+- **Embeddings**: Qwen3-Embedding-0.6B via `candle-binding` (Rust)
+- **ML Inference**: KNN/KMeans/SVM via `ml-binding` → **Linfa** (Rust)
+
+**Expected Results (109 test queries, 4 models):**
+
+| Algorithm | Avg Quality | Improvement over Random |
+|-----------|-------------|------------------------|
+| **KMEANS** | 0.252 | +44.4% |
+| **SVM** | 0.233 | +33.3% |
+| **KNN** | 0.196 | +12.2% |
+| Random | 0.175 | baseline |
+
+Output shows ML routing improvement vs baselines (random, single-model).
 
 ## Configuration
 
@@ -190,10 +247,10 @@ decisions:
 ```yaml
 model_selection:
   ml:
-    models_path: "data/trained_models"
+    models_path: ".cache/ml-models"
     knn:
       k: 5
-      pretrained_path: "data/trained_models/knn_model.json"
+      pretrained_path: ".cache/ml-models/knn_model.json"
     svm:
       kernel: "rbf"
       gamma: 1.0
@@ -307,7 +364,7 @@ The E2E test automatically downloads models from HuggingFace. If download fails:
 ```bash
 pip install huggingface-hub
 cd src/training/ml_model_selection
-python download_model.py --output-dir ../../semantic-router/pkg/modelselection/data/trained_models
+python download_model.py --output-dir ../../../.cache/ml-models
 ```
 
 ### No Model Selected

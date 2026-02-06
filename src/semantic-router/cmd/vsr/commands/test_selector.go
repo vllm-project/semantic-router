@@ -36,8 +36,8 @@ func NewTestSelectorCmd() *cobra.Command {
 	testSelectorCmd.Flags().StringVar(&testSelectorCategory, "category", "other",
 		"Category for the query (biology, math, physics, etc.)")
 	testSelectorCmd.Flags().StringVar(&testSelectorModelsDir, "models-dir",
-		"src/semantic-router/pkg/modelselection/data/trained_models",
-		"Directory containing trained models")
+		"../../.cache/ml-models",
+		"Directory for downloaded/trained models")
 
 	return testSelectorCmd
 }
