@@ -3,8 +3,7 @@ module github.com/vllm-project/semantic-router/src/semantic-router
 go 1.24.1
 
 replace (
-	// Use onnx-binding instead of candle-binding for ONNX Runtime support
-	github.com/vllm-project/semantic-router/candle-binding => ../../onnx-binding
+	github.com/vllm-project/semantic-router/candle-binding => ../../candle-binding
 	github.com/vllm-project/semantic-router/ml-binding => ../../ml-binding
 	github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache => ./pkg/cache
 	github.com/vllm-project/semantic-router/src/semantic-router/pkg/config => ./pkg/config
