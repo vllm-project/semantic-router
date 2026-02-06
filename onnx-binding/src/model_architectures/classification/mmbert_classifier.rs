@@ -370,9 +370,12 @@ impl MmBertSequenceClassifier {
 
         for (i, encoding) in encodings.iter().enumerate() {
             let seq_len = encoding.len().min(max_len);
+            let enc_attention_mask = encoding.get_attention_mask();
             for j in 0..seq_len {
                 input_ids[i * max_len + j] = encoding.get_ids()[j] as i64;
-                attention_mask[i * max_len + j] = 1;
+                // Use the tokenizer's attention mask to correctly handle padding tokens
+                // (e.g. when tokenizer has Fixed padding strategy like Fixed:512)
+                attention_mask[i * max_len + j] = enc_attention_mask[j] as i64;
             }
         }
 
@@ -577,10 +580,12 @@ impl MmBertTokenClassifier {
         // Prepare inputs
         let mut input_ids = vec![self.config.pad_token_id as i64; seq_len];
         let mut attention_mask = vec![0i64; seq_len];
+        let enc_attention_mask = encoding.get_attention_mask();
 
         for i in 0..seq_len {
             input_ids[i] = encoding.get_ids()[i] as i64;
-            attention_mask[i] = 1;
+            // Use the tokenizer's attention mask to correctly handle padding tokens
+            attention_mask[i] = enc_attention_mask[i] as i64;
         }
 
         // Create tensors (batch size 1)

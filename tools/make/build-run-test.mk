@@ -35,9 +35,15 @@ build-onnx-binding: ## Build the ONNX Runtime binding (mmBERT 32K support)
 	@cd onnx-binding && cargo build --release
 	@echo "ONNX binding built successfully"
 
+# Build the ml-binding Rust library (required by router-onnx at runtime)
+build-ml-binding: ## Build the ml-binding Rust library
+	@echo "Building ml-binding Rust library..."
+	@cd ml-binding && cargo build --release
+	@echo "ml-binding built successfully"
+
 # Build the router with ONNX binding support
 build-router-onnx: ## Build the router binary with ONNX binding
-build-router-onnx: build-onnx-binding
+build-router-onnx: build-onnx-binding build-ml-binding
 	@$(LOG_TARGET)
 	@mkdir -p bin
 	@cd src/semantic-router && \
@@ -50,7 +56,7 @@ run-router-onnx: ## Run the router with ONNX binding (mmBERT embedding model)
 run-router-onnx: build-router-onnx
 	@echo "Running router with ONNX binding..."
 	@echo "Config: $${ONNX_CONFIG_FILE:-config/config.onnx-binding-test.yaml}"
-	@export LD_LIBRARY_PATH=${PWD}/onnx-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/onnx-binding/target/release:${PWD}/ml-binding/target/release && \
 		./bin/router-onnx -config=$${ONNX_CONFIG_FILE:-config/config.onnx-binding-test.yaml} --enable-system-prompt-api=true
 
 # Unit test semantic-router

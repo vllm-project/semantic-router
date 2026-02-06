@@ -6,6 +6,8 @@ Models:
 - mmbert32k-intent-classifier: 14-class sequence classification
 - mmbert32k-jailbreak-detector: 2-class sequence classification
 - mmbert32k-pii-detector: 35-label token classification
+- mmbert32k-factcheck-classifier: binary fact-check routing
+- mmbert32k-feedback-detector: 4-class satisfaction (user feedback)
 
 Uses optimum for ONNX export with proper handling of ModernBERT architecture.
 """
@@ -20,6 +22,7 @@ from transformers import (
     AutoTokenizer,
     AutoModelForSequenceClassification,
     AutoModelForTokenClassification,
+    PreTrainedTokenizerFast,
 )
 from optimum.onnxruntime import (
     ORTModelForSequenceClassification,
@@ -34,8 +37,23 @@ def export_sequence_classifier(model_path: str, output_path: str, opset: int = 1
     print(f"Output: {output_path}")
     print(f"{'='*60}")
 
-    # Load tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    # Load tokenizer (fallback for TokenizersBackend or incompatible tokenizer_config)
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
+    except (ValueError, OSError, AttributeError) as e:
+        if (
+            "TokenizersBackend" in str(e)
+            or "does not exist" in str(e)
+            or "has no attribute" in str(e)
+        ):
+            # Load from tokenizer.json only to avoid tokenizer_config issues
+            tokenizer_file = Path(model_path) / "tokenizer.json"
+            if tokenizer_file.exists():
+                tokenizer = PreTrainedTokenizerFast(tokenizer_file=str(tokenizer_file))
+            else:
+                raise
+        else:
+            raise
 
     # Load model
     print("Loading PyTorch model...")
@@ -71,6 +89,7 @@ def export_sequence_classifier(model_path: str, output_path: str, opset: int = 1
         "label_mapping.json",
         "category_mapping.json",
         "jailbreak_type_mapping.json",
+        "fact_check_mapping.json",
     ]:
         src = Path(model_path) / mapping_file
         if src.exists():
@@ -199,7 +218,7 @@ def main():
     parser = argparse.ArgumentParser(description="Export classifier models to ONNX")
     parser.add_argument(
         "--model",
-        choices=["intent", "jailbreak", "pii", "all"],
+        choices=["intent", "jailbreak", "pii", "factcheck", "feedback", "all"],
         default="all",
         help="Which model to export",
     )
@@ -224,9 +243,23 @@ def main():
             "output": "mmbert32k-pii-detector-onnx",
             "type": "token",
         },
+        "factcheck": {
+            "input": "mmbert32k-factcheck-classifier-merged",
+            "output": "mmbert32k-factcheck-classifier-merged-onnx",
+            "type": "sequence",
+        },
+        "feedback": {
+            "input": "mmbert32k-feedback-detector-merged",
+            "output": "mmbert32k-feedback-detector-merged-onnx",
+            "type": "sequence",
+        },
     }
 
-    to_export = [args.model] if args.model != "all" else ["intent", "jailbreak", "pii"]
+    to_export = (
+        [args.model]
+        if args.model != "all"
+        else ["intent", "jailbreak", "pii", "factcheck", "feedback"]
+    )
 
     for model_name in to_export:
         model_info = models[model_name]

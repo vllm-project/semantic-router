@@ -4,10 +4,15 @@
 # Model-On-Demand Registry - maps local paths to HuggingFace repos
 # The ONNX models are stored in the onnx/ subdirectory of the merged model repos
 mom_registry:
-  # ONNX classifier models (already downloaded locally)
+  # ONNX classifier models (already downloaded/exported locally)
   "models/mmbert32k-intent-classifier-merged-onnx": "llm-semantic-router/mmbert32k-intent-classifier-merged"
   "models/mmbert32k-jailbreak-detector-merged-onnx": "llm-semantic-router/mmbert32k-jailbreak-detector-merged"
   "models/mmbert32k-pii-detector-merged-onnx": "llm-semantic-router/mmbert32k-pii-detector-merged"
+  "models/mmbert32k-factcheck-classifier-merged-onnx": "llm-semantic-router/mmbert32k-factcheck-classifier-merged"
+  "models/mmbert32k-feedback-detector-merged-onnx": "llm-semantic-router/mmbert32k-feedback-detector-merged"
+  # Required by hallucination_mitigation when enabled
+  "models/mom-halugate-detector": "KRLabsOrg/lettucedect-base-modernbert-en-v1"
+  "models/mom-halugate-explainer": "tasksource/ModernBERT-base-nli"
 
 # Response API Configuration
 response_api:
@@ -73,10 +78,26 @@ classifier:
     threshold: 0.5
 
 feedback_detector:
-  enabled: false
+  enabled: true
+  use_mmbert_32k: true
+  model_id: "models/mmbert32k-feedback-detector-merged-onnx"
+  feedback_mapping_path: "models/mmbert32k-feedback-detector-merged-onnx/label_mapping.json"
+  use_cpu: true
+  threshold: 0.5
 
 hallucination_mitigation:
-  enabled: false
+  enabled: true
+  fact_check_model:
+    model_id: "models/mmbert32k-factcheck-classifier-merged-onnx"
+    use_cpu: true
+    use_mmbert_32k: true
+    threshold: 0.5
+  hallucination_model:
+    model_id: "models/mom-halugate-detector"
+    use_cpu: true
+  nli_model:
+    model_id: "models/mom-halugate-explainer"
+    use_cpu: true
 
 # vLLM Endpoints Configuration
 vllm_endpoints:
@@ -105,7 +126,53 @@ categories:
   - name: computer_science
     description: "Computer science questions"
 
+# Fact-check signal rules (matched signals emitted by fact-check classifier)
+fact_check_rules:
+  - name: "needs_fact_check"
+    description: "Query requires factual verification"
+  - name: "no_fact_check_needed"
+    description: "Query does not require factual verification"
+
+# User feedback signal rules (matched signals emitted by feedback detector)
+user_feedback_rules:
+  - name: "satisfied"
+    description: "User is satisfied with the response"
+  - name: "need_clarification"
+    description: "User needs clarification"
+  - name: "wrong_answer"
+    description: "User indicates the answer is wrong"
+  - name: "want_different"
+    description: "User wants a different answer"
+
 decisions:
+  - name: "fact_check_routing"
+    description: "Route queries that need fact-checking to a reasoning model"
+    priority: 90
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "fact_check"
+          name: "needs_fact_check"
+    modelRefs:
+      - model: "qwen2.5:3b"
+        use_reasoning: true
+        weight: 100
+
+  - name: "wrong_answer_routing"
+    description: "Route corrections to reasoning model"
+    priority: 85
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "user_feedback"
+          name: "wrong_answer"
+        - type: "user_feedback"
+          name: "need_clarification"
+    modelRefs:
+      - model: "qwen2.5:3b"
+        use_reasoning: true
+        weight: 100
+
   - name: "default"
     description: "Default routing"
     priority: 100
