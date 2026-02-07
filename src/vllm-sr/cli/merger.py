@@ -154,8 +154,20 @@ def translate_latency_signals(latencies: list) -> list:
     for signal in latencies:
         rule = {
             "name": signal.name,
-            "max_tpot": signal.max_tpot,
         }
+        # At least one of tpot_percentile or ttft_percentile should be set
+        if signal.tpot_percentile is not None and signal.tpot_percentile > 0:
+            rule["tpot_percentile"] = signal.tpot_percentile
+        if signal.ttft_percentile is not None and signal.ttft_percentile > 0:
+            rule["ttft_percentile"] = signal.ttft_percentile
+
+        # Validate that at least one is set
+        if "tpot_percentile" not in rule and "ttft_percentile" not in rule:
+            log.warn(
+                f"Latency signal '{signal.name}' has neither tpot_percentile nor ttft_percentile set, skipping"
+            )
+            continue
+
         if signal.description:
             rule["description"] = signal.description
         rules.append(rule)
@@ -181,6 +193,37 @@ def translate_context_signals(context_rules: list) -> list:
         }
         if signal.description:
             rule["description"] = signal.description
+        rules.append(rule)
+    return rules
+
+
+def translate_complexity_signals(complexity_rules: list) -> list:
+    """
+    Translate complexity signals to router format.
+
+    Args:
+        complexity_rules: List of ComplexityRule objects
+
+    Returns:
+        list: Router complexity rules
+    """
+    rules = []
+    for signal in complexity_rules:
+        rule = {
+            "name": signal.name,
+            "threshold": signal.threshold,
+            "hard": {"candidates": signal.hard.candidates},
+            "easy": {"candidates": signal.easy.candidates},
+        }
+        if signal.description:
+            rule["description"] = signal.description
+        if signal.composer:
+            rule["composer"] = {
+                "operator": signal.composer.operator,
+                "conditions": [
+                    {"type": c.type, "name": c.name} for c in signal.composer.conditions
+                ],
+            }
         rules.append(rule)
     return rules
 
@@ -440,6 +483,14 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
                 user_config.signals.context
             )
             log.info(f"  Added {len(user_config.signals.context)} context signals")
+
+        if user_config.signals.complexity and len(user_config.signals.complexity) > 0:
+            merged["complexity_rules"] = translate_complexity_signals(
+                user_config.signals.complexity
+            )
+            log.info(
+                f"  Added {len(user_config.signals.complexity)} complexity signals"
+            )
 
         # Translate domains to categories
         if user_config.signals.domains:

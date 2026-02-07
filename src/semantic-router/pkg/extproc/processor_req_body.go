@@ -23,7 +23,6 @@ import (
 
 // handleRequestBody processes the request body
 func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBody, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
-	logging.Infof("Processing request body: %s", string(v.RequestBody.GetBody()))
 	// Record start time for model routing
 	ctx.ProcessingStartTime = time.Now()
 	// Save the original request body
@@ -76,13 +75,11 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		ctx.RequestModel = originalModel
 	}
 
-	// Check if this is a looper internal request - if so, skip all plugin processing
-	// and route directly to the specified model (looper already did decision evaluation)
+	// Check if this is a looper internal request - if so, execute decision plugins
+	// (lookup decision by name and apply configured plugins)
 	if r.isLooperRequest(ctx) {
-		logging.Infof("[Looper] Internal request detected, skipping plugin processing, routing to model: %s", originalModel)
-		ctx.RequestModel = originalModel
-		ctx.VSRSelectedModel = originalModel
-		return r.handleLooperInternalRequest(originalModel, ctx)
+		logging.Infof("[Looper] Internal request detected, executing decision plugins for model: %s", originalModel)
+		return r.handleLooperInternalRequestWithPlugins(originalModel, ctx)
 	}
 
 	// Get content from messages
@@ -101,12 +98,18 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 
 	// Perform security checks with decision-specific settings
 	if response, shouldReturn := r.performJailbreaks(ctx, userContent, nonUserMessages, decisionName); shouldReturn {
+		// Record blocked request to replay before returning
+		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
+		r.updateRouterReplayStatus(ctx, 403, false) // 403 Forbidden for jailbreak block
 		return response, nil
 	}
 
 	// Perform PII detection and policy check (if PII policy is enabled for the decision)
 	piiResponse := r.performPIIDetection(ctx, userContent, nonUserMessages, decisionName)
 	if piiResponse != nil {
+		// Record blocked request to replay before returning
+		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
+		r.updateRouterReplayStatus(ctx, 403, false) // 403 Forbidden for PII block
 		// PII policy violation - return error response
 		return piiResponse, nil
 	}

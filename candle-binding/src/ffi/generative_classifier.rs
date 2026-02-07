@@ -9,8 +9,10 @@
 //! - Detecting jailbreaks and unsafe content
 //! - Managing model lifecycle
 
+use crate::ffi::types::ClassificationResult;
 use crate::model_architectures::generative::{Qwen3GuardModel, Qwen3MultiLoRAClassifier};
 use candle_core::Device;
+use serde_json::Value;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::ptr;
@@ -21,6 +23,9 @@ static GLOBAL_QWEN3_MULTI_CLASSIFIER: OnceLock<Mutex<Qwen3MultiLoRAClassifier>> 
 
 /// Global Qwen3Guard instance (for safety/jailbreak detection)
 static GLOBAL_QWEN3_GUARD: OnceLock<Mutex<Qwen3GuardModel>> = OnceLock::new();
+
+/// Global Qwen3 zero-shot classifier for preference routing
+static GLOBAL_QWEN3_PREFERENCE: OnceLock<Mutex<Qwen3MultiLoRAClassifier>> = OnceLock::new();
 
 /// Generative classification result returned to Go
 #[repr(C)]
@@ -862,5 +867,169 @@ pub extern "C" fn is_qwen3_multi_lora_initialized() -> i32 {
         1
     } else {
         0
+    }
+}
+
+// ================================================================================================
+// QWEN3 ZERO-SHOT PREFERENCE CLASSIFIER
+// ================================================================================================
+
+fn select_device(use_cpu: bool) -> Device {
+    if use_cpu {
+        Device::Cpu
+    } else {
+        Device::cuda_if_available(0).unwrap_or(Device::Cpu)
+    }
+}
+
+/// Initialize Qwen3 zero-shot classifier for preference routing (no LoRA required)
+///
+/// # Safety
+/// - `model_path` must be a valid null-terminated C string
+#[no_mangle]
+pub extern "C" fn init_qwen3_preference_classifier(
+    model_path: *const c_char,
+    use_cpu: bool,
+) -> bool {
+    if model_path.is_null() {
+        eprintln!("Error: model_path is null");
+        return false;
+    }
+
+    let model_path_str = unsafe {
+        match CStr::from_ptr(model_path).to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("Error: invalid UTF-8 in model_path: {}", e);
+                return false;
+            }
+        }
+    };
+
+    // Avoid re-loading if already initialized
+    if GLOBAL_QWEN3_PREFERENCE.get().is_some() {
+        println!("✅ Qwen3 preference classifier already initialized, reusing instance");
+        return true;
+    }
+
+    let device = select_device(use_cpu);
+
+    match Qwen3MultiLoRAClassifier::new(model_path_str, &device) {
+        Ok(classifier) => match GLOBAL_QWEN3_PREFERENCE.set(Mutex::new(classifier)) {
+            Ok(_) => true,
+            Err(_) => {
+                println!("✅ Qwen3 preference classifier already initialized (race), reusing");
+                true
+            }
+        },
+        Err(e) => {
+            eprintln!(
+                "Error: failed to initialize Qwen3 preference classifier: {}",
+                e
+            );
+            false
+        }
+    }
+}
+
+/// Classify preference using zero-shot Qwen3 base model
+///
+/// # Safety
+/// - `text` and `labels_json` must be valid null-terminated C strings
+#[no_mangle]
+pub extern "C" fn classify_qwen3_preference(
+    text: *const c_char,
+    labels_json: *const c_char,
+) -> ClassificationResult {
+    let default_result = ClassificationResult {
+        predicted_class: -1,
+        confidence: 0.0,
+        label: ptr::null_mut(),
+    };
+
+    if text.is_null() || labels_json.is_null() {
+        eprintln!("Error: text or labels_json is null");
+        return default_result;
+    }
+
+    let text_str = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("Error: invalid UTF-8 in text: {}", e);
+                return default_result;
+            }
+        }
+    };
+
+    let labels_str = unsafe {
+        match CStr::from_ptr(labels_json).to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("Error: invalid UTF-8 in labels_json: {}", e);
+                return default_result;
+            }
+        }
+    };
+
+    // Parse labels array from JSON
+    let labels_value: Value = match serde_json::from_str(labels_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Error: failed to parse labels_json: {}", e);
+            return default_result;
+        }
+    };
+
+    let labels: Vec<String> = match labels_value {
+        Value::Array(arr) => arr
+            .into_iter()
+            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .collect(),
+        _ => {
+            eprintln!("Error: labels_json is not an array of strings");
+            return default_result;
+        }
+    };
+
+    if labels.is_empty() {
+        eprintln!("Error: labels list is empty");
+        return default_result;
+    }
+
+    let classifier_mutex = match GLOBAL_QWEN3_PREFERENCE.get() {
+        Some(c) => c,
+        None => {
+            eprintln!("Error: Qwen3 preference classifier not initialized");
+            return default_result;
+        }
+    };
+
+    match classifier_mutex.lock() {
+        Ok(mut classifier) => {
+            match classifier.classify_zero_shot_multi_tokens(text_str, labels.clone()) {
+                Ok(result) => {
+                    let class_idx = labels
+                        .iter()
+                        .position(|label| label == &result.category)
+                        .map(|idx| idx as i32)
+                        .unwrap_or(-1);
+
+                    ClassificationResult {
+                        predicted_class: class_idx,
+                        confidence: result.confidence,
+                        label: ptr::null_mut(),
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error: Qwen3 preference classification failed: {}", e);
+                    default_result
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("Error: failed to acquire preference classifier lock: {}", e);
+            default_result
+        }
     }
 }

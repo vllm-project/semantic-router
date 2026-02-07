@@ -13,6 +13,7 @@ export const SIGNAL_ICONS: Record<SignalType, string> = {
   language: '🌐',
   latency: '⚡',
   context: '📏',
+  complexity: '🧠',
 }
 
 // ============== Signal Colors (Gray Nodes, Green Paths) ==============
@@ -26,6 +27,7 @@ export const SIGNAL_COLORS: Record<SignalType, { background: string; border: str
   language: { background: '#4a5568', border: '#2d3748' },     // Dark Gray
   latency: { background: '#4a5568', border: '#2d3748' },      // Dark Gray
   context: { background: '#4a5568', border: '#2d3748' },      // Dark Gray
+  complexity: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
 }
 
 // ============== Signal Latency ==============
@@ -39,6 +41,7 @@ export const SIGNAL_LATENCY: Record<SignalType, string> = {
   language: '<1ms',
   latency: '<1ms',
   context: '<1ms',
+  complexity: '50-100ms',
 }
 
 // ============== Plugin Icons ==============
@@ -60,7 +63,7 @@ export const PLUGIN_COLORS: Record<PluginType, { background: string; border: str
   'system_prompt': { background: '#8fd400', border: '#76b900' },   // Light Green
   'header_mutation': { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
   'hallucination': { background: '#556b7d', border: '#3d4a59' },   // Cool Gray
-  'router_replay': { background: '#4a5568', border: '#2d3748' },   // Dark Gray
+  'router_replay': { background: '#6ba300', border: '#5a8f00' },   // Green (consistent with other plugins)
 }
 
 // ============== Algorithm Icons ==============
@@ -74,6 +77,7 @@ export const ALGORITHM_ICONS: Record<AlgorithmType, string> = {
   router_dc: '🔀',
   automix: '🤖',
   hybrid: '🔄',
+  remom: '🧠',  // Brain icon for reasoning/thinking
 }
 
 // ============== Algorithm Colors (NVIDIA Dark Theme) ==============
@@ -85,6 +89,7 @@ export const ALGORITHM_COLORS: Record<AlgorithmType, { background: string; borde
   static: { background: '#606c7a', border: '#3d4a59' },        // Slate Gray
   elo: { background: '#718096', border: '#4a5568' },           // Medium Gray
   router_dc: { background: '#556b7d', border: '#3d4a59' },     // Cool Gray
+  remom: { background: '#76b900', border: '#5a8f00' },         // NVIDIA Green (same as plugins)
   automix: { background: '#5d6d7e', border: '#3d4a59' },       // Steel Gray
   hybrid: { background: '#4a5568', border: '#2d3748' },        // Dark Gray
 }
@@ -141,8 +146,8 @@ export const LAYOUT_CONFIG = {
   },
   nodeWidth: 180,
   nodeHeight: 100,
-  verticalSpacing: 25,   // Minimum space between nodes in same column
-  groupSpacing: 35,      // Extra space between signal groups
+  verticalSpacing: 15,   // Minimum space between nodes in same column (reduced from 25)
+  groupSpacing: 20,      // Extra space between signal groups (reduced from 35)
   // Base heights for different node types (actual height = base + content)
   decisionBaseHeight: 120,   // Decision nodes base
   decisionConditionHeight: 22, // Per condition line
@@ -163,6 +168,7 @@ export const SIGNAL_TYPES: SignalType[] = [
   'language',
   'latency',
   'context',
+  'complexity',
 ]
 
 // ============== Plugin Types Array ==============

@@ -34,6 +34,10 @@ const (
 	// Example values: "math_decision", "business_decision", "thinking_decision"
 	VSRSelectedDecision = "x-vsr-selected-decision"
 
+	// VSRSelectedConfidence indicates the confidence score of the selected decision.
+	// Value: decimal between 0.0 and 1.0 (e.g., "0.75")
+	VSRSelectedConfidence = "x-vsr-selected-confidence"
+
 	// VSRSelectedReasoning indicates whether reasoning mode was determined to be used.
 	// Values: "on" (reasoning enabled) or "off" (reasoning disabled)
 	VSRSelectedReasoning = "x-vsr-selected-reasoning"
@@ -99,6 +103,10 @@ const (
 	// Example: "1500"
 	//nolint:gosec
 	VSRContextTokenCount = "x-vsr-context-token-count"
+
+	// VSRMatchedComplexity contains comma-separated list of matched complexity rules with difficulty levels.
+	// Example: "code_complexity:hard,math_complexity:easy"
+	VSRMatchedComplexity = "x-vsr-matched-complexity"
 )
 
 // Security Headers
@@ -156,17 +164,21 @@ const (
 
 // Looper Request Headers
 // These headers are added to looper internal requests to identify them
-// and allow the extproc to skip plugin processing for looper requests.
+// and allow the extproc to lookup decision configuration and apply plugins.
 const (
 	// VSRLooperRequest indicates this is an internal looper request.
-	// When present, extproc should skip plugin processing (jailbreak, PII, hallucination, etc.)
-	// and pass the request directly to the backend.
+	// When present, extproc should lookup the decision and execute configured plugins.
 	// Value: "true"
 	VSRLooperRequest = "x-vsr-looper-request"
 
 	// VSRLooperIteration indicates the current iteration number in the looper loop.
 	// Value: "1", "2", "3", etc.
 	VSRLooperIteration = "x-vsr-looper-iteration"
+
+	// VSRLooperDecision indicates the decision name for looper internal requests.
+	// Used by extproc to lookup decision configuration and apply plugins.
+	// Value: decision name (e.g., "remom_low_effort")
+	VSRLooperDecision = "x-vsr-looper-decision"
 )
 
 // Looper Response Headers

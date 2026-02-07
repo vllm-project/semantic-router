@@ -27,6 +27,9 @@ WORKDIR /app
 COPY candle-binding/Cargo.toml ./candle-binding/
 # Copy Cargo.lock if it exists in the build context
 COPY candle-binding/Cargo.loc[k] ./candle-binding/
+# Copy ml-binding Rust files
+COPY ml-binding/Cargo.toml ./ml-binding/
+COPY ml-binding/Cargo.loc[k] ./ml-binding/
 COPY tools/make/ tools/make/
 COPY Makefile ./
 
@@ -37,8 +40,16 @@ RUN cd candle-binding && \
     cargo build --release --no-default-features && \
     rm -rf src
 
+# Pre-build ml-binding dependencies
+RUN cd ml-binding && \
+    mkdir -p src && \
+    echo "pub fn dummy() {}" > src/lib.rs && \
+    cargo build --release && \
+    rm -rf src
+
 # Copy source code and build
 COPY candle-binding/src/ ./candle-binding/src/
+COPY ml-binding/src/ ./ml-binding/src/
 
 # Use Makefile to build the Rust library (rebuild with actual source code, CPU-only, no CUDA)
 RUN echo "Building Rust library with actual source code (CPU-only, no CUDA)..." && \
@@ -52,6 +63,16 @@ RUN echo "Building Rust library with actual source code (CPU-only, no CUDA)..." 
     find target -name "*.so" -type f && \
     ls -la target/release/
 
+# Build ml-binding Rust library
+RUN echo "Building ml-binding Rust library..." && \
+    ls -la ml-binding/src/ && \
+    cd ml-binding && \
+    cargo clean && \
+    cargo build --release && \
+    echo "Checking built ml-binding library:" && \
+    find target -name "*.so" -type f && \
+    ls -la target/release/
+
 # Build the Go application
 FROM golang:1.24 AS go-builder
 
@@ -61,20 +82,23 @@ WORKDIR /app
 RUN mkdir -p src/semantic-router
 COPY src/semantic-router/go.mod src/semantic-router/go.sum src/semantic-router/
 COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/
+COPY ml-binding/go.mod ml-binding/ml_binding.go ml-binding/
 
 # Pre-download modules to fail fast if mirrors are unreachable
 RUN cd src/semantic-router && go mod download && \
-    cd /app/candle-binding && go mod download
+    cd /app/candle-binding && go mod download && \
+    cd /app/ml-binding && go mod download
 
 # Copy semantic-router source code
 COPY src/semantic-router/ src/semantic-router/
 
-# Copy the built Rust library from rust-builder
+# Copy the built Rust libraries from rust-builder
 COPY --from=rust-builder /app/candle-binding/target/release/libcandle_semantic_router.so /app/candle-binding/target/release/
+COPY --from=rust-builder /app/ml-binding/target/release/libml_semantic_router.so /app/ml-binding/target/release/
 
-# Set environment variables for CGO to find the library
+# Set environment variables for CGO to find the libraries
 ENV CGO_ENABLED=1
-ENV LD_LIBRARY_PATH=/app/candle-binding/target/release
+ENV LD_LIBRARY_PATH=/app/candle-binding/target/release:/app/ml-binding/target/release
 ENV GOOS=linux
 
 # Build the router binary with optimizations
@@ -97,6 +121,7 @@ WORKDIR /app
 
 COPY --from=go-builder /app/bin/router /app/extproc-server
 COPY --from=go-builder /app/candle-binding/target/release/libcandle_semantic_router.so /app/lib/
+COPY --from=go-builder /app/ml-binding/target/release/libml_semantic_router.so /app/lib/
 COPY config/config.yaml /app/config/
 
 ENV LD_LIBRARY_PATH=/app/lib

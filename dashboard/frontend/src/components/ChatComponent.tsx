@@ -6,7 +6,9 @@ import ThinkingAnimation from './ThinkingAnimation'
 import HeaderReveal from './HeaderReveal'
 import ThinkingBlock from './ThinkingBlock'
 import ErrorBoundary from './ErrorBoundary'
+import ReMoMResponsesDisplay from './ReMoMResponsesDisplay'
 import { useToolRegistry } from '../tools'
+import { useMCPToolSync } from '../tools/mcp'
 import { getTranslateAttr } from '../hooks/useNoTranslate'
 import type { ToolCall, ToolResult, WebSearchResult } from '../tools'
 
@@ -125,6 +127,21 @@ interface Choice {
   model?: string
 }
 
+// ReMoM intermediate response structure
+interface ReMoMIntermediateResp {
+  model: string
+  content: string
+  reasoning?: string
+  compacted_content?: string
+  token_count?: number
+}
+
+interface ReMoMRoundResponse {
+  round: number
+  breadth: number
+  responses: ReMoMIntermediateResp[]
+}
+
 // Re-export ToolCall and ToolResult types from tools module
 // Local SearchResult alias for backward compatibility
 type SearchResult = WebSearchResult
@@ -143,6 +160,8 @@ interface Message {
   // Tool calls and results
   toolCalls?: ToolCall[]
   toolResults?: ToolResult[]
+  // For ReMoM: intermediate responses from multi-round reasoning
+  reasoning_mom_responses?: ReMoMRoundResponse[]
 }
 
 // Web Search Card Component
@@ -652,23 +671,17 @@ const ContentWithCitations = ({
 
 interface ChatComponentProps {
   endpoint?: string
-  defaultModel?: string
-  defaultSystemPrompt?: string
   isFullscreenMode?: boolean
 }
 
 const ChatComponent = ({
   endpoint = '/api/router/v1/chat/completions',
-  defaultModel = 'MoM',
-  defaultSystemPrompt = 'You are a helpful assistant.',
   isFullscreenMode = false,
 }: ChatComponentProps) => {
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [model, setModel] = useState(defaultModel)
-  const [systemPrompt, setSystemPrompt] = useState(defaultSystemPrompt)
-  const [showSettings, setShowSettings] = useState(false)
+  const model = 'MoM' // Fixed to MoM
   const [error, setError] = useState<string | null>(null)
   const [showThinking, setShowThinking] = useState(false)
   const [showHeaderReveal, setShowHeaderReveal] = useState(false)
@@ -680,6 +693,9 @@ const [enableWebSearch, setEnableWebSearch] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
+
+  // MCP 工具同步 - 自动将 MCP 服务器的工具同步到 toolRegistry
+  useMCPToolSync({ enabled: true, pollInterval: 30000 })
 
   // Tool Registry integration
   // Search tools (controlled by web search toggle)
@@ -780,9 +796,7 @@ const [enableWebSearch, setEnableWebSearch] = useState(true)
         tool_call_id?: string
       }
 
-      const chatMessages: ChatMessage[] = [
-        { role: 'system', content: systemPrompt },
-      ]
+      const chatMessages: ChatMessage[] = []
 
       // Process each message for context
       // IMPORTANT: For history messages, we only include the final text content,
@@ -858,6 +872,7 @@ const [enableWebSearch, setEnableWebSearch] = useState(true)
         'x-vsr-matched-latency',
         'x-vsr-matched-context',
         'x-vsr-context-token-count',
+        'x-vsr-matched-complexity',
         // Looper headers
         'x-vsr-looper-model',
         'x-vsr-looper-models-used',
@@ -893,13 +908,21 @@ const [enableWebSearch, setEnableWebSearch] = useState(true)
       // Track tool calls
       const toolCallsMap: Map<number, ToolCall> = new Map()
       let hasToolCalls = false
+      // Track ReMoM intermediate responses
+      let reasoningMomResponses: ReMoMRoundResponse[] | undefined
+      // Buffer for incomplete lines
+      let buffer = ''
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
 
         const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n')
+        buffer += chunk
+        const lines = buffer.split('\n')
+
+        // Keep the last incomplete line in the buffer
+        buffer = lines.pop() || ''
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
@@ -909,6 +932,12 @@ const [enableWebSearch, setEnableWebSearch] = useState(true)
             try {
               const parsed = JSON.parse(data)
               const choices = parsed.choices || []
+
+              // Extract reasoning_mom_responses if present (ReMoM algorithm)
+              if (parsed.reasoning_mom_responses) {
+                reasoningMomResponses = parsed.reasoning_mom_responses
+                console.log('[ReMoM] Extracted reasoning_mom_responses:', reasoningMomResponses)
+              }
 
               // Detect ratings mode (multiple choices)
               if (choices.length > 1) {
@@ -1345,6 +1374,7 @@ const MAX_TOOL_ITERATIONS = 30
       // Streaming finished - no need to control ThinkingAnimation here
       // It was already hidden when headers arrived
 
+      console.log('[ReMoM] Setting reasoning_mom_responses:', reasoningMomResponses)
       setMessages(prev =>
         prev.map(m =>
           m.id === assistantMessageId
@@ -1353,7 +1383,8 @@ const MAX_TOOL_ITERATIONS = 30
                 isStreaming: false,
                 headers: Object.keys(responseHeaders).length > 0 ? responseHeaders : undefined,
                 choices: finalChoices,
-                thinkingProcess: finalThinkingProcess || m.thinkingProcess
+                thinkingProcess: finalThinkingProcess || m.thinkingProcess,
+                reasoning_mom_responses: reasoningMomResponses
               }
             : m
         )
@@ -1408,43 +1439,6 @@ const MAX_TOOL_ITERATIONS = 30
       )}
 
       <div className={`${styles.container} ${isFullscreen ? styles.fullscreen : ''}`}>
-      {showSettings && (
-        <div className={styles.settings}>
-          <div className={styles.settingsHeader}>
-            <span className={styles.settingsTitle}>Settings</span>
-            <button
-              className={styles.iconButton}
-              onClick={() => setShowSettings(false)}
-              title="Close settings"
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M1 1l12 12M13 1L1 13" strokeLinecap="round"/>
-              </svg>
-            </button>
-          </div>
-          <div className={styles.settingRow}>
-            <label className={styles.settingLabel}>Model:</label>
-            <input
-              type="text"
-              value={model}
-              onChange={e => setModel(e.target.value)}
-              className={styles.settingInput}
-              placeholder="auto, gpt-4, etc."
-            />
-          </div>
-          <div className={styles.settingRow}>
-            <label className={styles.settingLabel}>System Prompt:</label>
-            <textarea
-              value={systemPrompt}
-              onChange={e => setSystemPrompt(e.target.value)}
-              className={styles.settingTextarea}
-              rows={3}
-              placeholder="You are a helpful assistant."
-            />
-          </div>
-        </div>
-      )}
-
       {error && (
         <div className={styles.error}>
           <span className={styles.errorIcon}>⚠️</span>
@@ -1621,6 +1615,12 @@ const MAX_TOOL_ITERATIONS = 30
                   {message.role === 'assistant' && message.headers && (
                     <HeaderDisplay headers={message.headers} />
                   )}
+                  {message.role === 'assistant' && message.reasoning_mom_responses && (
+                    <>
+                      {console.log('[ReMoM] Rendering ReMoMResponsesDisplay for message:', message.id, 'rounds:', message.reasoning_mom_responses)}
+                      <ReMoMResponsesDisplay rounds={message.reasoning_mom_responses} />
+                    </>
+                  )}
                   {message.role === 'assistant' && message.content && !message.isStreaming && (
                     <MessageActionBar content={message.content} />
                   )}
@@ -1633,7 +1633,7 @@ const MAX_TOOL_ITERATIONS = 30
       </div>
 
       <div className={styles.inputContainer}>
-        <div className={styles.inputWrapper}>
+        <div className={`${styles.inputWrapper} ${inputValue.trim() ? styles.hasContent : ''}`}>
           <textarea
             ref={inputRef}
             value={inputValue}
@@ -1651,16 +1651,6 @@ const MAX_TOOL_ITERATIONS = 30
                 onToggle={() => setEnableWebSearch(!enableWebSearch)}
                 disabled={isLoading}
               />
-              <button
-                className={styles.inputActionButton}
-                onClick={() => setShowSettings(!showSettings)}
-                data-tooltip="Settings"
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <circle cx="8" cy="8" r="2.5"/>
-                  <path d="M8 1v2M8 13v2M15 8h-2M3 8H1M13.5 2.5l-1.4 1.4M3.9 12.1l-1.4 1.4M13.5 13.5l-1.4-1.4M3.9 3.9L2.5 2.5" strokeLinecap="round"/>
-                </svg>
-              </button>
               <button
                 className={styles.inputActionButton}
                 onClick={handleClear}

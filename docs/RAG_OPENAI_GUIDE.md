@@ -255,6 +255,30 @@ python e2e/testing/08-rag-openai-test.py --base-url http://localhost:8080
 make e2e-test E2E_TESTS=rag-openai
 ```
 
+### OpenAI API Validation Test Suite
+
+Validation tests ensure the OpenAI API implementation (Files, Vector Stores, Search) stays compatible with upstream. Adapted from [openai-python/tests](https://github.com/openai/openai-python/tree/main/tests). Run when `OPENAI_API_KEY` is set.
+
+**Python E2E (contract validation against real API):**
+
+```bash
+# From repo root; skips all tests if OPENAI_API_KEY is not set
+OPENAI_API_KEY=sk-... python e2e/testing/09-openai-api-validation-test.py --verbose
+
+# Optional: override API base URL
+OPENAI_BASE_URL=https://api.openai.com/v1 OPENAI_API_KEY=sk-... python e2e/testing/09-openai-api-validation-test.py
+```
+
+**Go integration (pkg/openai client against real API):**
+
+```bash
+cd src/semantic-router
+# Skips tests if OPENAI_API_KEY is not set
+OPENAI_API_KEY=sk-... go test -tags=openai_validation ./pkg/openai -v
+```
+
+Tests cover: Files (list, upload, get, delete), Vector Stores (list, create, get, update, delete), Vector Store Files (list), and Vector Store Search (response schema).
+
 ## Monitoring and Observability
 
 The OpenAI RAG backend exposes the following metrics:

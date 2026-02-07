@@ -57,9 +57,15 @@ config:
       operator: "OR"
       keywords: ["urgent", "immediate", "asap", "emergency"]
       case_sensitive: false
+      fuzzy_match: true
+      fuzzy_threshold: 2
     - name: "sensitive_data"
       operator: "AND"
       keywords: ["SSN", "credit card"]
+      case_sensitive: false
+    - name: "regex_pattern_match"
+      operator: "OR"
+      keywords: ["user.name@domain.com", "C:\\Program Files\\"]
       case_sensitive: false
 
   # Categories define domain metadata only (no routing logic)
@@ -165,6 +171,18 @@ config:
           configuration:
             enabled: true
             pii_types_allowed: []
+
+    - name: "regex_pattern_match_decision"
+      description: "Structured data and pattern-based requests"
+      priority: 150
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "keyword"
+            name: "regex_pattern_match"
+      modelRefs:
+        - model: "base-model"
+          use_reasoning: false
 
     # Standard category decisions
     - name: "business_decision"

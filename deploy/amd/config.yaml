@@ -9,7 +9,7 @@ listeners:
   - name: "http-8899"
     address: "0.0.0.0"
     port: 8899
-    timeout: "300s"
+    timeout: "1200s"
 
 # Signals - Classification signals for routing
 signals:
@@ -26,6 +26,25 @@ signals:
         - "pretend you are"
         - "act as if"
         - "forget your guidelines"
+      case_sensitive: false
+
+    # ReMoM detection
+    - name: "remom_low"
+      operator: "OR"
+      keywords:
+        - "think step by step"
+      case_sensitive: false
+
+    - name: "remom_medium"
+      operator: "OR"
+      keywords:
+        - "think carefully step by step"
+      case_sensitive: false
+
+    - name: "remom_high"
+      operator: "OR"
+      keywords:
+        - "think deeply and systematically"
       case_sensitive: false
 
     # Creative/opinion keywords
@@ -104,7 +123,7 @@ signals:
   # Embedding-based signals for intent classification
   embeddings:
     # Fast QA (English) - Simple, quick questions requiring brief answers
-    - name: "fast_qa"
+    - name: "fast_qa_en"
       threshold: 0.72
       aggregation_method: "max"
       candidates:
@@ -240,7 +259,17 @@ signals:
     - name: "en"
       description: "English language queries"
     - name: "zh"
-      description: "Chinese language queries (Simplified and Traditional)"
+      description: "Chinese language queries"
+    - name: "kor"
+      description: "Korean language queries"
+    - name: "fr"
+      description: "French language queries"
+    - name: "ru"
+      description: "Russian language queries"
+    - name: "de"
+      description: "German language queries"
+    - name: "ja"
+      description: "Japanese language queries"
 
   # Domain classification signals (using MMLU standard categories)
   domains:
@@ -250,17 +279,43 @@ signals:
       description: "Mathematics, statistics, and quantitative reasoning"
     - name: "physics"
       description: "Physics and physical sciences"
+    - name: "chemistry"
+      description: "Chemistry and chemical sciences questions"
+    - name: "biology"
+      description: "Biology and life sciences questions"
+    - name: "engineering"
+      description: "Engineering and technical problem-solving"
+    - name: "business"
+      description: "Business and management related queries"
+    - name: "economics"
+      description: "Economics and financial topics"
+    - name: "law"
+      description: "Legal questions and law-related topics"
+    - name: "psychology"
+      description: "Psychology and mental health topics"
+    - name: "philosophy"
+      description: "Philosophy and ethical questions"
+    - name: "history"
+      description: "Historical questions and cultural topics"
+    - name: "health"
+      description: "Health and medical information queries"
     - name: "other"
-      description: "Creative writing, opinion-based, brainstorming, or general queries that don't fit specific domains"
+      description: "General knowledge and miscellaneous topics"
 
   # latency - Latency-based routing signals (TPOT-based)
   latency:
-    - name: "low_latency"
-      max_tpot: 0.005  # 5ms per token
+    - name: "top10"
+      tpot_percentile: 10
+      ttft_percentile: 10
       description: "For real-time chat applications requiring fast responses"
-    - name: "medium_latency"
-      max_tpot: 0.15  # 150ms per token
+    - name: "top50"
+      tpot_percentile: 50
+      ttft_percentile: 50
       description: "For standard applications with moderate latency tolerance"
+    - name: "top90"
+      tpot_percentile: 90
+      ttft_percentile: 90
+      description: "For applications with high latency tolerance"
 
   # Fact-check signals for verification needs
   # Strategy: Identify queries that DON'T need fact checking (creative/code/opinion)
@@ -283,8 +338,247 @@ signals:
       min_tokens: "8K"
       max_tokens: "1024K"
 
+  # complexity - Complexity signals (Embedding-based difficulty detection)
+  # IMPORTANT: It is strongly recommended to configure a composer for each complexity rule
+  # to filter based on other signals (e.g., domain). This prevents misclassification where
+  # a math question might match computer_science or vice versa.
+  complexity:
+    - name: "computer_science"
+      composer:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "computer science"
+      threshold: 0.1
+      hard:
+        candidates:
+          - "design distributed system"
+          - "implement consensus algorithm"
+          - "optimize for scale"
+          - "architect microservices"
+          - "fix race condition"
+          - "implement garbage collector"
+          - "design database schema with complex relationships"
+          - "implement custom memory allocator"
+          - "build compiler or interpreter"
+          - "optimize algorithm time complexity"
+          - "implement concurrent data structures"
+          - "design fault-tolerant system"
+          - "implement distributed transaction protocol"
+          - "build real-time streaming pipeline"
+          - "optimize database query performance"
+          - "implement machine learning algorithm from scratch"
+          - "design scalable API architecture"
+          - "debug memory leak in production"
+          - "implement custom networking protocol"
+          - "build distributed lock manager"
+      easy:
+        candidates:
+          - "print hello world"
+          - "loop through array"
+          - "read file"
+          - "sort list"
+          - "string concatenation"
+          - "simple function"
+          - "create variable"
+          - "write if statement"
+          - "use for loop"
+          - "define class"
+          - "call function"
+          - "import library"
+          - "print output"
+          - "read input"
+          - "basic arithmetic in code"
+          - "concatenate strings"
+          - "access array element"
+          - "create dictionary"
+          - "write comment"
+          - "format string"
+      description: "Programming and software development tasks including coding problems, algorithm implementation, system design, debugging, software architecture, data structures, code optimization, testing, and technical questions about programming languages, frameworks, APIs, databases, and software engineering practices ranging from simple scripts to complex distributed systems"
+    - name: "math_problem"
+      composer:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "math"
+      threshold: 0.1
+      hard:
+        candidates:
+          - "prove mathematically"
+          - "derive the equation"
+          - "formal proof"
+          - "solve differential equation"
+          - "prove by induction"
+          - "analyze convergence"
+          - "prove theorem rigorously"
+          - "derive formula using calculus"
+          - "solve partial differential equation"
+          - "prove inequality mathematically"
+          - "analyze asymptotic behavior"
+          - "compute eigenvalues and eigenvectors"
+          - "prove using contradiction"
+          - "derive Taylor series expansion"
+          - "solve system of nonlinear equations"
+          - "prove limit exists"
+          - "compute complex integral"
+          - "prove bijection between sets"
+          - "analyze stability of system"
+          - "derive closed form solution"
+      easy:
+        candidates:
+          - "what is 2+2"
+          - "simple arithmetic"
+          - "basic calculation"
+          - "count numbers"
+          - "add two numbers"
+          - "multiply values"
+          - "subtract numbers"
+          - "divide numbers"
+          - "calculate percentage"
+          - "find average"
+          - "round number"
+          - "compare numbers"
+          - "basic addition"
+          - "basic subtraction"
+          - "basic multiplication"
+          - "basic division"
+          - "simple fraction"
+          - "count objects"
+          - "basic geometry area"
+          - "simple equation solve"
+      description: "Mathematical problems and calculations including arithmetic operations, algebra, geometry, trigonometry, calculus, linear algebra, differential equations, mathematical proofs, number theory, statistics, probability, mathematical reasoning, derivations, and theoretical mathematics ranging from basic calculations to advanced mathematical analysis and formal proofs"
+
 # Decisions - Intelligent routing rules
 decisions:
+  # Priority 203: ReMoM Algorithm with high effort
+  - name: "remom_high_effort"
+    description: "ReMoM Algorithm with high effort"
+    priority: 203
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "keyword"
+          name: "remom_high"
+    modelRefs:
+      - model: "DeepSeek-V3.2"
+        use_reasoning: true
+        reasoning_effort: "high"
+        weight: 0.5
+      - model: "openai/gpt-oss-20b"
+        use_reasoning: true
+        reasoning_effort: "high"
+        weight: 0.3
+      - model: "Qwen/Qwen3-235B"
+        use_reasoning: true
+        reasoning_effort: "high"
+        weight: 0.2
+    plugins:
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 10000           # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096         # Max bytes per body, truncates if exceeded (default: 4096)
+    algorithm:
+      type: "remom"
+      remom:
+        breadth_schedule: [32, 4]  # Low intensity for demonstration
+        # Model distribution strategy:
+        # - "weighted": Distribute calls based on model weights (default)
+        # - "equal": Distribute evenly across all models
+        # - "first_only": Use only the first model (PaCoRe-compatible)
+        model_distribution: "weighted"
+        compaction_strategy: "full"
+        # Behavior on model call failure: "skip" or "fail"
+        on_error: "skip"
+
+  # Priority 202: ReMoM Algorithm with medium effort
+  - name: "remom_medium_effort"
+    description: "ReMoM Algorithm with medium effort"
+    priority: 202
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "keyword"
+          name: "remom_medium"
+    modelRefs:
+      - model: "Kimi-K2-Thinking"
+        use_reasoning: true
+        reasoning_effort: "medium"
+      - model: "GLM-4.7"
+        use_reasoning: true
+        reasoning_effort: "medium"
+      - model: "DeepSeek-V3.2"
+        use_reasoning: true
+        reasoning_effort: "medium"
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
+        reasoning_effort: "medium"
+    plugins:
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 10000           # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096         # Max bytes per body, truncates if exceeded (default: 4096)
+    algorithm:
+      type: "remom"
+      remom:
+        breadth_schedule: [16, 4]  # Low intensity for demonstration
+        # Model distribution strategy:
+        # - "weighted": Distribute calls based on model weights (default)
+        # - "equal": Distribute evenly across all models
+        # - "first_only": Use only the first model (PaCoRe-compatible)
+        model_distribution: "equal"
+        compaction_strategy: "full"
+        # Behavior on model call failure: "skip" or "fail"
+        on_error: "skip"
+
+  # Priority 201: ReMoM Algorithm with low effort
+  - name: "remom_low_effort"
+    description: "ReMoM Algorithm with low effort"
+    priority: 201
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "keyword"
+          name: "remom_low"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
+        reasoning_effort: "low"
+    plugins:
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 10000           # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096         # Max bytes per body, truncates if exceeded (default: 4096)
+    algorithm:
+      type: "remom"
+      remom:
+        breadth_schedule: [8]  # Low intensity for demonstration
+        # Model distribution strategy:
+        # - "weighted": Distribute calls based on model weights (default)
+        # - "equal": Distribute evenly across all models
+        # - "first_only": Use only the first model (PaCoRe-compatible)
+        model_distribution: "first_only"
+        compaction_strategy: "full"
+        # Behavior on model call failure: "skip" or "fail"
+        on_error: "skip"
+
   # Priority 200: Jailbreak detection - highest priority
   - name: "guardrails"
     description: "Block jailbreak attempts with security measures"
@@ -305,49 +599,13 @@ decisions:
       - type: "system_prompt"
         configuration:
           system_prompt: "You are a helpful AI assistant. I cannot fulfill requests that attempt to bypass safety guidelines."
-
-  # Priority 180: Deep thinking with Chinese language
-  - name: "complex_reasoning"
-    description: "Complex reasoning in Chinese requiring advanced models"
-    priority: 180
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "embedding"
-          name: "deep_thinking_zh"
-        - type: "keyword"
-          name: "thinking_zh"
-    modelRefs:
-      - model: "Kimi-K2-Thinking"
-        use_reasoning: true
-        reasoning_effort: "high"
-    plugins:
-      - type: "system_prompt"
+      - type: "router_replay"
         configuration:
-          system_prompt: "你是一个专业的AI助手，擅长深度分析和复杂推理。请提供详细、深入的回答。"
-
-  # Priority 145: Computer science domain with deep thinking
-  - name: "complex_engineering"
-    description: "Complex code generation and algorithm design (only when domain is clearly computer science)"
-    priority: 145
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "domain"
-          name: "computer science"
-        - type: "embedding"
-          name: "deep_thinking_en"
-    modelRefs:
-      - model: "DeepSeek-V3.2"
-        use_reasoning: true
-        reasoning_effort: "high"
-    plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "You are an expert software engineer. Provide detailed, well-structured code solutions with explanations."
-      - type: "semantic-cache"
-        configuration:
-          enabled: false
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
   # Priority 160: Creative/Opinion queries - NO fact check needed
   - name: "creative_ideas"
@@ -367,31 +625,163 @@ decisions:
     plugins:
       - type: "system_prompt"
         configuration:
-          system_prompt: "You are a creative and insightful assistant. Feel free to explore ideas, provide opinions, and think outside the box."
+          system_prompt: "You are Qwen3-235B, a creative and insightful assistant. Feel free to explore ideas, provide opinions, and think outside the box."
       - type: "semantic-cache"
         configuration:
           enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
-  # Priority 150: Math domain
-  - name: "math_problems"
-    description: "Mathematical queries with reasoning"
+  # Priority 150: Hard Math domain
+  - name: "hard_math_problems"
+    description: "Hard Mathematical queries with high reasoning"
     priority: 150
     rules:
       operator: "AND"
       conditions:
         - type: "domain"
           name: "math"
+        - type: "complexity"
+          name: "math_problem:hard"
     modelRefs:
-      - model: "Qwen/Qwen3-235B"
+      - model: "DeepSeek-V3.2"
         use_reasoning: true
         reasoning_effort: "high"
     plugins:
       - type: "system_prompt"
         configuration:
-          system_prompt: "You are a mathematics expert. Provide rigorous proofs with step-by-step reasoning."
+          system_prompt: "You are Qwen3-235B, a mathematics expert. Provide rigorous proofs with step-by-step with hard reasoning."
       - type: "semantic-cache"
         configuration:
           enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
+
+  # Priority 149: Easy Math domain
+  - name: "easy_math_problems"
+    description: "Easy Mathematical queries with low reasoning"
+    priority: 149
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "math"
+        - type: "complexity"
+          name: "math_problem:easy"
+        - type: "complexity"
+          name: "math_problem:medium"
+    modelRefs:
+      - model: "Qwen/Qwen3-235B"
+        use_reasoning: true
+        reasoning_effort: "low"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are Qwen3-235B, a mathematics expert. Provide simple answers with easy reasoning."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
+
+  # Priority 148: Chemistry domain
+  - name: "chemistry_problems"
+    description: "Chemistry queries with reasoning"
+    priority: 148
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "chemistry"
+    modelRefs:
+      - model: "Qwen/Qwen3-235B"
+        use_reasoning: true
+        reasoning_effort: "medium"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are Qwen3-235B, a chemistry expert. Explain chemical reactions, molecular structures, and laboratory techniques with scientific rigor."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000
+          capture_request_body: true
+          capture_response_body: true
+          max_body_bytes: 4096
+
+  # Priority 147: Biology domain
+  - name: "biology_problems"
+    description: "Biology and life sciences queries"
+    priority: 147
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "biology"
+    modelRefs:
+      - model: "Qwen/Qwen3-235B"
+        use_reasoning: true
+        reasoning_effort: "medium"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are Qwen3-235B, a biology expert. Explain molecular biology, genetics, ecology, and life sciences with detailed scientific explanations."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000
+          capture_request_body: true
+          capture_response_body: true
+          max_body_bytes: 4096
+
+  # Priority 146: Health and Medical domain
+  - name: "health_medical"
+    description: "Health and medical information queries"
+    priority: 146
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "health"
+    modelRefs:
+      - model: "GLM-4.7"
+        use_reasoning: true
+        reasoning_effort: "medium"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are GLM-4.7, a medical information assistant. Provide accurate health information based on scientific evidence. Always remind users to consult healthcare professionals for medical advice."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000
+          capture_request_body: true
+          capture_response_body: true
+          max_body_bytes: 4096
 
   # Priority 145: Physics domain
   - name: "physics_problems"
@@ -409,26 +799,231 @@ decisions:
     plugins:
       - type: "system_prompt"
         configuration:
-          system_prompt: "You are a physics expert. Explain concepts with mathematical derivations and verified facts."
+          system_prompt: "You are GLM-4.7, a physics expert. Explain concepts with mathematical derivations and verified facts."
       - type: "semantic-cache"
         configuration:
           enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
-  # Priority 140: Deep thinking in English
-  - name: "deep_thinking"
-    description: "Complex reasoning in English"
-    priority: 140
+  # Priority 144: Engineering domain
+  - name: "engineering_problems"
+    description: "Engineering and technical problem-solving"
+    priority: 144
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "engineering"
+    modelRefs:
+      - model: "DeepSeek-V3.2"
+        use_reasoning: true
+        reasoning_effort: "medium"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are DeepSeek-V3.2, an engineering expert. Provide technical solutions with practical considerations, calculations, and design principles."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000
+          capture_request_body: true
+          capture_response_body: true
+          max_body_bytes: 4096
+
+  # Priority 143: Law domain
+  - name: "law_legal"
+    description: "Legal questions and law-related topics"
+    priority: 143
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "law"
+    modelRefs:
+      - model: "Qwen/Qwen3-235B"
+        use_reasoning: true
+        reasoning_effort: "medium"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are Qwen3-235B, a legal information assistant. Provide information about legal principles and concepts. Always remind users to consult qualified legal professionals for legal advice."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000
+          capture_request_body: true
+          capture_response_body: true
+          max_body_bytes: 4096
+
+  # Priority 142: Business and Economics domain
+  - name: "business_economics"
+    description: "Business, management, and economics queries"
+    priority: 142
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "business"
+        - type: "domain"
+          name: "economics"
+    modelRefs:
+      - model: "Qwen/Qwen3-235B"
+        use_reasoning: true
+        reasoning_effort: "medium"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are Qwen3-235B, a business and economics expert. Provide insights on business strategy, management, economics, and financial topics with practical analysis."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000
+          capture_request_body: true
+          capture_response_body: true
+          max_body_bytes: 4096
+
+  # Priority 141: Computer science domain with deep thinking
+  - name: "complex_engineering"
+    description: "Complex code generation and algorithm design (only when domain is clearly computer science)"
+    priority: 141
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "computer science"
+        - type: "embedding"
+          name: "deep_thinking_en"
+        - type: "complexity"
+          name: "computer_science:hard"
+    modelRefs:
+      - model: "DeepSeek-V3.2"
+        use_reasoning: true
+        reasoning_effort: "high"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are DeepSeek-V3.2, an expert software engineer. Provide detailed, well-structured code solutions with explanations."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
+
+  # Priority 138: Psychology domain
+  - name: "psychology_queries"
+    description: "Psychology and mental health topics"
+    priority: 138
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "psychology"
+    modelRefs:
+      - model: "Qwen/Qwen3-235B"
+        use_reasoning: true
+        reasoning_effort: "medium"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are Qwen3-235B, a psychology expert. Explain cognitive processes, behavioral patterns, and mental health topics with empathy and scientific accuracy."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000
+          capture_request_body: true
+          capture_response_body: true
+          max_body_bytes: 4096
+
+  # Priority 137: Philosophy domain
+  - name: "philosophy_queries"
+    description: "Philosophy and ethical questions"
+    priority: 137
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "philosophy"
+    modelRefs:
+      - model: "Qwen/Qwen3-235B"
+        use_reasoning: true
+        reasoning_effort: "high"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are Qwen3-235B, a philosophy expert. Explore philosophical concepts, ethical dilemmas, and logical reasoning with depth and clarity."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000
+          capture_request_body: true
+          capture_response_body: true
+          max_body_bytes: 4096
+
+  # Priority 136: History domain
+  - name: "history_queries"
+    description: "Historical questions and cultural topics"
+    priority: 136
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "history"
+    modelRefs:
+      - model: "GLM-4.7"
+        use_reasoning: true
+        reasoning_effort: "medium"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are GLM-4.7, a history expert. Provide accurate historical information about events, time periods, cultures, and civilizations with context and analysis."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000
+          capture_request_body: true
+          capture_response_body: true
+          max_body_bytes: 4096
+
+  # Priority 131: Deep thinking with Chinese language
+  - name: "complex_reasoning"
+    description: "Complex reasoning in Chinese requiring advanced models"
+    priority: 131
     rules:
       operator: "OR"
       conditions:
         - type: "embedding"
-          name: "deep_thinking_en"
+          name: "deep_thinking_zh"
         - type: "keyword"
-          name: "thinking_en"
-        - type: "context"
-          name: "long_context"
-        - type: "context"
-          name: "medium_context"
+          name: "thinking_zh"
     modelRefs:
       - model: "Kimi-K2-Thinking"
         use_reasoning: true
@@ -436,22 +1031,28 @@ decisions:
     plugins:
       - type: "system_prompt"
         configuration:
-          system_prompt: "You are an expert analyst. Provide comprehensive, well-reasoned responses with deep insights."
-      - type: "semantic-cache"
+          system_prompt: "你是 Kimi-K2-Thinking，一个专业的AI助手，擅长深度分析和复杂推理。请提供详细、深入的回答。"
+      - type: "router_replay"
         configuration:
-          enabled: false
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
-  # Priority 135: Fast coding in English
+  # Priority 131: Fast coding in English
   - name: "fast_coding"
     description: "Fast coding related queries in English"
-    priority: 135
+    priority: 131
     rules:
-      operator: "AND"
+      operator: "OR"
       conditions:
         - type: "domain"
           name: "computer science"
-        - type: "language"
-          name: "en"
+        - type: "complexity"
+          name: "computer_science:easy"
+        - type: "complexity"
+          name: "computer_science:medium"
     modelRefs:
       - model: "openai/gpt-oss-120b"
         use_reasoning: true
@@ -463,6 +1064,13 @@ decisions:
       - type: "semantic-cache"
         configuration:
           enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
   # Priority 130: Fast QA in Chinese
   - name: "quick_question"
@@ -478,16 +1086,23 @@ decisions:
         - type: "context"
           name: "short_context"
     modelRefs:
-      - model: "DeepSeek-V3.2"
+      - model: "openai/gpt-oss-20b"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
         configuration:
-          system_prompt: "你是一个高效的AI助手。请提供简洁、准确的回答。"
+          system_prompt: "你是由 openai 开发的模型 gpt-oss-20b, 一个高效的AI助手。请提供简洁、准确的回答。"
       - type: "semantic-cache"
         configuration:
           enabled: true
-          similarity_threshold: 0.95
+          similarity_threshold: 0.85
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
   # Priority 120: Fast QA in English
   - name: "fast_qa"
@@ -497,7 +1112,7 @@ decisions:
       operator: "AND"
       conditions:
         - type: "embedding"
-          name: "fast_qa"
+          name: "fast_qa_en"
         - type: "language"
           name: "en"
         - type: "context"
@@ -508,11 +1123,50 @@ decisions:
     plugins:
       - type: "system_prompt"
         configuration:
-          system_prompt: "You are an efficient AI assistant. Provide concise, accurate answers."
+          system_prompt: "You are GLM-4.7, an efficient AI assistant. Provide concise, accurate answers."
       - type: "semantic-cache"
         configuration:
           enabled: true
-          similarity_threshold: 0.95
+          similarity_threshold: 0.85
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
+
+  # Priority 110: Deep thinking in English
+  - name: "deep_thinking"
+    description: "Complex reasoning in English"
+    priority: 110
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "embedding"
+          name: "deep_thinking_en"
+        - type: "keyword"
+          name: "thinking_en"
+        - type: "context"
+          name: "long_context"
+    modelRefs:
+      - model: "Kimi-K2-Thinking"
+        use_reasoning: true
+        reasoning_effort: "high"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are Kimi-K2-Thinking, an expert analyst. Provide comprehensive, well-reasoned responses with deep insights."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
   # Priority 100: Default fallback
   - name: "casual_chat"
@@ -528,17 +1182,27 @@ decisions:
         - type: "language"
           name: "zh"
         - type: "latency"
-          name: "medium_latency"
+          name: "top50"
         - type: "context"
           name: "short_context"
     modelRefs:
       - model: "openai/gpt-oss-20b"
         use_reasoning: false
     plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are openai/gpt-oss-20b, a quick thinking and helpful assistant for general queries in casual chat."
       - type: "semantic-cache"
         configuration:
           enabled: true
-          similarity_threshold: 0.96
+          similarity_threshold: 0.85
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 1000              # Maximum records in memory (default: 200)
+          capture_request_body: true   # Capture request payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
+          max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
 # Providers - Backend model configuration
 providers:

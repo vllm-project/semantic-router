@@ -96,7 +96,7 @@ func (r *OpenAIRouter) startRouterReplay(
 	selectedModel string,
 	decisionName string,
 ) {
-	if ctx == nil || ctx.RouterReplayConfig == nil || !ctx.RouterReplayConfig.Enabled {
+	if ctx == nil || ctx.RouterReplayPluginConfig == nil || !ctx.RouterReplayPluginConfig.Enabled {
 		return
 	}
 	if ctx.RouterReplayID != "" {
@@ -113,7 +113,7 @@ func (r *OpenAIRouter) startRouterReplay(
 		}
 	}
 
-	cfg := ctx.RouterReplayConfig
+	cfg := ctx.RouterReplayPluginConfig
 	maxBodyBytes := cfg.MaxBodyBytes
 	if maxBodyBytes <= 0 {
 		maxBodyBytes = routerreplay.DefaultMaxBodyBytes
@@ -135,13 +135,33 @@ func (r *OpenAIRouter) startRouterReplay(
 		modelForRecord = originalModel
 	}
 
+	// Determine plugin status from decision configuration
+	var jailbreakEnabled, piiEnabled, hallucinationEnabled bool
+	if ctx.VSRSelectedDecision != nil {
+		if jailbreakCfg := ctx.VSRSelectedDecision.GetJailbreakConfig(); jailbreakCfg != nil {
+			jailbreakEnabled = jailbreakCfg.Enabled
+		}
+		if piiCfg := ctx.VSRSelectedDecision.GetPIIConfig(); piiCfg != nil {
+			piiEnabled = piiCfg.Enabled
+		}
+		if hallucinationCfg := ctx.VSRSelectedDecision.GetHallucinationConfig(); hallucinationCfg != nil {
+			hallucinationEnabled = hallucinationCfg.Enabled
+		}
+	}
+	guardrailsEnabled := jailbreakEnabled || piiEnabled
+
+	// Determine RAG status from context
+	ragEnabled := ctx.RAGRetrievedContext != ""
+
 	rec := routerreplay.RoutingRecord{
-		RequestID:     ctx.RequestID,
-		Decision:      decisionName,
-		Category:      ctx.VSRSelectedCategory,
-		OriginalModel: originalModel,
-		SelectedModel: modelForRecord,
-		ReasoningMode: reasoningMode,
+		RequestID:       ctx.RequestID,
+		Decision:        decisionName,
+		Category:        ctx.VSRSelectedCategory,
+		OriginalModel:   originalModel,
+		SelectedModel:   modelForRecord,
+		ReasoningMode:   reasoningMode,
+		ConfidenceScore: ctx.VSRSelectedDecisionConfidence,
+		SelectionMethod: ctx.VSRSelectionMethod,
 		Signals: routerreplay.Signal{
 			Keyword:      ctx.VSRMatchedKeywords,
 			Embedding:    ctx.VSRMatchedEmbeddings,
@@ -149,9 +169,32 @@ func (r *OpenAIRouter) startRouterReplay(
 			FactCheck:    ctx.VSRMatchedFactCheck,
 			UserFeedback: ctx.VSRMatchedUserFeedback,
 			Preference:   ctx.VSRMatchedPreference,
+			Language:     ctx.VSRMatchedLanguage,
+			Latency:      ctx.VSRMatchedLatency,
+			Context:      ctx.VSRMatchedContext,
+			Complexity:   ctx.VSRMatchedComplexity,
 		},
 		Streaming: ctx.ExpectStreamingResponse,
 		FromCache: ctx.VSRCacheHit,
+
+		GuardrailsEnabled: guardrailsEnabled,
+		JailbreakEnabled:  jailbreakEnabled,
+		PIIEnabled:        piiEnabled,
+
+		JailbreakDetected:   ctx.JailbreakDetected,
+		JailbreakType:       ctx.JailbreakType,
+		JailbreakConfidence: ctx.JailbreakConfidence,
+
+		PIIDetected: ctx.PIIDetected,
+		PIIEntities: ctx.PIIEntities,
+		PIIBlocked:  ctx.PIIBlocked,
+
+		RAGEnabled:         ragEnabled,
+		RAGBackend:         ctx.RAGBackend,
+		RAGContextLength:   len(ctx.RAGRetrievedContext),
+		RAGSimilarityScore: ctx.RAGSimilarityScore,
+
+		HallucinationEnabled: hallucinationEnabled,
 	}
 
 	// Attach request body directly; recorder will enforce capture + truncation
@@ -219,5 +262,39 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 				routerreplay.LogFields(rec, "router_replay_complete"),
 			)
 		}
+	}
+}
+
+// updateRouterReplayHallucinationStatus updates the hallucination detection results in the replay record.
+func (r *OpenAIRouter) updateRouterReplayHallucinationStatus(ctx *RequestContext) {
+	if ctx == nil || ctx.RouterReplayID == "" {
+		return
+	}
+
+	// Only update if hallucination detection was enabled
+	if ctx.VSRSelectedDecision == nil {
+		return
+	}
+	hallucinationConfig := ctx.VSRSelectedDecision.GetHallucinationConfig()
+	if hallucinationConfig == nil || !hallucinationConfig.Enabled {
+		return
+	}
+
+	recorder := ctx.RouterReplayRecorder
+	if recorder == nil {
+		recorder = r.ReplayRecorder
+	}
+	if recorder == nil {
+		return
+	}
+
+	err := recorder.UpdateHallucinationStatus(
+		ctx.RouterReplayID,
+		ctx.HallucinationDetected,
+		ctx.HallucinationConfidence,
+		ctx.HallucinationSpans,
+	)
+	if err != nil {
+		logging.Errorf("Failed to update router replay hallucination status: %v", err)
 	}
 }

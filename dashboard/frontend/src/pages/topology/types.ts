@@ -13,13 +13,14 @@ export type SignalType =
   | 'language'
   | 'latency'
   | 'context'
+  | 'complexity'
 
 export interface SignalConfig {
   type: SignalType
   name: string
   description?: string
   latency: string
-  config: KeywordSignalConfig | EmbeddingSignalConfig | DomainSignalConfig | ContextSignalConfig | GenericSignalConfig
+  config: KeywordSignalConfig | EmbeddingSignalConfig | DomainSignalConfig | ContextSignalConfig | ComplexitySignalConfig | GenericSignalConfig
 }
 
 export interface KeywordSignalConfig {
@@ -41,6 +42,17 @@ export interface DomainSignalConfig {
 export interface ContextSignalConfig {
   min_tokens?: string
   max_tokens?: string
+}
+
+export interface ComplexitySignalConfig {
+  threshold?: number
+  hard_candidates?: string[]
+  easy_candidates?: string[]
+}
+
+export interface LatencySignalConfig {
+  tpot_percentile?: number
+  ttft_percentile?: number
 }
 
 export interface GenericSignalConfig {
@@ -79,6 +91,7 @@ export type AlgorithmType =
   | 'router_dc'
   | 'automix'
   | 'hybrid'
+  | 'remom'
 
 export interface AlgorithmConfig {
   type: AlgorithmType
@@ -315,12 +328,24 @@ export interface ConfigData {
   latency_rules?: Array<{
     name: string
     description?: string
-    max_tpot?: number
+    tpot_percentile?: number
+    ttft_percentile?: number
   }>
   context_rules?: Array<{
     name: string
     min_tokens?: string
     max_tokens?: string
+  }>
+  complexity_rules?: Array<{
+    name: string
+    threshold?: number
+    hard?: {
+      candidates?: string[]
+    }
+    easy?: {
+      candidates?: string[]
+    }
+    description?: string
   }>
   // Legacy format
   categories?: Array<{
@@ -377,12 +402,24 @@ export interface ConfigData {
     latency?: Array<{
       name: string
       description?: string
-      max_tpot?: number
+      tpot_percentile?: number
+      ttft_percentile?: number
     }>
     context?: Array<{
       name: string
       min_tokens?: string
       max_tokens?: string
+    }>
+    complexity?: Array<{
+      name: string
+      threshold?: number
+      hard?: {
+        candidates?: string[]
+      }
+      easy?: {
+        candidates?: string[]
+      }
+      description?: string
     }>
   }
   decisions?: Array<{

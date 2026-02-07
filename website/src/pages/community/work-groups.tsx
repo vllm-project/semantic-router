@@ -248,7 +248,7 @@ const WorkGroups: React.FC = () => {
             <ul>
               <li>
                 <Translate id="workGroups.contact.issue">Open an issue on</Translate>
-                <a href="https://github.com/vllm-project/semantic-router/issues" target="_blank" rel="noopener noreferrer"> GitHub</a>
+                <a href="https://github.com/vllm-project/semantic-router/issues" target="_blank" rel="noopener noreferrer"> Issue </a>
               </li>
               <li>
                 <Translate id="workGroups.contact.discussion">Join the discussion on</Translate>

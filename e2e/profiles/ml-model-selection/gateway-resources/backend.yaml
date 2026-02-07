@@ -1,0 +1,25 @@
+# Mock LLM Backend for ML Model Selection testing
+# This backend receives all routed requests from the semantic-router
+apiVersion: aigateway.envoyproxy.io/v1alpha1
+kind: AIServiceBackend
+metadata:
+  name: mock-llm
+  namespace: default
+spec:
+  schema:
+    name: OpenAI
+  backendRef:
+    name: mock-llm
+    kind: Backend
+    group: gateway.envoyproxy.io
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: mock-llm
+  namespace: default
+spec:
+  endpoints:
+  - fqdn:
+      hostname: mock-llm-service.default.svc.cluster.local
+      port: 8000

@@ -291,7 +291,7 @@ Quick usage:
 
 ## Signals Configuration
 
-Signals are the foundation of intelligent routing. The system supports 8 types of signals that can be combined to make routing decisions.
+Signals are the foundation of intelligent routing. The system supports 10 types of signals that can be combined to make routing decisions.
 
 ### 1. Keyword Signals - Fast Pattern Matching
 
@@ -420,27 +420,48 @@ signals:
 - Support multilingual applications
 - Supports 100+ languages via whatlanggo library
 
-### 8. Latency Signals - TPOT-based Routing
+### 8. Latency Signals - Percentile-based Routing
 
 ```yaml
 signals:
   latency:
-    - name: "low_latency"
-      max_tpot: 0.05  # 50ms per token
-      description: "For real-time chat applications"
-    - name: "medium_latency"
-      max_tpot: 0.15  # 150ms per token
-      description: "For standard applications"
+    # RECOMMENDED: Use both TPOT and TTFT percentiles for comprehensive evaluation
+    - name: "low_latency_comprehensive"
+      tpot_percentile: 10  # 10th percentile for TPOT (top 10% fastest token generation)
+      ttft_percentile: 10  # 10th percentile for TTFT (top 10% fastest first token)
+      description: "For real-time applications - fast start and fast generation"
+    
+    # Different percentiles for different priorities
+    - name: "balanced_latency"
+      tpot_percentile: 50  # Median TPOT (top 50%)
+      ttft_percentile: 10  # Top 10% TTFT (prioritize fast start)
+      description: "Prioritize fast start, accept moderate generation speed"
+    
+    # TPOT percentile only (use case: batch processing)
+    - name: "batch_processing_optimized"
+      tpot_percentile: 10  # 10th percentile for TPOT
+      description: "For batch processing where throughput (TPOT) is critical"
+    
+    # TTFT percentile only (use case: real-time chat)
+    - name: "chat_fast_start"
+      ttft_percentile: 10  # 10th percentile for TTFT
+      description: "For chat applications where fast first token (TTFT) is critical"
 ```
 
 **Use Cases:**
 
-- Route latency-sensitive queries to faster models
+- Route latency-sensitive queries to faster models based on adaptive percentile thresholds
 - Optimize for real-time applications (chat, streaming)
 - Balance latency vs. capability based on query requirements
-- TPOT (Time Per Output Token) is automatically tracked from responses
+- TPOT (Time Per Output Token) and TTFT (Time To First Token) are automatically tracked from responses
 
-**How it works**: The latency classifier evaluates available models' TPOT values against configured thresholds. Models with TPOT ≤ max_tpot match the latency rule.
+**How it works**:
+
+- Percentile-based thresholds adapt to each model's actual performance distribution
+- Works with any number of observations: uses average for 1-2 observations, percentile calculation for 3+
+- When both TPOT and TTFT percentiles are set, model must meet BOTH thresholds (AND logic)
+- **Performance**: Typically 2-5ms for 10 models (runs asynchronously in goroutine, doesn't block requests) - percentile calculation with O(n log n) complexity where n = observations per model (typically 10-100, max 1000)
+- **Recommendation**: Use both TPOT and TTFT percentiles for comprehensive latency evaluation
 
 ### 9. Context Signals - Token Count Routing
 
@@ -464,6 +485,111 @@ signals:
 - Optimize cost by routing based on request size
 - Supports "K" (thousand) and "M" (million) suffixes
 
+### 10. Complexity Signals - Query Difficulty Classification
+
+**IMPORTANT**: It is **strongly recommended** to configure a `composer` for each complexity rule to filter based on other signals (e.g., domain). This prevents misclassification where a math question might match `code_complexity` or vice versa.
+
+```yaml
+signals:
+  complexity:
+    - name: "code_complexity"
+      composer:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "computer_science"
+      threshold: 0.1
+      description: "Detects code complexity level based on task difficulty"
+      hard:
+        candidates:
+          - "design distributed system"
+          - "implement consensus algorithm"
+          - "optimize for scale"
+          - "architect microservices"
+      easy:
+        candidates:
+          - "print hello world"
+          - "loop through array"
+          - "read file"
+          - "sort list"
+
+    - name: "math_complexity"
+      composer:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "math"
+      threshold: 0.1
+      description: "Detects mathematical problem complexity"
+      hard:
+        candidates:
+          - "prove mathematically"
+          - "derive the equation"
+          - "formal proof"
+          - "solve differential equation"
+      easy:
+        candidates:
+          - "add two numbers"
+          - "calculate percentage"
+          - "simple arithmetic"
+          - "basic algebra"
+```
+
+**Use Cases:**
+
+- Route complex queries to powerful, specialized models
+- Route simple queries to fast, efficient models
+- Optimize cost by using cheaper models for easy tasks
+- Improve response quality by matching query difficulty to model capability
+- Combine with domain signals to avoid cross-domain misclassification
+
+**How it works:**
+
+1. **Parallel Signal Evaluation**: All complexity rules are evaluated independently in parallel with other signals
+2. **Difficulty Classification**: For each rule:
+   - Query is compared to hard and easy candidates using embedding similarity
+   - Difficulty signal = max_hard_similarity - max_easy_similarity
+   - If signal > threshold: "hard", if signal < -threshold: "easy", else: "medium"
+3. **Composer Filtering** (Phase 2): After all signals are computed:
+   - If a rule has a `composer`, its conditions are evaluated against other signal results
+   - Only rules whose composer conditions are satisfied are kept
+   - This prevents cross-domain misclassification (e.g., math queries matching code_complexity)
+4. **Result Format**: Returns "rule_name:difficulty" for each matched rule (e.g., "code_complexity:hard")
+
+**Configuration Parameters:**
+
+- `name`: Unique identifier for the rule
+- `threshold`: Similarity difference threshold (default: 0.1)
+- `composer` (optional but **strongly recommended**): Filter based on other signals
+  - `operator`: "AND" or "OR" for combining conditions
+  - `conditions`: Array of signal conditions (type and name)
+- `description`: Human-readable description (optional, for documentation only)
+- `hard.candidates`: List of phrases representing complex queries
+- `easy.candidates`: List of phrases representing simple queries
+
+**Example with Composer:**
+
+```yaml
+decisions:
+  - name: "hard_code_problems"
+    description: "Route complex coding problems to specialized model"
+    priority: 15
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "complexity"
+          name: "code_complexity:hard"
+    modelRefs:
+      - model: "deepseek-coder-v3"
+        use_reasoning: true
+        reasoning_effort: "high"
+```
+
+In this example, the complexity signal will only match if:
+
+1. The query is classified as "hard" based on hard/easy candidates
+2. The domain signal has matched "computer_science" (due to composer)
+
 ## Decision Rules - Signal Fusion
 
 Combine signals using AND/OR operators:
@@ -484,6 +610,25 @@ decisions:
           name: "mathematics"
     modelRefs:
       - model: math-specialist
+        weight: 1.0
+```
+
+**Example with Complexity Signal:**
+
+```yaml
+decisions:
+  - name: complex_code
+    description: "Route complex coding tasks to specialized model"
+    priority: 15
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "complexity"
+          name: "code_complexity:hard"
+        - type: "domain"
+          name: "computer_science"
+    modelRefs:
+      - model: deepseek-coder-v2
         weight: 1.0
 ```
 

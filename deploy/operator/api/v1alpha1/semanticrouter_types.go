@@ -20,6 +20,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -256,6 +257,10 @@ type ConfigSpec struct {
 	// +optional
 	BertModel *BertModelConfig `json:"bert_model,omitempty"`
 
+	// Embedding models configuration (qwen3, gemma, mmbert)
+	// +optional
+	EmbeddingModels *EmbeddingModelsConfig `json:"embedding_models,omitempty"`
+
 	// Semantic cache configuration
 	// +optional
 	SemanticCache *SemanticCacheConfig `json:"semantic_cache,omitempty"`
@@ -271,6 +276,19 @@ type ConfigSpec struct {
 	// Classifier configuration
 	// +optional
 	Classifier *ClassifierConfig `json:"classifier,omitempty"`
+
+	// Complexity rules for complexity-aware routing
+	// +optional
+	ComplexityRules []ComplexityRulesConfig `json:"complexity_rules,omitempty"`
+
+	// Decision routing strategy ("priority" for priority-based matching)
+	// +kubebuilder:validation:Enum=priority
+	// +optional
+	Strategy string `json:"strategy,omitempty" yaml:"strategy,omitempty"`
+
+	// Routing decisions based on signals (domain, complexity, etc.)
+	// +optional
+	Decisions []DecisionConfig `json:"decisions,omitempty"`
 
 	// Reasoning families
 	// +optional
@@ -307,26 +325,749 @@ type BertModelConfig struct {
 
 // SemanticCacheConfig defines semantic cache configuration
 type SemanticCacheConfig struct {
+	// Enabled controls whether semantic caching is active
 	// +kubebuilder:default=true
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
+
+	// BackendType specifies the cache backend to use
+	// Options: "memory" (default), "redis", "milvus", "hybrid"
 	// +kubebuilder:default="memory"
+	// +kubebuilder:validation:Enum=memory;redis;milvus;hybrid
 	// +optional
 	BackendType string `json:"backend_type,omitempty"`
+
 	// Similarity threshold for cache hits (0.0-1.0). Stored as string to avoid float precision issues.
 	// +kubebuilder:default="0.8"
 	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
 	// +optional
 	SimilarityThreshold string `json:"similarity_threshold,omitempty"`
+
+	// MaxEntries is the maximum number of cache entries (for memory/hybrid backends)
 	// +kubebuilder:default=1000
 	// +optional
 	MaxEntries int `json:"max_entries,omitempty"`
+
+	// TTLSeconds is the time-to-live for cache entries in seconds
 	// +kubebuilder:default=3600
 	// +optional
 	TTLSeconds int `json:"ttl_seconds,omitempty"`
+
+	// EvictionPolicy for in-memory cache ("fifo", "lru", "lfu")
 	// +kubebuilder:default="fifo"
+	// +kubebuilder:validation:Enum=fifo;lru;lfu
 	// +optional
 	EvictionPolicy string `json:"eviction_policy,omitempty"`
+
+	// Redis configuration (required when backend_type is "redis")
+	// +optional
+	Redis *RedisCacheConfig `json:"redis,omitempty"`
+
+	// Milvus configuration (required when backend_type is "milvus")
+	// +optional
+	Milvus *MilvusCacheConfig `json:"milvus,omitempty"`
+
+	// EmbeddingModel specifies which embedding model to use for semantic similarity
+	// Options: "bert" (default), "qwen3", "gemma", "mmbert"
+	// +kubebuilder:default="bert"
+	// +kubebuilder:validation:Enum=bert;qwen3;gemma;mmbert
+	// +optional
+	EmbeddingModel string `json:"embedding_model,omitempty"`
+
+	// HNSW configuration for hybrid/in-memory backends
+	// +optional
+	HNSW *HNSWCacheConfig `json:"hnsw,omitempty"`
+}
+
+// RedisCacheConfig defines Redis cache backend configuration.
+// Configure these settings when using Redis as the semantic cache backend.
+type RedisCacheConfig struct {
+	// Connection settings for Redis server
+	// +optional
+	Connection RedisCacheConnection `json:"connection,omitempty"`
+
+	// Index settings for Redis vector search
+	// +optional
+	Index RedisCacheIndex `json:"index,omitempty"`
+
+	// Search settings for Redis queries
+	// +optional
+	Search RedisCacheSearch `json:"search,omitempty"`
+
+	// Development settings for Redis cache
+	// +optional
+	Development RedisCacheDevelopment `json:"development,omitempty"`
+}
+
+// RedisCacheConnection defines Redis connection parameters.
+type RedisCacheConnection struct {
+	// Host is the Redis server hostname or IP address
+	// Example: "redis.default.svc.cluster.local"
+	// +optional
+	Host string `json:"host,omitempty"`
+
+	// Port is the Redis server port
+	// +kubebuilder:default=6379
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	// +optional
+	Port int `json:"port,omitempty"`
+
+	// Database is the Redis database number to use
+	// +kubebuilder:default=0
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	Database int `json:"database,omitempty"`
+
+	// Password for Redis authentication (plaintext - consider using PasswordSecretRef instead)
+	// +optional
+	Password string `json:"password,omitempty"`
+
+	// PasswordSecretRef references a Secret containing the Redis password
+	// Preferred over plaintext Password field for security
+	// +optional
+	PasswordSecretRef *corev1.SecretKeySelector `json:"password_secret_ref,omitempty"`
+
+	// Timeout for Redis operations in seconds
+	// +kubebuilder:default=30
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	Timeout int `json:"timeout,omitempty"`
+
+	// TLS configuration for secure Redis connections
+	// +optional
+	TLS RedisCacheTLS `json:"tls,omitempty"`
+}
+
+// RedisCacheTLS defines TLS settings for Redis connections.
+type RedisCacheTLS struct {
+	// Enabled controls whether to use TLS for Redis connection
+	// +kubebuilder:default=false
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// CertFile is the path to client certificate file
+	// +optional
+	CertFile string `json:"cert_file,omitempty"`
+
+	// KeyFile is the path to client key file
+	// +optional
+	KeyFile string `json:"key_file,omitempty"`
+
+	// CAFile is the path to CA certificate file
+	// +optional
+	CAFile string `json:"ca_file,omitempty"`
+}
+
+// RedisCacheIndex defines Redis vector index configuration.
+type RedisCacheIndex struct {
+	// Name of the Redis index
+	// +kubebuilder:default="semantic_cache_idx"
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// Prefix for Redis keys
+	// +kubebuilder:default="doc:"
+	// +optional
+	Prefix string `json:"prefix,omitempty"`
+
+	// VectorField configuration for embeddings
+	// +optional
+	VectorField RedisCacheVectorField `json:"vector_field,omitempty"`
+
+	// IndexType specifies the index algorithm
+	// Options: "HNSW" (recommended), "FLAT"
+	// +kubebuilder:default="HNSW"
+	// +kubebuilder:validation:Enum=HNSW;FLAT
+	// +optional
+	IndexType string `json:"index_type,omitempty"`
+
+	// Params for HNSW index
+	// +optional
+	Params RedisCacheIndexParams `json:"params,omitempty"`
+}
+
+// RedisCacheVectorField defines vector field configuration.
+type RedisCacheVectorField struct {
+	// Name of the vector field
+	// +kubebuilder:default="embedding"
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// Dimension of the embedding vectors
+	// For BERT: 384, for Qwen3: 1024, for Gemma: 768
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	Dimension int `json:"dimension,omitempty"`
+
+	// MetricType for vector similarity
+	// Options: "COSINE", "IP" (inner product), "L2" (Euclidean)
+	// +kubebuilder:default="COSINE"
+	// +kubebuilder:validation:Enum=COSINE;IP;L2
+	// +optional
+	MetricType string `json:"metric_type,omitempty"`
+}
+
+// RedisCacheIndexParams defines HNSW index parameters.
+type RedisCacheIndexParams struct {
+	// M is the number of bi-directional links per node
+	// Higher values = better recall, more memory
+	// +kubebuilder:default=16
+	// +kubebuilder:validation:Minimum=2
+	// +optional
+	M int `json:"M,omitempty"`
+
+	// EfConstruction is the size of dynamic candidate list during construction
+	// Higher values = better quality, slower indexing
+	// +kubebuilder:default=64
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	EfConstruction int `json:"efConstruction,omitempty"`
+}
+
+// RedisCacheSearch defines Redis search parameters.
+type RedisCacheSearch struct {
+	// TopK is the number of results to return from vector search
+	// +kubebuilder:default=1
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	TopK int `json:"topk,omitempty"`
+}
+
+// RedisCacheDevelopment defines development-mode settings.
+type RedisCacheDevelopment struct {
+	// DropIndexOnStartup clears the index when router starts (for testing)
+	// +kubebuilder:default=false
+	// +optional
+	DropIndexOnStartup bool `json:"drop_index_on_startup,omitempty"`
+
+	// AutoCreateIndex automatically creates the index if it doesn't exist
+	// +kubebuilder:default=true
+	// +optional
+	AutoCreateIndex bool `json:"auto_create_index,omitempty"`
+
+	// VerboseErrors includes detailed error messages in logs
+	// +kubebuilder:default=true
+	// +optional
+	VerboseErrors bool `json:"verbose_errors,omitempty"`
+}
+
+// MilvusCacheConfig defines Milvus cache backend configuration.
+// Configure these settings when using Milvus as the semantic cache backend.
+type MilvusCacheConfig struct {
+	// Connection settings for Milvus server
+	// +optional
+	Connection MilvusCacheConnection `json:"connection,omitempty"`
+
+	// Collection settings for Milvus
+	// +optional
+	Collection MilvusCacheCollection `json:"collection,omitempty"`
+
+	// Search settings for Milvus queries
+	// +optional
+	Search MilvusCacheSearch `json:"search,omitempty"`
+
+	// Performance tuning for Milvus
+	// +optional
+	Performance MilvusCachePerformance `json:"performance,omitempty"`
+
+	// DataManagement settings for TTL and compaction
+	// +optional
+	DataManagement MilvusCacheDataManagement `json:"data_management,omitempty"`
+
+	// Development settings for Milvus cache
+	// +optional
+	Development MilvusCacheDevelopment `json:"development,omitempty"`
+}
+
+// MilvusCacheConnection defines Milvus connection parameters.
+type MilvusCacheConnection struct {
+	// Host is the Milvus server hostname or IP address
+	// +optional
+	Host string `json:"host,omitempty"`
+
+	// Port is the Milvus server port
+	// +kubebuilder:default=19530
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	// +optional
+	Port int `json:"port,omitempty"`
+
+	// Database name in Milvus
+	// +kubebuilder:default="semantic_router_cache"
+	// +optional
+	Database string `json:"database,omitempty"`
+
+	// Timeout for Milvus operations in seconds
+	// +kubebuilder:default=30
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	Timeout int `json:"timeout,omitempty"`
+
+	// Auth configuration for Milvus authentication
+	// +optional
+	Auth MilvusCacheAuth `json:"auth,omitempty"`
+
+	// TLS configuration for secure Milvus connections
+	// +optional
+	TLS MilvusCacheTLS `json:"tls,omitempty"`
+}
+
+// MilvusCacheAuth defines Milvus authentication.
+type MilvusCacheAuth struct {
+	// Enabled controls whether to use authentication
+	// +kubebuilder:default=false
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Username for Milvus authentication
+	// +optional
+	Username string `json:"username,omitempty"`
+
+	// Password for Milvus authentication (plaintext - consider using PasswordSecretRef instead)
+	// +optional
+	Password string `json:"password,omitempty"`
+
+	// PasswordSecretRef references a Secret containing the Milvus password
+	// Preferred over plaintext Password field for security
+	// +optional
+	PasswordSecretRef *corev1.SecretKeySelector `json:"password_secret_ref,omitempty"`
+}
+
+// MilvusCacheTLS defines TLS settings for Milvus connections.
+type MilvusCacheTLS struct {
+	// Enabled controls whether to use TLS
+	// +kubebuilder:default=false
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// CertFile is the path to client certificate file
+	// +optional
+	CertFile string `json:"cert_file,omitempty"`
+
+	// KeyFile is the path to client key file
+	// +optional
+	KeyFile string `json:"key_file,omitempty"`
+
+	// CAFile is the path to CA certificate file
+	// +optional
+	CAFile string `json:"ca_file,omitempty"`
+}
+
+// MilvusCacheCollection defines Milvus collection configuration.
+type MilvusCacheCollection struct {
+	// Name of the Milvus collection
+	// +kubebuilder:default="semantic_cache"
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// Description of the collection
+	// +kubebuilder:default="Semantic cache for LLM request-response pairs"
+	// +optional
+	Description string `json:"description,omitempty"`
+
+	// VectorField configuration for embeddings
+	// +optional
+	VectorField MilvusCacheVectorField `json:"vector_field,omitempty"`
+
+	// Index configuration for the collection
+	// +optional
+	Index MilvusCacheCollectionIndex `json:"index,omitempty"`
+}
+
+// MilvusCacheVectorField defines vector field configuration.
+type MilvusCacheVectorField struct {
+	// Name of the vector field
+	// +kubebuilder:default="embedding"
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// Dimension of the embedding vectors
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	Dimension int `json:"dimension,omitempty"`
+
+	// MetricType for vector similarity
+	// Options: "IP" (inner product), "L2", "COSINE"
+	// +kubebuilder:default="IP"
+	// +kubebuilder:validation:Enum=IP;L2;COSINE
+	// +optional
+	MetricType string `json:"metric_type,omitempty"`
+}
+
+// MilvusCacheCollectionIndex defines collection index settings.
+type MilvusCacheCollectionIndex struct {
+	// Type of index algorithm
+	// +kubebuilder:default="HNSW"
+	// +kubebuilder:validation:Enum=HNSW;IVF_FLAT;IVF_SQ8;IVF_PQ
+	// +optional
+	Type string `json:"type,omitempty"`
+
+	// Params for the index
+	// +optional
+	Params MilvusCacheIndexParams `json:"params,omitempty"`
+}
+
+// MilvusCacheIndexParams defines index parameters.
+type MilvusCacheIndexParams struct {
+	// M is the number of bi-directional links for HNSW
+	// +kubebuilder:default=16
+	// +kubebuilder:validation:Minimum=2
+	// +optional
+	M int `json:"M,omitempty"`
+
+	// EfConstruction for HNSW index building
+	// +kubebuilder:default=64
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	EfConstruction int `json:"efConstruction,omitempty"`
+}
+
+// MilvusCacheSearch defines Milvus search parameters.
+type MilvusCacheSearch struct {
+	// Params for search operations
+	// +optional
+	Params MilvusCacheSearchParams `json:"params,omitempty"`
+
+	// TopK is the number of results to return
+	// +kubebuilder:default=10
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	TopK int `json:"topk,omitempty"`
+
+	// ConsistencyLevel for search operations
+	// Options: "Strong", "Session", "Bounded", "Eventually"
+	// +kubebuilder:default="Session"
+	// +kubebuilder:validation:Enum=Strong;Session;Bounded;Eventually
+	// +optional
+	ConsistencyLevel string `json:"consistency_level,omitempty"`
+}
+
+// MilvusCacheSearchParams defines search-time parameters.
+type MilvusCacheSearchParams struct {
+	// Ef is the search-time HNSW parameter
+	// +kubebuilder:default=64
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	Ef int `json:"ef,omitempty"`
+}
+
+// MilvusCachePerformance defines performance tuning.
+type MilvusCachePerformance struct {
+	// ConnectionPool settings
+	// +optional
+	ConnectionPool MilvusCacheConnectionPool `json:"connection_pool,omitempty"`
+
+	// Batch settings for operations
+	// +optional
+	Batch MilvusCacheBatch `json:"batch,omitempty"`
+}
+
+// MilvusCacheConnectionPool defines connection pool settings.
+type MilvusCacheConnectionPool struct {
+	// MaxConnections in the pool
+	// +kubebuilder:default=10
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	MaxConnections int `json:"max_connections,omitempty"`
+
+	// MaxIdleConnections to keep
+	// +kubebuilder:default=5
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	MaxIdleConnections int `json:"max_idle_connections,omitempty"`
+
+	// AcquireTimeout in seconds
+	// +kubebuilder:default=30
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	AcquireTimeout int `json:"acquire_timeout,omitempty"`
+}
+
+// MilvusCacheBatch defines batch operation settings.
+type MilvusCacheBatch struct {
+	// InsertBatchSize for bulk inserts
+	// +kubebuilder:default=100
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	InsertBatchSize int `json:"insert_batch_size,omitempty"`
+
+	// Timeout for batch operations in seconds
+	// +kubebuilder:default=60
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	Timeout int `json:"timeout,omitempty"`
+}
+
+// MilvusCacheDataManagement defines data lifecycle settings.
+type MilvusCacheDataManagement struct {
+	// TTL settings for automatic expiration
+	// +optional
+	TTL MilvusCacheTTL `json:"ttl,omitempty"`
+
+	// Compaction settings
+	// +optional
+	Compaction MilvusCacheCompaction `json:"compaction,omitempty"`
+}
+
+// MilvusCacheTTL defines time-to-live settings.
+type MilvusCacheTTL struct {
+	// Enabled controls whether TTL is active
+	// +kubebuilder:default=false
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// TimestampField is the field used for TTL calculation
+	// +kubebuilder:default="created_at"
+	// +optional
+	TimestampField string `json:"timestamp_field,omitempty"`
+
+	// CleanupInterval in seconds between cleanup runs
+	// +kubebuilder:default=3600
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	CleanupInterval int `json:"cleanup_interval,omitempty"`
+}
+
+// MilvusCacheCompaction defines compaction settings.
+type MilvusCacheCompaction struct {
+	// Enabled controls whether auto-compaction is active
+	// +kubebuilder:default=false
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Interval in seconds between compaction runs
+	// +kubebuilder:default=86400
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	Interval int `json:"interval,omitempty"`
+}
+
+// MilvusCacheDevelopment defines development-mode settings.
+type MilvusCacheDevelopment struct {
+	// DropCollectionOnStartup clears the collection when router starts (for testing)
+	// +kubebuilder:default=false
+	// +optional
+	DropCollectionOnStartup bool `json:"drop_collection_on_startup,omitempty"`
+
+	// AutoCreateCollection automatically creates the collection if it doesn't exist
+	// +kubebuilder:default=true
+	// +optional
+	AutoCreateCollection bool `json:"auto_create_collection,omitempty"`
+
+	// VerboseErrors includes detailed error messages in logs
+	// +kubebuilder:default=true
+	// +optional
+	VerboseErrors bool `json:"verbose_errors,omitempty"`
+}
+
+// HNSWCacheConfig defines HNSW index configuration for hybrid/in-memory backends.
+type HNSWCacheConfig struct {
+	// UseHNSW enables HNSW indexing for faster similarity search
+	// +kubebuilder:default=false
+	// +optional
+	UseHNSW bool `json:"use_hnsw,omitempty"`
+
+	// M is the number of bi-directional links per node
+	// +kubebuilder:default=16
+	// +kubebuilder:validation:Minimum=2
+	// +optional
+	M int `json:"hnsw_m,omitempty"`
+
+	// EfConstruction is the size of dynamic candidate list during construction
+	// +kubebuilder:default=200
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	EfConstruction int `json:"hnsw_ef_construction,omitempty"`
+
+	// MaxMemoryEntries limits in-memory entries for hybrid backend
+	// +kubebuilder:default=1000
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	MaxMemoryEntries int `json:"max_memory_entries,omitempty"`
+}
+
+// EmbeddingModelsConfig defines configuration for embedding models
+type EmbeddingModelsConfig struct {
+	// Path to Qwen3-Embedding-0.6B model directory
+	// Qwen3 provides 32K context and high quality embeddings (1024 dimensions)
+	// +optional
+	Qwen3ModelPath string `json:"qwen3_model_path,omitempty"`
+
+	// Path to EmbeddingGemma-300M model directory
+	// Gemma provides 8K context and fast embeddings (768 dimensions)
+	// +optional
+	GemmaModelPath string `json:"gemma_model_path,omitempty"`
+
+	// Path to mmBERT 2D Matryoshka embedding model directory
+	// Supports layer early exit (3/6/11/22) and dimension reduction (64-768)
+	// +optional
+	MmBertModelPath string `json:"mmbert_model_path,omitempty"`
+
+	// Use CPU for inference (default: true)
+	// +kubebuilder:default=true
+	// +optional
+	UseCPU bool `json:"use_cpu,omitempty"`
+
+	// HNSW configuration for embedding-based classification
+	// +optional
+	HNSWConfig *HNSWEmbeddingConfig `json:"hnsw_config,omitempty"`
+}
+
+// HNSWEmbeddingConfig contains settings for embedding classification with HNSW indexing
+type HNSWEmbeddingConfig struct {
+	// ModelType specifies which embedding model to use
+	// Options: "qwen3" (1024-dim, 32K context), "gemma" (768-dim, 8K context), "mmbert" (64-768-dim, multilingual)
+	// +kubebuilder:validation:Enum=qwen3;gemma;mmbert
+	// +optional
+	ModelType string `json:"model_type,omitempty"`
+
+	// PreloadEmbeddings enables precomputing candidate embeddings at startup
+	// +kubebuilder:default=true
+	// +optional
+	PreloadEmbeddings bool `json:"preload_embeddings,omitempty"`
+
+	// TargetDimension is the embedding dimension to use (default: 768)
+	// Supported dimensions: 64, 128, 256, 512, 768
+	// For mmBERT, lower dimensions provide faster performance with slight accuracy trade-off
+	// +kubebuilder:validation:Enum=64;128;256;512;768
+	// +optional
+	TargetDimension int `json:"target_dimension,omitempty"`
+
+	// TargetLayer is the layer for mmBERT early exit (only used when ModelType is "mmbert")
+	// Layer 3: ~7x speedup, Layer 6: ~3.6x speedup, Layer 11: ~2x speedup, Layer 22: full accuracy
+	// +kubebuilder:validation:Enum=3;6;11;22
+	// +optional
+	TargetLayer int `json:"target_layer,omitempty"`
+
+	// EnableSoftMatching enables soft matching mode
+	// +kubebuilder:default=true
+	// +optional
+	EnableSoftMatching bool `json:"enable_soft_matching,omitempty"`
+
+	// MinScoreThreshold for matching (0.0-1.0). Stored as string to avoid float precision issues.
+	// +kubebuilder:default="0.5"
+	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
+	// +optional
+	MinScoreThreshold string `json:"min_score_threshold,omitempty"`
+}
+
+// ComplexityRulesConfig defines complexity-based signal classification
+type ComplexityRulesConfig struct {
+	// Name of the complexity rule (e.g., "code-complexity", "reasoning-complexity")
+	Name string `json:"name"`
+
+	// Description of what this rule classifies
+	// +optional
+	Description string `json:"description,omitempty"`
+
+	// Threshold for difficulty classification (0.0-1.0). Stored as string to avoid float precision issues.
+	// Queries scoring above this threshold are classified as "hard"
+	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
+	// +optional
+	Threshold string `json:"threshold,omitempty"`
+
+	// Hard candidates represent complex/difficult examples
+	Hard ComplexityCandidates `json:"hard"`
+
+	// Easy candidates represent simple/easy examples
+	Easy ComplexityCandidates `json:"easy"`
+
+	// Composer allows filtering based on other signals (e.g., only apply this rule if domain:medical)
+	// +optional
+	Composer *RuleComposition `json:"composer,omitempty"`
+}
+
+// ComplexityCandidates defines candidate examples for complexity classification
+type ComplexityCandidates struct {
+	// List of candidate phrases or examples
+	Candidates []string `json:"candidates"`
+}
+
+// RuleComposition defines how to compose/filter rules based on other signals
+type RuleComposition struct {
+	// Operator for combining conditions (AND, OR)
+	// +kubebuilder:validation:Enum=AND;OR
+	Operator string `json:"operator"`
+
+	// List of conditions that must be met
+	Conditions []CompositionCondition `json:"conditions"`
+}
+
+// CompositionCondition defines a single composition condition
+type CompositionCondition struct {
+	// Type of signal to check (e.g., "domain", "language", "category")
+	Type string `json:"type"`
+
+	// Name of the specific signal/rule value to match
+	Name string `json:"name"`
+}
+
+// DecisionConfig defines a routing decision
+type DecisionConfig struct {
+	// Name is the unique identifier for this decision
+	Name string `json:"name" yaml:"name"`
+
+	// Description provides information about what this decision handles
+	// +optional
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+
+	// Priority is used for decision ordering - higher priority decisions are evaluated first
+	// +optional
+	Priority int `json:"priority,omitempty" yaml:"priority,omitempty"`
+
+	// Rules defines the combination of conditions using AND/OR logic
+	Rules RuleCombinationConfig `json:"rules" yaml:"rules"`
+
+	// ModelRefs contains model references for this decision
+	// +optional
+	ModelRefs []ModelRefConfig `json:"modelRefs,omitempty" yaml:"modelRefs,omitempty"`
+
+	// PreferredEndpoints specifies which vLLM endpoints to prefer for this decision
+	// +optional
+	PreferredEndpoints []string `json:"preferred_endpoints,omitempty" yaml:"preferred_endpoints,omitempty"`
+
+	// Plugins contains policy configurations applied after rule matching
+	// +optional
+	Plugins []runtime.RawExtension `json:"plugins,omitempty" yaml:"plugins,omitempty"`
+}
+
+// RuleCombinationConfig defines how to combine multiple rule conditions
+type RuleCombinationConfig struct {
+	// Operator specifies how to combine conditions: "AND" or "OR"
+	// +kubebuilder:validation:Enum=AND;OR
+	Operator string `json:"operator" yaml:"operator"`
+
+	// Conditions is the list of rule references to evaluate
+	Conditions []RuleConditionConfig `json:"conditions" yaml:"conditions"`
+}
+
+// RuleConditionConfig references a specific rule by type and name
+type RuleConditionConfig struct {
+	// Type specifies the rule type: "keyword", "embedding", "domain", "complexity", or "fact_check"
+	// +kubebuilder:validation:Enum=keyword;embedding;domain;complexity;fact_check;context
+	Type string `json:"type" yaml:"type"`
+
+	// Name is the name of the rule to reference
+	Name string `json:"name" yaml:"name"`
+}
+
+// ModelRefConfig defines a model reference for routing
+type ModelRefConfig struct {
+	// Model name to route to
+	Model string `json:"model" yaml:"model"`
+
+	// LoRAName is the optional LoRA adapter name
+	// +optional
+	LoRAName string `json:"lora_name,omitempty" yaml:"lora_name,omitempty"`
+
+	// UseReasoning enables reasoning mode for this model
+	// +optional
+	UseReasoning *bool `json:"use_reasoning,omitempty" yaml:"use_reasoning,omitempty"`
+
+	// ReasoningEffort specifies the reasoning effort level (low, medium, high)
+	// +optional
+	ReasoningEffort string `json:"reasoning_effort,omitempty" yaml:"reasoning_effort,omitempty"`
 }
 
 // ToolsConfig defines tools configuration

@@ -1,3 +1,12 @@
+---
+translation:
+  source_commit: "eb18d86"
+  source_file: "docs/installation/k8s/llm-d.md"
+  outdated: false
+is_mtpe: true
+sidebar_position: 2
+---
+
 # 使用 LLM-D 安装
 
 本指南提供了将 vLLM Semantic Router (vsr) 与 [LLM-D](https://github.com/llm-d/llm-d) 结合部署的分步说明。这也将说明一个关键设计模式，即使用 vsr 作为 model selector，结合使用 LLM-D 作为 endpoint selector。
@@ -26,6 +35,7 @@ Model selector 提供将 LLM 查询路由到多个完全不同的 LLM 模型之�
 - [minikube](https://minikube.sigs.k8s.io/docs/start/) - 本地 Kubernetes
 - [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) - Kubernetes in Docker
 - [kubectl](https://kubernetes.io/docs/tasks/tools/) - Kubernetes CLI
+- [Helm](https://helm.sh/docs/intro/install/) - Kubernetes 包管理器
 - [istioctl](https://istio.io/latest/docs/ops/diagnostic-tools/istioctl/) - Istio CLI
 
 我们在下面的描述中使用 minikube。如上所述，本指南构建在本仓库的 vsr + Istio [部署指南](istio)之上，因此将参考该指南的公共部分并在此添加增量步骤。
@@ -60,7 +70,7 @@ kubectl get pods -n istio-system
 
 ## 步骤 3：部署 LLM 模型
 
-现在与 [Istio 指南](istio)文档类似部署两个 LLM 模型。注意从清单文件名称可知，这些示例命令要从仓库的顶层文件夹执行。LLM-D 部署文档中此步骤的对应部分是 LLM-D Model Service 的设置。为简单起见，本指南不需要 LLM-D Model service。
+现在与 [Istio 指南](istio)文档类似部署两个 LLM 模型。LLM-D 部署文档中此步骤的对应部分是 LLM-D Model Service 的设置。为简单起见，本指南不需要 LLM-D Model service。
 
 ```bash
 kubectl create secret generic hf-token-secret --from-literal=token=$HF_TOKEN
@@ -68,14 +78,14 @@ kubectl create secret generic hf-token-secret --from-literal=token=$HF_TOKEN
 
 ```bash
 # 创建运行 llama3-8b 的 vLLM 服务
-kubectl apply -f deploy/kubernetes/istio/vLlama3.yaml
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/vLlama3.yaml
 ```
 
 第一次运行时可能需要几分钟（10+）来下载模型，直到运行此模型的 vLLM pod 处于 READY 状态。同样地部署第二个 LLM (phi4-mini) 并等待几分钟直到 pod 处于 READY 状态。
 
 ```bash
 # 创建运行 phi4-mini 的 vLLM 服务
-kubectl apply -f deploy/kubernetes/istio/vPhi4.yaml
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/vPhi4.yaml
 ```
 
 完成后，您应该能够使用以下命令看到两个 vLLM pod 都处于 READY 状态并正在服务这些 LLM。您还应该看到 Kubernetes 服务暴露了这些模型服务的 IP/端口。在下面的示例中，llama3-8b 模型通过服务 IP 为 10.108.250.109 和端口 80 的 kubernetes 服务提供服务。
@@ -107,12 +117,12 @@ LLM-D（和 Kubernetes IGW）使用一个名为 InferencePool 的 API 资源，�
 
 ```bash
 # 为 Llama3-8b 模型创建 LLM-D 调度器和 InferencePool
-kubectl apply -f deploy/kubernetes/llmd-base/inferencepool-llama.yaml
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/llmd-base/inferencepool-llama.yaml
 ```
 
 ```bash
 # 为 phi4-mini 模型创建 LLM-D 调度器和 InferencePool
-kubectl apply -f deploy/kubernetes/llmd-base/inferencepool-phi4.yaml
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/llmd-base/inferencepool-phi4.yaml
 ```
 
 ## 步骤 5：LLM-D 连接的额外 Istio 配置

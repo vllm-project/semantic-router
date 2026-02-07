@@ -78,6 +78,21 @@ kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/
 
 # Llama Stack backend discovery
 kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_llamastack.yaml
+
+# Redis cache backend for production caching
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_redis_cache.yaml
+
+# Milvus cache backend for large-scale deployments
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_milvus_cache.yaml
+
+# Hybrid cache backend for optimal performance
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_hybrid_cache.yaml
+
+# mmBERT 2D Matryoshka embeddings with layer early exit
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_mmbert.yaml
+
+# Complexity-aware routing for intelligent model selection
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_complexity.yaml
 ```
 
 ### Custom Configuration
@@ -165,6 +180,189 @@ Apply the configuration:
 ```bash
 kubectl apply -f my-router.yaml
 ```
+
+## Advanced Features
+
+### Embedding Models Configuration
+
+The operator supports three high-performance embedding models for semantic understanding and caching. You can configure these models to optimize for your specific use case.
+
+#### Available Embedding Models
+
+1. **Qwen3-Embedding** (1024 dimensions, 32K context)
+   - Best for: High-quality semantic understanding with long context
+   - Use case: Complex queries, research documents, detailed analysis
+
+2. **EmbeddingGemma** (768 dimensions, 8K context)
+   - Best for: Fast performance with good accuracy
+   - Use case: Real-time applications, high-throughput scenarios
+
+3. **mmBERT 2D Matryoshka** (64-768 dimensions, multilingual)
+   - Best for: Adaptive performance with layer early exit
+   - Use case: Multilingual deployments, flexible quality/speed trade-offs
+
+#### Example: mmBERT with Layer Early Exit
+
+```yaml
+spec:
+  config:
+    # Configure mmBERT 2D Matryoshka embeddings
+    embedding_models:
+      mmbert_model_path: "models/mmbert-embedding"
+      use_cpu: true
+
+      # HNSW configuration for embedding-based classification
+      hnsw_config:
+        model_type: "mmbert"
+
+        # Layer early exit: balance speed vs accuracy
+        # Layer 3: ~7x speedup (fast, good for high-volume queries)
+        # Layer 6: ~3.6x speedup (balanced - recommended)
+        # Layer 11: ~2x speedup (higher accuracy)
+        # Layer 22: full model (maximum accuracy)
+        target_layer: 6
+
+        # Dimension reduction for faster similarity search
+        # Options: 64, 128, 256, 512, 768
+        target_dimension: 256
+
+        preload_embeddings: true
+        enable_soft_matching: true
+        min_score_threshold: "0.5"
+
+    # Use mmBERT in semantic cache
+    semantic_cache:
+      enabled: true
+      backend_type: "memory"
+      embedding_model: "mmbert"
+      similarity_threshold: "0.85"
+      max_entries: 5000
+      ttl_seconds: 7200
+```
+
+See [mmbert sample configuration](https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_mmbert.yaml) for a complete example.
+
+#### Example: Qwen3 with Redis Cache
+
+```yaml
+spec:
+  config:
+    embedding_models:
+      qwen3_model_path: "models/qwen3-embedding"
+      use_cpu: true
+
+    semantic_cache:
+      enabled: true
+      backend_type: "redis"
+      embedding_model: "qwen3"
+      redis:
+        connection:
+          host: redis.cache-backends.svc.cluster.local
+          port: 6379
+        index:
+          vector_field:
+            dimension: 1024  # Qwen3 dimension
+```
+
+See [redis cache sample configuration](https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_redis_cache.yaml) for a complete example.
+
+### Complexity-Aware Routing
+
+Route queries to different models based on complexity classification. Simple queries go to fast models, complex queries go to powerful models.
+
+#### Example Configuration
+
+```yaml
+spec:
+  # Configure multiple backends with different capabilities
+  vllmEndpoints:
+    - name: llama-8b-fast
+      model: llama3-8b
+      reasoningFamily: qwen3
+      backend:
+        type: kserve
+        inferenceServiceName: llama-3-8b
+      weight: 2  # Prefer for simple queries
+
+    - name: llama-70b-reasoning
+      model: llama3-70b
+      reasoningFamily: deepseek
+      backend:
+        type: kserve
+        inferenceServiceName: llama-3-70b
+      weight: 1  # Use for complex queries
+
+  config:
+    # Define complexity rules
+    complexity_rules:
+      # Rule 1: Code complexity
+      - name: "code-complexity"
+        description: "Classify coding tasks by complexity"
+        threshold: "0.3"  # Lower threshold works better for embedding-based similarity
+
+        # Examples of complex coding tasks
+        hard:
+          candidates:
+            - "Implement a distributed lock manager with leader election"
+            - "Design a database migration system with rollback support"
+            - "Create a compiler optimization pass for loop unrolling"
+
+        # Examples of simple coding tasks
+        easy:
+          candidates:
+            - "Write a function to reverse a string"
+            - "Create a class to represent a rectangle"
+            - "Implement a simple counter with increment/decrement"
+
+      # Rule 2: Reasoning complexity
+      - name: "reasoning-complexity"
+        description: "Classify reasoning and problem-solving tasks"
+        threshold: "0.3"  # Lower threshold works better for embedding-based similarity
+
+        hard:
+          candidates:
+            - "Analyze the geopolitical implications of renewable energy adoption"
+            - "Evaluate the ethical considerations of AI in healthcare"
+            - "Design a multi-stage marketing strategy for a new product launch"
+
+        easy:
+          candidates:
+            - "What is the capital of France?"
+            - "How many days are in a week?"
+            - "Name three common pets"
+
+      # Rule 3: Domain-specific complexity with conditional application
+      - name: "medical-complexity"
+        description: "Classify medical queries (only for medical domain)"
+        threshold: "0.3"  # Lower threshold works better for embedding-based similarity
+
+        hard:
+          candidates:
+            - "Differential diagnosis for chest pain with dyspnea"
+            - "Treatment protocol for multi-drug resistant tuberculosis"
+
+        easy:
+          candidates:
+            - "What is the normal body temperature?"
+            - "What are common symptoms of a cold?"
+
+        # Only apply this rule if domain signal indicates medical domain
+        composer:
+          operator: "AND"
+          conditions:
+            - type: "domain"
+              name: "medical"
+```
+
+**How it works:**
+
+1. Incoming query is compared against `hard` and `easy` candidate examples
+2. Similarity scores determine complexity classification
+3. Output signals: `{rule-name}:hard`, `{rule-name}:easy`, or `{rule-name}:medium`
+4. Router uses signals to select appropriate backend model
+5. Composer allows conditional rule application based on other signals
+
+See [complexity routing sample configuration](https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_complexity.yaml) for a complete example.
 
 ## Verify Deployment
 
@@ -638,25 +836,515 @@ The operator validates that the specified StorageClass exists before creating th
 - **Azure AKS**: `managed`, `managed-premium`
 - **OpenShift**: `gp3-csi`, `thin`, `ocs-storagecluster-ceph-rbd`
 
+### Semantic Cache Backends
+
+The operator supports multiple cache backends for semantic caching, which significantly improves latency and reduces token usage by caching similar queries and their responses.
+
+:::warning Prerequisites
+The operator does **not** deploy Redis or Milvus. You must deploy these services separately in your cluster before using them as cache backends. The operator only configures the SemanticRouter to connect to your existing Redis/Milvus deployment.
+
+For deployment examples, see the [Redis](#deploying-redis) and [Milvus](#deploying-milvus) sections below.
+
+**Alternative:** If you prefer automatic deployment of Redis/Milvus, consider using the [Helm chart](https://github.com/vllm-project/semantic-router/tree/main/deploy/helm), which can deploy cache backends as Helm chart dependencies.
+:::
+
+#### Supported Backends
+
+##### 1. Memory Cache (Default)
+
+Simple in-memory cache suitable for development and small deployments.
+
+**Characteristics:**
+
+- No external dependencies
+- Fast access
+- Not persistent (cleared on restart)
+- Limited by pod memory
+
+**Configuration:**
+
+```yaml
+spec:
+  config:
+    bert_model:
+      model_id: models/mom-embedding-light
+      threshold: "0.6"
+      use_cpu: true
+
+    semantic_cache:
+      enabled: true
+      backend_type: memory
+      similarity_threshold: "0.8"
+      max_entries: 1000
+      ttl_seconds: 3600
+      eviction_policy: fifo  # fifo, lru, or lfu
+```
+
+**When to use:**
+
+- Development and testing
+- Small deployments (&lt;1000 cached queries)
+- No persistence requirements
+
+##### 2. Redis Cache
+
+High-performance distributed cache using Redis with vector search capabilities.
+
+**Characteristics:**
+
+- Distributed and scalable
+- Persistent storage (with AOF/RDB)
+- HNSW or FLAT indexing
+- Wide ecosystem support
+
+**Prerequisites:**
+
+- Redis 7.0+ with RediSearch module
+- Create Kubernetes Secret for password:
+
+```bash
+kubectl create secret generic redis-credentials \
+  --from-literal=password='your-redis-password'
+```
+
+**Configuration:**
+
+```yaml
+spec:
+  config:
+    bert_model:
+      model_id: models/mom-embedding-light
+      threshold: "0.6"
+      use_cpu: true
+
+    semantic_cache:
+      enabled: true
+      backend_type: redis
+      similarity_threshold: "0.85"
+      ttl_seconds: 3600
+      embedding_model: bert
+
+      redis:
+        connection:
+          host: redis.default.svc.cluster.local
+          port: 6379
+          database: 0
+          password_secret_ref:
+            name: redis-credentials
+            key: password
+          timeout: 30
+          tls:
+            enabled: false
+
+        index:
+          name: semantic_cache_idx
+          prefix: "cache:"
+          vector_field:
+            name: embedding
+            dimension: 384  # Match your embedding model
+            metric_type: COSINE
+          index_type: HNSW
+          params:
+            M: 16
+            efConstruction: 64
+
+        search:
+          topk: 1
+
+        development:
+          auto_create_index: true
+          verbose_errors: true
+```
+
+**When to use:**
+
+- Production deployments with moderate scale
+- Need persistence and high availability
+- Existing Redis infrastructure
+- Fast in-memory performance required
+
+**Example:** [`vllm.ai_v1alpha1_semanticrouter_redis_cache.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_redis_cache.yaml)
+
+##### 3. Milvus Cache
+
+Enterprise-grade vector database for production deployments with large cache volumes.
+
+**Characteristics:**
+
+- Highly scalable and distributed
+- Advanced indexing (HNSW, IVF, etc.)
+- Built-in data lifecycle management
+- High availability support
+
+**Prerequisites:**
+
+- Milvus 2.3+ (standalone or cluster)
+- Create Kubernetes Secret for credentials:
+
+```bash
+kubectl create secret generic milvus-credentials \
+  --from-literal=password='your-milvus-password'
+```
+
+**Configuration:**
+
+```yaml
+spec:
+  config:
+    bert_model:
+      model_id: models/mom-embedding-light
+      threshold: "0.6"
+      use_cpu: true
+
+    semantic_cache:
+      enabled: true
+      backend_type: milvus
+      similarity_threshold: "0.90"
+      ttl_seconds: 7200
+      embedding_model: bert
+
+      milvus:
+        connection:
+          host: milvus-standalone.default.svc.cluster.local
+          port: 19530
+          database: semantic_router_cache
+          timeout: 30
+          auth:
+            enabled: true
+            username: root
+            password_secret_ref:
+              name: milvus-credentials
+              key: password
+
+        collection:
+          name: semantic_cache
+          description: "Semantic cache for LLM responses"
+          vector_field:
+            name: embedding
+            dimension: 384  # Match your embedding model
+            metric_type: IP
+          index:
+            type: HNSW
+            params:
+              M: 16
+              efConstruction: 64
+
+        search:
+          params:
+            ef: 64
+          topk: 10
+          consistency_level: Session
+
+        performance:
+          connection_pool:
+            max_connections: 10
+            max_idle_connections: 5
+          batch:
+            insert_batch_size: 100
+
+        data_management:
+          ttl:
+            enabled: true
+            timestamp_field: created_at
+            cleanup_interval: 3600
+
+        development:
+          auto_create_collection: true
+```
+
+**When to use:**
+
+- Large-scale production deployments
+- Need advanced vector search capabilities
+- Require data lifecycle management (TTL, compaction)
+- High availability and scalability requirements
+
+**Example:** [`vllm.ai_v1alpha1_semanticrouter_milvus_cache.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_milvus_cache.yaml)
+
+##### 4. Hybrid Cache
+
+Combines in-memory HNSW index with persistent Milvus storage for optimal performance and durability.
+
+**Characteristics:**
+
+- Fast in-memory search with HNSW
+- Persistent storage in Milvus
+- Best of both worlds
+- Automatic synchronization
+
+**Configuration:**
+
+```yaml
+spec:
+  config:
+    bert_model:
+      model_id: models/mom-embedding-light
+      threshold: "0.6"
+      use_cpu: true
+
+    semantic_cache:
+      enabled: true
+      backend_type: hybrid
+      similarity_threshold: "0.85"
+      ttl_seconds: 3600
+      max_entries: 5000
+      eviction_policy: lru
+      embedding_model: bert
+
+      # HNSW in-memory configuration
+      hnsw:
+        use_hnsw: true
+        hnsw_m: 32
+        hnsw_ef_construction: 128
+        max_memory_entries: 5000
+
+      # Milvus persistent storage (same config as milvus backend)
+      milvus:
+        connection:
+          host: milvus-standalone.default.svc.cluster.local
+          port: 19530
+          # ... rest of milvus config
+```
+
+**When to use:**
+
+- Need fastest possible cache lookups
+- Require persistence and durability
+- Willing to trade memory for performance
+- High-throughput production deployments
+
+**Example:** [`vllm.ai_v1alpha1_semanticrouter_hybrid_cache.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_hybrid_cache.yaml)
+
+#### Deploying Redis
+
+Before using Redis cache backend, deploy Redis with RediSearch module to your cluster:
+
+```yaml
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cache-backends
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: cache-backends
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis/redis-stack-server:latest
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: cache-backends
+spec:
+  type: ClusterIP
+  ports:
+  - port: 6379
+    targetPort: 6379
+  selector:
+    app: redis
+```
+
+Apply the configuration:
+
+```bash
+kubectl apply -f redis-deployment.yaml
+```
+
+Create the credentials Secret:
+
+```bash
+kubectl create secret generic redis-credentials \
+  --from-literal=password=''  # Empty for no password, or set your password
+```
+
+**For production deployments**, consider using:
+
+- [Redis Operator](https://github.com/spotahome/redis-operator)
+- [Redis Enterprise Operator](https://docs.redis.com/latest/kubernetes/)
+- Managed Redis services (AWS ElastiCache, Azure Cache for Redis, GCP Memorystore)
+
+#### Deploying Milvus
+
+Before using Milvus cache backend, deploy Milvus to your cluster:
+
+```yaml
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: milvus-standalone
+  namespace: cache-backends
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: milvus
+  template:
+    metadata:
+      labels:
+        app: milvus
+    spec:
+      containers:
+      - name: milvus
+        image: milvusdb/milvus:v2.4.0
+        command: ["milvus", "run", "standalone"]
+        ports:
+        - containerPort: 19530
+          name: grpc
+        - containerPort: 9091
+          name: metrics
+        env:
+        - name: ETCD_USE_EMBED
+          value: "true"
+        - name: COMMON_STORAGETYPE
+          value: "local"
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 2000m
+            memory: 4Gi
+        volumeMounts:
+        - name: milvus-data
+          mountPath: /var/lib/milvus
+      volumes:
+      - name: milvus-data
+        emptyDir: {}  # Use PVC for production
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: milvus-standalone
+  namespace: cache-backends
+spec:
+  type: ClusterIP
+  ports:
+  - port: 19530
+    targetPort: 19530
+    name: grpc
+  selector:
+    app: milvus
+```
+
+Apply the configuration:
+
+```bash
+kubectl apply -f milvus-deployment.yaml
+```
+
+Create the credentials Secret:
+
+```bash
+kubectl create secret generic milvus-credentials \
+  --from-literal=password='Milvus'  # Default Milvus password
+```
+
+**For production deployments**, consider using:
+
+- [Milvus Operator](https://milvus.io/docs/install_cluster-milvusoperator.md)
+- [Milvus Helm Chart](https://milvus.io/docs/install_cluster-helm.md)
+- [Zilliz Cloud](https://cloud.zilliz.com/) (managed Milvus service)
+
+:::tip Production Best Practices
+For production cache backends:
+
+1. Use persistent volumes (not emptyDir)
+2. Enable authentication and TLS
+3. Configure resource limits appropriately
+4. Set up monitoring and alerting
+5. Use operators or Helm charts for easier management
+6. Consider managed services for reduced operational overhead
+:::
+
+#### Embedding Models
+
+The semantic cache supports different embedding models for similarity calculation:
+
+- **bert** (default): Lightweight, 384 dimensions, good for general use
+- **qwen3**: Higher quality, 1024 dimensions, better accuracy
+- **gemma**: Balanced, 768 dimensions, moderate performance
+
+Configure via:
+
+```yaml
+spec:
+  config:
+    semantic_cache:
+      embedding_model: bert  # or qwen3, gemma
+```
+
+**Note:** Ensure the `dimension` in cache config matches your chosen embedding model.
+
+#### Migration Between Backends
+
+Migrating from memory cache to Redis or Milvus is straightforward:
+
+1. Deploy Redis or Milvus in your cluster
+2. Create the credentials Secret
+3. Update SemanticRouter CR with new backend configuration
+4. Apply the changes - operator will perform rolling update
+
+The cache will be empty after migration but will populate naturally as queries are processed.
+
+#### Cache Configuration Reference
+
+For detailed configuration options, use `kubectl explain`:
+
+```bash
+# Redis cache configuration
+kubectl explain semanticrouter.spec.config.semantic_cache.redis
+
+# Milvus cache configuration
+kubectl explain semanticrouter.spec.config.semantic_cache.milvus
+
+# HNSW configuration
+kubectl explain semanticrouter.spec.config.semantic_cache.hnsw
+```
+
 ### Semantic Router Configuration
 
-Full semantic router configuration is embedded in the CR. See the complete example in [`deploy/operator/config/samples/vllm_v1alpha1_semanticrouter.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/operator/config/samples/vllm_v1alpha1_semanticrouter.yaml).
+Full semantic router configuration is embedded in the CR. See the complete examples above and in [`deploy/operator/config/samples/`](https://github.com/vllm-project/semantic-router/tree/main/deploy/operator/config/samples).
 
 Key configuration sections:
 
 ```yaml
 spec:
   config:
-    # BERT model for embeddings
+    # BERT model for embeddings (required for semantic cache)
     bert_model:
       model_id: "models/mom-embedding-light"
       threshold: 0.6
       use_cpu: true
 
-    # Semantic cache
+    # Semantic cache (see Semantic Cache Backends section above)
     semantic_cache:
       enabled: true
-      backend_type: "memory"  # or "milvus"
+      backend_type: "memory"  # or redis, milvus, hybrid
       similarity_threshold: 0.8
       max_entries: 1000
       ttl_seconds: 3600

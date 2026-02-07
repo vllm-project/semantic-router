@@ -16,20 +16,27 @@ const (
 	StatusCancelled EvaluationStatus = "cancelled"
 )
 
+// EvaluationLevel represents the level of evaluation
+type EvaluationLevel string
+
+const (
+	LevelRouter EvaluationLevel = "router" // Router-level evaluation (signal extraction)
+	LevelMoM    EvaluationLevel = "mom"    // MoM-level evaluation (model performance)
+)
+
 // EvaluationDimension represents a type of evaluation to run.
 type EvaluationDimension string
 
 const (
-	DimensionHallucination EvaluationDimension = "hallucination"
-	DimensionReasoning     EvaluationDimension = "reasoning"
-	DimensionAccuracy      EvaluationDimension = "accuracy"
-	DimensionLatency       EvaluationDimension = "latency"
-	DimensionCost          EvaluationDimension = "cost"
-	DimensionSecurity      EvaluationDimension = "security"
+	// Signal evaluation dimensions (Router-level)
+	DimensionDomain       EvaluationDimension = "domain"
+	DimensionFactCheck    EvaluationDimension = "fact_check"
+	DimensionUserFeedback EvaluationDimension = "user_feedback"
 )
 
 // EvaluationConfig holds the configuration for an evaluation task.
 type EvaluationConfig struct {
+	Level         EvaluationLevel       `json:"level"` // evaluation level (router or mom)
 	Dimensions    []EvaluationDimension `json:"dimensions"`
 	Datasets      map[string][]string   `json:"datasets"`        // dimension -> dataset names
 	MaxSamples    int                   `json:"max_samples"`     // max samples per dataset
@@ -151,6 +158,7 @@ type DatasetInfo struct {
 	Name        string              `json:"name"`
 	Description string              `json:"description"`
 	Dimension   EvaluationDimension `json:"dimension"`
+	Level       EvaluationLevel     `json:"level"` // evaluation level (router or mom)
 	SampleCount int                 `json:"sample_count,omitempty"`
 }
 

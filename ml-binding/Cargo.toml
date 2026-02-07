@@ -1,0 +1,36 @@
+[package]
+name = "ml_semantic_router"
+version = "0.1.0"
+edition = "2021"
+description = "ML algorithms binding for semantic-router using Linfa"
+license = "Apache-2.0"
+
+[lib]
+name = "ml_semantic_router"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Linfa ML framework - inference only (training done in Python)
+# Training: src/training/ml_model_selection/
+linfa-nn = "0.7"           # Ball Tree for KNN/KMeans inference
+
+# Linear algebra (must match Linfa's ndarray version)
+ndarray = "0.15"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Pin noisy_float to version compatible with Rust 1.75
+noisy_float = "=0.2.0"
+
+# FFI
+libc = "0.2"
+
+[features]
+default = []
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3

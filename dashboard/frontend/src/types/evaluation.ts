@@ -2,15 +2,15 @@
 
 export type EvaluationStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 
+export type EvaluationLevel = 'router' | 'mom';
+
 export type EvaluationDimension =
-  | 'hallucination'
-  | 'reasoning'
-  | 'accuracy'
-  | 'latency'
-  | 'cost'
-  | 'security';
+  | 'domain'
+  | 'fact_check'
+  | 'user_feedback';
 
 export interface EvaluationConfig {
+  level: EvaluationLevel; // evaluation level (router or mom)
   dimensions: EvaluationDimension[];
   datasets: Record<string, string[]>; // dimension -> dataset names
   max_samples: number;
@@ -34,12 +34,40 @@ export interface EvaluationTask {
   current_step?: string;
 }
 
+export interface TestCaseDetail {
+  query: string;
+  expected: string | number;
+  actual: string | number | null;
+  status: 'correct' | 'incorrect' | 'skip';
+  reason?: string;
+}
+
+export interface EvaluationMetadata {
+  dataset_id: string;
+  dataset_name: string;
+  description: string;
+  hf_dataset: string;
+  dimension: string;
+  endpoint: string;
+  max_samples?: number;
+  concurrent?: number;
+  elapsed_time_seconds?: number;
+  timestamp?: string;
+}
+
 export interface EvaluationResult {
   id: string;
   task_id: string;
   dimension: EvaluationDimension;
   dataset_name: string;
-  metrics: Record<string, unknown>;
+  metrics: Record<string, unknown> & {
+    details?: TestCaseDetail[];
+    metadata?: EvaluationMetadata;
+    correct?: number;
+    incorrect?: number;
+    skipped?: number;
+    accuracy?: number;
+  };
   raw_results_path?: string;
 }
 
@@ -55,6 +83,7 @@ export interface DatasetInfo {
   name: string;
   description: string;
   dimension: EvaluationDimension;
+  level: EvaluationLevel; // evaluation level (router or mom)
   sample_count?: number;
 }
 
@@ -81,37 +110,36 @@ export interface TaskResults {
   results: EvaluationResult[];
 }
 
-// Dimension metadata for UI display
-export const DIMENSION_INFO: Record<EvaluationDimension, { label: string; description: string; color: string }> = {
-  hallucination: {
-    label: 'Hallucination Detection',
-    description: 'Measures the system ability to detect factual inaccuracies',
-    color: '#ef4444', // red
+// Level metadata for UI display
+export const LEVEL_INFO: Record<EvaluationLevel, { label: string; description: string; color: string }> = {
+  router: {
+    label: 'Signal Level',
+    description: 'Evaluates the signal extraction accuracy (domain, fact_check, user_feedback)',
+    color: '#10b981', // green
   },
-  reasoning: {
-    label: 'Reasoning Mode',
-    description: 'Compares standard vs reasoning mode performance',
-    color: '#8b5cf6', // purple
-  },
-  accuracy: {
-    label: 'Classification Accuracy',
-    description: 'Measures routing and classification correctness',
-    color: '#22c55e', // green
-  },
-  latency: {
-    label: 'Latency',
-    description: 'Measures response time and throughput',
+  mom: {
+    label: 'System Level',
+    description: 'Evaluates the system as a unified model (reasoning, coding, agentic)',
     color: '#3b82f6', // blue
   },
-  cost: {
-    label: 'Cost Efficiency',
-    description: 'Measures token usage and cost per request',
-    color: '#f59e0b', // amber
+};
+
+// Dimension metadata for UI display
+export const DIMENSION_INFO: Record<EvaluationDimension, { label: string; description: string; color: string }> = {
+  domain: {
+    label: 'Domain Classification',
+    description: 'Evaluates intent signal extraction accuracy',
+    color: '#8b5cf6', // purple
   },
-  security: {
-    label: 'Security',
-    description: 'Measures jailbreak and prompt injection detection',
-    color: '#ec4899', // pink
+  fact_check: {
+    label: 'Fact Check Detection',
+    description: 'Evaluates fact-check signal extraction accuracy',
+    color: '#ef4444', // red
+  },
+  user_feedback: {
+    label: 'User Feedback Detection',
+    description: 'Evaluates feedback signal extraction accuracy',
+    color: '#22c55e', // green
   },
 };
 

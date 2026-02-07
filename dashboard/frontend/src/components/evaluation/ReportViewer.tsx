@@ -1,6 +1,6 @@
-import { useCallback } from 'react';
-import type { EvaluationResult, TaskResults } from '../../types/evaluation';
-import { DIMENSION_INFO, formatDate, formatDuration, formatMetricValue, getMetricValue } from '../../types/evaluation';
+import { useCallback, useState } from 'react';
+import type { EvaluationResult, TaskResults, TestCaseDetail, EvaluationMetadata } from '../../types/evaluation';
+import { DIMENSION_INFO, LEVEL_INFO, formatDate, formatDuration, formatMetricValue, getMetricValue } from '../../types/evaluation';
 import { downloadExport } from '../../utils/evaluationApi';
 import styles from './ReportViewer.module.css';
 
@@ -105,6 +105,12 @@ export function ReportViewer({ results, onBack }: ReportViewerProps) {
         <dl className={styles.metadataList}>
           <dt>Task ID</dt>
           <dd>{task.id}</dd>
+          <dt>Evaluation Level</dt>
+          <dd>
+            <span style={{ color: LEVEL_INFO[task.config.level].color }}>
+              {LEVEL_INFO[task.config.level].label}
+            </span>
+          </dd>
           <dt>Created</dt>
           <dd>{formatDate(task.created_at)}</dd>
           <dt>Started</dt>
@@ -127,6 +133,9 @@ interface ResultCardProps {
 
 function ResultCard({ result }: ResultCardProps) {
   const dimInfo = DIMENSION_INFO[result.dimension];
+  const [showDetails, setShowDetails] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Extract common metrics
   const accuracy = getMetricValue(result.metrics, 'accuracy');
@@ -137,6 +146,10 @@ function ResultCard({ result }: ResultCardProps) {
   const p50Latency = getMetricValue(result.metrics, 'p50_latency_ms');
   const p99Latency = getMetricValue(result.metrics, 'p99_latency_ms');
 
+  // Extract metadata and details
+  const metadata = result.metrics.metadata as EvaluationMetadata | undefined;
+  const details = result.metrics.details as TestCaseDetail[] | undefined;
+
   return (
     <div className={styles.resultCard}>
       <div className={styles.resultHeader}>
@@ -146,6 +159,30 @@ function ResultCard({ result }: ResultCardProps) {
         </div>
         <span className={styles.datasetName}>{result.dataset_name}</span>
       </div>
+
+      {/* Dimension Info Box */}
+      {((metadata?.description || dimInfo?.description) || metadata) && (
+        <div className={styles.dimensionInfoBox}>
+          {(metadata?.description || dimInfo?.description) && (
+            <div className={styles.infoItem}>
+              <span className={styles.infoIcon}>📋</span>
+              <div className={styles.infoText}>
+                <div>Dimension: {dimInfo?.label || result.dimension}</div>
+                <span className={styles.datasetId}>{metadata?.description || dimInfo?.description}</span>
+              </div>
+            </div>
+          )}
+          {metadata && (
+            <div className={styles.infoItem}>
+              <span className={styles.infoIcon}>📊</span>
+              <div className={styles.infoText}>
+                <div>Dataset: {metadata.dataset_name || result.dataset_name}</div>
+                {metadata.hf_dataset && <span className={styles.datasetId}>{metadata.hf_dataset}</span>}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className={styles.metricsGrid}>
         {accuracy !== null && (
@@ -192,93 +229,125 @@ function ResultCard({ result }: ResultCardProps) {
         )}
       </div>
 
-      {result.dimension === 'reasoning' && (
-        <ReasoningDetails metrics={result.metrics} />
+      {(result.dimension === 'domain' || result.dimension === 'fact_check' || result.dimension === 'user_feedback') && (
+        <SignalEvalDetails metrics={result.metrics} />
       )}
 
-      {result.dimension === 'hallucination' && (
-        <HallucinationDetails metrics={result.metrics} />
-      )}
+      {/* Test Case Details */}
+      {details && details.length > 0 && (() => {
+        const totalPages = Math.ceil(details.length / itemsPerPage);
+        const startIdx = (currentPage - 1) * itemsPerPage;
+        const endIdx = startIdx + itemsPerPage;
+        const currentItems = details.slice(startIdx, endIdx);
+
+        return (
+          <div className={styles.testCaseSection}>
+            <button
+              className={styles.toggleDetailsButton}
+              onClick={() => setShowDetails(!showDetails)}
+            >
+              {showDetails ? '▼' : '▶'} Test Cases ({details.length})
+            </button>
+            {showDetails && (
+              <>
+                <div className={styles.testCaseList}>
+                  {currentItems.map((testCase, idx) => {
+                    const actualIdx = startIdx + idx;
+                    return (
+                      <div key={actualIdx} className={`${styles.testCase} ${styles[`testCase${testCase.status.charAt(0).toUpperCase() + testCase.status.slice(1)}`]}`}>
+                        <div className={styles.testCaseHeader}>
+                          <span className={styles.testCaseIndex}>#{actualIdx + 1}</span>
+                          <span className={`${styles.testCaseStatus} ${styles[`status${testCase.status.charAt(0).toUpperCase() + testCase.status.slice(1)}`]}`}>
+                            {testCase.status === 'correct' ? '✓' : testCase.status === 'incorrect' ? '✗' : '⊘'}
+                          </span>
+                        </div>
+                        <div className={styles.testCaseContent}>
+                          <div className={styles.testCaseQuery}>
+                            <strong>Query:</strong> {testCase.query}
+                          </div>
+                          <div className={styles.testCaseComparison}>
+                            <div className={styles.testCaseExpected}>
+                              <strong>Expected:</strong> <code>{String(testCase.expected)}</code>
+                            </div>
+                            <div className={styles.testCaseActual}>
+                              <strong>Actual:</strong> <code>{testCase.actual !== null ? String(testCase.actual) : 'N/A'}</code>
+                            </div>
+                          </div>
+                          {testCase.reason && (
+                            <div className={styles.testCaseReason}>
+                              <strong>Reason:</strong> {testCase.reason}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {totalPages > 1 && (
+                  <div className={styles.pagination}>
+                    <span className={styles.paginationInfo}>
+                      Page {currentPage} of {totalPages} ({startIdx + 1}-{Math.min(endIdx, details.length)} of {details.length})
+                    </span>
+                    <div className={styles.paginationButtons}>
+                      <button
+                        className={styles.paginationButton}
+                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        ← Previous
+                      </button>
+                      <button
+                        className={styles.paginationButton}
+                        onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                        disabled={currentPage === totalPages}
+                      >
+                        Next →
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
 
-function ReasoningDetails({ metrics }: { metrics: Record<string, unknown> }) {
-  const standardAccuracy = getMetricValue(metrics, 'standard_accuracy');
-  const reasoningAccuracy = getMetricValue(metrics, 'reasoning_accuracy');
-  const accuracyDelta = getMetricValue(metrics, 'accuracy_delta');
-  const improvementPct = getMetricValue(metrics, 'accuracy_improvement_pct');
+function SignalEvalDetails({ metrics }: { metrics: Record<string, unknown> }) {
+  const totalSamples = getMetricValue(metrics, 'total_samples');
+  const correct = getMetricValue(metrics, 'correct');
+  const incorrect = getMetricValue(metrics, 'incorrect');
+  const skipped = getMetricValue(metrics, 'skipped');
 
   return (
     <div className={styles.details}>
-      <h4>Reasoning Mode Comparison</h4>
+      <h4>Signal Evaluation Results</h4>
       <div className={styles.comparisonGrid}>
         <div className={styles.comparisonItem}>
-          <span className={styles.comparisonLabel}>Standard Mode</span>
-          <span className={styles.comparisonValue}>
-            {formatMetricValue(standardAccuracy, 'percent')}
+          <span className={styles.comparisonLabel}>Total Samples</span>
+          <span className={styles.comparisonValue}>{totalSamples ?? '-'}</span>
+        </div>
+        <div className={styles.comparisonItem}>
+          <span className={styles.comparisonLabel}>Correct</span>
+          <span className={styles.comparisonValue} style={{ color: '#22c55e' }}>
+            {correct ?? '-'}
           </span>
         </div>
         <div className={styles.comparisonItem}>
-          <span className={styles.comparisonLabel}>Reasoning Mode</span>
-          <span className={styles.comparisonValue} style={{ color: '#22c55e' }}>
-            {formatMetricValue(reasoningAccuracy, 'percent')}
+          <span className={styles.comparisonLabel}>Incorrect</span>
+          <span className={styles.comparisonValue} style={{ color: '#ef4444' }}>
+            {incorrect ?? '-'}
           </span>
         </div>
-        {accuracyDelta !== null && (
-          <div className={styles.comparisonItem}>
-            <span className={styles.comparisonLabel}>Improvement</span>
-            <span
-              className={styles.comparisonValue}
-              style={{ color: accuracyDelta >= 0 ? '#22c55e' : '#ef4444' }}
-            >
-              {accuracyDelta >= 0 ? '+' : ''}{formatMetricValue(improvementPct, 'decimal')}%
-            </span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function HallucinationDetails({ metrics }: { metrics: Record<string, unknown> }) {
-  const tp = getMetricValue(metrics, 'true_positives');
-  const fp = getMetricValue(metrics, 'false_positives');
-  const tn = getMetricValue(metrics, 'true_negatives');
-  const fn = getMetricValue(metrics, 'false_negatives');
-  const efficiencyGain = getMetricValue(metrics, 'efficiency_gain_percent');
-
-  return (
-    <div className={styles.details}>
-      <h4>Detection Results</h4>
-      <div className={styles.confusionMatrix}>
-        <div className={styles.matrixRow}>
-          <div className={styles.matrixCell} style={{ backgroundColor: 'rgba(34, 197, 94, 0.2)' }}>
-            <span className={styles.matrixLabel}>True Positives</span>
-            <span className={styles.matrixValue}>{tp ?? '-'}</span>
-          </div>
-          <div className={styles.matrixCell} style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)' }}>
-            <span className={styles.matrixLabel}>False Positives</span>
-            <span className={styles.matrixValue}>{fp ?? '-'}</span>
-          </div>
-        </div>
-        <div className={styles.matrixRow}>
-          <div className={styles.matrixCell} style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)' }}>
-            <span className={styles.matrixLabel}>False Negatives</span>
-            <span className={styles.matrixValue}>{fn ?? '-'}</span>
-          </div>
-          <div className={styles.matrixCell} style={{ backgroundColor: 'rgba(34, 197, 94, 0.2)' }}>
-            <span className={styles.matrixLabel}>True Negatives</span>
-            <span className={styles.matrixValue}>{tn ?? '-'}</span>
-          </div>
+        <div className={styles.comparisonItem}>
+          <span className={styles.comparisonLabel}>Skipped</span>
+          <span className={styles.comparisonValue} style={{ color: '#f59e0b' }}>
+            {skipped ?? '-'}
+          </span>
         </div>
       </div>
-      {efficiencyGain !== null && (
-        <div className={styles.efficiencyBanner}>
-          <span className={styles.efficiencyLabel}>Efficiency Gain from Pre-filtering</span>
-          <span className={styles.efficiencyValue}>{formatMetricValue(efficiencyGain, 'decimal')}%</span>
-        </div>
-      )}
     </div>
   );
 }

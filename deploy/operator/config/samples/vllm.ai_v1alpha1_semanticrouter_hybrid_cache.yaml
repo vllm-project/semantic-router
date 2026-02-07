@@ -1,0 +1,153 @@
+---
+# SemanticRouter with Hybrid Cache Backend
+# This example demonstrates how to configure the semantic router to use Hybrid caching
+# Hybrid cache combines in-memory HNSW index with persistent Milvus storage for optimal performance
+apiVersion: vllm.ai/v1alpha1
+kind: SemanticRouter
+metadata:
+  name: semantic-router-hybrid
+  namespace: default
+spec:
+  replicas: 2
+
+  # Configure vLLM backend endpoints
+  vllmEndpoints:
+    - name: small-model
+      model: qwen3-1.8b
+      reasoningFamily: qwen3
+      backend:
+        type: service
+        service:
+          name: vllm-small
+          port: 8000
+
+    - name: large-model
+      model: llama3-70b
+      reasoningFamily: qwen3
+      backend:
+        type: service
+        service:
+          name: vllm-large
+          port: 8000
+
+  # Persistence for model cache
+  persistence:
+    enabled: true
+    size: 20Gi
+
+  # Autoscaling configuration
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+
+  # Resource limits
+  resources:
+    requests:
+      cpu: 2000m
+      memory: 4Gi
+    limits:
+      cpu: 4000m
+      memory: 8Gi
+
+  # Semantic router configuration
+  config:
+    # BERT model for embeddings (required for semantic cache)
+    bert_model:
+      model_id: models/mom-embedding-light
+      threshold: "0.6"
+      use_cpu: true
+
+    # Semantic cache with Hybrid backend (HNSW + Milvus)
+    semantic_cache:
+      enabled: true
+      backend_type: hybrid
+      similarity_threshold: "0.85"
+      ttl_seconds: 3600
+      max_entries: 5000
+      eviction_policy: lru
+      embedding_model: bert
+
+      # HNSW configuration for hybrid backend
+      hnsw:
+        use_hnsw: true
+        hnsw_m: 32  # Higher for better recall
+        hnsw_ef_construction: 128
+        max_memory_entries: 5000
+
+      # Milvus configuration for persistent storage
+      # NOTE: Update host to match your Milvus deployment namespace
+      milvus:
+        connection:
+          host: milvus-standalone.cache-backends.svc.cluster.local
+          port: 19530
+          database: semantic_router_cache
+          timeout: 30
+          auth:
+            enabled: true
+            username: root
+            password_secret_ref:
+              name: milvus-credentials
+              key: password
+
+        collection:
+          name: semantic_cache_hybrid
+          description: "Hybrid cache backend storage"
+          vector_field:
+            name: embedding
+            dimension: 384  # For BERT embeddings
+            metric_type: IP
+          index:
+            type: HNSW
+            params:
+              M: 32
+              efConstruction: 128
+
+        search:
+          params:
+            ef: 128
+          topk: 20
+          consistency_level: Eventually  # Faster for hybrid usage
+
+        performance:
+          connection_pool:
+            max_connections: 20
+            max_idle_connections: 10
+            acquire_timeout: 30
+          batch:
+            insert_batch_size: 200
+            timeout: 60
+
+        data_management:
+          ttl:
+            enabled: true
+            timestamp_field: created_at
+            cleanup_interval: 1800
+          compaction:
+            enabled: true
+            interval: 43200  # Twice daily
+
+        development:
+          drop_collection_on_startup: false
+          auto_create_collection: true
+          verbose_errors: false
+
+    # Disable features that require additional models for this example
+    # Enable these features in production with proper model configuration
+    prompt_guard:
+      enabled: false
+
+    tools:
+      enabled: false
+
+---
+# Secret for Milvus password (create separately)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: milvus-credentials
+  namespace: default
+type: Opaque
+stringData:
+  password: "your-milvus-password-here"

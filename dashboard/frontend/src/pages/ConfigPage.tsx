@@ -12,6 +12,7 @@ import {
   detectConfigFormat,
   DecisionConditionType
 } from '../types/config'
+import { MCPConfigPanel } from '../components/MCPConfigPanel'
 
 interface VLLMEndpoint {
   name: string
@@ -26,6 +27,7 @@ interface ModelConfig {
   use_modernbert?: boolean
   threshold: number
   use_cpu: boolean
+  use_qwen3?: boolean
   category_mapping_path?: string
   pii_mapping_path?: string
   jailbreak_mapping_path?: string
@@ -163,8 +165,19 @@ interface ConfigData {
     user_feedbacks?: Array<{ name: string; description: string }>
     preferences?: Array<{ name: string; description: string }>
     language?: Array<{ name: string }>
-    latency?: Array<{ name: string; max_tpot?: number; description?: string }>
+    latency?: Array<{ name: string; tpot_percentile?: number; ttft_percentile?: number; description?: string }>
     context?: Array<{ name: string; min_tokens: string; max_tokens: string; description?: string }>
+    complexity?: Array<{
+      name: string
+      threshold: number
+      hard: { candidates: string[] }
+      easy: { candidates: string[] }
+      description?: string
+      composer?: {
+        operator: 'AND' | 'OR'
+        conditions: Array<{ type: string; name: string }>
+      }
+    }>
   }
   decisions?: Array<{
     name: string
@@ -219,6 +232,7 @@ interface ConfigData {
     category_model?: ModelConfig
     mcp_category_model?: MCPCategoryModel
     pii_model?: ModelConfig
+    preference_model?: ModelConfig
   }
   categories?: Category[]
   default_reasoning_effort?: string
@@ -237,7 +251,7 @@ interface ConfigPageProps {
   activeSection?: ConfigSection
 }
 
-type SignalType = 'Keywords' | 'Embeddings' | 'Domain' | 'Preference' | 'Fact Check' | 'User Feedback' | 'Language' | 'Latency' | 'Context'
+type SignalType = 'Keywords' | 'Embeddings' | 'Domain' | 'Preference' | 'Fact Check' | 'User Feedback' | 'Language' | 'Latency' | 'Context' | 'Complexity'
 type DecisionConfig = NonNullable<ConfigData['decisions']>[number]
 
 interface DecisionFormState {
@@ -261,9 +275,15 @@ interface AddSignalFormState {
   candidates: string
   aggregation_method: string
   mmlu_categories: string
-  max_tpot?: number
+  tpot_percentile?: number
+  ttft_percentile?: number
   min_tokens?: string
   max_tokens?: string
+  complexity_threshold?: number
+  hard_candidates?: string
+  easy_candidates?: string
+  composer_operator?: 'AND' | 'OR'
+  composer_conditions?: string
 }
 
 // Helper function to format threshold as percentage
@@ -488,6 +508,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         break
       case 'Context':
         cfg.signals.context = (cfg.signals.context || []).filter(s => s.name !== targetName)
+        break
+      case 'Complexity':
+        cfg.signals.complexity = (cfg.signals.complexity || []).filter(s => s.name !== targetName)
         break
       default:
         break
@@ -975,50 +998,50 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                               name: 'backend_type',
                               label: 'Backend Type',
                               type: 'select',
-                            options: ['memory', 'redis', 'memcached'],
-                            description: 'Cache backend storage type'
-                          },
-                          {
-                            name: 'similarity_threshold',
-                            label: 'Similarity Threshold',
-                            type: 'percentage',
-                            required: true,
-                            placeholder: '90',
-                            description: 'Minimum similarity score for cache hits (0-100%)',
-                            step: 1
-                          },
-                          {
-                            name: 'max_entries',
-                            label: 'Max Entries',
-                            type: 'number',
-                            placeholder: '10000',
-                            description: 'Maximum number of cached entries'
-                          },
-                          {
-                            name: 'ttl_seconds',
-                            label: 'TTL (seconds)',
-                            type: 'number',
-                            placeholder: '3600',
-                            description: 'Time-to-live for cached entries'
-                          },
-                          {
-                            name: 'eviction_policy',
-                            label: 'Eviction Policy',
-                            type: 'select',
-                            options: ['lru', 'lfu', 'fifo'],
-                            description: 'Cache eviction policy when max entries reached'
+                              options: ['memory', 'redis', 'memcached'],
+                              description: 'Cache backend storage type'
+                            },
+                            {
+                              name: 'similarity_threshold',
+                              label: 'Similarity Threshold',
+                              type: 'percentage',
+                              required: true,
+                              placeholder: '90',
+                              description: 'Minimum similarity score for cache hits (0-100%)',
+                              step: 1
+                            },
+                            {
+                              name: 'max_entries',
+                              label: 'Max Entries',
+                              type: 'number',
+                              placeholder: '10000',
+                              description: 'Maximum number of cached entries'
+                            },
+                            {
+                              name: 'ttl_seconds',
+                              label: 'TTL (seconds)',
+                              type: 'number',
+                              placeholder: '3600',
+                              description: 'Time-to-live for cached entries'
+                            },
+                            {
+                              name: 'eviction_policy',
+                              label: 'Eviction Policy',
+                              type: 'select',
+                              options: ['lru', 'lfu', 'fifo'],
+                              description: 'Cache eviction policy when max entries reached'
+                            }
+                          ],
+                          async (data) => {
+                            const newConfig = { ...config }
+                            newConfig.semantic_cache = data
+                            await saveConfig(newConfig)
                           }
-                        ],
-                        async (data) => {
-                          const newConfig = { ...config }
-                          newConfig.semantic_cache = data
-                          await saveConfig(newConfig)
-                        }
-                      )
-                    }}
-                  >
-                    Edit
-                  </button>
+                        )
+                      }}
+                    >
+                      Edit
+                    </button>
                   )}
                 </div>
               </div>
@@ -1086,54 +1109,54 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                           'Edit In-tree Category Classifier',
                           routerConfig.classifier?.category_model || {},
                           [
-                          {
-                            name: 'model_id',
-                            label: 'Model ID',
-                            type: 'text',
-                            required: true,
-                            placeholder: 'e.g., answerdotai/ModernBERT-base',
-                            description: 'HuggingFace model ID for category classification'
-                          },
-                          {
-                            name: 'threshold',
-                            label: 'Classification Threshold',
-                            type: 'percentage',
-                            required: true,
-                            placeholder: '70',
-                            description: 'Confidence threshold for category classification (0-100%)',
-                            step: 1
-                          },
-                          {
-                            name: 'use_cpu',
-                            label: 'Use CPU',
-                            type: 'boolean',
-                            description: 'Use CPU instead of GPU for inference'
-                          },
-                          {
-                            name: 'use_modernbert',
-                            label: 'Use ModernBERT',
-                            type: 'boolean',
-                            description: 'Enable ModernBERT-based classification'
-                          },
-                          {
-                            name: 'category_mapping_path',
-                            label: 'Category Mapping Path',
-                            type: 'text',
-                            placeholder: 'config/category_mapping.json',
-                            description: 'Path to category mapping configuration'
+                            {
+                              name: 'model_id',
+                              label: 'Model ID',
+                              type: 'text',
+                              required: true,
+                              placeholder: 'e.g., answerdotai/ModernBERT-base',
+                              description: 'HuggingFace model ID for category classification'
+                            },
+                            {
+                              name: 'threshold',
+                              label: 'Classification Threshold',
+                              type: 'percentage',
+                              required: true,
+                              placeholder: '70',
+                              description: 'Confidence threshold for category classification (0-100%)',
+                              step: 1
+                            },
+                            {
+                              name: 'use_cpu',
+                              label: 'Use CPU',
+                              type: 'boolean',
+                              description: 'Use CPU instead of GPU for inference'
+                            },
+                            {
+                              name: 'use_modernbert',
+                              label: 'Use ModernBERT',
+                              type: 'boolean',
+                              description: 'Enable ModernBERT-based classification'
+                            },
+                            {
+                              name: 'category_mapping_path',
+                              label: 'Category Mapping Path',
+                              type: 'text',
+                              placeholder: 'config/category_mapping.json',
+                              description: 'Path to category mapping configuration'
+                            }
+                          ],
+                          async (data) => {
+                            const newConfig = { ...config }
+                            if (!newConfig.classifier) newConfig.classifier = {}
+                            newConfig.classifier.category_model = data
+                            await saveConfig(newConfig)
                           }
-                        ],
-                        async (data) => {
-                          const newConfig = { ...config }
-                          if (!newConfig.classifier) newConfig.classifier = {}
-                          newConfig.classifier.category_model = data
-                          await saveConfig(newConfig)
-                        }
-                      )
-                    }}
-                  >
+                        )
+                      }}
+                    >
 
-                  </button>
+                    </button>
                   )}
                 </div>
               </div>
@@ -1181,83 +1204,83 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                           'Edit Out-tree MCP Category Classifier',
                           routerConfig.classifier?.mcp_category_model || {},
                           [
-                          {
-                            name: 'enabled',
-                            label: 'Enable MCP Classifier',
-                            type: 'boolean',
-                            description: 'Enable or disable MCP-based classification'
-                          },
-                          {
-                            name: 'transport_type',
-                            label: 'Transport Type',
-                            type: 'select',
-                            options: ['stdio', 'http'],
-                            required: true,
-                            description: 'MCP transport protocol type'
-                          },
-                          {
-                            name: 'command',
-                            label: 'Command',
-                            type: 'text',
-                            placeholder: 'e.g., python mcp_server.py',
-                            description: 'Command to start MCP server (for stdio transport)'
-                          },
-                          {
-                            name: 'args',
-                            label: 'Arguments (JSON)',
-                            type: 'json',
-                            placeholder: '["--port", "8080"]',
-                            description: 'Command line arguments as JSON array'
-                          },
-                          {
-                            name: 'env',
-                            label: 'Environment Variables (JSON)',
-                            type: 'json',
-                            placeholder: '{"API_KEY": "xxx"}',
-                            description: 'Environment variables as JSON object'
-                          },
-                          {
-                            name: 'url',
-                            label: 'URL',
-                            type: 'text',
-                            placeholder: 'http://localhost:8080',
-                            description: 'MCP server URL (for http transport)'
-                          },
-                          {
-                            name: 'tool_name',
-                            label: 'Tool Name',
-                            type: 'text',
-                            placeholder: 'classify_category',
-                            description: 'Name of the MCP tool to call'
-                          },
-                          {
-                            name: 'threshold',
-                            label: 'Classification Threshold',
-                            type: 'percentage',
-                            required: true,
-                            placeholder: '70',
-                            description: 'Confidence threshold for classification (0-100%)',
-                            step: 1
-                          },
-                          {
-                            name: 'timeout_seconds',
-                            label: 'Timeout (seconds)',
-                            type: 'number',
-                            placeholder: '30',
-                            description: 'Request timeout in seconds'
+                            {
+                              name: 'enabled',
+                              label: 'Enable MCP Classifier',
+                              type: 'boolean',
+                              description: 'Enable or disable MCP-based classification'
+                            },
+                            {
+                              name: 'transport_type',
+                              label: 'Transport Type',
+                              type: 'select',
+                              options: ['stdio', 'http'],
+                              required: true,
+                              description: 'MCP transport protocol type'
+                            },
+                            {
+                              name: 'command',
+                              label: 'Command',
+                              type: 'text',
+                              placeholder: 'e.g., python mcp_server.py',
+                              description: 'Command to start MCP server (for stdio transport)'
+                            },
+                            {
+                              name: 'args',
+                              label: 'Arguments (JSON)',
+                              type: 'json',
+                              placeholder: '["--port", "8080"]',
+                              description: 'Command line arguments as JSON array'
+                            },
+                            {
+                              name: 'env',
+                              label: 'Environment Variables (JSON)',
+                              type: 'json',
+                              placeholder: '{"API_KEY": "xxx"}',
+                              description: 'Environment variables as JSON object'
+                            },
+                            {
+                              name: 'url',
+                              label: 'URL',
+                              type: 'text',
+                              placeholder: 'http://localhost:8080',
+                              description: 'MCP server URL (for http transport)'
+                            },
+                            {
+                              name: 'tool_name',
+                              label: 'Tool Name',
+                              type: 'text',
+                              placeholder: 'classify_category',
+                              description: 'Name of the MCP tool to call'
+                            },
+                            {
+                              name: 'threshold',
+                              label: 'Classification Threshold',
+                              type: 'percentage',
+                              required: true,
+                              placeholder: '70',
+                              description: 'Confidence threshold for classification (0-100%)',
+                              step: 1
+                            },
+                            {
+                              name: 'timeout_seconds',
+                              label: 'Timeout (seconds)',
+                              type: 'number',
+                              placeholder: '30',
+                              description: 'Request timeout in seconds'
+                            }
+                          ],
+                          async (data) => {
+                            const newConfig = { ...config }
+                            if (!newConfig.classifier) newConfig.classifier = {}
+                            newConfig.classifier.mcp_category_model = data
+                            await saveConfig(newConfig)
                           }
-                        ],
-                        async (data) => {
-                          const newConfig = { ...config }
-                          if (!newConfig.classifier) newConfig.classifier = {}
-                          newConfig.classifier.mcp_category_model = data
-                          await saveConfig(newConfig)
-                        }
-                      )
-                    }}
-                  >
+                        )
+                      }}
+                    >
 
-                  </button>
+                    </button>
                   )}
                 </div>
               </div>
@@ -1304,6 +1327,105 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
           {!hasInTree && !hasOutTree && (
             <div className={styles.emptyState}>No category classifier configured</div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // ============================================================================
+  // 4b. PREFERENCE MODEL SECTION (LOCAL CANDLE)
+  // ============================================================================
+
+  const renderPreferenceModel = () => {
+    const preferenceModel = routerConfig.classifier?.preference_model
+
+    return (
+      <div className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <h3 className={styles.sectionTitle}>Preference Model (Work In Progress)</h3>
+          <button
+            className={styles.sectionEditButton}
+            onClick={() => {
+              openEditModal(
+                preferenceModel ? 'Edit Preference Model' : 'Add Preference Model',
+                preferenceModel || {
+                  model_id: '',
+                  threshold: 0,
+                  use_cpu: false,
+                  use_qwen3: true,
+                },
+                [
+                  {
+                    name: 'model_id',
+                    label: 'Model ID or Path',
+                    type: 'text',
+                    required: true,
+                    placeholder: '',
+                    description: 'Local Candle model path or HuggingFace ID for preference routing',
+                  },
+                  {
+                    name: 'threshold',
+                    label: 'Confidence Threshold',
+                    type: 'percentage',
+                    placeholder: '0',
+                    description: 'Minimum confidence to accept a preference (0-100%, optional)',
+                    step: 1,
+                  },
+                  {
+                    name: 'use_cpu',
+                    label: 'Use CPU',
+                    type: 'boolean',
+                    description: 'Force CPU inference instead of GPU/Metal when available',
+                  },
+                  {
+                    name: 'use_qwen3',
+                    label: 'Use Qwen3 Model',
+                    type: 'boolean',
+                    description: 'Enable Qwen3 zero-shot/fine-tuned preference classifier',
+                  },
+                ],
+                async (data) => {
+                  const newConfig = { ...config }
+                  if (!newConfig.classifier) newConfig.classifier = {}
+                  newConfig.classifier.preference_model = data
+                  await saveConfig(newConfig)
+                },
+                preferenceModel ? 'edit' : 'add'
+              )
+            }}
+          >
+            {preferenceModel ? 'Edit' : 'Add'}
+          </button>
+        </div>
+        <div className={styles.sectionContent}>
+          {preferenceModel ? (
+            <div className={styles.modelCard}>
+              <div className={styles.modelCardHeader}>
+                <span className={styles.modelCardTitle}>Local Preference Classifier</span>
+                <span className={`${styles.statusBadge} ${styles.statusActive}`}>
+                  {preferenceModel.use_cpu ? 'CPU' : 'GPU'}
+                </span>
+              </div>
+              <div className={styles.modelCardBody}>
+                <div className={styles.configRow}>
+                  <span className={styles.configLabel}>Model ID</span>
+                  <span className={styles.configValue}>{preferenceModel.model_id}</span>
+                </div>
+                <div className={styles.configRow}>
+                  <span className={styles.configLabel}>Threshold</span>
+                  <span className={styles.configValue}>{formatThreshold(preferenceModel.threshold || 0)}</span>
+                </div>
+                <div className={styles.configRow}>
+                  <span className={styles.configLabel}>Qwen3</span>
+                  <span className={`${styles.statusBadge} ${preferenceModel.use_qwen3 ? styles.statusActive : styles.statusInactive}`}>
+                    {preferenceModel.use_qwen3 ? '✓ Enabled' : '✗ Disabled'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className={styles.emptyState}>Preference model not configured</div>
           )}
         </div>
       </div>
@@ -2216,10 +2338,17 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
     // Latency
     signals?.latency?.forEach(lat => {
+      const parts: string[] = []
+      if (lat.tpot_percentile) {
+        parts.push(`TPOT: ${lat.tpot_percentile}th percentile`)
+      }
+      if (lat.ttft_percentile) {
+        parts.push(`TTFT: ${lat.ttft_percentile}th percentile`)
+      }
       allSignals.push({
         name: lat.name,
         type: 'Latency',
-        summary: `Max TPOT: ${lat.max_tpot}s`,
+        summary: parts.length > 0 ? parts.join(', ') : 'Latency signal',
         rawData: lat
       })
     })
@@ -2231,6 +2360,18 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         type: 'Context',
         summary: `${ctx.min_tokens} to ${ctx.max_tokens} tokens`,
         rawData: ctx
+      })
+    })
+
+    // Complexity
+    signals?.complexity?.forEach(comp => {
+      const hardCount = comp.hard?.candidates?.length || 0
+      const easyCount = comp.easy?.candidates?.length || 0
+      allSignals.push({
+        name: comp.name,
+        type: 'Complexity',
+        summary: `Threshold: ${comp.threshold}, ${hardCount} hard / ${easyCount} easy candidates`,
+        rawData: comp
       })
     })
 
@@ -2264,7 +2405,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             'User Feedback': 'rgba(236, 72, 153, 0.15)',
             'Language': 'rgba(59, 130, 246, 0.15)',
             'Latency': 'rgba(168, 85, 247, 0.15)',
-            'Context': 'rgba(251, 146, 60, 0.15)'
+            'Context': 'rgba(251, 146, 60, 0.15)',
+            'Complexity': 'rgba(66, 153, 225, 0.15)'
           }
           return (
             <span className={styles.badge} style={{ background: typeColors[row.type] }}>
@@ -2396,9 +2538,81 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         sections.push({
           title: 'Latency Signal',
           fields: [
-            { label: 'Max TPOT', value: signal.rawData.max_tpot ? `${signal.rawData.max_tpot}s (${(signal.rawData.max_tpot * 1000).toFixed(0)}ms per token)` : 'N/A', fullWidth: true },
+            { label: 'TPOT Percentile', value: signal.rawData.tpot_percentile ? `${signal.rawData.tpot_percentile}th percentile` : 'N/A', fullWidth: true },
+            { label: 'TTFT Percentile', value: signal.rawData.ttft_percentile ? `${signal.rawData.ttft_percentile}th percentile` : 'N/A', fullWidth: true },
             { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
           ]
+        })
+      } else if (signal.type === 'Context') {
+        sections.push({
+          title: 'Context Signal',
+          fields: [
+            { label: 'Min Tokens', value: signal.rawData.min_tokens || 'N/A', fullWidth: true },
+            { label: 'Max Tokens', value: signal.rawData.max_tokens || 'N/A', fullWidth: true },
+            { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
+          ]
+        })
+      } else if (signal.type === 'Complexity') {
+        const fields: Array<{ label: string; value: React.ReactNode; fullWidth?: boolean }> = [
+          { label: 'Threshold', value: signal.rawData.threshold?.toString() || 'N/A', fullWidth: true }
+        ]
+
+        // Add composer if present
+        if (signal.rawData.composer) {
+          fields.push({
+            label: 'Composer',
+            value: (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div><strong>Operator:</strong> {signal.rawData.composer.operator}</div>
+                <div><strong>Conditions:</strong></div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginLeft: '1rem' }}>
+                  {signal.rawData.composer.conditions.map((cond: { type: string; name: string }, i: number) => (
+                    <div key={i} style={{
+                      padding: '0.5rem',
+                      background: 'rgba(255, 165, 0, 0.1)',
+                      borderRadius: '4px',
+                      fontSize: '0.875rem',
+                      fontFamily: 'var(--font-mono)'
+                    }}>
+                      {cond.type}: {cond.name}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ),
+            fullWidth: true
+          })
+        }
+
+        fields.push(
+          {
+            label: 'Hard Candidates',
+            value: (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontFamily: 'var(--font-mono)', fontSize: '0.875rem' }}>
+                {(signal.rawData.hard?.candidates || []).map((c: string, i: number) => (
+                  <div key={i}>• {c}</div>
+                ))}
+              </div>
+            ),
+            fullWidth: true
+          },
+          {
+            label: 'Easy Candidates',
+            value: (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontFamily: 'var(--font-mono)', fontSize: '0.875rem' }}>
+                {(signal.rawData.easy?.candidates || []).map((c: string, i: number) => (
+                  <div key={i}>• {c}</div>
+                ))}
+              </div>
+            ),
+            fullWidth: true
+          },
+          { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
+        )
+
+        sections.push({
+          title: 'Complexity Signal',
+          fields
         })
       } else {
         // Preference, Fact Check, User Feedback
@@ -2429,9 +2643,15 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         candidates: '',
         aggregation_method: 'mean',
         mmlu_categories: '',
-        max_tpot: 0.05,
+        tpot_percentile: undefined,
+        ttft_percentile: undefined,
         min_tokens: '0',
-        max_tokens: '8K'
+        max_tokens: '8K',
+        complexity_threshold: 0.1,
+        hard_candidates: '',
+        easy_candidates: '',
+        composer_operator: 'AND',
+        composer_conditions: ''
       }
 
       const initialData: AddSignalFormState = mode === 'edit' && signal ? {
@@ -2445,9 +2665,15 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         candidates: (signal.rawData.candidates || []).join('\n'),
         aggregation_method: signal.rawData.aggregation_method || 'mean',
         mmlu_categories: (signal.rawData.mmlu_categories || []).join('\n'),
-        max_tpot: signal.rawData.max_tpot ?? 0.05,
+        tpot_percentile: signal.rawData.tpot_percentile,
+        ttft_percentile: signal.rawData.ttft_percentile,
         min_tokens: signal.rawData.min_tokens || '0',
-        max_tokens: signal.rawData.max_tokens || '8K'
+        max_tokens: signal.rawData.max_tokens || '8K',
+        complexity_threshold: signal.rawData.threshold ?? 0.1,
+        hard_candidates: (signal.rawData.hard?.candidates || []).join('\n'),
+        easy_candidates: (signal.rawData.easy?.candidates || []).join('\n'),
+        composer_operator: signal.rawData.composer?.operator || 'AND',
+        composer_conditions: signal.rawData.composer?.conditions?.map((c: { type: string; name: string }) => `${c.type}:${c.name}`).join('\n') || ''
       } : defaultForm
 
 
@@ -2518,13 +2744,25 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
       const latencyFields: FieldConfig[] = [
         {
-          name: 'max_tpot',
-          label: 'Max TPOT (latency only)',
+          name: 'tpot_percentile',
+          label: 'TPOT Percentile (latency only)',
           type: 'number',
-          min: 0,
-          step: 0.001,
-          placeholder: '0.05',
-          description: 'Maximum Time Per Output Token in seconds (e.g., 0.05 = 50ms per token)',
+          min: 1,
+          max: 100,
+          step: 1,
+          placeholder: '10',
+          description: 'TPOT (Time Per Output Token) percentile bucket (1-100). Example: 10 = 10th percentile (top 10% fastest TPOT). Works with any number of observations, adapts to model performance. ⚠️ RECOMMENDED: Use both TPOT and TTFT for comprehensive latency evaluation.',
+          shouldHide: conditionallyHideFieldExceptType('Latency')
+        },
+        {
+          name: 'ttft_percentile',
+          label: 'TTFT Percentile (latency only)',
+          type: 'number',
+          min: 1,
+          max: 100,
+          step: 1,
+          placeholder: '10',
+          description: 'TTFT (Time To First Token) percentile bucket (1-100). Example: 10 = 10th percentile (top 10% fastest TTFT). Works with any number of observations, adapts to model performance. ⚠️ RECOMMENDED: Use both TPOT and TTFT for comprehensive latency evaluation. At least one of TPOT or TTFT percentile must be set.',
           shouldHide: conditionallyHideFieldExceptType('Latency')
         }
       ]
@@ -2548,12 +2786,55 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         }
       ]
 
+      const complexityFields: FieldConfig[] = [
+        {
+          name: 'complexity_threshold',
+          label: 'Threshold (complexity only)',
+          type: 'number',
+          placeholder: 'e.g., 0.1',
+          description: 'Similarity difference threshold for hard/easy classification',
+          shouldHide: conditionallyHideFieldExceptType('Complexity')
+        },
+        {
+          name: 'composer_operator',
+          label: 'Composer Operator (complexity only)',
+          type: 'select',
+          options: ['AND', 'OR'],
+          description: 'Logical operator for composer conditions (recommended to filter based on other signals)',
+          shouldHide: conditionallyHideFieldExceptType('Complexity')
+        },
+        {
+          name: 'composer_conditions',
+          label: 'Composer Conditions (complexity only)',
+          type: 'textarea',
+          placeholder: 'One condition per line in format type:name, e.g.:\ndomain:computer_science\nkeyword:coding',
+          description: 'Filter this complexity signal based on other signals (RECOMMENDED). Format: type:name per line',
+          shouldHide: conditionallyHideFieldExceptType('Complexity')
+        },
+        {
+          name: 'hard_candidates',
+          label: 'Hard Candidates (complexity only)',
+          type: 'textarea',
+          placeholder: 'One candidate per line, e.g.:\ndesign distributed system\nimplement consensus algorithm',
+          description: 'Phrases representing hard/complex queries',
+          shouldHide: conditionallyHideFieldExceptType('Complexity')
+        },
+        {
+          name: 'easy_candidates',
+          label: 'Easy Candidates (complexity only)',
+          type: 'textarea',
+          placeholder: 'One candidate per line, e.g.:\nprint hello world\nloop through array',
+          description: 'Phrases representing easy/simple queries',
+          shouldHide: conditionallyHideFieldExceptType('Complexity')
+        }
+      ]
+
       const fields: FieldConfig[] = [
         {
           name: 'type',
           label: 'Type',
           type: 'select',
-          options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Language', 'Latency', 'Context'],
+          options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Language', 'Latency', 'Context', 'Complexity'],
           required: true,
           description: 'Fields are validated based on the selected type.'
         },
@@ -2575,6 +2856,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         ...domainFields,
         ...latencyFields,
         ...contextFields,
+        ...complexityFields,
       ]
 
       const saveSignal = async (formData: AddSignalFormState) => {
@@ -2692,17 +2974,36 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             break
           }
           case 'Latency': {
-            const max_tpot = formData.max_tpot ?? 0.05
-            if (max_tpot <= 0) {
-              throw new Error('Max TPOT must be greater than 0.')
+            const tpot_percentile = formData.tpot_percentile
+            const ttft_percentile = formData.ttft_percentile
+
+            // Validate: at least one of tpot_percentile or ttft_percentile must be set
+            if ((tpot_percentile === undefined || tpot_percentile <= 0) && (ttft_percentile === undefined || ttft_percentile <= 0)) {
+              throw new Error('Either TPOT Percentile or TTFT Percentile must be set for latency signals (or both)')
             }
+            if (tpot_percentile !== undefined && (tpot_percentile < 1 || tpot_percentile > 100)) {
+              throw new Error('TPOT Percentile must be between 1 and 100')
+            }
+            if (ttft_percentile !== undefined && (ttft_percentile < 1 || ttft_percentile > 100)) {
+              throw new Error('TTFT Percentile must be between 1 and 100')
+            }
+
+            const latencySignal: { name: string; description?: string; tpot_percentile?: number; ttft_percentile?: number } = {
+              name,
+            }
+            if (formData.description) {
+              latencySignal.description = formData.description
+            }
+            if (tpot_percentile !== undefined && tpot_percentile > 0) {
+              latencySignal.tpot_percentile = tpot_percentile
+            }
+            if (ttft_percentile !== undefined && ttft_percentile > 0) {
+              latencySignal.ttft_percentile = ttft_percentile
+            }
+
             newConfig.signals.latency = [
               ...(newConfig.signals.latency || []),
-              {
-                name,
-                max_tpot,
-                description: formData.description || undefined
-              }
+              latencySignal
             ]
             break
           }
@@ -2719,6 +3020,66 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                 min_tokens,
                 max_tokens,
                 description: formData.description || undefined
+              }
+            ]
+            break
+          }
+          case 'Complexity': {
+            const complexity_threshold = formData.complexity_threshold ?? 0.1
+            const hard_candidates = (formData.hard_candidates || '').trim()
+            const easy_candidates = (formData.easy_candidates || '').trim()
+
+            if (!hard_candidates || !easy_candidates) {
+              throw new Error('Both hard and easy candidates are required.')
+            }
+
+            const hardList = hard_candidates.split('\n').map(c => c.trim()).filter(c => c.length > 0)
+            const easyList = easy_candidates.split('\n').map(c => c.trim()).filter(c => c.length > 0)
+
+            if (hardList.length === 0 || easyList.length === 0) {
+              throw new Error('Both hard and easy candidates must have at least one entry.')
+            }
+
+            // Parse composer conditions if provided
+            const composer_conditions_str = (formData.composer_conditions || '').trim()
+            let composer = undefined
+            if (composer_conditions_str) {
+              const conditions = composer_conditions_str
+                .split('\n')
+                .map(line => line.trim())
+                .filter(line => line.length > 0)
+                .map(line => {
+                  const parts = line.split(':')
+                  if (parts.length !== 2) {
+                    throw new Error(`Invalid composer condition format: "${line}". Expected format: type:name`)
+                  }
+                  return {
+                    type: parts[0].trim(),
+                    name: parts[1].trim()
+                  }
+                })
+
+              if (conditions.length > 0) {
+                composer = {
+                  operator: formData.composer_operator || 'AND',
+                  conditions
+                }
+              }
+            }
+
+            newConfig.signals.complexity = [
+              ...(newConfig.signals.complexity || []),
+              {
+                name,
+                threshold: complexity_threshold,
+                hard: {
+                  candidates: hardList
+                },
+                easy: {
+                  candidates: easyList
+                },
+                description: formData.description || undefined,
+                ...(composer && { composer })
               }
             ]
             break
@@ -3556,7 +3917,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                 <tr key={idx} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
                   <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem', fontWeight: 500 }}>{ep.name}</td>
                   <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem', fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)' }}>
-                    {ep.endpoint || 'N/A'}
+                    {isReadonly ? '************' : (ep.endpoint || 'N/A')}
                   </td>
                   <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
                     <span style={{
@@ -3631,7 +3992,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                           color: 'var(--color-text-secondary)'
                         }}>
                           <span style={{ fontFamily: 'var(--font-mono)' }}>
-                            {ep.endpoint}
+                            {isReadonly ? '************' : ep.endpoint}
                           </span>
                           <span>
                             <span style={{
@@ -4186,6 +4547,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       {/* Classifier */}
       {renderClassifyBERT()}
 
+      {/* Preference Model */}
+      {renderPreferenceModel()}
+
       {/* Tools */}
       {renderToolsConfiguration()}
       {renderToolsDB()}
@@ -4211,6 +4575,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         return renderModelsSection()
       case 'router-config':
         return renderRouterConfigSection()
+      case 'mcp':
+        return <MCPConfigPanel />
       default:
         return renderSignalsSection()
     }

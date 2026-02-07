@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httputil"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -198,7 +199,7 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	mux.HandleFunc("/api/tools/web-search", handlers.WebSearchHandler())
 	log.Printf("Web Search API endpoint registered: /api/tools/web-search")
 
-	// Open Web endpoint for Playground tool execution (避免CORS问题)
+	// Open Web endpoint for Playground tool execution (avoid CORS issues)
 	mux.HandleFunc("/api/tools/open-web", handlers.OpenWebHandler())
 	log.Printf("Open Web API endpoint registered: /api/tools/open-web")
 
@@ -217,13 +218,25 @@ func Setup(cfg *config.Config) *http.ServeMux {
 
 	// Evaluation endpoints (if enabled)
 	if cfg.EvaluationEnabled {
-		// Get project root (one level up from config dir, e.g., /path/to/semantic-router-fork/config -> /path/to/semantic-router-fork)
+		// Register datasets endpoint first - it doesn't require DB and returns static data
+		// This ensures datasets are always available even if DB initialization fails
+		mux.HandleFunc("/api/evaluation/datasets", handlers.GetDatasetsHandler())
+		log.Printf("Evaluation datasets endpoint registered: /api/evaluation/datasets")
+
+		// Get project root for evaluation benchmarks
+		// In local dev: config is in config/config.yaml, so project root is one level up
+		// In container: config is at /app/config.yaml, and bench is at /app/bench
 		projectRoot := filepath.Dir(cfg.ConfigDir)
+		// Check if bench directory exists in ConfigDir (container case)
+		if _, err := os.Stat(filepath.Join(cfg.ConfigDir, "bench")); err == nil {
+			projectRoot = cfg.ConfigDir
+		}
+		log.Printf("Evaluation project root: %s", projectRoot)
 
 		// Initialize evaluation database
 		evalDB, err := evaluation.NewDB(cfg.EvaluationDBPath)
 		if err != nil {
-			log.Printf("Warning: failed to initialize evaluation database: %v", err)
+			log.Printf("Warning: failed to initialize evaluation database: %v (other evaluation endpoints disabled)", err)
 		} else {
 			// Initialize evaluation runner
 			runner := evaluation.NewRunner(evaluation.RunnerConfig{
@@ -231,13 +244,13 @@ func Setup(cfg *config.Config) *http.ServeMux {
 				ProjectRoot:   projectRoot,
 				PythonPath:    cfg.PythonPath,
 				ResultsDir:    cfg.EvaluationResultsDir,
-				MaxConcurrent: 3,
+				MaxConcurrent: 10,
 			})
 
 			// Create evaluation handler
-			evalHandler := handlers.NewEvaluationHandler(evalDB, runner, cfg.ReadonlyMode)
+			evalHandler := handlers.NewEvaluationHandler(evalDB, runner, cfg.ReadonlyMode, cfg.RouterAPIURL, cfg.EnvoyURL)
 
-			// Register evaluation endpoints
+			// Register evaluation endpoints that require the database
 			// /api/evaluation/tasks - GET for list, POST for create
 			mux.HandleFunc("/api/evaluation/tasks", func(w http.ResponseWriter, r *http.Request) {
 				if middleware.HandleCORSPreflight(w, r) {
@@ -271,13 +284,15 @@ func Setup(cfg *config.Config) *http.ServeMux {
 			mux.HandleFunc("/api/evaluation/stream/", evalHandler.StreamProgressHandler())
 			mux.HandleFunc("/api/evaluation/results/", evalHandler.GetResultsHandler())
 			mux.HandleFunc("/api/evaluation/export/", evalHandler.ExportResultsHandler())
-			mux.HandleFunc("/api/evaluation/datasets", evalHandler.GetDatasetsHandler())
 			mux.HandleFunc("/api/evaluation/history", evalHandler.GetHistoryHandler())
 			log.Printf("Evaluation API endpoints registered: /api/evaluation/*")
 		}
 	} else {
 		log.Printf("Evaluation feature disabled")
 	}
+
+	// MCP endpoints (if enabled)
+	SetupMCP(mux, cfg)
 
 	// Envoy proxy for chat completions (if configured)
 	// Chat completions must go through Envoy's ext_proc pipeline
@@ -313,6 +328,17 @@ func Setup(cfg *config.Config) *http.ServeMux {
 				// Strip /api/router prefix and forward to Envoy
 				r.URL.Path = strings.TrimPrefix(r.URL.Path, "/api/router")
 				log.Printf("Proxying chat completions to Envoy: %s %s", r.Method, r.URL.Path)
+				if middleware.HandleCORSPreflight(w, r) {
+					return
+				}
+				envoyProxy.ServeHTTP(w, r)
+				return
+			}
+			// Route router_replay to Envoy proxy
+			if envoyProxy != nil && strings.HasPrefix(r.URL.Path, "/api/router/v1/router_replay") {
+				// Strip /api/router prefix and forward to Envoy
+				r.URL.Path = strings.TrimPrefix(r.URL.Path, "/api/router")
+				log.Printf("Proxying router_replay to Envoy: %s %s", r.Method, r.URL.Path)
 				if middleware.HandleCORSPreflight(w, r) {
 					return
 				}

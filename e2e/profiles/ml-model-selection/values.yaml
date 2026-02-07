@@ -1,0 +1,363 @@
+# ML Model Selection E2E Profile Values
+# This deploys semantic-router with ML-based model selection enabled
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/vllm-project/semantic-router/extproc
+  pullPolicy: Never
+  tag: "e2e-test"
+
+service:
+  type: ClusterIP
+  port: 8080
+
+# Configuration for ML-based model selection
+config:
+  # Model Selection Configuration
+  model_selection:
+    enabled: true
+    ml:
+      models_path: "/tmp/ml-models"
+      embedding_dim: 1024  # Qwen3-Embedding-0.6B outputs 1024-dim
+      knn:
+        k: 5
+        pretrained_path: "/tmp/ml-models/knn_model.json"
+      kmeans:
+        num_clusters: 8
+        efficiency_weight: 0.1
+        pretrained_path: "/tmp/ml-models/kmeans_model.json"
+      svm:
+        kernel: "rbf"
+        gamma: 1.0
+        pretrained_path: "/tmp/ml-models/svm_model.json"
+
+  # Classifier configuration
+  classifier:
+    category_model:
+      model_id: "models/mom-domain-classifier"
+      threshold: 0.6
+      use_cpu: true
+      category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
+    pii_model:
+      model_id: "models/mom-pii-classifier"
+      use_modernbert: false
+      threshold: 0.9
+      use_cpu: true
+      pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
+
+  # Embedding Models Configuration
+  embedding_models:
+    qwen3_model_path: "models/mom-embedding-pro"
+    use_cpu: true
+
+  # vLLM Endpoints - Mock LLM for testing
+  vllm_endpoints:
+    - name: "mock-llm"
+      address: "mock-llm-service.default.svc.cluster.local"
+      port: 8000
+      type: "vllm"
+      weight: 1
+
+  # Model configurations matching training data
+  model_config:
+    "llama-3.2-1b":
+      preferred_endpoints: ["mock-llm"]
+      external_model_ids:
+        mock-llm: "llama-3.2-1b"
+    "llama-3.2-3b":
+      preferred_endpoints: ["mock-llm"]
+      external_model_ids:
+        mock-llm: "llama-3.2-3b"
+    "codellama-7b":
+      preferred_endpoints: ["mock-llm"]
+      external_model_ids:
+        mock-llm: "codellama-7b"
+    "mistral-7b":
+      preferred_endpoints: ["mock-llm"]
+      external_model_ids:
+        mock-llm: "mistral-7b"
+
+  # Categories - must match VSRCategories exactly (14 categories)
+  # "biology", "business", "chemistry", "computer science",
+  # "economics", "engineering", "health", "history",
+  # "law", "math", "other", "philosophy", "physics", "psychology"
+  categories:
+    - name: "math"
+      description: "Mathematics and quantitative reasoning"
+    - name: "computer science"
+      description: "Computer science and programming"
+    - name: "physics"
+      description: "Physics and physical sciences"
+    - name: "chemistry"
+      description: "Chemistry and chemical sciences"
+    - name: "biology"
+      description: "Biology and life sciences"
+    - name: "health"
+      description: "Health and medical sciences"
+    - name: "engineering"
+      description: "Engineering disciplines"
+    - name: "economics"
+      description: "Economics and finance"
+    - name: "business"
+      description: "Business and management"
+    - name: "history"
+      description: "History and historical events"
+    - name: "law"
+      description: "Law and legal matters"
+    - name: "philosophy"
+      description: "Philosophy and ethics"
+    - name: "psychology"
+      description: "Psychology and behavioral science"
+    - name: "other"
+      description: "General knowledge and miscellaneous"
+
+  strategy: "priority"
+
+  # Decisions with ML-based model selection
+  # Domain names MUST match VSRCategories exactly (with spaces, not underscores)
+  decisions:
+    - name: "math_decision"
+      description: "Mathematics queries"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "math"
+      algorithm:
+        type: "knn"
+        knn:
+          k: 5
+      modelRefs:
+        - model: "llama-3.2-1b"
+          use_reasoning: false
+        - model: "llama-3.2-3b"
+          use_reasoning: false
+        - model: "codellama-7b"
+          use_reasoning: false
+        - model: "mistral-7b"
+          use_reasoning: false
+
+    - name: "code_decision"
+      description: "Programming queries"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "computer science"
+      algorithm:
+        type: "svm"
+        svm:
+          kernel: "rbf"
+      modelRefs:
+        - model: "llama-3.2-1b"
+          use_reasoning: false
+        - model: "llama-3.2-3b"
+          use_reasoning: false
+        - model: "codellama-7b"
+          use_reasoning: false
+        - model: "mistral-7b"
+          use_reasoning: false
+
+    - name: "science_decision"
+      description: "Science queries (physics, chemistry, biology)"
+      priority: 100
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "physics"
+          - type: "domain"
+            name: "chemistry"
+          - type: "domain"
+            name: "biology"
+      algorithm:
+        type: "kmeans"
+        kmeans:
+          num_clusters: 4
+      modelRefs:
+        - model: "llama-3.2-1b"
+          use_reasoning: false
+        - model: "llama-3.2-3b"
+          use_reasoning: false
+        - model: "codellama-7b"
+          use_reasoning: false
+        - model: "mistral-7b"
+          use_reasoning: false
+
+    - name: "health_decision"
+      description: "Health and medical queries"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "health"
+      algorithm:
+        type: "knn"
+        knn:
+          k: 5
+      modelRefs:
+        - model: "llama-3.2-1b"
+          use_reasoning: false
+        - model: "llama-3.2-3b"
+          use_reasoning: false
+        - model: "codellama-7b"
+          use_reasoning: false
+        - model: "mistral-7b"
+          use_reasoning: false
+
+    - name: "engineering_decision"
+      description: "Engineering queries"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "engineering"
+      algorithm:
+        type: "svm"
+        svm:
+          kernel: "rbf"
+      modelRefs:
+        - model: "llama-3.2-1b"
+          use_reasoning: false
+        - model: "llama-3.2-3b"
+          use_reasoning: false
+        - model: "codellama-7b"
+          use_reasoning: false
+        - model: "mistral-7b"
+          use_reasoning: false
+
+    - name: "business_decision"
+      description: "Business and economics queries"
+      priority: 100
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "business"
+          - type: "domain"
+            name: "economics"
+      algorithm:
+        type: "knn"
+        knn:
+          k: 3
+      modelRefs:
+        - model: "llama-3.2-1b"
+          use_reasoning: false
+        - model: "llama-3.2-3b"
+          use_reasoning: false
+        - model: "codellama-7b"
+          use_reasoning: false
+        - model: "mistral-7b"
+          use_reasoning: false
+
+    - name: "humanities_decision"
+      description: "History, philosophy, psychology, law queries"
+      priority: 100
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "history"
+          - type: "domain"
+            name: "philosophy"
+          - type: "domain"
+            name: "psychology"
+          - type: "domain"
+            name: "law"
+      algorithm:
+        type: "knn"
+        knn:
+          k: 3
+      modelRefs:
+        - model: "llama-3.2-1b"
+          use_reasoning: false
+        - model: "llama-3.2-3b"
+          use_reasoning: false
+        - model: "codellama-7b"
+          use_reasoning: false
+        - model: "mistral-7b"
+          use_reasoning: false
+
+    - name: "general_decision"
+      description: "Catch-all for any domain (lowest priority)"
+      priority: 1  # Lowest priority - only matches if no other decision matched
+      rules:
+        operator: "OR"
+        conditions:
+          # Match ALL 14 VSR domains - this is a true catch-all
+          - type: "domain"
+            name: "math"
+          - type: "domain"
+            name: "computer science"
+          - type: "domain"
+            name: "physics"
+          - type: "domain"
+            name: "chemistry"
+          - type: "domain"
+            name: "biology"
+          - type: "domain"
+            name: "health"
+          - type: "domain"
+            name: "engineering"
+          - type: "domain"
+            name: "economics"
+          - type: "domain"
+            name: "business"
+          - type: "domain"
+            name: "history"
+          - type: "domain"
+            name: "law"
+          - type: "domain"
+            name: "philosophy"
+          - type: "domain"
+            name: "psychology"
+          - type: "domain"
+            name: "other"
+      algorithm:
+        type: "knn"
+        knn:
+          k: 3
+      modelRefs:
+        - model: "llama-3.2-1b"
+          use_reasoning: false
+        - model: "llama-3.2-3b"
+          use_reasoning: false
+        - model: "codellama-7b"
+          use_reasoning: false
+        - model: "mistral-7b"
+          use_reasoning: false
+
+  default_model: "mistral-7b"
+
+  # Observability
+  observability:
+    metrics:
+      enabled: true
+    tracing:
+      enabled: false
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 8Gi
+  requests:
+    cpu: 500m
+    memory: 2Gi
+
+# Mount ML models from host via Kind's extraMounts
+# Using /tmp which is writable without sudo
+extraVolumes:
+  - name: ml-models
+    hostPath:
+      path: /tmp/ml-models
+      type: DirectoryOrCreate
+
+extraVolumeMounts:
+  - name: ml-models
+    mountPath: /tmp/ml-models
+    readOnly: true

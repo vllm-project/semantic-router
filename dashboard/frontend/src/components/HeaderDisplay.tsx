@@ -78,6 +78,10 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
     label: 'Context Count',
     type: 'info',
   },
+  'x-vsr-matched-complexity': {
+    label: 'Complexity',
+    type: 'info',
+  },
   // Looper headers
   'x-vsr-looper-models-used': {
     label: 'Collaborative Models',

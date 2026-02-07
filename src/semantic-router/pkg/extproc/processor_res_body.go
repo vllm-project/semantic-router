@@ -23,10 +23,15 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	// Decrement active request count for queue depth estimation
 	defer metrics.DecrementModelActiveRequests(ctx.RequestModel)
 
-	// If this is a looper internal request, skip all processing and just continue
+	// If this is a looper internal request, capture response body for router replay and continue
 	// The response will be handled by the looper client directly
 	if ctx.LooperRequest {
-		logging.Debugf("[Looper] Skipping response body processing for internal request")
+		logging.Debugf("[Looper] Capturing response body for router replay")
+
+		// Capture response body for router replay if enabled
+		responseBody := v.ResponseBody.Body
+		r.attachRouterReplayResponse(ctx, responseBody, true)
+
 		return &ext_proc.ProcessingResponse{
 			Response: &ext_proc.ProcessingResponse_ResponseBody{
 				ResponseBody: &ext_proc.BodyResponse{
@@ -65,7 +70,9 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 				metrics.RecordModelTTFT(ctx.RequestModel, ttft)
 				ctx.TTFTSeconds = ttft
 				ctx.TTFTRecorded = true
-				logging.Infof("Recorded TTFT on first streamed body chunk: %.3fs", ttft)
+				// Update TTFT cache for latency signal evaluation
+				classification.UpdateTTFT(ctx.RequestModel, ttft)
+				logging.Debugf("Recorded TTFT on first streamed body chunk: model=%q, TTFT=%.4fs", ctx.RequestModel, ttft)
 			}
 		}
 
@@ -294,6 +301,9 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 			},
 		}
 	}
+
+	// Update router replay with hallucination detection results if enabled
+	r.updateRouterReplayHallucinationStatus(ctx)
 
 	// Capture replay response payload if enabled
 	r.attachRouterReplayResponse(ctx, finalBody, true)

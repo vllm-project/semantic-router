@@ -86,7 +86,8 @@ export interface LanguageSignal {
 
 export interface LatencySignal {
   name: string
-  max_tpot: number
+  tpot_percentile?: number
+  ttft_percentile?: number
   description?: string
 }
 
@@ -95,6 +96,27 @@ export interface ContextSignal {
   min_tokens: string
   max_tokens: string
   description?: string
+}
+
+export interface ComplexityCandidates {
+  candidates: string[]
+}
+
+export interface RuleComposer {
+  operator: 'AND' | 'OR'
+  conditions: Array<{
+    type: string
+    name: string
+  }>
+}
+
+export interface ComplexitySignal {
+  name: string
+  threshold: number
+  hard: ComplexityCandidates
+  easy: ComplexityCandidates
+  description?: string
+  composer?: RuleComposer
 }
 
 export interface Signals {
@@ -107,6 +129,7 @@ export interface Signals {
   language?: LanguageSignal[]
   latency?: LatencySignal[]
   context?: ContextSignal[]
+  complexity?: ComplexitySignal[]
 }
 
 // =============================================================================
@@ -114,7 +137,7 @@ export interface Signals {
 // =============================================================================
 
 
-export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'latency' | 'context'
+export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'latency' | 'context' | 'complexity'
 export interface DecisionCondition {
   type: DecisionConditionType
   name: string
@@ -131,7 +154,7 @@ export interface ModelRef {
 }
 
 export interface PluginConfig {
-  type: 'system_prompt' | 'semantic-cache' | 'pii' | 'hallucination'
+  type: 'system_prompt' | 'semantic-cache' | 'pii' | 'hallucination' | 'jailbreak' | 'header_mutation' | 'router_replay'
   configuration: Record<string, any>
 }
 

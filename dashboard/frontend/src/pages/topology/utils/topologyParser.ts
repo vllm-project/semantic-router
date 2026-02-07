@@ -280,7 +280,8 @@ function extractSignals(config: ConfigData): SignalConfig[] {
       description: rule.description,
       latency: SIGNAL_LATENCY.latency,
       config: {
-        max_tpot: rule.max_tpot,
+        tpot_percentile: rule.tpot_percentile,
+        ttft_percentile: rule.ttft_percentile,
       },
     })
   })
@@ -292,7 +293,8 @@ function extractSignals(config: ConfigData): SignalConfig[] {
       description: rule.description,
       latency: SIGNAL_LATENCY.latency,
       config: {
-        max_tpot: rule.max_tpot,
+        tpot_percentile: rule.tpot_percentile,
+        ttft_percentile: rule.ttft_percentile,
       },
     })
   })
@@ -319,6 +321,36 @@ function extractSignals(config: ConfigData): SignalConfig[] {
       config: {
         min_tokens: rule.min_tokens,
         max_tokens: rule.max_tokens,
+      },
+    })
+  })
+
+  // 10. Complexity Rules
+  // From complexity_rules (Go/Router format)
+  config.complexity_rules?.forEach(rule => {
+    addSignal({
+      type: 'complexity',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.complexity,
+      config: {
+        threshold: rule.threshold,
+        hard: rule.hard,
+        easy: rule.easy,
+      },
+    })
+  })
+  // From signals.complexity (Python CLI format)
+  config.signals?.complexity?.forEach(rule => {
+    addSignal({
+      type: 'complexity',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.complexity,
+      config: {
+        threshold: rule.threshold,
+        hard: rule.hard,
+        easy: rule.easy,
       },
     })
   })
@@ -483,6 +515,7 @@ export function groupSignalsByType(signals: SignalConfig[]): Record<SignalType, 
     language: [],
     latency: [],
     context: [],
+    complexity: [],
   }
 
   signals.forEach(signal => {

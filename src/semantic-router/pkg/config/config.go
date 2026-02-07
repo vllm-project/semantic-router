@@ -38,6 +38,7 @@ const (
 	SignalTypeLanguage     = "language"
 	SignalTypeLatency      = "latency"
 	SignalTypeContext      = "context"
+	SignalTypeComplexity   = "complexity"
 )
 
 // API format constants for model backends
@@ -185,6 +186,9 @@ type ModelSelectionConfig struct {
 	// Default: "static" (uses static scores from configuration)
 	Method string `yaml:"method,omitempty"`
 
+	// Enabled indicates if model selection is enabled
+	Enabled bool `yaml:"enabled,omitempty"`
+
 	// Elo configuration for Elo rating-based selection
 	Elo EloSelectionConfig `yaml:"elo,omitempty"`
 
@@ -196,6 +200,47 @@ type ModelSelectionConfig struct {
 
 	// Hybrid configuration for combined selection methods
 	Hybrid HybridSelectionConfig `yaml:"hybrid,omitempty"`
+
+	// ML configuration for ML-based selection (KNN, KMeans, SVM)
+	ML MLSelectionConfig `yaml:"ml,omitempty"`
+}
+
+// MLSelectionConfig holds configuration for all ML-based selectors
+type MLSelectionConfig struct {
+	// ModelsPath is the base path for pretrained model files
+	ModelsPath string `yaml:"models_path,omitempty"`
+
+	// EmbeddingDim is the embedding dimension (default: 1024 for Qwen3)
+	EmbeddingDim int `yaml:"embedding_dim,omitempty"`
+
+	// KNN configuration
+	KNN MLKNNConfig `yaml:"knn,omitempty"`
+
+	// KMeans configuration
+	KMeans MLKMeansConfig `yaml:"kmeans,omitempty"`
+
+	// SVM configuration
+	SVM MLSVMConfig `yaml:"svm,omitempty"`
+}
+
+// MLKNNConfig holds KNN-specific configuration
+type MLKNNConfig struct {
+	K              int    `yaml:"k,omitempty"`
+	PretrainedPath string `yaml:"pretrained_path,omitempty"`
+}
+
+// MLKMeansConfig holds KMeans-specific configuration
+type MLKMeansConfig struct {
+	NumClusters      int     `yaml:"num_clusters,omitempty"`
+	EfficiencyWeight float64 `yaml:"efficiency_weight,omitempty"`
+	PretrainedPath   string  `yaml:"pretrained_path,omitempty"`
+}
+
+// MLSVMConfig holds SVM-specific configuration
+type MLSVMConfig struct {
+	Kernel         string  `yaml:"kernel,omitempty"`
+	Gamma          float64 `yaml:"gamma,omitempty"`
+	PretrainedPath string  `yaml:"pretrained_path,omitempty"`
 }
 
 // EloSelectionConfig configures Elo rating-based model selection
@@ -328,6 +373,10 @@ type Signals struct {
 	// Context rules for token count-based classification
 	// When matched, outputs the rule name (e.g., "low_token_count", "high_token_count")
 	ContextRules []ContextRule `yaml:"context_rules,omitempty"`
+
+	// Complexity rules for complexity-based classification using embedding similarity
+	// When matched, outputs the rule name with difficulty level (e.g., "code_complexity:hard", "math_complexity:easy")
+	ComplexityRules []ComplexityRule `yaml:"complexity_rules,omitempty"`
 }
 
 // BackendModels represents the configuration for backend models
@@ -358,6 +407,8 @@ type Classifier struct {
 	MCPCategoryModel `yaml:"mcp_category_model,omitempty"`
 	// PII detection model
 	PIIModel `yaml:"pii_model"`
+	// Preference model configuration for local preference classification
+	PreferenceModel PreferenceModelConfig `yaml:"preference_model,omitempty"`
 }
 
 type BertModel struct {
@@ -371,6 +422,7 @@ type CategoryModel struct {
 	Threshold           float32 `yaml:"threshold"`
 	UseCPU              bool    `yaml:"use_cpu"`
 	UseModernBERT       bool    `yaml:"use_modernbert"`
+	UseMmBERT32K        bool    `yaml:"use_mmbert_32k"` // Use mmBERT-32K (YaRN, 32K context) instead of ModernBERT
 	CategoryMappingPath string  `yaml:"category_mapping_path"`
 	// FallbackCategory is returned when classification confidence is below threshold.
 	// Default is "other" if not specified.
@@ -381,6 +433,7 @@ type PIIModel struct {
 	ModelID        string  `yaml:"model_id"`
 	Threshold      float32 `yaml:"threshold"`
 	UseCPU         bool    `yaml:"use_cpu"`
+	UseMmBERT32K   bool    `yaml:"use_mmbert_32k"` // Use mmBERT-32K (YaRN, 32K context) for PII detection
 	PIIMappingPath string  `yaml:"pii_mapping_path"`
 }
 
@@ -389,6 +442,9 @@ type EmbeddingModels struct {
 	Qwen3ModelPath string `yaml:"qwen3_model_path"`
 	// Path to EmbeddingGemma-300M model directory
 	GemmaModelPath string `yaml:"gemma_model_path"`
+	// Path to mmBERT 2D Matryoshka embedding model directory
+	// Supports layer early exit (3/6/11/22 layers) and dimension reduction (64-768)
+	MmBertModelPath string `yaml:"mmbert_model_path"`
 	// Use CPU for inference (default: true, auto-detect GPU if available)
 	UseCPU bool `yaml:"use_cpu"`
 
@@ -403,7 +459,7 @@ type EmbeddingModels struct {
 // This struct is kept for backward compatibility and may be renamed in a future version.
 type HNSWConfig struct {
 	// ModelType specifies which embedding model to use (default: "qwen3")
-	// Options: "qwen3" (high quality, 32K context) or "gemma" (fast, 8K context)
+	// Options: "qwen3" (high quality, 32K context), "gemma" (fast, 8K context), or "mmbert" (multilingual, 2D Matryoshka)
 	// This model will be used for both preloading and runtime embedding generation
 	ModelType string `yaml:"model_type,omitempty"`
 
@@ -413,8 +469,13 @@ type HNSWConfig struct {
 	PreloadEmbeddings bool `yaml:"preload_embeddings"`
 
 	// TargetDimension is the embedding dimension to use (default: 768)
-	// Supports Matryoshka dimensions: 768, 512, 256, 128
+	// Supports Matryoshka dimensions: 768, 512, 256, 128, 64
 	TargetDimension int `yaml:"target_dimension,omitempty"`
+
+	// TargetLayer is the layer for mmBERT early exit (default: 0 = full model)
+	// Only used when ModelType is "mmbert"
+	// Options: 3 (fastest, ~7x speedup), 6 (~3.6x), 11 (~2x), 22 (full model)
+	TargetLayer int `yaml:"target_layer,omitempty"`
 
 	// EnableSoftMatching enables soft matching mode (default: true)
 	// When enabled, if no rule meets its threshold, returns the rule with highest score
@@ -733,6 +794,17 @@ type KeywordRule struct {
 	Operator      string   `yaml:"operator"`
 	Keywords      []string `yaml:"keywords"`
 	CaseSensitive bool     `yaml:"case_sensitive"`
+
+	// FuzzyMatch enables approximate string matching using Levenshtein distance.
+	// When enabled, keywords will match even with typos (e.g., "urgnt" matches "urgent").
+	// Default: false (exact matching only)
+	FuzzyMatch bool `yaml:"fuzzy_match,omitempty"`
+
+	// FuzzyThreshold sets the maximum Levenshtein distance for fuzzy matching.
+	// Lower values = stricter matching (1-2 recommended for short words, 2-3 for longer).
+	// Only used when FuzzyMatch is true.
+	// Default: 2
+	FuzzyThreshold int `yaml:"fuzzy_threshold,omitempty"`
 }
 
 // Aggregation method used in keyword embedding rule
@@ -905,12 +977,16 @@ type PromptGuardConfig struct {
 	// Ignored when use_vllm is true
 	UseModernBERT bool `yaml:"use_modernbert"`
 
+	// Use mmBERT-32K for jailbreak detection (32K context, YaRN RoPE, multilingual)
+	// Takes precedence over UseModernBERT when both are true
+	UseMmBERT32K bool `yaml:"use_mmbert_32k"`
+
 	// Path to the jailbreak type mapping file
 	JailbreakMappingPath string `yaml:"jailbreak_mapping_path"`
 
 	// Use vLLM REST API instead of Candle for guardrail/safety checks
 	// When true, vLLM configuration must be provided in external_models with model_role="guardrail"
-	// When false (default), uses Candle-based classification with ModelID, UseCPU, and UseModernBERT
+	// When false (default), uses Candle-based classification with ModelID, UseCPU, and UseModernBERT/UseMmBERT32K
 	UseVLLM bool `yaml:"use_vllm,omitempty"`
 }
 
@@ -933,8 +1009,29 @@ type FeedbackDetectorConfig struct {
 	// Use ModernBERT for feedback detection (Candle ModernBERT flag)
 	UseModernBERT bool `yaml:"use_modernbert"`
 
+	// Use mmBERT-32K for feedback detection (32K context, YaRN RoPE, multilingual)
+	// Takes precedence over UseModernBERT when both are true
+	UseMmBERT32K bool `yaml:"use_mmbert_32k"`
+
 	// Path to the feedback type mapping file
 	FeedbackMappingPath string `yaml:"feedback_mapping_path"`
+}
+
+// PreferenceModelConfig represents configuration for local (Candle) preference classification
+// This enables running the preference classifier without an external vLLM endpoint.
+type PreferenceModelConfig struct {
+	// Model ID/path for the preference classification model (Candle model path)
+	ModelID string `yaml:"model_id"`
+
+	// Confidence threshold for accepting the predicted preference (0.0-1.0)
+	// If 0, no thresholding is applied.
+	Threshold float32 `yaml:"threshold,omitempty"`
+
+	// Use CPU for inference (Candle CPU flag)
+	UseCPU bool `yaml:"use_cpu"`
+
+	// Use Qwen3 preference classifier (zero-shot / fine-tuned)
+	UseQwen3 bool `yaml:"use_qwen3"`
 }
 
 // ExternalModelConfig represents configuration for external LLM-based models
@@ -1057,6 +1154,9 @@ type FactCheckModelConfig struct {
 
 	// Use CPU for inference
 	UseCPU bool `yaml:"use_cpu"`
+
+	// Use mmBERT-32K for fact-check classification (32K context, YaRN RoPE, multilingual)
+	UseMmBERT32K bool `yaml:"use_mmbert_32k"`
 }
 
 // HallucinationModelConfig represents configuration for hallucination detection model
@@ -1153,6 +1253,17 @@ type VLLMEndpoint struct {
 
 	// Load balancing weight for this endpoint
 	Weight int `yaml:"weight,omitempty"`
+
+	// Type of endpoint API: "vllm" (default), "openai", "ollama", "huggingface", "openrouter"
+	// This determines how requests are formatted and which API format to use
+	// +optional
+	// +kubebuilder:default=vllm
+	Type string `yaml:"type,omitempty"`
+
+	// API key for authenticated endpoints (HuggingFace, OpenRouter, etc.)
+	// Can also be set via environment variables: HF_API_KEY, OPENROUTER_API_KEY
+	// +optional
+	APIKey string `yaml:"api_key,omitempty"`
 }
 
 // ModelPricing represents configuration for model-specific parameters
@@ -1209,6 +1320,12 @@ type ModelParams struct {
 	// Default: 0.8 if not specified
 	// Example: 0.95 for a high-quality model, 0.6 for a fast but less capable model
 	QualityScore float64 `yaml:"quality_score,omitempty"`
+
+	// ExternalModelIDs maps endpoint types to their model identifiers
+	// This allows mapping the internal model name to different external model IDs
+	// Example: {"huggingface": "meta-llama/Llama-3.1-8B-Instruct", "ollama": "llama3.1:8b"}
+	// +optional
+	ExternalModelIDs map[string]string `yaml:"external_model_ids,omitempty"`
 }
 
 // LoRAAdapter represents a LoRA adapter configuration for a model
@@ -1286,7 +1403,12 @@ type Decision struct {
 	// Rules defines the combination of keyword/embedding/domain rules using AND/OR logic
 	Rules RuleCombination `yaml:"rules"`
 
-	// ModelRefs contains model references for this decision (currently only supports one model)
+	// ModelSelectionAlgorithm configures how to select from multiple models in ModelRefs
+	// If not specified, defaults to selecting the first model
+	ModelSelectionAlgorithm *ModelSelectionConfig `yaml:"modelSelectionAlgorithm,omitempty"`
+
+	// ModelRefs contains model references for this decision
+	// When multiple models are specified, ModelSelectionAlgorithm determines which to use
 	ModelRefs []ModelRef `yaml:"modelRefs,omitempty"`
 
 	// Algorithm defines the multi-model execution strategy when multiple ModelRefs are configured.
@@ -1303,6 +1425,7 @@ type AlgorithmConfig struct {
 	// Looper algorithms (multi-model execution):
 	// - "confidence": Try smaller models first, escalate to larger models if confidence is low
 	// - "ratings": Execute all models concurrently and return multiple choices for comparison
+	// - "remom": Multi-round parallel reasoning with intelligent synthesis (Reasoning for Mixture of Models)
 	// Selection algorithms (single model selection from candidates):
 	// - "static": Use static scores from configuration (default)
 	// - "elo": Use Elo rating system with Bradley-Terry model
@@ -1314,6 +1437,7 @@ type AlgorithmConfig struct {
 	// Looper algorithm configurations (for multi-model execution)
 	Confidence *ConfidenceAlgorithmConfig `yaml:"confidence,omitempty"`
 	Ratings    *RatingsAlgorithmConfig    `yaml:"ratings,omitempty"`
+	ReMoM      *ReMoMAlgorithmConfig      `yaml:"remom,omitempty"`
 
 	// Selection algorithm configurations (for single model selection)
 	// These align with the global ModelSelectionConfig but can be overridden per-decision
@@ -1387,6 +1511,102 @@ type RatingsAlgorithmConfig struct {
 	// - "skip": Skip the failed model and return remaining results (default)
 	// - "fail": Return error if any model fails
 	OnError string `yaml:"on_error,omitempty"`
+}
+
+// ReMoMAlgorithmConfig configures the ReMoM (Reasoning for Mixture of Models) algorithm
+// This algorithm performs multi-round parallel reasoning with intelligent synthesis
+// Inspired by PaCoRe (arXiv:2601.05593) but extended to support mixture of models
+type ReMoMAlgorithmConfig struct {
+	// BreadthSchedule defines the number of parallel calls per round
+	// The final round (K=1) is automatically appended
+	// Examples:
+	//   [4]      -> Low intensity: 2 rounds (4 → 1)
+	//   [16]     -> Medium intensity: 2 rounds (16 → 1)
+	//   [32, 4]  -> High intensity: 3 rounds (32 → 4 → 1)
+	BreadthSchedule []int `yaml:"breadth_schedule"`
+
+	// ModelDistribution specifies how to distribute calls among multiple models
+	// - "weighted": Distribute proportionally based on model weights (default)
+	// - "equal": Distribute evenly among all models
+	// - "first_only": Use only the first model (PaCoRe-compatible mode)
+	ModelDistribution string `yaml:"model_distribution,omitempty"`
+
+	// Temperature for generation (default: 1.0)
+	Temperature float64 `yaml:"temperature,omitempty"`
+
+	// IncludeReasoning determines whether to include reasoning content in synthesis
+	// When true, extracts vLLM reasoning fields and includes them in synthesis prompts
+	// Default: false
+	IncludeReasoning bool `yaml:"include_reasoning,omitempty"`
+
+	// CompactionStrategy defines how to compact responses between rounds
+	// - "full": Use complete responses (default)
+	// - "last_n_tokens": Keep only the last N tokens
+	CompactionStrategy string `yaml:"compaction_strategy,omitempty"`
+
+	// CompactionTokens specifies how many tokens to keep when using "last_n_tokens" strategy
+	// Default: 1000
+	CompactionTokens int `yaml:"compaction_tokens,omitempty"`
+
+	// SynthesisTemplate is a custom Go text/template for building synthesis prompts
+	// Available variables: .OriginalContent, .ReferenceResponses
+	// If empty, uses default template
+	SynthesisTemplate string `yaml:"synthesis_template,omitempty"`
+
+	// MaxConcurrent limits the number of concurrent model calls per round
+	// Default: no limit (all calls in a round execute concurrently)
+	MaxConcurrent int `yaml:"max_concurrent,omitempty"`
+
+	// OnError defines behavior when a model call fails: "skip" or "fail"
+	// - "skip": Skip the failed call and continue with remaining responses (default)
+	// - "fail": Return error immediately
+	OnError string `yaml:"on_error,omitempty"`
+
+	// ShuffleSeed for reproducible shuffling of responses
+	// Default: 42
+	ShuffleSeed int `yaml:"shuffle_seed,omitempty"`
+
+	// IncludeIntermediateResponses determines whether to include intermediate responses
+	// in the response body for visualization in the dashboard
+	// Default: true
+	IncludeIntermediateResponses bool `yaml:"include_intermediate_responses,omitempty"`
+
+	// MaxResponsesPerRound limits how many responses to save per round
+	// Useful to avoid large response bodies
+	// Default: no limit (save all responses)
+	MaxResponsesPerRound int `yaml:"max_responses_per_round,omitempty"`
+}
+
+// MLModelSelectionConfig configures the ML-based model selection algorithm
+// Supported types: knn, kmeans, svm
+type MLModelSelectionConfig struct {
+	// Type specifies the algorithm: "knn", "kmeans", "svm"
+	Type string `yaml:"type"`
+
+	// ModelsPath is the path to pre-trained model files (e.g., "trained_models/")
+	// If specified, loads pre-trained models instead of creating empty selectors
+	// The algorithm will look for {ModelsPath}/{type}_model.json
+	ModelsPath string `yaml:"models_path,omitempty"`
+
+	// K is the number of neighbors for KNN algorithm (default: 3)
+	K int `yaml:"k,omitempty"`
+
+	// NumClusters is the number of clusters for KMeans algorithm (default: equals number of models)
+	NumClusters int `yaml:"num_clusters,omitempty"`
+
+	// Kernel specifies the SVM kernel type: "linear", "rbf", "poly" (default: "rbf")
+	Kernel string `yaml:"kernel,omitempty"`
+
+	// Gamma is the RBF kernel parameter for SVM (default: 1.0)
+	Gamma float64 `yaml:"gamma,omitempty"`
+
+	// EfficiencyWeight controls the performance-efficiency tradeoff for KMeans (default: 0.3)
+	// 0 = pure performance (quality), 1 = pure efficiency (latency)
+	// Use pointer to distinguish "not set" (nil, uses default 0.3) from "explicitly 0"
+	EfficiencyWeight *float64 `yaml:"efficiency_weight,omitempty"`
+
+	// FeatureWeights allows custom weighting of features for selection
+	FeatureWeights map[string]float64 `yaml:"feature_weights,omitempty"`
 }
 
 // ModelRef represents a reference to a model (without score field)
@@ -1490,11 +1710,9 @@ type HallucinationPluginConfig struct {
 	IncludeHallucinationDetails bool `json:"include_hallucination_details,omitempty" yaml:"include_hallucination_details,omitempty"`
 }
 
-// RouterReplayConfig configures the router replay system for recording
-// routing decisions and payload snippets for later debugging and replay.
-// This is a system-level configuration with automatic per-decision isolation
-// (separate collection/table/keyspace per decision).
-type RouterReplayConfig struct {
+// RouterReplayPluginConfig represents configuration for router_replay plugin
+// This is the per-decision plugin configuration (overrides global router_replay config)
+type RouterReplayPluginConfig struct {
 	Enabled bool `json:"enabled" yaml:"enabled"`
 
 	// MaxRecords controls the maximum number of replay records kept in memory.
@@ -1512,7 +1730,12 @@ type RouterReplayConfig struct {
 	// MaxBodyBytes caps how many bytes of request/response body are recorded.
 	// Defaults to 4096 bytes.
 	MaxBodyBytes int `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
+}
 
+// RouterReplayConfig configures the router replay system at the system level.
+// This provides storage backend configuration and system-level settings.
+// Per-decision settings (max_records, capture settings) are configured via router_replay plugin.
+type RouterReplayConfig struct {
 	// StoreBackend specifies the storage backend to use.
 	// Options: "memory", "redis", "postgres", "milvus". Defaults to "memory".
 	StoreBackend string `json:"store_backend,omitempty" yaml:"store_backend,omitempty"`
@@ -1745,6 +1968,21 @@ func (d *Decision) GetHallucinationConfig() *HallucinationPluginConfig {
 	return result
 }
 
+// GetRouterReplayConfig returns the router_replay plugin configuration
+func (d *Decision) GetRouterReplayConfig() *RouterReplayPluginConfig {
+	config := d.GetPluginConfig("router_replay")
+	if config == nil {
+		return nil
+	}
+
+	result := &RouterReplayPluginConfig{}
+	if err := unmarshalPluginConfig(config, result); err != nil {
+		logging.Errorf("Failed to unmarshal router_replay config: %v", err)
+		return nil
+	}
+	return result
+}
+
 // RuleCombination defines how to combine multiple rule conditions with AND/OR operators
 type RuleCombination struct {
 	// Operator specifies how to combine conditions: "AND" or "OR"
@@ -1824,10 +2062,20 @@ type LatencyRule struct {
 	// Name is the latency rule name that can be referenced in decision rules
 	Name string `yaml:"name"`
 
-	// MaxTPOT is the maximum acceptable TPOT (Time Per Output Token) in seconds
-	// Models with TPOT <= MaxTPOT will match this rule
-	// Example: 0.05 means 50ms per token
-	MaxTPOT float64 `yaml:"max_tpot"`
+	// TPOTPercentile is the percentile bucket to use for TPOT (Time Per Output Token) evaluation (1-100)
+	// Models with current TPOT <= the calculated TPOT percentile threshold will match this rule
+	// Example: 10 means 10th percentile (top 10% fastest TPOT)
+	// Example: 50 means median (top 50% fastest TPOT)
+	// Works with any number of observations (1+), adapts to model's actual performance
+	TPOTPercentile int `yaml:"tpot_percentile,omitempty"`
+
+	// TTFTPercentile is the percentile bucket to use for TTFT (Time To First Token) evaluation (1-100)
+	// Models with current TTFT <= the calculated TTFT percentile threshold will match this rule
+	// Example: 10 means 10th percentile (top 10% fastest TTFT)
+	// Example: 50 means median (top 50% fastest TTFT)
+	// Works with any number of observations (1+), adapts to model's actual performance
+	// At least one of TPOTPercentile or TTFTPercentile must be set
+	TTFTPercentile int `yaml:"ttft_percentile,omitempty"`
 
 	// Description provides human-readable explanation of the latency requirement
 	Description string `yaml:"description,omitempty"`
@@ -1867,6 +2115,28 @@ type ContextRule struct {
 	MinTokens   TokenCount `yaml:"min_tokens"`
 	MaxTokens   TokenCount `yaml:"max_tokens"`
 	Description string     `yaml:"description,omitempty"`
+}
+
+// ComplexityCandidates defines hard and easy candidates for complexity classification
+type ComplexityCandidates struct {
+	Candidates []string `yaml:"candidates"`
+}
+
+// ComplexityRule defines a rule for complexity-based classification using embedding similarity
+// The classifier computes max similarity to hard and easy candidates, then:
+// - If (max_hard_sim - max_easy_sim) > threshold: outputs "rulename:hard"
+// - If (max_hard_sim - max_easy_sim) < -threshold: outputs "rulename:easy"
+// - Otherwise: outputs "rulename:medium"
+//
+// The Composer field allows filtering based on other signals (e.g., only apply code_complexity when domain is "computer_science")
+// This is evaluated after all signals are computed in parallel, enabling signal dependencies.
+type ComplexityRule struct {
+	Name        string               `yaml:"name"`
+	Threshold   float32              `yaml:"threshold"`
+	Hard        ComplexityCandidates `yaml:"hard"`
+	Easy        ComplexityCandidates `yaml:"easy"`
+	Description string               `yaml:"description,omitempty"`
+	Composer    *RuleCombination     `yaml:"composer,omitempty"` // Optional: filter based on other signals
 }
 
 // ModelReasoningControl represents reasoning mode control on model level

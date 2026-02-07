@@ -98,8 +98,9 @@ type ClassificationOptions struct {
 // EmbeddingRequest represents a request for embedding generation
 type EmbeddingRequest struct {
 	Texts           []string `json:"texts"`
-	Model           string   `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma"
-	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128
+	Model           string   `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma", "mmbert"
+	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128, 64
+	TargetLayer     int      `json:"target_layer,omitempty"`     // Target layer for early exit (mmbert only): 3, 6, 11, 22 (0=full)
 	QualityPriority float32  `json:"quality_priority,omitempty"` // 0.0-1.0, default 0.5 (only used when model="auto")
 	LatencyPriority float32  `json:"latency_priority,omitempty"` // 0.0-1.0, default 0.5 (only used when model="auto")
 	SequenceLength  int      `json:"sequence_length,omitempty"`  // Optional, auto-detected if not provided
@@ -126,8 +127,9 @@ type EmbeddingResponse struct {
 type SimilarityRequest struct {
 	Text1           string  `json:"text1"`
 	Text2           string  `json:"text2"`
-	Model           string  `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma"
-	Dimension       int     `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128
+	Model           string  `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma", "mmbert"
+	Dimension       int     `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128, 64
+	TargetLayer     int     `json:"target_layer,omitempty"`     // Target layer for early exit (mmbert only): 3, 6, 11, 22 (0=full)
 	QualityPriority float32 `json:"quality_priority,omitempty"` // 0.0-1.0, only for "auto" model
 	LatencyPriority float32 `json:"latency_priority,omitempty"` // 0.0-1.0, only for "auto" model
 }
@@ -144,8 +146,9 @@ type BatchSimilarityRequest struct {
 	Query           string   `json:"query"`                      // Query text
 	Candidates      []string `json:"candidates"`                 // Array of candidate texts
 	TopK            int      `json:"top_k,omitempty"`            // Max number of matches to return (0 = return all)
-	Model           string   `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma"
-	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128
+	Model           string   `json:"model,omitempty"`            // "auto" (default), "qwen3", "gemma", "mmbert"
+	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 768 (default), 512, 256, 128, 64
+	TargetLayer     int      `json:"target_layer,omitempty"`     // Target layer for early exit (mmbert only): 3, 6, 11, 22 (0=full)
 	QualityPriority float32  `json:"quality_priority,omitempty"` // 0.0-1.0, only for "auto" model
 	LatencyPriority float32  `json:"latency_priority,omitempty"` // 0.0-1.0, only for "auto" model
 }

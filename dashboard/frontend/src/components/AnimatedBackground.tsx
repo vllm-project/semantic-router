@@ -121,7 +121,7 @@ const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({ speed = 'normal
         cancelAnimationFrame(animationRef.current)
       }
     }
-  }, [])
+  }, [speed])
 
   return <canvas ref={canvasRef} className={styles.canvas} />
 }

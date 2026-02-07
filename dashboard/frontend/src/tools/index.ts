@@ -60,6 +60,9 @@ export type {
 export { webSearchTool } from './executors/webSearch'
 export { openWebTool } from './executors/openWeb'
 
+// MCP (Model Context Protocol) support
+export * from './mcp'
+
 // React hook
 export { useToolRegistry } from './hooks/useToolRegistry'
 

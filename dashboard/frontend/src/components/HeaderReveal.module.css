@@ -4,14 +4,15 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #1a1a1a;
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  background: radial-gradient(ellipse at center, rgba(26, 26, 26, 0.95) 0%, rgba(0, 0, 0, 0.98) 100%);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
   z-index: 10001;
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 1.5rem;
 }
 
 .overlay.fadeOut {
@@ -37,14 +38,17 @@
 }
 
 .container {
-  max-width: 800px;
+  max-width: 950px;
   width: 90%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2rem;
-  animation: slideUp 0.4s ease-out;
-  padding: 1rem;
+  gap: 1.75rem;
+  animation: slideUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  padding: 2rem 1.5rem;
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 
 @keyframes slideUp {
@@ -61,40 +65,132 @@
 .title {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', 'Roboto', sans-serif;
   font-size: 1.5rem;
-  font-weight: 590;
+  font-weight: 700;
   color: #ffffff;
-  letter-spacing: -0.02em;
-  margin-bottom: 1rem;
+  letter-spacing: -0.03em;
+  margin-bottom: 0.25rem;
   text-align: center;
+  position: relative;
+  padding-bottom: 0.75rem;
 }
 
-.headerGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1rem;
+.title::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #76b900, transparent);
+  border-radius: 2px;
+}
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
   width: 100%;
 }
 
-.headerItem {
-  background: rgba(30, 30, 30, 0.8);
-  border: 1.5px solid #76b900;
-  border-radius: 1rem;
-  padding: 1rem 1.25rem;
-  transition: all 0.2s ease;
-  animation: itemFadeIn 0.4s ease-out backwards;
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
 }
 
-.headerItem:nth-child(1) { animation-delay: 0.1s; }
-.headerItem:nth-child(2) { animation-delay: 0.15s; }
-.headerItem:nth-child(3) { animation-delay: 0.2s; }
-.headerItem:nth-child(4) { animation-delay: 0.25s; }
-.headerItem:nth-child(5) { animation-delay: 0.3s; }
-.headerItem:nth-child(6) { animation-delay: 0.35s; }
+.sectionPrimary {
+  gap: 0.75rem;
+}
+
+.sectionTitle {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Roboto', sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: rgba(118, 185, 0, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  padding-left: 0.375rem;
+  opacity: 0.9;
+}
+
+.sectionPrimary .sectionTitle {
+  font-size: 0.875rem;
+  color: #76b900;
+  letter-spacing: 0.15em;
+  opacity: 1;
+}
+
+.sectionItems {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+  width: 100%;
+}
+
+.sectionPrimary .sectionItems {
+  justify-content: center;
+}
+
+.sectionPrimary .headerItem {
+  flex: 1;
+  max-width: 100%;
+  text-align: center;
+  align-items: center;
+}
+
+/* Non-primary items should grow to fill space */
+.section:not(.sectionPrimary) .headerItem {
+  flex: 1 1 auto;
+  min-width: fit-content;
+}
+
+.headerItem {
+  background: rgba(35, 35, 35, 0.5);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.625rem 1rem;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: itemFadeIn 0.4s ease-out backwards;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.headerItemPrimary {
+  background: rgba(35, 35, 35, 0.5);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.625rem 1rem;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  position: relative;
+  overflow: hidden;
+}
+
+
+
+.headerItem:nth-child(1) { animation-delay: 0.05s; }
+.headerItem:nth-child(2) { animation-delay: 0.08s; }
+.headerItem:nth-child(3) { animation-delay: 0.11s; }
+.headerItem:nth-child(4) { animation-delay: 0.14s; }
+.headerItem:nth-child(5) { animation-delay: 0.17s; }
+.headerItem:nth-child(6) { animation-delay: 0.20s; }
+.headerItem:nth-child(7) { animation-delay: 0.23s; }
+.headerItem:nth-child(8) { animation-delay: 0.26s; }
 
 @keyframes itemFadeIn {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -103,44 +199,71 @@
 }
 
 .headerItem:hover {
-  background: rgba(40, 40, 40, 0.9);
+  background: rgba(45, 45, 45, 0.7);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(118, 185, 0, 0.3);
+  box-shadow:
+    0 4px 16px rgba(118, 185, 0, 0.15),
+    0 2px 8px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(118, 185, 0, 0.1);
+}
+
+.headerItemPrimary:hover {
+  background: rgba(45, 45, 45, 0.7);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  box-shadow:
+    0 4px 16px rgba(118, 185, 0, 0.15),
+    0 2px 8px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(118, 185, 0, 0.1);
+  transform: translateY(-2px);
 }
 
 .headerLabel {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Roboto', sans-serif;
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   font-weight: 600;
-  color: #999;
+  color: rgba(118, 185, 0, 0.6);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 0.5rem;
+  letter-spacing: 0.08em;
+}
+
+.headerItemPrimary .headerLabel {
+  font-size: 0.75rem;
+  color: rgba(118, 185, 0, 0.7);
+  font-weight: 700;
 }
 
 .headerValue {
   font-family: 'SF Mono', 'Monaco', 'Menlo', 'Courier New', monospace;
-  font-size: 1.125rem;
+  font-size: 0.9375rem;
   font-weight: 600;
-  color: #ffffff;
-  margin-bottom: 0.5rem;
+  color: #e8e8e8;
   word-break: break-word;
+  line-height: 1.4;
+}
+
+.headerItemPrimary .headerValue {
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.02em;
 }
 
 .headerDescription {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Roboto', sans-serif;
-  font-size: 0.875rem;
-  color: #aaaaaa;
-  line-height: 1.4;
+  display: none;
 }
 
 .hint {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Roboto', sans-serif;
-  font-size: 0.9375rem;
-  color: #888;
-  margin-top: 1rem;
+  font-size: 0.875rem;
+  color: rgba(118, 185, 0, 0.6);
+  margin-top: 0.5rem;
   animation: pulse 2s ease-in-out infinite;
   text-align: center;
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 @keyframes pulse {
@@ -154,83 +277,162 @@
 
 /* Mobile Responsive */
 @media (max-width: 768px) {
+  .overlay {
+    padding: 1rem;
+  }
+
   .container {
     width: 95%;
     gap: 1.5rem;
-    padding: 0.75rem;
+    padding: 1.5rem 1rem;
+    border-radius: 1.25rem;
   }
 
   .title {
     font-size: 1.25rem;
-    margin-bottom: 0.75rem;
-  }
-
-  .headerGrid {
-    grid-template-columns: 1fr;
-    gap: 0.875rem;
-  }
-
-  .headerItem {
-    padding: 0.875rem 1rem;
-    border-radius: 0.75rem;
-  }
-
-  .headerLabel {
-    font-size: 0.6875rem;
-    margin-bottom: 0.375rem;
-  }
-
-  .headerValue {
-    font-size: 0.9375rem;
-    margin-bottom: 0.375rem;
-  }
-
-  .headerDescription {
-    font-size: 0.8125rem;
-    line-height: 1.3;
-  }
-
-  .hint {
-    font-size: 0.8125rem;
-    margin-top: 0.75rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .container {
-    width: 98%;
-    gap: 1rem;
-    padding: 0.5rem;
-  }
-
-  .title {
-    font-size: 1.125rem;
     margin-bottom: 0.5rem;
+    padding-bottom: 0.625rem;
   }
 
-  .headerGrid {
-    gap: 0.75rem;
+  .title::after {
+    width: 50px;
+    height: 2.5px;
+  }
+
+  .sections {
+    gap: 1rem;
+  }
+
+  .section {
+    gap: 0.5rem;
+  }
+
+  .sectionTitle {
+    font-size: 0.625rem;
+  }
+
+  .sectionPrimary .sectionTitle {
+    font-size: 0.75rem;
+  }
+
+  .sectionItems {
+    gap: 0.5rem;
   }
 
   .headerItem {
-    padding: 0.75rem 0.875rem;
-    border-radius: 0.625rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+  }
+
+  .section:not(.sectionPrimary) .headerItem {
+    flex: 1 1 calc(50% - 0.25rem);
+    min-width: 0;
+  }
+
+  .headerItemPrimary {
+    padding: 1rem 1.25rem;
+    border-radius: 0.875rem;
   }
 
   .headerLabel {
     font-size: 0.625rem;
   }
 
+  .headerItemPrimary .headerLabel {
+    font-size: 0.6875rem;
+  }
+
   .headerValue {
     font-size: 0.875rem;
   }
 
-  .headerDescription {
+  .headerItemPrimary .headerValue {
+    font-size: 1.125rem;
+  }
+
+  .hint {
+    font-size: 0.8125rem;
+    margin-top: 0.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .overlay {
+    padding: 0.75rem;
+  }
+
+  .container {
+    width: 96%;
+    gap: 1.25rem;
+    padding: 1.25rem 0.875rem;
+    border-radius: 1rem;
+  }
+
+  .title {
+    font-size: 1.125rem;
+    margin-bottom: 0.375rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .title::after {
+    width: 40px;
+    height: 2px;
+  }
+
+  .sections {
+    gap: 0.875rem;
+  }
+
+  .section {
+    gap: 0.4375rem;
+  }
+
+  .sectionTitle {
+    font-size: 0.5625rem;
+  }
+
+  .sectionPrimary .sectionTitle {
+    font-size: 0.6875rem;
+  }
+
+  .sectionItems {
+    gap: 0.4375rem;
+  }
+
+  .headerItem {
+    padding: 0.4375rem 0.625rem;
+    border-radius: 0.5rem;
+  }
+
+  .section:not(.sectionPrimary) .headerItem {
+    flex: 1 1 calc(50% - 0.21875rem);
+    min-width: 0;
+  }
+
+  .headerItemPrimary {
+    padding: 0.875rem 1rem;
+    border-radius: 0.75rem;
+  }
+
+  .headerLabel {
+    font-size: 0.5rem;
+  }
+
+  .headerItemPrimary .headerLabel {
+    font-size: 0.5625rem;
+  }
+
+  .headerValue {
     font-size: 0.75rem;
+  }
+
+  .headerItemPrimary .headerValue {
+    font-size: 1rem;
   }
 
   .hint {
     font-size: 0.75rem;
+    margin-top: 0.375rem;
   }
 }
 

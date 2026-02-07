@@ -1,8 +1,9 @@
 ---
 translation:
-  source_commit: "a149800"
+  source_commit: "f8480f8"
   source_file: "docs/api/crd-reference.md"
   outdated: false
+is_mtpe: true
 sidebar_position: 3
 title: CRD API 参考
 description: vLLM Semantic Router 的 Kubernetes 自定义资源定义 (CRD) API 参考
@@ -24,6 +25,21 @@ description: vLLM Semantic Router 的 Kubernetes 自定义资源定义 (CRD) API
 - [IntelligentPoolList](#intelligentpoollist)
 - [IntelligentRoute](#intelligentroute)
 - [IntelligentRouteList](#intelligentroutelist)
+
+#### ContextRule (上下文规则) {#contextrule}
+
+ContextRule 定义了基于上下文（token 计数）的分类规则。
+
+_出现位置:_
+
+- [Signals](#signals)
+
+| 字段 | 描述 | 默认值 | 验证 |
+| --- | --- | --- | --- |
+| `name` _string_ | Name 是信号名称（例如 "high_token_count"） |  | MaxLength: 100 <br />MinLength: 1 <br />Required: \{\} <br /> |
+| `minTokens` _string_ | MinTokens 是最小 token 计数（支持 K/M 后缀） |  | Pattern: `^[0-9]+(\.[0-9]+)?[KMkm]?$` <br />Required: \{\} <br /> |
+| `maxTokens` _string_ | MaxTokens 是最大 token 计数（支持 K/M 后缀） |  | Pattern: `^[0-9]+(\.[0-9]+)?[KMkm]?$` <br />Required: \{\} <br /> |
+| `description` _string_ | Description 提供了人类可读的解释 |  | MaxLength: 500 <br /> |
 
 #### Decision (决策) {#decision}
 
@@ -301,7 +317,7 @@ _出现位置:_
 
 | 字段 | 描述 | 默认值 | 验证 |
 | --- | --- | --- | --- |
-| `type` _string_ | Type 定义了信号类型 (keyword/embedding/domain) |  | Enum: [keyword embedding domain] <br />Required: \{\} <br /> |
+| `type` _string_ | Type 定义了信号类型 (keyword/embedding/domain/fact_check/context) |  | Enum: [keyword embedding domain fact_check context] <br />Required: \{\} <br /> |
 | `name` _string_ | Name 是要引用的信号名称 |  | MaxLength: 100 <br />MinLength: 1 <br />Required: \{\} <br /> |
 
 #### Signals (信号) {#signals}
@@ -317,3 +333,4 @@ _出现位置:_
 | `keywords` _[KeywordSignal](#keywordsignal) array_ | Keywords 定义了基于关键词的信号提取规则 |  | MaxItems: 100 <br /> |
 | `embeddings` _[EmbeddingSignal](#embeddingsignal) array_ | Embeddings 定义了基于嵌入的信号提取规则 |  | MaxItems: 100 <br /> |
 | `domains` _[DomainSignal](#domainsignal) array_ | Domains 定义了用于分类的 MMLU 领域类别 |  | MaxItems: 14 <br /> |
+| `contextRules` _[ContextRule](#contextrule) array_ | ContextRules 定义了用于信号分类的上下文（token 计数）规则 |  | MaxItems: 20 <br /> |

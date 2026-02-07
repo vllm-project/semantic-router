@@ -1,0 +1,93 @@
+---
+# SemanticRouter example using mmBERT 2D Matryoshka embeddings
+# This example demonstrates layer early exit and dimension reduction for optimal performance
+# mmBERT provides multilingual support with adaptive quality/speed trade-offs
+apiVersion: vllm.ai/v1alpha1
+kind: SemanticRouter
+metadata:
+  name: semantic-router-mmbert
+  namespace: default
+spec:
+  # Basic deployment settings
+  replicas: 1
+
+  # Configure vLLM backend endpoints
+  vllmEndpoints:
+    - name: my-llama-model
+      model: llama3-8b
+      reasoningFamily: qwen3
+      backend:
+        type: kserve
+        inferenceServiceName: llama-3-8b
+
+  # Persistence for model cache
+  persistence:
+    enabled: true
+    size: 10Gi
+
+  # Basic resource limits
+  resources:
+    requests:
+      cpu: 2000m
+      memory: 4Gi
+    limits:
+      cpu: 4000m
+      memory: 8Gi
+
+  # Semantic router configuration
+  config:
+    # Embedding models configuration with mmBERT 2D Matryoshka
+    embedding_models:
+      # Path to mmBERT model (download using: make download-mmbert-embedding)
+      mmbert_model_path: "models/mmbert-embedding"
+      use_cpu: true
+
+      # HNSW configuration for embedding-based classification
+      hnsw_config:
+        # Use mmBERT model
+        model_type: "mmbert"
+
+        # Layer early exit: balance between speed and accuracy
+        # Layer 3: ~7x speedup (good for high-volume, simple queries)
+        # Layer 6: ~3.6x speedup (balanced - recommended for most use cases)
+        # Layer 11: ~2x speedup (higher accuracy)
+        # Layer 22: full model (maximum accuracy)
+        target_layer: 6
+
+        # Dimension reduction: lower dimensions = faster similarity search
+        # Supported: 64, 128, 256, 512, 768
+        # 256 is recommended for balanced performance/quality
+        target_dimension: 256
+
+        preload_embeddings: true
+        enable_soft_matching: true
+        min_score_threshold: "0.5"
+
+    # Semantic cache using mmBERT embeddings
+    semantic_cache:
+      enabled: true
+      backend_type: "memory"
+
+      # Use mmBERT for semantic similarity in cache
+      embedding_model: "mmbert"
+      similarity_threshold: "0.85"
+      max_entries: 5000
+      ttl_seconds: 7200
+      eviction_policy: "lru"
+
+      # HNSW indexing for fast similarity search
+      hnsw:
+        use_hnsw: true
+        hnsw_m: 16
+        hnsw_ef_construction: 200
+        max_memory_entries: 5000
+
+    # Prompt guard (jailbreak detection)
+    prompt_guard:
+      enabled: true
+      threshold: "0.7"
+
+    # Tools auto-selection
+    tools:
+      enabled: true
+      top_k: 3

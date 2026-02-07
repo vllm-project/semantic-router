@@ -180,6 +180,7 @@ export function getSignalIcon(type: SignalType): string {
     language: '🌐',
     latency: '⚡',
     context: '📏',
+    complexity: '🧠',
   }
   return icons[type] || '❓'
 }
@@ -198,6 +199,7 @@ export function getSignalColor(type: SignalType): string {
     language: '#795548',
     latency: '#FFC107',
     context: '#607D8B', // Blue Grey
+    complexity: '#4299e1', // Blue
   }
   return colors[type] || '#607D8B'
 }
