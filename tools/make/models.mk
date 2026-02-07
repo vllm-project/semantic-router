@@ -47,6 +47,15 @@ MMBERT_32K_MERGED_MODELS := \
 	mmbert32k-jailbreak-detector-merged \
 	mmbert32k-factcheck-classifier-merged
 
+# mmBERT-32K ONNX models (for ONNX Runtime inference - ROCm/CPU)
+# These are stored in the onnx/ subdirectory of merged model repos
+MMBERT_32K_ONNX_MODELS := \
+	mmbert32k-intent-classifier-merged \
+	mmbert32k-jailbreak-detector-merged \
+	mmbert32k-pii-detector-merged \
+	mmbert32k-factcheck-classifier-merged \
+	mmbert32k-feedback-detector-merged
+
 # Download models by running the router with --download-only flag
 download-models: ## Download models using router's built-in download logic
 	@echo "📦 Downloading models via router..."
@@ -93,7 +102,7 @@ download-mmbert-lora: ## Download mmBERT LoRA adapters for Python fine-tuning
 	@echo "✅ mmBERT LoRA adapters downloaded to $(MODELS_DIR)/"
 	@ls -la $(MODELS_DIR)/
 
-download-mmbert-all: download-mmbert download-mmbert-lora download-mmbert-32k-lora download-mmbert-32k-merged download-mmbert-embedding download-mmbert-32k ## Download all mmBERT models, LoRA adapters, embedding, and 32K base model
+download-mmbert-all: download-mmbert download-mmbert-lora download-mmbert-32k-lora download-mmbert-32k-merged download-mmbert-embedding download-mmbert-32k download-mmbert-32k-onnx ## Download all mmBERT models, LoRA adapters, embedding, ONNX, and 32K base model
 
 download-mmbert-32k-lora: ## Download mmBERT-32K LoRA adapters (32K context models)
 	@echo "📦 Downloading mmBERT-32K LoRA adapters from Hugging Face..."
@@ -180,6 +189,68 @@ download-mmbert-32k: ## Download mmBERT 32K YaRN base model (extended context ML
 	@echo "  - Architecture: ModernBERT with Flash Attention 2"
 	@echo "  - Reference: https://huggingface.co/$(HF_ORG)/$(MMBERT_32K_BASE_MODEL)"
 
+download-mmbert-32k-onnx: ## Download mmBERT-32K ONNX models (from onnx/ subdir of merged repos on HF)
+	@echo "📦 Downloading mmBERT-32K ONNX models from Hugging Face..."
+	@echo "   These are ONNX versions for efficient inference with ONNX Runtime"
+	@echo "   Supports: ROCm (AMD GPU), CUDA (NVIDIA GPU), OpenVINO (Intel), CPU"
+	@mkdir -p $(MODELS_DIR)
+	@for model in $(MMBERT_32K_ONNX_MODELS); do \
+		echo ""; \
+		echo "⬇️  Downloading $$model/onnx/..."; \
+		onnx_dir="$(MODELS_DIR)/$${model}-onnx"; \
+		if [ -d "$$onnx_dir" ]; then \
+			echo "   Already exists, updating..."; \
+		fi; \
+		mkdir -p "$$onnx_dir"; \
+		echo "   Downloading model.onnx and config.json from onnx/ subdir..."; \
+		huggingface-cli download $(HF_ORG)/$$model onnx/model.onnx onnx/config.json --local-dir "$$onnx_dir" --local-dir-use-symlinks False; \
+		if [ -f "$$onnx_dir/onnx/model.onnx" ]; then \
+			mv "$$onnx_dir/onnx/"* "$$onnx_dir/"; \
+			rmdir "$$onnx_dir/onnx" 2>/dev/null || true; \
+		fi; \
+		echo "   Downloading tokenizer files from onnx/ subdir (fallback to repo root)..."; \
+		huggingface-cli download $(HF_ORG)/$$model onnx/tokenizer.json onnx/tokenizer_config.json onnx/special_tokens_map.json --local-dir "$$onnx_dir" --local-dir-use-symlinks False 2>/dev/null && { \
+			for f in tokenizer.json tokenizer_config.json special_tokens_map.json; do \
+				[ -f "$$onnx_dir/onnx/$$f" ] && mv "$$onnx_dir/onnx/$$f" "$$onnx_dir/$$f"; \
+			done; \
+			rmdir "$$onnx_dir/onnx" 2>/dev/null || true; \
+		} || { \
+			echo "   (onnx/ subdir tokenizer not found, downloading from repo root)"; \
+			huggingface-cli download $(HF_ORG)/$$model tokenizer.json tokenizer_config.json special_tokens_map.json --local-dir "$$onnx_dir" --local-dir-use-symlinks False 2>/dev/null || true; \
+		}; \
+		echo "   Downloading label/fact_check mapping files (if any)..."; \
+		huggingface-cli download $(HF_ORG)/$$model label_mapping.json --local-dir "$$onnx_dir" --local-dir-use-symlinks False 2>/dev/null || true; \
+		huggingface-cli download $(HF_ORG)/$$model fact_check_mapping.json --local-dir "$$onnx_dir" --local-dir-use-symlinks False 2>/dev/null || true; \
+	done
+	@echo ""
+	@echo "✅ mmBERT-32K ONNX models downloaded to $(MODELS_DIR)/"
+	@echo ""
+	@echo "Available ONNX models (~1.2GB each):"
+	@echo "  - mmbert32k-intent-classifier-merged-onnx     (14-class MMLU-Pro)"
+	@echo "  - mmbert32k-jailbreak-detector-merged-onnx    (binary jailbreak)"
+	@echo "  - mmbert32k-pii-detector-merged-onnx          (35-class PII NER)"
+	@echo "  - mmbert32k-factcheck-classifier-merged-onnx  (fact-check routing)"
+	@echo "  - mmbert32k-feedback-detector-merged-onnx     (4-class satisfaction)"
+	@echo ""
+	@echo "Usage with onnx-binding:"
+	@echo "  ONNX_MODEL_PATH=models/mmbert32k-intent-classifier-merged-onnx make run-router-onnx"
+
+# Fact-check and feedback: download merged models, export to ONNX, upload to HF
+# Requires: huggingface-cli login (or HF_TOKEN) for upload
+download-export-upload-onnx-factcheck-feedback: ## Download merged factcheck/feedback, export to ONNX, upload to Hugging Face
+	@chmod +x scripts/download_export_upload_onnx_factcheck_feedback.sh
+	@./scripts/download_export_upload_onnx_factcheck_feedback.sh
+
+export-onnx-factcheck-feedback: ## Export factcheck and feedback merged models to ONNX (requires models in models/, run: make download-mmbert-32k-merged first; needs optimum: pip install optimum[onnxruntime])
+	@echo "📤 Exporting factcheck and feedback to ONNX..."
+	@python3 scripts/export_classifiers_to_onnx.py --model factcheck --output-dir $(MODELS_DIR)
+	@python3 scripts/export_classifiers_to_onnx.py --model feedback --output-dir $(MODELS_DIR)
+	@echo "✅ ONNX export done: $(MODELS_DIR)/mmbert32k-factcheck-classifier-merged-onnx, $(MODELS_DIR)/mmbert32k-feedback-detector-merged-onnx"
+
+upload-onnx-factcheck-feedback: export-onnx-factcheck-feedback ## Export and upload factcheck/feedback ONNX to Hugging Face (requires login)
+	@echo "⬆️  Uploading ONNX to Hugging Face..."
+	@SKIP_DOWNLOAD=1 SKIP_UPLOAD=0 ./scripts/download_export_upload_onnx_factcheck_feedback.sh
+
 test-mmbert-32k: ## Test mmBERT 32K context with AVX512 optimization
 	@echo "🧪 Testing mmBERT 32K context length support..."
 	@echo "   Using release mode + native CPU optimization (AVX512)"
@@ -207,6 +278,9 @@ clean-mmbert: ## Remove downloaded mmBERT models
 	@echo "🗑️  Removing mmBERT models..."
 	@for model in $(MMBERT_MODELS) $(MMBERT_LORA_ADAPTERS) $(MMBERT_32K_LORA_ADAPTERS) $(MMBERT_32K_MERGED_MODELS); do \
 		rm -rf $(MODELS_DIR)/$$model; \
+	done
+	@for model in $(MMBERT_32K_ONNX_MODELS); do \
+		rm -rf $(MODELS_DIR)/$${model}-onnx; \
 	done
 	@rm -rf $(MODELS_DIR)/$(MMBERT_EMBEDDING_MODEL)
 	@rm -rf $(MODELS_DIR)/$(MMBERT_32K_BASE_MODEL)

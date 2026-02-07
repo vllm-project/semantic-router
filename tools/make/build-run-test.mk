@@ -29,6 +29,38 @@ run-router-e2e: build-router download-models
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release && \
 		./bin/router -config=config/testing/config.e2e.yaml
 
+# Build the ONNX binding Rust library
+build-onnx-binding: ## Build the ONNX Runtime binding (mmBERT 32K support)
+	@echo "Building ONNX binding Rust library..."
+	@cd onnx-binding && cargo build --release
+	@echo "ONNX binding built successfully"
+
+# Build the ml-binding Rust library (required by router-onnx at runtime)
+build-ml-binding: ## Build the ml-binding Rust library
+	@echo "Building ml-binding Rust library..."
+	@cd ml-binding && cargo build --release
+	@echo "ml-binding built successfully"
+
+# Build the router with ONNX binding support
+# Uses -modfile=go.onnx.mod (candle-binding => ../../onnx-binding)
+# Uses -tags=onnx to select onnx-binding CGO flags at compile time
+build-router-onnx: ## Build the router binary with ONNX binding
+build-router-onnx: build-onnx-binding build-ml-binding
+	@$(LOG_TARGET)
+	@mkdir -p bin
+	@cd src/semantic-router && \
+		CGO_LDFLAGS="-L../../onnx-binding/target/release" \
+		go build -modfile=go.onnx.mod -tags=onnx,milvus -o ../../bin/router-onnx cmd/main.go
+	@echo "Router built with ONNX binding support"
+
+# Run the router with ONNX binding (uses mmBERT 32K via ONNX Runtime)
+run-router-onnx: ## Run the router with ONNX binding (mmBERT embedding model)
+run-router-onnx: build-router-onnx
+	@echo "Running router with ONNX binding..."
+	@echo "Config: $${ONNX_CONFIG_FILE:-config/config.onnx-binding-test.yaml}"
+	@export LD_LIBRARY_PATH=${PWD}/onnx-binding/target/release:${PWD}/ml-binding/target/release && \
+		./bin/router-onnx -config=$${ONNX_CONFIG_FILE:-config/config.onnx-binding-test.yaml} --enable-system-prompt-api=true
+
 # Unit test semantic-router
 # By default, Milvus and Redis tests are skipped. To enable them, set SKIP_MILVUS_TESTS=false and/or SKIP_REDIS_TESTS=false
 # Example: make test-semantic-router SKIP_MILVUS_TESTS=false

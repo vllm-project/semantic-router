@@ -1,0 +1,29 @@
+# Dockerfile for building and running ort-binding with ROCm GPU support
+# Uses official ROCm ORT image which has matching library versions
+
+FROM rocm/onnxruntime:rocm7.0_ub22.04_ort1.22_torch2.8.0
+
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Set ORT library paths for dynamic loading
+ENV ORT_DYLIB_PATH=/opt/venv/lib/python3.10/site-packages/onnxruntime/capi/libonnxruntime.so.1.22.1
+ENV LD_LIBRARY_PATH=/opt/venv/lib/python3.10/site-packages/onnxruntime/capi:/opt/rocm/lib:${LD_LIBRARY_PATH}
+
+WORKDIR /workspace
+
+# Copy only Cargo files first for dependency caching
+COPY Cargo.toml Cargo.lock* ./
+RUN mkdir -p src && echo "fn main() {}" > src/main.rs && \
+    cargo fetch || true && \
+    rm -rf src
+
+# Copy source code
+COPY . .
+
+# Build with dynamic ORT loading (uses container's ROCm-enabled ORT)
+RUN cargo build --release --features rocm-dynamic --examples
+
+# Default command runs the benchmark
+CMD ["./target/release/examples/benchmark_mmbert_latency"]
