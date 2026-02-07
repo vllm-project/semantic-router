@@ -1,0 +1,7 @@
+openai>=1.0.0
+requests>=2.31.0
+streamlit>=1.28.0
+python-dotenv>=1.0.0
+PyPDF2>=3.0.0
+jupyter>=1.0.0
+ipywidgets>=8.1.0
