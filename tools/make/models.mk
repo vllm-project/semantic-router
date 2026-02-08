@@ -20,6 +20,8 @@ MMBERT_MODELS := \
 
 # mmBERT embedding model with 2D Matryoshka support
 MMBERT_EMBEDDING_MODEL := mmbert-embed-32k-2d-matryoshka
+# Canonical local path must match config/registry.go LocalPath
+MMBERT_EMBEDDING_LOCAL_PATH := mom-embedding-ultra
 
 # mmBERT base 32K YaRN model (extended context MLM model)
 MMBERT_32K_BASE_MODEL := mmbert-32k-yarn
@@ -142,17 +144,17 @@ download-mmbert-embedding: ## Download mmBERT 2D Matryoshka embedding model
 	@echo "📦 Downloading mmBERT 2D Matryoshka embedding model..."
 	@mkdir -p $(MODELS_DIR)
 	@echo ""
-	@echo "⬇️  Downloading $(MMBERT_EMBEDDING_MODEL)..."
+	@echo "⬇️  Downloading $(MMBERT_EMBEDDING_MODEL) → $(MMBERT_EMBEDDING_LOCAL_PATH)..."
 	@echo "   This model supports:"
 	@echo "   - 32K context length (YaRN-scaled RoPE)"
 	@echo "   - Multilingual (1800+ languages)"
 	@echo "   - 2D Matryoshka: layer early exit (3/6/11/22) + dimension reduction (64-768)"
-	@if [ -d "$(MODELS_DIR)/$(MMBERT_EMBEDDING_MODEL)" ]; then \
+	@if [ -d "$(MODELS_DIR)/$(MMBERT_EMBEDDING_LOCAL_PATH)" ]; then \
 		echo "   Already exists, updating..."; \
 	fi
-	@huggingface-cli download $(HF_ORG)/$(MMBERT_EMBEDDING_MODEL) --local-dir $(MODELS_DIR)/$(MMBERT_EMBEDDING_MODEL) --local-dir-use-symlinks False
+	@huggingface-cli download $(HF_ORG)/$(MMBERT_EMBEDDING_MODEL) --local-dir $(MODELS_DIR)/$(MMBERT_EMBEDDING_LOCAL_PATH) --local-dir-use-symlinks False
 	@echo ""
-	@echo "✅ mmBERT embedding model downloaded to $(MODELS_DIR)/$(MMBERT_EMBEDDING_MODEL)"
+	@echo "✅ mmBERT embedding model downloaded to $(MODELS_DIR)/$(MMBERT_EMBEDDING_LOCAL_PATH)"
 	@echo ""
 	@echo "Usage example:"
 	@echo "  make run-router CONFIG_FILE=config/intelligent-routing/in-tree/embedding-mmbert.yaml"
