@@ -2,7 +2,7 @@
 translation:
   source_commit: "dd5c06f"
   source_file: "docs/installation/configuration.md"
-  outdated: false
+  outdated: true
 is_mtpe: true
 sidebar_position: 4
 ---
