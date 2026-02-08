@@ -1522,6 +1522,10 @@ body.playground-fullscreen .container {
     display: none;
   }
 
+  .chatArea {
+    max-height: 100vh;
+  }
+
   .sidebar {
     width: 100%;
     flex-direction: row;
