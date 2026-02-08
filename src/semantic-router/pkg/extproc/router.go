@@ -3,6 +3,7 @@ package extproc
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -64,10 +65,18 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		logging.Debugf("Parsed configuration from file: %s", configPath)
 	}
 
+	// Resolve relative paths against config file directory (e.g. Docker: config at /config, models under /config/models)
+	resolvePath := func(p string) string {
+		if p == "" || filepath.IsAbs(p) || configPath == "" {
+			return p
+		}
+		return filepath.Join(filepath.Dir(configPath), p)
+	}
+
 	// Load category mapping if classifier is enabled
 	var categoryMapping *classification.CategoryMapping
 	if cfg.CategoryMappingPath != "" {
-		categoryMapping, err = classification.LoadCategoryMapping(cfg.CategoryMappingPath)
+		categoryMapping, err = classification.LoadCategoryMapping(resolvePath(cfg.CategoryMappingPath))
 		if err != nil {
 			return nil, fmt.Errorf("failed to load category mapping: %w", err)
 		}
@@ -77,7 +86,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	// Load PII mapping if PII classifier is enabled
 	var piiMapping *classification.PIIMapping
 	if cfg.PIIMappingPath != "" {
-		piiMapping, err = classification.LoadPIIMapping(cfg.PIIMappingPath)
+		piiMapping, err = classification.LoadPIIMapping(resolvePath(cfg.PIIMappingPath))
 		if err != nil {
 			return nil, fmt.Errorf("failed to load PII mapping: %w", err)
 		}
@@ -87,9 +96,13 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	// Load jailbreak mapping if prompt guard is enabled
 	var jailbreakMapping *classification.JailbreakMapping
 	if cfg.IsPromptGuardEnabled() {
-		jailbreakMapping, err = classification.LoadJailbreakMapping(cfg.PromptGuard.JailbreakMappingPath)
+		jailbreakPath := resolvePath(cfg.PromptGuard.JailbreakMappingPath)
+		jailbreakMapping, err = classification.LoadJailbreakMapping(jailbreakPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load jailbreak mapping: %w", err)
+		}
+		if jailbreakMapping != nil && jailbreakMapping.GetJailbreakTypeCount() < 2 {
+			return nil, fmt.Errorf("jailbreak mapping has too few types (path: %s): need at least 2, got %d; ensure the file exists and contains id2label, id_to_label, idx_to_label, label_to_idx, label_to_id, label2id, or labels array", jailbreakPath, jailbreakMapping.GetJailbreakTypeCount())
 		}
 		logging.Infof("Loaded jailbreak mapping with %d jailbreak types", jailbreakMapping.GetJailbreakTypeCount())
 	}
