@@ -50,6 +50,18 @@ func NewServer(configPath string, port int, secure bool, certPath string) (*Serv
 	}, nil
 }
 
+// NewServerWithRouter creates a new ExtProc gRPC server with an existing router instance
+func NewServerWithRouter(router *OpenAIRouter, port int, secure bool, certPath string) *Server {
+	service := NewRouterService(router)
+	return &Server{
+		configPath: "", // No config path since router is already initialized
+		service:    service,
+		port:       port,
+		secure:     secure,
+		certPath:   certPath,
+	}
+}
+
 // GetRouter returns the current router instance
 func (s *Server) GetRouter() *OpenAIRouter {
 	return s.service.GetRouter()
