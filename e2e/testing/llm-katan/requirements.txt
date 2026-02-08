@@ -1,8 +1,9 @@
-# Core dependencies for yLLM
+# Core dependencies for LLM Katan
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 transformers>=4.35.0
 torch>=2.0.0
+accelerate>=0.25.0  # Required for device_map in transformers
 click>=8.0.0
 pydantic>=2.0.0
 numpy>=1.21.0

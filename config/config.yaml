@@ -491,6 +491,12 @@ decisions:
         configuration:
           enabled: true
           pii_types_allowed: []
+      - type: "memory"  # Per-decision memory config (overrides global)
+        configuration:
+          enabled: true
+          retrieval_limit: 5
+          similarity_threshold: 0.70
+          auto_store: false
 
 
 default_model: "qwen2.5:3b"

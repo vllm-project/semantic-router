@@ -262,6 +262,7 @@ class PluginType(str, Enum):
     HEADER_MUTATION = "header_mutation"
     HALLUCINATION = "hallucination"
     ROUTER_REPLAY = "router_replay"
+    MEMORY = "memory"
 
 
 class SemanticCachePluginConfig(BaseModel):
@@ -351,6 +352,27 @@ class RouterReplayPluginConfig(BaseModel):
         default=4096,
         gt=0,
         description="Max bytes to capture per body (must be > 0, default: 4096)",
+    )
+
+
+class MemoryPluginConfig(BaseModel):
+    """Configuration for memory plugin (per-decision memory settings)."""
+
+    enabled: bool = True
+    retrieval_limit: Optional[int] = Field(
+        default=None,
+        gt=0,
+        description="Max memories to retrieve (default: use global config)",
+    )
+    similarity_threshold: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Min similarity score (0.0-1.0, default: use global config)",
+    )
+    auto_store: Optional[bool] = Field(
+        default=None,
+        description="Auto-extract memories from conversation (default: use request config)",
     )
 
 
@@ -455,6 +477,56 @@ class Providers(BaseModel):
     external_models: Optional[List[ExternalModel]] = []
 
 
+class MemoryMilvusConfig(BaseModel):
+    """Milvus configuration for memory storage."""
+
+    address: str
+    collection: str = "agentic_memory"
+    dimension: int = 384
+
+
+class MemoryConfig(BaseModel):
+    """Agentic Memory configuration for cross-session memory.
+
+    Query rewriting and fact extraction are enabled by adding external_models
+    with role="memory_rewrite" or role="memory_extraction".
+    See external_models configuration in providers section for details.
+
+    The embedding_model is auto-detected from embedding_models if not specified.
+    Priority: bert > mmbert > qwen3 > gemma
+    """
+
+    enabled: bool = True
+    auto_store: bool = False  # Auto-store extracted facts after each response
+    milvus: Optional[MemoryMilvusConfig] = None
+    # Embedding model to use for memory vectors
+    # Options: "bert", "mmbert", "qwen3", "gemma"
+    # If not set, auto-detected from embedding_models section (bert preferred)
+    embedding_model: Optional[str] = None
+    default_retrieval_limit: int = 5
+    default_similarity_threshold: float = 0.70
+    extraction_batch_size: int = 10  # Extract every N turns
+
+
+class EmbeddingModelsConfig(BaseModel):
+    """Embedding models configuration for memory and semantic features."""
+
+    qwen3_model_path: Optional[str] = Field(
+        None, description="Path to Qwen3-Embedding model"
+    )
+    gemma_model_path: Optional[str] = Field(
+        None, description="Path to EmbeddingGemma model"
+    )
+    mmbert_model_path: Optional[str] = Field(
+        None, description="Path to mmBERT 2D Matryoshka model"
+    )
+    bert_model_path: Optional[str] = Field(
+        None,
+        description="Path to BERT/MiniLM model (recommended for memory retrieval)",
+    )
+    use_cpu: bool = Field(True, description="Use CPU for inference")
+
+
 class UserConfig(BaseModel):
     """Complete user configuration."""
 
@@ -463,6 +535,10 @@ class UserConfig(BaseModel):
     signals: Optional[Signals] = None
     decisions: List[Decision]
     providers: Providers
+    memory: Optional[MemoryConfig] = None  # Agentic Memory config
+    embedding_models: Optional[EmbeddingModelsConfig] = (
+        None  # Embedding models for memory
+    )
 
     class Config:
         populate_by_name = True

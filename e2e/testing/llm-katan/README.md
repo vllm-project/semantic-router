@@ -240,6 +240,46 @@ llm-katan --model Qwen/Qwen3-0.6B --no-quantize
 
 > **Note**: Even with quantization, llm-katan is slower than production tools like LM Studio (which uses llama.cpp with extensive optimizations). For production workloads, use vLLM, Ollama, or similar solutions.
 
+## Echo Backend for Integration Testing
+
+The **echo backend** is designed for integration tests where you need to verify
+that content (like memory context or system prompts) was properly injected into
+the prompt. Instead of generating a response, it echoes back all messages it receives.
+
+### Usage
+
+```bash
+# Start echo server (no model download required!)
+llm-katan --backend echo --served-model-name "test-model"
+```
+
+### What It Returns
+
+The echo backend returns all messages in the format `[role]: content`:
+
+```bash
+curl -X POST http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "test-model",
+    "messages": [
+      {"role": "system", "content": "You are helpful. Memory: User has a Tesla"},
+      {"role": "user", "content": "What car do I have?"}
+    ]
+  }'
+
+# Response content will be:
+# [system]: You are helpful. Memory: User has a Tesla
+# [user]: What car do I have?
+```
+
+### Use Cases for Echo Backend
+
+- **Memory injection tests**: Verify "Tesla" appears in the echoed system message
+- **System prompt tests**: Confirm the correct persona is being injected
+- **Prompt debugging**: See exactly what the router sends to the LLM
+- **Fast CI tests**: No model download or GPU required
+
 ## Use Cases
 
 ### Strengths
@@ -281,7 +321,7 @@ Optional:
                                 Model name to serve via API (defaults to model name)
   -p, --port INTEGER            Port to serve on (default: 8000)
   -h, --host TEXT               Host to bind to (default: 0.0.0.0)
-  -b, --backend [transformers|vllm]      Backend to use (default: transformers)
+  -b, --backend [transformers|vllm|echo]  Backend to use (default: transformers)
   --max, --max-tokens INTEGER   Maximum tokens to generate (default: 512)
   -t, --temperature FLOAT       Sampling temperature (default: 0.7)
   -d, --device [auto|cpu|cuda]  Device to use (default: auto)

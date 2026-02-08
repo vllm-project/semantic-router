@@ -21,10 +21,12 @@ const (
 
 // Model role constants for external models
 const (
-	ModelRoleGuardrail      = "guardrail"
-	ModelRoleClassification = "classification"
-	ModelRoleScoring        = "scoring"
-	ModelRolePreference     = "preference" // For route preference matching via external LLM
+	ModelRoleGuardrail        = "guardrail"
+	ModelRoleClassification   = "classification"
+	ModelRoleScoring          = "scoring"
+	ModelRolePreference       = "preference"        // For route preference matching via external LLM
+	ModelRoleMemoryRewrite    = "memory_rewrite"    // For memory query rewriting
+	ModelRoleMemoryExtraction = "memory_extraction" // For memory fact extraction
 )
 
 // Signal type constants for rule conditions
@@ -75,6 +77,8 @@ type RouterConfig struct {
 
 	// Semantic cache configuration
 	SemanticCache `yaml:"semantic_cache"`
+	// Memory configuration for agentic memory (cross-session context)
+	Memory MemoryConfig `yaml:"memory"`
 	// Response API configuration for stateful conversations
 	ResponseAPI ResponseAPIConfig `yaml:"response_api"`
 	// Router Replay configuration for recording routing decisions
@@ -445,6 +449,9 @@ type EmbeddingModels struct {
 	// Path to mmBERT 2D Matryoshka embedding model directory
 	// Supports layer early exit (3/6/11/22 layers) and dimension reduction (64-768)
 	MmBertModelPath string `yaml:"mmbert_model_path"`
+	// Path to BERT/MiniLM embedding model directory (e.g., all-MiniLM-L6-v2, all-MiniLM-L12-v2)
+	// Produces 384-dim embeddings, recommended for memory retrieval due to forgiving semantic matching
+	BertModelPath string `yaml:"bert_model_path"`
 	// Use CPU for inference (default: true, auto-detect GPU if available)
 	UseCPU bool `yaml:"use_cpu"`
 
@@ -710,6 +717,51 @@ type SemanticCache struct {
 	// - "gemma": Balanced, 768-dim, supports 8K context
 	// Default: "bert"
 	EmbeddingModel string `yaml:"embedding_model,omitempty"`
+}
+
+// MemoryConfig represents the configuration for agentic memory
+type MemoryConfig struct {
+	// Enable memory features globally.
+	// Auto-enabled if any decision uses memory plugin.
+	Enabled bool `yaml:"enabled,omitempty"`
+
+	// AutoStore enables automatic memory extraction from conversations
+	AutoStore bool `yaml:"auto_store,omitempty"`
+
+	// Milvus configuration for memory storage
+	Milvus MemoryMilvusConfig `yaml:"milvus,omitempty"`
+
+	// EmbeddingModel specifies which embedding model to use
+	// If not set, auto-detected from embedding_models section
+	// Options: "bert", "mmbert", "qwen3", "gemma"
+	EmbeddingModel string `yaml:"embedding_model,omitempty"`
+
+	// ExtractionBatchSize is the number of turns between extraction runs (default: 10)
+	ExtractionBatchSize int `yaml:"extraction_batch_size,omitempty"`
+
+	// Default retrieval limit (max number of results to return)
+	// Default: 5
+	DefaultRetrievalLimit int `yaml:"default_retrieval_limit,omitempty"`
+
+	// Default similarity threshold for memory retrieval (0.0-1.0)
+	// Default: 0.6
+	DefaultSimilarityThreshold float32 `yaml:"default_similarity_threshold,omitempty"`
+
+	// Note: Query rewriting and fact extraction are enabled by defining
+	// external_models with model_role="memory_rewrite" or "memory_extraction".
+	// Use FindExternalModelByRole() to check if enabled and get config.
+}
+
+// MemoryMilvusConfig contains Milvus-specific configuration for memory storage.
+type MemoryMilvusConfig struct {
+	// Milvus server address (e.g., "localhost:19530")
+	Address string `yaml:"address"`
+
+	// Collection name for memory storage (default: "agentic_memory")
+	Collection string `yaml:"collection,omitempty"`
+
+	// Embedding dimension (default: 384 for all-MiniLM-L6-v2)
+	Dimension int `yaml:"dimension,omitempty"`
 }
 
 // ResponseAPIConfig configures the Response API for stateful conversations.
@@ -1038,10 +1090,9 @@ type PreferenceModelConfig struct {
 type ExternalModelConfig struct {
 	// Provider (e.g., "vllm")
 	Provider string `yaml:"llm_provider"`
-	// Classifier type (e.g., "guardrail", "classification", "scoring")
+	// Classifier type (e.g., "guardrail", "classification", "scoring", "memory_rewrite", "memory_extraction")
 	ModelRole string `yaml:"model_role"`
-	// Dedicated LLM endpoint configuration for PromptGuard
-	// This is separate from vllm_endpoints (which are for backend inference)
+	// Dedicated LLM endpoint configuration
 	ModelEndpoint ClassifierVLLMEndpoint `yaml:"llm_endpoint,omitempty"`
 	// Model name on LLM server (e.g., "Qwen/Qwen3Guard-Gen-0.6B")
 	ModelName string `yaml:"llm_model_name,omitempty"`
@@ -1058,6 +1109,10 @@ type ExternalModelConfig struct {
 	// Optional access key for Authorization header
 	// If provided, will be sent as "Authorization: Bearer <access_key>"
 	AccessKey string `yaml:"access_key,omitempty"`
+	// Maximum tokens for LLM generation (used by memory_rewrite, memory_extraction)
+	MaxTokens int `yaml:"max_tokens,omitempty"`
+	// Temperature for LLM generation (used by memory_rewrite, memory_extraction)
+	Temperature float64 `yaml:"temperature,omitempty"`
 }
 
 // ToolFilteringWeights defines per-signal weights for advanced tool filtering.
@@ -1621,7 +1676,7 @@ type ModelRef struct {
 
 // DecisionPlugin represents a plugin configuration for a decision
 type DecisionPlugin struct {
-	// Type specifies the plugin type. Permitted values: "semantic-cache", "jailbreak", "pii", "system_prompt", "header_mutation", "hallucination", "router_replay".
+	// Type specifies the plugin type. Permitted values: "semantic-cache", "jailbreak", "pii", "system_prompt", "header_mutation", "hallucination", "router_replay", "memory".
 	Type string `yaml:"type" json:"type"`
 
 	// Configuration is the raw configuration for this plugin
@@ -1638,6 +1693,14 @@ type SemanticCachePluginConfig struct {
 	Enabled             bool     `json:"enabled" yaml:"enabled"`
 	SimilarityThreshold *float32 `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"`
 	TTLSeconds          *int     `json:"ttl_seconds,omitempty" yaml:"ttl_seconds,omitempty"` // Per-entry TTL (0 = do not cache, nil = use global default)
+}
+
+// MemoryPluginConfig is per-decision memory config (overrides global MemoryConfig).
+type MemoryPluginConfig struct {
+	Enabled             bool     `json:"enabled" yaml:"enabled"`                                               // If false, memory is skipped even if globally enabled
+	RetrievalLimit      *int     `json:"retrieval_limit,omitempty" yaml:"retrieval_limit,omitempty"`           // Max memories to retrieve (nil = use global)
+	SimilarityThreshold *float32 `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"` // Min similarity score (nil = use global)
+	AutoStore           *bool    `json:"auto_store,omitempty" yaml:"auto_store,omitempty"`                     // Auto-extract memories (nil = use request config)
 }
 
 // JailbreakPluginConfig represents configuration for jailbreak plugin
@@ -1978,6 +2041,21 @@ func (d *Decision) GetRouterReplayConfig() *RouterReplayPluginConfig {
 	result := &RouterReplayPluginConfig{}
 	if err := unmarshalPluginConfig(config, result); err != nil {
 		logging.Errorf("Failed to unmarshal router_replay config: %v", err)
+		return nil
+	}
+	return result
+}
+
+// GetMemoryConfig returns the memory plugin config, or nil to use global config.
+func (d *Decision) GetMemoryConfig() *MemoryPluginConfig {
+	config := d.GetPluginConfig("memory")
+	if config == nil {
+		return nil
+	}
+
+	result := &MemoryPluginConfig{}
+	if err := unmarshalPluginConfig(config, result); err != nil {
+		logging.Errorf("Failed to unmarshal memory config: %v", err)
 		return nil
 	}
 	return result
