@@ -10,6 +10,187 @@
   overflow: hidden;
 }
 
+.mainLayout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.chatArea {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 95vh;
+}
+
+.chatTopBar {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem 0.25rem 1rem;
+}
+
+.sidebarToggleButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-size: var(--text-sm);
+}
+
+.sidebarToggleButton:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.sidebarToggleButton svg {
+  width: 14px;
+  height: 14px;
+}
+
+.sidebarToggleLabel {
+  line-height: 1;
+}
+
+.sidebar {
+  width: 260px;
+  background: rgba(255, 255, 255, 0.04);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+
+.sidebarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.sidebarTitle {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.sidebarSubtitle {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.sidebarActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.sidebarButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.sidebarButton:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.sidebarList {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.sidebarItem {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.sidebarItem:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.sidebarItemActive {
+  background-color: var(--color-bg-tertiary);
+  border-color: var(--color-border);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+}
+
+.sidebarItemText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.sidebarItemTitle {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebarItemMeta {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.sidebarDeleteButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.sidebarDeleteButton:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text);
+}
+
+.sidebarEmpty {
+  padding: 0.75rem;
+  border-radius: var(--radius-md);
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
 /* Fullscreen mode - when toggled from within the app */
 .container.fullscreen {
   position: fixed;
@@ -242,14 +423,25 @@ body.playground-fullscreen .container {
 }
 
 @keyframes blink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
+
+  0%,
+  50% {
+    opacity: 1;
+  }
+
+  51%,
+  100% {
+    opacity: 0;
+  }
 }
 
 .messages {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  overflow-y: auto;
+  /* hide scrollbar but allow scrolling */
+  scrollbar-width: none;
 }
 
 .message {
@@ -264,6 +456,7 @@ body.playground-fullscreen .container {
     opacity: 0;
     transform: translateY(8px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -409,10 +602,14 @@ body.playground-fullscreen .container {
 }
 
 @keyframes blink {
-  0%, 50% {
+
+  0%,
+  50% {
     opacity: 1;
   }
-  51%, 100% {
+
+  51%,
+  100% {
     opacity: 0;
   }
 }
@@ -737,7 +934,8 @@ body.playground-fullscreen .container {
   .input,
   .input:focus {
     padding: 0.875rem 1rem;
-    font-size: 16px; /* Prevent mobile browser auto-zoom */
+    font-size: 16px;
+    /* Prevent mobile browser auto-zoom */
     min-height: unset;
     box-shadow: none !important;
     border: none !important;
@@ -830,7 +1028,8 @@ body.playground-fullscreen .container {
 
   .input {
     padding: 0.75rem 1rem;
-    font-size: 16px; /* Prevent mobile browser auto-zoom */
+    font-size: 16px;
+    /* Prevent mobile browser auto-zoom */
   }
 
   .sendButton {
@@ -965,8 +1164,13 @@ body.playground-fullscreen .container {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .webSearchInfo {
@@ -1026,18 +1230,22 @@ body.playground-fullscreen .container {
 .webSearchLoadingBar {
   height: 3px;
   border-radius: 2px;
-  background: linear-gradient(90deg, 
-    transparent 0%, 
-    #3b82f6 50%, 
-    transparent 100%
-  );
+  background: linear-gradient(90deg,
+      transparent 0%,
+      #3b82f6 50%,
+      transparent 100%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
 
 @keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 /* Web Search Results */
@@ -1231,11 +1439,11 @@ body.playground-fullscreen .container {
   display: block;
 }
 
-.contentWithCitations > * {
+.contentWithCitations>* {
   margin-bottom: 0.25rem;
 }
 
-.contentWithCitations > *:last-child {
+.contentWithCitations>*:last-child {
   margin-bottom: 0;
 }
 
@@ -1296,5 +1504,35 @@ body.playground-fullscreen .container {
 @media (prefers-color-scheme: dark) {
   .openWebContent {
     background: rgba(255, 255, 255, 0.03);
+  }
+}
+
+@media (max-width: 960px) {
+  .sidebar {
+    width: 220px;
+  }
+}
+
+@media (max-width: 900px) {
+  .mainLayout {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .sidebarList {
+    flex-direction: row;
+    flex-wrap: wrap;
+    max-height: 220px;
+  }
+
+  .sidebarItem {
+    flex: 1 1 240px;
   }
 }
