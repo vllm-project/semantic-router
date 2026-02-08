@@ -23,6 +23,39 @@
   min-height: 0;
 }
 
+.chatTopBar {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem 0.25rem 1rem;
+}
+
+.sidebarToggleButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-size: var(--text-sm);
+}
+
+.sidebarToggleButton:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.sidebarToggleButton svg {
+  width: 14px;
+  height: 14px;
+}
+
+.sidebarToggleLabel {
+  line-height: 1;
+}
+
 .sidebar {
   width: 260px;
   background: rgba(255, 255, 255, 0.04);

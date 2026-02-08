@@ -694,6 +694,7 @@ const ChatComponent = ({
   const [isFullscreen] = useState(isFullscreenMode)
   const [enableWebSearch, setEnableWebSearch] = useState(true)
   const [expandedToolCards, setExpandedToolCards] = useState<Set<string>>(new Set())
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -777,19 +778,21 @@ const ChatComponent = ({
   }, [conversationId, messages, saveConversation])
 
   const conversationPreviews = useMemo(() => {
-    return conversations.map(conv => {
-      const firstUserMessage = Array.isArray(conv.payload)
-        ? conv.payload.find(msg => msg.role === 'user')
-        : undefined
-      const title = (firstUserMessage?.content || 'New conversation').trim()
-      const preview = title.length > 60 ? `${title.slice(0, 60)}…` : title || 'New conversation'
+    return [...conversations]
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .map(conv => {
+        const firstUserMessage = Array.isArray(conv.payload)
+          ? conv.payload.find(msg => msg.role === 'user')
+          : undefined
+        const title = (firstUserMessage?.content || 'New conversation').trim()
+        const preview = title.length > 60 ? `${title.slice(0, 60)}…` : title || 'New conversation'
 
-      return {
-        id: conv.id,
-        updatedAt: conv.updatedAt || conv.createdAt,
-        preview,
-      }
-    })
+        return {
+          id: conv.id,
+          updatedAt: conv.updatedAt || conv.createdAt,
+          preview,
+        }
+      })
   }, [conversations])
   const generateId = generateMessageId
 
@@ -1564,76 +1567,107 @@ const ChatComponent = ({
 
       <div className={`${styles.container} ${isFullscreen ? styles.fullscreen : ''}`}>
         <div className={styles.mainLayout}>
-          <aside className={styles.sidebar}>
-            <div className={styles.sidebarHeader}>
-              <div>
-                <div className={styles.sidebarTitle}>Conversations</div>
-                <div className={styles.sidebarSubtitle}>
-                  {conversationPreviews.length ? `${conversationPreviews.length} saved` : 'No saved conversations'}
+          {isSidebarOpen && (
+            <aside className={styles.sidebar}>
+              <div className={styles.sidebarHeader}>
+                <div>
+                  <div className={styles.sidebarTitle}>Conversations</div>
+                  <div className={styles.sidebarSubtitle}>
+                    {conversationPreviews.length ? `${conversationPreviews.length} saved` : 'No saved conversations'}
+                  </div>
+                </div>
+                <div className={styles.sidebarActions}>
+                  <button
+                    type="button"
+                    className={styles.sidebarButton}
+                    onClick={() => setIsSidebarOpen(false)}
+                    title="Hide sidebar"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M15 6l-6 6 6 6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.sidebarButton}
+                    onClick={handleNewConversation}
+                    title="New conversation"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
                 </div>
               </div>
-              <div className={styles.sidebarActions}>
-                <button
-                  type="button"
-                  className={styles.sidebarButton}
-                  onClick={handleNewConversation}
-                  title="New conversation"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <div className={styles.sidebarList}>
-              {conversationPreviews.length === 0 ? (
-                <div className={styles.sidebarEmpty}>Start a conversation to see it here.</div>
-              ) : (
-                conversationPreviews.map(conv => (
-                  <div
-                    key={conv.id}
-                    className={`${styles.sidebarItem} ${conv.id === conversationId ? styles.sidebarItemActive : ''}`}
-                    onClick={() => handleSelectConversation(conv.id)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        handleSelectConversation(conv.id)
-                      }
-                    }}
-                  >
-                    <div className={styles.sidebarItemText}>
-                      <div className={styles.sidebarItemTitle}>{conv.preview}</div>
-                      <div className={styles.sidebarItemMeta}>
-                        {new Date(conv.updatedAt).toLocaleString(undefined, {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          month: 'short',
-                          day: 'numeric',
-                        })}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className={styles.sidebarDeleteButton}
-                      onClick={e => {
-                        e.stopPropagation()
-                        handleDeleteConversation(conv.id)
+              <div className={styles.sidebarList}>
+                {conversationPreviews.length === 0 ? (
+                  <div className={styles.sidebarEmpty}>Start a conversation to see it here.</div>
+                ) : (
+                  conversationPreviews.map(conv => (
+                    <div
+                      key={conv.id}
+                      className={`${styles.sidebarItem} ${conv.id === conversationId ? styles.sidebarItemActive : ''}`}
+                      onClick={() => handleSelectConversation(conv.id)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          handleSelectConversation(conv.id)
+                        }
                       }}
-                      title="Delete conversation"
                     >
-                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <path d="M2 4h12M5.5 4V2.5h5V4M13 4v9.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4M6.5 7v4M9.5 7v4" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          </aside>
+                      <div className={styles.sidebarItemText}>
+                        <div className={styles.sidebarItemTitle}>{conv.preview}</div>
+                        <div className={styles.sidebarItemMeta}>
+                          {new Date(conv.updatedAt).toLocaleString(undefined, {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className={styles.sidebarDeleteButton}
+                        onClick={e => {
+                          e.stopPropagation()
+                          handleDeleteConversation(conv.id)
+                        }}
+                        title="Delete conversation"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <path d="M2 4h12M5.5 4V2.5h5V4M13 4v9.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4M6.5 7v4M9.5 7v4" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </aside>
+          )}
 
           <div className={styles.chatArea}>
+            <div className={styles.chatTopBar}>
+              <button
+                type="button"
+                className={styles.sidebarToggleButton}
+                onClick={() => setIsSidebarOpen(prev => !prev)}
+                title={isSidebarOpen ? 'Hide conversations' : 'Show conversations'}
+              >
+                {isSidebarOpen ? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M15 6l-6 6 6 6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+                <span className={styles.sidebarToggleLabel}>{isSidebarOpen ? 'Hide' : 'Show'} conversations</span>
+              </button>
+            </div>
             {error && (
               <div className={styles.error}>
                 <span className={styles.errorIcon}>⚠️</span>
