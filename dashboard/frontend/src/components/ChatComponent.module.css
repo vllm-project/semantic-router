@@ -1518,6 +1518,14 @@ body.playground-fullscreen .container {
     flex-direction: column;
   }
 
+  .chatTopBar {
+    display: none;
+  }
+
+  .chatArea {
+    max-height: 100vh;
+  }
+
   .sidebar {
     width: 100%;
     flex-direction: row;
