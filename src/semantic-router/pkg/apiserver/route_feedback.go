@@ -27,6 +27,21 @@ type FeedbackRequest struct {
 
 	// DecisionName is the category/decision context (optional)
 	DecisionName string `json:"decision_name,omitempty"`
+
+	// Category for routing context (alias for DecisionName for RL-driven)
+	Category string `json:"category,omitempty"`
+
+	// UserID for personalized RL-driven selection (optional)
+	UserID string `json:"user_id,omitempty"`
+
+	// SessionID for multi-turn context (optional)
+	SessionID string `json:"session_id,omitempty"`
+
+	// FeedbackType for implicit feedback (satisfied, wrong_answer, etc.)
+	FeedbackType string `json:"feedback_type,omitempty"`
+
+	// Confidence for weighted feedback (0.0-1.0)
+	Confidence float64 `json:"confidence,omitempty"`
 }
 
 // FeedbackResponse represents the response from feedback submission
@@ -50,34 +65,69 @@ func (s *ClassificationAPIServer) handleFeedback(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Get the Elo selector from the global registry
-	selector, ok := selection.GlobalRegistry.Get(selection.MethodElo)
-	if !ok {
-		s.writeErrorResponse(w, http.StatusServiceUnavailable, "ELO_NOT_CONFIGURED",
-			"Elo selection is not configured. Enable elo selection to use feedback API.")
-		return
+	// Resolve category/decision name
+	decisionName := req.DecisionName
+	if decisionName == "" && req.Category != "" {
+		decisionName = req.Category
 	}
 
-	// Create feedback object
+	// Create feedback object with all fields
 	feedback := &selection.Feedback{
 		Query:        req.Query,
 		WinnerModel:  req.WinnerModel,
 		LoserModel:   req.LoserModel,
 		Tie:          req.Tie,
-		DecisionName: req.DecisionName,
+		DecisionName: decisionName,
+		UserID:       req.UserID,
+		SessionID:    req.SessionID,
+		FeedbackType: req.FeedbackType,
+		Confidence:   req.Confidence,
 		Timestamp:    time.Now().Unix(),
 	}
 
-	// Submit feedback to the selector
 	ctx := context.Background()
-	if err := selector.UpdateFeedback(ctx, feedback); err != nil {
-		logging.Errorf("[FeedbackAPI] Failed to update feedback: %v", err)
-		s.writeErrorResponse(w, http.StatusInternalServerError, "FEEDBACK_FAILED", err.Error())
+	selectorsUpdated := 0
+
+	// Try to update Elo selector if available
+	if eloSelector, ok := selection.GlobalRegistry.Get(selection.MethodElo); ok {
+		if err := eloSelector.UpdateFeedback(ctx, feedback); err != nil {
+			logging.Warnf("[FeedbackAPI] Failed to update Elo selector: %v", err)
+		} else {
+			selectorsUpdated++
+		}
+	}
+
+	// Try to update RL-driven selector if available
+	if rlSelector, ok := selection.GlobalRegistry.Get(selection.MethodRLDriven); ok {
+		if err := rlSelector.UpdateFeedback(ctx, feedback); err != nil {
+			logging.Warnf("[FeedbackAPI] Failed to update RL-driven selector: %v", err)
+		} else {
+			selectorsUpdated++
+			logging.Debugf("[FeedbackAPI] RL-driven feedback updated: winner=%s, user=%s, type=%s",
+				req.WinnerModel, req.UserID, req.FeedbackType)
+		}
+	}
+
+	// Try to update GMTRouter selector if available (for personalized routing)
+	if gmtSelector, ok := selection.GlobalRegistry.Get(selection.MethodGMTRouter); ok {
+		if err := gmtSelector.UpdateFeedback(ctx, feedback); err != nil {
+			logging.Warnf("[FeedbackAPI] Failed to update GMTRouter selector: %v", err)
+		} else {
+			selectorsUpdated++
+			logging.Debugf("[FeedbackAPI] GMTRouter feedback updated: winner=%s, user=%s",
+				req.WinnerModel, req.UserID)
+		}
+	}
+
+	// Require at least one selector to be configured
+	if selectorsUpdated == 0 {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "NO_SELECTOR_CONFIGURED",
+			"No selection algorithm configured. Enable elo or rl_driven selection to use feedback API.")
 		return
 	}
 
-	logging.Infof("[FeedbackAPI] Feedback recorded: winner=%s, loser=%s, tie=%v, decision=%s",
-		req.WinnerModel, req.LoserModel, req.Tie, req.DecisionName)
+	logging.Infof("[FeedbackAPI] Feedback recorded: winner=%s, loser=%s, tie=%v, decision=%s, user=%s, selectors=%d",
+		req.WinnerModel, req.LoserModel, req.Tie, decisionName, req.UserID, selectorsUpdated)
 
 	// Return success response
 	response := FeedbackResponse{

@@ -40,6 +40,14 @@ type ModelSelectionConfig struct {
 
 	// ML configuration (used for knn, kmeans, svm methods)
 	ML *MLSelectorConfig `yaml:"ml,omitempty"`
+
+	// RLDriven configuration (used when method is "rl_driven")
+	// Implements Router-R1 reward structure for RL training
+	RLDriven *RLDrivenConfig `yaml:"rl_driven,omitempty"`
+
+	// GMTRouter configuration (used when method is "gmtrouter")
+	// Implements heterogeneous graph learning for personalized routing
+	GMTRouter *GMTRouterConfig `yaml:"gmtrouter,omitempty"`
 }
 
 // DefaultModelSelectionConfig returns the default configuration
@@ -128,6 +136,23 @@ func (f *Factory) Create() Selector {
 			hybridSelector.routerDCSelector.SetEmbeddingFunc(f.embeddingFunc)
 		}
 		selector = hybridSelector
+
+	case MethodGMTRouter:
+		gmtRouterSelector := NewGMTRouterSelector(f.cfg.GMTRouter)
+		if f.modelConfig != nil {
+			gmtRouterSelector.InitializeFromConfig(f.modelConfig)
+		}
+		if f.embeddingFunc != nil {
+			gmtRouterSelector.SetEmbeddingFunc(f.embeddingFunc)
+		}
+		selector = gmtRouterSelector
+
+	case MethodRLDriven:
+		rlDrivenSelector := NewRLDrivenSelector(f.cfg.RLDriven)
+		if f.modelConfig != nil {
+			rlDrivenSelector.InitializeFromConfig(f.modelConfig, f.categories)
+		}
+		selector = rlDrivenSelector
 
 	default:
 		// Default to static selector
@@ -236,7 +261,32 @@ func (f *Factory) CreateAll() *Registry {
 		registry.Register(MethodSVM, svmAdapter)
 	}
 
-	logging.Infof("[SelectionFactory] Created all selectors: static, elo, router_dc, automix, hybrid, knn, kmeans, svm")
+	// Create RL-Driven selector
+	rlDrivenCfg := f.cfg.RLDriven
+	if rlDrivenCfg == nil {
+		rlDrivenCfg = DefaultRLDrivenConfig()
+	}
+	rlDrivenSelector := NewRLDrivenSelector(rlDrivenCfg)
+	if f.modelConfig != nil {
+		rlDrivenSelector.InitializeFromConfig(f.modelConfig, f.categories)
+	}
+	registry.Register(MethodRLDriven, rlDrivenSelector)
+
+	// Create GMTRouter selector
+	gmtRouterCfg := f.cfg.GMTRouter
+	if gmtRouterCfg == nil {
+		gmtRouterCfg = DefaultGMTRouterConfig()
+	}
+	gmtRouterSelector := NewGMTRouterSelector(gmtRouterCfg)
+	if f.modelConfig != nil {
+		gmtRouterSelector.InitializeFromConfig(f.modelConfig)
+	}
+	if f.embeddingFunc != nil {
+		gmtRouterSelector.SetEmbeddingFunc(f.embeddingFunc)
+	}
+	registry.Register(MethodGMTRouter, gmtRouterSelector)
+
+	logging.Infof("[SelectionFactory] Created all selectors: static, elo, router_dc, automix, hybrid, knn, kmeans, svm, rl_driven, gmtrouter")
 	return registry
 }
 
