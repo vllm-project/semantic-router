@@ -48,6 +48,7 @@ jobs:
   build_multiarch:
     if: github.repository == 'vllm-project/semantic-router' && !github.event.pull_request.draft
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     permissions:
       contents: read
       packages: write
@@ -102,13 +103,32 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             candle-binding/target/
+            ml-binding/target/
             ~/.rustup/
-          key: ${{ runner.os }}-cargo-multiarch-${{ hashFiles('candle-binding/Cargo.toml') }}-${{ hashFiles('candle-binding/Cargo.lock') }}-${{ hashFiles('candle-binding/src/**/*.rs') }}
+          key: ${{ runner.os }}-cargo-multiarch-${{ hashFiles('candle-binding/Cargo.toml') }}-${{ hashFiles('candle-binding/Cargo.lock') }}-${{ hashFiles('candle-binding/src/**/*.rs') }}-${{ hashFiles('ml-binding/Cargo.toml') }}-${{ hashFiles('ml-binding/Cargo.lock') }}-${{ hashFiles('ml-binding/src/**/*.rs') }}
           restore-keys: |
             ${{ runner.os }}-cargo-multiarch-${{ hashFiles('candle-binding/Cargo.toml') }}-${{ hashFiles('candle-binding/Cargo.lock') }}-
             ${{ runner.os }}-cargo-multiarch-${{ hashFiles('candle-binding/Cargo.toml') }}-
             ${{ runner.os }}-cargo-multiarch-
             ${{ runner.os }}-cargo-
+
+      # Rust caching for vllm-sr builds (candle-binding + ml-binding)
+      - name: Cache Rust dependencies (vllm-sr)
+        if: matrix.image == 'vllm-sr'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            candle-binding/target/
+            ml-binding/target/
+            ~/.rustup/
+          key: ${{ runner.os }}-cargo-vllm-sr-${{ hashFiles('candle-binding/Cargo.toml') }}-${{ hashFiles('candle-binding/Cargo.lock') }}-${{ hashFiles('candle-binding/src/**/*.rs') }}-${{ hashFiles('ml-binding/Cargo.toml') }}-${{ hashFiles('ml-binding/Cargo.lock') }}-${{ hashFiles('ml-binding/src/**/*.rs') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-vllm-sr-${{ hashFiles('candle-binding/Cargo.toml') }}-${{ hashFiles('candle-binding/Cargo.lock') }}-
+            ${{ runner.os }}-cargo-vllm-sr-${{ hashFiles('candle-binding/Cargo.toml') }}-
+            ${{ runner.os }}-cargo-vllm-sr-
 
       # Python caching for llm-katan builds
       - name: Cache Python dependencies (llm-katan)
@@ -207,6 +227,10 @@ jobs:
           sudo rm -rf /var/lib/apt/lists/*
           df -h
 
+      - name: Record build start time
+        id: build-start
+        run: echo "start=$(date +%s)" >> $GITHUB_OUTPUT
+
       - name: Build and push ${{ matrix.image }} multi-platform Docker image
         id: build
         uses: docker/build-push-action@v5
@@ -228,15 +252,23 @@ jobs:
             CARGO_NET_GIT_FETCH_WITH_CLI=true
             BUILDKIT_PROGRESS=plain
 
-      - name: Build summary
+      - name: Build summary and timing
         if: always()
         run: |
+          END=$(date +%s)
+          START="${{ steps.build-start.outputs.start }}"
+          DURATION=$((END - START))
+          DURATION_MIN=$((DURATION / 60))
+          DURATION_SEC=$((DURATION % 60))
           if [ "${{ job.status }}" = "success" ]; then
             PLATFORMS="${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}"
-            echo "::notice title=Build Success::${{ matrix.image }} built successfully for ${PLATFORMS}"
+            echo "::notice title=Build Success::${{ matrix.image }} built for ${PLATFORMS} in ${DURATION_MIN}m ${DURATION_SEC}s"
             echo "### Build Summary for ${{ matrix.image }}" >> $GITHUB_STEP_SUMMARY
             echo "- **Platforms**: ${PLATFORMS}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Build time**: ${DURATION_MIN}m ${DURATION_SEC}s (${DURATION}s)" >> $GITHUB_STEP_SUMMARY
             echo "- **Tags**: ${{ steps.tags.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
           else
-            echo "::error title=Build Failed::${{ matrix.image }} build failed"
+            echo "::error title=Build Failed::${{ matrix.image }} build failed after ${DURATION_MIN}m ${DURATION_SEC}s"
+            echo "### Build failed for ${{ matrix.image }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Elapsed**: ${DURATION_MIN}m ${DURATION_SEC}s (${DURATION}s)" >> $GITHUB_STEP_SUMMARY
           fi
