@@ -150,6 +150,9 @@ model_config:
   "qwen2.5:3b":
     reasoning_family: "qwen3"  # Qwen2.5 uses similar reasoning syntax to Qwen3
     preferred_endpoints: ["ollama"]
+  "qwen2.5vl:7b":
+    reasoning_family: "qwen3"  # Qwen2.5 VL uses similar reasoning syntax
+    preferred_endpoints: ["ollama"]
 
 # Categories define domain metadata only (no routing logic)
 categories:
@@ -195,11 +198,44 @@ categories:
   - name: engineering
     description: "Engineering and technical problem-solving"
     mmlu_categories: ["engineering"]
+  - name: computer_use
+    description: "Desktop automation, GUI control, and computer use agent tasks"
+    mmlu_categories: ["computer_use"]
 
 # Decisions define routing logic with domain-based conditions
 strategy: "priority"
 
 decisions:
+  - name: "computer_use_decision"
+    description: "Computer use agent with vision models for desktop automation"
+    priority: 200
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "computer_use"
+        - type: "keyword"
+          name: "desktop_automation"
+    modelRefs:
+      - model: "qwen2.5vl:7b"
+        use_reasoning: true
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: |
+            You are a computer use agent controlling a desktop environment.
+            Analyze screenshots carefully and execute precise mouse clicks and keyboard actions.
+            When given a task:
+            1. Observe the current screen state
+            2. Plan the next action to achieve the goal
+            3. Execute one action at a time
+            4. Verify the result before proceeding
+            Be methodical and precise with coordinates.
+      - type: "pii"
+        configuration:
+          enabled: true
+          pii_types_allowed: []
+
   - name: "business_decision"
     description: "Business and management queries"
     priority: 100

@@ -203,6 +203,74 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	mux.HandleFunc("/api/tools/open-web", handlers.OpenWebHandler())
 	log.Printf("Open Web API endpoint registered: /api/tools/open-web")
 
+	// Browser automation endpoints for computer-use agent
+	browserHandler := handlers.NewBrowserHandler()
+	mux.HandleFunc("/api/browser/start", browserHandler.StartSessionHandler())
+	mux.HandleFunc("/api/browser/", func(w http.ResponseWriter, r *http.Request) {
+		if middleware.HandleCORSPreflight(w, r) {
+			return
+		}
+		path := strings.TrimPrefix(r.URL.Path, "/api/browser/")
+		parts := strings.Split(path, "/")
+		if len(parts) < 1 || parts[0] == "" {
+			http.Error(w, "Session ID required", http.StatusBadRequest)
+			return
+		}
+
+		// Route based on action
+		if len(parts) >= 2 {
+			switch parts[1] {
+			case "action":
+				browserHandler.ActionHandler().ServeHTTP(w, r)
+			case "screenshot":
+				browserHandler.ScreenshotHandler().ServeHTTP(w, r)
+			case "navigate":
+				browserHandler.NavigateHandler().ServeHTTP(w, r)
+			default:
+				http.NotFound(w, r)
+			}
+		} else if r.Method == http.MethodDelete {
+			browserHandler.StopSessionHandler().ServeHTTP(w, r)
+		} else {
+			http.NotFound(w, r)
+		}
+	})
+	log.Printf("Browser automation API endpoints registered: /api/browser/*")
+
+	// Computer-use agent service proxy (E2B-powered desktop automation)
+	if cfg.AgentServiceURL != "" {
+		agentHandler := handlers.NewAgentHandler(cfg.AgentServiceURL)
+
+		// WebSocket proxy for real-time agent communication
+		mux.HandleFunc("/ws/agent", func(w http.ResponseWriter, r *http.Request) {
+			agentHandler.WebSocketHandler()(w, r)
+		})
+
+		// REST API proxy for agent endpoints
+		mux.HandleFunc("/api/agent/health", func(w http.ResponseWriter, r *http.Request) {
+			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			agentHandler.HealthHandler()(w, r)
+		})
+		mux.HandleFunc("/api/agent/models", func(w http.ResponseWriter, r *http.Request) {
+			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			agentHandler.ModelsHandler()(w, r)
+		})
+		mux.HandleFunc("/api/agent/", func(w http.ResponseWriter, r *http.Request) {
+			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			agentHandler.RESTProxyHandler()(w, r)
+		})
+		log.Printf("Agent service proxy configured: %s", cfg.AgentServiceURL)
+		log.Printf("Agent API endpoints registered: /ws/agent, /api/agent/*")
+	} else {
+		log.Printf("Info: Agent service URL not configured (AGENT_SERVICE_URL)")
+	}
+
 	// Status endpoint - shows service health status (aligns with vllm-sr status)
 	mux.HandleFunc("/api/status", handlers.StatusHandler(cfg.RouterAPIURL))
 	log.Printf("Status API endpoint registered: /api/status")

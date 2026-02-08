@@ -1,0 +1,12 @@
+# Computer Use Agent Dependencies
+fastapi>=0.115.0
+uvicorn[standard]>=0.29.0
+websockets>=13.0.0
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+httpx>=0.27.0
+aiofiles>=23.0.0
+smolagents[openai,litellm]>=1.20.0
+e2b-desktop>=2.0.0
+huggingface_hub>=1.0.0
+pillow>=10.0.0

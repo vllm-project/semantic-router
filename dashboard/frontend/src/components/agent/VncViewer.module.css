@@ -1,0 +1,177 @@
+/* VncViewer.module.css */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary, #1a1a1a);
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-color, #333);
+}
+
+.statusBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--bg-tertiary, #242424);
+  border-bottom: 1px solid var(--border-color, #333);
+}
+
+.statusLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+
+.statusDot.connected {
+  background-color: #22c55e;
+}
+
+.statusDot.running {
+  background-color: #3b82f6;
+  animation: pulse 1.5s infinite;
+}
+
+.statusDot.disconnected {
+  background-color: #6b7280;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.statusText {
+  font-size: 12px;
+  color: var(--text-secondary, #a0a0a0);
+}
+
+.statusRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vncBadge {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  border-radius: 4px;
+}
+
+.viewerArea {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loadingOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 10;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loadingOverlay span {
+  font-size: 14px;
+  color: #a0a0a0;
+}
+
+.errorOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.9);
+  padding: 24px;
+}
+
+.errorIcon {
+  width: 48px;
+  height: 48px;
+  color: #ef4444;
+}
+
+.errorText {
+  font-size: 14px;
+  color: #ef4444;
+  text-align: center;
+}
+
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+}
+
+.placeholderIcon {
+  width: 64px;
+  height: 64px;
+  color: #4b5563;
+}
+
+.placeholderTitle {
+  font-size: 16px;
+  font-weight: 500;
+  color: #9ca3af;
+}
+
+.placeholderText {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.vncFrame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #000;
+}

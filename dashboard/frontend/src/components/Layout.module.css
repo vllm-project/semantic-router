@@ -133,6 +133,13 @@ button.navLink {
   align-items: center;
 }
 
+/* Playground Dropdown */
+.playgroundDropdown {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
 /* System Dropdown */
 .systemDropdown {
   position: relative;

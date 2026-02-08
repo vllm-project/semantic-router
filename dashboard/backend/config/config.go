@@ -15,12 +15,13 @@ type Config struct {
 	ConfigDir     string
 
 	// Upstream targets
-	GrafanaURL    string
-	PrometheusURL string
-	RouterAPIURL  string
-	RouterMetrics string
-	JaegerURL     string
-	EnvoyURL      string // Envoy proxy for chat completions
+	GrafanaURL      string
+	PrometheusURL   string
+	RouterAPIURL    string
+	RouterMetrics   string
+	JaegerURL       string
+	EnvoyURL        string // Envoy proxy for chat completions
+	AgentServiceURL string // Computer-use agent service URL
 
 	// Read-only mode for public beta deployments
 	ReadonlyMode bool
@@ -62,6 +63,7 @@ func LoadConfig() (*Config, error) {
 	routerMetrics := flag.String("router_metrics", env("TARGET_ROUTER_METRICS_URL", "http://localhost:9190/metrics"), "Router metrics URL")
 	jaegerURL := flag.String("jaeger", env("TARGET_JAEGER_URL", ""), "Jaeger base URL")
 	envoyURL := flag.String("envoy", env("TARGET_ENVOY_URL", ""), "Envoy proxy URL for chat completions")
+	agentServiceURL := flag.String("agent", env("AGENT_SERVICE_URL", ""), "Computer-use agent service URL")
 
 	// Read-only mode for public beta deployments
 	readonlyMode := flag.Bool("readonly", env("DASHBOARD_READONLY", "false") == "true", "enable read-only mode (disable config editing)")
@@ -89,6 +91,7 @@ func LoadConfig() (*Config, error) {
 	cfg.RouterMetrics = *routerMetrics
 	cfg.JaegerURL = *jaegerURL
 	cfg.EnvoyURL = *envoyURL
+	cfg.AgentServiceURL = *agentServiceURL
 	cfg.ReadonlyMode = *readonlyMode
 	cfg.Platform = *platform
 	cfg.EvaluationEnabled = *evaluationEnabled

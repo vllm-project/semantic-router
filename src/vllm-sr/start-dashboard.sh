@@ -28,6 +28,13 @@ if [ "${DASHBOARD_READONLY}" = "true" ]; then
     echo "Dashboard read-only mode: ENABLED"
 fi
 
+# Build agent service arguments
+AGENT_ARGS=""
+if [ -n "${E2B_API_KEY}" ]; then
+    AGENT_ARGS="-agent=http://localhost:8000"
+    echo "Agent service URL: http://localhost:8000"
+fi
+
 # Build observability arguments
 OBSERVABILITY_ARGS=""
 if [ -n "${TARGET_JAEGER_URL}" ]; then
@@ -51,5 +58,6 @@ exec /usr/local/bin/dashboard-backend \
     -router_metrics=http://localhost:9190/metrics \
     -envoy="http://localhost:${ENVOY_PORT}" \
     ${READONLY_ARG} \
+    ${AGENT_ARGS} \
     "${OBSERVABILITY_ARGS}"
 

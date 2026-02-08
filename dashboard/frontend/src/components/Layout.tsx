@@ -12,19 +12,24 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectionChange, hideHeaderOnMobile }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [systemDropdownOpen, setSystemDropdownOpen] = useState(false)
+  const [playgroundDropdownOpen, setPlaygroundDropdownOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
   const isConfigPage = location.pathname === '/config'
   const isSystemPage = isConfigPage && configSection === 'router-config'
   const isObservabilityPage = ['/status', '/logs', '/monitoring', '/tracing'].includes(location.pathname)
   const isMCPPage = isConfigPage && configSection === 'mcp'
+  const isPlaygroundPage = location.pathname === '/playground' || location.pathname === '/agent'
 
-  // Close system dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement
       if (!target.closest(`.${styles.systemDropdown}`)) {
         setSystemDropdownOpen(false)
+      }
+      if (!target.closest(`.${styles.playgroundDropdown}`)) {
+        setPlaygroundDropdownOpen(false)
       }
     }
     document.addEventListener('click', handleClickOutside)
@@ -44,14 +49,47 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
 
           {/* Center: Navigation - Flat structure */}
           <nav className={styles.nav}>
-            <NavLink
-              to="/playground"
-              className={({ isActive }) =>
-                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
-              }
-            >
-              Playground
-            </NavLink>
+            {/* Playground Dropdown */}
+            <div className={styles.playgroundDropdown}>
+              <button
+                className={`${styles.navLink} ${styles.dropdownTrigger} ${isPlaygroundPage ? styles.navLinkActive : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setPlaygroundDropdownOpen(!playgroundDropdownOpen)
+                }}
+              >
+                Playground
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 12 12"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  className={`${styles.dropdownArrow} ${playgroundDropdownOpen ? styles.dropdownArrowOpen : ''}`}
+                >
+                  <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              {playgroundDropdownOpen && (
+                <div className={styles.dropdownMenu}>
+                  <NavLink
+                    to="/playground"
+                    className={`${styles.dropdownItem} ${location.pathname === '/playground' ? styles.dropdownItemActive : ''}`}
+                    onClick={() => setPlaygroundDropdownOpen(false)}
+                  >
+                    Chat
+                  </NavLink>
+                  <NavLink
+                    to="/agent"
+                    className={`${styles.dropdownItem} ${location.pathname === '/agent' ? styles.dropdownItemActive : ''}`}
+                    onClick={() => setPlaygroundDropdownOpen(false)}
+                  >
+                    Agent
+                  </NavLink>
+                </div>
+              )}
+            </div>
 
             <button
               className={`${styles.navLink} ${isConfigPage && configSection === 'models' ? styles.navLinkActive : ''}`}
@@ -243,9 +281,15 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
         {/* Mobile Navigation */}
         {mobileMenuOpen && (
           <div className={styles.mobileNav}>
-            <NavLink to="/playground" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
-              Playground
-            </NavLink>
+            <div className={styles.mobileNavSection}>
+              <div className={styles.mobileNavSectionTitle}>Playground</div>
+              <NavLink to="/playground" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+                Chat
+              </NavLink>
+              <NavLink to="/agent" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+                Agent
+              </NavLink>
+            </div>
             <button
               className={styles.mobileNavLink}
               onClick={() => {
