@@ -1518,6 +1518,10 @@ body.playground-fullscreen .container {
     flex-direction: column;
   }
 
+  .chatTopBar {
+    display: none;
+  }
+
   .sidebar {
     width: 100%;
     flex-direction: row;

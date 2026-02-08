@@ -694,7 +694,7 @@ const ChatComponent = ({
   const [isFullscreen] = useState(isFullscreenMode)
   const [enableWebSearch, setEnableWebSearch] = useState(true)
   const [expandedToolCards, setExpandedToolCards] = useState<Set<string>>(new Set())
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
