@@ -395,6 +395,8 @@ decisions:
           name: "math_keywords"
         - type: "domain"
           name: "math"
+        - type: "fact_check"
+          name: "needs_fact_check"
     modelRefs:
       - model: "openai/gpt-oss-120b"
         use_reasoning: true
@@ -407,6 +409,29 @@ decisions:
         configuration:
           enabled: true
           similarity_threshold: 0.92
+      # RAG Plugin: Retrieval-Augmented Generation
+      # Supports backends: milvus, external_api, openai, mcp, hybrid
+      - type: "rag"
+        configuration:
+          enabled: true
+          backend: "external_api"       # Backend type
+          top_k: 5                      # Number of documents to retrieve
+          similarity_threshold: 0.75   # Min similarity (0.0-1.0)
+          injection_mode: "tool_role"  # How to inject context
+          on_failure: "skip"           # Continue if retrieval fails
+          cache_results: true          # Cache for performance
+          cache_ttl_seconds: 300       # 5 minutes cache
+          backend_config:
+            endpoint: "http://host.docker.internal:8001/search"
+            request_format: "elasticsearch"
+            timeout_seconds: 10
+      # Hallucination Detection: Verify LLM response against RAG context
+      # When RAG uses injection_mode: "tool_role", the retrieved context is
+      # available as tool results for fact-checking the LLM response
+      - type: "hallucination"
+        configuration:
+          enabled: true
+          hallucination_action: "header"
       # Router Replay plugin: Capture routing decisions for debugging
       # Records accessible via /v1/router_replay API endpoint
       - type: "router_replay"
@@ -414,7 +439,7 @@ decisions:
           enabled: true
           max_records: 200              # Maximum records in memory (default: 200)
           capture_request_body: true   # Capture request payloads (default: false)
-          capture_response_body: false  # Capture response payloads (default: false)
+          capture_response_body: true  # Capture response payloads (default: false)
           max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
   - name: "physics_problems"
