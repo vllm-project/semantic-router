@@ -132,9 +132,10 @@ func (m *MilvusStore) ensureCollection(ctx context.Context) error {
 				TypeParams: map[string]string{"max_length": "64"},
 			},
 			{
-				Name:       "user_id",
-				DataType:   entity.FieldTypeVarChar,
-				TypeParams: map[string]string{"max_length": "256"},
+				Name:           "user_id",
+				DataType:       entity.FieldTypeVarChar,
+				TypeParams:     map[string]string{"max_length": "256"},
+				IsPartitionKey: true, // Enables efficient per-user queries
 			},
 			{
 				Name:       "project_id",
@@ -187,8 +188,15 @@ func (m *MilvusStore) ensureCollection(ctx context.Context) error {
 		},
 	}
 
-	// Create collection
-	if createErr := m.client.CreateCollection(ctx, schema, 1); createErr != nil {
+	// Create collection with partition key support
+	// NumPartitions determines how partition key values are distributed (default: 16)
+	numPartitions := int64(16) // Milvus default
+	if m.config.Milvus.NumPartitions > 0 {
+		numPartitions = int64(m.config.Milvus.NumPartitions)
+	}
+	logging.Infof("MilvusStore: creating collection with %d partitions (partition key: user_id)", numPartitions)
+
+	if createErr := m.client.CreateCollection(ctx, schema, 1, client.WithPartitionNum(numPartitions)); createErr != nil {
 		return fmt.Errorf("failed to create collection: %w", createErr)
 	}
 
