@@ -171,7 +171,7 @@ type IntelligentRouting struct {
 	Strategy string `yaml:"strategy,omitempty"`
 
 	// ModelSelection configures the algorithm used for model selection
-	// Supported methods: "static", "elo", "router_dc", "automix", "hybrid"
+	// Supported methods: "static", "elo", "router_dc", "automix", "hybrid", "knn", "kmeans", "svm", "rl_driven", "gmtrouter"
 	ModelSelection ModelSelectionConfig `yaml:"model_selection,omitempty"`
 
 	// Reasoning mode configuration
@@ -186,7 +186,7 @@ type IntelligentRouting struct {
 //   - Hybrid: Cost-Efficient Quality-Aware Query Routing (arXiv:2404.14618)
 type ModelSelectionConfig struct {
 	// Method specifies the selection algorithm to use
-	// Options: "static", "elo", "router_dc", "automix", "hybrid"
+	// Options: "static", "elo", "router_dc", "automix", "hybrid", "knn", "kmeans", "svm", "rl_driven", "gmtrouter"
 	// Default: "static" (uses static scores from configuration)
 	Method string `yaml:"method,omitempty"`
 
@@ -342,6 +342,59 @@ type HybridSelectionConfig struct {
 
 	// NormalizeScores before combination (default: true)
 	NormalizeScores bool `yaml:"normalize_scores,omitempty"`
+}
+
+// RLDrivenSelectionConfig configures RL-based model selection
+// Reference: Router-R1 (arXiv:2506.09033)
+type RLDrivenSelectionConfig struct {
+	// ExplorationRate controls initial exploration (0-1, default: 0.3)
+	ExplorationRate float64 `yaml:"exploration_rate,omitempty"`
+
+	// UseThompsonSampling enables Thompson Sampling (default: true)
+	UseThompsonSampling bool `yaml:"use_thompson_sampling,omitempty"`
+
+	// EnablePersonalization enables per-user preference tracking
+	EnablePersonalization bool `yaml:"enable_personalization,omitempty"`
+
+	// PersonalizationBlend controls global vs user-specific blend (0-1, default: 0.3)
+	PersonalizationBlend float64 `yaml:"personalization_blend,omitempty"`
+
+	// CostAwareness enables cost-aware exploration
+	CostAwareness bool `yaml:"cost_awareness,omitempty"`
+
+	// CostWeight controls cost influence when CostAwareness is enabled (0-1)
+	CostWeight float64 `yaml:"cost_weight,omitempty"`
+
+	// UseRouterR1Rewards enables Router-R1 style reward computation
+	UseRouterR1Rewards bool `yaml:"use_router_r1_rewards,omitempty"`
+
+	// EnableLLMRouting enables LLM-based routing using Router-R1 approach
+	EnableLLMRouting bool `yaml:"enable_llm_routing,omitempty"`
+
+	// RouterR1ServerURL is the URL of the Router-R1 LLM server
+	RouterR1ServerURL string `yaml:"router_r1_server_url,omitempty"`
+}
+
+// GMTRouterSelectionConfig configures graph-based personalized routing
+// Reference: GMTRouter (arXiv:2511.08590)
+type GMTRouterSelectionConfig struct {
+	// EnablePersonalization enables user-specific preference learning
+	EnablePersonalization bool `yaml:"enable_personalization,omitempty"`
+
+	// HistorySampleSize is the number of interaction histories to sample (default: 5)
+	HistorySampleSize int `yaml:"history_sample_size,omitempty"`
+
+	// MinInteractionsForPersonalization is minimum interactions before personalization
+	MinInteractionsForPersonalization int `yaml:"min_interactions_for_personalization,omitempty"`
+
+	// MaxInteractionsPerUser limits stored interactions per user (default: 100)
+	MaxInteractionsPerUser int `yaml:"max_interactions_per_user,omitempty"`
+
+	// ModelPath is the path to trained GMTRouter model weights
+	ModelPath string `yaml:"model_path,omitempty"`
+
+	// StoragePath is where to persist interaction graph
+	StoragePath string `yaml:"storage_path,omitempty"`
 }
 
 type Signals struct {
@@ -1487,6 +1540,11 @@ type AlgorithmConfig struct {
 	// - "router_dc": Use dual-contrastive learning for query-model matching
 	// - "automix": Use POMDP-based cost-quality optimization
 	// - "hybrid": Combine multiple selection methods with configurable weights
+	// - "rl_driven": Use reinforcement learning with Thompson Sampling (arXiv:2506.09033)
+	// - "gmtrouter": Use heterogeneous graph learning for personalized routing (arXiv:2511.08590)
+	// - "knn": Use K-Nearest Neighbors for query-based model selection
+	// - "kmeans": Use KMeans clustering for model selection
+	// - "svm": Use Support Vector Machine for model classification
 	Type string `yaml:"type"`
 
 	// Looper algorithm configurations (for multi-model execution)
@@ -1496,10 +1554,12 @@ type AlgorithmConfig struct {
 
 	// Selection algorithm configurations (for single model selection)
 	// These align with the global ModelSelectionConfig but can be overridden per-decision
-	Elo      *EloSelectionConfig      `yaml:"elo,omitempty"`
-	RouterDC *RouterDCSelectionConfig `yaml:"router_dc,omitempty"`
-	AutoMix  *AutoMixSelectionConfig  `yaml:"automix,omitempty"`
-	Hybrid   *HybridSelectionConfig   `yaml:"hybrid,omitempty"`
+	Elo       *EloSelectionConfig       `yaml:"elo,omitempty"`
+	RouterDC  *RouterDCSelectionConfig  `yaml:"router_dc,omitempty"`
+	AutoMix   *AutoMixSelectionConfig   `yaml:"automix,omitempty"`
+	Hybrid    *HybridSelectionConfig    `yaml:"hybrid,omitempty"`
+	RLDriven  *RLDrivenSelectionConfig  `yaml:"rl_driven,omitempty"`
+	GMTRouter *GMTRouterSelectionConfig `yaml:"gmtrouter,omitempty"`
 
 	// OnError defines behavior when algorithm fails: "skip" or "fail"
 	// - "skip": Skip and use fallback (default)

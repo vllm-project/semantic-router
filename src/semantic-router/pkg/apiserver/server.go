@@ -12,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
@@ -136,6 +137,7 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	// Model selection feedback endpoints
 	mux.HandleFunc("POST /api/v1/feedback", s.handleFeedback)
 	mux.HandleFunc("GET /api/v1/ratings", s.handleGetRatings)
+	mux.HandleFunc("GET /api/v1/rl-state", s.handleRLState)
 
 	// Configuration endpoints
 	mux.HandleFunc("GET /config/classification", s.handleGetConfig)
@@ -194,4 +196,29 @@ func (s *ClassificationAPIServer) writeErrorResponse(w http.ResponseWriter, stat
 	}
 
 	s.writeJSONResponse(w, statusCode, errorResponse)
+}
+
+// handleRLState returns the current state of RL-based selectors for debugging
+func (s *ClassificationAPIServer) handleRLState(w http.ResponseWriter, r *http.Request) {
+	userID := r.URL.Query().Get("user_id")
+
+	state := map[string]interface{}{
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	}
+
+	// Get RLDriven selector state
+	if rlSelector, ok := selection.GlobalRegistry.Get(selection.MethodRLDriven); ok {
+		if rlDriven, ok := rlSelector.(*selection.RLDrivenSelector); ok {
+			state["rl_driven"] = rlDriven.GetDebugState(userID)
+		}
+	}
+
+	// Get GMTRouter selector state
+	if gmtSelector, ok := selection.GlobalRegistry.Get(selection.MethodGMTRouter); ok {
+		if gmtRouter, ok := gmtSelector.(*selection.GMTRouterSelector); ok {
+			state["gmtrouter"] = gmtRouter.GetDebugState(userID)
+		}
+	}
+
+	s.writeJSONResponse(w, http.StatusOK, state)
 }

@@ -331,6 +331,10 @@ func (r *OpenAIRouter) getSelectionMethod(algorithm *config.AlgorithmConfig) sel
 			return selection.MethodAutoMix
 		case "hybrid":
 			return selection.MethodHybrid
+		case "rl_driven":
+			return selection.MethodRLDriven
+		case "gmtrouter":
+			return selection.MethodGMTRouter
 		case "static":
 			return selection.MethodStatic
 		case "knn":
