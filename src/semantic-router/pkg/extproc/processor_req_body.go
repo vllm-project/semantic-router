@@ -130,6 +130,21 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		return r.createErrorResponse(503, fmt.Sprintf("RAG retrieval failed: %v", ragErr)), nil
 	}
 
+	// Execute image generation plugin if enabled and request matches
+	// Image generation returns an immediate response, bypassing model routing
+	if imageGenResult, err := r.executeImageGenPlugin(ctx, decisionName); err != nil {
+		logging.Errorf("[ImageGen] Plugin execution failed: %v", err)
+		return r.createErrorResponse(503, fmt.Sprintf("Image generation failed: %v", err)), nil
+	} else if imageGenResult != nil {
+		// Image was generated - return immediate response
+		logging.Infof("[ImageGen] Returning generated image response")
+		responseBody, err := r.buildImageGenResponse(imageGenResult, ctx)
+		if err != nil {
+			return r.createErrorResponse(500, fmt.Sprintf("Failed to build image response: %v", err)), nil
+		}
+		return r.createJSONResponseWithBody(200, responseBody), nil
+	}
+
 	// Handle memory retrieval (if enabled)
 	// Memory retrieval happens after cache check to avoid unnecessary work on cache hits
 	// and before model routing to inject memories into LLM context
