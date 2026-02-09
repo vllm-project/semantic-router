@@ -400,12 +400,18 @@ def translate_providers_to_router_format(providers) -> Dict[str, Any]:
                     "parameter": family_config.parameter,
                 }
 
+    # Translate external_models if present
+    external_models = []
+    if providers.external_models:
+        external_models = translate_external_models(providers.external_models)
+
     return {
         "vllm_endpoints": vllm_endpoints,
         "model_config": model_config,
         "default_model": providers.default_model,
         "reasoning_families": reasoning_families_dict,
         "default_reasoning_effort": providers.default_reasoning_effort,
+        "external_models": external_models,
     }
 
 
@@ -536,6 +542,21 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
     merged.update(provider_config)
     log.info(f"  Added {len(user_config.providers.models)} models")
     log.info(f"  Added {len(provider_config['vllm_endpoints'])} endpoints")
+    if provider_config.get("external_models"):
+        log.info(f"  Added {len(provider_config['external_models'])} external_models")
+
+    # Pass through memory configuration if provided
+    if user_config.memory:
+        memory_config = user_config.memory.model_dump(exclude_none=True)
+        merged["memory"] = memory_config
+        log.info(f"  Added memory configuration (enabled={user_config.memory.enabled})")
+
+    # Pass through embedding_models configuration if provided
+    # BERT is recommended for memory retrieval (forgiving semantic matching)
+    if user_config.embedding_models:
+        embedding_config = user_config.embedding_models.model_dump(exclude_none=True)
+        merged["embedding_models"] = embedding_config
+        log.info(f"  Added embedding_models configuration")
 
     log.info("✓ Configuration merged successfully")
 

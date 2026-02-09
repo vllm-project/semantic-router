@@ -1,0 +1,87 @@
+# vllm-sr CLI config for Memory Integration Test
+# This is the user-facing vllm-sr format
+
+version: v0.1
+
+# Embedding models - BERT required for memory (forgiving semantic matching)
+# BERT (MiniLM) provides better question-to-statement similarity than mmbert/qwen3
+embedding_models:
+  bert_model_path: 'models/mom-embedding-light'  # all-MiniLM-L12-v2 (384-dim)
+  use_cpu: true
+
+# Listeners - Network configuration (required)
+listeners:
+  - name: "http-8888"
+    address: "0.0.0.0"
+    port: 8888
+    timeout: "300s"
+
+# Signals - Domain-based for category auto-generation
+signals:
+  domains:
+    - name: "general"
+      description: "General queries for memory testing"
+      mmlu_categories: ["other"]
+  keywords: []
+
+# Decisions - Simple routing for test (using domain for category auto-gen)
+decisions:
+  - name: "default_route"
+    description: "Default route for memory testing"
+    priority: 1
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "general"
+    modelRefs:
+      - model: "qwen3"
+        use_reasoning: false
+    # Plugins - System prompt + Memory to test they work together
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are MoM, a helpful AI assistant with memory. You remember important facts about users and use this context to provide personalized assistance."
+          mode: "insert"  # insert mode to test with memory injection
+      - type: "memory"
+        configuration:
+          enabled: true
+          retrieval_limit: 5
+          similarity_threshold: 0.60
+          auto_store: true
+
+# Providers - LLM backend
+providers:
+  models:
+    - name: "qwen3"
+      endpoints:
+        - name: "llm_katan"
+          weight: 1
+          endpoint: "172.17.0.1:8000"
+          protocol: "http"
+  default_model: "qwen3"
+  # External models for memory features (query rewriting and extraction)
+  external_models:
+    - provider: "vllm"
+      role: "memory_rewrite"
+      endpoint: "172.17.0.1:8000"
+      model_name: "qwen3"
+      timeout_seconds: 30
+    - provider: "vllm"
+      role: "memory_extraction"
+      endpoint: "172.17.0.1:8000"
+      model_name: "qwen3"
+      timeout_seconds: 30
+
+# Memory configuration - the key feature being tested
+memory:
+  enabled: true
+  auto_store: true
+  milvus:
+    address: "172.17.0.1:19530"
+    collection: "memory_test_ci"
+    dimension: 384  # Must match embedding_models target_dimension
+  embedding_model: "bert"  # Use BERT for forgiving semantic matching
+  default_retrieval_limit: 5
+  default_similarity_threshold: 0.60  # POC recommends 0.6 as starting threshold
+  extraction_batch_size: 1  # Extract after every turn (1%1=0 triggers extraction)
