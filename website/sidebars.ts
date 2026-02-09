@@ -117,6 +117,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'training/training-overview',
         'training/model-performance-eval',
+        'training/ml-model-selection',
       ],
     },
     {
