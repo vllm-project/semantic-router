@@ -1169,7 +1169,7 @@ var _ = Describe("ExtProc Package", func() {
 
 			_, err := CreateTestRouter(cfg)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Or(ContainSubstring("no such file or directory"), ContainSubstring("The system cannot find the path specified")))
+			Expect(err.Error()).To(ContainSubstring("no such file or directory"))
 		})
 	})
 

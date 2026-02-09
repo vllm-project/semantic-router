@@ -59,9 +59,9 @@ logger = logging.getLogger(__name__)
 @click.option(
     "--backend",
     "-b",
-    type=click.Choice(["transformers", "vllm"], case_sensitive=False),
+    type=click.Choice(["transformers", "vllm", "echo"], case_sensitive=False),
     default="transformers",
-    help="Backend to use (default: transformers)",
+    help="Backend to use: transformers, vllm, or echo (default: transformers)",
 )
 @click.option(
     "--max-tokens",
@@ -167,16 +167,18 @@ def main(
             )
             sys.exit(1)
 
-    try:
-        import torch  # noqa: F401
-        import transformers  # noqa: F401
-    except ImportError:
-        click.echo(
-            "❌ Required dependencies missing. "
-            "Install with: pip install transformers torch",
-            err=True,
-        )
-        sys.exit(1)
+    # Echo backend doesn't need torch/transformers
+    if config.backend != "echo":
+        try:
+            import torch  # noqa: F401
+            import transformers  # noqa: F401
+        except ImportError:
+            click.echo(
+                "❌ Required dependencies missing. "
+                "Install with: pip install transformers torch",
+                err=True,
+            )
+            sys.exit(1)
 
     # Run the server
     try:

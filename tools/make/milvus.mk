@@ -18,7 +18,7 @@ start-milvus: ## Start Milvus container for testing
 		-e CLUSTER_ENABLED=false \
 		-p 19530:19530 \
 		-p 9091:9091 \
-		-v /tmp/milvus-data:/var/lib/milvus \
+		-v /tmp/milvus-data:/var/lib/milvus:z \
 		milvusdb/milvus:v2.3.3 \
 		milvus run standalone
 	@echo "Waiting for Milvus to be ready..."

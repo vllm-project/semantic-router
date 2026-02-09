@@ -3158,4 +3158,63 @@ default_model: "test-model"
 			Expect(cfg.GetHallucinationAction()).To(Equal("warn"))
 		})
 	})
+
+	Describe("Decision.GetMemoryConfig", func() {
+		It("should return nil when no memory plugin is configured", func() {
+			decision := &Decision{
+				Name: "test_decision",
+				Plugins: []DecisionPlugin{
+					{Type: "pii", Configuration: map[string]interface{}{"enabled": true}},
+				},
+			}
+
+			Expect(decision.GetMemoryConfig()).To(BeNil())
+		})
+
+		It("should return memory config when memory plugin is configured", func() {
+			decision := &Decision{
+				Name: "test_decision",
+				Plugins: []DecisionPlugin{
+					{
+						Type: "memory",
+						Configuration: map[string]interface{}{
+							"enabled":              true,
+							"retrieval_limit":      10,
+							"similarity_threshold": 0.75,
+							"auto_store":           true,
+						},
+					},
+				},
+			}
+
+			memConfig := decision.GetMemoryConfig()
+			Expect(memConfig).NotTo(BeNil())
+			Expect(memConfig.Enabled).To(BeTrue())
+			Expect(*memConfig.RetrievalLimit).To(Equal(10))
+			Expect(*memConfig.SimilarityThreshold).To(BeNumerically("~", 0.75, 0.001))
+			Expect(*memConfig.AutoStore).To(BeTrue())
+		})
+
+		It("should return memory config with partial settings", func() {
+			decision := &Decision{
+				Name: "test_decision",
+				Plugins: []DecisionPlugin{
+					{
+						Type: "memory",
+						Configuration: map[string]interface{}{
+							"enabled": false,
+							// Only enabled is set, other fields are nil
+						},
+					},
+				},
+			}
+
+			memConfig := decision.GetMemoryConfig()
+			Expect(memConfig).NotTo(BeNil())
+			Expect(memConfig.Enabled).To(BeFalse())
+			Expect(memConfig.RetrievalLimit).To(BeNil())
+			Expect(memConfig.SimilarityThreshold).To(BeNil())
+			Expect(memConfig.AutoStore).To(BeNil())
+		})
+	})
 })
