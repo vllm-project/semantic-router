@@ -1,0 +1,137 @@
+{
+  "description": "Test cases for RL-driven model selection (Issue #994)",
+  "test_cases": [
+    {
+      "name": "basic_selection",
+      "description": "Verify RL-driven selector picks from candidate models",
+      "input": {
+        "query": "What is the capital of France?",
+        "candidate_models": ["gpt-4", "claude-3-sonnet", "mistral-7b"]
+      },
+      "expected": {
+        "model_selected": true,
+        "selection_method": "rl_driven"
+      }
+    },
+    {
+      "name": "personalization_preference",
+      "description": "Verify user preference is learned from feedback",
+      "setup": {
+        "feedback_events": [
+          {"winner": "gpt-4", "loser": "mistral-7b", "user_id": "user-123"},
+          {"winner": "gpt-4", "loser": "mistral-7b", "user_id": "user-123"},
+          {"winner": "gpt-4", "loser": "mistral-7b", "user_id": "user-123"}
+        ]
+      },
+      "input": {
+        "query": "Help me with coding",
+        "user_id": "user-123",
+        "candidate_models": ["gpt-4", "mistral-7b"]
+      },
+      "expected": {
+        "preferred_model": "gpt-4",
+        "min_preference_rate": 0.6
+      }
+    },
+    {
+      "name": "implicit_feedback",
+      "description": "Verify implicit feedback (satisfied/dissatisfied) updates preferences",
+      "input": {
+        "query": "Explain quantum computing",
+        "feedback_type": "satisfied",
+        "confidence": 0.85
+      },
+      "expected": {
+        "preference_updated": true,
+        "weighted_update": true
+      }
+    },
+    {
+      "name": "session_context",
+      "description": "Verify session context influences model selection",
+      "setup": {
+        "session_id": "session-abc",
+        "prior_success": {"model": "claude-3-sonnet", "successes": 3, "total": 3}
+      },
+      "input": {
+        "query": "Continue our conversation about AI",
+        "session_id": "session-abc"
+      },
+      "expected": {
+        "session_influence": true,
+        "preferred_model": "claude-3-sonnet"
+      }
+    },
+    {
+      "name": "exploration_initial",
+      "description": "Verify exploration behavior with no prior data",
+      "input": {
+        "query": "Random test query",
+        "num_requests": 30,
+        "new_context": true
+      },
+      "expected": {
+        "exploration_observed": true,
+        "min_unique_models": 2
+      }
+    },
+    {
+      "name": "cost_awareness",
+      "description": "Verify cost-aware exploration prefers cheaper models",
+      "setup": {
+        "cost_awareness": true,
+        "model_costs": {
+          "gpt-4": 30.0,
+          "mistral-7b": 0.5
+        }
+      },
+      "input": {
+        "query": "Simple question for exploration",
+        "exploration_mode": true
+      },
+      "expected": {
+        "cheaper_model_preference": true,
+        "cost_factor_applied": true
+      }
+    },
+    {
+      "name": "tie_feedback",
+      "description": "Verify tie feedback updates both models equally",
+      "input": {
+        "winner": "gpt-4",
+        "loser": "claude-3-sonnet",
+        "tie": true
+      },
+      "expected": {
+        "both_updated": true,
+        "equal_update": true
+      }
+    },
+    {
+      "name": "category_preference",
+      "description": "Verify per-category preferences are maintained",
+      "setup": {
+        "feedback_events": [
+          {"winner": "deepseek-coder", "loser": "gpt-4", "category": "coding"},
+          {"winner": "gpt-4", "loser": "deepseek-coder", "category": "reasoning"}
+        ]
+      },
+      "input": {
+        "query": "Write a Python function",
+        "category": "coding"
+      },
+      "expected": {
+        "category_aware": true,
+        "preferred_model_coding": "deepseek-coder"
+      }
+    }
+  ],
+  "metrics_to_verify": [
+    "llm_model_rl_beta_alpha",
+    "llm_model_rl_beta_beta",
+    "llm_model_rl_win_probability",
+    "llm_model_rl_exploration_total",
+    "llm_model_rl_personalized_selections_total",
+    "llm_model_rl_implicit_feedback_total"
+  ]
+}

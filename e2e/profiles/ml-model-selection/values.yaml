@@ -121,13 +121,59 @@ config:
   # Domain names MUST match VSRCategories exactly (with spaces, not underscores)
   decisions:
     - name: "math_decision"
-      description: "Mathematics queries"
+      description: "Mathematics queries - uses MLP for neural network routing"
       priority: 100
       rules:
         operator: "AND"
         conditions:
           - type: "domain"
             name: "math"
+      algorithm:
+        type: "mlp"
+        mlp:
+          device: "cpu"
+      modelRefs:
+        - model: "llama-3.2-1b"
+          use_reasoning: false
+        - model: "llama-3.2-3b"
+          use_reasoning: false
+        - model: "codellama-7b"
+          use_reasoning: false
+        - model: "mistral-7b"
+          use_reasoning: false
+
+    - name: "code_decision"
+      description: "Programming queries - uses MLP"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "computer science"
+      algorithm:
+        type: "mlp"
+        mlp:
+          device: "cpu"
+      modelRefs:
+        - model: "llama-3.2-1b"
+          use_reasoning: false
+        - model: "llama-3.2-3b"
+          use_reasoning: false
+        - model: "codellama-7b"
+          use_reasoning: false
+        - model: "mistral-7b"
+          use_reasoning: false
+
+    - name: "science_decision"
+      description: "Science queries (chemistry, biology) - uses KNN"
+      priority: 100
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "chemistry"
+          - type: "domain"
+            name: "biology"
       algorithm:
         type: "knn"
         knn:
@@ -142,40 +188,14 @@ config:
         - model: "mistral-7b"
           use_reasoning: false
 
-    - name: "code_decision"
-      description: "Programming queries"
+    - name: "health_decision"
+      description: "Health and medical queries - uses KMeans"
       priority: 100
       rules:
         operator: "AND"
         conditions:
           - type: "domain"
-            name: "computer science"
-      algorithm:
-        type: "svm"
-        svm:
-          kernel: "rbf"
-      modelRefs:
-        - model: "llama-3.2-1b"
-          use_reasoning: false
-        - model: "llama-3.2-3b"
-          use_reasoning: false
-        - model: "codellama-7b"
-          use_reasoning: false
-        - model: "mistral-7b"
-          use_reasoning: false
-
-    - name: "science_decision"
-      description: "Science queries (physics, chemistry, biology)"
-      priority: 100
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "domain"
-            name: "physics"
-          - type: "domain"
-            name: "chemistry"
-          - type: "domain"
-            name: "biology"
+            name: "health"
       algorithm:
         type: "kmeans"
         kmeans:
@@ -190,14 +210,60 @@ config:
         - model: "mistral-7b"
           use_reasoning: false
 
-    - name: "health_decision"
-      description: "Health and medical queries"
+    - name: "physics_decision"
+      description: "Physics queries - uses SVM"
       priority: 100
       rules:
         operator: "AND"
         conditions:
           - type: "domain"
-            name: "health"
+            name: "physics"
+      algorithm:
+        type: "svm"
+        svm:
+          kernel: "rbf"
+      modelRefs:
+        - model: "llama-3.2-1b"
+          use_reasoning: false
+        - model: "llama-3.2-3b"
+          use_reasoning: false
+        - model: "codellama-7b"
+          use_reasoning: false
+        - model: "mistral-7b"
+          use_reasoning: false
+
+    - name: "business_decision"
+      description: "Business and economics queries - uses SVM"
+      priority: 100
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "business"
+          - type: "domain"
+            name: "economics"
+      algorithm:
+        type: "svm"
+        svm:
+          kernel: "rbf"
+      modelRefs:
+        - model: "llama-3.2-1b"
+          use_reasoning: false
+        - model: "llama-3.2-3b"
+          use_reasoning: false
+        - model: "codellama-7b"
+          use_reasoning: false
+        - model: "mistral-7b"
+          use_reasoning: false
+
+    - name: "law_decision"
+      description: "Law queries - uses KNN"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "law"
       algorithm:
         type: "knn"
         knn:
@@ -213,7 +279,7 @@ config:
           use_reasoning: false
 
     - name: "engineering_decision"
-      description: "Engineering queries - uses MLP with GPU acceleration"
+      description: "Engineering queries - uses KMeans"
       priority: 100
       rules:
         operator: "AND"
@@ -221,110 +287,9 @@ config:
           - type: "domain"
             name: "engineering"
       algorithm:
-        type: "mlp"
-        mlp:
-          device: "cpu"  # Use cpu for E2E tests, cuda/metal for production
-      modelRefs:
-        - model: "llama-3.2-1b"
-          use_reasoning: false
-        - model: "llama-3.2-3b"
-          use_reasoning: false
-        - model: "codellama-7b"
-          use_reasoning: false
-        - model: "mistral-7b"
-          use_reasoning: false
-
-    - name: "business_decision"
-      description: "Business and economics queries"
-      priority: 100
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "domain"
-            name: "business"
-          - type: "domain"
-            name: "economics"
-      algorithm:
-        type: "knn"
-        knn:
-          k: 3
-      modelRefs:
-        - model: "llama-3.2-1b"
-          use_reasoning: false
-        - model: "llama-3.2-3b"
-          use_reasoning: false
-        - model: "codellama-7b"
-          use_reasoning: false
-        - model: "mistral-7b"
-          use_reasoning: false
-
-    - name: "humanities_decision"
-      description: "History, philosophy, psychology, law queries"
-      priority: 100
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "domain"
-            name: "history"
-          - type: "domain"
-            name: "philosophy"
-          - type: "domain"
-            name: "psychology"
-          - type: "domain"
-            name: "law"
-      algorithm:
-        type: "knn"
-        knn:
-          k: 3
-      modelRefs:
-        - model: "llama-3.2-1b"
-          use_reasoning: false
-        - model: "llama-3.2-3b"
-          use_reasoning: false
-        - model: "codellama-7b"
-          use_reasoning: false
-        - model: "mistral-7b"
-          use_reasoning: false
-
-    - name: "general_decision"
-      description: "Catch-all for any domain (lowest priority)"
-      priority: 1  # Lowest priority - only matches if no other decision matched
-      rules:
-        operator: "OR"
-        conditions:
-          # Match ALL 14 VSR domains - this is a true catch-all
-          - type: "domain"
-            name: "math"
-          - type: "domain"
-            name: "computer science"
-          - type: "domain"
-            name: "physics"
-          - type: "domain"
-            name: "chemistry"
-          - type: "domain"
-            name: "biology"
-          - type: "domain"
-            name: "health"
-          - type: "domain"
-            name: "engineering"
-          - type: "domain"
-            name: "economics"
-          - type: "domain"
-            name: "business"
-          - type: "domain"
-            name: "history"
-          - type: "domain"
-            name: "law"
-          - type: "domain"
-            name: "philosophy"
-          - type: "domain"
-            name: "psychology"
-          - type: "domain"
-            name: "other"
-      algorithm:
-        type: "knn"
-        knn:
-          k: 3
+        type: "kmeans"
+        kmeans:
+          num_clusters: 4
       modelRefs:
         - model: "llama-3.2-1b"
           use_reasoning: false

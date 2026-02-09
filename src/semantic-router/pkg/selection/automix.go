@@ -23,29 +23,29 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // AutoMixConfig configures the AutoMix POMDP-based selector
-// Based on arXiv:2310.12963 - Automatically Mixing Language Models
+// Based on arXiv:2310.12963 - Automatically Mixing Language Models (NeurIPS 2024)
 //
-// NOTE: This is a PRE-SELECTION implementation of AutoMix concepts.
-// The original paper describes a CASCADED EXECUTION approach where:
-//  1. Start with the smallest/cheapest model
-//  2. Execute the query and perform self-verification
-//  3. If confidence is below threshold, escalate to a larger model
-//  4. Repeat until confidence is acceptable or max escalations reached
+// AutoMix implements a 3-step cascaded routing approach:
+//  1. Generate: Start with the smallest/cheapest model
+//  2. Self-Verify: Same model verifies answer via entailment check
+//  3. Route: If confidence below threshold, escalate to larger model
 //
-// Our implementation applies AutoMix PRINCIPLES to pre-selection:
-//   - We estimate which model is most likely to succeed based on learned capabilities
-//   - We optimize the cost-quality tradeoff using POMDP value functions
-//   - Feedback updates improve the selection over time
+// Key technical contributions from the paper:
+//   - Few-shot self-verification framed as entailment
+//   - POMDP-based router with belief states over model performance
+//   - Particle filtering for belief updates
+//   - IBC (Incremental Benefit per Cost) metric for evaluation
 //
-// For true cascaded execution with self-verification, the looper package
-// would need to be extended to support multi-stage inference with confidence
-// checks between stages. This is planned for a future enhancement.
+// This implementation supports both:
+//   - Pre-selection mode: Estimate best model upfront
+//   - Cascaded mode: Verify and escalate (requires looper integration)
 type AutoMixConfig struct {
 	// VerificationThreshold is the confidence threshold for self-verification
 	// Responses below this threshold trigger escalation (default: 0.7)
@@ -65,17 +65,54 @@ type AutoMixConfig struct {
 
 	// UseLogprobVerification uses logprobs for confidence estimation
 	UseLogprobVerification bool `yaml:"use_logprob_verification"`
+
+	// EnableSelfVerification enables LLM-based self-verification (paper method)
+	// When true, uses entailment-based verification prompt
+	EnableSelfVerification bool `yaml:"enable_self_verification"`
+
+	// VerificationSamples is the number of samples for confidence estimation (k in paper)
+	VerificationSamples int `yaml:"verification_samples"`
+
+	// VerificationTemperature for sampling during self-verification
+	VerificationTemperature float64 `yaml:"verification_temperature"`
+
+	// UsePOMDPRouter enables full POMDP-based routing with belief updates
+	// When false, uses simpler threshold-based routing
+	UsePOMDPRouter bool `yaml:"use_pomdp_router"`
+
+	// BeliefParticles is the number of particles for belief representation
+	BeliefParticles int `yaml:"belief_particles"`
+
+	// CostLambda is the tradeoff parameter in R = Performance - λ × Cost
+	CostLambda float64 `yaml:"cost_lambda"`
+
+	// Self-Verification Server Configuration
+
+	// VerifierServerURL is the URL of the AutoMix self-verification server
+	// This server performs entailment-based answer verification
+	VerifierServerURL string `yaml:"verifier_server_url"`
+
+	// EnableCascade enables the full cascade execution mode
+	// When true, Select() returns the smallest model first, and the cascade
+	// is managed via SelectWithVerification() which includes verification
+	EnableCascade bool `yaml:"enable_cascade"`
 }
 
 // DefaultAutoMixConfig returns the default AutoMix configuration
 func DefaultAutoMixConfig() *AutoMixConfig {
 	return &AutoMixConfig{
-		VerificationThreshold:  0.7,
-		MaxEscalations:         2,
-		CostAwareRouting:       true,
-		CostQualityTradeoff:    0.3,
-		DiscountFactor:         0.95,
-		UseLogprobVerification: true,
+		VerificationThreshold:   0.7,
+		MaxEscalations:          2,
+		CostAwareRouting:        true,
+		CostQualityTradeoff:     0.3,
+		DiscountFactor:          0.95,
+		UseLogprobVerification:  true,
+		EnableSelfVerification:  false, // Requires LLM endpoint
+		VerificationSamples:     5,     // k=5 as in paper
+		VerificationTemperature: 0.7,
+		UsePOMDPRouter:          true,
+		BeliefParticles:         100,
+		CostLambda:              0.5, // Balance performance and cost
 	}
 }
 
@@ -107,6 +144,13 @@ type AutoMixSelector struct {
 
 	// Transition probabilities P(s'|s,a) for escalation decisions
 	transitionProbs map[string]map[string]float64
+
+	// AdaOps POMDP solver with particle filtering (full paper implementation)
+	adaOpsSolver *AdaOpsSolver
+
+	// Self-verification client for LLM-based verification
+	// Requires external server: src/training/rl_model_selection/automix_verifier.py
+	verifierClient *AutoMixVerifierClient
 }
 
 // NewAutoMixSelector creates a new AutoMix-based selector
@@ -114,12 +158,43 @@ func NewAutoMixSelector(cfg *AutoMixConfig) *AutoMixSelector {
 	if cfg == nil {
 		cfg = DefaultAutoMixConfig()
 	}
-	return &AutoMixSelector{
+
+	selector := &AutoMixSelector{
 		config:          cfg,
 		capabilities:    make(map[string]*ModelCapability),
 		valueFunction:   make(map[string]float64),
 		transitionProbs: make(map[string]map[string]float64),
 	}
+
+	// Initialize AdaOps solver if POMDP routing is enabled
+	if cfg.UsePOMDPRouter {
+		selector.adaOpsSolver = NewAdaOpsSolver(
+			cfg.BeliefParticles,
+			cfg.CostLambda,
+			cfg.DiscountFactor,
+		)
+		logging.Infof("[AutoMix] Initialized AdaOps POMDP solver with %d particles", cfg.BeliefParticles)
+	}
+
+	// Initialize self-verification client if configured
+	// Requires external server: src/training/rl_model_selection/automix_verifier.py
+	if cfg.EnableSelfVerification && cfg.VerifierServerURL != "" {
+		selector.verifierClient = NewAutoMixVerifierClient(cfg.VerifierServerURL)
+		logging.Infof("[AutoMix] Self-verification enabled, server: %s", cfg.VerifierServerURL)
+
+		// Verify connectivity
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := selector.verifierClient.HealthCheck(ctx); err != nil {
+			logging.Warnf("[AutoMix] Verifier server not reachable: %v (will retry on use)", err)
+		} else {
+			logging.Infof("[AutoMix] Verifier server connected successfully")
+		}
+	} else if cfg.EnableSelfVerification {
+		logging.Warnf("[AutoMix] Self-verification enabled but no server URL configured")
+	}
+
+	return selector
 }
 
 // Method returns the selection method type
@@ -139,14 +214,20 @@ func (a *AutoMixSelector) InitializeFromConfig(modelConfig map[string]config.Mod
 			qualityScore = 0.8 // Default quality estimate
 		}
 
+		paramSize := a.estimateParamSize(model)
 		cap := &ModelCapability{
 			Model:            model,
 			Cost:             params.Pricing.PromptPer1M,
 			AvgQuality:       qualityScore,
-			VerificationProb: 0.7,                        // Default verification probability
-			ParamSize:        a.estimateParamSize(model), // Estimate from model name
+			VerificationProb: 0.7,       // Default verification probability
+			ParamSize:        paramSize, // Estimate from model name
 		}
 		a.capabilities[model] = cap
+
+		// Register with AdaOps solver
+		if a.adaOpsSolver != nil {
+			a.adaOpsSolver.RegisterModel(model, params.Pricing.PromptPer1M, paramSize)
+		}
 
 		// Initialize value function (higher for larger/better models)
 		a.valueMu.Lock()
@@ -248,6 +329,11 @@ func (a *AutoMixSelector) UpdateFeedback(ctx context.Context, feedback *Feedback
 		cap.VerificationProb = cap.VerificationProb*(1-alpha) + 1.0*alpha
 		cap.AvgQuality = cap.AvgQuality*(1-alpha) + 1.0*alpha
 
+		// Update AdaOps belief state with observation
+		if a.adaOpsSolver != nil {
+			a.adaOpsSolver.UpdateBelief(feedback.WinnerModel, 1.0) // Winner = high performance
+		}
+
 		logging.Debugf("[AutoMix] Updated winner %s: verification_prob=%.3f, quality=%.3f",
 			feedback.WinnerModel, cap.VerificationProb, cap.AvgQuality)
 	}
@@ -260,6 +346,11 @@ func (a *AutoMixSelector) UpdateFeedback(ctx context.Context, feedback *Feedback
 			alpha := 0.1
 			cap.VerificationProb = cap.VerificationProb*(1-alpha) + 0.0*alpha
 			cap.AvgQuality = cap.AvgQuality*(1-alpha) + 0.0*alpha
+
+			// Update AdaOps belief state with observation
+			if a.adaOpsSolver != nil {
+				a.adaOpsSolver.UpdateBelief(feedback.LoserModel, 0.0) // Loser = low performance
+			}
 
 			logging.Debugf("[AutoMix] Updated loser %s: verification_prob=%.3f, quality=%.3f",
 				feedback.LoserModel, cap.VerificationProb, cap.AvgQuality)
@@ -504,4 +595,228 @@ func (a *AutoMixSelector) SetCapability(model string, cap *ModelCapability) {
 	a.capMu.Lock()
 	defer a.capMu.Unlock()
 	a.capabilities[model] = cap
+}
+
+// VerificationResult contains the result of self-verification
+type VerificationResult struct {
+	Confidence     float64 `json:"confidence"`
+	ShouldEscalate bool    `json:"should_escalate"`
+	NextModel      string  `json:"next_model,omitempty"`
+	Reasoning      string  `json:"reasoning"`
+}
+
+// VerifyAnswer implements the AutoMix self-verification step
+// Given a question and answer from a model, this uses entailment-based
+// verification to estimate answer confidence and recommend escalation.
+// This implements Section 3.2 of arXiv:2310.12963
+// Requires external server: src/training/rl_model_selection/automix_verifier.py
+func (a *AutoMixSelector) VerifyAnswer(ctx context.Context, question, answer, currentModel string, escalationChain []string) (*VerificationResult, error) {
+	if a.verifierClient == nil {
+		return nil, fmt.Errorf("verifier client not initialized - set verifier_server_url in config")
+	}
+
+	// Call the verification server
+	verifyResp, err := a.verifierClient.Verify(ctx, question, answer, "", a.config.VerificationThreshold)
+	if err != nil {
+		return nil, fmt.Errorf("verification failed: %w", err)
+	}
+
+	result := &VerificationResult{
+		Confidence:     verifyResp.Confidence,
+		ShouldEscalate: verifyResp.ShouldEscalate,
+	}
+
+	// Build reasoning
+	result.Reasoning = fmt.Sprintf("Self-verification confidence: %.2f (threshold: %.2f). %d/%d samples verified.",
+		verifyResp.Confidence, a.config.VerificationThreshold,
+		verifyResp.VerifiedCount, verifyResp.TotalSamples)
+
+	// If escalation recommended, find the next model in the chain
+	if result.ShouldEscalate && len(escalationChain) > 0 {
+		// Find current model in chain
+		currentIdx := -1
+		for i, m := range escalationChain {
+			if m == currentModel {
+				currentIdx = i
+				break
+			}
+		}
+
+		// Get next larger model
+		if currentIdx >= 0 && currentIdx < len(escalationChain)-1 {
+			result.NextModel = escalationChain[currentIdx+1]
+			result.Reasoning += fmt.Sprintf(" Recommending escalation to %s.", result.NextModel)
+		} else {
+			result.ShouldEscalate = false
+			result.Reasoning += " No larger model available for escalation."
+		}
+	}
+
+	logging.Infof("[AutoMix] Verification result: confidence=%.2f, escalate=%v, next=%s",
+		result.Confidence, result.ShouldEscalate, result.NextModel)
+
+	// Update model capability based on verification outcome
+	a.capMu.Lock()
+	if cap, ok := a.capabilities[currentModel]; ok {
+		alpha := 0.1 // Learning rate
+		if verifyResp.Confidence >= a.config.VerificationThreshold {
+			// Passed verification
+			cap.VerificationProb = cap.VerificationProb*(1-alpha) + 1.0*alpha
+		} else {
+			// Failed verification
+			cap.VerificationProb = cap.VerificationProb*(1-alpha) + 0.0*alpha
+		}
+	}
+	a.capMu.Unlock()
+
+	return result, nil
+}
+
+// GetEscalationChain returns models sorted by capability (smallest to largest)
+// This is the escalation path for cascaded routing
+func (a *AutoMixSelector) GetEscalationChain(candidates []config.ModelRef) []string {
+	// Sort by param size (smallest first)
+	sorted := make([]config.ModelRef, len(candidates))
+	copy(sorted, candidates)
+
+	sort.Slice(sorted, func(i, j int) bool {
+		sizeI := a.estimateParamSize(sorted[i].Model)
+		sizeJ := a.estimateParamSize(sorted[j].Model)
+		return sizeI < sizeJ
+	})
+
+	chain := make([]string, len(sorted))
+	for i, m := range sorted {
+		chain[i] = m.Model
+	}
+
+	return chain
+}
+
+// SelectWithCascadeState stores the state for cascaded execution
+type SelectWithCascadeState struct {
+	CurrentModel     string              `json:"current_model"`
+	EscalationChain  []string            `json:"escalation_chain"`
+	EscalationCount  int                 `json:"escalation_count"`
+	MaxEscalations   int                 `json:"max_escalations"`
+	Question         string              `json:"question"`
+	LastVerification *VerificationResult `json:"last_verification,omitempty"`
+}
+
+// InitializeCascade prepares the cascade state for a new request
+// Returns the first (smallest) model to try
+func (a *AutoMixSelector) InitializeCascade(ctx context.Context, selCtx *SelectionContext) (*SelectWithCascadeState, *SelectionResult, error) {
+	if len(selCtx.CandidateModels) == 0 {
+		return nil, nil, fmt.Errorf("no candidate models provided")
+	}
+
+	// Get escalation chain (smallest to largest)
+	chain := a.GetEscalationChain(selCtx.CandidateModels)
+
+	// Start with the smallest model
+	firstModel := chain[0]
+	var modelRef *config.ModelRef
+	for i := range selCtx.CandidateModels {
+		if selCtx.CandidateModels[i].Model == firstModel {
+			modelRef = &selCtx.CandidateModels[i]
+			break
+		}
+	}
+
+	if modelRef == nil {
+		return nil, nil, fmt.Errorf("failed to find first model in candidates")
+	}
+
+	state := &SelectWithCascadeState{
+		CurrentModel:    firstModel,
+		EscalationChain: chain,
+		EscalationCount: 0,
+		MaxEscalations:  a.config.MaxEscalations,
+	}
+
+	logging.Infof("[AutoMix] Initialized cascade: chain=%v, starting with %s", chain, firstModel)
+
+	return state, &SelectionResult{
+		SelectedModel: modelRef.Model,
+		LoRAName:      modelRef.LoRAName,
+		Score:         0.5,
+		Confidence:    0.5,
+		Method:        MethodAutoMix,
+		Reasoning:     fmt.Sprintf("AutoMix cascade: starting with smallest model %s", firstModel),
+	}, nil
+}
+
+// ContinueCascade processes the answer from the current model and decides
+// whether to escalate or return the final result
+func (a *AutoMixSelector) ContinueCascade(ctx context.Context, state *SelectWithCascadeState, answer string, selCtx *SelectionContext) (*SelectionResult, bool, error) {
+	if a.verifierClient == nil {
+		// No verifier - accept the answer
+		logging.Warnf("[AutoMix] No verifier configured, accepting answer from %s", state.CurrentModel)
+		return &SelectionResult{
+			SelectedModel: state.CurrentModel,
+			Score:         0.8,
+			Confidence:    0.8,
+			Method:        MethodAutoMix,
+			Reasoning:     "No verifier configured, accepting answer",
+		}, true, nil
+	}
+
+	// Verify the answer
+	verifyResult, err := a.VerifyAnswer(ctx, state.Question, answer, state.CurrentModel, state.EscalationChain)
+	if err != nil {
+		logging.Warnf("[AutoMix] Verification failed: %v, accepting answer", err)
+		return &SelectionResult{
+			SelectedModel: state.CurrentModel,
+			Score:         0.6,
+			Confidence:    0.6,
+			Method:        MethodAutoMix,
+			Reasoning:     fmt.Sprintf("Verification failed: %v", err),
+		}, true, nil
+	}
+
+	state.LastVerification = verifyResult
+
+	// Check if we should escalate
+	if verifyResult.ShouldEscalate && state.EscalationCount < state.MaxEscalations && verifyResult.NextModel != "" {
+		// Escalate to next model
+		state.CurrentModel = verifyResult.NextModel
+		state.EscalationCount++
+
+		// Find the model ref
+		var modelRef *config.ModelRef
+		for i := range selCtx.CandidateModels {
+			if selCtx.CandidateModels[i].Model == verifyResult.NextModel {
+				modelRef = &selCtx.CandidateModels[i]
+				break
+			}
+		}
+
+		if modelRef == nil {
+			return nil, false, fmt.Errorf("escalation model %s not in candidates", verifyResult.NextModel)
+		}
+
+		logging.Infof("[AutoMix] Escalating to %s (confidence was %.2f, escalation %d/%d)",
+			verifyResult.NextModel, verifyResult.Confidence, state.EscalationCount, state.MaxEscalations)
+
+		return &SelectionResult{
+			SelectedModel: modelRef.Model,
+			LoRAName:      modelRef.LoRAName,
+			Score:         0.5,
+			Confidence:    verifyResult.Confidence,
+			Method:        MethodAutoMix,
+			Reasoning:     verifyResult.Reasoning,
+		}, false, nil // false = not done, continue cascade
+	}
+
+	// Accept the answer
+	logging.Infof("[AutoMix] Accepting answer from %s (confidence=%.2f, escalations=%d)",
+		state.CurrentModel, verifyResult.Confidence, state.EscalationCount)
+
+	return &SelectionResult{
+		SelectedModel: state.CurrentModel,
+		Score:         verifyResult.Confidence,
+		Confidence:    verifyResult.Confidence,
+		Method:        MethodAutoMix,
+		Reasoning:     verifyResult.Reasoning,
+	}, true, nil // true = done
 }

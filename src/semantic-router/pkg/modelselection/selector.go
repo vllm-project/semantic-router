@@ -598,15 +598,20 @@ func (s *KNNSelector) Train(data []TrainingRecord) error {
 
 func (s *KNNSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*config.ModelRef, error) {
 	if len(refs) == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("KNN: no model refs provided")
 	}
 	if len(refs) == 1 {
 		return &refs[0], nil
 	}
 
-	if s.mlKNN == nil || !s.mlKNN.IsTrained() || len(ctx.QueryEmbedding) == 0 {
-		logging.Debugf("KNN: Not trained or no embedding, selecting first model")
-		return &refs[0], nil
+	if s.mlKNN == nil {
+		return nil, fmt.Errorf("KNN: model not initialized")
+	}
+	if !s.mlKNN.IsTrained() {
+		return nil, fmt.Errorf("KNN: model not trained - load pretrained model first")
+	}
+	if len(ctx.QueryEmbedding) == 0 {
+		return nil, fmt.Errorf("KNN: no query embedding provided")
 	}
 
 	// Build feature vector: embedding + category one-hot (matches Python training format)
@@ -616,8 +621,7 @@ func (s *KNNSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*co
 	// Use ml-binding for selection
 	selectedModel, err := s.mlKNN.Select(featureVector)
 	if err != nil {
-		logging.Debugf("KNN (Linfa) selection failed: %v, selecting first model", err)
-		return &refs[0], nil
+		return nil, fmt.Errorf("KNN (Linfa) selection failed: %w", err)
 	}
 
 	// Find the selected model in refs
@@ -627,7 +631,7 @@ func (s *KNNSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*co
 		return &refs[idx], nil
 	}
 
-	return &refs[0], nil
+	return nil, fmt.Errorf("KNN: selected model %s not found in available refs", selectedModel)
 }
 
 // =============================================================================
@@ -718,15 +722,20 @@ func (s *KMeansSelector) Train(data []TrainingRecord) error {
 
 func (s *KMeansSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*config.ModelRef, error) {
 	if len(refs) == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("KMeans: no model refs provided")
 	}
 	if len(refs) == 1 {
 		return &refs[0], nil
 	}
 
-	if s.mlKMeans == nil || !s.mlKMeans.IsTrained() || len(ctx.QueryEmbedding) == 0 {
-		logging.Debugf("KMeans: Not trained or no embedding, selecting first model")
-		return &refs[0], nil
+	if s.mlKMeans == nil {
+		return nil, fmt.Errorf("KMeans: model not initialized")
+	}
+	if !s.mlKMeans.IsTrained() {
+		return nil, fmt.Errorf("KMeans: model not trained - load pretrained model first")
+	}
+	if len(ctx.QueryEmbedding) == 0 {
+		return nil, fmt.Errorf("KMeans: no query embedding provided")
 	}
 
 	// Build feature vector: embedding + category one-hot (matches Python training format)
@@ -736,8 +745,7 @@ func (s *KMeansSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (
 	// Use ml-binding for selection
 	selectedModel, err := s.mlKMeans.Select(featureVector)
 	if err != nil {
-		logging.Debugf("KMeans (Linfa) selection failed: %v, selecting first model", err)
-		return &refs[0], nil
+		return nil, fmt.Errorf("KMeans (Linfa) selection failed: %w", err)
 	}
 
 	// Find the selected model in refs
@@ -747,7 +755,7 @@ func (s *KMeansSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (
 		return &refs[idx], nil
 	}
 
-	return &refs[0], nil
+	return nil, fmt.Errorf("KMeans: selected model %s not found in available refs", selectedModel)
 }
 
 // =============================================================================
@@ -840,15 +848,20 @@ func (s *SVMSelector) Train(data []TrainingRecord) error {
 
 func (s *SVMSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*config.ModelRef, error) {
 	if len(refs) == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("SVM: no model refs provided")
 	}
 	if len(refs) == 1 {
 		return &refs[0], nil
 	}
 
-	if s.mlSVM == nil || !s.mlSVM.IsTrained() || len(ctx.QueryEmbedding) == 0 {
-		logging.Debugf("SVM: Not trained or no embedding, selecting first model")
-		return &refs[0], nil
+	if s.mlSVM == nil {
+		return nil, fmt.Errorf("SVM: model not initialized")
+	}
+	if !s.mlSVM.IsTrained() {
+		return nil, fmt.Errorf("SVM: model not trained - load pretrained model first")
+	}
+	if len(ctx.QueryEmbedding) == 0 {
+		return nil, fmt.Errorf("SVM: no query embedding provided")
 	}
 
 	// Build feature vector: embedding + category one-hot (matches Python training format)
@@ -858,8 +871,7 @@ func (s *SVMSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*co
 	// Use ml-binding for selection
 	selectedModel, err := s.mlSVM.Select(featureVector)
 	if err != nil {
-		logging.Debugf("SVM (Linfa) selection failed: %v, selecting first model", err)
-		return &refs[0], nil
+		return nil, fmt.Errorf("SVM (Linfa) selection failed: %w", err)
 	}
 
 	// Find the selected model in refs
@@ -869,7 +881,7 @@ func (s *SVMSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*co
 		return &refs[idx], nil
 	}
 
-	return &refs[0], nil
+	return nil, fmt.Errorf("SVM: selected model %s not found in available refs", selectedModel)
 }
 
 // =============================================================================
@@ -937,15 +949,20 @@ func (s *MLPSelector) Train(data []TrainingRecord) error {
 
 func (s *MLPSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*config.ModelRef, error) {
 	if len(refs) == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("MLP: no model refs provided")
 	}
 	if len(refs) == 1 {
 		return &refs[0], nil
 	}
 
-	if s.mlMLP == nil || !s.mlMLP.IsTrained() || len(ctx.QueryEmbedding) == 0 {
-		logging.Debugf("MLP: Not trained or no embedding, selecting first model")
-		return &refs[0], nil
+	if s.mlMLP == nil {
+		return nil, fmt.Errorf("MLP: model not initialized")
+	}
+	if !s.mlMLP.IsTrained() {
+		return nil, fmt.Errorf("MLP: model not trained - load pretrained model first")
+	}
+	if len(ctx.QueryEmbedding) == 0 {
+		return nil, fmt.Errorf("MLP: no query embedding provided")
 	}
 
 	// Build feature vector: embedding + category one-hot (matches Python training format)
@@ -954,8 +971,7 @@ func (s *MLPSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*co
 	// Use ml-binding for selection
 	selectedModel, err := s.mlMLP.Select(featureVector)
 	if err != nil {
-		logging.Debugf("MLP (Candle) selection failed: %v, selecting first model", err)
-		return &refs[0], nil
+		return nil, fmt.Errorf("MLP (Candle) selection failed: %w", err)
 	}
 
 	// Find the selected model in refs
@@ -965,5 +981,5 @@ func (s *MLPSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*co
 		return &refs[idx], nil
 	}
 
-	return &refs[0], nil
+	return nil, fmt.Errorf("MLP: selected model %s not found in available refs", selectedModel)
 }

@@ -107,9 +107,12 @@ func testModelSelection(ctx context.Context, client *kubernetes.Clientset, opts 
 			correctTests, totalTests, accuracy)
 	}
 
-	// Return error if accuracy is 0%
-	if correctTests == 0 {
-		return fmt.Errorf("model selection test failed: 0%% accuracy (0/%d correct)", totalTests)
+	// Require at least 75% accuracy (allows for domain classification variance)
+	// The BERT domain classifier has ~55% accuracy, so some queries may not match expected decisions
+	minAccuracy := 75.0
+	if accuracy < minAccuracy {
+		return fmt.Errorf("model selection test failed: %d/%d correct (%.2f%% accuracy) - minimum %.0f%% required",
+			correctTests, totalTests, accuracy, minAccuracy)
 	}
 
 	return nil
@@ -237,220 +240,167 @@ func getDefaultModelSelectionCases() []ModelSelectionCase {
 	// Models configured in values.yaml matching training data
 	mlModels := []string{"llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"}
 
+	// 20 test cases covering all 4 ML algorithms with DIVERSE decision types:
+	// - MLP: math_decision (3 cases), code_decision (2 cases) - diverse domains
+	// - SVM: physics_decision (3 cases), business_decision (2 cases) - diverse domains
+	// - KNN: science_decision (3 cases), law_decision (2 cases) - diverse domains
+	// - KMeans: health_decision (3 cases), engineering_decision (2 cases) - diverse domains
+
 	return []ModelSelectionCase{
 		// =================================================================
-		// MATH DECISION (domain: "math") - KNN algorithm
+		// MLP ALGORITHM: math_decision + code_decision (5 cases total)
 		// =================================================================
 		{
-			Query:          "Calculate the derivative of sin(x) * cos(x)",
+			Query:          "Calculate the derivative of x^3 + 2x^2 - 5x + 1",
 			Decision:       "math_decision",
 			ExpectedModels: mlModels,
-			Description:    "Calculus query should match math decision",
-			Algorithm:      "knn",
-		},
-		{
-			Query:          "Solve the quadratic equation: x^2 + 5x + 6 = 0",
-			Decision:       "math_decision",
-			ExpectedModels: mlModels,
-			Description:    "Algebra query should match math decision",
-			Algorithm:      "knn",
-		},
-		{
-			Query:          "What is the integral of e^x from 0 to infinity?",
-			Decision:       "math_decision",
-			ExpectedModels: mlModels,
-			Description:    "Advanced calculus query",
-			Algorithm:      "knn",
-		},
-		{
-			Query:          "Prove that the sum of angles in a triangle is 180 degrees",
-			Decision:       "math_decision",
-			ExpectedModels: mlModels,
-			Description:    "Geometry proof query",
-			Algorithm:      "knn",
-		},
-		{
-			Query:          "Calculate the eigenvalues of a 3x3 matrix",
-			Decision:       "math_decision",
-			ExpectedModels: mlModels,
-			Description:    "Linear algebra computation",
-			Algorithm:      "knn",
-		},
-
-		// =================================================================
-		// CODE DECISION (domain: "computer science") - SVM algorithm
-		// =================================================================
-		{
-			Query:          "Write a Python function to sort a list using quicksort",
-			Decision:       "code_decision",
-			ExpectedModels: mlModels,
-			Description:    "Python coding query should match code decision",
-			Algorithm:      "svm",
-		},
-		{
-			Query:          "Debug this JavaScript: const x = undefined; console.log(x.length)",
-			Decision:       "code_decision",
-			ExpectedModels: mlModels,
-			Description:    "Debug query should match code decision",
-			Algorithm:      "svm",
-		},
-		{
-			Query:          "How do I implement a binary search tree in Go?",
-			Decision:       "code_decision",
-			ExpectedModels: mlModels,
-			Description:    "Data structures coding query",
-			Algorithm:      "svm",
-		},
-		{
-			Query:          "Write a recursive function to compute Fibonacci numbers in Rust",
-			Decision:       "code_decision",
-			ExpectedModels: mlModels,
-			Description:    "Rust programming with recursion",
-			Algorithm:      "svm",
-		},
-		{
-			Query:          "How do I optimize a SQL query with multiple JOINs?",
-			Decision:       "code_decision",
-			ExpectedModels: mlModels,
-			Description:    "Database optimization query",
-			Algorithm:      "svm",
-		},
-
-		// =================================================================
-		// SCIENCE DECISION (domain: "physics", "chemistry", "biology") - KMeans
-		// =================================================================
-		{
-			Query:          "Explain Newton's laws of motion",
-			Decision:       "science_decision",
-			ExpectedModels: mlModels,
-			Description:    "Physics query should match science decision",
-			Algorithm:      "kmeans",
-		},
-		{
-			Query:          "What is the theory of relativity?",
-			Decision:       "science_decision",
-			ExpectedModels: mlModels,
-			Description:    "Physics theory query",
-			Algorithm:      "kmeans",
-		},
-		{
-			Query:          "Explain the difference between nuclear fission and fusion",
-			Decision:       "science_decision",
-			ExpectedModels: mlModels,
-			Description:    "Nuclear physics query",
-			Algorithm:      "kmeans",
-		},
-		{
-			Query:          "What is the structure of a DNA molecule?",
-			Decision:       "science_decision",
-			ExpectedModels: mlModels,
-			Description:    "Biology query should match science decision",
-			Algorithm:      "kmeans",
-		},
-		{
-			Query:          "Explain the periodic table and electron configurations",
-			Decision:       "science_decision",
-			ExpectedModels: mlModels,
-			Description:    "Chemistry query should match science decision",
-			Algorithm:      "kmeans",
-		},
-
-		// =================================================================
-		// HEALTH DECISION (domain: "health") - KNN algorithm
-		// =================================================================
-		{
-			Query:          "What are the symptoms and treatment for diabetes?",
-			Decision:       "health_decision",
-			ExpectedModels: mlModels,
-			Description:    "Medical symptoms query",
-			Algorithm:      "knn",
-		},
-		{
-			Query:          "Explain the cardiovascular system and heart function",
-			Decision:       "health_decision",
-			ExpectedModels: mlModels,
-			Description:    "Human anatomy query",
-			Algorithm:      "knn",
-		},
-
-		// =================================================================
-		// ENGINEERING DECISION (domain: "engineering") - MLP algorithm (GPU-accelerated)
-		// Reference: FusionFactory (arXiv:2507.10540)
-		// =================================================================
-		{
-			Query:          "How do I design a bridge to withstand earthquakes?",
-			Decision:       "engineering_decision",
-			ExpectedModels: mlModels,
-			Description:    "Civil engineering query - uses MLP neural network",
+			Description:    "Calculus derivative - MLP/math",
 			Algorithm:      "mlp",
 		},
 		{
-			Query:          "Explain the principles of aerodynamics in aircraft design",
-			Decision:       "engineering_decision",
+			Query:          "Solve for x: 3x + 7 = 22",
+			Decision:       "math_decision",
 			ExpectedModels: mlModels,
-			Description:    "Aerospace engineering query - uses MLP neural network",
+			Description:    "Algebra equation - MLP/math",
 			Algorithm:      "mlp",
 		},
 		{
-			Query:          "What materials are best for high-temperature turbine blades?",
-			Decision:       "engineering_decision",
+			Query:          "What is the integral of sin(x)dx?",
+			Decision:       "math_decision",
 			ExpectedModels: mlModels,
-			Description:    "Materials engineering query - uses MLP neural network",
+			Description:    "Integral calculus - MLP/math",
 			Algorithm:      "mlp",
 		},
 		{
-			Query:          "How do you calculate stress distribution in a cantilever beam?",
-			Decision:       "engineering_decision",
+			Query:          "Write a Python function to sort a list using bubble sort",
+			Decision:       "code_decision",
 			ExpectedModels: mlModels,
-			Description:    "Structural engineering query - uses MLP neural network",
+			Description:    "Python sorting - MLP/code",
+			Algorithm:      "mlp",
+		},
+		{
+			Query:          "How do I create a for loop in JavaScript?",
+			Decision:       "code_decision",
+			ExpectedModels: mlModels,
+			Description:    "JavaScript loop - MLP/code",
 			Algorithm:      "mlp",
 		},
 
 		// =================================================================
-		// HUMANITIES DECISION (domain: "history", "philosophy", "psychology", "law")
+		// SVM ALGORITHM: physics_decision + business_decision (5 cases total)
 		// =================================================================
 		{
-			Query:          "Tell me about the history of the Roman Empire",
-			Decision:       "humanities_decision",
+			Query:          "What is Newton's second law of motion?",
+			Decision:       "physics_decision",
 			ExpectedModels: mlModels,
-			Description:    "History query should match humanities decision",
-			Algorithm:      "knn",
+			Description:    "Classical mechanics - SVM/physics",
+			Algorithm:      "svm",
 		},
 		{
-			Query:          "What is Kant's categorical imperative in moral philosophy?",
-			Decision:       "humanities_decision",
+			Query:          "Calculate the kinetic energy of a 5kg object moving at 10m/s",
+			Decision:       "physics_decision",
 			ExpectedModels: mlModels,
-			Description:    "Philosophy query should match humanities decision",
-			Algorithm:      "knn",
+			Description:    "Energy calculation - SVM/physics",
+			Algorithm:      "svm",
 		},
-
-		// =================================================================
-		// BUSINESS DECISION (domain: "business", "economics")
-		// =================================================================
 		{
-			Query:          "Explain supply and demand in microeconomics",
+			Query:          "What is the wavelength of light with frequency 5e14 Hz?",
+			Decision:       "physics_decision",
+			ExpectedModels: mlModels,
+			Description:    "Wave physics - SVM/physics",
+			Algorithm:      "svm",
+		},
+		{
+			Query:          "What is the law of supply and demand in economics?",
 			Decision:       "business_decision",
 			ExpectedModels: mlModels,
-			Description:    "Economics query should match business decision",
+			Description:    "Economics law - SVM/business",
+			Algorithm:      "svm",
+		},
+		{
+			Query:          "How does inflation affect interest rates?",
+			Decision:       "business_decision",
+			ExpectedModels: mlModels,
+			Description:    "Monetary economics - SVM/business",
+			Algorithm:      "svm",
+		},
+
+		// =================================================================
+		// KNN ALGORITHM: science_decision + law_decision (5 cases total)
+		// =================================================================
+		{
+			Query:          "What is the process of photosynthesis in plants?",
+			Decision:       "science_decision",
+			ExpectedModels: mlModels,
+			Description:    "Biology photosynthesis - KNN/science",
 			Algorithm:      "knn",
 		},
 		{
-			Query:          "What are the best strategies for startup fundraising?",
-			Decision:       "business_decision",
+			Query:          "Explain the structure of DNA and its double helix",
+			Decision:       "science_decision",
 			ExpectedModels: mlModels,
-			Description:    "Business strategy query",
+			Description:    "Biology DNA - KNN/science",
+			Algorithm:      "knn",
+		},
+		{
+			Query:          "What is the pH of a neutral solution at 25 degrees Celsius?",
+			Decision:       "science_decision",
+			ExpectedModels: mlModels,
+			Description:    "Chemistry pH - KNN/science",
+			Algorithm:      "knn",
+		},
+		{
+			Query:          "What is the difference between civil law and criminal law?",
+			Decision:       "law_decision",
+			ExpectedModels: mlModels,
+			Description:    "Legal concepts - KNN/law",
+			Algorithm:      "knn",
+		},
+		{
+			Query:          "What are the elements of a valid contract?",
+			Decision:       "law_decision",
+			ExpectedModels: mlModels,
+			Description:    "Contract law - KNN/law",
 			Algorithm:      "knn",
 		},
 
 		// =================================================================
-		// GENERAL DECISION (domain: "other") - catch-all
+		// KMeans ALGORITHM: health_decision + engineering_decision (5 cases total)
 		// =================================================================
 		{
-			Query:          "What is the capital of France?",
-			Decision:       "general_decision",
+			Query:          "What are the symptoms of diabetes mellitus?",
+			Decision:       "health_decision",
 			ExpectedModels: mlModels,
-			Description:    "General factual query",
-			Algorithm:      "knn",
+			Description:    "Medical symptoms - KMeans/health",
+			Algorithm:      "kmeans",
+		},
+		{
+			Query:          "How does the human cardiovascular system work?",
+			Decision:       "health_decision",
+			ExpectedModels: mlModels,
+			Description:    "Human anatomy - KMeans/health",
+			Algorithm:      "kmeans",
+		},
+		{
+			Query:          "What causes high blood pressure in humans?",
+			Decision:       "health_decision",
+			ExpectedModels: mlModels,
+			Description:    "Health condition - KMeans/health",
+			Algorithm:      "kmeans",
+		},
+		{
+			Query:          "What is the difference between AC and DC electrical current?",
+			Decision:       "engineering_decision",
+			ExpectedModels: mlModels,
+			Description:    "Electrical engineering - KMeans/engineering",
+			Algorithm:      "kmeans",
+		},
+		{
+			Query:          "How does a transistor amplify electrical signals?",
+			Decision:       "engineering_decision",
+			ExpectedModels: mlModels,
+			Description:    "Electronics engineering - KMeans/engineering",
+			Algorithm:      "kmeans",
 		},
 	}
 }

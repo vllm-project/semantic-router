@@ -1,0 +1,182 @@
+[
+  {
+    "query": "What is the capital of France?",
+    "query_type": "factual",
+    "complexity": "simple",
+    "candidate_models": ["gpt-4", "mistral-7b", "phi-2"],
+    "optimal_model": "phi-2",
+    "ground_truth": "Paris",
+    "reasoning": "Simple factual query, cheapest model sufficient"
+  },
+  {
+    "query": "Explain the mathematical foundations of quantum computing, including superposition and entanglement.",
+    "query_type": "science",
+    "complexity": "complex",
+    "candidate_models": ["gpt-4", "mistral-7b", "phi-2"],
+    "optimal_model": "gpt-4",
+    "ground_truth": "Quantum computing leverages quantum mechanical phenomena such as superposition and entanglement to perform computations.",
+    "reasoning": "Complex technical explanation requires high-capability model"
+  },
+  {
+    "query": "Write a Python function to implement binary search with error handling",
+    "query_type": "coding",
+    "complexity": "medium",
+    "candidate_models": ["gpt-4", "deepseek-coder", "mistral-7b"],
+    "optimal_model": "deepseek-coder",
+    "ground_truth": "def binary_search(arr, target): left, right = 0, len(arr) - 1 ...",
+    "reasoning": "Code-specialized model is optimal for coding tasks"
+  },
+  {
+    "query": "What is 15 + 27?",
+    "query_type": "math",
+    "complexity": "simple",
+    "candidate_models": ["gpt-4", "phi-2"],
+    "optimal_model": "phi-2",
+    "ground_truth": "42",
+    "reasoning": "Trivial arithmetic, use cheapest model"
+  },
+  {
+    "query": "Analyze the themes of isolation in Kafka's Metamorphosis and compare with Camus' The Stranger",
+    "query_type": "literature",
+    "complexity": "complex",
+    "candidate_models": ["gpt-4", "claude-3-sonnet", "mistral-7b"],
+    "optimal_model": "claude-3-sonnet",
+    "ground_truth": "Both works explore existential isolation through protagonists alienated from society.",
+    "reasoning": "Literary analysis benefits from Claude's nuanced capabilities"
+  },
+  {
+    "query": "How do I make a cup of tea?",
+    "query_type": "instructions",
+    "complexity": "simple",
+    "candidate_models": ["gpt-4", "phi-2"],
+    "optimal_model": "phi-2",
+    "ground_truth": "1. Boil water 2. Add tea bag 3. Steep for 3-5 minutes 4. Remove tea bag 5. Add milk/sugar if desired",
+    "reasoning": "Simple instructions, any model works"
+  },
+  {
+    "query": "Derive the Navier-Stokes equations from first principles and explain turbulence",
+    "query_type": "physics",
+    "complexity": "complex",
+    "candidate_models": ["gpt-4", "claude-3-opus", "mistral-7b"],
+    "optimal_model": "claude-3-opus",
+    "ground_truth": "The Navier-Stokes equations describe the motion of viscous fluids...",
+    "reasoning": "Advanced physics derivation needs most capable model"
+  },
+  {
+    "query": "Translate 'Hello, how are you?' to Spanish",
+    "query_type": "translation",
+    "complexity": "simple",
+    "candidate_models": ["gpt-4", "mistral-7b"],
+    "optimal_model": "mistral-7b",
+    "ground_truth": "Hola, ¿cómo estás?",
+    "reasoning": "Simple translation, mid-size model sufficient"
+  },
+  {
+    "query": "Implement a distributed consensus algorithm in Rust with fault tolerance",
+    "query_type": "coding",
+    "complexity": "complex",
+    "candidate_models": ["gpt-4", "claude-3-opus", "deepseek-coder"],
+    "optimal_model": "claude-3-opus",
+    "ground_truth": "pub struct RaftNode { state: NodeState, term: u64, log: Vec<LogEntry> }",
+    "reasoning": "Complex distributed systems + Rust needs highest capability"
+  },
+  {
+    "query": "What year did World War 2 end?",
+    "query_type": "factual",
+    "complexity": "simple",
+    "candidate_models": ["gpt-4", "phi-2"],
+    "optimal_model": "phi-2",
+    "ground_truth": "1945",
+    "reasoning": "Simple factual recall, cheapest model"
+  },
+  {
+    "query": "Design a microservices architecture for a real-time trading platform with high availability",
+    "query_type": "architecture",
+    "complexity": "complex",
+    "candidate_models": ["gpt-4", "claude-3-opus"],
+    "optimal_model": "gpt-4",
+    "ground_truth": "The architecture should include API Gateway, Order Service, Matching Engine, Risk Management...",
+    "reasoning": "System design needs strong reasoning but gpt-4 is cost-effective"
+  },
+  {
+    "query": "Fix this Python code: for i in range(10) print(i)",
+    "query_type": "coding",
+    "complexity": "simple",
+    "candidate_models": ["gpt-4", "mistral-7b", "phi-2"],
+    "optimal_model": "phi-2",
+    "ground_truth": "for i in range(10): print(i)",
+    "reasoning": "Simple syntax fix, smallest model sufficient"
+  },
+  {
+    "query": "Explain the proof of Fermat's Last Theorem by Andrew Wiles",
+    "query_type": "math",
+    "complexity": "complex",
+    "candidate_models": ["gpt-4", "claude-3-opus"],
+    "optimal_model": "claude-3-opus",
+    "ground_truth": "Wiles' proof relies on establishing a connection between elliptic curves and modular forms...",
+    "reasoning": "Advanced mathematical proof explanation needs highest capability"
+  },
+  {
+    "query": "What color is the sky?",
+    "query_type": "factual",
+    "complexity": "simple",
+    "candidate_models": ["gpt-4", "phi-2"],
+    "optimal_model": "phi-2",
+    "ground_truth": "Blue",
+    "reasoning": "Trivial question, use cheapest"
+  },
+  {
+    "query": "Create a machine learning pipeline for fraud detection with feature engineering and model selection",
+    "query_type": "data_science",
+    "complexity": "complex",
+    "candidate_models": ["gpt-4", "claude-3-sonnet"],
+    "optimal_model": "gpt-4",
+    "ground_truth": "The pipeline should include data preprocessing, feature engineering, model training...",
+    "reasoning": "ML pipeline design needs strong technical reasoning"
+  },
+  {
+    "query": "Summarize this text in one sentence: The quick brown fox jumps over the lazy dog.",
+    "query_type": "summarization",
+    "complexity": "simple",
+    "candidate_models": ["gpt-4", "phi-2"],
+    "optimal_model": "phi-2",
+    "ground_truth": "A fox jumps over a dog.",
+    "reasoning": "Simple summarization, any model works"
+  },
+  {
+    "query": "Write a comprehensive essay comparing Eastern and Western philosophical traditions",
+    "query_type": "essay",
+    "complexity": "complex",
+    "candidate_models": ["gpt-4", "claude-3-opus", "claude-3-sonnet"],
+    "optimal_model": "claude-3-sonnet",
+    "ground_truth": "Eastern and Western philosophy differ fundamentally in their approaches...",
+    "reasoning": "Long-form essay with good writing needs Claude"
+  },
+  {
+    "query": "Convert 100 kilometers to miles",
+    "query_type": "math",
+    "complexity": "simple",
+    "candidate_models": ["gpt-4", "phi-2"],
+    "optimal_model": "phi-2",
+    "ground_truth": "62.14 miles",
+    "reasoning": "Simple unit conversion, cheapest model"
+  },
+  {
+    "query": "Debug this recursive function that's causing a stack overflow",
+    "query_type": "debugging",
+    "complexity": "medium",
+    "candidate_models": ["gpt-4", "deepseek-coder", "mistral-7b"],
+    "optimal_model": "deepseek-coder",
+    "ground_truth": "The issue is missing base case causing infinite recursion",
+    "reasoning": "Debugging benefits from code-specialized model"
+  },
+  {
+    "query": "Explain how CRISPR-Cas9 gene editing works and its ethical implications",
+    "query_type": "science",
+    "complexity": "complex",
+    "candidate_models": ["gpt-4", "claude-3-opus"],
+    "optimal_model": "gpt-4",
+    "ground_truth": "CRISPR-Cas9 is a molecular scissors that can edit DNA sequences...",
+    "reasoning": "Technical + ethical discussion, gpt-4 is cost-effective"
+  }
+]

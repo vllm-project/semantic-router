@@ -13,11 +13,58 @@
 //! - `model_names`: List of model names for classification
 //! - `hidden_sizes`: Hidden layer dimensions
 //! - `feature_dim`: Input feature dimension
+//!
+//! ## Mixed Precision Support
+//! Supports multiple data types for inference:
+//! - `f32`: Full precision (default, best accuracy)
+//! - `f16`: Half precision (faster on GPUs with tensor cores)
+//! - `bf16`: BFloat16 (good balance of range and speed)
+//!
+//! Use `with_dtype()` or `from_json_with_dtype()` to specify precision.
 
 use candle_core::{DType, Device, Tensor};
-use candle_nn::{linear, BatchNorm, Linear, Module, VarBuilder, VarMap};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+
+/// Supported data types for mixed precision inference
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MLPDType {
+    /// Full precision (32-bit float) - default, best accuracy
+    F32,
+    /// Half precision (16-bit float) - faster on GPUs with tensor cores
+    F16,
+    /// BFloat16 - good balance of dynamic range and speed
+    BF16,
+}
+
+impl MLPDType {
+    /// Convert to Candle DType
+    fn to_candle_dtype(&self) -> DType {
+        match self {
+            MLPDType::F32 => DType::F32,
+            MLPDType::F16 => DType::F16,
+            MLPDType::BF16 => DType::BF16,
+        }
+    }
+
+    /// Parse from string (e.g., from config)
+    pub fn from_str(s: &str) -> Result<Self, String> {
+        match s.to_lowercase().as_str() {
+            "f32" | "float32" | "fp32" => Ok(MLPDType::F32),
+            "f16" | "float16" | "fp16" | "half" => Ok(MLPDType::F16),
+            "bf16" | "bfloat16" => Ok(MLPDType::BF16),
+            _ => Err(format!(
+                "Unknown dtype '{}'. Supported: f32, f16, bf16",
+                s
+            )),
+        }
+    }
+}
+
+impl Default for MLPDType {
+    fn default() -> Self {
+        MLPDType::F32
+    }
+}
 
 /// MLP layer definition from JSON
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,30 +125,50 @@ pub struct MLPSelector {
     model_names: Vec<String>,
     feature_dim: usize,
     device: Device,
+    dtype: MLPDType,
     trained: bool,
 }
 
 impl MLPSelector {
-    /// Create a new MLP selector (untrained)
+    /// Create a new MLP selector (untrained, f32 precision)
     pub fn new() -> Self {
         Self {
             layers: Vec::new(),
             model_names: Vec::new(),
             feature_dim: 0,
             device: Device::Cpu,
+            dtype: MLPDType::F32,
             trained: false,
         }
     }
 
-    /// Create MLP selector with specific device
+    /// Create MLP selector with specific device (f32 precision)
     pub fn with_device(device: Device) -> Self {
         Self {
             layers: Vec::new(),
             model_names: Vec::new(),
             feature_dim: 0,
             device,
+            dtype: MLPDType::F32,
             trained: false,
         }
+    }
+
+    /// Create MLP selector with specific device and dtype for mixed precision
+    pub fn with_device_and_dtype(device: Device, dtype: MLPDType) -> Self {
+        Self {
+            layers: Vec::new(),
+            model_names: Vec::new(),
+            feature_dim: 0,
+            device,
+            dtype,
+            trained: false,
+        }
+    }
+
+    /// Get the current dtype
+    pub fn dtype(&self) -> MLPDType {
+        self.dtype
     }
 
     /// Check if model is trained/loaded
@@ -115,6 +182,7 @@ impl MLPSelector {
     }
 
     /// Select model for a query embedding
+    /// Supports mixed precision inference based on configured dtype
     pub fn select(&self, query: &[f64]) -> Result<String, String> {
         if !self.trained {
             return Err("Model not trained/loaded".to_string());
@@ -128,16 +196,33 @@ impl MLPSelector {
             ));
         }
 
-        // Convert query to tensor
+        // Convert query to tensor with configured dtype for mixed precision
         let query_f32: Vec<f32> = query.iter().map(|&x| x as f32).collect();
         let x = Tensor::from_vec(query_f32, &[1, self.feature_dim], &self.device)
             .map_err(|e| format!("Failed to create input tensor: {}", e))?;
 
+        // Convert to target dtype if not f32 (for mixed precision)
+        let x = if self.dtype != MLPDType::F32 {
+            x.to_dtype(self.dtype.to_candle_dtype())
+                .map_err(|e| format!("Failed to convert input to {:?}: {}", self.dtype, e))?
+        } else {
+            x
+        };
+
         // Forward pass through layers
         let output = self.forward(x)?;
 
+        // Convert output back to f32 for argmax (always use f32 for final computation)
+        let output_f32 = if self.dtype != MLPDType::F32 {
+            output
+                .to_dtype(DType::F32)
+                .map_err(|e| format!("Failed to convert output to f32: {}", e))?
+        } else {
+            output
+        };
+
         // Get argmax
-        let output_vec = output
+        let output_vec = output_f32
             .squeeze(0)
             .map_err(|e| format!("Squeeze failed: {}", e))?
             .to_vec1::<f32>()
@@ -187,8 +272,13 @@ impl MLPSelector {
                     let x_norm = x
                         .broadcast_sub(running_mean)
                         .map_err(|e| format!("BN sub failed: {}", e))?;
+                    // Create eps tensor with matching dtype for mixed precision
+                    let eps_tensor = Tensor::new(&[*eps as f32], &self.device)
+                        .unwrap()
+                        .to_dtype(self.dtype.to_candle_dtype())
+                        .map_err(|e| format!("BN eps dtype conversion: {}", e))?;
                     let var_eps = running_var
-                        .broadcast_add(&Tensor::new(&[*eps as f32], &self.device).unwrap())
+                        .broadcast_add(&eps_tensor)
                         .map_err(|e| format!("BN var_eps failed: {}", e))?;
                     let std = var_eps
                         .sqrt()
@@ -209,23 +299,28 @@ impl MLPSelector {
         Ok(x)
     }
 
-    /// Load model from JSON string
+    /// Load model from JSON string (f32 precision)
     pub fn from_json(json: &str) -> Result<Self, String> {
-        let data: MLPModelData =
-            serde_json::from_str(json).map_err(|e| format!("JSON parse error: {}", e))?;
-
-        if data.algorithm != "mlp" {
-            return Err(format!(
-                "Invalid algorithm: expected 'mlp', got '{}'",
-                data.algorithm
-            ));
-        }
-
-        Self::from_model_data(data, Device::Cpu)
+        Self::from_json_with_dtype(json, Device::Cpu, MLPDType::F32)
     }
 
-    /// Load model from JSON with specific device
+    /// Load model from JSON with specific device (f32 precision)
     pub fn from_json_with_device(json: &str, device: Device) -> Result<Self, String> {
+        Self::from_json_with_dtype(json, device, MLPDType::F32)
+    }
+
+    /// Load model from JSON with specific device and dtype for mixed precision
+    ///
+    /// # Arguments
+    /// * `json` - JSON string containing the model data
+    /// * `device` - Device to load model on (CPU, CUDA, Metal)
+    /// * `dtype` - Data type for inference (F32, F16, BF16)
+    ///
+    /// # Example
+    /// ```ignore
+    /// let model = MLPSelector::from_json_with_dtype(json, Device::Cpu, MLPDType::F16)?;
+    /// ```
+    pub fn from_json_with_dtype(json: &str, device: Device, dtype: MLPDType) -> Result<Self, String> {
         let data: MLPModelData =
             serde_json::from_str(json).map_err(|e| format!("JSON parse error: {}", e))?;
 
@@ -236,11 +331,12 @@ impl MLPSelector {
             ));
         }
 
-        Self::from_model_data(data, device)
+        Self::from_model_data(data, device, dtype)
     }
 
-    /// Build selector from model data
-    fn from_model_data(data: MLPModelData, device: Device) -> Result<Self, String> {
+    /// Build selector from model data with mixed precision support
+    fn from_model_data(data: MLPModelData, device: Device, dtype: MLPDType) -> Result<Self, String> {
+        let target_dtype = dtype.to_candle_dtype();
         let mut layers = Vec::new();
 
         for layer_def in &data.layers {
@@ -251,7 +347,7 @@ impl MLPSelector {
                     weight,
                     bias,
                 } => {
-                    // Flatten weight matrix
+                    // Flatten weight matrix and create tensor in f32 first
                     let weight_flat: Vec<f32> = weight
                         .iter()
                         .flat_map(|row| row.iter().map(|&x| x as f32))
@@ -270,6 +366,14 @@ impl MLPSelector {
                             .map_err(|e| format!("Failed to create zero bias: {}", e))?
                     };
 
+                    // Convert to target dtype for mixed precision
+                    let weight_tensor = weight_tensor
+                        .to_dtype(target_dtype)
+                        .map_err(|e| format!("Failed to convert weight to {:?}: {}", dtype, e))?;
+                    let bias_tensor = bias_tensor
+                        .to_dtype(target_dtype)
+                        .map_err(|e| format!("Failed to convert bias to {:?}: {}", dtype, e))?;
+
                     layers.push(CompiledLayer::Linear(weight_tensor, bias_tensor));
                 }
                 LayerDef::ReLU => {
@@ -283,6 +387,7 @@ impl MLPSelector {
                     running_var,
                     eps,
                 } => {
+                    // Create tensors in f32 first, then convert for mixed precision
                     let weight_tensor = if let Some(w) = weight {
                         let w_f32: Vec<f32> = w.iter().map(|&x| x as f32).collect();
                         Tensor::from_vec(w_f32, &[*num_features], &device)
@@ -319,6 +424,20 @@ impl MLPSelector {
                             .map_err(|e| format!("BN var ones error: {}", e))?
                     };
 
+                    // Convert to target dtype for mixed precision
+                    let weight_tensor = weight_tensor
+                        .to_dtype(target_dtype)
+                        .map_err(|e| format!("BN weight dtype conversion: {}", e))?;
+                    let bias_tensor = bias_tensor
+                        .to_dtype(target_dtype)
+                        .map_err(|e| format!("BN bias dtype conversion: {}", e))?;
+                    let mean_tensor = mean_tensor
+                        .to_dtype(target_dtype)
+                        .map_err(|e| format!("BN mean dtype conversion: {}", e))?;
+                    let var_tensor = var_tensor
+                        .to_dtype(target_dtype)
+                        .map_err(|e| format!("BN var dtype conversion: {}", e))?;
+
                     layers.push(CompiledLayer::BatchNorm {
                         weight: weight_tensor,
                         bias: bias_tensor,
@@ -338,6 +457,7 @@ impl MLPSelector {
             model_names: data.model_names,
             feature_dim: data.feature_dim,
             device,
+            dtype,
             trained: data.trained,
         })
     }
