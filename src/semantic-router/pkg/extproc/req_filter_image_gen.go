@@ -200,7 +200,6 @@ func getOrDefault(value, defaultValue int) int {
 	return value
 }
 
-
 // ExtractImagePrompt extracts and cleans the image generation prompt
 func ExtractImagePrompt(userContent string) string {
 	// Remove common prefixes like "generate an image of", "create a picture of", etc.
