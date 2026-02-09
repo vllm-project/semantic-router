@@ -1,10 +1,9 @@
-// Package ml_binding provides Go bindings for Linfa and Candle-based ML algorithms.
+// Package ml_binding provides Go bindings for Linfa-based traditional ML algorithms.
 //
 // This package wraps Rust implementations of:
 // - KNN (K-Nearest Neighbors) via linfa-nn
 // - KMeans clustering via linfa-clustering
 // - SVM (Support Vector Machine) via linfa-svm
-// - MLP (Multi-Layer Perceptron) via Candle (GPU-accelerated)
 //
 // Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
 //
@@ -41,16 +40,6 @@ char* ml_svm_select(void* handle, double* query, size_t query_len);
 int ml_svm_is_trained(void* handle);
 char* ml_svm_to_json(void* handle);
 void* ml_svm_from_json(char* json);
-
-// MLP functions (GPU-accelerated via Candle - Reference: FusionFactory arXiv:2507.10540)
-void* ml_mlp_new();
-void* ml_mlp_new_with_device(int device_type);
-void ml_mlp_free(void* handle);
-char* ml_mlp_select(void* handle, double* query, size_t query_len);
-int ml_mlp_is_trained(void* handle);
-char* ml_mlp_to_json(void* handle);
-void* ml_mlp_from_json(char* json);
-void* ml_mlp_from_json_with_device(char* json, int device_type);
 
 // Memory management
 void ml_free_string(char* ptr);
@@ -352,129 +341,4 @@ func SVMFromJSON(json string) (*SVMSelector, error) {
 	}
 
 	return &SVMSelector{handle: handle}, nil
-}
-
-// =============================================================================
-// MLP Selector (GPU-Accelerated via Candle)
-// Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
-// =============================================================================
-
-// MLPDeviceType defines the device type for MLP inference
-type MLPDeviceType int
-
-const (
-	// MLPDeviceCPU uses CPU for inference
-	MLPDeviceCPU MLPDeviceType = 0
-	// MLPDeviceCUDA uses NVIDIA GPU for inference
-	MLPDeviceCUDA MLPDeviceType = 1
-	// MLPDeviceMetal uses Apple Silicon GPU for inference
-	MLPDeviceMetal MLPDeviceType = 2
-)
-
-// MLPSelector wraps the Candle MLP implementation for GPU-accelerated inference
-type MLPSelector struct {
-	handle unsafe.Pointer
-	mu     sync.RWMutex
-}
-
-// NewMLPSelector creates a new MLP selector (CPU)
-func NewMLPSelector() *MLPSelector {
-	handle := C.ml_mlp_new()
-	if handle == nil {
-		return nil
-	}
-	return &MLPSelector{handle: handle}
-}
-
-// NewMLPSelectorWithDevice creates a new MLP selector with specified device
-func NewMLPSelectorWithDevice(deviceType MLPDeviceType) *MLPSelector {
-	handle := C.ml_mlp_new_with_device(C.int(deviceType))
-	if handle == nil {
-		return nil
-	}
-	return &MLPSelector{handle: handle}
-}
-
-// Close releases the MLP selector resources
-func (s *MLPSelector) Close() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.handle != nil {
-		C.ml_mlp_free(s.handle)
-		s.handle = nil
-	}
-}
-
-// Select selects the best model for a query embedding
-func (s *MLPSelector) Select(query []float64) (string, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if s.handle == nil {
-		return "", errors.New("selector not initialized")
-	}
-
-	cQuery := make([]C.double, len(query))
-	for i, v := range query {
-		cQuery[i] = C.double(v)
-	}
-
-	result := C.ml_mlp_select(s.handle, &cQuery[0], C.size_t(len(query)))
-	if result == nil {
-		return "", errors.New("MLP selection failed")
-	}
-	defer C.ml_free_string(result)
-
-	return C.GoString(result), nil
-}
-
-// IsTrained returns whether the model has been loaded
-func (s *MLPSelector) IsTrained() bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if s.handle == nil {
-		return false
-	}
-	return C.ml_mlp_is_trained(s.handle) != 0
-}
-
-// ToJSON serializes the model to JSON
-func (s *MLPSelector) ToJSON() (string, error) {
-	if s.handle == nil {
-		return "", errors.New("selector not initialized")
-	}
-
-	result := C.ml_mlp_to_json(s.handle)
-	if result == nil {
-		return "", errors.New("JSON serialization failed")
-	}
-	defer C.ml_free_string(result)
-
-	return C.GoString(result), nil
-}
-
-// MLPFromJSON loads an MLP selector from JSON (the primary way to load trained models)
-func MLPFromJSON(json string) (*MLPSelector, error) {
-	cJSON := C.CString(json)
-	defer C.free(unsafe.Pointer(cJSON))
-
-	handle := C.ml_mlp_from_json(cJSON)
-	if handle == nil {
-		return nil, errors.New("failed to load MLP from JSON")
-	}
-
-	return &MLPSelector{handle: handle}, nil
-}
-
-// MLPFromJSONWithDevice loads an MLP selector from JSON with specific device
-func MLPFromJSONWithDevice(json string, deviceType MLPDeviceType) (*MLPSelector, error) {
-	cJSON := C.CString(json)
-	defer C.free(unsafe.Pointer(cJSON))
-
-	handle := C.ml_mlp_from_json_with_device(cJSON, C.int(deviceType))
-	if handle == nil {
-		return nil, errors.New("failed to load MLP from JSON with device")
-	}
-
-	return &MLPSelector{handle: handle}, nil
 }

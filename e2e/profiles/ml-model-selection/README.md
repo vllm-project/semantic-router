@@ -186,7 +186,7 @@ go run validate.go --qwen3-model /path/to/Qwen3-Embedding-0.6B
 This uses the **actual production inference path**:
 
 - **Embeddings**: Qwen3-Embedding-0.6B via `candle-binding` (Rust)
-- **ML Inference**: KNN/KMeans/SVM via `ml-binding` → **Linfa** (Rust), MLP via **Candle** (GPU)
+- **ML Inference**: KNN/KMeans/SVM via `ml-binding` → **Linfa** (Rust), MLP via `candle-binding` → **Candle** (GPU)
 
 **Expected Results (109 test queries, 4 models):**
 

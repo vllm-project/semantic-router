@@ -2,7 +2,7 @@
 name = "ml_semantic_router"
 version = "0.1.0"
 edition = "2021"
-description = "ML algorithms binding for semantic-router using Linfa and Candle"
+description = "Traditional ML algorithms binding for semantic-router using Linfa"
 license = "Apache-2.0"
 
 [lib]
@@ -17,11 +17,6 @@ linfa-nn = "0.7"           # Ball Tree for KNN/KMeans inference
 # Linear algebra (must match Linfa's ndarray version)
 ndarray = "0.15"
 
-# Candle for MLP GPU inference
-# Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via LLM routers
-candle-core = "0.8"
-candle-nn = "0.8"
-
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -31,11 +26,6 @@ noisy_float = "=0.2.0"
 
 # FFI
 libc = "0.2"
-
-[features]
-default = []
-cuda = ["candle-core/cuda", "candle-nn/cuda"]
-metal = ["candle-core/metal", "candle-nn/metal"]
 
 [profile.release]
 lto = true

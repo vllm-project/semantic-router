@@ -31,9 +31,9 @@ This module implements machine learning-based model selection algorithms that in
 | **KNN** (K-Nearest Neighbors) | Rust (`ml-binding/`) | Linfa (`linfa-nn`) | Quality-weighted voting among similar queries | `k` (neighbors) |
 | **KMeans** | Rust (`ml-binding/`) | Linfa (`linfa-clustering`) | Cluster-based routing with quality-weighted assignment | `num_clusters` |
 | **SVM** (Support Vector Machine) | Rust (`ml-binding/`) | Linfa (`linfa-svm`) | Decision boundaries with RBF kernel (gamma=1.0) | `kernel`, `gamma` |
-| **MLP** (Multi-Layer Perceptron) | Rust (`ml-binding/`) | Candle (GPU) | GPU-accelerated neural network routing | `hidden_sizes`, `device` |
+| **MLP** (Multi-Layer Perceptron) | Rust (`candle-binding/`) | Candle (GPU) | GPU-accelerated neural network routing | `hidden_sizes`, `device` |
 
-> **Note:** KNN, KMeans, and SVM use [Linfa](https://github.com/rust-ml/linfa). MLP uses [Candle](https://github.com/huggingface/candle) for GPU acceleration (CUDA/Metal).
+> **Note:** KNN, KMeans, and SVM use [Linfa](https://github.com/rust-ml/linfa) via `ml-binding/`. MLP uses [Candle](https://github.com/huggingface/candle) via `candle-binding/` for GPU acceleration (CUDA/Metal).
 >
 > **Reference:** Implementation aligned with [FusionFactory (arXiv:2507.10540)](https://arxiv.org/abs/2507.10540) query-level fusion approach.
 

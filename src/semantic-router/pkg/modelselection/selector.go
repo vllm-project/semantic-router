@@ -17,11 +17,14 @@ limitations under the License.
 // Package modelselection provides ML-based model selection algorithms
 // for choosing the optimal model from a set of candidates.
 //
-// This package uses Linfa and Candle (Rust) via ml-binding for ML algorithms:
-// - KNN (K-Nearest Neighbors)
-// - KMeans clustering
-// - SVM (Support Vector Machine)
-// - MLP (Multi-Layer Perceptron) with GPU support via Candle
+// This package uses:
+// - Linfa (Rust) via ml-binding for traditional ML algorithms:
+//   - KNN (K-Nearest Neighbors)
+//   - KMeans clustering
+//   - SVM (Support Vector Machine)
+//
+// - Candle (Rust) via candle-binding for GPU-accelerated algorithms:
+//   - MLP (Multi-Layer Perceptron) with GPU support
 //
 // Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
 //
@@ -37,6 +40,7 @@ import (
 	"sync"
 	"time"
 
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	ml_binding "github.com/vllm-project/semantic-router/ml-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -887,27 +891,28 @@ func (s *SVMSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*co
 // =============================================================================
 // MLP Selector - Candle/Rust Implementation (GPU-accelerated)
 // Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
+// Note: MLP uses candle-binding (not ml-binding) for GPU acceleration
 // =============================================================================
 
 // MLPSelector implements Multi-Layer Perceptron using Candle (GPU-accelerated)
 type MLPSelector struct {
 	baseSelector
-	mlMLP *ml_binding.MLPSelector
+	mlMLP *candle_binding.MLPSelector
 }
 
 // NewMLPSelector creates a new MLP selector using Candle (CPU)
 func NewMLPSelector() *MLPSelector {
 	return &MLPSelector{
 		baseSelector: newBaseSelector(10000),
-		mlMLP:        ml_binding.NewMLPSelector(),
+		mlMLP:        candle_binding.NewMLPSelector(),
 	}
 }
 
 // NewMLPSelectorWithDevice creates a new MLP selector with GPU support
-func NewMLPSelectorWithDevice(deviceType ml_binding.MLPDeviceType) *MLPSelector {
+func NewMLPSelectorWithDevice(deviceType candle_binding.MLPDeviceType) *MLPSelector {
 	return &MLPSelector{
 		baseSelector: newBaseSelector(10000),
-		mlMLP:        ml_binding.NewMLPSelectorWithDevice(deviceType),
+		mlMLP:        candle_binding.NewMLPSelectorWithDevice(deviceType),
 	}
 }
 
@@ -921,8 +926,8 @@ func (s *MLPSelector) LoadFromJSON(data []byte) error {
 		return err
 	}
 
-	// Also load into ml-binding
-	mlp, err := ml_binding.MLPFromJSON(string(data))
+	// Load into candle-binding
+	mlp, err := candle_binding.MLPFromJSON(string(data))
 	if err != nil {
 		logging.Warnf("MLP: Failed to load model: %v", err)
 		return nil
@@ -968,7 +973,7 @@ func (s *MLPSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*co
 	// Build feature vector: embedding + category one-hot (matches Python training format)
 	featureVector := CombineEmbeddingWithCategory(ctx.QueryEmbedding, ctx.CategoryName)
 
-	// Use ml-binding for selection
+	// Use candle-binding for selection
 	selectedModel, err := s.mlMLP.Select(featureVector)
 	if err != nil {
 		return nil, fmt.Errorf("MLP (Candle) selection failed: %w", err)

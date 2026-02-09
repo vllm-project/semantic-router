@@ -99,6 +99,7 @@ Usage:
 
 Examples:
   go run validate.go                                    # Downloads everything from HuggingFace
+  go run validate.go --algorithm mlp                    # Validate only MLP (confirm MLP works)
   go run validate.go --algorithm knn                    # Validate only KNN
   go run validate.go --data-file local.jsonl            # Use local data file
   go run validate.go --no-download                      # Skip downloads, use local files only
@@ -235,10 +236,10 @@ Flags:
 
 	// Evaluate strategies
 	fmt.Println("\nEvaluating strategies...")
-	results := evaluateStrategies(queryResults, modelNames, selectors)
+	results, selectionsByAlgo := evaluateStrategies(queryResults, modelNames, selectors)
 
 	// Print results
-	printResults(results, len(queryResults), len(modelNames))
+	printResults(results, len(queryResults), len(modelNames), selectionsByAlgo)
 }
 
 // downloadFromHuggingFace downloads pretrained models and benchmark data from HuggingFace.
@@ -440,8 +441,10 @@ func loadBenchmarkData(dataFile string, testSplit float64) ([]QueryResult, []str
 	return testQueries, modelNames, nil
 }
 
-func evaluateStrategies(queries []QueryResult, modelNames []string, selectors map[string]modelselection.Selector) []StrategyResult {
+// selectionsByAlgo: algorithm name -> (model name -> count of times selected)
+func evaluateStrategies(queries []QueryResult, modelNames []string, selectors map[string]modelselection.Selector) ([]StrategyResult, map[string]map[string]int) {
 	results := make([]StrategyResult, 0)
+	selectionsByAlgo := make(map[string]map[string]int)
 
 	// Oracle (best possible)
 	oracleResult := evaluateOracle(queries)
@@ -449,8 +452,9 @@ func evaluateStrategies(queries []QueryResult, modelNames []string, selectors ma
 
 	// ML Selectors
 	for name, selector := range selectors {
-		result := evaluateSelector(queries, modelNames, selector, name)
+		result, modelCounts := evaluateSelector(queries, modelNames, selector, name)
 		results = append(results, result)
+		selectionsByAlgo[name] = modelCounts
 	}
 
 	// Random selection
@@ -463,7 +467,7 @@ func evaluateStrategies(queries []QueryResult, modelNames []string, selectors ma
 		results = append(results, result)
 	}
 
-	return results
+	return results, selectionsByAlgo
 }
 
 // normalizeModelName normalizes model names for comparison.
@@ -509,9 +513,10 @@ func evaluateOracle(queries []QueryResult) StrategyResult {
 	}
 }
 
-func evaluateSelector(queries []QueryResult, modelNames []string, selector modelselection.Selector, name string) StrategyResult {
+func evaluateSelector(queries []QueryResult, modelNames []string, selector modelselection.Selector, name string) (StrategyResult, map[string]int) {
 	var totalQuality, totalLatency float64
 	bestCount := 0
+	modelCounts := make(map[string]int)
 
 	// Create model refs for the selector
 	refs := make([]config.ModelRef, len(modelNames))
@@ -537,10 +542,12 @@ func evaluateSelector(queries []QueryResult, modelNames []string, selector model
 			selectedModel = selected.Model
 		}
 
-		// Get performance for selected model (with name normalization)
+		// Get performance and normalize key for counting
 		actualKey, perf, found := findModelInMap(selectedModel, qr.ModelPerfs)
-		if !found {
-			// Model not found - use 0
+		if found {
+			modelCounts[actualKey]++
+		} else {
+			modelCounts[selectedModel]++
 			perf = 0
 		}
 		_, lat, _ := findModelInMap(selectedModel, qr.ModelLats)
@@ -555,12 +562,13 @@ func evaluateSelector(queries []QueryResult, modelNames []string, selector model
 	}
 
 	n := float64(len(queries))
-	return StrategyResult{
+	result := StrategyResult{
 		Name:         fmt.Sprintf("%s Selection", strings.ToUpper(name)),
 		AvgQuality:   totalQuality / n,
 		AvgLatency:   totalLatency / n,
 		BestModelPct: float64(bestCount) / n * 100,
 	}
+	return result, modelCounts
 }
 
 func evaluateRandom(queries []QueryResult, modelNames []string) StrategyResult {
@@ -610,7 +618,7 @@ func evaluateSingleModel(queries []QueryResult, model string) StrategyResult {
 	}
 }
 
-func printResults(results []StrategyResult, numQueries, numModels int) {
+func printResults(results []StrategyResult, numQueries, numModels int, selectionsByAlgo map[string]map[string]int) {
 	// Sort by avg quality descending
 	sort.Slice(results, func(i, j int) bool {
 		return results[i].AvgQuality > results[j].AvgQuality
@@ -628,15 +636,53 @@ func printResults(results []StrategyResult, numQueries, numModels int) {
 	}
 	fmt.Println("=" + strings.Repeat("=", 69))
 
-	// Calculate ML benefit over random
-	var randomResult *StrategyResult
-	for i := range results {
-		if results[i].Name == "Random Selection" {
-			randomResult = &results[i]
-			break
+	// Per-algorithm: which LLM each algorithm selected (counts)
+	if len(selectionsByAlgo) > 0 {
+		fmt.Println("\nSelections by algorithm (LLM chosen by each):")
+		for _, algo := range []string{"knn", "kmeans", "svm", "mlp"} {
+			counts := selectionsByAlgo[algo]
+			if len(counts) == 0 {
+				continue
+			}
+			models := make([]string, 0, len(counts))
+			for m := range counts {
+				models = append(models, m)
+			}
+			sort.Strings(models)
+			for _, model := range models {
+				fmt.Printf("  %s: %s (%d)\n", algo, model, counts[model])
+			}
 		}
 	}
 
+	// MLP validation: confirm MLP is working and selecting well
+	var mlpResult, randomResult *StrategyResult
+	for i := range results {
+		if results[i].Name == "MLP Selection" {
+			mlpResult = &results[i]
+		}
+		if results[i].Name == "Random Selection" {
+			randomResult = &results[i]
+		}
+	}
+	if mlpResult != nil {
+		fmt.Println("\nMLP validation:")
+		fmt.Printf("  MLP is working: selector ran and made selections (see 'MLP Selection' above).\n")
+		if randomResult != nil && randomResult.BestModelPct > 0 {
+			ratio := mlpResult.BestModelPct / randomResult.BestModelPct
+			fmt.Printf("  MLP Best Model %%: %.1f%% (random: %.1f%%). MLP selects best model %.1fx more often than random.\n",
+				mlpResult.BestModelPct, randomResult.BestModelPct, ratio)
+			if mlpResult.BestModelPct > randomResult.BestModelPct {
+				fmt.Printf("  MLP is selecting the best model better than random: validated.\n")
+			} else {
+				fmt.Printf("  Warning: MLP Best Model %% is not above random; check model/data.\n")
+			}
+		}
+	} else {
+		fmt.Println("\nMLP validation: MLP selector was not loaded (see warnings above). Run with candle-binding built and LD_LIBRARY_PATH set.")
+	}
+
+	// Calculate ML benefit over random
 	if randomResult != nil {
 		fmt.Println("\nML Routing Benefit:")
 		for _, r := range results {

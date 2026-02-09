@@ -211,7 +211,7 @@ config:
           use_reasoning: false
 
     - name: "physics_decision"
-      description: "Physics queries - uses SVM"
+      description: "Physics queries - uses KMeans"
       priority: 100
       rules:
         operator: "AND"
@@ -219,9 +219,9 @@ config:
           - type: "domain"
             name: "physics"
       algorithm:
-        type: "svm"
-        svm:
-          kernel: "rbf"
+        type: "kmeans"
+        kmeans:
+          num_clusters: 4
       modelRefs:
         - model: "llama-3.2-1b"
           use_reasoning: false
@@ -290,6 +290,56 @@ config:
         type: "kmeans"
         kmeans:
           num_clusters: 4
+      modelRefs:
+        - model: "llama-3.2-1b"
+          use_reasoning: false
+        - model: "llama-3.2-3b"
+          use_reasoning: false
+        - model: "codellama-7b"
+          use_reasoning: false
+        - model: "mistral-7b"
+          use_reasoning: false
+
+    # Decisions for remaining domains (history, philosophy, psychology, other)
+    # so all 14 categories have a matching decision and no domain falls through to default
+    - name: "humanities_decision"
+      description: "History, philosophy, psychology - uses KNN"
+      priority: 90
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "history"
+          - type: "domain"
+            name: "philosophy"
+          - type: "domain"
+            name: "psychology"
+      algorithm:
+        type: "knn"
+        knn:
+          k: 5
+      modelRefs:
+        - model: "llama-3.2-1b"
+          use_reasoning: false
+        - model: "llama-3.2-3b"
+          use_reasoning: false
+        - model: "codellama-7b"
+          use_reasoning: false
+        - model: "mistral-7b"
+          use_reasoning: false
+
+    - name: "general_decision"
+      description: "General / other - catch-all for domain 'other' and low-confidence"
+      priority: 1
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "domain"
+            name: "other"
+      algorithm:
+        type: "knn"
+        knn:
+          k: 5
       modelRefs:
         - model: "llama-3.2-1b"
           use_reasoning: false

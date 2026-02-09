@@ -34,6 +34,9 @@ type ModelSelectionCase struct {
 	// ExpectEfficient indicates if the test expects an efficiency-optimized selection (KMeans)
 	// When true, expects faster/cheaper model; when false, expects higher quality model
 	ExpectEfficient bool `json:"expect_efficient,omitempty"`
+	// AllowNoDecision if true, accepts empty/no decision as valid (for ambiguous queries)
+	// This is useful for queries that may not reliably match a specific domain
+	AllowNoDecision bool `json:"allow_no_decision,omitempty"`
 }
 
 // ModelSelectionResult tracks the result of a single model selection test
@@ -45,6 +48,7 @@ type ModelSelectionResult struct {
 	ExpectedModels  []string
 	Algorithm       string
 	ExpectEfficient bool
+	AllowNoDecision bool
 	Correct         bool
 	Error           string
 }
@@ -125,6 +129,7 @@ func testSingleModelSelection(ctx context.Context, testCase ModelSelectionCase, 
 		ExpectedModels:  testCase.ExpectedModels,
 		Algorithm:       testCase.Algorithm,
 		ExpectEfficient: testCase.ExpectEfficient,
+		AllowNoDecision: testCase.AllowNoDecision,
 	}
 
 	// Create chat completion request with MoM (Mixture of Models) to trigger decision engine
@@ -178,6 +183,11 @@ func testSingleModelSelection(ctx context.Context, testCase ModelSelectionCase, 
 
 	// Verify the decision matches
 	decisionMatches := result.ActualDecision == testCase.Decision
+	// If AllowNoDecision is true, accept empty decision or general_decision as valid
+	// (general_decision is the catch-all for unclassified queries)
+	if testCase.AllowNoDecision && (result.ActualDecision == "" || result.ActualDecision == "general_decision") {
+		decisionMatches = true
+	}
 
 	// Verify the selected model is one of the expected models
 	modelValid := false

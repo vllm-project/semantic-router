@@ -1,12 +1,5 @@
 [
   {
-    "query": "Calculate the derivative of x^3 + 2x^2 - 5x + 1",
-    "decision": "math_decision",
-    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Calculus derivative - MLP/math",
-    "algorithm": "mlp"
-  },
-  {
     "query": "Solve for x: 3x + 7 = 22",
     "decision": "math_decision",
     "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
@@ -14,10 +7,10 @@
     "algorithm": "mlp"
   },
   {
-    "query": "What is the integral of sin(x)dx?",
+    "query": "What is the integral of sin(x)?",
     "decision": "math_decision",
     "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Integral calculus - MLP/math",
+    "description": "Calculus integral - MLP/math",
     "algorithm": "mlp"
   },
   {
@@ -38,22 +31,29 @@
     "query": "What is Newton's second law of motion?",
     "decision": "physics_decision",
     "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Classical mechanics - SVM/physics",
-    "algorithm": "svm"
+    "description": "Classical mechanics - KMeans/physics",
+    "algorithm": "kmeans"
   },
   {
     "query": "Calculate the kinetic energy of a 5kg object moving at 10m/s",
     "decision": "physics_decision",
     "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Energy calculation - SVM/physics",
-    "algorithm": "svm"
+    "description": "Energy calculation - KMeans/physics",
+    "algorithm": "kmeans"
   },
   {
-    "query": "What is the wavelength of light with frequency 5e14 Hz?",
+    "query": "What is the difference between AC and DC electrical current?",
     "decision": "physics_decision",
     "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Wave physics - SVM/physics",
-    "algorithm": "svm"
+    "description": "Electrical physics - KMeans/physics",
+    "algorithm": "kmeans"
+  },
+  {
+    "query": "How does a transistor amplify electrical signals?",
+    "decision": "physics_decision",
+    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
+    "description": "Electronics physics - KMeans/physics",
+    "algorithm": "kmeans"
   },
   {
     "query": "What is the law of supply and demand in economics?",
@@ -84,13 +84,6 @@
     "algorithm": "knn"
   },
   {
-    "query": "What is the pH of a neutral solution at 25 degrees Celsius?",
-    "decision": "science_decision",
-    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Chemistry pH - KNN/science",
-    "algorithm": "knn"
-  },
-  {
     "query": "What is the difference between civil law and criminal law?",
     "decision": "law_decision",
     "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
@@ -105,6 +98,20 @@
     "algorithm": "knn"
   },
   {
+    "query": "What were the main causes of World War I?",
+    "decision": "humanities_decision",
+    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
+    "description": "History WWI - KNN/humanities",
+    "algorithm": "knn"
+  },
+  {
+    "query": "Explain the philosophical concept of existentialism",
+    "decision": "humanities_decision",
+    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
+    "description": "Philosophy existentialism - KNN/humanities",
+    "algorithm": "knn"
+  },
+  {
     "query": "What are the symptoms of diabetes mellitus?",
     "decision": "health_decision",
     "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
@@ -112,31 +119,24 @@
     "algorithm": "kmeans"
   },
   {
-    "query": "How does the human cardiovascular system work?",
+    "query": "What is the treatment for hypertension?",
     "decision": "health_decision",
     "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Human anatomy - KMeans/health",
+    "description": "Medical treatment - KMeans/health",
     "algorithm": "kmeans"
   },
   {
-    "query": "What causes high blood pressure in humans?",
-    "decision": "health_decision",
+    "query": "What is the Pythagorean theorem?",
+    "decision": "math_decision",
     "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Health condition - KMeans/health",
-    "algorithm": "kmeans"
+    "description": "Geometry theorem - MLP/math",
+    "algorithm": "mlp"
   },
   {
-    "query": "What is the difference between AC and DC electrical current?",
-    "decision": "engineering_decision",
+    "query": "How do I implement a binary search tree in Java?",
+    "decision": "code_decision",
     "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Electrical engineering - KMeans/engineering",
-    "algorithm": "kmeans"
-  },
-  {
-    "query": "How does a transistor amplify electrical signals?",
-    "decision": "engineering_decision",
-    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
-    "description": "Electronics engineering - KMeans/engineering",
-    "algorithm": "kmeans"
+    "description": "Java data structures - MLP/code",
+    "algorithm": "mlp"
   }
 ]

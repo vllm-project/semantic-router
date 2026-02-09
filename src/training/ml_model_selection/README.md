@@ -196,8 +196,8 @@ python train.py --data-file data.jsonl --output-dir models/ --algorithm mlp --de
 │  ─────────────────────────────────────────────────────────────────  │
 │                                                                     │
 │  Router loads pretrained models:                                    │
-│  • LoadPretrainedSelector("knn_model.json")                         │
-│  • Models loaded via ml_binding.KNNFromJSON()                       │
+│  • LoadPretrainedSelector("knn_model.json") / ... "mlp_model.json"   │
+│  • KNN/KMeans/SVM via ml_binding.*FromJSON(); MLP via candle_binding.MLPFromJSON() │
 │                                                                     │
 │  Runtime selection:                                                 │
 │  • Generate query embedding (Qwen3, 1024-dim)                       │

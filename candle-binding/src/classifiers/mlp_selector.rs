@@ -52,10 +52,7 @@ impl MLPDType {
             "f32" | "float32" | "fp32" => Ok(MLPDType::F32),
             "f16" | "float16" | "fp16" | "half" => Ok(MLPDType::F16),
             "bf16" | "bfloat16" => Ok(MLPDType::BF16),
-            _ => Err(format!(
-                "Unknown dtype '{}'. Supported: f32, f16, bf16",
-                s
-            )),
+            _ => Err(format!("Unknown dtype '{}'. Supported: f32, f16, bf16", s)),
         }
     }
 }
@@ -198,7 +195,7 @@ impl MLPSelector {
 
         // Convert query to tensor with configured dtype for mixed precision
         let query_f32: Vec<f32> = query.iter().map(|&x| x as f32).collect();
-        let x = Tensor::from_vec(query_f32, &[1, self.feature_dim], &self.device)
+        let x = Tensor::from_vec(query_f32, (1, self.feature_dim), &self.device)
             .map_err(|e| format!("Failed to create input tensor: {}", e))?;
 
         // Convert to target dtype if not f32 (for mixed precision)
@@ -251,9 +248,7 @@ impl MLPSelector {
             x = match layer {
                 CompiledLayer::Linear(weight, bias) => {
                     // x @ weight.T + bias
-                    let weight_t = weight
-                        .t()
-                        .map_err(|e| format!("Transpose failed: {}", e))?;
+                    let weight_t = weight.t().map_err(|e| format!("Transpose failed: {}", e))?;
                     let out = x
                         .matmul(&weight_t)
                         .map_err(|e| format!("Matmul failed: {}", e))?;
@@ -320,7 +315,11 @@ impl MLPSelector {
     /// ```ignore
     /// let model = MLPSelector::from_json_with_dtype(json, Device::Cpu, MLPDType::F16)?;
     /// ```
-    pub fn from_json_with_dtype(json: &str, device: Device, dtype: MLPDType) -> Result<Self, String> {
+    pub fn from_json_with_dtype(
+        json: &str,
+        device: Device,
+        dtype: MLPDType,
+    ) -> Result<Self, String> {
         let data: MLPModelData =
             serde_json::from_str(json).map_err(|e| format!("JSON parse error: {}", e))?;
 
@@ -335,7 +334,11 @@ impl MLPSelector {
     }
 
     /// Build selector from model data with mixed precision support
-    fn from_model_data(data: MLPModelData, device: Device, dtype: MLPDType) -> Result<Self, String> {
+    fn from_model_data(
+        data: MLPModelData,
+        device: Device,
+        dtype: MLPDType,
+    ) -> Result<Self, String> {
         let target_dtype = dtype.to_candle_dtype();
         let mut layers = Vec::new();
 
@@ -354,15 +357,15 @@ impl MLPSelector {
                         .collect();
 
                     let weight_tensor =
-                        Tensor::from_vec(weight_flat, &[*out_features, *in_features], &device)
+                        Tensor::from_vec(weight_flat, (*out_features, *in_features), &device)
                             .map_err(|e| format!("Failed to create weight tensor: {}", e))?;
 
                     let bias_tensor = if let Some(b) = bias {
                         let bias_f32: Vec<f32> = b.iter().map(|&x| x as f32).collect();
-                        Tensor::from_vec(bias_f32, &[*out_features], &device)
+                        Tensor::from_vec(bias_f32, *out_features, &device)
                             .map_err(|e| format!("Failed to create bias tensor: {}", e))?
                     } else {
-                        Tensor::zeros(&[*out_features], DType::F32, &device)
+                        Tensor::zeros(*out_features, DType::F32, &device)
                             .map_err(|e| format!("Failed to create zero bias: {}", e))?
                     };
 
@@ -390,37 +393,37 @@ impl MLPSelector {
                     // Create tensors in f32 first, then convert for mixed precision
                     let weight_tensor = if let Some(w) = weight {
                         let w_f32: Vec<f32> = w.iter().map(|&x| x as f32).collect();
-                        Tensor::from_vec(w_f32, &[*num_features], &device)
+                        Tensor::from_vec(w_f32, *num_features, &device)
                             .map_err(|e| format!("BN weight error: {}", e))?
                     } else {
-                        Tensor::ones(&[*num_features], DType::F32, &device)
+                        Tensor::ones(*num_features, DType::F32, &device)
                             .map_err(|e| format!("BN weight ones error: {}", e))?
                     };
 
                     let bias_tensor = if let Some(b) = bias {
                         let b_f32: Vec<f32> = b.iter().map(|&x| x as f32).collect();
-                        Tensor::from_vec(b_f32, &[*num_features], &device)
+                        Tensor::from_vec(b_f32, *num_features, &device)
                             .map_err(|e| format!("BN bias error: {}", e))?
                     } else {
-                        Tensor::zeros(&[*num_features], DType::F32, &device)
+                        Tensor::zeros(*num_features, DType::F32, &device)
                             .map_err(|e| format!("BN bias zeros error: {}", e))?
                     };
 
                     let mean_tensor = if let Some(m) = running_mean {
                         let m_f32: Vec<f32> = m.iter().map(|&x| x as f32).collect();
-                        Tensor::from_vec(m_f32, &[*num_features], &device)
+                        Tensor::from_vec(m_f32, *num_features, &device)
                             .map_err(|e| format!("BN mean error: {}", e))?
                     } else {
-                        Tensor::zeros(&[*num_features], DType::F32, &device)
+                        Tensor::zeros(*num_features, DType::F32, &device)
                             .map_err(|e| format!("BN mean zeros error: {}", e))?
                     };
 
                     let var_tensor = if let Some(v) = running_var {
                         let v_f32: Vec<f32> = v.iter().map(|&x| x as f32).collect();
-                        Tensor::from_vec(v_f32, &[*num_features], &device)
+                        Tensor::from_vec(v_f32, *num_features, &device)
                             .map_err(|e| format!("BN var error: {}", e))?
                     } else {
-                        Tensor::ones(&[*num_features], DType::F32, &device)
+                        Tensor::ones(*num_features, DType::F32, &device)
                             .map_err(|e| format!("BN var ones error: {}", e))?
                     };
 
