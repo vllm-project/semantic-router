@@ -55,14 +55,39 @@ def validate_signal_references(config: UserConfig) -> List[ValidationError]:
         if config.signals.fact_check:
             for signal in config.signals.fact_check:
                 signal_names.add(signal.name)
+        if config.signals.user_feedbacks:
+            for signal in config.signals.user_feedbacks:
+                signal_names.add(signal.name)
+        if config.signals.preferences:
+            for signal in config.signals.preferences:
+                signal_names.add(signal.name)
+        if config.signals.language:
+            for signal in config.signals.language:
+                signal_names.add(signal.name)
+        if config.signals.latency:
+            for signal in config.signals.latency:
+                signal_names.add(signal.name)
         if config.signals.context:
             for signal in config.signals.context:
+                signal_names.add(signal.name)
+        if config.signals.complexity:
+            for signal in config.signals.complexity:
                 signal_names.add(signal.name)
 
     # Check decision conditions
     for decision in config.decisions:
         for condition in decision.rules.conditions:
-            if condition.type in ["keyword", "embedding", "fact_check", "context"]:
+            if condition.type in [
+                "keyword",
+                "embedding",
+                "fact_check",
+                "user_feedback",
+                "preference",
+                "language",
+                "latency",
+                "context",
+                "complexity",
+            ]:
                 if condition.name not in signal_names:
                     errors.append(
                         ValidationError(
@@ -103,10 +128,10 @@ def validate_domain_references(config: UserConfig) -> List[ValidationError]:
     for decision in config.decisions:
         for condition in decision.rules.conditions:
             if condition.type == "domain":
-                if not domain_names:
+                if condition.name not in domain_names:
                     errors.append(
                         ValidationError(
-                            f"Decision '{decision.name}' references domain '{condition.name}' but no domains are defined",
+                            f"Decision '{decision.name}' references unknown domain '{condition.name}'",
                             field=f"decisions.{decision.name}.rules.conditions",
                         )
                     )
