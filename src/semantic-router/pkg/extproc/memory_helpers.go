@@ -30,14 +30,18 @@ func extractAutoStore(ctx *RequestContext) bool {
 	return false
 }
 
+// extractUserID is defined in user_id_dev.go (with metadata fallback) and
+// user_id_prod.go (auth header only) using build tags.
+
 // extractMemoryInfo extracts sessionID, userID, and history from the request context.
 //
 // Returns an error if userID is not available, because memory would be orphaned
 // (unretrievable) without a valid userID. Memory retrieval filters by userID first,
 // so memories stored without userID cannot be retrieved later.
 //
-// userID is required and must be provided via:
-//   - metadata["user_id"] in Response API request (OpenAI API spec-compliant)
+// userID extraction priority:
+//  1. Auth header (x-authz-user-id) injected by external auth service (Authorino, Envoy Gateway JWT, etc.)
+//  2. metadata["user_id"] in Response API request (fallback for development/testing)
 func extractMemoryInfo(ctx *RequestContext) (sessionID string, userID string, history []memory.Message, err error) {
 	// First check if this is a Response API request
 	// Non-Response API requests cannot track turns without ConversationID
@@ -45,15 +49,8 @@ func extractMemoryInfo(ctx *RequestContext) (sessionID string, userID string, hi
 		return "", "", nil, fmt.Errorf("ConversationID required for memory extraction - cannot track turns without it. Please use Response API (/v1/responses) with conversation_id or previous_response_id")
 	}
 
-	// Extract userID (required for memory extraction)
-	// userID is provided via metadata.user_id (OpenAI API spec-compliant)
-	if ctx.ResponseAPICtx.OriginalRequest != nil {
-		if ctx.ResponseAPICtx.OriginalRequest.Metadata != nil {
-			if uid, ok := ctx.ResponseAPICtx.OriginalRequest.Metadata["user_id"]; ok {
-				userID = uid
-			}
-		}
-	}
+	// Extract userID with priority: auth header > metadata fallback
+	userID = extractUserID(ctx)
 
 	// Require userID - without it, memory would be orphaned (unretrievable)
 	// because memory retrieval filters by userID first
@@ -63,7 +60,8 @@ func extractMemoryInfo(ctx *RequestContext) (sessionID string, userID string, hi
 		if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.ConversationHistory != nil {
 			history = convertStoredResponsesToMessages(ctx.ResponseAPICtx.ConversationHistory)
 		}
-		return "", "", history, fmt.Errorf("userID is required for memory extraction but not provided. Please set metadata[\"user_id\"] in the request")
+		return "", "", history, fmt.Errorf("userID is required for memory extraction but not provided. " +
+			"Set the auth header (x-authz-user-id) via your auth layer, or metadata[\"user_id\"] for development")
 	}
 
 	// Extract sessionID (ConversationID) for turnCounts tracking.

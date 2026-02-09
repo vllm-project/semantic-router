@@ -9,11 +9,18 @@ build: ## Build the Rust library and Golang binding
 build: $(if $(CI),rust-ci,rust) build-router
 
 # Build router (conditionally use rust-ci in CI environments)
+# Development build: Use DEV=true to enable untrusted metadata["user_id"] fallback for testing
+# Example: make build-router DEV=true
+# Production builds (default) only accept user_id from auth headers (x-authz-user-id)
 build-router: ## Build the router binary
 build-router: $(if $(CI),rust-ci,rust)
 	@$(LOG_TARGET)
 	@mkdir -p bin
-	@cd src/semantic-router && go build --tags=milvus -o ../../bin/router cmd/main.go
+ifdef DEV
+	@cd src/semantic-router && go build -tags=dev,milvus -o ../../bin/router cmd/main.go
+else
+	@cd src/semantic-router && go build -tags=milvus -o ../../bin/router cmd/main.go
+endif
 
 # Run the router
 run-router: ## Run the router with the specified config
