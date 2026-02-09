@@ -153,7 +153,7 @@ func (r *OpenAIRouter) buildResponsesAPIImageResponse(result *ImageGenResult, ct
 				"content": []map[string]interface{}{
 					{
 						"type": "output_text",
-						"text": fmt.Sprintf("I've generated an image based on your request."),
+						"text": "I've generated an image based on your request.",
 					},
 				},
 			},
@@ -200,12 +200,6 @@ func getOrDefault(value, defaultValue int) int {
 	return value
 }
 
-func getOrDefaultFloat(value, defaultValue float64) float64 {
-	if value == 0 {
-		return defaultValue
-	}
-	return value
-}
 
 // ExtractImagePrompt extracts and cleans the image generation prompt
 func ExtractImagePrompt(userContent string) string {

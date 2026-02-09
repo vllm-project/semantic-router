@@ -112,8 +112,8 @@ func (b *VLLMOmniBackend) GenerateImage(ctx context.Context, req *GenerateReques
 
 	// Parse response
 	var vllmResp vllmOmniResponse
-	if err := json.Unmarshal(respBody, &vllmResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+	if unmarshalErr := json.Unmarshal(respBody, &vllmResp); unmarshalErr != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", unmarshalErr)
 	}
 
 	// Extract image URL
