@@ -60,7 +60,7 @@ func main() {
 	modelsDir := flag.String("models-dir", ".cache/ml-models",
 		"Directory for downloaded/trained models")
 	algorithm := flag.String("algorithm", "all",
-		"Algorithm to validate: knn, kmeans, svm, all")
+		"Algorithm to validate: knn, kmeans, svm, mlp, all")
 	testSplit := flag.Float64("test-split", 1.0,
 		"Fraction of data to use for testing (default: 1.0 = all data)")
 	seed := flag.Int64("seed", 42,
@@ -90,7 +90,7 @@ It automatically downloads pretrained models and benchmark data from HuggingFace
 
 It compares:
   - Oracle (best possible): Always picks the actual best model
-  - ML Selection (KNN/KMeans/SVM): Uses trained ML model via Rust FFI
+  - ML Selection (KNN/KMeans/SVM/MLP): Uses trained ML model via Rust FFI
   - Random Selection: Randomly picks a model
   - Single Model: Always picks one specific model
 
@@ -117,10 +117,16 @@ Flags:
 	fmt.Println("=" + strings.Repeat("=", 69))
 
 	// Download from HuggingFace if needed
-	if !*noDownload {
+	// Skip download if --data-file is provided (user has their own data)
+	if !*noDownload && *dataFile == "" {
 		if err := downloadFromHuggingFace(*modelsDir, *modelsRepo, *dataRepo, *dataFile); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: failed to download from HuggingFace: %v\n", err)
 			os.Exit(1)
+		}
+	} else if !*noDownload && *dataFile != "" {
+		// Download only models, not data (user provided their own data file)
+		if err := downloadModelsOnly(*modelsDir, *modelsRepo); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to download models: %v\n", err)
 		}
 	}
 
@@ -204,7 +210,7 @@ Flags:
 
 	// Load selectors
 	selectors := make(map[string]modelselection.Selector)
-	algorithms := []string{"knn", "kmeans", "svm"}
+	algorithms := []string{"knn", "kmeans", "svm", "mlp"}
 	if *algorithm != "all" {
 		algorithms = []string{*algorithm}
 	}
@@ -252,7 +258,7 @@ func downloadFromHuggingFace(modelsDir, modelsRepo, dataRepo, dataFile string) e
 	fmt.Println("Downloading from HuggingFace...")
 
 	// Download models using huggingface-cli
-	modelFiles := []string{"knn_model.json", "kmeans_model.json", "svm_model.json"}
+	modelFiles := []string{"knn_model.json", "kmeans_model.json", "svm_model.json", "mlp_model.json"}
 	for _, file := range modelFiles {
 		destPath := filepath.Join(modelsDir, file)
 		if _, err := os.Stat(destPath); err == nil {
@@ -285,6 +291,35 @@ func downloadFromHuggingFace(modelsDir, modelsRepo, dataRepo, dataFile string) e
 		}
 	}
 
+	return nil
+}
+
+// downloadModelsOnly downloads only model files (not data) from HuggingFace.
+// Used when user provides their own data file via --data-file.
+func downloadModelsOnly(modelsDir, modelsRepo string) error {
+	if err := os.MkdirAll(modelsDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create models directory: %w", err)
+	}
+
+	if !hfCliAvailable() {
+		return fmt.Errorf("huggingface-cli not found")
+	}
+
+	fmt.Println("Downloading models from HuggingFace...")
+	modelFiles := []string{"knn_model.json", "kmeans_model.json", "svm_model.json", "mlp_model.json"}
+	for _, file := range modelFiles {
+		destPath := filepath.Join(modelsDir, file)
+		if _, err := os.Stat(destPath); err == nil {
+			fmt.Printf("  %s already exists, skipping\n", file)
+			continue
+		}
+		fmt.Printf("  Downloading %s...\n", file)
+		if err := downloadWithHfCli(modelsRepo, file, destPath, false); err != nil {
+			fmt.Printf("  Warning: Could not download %s: %v\n", file, err)
+			continue
+		}
+		fmt.Printf("  Downloaded %s\n", file)
+	}
 	return nil
 }
 

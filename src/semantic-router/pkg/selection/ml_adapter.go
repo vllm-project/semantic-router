@@ -134,6 +134,10 @@ type MLSelectorConfig struct {
 
 	// SVM configuration
 	SVM *SVMConfig `yaml:"svm,omitempty"`
+
+	// MLP configuration (GPU-accelerated via Candle)
+	// Reference: FusionFactory (arXiv:2507.10540)
+	MLP *MLPConfig `yaml:"mlp,omitempty"`
 }
 
 // KNNConfig holds KNN-specific configuration.
@@ -156,6 +160,13 @@ type SVMConfig struct {
 	PretrainedPath string  `yaml:"pretrained_path,omitempty"`
 }
 
+// MLPConfig holds MLP-specific configuration.
+// Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
+type MLPConfig struct {
+	Device         string `yaml:"device"` // "cpu", "cuda", or "metal"
+	PretrainedPath string `yaml:"pretrained_path,omitempty"`
+}
+
 // DefaultMLSelectorConfig returns default ML selector configuration.
 func DefaultMLSelectorConfig() *MLSelectorConfig {
 	return &MLSelectorConfig{
@@ -171,6 +182,9 @@ func DefaultMLSelectorConfig() *MLSelectorConfig {
 		SVM: &SVMConfig{
 			Kernel: "rbf",
 			Gamma:  1.0,
+		},
+		MLP: &MLPConfig{
+			Device: "cpu", // Default to CPU, use "cuda" or "metal" for GPU
 		},
 	}
 }
@@ -273,6 +287,39 @@ func CreateSVMSelector(cfg *MLSelectorConfig, embeddingFunc func(string) ([]floa
 	}
 
 	adapter := NewMLSelectorAdapter(mlSelector, MethodSVM)
+	adapter.SetEmbeddingFunc(embeddingFunc)
+	return adapter, nil
+}
+
+// CreateMLPSelector creates an MLP selector adapter (GPU-accelerated).
+// Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
+func CreateMLPSelector(cfg *MLSelectorConfig, embeddingFunc func(string) ([]float32, error)) (*MLSelectorAdapter, error) {
+	mlpCfg := cfg.MLP
+	if mlpCfg == nil {
+		mlpCfg = &MLPConfig{Device: "cpu"}
+	}
+
+	mlCfg := &config.MLModelSelectionConfig{
+		Type: "mlp",
+	}
+
+	mlSelector, err := modelselection.NewSelector(mlCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create MLP selector: %w", err)
+	}
+
+	// Try to load pretrained model
+	if mlpCfg.PretrainedPath != "" {
+		if mlpSelector, ok := mlSelector.(*modelselection.MLPSelector); ok {
+			if err := mlpSelector.Load(mlpCfg.PretrainedPath); err != nil {
+				logging.Warnf("[MLAdapter] Failed to load pretrained MLP model from %s: %v", mlpCfg.PretrainedPath, err)
+			} else {
+				logging.Infof("[MLAdapter] Loaded pretrained MLP model from %s", mlpCfg.PretrainedPath)
+			}
+		}
+	}
+
+	adapter := NewMLSelectorAdapter(mlSelector, MethodMLP)
 	adapter.SetEmbeddingFunc(embeddingFunc)
 	return adapter, nil
 }

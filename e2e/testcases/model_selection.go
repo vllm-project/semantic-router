@@ -29,7 +29,7 @@ type ModelSelectionCase struct {
 	ExpectedModels []string `json:"expected_models"` // List of valid models for this query
 	Description    string   `json:"description"`
 	// Algorithm specifies which model selection algorithm is expected to be used
-	// Supported: "knn", "kmeans", "svm"
+	// Supported: "knn", "kmeans", "svm", "mlp"
 	Algorithm string `json:"algorithm,omitempty"`
 	// ExpectEfficient indicates if the test expects an efficiency-optimized selection (KMeans)
 	// When true, expects faster/cheaper model; when false, expects higher quality model
@@ -374,21 +374,36 @@ func getDefaultModelSelectionCases() []ModelSelectionCase {
 		},
 
 		// =================================================================
-		// ENGINEERING DECISION (domain: "engineering") - SVM algorithm
+		// ENGINEERING DECISION (domain: "engineering") - MLP algorithm (GPU-accelerated)
+		// Reference: FusionFactory (arXiv:2507.10540)
 		// =================================================================
 		{
 			Query:          "How do I design a bridge to withstand earthquakes?",
 			Decision:       "engineering_decision",
 			ExpectedModels: mlModels,
-			Description:    "Civil engineering query",
-			Algorithm:      "svm",
+			Description:    "Civil engineering query - uses MLP neural network",
+			Algorithm:      "mlp",
 		},
 		{
 			Query:          "Explain the principles of aerodynamics in aircraft design",
 			Decision:       "engineering_decision",
 			ExpectedModels: mlModels,
-			Description:    "Aerospace engineering query",
-			Algorithm:      "svm",
+			Description:    "Aerospace engineering query - uses MLP neural network",
+			Algorithm:      "mlp",
+		},
+		{
+			Query:          "What materials are best for high-temperature turbine blades?",
+			Decision:       "engineering_decision",
+			ExpectedModels: mlModels,
+			Description:    "Materials engineering query - uses MLP neural network",
+			Algorithm:      "mlp",
+		},
+		{
+			Query:          "How do you calculate stress distribution in a cantilever beam?",
+			Decision:       "engineering_decision",
+			ExpectedModels: mlModels,
+			Description:    "Structural engineering query - uses MLP neural network",
+			Algorithm:      "mlp",
 		},
 
 		// =================================================================

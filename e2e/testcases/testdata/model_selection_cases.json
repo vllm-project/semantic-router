@@ -140,5 +140,40 @@
     "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
     "description": "Historical knowledge query",
     "algorithm": "knn"
+  },
+  {
+    "query": "How do I design a bridge to withstand earthquakes?",
+    "decision": "engineering_decision",
+    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
+    "description": "Civil engineering query - MLP neural network selection (FusionFactory)",
+    "algorithm": "mlp"
+  },
+  {
+    "query": "Explain the principles of aerodynamics in aircraft design",
+    "decision": "engineering_decision",
+    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
+    "description": "Aerospace engineering query - MLP GPU-accelerated inference",
+    "algorithm": "mlp"
+  },
+  {
+    "query": "What materials are best for high-temperature turbine blades?",
+    "decision": "engineering_decision",
+    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
+    "description": "Materials engineering query - MLP neural network",
+    "algorithm": "mlp"
+  },
+  {
+    "query": "How do you calculate stress distribution in a cantilever beam?",
+    "decision": "engineering_decision",
+    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
+    "description": "Structural engineering query - MLP via Candle",
+    "algorithm": "mlp"
+  },
+  {
+    "query": "What are the key considerations for designing an electric motor?",
+    "decision": "engineering_decision",
+    "expected_models": ["llama-3.2-1b", "llama-3.2-3b", "codellama-7b", "mistral-7b"],
+    "description": "Electrical engineering query - MLP model selection",
+    "algorithm": "mlp"
   }
 ]

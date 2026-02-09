@@ -1,16 +1,19 @@
 # ML Binding for Semantic Router
 
-This directory contains Rust-based ML algorithm implementations using [Linfa](https://github.com/rust-ml/linfa), the Rust ML framework.
+This directory contains Rust-based ML algorithm implementations using [Linfa](https://github.com/rust-ml/linfa) and [Candle](https://github.com/huggingface/candle) for GPU-accelerated inference.
 
 > **Note:** This package provides **inference only**. Training is done in Python. See `src/training/ml_model_selection/`.
 
 ## Algorithms
 
-| Algorithm | Linfa Crate | Status |
-|-----------|-------------|--------|
-| **KNN** (K-Nearest Neighbors) | `linfa-nn` | ✅ Inference |
-| **KMeans** (Clustering) | `linfa-clustering` | ✅ Inference |
-| **SVM** (Support Vector Machine) | `linfa-svm` | ✅ Inference |
+| Algorithm | Backend | GPU Support | Status |
+|-----------|---------|-------------|--------|
+| **KNN** (K-Nearest Neighbors) | Linfa (`linfa-nn`) | CPU only | ✅ Inference |
+| **KMeans** (Clustering) | Linfa (`linfa-clustering`) | CPU only | ✅ Inference |
+| **SVM** (Support Vector Machine) | Linfa (`linfa-svm`) | CPU only | ✅ Inference |
+| **MLP** (Multi-Layer Perceptron) | Candle | ✅ CUDA/Metal | ✅ Inference |
+
+> **Reference:** MLP implementation aligned with [FusionFactory (arXiv:2507.10540)](https://arxiv.org/abs/2507.10540).
 
 ## Architecture
 
@@ -19,11 +22,11 @@ This directory contains Rust-based ML algorithm implementations using [Linfa](ht
 │                    TRAINING (Python)                             │
 ├─────────────────────────────────────────────────────────────────┤
 │  src/training/ml_model_selection/                               │
-│  ├── train.py          # Train models using scikit-learn        │
+│  ├── train.py          # Train models (scikit-learn, PyTorch)   │
 │  ├── upload_model.py   # Upload to HuggingFace                  │
 │  └── download_model.py # Download from HuggingFace              │
 │                                                                  │
-│  Output: knn_model.json, kmeans_model.json, svm_model.json      │
+│  Output: knn/kmeans/svm/mlp_model.json                          │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
@@ -33,6 +36,7 @@ This directory contains Rust-based ML algorithm implementations using [Linfa](ht
 │  ├── src/knn.rs    # Load JSON, select using Linfa Ball Tree    │
 │  ├── src/kmeans.rs # Load JSON, select using cluster centroids  │
 │  ├── src/svm.rs    # Load JSON, select using decision function  │
+│  ├── src/mlp.rs    # Load JSON, select using Candle (GPU)       │
 │  └── ml_binding.go # Go bindings via CGO                        │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -50,6 +54,7 @@ ml-binding/
     ├── knn.rs           # KNN inference implementation
     ├── kmeans.rs        # KMeans inference implementation
     ├── svm.rs           # SVM inference implementation
+    ├── mlp.rs           # MLP inference using Candle (GPU)
     └── ffi.rs           # C FFI exports for Go (inference only)
 ```
 
@@ -67,8 +72,14 @@ ml-binding/
 ```bash
 cd ml-binding
 
-# Build release version
+# Build release version (CPU only)
 cargo build --release
+
+# Build with CUDA GPU support
+cargo build --release --features cuda
+
+# Build with Metal GPU support (Apple Silicon)
+cargo build --release --features metal
 
 # The library will be at:
 # - Linux: target/release/libml_semantic_router.so
@@ -118,12 +129,19 @@ func main() {
     selected, _ := knn.Select(query)
     // selected == "llama-3.2-3b" (or whichever model the KNN selects)
 
-    // Same pattern for KMeans and SVM
+    // Same pattern for KMeans, SVM, and MLP
     kmeansData, _ := os.ReadFile("models/kmeans_model.json")
     kmeans, _ := ml.KMeansFromJSON(string(kmeansData))
     
     svmData, _ := os.ReadFile("models/svm_model.json")
     svm, _ := ml.SVMFromJSON(string(svmData))
+    
+    // MLP with GPU support
+    mlpData, _ := os.ReadFile("models/mlp_model.json")
+    mlp, _ := ml.MLPFromJSONWithDevice(string(mlpData), ml.MLPDeviceCUDA)
+    defer mlp.Close()
+    
+    selected, _ = mlp.Select(query)
 }
 ```
 
@@ -134,10 +152,20 @@ func main() {
 | `KNNFromJSON(json)` | Load KNN model from JSON |
 | `KMeansFromJSON(json)` | Load KMeans model from JSON |
 | `SVMFromJSON(json)` | Load SVM model from JSON |
-| `knn.Select(embedding)` | Select best model for query |
-| `knn.IsTrained()` | Check if model is loaded |
-| `knn.ToJSON()` | Serialize model to JSON |
-| `knn.Close()` | Release resources |
+| `MLPFromJSON(json)` | Load MLP model from JSON (CPU) |
+| `MLPFromJSONWithDevice(json, device)` | Load MLP with device (CPU/CUDA/Metal) |
+| `*.Select(embedding)` | Select best model for query |
+| `*.IsTrained()` | Check if model is loaded |
+| `*.ToJSON()` | Serialize model to JSON |
+| `*.Close()` | Release resources |
+
+### MLP Device Options
+
+| Device | Constant | Description |
+|--------|----------|-------------|
+| CPU | `ml.MLPDeviceCPU` | Default, works everywhere |
+| CUDA | `ml.MLPDeviceCUDA` | NVIDIA GPU (requires `--features cuda`) |
+| Metal | `ml.MLPDeviceMetal` | Apple Silicon GPU (requires `--features metal`) |
 
 ## Training Models
 
@@ -148,21 +176,29 @@ Training is done in Python using scikit-learn. See `src/training/ml_model_select
 cd src/training/ml_model_selection
 pip install -r requirements.txt
 
-# Train models
+# Train all models
 python train.py \
   --data-file benchmark.jsonl \
   --output-dir models/
+
+# Train only MLP
+python train.py \
+  --data-file benchmark.jsonl \
+  --output-dir models/ \
+  --algorithm mlp \
+  --device cpu
 
 # Or download pretrained from HuggingFace
 python download_model.py --output-dir models/
 ```
 
-## Why Linfa for Inference?
+## Why Linfa + Candle for Inference?
 
 1. **Performance**: Native Rust speed for inference
-2. **Consistency**: Same pattern as `candle-binding` for embeddings
-3. **Memory safety**: Rust guarantees
-4. **No Python dependency**: Production inference without Python runtime
+2. **GPU Acceleration**: Candle provides CUDA/Metal support for MLP
+3. **Consistency**: Same pattern as `candle-binding` for embeddings
+4. **Memory safety**: Rust guarantees
+5. **No Python dependency**: Production inference without Python runtime
 
 ## Algorithm Details
 
@@ -183,6 +219,14 @@ python download_model.py --output-dir models/
 - Supports Linear and RBF kernels
 - Loads support vectors from JSON
 - One-vs-All classification for multi-model selection
+
+### MLP (Multi-Layer Perceptron)
+
+- Configurable hidden layers (default: 256→128)
+- GPU-accelerated inference via Candle
+- Supports CUDA (NVIDIA) and Metal (Apple Silicon)
+- Network: Input → Linear → ReLU → BatchNorm → Dropout → ... → Output
+- Manual forward pass implementation for efficient inference
 
 ## License
 

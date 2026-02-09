@@ -31,6 +31,9 @@ config:
         kernel: "rbf"
         gamma: 1.0
         pretrained_path: "/tmp/ml-models/svm_model.json"
+      mlp:
+        device: "cpu"  # Options: cpu, cuda, metal
+        pretrained_path: "/tmp/ml-models/mlp_model.json"
 
   # Classifier configuration
   classifier:
@@ -210,7 +213,7 @@ config:
           use_reasoning: false
 
     - name: "engineering_decision"
-      description: "Engineering queries"
+      description: "Engineering queries - uses MLP with GPU acceleration"
       priority: 100
       rules:
         operator: "AND"
@@ -218,9 +221,9 @@ config:
           - type: "domain"
             name: "engineering"
       algorithm:
-        type: "svm"
-        svm:
-          kernel: "rbf"
+        type: "mlp"
+        mlp:
+          device: "cpu"  # Use cpu for E2E tests, cuda/metal for production
       modelRefs:
         - model: "llama-3.2-1b"
           use_reasoning: false
