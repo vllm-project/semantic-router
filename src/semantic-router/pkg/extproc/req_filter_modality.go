@@ -35,6 +35,9 @@ func InitModalityClassifier(modelPath string, useCPU bool) error {
 //     returns a combined multimodal response (*ProcessingResponse, nil)
 func (r *OpenAIRouter) handleModalityRouting(ctx *RequestContext, openAIRequest *openai.ChatCompletionNewParams) (*ext_proc.ProcessingResponse, error) {
 	cfg := config.Get()
+	if cfg == nil {
+		return nil, nil // No config loaded — skip modality routing
+	}
 	mr := cfg.ModalityRouting
 	if mr == nil || !mr.Enabled {
 		return nil, nil // Feature disabled — normal flow
