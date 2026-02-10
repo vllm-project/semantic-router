@@ -112,7 +112,7 @@ ENV GOOS=linux
 # Verify the library exists and has expected symbols before Go build
 RUN echo "Verifying Rust library before Go build..." && \
     ls -la /app/candle-binding/target/release/libcandle_semantic_router.* && \
-    file /app/candle-binding/target/release/libcandle_semantic_router.so
+    ls -la /app/ml-binding/target/release/libml_semantic_router.*
 
 # Build the router binary with optimizations
 RUN mkdir -p bin && cd src/semantic-router && \
