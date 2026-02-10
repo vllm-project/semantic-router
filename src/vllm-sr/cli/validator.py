@@ -12,6 +12,7 @@ from cli.models import (
     HallucinationPluginConfig,
     RouterReplayPluginConfig,
     MemoryPluginConfig,
+    RAGPluginConfig,
 )
 from pydantic import ValidationError as PydanticValidationError
 from cli.utils import getLogger
@@ -268,6 +269,7 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
         PluginType.HALLUCINATION.value: HallucinationPluginConfig,
         PluginType.ROUTER_REPLAY.value: RouterReplayPluginConfig,
         PluginType.MEMORY.value: MemoryPluginConfig,
+        PluginType.RAG.value: RAGPluginConfig,
     }
 
     for decision in config.decisions:

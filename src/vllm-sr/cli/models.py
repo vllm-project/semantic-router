@@ -263,6 +263,7 @@ class PluginType(str, Enum):
     HALLUCINATION = "hallucination"
     ROUTER_REPLAY = "router_replay"
     MEMORY = "memory"
+    RAG = "rag"
 
 
 class SemanticCachePluginConfig(BaseModel):
@@ -373,6 +374,98 @@ class MemoryPluginConfig(BaseModel):
     auto_store: Optional[bool] = Field(
         default=None,
         description="Auto-extract memories from conversation (default: use request config)",
+    )
+
+
+class RAGPluginConfig(BaseModel):
+    """Configuration for RAG (Retrieval-Augmented Generation) plugin.
+
+    The RAG plugin retrieves relevant context from external knowledge bases
+    and injects it into the LLM request.
+
+    Supported backends:
+    - milvus: Milvus vector database (reuses semantic cache connection)
+    - external_api: External REST API (OpenAI, Pinecone, Weaviate, Elasticsearch)
+    - mcp: MCP tool-based retrieval
+    - openai: OpenAI file_search with vector stores
+    - hybrid: Multi-backend with fallback strategy
+    """
+
+    # Required: Enable RAG retrieval
+    enabled: bool = Field(..., description="Enable RAG retrieval for this decision")
+
+    # Required: Backend type (milvus, external_api, mcp, openai, hybrid)
+    backend: str = Field(
+        ...,
+        description="Retrieval backend: milvus, external_api, mcp, openai, hybrid",
+    )
+
+    # Optional: Similarity threshold (0.0-1.0)
+    # Only documents with similarity >= threshold will be retrieved
+    similarity_threshold: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Similarity threshold for retrieval (0.0-1.0)",
+    )
+
+    # Optional: Number of top-k documents to retrieve
+    top_k: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Number of top-k documents to retrieve",
+    )
+
+    # Optional: Maximum context length (in characters)
+    max_context_length: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Maximum context length to inject (characters)",
+    )
+
+    # Optional: Context injection mode
+    # - "tool_role": Inject as tool role messages (compatible with hallucination detection)
+    # - "system_prompt": Prepend to system prompt
+    injection_mode: Optional[str] = Field(
+        default=None,
+        description="Injection mode: tool_role (default) or system_prompt",
+    )
+
+    # Optional: Backend-specific configuration
+    # Structure depends on backend type (see Go: rag_plugin.go lines 64-174)
+    backend_config: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Backend-specific configuration",
+    )
+
+    # Optional: Fallback behavior on retrieval failure
+    # - "skip": Continue without context (default)
+    # - "block": Return error response
+    # - "warn": Continue with warning header
+    on_failure: Optional[str] = Field(
+        default=None,
+        description="On failure: skip (default), block, or warn",
+    )
+
+    # Optional: Cache retrieved results
+    cache_results: Optional[bool] = Field(
+        default=None,
+        description="Cache retrieved results",
+    )
+
+    # Optional: Cache TTL (seconds)
+    cache_ttl_seconds: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Cache TTL in seconds",
+    )
+
+    # Optional: Minimum confidence for triggering retrieval
+    min_confidence_threshold: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Minimum confidence for triggering retrieval",
     )
 
 
