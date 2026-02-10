@@ -80,6 +80,65 @@ RUN mkdir -p /build/out && \
     echo "Exported symbol count:" && \
     nm -D /build/out/libcandle_semantic_router.so 2>/dev/null | grep -c " T " || true
 
+# Stage 1a: Build Rust ml-binding (Linfa ML algorithms, cross-compiled for TARGETARCH)
+FROM --platform=$BUILDPLATFORM rustlang/rust:nightly AS ml-builder
+ARG TARGETARCH
+ARG GIT_SSL_NO_VERIFY
+WORKDIR /build
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+# Reuse cross-compilation toolchain setup (same as rust-builder)
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+      dpkg --add-architecture arm64 && \
+      apt-get update && apt-get install -y \
+        gcc-aarch64-linux-gnu \
+        g++-aarch64-linux-gnu && \
+      rm -rf /var/lib/apt/lists/* && \
+      rustup target add aarch64-unknown-linux-gnu; \
+    fi
+
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+
+# Copy Cargo manifest for dependency caching
+COPY ml-binding/Cargo.toml ml-binding/Cargo.loc[k] ./
+
+# Pre-build dependencies with dummy source
+RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false || true; \
+    mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cargo build --release --target aarch64-unknown-linux-gnu; \
+    else \
+      cargo build --release; \
+    fi && \
+    rm -rf src
+
+# Copy real source and rebuild
+COPY ml-binding/src/ ./src/
+COPY ml-binding/go.mod ml-binding/ml_binding.go ./
+
+RUN find target -name "libml_semantic_router.so" -delete 2>/dev/null; \
+    find target -name "libml_semantic_router.a" -delete 2>/dev/null; \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cargo build --release --target aarch64-unknown-linux-gnu; \
+    else \
+      cargo build --release; \
+    fi
+
+# Normalize output
+RUN mkdir -p /build/out && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cp target/aarch64-unknown-linux-gnu/release/libml_semantic_router.so /build/out/ && \
+      (cp target/aarch64-unknown-linux-gnu/release/libml_semantic_router.a /build/out/ 2>/dev/null || true); \
+    else \
+      cp target/release/libml_semantic_router.so /build/out/ && \
+      (cp target/release/libml_semantic_router.a /build/out/ 2>/dev/null || true); \
+    fi && \
+    echo "=== Built ml-binding library ===" && \
+    ls -la /build/out/ && \
+    file /build/out/libml_semantic_router.so
+
 # Stage 1b: Build dashboard frontend with Node.js
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
@@ -118,16 +177,22 @@ FROM --platform=$BUILDPLATFORM golang:1.24 AS go-builder
 ARG TARGETARCH
 WORKDIR /build
 
-# Copy from normalized /build/out/ (set in rust stages)
+# Copy Rust libraries from both builders
 COPY --from=rust-builder /build/out/ /usr/local/lib/
+COPY --from=ml-builder /build/out/ /usr/local/lib/
 
 ENV LD_LIBRARY_PATH=/usr/local/lib
 
 # Copy candle-binding Go files (needed for go.mod replace directive)
 COPY --from=rust-builder /build/go.mod /build/semantic-router.go /build/../candle-binding/
 
+# Copy ml-binding Go files (needed for go.mod replace directive)
+# Also copy the built library to ml-binding/target/release/ for CGO linking
+COPY ml-binding/go.mod ml-binding/ml_binding.go /build/../ml-binding/
+COPY --from=ml-builder /build/out/ /build/../ml-binding/target/release/
+
 # Copy Go source (go.mod has local replace directives, so go mod download
-# requires candle-binding to be present first)
+# requires candle-binding and ml-binding to be present first)
 COPY src/semantic-router/ .
 
 # Build router (cross-compile for arm64 when TARGETARCH=arm64)
@@ -167,6 +232,7 @@ RUN set -eux; \
 # Copy binaries from builders (rust artifacts from normalized /build/out/)
 COPY --from=go-builder /build/router /usr/local/bin/router
 COPY --from=rust-builder /build/out/libcandle_semantic_router.so /usr/local/lib/
+COPY --from=ml-builder /build/out/libml_semantic_router.so /usr/local/lib/
 COPY --from=envoy /usr/local/bin/envoy /usr/local/bin/envoy
 COPY --from=dashboard-builder /app/dashboard-backend /usr/local/bin/dashboard-backend
 COPY --from=frontend-builder /app/frontend/dist /app/frontend

@@ -83,6 +83,55 @@ RUN echo "Building Rust library (CPU-only, no CUDA) for TARGETARCH=$TARGETARCH..
     find target -name "libcandle_semantic_router.so" -type f -exec ls -la {} \; && \
     find target -name "libcandle_semantic_router.so" -type f -exec sh -c 'nm -D "$1" | grep -c "T "' _ {} \;
 
+# Build ml-binding Rust library (Linfa ML algorithms, cross-compiled)
+ARG BUILDPLATFORM
+FROM --platform=$BUILDPLATFORM rust:1.90 AS ml-cross-builder
+
+ARG TARGETARCH
+
+RUN dpkg --add-architecture arm64 && \
+    apt-get update && apt-get install -y \
+    build-essential \
+    pkg-config \
+    gcc-aarch64-linux-gnu \
+    g++-aarch64-linux-gnu \
+    libc6-dev-arm64-cross \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+WORKDIR /app
+
+COPY ml-binding/Cargo.toml ./ml-binding/
+COPY ml-binding/Cargo.loc[k] ./ml-binding/
+
+RUN cd ml-binding && \
+    mkdir -p src && \
+    echo "pub fn _dummy() {}" > src/lib.rs && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        cargo build --release --target aarch64-unknown-linux-gnu; \
+    else \
+        cargo build --release --target x86_64-unknown-linux-gnu; \
+    fi && \
+    rm -rf src
+
+COPY ml-binding/src/ ./ml-binding/src/
+
+RUN cd ml-binding && \
+    find target -name "libml_semantic_router.so" -delete 2>/dev/null; \
+    find target -name "libml_semantic_router.a" -delete 2>/dev/null; \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        cargo build --release --target aarch64-unknown-linux-gnu; \
+    else \
+        cargo build --release --target x86_64-unknown-linux-gnu; \
+    fi && \
+    find target -name "libml_semantic_router.so" -type f -exec ls -la {} \;
+
 # Build the Go application
 ARG BUILDPLATFORM
 FROM --platform=$BUILDPLATFORM golang:1.24 AS go-builder
@@ -103,6 +152,7 @@ WORKDIR /app
 RUN mkdir -p src/semantic-router
 COPY src/semantic-router/go.mod src/semantic-router/go.sum src/semantic-router/
 COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/
+COPY ml-binding/go.mod ml-binding/ml_binding.go ml-binding/
 
 # Download Go dependencies (cached layer)
 RUN cd src/semantic-router && go mod download && \
@@ -126,9 +176,21 @@ RUN mkdir -p /app/candle-binding/target/release && \
     fi && \
     rm -rf /tmp/rust-target
 
+# Copy ml-binding library (extract correct platform)
+COPY --from=ml-cross-builder /app/ml-binding/target/ /tmp/ml-target/
+RUN mkdir -p /app/ml-binding/target/release && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        cp /tmp/ml-target/aarch64-unknown-linux-gnu/release/libml_semantic_router.so /app/ml-binding/target/release/ && \
+        (cp /tmp/ml-target/aarch64-unknown-linux-gnu/release/libml_semantic_router.a /app/ml-binding/target/release/ 2>/dev/null || true); \
+    else \
+        cp /tmp/ml-target/x86_64-unknown-linux-gnu/release/libml_semantic_router.so /app/ml-binding/target/release/ && \
+        (cp /tmp/ml-target/x86_64-unknown-linux-gnu/release/libml_semantic_router.a /app/ml-binding/target/release/ 2>/dev/null || true); \
+    fi && \
+    rm -rf /tmp/ml-target
+
 # Set environment variables for CGO to find the libraries
 ENV CGO_ENABLED=1
-ENV LD_LIBRARY_PATH=/app/candle-binding/target/release
+ENV LD_LIBRARY_PATH=/app/candle-binding/target/release:/app/ml-binding/target/release
 ENV GOOS=linux
 
 # Verify the library exists and has expected symbols
@@ -144,13 +206,13 @@ RUN mkdir -p bin && cd src/semantic-router && \
         CXX=aarch64-linux-gnu-g++ \
         PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig \
         CGO_CFLAGS="-I/app/candle-binding" \
-        CGO_LDFLAGS="-L/app/candle-binding/target/release -L/usr/lib/aarch64-linux-gnu -lcandle_semantic_router -lssl -lcrypto" \
+        CGO_LDFLAGS="-L/app/candle-binding/target/release -L/app/ml-binding/target/release -L/usr/lib/aarch64-linux-gnu -lcandle_semantic_router -lml_semantic_router -lssl -lcrypto" \
         GOOS=linux GOARCH=arm64 \
         go build -ldflags="-w -s" -o ../../bin/router cmd/main.go; \
     else \
         echo "Building for AMD64..." && \
         CGO_CFLAGS="-I/app/candle-binding" \
-        CGO_LDFLAGS="-L/app/candle-binding/target/release -lcandle_semantic_router" \
+        CGO_LDFLAGS="-L/app/candle-binding/target/release -L/app/ml-binding/target/release -lcandle_semantic_router -lml_semantic_router" \
         go build -ldflags="-w -s" -o ../../bin/router cmd/main.go; \
     fi
 
@@ -171,6 +233,7 @@ WORKDIR /app
 
 COPY --from=go-builder /app/bin/router /app/extproc-server
 COPY --from=go-builder /app/candle-binding/target/release/libcandle_semantic_router.so /app/lib/
+COPY --from=go-builder /app/ml-binding/target/release/libml_semantic_router.so /app/lib/
 COPY config/config.yaml /app/config/
 
 ENV LD_LIBRARY_PATH=/app/lib

@@ -52,6 +52,35 @@ RUN echo "Building Rust library (CPU-only, no CUDA)..." && \
     echo "Sample exported symbols:" && \
     nm -D target/release/libcandle_semantic_router.so | grep " T " | head -10
 
+# Build the ml-binding Rust library (Linfa ML algorithms)
+FROM rust:1.90 AS ml-builder
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+WORKDIR /app
+
+COPY ml-binding/Cargo.toml ./ml-binding/
+COPY ml-binding/Cargo.loc[k] ./ml-binding/
+
+RUN cd ml-binding && \
+    mkdir -p src && \
+    echo "pub fn _dummy() {}" > src/lib.rs && \
+    cargo build --release && \
+    rm -rf src
+
+COPY ml-binding/src/ ./ml-binding/src/
+
+RUN cd ml-binding && \
+    find target -name "libml_semantic_router.so" -delete 2>/dev/null; \
+    find target -name "libml_semantic_router.a" -delete 2>/dev/null; \
+    cargo build --release && \
+    ls -la target/release/libml_semantic_router.so
+
 # Build the Go application
 FROM golang:1.24 AS go-builder
 
@@ -61,6 +90,7 @@ WORKDIR /app
 RUN mkdir -p src/semantic-router
 COPY src/semantic-router/go.mod src/semantic-router/go.sum src/semantic-router/
 COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/
+COPY ml-binding/go.mod ml-binding/ml_binding.go ml-binding/
 
 # Pre-download modules to fail fast if mirrors are unreachable
 RUN cd src/semantic-router && go mod download && \
@@ -69,13 +99,15 @@ RUN cd src/semantic-router && go mod download && \
 # Copy semantic-router source code
 COPY src/semantic-router/ src/semantic-router/
 
-# Copy the built Rust library from rust-builder (both .so and .a for linking)
+# Copy the built Rust libraries from builders (both .so and .a for linking)
 COPY --from=rust-builder /app/candle-binding/target/release/libcandle_semantic_router.so /app/candle-binding/target/release/
 COPY --from=rust-builder /app/candle-binding/target/release/libcandle_semantic_router.a /app/candle-binding/target/release/
+COPY --from=ml-builder /app/ml-binding/target/release/libml_semantic_router.so /app/ml-binding/target/release/
+COPY --from=ml-builder /app/ml-binding/target/release/libml_semantic_router.a /app/ml-binding/target/release/ 
 
 # Set environment variables for CGO to find the libraries
 ENV CGO_ENABLED=1
-ENV LD_LIBRARY_PATH=/app/candle-binding/target/release
+ENV LD_LIBRARY_PATH=/app/candle-binding/target/release:/app/ml-binding/target/release
 ENV GOOS=linux
 
 # Verify the library exists and has expected symbols before Go build
@@ -103,6 +135,7 @@ WORKDIR /app
 
 COPY --from=go-builder /app/bin/router /app/extproc-server
 COPY --from=go-builder /app/candle-binding/target/release/libcandle_semantic_router.so /app/lib/
+COPY --from=go-builder /app/ml-binding/target/release/libml_semantic_router.so /app/lib/
 COPY config/config.yaml /app/config/
 
 ENV LD_LIBRARY_PATH=/app/lib
