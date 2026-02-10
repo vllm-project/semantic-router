@@ -1,5 +1,21 @@
 # Semantic Router Configuration for AI Gateway
 config:
+  # Response API Configuration
+  # Enables OpenAI Response API support with conversation chaining
+  response_api:
+    enabled: true
+    store_backend: "memory"  # Options: "memory", "milvus", "redis"
+    ttl_seconds: 86400       # 24 hours
+    max_responses: 1000
+
+  # Router Replay Configuration (System-Level)
+  # Provides storage backend configuration for router_replay plugin
+  # Per-decision settings (max_records, capture settings) are configured via router_replay plugin
+  router_replay:
+    store_backend: "memory"  # Options: "memory", "redis", "postgres", "milvus"
+    ttl_seconds: 2592000     # 30 days retention (for persistent backends)
+    async_writes: false      # Enable async writes for better performance
+
   model_config:
     "base-model":
       reasoning_family: "qwen3"  # This model uses Qwen-3 reasoning syntax
@@ -416,11 +432,6 @@ config:
 
   default_model: general-expert
 
-  bert_model:
-    model_id: models/mom-embedding-light
-    threshold: 0.6
-    use_cpu: true
-
   semantic_cache:
     enabled: true
     backend_type: "memory"  # Options: "memory", "milvus", or "hybrid"
@@ -439,9 +450,9 @@ config:
     # backend_config_path: "config/milvus.yaml" # Path to Milvus config
 
     # Embedding model for semantic similarity matching
-    # Options: "bert" (fast, 384-dim), "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
-    # Default: "bert" (fastest, lowest memory)
-    embedding_model: "bert"
+    # If not specified, automatically uses the model configured in embedding_models section
+    # Options: "mmbert" (multilingual, 768-dim), "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
+    # embedding_model: "mmbert"  # Optional: explicitly set if you want to override auto-detection
 
   tools:
     enabled: true
@@ -452,26 +463,62 @@ config:
 
   prompt_guard:
     enabled: true  # Global default - can be overridden per category with jailbreak_enabled
-    use_modernbert: false
-    model_id: "models/mom-jailbreak-classifier"
+    use_mmbert_32k: true
+    model_id: "models/mmbert32k-jailbreak-detector-merged"
+    jailbreak_mapping_path: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json"
     threshold: 0.7
     use_cpu: true
-    jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
 
   # Classifier configuration
   classifier:
     category_model:
-      model_id: "models/mom-domain-classifier"
-      use_modernbert: true
+      model_id: "models/mmbert32k-intent-classifier-merged"
+      use_mmbert_32k: true
+      threshold: 0.5
+      use_cpu: true
+      category_mapping_path: "models/mmbert32k-intent-classifier-merged/category_mapping.json"
+    pii_model:
+      model_id: "models/mmbert32k-pii-detector-merged"
+      use_mmbert_32k: true
+      threshold: 0.9
+      use_cpu: true
+      pii_mapping_path: "models/mmbert32k-pii-detector-merged/pii_type_mapping.json"
+
+  # Hallucination mitigation configuration
+  # Disabled by default - enable in decisions via hallucination plugin
+  hallucination_mitigation:
+    enabled: false
+    # Fact-check classifier: determines if a prompt needs fact verification
+    fact_check_model:
+      model_id: "models/mmbert32k-factcheck-classifier-merged"
       threshold: 0.6
       use_cpu: true
-      category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
-    pii_model:
-      model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
-      use_modernbert: true
-      threshold: 0.7
+      use_mmbert_32k: true
+    # Hallucination detector: verifies if LLM response is grounded in context
+    hallucination_model:
+      model_id: "models/mom-halugate-detector"
+      threshold: 0.8
       use_cpu: true
-      pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
+      # False positive reduction settings
+      min_span_length: 2  # Minimum tokens in a span to report (filters single-token false positives)
+      min_span_confidence: 0.6  # Minimum confidence for a span to be reported
+      context_window_size: 50  # Characters of context around flagged spans
+      enable_nli_filtering: true  # Use NLI to filter false positives
+      nli_entailment_threshold: 0.75  # Filter spans with high entailment scores
+    # NLI model: provides explanations for hallucinated spans
+    nli_model:
+      model_id: "models/mom-halugate-explainer"
+      threshold: 0.9
+      use_cpu: true
+
+  # Feedback detector configuration
+  # Classifies user feedback into 4 types: satisfied, need_clarification, wrong_answer, want_different
+  feedback_detector:
+    enabled: true
+    model_id: "models/mmbert32k-feedback-detector-merged"
+    threshold: 0.7
+    use_cpu: true
+    use_mmbert_32k: true
 
   keyword_rules:
     - category: "thinking"
@@ -562,13 +609,32 @@ config:
           [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
         size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
 
-  # Embedding Models Configuration (Optional)
-  # These models provide intelligent embedding generation with automatic routing:
-  # - Qwen3-Embedding-0.6B: Up to 32K context, high quality, 1024-dim embeddings
-  # - EmbeddingGemma-300M: Up to 8K context, fast inference, Matryoshka support (768/512/256/128)
+  # Embedding Models Configuration
+  # This is the UNIFIED configuration for all embedding-related features:
+  # - Semantic Cache: Automatically uses the configured model
+  # - Tool Selection: Uses the configured model for tool matching
+  # - Embedding Signal: Uses the model specified in hnsw_config.model_type
+  # - Complexity Signal: Uses the model specified in hnsw_config.model_type
+  #
+  # Available models:
+  # - Qwen3-Embedding-0.6B (Pro): Up to 32K context, high quality, 1024-dim
+  # - EmbeddingGemma-300M (Flash): Up to 8K context, fast inference, Matryoshka support (768/512/256/128)
+  # - mmBERT-Embed-32K-2D-Matryoshka (Ultra): Up to 32K context, 1800+ languages, 2D Matryoshka (layer early exit + dimension reduction)
   embedding_models:
-    qwen3_model_path: "models/mom-embedding-pro"
+    # qwen3_model_path: "models/mom-embedding-pro"
+    # gemma_model_path: "models/mom-embedding-flash"
+    mmbert_model_path: "models/mom-embedding-ultra"
     use_cpu: true  # Set to false for GPU acceleration (requires CUDA)
+    # HNSW Configuration
+    # Improves performance by preloading candidate embeddings at startup
+    # and using HNSW index for O(log n) similarity search
+    hnsw_config:
+      model_type: "mmbert"         # Which model to use: "qwen3" (high quality), "gemma" (fast), or "mmbert" (multilingual)
+      preload_embeddings: true    # Precompute candidate embeddings at startup
+      target_dimension: 768        # Embedding dimension (1024 for qwen3, 768 for gemma/mmbert)
+      # For mmbert only: target_layer (3/6/11/22) for layer early exit
+      enable_soft_matching: true
+      min_score_threshold: 0.5
 
   # Observability Configuration
   observability:

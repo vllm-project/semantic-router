@@ -1,4 +1,4 @@
-# OpenAI RAG Integration Guide
+# OpenAI RAG Integration
 
 This guide demonstrates how to use OpenAI's File Store and Vector Store APIs for RAG (Retrieval-Augmented Generation) in Semantic Router, following the [OpenAI Responses API cookbook](https://cookbook.openai.com/examples/rag_on_pdfs_using_file_search).
 
