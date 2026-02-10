@@ -173,6 +173,16 @@ type HybridRAGConfig struct {
 	Strategy string `json:"strategy,omitempty" yaml:"strategy,omitempty"`
 }
 
+// VectorStoreRAGConfig contains configuration for the local vectorstore RAG backend.
+// This uses vSR's own vector store infrastructure (created via /v1/vector_stores API).
+type VectorStoreRAGConfig struct {
+	// Vector store ID to search (required)
+	VectorStoreID string `json:"vector_store_id" yaml:"vector_store_id"`
+
+	// File IDs to restrict search to (optional)
+	FileIDs []string `json:"file_ids,omitempty" yaml:"file_ids,omitempty"`
+}
+
 // GetRAGConfig returns the RAG plugin configuration for a decision
 func (d *Decision) GetRAGConfig() *RAGPluginConfig {
 	config := d.GetPluginConfig("rag")
@@ -198,6 +208,8 @@ func (d *Decision) GetRAGConfig() *RAGPluginConfig {
 			backendConfig = &MCPRAGConfig{}
 		case "openai":
 			backendConfig = &OpenAIRAGConfig{}
+		case "vectorstore":
+			backendConfig = &VectorStoreRAGConfig{}
 		case "hybrid":
 			backendConfig = &HybridRAGConfig{}
 		default:

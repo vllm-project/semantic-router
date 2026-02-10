@@ -23,6 +23,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
 
 func main() {
@@ -116,6 +117,10 @@ func main() {
 		}
 	}
 
+	// Shutdown hooks for components initialized later (e.g. vector store pipeline).
+	// The signal handler calls these before exiting since os.Exit skips defers.
+	var shutdownHooks []func()
+
 	// Set up signal handling for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
@@ -123,6 +128,12 @@ func main() {
 	go func() {
 		<-sigChan
 		logging.Infof("Received shutdown signal, cleaning up...")
+
+		// Run shutdown hooks (vector store pipeline, backend, etc.)
+		for _, hook := range shutdownHooks {
+			hook()
+		}
+
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if shutdownErr := tracing.ShutdownTracing(shutdownCtx); shutdownErr != nil {
@@ -286,6 +297,84 @@ func main() {
 			}
 			logging.Infof("BERT model initialized successfully for semantic cache")
 		}
+	}
+
+	// Initialize vector store if configured
+	if cfg.VectorStore != nil && cfg.VectorStore.Enabled {
+		logging.Infof("Initializing vector store feature...")
+
+		if validateErr := cfg.VectorStore.Validate(); validateErr != nil {
+			logging.Fatalf("Invalid vector store configuration: %v", validateErr)
+		}
+		cfg.VectorStore.ApplyDefaults()
+
+		// Ensure BERT is initialized if vector store uses it and semantic cache didn't already
+		if cfg.VectorStore.EmbeddingModel == "bert" && !cfg.SemanticCache.Enabled {
+			bertModelID := cfg.BertModel.ModelID
+			if bertModelID == "" {
+				bertModelID = "sentence-transformers/all-MiniLM-L6-v2"
+			}
+			bertModelID = config.ResolveModelPath(bertModelID)
+			logging.Infof("Vector store uses BERT embeddings, initializing BERT model: %s", bertModelID)
+			if initErr := candle_binding.InitModel(bertModelID, cfg.BertModel.UseCPU); initErr != nil {
+				logging.Fatalf("Failed to initialize BERT model for vector store: %v", initErr)
+			}
+		}
+
+		// Create file store
+		vsFileStore, vsErr := vectorstore.NewFileStore(cfg.VectorStore.FileStorageDir)
+		if vsErr != nil {
+			logging.Fatalf("Failed to create vector store file store: %v", vsErr)
+		}
+		apiserver.SetFileStore(vsFileStore)
+
+		// Create backend
+		var memoryCfg vectorstore.MemoryBackendConfig
+		var milvusCfg vectorstore.MilvusBackendConfig
+		switch cfg.VectorStore.BackendType {
+		case "memory":
+			maxEntries := 100000
+			if cfg.VectorStore.Memory != nil && cfg.VectorStore.Memory.MaxEntriesPerStore > 0 {
+				maxEntries = cfg.VectorStore.Memory.MaxEntriesPerStore
+			}
+			memoryCfg = vectorstore.MemoryBackendConfig{MaxEntriesPerStore: maxEntries}
+		case "milvus":
+			milvusCfg = vectorstore.MilvusBackendConfig{
+				Address: fmt.Sprintf("%s:%d", cfg.VectorStore.Milvus.Connection.Host, cfg.VectorStore.Milvus.Connection.Port),
+			}
+		}
+		vsBackend, vsErr := vectorstore.NewBackend(cfg.VectorStore.BackendType, memoryCfg, milvusCfg)
+		if vsErr != nil {
+			logging.Fatalf("Failed to create vector store backend: %v", vsErr)
+		}
+
+		// Create manager
+		vsMgr := vectorstore.NewManager(vsBackend, cfg.VectorStore.EmbeddingDimension, cfg.VectorStore.BackendType)
+		apiserver.SetVectorStoreManager(vsMgr)
+
+		// Create embedder
+		vsEmbedder := vectorstore.NewCandleEmbedder(cfg.VectorStore.EmbeddingModel, cfg.VectorStore.EmbeddingDimension)
+		apiserver.SetEmbedder(vsEmbedder)
+
+		// Create and start ingestion pipeline
+		vsPipeline := vectorstore.NewIngestionPipeline(vsBackend, vsFileStore, vsMgr, vsEmbedder, vectorstore.PipelineConfig{
+			Workers:   cfg.VectorStore.IngestionWorkers,
+			QueueSize: 100,
+		})
+		vsPipeline.Start()
+		apiserver.SetIngestionPipeline(vsPipeline)
+
+		// Register shutdown hooks so signal handler can clean up
+		// (defer won't run when os.Exit is called from signal handler)
+		shutdownHooks = append(shutdownHooks, func() {
+			logging.Infof("Shutting down vector store pipeline...")
+			vsPipeline.Stop()
+			vsBackend.Close()
+		})
+
+		logging.Infof("Vector store initialized: backend=%s, model=%s, dim=%d, workers=%d",
+			cfg.VectorStore.BackendType, cfg.VectorStore.EmbeddingModel,
+			cfg.VectorStore.EmbeddingDimension, cfg.VectorStore.IngestionWorkers)
 	}
 
 	// Create and start the ExtProc server

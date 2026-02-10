@@ -1,0 +1,77 @@
+# Example configuration for local RAG with Vector Store
+#
+# This config enables document ingestion and retrieval using vSR's own
+# embedding models. Documents are chunked, embedded locally, and stored
+# in an in-memory vector store for similarity search.
+#
+# Usage:
+#   make run-router CONFIG_FILE=config/config-rag-example.yaml
+
+bert_model:
+  model_id: "sentence-transformers/all-MiniLM-L12-v2"
+  threshold: 0.6
+  use_cpu: true
+
+# Embedding models — mmBERT 2D Matryoshka for high-quality multilingual embeddings
+# Download with: make download-mmbert-embedding
+embedding_models:
+  mmbert_model_path: "models/mom-embedding-ultra"
+  use_cpu: true
+
+# Vector Store — local document ingestion and search
+vector_store:
+  enabled: true
+  backend_type: "memory"         # "memory" (dev/testing) or "milvus" (production)
+  file_storage_dir: "/tmp/vsr-data"
+  max_file_size_mb: 50
+  embedding_model: "mmbert"      # "bert", "qwen3", "gemma", "mmbert"
+  embedding_dimension: 768       # bert=384, qwen3/gemma/mmbert=768
+  ingestion_workers: 2
+  supported_formats:
+    - ".txt"
+    - ".md"
+    - ".json"
+    - ".csv"
+    - ".html"
+  # memory:
+  #   max_entries_per_store: 100000
+  # milvus:
+  #   connection:
+  #     host: "localhost"
+  #     port: 19530
+
+# Semantic cache (independent of vector store)
+semantic_cache:
+  enabled: false
+  backend_type: "memory"
+  similarity_threshold: 0.8
+  max_entries: 1000
+  ttl_seconds: 3600
+
+# vLLM Endpoints
+vllm_endpoints:
+  - name: "default-endpoint"
+    address: "127.0.0.1"
+    port: 8000
+    weight: 1
+    health_check_path: "/health"
+
+model_config:
+  "Model-A":
+    use_reasoning: false
+    preferred_endpoints: ["default-endpoint"]
+
+# Decisions — example with vectorstore RAG
+# decisions:
+#   - name: "rag-local-decision"
+#     model_override: "Model-A"
+#     plugins:
+#       - type: "rag"
+#         configuration:
+#           enabled: true
+#           backend: "vectorstore"
+#           top_k: 5
+#           similarity_threshold: 0.7
+#           injection_mode: "system_prompt"
+#           backend_config:
+#             vector_store_id: "vs_your_store_id_here"
