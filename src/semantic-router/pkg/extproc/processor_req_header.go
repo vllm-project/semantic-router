@@ -146,11 +146,23 @@ type RequestContext struct {
 	// Stores formatted memory context to be injected after system prompt
 	MemoryContext string // Formatted memory context (empty if no memories retrieved)
 
+	// Chat Completions memory support
+	// Stores parsed messages for memory extraction (Chat Completions provides full history)
+	ChatCompletionMessages    []ChatCompletionMessage // Parsed messages from Chat Completions request
+	ChatCompletionRequestBody []byte                  // Raw request body for user_id extraction in dev builds
+	ChatCompletionUserID      string                  // User ID extracted in dev builds only
+
 	// Note: Per-user API keys from ext_authz / Authorino are read directly from
 	// ctx.Headers by the CredentialResolver (pkg/authz). No separate fields needed.
 
 	// Rate limit context — stored after Check() for post-response Report()
 	RateLimitCtx *ratelimit.Context
+}
+
+// ChatCompletionMessage represents a message from Chat Completions for memory extraction.
+type ChatCompletionMessage struct {
+	Role    string // "user", "assistant", "system"
+	Content string // Text content of the message
 }
 
 // handleRequestHeaders processes the request headers

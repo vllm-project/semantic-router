@@ -1078,6 +1078,18 @@ type MemoryConfig struct {
 	// AutoStore enables automatic memory extraction from conversations
 	AutoStore bool `yaml:"auto_store,omitempty"`
 
+	// DisabledRoutes is a list of API routes where memory should be disabled.
+	// This prevents double injection when SDK-managed memory (Mem0, LangMem, etc.) is used.
+	// Example: ["/v1/chat/completions"]
+	// Default: empty (memory enabled for all routes)
+	DisabledRoutes []string `yaml:"disabled_routes,omitempty"`
+
+	// DisabledModels is a list of model names where memory should be disabled.
+	// Useful for per-model opt-out when certain models have SDK-managed memory.
+	// Example: ["gpt-4-with-mem0", "claude-3-langmem"]
+	// Default: empty (memory enabled for all models)
+	DisabledModels []string `yaml:"disabled_models,omitempty"`
+
 	// Milvus configuration for memory storage
 	Milvus MemoryMilvusConfig `yaml:"milvus,omitempty"`
 
