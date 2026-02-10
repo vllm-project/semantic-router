@@ -967,9 +967,27 @@ type MemoryConfig struct {
 	// Default: 0.6
 	DefaultSimilarityThreshold float32 `yaml:"default_similarity_threshold,omitempty"`
 
+	// QualityScoring configures retention scoring and pruning parameters (MemoryBank-style).
+	// Access tracking (LastAccessed, AccessCount) is always active; pruning runs only when PruneUser is called.
+	QualityScoring MemoryQualityScoringConfig `yaml:"quality_scoring,omitempty"`
+
 	// Note: Query rewriting and fact extraction are enabled by defining
 	// external_models with model_role="memory_rewrite" or "memory_extraction".
 	// Use FindExternalModelByRole() to check if enabled and get config.
+}
+
+// MemoryQualityScoringConfig configures retention scoring and pruning (MemoryBank-style).
+// Access tracking (LastAccessed, AccessCount) is always active when memory is enabled.
+// R = exp(-t_days/S), S = InitialStrengthDays + AccessCount; delete when R < PruneThreshold.
+type MemoryQualityScoringConfig struct {
+	// InitialStrengthDays is S0: initial strength in days (default: 30). Higher = slower decay for new memories.
+	InitialStrengthDays int `yaml:"initial_strength_days,omitempty"`
+
+	// PruneThreshold is delta: delete memories with R < PruneThreshold (default: 0.1).
+	PruneThreshold float64 `yaml:"prune_threshold,omitempty"`
+
+	// MaxMemoriesPerUser caps memories per user; if over, lowest-R memories are deleted first (0 = no cap).
+	MaxMemoriesPerUser int `yaml:"max_memories_per_user,omitempty"`
 }
 
 // MemoryMilvusConfig contains Milvus-specific configuration for memory storage.
