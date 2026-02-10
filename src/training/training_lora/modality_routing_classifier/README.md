@@ -24,16 +24,19 @@ MODEL=mmbert-32k EPOCHS=10 MAX_SAMPLES=10000 bash run_training.sh
 ## Datasets
 
 ### DIFFUSION class (image generation intent)
+
 - **DiffusionDB** (`poloclub/diffusiondb`): 1.8M unique real Stable Diffusion prompts
   - ACL 2023 Best Paper Honorable Mention
   - Real user prompts, not synthetic
 
 ### AR class (text-only intent)
+
 - **OASST2** (`OpenAssistant/oasst2`): 135K instruction-following conversations (35+ languages)
 - **Alpaca** (`tatsu-lab/alpaca`): 52K instruction-following examples (Stanford)
 - **Dolly** (`databricks/databricks-dolly-15k`): 15K categorized instructions
 
 ### BOTH class (mixed modality intent)
+
 - **vLLM Synthesis**: Use `--vllm-endpoint` to generate diverse BOTH prompts via LLM
 - **Seed examples**: 40+ curated examples across diverse domains
 - **Template generation**: Fallback template-based generation
@@ -62,6 +65,7 @@ MODEL=mmbert-32k EPOCHS=10 MAX_SAMPLES=10000 bash run_training.sh
 ## Output
 
 The trained model is saved with:
+
 - `adapter_config.json` - LoRA adapter configuration
 - `adapter_model.safetensors` - LoRA weights
 - `label_mapping.json` - Label ID mapping
