@@ -215,3 +215,68 @@ func isSafeImageDataURL(url string) bool {
 func rewriteRequestModel(originalBody []byte, newModel string) ([]byte, error) {
 	return rewriteModelInBodyFast(originalBody, newModel)
 }
+
+// extractChatCompletionMessages extracts all messages from a Chat Completions request
+// for memory extraction. Returns messages in order (system, user, assistant, etc.)
+func extractChatCompletionMessages(req *openai.ChatCompletionNewParams) []ChatCompletionMessage {
+	var messages []ChatCompletionMessage
+	for _, msg := range req.Messages {
+		role, text := extractChatMessageRoleAndText(msg)
+		if role != "" && text != "" {
+			messages = append(messages, ChatCompletionMessage{Role: role, Content: text})
+		}
+	}
+	return messages
+}
+
+func extractChatMessageRoleAndText(msg openai.ChatCompletionMessageParamUnion) (string, string) {
+	if msg.OfUser != nil {
+		return "user", extractUserMessageText(msg.OfUser)
+	}
+	if msg.OfSystem != nil {
+		return "system", extractSystemMessageText(msg.OfSystem)
+	}
+	if msg.OfAssistant != nil {
+		return "assistant", extractAssistantMessageText(msg.OfAssistant)
+	}
+	return "", ""
+}
+
+func extractUserMessageText(m *openai.ChatCompletionUserMessageParam) string {
+	if m.Content.OfString.Value != "" {
+		return m.Content.OfString.Value
+	}
+	var parts []string
+	for _, part := range m.Content.OfArrayOfContentParts {
+		if part.OfText != nil {
+			parts = append(parts, part.OfText.Text)
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+func extractSystemMessageText(m *openai.ChatCompletionSystemMessageParam) string {
+	if m.Content.OfString.Value != "" {
+		return m.Content.OfString.Value
+	}
+	var parts []string
+	for _, part := range m.Content.OfArrayOfContentParts {
+		if part.Text != "" {
+			parts = append(parts, part.Text)
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+func extractAssistantMessageText(m *openai.ChatCompletionAssistantMessageParam) string {
+	if m.Content.OfString.Value != "" {
+		return m.Content.OfString.Value
+	}
+	var parts []string
+	for _, part := range m.Content.OfArrayOfContentParts {
+		if part.OfText != nil {
+			parts = append(parts, part.OfText.Text)
+		}
+	}
+	return strings.Join(parts, " ")
+}
