@@ -127,7 +127,7 @@ func (r *OpenAIRouter) executeBoth(ctx *RequestContext, mr *config.ModalityRouti
 	}
 	// If both failed, return error
 	if textErr != nil && imgErr != nil {
-		return nil, fmt.Errorf("BOTH: AR failed (%w) and diffusion failed (%v)", textErr, imgErr)
+		return nil, fmt.Errorf("BOTH: AR failed (%w) and diffusion failed (%w)", textErr, imgErr)
 	}
 
 	responseBody, err := r.buildBothResponse(textResp, imgRes, ctx)

@@ -115,7 +115,7 @@ if [ -n "$VLLM_ENDPOINT" ]; then
 fi
 
 # Run training
-eval $CMD
+eval "$CMD"
 
 end_time=$(date +%s)
 duration=$((end_time - start_time))
@@ -128,7 +128,7 @@ echo -e "${GREEN}Running inference test...${NC}"
 echo -e "${BLUE}============================================${NC}"
 
 # Find the output model directory (rank may be auto-selected)
-MODEL_PATH=$(ls -d lora_modality_router_${MODEL}_r*_model 2>/dev/null | head -1)
+MODEL_PATH=$(ls -d lora_modality_router_"${MODEL}"_r*_model 2>/dev/null | head -1)
 if [ -n "$MODEL_PATH" ] && [ -d "$MODEL_PATH" ]; then
     echo -e "${GREEN}Found model at: $MODEL_PATH${NC}"
     python modality_routing_bert_finetuning_lora.py \
