@@ -30,6 +30,7 @@ For **PR builds**, only amd64 is built (via `build_pr` job) for fast feedback.
 ### Rust dependency pre-caching
 
 All Dockerfiles use a two-step Rust build pattern:
+
 1. Copy `Cargo.toml` + `Cargo.lock`, create a dummy `lib.rs`, and build dependencies (cached Docker layer).
 2. Copy real source, **delete stale `.so`/`.a`** from the dummy build, and rebuild (only recompiles application code).
 

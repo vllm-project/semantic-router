@@ -74,7 +74,7 @@ func LoadJailbreakMapping(path string) (*JailbreakMapping, error) {
 		return nil, fmt.Errorf("failed to parse jailbreak mapping JSON: %w", err)
 	}
 
-	if mapping.LabelToIdx == nil || len(mapping.LabelToIdx) < 2 {
+	if len(mapping.LabelToIdx) < 2 {
 		mapping.LabelToIdx = map[string]int{"benign": 0, "jailbreak": 1}
 		mapping.IdxToLabel = map[string]string{"0": "benign", "1": "jailbreak"}
 	}
