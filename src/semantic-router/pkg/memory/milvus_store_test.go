@@ -33,15 +33,17 @@ func TestMain(m *testing.M) {
 
 // MockMilvusClient facilitates testing without a running Milvus instance
 type MockMilvusClient struct {
-	SearchFunc        func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error)
-	HasCollectionFunc func(ctx context.Context, coll string) (bool, error)
-	InsertFunc        func(ctx context.Context, coll string, part string, cols ...entity.Column) (entity.Column, error)
-	DeleteFunc        func(ctx context.Context, coll string, part string, expr string) error
-	QueryFunc         func(ctx context.Context, coll string, parts []string, expr string, out []string, opts ...client.SearchQueryOptionFunc) (client.ResultSet, error)
-	SearchCallCount   int
-	InsertCallCount   int
-	DeleteCallCount   int
-	QueryCallCount    int
+	SearchFunc           func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error)
+	HasCollectionFunc    func(ctx context.Context, coll string) (bool, error)
+	InsertFunc           func(ctx context.Context, coll string, part string, cols ...entity.Column) (entity.Column, error)
+	DeleteFunc           func(ctx context.Context, coll string, part string, expr string) error
+	QueryFunc            func(ctx context.Context, coll string, parts []string, expr string, out []string, opts ...client.SearchQueryOptionFunc) (client.ResultSet, error)
+	CreateCollectionFunc func(ctx context.Context, schema *entity.Schema, shardNum int32, opts ...client.CreateCollectionOption) error
+	SearchCallCount      int
+	InsertCallCount      int
+	DeleteCallCount      int
+	QueryCallCount       int
+	CapturedSchema       *entity.Schema // Captures schema passed to CreateCollection
 }
 
 func (m *MockMilvusClient) Search(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
@@ -88,7 +90,11 @@ func (m *MockMilvusClient) ListCollections(context.Context, ...client.ListCollec
 	return nil, nil
 }
 
-func (m *MockMilvusClient) CreateCollection(context.Context, *entity.Schema, int32, ...client.CreateCollectionOption) error {
+func (m *MockMilvusClient) CreateCollection(ctx context.Context, schema *entity.Schema, shardNum int32, opts ...client.CreateCollectionOption) error {
+	m.CapturedSchema = schema
+	if m.CreateCollectionFunc != nil {
+		return m.CreateCollectionFunc(ctx, schema, shardNum, opts...)
+	}
 	return nil
 }
 
@@ -895,4 +901,50 @@ func TestMilvusStore_Update_NotFound(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "memory not found")
+}
+
+// ============================================================================
+// Schema Tests
+// ============================================================================
+
+func TestMilvusStore_Schema_UserIDPartitionKey(t *testing.T) {
+	mockClient := &MockMilvusClient{}
+
+	// Return false for HasCollection to trigger schema creation
+	mockClient.HasCollectionFunc = func(ctx context.Context, coll string) (bool, error) {
+		return false, nil
+	}
+
+	testEmbeddingConfig := EmbeddingConfig{
+		Model: EmbeddingModelBERT,
+	}
+
+	config := DefaultMemoryConfig()
+	config.Milvus.Dimension = 384
+
+	options := MilvusStoreOptions{
+		Client:          mockClient,
+		CollectionName:  "test_partition_key",
+		Config:          config,
+		Enabled:         true,
+		EmbeddingConfig: &testEmbeddingConfig,
+	}
+
+	_, err := NewMilvusStore(options)
+	require.NoError(t, err)
+
+	// Verify schema was captured
+	require.NotNil(t, mockClient.CapturedSchema, "Schema should be captured during collection creation")
+
+	// Find the user_id field and verify IsPartitionKey
+	var userIDField *entity.Field
+	for _, field := range mockClient.CapturedSchema.Fields {
+		if field.Name == "user_id" {
+			userIDField = field
+			break
+		}
+	}
+
+	require.NotNil(t, userIDField, "user_id field should exist in schema")
+	assert.True(t, userIDField.IsPartitionKey, "user_id field should have IsPartitionKey=true for efficient per-user queries")
 }
