@@ -555,12 +555,6 @@ func createReplayRecorder(decisionName string, pluginCfg *config.RouterReplayPlu
 
 // handleRouterReplayAPI serves read-only endpoints for router replay records.
 func (r *OpenAIRouter) handleRouterReplayAPI(method string, path string) *ext_proc.ProcessingResponse {
-	// Check if any recorders are initialized
-	hasRecorders := len(r.ReplayRecorders) > 0 || r.ReplayRecorder != nil
-	if !hasRecorders {
-		return nil
-	}
-
 	// Strip query string
 	if idx := strings.Index(path, "?"); idx != -1 {
 		path = path[:idx]
@@ -570,6 +564,19 @@ func (r *OpenAIRouter) handleRouterReplayAPI(method string, path string) *ext_pr
 	if path == base || path == base+"/" {
 		if method != "GET" {
 			return r.createErrorResponse(405, "method not allowed")
+		}
+
+		// Check if any recorders are initialized
+		hasRecorders := len(r.ReplayRecorders) > 0 || r.ReplayRecorder != nil
+		if !hasRecorders {
+			// Return empty list if replay not configured
+			payload := map[string]interface{}{
+				"object":  "router_replay.list",
+				"count":   0,
+				"data":    []interface{}{},
+				"message": "Router replay not configured",
+			}
+			return r.createJSONResponse(200, payload)
 		}
 
 		// Aggregate records from all recorders

@@ -6,6 +6,7 @@ services:
     container_name: semantic-router
     ports:
       - "50051:50051"
+      - "9000:9000"
     volumes:
       - ../../config:/app/config:ro,z
       - ../../models:/app/models:ro,z

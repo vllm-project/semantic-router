@@ -51,8 +51,33 @@ const (
 	APIFormatAnthropic = "anthropic"
 )
 
+// AdapterConfig represents configuration for a protocol adapter
+type AdapterConfig struct {
+	// Type of adapter: "envoy", "http"
+	Type string `yaml:"type"`
+	// Whether this adapter is enabled
+	Enabled bool `yaml:"enabled"`
+	// Port to listen on
+	Port int `yaml:"port"`
+	// TLS configuration (optional)
+	TLS *TLSConfig `yaml:"tls,omitempty"`
+}
+
+// TLSConfig represents TLS configuration for an adapter
+type TLSConfig struct {
+	// Enable TLS
+	Enabled bool `yaml:"enabled"`
+	// Path to certificate file
+	CertFile string `yaml:"cert_file"`
+	// Path to key file
+	KeyFile string `yaml:"key_file"`
+}
+
 // RouterConfig represents the main configuration for the LLM Router
 type RouterConfig struct {
+	// Protocol adapters configuration
+	Adapters []AdapterConfig `yaml:"adapters,omitempty"`
+
 	// ConfigSource specifies where to load dynamic configuration from (file or kubernetes)
 	// +optional
 	// +kubebuilder:default=file

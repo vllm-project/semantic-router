@@ -1,3 +1,13 @@
+# Adapter Configuration - Choose which protocols to enable
+# Multiple adapters can run simultaneously on different ports
+adapters:
+  - type: "envoy"      # ExtProc gRPC adapter for Envoy proxy
+    enabled: true
+    port: 50051        # Internal port for ExtProc (Envoy connects here)
+  - type: "http"       # Direct HTTP REST API (OpenAI-compatible)
+    enabled: true
+    port: 9000
+
 # You can override by specifying your own mappings below:
 # Uncomment and customize if you need different model mappings:
 # mom_registry:
@@ -62,9 +72,9 @@ semantic_cache:
   # backend_config_path: "config/milvus.yaml" # Path to Milvus config
 
   # Embedding model for semantic similarity matching
-  # If not specified, automatically uses the model configured in embedding_models section
-  # Options: "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context), "mmbert" (multilingual, 768-dim)
-  # embedding_model: "qwen3"  # Optional: explicitly set if you want to override auto-detection
+  # Options: "bert" (fast, 384-dim), "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
+  # Default: "bert" (fastest, lowest memory)
+  embedding_model: "qwen3"
 
 tools:
   enabled: true
@@ -141,15 +151,15 @@ hallucination_mitigation:
 # Supported formats: 127.0.0.1, 192.168.1.1, ::1, 2001:db8::1, example.com, localhost
 # Note: Use the 'port' field for port numbers, not in the address field
 vllm_endpoints:
-  - name: "ollama"
-    address: "127.0.0.1"  # Ollama endpoint for testing
-    port: 11434
+  - name: "endpoint1"
+    address: "172.28.0.20"  # Static IPv4 of llm-katan within docker compose network
+    port: 8002
     weight: 1
 
 model_config:
-  "qwen2.5:3b":
-    reasoning_family: "qwen3"  # Qwen2.5 uses similar reasoning syntax to Qwen3
-    preferred_endpoints: ["ollama"]
+  "qwen3":
+    reasoning_family: "qwen3"  # This model uses Qwen-3 reasoning syntax
+    preferred_endpoints: ["endpoint1"]  # Optional: omit to let upstream handle endpoint selection
 
 # Categories define domain metadata only (no routing logic)
 categories:
@@ -209,7 +219,7 @@ decisions:
         - type: "domain"
           name: "business"
     modelRefs:
-      - model: "qwen2.5:3b"
+      - model: "qwen3"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -229,7 +239,7 @@ decisions:
         - type: "domain"
           name: "law"
     modelRefs:
-      - model: "qwen2.5:3b"
+      - model: "qwen3"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -249,7 +259,7 @@ decisions:
         - type: "domain"
           name: "psychology"
     modelRefs:
-      - model: "qwen2.5:3b"
+      - model: "qwen3"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -273,7 +283,7 @@ decisions:
         - type: "domain"
           name: "biology"
     modelRefs:
-      - model: "qwen2.5:3b"
+      - model: "qwen3"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -293,7 +303,7 @@ decisions:
         - type: "domain"
           name: "chemistry"
     modelRefs:
-      - model: "qwen2.5:3b"
+      - model: "qwen3"
         use_reasoning: true
     plugins:
       - type: "system_prompt"
@@ -313,7 +323,7 @@ decisions:
         - type: "domain"
           name: "history"
     modelRefs:
-      - model: "qwen2.5:3b"
+      - model: "qwen3"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -333,7 +343,7 @@ decisions:
         - type: "domain"
           name: "health"
     modelRefs:
-      - model: "qwen2.5:3b"
+      - model: "qwen3"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -357,7 +367,7 @@ decisions:
         - type: "domain"
           name: "economics"
     modelRefs:
-      - model: "qwen2.5:3b"
+      - model: "qwen3"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -377,7 +387,7 @@ decisions:
         - type: "domain"
           name: "math"
     modelRefs:
-      - model: "qwen2.5:3b"
+      - model: "qwen3"
         use_reasoning: true
     plugins:
       - type: "system_prompt"
@@ -397,7 +407,7 @@ decisions:
         - type: "domain"
           name: "physics"
     modelRefs:
-      - model: "qwen2.5:3b"
+      - model: "qwen3"
         use_reasoning: true
     plugins:
       - type: "system_prompt"
@@ -417,7 +427,7 @@ decisions:
         - type: "domain"
           name: "computer_science"
     modelRefs:
-      - model: "qwen2.5:3b"
+      - model: "qwen3"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -437,7 +447,7 @@ decisions:
         - type: "domain"
           name: "philosophy"
     modelRefs:
-      - model: "qwen2.5:3b"
+      - model: "qwen3"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -457,7 +467,7 @@ decisions:
         - type: "domain"
           name: "engineering"
     modelRefs:
-      - model: "qwen2.5:3b"
+      - model: "qwen3"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -477,7 +487,7 @@ decisions:
         - type: "domain"
           name: "other"
     modelRefs:
-      - model: "qwen2.5:3b"
+      - model: "qwen3"
         use_reasoning: false
     plugins:
       - type: "system_prompt"
@@ -499,7 +509,7 @@ decisions:
           auto_store: false
 
 
-default_model: "qwen2.5:3b"
+default_model: qwen3
 
 # Reasoning family configurations
 reasoning_families:
@@ -519,7 +529,7 @@ reasoning_families:
     parameter: "reasoning_effort"
 
 # Global default reasoning effort level
-default_reasoning_effort: low
+default_reasoning_effort: high
 
 # API Configuration
 api:
@@ -542,17 +552,7 @@ api:
 # - EmbeddingGemma-300M: Up to 8K context, fast inference, Matryoshka support (768/512/256/128)
 embedding_models:
   qwen3_model_path: "models/mom-embedding-pro"
-  # gemma_model_path: "models/mom-embedding-flash"
   use_cpu: true  # Set to false for GPU acceleration (requires CUDA)
-  # HNSW Configuration
-  # Improves performance by preloading candidate embeddings at startup
-  # and using HNSW index for O(log n) similarity search
-  hnsw_config:
-    model_type: "qwen3"         # Which model to use: "qwen3" (high quality) or "gemma" (fast)
-    preload_embeddings: true    # Precompute candidate embeddings at startup
-    target_dimension: 1024       # Embedding dimension
-    enable_soft_matching: true
-    min_score_threshold: 0.5
 
 # Observability Configuration
 observability:
