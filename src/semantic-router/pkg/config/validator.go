@@ -121,6 +121,20 @@ func validateConfigStructure(cfg *RouterConfig) error {
 		}
 	}
 
+	// Validate plugin configurations within each decision
+	for _, decision := range cfg.Decisions {
+		if imageGenCfg := decision.GetImageGenConfig(); imageGenCfg != nil {
+			if err := imageGenCfg.Validate(); err != nil {
+				return fmt.Errorf("decision '%s': %w", decision.Name, err)
+			}
+		}
+	}
+
+	// Validate top-level modality routing configuration
+	if err := cfg.ModalityRouting.Validate(); err != nil {
+		return err
+	}
+
 	// Validate vLLM classifier configurations
 	if err := validateVLLMClassifierConfig(&cfg.PromptGuard); err != nil {
 		return err

@@ -103,6 +103,11 @@ type RouterConfig struct {
 	BackendModels `yaml:",inline"`
 	// ToolSelection for automatic tool selection
 	ToolSelection `yaml:",inline"`
+
+	// ModalityRouting configures automatic routing between AR (text) and Diffusion (image) models.
+	// When enabled, every request is classified as AR / DIFFUSION / BOTH before decision evaluation.
+	// This is a top-level feature, independent of the decision engine.
+	ModalityRouting *ModalityRoutingConfig `yaml:"modality_routing,omitempty"`
 }
 
 // ToolSelection represents the configuration for automatic tool selection
@@ -2145,11 +2150,12 @@ type RuleCombination struct {
 
 // RuleCondition references a specific rule by type and name
 type RuleCondition struct {
-	// Type specifies the rule type: "keyword", "embedding", "domain", or "fact_check"
+	// Type specifies the rule type: "keyword", "embedding", "domain", "fact_check",
+	// "user_feedback", "preference", "language", "latency", "context", or "complexity".
 	Type string `yaml:"type"`
 
-	// Name is the name of the rule to reference
-	// For fact_check type, use "needs_fact_check" to match queries that need fact verification
+	// Name is the name of the rule to reference.
+	// For fact_check type, use "needs_fact_check" to match queries that need fact verification.
 	Name string `yaml:"name"`
 }
 

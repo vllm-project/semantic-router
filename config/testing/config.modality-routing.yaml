@@ -1,0 +1,160 @@
+# Modality Routing Config - Auto-route between AR (text) and Diffusion (image) models
+#
+# Supports three detection methods for modality classification:
+#   - "classifier":  ML-based (mmBERT-32K) — 3-class: AR / DIFFUSION / BOTH
+#   - "keyword":     Keyword pattern matching — configurable keywords + both_keywords
+#   - "hybrid":      Classifier + keyword fallback/confirmation
+#
+# Architecture:
+#   User Prompt → Modality Detection → AR (text LLM) | DIFFUSION (image gen) | BOTH (AR text + image in parallel)
+#
+# Run with: CONFIG_FILE=config/testing/config.modality-routing.yaml make run-router
+
+# Disable features not needed for this demo
+semantic_cache:
+  enabled: false
+
+tools:
+  enabled: false
+
+prompt_guard:
+  enabled: false
+
+# Response API for testing
+response_api:
+  enabled: true
+  store_backend: "memory"
+  ttl_seconds: 3600
+  max_responses: 100
+
+# vLLM endpoints - AR text model + Diffusion image model
+vllm_endpoints:
+  - name: "vllm-ar"
+    address: "127.0.0.1"
+    port: 8000
+    weight: 1
+    health_check_path: "/health"
+  - name: "vllm-omni"
+    address: "127.0.0.1"
+    port: 8001
+    weight: 1
+    health_check_path: "/health"
+
+# Model config - map models to their preferred endpoints
+model_config:
+  "Qwen/Qwen2.5-14B-Instruct":
+    reasoning_family: "none"
+    preferred_endpoints: ["vllm-ar"]
+  "Qwen/Qwen-Image":
+    reasoning_family: "none"
+    preferred_endpoints: ["vllm-omni"]
+
+# ── Modality Routing (top-level, no decisions needed) ──────────────────────
+modality_routing:
+  enabled: true
+  ar_model: "Qwen/Qwen2.5-14B-Instruct"
+  ar_endpoint: "http://localhost:8000/v1"
+  diffusion_model: "Qwen/Qwen-Image"
+  diffusion_endpoint: "http://localhost:8001/v1"
+
+  image_gen:
+    backend: "vllm_omni"
+    default_width: 1024
+    default_height: 1024
+    timeout_seconds: 120
+    response_text: "Here is the generated image based on your request."
+    prompt_prefixes:
+      - "generate an image of "
+      - "create an image of "
+      - "draw an image of "
+      - "make an image of "
+      - "generate a picture of "
+      - "create a picture of "
+      - "draw a picture of "
+      - "generate "
+      - "create "
+      - "draw "
+    backend_config:
+      base_url: "http://localhost:8001"
+      model: "Qwen/Qwen-Image"
+      num_inference_steps: 4
+      cfg_scale: 0.0
+
+  detection:
+    method: "hybrid"
+
+    classifier:
+      model_path: "./models/mmbert32k-modality-router-merged"
+      use_cpu: false
+
+    confidence_threshold: 0.6
+    lower_threshold_ratio: 0.7
+
+    keywords:
+      - "generate an image"
+      - "generate image"
+      - "create an image"
+      - "create image"
+      - "draw"
+      - "make a picture"
+      - "generate a picture"
+      - "create a picture"
+      - "make an image"
+      - "paint"
+      - "sketch"
+      - "render an image"
+      - "produce an image"
+
+    both_keywords:
+      - "and illustrate"
+      - "with a picture"
+      - "with an image"
+      - "with an illustration"
+      - "with a diagram"
+      - "include a picture"
+      - "include an image"
+      - "and generate an image"
+      - "and draw"
+      - "also generate"
+      - "with a photo"
+
+# Minimal categories (unused but required by schema)
+categories:
+  - name: text_generation
+    description: "Text generation and general queries"
+    mmlu_categories: ["other"]
+
+strategy: "priority"
+
+# No decisions needed for modality routing — it runs before the decision engine.
+# A simple catch-all decision is included to satisfy the routing pipeline.
+decisions:
+  - name: "default"
+    description: "Default text routing"
+    priority: 1
+    rules:
+      operator: "OR"
+      conditions: []
+    modelRefs:
+      - model: "Qwen/Qwen2.5-14B-Instruct"
+        use_reasoning: false
+
+# Default model - AR text model handles unmatched requests (fallback)
+default_model: "Qwen/Qwen2.5-14B-Instruct"
+
+# Disable reasoning
+reasoning_families: {}
+
+# Minimal API config
+api:
+  batch_classification:
+    max_batch_size: 10
+    concurrency_threshold: 2
+    max_concurrency: 4
+
+# Observability - metrics only
+observability:
+  metrics:
+    enabled: true
+  tracing:
+    enabled: false

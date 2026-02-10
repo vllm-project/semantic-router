@@ -377,6 +377,25 @@ func main() {
 			cfg.VectorStore.EmbeddingDimension, cfg.VectorStore.IngestionWorkers)
 	}
 
+	// Initialize modality classifier if top-level modality_routing is enabled
+	if mr := cfg.ModalityRouting; mr != nil && mr.Enabled {
+		md := &mr.Detection
+		method := md.GetMethod()
+		if (method == config.ModalityDetectionClassifier || method == config.ModalityDetectionHybrid) &&
+			md.Classifier != nil && md.Classifier.ModelPath != "" {
+			modelPath := config.ResolveModelPath(md.Classifier.ModelPath)
+			logging.Infof("Initializing modality classifier (method=%s) from model: %s", method, modelPath)
+			if initErr := extproc.InitModalityClassifier(modelPath, md.Classifier.UseCPU); initErr != nil {
+				if method == config.ModalityDetectionClassifier {
+					logging.Fatalf("Failed to initialize modality classifier (required for method=%q): %v", method, initErr)
+				}
+				logging.Warnf("Failed to initialize modality classifier (hybrid will fall back to keywords): %v", initErr)
+			} else {
+				logging.Infof("Modality classifier initialized successfully")
+			}
+		}
+	}
+
 	// Create and start the ExtProc server
 	server, err := extproc.NewServer(*configPath, *port, *secure, *certPath)
 	if err != nil {

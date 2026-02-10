@@ -703,9 +703,7 @@ class ModalityRoutingDataset:
         prompts = []
         seen = set()
         try:
-            dataset = load_dataset(
-                "tatsu-lab/alpaca", split="train", streaming=True
-            )
+            dataset = load_dataset("tatsu-lab/alpaca", split="train", streaming=True)
             for item in dataset:
                 if len(prompts) >= max_samples:
                     break
@@ -803,9 +801,7 @@ class ModalityRoutingDataset:
         prompts = []
         seen = set()
         try:
-            dataset = load_dataset(
-                "lmsys/lmsys-chat-1m", split="train", streaming=True
-            )
+            dataset = load_dataset("lmsys/lmsys-chat-1m", split="train", streaming=True)
             for item in dataset:
                 if len(prompts) >= max_samples:
                     break
@@ -820,12 +816,7 @@ class ModalityRoutingDataset:
                     continue
 
                 text = first_msg.get("content", "")
-                if (
-                    text
-                    and len(text) > 10
-                    and len(text) < 1000
-                    and text not in seen
-                ):
+                if text and len(text) > 10 and len(text) < 1000 and text not in seen:
                     # Filter out image generation requests
                     text_lower = text.lower()
                     image_keywords = [
@@ -860,9 +851,7 @@ class ModalityRoutingDataset:
         prompts = []
         seen = set()
         try:
-            dataset = load_dataset(
-                "stingning/ultrachat", split="train", streaming=True
-            )
+            dataset = load_dataset("stingning/ultrachat", split="train", streaming=True)
             for item in dataset:
                 if len(prompts) >= max_samples:
                     break
@@ -874,18 +863,19 @@ class ModalityRoutingDataset:
                 # First element is the user's opening message
                 text = data[0] if isinstance(data[0], str) else ""
                 text = text.strip()
-                if (
-                    text
-                    and len(text) > 15
-                    and len(text) < 500
-                    and text not in seen
-                ):
+                if text and len(text) > 15 and len(text) < 500 and text not in seen:
                     # Filter out image/visual requests
                     text_lower = text.lower()
                     visual_keywords = [
-                        "generate an image", "create an image", "draw ",
-                        "make a picture", "illustrate", "paint ",
-                        "stable diffusion", "dall-e", "midjourney",
+                        "generate an image",
+                        "create an image",
+                        "draw ",
+                        "make a picture",
+                        "illustrate",
+                        "paint ",
+                        "stable diffusion",
+                        "dall-e",
+                        "midjourney",
                     ]
                     if not any(kw in text_lower for kw in visual_keywords):
                         prompts.append(text)
@@ -918,30 +908,28 @@ class ModalityRoutingDataset:
 
         # Strict diffusion patterns - must clearly request image creation
         diffusion_re = re.compile(
-            r'(?:^|\b)(?:'
-            r'(?:create|generate|make|produce)\s+(?:an?\s+)?(?:image|picture|photo|illustration|artwork|portrait|logo|icon|poster|banner|thumbnail|wallpaper)'
-            r'|(?:can you|please|could you)\s+(?:create|generate|make|draw|paint)\s+(?:an?\s+)?(?:image|picture|illustration|artwork)'
-            r'|(?:write|create|make|give)\s+(?:me\s+)?(?:an?\s+)?(?:stable\s+diffusion|dall-?e|midjourney)\s+prompt'
-            r'|(?:text[\s-]?to[\s-]?image)\s+prompt'
-            r'|make\s+(?:a\s+)?(?:picture|photo)\s+of'
-            r')',
+            r"(?:^|\b)(?:"
+            r"(?:create|generate|make|produce)\s+(?:an?\s+)?(?:image|picture|photo|illustration|artwork|portrait|logo|icon|poster|banner|thumbnail|wallpaper)"
+            r"|(?:can you|please|could you)\s+(?:create|generate|make|draw|paint)\s+(?:an?\s+)?(?:image|picture|illustration|artwork)"
+            r"|(?:write|create|make|give)\s+(?:me\s+)?(?:an?\s+)?(?:stable\s+diffusion|dall-?e|midjourney)\s+prompt"
+            r"|(?:text[\s-]?to[\s-]?image)\s+prompt"
+            r"|make\s+(?:a\s+)?(?:picture|photo)\s+of"
+            r")",
             re.IGNORECASE,
         )
 
         # Strict BOTH patterns - explicitly request text explanation + visual output
         both_re = re.compile(
-            r'(?:'
-            r'(?:explain|describe|write\s+about).*(?:and\s+(?:include|add|create|show|provide|generate)\s+(?:an?\s+)?(?:image|diagram|picture|illustration|visual|chart|figure|infographic))'
-            r'|(?:explain|describe|write).*(?:with\s+(?:an?\s+)?(?:image|diagram|illustration|visual|chart|figure))'
-            r'|(?:create|make|generate)\s+(?:an?\s+)?(?:infographic|poster|presentation)\s+(?:about|explaining|describing)'
-            r')',
+            r"(?:"
+            r"(?:explain|describe|write\s+about).*(?:and\s+(?:include|add|create|show|provide|generate)\s+(?:an?\s+)?(?:image|diagram|picture|illustration|visual|chart|figure|infographic))"
+            r"|(?:explain|describe|write).*(?:with\s+(?:an?\s+)?(?:image|diagram|illustration|visual|chart|figure))"
+            r"|(?:create|make|generate)\s+(?:an?\s+)?(?:infographic|poster|presentation)\s+(?:about|explaining|describing)"
+            r")",
             re.IGNORECASE,
         )
 
         try:
-            dataset = load_dataset(
-                "allenai/WildChat", split="train", streaming=True
-            )
+            dataset = load_dataset("allenai/WildChat", split="train", streaming=True)
 
             scanned = 0
             target_per_class = max_samples
@@ -980,10 +968,18 @@ class ModalityRoutingDataset:
                 if is_both and len(both_prompts) < target_per_class:
                     both_prompts.append(text)
                     seen.add(text)
-                elif is_diffusion and not is_both and len(diffusion_prompts) < target_per_class:
+                elif (
+                    is_diffusion
+                    and not is_both
+                    and len(diffusion_prompts) < target_per_class
+                ):
                     diffusion_prompts.append(text)
                     seen.add(text)
-                elif not is_diffusion and not is_both and len(ar_prompts) < target_per_class:
+                elif (
+                    not is_diffusion
+                    and not is_both
+                    and len(ar_prompts) < target_per_class
+                ):
                     ar_prompts.append(text)
                     seen.add(text)
 
@@ -1017,7 +1013,9 @@ class ModalityRoutingDataset:
 
         Source: https://huggingface.co/mqliu/InterleavedBench
         """
-        logger.info("Loading InterleavedBench prompts (interleaved text+image tasks)...")
+        logger.info(
+            "Loading InterleavedBench prompts (interleaved text+image tasks)..."
+        )
         prompts = []
         seen = global_seen if global_seen is not None else set()
 
@@ -1097,12 +1095,7 @@ class ModalityRoutingDataset:
                 if len(prompts) >= max_samples:
                     break
                 text = item.get("Prompt", "").strip()
-                if (
-                    text
-                    and len(text) > 3
-                    and len(text) < 500
-                    and text not in seen
-                ):
+                if text and len(text) > 3 and len(text) < 500 and text not in seen:
                     prompts.append(text)
                     seen.add(text)
 
@@ -1112,9 +1105,7 @@ class ModalityRoutingDataset:
 
         return prompts
 
-    def _load_fal_prompts(
-        self, max_samples: int, global_seen: set = None
-    ) -> List[str]:
+    def _load_fal_prompts(self, max_samples: int, global_seen: set = None) -> List[str]:
         """
         Load fal/image-generation-prompts - structured T2I prompts with categories.
 
@@ -1133,12 +1124,7 @@ class ModalityRoutingDataset:
                 if len(prompts) >= max_samples:
                     break
                 text = item.get("prompt", "").strip()
-                if (
-                    text
-                    and len(text) > 10
-                    and len(text) < 1500
-                    and text not in seen
-                ):
+                if text and len(text) > 10 and len(text) < 1500 and text not in seen:
                     prompts.append(text)
                     seen.add(text)
 
@@ -1221,7 +1207,11 @@ class ModalityRoutingDataset:
             ],
             "expression": ["integral of x^2", "derivative of sin(x)", "sqrt(144)"],
             "theme": ["the ocean", "autumn", "technology"],
-            "business": ["a coffee shop", "a SaaS startup", "an online tutoring service"],
+            "business": [
+                "a coffee shop",
+                "a SaaS startup",
+                "an online tutoring service",
+            ],
             "event": [
                 "the industrial revolution",
                 "the moon landing",
@@ -1316,73 +1306,144 @@ class ModalityRoutingDataset:
 
         values = {
             "topic": [
-                "the water cycle", "how vaccines work", "plate tectonics",
-                "photosynthesis", "neural networks", "the solar system",
-                "DNA replication", "color theory", "ocean currents",
-                "how electricity reaches your home", "cloud formation",
-                "the nitrogen cycle", "how earthquakes happen",
-                "the rock cycle", "how stars form and die",
-                "the immune system", "how transistors work",
-                "the krebs cycle", "continental drift",
+                "the water cycle",
+                "how vaccines work",
+                "plate tectonics",
+                "photosynthesis",
+                "neural networks",
+                "the solar system",
+                "DNA replication",
+                "color theory",
+                "ocean currents",
+                "how electricity reaches your home",
+                "cloud formation",
+                "the nitrogen cycle",
+                "how earthquakes happen",
+                "the rock cycle",
+                "how stars form and die",
+                "the immune system",
+                "how transistors work",
+                "the krebs cycle",
+                "continental drift",
             ],
             "thing": [
-                "a healthy coral reef", "the inside of a volcano",
-                "a cross-section of the Earth", "the Milky Way galaxy",
-                "a Tesla coil in action", "the interior of a cell",
-                "a black hole accretion disk", "a submarine interior",
-                "the layers of the atmosphere", "a glacial formation",
+                "a healthy coral reef",
+                "the inside of a volcano",
+                "a cross-section of the Earth",
+                "the Milky Way galaxy",
+                "a Tesla coil in action",
+                "the interior of a cell",
+                "a black hole accretion disk",
+                "a submarine interior",
+                "the layers of the atmosphere",
+                "a glacial formation",
             ],
             "process": [
-                "bread baking", "3D printing", "steel manufacturing",
-                "wound healing", "cloud formation", "OAuth authentication",
-                "beer brewing", "silk weaving", "concrete curing",
-                "glass blowing", "cheese making", "bone fracture repair",
-                "semiconductor fabrication", "paper recycling",
+                "bread baking",
+                "3D printing",
+                "steel manufacturing",
+                "wound healing",
+                "cloud formation",
+                "OAuth authentication",
+                "beer brewing",
+                "silk weaving",
+                "concrete curing",
+                "glass blowing",
+                "cheese making",
+                "bone fracture repair",
+                "semiconductor fabrication",
+                "paper recycling",
             ],
             "technique": [
-                "julienne cutting", "French braid", "origami crane folding",
-                "watercolor wet-on-wet", "soldering", "knot tying",
-                "dovetail joinery", "pottery throwing", "cross-stitching",
-                "cake decorating with fondant", "TIG welding",
-                "leather tooling", "calligraphy", "macramé",
+                "julienne cutting",
+                "French braid",
+                "origami crane folding",
+                "watercolor wet-on-wet",
+                "soldering",
+                "knot tying",
+                "dovetail joinery",
+                "pottery throwing",
+                "cross-stitching",
+                "cake decorating with fondant",
+                "TIG welding",
+                "leather tooling",
+                "calligraphy",
+                "macramé",
             ],
             "concept": [
-                "the golden ratio", "Fourier transform", "supply and demand",
-                "the electromagnetic spectrum", "recursion",
-                "Ohm's law in circuits", "the doppler effect",
-                "binary search trees", "gradient descent",
-                "convolution in image processing", "Bayesian inference",
+                "the golden ratio",
+                "Fourier transform",
+                "supply and demand",
+                "the electromagnetic spectrum",
+                "recursion",
+                "Ohm's law in circuits",
+                "the doppler effect",
+                "binary search trees",
+                "gradient descent",
+                "convolution in image processing",
+                "Bayesian inference",
             ],
             "body_part": [
-                "the human heart", "the knee joint", "the eye",
-                "the brain", "the respiratory system", "the inner ear",
-                "the spine", "the shoulder rotator cuff", "the liver",
+                "the human heart",
+                "the knee joint",
+                "the eye",
+                "the brain",
+                "the respiratory system",
+                "the inner ear",
+                "the spine",
+                "the shoulder rotator cuff",
+                "the liver",
             ],
             "thing1": [
-                "serif fonts", "CPU", "oil painting", "bridge types",
-                "AC motors", "hardwood", "LCD", "induction cooktop",
+                "serif fonts",
+                "CPU",
+                "oil painting",
+                "bridge types",
+                "AC motors",
+                "hardwood",
+                "LCD",
+                "induction cooktop",
             ],
             "thing2": [
-                "sans-serif fonts", "GPU", "watercolor painting", "arch types",
-                "DC motors", "softwood", "OLED", "gas cooktop",
+                "sans-serif fonts",
+                "GPU",
+                "watercolor painting",
+                "arch types",
+                "DC motors",
+                "softwood",
+                "OLED",
+                "gas cooktop",
             ],
             "system": [
-                "a microservices application", "a nuclear reactor",
-                "a suspension bridge", "a spacecraft",
-                "a wastewater treatment plant", "a wind turbine",
-                "an ethernet network", "a hydroelectric dam",
+                "a microservices application",
+                "a nuclear reactor",
+                "a suspension bridge",
+                "a spacecraft",
+                "a wastewater treatment plant",
+                "a wind turbine",
+                "an ethernet network",
+                "a hydroelectric dam",
             ],
             # ---- Values for IMPLICIT templates ----
             "diy_task": [
-                "tile a bathroom floor", "build a raised garden bed",
-                "change brake pads", "set up a home network",
-                "install a ceiling fan", "build a bookshelf",
-                "replace a toilet fill valve", "install a dimmer switch",
-                "lay laminate flooring", "build a fence gate",
-                "install a garbage disposal", "paint a room with clean edges",
-                "hang heavy shelves on drywall", "replace a car battery",
-                "assemble a PC from parts", "install a dishwasher",
-                "patch a hole in drywall", "install a drip irrigation system",
+                "tile a bathroom floor",
+                "build a raised garden bed",
+                "change brake pads",
+                "set up a home network",
+                "install a ceiling fan",
+                "build a bookshelf",
+                "replace a toilet fill valve",
+                "install a dimmer switch",
+                "lay laminate flooring",
+                "build a fence gate",
+                "install a garbage disposal",
+                "paint a room with clean edges",
+                "hang heavy shelves on drywall",
+                "replace a car battery",
+                "assemble a PC from parts",
+                "install a dishwasher",
+                "patch a hole in drywall",
+                "install a drip irrigation system",
             ],
             "spatial_concept": [
                 "how a 4-stroke engine works",
@@ -1420,9 +1481,12 @@ class ModalityRoutingDataset:
                 "the chambers of the heart",
             ],
             "setup_task": [
-                "a freshwater aquarium", "a home recording studio",
-                "a hydroponic growing system", "a sourdough starter",
-                "a basic Arduino circuit", "a home darkroom for film",
+                "a freshwater aquarium",
+                "a home recording studio",
+                "a hydroponic growing system",
+                "a sourdough starter",
+                "a basic Arduino circuit",
+                "a home darkroom for film",
             ],
             "physical_skill": [
                 "a deadlift with proper form",
@@ -1433,9 +1497,12 @@ class ModalityRoutingDataset:
                 "a proper golf swing",
             ],
             "craft": [
-                "pottery on a wheel", "leather working",
-                "stained glass making", "blacksmithing basics",
-                "bookbinding by hand", "screen printing",
+                "pottery on a wheel",
+                "leather working",
+                "stained glass making",
+                "blacksmithing basics",
+                "bookbinding by hand",
+                "screen printing",
             ],
             "spatial_thing": [
                 "a typical car engine bay",
@@ -1450,9 +1517,12 @@ class ModalityRoutingDataset:
                 "a broken vs sprained ankle",
             ],
             "constructed_thing": [
-                "a violin", "a mechanical watch",
-                "a residential HVAC system", "a telescope",
-                "a lithium-ion battery", "a diesel engine",
+                "a violin",
+                "a mechanical watch",
+                "a residential HVAC system",
+                "a telescope",
+                "a lithium-ion battery",
+                "a diesel engine",
             ],
         }
 
@@ -1618,9 +1688,7 @@ class ModalityRoutingDataset:
         # Source 5: LMSYS (if still short)
         if len(ar_texts) < samples_per_class:
             prev_count = len(ar_texts)
-            lmsys_prompts = self._load_lmsys_prompts(
-                samples_per_class - len(ar_texts)
-            )
+            lmsys_prompts = self._load_lmsys_prompts(samples_per_class - len(ar_texts))
             for p in lmsys_prompts:
                 if p not in global_seen:
                     ar_texts.append(p)
@@ -2018,7 +2086,11 @@ class ModalityRoutingLoRATrainer(Trainer):
     def _get_loss_fn(self, device: torch.device) -> FocalLoss:
         """Get or create the Focal Loss function."""
         if self._focal_loss is None:
-            alpha = self.class_weights.to(device) if self.class_weights is not None else None
+            alpha = (
+                self.class_weights.to(device)
+                if self.class_weights is not None
+                else None
+            )
             self._focal_loss = FocalLoss(
                 alpha=alpha,
                 gamma=self.focal_gamma,
@@ -2053,9 +2125,7 @@ def create_lora_modality_routing_model(
     model_name: str, num_labels: int, lora_config: dict
 ):
     """Create LoRA-enhanced modality routing classification model."""
-    logger.info(
-        f"Creating LoRA modality routing model with base: {model_name}"
-    )
+    logger.info(f"Creating LoRA modality routing model with base: {model_name}")
 
     # Load tokenizer with model-specific configuration
     tokenizer = create_tokenizer_for_model(model_name, model_name)
@@ -2250,7 +2320,7 @@ def main(
             # Inverse frequency weighting with sqrt dampening
             # sqrt dampening prevents extreme weights when imbalance is severe
             raw_weight = total / (n_classes * count)
-            weights.append(max(0.5, min(raw_weight ** 0.5, 3.0)))  # Clamp [0.5, 3.0]
+            weights.append(max(0.5, min(raw_weight**0.5, 3.0)))  # Clamp [0.5, 3.0]
 
         class_weights = torch.tensor(weights, dtype=torch.float32)
 
@@ -2261,10 +2331,14 @@ def main(
 
         logger.info(f"Class distribution in training data:")
         for i in range(n_classes):
-            label_name = MODALITY_LABELS[i] if i < len(MODALITY_LABELS) else f"class_{i}"
+            label_name = (
+                MODALITY_LABELS[i] if i < len(MODALITY_LABELS) else f"class_{i}"
+            )
             count = label_counts.get(i, 0)
             pct = count / total * 100
-            logger.info(f"  {label_name}: {count} ({pct:.1f}%), weight={weights[i]:.3f}")
+            logger.info(
+                f"  {label_name}: {count} ({pct:.1f}%), weight={weights[i]:.3f}"
+            )
         logger.info(f"Imbalance ratio: {imbalance_ratio:.1f}:1")
 
         # Adapt focal gamma based on imbalance severity
@@ -2276,10 +2350,14 @@ def main(
             )
         elif imbalance_ratio > 1.5:
             focal_gamma = 2.0
-            logger.info(f"Moderate imbalance ({imbalance_ratio:.1f}:1). Using focal gamma={focal_gamma}")
+            logger.info(
+                f"Moderate imbalance ({imbalance_ratio:.1f}:1). Using focal gamma={focal_gamma}"
+            )
         else:
             focal_gamma = 1.5
-            logger.info(f"Balanced data ({imbalance_ratio:.1f}:1). Using focal gamma={focal_gamma}")
+            logger.info(
+                f"Balanced data ({imbalance_ratio:.1f}:1). Using focal gamma={focal_gamma}"
+            )
 
     # ---- Oversample minority class if severely imbalanced ----
     if use_class_weights:
@@ -2349,13 +2427,19 @@ def main(
     ratio = approx_params / max(len(train_data), 1)
     if ratio > 500:
         weight_decay = 0.15  # Aggressive regularization
-        logger.info(f"High param-to-sample ratio ({ratio:.0f}:1) → weight_decay={weight_decay}")
+        logger.info(
+            f"High param-to-sample ratio ({ratio:.0f}:1) → weight_decay={weight_decay}"
+        )
     elif ratio > 200:
         weight_decay = 0.10
-        logger.info(f"Moderate param-to-sample ratio ({ratio:.0f}:1) → weight_decay={weight_decay}")
+        logger.info(
+            f"Moderate param-to-sample ratio ({ratio:.0f}:1) → weight_decay={weight_decay}"
+        )
     else:
         weight_decay = 0.05
-        logger.info(f"Good param-to-sample ratio ({ratio:.0f}:1) → weight_decay={weight_decay}")
+        logger.info(
+            f"Good param-to-sample ratio ({ratio:.0f}:1) → weight_decay={weight_decay}"
+        )
 
     # Training arguments - optimized for 3-class LoRA classification
     training_args = TrainingArguments(
@@ -2440,7 +2524,11 @@ def main(
     # Save evaluation results
     with open(os.path.join(output_dir, "eval_results.json"), "w") as f:
         json.dump(
-            {k: float(v) for k, v in eval_results.items() if isinstance(v, (int, float))},
+            {
+                k: float(v)
+                for k, v in eval_results.items()
+                if isinstance(v, (int, float))
+            },
             f,
             indent=2,
         )
@@ -2620,7 +2708,9 @@ def demo_inference(
 
             print(f"\n  Input: {example_text}")
             print(f"  Expected: {expected_label}")
-            print(f"  Predicted: {predicted_label} (confidence: {confidence:.4f}) [{status}]")
+            print(
+                f"  Predicted: {predicted_label} (confidence: {confidence:.4f}) [{status}]"
+            )
 
             # Show all class probabilities
             probs = predictions[0].tolist()
