@@ -98,16 +98,20 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 		return []ModelSpec{}, nil
 	}
 
-	// Get model registry from config
+	// Use config registry; fall back to default registry for any path not in config
 	registry := cfg.MoMRegistry
 	if len(registry) == 0 {
-		return nil, fmt.Errorf("mom_registry is empty in configuration")
+		registry = config.ToLegacyRegistry()
 	}
+	defaultRegistry := config.ToLegacyRegistry()
 
 	// Build specs
 	var specs []ModelSpec
 	for _, path := range paths {
 		repoID, ok := registry[path]
+		if !ok {
+			repoID, ok = defaultRegistry[path]
+		}
 		if !ok {
 			return nil, fmt.Errorf("model path %s not found in mom_registry", path)
 		}

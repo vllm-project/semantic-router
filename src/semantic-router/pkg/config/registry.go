@@ -60,7 +60,7 @@ var DefaultModelRegistry = []ModelSpec{
 	{
 		LocalPath:        "models/mom-domain-classifier",
 		RepoID:           "LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model",
-		Aliases:          []string{"domain-classifier", "intent-classifier", "category-classifier", "category_classifier_modernbert-base_model", "lora_intent_classifier_bert-base-uncased_model"},
+		Aliases:          []string{"domain-classifier", "intent-classifier", "category-classifier", "category_classifier_modernbert-base_model", "lora_intent_classifier_bert-base-uncased_model", "mmbert32k-intent-classifier-merged"},
 		Purpose:          PurposeDomainClassification,
 		Description:      "BERT-based domain/intent classifier with LoRA adapters for MMLU categories",
 		ParameterSize:    "110M + LoRA",
@@ -88,7 +88,7 @@ var DefaultModelRegistry = []ModelSpec{
 	{
 		LocalPath:        "models/mom-mmbert-pii-detector",
 		RepoID:           "llm-semantic-router/mmbert-pii-detector-merged",
-		Aliases:          []string{"mmbert-pii-detector", "mmbert-pii-detector-merged", "pii_classifier_modernbert-base_presidio_token_model", "pii_classifier_modernbert-base_model", "pii_classifier_modernbert_model", "pii_classifier_modernbert_ai4privacy_token_model"},
+		Aliases:          []string{"mmbert-pii-detector", "mmbert-pii-detector-merged", "mmbert32k-pii-detector-merged", "pii_classifier_modernbert-base_presidio_token_model", "pii_classifier_modernbert-base_model", "pii_classifier_modernbert_model", "pii_classifier_modernbert_ai4privacy_token_model"},
 		Purpose:          PurposePIIDetection,
 		Description:      "ModernBERT-based merged PII detector for token-level classification",
 		ParameterSize:    "149M",
@@ -102,7 +102,7 @@ var DefaultModelRegistry = []ModelSpec{
 	{
 		LocalPath:        "models/mom-jailbreak-classifier",
 		RepoID:           "LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model",
-		Aliases:          []string{"jailbreak-detector", "prompt-guard", "safety-classifier", "jailbreak_classifier_modernbert-base_model", "lora_jailbreak_classifier_bert-base-uncased_model", "jailbreak_classifier_modernbert_model"},
+		Aliases:          []string{"jailbreak-detector", "prompt-guard", "safety-classifier", "jailbreak_classifier_modernbert-base_model", "lora_jailbreak_classifier_bert-base-uncased_model", "jailbreak_classifier_modernbert_model", "mmbert32k-jailbreak-detector-merged"},
 		Purpose:          PurposeJailbreakDetection,
 		Description:      "ModernBERT-based jailbreak/prompt injection detector",
 		ParameterSize:    "149M",
@@ -129,7 +129,7 @@ var DefaultModelRegistry = []ModelSpec{
 	{
 		LocalPath:        "models/mom-halugate-detector",
 		RepoID:           "KRLabsOrg/lettucedect-base-modernbert-en-v1",
-		Aliases:          []string{"hallucination-detector", "halugate-detector", "lettucedect"},
+		Aliases:          []string{"hallucination-detector", "halugate-detector", "lettucedect", "mmbert32k-fact-check-merged", "mmbert32k-factcheck-classifier-merged"},
 		Purpose:          PurposeHallucinationDetector,
 		Description:      "ModernBERT-based hallucination detector for accurate verification",
 		ParameterSize:    "149M",
@@ -155,7 +155,7 @@ var DefaultModelRegistry = []ModelSpec{
 	{
 		LocalPath:        "models/mom-feedback-detector",
 		RepoID:           "llm-semantic-router/feedback-detector",
-		Aliases:          []string{"feedback-detector", "user-feedback-classifier"},
+		Aliases:          []string{"feedback-detector", "user-feedback-classifier", "mmbert32k-feedback-detector-merged"},
 		Purpose:          PurposeFeedbackDetection,
 		Description:      "ModernBERT-based user feedback classifier for 4 feedback types",
 		ParameterSize:    "149M",
@@ -214,151 +214,6 @@ var DefaultModelRegistry = []ModelSpec{
 		EmbeddingDim:     768, // Default, supports 512/256/128/64 via Matryoshka
 		MaxContextLength: 32768,
 		Tags:             []string{"embedding", "matryoshka", "2d-matryoshka", "multilingual", "modernbert", "long-context", "early-exit", "flash-attention-2"},
-	},
-
-	// ============================================================================
-	// mmBERT-32K LoRA Models (32K context, YaRN RoPE scaling, multilingual)
-	// Reference: https://huggingface.co/llm-semantic-router/mmbert-32k-yarn
-	// ============================================================================
-
-	// mmBERT-32K Intent Classifier
-	{
-		LocalPath:        "models/mmbert32k-intent-classifier-lora",
-		RepoID:           "llm-semantic-router/mmbert32k-intent-classifier-lora",
-		Aliases:          []string{"mmbert32k-intent", "mmbert-32k-intent", "intent-classifier-32k"},
-		Purpose:          PurposeDomainClassification,
-		Description:      "mmBERT-32K intent classifier with YaRN RoPE scaling for MMLU-Pro categories",
-		ParameterSize:    "307M + LoRA",
-		UsesLoRA:         true,
-		NumClasses:       14, // MMLU-Pro categories
-		MaxContextLength: 32768,
-		Tags:             []string{"classification", "lora", "mmlu", "intent", "mmbert-32k", "yarn", "multilingual"},
-	},
-
-	// mmBERT-32K Fact-Check Classifier
-	{
-		LocalPath:        "models/mmbert32k-factcheck-classifier-lora",
-		RepoID:           "llm-semantic-router/mmbert32k-factcheck-classifier-lora",
-		Aliases:          []string{"mmbert32k-factcheck", "mmbert-32k-factcheck", "factcheck-classifier-32k", "fact-check-32k"},
-		Purpose:          PurposeHallucinationSentinel,
-		Description:      "mmBERT-32K fact-check classifier for determining if queries need verification",
-		ParameterSize:    "307M + LoRA",
-		UsesLoRA:         true,
-		NumClasses:       2, // NO_FACT_CHECK_NEEDED / FACT_CHECK_NEEDED
-		MaxContextLength: 32768,
-		Tags:             []string{"factcheck", "lora", "mmbert-32k", "yarn", "multilingual", "rag"},
-	},
-
-	// mmBERT-32K Jailbreak Detector
-	{
-		LocalPath:        "models/mmbert32k-jailbreak-detector-lora",
-		RepoID:           "llm-semantic-router/mmbert32k-jailbreak-detector-lora",
-		Aliases:          []string{"mmbert32k-jailbreak", "mmbert-32k-jailbreak", "jailbreak-detector-32k", "prompt-guard-32k"},
-		Purpose:          PurposeJailbreakDetection,
-		Description:      "mmBERT-32K jailbreak/prompt injection detector with multilingual support",
-		ParameterSize:    "307M + LoRA",
-		UsesLoRA:         true,
-		NumClasses:       2, // benign / jailbreak
-		MaxContextLength: 32768,
-		Tags:             []string{"safety", "jailbreak", "prompt-injection", "lora", "mmbert-32k", "yarn", "multilingual"},
-	},
-
-	// mmBERT-32K Feedback Detector (LoRA)
-	{
-		LocalPath:        "models/mmbert32k-feedback-detector-lora",
-		RepoID:           "llm-semantic-router/mmbert32k-feedback-detector-lora",
-		Aliases:          []string{"mmbert32k-feedback", "mmbert-32k-feedback", "feedback-detector-32k"},
-		Purpose:          PurposeFeedbackDetection,
-		Description:      "mmBERT-32K user feedback classifier for 4 satisfaction levels",
-		ParameterSize:    "307M + LoRA",
-		UsesLoRA:         true,
-		NumClasses:       4, // SAT / NEED_CLARIFICATION / WRONG_ANSWER / WANT_DIFFERENT
-		MaxContextLength: 32768,
-		Tags:             []string{"feedback", "classification", "lora", "mmbert-32k", "yarn", "multilingual"},
-	},
-
-	// mmBERT-32K Feedback Detector (Merged - for Rust/Go inference)
-	{
-		LocalPath:        "models/mmbert32k-feedback-detector-merged",
-		RepoID:           "llm-semantic-router/mmbert32k-feedback-detector-merged",
-		Aliases:          []string{"mmbert32k-feedback-merged", "feedback-detector-32k-merged"},
-		Purpose:          PurposeFeedbackDetection,
-		Description:      "mmBERT-32K merged feedback detector (full model for Rust inference)",
-		ParameterSize:    "307M",
-		UsesLoRA:         false,
-		NumClasses:       4, // SAT / NEED_CLARIFICATION / WRONG_ANSWER / WANT_DIFFERENT
-		MaxContextLength: 32768,
-		Tags:             []string{"feedback", "classification", "merged", "mmbert-32k", "yarn", "multilingual"},
-	},
-
-	// mmBERT-32K Intent Classifier (Merged)
-	{
-		LocalPath:        "models/mmbert32k-intent-classifier-merged",
-		RepoID:           "llm-semantic-router/mmbert32k-intent-classifier-merged",
-		Aliases:          []string{"mmbert32k-intent-merged", "intent-classifier-32k-merged"},
-		Purpose:          PurposeDomainClassification,
-		Description:      "mmBERT-32K merged intent classifier (full model for Rust inference)",
-		ParameterSize:    "307M",
-		UsesLoRA:         false,
-		NumClasses:       14,
-		MaxContextLength: 32768,
-		Tags:             []string{"classification", "merged", "mmbert-32k", "yarn", "multilingual"},
-	},
-
-	// mmBERT-32K Fact-Check Classifier (Merged)
-	{
-		LocalPath:        "models/mmbert32k-factcheck-classifier-merged",
-		RepoID:           "llm-semantic-router/mmbert32k-factcheck-classifier-merged",
-		Aliases:          []string{"mmbert32k-factcheck-merged", "factcheck-classifier-32k-merged"},
-		Purpose:          PurposeHallucinationSentinel,
-		Description:      "mmBERT-32K merged fact-check classifier (full model for Rust inference)",
-		ParameterSize:    "307M",
-		UsesLoRA:         false,
-		NumClasses:       2,
-		MaxContextLength: 32768,
-		Tags:             []string{"factcheck", "merged", "mmbert-32k", "yarn", "multilingual"},
-	},
-
-	// mmBERT-32K Jailbreak Detector (Merged)
-	{
-		LocalPath:        "models/mmbert32k-jailbreak-detector-merged",
-		RepoID:           "llm-semantic-router/mmbert32k-jailbreak-detector-merged",
-		Aliases:          []string{"mmbert32k-jailbreak-merged", "jailbreak-detector-32k-merged"},
-		Purpose:          PurposeJailbreakDetection,
-		Description:      "mmBERT-32K merged jailbreak detector (full model for Rust inference)",
-		ParameterSize:    "307M",
-		UsesLoRA:         false,
-		NumClasses:       2,
-		MaxContextLength: 32768,
-		Tags:             []string{"safety", "jailbreak", "merged", "mmbert-32k", "yarn", "multilingual"},
-	},
-
-	// mmBERT-32K PII Detector (Merged)
-	{
-		LocalPath:        "models/mmbert32k-pii-detector-merged",
-		RepoID:           "llm-semantic-router/mmbert32k-pii-detector-merged",
-		Aliases:          []string{"mmbert32k-pii-merged", "pii-detector-32k-merged"},
-		Purpose:          PurposePIIDetection,
-		Description:      "mmBERT-32K merged PII detector (full model for Rust inference)",
-		ParameterSize:    "307M",
-		UsesLoRA:         false,
-		NumClasses:       35,
-		MaxContextLength: 32768,
-		Tags:             []string{"pii", "privacy", "merged", "mmbert-32k", "yarn", "multilingual"},
-	},
-
-	// mmBERT-32K PII Detector
-	{
-		LocalPath:        "models/mmbert32k-pii-detector-lora",
-		RepoID:           "llm-semantic-router/mmbert32k-pii-detector-lora",
-		Aliases:          []string{"mmbert32k-pii", "mmbert-32k-pii", "pii-detector-32k"},
-		Purpose:          PurposePIIDetection,
-		Description:      "mmBERT-32K PII detector for 17 entity types with BIO tagging",
-		ParameterSize:    "307M + LoRA",
-		UsesLoRA:         true,
-		NumClasses:       35, // 17 entity types × 2 (B/I) + O
-		MaxContextLength: 32768,
-		Tags:             []string{"pii", "privacy", "token-classification", "lora", "mmbert-32k", "yarn", "multilingual"},
 	},
 }
 
