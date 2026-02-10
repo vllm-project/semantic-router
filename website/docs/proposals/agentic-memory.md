@@ -1,4 +1,4 @@
-# Agentic Memory POC: Complete Design Document
+# Agentic Memory
 
 ## Executive Summary
 
@@ -1118,7 +1118,7 @@ if err != nil {
 |--------|--------|----------------|
 | Retrieval relevance | Majority of injected memories are relevant | Manual review of 50 samples |
 | Extraction accuracy | Majority of extracted facts are correct | Manual review of 50 samples |
-| Latency impact | <50ms added to P50 | Compare with/without memory enabled |
+| Latency impact | &lt;50ms added to P50 | Compare with/without memory enabled |
 
 > **POC Scope:** We validate functional criteria only. Quality metrics are measured after POC to inform threshold tuning and extraction prompt improvements.
 
