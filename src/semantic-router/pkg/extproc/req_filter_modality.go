@@ -48,7 +48,7 @@ func (r *OpenAIRouter) handleModalityRouting(ctx *RequestContext, openAIRequest 
 	// normal upstream flow). DIFFUSION and BOTH are short-circuited below and
 	// the header is added directly to the immediate response.
 	ctx.ModalityClassification = &ModalityClassificationResult{
-		Modality:   string(result.Modality),
+		Modality:   result.Modality,
 		Method:     result.Method,
 		Confidence: result.Confidence,
 	}
@@ -127,7 +127,7 @@ func (r *OpenAIRouter) executeBoth(ctx *RequestContext, mr *config.ModalityRouti
 	}
 	// If both failed, return error
 	if textErr != nil && imgErr != nil {
-		return nil, fmt.Errorf("BOTH: AR failed (%v) and diffusion failed (%v)", textErr, imgErr)
+		return nil, fmt.Errorf("BOTH: AR failed (%w) and diffusion failed (%v)", textErr, imgErr)
 	}
 
 	responseBody, err := r.buildBothResponse(textResp, imgRes, ctx)
@@ -149,8 +149,8 @@ func (r *OpenAIRouter) callARModel(ctx *RequestContext, mr *config.ModalityRouti
 
 	// Override model to the AR model name
 	var reqMap map[string]interface{}
-	if err := json.Unmarshal(reqBody, &reqMap); err != nil {
-		return nil, fmt.Errorf("failed to parse AR request: %w", err)
+	if unmarshalErr := json.Unmarshal(reqBody, &reqMap); unmarshalErr != nil {
+		return nil, fmt.Errorf("failed to parse AR request: %w", unmarshalErr)
 	}
 	reqMap["model"] = mr.ARModel
 	// Remove tools/tool_choice — we want pure text from the AR model
@@ -320,7 +320,7 @@ func (r *OpenAIRouter) buildBothResponse(textResp map[string]interface{}, imgRes
 func (r *OpenAIRouter) buildImmediateResponseWithModality(statusCode int, body []byte, result ModalityClassificationResult) *ext_proc.ProcessingResponse {
 	procResp := r.createJSONResponseWithBody(statusCode, body)
 
-	modalityValue := string(result.Modality)
+	modalityValue := result.Modality
 	if result.Method != "" {
 		modalityValue += ";" + result.Method
 	}

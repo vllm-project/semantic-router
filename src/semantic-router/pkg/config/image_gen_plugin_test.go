@@ -7,9 +7,7 @@ import (
 )
 
 var _ = Describe("ModalityDetectionConfig", func() {
-
 	Describe("Validate", func() {
-
 		// ── nil / empty ─────────────────────────────────────────────
 		It("accepts nil config (defaults to hybrid at runtime)", func() {
 			var cfg *ModalityDetectionConfig
@@ -410,7 +408,6 @@ var _ = Describe("ModalityDetectionConfig", func() {
 })
 
 var _ = Describe("ImageGenPluginConfig.Validate", func() {
-
 	It("passes when disabled", func() {
 		cfg := &ImageGenPluginConfig{Enabled: false}
 		Expect(cfg.Validate()).To(Succeed())
@@ -473,7 +470,6 @@ var _ = Describe("ImageGenPluginConfig.Validate", func() {
 })
 
 var _ = Describe("Config load validates modality_detection in image_gen plugin", func() {
-
 	// Helper to create a minimal valid config YAML with an image_gen plugin
 	buildConfigYAML := func(modalityBlock string) string {
 		return `
