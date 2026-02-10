@@ -388,3 +388,24 @@ demo-hallucination-auto: ## Run hallucination demo with predefined questions (no
 demo-hallucination-auto: build-router download-models
 	@echo "Starting Hallucination Detection Demo (auto mode)..."
 	@./e2e/testing/hallucination-demo/run_demo.sh --demo
+
+# ============== Image Generation Tests ==============
+
+# Test image generation with vLLM-Omni
+test-image-gen: ## Test image generation via vLLM-Omni (requires vLLM-Omni on localhost:8001)
+test-image-gen:
+	@echo "Testing image generation with vLLM-Omni..."
+	@./scripts/test-image-gen.sh
+
+# Run image generation integration tests (Go)
+test-image-gen-integration: ## Run Go integration tests for image generation
+test-image-gen-integration:
+	@echo "Running image generation integration tests..."
+	@cd src/semantic-router && go test -tags=integration -v ./pkg/imagegen/integration_test.go -timeout 300s
+
+# Run router with image generation config
+run-router-image-gen: ## Run router with image generation config
+run-router-image-gen: build-router
+	@echo "Running router with image generation config..."
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release && \
+		./bin/router -config=config/testing/config.image-gen.yaml

@@ -1,0 +1,118 @@
+# Minimal config for testing image generation with vLLM-Omni
+# Run with: CONFIG_FILE=config/testing/config.image-gen.yaml make run-router
+
+# Disable features we don't need for this test
+semantic_cache:
+  enabled: false
+
+tools:
+  enabled: false
+
+prompt_guard:
+  enabled: false
+
+# Response API for testing image generation via Responses API
+response_api:
+  enabled: true
+  store_backend: "memory"
+  ttl_seconds: 3600
+  max_responses: 100
+
+# vLLM endpoints - including vLLM-Omni for image generation
+vllm_endpoints:
+  - name: "vllm-omni"
+    address: "127.0.0.1"
+    port: 8001
+    weight: 1
+    health_check_path: "/health"
+
+# Model config
+model_config:
+  "black-forest-labs/FLUX.1-schnell":
+    reasoning_family: "none"
+    preferred_endpoints: ["vllm-omni"]
+
+# Keyword rules - define rules that can be referenced by decisions
+keyword_rules:
+  - name: "image_generation_keywords"
+    operator: "OR"
+    keywords:
+      - "generate an image"
+      - "generate image"
+      - "create an image"
+      - "create image"
+      - "draw"
+      - "make a picture"
+      - "generate a picture"
+      - "create a picture"
+      - "make an image"
+
+# Minimal categories
+categories:
+  - name: image_generation
+    description: "Image generation requests"
+    mmlu_categories: ["other"]
+  - name: other
+    description: "General queries"
+    mmlu_categories: ["other"]
+
+strategy: "priority"
+
+decisions:
+  # Image generation decision - highest priority
+  - name: "image_generation_decision"
+    description: "Handle image generation requests via vLLM-Omni"
+    priority: 200
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "image_generation_keywords"
+    modelRefs:
+      - model: "black-forest-labs/FLUX.1-schnell"
+        use_reasoning: false
+    plugins:
+      - type: "image_gen"
+        configuration:
+          enabled: true
+          backend: "vllm_omni"
+          default_width: 1024
+          default_height: 1024
+          timeout_seconds: 120
+          backend_config:
+            base_url: "http://localhost:8001"
+            model: "black-forest-labs/FLUX.1-schnell"
+            num_inference_steps: 4
+            cfg_scale: 0.0
+
+  # Default decision for other requests
+  - name: "general_decision"
+    description: "General queries - passthrough"
+    priority: 50
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "other"
+    modelRefs:
+      - model: "black-forest-labs/FLUX.1-schnell"
+        use_reasoning: false
+
+default_model: "black-forest-labs/FLUX.1-schnell"
+
+# Disable reasoning
+reasoning_families: {}
+
+# Minimal API config
+api:
+  batch_classification:
+    max_batch_size: 10
+    concurrency_threshold: 2
+    max_concurrency: 4
+
+# Observability - metrics only
+observability:
+  metrics:
+    enabled: true
+  tracing:
+    enabled: false
