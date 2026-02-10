@@ -815,6 +815,11 @@ type MemoryMilvusConfig struct {
 
 	// Embedding dimension (default: 384 for all-MiniLM-L6-v2)
 	Dimension int `yaml:"dimension,omitempty"`
+
+	// NumPartitions for partition key distribution (default: 16, max: 1024)
+	// Higher values improve per-user query performance at scale.
+	// Recommendation: 64 for <100K users, 256 for 100K-1M users.
+	NumPartitions int `yaml:"num_partitions,omitempty"`
 }
 
 // ResponseAPIConfig configures the Response API for stateful conversations.

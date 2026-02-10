@@ -666,3 +666,22 @@ providers:
 
   # Default reasoning effort level
   default_reasoning_effort: "low"
+
+# Memory - Agentic Memory for cross-session context (requires Milvus)
+memory:
+  enabled: false
+  auto_store: true
+  
+  milvus:
+    address: "localhost:19530"
+    collection: "agentic_memory"
+    dimension: 384  # 384=bert (fast), 1024=qwen3 (quality)
+    # Partitions for user_id routing: 16 (default), 64 (<10K users), 256 (<1M users)
+    num_partitions: 64
+  
+  embedding_model: "bert"  # "bert" (fast) or "qwen3" (quality)
+  similarity_threshold: 0.7
+  
+  # Security: auth header for trusted user_id (optional)
+  # auth_user_id_header: "x-authenticated-user-id"
+  # require_auth_header: false
