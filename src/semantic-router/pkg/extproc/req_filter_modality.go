@@ -96,6 +96,8 @@ func (r *OpenAIRouter) executeDiffusion(ctx *RequestContext, mr *config.Modality
 // executeBoth calls the AR model for text and the diffusion model for image
 // generation in parallel, then combines them into a single multimodal response.
 func (r *OpenAIRouter) executeBoth(ctx *RequestContext, mr *config.ModalityRoutingConfig, openAIRequest *openai.ChatCompletionNewParams, result ModalityClassificationResult) (*ext_proc.ProcessingResponse, error) {
+	// Each goroutine writes to its own dedicated variable; no shared writes.
+	// wg.Wait() provides the happens-before guarantee for safe reads after Wait.
 	var (
 		wg       sync.WaitGroup
 		textResp map[string]interface{}
@@ -159,7 +161,10 @@ func (r *OpenAIRouter) callARModel(ctx *RequestContext, mr *config.ModalityRouti
 	// Remove tools/tool_choice — we want pure text from the AR model
 	delete(reqMap, "tools")
 	delete(reqMap, "tool_choice")
-	reqBody, _ = json.Marshal(reqMap)
+	reqBody, err = json.Marshal(reqMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal modified AR request: %w", err)
+	}
 
 	url := mr.AREndpoint + "/chat/completions"
 	logging.Infof("[ModalityRouter] BOTH: calling AR endpoint %s (model=%s)", url, mr.ARModel)
@@ -171,7 +176,11 @@ func (r *OpenAIRouter) callARModel(ctx *RequestContext, mr *config.ModalityRouti
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 60 * time.Second}
+	timeout := time.Duration(mr.ImageGen.TimeoutSeconds) * time.Second
+	if timeout <= 0 {
+		timeout = 120 * time.Second // same default as diffusion timeout
+	}
+	client := &http.Client{Timeout: timeout}
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("AR request failed: %w", err)

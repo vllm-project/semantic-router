@@ -53,7 +53,6 @@ Key Features:
 """
 
 import json
-import logging
 import os
 import random
 import shutil
@@ -68,7 +67,6 @@ from datasets import Dataset, load_dataset
 from peft import LoraConfig, PeftConfig, PeftModel, TaskType, get_peft_model
 from sklearn.metrics import (
     accuracy_score,
-    classification_report,
     f1_score,
     precision_recall_fscore_support,
 )
@@ -1030,7 +1028,6 @@ class ModalityRoutingDataset:
 
         try:
             from huggingface_hub import hf_hub_download
-            import json
 
             path = hf_hub_download(
                 "mqliu/InterleavedBench",
@@ -2361,10 +2358,8 @@ def main(
 
     # ---- Oversample minority class if severely imbalanced ----
     if use_class_weights:
-        train_labels_list = [item["label"] for item in train_data]
-        label_counts_train = {}
-        for label in train_labels_list:
-            label_counts_train[label] = label_counts_train.get(label, 0) + 1
+        # Reuse label_counts computed earlier during class-weight calculation
+        label_counts_train = label_counts
 
         max_class_count = max(label_counts_train.values())
         min_class_count = min(label_counts_train.values())
