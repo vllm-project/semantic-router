@@ -41,6 +41,7 @@ const (
 	SignalTypeLatency      = "latency"
 	SignalTypeContext      = "context"
 	SignalTypeComplexity   = "complexity"
+	SignalTypeAuthz        = "authz"
 )
 
 // API format constants for model backends
@@ -113,8 +114,8 @@ type RouterConfig struct {
 //
 // If Providers is empty, the router uses a default chain:
 //
-//	1. header-injection (reads x-user-openai-key, x-user-anthropic-key)
-//	2. static-config    (reads model_config.*.access_key from this YAML)
+//  1. header-injection (reads x-user-openai-key, x-user-anthropic-key)
+//  2. static-config    (reads model_config.*.access_key from this YAML)
 //
 // Security: By default, the resolver operates in fail-closed mode — if no
 // provider can resolve a key, the request is rejected. Set fail_open: true
@@ -485,6 +486,14 @@ type Signals struct {
 	// Complexity rules for complexity-based classification using embedding similarity
 	// When matched, outputs the rule name with difficulty level (e.g., "code_complexity:hard", "math_complexity:easy")
 	ComplexityRules []ComplexityRule `yaml:"complexity_rules,omitempty"`
+
+	// RoleBindings defines RBAC role assignments for user-level authorization.
+	// Each binding maps subjects (users/groups) to a named role (K8s RoleBinding pattern).
+	// The role name is emitted as a signal in the decision engine (type: "authz").
+	// Model access is controlled by decisions via modelRefs, NOT by the role binding.
+	// User identity and groups are read from x-authz-user-id and x-authz-user-groups headers
+	// (injected by Authorino / ext_authz). Subject names MUST match Authorino output.
+	RoleBindings []RoleBinding `yaml:"role_bindings,omitempty"`
 }
 
 // BackendModels represents the configuration for backend models
@@ -2304,6 +2313,77 @@ type ContextRule struct {
 	MinTokens   TokenCount `yaml:"min_tokens"`
 	MaxTokens   TokenCount `yaml:"max_tokens"`
 	Description string     `yaml:"description,omitempty"`
+}
+
+// Subject identifies a user or group for RBAC role binding.
+// Modeled after Kubernetes RoleBinding subjects:
+//
+//	subjects:
+//	  - kind: User
+//	    name: "admin"
+//	  - kind: Group
+//	    name: "engineering"
+//
+// The Kind field must be "User" or "Group" (case-insensitive, validated at startup).
+// The Name must match exactly what Authorino injects in x-authz-user-id (for User)
+// or x-authz-user-groups (for Group).
+type Subject struct {
+	// Kind is "User" or "Group" (case-insensitive)
+	Kind string `yaml:"kind"`
+
+	// Name is the user ID or group name — must match the value from Authorino headers
+	Name string `yaml:"name"`
+}
+
+// RoleBinding maps subjects (users/groups) to a named role, following the Kubernetes
+// RBAC RoleBinding pattern. The role name is emitted as a signal in the decision engine
+// (type: "authz"), and decisions define which models each role can access via modelRefs.
+//
+// Kubernetes RBAC analog:
+//
+//	kind: RoleBinding
+//	metadata:
+//	  name: "premium-users"          → RoleBinding.Name
+//	subjects:
+//	  - kind: Group
+//	    name: "premium"              → RoleBinding.Subjects
+//	roleRef:
+//	  name: "premium_tier"           → RoleBinding.Role
+//
+// The RoleBinding does NOT define permissions (model access, pricing, latency).
+// Those are the decision engine's responsibility via modelRefs.
+//
+// RBAC mapping:
+//   - Subject    → users / groups (from Authorino x-authz-user-id / x-authz-user-groups)
+//   - Role       → RoleBinding.Role (the role name used in decision conditions)
+//   - Permission → Decision modelRefs (which models the role can use)
+//
+// Sync contract: the Subject names MUST match the values Authorino injects.
+// User names come from the K8s Secret metadata.name.
+// Group names come from the K8s Secret "authz-groups" annotation.
+type RoleBinding struct {
+	// Name is the binding name (for audit logs and error messages)
+	// This is NOT the role name — it identifies this specific binding.
+	Name string `yaml:"name"`
+
+	// Description provides human-readable explanation of this binding
+	Description string `yaml:"description,omitempty"`
+
+	// Subjects lists the users and groups assigned to this role.
+	// At least one subject must be specified (validated at startup).
+	// A request matches if the user ID matches a User subject OR
+	// any of the user's groups matches a Group subject (OR logic).
+	Subjects []Subject `yaml:"subjects"`
+
+	// Role is the role name that this binding grants.
+	// Referenced in decision conditions as type: "authz", name: "<Role>".
+	// Multiple bindings can grant the same role to different subjects.
+	Role string `yaml:"role"`
+}
+
+// GetRoleBindings returns the configured role bindings.
+func (s *Signals) GetRoleBindings() []RoleBinding {
+	return s.RoleBindings
 }
 
 // ComplexityCandidates defines hard and easy candidates for complexity classification

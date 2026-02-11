@@ -162,8 +162,8 @@ static_resources:
         - endpoint:
             address:
               socket_address:
-                address: authorino-authorino-authorization
-                port_value: 50051
+                address: 127.0.0.1
+                port_value: 50052
 
   # OpenAI API cluster
   - name: openai_api_cluster

@@ -107,6 +107,10 @@ const (
 	// VSRMatchedComplexity contains comma-separated list of matched complexity rules with difficulty levels.
 	// Example: "code_complexity:hard,math_complexity:easy"
 	VSRMatchedComplexity = "x-vsr-matched-complexity"
+
+	// VSRMatchedAuthz contains comma-separated list of matched authz rule names.
+	// Example: "premium_tier,admin_tier"
+	VSRMatchedAuthz = "x-vsr-matched-authz"
 )
 
 // Security Headers
@@ -174,6 +178,16 @@ const (
 	// UserAnthropicKey carries the user's Anthropic API key, injected by ext_authz / Authorino.
 	// Used by the ext_proc when routing requests to Anthropic models.
 	UserAnthropicKey = "x-user-anthropic-key"
+
+	// AuthzUserID carries the authenticated user's identity, injected by ext_authz / Authorino.
+	// Read from the K8s Secret annotation "authz-user-id".
+	// Used by the authz signal classifier for user-level routing and enforcement.
+	AuthzUserID = "x-authz-user-id"
+
+	// AuthzUserGroups carries comma-separated group memberships, injected by ext_authz / Authorino.
+	// Read from the K8s Secret annotation "authz-user-groups".
+	// Used by the authz signal classifier for group-level routing and enforcement.
+	AuthzUserGroups = "x-authz-user-groups"
 )
 
 // Looper Request Headers

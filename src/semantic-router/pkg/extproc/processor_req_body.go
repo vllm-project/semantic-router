@@ -94,7 +94,13 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	// Perform decision evaluation and model selection once at the beginning
 	// Use decision-based routing if decisions are configured, otherwise fall back to category-based
 	// This also evaluates fact-check signal as part of the signal evaluation
-	decisionName, _, reasoningDecision, selectedModel := r.performDecisionEvaluation(originalModel, userContent, nonUserMessages, ctx)
+	decisionName, _, reasoningDecision, selectedModel, authzErr := r.performDecisionEvaluation(originalModel, userContent, nonUserMessages, ctx)
+	if authzErr != nil {
+		// Authz failure is a hard error — return 403 Forbidden.
+		// This happens when role_bindings are configured but the x-authz-user-id header is missing.
+		logging.Errorf("[Request Body] Authz evaluation failed: %v", authzErr)
+		return r.createErrorResponse(403, authzErr.Error()), nil
+	}
 
 	// Record the initial request to this model (count all requests)
 	metrics.RecordModelRequest(selectedModel)
