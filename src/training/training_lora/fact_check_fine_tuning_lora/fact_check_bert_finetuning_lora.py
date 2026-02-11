@@ -464,6 +464,7 @@ class FactCheckDataset:
             # Check for cached dataset first
             faithdial_path = None
             if self.data_dir:
+                # Try the standard HuggingFace clone location (data subdirectory)
                 faithdial_path = (
                     Path(self.data_dir) / "FaithDial_dataset" / "data" / "train.json"
                 )
@@ -480,6 +481,9 @@ class FactCheckDataset:
                 )
             if not faithdial_path.exists():
                 faithdial_path = Path("FaithDial_dataset/data/train.json")
+            # Also try root level (some older clones)
+            if not faithdial_path.exists() and self.data_dir:
+                faithdial_path = Path(self.data_dir) / "FaithDial_dataset" / "train.json"
 
             if not faithdial_path.exists():
                 logger.warning(

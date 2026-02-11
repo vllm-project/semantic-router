@@ -57,10 +57,11 @@ echo ""
 echo "=== Downloading FaithDial Dataset ==="
 echo "Reference: 'FaithDial: A Benchmark for Information-Seeking Dialogue' (TACL 2022)"
 clone_or_update "https://huggingface.co/datasets/McGill-NLP/FaithDial" "FaithDial_dataset"
-if [ -f "FaithDial_dataset/train.json" ]; then
-    echo "  ✓ FaithDial dataset ready (train.json found)"
+if [ -f "FaithDial_dataset/data/train.json" ]; then
+    echo "  ✓ FaithDial dataset ready (data/train.json found)"
+    wc -l FaithDial_dataset/data/train.json | awk '{print "    Lines: " $1}'
 else
-    echo "  ✗ Warning: train.json not found"
+    echo "  ✗ Warning: data/train.json not found"
 fi
 
 echo ""
