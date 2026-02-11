@@ -97,6 +97,9 @@ func validateConfigStructure(cfg *RouterConfig) error {
 		return nil
 	}
 
+	// Emit migration warnings for legacy latency signal-based routing config.
+	warnDeprecatedLatencyConfig(cfg)
+
 	// File mode: validate decisions have at least one model ref
 	for _, decision := range cfg.Decisions {
 		if len(decision.ModelRefs) == 0 {
@@ -117,6 +120,16 @@ func validateConfigStructure(cfg *RouterConfig) error {
 				if err := validateLoRAName(cfg, modelRef.Model, modelRef.LoRAName); err != nil {
 					return fmt.Errorf("decision '%s', model '%s': %w", decision.Name, modelRef.Model, err)
 				}
+			}
+		}
+
+		// Validate algorithm.latency_aware only when algorithm.type=latency_aware.
+		if decision.Algorithm != nil && strings.EqualFold(strings.TrimSpace(decision.Algorithm.Type), "latency_aware") {
+			if decision.Algorithm.LatencyAware == nil {
+				return fmt.Errorf("decision '%s': algorithm.type=latency_aware requires algorithm.latency_aware configuration", decision.Name)
+			}
+			if err := validateLatencyAwareAlgorithmConfig(decision.Algorithm.LatencyAware); err != nil {
+				return fmt.Errorf("decision '%s', algorithm.latency_aware: %w", decision.Name, err)
 			}
 		}
 	}
@@ -251,6 +264,20 @@ func validateImageGenBackends(cfg *RouterConfig) error {
 	return nil
 }
 
+func warnDeprecatedLatencyConfig(cfg *RouterConfig) {
+	if len(cfg.Signals.LatencyRules) > 0 {
+		logging.Warnf("DEPRECATED: signals.latency_rules is deprecated and will be removed in a future release. Migrate to decision.algorithm.type=latency_aware")
+	}
+
+	for _, decision := range cfg.Decisions {
+		for _, condition := range decision.Rules.Conditions {
+			if strings.EqualFold(strings.TrimSpace(condition.Type), SignalTypeLatency) {
+				logging.Warnf("DEPRECATED: decision '%s' uses conditions.type=latency (name=%s). Migrate to decision.algorithm.type=latency_aware", decision.Name, condition.Name)
+			}
+		}
+	}
+}
+
 // validateLatencyRules validates latency rule configurations
 func validateLatencyRules(rules []LatencyRule) error {
 	for i, rule := range rules {
@@ -284,6 +311,34 @@ func validateLatencyRules(rules []LatencyRule) error {
 			return fmt.Errorf("latency_rules[%d] (%s): ttft_percentile must be between 1 and 100, got: %d", i, rule.Name, rule.TTFTPercentile)
 		}
 	}
+	return nil
+}
+
+// validateLatencyAwareAlgorithmConfig validates latency_aware algorithm configuration.
+func validateLatencyAwareAlgorithmConfig(cfg *LatencyAwareAlgorithmConfig) error {
+	hasTPOTPercentile := cfg.TPOTPercentile > 0
+	hasTTFTPercentile := cfg.TTFTPercentile > 0
+
+	if !hasTPOTPercentile && !hasTTFTPercentile {
+		return fmt.Errorf("must specify at least one of tpot_percentile (1-100) or ttft_percentile (1-100). RECOMMENDED: use both for comprehensive latency evaluation")
+	}
+
+	// Warn (but don't error) if only one is set - recommend using both
+	if hasTPOTPercentile && !hasTTFTPercentile {
+		logging.Warnf("algorithm.latency_aware: only tpot_percentile is set. RECOMMENDED: also set ttft_percentile for comprehensive latency evaluation (user-perceived latency)")
+	}
+	if !hasTPOTPercentile && hasTTFTPercentile {
+		logging.Warnf("algorithm.latency_aware: only ttft_percentile is set. RECOMMENDED: also set tpot_percentile for comprehensive latency evaluation (token generation throughput)")
+	}
+
+	if hasTPOTPercentile && (cfg.TPOTPercentile < 1 || cfg.TPOTPercentile > 100) {
+		return fmt.Errorf("tpot_percentile must be between 1 and 100, got: %d", cfg.TPOTPercentile)
+	}
+
+	if hasTTFTPercentile && (cfg.TTFTPercentile < 1 || cfg.TTFTPercentile > 100) {
+		return fmt.Errorf("ttft_percentile must be between 1 and 100, got: %d", cfg.TTFTPercentile)
+	}
+
 	return nil
 }
 

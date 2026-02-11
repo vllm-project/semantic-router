@@ -66,6 +66,50 @@ var _ = Describe("validateLatencyRules", func() {
 	})
 })
 
+var _ = Describe("validateLatencyAwareAlgorithmConfig", func() {
+	It("accepts both percentiles set", func() {
+		cfg := &LatencyAwareAlgorithmConfig{TPOTPercentile: 10, TTFTPercentile: 50}
+		Expect(validateLatencyAwareAlgorithmConfig(cfg)).To(Succeed())
+	})
+
+	It("accepts TPOT-only", func() {
+		cfg := &LatencyAwareAlgorithmConfig{TPOTPercentile: 50}
+		Expect(validateLatencyAwareAlgorithmConfig(cfg)).To(Succeed())
+	})
+
+	It("accepts TTFT-only", func() {
+		cfg := &LatencyAwareAlgorithmConfig{TTFTPercentile: 50}
+		Expect(validateLatencyAwareAlgorithmConfig(cfg)).To(Succeed())
+	})
+
+	It("accepts boundary values 1 and 100", func() {
+		cfg := &LatencyAwareAlgorithmConfig{TPOTPercentile: 1, TTFTPercentile: 100}
+		Expect(validateLatencyAwareAlgorithmConfig(cfg)).To(Succeed())
+	})
+
+	It("rejects zero percentiles", func() {
+		cfg := &LatencyAwareAlgorithmConfig{}
+		err := validateLatencyAwareAlgorithmConfig(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("must specify at least one of"))
+	})
+
+	It("rejects TPOT > 100", func() {
+		cfg := &LatencyAwareAlgorithmConfig{TPOTPercentile: 101}
+		err := validateLatencyAwareAlgorithmConfig(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("tpot_percentile must be between 1 and 100"))
+	})
+
+	It("rejects TTFT > 100", func() {
+		cfg := &LatencyAwareAlgorithmConfig{TTFTPercentile: 200}
+		err := validateLatencyAwareAlgorithmConfig(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("ttft_percentile must be between 1 and 100"))
+	})
+
+})
+
 var _ = Describe("validateLoRAName", func() {
 	loraConfig := func(model string, loras ...string) *RouterConfig {
 		adapters := make([]LoRAAdapter, len(loras))
@@ -237,5 +281,51 @@ var _ = Describe("validateConfigStructure", func() {
 		err := validateConfigStructure(cfg)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("name cannot be empty"))
+	})
+
+	It("rejects latency_aware without algorithm.latency_aware", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "x",
+					ModelRefs: []ModelRef{{
+						Model:                 "model-a",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+					}},
+					Algorithm: &AlgorithmConfig{
+						Type: "latency_aware",
+					},
+				}},
+			},
+		}
+		err := validateConfigStructure(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("algorithm.type=latency_aware requires algorithm.latency_aware configuration"))
+	})
+
+	It("accepts deprecated latency signal config and latency conditions (warning only)", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Signals: Signals{
+					LatencyRules: []LatencyRule{{Name: "low_latency", TPOTPercentile: 20}},
+				},
+				Decisions: []Decision{{
+					Name: "legacy-latency",
+					Rules: RuleCombination{
+						Operator: "AND",
+						Conditions: []RuleCondition{
+							{Type: "latency", Name: "low_latency"},
+						},
+					},
+					ModelRefs: []ModelRef{{
+						Model:                 "model-a",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+					}},
+					Algorithm: &AlgorithmConfig{Type: "static"},
+				}},
+			},
+		}
+
+		Expect(validateConfigStructure(cfg)).To(Succeed())
 	})
 })

@@ -418,6 +418,19 @@ type GMTRouterSelectionConfig struct {
 	StoragePath string `yaml:"storage_path,omitempty"`
 }
 
+// LatencyAwareAlgorithmConfig configures latency-aware model selection using TPOT/TTFT percentiles.
+// At least one of TPOTPercentile or TTFTPercentile must be set.
+type LatencyAwareAlgorithmConfig struct {
+	// TPOTPercentile is the percentile bucket to use for TPOT (Time Per Output Token) evaluation (1-100).
+	TPOTPercentile int `yaml:"tpot_percentile,omitempty"`
+
+	// TTFTPercentile is the percentile bucket to use for TTFT (Time To First Token) evaluation (1-100).
+	TTFTPercentile int `yaml:"ttft_percentile,omitempty"`
+
+	// Description provides human-readable explanation of the latency-aware policy.
+	Description string `yaml:"description,omitempty"`
+}
+
 type Signals struct {
 	// Keyword-based classification rules
 	KeywordRules []KeywordRule `yaml:"keyword_rules,omitempty"`
@@ -1588,6 +1601,7 @@ type AlgorithmConfig struct {
 	// - "hybrid": Combine multiple selection methods with configurable weights
 	// - "rl_driven": Use reinforcement learning with Thompson Sampling (arXiv:2506.09033)
 	// - "gmtrouter": Use heterogeneous graph learning for personalized routing (arXiv:2511.08590)
+	// - "latency_aware": Use TPOT/TTFT percentile thresholds for latency-aware model selection
 	// - "knn": Use K-Nearest Neighbors for query-based model selection
 	// - "kmeans": Use KMeans clustering for model selection
 	// - "svm": Use Support Vector Machine for model classification
@@ -1606,6 +1620,7 @@ type AlgorithmConfig struct {
 	Hybrid    *HybridSelectionConfig    `yaml:"hybrid,omitempty"`
 	RLDriven  *RLDrivenSelectionConfig  `yaml:"rl_driven,omitempty"`
 	GMTRouter *GMTRouterSelectionConfig `yaml:"gmtrouter,omitempty"`
+	LatencyAware *LatencyAwareAlgorithmConfig `yaml:"latency_aware,omitempty"`
 
 	// OnError defines behavior when algorithm fails: "skip" or "fail"
 	// - "skip": Skip and use fallback (default)
