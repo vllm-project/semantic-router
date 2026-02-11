@@ -303,6 +303,26 @@ var _ = Describe("validateConfigStructure", func() {
 		Expect(err.Error()).To(ContainSubstring("algorithm.type=latency_aware requires algorithm.latency_aware configuration"))
 	})
 
+	It("accepts latency_aware-only configuration", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "new-latency-aware",
+					ModelRefs: []ModelRef{{
+						Model:                 "model-a",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+					}},
+					Algorithm: &AlgorithmConfig{
+						Type:         "latency_aware",
+						LatencyAware: &LatencyAwareAlgorithmConfig{TPOTPercentile: 20, TTFTPercentile: 20},
+					},
+				}},
+			},
+		}
+
+		Expect(validateConfigStructure(cfg)).To(Succeed())
+	})
+
 	It("accepts deprecated latency signal config and latency conditions (warning only)", func() {
 		cfg := &RouterConfig{
 			IntelligentRouting: IntelligentRouting{
@@ -327,5 +347,46 @@ var _ = Describe("validateConfigStructure", func() {
 		}
 
 		Expect(validateConfigStructure(cfg)).To(Succeed())
+	})
+
+	It("rejects mixed legacy and latency_aware configurations", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Signals: Signals{
+					LatencyRules: []LatencyRule{{Name: "low_latency", TPOTPercentile: 20}},
+				},
+				Decisions: []Decision{
+					{
+						Name: "legacy-latency",
+						Rules: RuleCombination{
+							Operator: "AND",
+							Conditions: []RuleCondition{
+								{Type: "latency", Name: "low_latency"},
+							},
+						},
+						ModelRefs: []ModelRef{{
+							Model:                 "model-a",
+							ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+						}},
+						Algorithm: &AlgorithmConfig{Type: "static"},
+					},
+					{
+						Name: "new-latency-aware",
+						ModelRefs: []ModelRef{{
+							Model:                 "model-b",
+							ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+						}},
+						Algorithm: &AlgorithmConfig{
+							Type:         "latency_aware",
+							LatencyAware: &LatencyAwareAlgorithmConfig{TPOTPercentile: 20, TTFTPercentile: 20},
+						},
+					},
+				},
+			},
+		}
+
+		err := validateConfigStructure(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("cannot be used with decision.algorithm.type=latency_aware"))
 	})
 })
