@@ -1,3 +1,6 @@
+# Test Envoy config for Authorino integration
+# Authorino gRPC is port-forwarded from kind cluster to localhost:50055
+# Semantic Router ext_proc is on localhost:50051
 static_resources:
   listeners:
   - name: listener_0
@@ -28,7 +31,6 @@ static_resources:
                   duration: "%DURATION%"
                   upstream_host: "%UPSTREAM_HOST%"
                   upstream_cluster: "%UPSTREAM_CLUSTER%"
-                  upstream_local_address: "%UPSTREAM_LOCAL_ADDRESS%"
                   request_id: "%REQ(X-REQUEST-ID)%"
                   selected_model: "%REQ(X-SELECTED-MODEL)%"
           route_config:
@@ -48,7 +50,7 @@ static_resources:
                   cluster: anthropic_api_cluster
                   timeout: 300s
                   host_rewrite_literal: "api.anthropic.com"
-              # OpenAI API route (matches gpt-* and o1-* and o3-* models)
+              # OpenAI API route
               - match:
                   prefix: "/"
                   headers:
@@ -67,8 +69,7 @@ static_resources:
                   cluster: vllm_dynamic_cluster
                   timeout: 300s
           http_filters:
-          # ext_authz filter — validates Bearer token via Authorino (gRPC)
-          # On success, Authorino injects x-user-openai-key / x-user-anthropic-key headers
+          # ext_authz filter — Authorino (gRPC) on port-forwarded localhost:50055
           - name: envoy.filters.http.ext_authz
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
@@ -145,10 +146,10 @@ static_resources:
         explicit_http_config:
           http_protocol_options: {}
 
-  # Authorino authorization service (gRPC)
+  # Authorino authorization service (gRPC) — port-forwarded from kind
   - name: authorino_service
     connect_timeout: 5s
-    type: STRICT_DNS
+    type: STATIC
     lb_policy: ROUND_ROBIN
     typed_extension_protocol_options:
       envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
@@ -162,8 +163,8 @@ static_resources:
         - endpoint:
             address:
               socket_address:
-                address: authorino-authorino-authorization
-                port_value: 50051
+                address: 127.0.0.1
+                port_value: 50055
 
   # OpenAI API cluster
   - name: openai_api_cluster

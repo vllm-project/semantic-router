@@ -1,0 +1,48 @@
+# Authorino AuthConfig for Semantic Router token management
+#
+# This CRD configures Authorino to:
+#   1. Authenticate incoming requests via API key (Bearer token matched against Kubernetes Secrets)
+#   2. Inject per-user provider API keys as response headers (x-user-openai-key, x-user-anthropic-key)
+#
+# The router (ext_proc) reads these injected headers and uses them to authenticate
+# upstream LLM provider requests. The same ext_proc code works whether Authorino
+# or the custom ext_authz service injects the headers.
+#
+# Token management patterns are encoded in the Secrets (see secrets-*.yaml):
+#   - 1:1 (BYOT): Secret api_key == the user's own provider key
+#   - 1:N (per-user): Secret api_key is a local token; annotations hold distinct provider keys
+#   - N:1 (shared): Multiple Secrets share the same provider key annotations
+#
+apiVersion: authorino.kuadrant.io/v1beta3
+kind: AuthConfig
+metadata:
+  name: semantic-router-auth
+spec:
+  hosts:
+  - "semantic-router.example.com"   # adjust to match your Envoy virtual host
+
+  # ─── Authentication ─────────────────────────────────────────────
+  # Match the Bearer token against Kubernetes Secrets labeled app=semantic-router
+  authentication:
+    "api-key-users":
+      apiKey:
+        selector:
+          matchLabels:
+            app: semantic-router
+      credentials:
+        authorizationHeader:
+          prefix: Bearer
+
+  # ─── Dynamic Response (header injection) ────────────────────────
+  # After successful auth, Authorino injects provider keys from Secret annotations
+  # into upstream request headers. ext_proc reads these and sets Authorization for
+  # the chosen LLM provider.
+  response:
+    success:
+      headers:
+        x-user-openai-key:
+          plain:
+            expression: auth.identity.metadata.annotations['openai-key']
+        x-user-anthropic-key:
+          plain:
+            expression: auth.identity.metadata.annotations['anthropic-key']

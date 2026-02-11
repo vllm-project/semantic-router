@@ -162,6 +162,20 @@ const (
 	VerificationContextMissing = "x-vsr-verification-context-missing"
 )
 
+// ext_authz / Authorino Injected Headers
+// These headers are set by the external authorization service (ext_authz or Authorino)
+// after successful user token validation.
+// They carry per-user provider API keys for external model routing.
+const (
+	// UserOpenAIKey carries the user's OpenAI API key, injected by ext_authz / Authorino.
+	// Used by the ext_proc when routing requests to OpenAI models.
+	UserOpenAIKey = "x-user-openai-key"
+
+	// UserAnthropicKey carries the user's Anthropic API key, injected by ext_authz / Authorino.
+	// Used by the ext_proc when routing requests to Anthropic models.
+	UserAnthropicKey = "x-user-anthropic-key"
+)
+
 // Looper Request Headers
 // These headers are added to looper internal requests to identify them
 // and allow the extproc to lookup decision configuration and apply plugins.

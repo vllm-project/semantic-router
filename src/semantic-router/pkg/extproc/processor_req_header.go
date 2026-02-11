@@ -137,6 +137,9 @@ type RequestContext struct {
 	// Memory retrieval tracking
 	// Stores formatted memory context to be injected after system prompt
 	MemoryContext string // Formatted memory context (empty if no memories retrieved)
+
+	// Note: Per-user API keys from ext_authz / Authorino are read directly from
+	// ctx.Headers by the CredentialResolver (pkg/authz). No separate fields needed.
 }
 
 // handleRequestHeaders processes the request headers
@@ -184,6 +187,9 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 			ctx.LooperRequest = true
 			logging.Infof("Detected looper internal request, will skip plugin processing")
 		}
+
+		// Note: ext_authz / Authorino injected headers (x-user-openai-key, x-user-anthropic-key)
+		// are stored in ctx.Headers and read by the CredentialResolver at routing time.
 	}
 
 	// Set request metadata on span

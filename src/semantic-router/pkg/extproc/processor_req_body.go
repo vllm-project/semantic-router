@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
@@ -201,11 +202,14 @@ func (r *OpenAIRouter) handleAnthropicRouting(openAIRequest *openai.ChatCompleti
 		return r.createErrorResponse(400, "Streaming is not supported for Anthropic models. Please set stream=false in your request."), nil
 	}
 
-	// Get API key for the model
-	accessKey := r.Config.GetModelAccessKey(targetModel)
+	// Resolve API key for Anthropic via credential chain (ext_authz headers → static config)
+	accessKey, err := r.CredentialResolver.KeyForProvider(authz.ProviderAnthropic, targetModel, ctx.Headers)
+	if err != nil {
+		return r.createErrorResponse(401, fmt.Sprintf("Credential resolution failed for model %s: %v", targetModel, err)), nil
+	}
 	if accessKey == "" {
-		logging.Errorf("No access_key configured for Anthropic model: %s", targetModel)
-		return r.createErrorResponse(500, fmt.Sprintf("No API key configured for model: %s", targetModel)), nil
+		// fail_open=true path: no key but allowed through — warn operator
+		logging.Warnf("No API key for Anthropic model %q (fail_open=true) — request will use empty key", targetModel)
 	}
 
 	// Update model in request to target model
@@ -255,6 +259,9 @@ func (r *OpenAIRouter) handleAnthropicRouting(openAIRequest *openai.ChatCompleti
 
 	logging.Infof("Transformed request for Anthropic API, body size: %d bytes", len(anthropicBody))
 
+	// Strip ext_authz / Authorino injected headers before forwarding upstream (prevent key leakage)
+	removeHeaders := append(anthropic.HeadersToRemove(), r.CredentialResolver.HeadersToStrip()...)
+
 	// Return response with body and header mutations - let Envoy route to Anthropic
 	// ClearRouteCache forces Envoy to re-evaluate routing after we set x-selected-model header
 	return &ext_proc.ProcessingResponse{
@@ -265,7 +272,7 @@ func (r *OpenAIRouter) handleAnthropicRouting(openAIRequest *openai.ChatCompleti
 					ClearRouteCache: true,
 					HeaderMutation: &ext_proc.HeaderMutation{
 						SetHeaders:    setHeaders,
-						RemoveHeaders: anthropic.HeadersToRemove(),
+						RemoveHeaders: removeHeaders,
 					},
 					BodyMutation: &ext_proc.BodyMutation{
 						Mutation: &ext_proc.BodyMutation_Body{
@@ -489,8 +496,12 @@ func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, modi
 	traceContextHeaders := r.startUpstreamSpanAndInjectHeaders(model, endpoint, ctx)
 	setHeaders = append(setHeaders, traceContextHeaders...)
 
-	// Add Authorization header if model has access_key configured
-	if accessKey := r.getModelAccessKey(model); accessKey != "" {
+	// Resolve Authorization key via credential chain (ext_authz headers → static config)
+	accessKey, credErr := r.CredentialResolver.KeyForProvider(authz.ProviderOpenAI, model, ctx.Headers)
+	if credErr != nil {
+		return r.createErrorResponse(401, fmt.Sprintf("Credential resolution failed for model %s: %v", model, credErr))
+	}
+	if accessKey != "" {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{
 				Key:      "Authorization",
@@ -498,7 +509,13 @@ func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, modi
 			},
 		})
 		logging.Infof("Added Authorization header for model %s", model)
+	} else {
+		// fail_open=true path: no key but allowed through
+		logging.Warnf("No API key for OpenAI model %q (fail_open=true) — forwarding without Authorization header", model)
 	}
+
+	// Strip ext_authz injected headers before forwarding upstream (prevent key leakage)
+	removeHeaders = append(removeHeaders, r.CredentialResolver.HeadersToStrip()...)
 
 	// Add standard routing headers
 	if endpoint != "" {
@@ -569,8 +586,12 @@ func (r *OpenAIRouter) createSpecifiedModelResponse(model string, endpoint strin
 	traceContextHeaders := r.startUpstreamSpanAndInjectHeaders(model, endpoint, ctx)
 	setHeaders = append(setHeaders, traceContextHeaders...)
 
-	// Add Authorization header if model has access_key configured
-	if accessKey := r.getModelAccessKey(model); accessKey != "" {
+	// Resolve Authorization key via credential chain (ext_authz headers → static config)
+	accessKey, credErr := r.CredentialResolver.KeyForProvider(authz.ProviderOpenAI, model, ctx.Headers)
+	if credErr != nil {
+		return r.createErrorResponse(401, fmt.Sprintf("Credential resolution failed for model %s: %v", model, credErr))
+	}
+	if accessKey != "" {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{
 				Key:      "Authorization",
@@ -578,7 +599,13 @@ func (r *OpenAIRouter) createSpecifiedModelResponse(model string, endpoint strin
 			},
 		})
 		logging.Infof("Added Authorization header for model %s", model)
+	} else {
+		// fail_open=true path: no key but allowed through
+		logging.Warnf("No API key for OpenAI model %q (fail_open=true) — forwarding without Authorization header", model)
 	}
+
+	// Strip ext_authz injected headers before forwarding upstream (prevent key leakage)
+	removeHeaders = append(removeHeaders, r.CredentialResolver.HeadersToStrip()...)
 
 	if endpoint != "" {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{

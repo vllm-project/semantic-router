@@ -101,6 +101,57 @@ type RouterConfig struct {
 	BackendModels `yaml:",inline"`
 	// ToolSelection for automatic tool selection
 	ToolSelection `yaml:",inline"`
+
+	// Authz configures the credential resolution chain for per-user LLM API keys.
+	// If omitted, defaults to: header-injection (standard headers) → static-config.
+	Authz AuthzConfig `yaml:"authz,omitempty"`
+}
+
+// AuthzConfig configures how the router resolves per-user LLM API keys.
+// The provider chain is tried in order; the first provider that returns a
+// non-empty key wins.
+//
+// If Providers is empty, the router uses a default chain:
+//
+//	1. header-injection (reads x-user-openai-key, x-user-anthropic-key)
+//	2. static-config    (reads model_config.*.access_key from this YAML)
+//
+// Security: By default, the resolver operates in fail-closed mode — if no
+// provider can resolve a key, the request is rejected. Set fail_open: true
+// only if you intentionally want to allow requests without API keys (e.g.,
+// routing to local vLLM backends that don't require auth).
+//
+// Example:
+//
+//	authz:
+//	  fail_open: false   # default: reject if no key found
+//	  providers:
+//	    - type: header-injection
+//	      headers:
+//	        openai: "x-user-openai-key"
+//	        anthropic: "x-user-anthropic-key"
+//	        gemini: "x-user-gemini-key"
+//	    - type: static-config
+type AuthzConfig struct {
+	// FailOpen controls behavior when no provider can resolve an API key.
+	//   false (default): reject the request with a clear error — prevents
+	//                    silent bypass from misconfig or ext_authz failures.
+	//   true:            allow the request through without a key — use only
+	//                    for local/vLLM backends that don't require auth.
+	FailOpen bool `yaml:"fail_open,omitempty"`
+
+	Providers []AuthzProviderConfig `yaml:"providers,omitempty"`
+}
+
+// AuthzProviderConfig describes a single credential provider in the chain.
+type AuthzProviderConfig struct {
+	// Type is the provider type: "header-injection" or "static-config".
+	Type string `yaml:"type"`
+
+	// Headers maps LLM provider name → request header name.
+	// Only used when Type is "header-injection".
+	// Example: {"openai": "x-user-openai-key", "anthropic": "x-user-anthropic-key"}
+	Headers map[string]string `yaml:"headers,omitempty"`
 }
 
 // ToolSelection represents the configuration for automatic tool selection

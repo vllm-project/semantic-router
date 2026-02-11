@@ -1,0 +1,23 @@
+# Profile C: Static keys only (no ext_authz)
+#
+# Skips header-injection entirely. Useful for:
+#   - Local development without Authorino / ext_authz
+#   - Simple deployments where a single API key per model is sufficient
+#   - Testing without running an authorization service
+#
+# FAIL-CLOSED: if a model's access_key is empty, the request is rejected.
+# This catches missing config instead of sending unauthenticated requests
+# to LLM providers (which would return cryptic 401 errors).
+
+authz:
+  fail_open: false             # reject if access_key is missing
+  providers:
+    - type: static-config
+
+model_config:
+  gpt-4o-mini:
+    model_name: gpt-4o-mini
+    access_key: "sk-proj-my-openai-key"
+  claude-sonnet-4-5-20250929:
+    model_name: claude-sonnet-4-5-20250929
+    access_key: "sk-ant-my-anthropic-key"
