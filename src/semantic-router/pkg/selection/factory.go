@@ -154,6 +154,9 @@ func (f *Factory) Create() Selector {
 		}
 		selector = rlDrivenSelector
 
+	case MethodLatencyAware:
+		selector = NewLatencyAwareSelector(nil)
+
 	default:
 		// Default to static selector
 		staticSelector := NewStaticSelector(DefaultStaticConfig())
@@ -294,7 +297,11 @@ func (f *Factory) CreateAll() *Registry {
 	}
 	registry.Register(MethodGMTRouter, gmtRouterSelector)
 
-	logging.Infof("[SelectionFactory] Created all selectors: static, elo, router_dc, automix, hybrid, knn, kmeans, svm, mlp, rl_driven, gmtrouter")
+	// Create LatencyAware selector
+	latencyAwareSelector := NewLatencyAwareSelector(nil)
+	registry.Register(MethodLatencyAware, latencyAwareSelector)
+
+	logging.Infof("[SelectionFactory] Created all selectors: static, elo, router_dc, automix, hybrid, knn, kmeans, svm, mlp, rl_driven, gmtrouter, latency_aware")
 	return registry
 }
 

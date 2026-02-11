@@ -288,14 +288,17 @@ func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, de
 
 	// Build selection context with cost/quality weights
 	costWeight, qualityWeight := r.getSelectionWeights(algorithm)
+	latencyAwareTPOTPercentile, latencyAwareTTFTPercentile := r.getLatencyAwarePercentiles(algorithm)
 
 	selCtx := &selection.SelectionContext{
-		Query:           query,
-		DecisionName:    decisionName,
-		CategoryName:    categoryName,
-		CandidateModels: modelRefs,
-		CostWeight:      costWeight,
-		QualityWeight:   qualityWeight,
+		Query:                      query,
+		DecisionName:               decisionName,
+		CategoryName:               categoryName,
+		CandidateModels:            modelRefs,
+		CostWeight:                 costWeight,
+		QualityWeight:              qualityWeight,
+		LatencyAwareTPOTPercentile: latencyAwareTPOTPercentile,
+		LatencyAwareTTFTPercentile: latencyAwareTTFTPercentile,
 	}
 
 	// Perform selection
@@ -341,6 +344,8 @@ func (r *OpenAIRouter) getSelectionMethod(algorithm *config.AlgorithmConfig) sel
 			return selection.MethodRLDriven
 		case "gmtrouter":
 			return selection.MethodGMTRouter
+		case "latency_aware":
+			return selection.MethodLatencyAware
 		case "static":
 			return selection.MethodStatic
 		case "knn":
@@ -376,6 +381,15 @@ func (r *OpenAIRouter) getSelectionWeights(algorithm *config.AlgorithmConfig) (f
 
 	// Default: equal weighting (0.5 cost, 0.5 quality)
 	return 0.5, 0.5
+}
+
+// getLatencyAwarePercentiles extracts TPOT/TTFT percentile settings for latency_aware selection.
+// Returns (0, 0) when latency_aware is not configured for the decision.
+func (r *OpenAIRouter) getLatencyAwarePercentiles(algorithm *config.AlgorithmConfig) (int, int) {
+	if algorithm == nil || algorithm.LatencyAware == nil {
+		return 0, 0
+	}
+	return algorithm.LatencyAware.TPOTPercentile, algorithm.LatencyAware.TTFTPercentile
 }
 
 // processUserFeedbackForElo automatically updates Elo ratings based on detected user feedback signals.

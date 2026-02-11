@@ -384,6 +384,11 @@ func TestFactory_Create(t *testing.T) {
 			expectedMethod: MethodHybrid,
 		},
 		{
+			name:           "create latency_aware selector",
+			method:         "latency_aware",
+			expectedMethod: MethodLatencyAware,
+		},
+		{
 			name:           "create static selector (default)",
 			method:         "static",
 			expectedMethod: MethodStatic,
