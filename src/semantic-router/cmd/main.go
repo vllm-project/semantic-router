@@ -19,6 +19,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/logo"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/mcpserver"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -67,9 +68,13 @@ func main() {
 	// This is important for Kubernetes mode where the controller will update it
 	config.Replace(cfg)
 
-	// Ensure required models are downloaded
-	if modelErr := ensureModelsDownloaded(cfg); modelErr != nil {
-		logging.Fatalf("Failed to ensure models are downloaded: %v", modelErr)
+	// Ensure required models are downloaded (can be skipped for local dev)
+	if strings.EqualFold(os.Getenv("SR_SKIP_MODEL_DOWNLOAD"), "true") {
+		logging.Warnf("SR_SKIP_MODEL_DOWNLOAD=true: skipping model download checks")
+	} else {
+		if modelErr := ensureModelsDownloaded(cfg); modelErr != nil {
+			logging.Fatalf("Failed to ensure models are downloaded: %v", modelErr)
+		}
 	}
 
 	// If download-only mode, exit after downloading models
@@ -407,6 +412,26 @@ func main() {
 			logging.Infof("Starting API server on port %d", *apiPort)
 			if err := apiserver.Init(*configPath, *apiPort, *enableSystemPromptAPI); err != nil {
 				logging.Errorf("Start API server error: %v", err)
+			}
+		}()
+	}
+
+	// Start internal MCP config server if enabled
+	if cfg.MCPConfigServer.Enabled {
+		go func() {
+			addr := cfg.MCPConfigServer.Addr
+			if addr == "" {
+				addr = mcpserver.DefaultAddr
+			}
+			path := cfg.MCPConfigServer.Path
+			if path == "" {
+				path = mcpserver.DefaultPath
+			}
+
+			logging.Infof("Starting MCP config server on %s (path: %s)", addr, path)
+			m := mcpserver.NewWithPersist(&mcpserver.GlobalConfigProvider{}, *configPath)
+			if err := m.StartHTTP(addr, path); err != nil {
+				logging.Errorf("MCP config server error: %v", err)
 			}
 		}()
 	}
