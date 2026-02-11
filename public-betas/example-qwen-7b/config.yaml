@@ -1,0 +1,58 @@
+# Example Public Beta Configuration
+# This is a working example that deploys Qwen2.5-7B with semantic routing on AMD MI300X
+
+name: "example-qwen-7b"
+description: "Example public beta with Qwen2.5-7B for testing semantic router"
+
+# Replace with your GitHub username(s) before submitting PR
+owners:
+  - "example-maintainer"
+  - "example-collaborator"
+
+# DigitalOcean AMD GPU Instance
+instance:
+  region: "nyc1"
+  size: "gd-40vcpu-160gb-400gb-1x-amd-mi300x"
+  image: "ubuntu-22-04-x64"
+  tags:
+    - "example"
+
+# vLLM Configuration (ROCm/AMD)
+vllm:
+  model: "Qwen/Qwen2.5-7B-Instruct"
+  tensor_parallel_size: 1
+  gpu_memory_utilization: 0.9
+  max_model_len: 32768
+  port: 8000
+
+# Semantic Router Configuration
+semantic_router:
+  config_source: "custom"
+  
+  custom_config:
+    semantic_cache:
+      enabled: true
+      backend_type: "memory"
+      similarity_threshold: 0.85
+      embedding_model: "qwen3"
+    
+    prompt_guard:
+      enabled: true
+      threshold: 0.7
+    
+    classifier:
+      category_model:
+        model_id: "models/mom-domain-classifier"
+        threshold: 0.6
+
+# Networking (UFW auto-configured)
+networking:
+  additional_ports: []
+  allowed_ips: []
+
+# Lifecycle tied to PR status (no max_duration needed)
+lifecycle:
+  notifications:
+    on_ready: true
+    on_updated: true
+    on_deleted: true

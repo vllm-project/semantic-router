@@ -1,0 +1,266 @@
+name: "Deploy Public Beta (AMD GPU)"
+description: "Composite action to deploy semantic router and vLLM on AMD MI300X GPU"
+
+inputs:
+  beta_name:
+    description: "Name of the public beta"
+    required: true
+  config_path:
+    description: "Path to the beta config.yaml file"
+    required: true
+  model:
+    description: "HuggingFace model ID"
+    required: true
+  tensor_parallel_size:
+    description: "Number of GPUs for tensor parallelism"
+    required: false
+    default: "1"
+  hf_token:
+    description: "HuggingFace API token"
+    required: false
+  droplet_ip:
+    description: "IP address of the droplet"
+    required: true
+  ssh_private_key:
+    description: "SSH private key for deployment"
+    required: true
+
+outputs:
+  vllm_endpoint:
+    description: "vLLM API endpoint"
+    value: ${{ steps.endpoints.outputs.vllm }}
+  router_endpoint:
+    description: "Semantic Router API endpoint"
+    value: ${{ steps.endpoints.outputs.router }}
+  health_status:
+    description: "Combined health status"
+    value: ${{ steps.health.outputs.status }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install yq
+      shell: bash
+      run: |
+        sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+        sudo chmod +x /usr/local/bin/yq
+
+    - name: Prepare deployment package
+      shell: bash
+      run: |
+        model="${{ inputs.model }}"
+        tp_size="${{ inputs.tensor_parallel_size }}"
+        model_dir=$(echo "$model" | tr '/' '_')
+        
+        mkdir -p deploy-package/config
+        
+        # Copy base config
+        cp -r config/* deploy-package/config/ 2>/dev/null || true
+        
+        # Process semantic router config
+        config_source=$(yq eval '.semantic_router.config_source // "default"' "${{ inputs.config_path }}")
+        
+        if [ -f "config/config.yaml" ]; then
+          if [ "$config_source" = "custom" ]; then
+            yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1).semantic_router.custom_config' \
+              config/config.yaml "${{ inputs.config_path }}" > deploy-package/config/config.yaml
+          else
+            cp config/config.yaml deploy-package/config/config.yaml
+          fi
+        fi
+        
+        # Update vLLM endpoint
+        yq eval -i '.vllm_endpoints = [{"name": "local-gpu", "address": "vllm", "port": 8000, "weight": 1}]' \
+          deploy-package/config/config.yaml 2>/dev/null || true
+        
+        # Create docker-compose for AMD GPU (ROCm)
+        cat > deploy-package/docker-compose.yml << EOF
+        services:
+          vllm:
+            image: rocm/vllm:latest
+            container_name: vllm
+            restart: unless-stopped
+            ports:
+              - "8000:8000"
+            volumes:
+              - /data/models:/models:ro
+              - /dev/kfd:/dev/kfd
+              - /dev/dri:/dev/dri
+            environment:
+              - HF_TOKEN
+              - HUGGINGFACE_HUB_TOKEN
+              - HSA_OVERRIDE_GFX_VERSION=11.0.0
+            command: >
+              --model /models/$model_dir
+              --tensor-parallel-size $tp_size
+              --gpu-memory-utilization 0.9
+              --max-model-len 32768
+              --host 0.0.0.0
+              --port 8000
+            group_add:
+              - video
+              - render
+            devices:
+              - /dev/kfd
+              - /dev/dri
+            security_opt:
+              - seccomp:unconfined
+            healthcheck:
+              test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+              interval: 30s
+              timeout: 10s
+              retries: 5
+              start_period: 300s
+          
+          semantic-router:
+            image: ghcr.io/vllm-project/semantic-router/extproc:latest
+            container_name: semantic-router
+            restart: unless-stopped
+            ports:
+              - "8080:8080"
+              - "50051:50051"
+              - "9190:9190"
+            volumes:
+              - ./config:/app/config:ro
+              - /data/models:/app/models:rw
+            environment:
+              - HF_TOKEN
+              - HUGGINGFACE_HUB_TOKEN
+            depends_on:
+              vllm:
+                condition: service_healthy
+            healthcheck:
+              test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+              interval: 30s
+              timeout: 10s
+              retries: 5
+              start_period: 120s
+          
+          envoy:
+            image: envoyproxy/envoy:v1.31-latest
+            container_name: envoy-proxy
+            restart: unless-stopped
+            ports:
+              - "8801:8801"
+              - "19000:19000"
+            volumes:
+              - ./config/envoy.yaml:/etc/envoy/envoy.yaml:ro
+            depends_on:
+              semantic-router:
+                condition: service_healthy
+        EOF
+        
+        # Create deployment script
+        cat > deploy-package/deploy.sh << 'DEPLOY'
+        #!/bin/bash
+        set -e
+        
+        cd /opt/semantic-router
+        
+        # Download model if not exists
+        MODEL="${MODEL_ID}"
+        MODEL_DIR=$(echo "$MODEL" | tr '/' '_')
+        
+        if [ ! -d "/data/models/$MODEL_DIR" ]; then
+          echo "Downloading model: $MODEL"
+          pip install -U huggingface_hub[cli] hf_transfer
+          mkdir -p /data/models
+          HF_HUB_ENABLE_HF_TRANSFER=1 huggingface-cli download "$MODEL" --local-dir "/data/models/$MODEL_DIR"
+        fi
+        
+        # Setup UFW if not already configured
+        if ! ufw status | grep -q "Status: active"; then
+          ufw default deny incoming
+          ufw default allow outgoing
+          ufw allow ssh
+          ufw allow 8080/tcp comment 'Semantic Router API'
+          ufw allow 8801/tcp comment 'Envoy Proxy'
+          ufw allow 9190/tcp comment 'Metrics'
+          ufw --force enable
+        fi
+        
+        # Stop existing services
+        docker compose down 2>/dev/null || true
+        
+        # Start services
+        docker compose up -d
+        
+        echo "Deployment complete"
+        DEPLOY
+        
+        chmod +x deploy-package/deploy.sh
+        tar -czvf deploy-package.tar.gz -C deploy-package .
+
+    - name: Setup SSH
+      shell: bash
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ inputs.ssh_private_key }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H "${{ inputs.droplet_ip }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+    - name: Deploy to instance
+      shell: bash
+      env:
+        HF_TOKEN: ${{ inputs.hf_token }}
+      run: |
+        droplet_ip="${{ inputs.droplet_ip }}"
+        model="${{ inputs.model }}"
+        
+        # Copy deployment package
+        scp -o StrictHostKeyChecking=no deploy-package.tar.gz root@$droplet_ip:/tmp/
+        
+        # Extract and deploy
+        ssh -o StrictHostKeyChecking=no root@$droplet_ip << EOF
+        set -e
+        mkdir -p /opt/semantic-router
+        cd /opt/semantic-router
+        tar -xzvf /tmp/deploy-package.tar.gz
+        
+        export HF_TOKEN="$HF_TOKEN"
+        export HUGGINGFACE_HUB_TOKEN="$HF_TOKEN"
+        export MODEL_ID="$model"
+        
+        ./deploy.sh
+        EOF
+
+    - name: Wait for services
+      id: health
+      shell: bash
+      run: |
+        droplet_ip="${{ inputs.droplet_ip }}"
+        
+        echo "Waiting for services to be healthy..."
+        
+        for i in {1..60}; do
+          router_ok=false
+          vllm_ok=false
+          
+          if curl -sf "http://$droplet_ip:8080/health" > /dev/null 2>&1; then
+            router_ok=true
+          fi
+          
+          if curl -sf "http://$droplet_ip:8000/health" > /dev/null 2>&1; then
+            vllm_ok=true
+          fi
+          
+          if [ "$router_ok" = "true" ] && [ "$vllm_ok" = "true" ]; then
+            echo "✅ All services healthy"
+            echo "status=healthy" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "Waiting (attempt $i/60)... Router: $router_ok, vLLM: $vllm_ok"
+          sleep 15
+        done
+        
+        echo "status=unhealthy" >> $GITHUB_OUTPUT
+        echo "::warning::Services may not be fully healthy"
+
+    - name: Get endpoints
+      id: endpoints
+      shell: bash
+      run: |
+        ip="${{ inputs.droplet_ip }}"
+        echo "vllm=http://$ip:8000" >> $GITHUB_OUTPUT
+        echo "router=http://$ip:8801" >> $GITHUB_OUTPUT
