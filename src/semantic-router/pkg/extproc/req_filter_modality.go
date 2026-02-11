@@ -27,53 +27,53 @@ func InitModalityClassifier(modelPath string, useCPU bool) error {
 	return candle_binding.InitMmBert32KModalityClassifier(modelPath, useCPU)
 }
 
-// handleModalityRouting is the single entry point for modality-based routing.
-// It reads the top-level modality_routing config and:
+// handleModalityFromDecision executes modality-based routing based on the modality signal
+// that was evaluated as part of the decision engine. The signal results are stored in
+// ctx.VSRMatchedModality and ctx.ModalityClassification during signal evaluation.
+//
+// This replaces the old handleModalityRouting which ran as a top-level bypass before
+// the decision engine. Now modality is a first-class signal (type: "modality") that
+// participates in the decision framework and can be composed with other signals.
+//
 //   - AR:        returns (nil, nil) — continue normal LLM routing
 //   - DIFFUSION: generates image, returns (*ProcessingResponse, nil)
 //   - BOTH:      calls AR for text AND diffusion for image in parallel,
 //     returns a combined multimodal response (*ProcessingResponse, nil)
-func (r *OpenAIRouter) handleModalityRouting(ctx *RequestContext, openAIRequest *openai.ChatCompletionNewParams) (*ext_proc.ProcessingResponse, error) {
+func (r *OpenAIRouter) handleModalityFromDecision(ctx *RequestContext, openAIRequest *openai.ChatCompletionNewParams) (*ext_proc.ProcessingResponse, error) {
 	cfg := config.Get()
 	if cfg == nil {
-		return nil, nil // No config loaded — skip modality routing
+		return nil, nil
 	}
 	mr := cfg.ModalityRouting
 	if mr == nil || !mr.Enabled {
-		return nil, nil // Feature disabled — normal flow
+		return nil, nil // Modality routing config not present — normal flow
 	}
 
-	// Classify
-	result := r.classifyModality(ctx, &mr.Detection)
-
-	// Store classification on the request context so response-header phase can
-	// add the x-vsr-selected-modality header for AR (which goes through the
-	// normal upstream flow). DIFFUSION and BOTH are short-circuited below and
-	// the header is added directly to the immediate response.
-	ctx.ModalityClassification = &ModalityClassificationResult{
-		Modality:   result.Modality,
-		Method:     result.Method,
-		Confidence: result.Confidence,
+	// Check the modality classification from signal evaluation
+	if ctx.ModalityClassification == nil || ctx.ModalityClassification.Modality == "" {
+		return nil, nil // No modality signal matched — normal flow
 	}
+
+	result := *ctx.ModalityClassification
 
 	switch result.Modality {
 	case ModalityAR:
-		logging.Infof("[ModalityRouter] AR (confidence=%.3f, method=%s) — passthrough to %s",
-			result.Confidence, result.Method, mr.ARModel)
+		logging.Infof("[ModalityRouter] AR (method=%s) — passthrough to %s",
+			result.Method, mr.ARModel)
 		return nil, nil
 
 	case ModalityDiffusion:
-		logging.Infof("[ModalityRouter] DIFFUSION (confidence=%.3f, method=%s) — generating image via %s",
-			result.Confidence, result.Method, mr.DiffusionModel)
+		logging.Infof("[ModalityRouter] DIFFUSION (method=%s) — generating image via %s",
+			result.Method, mr.DiffusionModel)
 		return r.executeDiffusion(ctx, mr, result)
 
 	case ModalityBoth:
-		logging.Infof("[ModalityRouter] BOTH (confidence=%.3f, method=%s) — parallel: AR(%s) + diffusion(%s)",
-			result.Confidence, result.Method, mr.ARModel, mr.DiffusionModel)
+		logging.Infof("[ModalityRouter] BOTH (method=%s) — parallel: AR(%s) + diffusion(%s)",
+			result.Method, mr.ARModel, mr.DiffusionModel)
 		return r.executeBoth(ctx, mr, openAIRequest, result)
 
 	default:
-		logging.Errorf("[ModalityRouter] BUG: unexpected modality %q", result.Modality)
+		// AR fallback for unrecognized modality
 		return nil, nil
 	}
 }

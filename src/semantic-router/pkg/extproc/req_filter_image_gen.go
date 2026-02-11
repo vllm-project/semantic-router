@@ -331,3 +331,19 @@ func ExtractImagePrompt(userContent string, prefixes []string) string {
 
 	return strings.TrimSpace(prompt)
 }
+
+// setModalityFromSignals sets the ModalityClassification on the request context
+// based on the modality signal evaluation results. This is called after
+// EvaluateAllSignals to populate ctx.ModalityClassification for response headers.
+func (r *OpenAIRouter) setModalityFromSignals(ctx *RequestContext, matchedModalityRules []string) {
+	if len(matchedModalityRules) == 0 {
+		return
+	}
+	// Use the first matched modality signal
+	modality := matchedModalityRules[0]
+	ctx.ModalityClassification = &ModalityClassificationResult{
+		Modality:   modality,
+		Confidence: 0, // Confidence is set by the signal evaluator; here we just need the modality name
+		Method:     "signal",
+	}
+}

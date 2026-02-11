@@ -130,13 +130,13 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		return r.createErrorResponse(503, fmt.Sprintf("RAG retrieval failed: %v", ragErr)), nil
 	}
 
-	// Modality routing: classify prompt as AR / DIFFUSION / BOTH.
-	// Reads from the top-level modality_routing config — no decision/plugin involvement.
-	if resp, err := r.handleModalityRouting(ctx, openAIRequest); err != nil {
+	// Modality routing: if the decision matched a modality signal (DIFFUSION/BOTH),
+	// execute image generation. This is driven by the modality signal in the decision engine.
+	if resp, err := r.handleModalityFromDecision(ctx, openAIRequest); err != nil {
 		logging.Errorf("[ModalityRouter] Error: %v", err)
 		return r.createErrorResponse(503, fmt.Sprintf("Modality routing failed: %v", err)), nil
 	} else if resp != nil {
-		return resp, nil // DIFFUSION short-circuit — image already generated
+		return resp, nil // DIFFUSION/BOTH short-circuit — image already generated
 	}
 
 	// Handle memory retrieval (if enabled)

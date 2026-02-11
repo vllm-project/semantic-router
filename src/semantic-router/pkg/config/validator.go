@@ -135,6 +135,11 @@ func validateConfigStructure(cfg *RouterConfig) error {
 		return err
 	}
 
+	// Validate modality rules (signal names must be valid)
+	if err := validateModalityRules(cfg.Signals.ModalityRules); err != nil {
+		return err
+	}
+
 	// Validate vLLM classifier configurations
 	if err := validateVLLMClassifierConfig(&cfg.PromptGuard); err != nil {
 		return err
@@ -150,6 +155,20 @@ func validateConfigStructure(cfg *RouterConfig) error {
 		return err
 	}
 
+	return nil
+}
+
+// validateModalityRules validates modality rule configurations
+func validateModalityRules(rules []ModalityRule) error {
+	validNames := map[string]bool{"AR": true, "DIFFUSION": true, "BOTH": true}
+	for i, rule := range rules {
+		if rule.Name == "" {
+			return fmt.Errorf("modality_rules[%d]: name cannot be empty", i)
+		}
+		if !validNames[rule.Name] {
+			return fmt.Errorf("modality_rules[%d] (%s): name must be one of \"AR\", \"DIFFUSION\", or \"BOTH\"", i, rule.Name)
+		}
+	}
 	return nil
 }
 

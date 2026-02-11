@@ -41,6 +41,7 @@ const (
 	SignalTypeLatency      = "latency"
 	SignalTypeContext      = "context"
 	SignalTypeComplexity   = "complexity"
+	SignalTypeModality    = "modality"
 )
 
 // API format constants for model backends
@@ -104,9 +105,9 @@ type RouterConfig struct {
 	// ToolSelection for automatic tool selection
 	ToolSelection `yaml:",inline"`
 
-	// ModalityRouting configures automatic routing between AR (text) and Diffusion (image) models.
-	// When enabled, every request is classified as AR / DIFFUSION / BOTH before decision evaluation.
-	// This is a top-level feature, independent of the decision engine.
+	// ModalityRouting configures modality-based classification and image generation settings.
+	// Detection config is used by the modality signal evaluator (type: "modality" in decisions).
+	// Image generation config is used when a matched decision triggers DIFFUSION or BOTH execution.
 	ModalityRouting *ModalityRoutingConfig `yaml:"modality_routing,omitempty"`
 }
 
@@ -441,6 +442,11 @@ type Signals struct {
 	// Complexity rules for complexity-based classification using embedding similarity
 	// When matched, outputs the rule name with difficulty level (e.g., "code_complexity:hard", "math_complexity:easy")
 	ComplexityRules []ComplexityRule `yaml:"complexity_rules,omitempty"`
+
+	// Modality rules for modality-based signal classification
+	// When matched, outputs "AR", "DIFFUSION", or "BOTH" based on the modality classifier/keyword detection
+	// Detection configuration is read from modality_routing.detection
+	ModalityRules []ModalityRule `yaml:"modality_rules,omitempty"`
 }
 
 // BackendModels represents the configuration for backend models
@@ -2151,7 +2157,7 @@ type RuleCombination struct {
 // RuleCondition references a specific rule by type and name
 type RuleCondition struct {
 	// Type specifies the rule type: "keyword", "embedding", "domain", "fact_check",
-	// "user_feedback", "preference", "language", "latency", "context", or "complexity".
+	// "user_feedback", "preference", "language", "latency", "context", "complexity", or "modality".
 	Type string `yaml:"type"`
 
 	// Name is the name of the rule to reference.
@@ -2181,6 +2187,19 @@ type FactCheckRule struct {
 type UserFeedbackRule struct {
 	// Name is the signal name that can be referenced in decision rules
 	// e.g., "need_clarification", "satisfied", "want_different", "wrong_answer"
+	Name string `yaml:"name"`
+
+	// Description provides human-readable explanation of when this signal is triggered
+	Description string `yaml:"description,omitempty"`
+}
+
+// ModalityRule defines a rule for modality-based signal classification.
+// The modality classifier determines whether a prompt requires AR (text), DIFFUSION (image),
+// or BOTH (text + image) and outputs one of these signal names.
+// Detection configuration is read from modality_routing.detection.
+type ModalityRule struct {
+	// Name is the signal name that can be referenced in decision rules
+	// e.g., "AR", "DIFFUSION", or "BOTH"
 	Name string `yaml:"name"`
 
 	// Description provides human-readable explanation of when this signal is triggered

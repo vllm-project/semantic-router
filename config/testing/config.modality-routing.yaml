@@ -1,12 +1,18 @@
 # Modality Routing Config - Auto-route between AR (text) and Diffusion (image) models
 #
+# Uses modality as a SIGNAL in the decision engine, composable with all other signals
+# (keyword, domain, language, context, latency, etc.).
+#
 # Supports three detection methods for modality classification:
 #   - "classifier":  ML-based (mmBERT-32K) — 3-class: AR / DIFFUSION / BOTH
 #   - "keyword":     Keyword pattern matching — configurable keywords + both_keywords
 #   - "hybrid":      Classifier + keyword fallback/confirmation
 #
 # Architecture:
-#   User Prompt → Modality Detection → AR (text LLM) | DIFFUSION (image gen) | BOTH (AR text + image in parallel)
+#   User Prompt → Signal Evaluation (modality + other signals) → Decision Engine → Execution
+#     - AR:        Normal LLM routing (passthrough)
+#     - DIFFUSION: Image generation via diffusion endpoint
+#     - BOTH:      AR text + image generation in parallel
 #
 # Run with: CONFIG_FILE=config/testing/config.modality-routing.yaml make run-router
 
@@ -49,7 +55,9 @@ model_config:
     reasoning_family: "none"
     preferred_endpoints: ["vllm-omni"]
 
-# ── Modality Routing (top-level, no decisions needed) ──────────────────────
+# ── Modality Routing (detection + image generation config) ──────────────────
+# The detection config is used by the modality signal evaluator.
+# The image_gen config is used when a DIFFUSION or BOTH decision executes.
 modality_routing:
   enabled: true
   ar_model: "Qwen/Qwen2.5-14B-Instruct"
@@ -118,7 +126,18 @@ modality_routing:
       - "also generate"
       - "with a photo"
 
-# Minimal categories (unused but required by schema)
+# ── Modality Signal Rules ──────────────────────────────────────────────────
+# Defines signal names for modality classification (like fact_check_rules, user_feedback_rules)
+# The classifier produces one of these signal names, which decisions reference via type: "modality"
+modality_rules:
+  - name: "AR"
+    description: "Text-only response via autoregressive LLM"
+  - name: "DIFFUSION"
+    description: "Image generation via diffusion model"
+  - name: "BOTH"
+    description: "Hybrid response requiring both text and image"
+
+# Minimal categories (required by schema)
 categories:
   - name: text_generation
     description: "Text generation and general queries"
@@ -126,15 +145,44 @@ categories:
 
 strategy: "priority"
 
-# No decisions needed for modality routing — it runs before the decision engine.
-# A simple catch-all decision is included to satisfy the routing pipeline.
+# ── Decisions ─────────────────────────────────────────────────────────────
+# Modality is now a signal, composed with other signals in the decision engine.
+# This enables combining modality with keyword, domain, language, context, etc.
 decisions:
-  - name: "default"
-    description: "Default text routing"
+  - name: "image_generation"
+    description: "Route image generation requests to diffusion model"
+    priority: 200
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "modality"
+          name: "DIFFUSION"
+    modelRefs:
+      - model: "Qwen/Qwen-Image"
+        use_reasoning: false
+
+  - name: "text_and_image"
+    description: "Route hybrid text+image requests to both models in parallel"
+    priority: 190
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "modality"
+          name: "BOTH"
+    modelRefs:
+      - model: "Qwen/Qwen2.5-14B-Instruct"
+        use_reasoning: false
+
+  - name: "text_generation"
+    description: "Default text routing for AR (text-only) requests"
     priority: 1
     rules:
       operator: "OR"
-      conditions: []
+      conditions:
+        - type: "modality"
+          name: "AR"
+        - type: "domain"
+          name: "text_generation"
     modelRefs:
       - model: "Qwen/Qwen2.5-14B-Instruct"
         use_reasoning: false

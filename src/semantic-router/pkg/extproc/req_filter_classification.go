@@ -86,15 +86,20 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	ctx.VSRMatchedContext = signals.MatchedContextRules
 	ctx.VSRContextTokenCount = signals.TokenCount
 	ctx.VSRMatchedComplexity = signals.MatchedComplexityRules
+	ctx.VSRMatchedModality = signals.MatchedModalityRules
 
 	// Set fact-check context fields from signal results
 	// This replaces the old performFactCheckClassification call to avoid duplicate computation
 	r.setFactCheckFromSignals(ctx, signals.MatchedFactCheckRules)
 
+	// Set modality classification on context from signal results for response headers
+	r.setModalityFromSignals(ctx, signals.MatchedModalityRules)
+
 	// Log signal evaluation results
-	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, latency=%v",
+	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, latency=%v, modality=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
-		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules, signals.MatchedLanguageRules, signals.MatchedLatencyRules)
+		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules,
+		signals.MatchedLanguageRules, signals.MatchedLatencyRules, signals.MatchedModalityRules)
 
 	// Set signal span attributes
 	allMatchedRules := []string{}
@@ -106,6 +111,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	allMatchedRules = append(allMatchedRules, signals.MatchedPreferenceRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedLanguageRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedLatencyRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedModalityRules...)
 
 	// End signal evaluation span
 	tracing.EndSignalSpan(signalSpan, allMatchedRules, 1.0, signalLatency)

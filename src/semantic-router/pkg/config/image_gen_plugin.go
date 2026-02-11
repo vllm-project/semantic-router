@@ -17,11 +17,12 @@ const (
 )
 
 // ModalityRoutingConfig is the top-level configuration for modality-based routing.
-// It runs before the decision engine and classifies every request as AR / DIFFUSION / BOTH.
+// The Detection field configures the modality signal evaluator (type: "modality" in decisions).
+// The ImageGen + endpoint fields configure execution when a DIFFUSION or BOTH decision matches.
 //
 //   - AR        → passthrough to the AR text model (normal flow)
-//   - DIFFUSION → short-circuit: generate image via diffusion endpoint, return immediately
-//   - BOTH      → short-circuit: call AR for text AND diffusion for image in parallel,
+//   - DIFFUSION → generate image via diffusion endpoint, return immediately
+//   - BOTH      → call AR for text AND diffusion for image in parallel,
 //     return a combined multimodal response with both text and image content
 type ModalityRoutingConfig struct {
 	// Enabled activates modality routing. When false, the feature is completely skipped.
