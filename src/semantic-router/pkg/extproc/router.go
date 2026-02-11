@@ -309,9 +309,9 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		NormalizeScores:     hybridCfg.NormalizeScores,
 	}
 
-	// Copy ML config for KNN, KMeans, SVM selectors
+	// Copy ML config for KNN, KMeans, SVM, MLP selectors
 	mlCfg := cfg.IntelligentRouting.ModelSelection.ML
-	if mlCfg.ModelsPath != "" || mlCfg.KNN.PretrainedPath != "" || mlCfg.KMeans.PretrainedPath != "" || mlCfg.SVM.PretrainedPath != "" {
+	if mlCfg.ModelsPath != "" || mlCfg.KNN.PretrainedPath != "" || mlCfg.KMeans.PretrainedPath != "" || mlCfg.SVM.PretrainedPath != "" || mlCfg.MLP.PretrainedPath != "" {
 		modelSelectionCfg.ML = &selection.MLSelectorConfig{
 			ModelsPath:   mlCfg.ModelsPath,
 			EmbeddingDim: mlCfg.EmbeddingDim,
@@ -328,6 +328,10 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 				Kernel:         mlCfg.SVM.Kernel,
 				Gamma:          mlCfg.SVM.Gamma,
 				PretrainedPath: mlCfg.SVM.PretrainedPath,
+			},
+			MLP: &selection.MLPConfig{
+				Device:         mlCfg.MLP.Device,
+				PretrainedPath: mlCfg.MLP.PretrainedPath,
 			},
 		}
 		logging.Infof("[Router] ML model selection enabled with models_path=%s", mlCfg.ModelsPath)

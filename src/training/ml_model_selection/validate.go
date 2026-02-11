@@ -60,7 +60,7 @@ func main() {
 	modelsDir := flag.String("models-dir", ".cache/ml-models",
 		"Directory for downloaded/trained models")
 	algorithm := flag.String("algorithm", "all",
-		"Algorithm to validate: knn, kmeans, svm, all")
+		"Algorithm to validate: knn, kmeans, svm, mlp, all")
 	testSplit := flag.Float64("test-split", 1.0,
 		"Fraction of data to use for testing (default: 1.0 = all data)")
 	seed := flag.Int64("seed", 42,
@@ -90,7 +90,7 @@ It automatically downloads pretrained models and benchmark data from HuggingFace
 
 It compares:
   - Oracle (best possible): Always picks the actual best model
-  - ML Selection (KNN/KMeans/SVM): Uses trained ML model via Rust FFI
+  - ML Selection (KNN/KMeans/SVM/MLP): Uses trained ML model via Rust FFI
   - Random Selection: Randomly picks a model
   - Single Model: Always picks one specific model
 
@@ -99,6 +99,7 @@ Usage:
 
 Examples:
   go run validate.go                                    # Downloads everything from HuggingFace
+  go run validate.go --algorithm mlp                    # Validate only MLP (confirm MLP works)
   go run validate.go --algorithm knn                    # Validate only KNN
   go run validate.go --data-file local.jsonl            # Use local data file
   go run validate.go --no-download                      # Skip downloads, use local files only
@@ -117,10 +118,16 @@ Flags:
 	fmt.Println("=" + strings.Repeat("=", 69))
 
 	// Download from HuggingFace if needed
-	if !*noDownload {
+	// Skip download if --data-file is provided (user has their own data)
+	if !*noDownload && *dataFile == "" {
 		if err := downloadFromHuggingFace(*modelsDir, *modelsRepo, *dataRepo, *dataFile); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: failed to download from HuggingFace: %v\n", err)
 			os.Exit(1)
+		}
+	} else if !*noDownload && *dataFile != "" {
+		// Download only models, not data (user provided their own data file)
+		if err := downloadModelsOnly(*modelsDir, *modelsRepo); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to download models: %v\n", err)
 		}
 	}
 
@@ -204,7 +211,7 @@ Flags:
 
 	// Load selectors
 	selectors := make(map[string]modelselection.Selector)
-	algorithms := []string{"knn", "kmeans", "svm"}
+	algorithms := []string{"knn", "kmeans", "svm", "mlp"}
 	if *algorithm != "all" {
 		algorithms = []string{*algorithm}
 	}
@@ -229,10 +236,10 @@ Flags:
 
 	// Evaluate strategies
 	fmt.Println("\nEvaluating strategies...")
-	results := evaluateStrategies(queryResults, modelNames, selectors)
+	results, selectionsByAlgo := evaluateStrategies(queryResults, modelNames, selectors)
 
 	// Print results
-	printResults(results, len(queryResults), len(modelNames))
+	printResults(results, len(queryResults), len(modelNames), selectionsByAlgo)
 }
 
 // downloadFromHuggingFace downloads pretrained models and benchmark data from HuggingFace.
@@ -252,7 +259,7 @@ func downloadFromHuggingFace(modelsDir, modelsRepo, dataRepo, dataFile string) e
 	fmt.Println("Downloading from HuggingFace...")
 
 	// Download models using huggingface-cli
-	modelFiles := []string{"knn_model.json", "kmeans_model.json", "svm_model.json"}
+	modelFiles := []string{"knn_model.json", "kmeans_model.json", "svm_model.json", "mlp_model.json"}
 	for _, file := range modelFiles {
 		destPath := filepath.Join(modelsDir, file)
 		if _, err := os.Stat(destPath); err == nil {
@@ -285,6 +292,35 @@ func downloadFromHuggingFace(modelsDir, modelsRepo, dataRepo, dataFile string) e
 		}
 	}
 
+	return nil
+}
+
+// downloadModelsOnly downloads only model files (not data) from HuggingFace.
+// Used when user provides their own data file via --data-file.
+func downloadModelsOnly(modelsDir, modelsRepo string) error {
+	if err := os.MkdirAll(modelsDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create models directory: %w", err)
+	}
+
+	if !hfCliAvailable() {
+		return fmt.Errorf("huggingface-cli not found")
+	}
+
+	fmt.Println("Downloading models from HuggingFace...")
+	modelFiles := []string{"knn_model.json", "kmeans_model.json", "svm_model.json", "mlp_model.json"}
+	for _, file := range modelFiles {
+		destPath := filepath.Join(modelsDir, file)
+		if _, err := os.Stat(destPath); err == nil {
+			fmt.Printf("  %s already exists, skipping\n", file)
+			continue
+		}
+		fmt.Printf("  Downloading %s...\n", file)
+		if err := downloadWithHfCli(modelsRepo, file, destPath, false); err != nil {
+			fmt.Printf("  Warning: Could not download %s: %v\n", file, err)
+			continue
+		}
+		fmt.Printf("  Downloaded %s\n", file)
+	}
 	return nil
 }
 
@@ -405,8 +441,10 @@ func loadBenchmarkData(dataFile string, testSplit float64) ([]QueryResult, []str
 	return testQueries, modelNames, nil
 }
 
-func evaluateStrategies(queries []QueryResult, modelNames []string, selectors map[string]modelselection.Selector) []StrategyResult {
+// selectionsByAlgo: algorithm name -> (model name -> count of times selected)
+func evaluateStrategies(queries []QueryResult, modelNames []string, selectors map[string]modelselection.Selector) ([]StrategyResult, map[string]map[string]int) {
 	results := make([]StrategyResult, 0)
+	selectionsByAlgo := make(map[string]map[string]int)
 
 	// Oracle (best possible)
 	oracleResult := evaluateOracle(queries)
@@ -414,8 +452,9 @@ func evaluateStrategies(queries []QueryResult, modelNames []string, selectors ma
 
 	// ML Selectors
 	for name, selector := range selectors {
-		result := evaluateSelector(queries, modelNames, selector, name)
+		result, modelCounts := evaluateSelector(queries, modelNames, selector, name)
 		results = append(results, result)
+		selectionsByAlgo[name] = modelCounts
 	}
 
 	// Random selection
@@ -428,7 +467,7 @@ func evaluateStrategies(queries []QueryResult, modelNames []string, selectors ma
 		results = append(results, result)
 	}
 
-	return results
+	return results, selectionsByAlgo
 }
 
 // normalizeModelName normalizes model names for comparison.
@@ -474,9 +513,10 @@ func evaluateOracle(queries []QueryResult) StrategyResult {
 	}
 }
 
-func evaluateSelector(queries []QueryResult, modelNames []string, selector modelselection.Selector, name string) StrategyResult {
+func evaluateSelector(queries []QueryResult, modelNames []string, selector modelselection.Selector, name string) (StrategyResult, map[string]int) {
 	var totalQuality, totalLatency float64
 	bestCount := 0
+	modelCounts := make(map[string]int)
 
 	// Create model refs for the selector
 	refs := make([]config.ModelRef, len(modelNames))
@@ -502,10 +542,12 @@ func evaluateSelector(queries []QueryResult, modelNames []string, selector model
 			selectedModel = selected.Model
 		}
 
-		// Get performance for selected model (with name normalization)
+		// Get performance and normalize key for counting
 		actualKey, perf, found := findModelInMap(selectedModel, qr.ModelPerfs)
-		if !found {
-			// Model not found - use 0
+		if found {
+			modelCounts[actualKey]++
+		} else {
+			modelCounts[selectedModel]++
 			perf = 0
 		}
 		_, lat, _ := findModelInMap(selectedModel, qr.ModelLats)
@@ -520,12 +562,13 @@ func evaluateSelector(queries []QueryResult, modelNames []string, selector model
 	}
 
 	n := float64(len(queries))
-	return StrategyResult{
+	result := StrategyResult{
 		Name:         fmt.Sprintf("%s Selection", strings.ToUpper(name)),
 		AvgQuality:   totalQuality / n,
 		AvgLatency:   totalLatency / n,
 		BestModelPct: float64(bestCount) / n * 100,
 	}
+	return result, modelCounts
 }
 
 func evaluateRandom(queries []QueryResult, modelNames []string) StrategyResult {
@@ -575,7 +618,7 @@ func evaluateSingleModel(queries []QueryResult, model string) StrategyResult {
 	}
 }
 
-func printResults(results []StrategyResult, numQueries, numModels int) {
+func printResults(results []StrategyResult, numQueries, numModels int, selectionsByAlgo map[string]map[string]int) {
 	// Sort by avg quality descending
 	sort.Slice(results, func(i, j int) bool {
 		return results[i].AvgQuality > results[j].AvgQuality
@@ -593,15 +636,53 @@ func printResults(results []StrategyResult, numQueries, numModels int) {
 	}
 	fmt.Println("=" + strings.Repeat("=", 69))
 
-	// Calculate ML benefit over random
-	var randomResult *StrategyResult
-	for i := range results {
-		if results[i].Name == "Random Selection" {
-			randomResult = &results[i]
-			break
+	// Per-algorithm: which LLM each algorithm selected (counts)
+	if len(selectionsByAlgo) > 0 {
+		fmt.Println("\nSelections by algorithm (LLM chosen by each):")
+		for _, algo := range []string{"knn", "kmeans", "svm", "mlp"} {
+			counts := selectionsByAlgo[algo]
+			if len(counts) == 0 {
+				continue
+			}
+			models := make([]string, 0, len(counts))
+			for m := range counts {
+				models = append(models, m)
+			}
+			sort.Strings(models)
+			for _, model := range models {
+				fmt.Printf("  %s: %s (%d)\n", algo, model, counts[model])
+			}
 		}
 	}
 
+	// MLP validation: confirm MLP is working and selecting well
+	var mlpResult, randomResult *StrategyResult
+	for i := range results {
+		if results[i].Name == "MLP Selection" {
+			mlpResult = &results[i]
+		}
+		if results[i].Name == "Random Selection" {
+			randomResult = &results[i]
+		}
+	}
+	if mlpResult != nil {
+		fmt.Println("\nMLP validation:")
+		fmt.Printf("  MLP is working: selector ran and made selections (see 'MLP Selection' above).\n")
+		if randomResult != nil && randomResult.BestModelPct > 0 {
+			ratio := mlpResult.BestModelPct / randomResult.BestModelPct
+			fmt.Printf("  MLP Best Model %%: %.1f%% (random: %.1f%%). MLP selects best model %.1fx more often than random.\n",
+				mlpResult.BestModelPct, randomResult.BestModelPct, ratio)
+			if mlpResult.BestModelPct > randomResult.BestModelPct {
+				fmt.Printf("  MLP is selecting the best model better than random: validated.\n")
+			} else {
+				fmt.Printf("  Warning: MLP Best Model %% is not above random; check model/data.\n")
+			}
+		}
+	} else {
+		fmt.Println("\nMLP validation: MLP selector was not loaded (see warnings above). Run with candle-binding built and LD_LIBRARY_PATH set.")
+	}
+
+	// Calculate ML benefit over random
 	if randomResult != nil {
 		fmt.Println("\nML Routing Benefit:")
 		for _, r := range results {

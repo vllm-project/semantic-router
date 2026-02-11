@@ -412,6 +412,22 @@ typedef struct {
 extern bool init_lora_unified_classifier(const char* intent_model_path, const char* pii_model_path, const char* security_model_path, const char* architecture, bool use_cpu);
 extern LoRABatchResult classify_batch_with_lora(const char** texts, int num_texts);
 extern void free_lora_batch_result(LoRABatchResult result);
+
+// =============================================================================
+// MLP Selector for Model Selection (GPU-accelerated)
+// Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
+// =============================================================================
+extern void* candle_mlp_new();
+extern void* candle_mlp_new_with_device(int device_type);
+extern void* candle_mlp_new_with_device_and_dtype(int device_type, int dtype);
+extern void candle_mlp_free(void* handle);
+extern char* candle_mlp_select(void* handle, double* query, size_t query_len);
+extern int candle_mlp_is_trained(void* handle);
+extern char* candle_mlp_to_json(void* handle);
+extern void* candle_mlp_from_json(char* json);
+extern void* candle_mlp_from_json_with_device(char* json, int device_type);
+extern void* candle_mlp_from_json_with_device_and_dtype(char* json, int device_type, int dtype);
+extern void candle_mlp_free_string(char* ptr);
 */
 import "C"
 
@@ -3595,4 +3611,174 @@ func extractLabelAndCategories(content string) (string, []string) {
 
 // ================================================================================================
 // END OF LORA UNIFIED CLASSIFIER GO BINDINGS
+// ================================================================================================
+
+// ================================================================================================
+// MLP SELECTOR FOR MODEL SELECTION (GPU-ACCELERATED)
+// Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
+// ================================================================================================
+
+// MLPDeviceType defines the device type for MLP inference
+type MLPDeviceType int
+
+const (
+	// MLPDeviceCPU uses CPU for inference
+	MLPDeviceCPU MLPDeviceType = 0
+	// MLPDeviceCUDA uses NVIDIA GPU for inference
+	MLPDeviceCUDA MLPDeviceType = 1
+	// MLPDeviceMetal uses Apple Silicon GPU for inference
+	MLPDeviceMetal MLPDeviceType = 2
+)
+
+// MLPDType defines the data type for mixed precision inference
+type MLPDType int
+
+const (
+	// MLPF32 uses full precision (32-bit float) - default, best accuracy
+	MLPF32 MLPDType = 0
+	// MLPF16 uses half precision (16-bit float) - faster on GPUs with tensor cores
+	MLPF16 MLPDType = 1
+	// MLPBF16 uses BFloat16 - good balance of dynamic range and speed
+	MLPBF16 MLPDType = 2
+)
+
+// MLPSelector wraps the Candle MLP implementation for GPU-accelerated inference
+type MLPSelector struct {
+	handle unsafe.Pointer
+	mu     sync.RWMutex
+}
+
+// NewMLPSelector creates a new MLP selector (CPU)
+func NewMLPSelector() *MLPSelector {
+	handle := C.candle_mlp_new()
+	if handle == nil {
+		return nil
+	}
+	return &MLPSelector{handle: handle}
+}
+
+// NewMLPSelectorWithDevice creates a new MLP selector with specified device
+func NewMLPSelectorWithDevice(deviceType MLPDeviceType) *MLPSelector {
+	handle := C.candle_mlp_new_with_device(C.int(deviceType))
+	if handle == nil {
+		return nil
+	}
+	return &MLPSelector{handle: handle}
+}
+
+// NewMLPSelectorWithDeviceAndDType creates a new MLP selector with device and dtype for mixed precision
+func NewMLPSelectorWithDeviceAndDType(deviceType MLPDeviceType, dtype MLPDType) *MLPSelector {
+	handle := C.candle_mlp_new_with_device_and_dtype(C.int(deviceType), C.int(dtype))
+	if handle == nil {
+		return nil
+	}
+	return &MLPSelector{handle: handle}
+}
+
+// Close releases the MLP selector resources
+func (s *MLPSelector) Close() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.handle != nil {
+		C.candle_mlp_free(s.handle)
+		s.handle = nil
+	}
+}
+
+// Select selects the best model for a query embedding
+func (s *MLPSelector) Select(query []float64) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.handle == nil {
+		return "", fmt.Errorf("MLP selector not initialized")
+	}
+
+	if len(query) == 0 {
+		return "", fmt.Errorf("empty query embedding")
+	}
+
+	cQuery := make([]C.double, len(query))
+	for i, v := range query {
+		cQuery[i] = C.double(v)
+	}
+
+	result := C.candle_mlp_select(s.handle, &cQuery[0], C.size_t(len(query)))
+	if result == nil {
+		return "", fmt.Errorf("MLP selection failed")
+	}
+	defer C.candle_mlp_free_string(result)
+
+	return C.GoString(result), nil
+}
+
+// IsTrained returns whether the model has been loaded
+func (s *MLPSelector) IsTrained() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.handle == nil {
+		return false
+	}
+	return C.candle_mlp_is_trained(s.handle) != 0
+}
+
+// ToJSON serializes the model to JSON
+func (s *MLPSelector) ToJSON() (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.handle == nil {
+		return "", fmt.Errorf("MLP selector not initialized")
+	}
+
+	result := C.candle_mlp_to_json(s.handle)
+	if result == nil {
+		return "", fmt.Errorf("JSON serialization failed")
+	}
+	defer C.candle_mlp_free_string(result)
+
+	return C.GoString(result), nil
+}
+
+// MLPFromJSON loads an MLP selector from JSON (the primary way to load trained models)
+func MLPFromJSON(jsonStr string) (*MLPSelector, error) {
+	cJSON := C.CString(jsonStr)
+	defer C.free(unsafe.Pointer(cJSON))
+
+	handle := C.candle_mlp_from_json(cJSON)
+	if handle == nil {
+		return nil, fmt.Errorf("failed to load MLP from JSON")
+	}
+
+	return &MLPSelector{handle: handle}, nil
+}
+
+// MLPFromJSONWithDevice loads an MLP selector from JSON with specific device
+func MLPFromJSONWithDevice(jsonStr string, deviceType MLPDeviceType) (*MLPSelector, error) {
+	cJSON := C.CString(jsonStr)
+	defer C.free(unsafe.Pointer(cJSON))
+
+	handle := C.candle_mlp_from_json_with_device(cJSON, C.int(deviceType))
+	if handle == nil {
+		return nil, fmt.Errorf("failed to load MLP from JSON with device")
+	}
+
+	return &MLPSelector{handle: handle}, nil
+}
+
+// MLPFromJSONWithDeviceAndDType loads an MLP selector from JSON with device and dtype for mixed precision
+func MLPFromJSONWithDeviceAndDType(jsonStr string, deviceType MLPDeviceType, dtype MLPDType) (*MLPSelector, error) {
+	cJSON := C.CString(jsonStr)
+	defer C.free(unsafe.Pointer(cJSON))
+
+	handle := C.candle_mlp_from_json_with_device_and_dtype(cJSON, C.int(deviceType), C.int(dtype))
+	if handle == nil {
+		return nil, fmt.Errorf("failed to load MLP from JSON with device and dtype")
+	}
+
+	return &MLPSelector{handle: handle}, nil
+}
+
+// ================================================================================================
+// END OF MLP SELECTOR GO BINDINGS
 // ================================================================================================

@@ -17,10 +17,16 @@ limitations under the License.
 // Package modelselection provides ML-based model selection algorithms
 // for choosing the optimal model from a set of candidates.
 //
-// This package uses Linfa (Rust) via ml-binding for ML algorithms:
-// - KNN (K-Nearest Neighbors)
-// - KMeans clustering
-// - SVM (Support Vector Machine)
+// This package uses:
+// - Linfa (Rust) via ml-binding for traditional ML algorithms:
+//   - KNN (K-Nearest Neighbors)
+//   - KMeans clustering
+//   - SVM (Support Vector Machine)
+//
+// - Candle (Rust) via candle-binding for GPU-accelerated algorithms:
+//   - MLP (Multi-Layer Perceptron) with GPU support
+//
+// Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
 //
 // Training is done in Python (src/training/ml_model_selection/).
 // This package provides inference-only functionality, loading models from JSON.
@@ -34,6 +40,7 @@ import (
 	"sync"
 	"time"
 
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	ml_binding "github.com/vllm-project/semantic-router/ml-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -275,8 +282,16 @@ func loadPretrainedSelectorFromPath(algorithmType, modelsPath string) (Selector,
 		logging.Infof("Loaded SVM selector with %d training records", selector.getTrainingCount())
 		return selector, nil
 
+	case "mlp":
+		selector := NewMLPSelector()
+		if err := selector.LoadFromJSON(data); err != nil {
+			return nil, fmt.Errorf("failed to parse MLP model: %w", err)
+		}
+		logging.Infof("Loaded MLP selector (GPU-accelerated via Candle)")
+		return selector, nil
+
 	default:
-		return nil, fmt.Errorf("unknown algorithm type: %s (supported: knn, kmeans, svm)", algorithmType)
+		return nil, fmt.Errorf("unknown algorithm type: %s (supported: knn, kmeans, svm, mlp)", algorithmType)
 	}
 }
 
@@ -308,8 +323,11 @@ func NewEmptySelector(cfg *config.MLModelSelectionConfig) (Selector, error) {
 		}
 		return NewSVMSelector(kernel), nil
 
+	case "mlp":
+		return NewMLPSelector(), nil
+
 	default:
-		return nil, fmt.Errorf("unknown model selection algorithm: %s (supported: knn, kmeans, svm)", cfg.Type)
+		return nil, fmt.Errorf("unknown model selection algorithm: %s (supported: knn, kmeans, svm, mlp)", cfg.Type)
 	}
 }
 
@@ -584,15 +602,20 @@ func (s *KNNSelector) Train(data []TrainingRecord) error {
 
 func (s *KNNSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*config.ModelRef, error) {
 	if len(refs) == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("KNN: no model refs provided")
 	}
 	if len(refs) == 1 {
 		return &refs[0], nil
 	}
 
-	if s.mlKNN == nil || !s.mlKNN.IsTrained() || len(ctx.QueryEmbedding) == 0 {
-		logging.Debugf("KNN: Not trained or no embedding, selecting first model")
-		return &refs[0], nil
+	if s.mlKNN == nil {
+		return nil, fmt.Errorf("KNN: model not initialized")
+	}
+	if !s.mlKNN.IsTrained() {
+		return nil, fmt.Errorf("KNN: model not trained - load pretrained model first")
+	}
+	if len(ctx.QueryEmbedding) == 0 {
+		return nil, fmt.Errorf("KNN: no query embedding provided")
 	}
 
 	// Build feature vector: embedding + category one-hot (matches Python training format)
@@ -602,8 +625,7 @@ func (s *KNNSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*co
 	// Use ml-binding for selection
 	selectedModel, err := s.mlKNN.Select(featureVector)
 	if err != nil {
-		logging.Debugf("KNN (Linfa) selection failed: %v, selecting first model", err)
-		return &refs[0], nil
+		return nil, fmt.Errorf("KNN (Linfa) selection failed: %w", err)
 	}
 
 	// Find the selected model in refs
@@ -613,7 +635,7 @@ func (s *KNNSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*co
 		return &refs[idx], nil
 	}
 
-	return &refs[0], nil
+	return nil, fmt.Errorf("KNN: selected model %s not found in available refs", selectedModel)
 }
 
 // =============================================================================
@@ -704,15 +726,20 @@ func (s *KMeansSelector) Train(data []TrainingRecord) error {
 
 func (s *KMeansSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*config.ModelRef, error) {
 	if len(refs) == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("KMeans: no model refs provided")
 	}
 	if len(refs) == 1 {
 		return &refs[0], nil
 	}
 
-	if s.mlKMeans == nil || !s.mlKMeans.IsTrained() || len(ctx.QueryEmbedding) == 0 {
-		logging.Debugf("KMeans: Not trained or no embedding, selecting first model")
-		return &refs[0], nil
+	if s.mlKMeans == nil {
+		return nil, fmt.Errorf("KMeans: model not initialized")
+	}
+	if !s.mlKMeans.IsTrained() {
+		return nil, fmt.Errorf("KMeans: model not trained - load pretrained model first")
+	}
+	if len(ctx.QueryEmbedding) == 0 {
+		return nil, fmt.Errorf("KMeans: no query embedding provided")
 	}
 
 	// Build feature vector: embedding + category one-hot (matches Python training format)
@@ -722,8 +749,7 @@ func (s *KMeansSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (
 	// Use ml-binding for selection
 	selectedModel, err := s.mlKMeans.Select(featureVector)
 	if err != nil {
-		logging.Debugf("KMeans (Linfa) selection failed: %v, selecting first model", err)
-		return &refs[0], nil
+		return nil, fmt.Errorf("KMeans (Linfa) selection failed: %w", err)
 	}
 
 	// Find the selected model in refs
@@ -733,7 +759,7 @@ func (s *KMeansSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (
 		return &refs[idx], nil
 	}
 
-	return &refs[0], nil
+	return nil, fmt.Errorf("KMeans: selected model %s not found in available refs", selectedModel)
 }
 
 // =============================================================================
@@ -826,15 +852,20 @@ func (s *SVMSelector) Train(data []TrainingRecord) error {
 
 func (s *SVMSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*config.ModelRef, error) {
 	if len(refs) == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("SVM: no model refs provided")
 	}
 	if len(refs) == 1 {
 		return &refs[0], nil
 	}
 
-	if s.mlSVM == nil || !s.mlSVM.IsTrained() || len(ctx.QueryEmbedding) == 0 {
-		logging.Debugf("SVM: Not trained or no embedding, selecting first model")
-		return &refs[0], nil
+	if s.mlSVM == nil {
+		return nil, fmt.Errorf("SVM: model not initialized")
+	}
+	if !s.mlSVM.IsTrained() {
+		return nil, fmt.Errorf("SVM: model not trained - load pretrained model first")
+	}
+	if len(ctx.QueryEmbedding) == 0 {
+		return nil, fmt.Errorf("SVM: no query embedding provided")
 	}
 
 	// Build feature vector: embedding + category one-hot (matches Python training format)
@@ -844,8 +875,7 @@ func (s *SVMSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*co
 	// Use ml-binding for selection
 	selectedModel, err := s.mlSVM.Select(featureVector)
 	if err != nil {
-		logging.Debugf("SVM (Linfa) selection failed: %v, selecting first model", err)
-		return &refs[0], nil
+		return nil, fmt.Errorf("SVM (Linfa) selection failed: %w", err)
 	}
 
 	// Find the selected model in refs
@@ -855,5 +885,106 @@ func (s *SVMSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*co
 		return &refs[idx], nil
 	}
 
-	return &refs[0], nil
+	return nil, fmt.Errorf("SVM: selected model %s not found in available refs", selectedModel)
+}
+
+// =============================================================================
+// MLP Selector - Candle/Rust Implementation (GPU-accelerated)
+// Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
+// Note: MLP uses candle-binding (not ml-binding) for GPU acceleration
+// =============================================================================
+
+// MLPSelector implements Multi-Layer Perceptron using Candle (GPU-accelerated)
+type MLPSelector struct {
+	baseSelector
+	mlMLP *candle_binding.MLPSelector
+}
+
+// NewMLPSelector creates a new MLP selector using Candle (CPU)
+func NewMLPSelector() *MLPSelector {
+	return &MLPSelector{
+		baseSelector: newBaseSelector(10000),
+		mlMLP:        candle_binding.NewMLPSelector(),
+	}
+}
+
+// NewMLPSelectorWithDevice creates a new MLP selector with GPU support
+func NewMLPSelectorWithDevice(deviceType candle_binding.MLPDeviceType) *MLPSelector {
+	return &MLPSelector{
+		baseSelector: newBaseSelector(10000),
+		mlMLP:        candle_binding.NewMLPSelectorWithDevice(deviceType),
+	}
+}
+
+func (s *MLPSelector) Name() string { return "mlp" }
+
+// LoadFromJSON loads a pre-trained MLP model from JSON data
+func (s *MLPSelector) LoadFromJSON(data []byte) error {
+	// Load into baseSelector for compatibility
+	_, err := s.loadFromJSON(data)
+	if err != nil {
+		return err
+	}
+
+	// Load into candle-binding
+	mlp, err := candle_binding.MLPFromJSON(string(data))
+	if err != nil {
+		logging.Warnf("MLP: Failed to load model: %v", err)
+		return nil
+	}
+	s.mlMLP = mlp
+	return nil
+}
+
+// Load loads a pre-trained MLP model from a file path
+func (s *MLPSelector) Load(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("failed to read MLP model file: %w", err)
+	}
+	return s.LoadFromJSON(data)
+}
+
+func (s *MLPSelector) Train(data []TrainingRecord) error {
+	s.addTrainingData(data)
+	// Training is done in Python (src/training/ml_model_selection/)
+	logging.Warnf("MLP training in Go is not supported. Use Python training: python src/training/ml_model_selection/train.py")
+	return nil
+}
+
+func (s *MLPSelector) Select(ctx *SelectionContext, refs []config.ModelRef) (*config.ModelRef, error) {
+	if len(refs) == 0 {
+		return nil, fmt.Errorf("MLP: no model refs provided")
+	}
+	if len(refs) == 1 {
+		return &refs[0], nil
+	}
+
+	if s.mlMLP == nil {
+		return nil, fmt.Errorf("MLP: model not initialized")
+	}
+	if !s.mlMLP.IsTrained() {
+		return nil, fmt.Errorf("MLP: model not trained - load pretrained model first")
+	}
+	if len(ctx.QueryEmbedding) == 0 {
+		return nil, fmt.Errorf("MLP: no query embedding provided")
+	}
+
+	// Build feature vector: embedding + category one-hot (matches Python training format)
+	featureVector := CombineEmbeddingWithCategory(ctx.QueryEmbedding, ctx.CategoryName)
+
+	// Use candle-binding for selection
+	selectedModel, err := s.mlMLP.Select(featureVector)
+	if err != nil {
+		return nil, fmt.Errorf("MLP (Candle) selection failed: %w", err)
+	}
+
+	// Find the selected model in refs
+	modelIndex := buildModelIndex(refs)
+	if idx, ok := modelIndex[selectedModel]; ok {
+		logging.Infof("MLP (Candle) selected model %s", selectedModel)
+		return &refs[idx], nil
+	}
+
+	return nil, fmt.Errorf("MLP: selected model %s not found in available refs", selectedModel)
 }
