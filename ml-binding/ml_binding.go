@@ -1,9 +1,11 @@
-// Package ml_binding provides Go bindings for Linfa-based ML algorithms.
+// Package ml_binding provides Go bindings for Linfa-based traditional ML algorithms.
 //
 // This package wraps Rust implementations of:
 // - KNN (K-Nearest Neighbors) via linfa-nn
 // - KMeans clustering via linfa-clustering
 // - SVM (Support Vector Machine) via linfa-svm
+//
+// Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
 //
 // Training is done in Python (src/training/ml_model_selection/).
 // This package provides inference-only functionality, loading models from JSON.

@@ -3,12 +3,16 @@
 #![allow(dead_code)]
 
 pub mod lora;
+pub mod mlp_selector;
 pub mod traditional;
 
 pub mod unified;
 
 // Re-export key types from unified module
 pub use unified::{DualPathUnifiedClassifier, EmbeddingRequirements, UnifiedClassifierError};
+
+// Re-export MLP selector types
+pub use mlp_selector::{MLPDType, MLPModelData, MLPSelector};
 
 /// Classification task types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

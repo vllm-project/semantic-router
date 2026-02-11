@@ -1,16 +1,18 @@
 # ML Binding for Semantic Router
 
-This directory contains Rust-based ML algorithm implementations using [Linfa](https://github.com/rust-ml/linfa), the Rust ML framework.
+This directory contains Rust-based traditional ML algorithm implementations using [Linfa](https://github.com/rust-ml/linfa) for CPU-based inference.
 
 > **Note:** This package provides **inference only**. Training is done in Python. See `src/training/ml_model_selection/`.
 
 ## Algorithms
 
-| Algorithm | Linfa Crate | Status |
-|-----------|-------------|--------|
-| **KNN** (K-Nearest Neighbors) | `linfa-nn` | ✅ Inference |
-| **KMeans** (Clustering) | `linfa-clustering` | ✅ Inference |
-| **SVM** (Support Vector Machine) | `linfa-svm` | ✅ Inference |
+| Algorithm | Backend | GPU Support | Status |
+|-----------|---------|-------------|--------|
+| **KNN** (K-Nearest Neighbors) | Linfa (`linfa-nn`) | CPU only | ✅ Inference |
+| **KMeans** (Clustering) | Linfa (`linfa-clustering`) | CPU only | ✅ Inference |
+| **SVM** (Support Vector Machine) | Linfa (`linfa-svm`) | CPU only | ✅ Inference |
+
+> Reference: [FusionFactory (arXiv:2507.10540)](https://arxiv.org/abs/2507.10540).
 
 ## Architecture
 
@@ -19,17 +21,17 @@ This directory contains Rust-based ML algorithm implementations using [Linfa](ht
 │                    TRAINING (Python)                             │
 ├─────────────────────────────────────────────────────────────────┤
 │  src/training/ml_model_selection/                               │
-│  ├── train.py          # Train models using scikit-learn        │
+│  ├── train.py          # Train models (scikit-learn, PyTorch)   │
 │  ├── upload_model.py   # Upload to HuggingFace                  │
 │  └── download_model.py # Download from HuggingFace              │
 │                                                                  │
-│  Output: knn_model.json, kmeans_model.json, svm_model.json      │
+│  Output: knn/kmeans/svm_model.json                               │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
 │                    INFERENCE (Rust/Go)                           │
 ├─────────────────────────────────────────────────────────────────┤
-│  ml-binding/                                                    │
+│  ml-binding/                      (Traditional ML - Linfa)       │
 │  ├── src/knn.rs    # Load JSON, select using Linfa Ball Tree    │
 │  ├── src/kmeans.rs # Load JSON, select using cluster centroids  │
 │  ├── src/svm.rs    # Load JSON, select using decision function  │
@@ -41,7 +43,7 @@ This directory contains Rust-based ML algorithm implementations using [Linfa](ht
 
 ```
 ml-binding/
-├── Cargo.toml           # Rust dependencies (Linfa)
+├── Cargo.toml           # Rust dependencies (Linfa only)
 ├── go.mod               # Go module
 ├── ml_binding.go        # Go wrapper with CGO bindings
 ├── README.md            # This file
@@ -134,10 +136,10 @@ func main() {
 | `KNNFromJSON(json)` | Load KNN model from JSON |
 | `KMeansFromJSON(json)` | Load KMeans model from JSON |
 | `SVMFromJSON(json)` | Load SVM model from JSON |
-| `knn.Select(embedding)` | Select best model for query |
-| `knn.IsTrained()` | Check if model is loaded |
-| `knn.ToJSON()` | Serialize model to JSON |
-| `knn.Close()` | Release resources |
+| `*.Select(embedding)` | Select best model for query |
+| `*.IsTrained()` | Check if model is loaded |
+| `*.ToJSON()` | Serialize model to JSON |
+| `*.Close()` | Release resources |
 
 ## Training Models
 
@@ -148,7 +150,7 @@ Training is done in Python using scikit-learn. See `src/training/ml_model_select
 cd src/training/ml_model_selection
 pip install -r requirements.txt
 
-# Train models
+# Train all models
 python train.py \
   --data-file benchmark.jsonl \
   --output-dir models/
@@ -160,7 +162,7 @@ python download_model.py --output-dir models/
 ## Why Linfa for Inference?
 
 1. **Performance**: Native Rust speed for inference
-2. **Consistency**: Same pattern as `candle-binding` for embeddings
+2. **Consistency**: Same FFI pattern as candle-binding
 3. **Memory safety**: Rust guarantees
 4. **No Python dependency**: Production inference without Python runtime
 

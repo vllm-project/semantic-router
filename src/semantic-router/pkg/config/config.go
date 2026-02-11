@@ -227,6 +227,10 @@ type MLSelectionConfig struct {
 
 	// SVM configuration
 	SVM MLSVMConfig `yaml:"svm,omitempty"`
+
+	// MLP configuration (GPU-accelerated via Candle)
+	// Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via MLP routers
+	MLP MLMLPConfig `yaml:"mlp,omitempty"`
 }
 
 // MLKNNConfig holds KNN-specific configuration
@@ -247,6 +251,15 @@ type MLSVMConfig struct {
 	Kernel         string  `yaml:"kernel,omitempty"`
 	Gamma          float64 `yaml:"gamma,omitempty"`
 	PretrainedPath string  `yaml:"pretrained_path,omitempty"`
+}
+
+// MLMLPConfig holds MLP-specific configuration
+// Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via MLP routers
+type MLMLPConfig struct {
+	// Device specifies compute device: "cpu", "cuda", or "metal"
+	Device string `yaml:"device,omitempty"`
+	// PretrainedPath is the path to the pretrained MLP model file
+	PretrainedPath string `yaml:"pretrained_path,omitempty"`
 }
 
 // EloSelectionConfig configures Elo rating-based model selection
@@ -1700,9 +1713,10 @@ type ReMoMAlgorithmConfig struct {
 }
 
 // MLModelSelectionConfig configures the ML-based model selection algorithm
-// Supported types: knn, kmeans, svm
+// Supported types: knn, kmeans, svm, mlp
+// Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
 type MLModelSelectionConfig struct {
-	// Type specifies the algorithm: "knn", "kmeans", "svm"
+	// Type specifies the algorithm: "knn", "kmeans", "svm", "mlp"
 	Type string `yaml:"type"`
 
 	// ModelsPath is the path to pre-trained model files (e.g., "trained_models/")
@@ -1726,6 +1740,11 @@ type MLModelSelectionConfig struct {
 	// 0 = pure performance (quality), 1 = pure efficiency (latency)
 	// Use pointer to distinguish "not set" (nil, uses default 0.3) from "explicitly 0"
 	EfficiencyWeight *float64 `yaml:"efficiency_weight,omitempty"`
+
+	// Device specifies the compute device for MLP inference: "cpu", "cuda", "metal"
+	// Default: "cpu". Use "cuda" for NVIDIA GPU or "metal" for Apple Silicon.
+	// Reference: FusionFactory (arXiv:2507.10540) query-level fusion via MLP routers
+	Device string `yaml:"device,omitempty"`
 
 	// FeatureWeights allows custom weighting of features for selection
 	FeatureWeights map[string]float64 `yaml:"feature_weights,omitempty"`

@@ -4,7 +4,7 @@
 >
 > **📥 Pretrained Models Downloaded Automatically**
 >
-> The E2E test automatically downloads pretrained ML models (KNN, KMeans, SVM) from HuggingFace
+> The E2E test automatically downloads pretrained ML models (KNN, KMeans, SVM, MLP) from HuggingFace
 > during setup. No local training or Python virtual environment setup is required.
 >
 > | Type | HuggingFace Repo | Local Path |
@@ -12,7 +12,7 @@
 > | **Trained Models** | `abdallah1008/semantic-router-ml-models` | `.cache/ml-models/` |
 > | **Benchmark Data** | `abdallah1008/ml-selection-benchmark-data` | `.cache/ml-models/` |
 >
-> **Model Files:** `knn_model.json`, `kmeans_model.json`, `svm_model.json`
+> **Model Files:** `knn_model.json`, `kmeans_model.json`, `svm_model.json`, `mlp_model.json`
 > **Data Files:** `validation_benchmark_with_gt.jsonl`
 
 This profile demonstrates how to use pretrained ML models for intelligent model selection at runtime, implementing concepts from FusionFactory and Avengers-Pro papers.
@@ -45,6 +45,7 @@ The profile uses custom gateway resources in `gateway-resources/` that match the
 │    • knn_model.json - K-Nearest Neighbors model                     │
 │    • kmeans_model.json - KMeans clustering model                    │
 │    • svm_model.json - Support Vector Machine model                  │
+│    • mlp_model.json - Multi-Layer Perceptron model (GPU)            │
 │                                                                     │
 │  From: abdallah1008/ml-selection-benchmark-data                     │
 │  To:   .cache/ml-models/                                            │
@@ -56,7 +57,7 @@ The profile uses custom gateway resources in `gateway-resources/` that match the
 │  ─────────────────────────────────────────────────────────────────  │
 │                                                                     │
 │  selection.Factory.CreateAll():                                     │
-│    → Creates KNN, KMeans, SVM selectors                             │
+│    → Creates KNN, KMeans, SVM, MLP selectors                        │
 │    → Loads pretrained models from JSON                              │
 │    → Registers in selection.Registry                                │
 │                                                                     │
@@ -99,7 +100,8 @@ The profile uses custom gateway resources in `gateway-resources/` that match the
 │  abdallah1008/semantic-     (automatic)     .cache/ml-models/
 │   router-ml-models                          ├── knn_model.json
 │                                             ├── kmeans_model.json
-│                                             └── svm_model.json
+│                                             ├── svm_model.json
+│                                             └── mlp_model.json
 │                                                              │
 │  abdallah1008/ml-selection- (automatic)     .cache/ml-models/
 │   benchmark-data                            └── validation_benchmark_with_gt.jsonl
@@ -161,7 +163,7 @@ The test sends queries and verifies:
 
 - Decision matches expected category (e.g., `math_decision`)
 - Selected model is one of the expected models
-- Algorithm header shows `knn`, `kmeans`, or `svm`
+- Algorithm header shows `knn`, `kmeans`, `svm`, or `mlp`
 
 ### 4. Validate ML Models (Optional)
 
@@ -184,16 +186,17 @@ go run validate.go --qwen3-model /path/to/Qwen3-Embedding-0.6B
 This uses the **actual production inference path**:
 
 - **Embeddings**: Qwen3-Embedding-0.6B via `candle-binding` (Rust)
-- **ML Inference**: KNN/KMeans/SVM via `ml-binding` → **Linfa** (Rust)
+- **ML Inference**: KNN/KMeans/SVM via `ml-binding` → **Linfa** (Rust), MLP via `candle-binding` → **Candle** (GPU)
 
 **Expected Results (109 test queries, 4 models):**
 
 | Algorithm | Avg Quality | Improvement over Random |
 |-----------|-------------|------------------------|
-| **KMEANS** | 0.252 | +44.4% |
-| **SVM** | 0.233 | +33.3% |
-| **KNN** | 0.196 | +12.2% |
-| Random | 0.175 | baseline |
+| **MLP** (GPU) | 0.286 | +47.1% |
+| **KMEANS** | 0.252 | +29.9% |
+| **SVM** | 0.233 | +20.0% |
+| **KNN** | 0.196 | +1.0% |
+| Random | 0.194 | baseline |
 
 Output shows ML routing improvement vs baselines (random, single-model).
 
@@ -219,7 +222,7 @@ decisions:
         - type: "domain"
           name: "math"     # Must match VSR category exactly
     algorithm:
-      type: "knn"          # Options: knn, kmeans, svm
+      type: "knn"          # Options: knn, kmeans, svm, mlp
       knn:
         k: 5               # Number of neighbors
     modelRefs:
@@ -235,10 +238,24 @@ decisions:
           name: "computer science"  # Note: space, not underscore!
     algorithm:
       type: "svm"
-      svm:
-        kernel: "rbf"
+    svm:
+      kernel: "rbf"
     modelRefs:
       - model: "codellama-7b"
+      - model: "mistral-7b"
+
+  - name: "gpu_decision"
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "engineering"
+    algorithm:
+      type: "mlp"
+      mlp:
+        device: "cuda"     # Options: cpu, cuda, metal
+    modelRefs:
+      - model: "llama-3.2-3b"
       - model: "mistral-7b"
 ```
 
@@ -263,6 +280,7 @@ model_selection:
 | **KNN** | Similar query matching | Quality-weighted voting (0.9q + 0.1e) |
 | **KMeans** | Efficiency optimization | Cluster-based routing |
 | **SVM** | Clear preferences | RBF kernel decision boundaries |
+| **MLP** | GPU-enabled environments | Neural network with CUDA/Metal acceleration |
 
 ## Test Cases
 
@@ -274,7 +292,7 @@ This profile includes 25 test cases covering all 8 decision types across the 14 
 | Code/programming | `code_decision` | svm | `computer science` |
 | Physics/chemistry/biology | `science_decision` | kmeans | `physics`, `chemistry`, `biology` |
 | Medical/health | `health_decision` | knn | `health` |
-| Engineering | `engineering_decision` | svm | `engineering` |
+| Engineering | `engineering_decision` | mlp | `engineering` |
 | Business/economics | `business_decision` | knn | `business`, `economics` |
 | History/philosophy/law | `humanities_decision` | knn | `history`, `philosophy`, `psychology`, `law` |
 | General knowledge | `general_decision` | knn | `other` |

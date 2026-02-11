@@ -2,7 +2,7 @@
 name = "ml_semantic_router"
 version = "0.1.0"
 edition = "2021"
-description = "ML algorithms binding for semantic-router using Linfa"
+description = "Traditional ML algorithms binding for semantic-router using Linfa"
 license = "Apache-2.0"
 
 [lib]
@@ -26,9 +26,6 @@ noisy_float = "=0.2.0"
 
 # FFI
 libc = "0.2"
-
-[features]
-default = []
 
 [profile.release]
 lto = true

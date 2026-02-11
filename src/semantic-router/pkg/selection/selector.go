@@ -70,6 +70,11 @@ const (
 	// Reference: FusionFactory (arXiv:2507.10540), Avengers-Pro (arXiv:2508.12631)
 	MethodSVM SelectionMethod = "svm"
 
+	// MethodMLP uses Multi-Layer Perceptron for GPU-accelerated model selection
+	// Neural network classifier using Candle for efficient GPU inference
+	// Reference: FusionFactory (arXiv:2507.10540) query-level fusion via MLP routers
+	MethodMLP SelectionMethod = "mlp"
+
 	// MethodRLDriven uses reinforcement learning for personalized model selection
 	// Implements Router-R1 reward structure (format, outcome, cost) for RL training
 	// Reference: Router-R1 (arXiv:2506.09033)
