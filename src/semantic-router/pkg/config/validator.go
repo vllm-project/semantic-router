@@ -97,8 +97,16 @@ func validateConfigStructure(cfg *RouterConfig) error {
 		return nil
 	}
 
+	hasLegacyLatencyConfig := hasLegacyLatencyRoutingConfig(cfg)
+	hasLatencyAwareDecision := hasAnyLatencyAwareDecision(cfg.Decisions)
+	if hasLegacyLatencyConfig && hasLatencyAwareDecision {
+		return fmt.Errorf("deprecated latency signal routing config cannot be used with decision.algorithm.type=latency_aware; remove either legacy latency config (signals.latency_rules / conditions.type=latency) or latency_aware decisions")
+	}
+
 	// Emit migration warnings for legacy latency signal-based routing config.
-	warnDeprecatedLatencyConfig(cfg)
+	if hasLegacyLatencyConfig {
+		warnDeprecatedLatencyConfig(cfg)
+	}
 
 	// File mode: validate decisions have at least one model ref
 	for _, decision := range cfg.Decisions {
@@ -285,6 +293,31 @@ func warnDeprecatedLatencyConfig(cfg *RouterConfig) {
 			}
 		}
 	}
+}
+
+func hasLegacyLatencyRoutingConfig(cfg *RouterConfig) bool {
+	if len(cfg.Signals.LatencyRules) > 0 {
+		return true
+	}
+
+	for _, decision := range cfg.Decisions {
+		for _, condition := range decision.Rules.Conditions {
+			if strings.EqualFold(strings.TrimSpace(condition.Type), SignalTypeLatency) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func hasAnyLatencyAwareDecision(decisions []Decision) bool {
+	for _, decision := range decisions {
+		if decision.Algorithm != nil && strings.EqualFold(strings.TrimSpace(decision.Algorithm.Type), "latency_aware") {
+			return true
+		}
+	}
+	return false
 }
 
 // validateLatencyRules validates latency rule configurations
