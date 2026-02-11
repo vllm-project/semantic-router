@@ -10,6 +10,7 @@ import (
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
@@ -392,7 +393,7 @@ type Classifier struct {
 	languageClassifier *LanguageClassifier
 
 	// Latency classifier
-	latencyClassifier *LatencyClassifier
+	latencyClassifier *latency.LatencyClassifier
 
 	// Context classifier for token count-based routing
 	contextClassifier *ContextClassifier
@@ -2668,7 +2669,7 @@ func (c *Classifier) initializeLatencyClassifier() error {
 		return nil
 	}
 
-	classifier, err := NewLatencyClassifier(c.Config.LatencyRules)
+	classifier, err := latency.NewLatencyClassifier(c.Config.LatencyRules)
 	if err != nil {
 		return fmt.Errorf("failed to create latency classifier: %w", err)
 	}
