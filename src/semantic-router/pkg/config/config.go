@@ -79,6 +79,8 @@ type RouterConfig struct {
 	SemanticCache `yaml:"semantic_cache"`
 	// Memory configuration for agentic memory (cross-session context)
 	Memory MemoryConfig `yaml:"memory"`
+	// Vector store configuration for document ingestion and search
+	VectorStore *VectorStoreConfig `yaml:"vector_store,omitempty"`
 	// Response API configuration for stateful conversations
 	ResponseAPI ResponseAPIConfig `yaml:"response_api"`
 	// Router Replay configuration for recording routing decisions
@@ -815,6 +817,11 @@ type MemoryMilvusConfig struct {
 
 	// Embedding dimension (default: 384 for all-MiniLM-L6-v2)
 	Dimension int `yaml:"dimension,omitempty"`
+
+	// NumPartitions for partition key distribution (default: 16, max: 1024)
+	// Higher values improve per-user query performance at scale.
+	// Recommendation: 64 for <100K users, 256 for 100K-1M users.
+	NumPartitions int `yaml:"num_partitions,omitempty"`
 }
 
 // ResponseAPIConfig configures the Response API for stateful conversations.
@@ -1933,6 +1940,12 @@ func (d *Decision) GetPluginConfig(pluginType string) interface{} {
 
 // unmarshalPluginConfig unmarshals plugin configuration to a target struct
 // Handles both map[string]interface{} (from YAML) and []byte (from Kubernetes RawExtension)
+// UnmarshalPluginConfig converts a plugin configuration (typically from YAML)
+// into the given target struct.
+func UnmarshalPluginConfig(config interface{}, target interface{}) error {
+	return unmarshalPluginConfig(config, target)
+}
+
 func unmarshalPluginConfig(config interface{}, target interface{}) error {
 	if config == nil {
 		return fmt.Errorf("plugin configuration is nil")

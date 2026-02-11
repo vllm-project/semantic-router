@@ -152,6 +152,12 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 		logging.Infof("System prompt configuration endpoints disabled for security")
 	}
 
+	// Vector store management endpoints
+	registerVectorStoreRoutes(mux, s)
+
+	// File management endpoints
+	registerFileRoutes(mux, s)
+
 	return mux
 }
 
