@@ -453,6 +453,8 @@ func buildCredentialResolver(cfg *config.RouterConfig) *authz.CredentialResolver
 			logging.Warnf("Authz fail_open=true with default chain — requests without valid credentials will be allowed through")
 		}
 		logging.Infof("Authz: using default chain [header-injection(defaults) → static-config], fail_open=%v", authzCfg.FailOpen)
+		logging.Infof("Authz identity: user_id_header=%q, user_groups_header=%q",
+			cfg.Authz.Identity.GetUserIDHeader(), cfg.Authz.Identity.GetUserGroupsHeader())
 		return resolver
 	}
 
@@ -514,6 +516,8 @@ func buildCredentialResolver(cfg *config.RouterConfig) *authz.CredentialResolver
 		logging.Warnf("Authz fail_open=true — requests without valid credentials will be allowed through. Ensure this is intentional.")
 	}
 	logging.Infof("Authz: chain=%v, fail_open=%v", resolver.ProviderNames(), authzCfg.FailOpen)
+	logging.Infof("Authz identity: user_id_header=%q, user_groups_header=%q",
+		cfg.Authz.Identity.GetUserIDHeader(), cfg.Authz.Identity.GetUserGroupsHeader())
 
 	return resolver
 }

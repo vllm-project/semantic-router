@@ -1,0 +1,69 @@
+# Profile B: Envoy Gateway JWT (claim_to_headers)
+#
+# This profile demonstrates using Envoy Gateway's SecurityPolicy with JWT
+# authentication and claim_to_headers to inject user identity into requests.
+#
+# Envoy Gateway SecurityPolicy extracts JWT claims and injects them as headers:
+#   - claim "sub"    → header "x-jwt-sub"    (user ID)
+#   - claim "groups" → header "x-jwt-groups" (comma-separated group memberships)
+#
+# The router reads these custom headers instead of the Authorino defaults.
+#
+# Required Envoy Gateway SecurityPolicy snippet:
+#
+#   apiVersion: gateway.envoyproxy.io/v1alpha1
+#   kind: SecurityPolicy
+#   spec:
+#     jwt:
+#       providers:
+#         - name: my-oidc-provider
+#           issuer: "https://accounts.google.com"
+#           remoteJWKS:
+#             uri: "https://www.googleapis.com/oauth2/v3/certs"
+#           claimToHeaders:
+#             - claim: sub
+#               header: x-jwt-sub
+#             - claim: groups
+#               header: x-jwt-groups
+#
+# FAIL-CLOSED (default): if the JWT is missing or invalid, Envoy Gateway
+# rejects the request before it reaches the router.
+
+authz:
+  fail_open: false
+  identity:
+    user_id_header: "x-jwt-sub"        # from EG claim_to_headers: claim=sub
+    user_groups_header: "x-jwt-groups"  # from EG claim_to_headers: claim=groups
+  providers:
+    - type: header-injection
+      headers:
+        openai: "x-user-openai-key"
+        anthropic: "x-user-anthropic-key"
+    - type: static-config
+
+# Role bindings use the same structure regardless of auth backend.
+# The subject names must match what the JWT claims contain.
+role_bindings:
+  - name: admin-binding
+    subjects:
+      - kind: Group
+        name: platform-admins          # JWT "groups" claim value
+    role: admin
+  - name: premium-binding
+    subjects:
+      - kind: Group
+        name: premium-tier             # JWT "groups" claim value
+    role: premium_user
+  - name: free-binding
+    subjects:
+      - kind: Group
+        name: free-tier
+    role: free_user
+
+model_config:
+  gpt-4o-mini:
+    model_name: gpt-4o-mini
+    access_key: ""
+  claude-sonnet-4-5-20250929:
+    model_name: claude-sonnet-4-5-20250929
+    access_key: ""

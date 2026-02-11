@@ -122,16 +122,25 @@ type RouterConfig struct {
 // only if you intentionally want to allow requests without API keys (e.g.,
 // routing to local vLLM backends that don't require auth).
 //
-// Example:
+// Example (Authorino — uses defaults, identity section optional):
 //
 //	authz:
-//	  fail_open: false   # default: reject if no key found
+//	  fail_open: false
+//	  providers:
+//	    - type: header-injection
+//	    - type: static-config
+//
+// Example (Envoy Gateway JWT — custom identity headers):
+//
+//	authz:
+//	  fail_open: false
+//	  identity:
+//	    user_id_header: "x-jwt-sub"
+//	    user_groups_header: "x-jwt-groups"
 //	  providers:
 //	    - type: header-injection
 //	      headers:
 //	        openai: "x-user-openai-key"
-//	        anthropic: "x-user-anthropic-key"
-//	        gemini: "x-user-gemini-key"
 //	    - type: static-config
 type AuthzConfig struct {
 	// FailOpen controls behavior when no provider can resolve an API key.
@@ -141,7 +150,54 @@ type AuthzConfig struct {
 	//                    for local/vLLM backends that don't require auth.
 	FailOpen bool `yaml:"fail_open,omitempty"`
 
+	// Identity configures which request headers carry the authenticated user's
+	// identity (user ID and group memberships). These headers are injected by
+	// the auth backend before the request reaches the router.
+	//
+	// Defaults (when omitted) match Authorino conventions:
+	//   user_id_header:     "x-authz-user-id"
+	//   user_groups_header: "x-authz-user-groups"
+	//
+	// Override these when using a different auth backend:
+	//   Envoy Gateway JWT (claim_to_headers): "x-jwt-sub", "x-jwt-groups"
+	//   oauth2-proxy:                         "x-forwarded-user", "x-forwarded-groups"
+	//   Istio RequestAuthentication:           "x-jwt-claim-sub", "x-jwt-claim-groups"
+	Identity IdentityConfig `yaml:"identity,omitempty"`
+
 	Providers []AuthzProviderConfig `yaml:"providers,omitempty"`
+}
+
+// IdentityConfig controls how the router reads user identity from request headers.
+// These headers are set by the auth backend (Authorino, Envoy Gateway JWT,
+// oauth2-proxy, etc.) after successful authentication. The AuthzClassifier uses
+// them to match role_bindings subjects.
+//
+// When omitted, defaults match the Authorino convention (x-authz-user-id,
+// x-authz-user-groups). Override when using a different backend.
+type IdentityConfig struct {
+	// UserIDHeader is the request header carrying the authenticated user's ID.
+	// Default: "x-authz-user-id" (Authorino: Secret metadata.name)
+	UserIDHeader string `yaml:"user_id_header,omitempty"`
+
+	// UserGroupsHeader is the request header carrying comma-separated group names.
+	// Default: "x-authz-user-groups" (Authorino: Secret annotation authz-groups)
+	UserGroupsHeader string `yaml:"user_groups_header,omitempty"`
+}
+
+// GetUserIDHeader returns the configured user ID header, or the default if empty.
+func (ic IdentityConfig) GetUserIDHeader() string {
+	if ic.UserIDHeader == "" {
+		return "x-authz-user-id"
+	}
+	return ic.UserIDHeader
+}
+
+// GetUserGroupsHeader returns the configured user groups header, or the default if empty.
+func (ic IdentityConfig) GetUserGroupsHeader() string {
+	if ic.UserGroupsHeader == "" {
+		return "x-authz-user-groups"
+	}
+	return ic.UserGroupsHeader
 }
 
 // AuthzProviderConfig describes a single credential provider in the chain.

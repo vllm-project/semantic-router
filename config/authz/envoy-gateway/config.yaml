@@ -1,34 +1,38 @@
-# Live RBAC Test Config — Two local Qwen vLLM endpoints
+# EG (Envoy Gateway) RBAC Test Config — Two local Qwen vLLM endpoints
+#
+# This config simulates Envoy Gateway's JWT authentication with claim_to_headers.
+# Identity headers are set to the names EG would inject from JWT claims:
+#   - JWT "sub"    claim → header "x-jwt-sub"
+#   - JWT "groups" claim → header "x-jwt-groups"
 #
 # Prerequisites:
 #   - Qwen/Qwen2.5-14B-Instruct on localhost:8000
 #   - Qwen/Qwen2.5-7B-Instruct  on localhost:8001
-#   - Authorino or mock injecting x-authz-user-id / x-authz-user-groups headers
 #
-# RBAC tiers:
-#   admin       → 14B (unrestricted, reasoning enabled)
-#   premium_tier → 14B (complex queries) or 7B (simple / realtime)
-#   pro_tier     → 7B (all queries)
-#   free_tier    → 7B (short queries only, long queries rejected by no matching decision)
+# RBAC tiers (same logic as Authorino test, different header names):
+#   admin        → 14B (unrestricted, reasoning enabled)
+#   premium_user → 14B (complex queries) or 7B (simple)
+#   free_user    → 7B only
 #
-# Test matrix (send requests with different x-authz-user-id / x-authz-user-groups):
+# Test matrix (send requests with x-jwt-sub / x-jwt-groups headers):
 #
-#   User: alice   Groups: engineering        → pro_tier   → Qwen2.5-7B
-#   User: bob     Groups: premium            → premium    → Qwen2.5-14B or 7B
-#   User: admin   Groups: (none)             → admin      → Qwen2.5-14B + reasoning
-#   User: dave    Groups: free               → free_tier  → Qwen2.5-7B
-#   User: eve     Groups: contractor         → free_tier  → Qwen2.5-7B
-#   User: unknown Groups: (none)             → no match   → (depends on default_model)
+#   x-jwt-sub: alice    x-jwt-groups: platform-admins  → admin        → 14B + reasoning
+#   x-jwt-sub: bob      x-jwt-groups: premium-tier     → premium_user → 14B or 7B
+#   x-jwt-sub: carol    x-jwt-groups: free-tier        → free_user    → 7B
+#   x-jwt-sub: unknown  x-jwt-groups: (none)           → no match     → default_model (7B)
 #
 
 # --------------------------------------------------------------------------
-# Authz — local vLLM backends don't require API keys
+# Authz — Envoy Gateway JWT backend (custom identity headers)
 # --------------------------------------------------------------------------
 authz:
-  fail_open: true
+  fail_open: true        # local vLLM backends don't require API keys
+  identity:
+    user_id_header: "x-jwt-sub"        # from EG SecurityPolicy claim_to_headers
+    user_groups_header: "x-jwt-groups"  # from EG SecurityPolicy claim_to_headers
 
 # --------------------------------------------------------------------------
-# vLLM Endpoints — the two real running backends
+# vLLM Endpoints — same backends as Authorino test
 # --------------------------------------------------------------------------
 vllm_endpoints:
   - name: "qwen-14b"
@@ -43,7 +47,7 @@ vllm_endpoints:
     health_check_path: "/health"
 
 # --------------------------------------------------------------------------
-# Model Config — maps model names to endpoints
+# Model Config
 # --------------------------------------------------------------------------
 model_config:
   "Qwen/Qwen2.5-14B-Instruct":
@@ -59,12 +63,12 @@ model_config:
     preferred_endpoints: ["qwen-7b"]
 
 # --------------------------------------------------------------------------
-# Default model — used when no decision matches
+# Default model
 # --------------------------------------------------------------------------
 default_model: "Qwen/Qwen2.5-7B-Instruct"
 
 # --------------------------------------------------------------------------
-# Keyword Rules — content signals for complex vs simple routing
+# Keyword Rules
 # --------------------------------------------------------------------------
 keyword_rules:
   - name: "complex_analysis"
@@ -76,7 +80,7 @@ keyword_rules:
     keywords: ["write code", "implement", "function", "algorithm", "debug", "refactor"]
 
 # --------------------------------------------------------------------------
-# Context Rules — token count signals
+# Context Rules
 # --------------------------------------------------------------------------
 context_rules:
   - name: "short_query"
@@ -90,52 +94,36 @@ context_rules:
     description: "Long documents 4K-32K tokens"
 
 # --------------------------------------------------------------------------
-# Role Bindings — RBAC subject-to-role assignment
+# Role Bindings — JWT claim values as subject names
 # --------------------------------------------------------------------------
-# Subject names MUST match the x-authz-user-id and x-authz-user-groups
-# header values injected by Authorino or the test harness.
+# Subject names match what EG claim_to_headers extracts from the JWT:
+#   - "sub" claim value → kind: User match
+#   - "groups" claim values → kind: Group match
 # --------------------------------------------------------------------------
 role_bindings:
-  # admin user (Secret: user-admin, metadata.name="user-admin", authz-groups="")
-  - name: "admin-users"
-    description: "Admin users — full access to all models"
+  - name: "admin-binding"
+    description: "Platform admins — full model access"
     subjects:
-      - kind: User
-        name: "user-admin"
+      - kind: Group
+        name: "platform-admins"     # JWT "groups" claim value
     role: "admin"
 
-  # bob (Secret: user-bob-shared, authz-groups="premium")
-  - name: "premium-customers"
-    description: "Premium customers"
+  - name: "premium-binding"
+    description: "Premium tier users"
     subjects:
       - kind: Group
-        name: "premium"
-    role: "premium_tier"
+        name: "premium-tier"        # JWT "groups" claim value
+    role: "premium_user"
 
-  # alice (Secret: user-alice-per-user, authz-groups="engineering")
-  - name: "pro-internal"
-    description: "Internal engineering teams"
+  - name: "free-binding"
+    description: "Free tier users"
     subjects:
       - kind: Group
-        name: "engineering"
-    role: "pro_tier"
-
-  # carol (Secret: user-carol-shared, authz-groups="free")
-  # dave (Secret: user-dave-byot, authz-groups="contractor")
-  - name: "free-external"
-    description: "Free tier — free users, contractors"
-    subjects:
-      - kind: Group
-        name: "free"
-      - kind: Group
-        name: "contractor"
-    role: "free_tier"
+        name: "free-tier"           # JWT "groups" claim value
+    role: "free_user"
 
 # --------------------------------------------------------------------------
-# Decisions — RBAC permissions (what each role can access)
-# --------------------------------------------------------------------------
-# Priority determines evaluation order (higher = checked first).
-# Cost is implicit: 14B is the expensive model, 7B is the cheap one.
+# Decisions — same structure, different role names
 # --------------------------------------------------------------------------
 decisions:
   # ── Admin: unrestricted, reasoning enabled ──
@@ -153,86 +141,58 @@ decisions:
       - model: "Qwen/Qwen2.5-7B-Instruct"
         use_reasoning: false
 
-  # ── Premium + complex query → 14B with reasoning ──
+  # ── Premium + complex → 14B with reasoning ──
   - name: "premium_complex"
-    description: "Premium users with complex queries get 14B + reasoning"
+    description: "Premium users + complex queries get 14B + reasoning"
     priority: 250
     rules:
       operator: "AND"
       conditions:
         - type: "authz"
-          name: "premium_tier"
+          name: "premium_user"
         - type: "keyword"
           name: "complex_analysis"
     modelRefs:
       - model: "Qwen/Qwen2.5-14B-Instruct"
         use_reasoning: true
 
-  # ── Premium + code request → 14B ──
+  # ── Premium + code → 14B ──
   - name: "premium_code"
-    description: "Premium users with code requests get 14B"
+    description: "Premium users + code requests get 14B"
     priority: 240
     rules:
       operator: "AND"
       conditions:
         - type: "authz"
-          name: "premium_tier"
+          name: "premium_user"
         - type: "keyword"
           name: "code_request"
     modelRefs:
       - model: "Qwen/Qwen2.5-14B-Instruct"
         use_reasoning: false
 
-  # ── Premium default → 7B for simple queries (cost savings) ──
+  # ── Premium default → 7B ──
   - name: "premium_default"
-    description: "Premium users simple queries get 7B (cost-efficient)"
+    description: "Premium users simple queries get 7B"
     priority: 150
     rules:
       operator: "AND"
       conditions:
         - type: "authz"
-          name: "premium_tier"
+          name: "premium_user"
     modelRefs:
       - model: "Qwen/Qwen2.5-7B-Instruct"
         use_reasoning: false
 
-  # ── Pro tier → always 7B ──
-  - name: "pro_default"
-    description: "Pro users always get 7B"
-    priority: 120
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "authz"
-          name: "pro_tier"
-    modelRefs:
-      - model: "Qwen/Qwen2.5-7B-Instruct"
-        use_reasoning: false
-
-  # ── Free tier + short query → 7B ──
-  - name: "free_short"
-    description: "Free users with short queries get 7B"
+  # ── Free tier → 7B ──
+  - name: "free_default"
+    description: "Free users get 7B"
     priority: 100
     rules:
       operator: "AND"
       conditions:
         - type: "authz"
-          name: "free_tier"
-        - type: "context"
-          name: "short_query"
-    modelRefs:
-      - model: "Qwen/Qwen2.5-7B-Instruct"
-        use_reasoning: false
-
-  # ── Free tier default → 7B (fallback for medium-length queries) ──
-  - name: "free_default"
-    description: "Free users default route"
-    priority: 90
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "authz"
-          name: "free_tier"
+          name: "free_user"
     modelRefs:
       - model: "Qwen/Qwen2.5-7B-Instruct"
         use_reasoning: false

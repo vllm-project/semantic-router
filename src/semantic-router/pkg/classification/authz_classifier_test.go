@@ -239,7 +239,7 @@ func TestAuthzClassifierClassify(t *testing.T) {
 		RegisterTestingT(t)
 		_, err := c.Classify("", nil)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("x-authz-user-id header is empty"))
+		Expect(err.Error()).To(ContainSubstring("user identity header is empty"))
 		Expect(err.Error()).To(ContainSubstring("no silent bypass"))
 	})
 
@@ -311,6 +311,74 @@ func TestAuthzClassifierClassify(t *testing.T) {
 		result, err := c.Classify("Admin", nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.MatchedRules).To(BeEmpty())
+	})
+}
+
+func TestIdentityConfigDefaults(t *testing.T) {
+	RegisterTestingT(t)
+
+	t.Run("default identity config uses Authorino header names", func(t *testing.T) {
+		RegisterTestingT(t)
+		ic := config.IdentityConfig{}
+		Expect(ic.GetUserIDHeader()).To(Equal("x-authz-user-id"))
+		Expect(ic.GetUserGroupsHeader()).To(Equal("x-authz-user-groups"))
+	})
+
+	t.Run("custom identity config overrides header names", func(t *testing.T) {
+		RegisterTestingT(t)
+		ic := config.IdentityConfig{
+			UserIDHeader:     "x-jwt-sub",
+			UserGroupsHeader: "x-jwt-groups",
+		}
+		Expect(ic.GetUserIDHeader()).To(Equal("x-jwt-sub"))
+		Expect(ic.GetUserGroupsHeader()).To(Equal("x-jwt-groups"))
+	})
+
+	t.Run("partial override — only user_id_header set", func(t *testing.T) {
+		RegisterTestingT(t)
+		ic := config.IdentityConfig{
+			UserIDHeader: "x-forwarded-user",
+		}
+		Expect(ic.GetUserIDHeader()).To(Equal("x-forwarded-user"))
+		Expect(ic.GetUserGroupsHeader()).To(Equal("x-authz-user-groups")) // default
+	})
+
+	t.Run("partial override — only user_groups_header set", func(t *testing.T) {
+		RegisterTestingT(t)
+		ic := config.IdentityConfig{
+			UserGroupsHeader: "x-forwarded-groups",
+		}
+		Expect(ic.GetUserIDHeader()).To(Equal("x-authz-user-id")) // default
+		Expect(ic.GetUserGroupsHeader()).To(Equal("x-forwarded-groups"))
+	})
+}
+
+func TestClassifierCustomIdentityHeaders(t *testing.T) {
+	RegisterTestingT(t)
+
+	t.Run("classifier stores resolved identity headers from config", func(t *testing.T) {
+		RegisterTestingT(t)
+		cfg := &config.RouterConfig{
+			Authz: config.AuthzConfig{
+				Identity: config.IdentityConfig{
+					UserIDHeader:     "x-jwt-sub",
+					UserGroupsHeader: "x-jwt-groups",
+				},
+			},
+		}
+		c, err := newClassifierWithOptions(cfg)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c.authzUserIDHeader).To(Equal("x-jwt-sub"))
+		Expect(c.authzUserGroupsHeader).To(Equal("x-jwt-groups"))
+	})
+
+	t.Run("classifier uses default identity headers when config is empty", func(t *testing.T) {
+		RegisterTestingT(t)
+		cfg := &config.RouterConfig{}
+		c, err := newClassifierWithOptions(cfg)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c.authzUserIDHeader).To(Equal("x-authz-user-id"))
+		Expect(c.authzUserGroupsHeader).To(Equal("x-authz-user-groups"))
 	})
 }
 

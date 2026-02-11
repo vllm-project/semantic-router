@@ -9,7 +9,7 @@ import (
 // for the requested model regardless of the LLM provider enum (since the static
 // config is model-scoped, not provider-scoped).
 //
-// This is the fallback provider — used when no ext_authz/Authorino injects
+// This is the fallback provider — used when no auth backend injects
 // per-user keys, or for models that don't require per-user auth.
 type StaticConfigProvider struct {
 	config *config.RouterConfig

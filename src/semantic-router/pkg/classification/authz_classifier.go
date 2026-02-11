@@ -32,7 +32,7 @@ type normalizedSubject struct {
 
 // AuthzClassifier evaluates user identity and group membership against RBAC role bindings.
 // It follows the Kubernetes RoleBinding pattern:
-//   - Subject  → user ID + groups (from Authorino x-authz-user-id / x-authz-user-groups)
+//   - Subject  → user ID + groups (from auth backend: Authorino, Envoy Gateway JWT, etc.)
 //   - Role     → RoleBinding.Role (emitted as the signal name)
 //   - Permission → decision engine modelRefs (not this classifier's concern)
 type AuthzClassifier struct {
@@ -91,9 +91,9 @@ func NewAuthzClassifier(bindings []config.RoleBinding) (*AuthzClassifier, error)
 			}
 			name := strings.TrimSpace(s.Name)
 			if name == "" {
-				return nil, fmt.Errorf("role_bindings: binding %q subject[%d] (kind: %s) has empty name — "+
-					"the name must match the value Authorino injects in x-authz-user-id (User) or x-authz-user-groups (Group)",
-					rb.Name, i, s.Kind)
+			return nil, fmt.Errorf("role_bindings: binding %q subject[%d] (kind: %s) has empty name — "+
+				"the name must match the value your auth backend injects in the identity headers (configured via authz.identity)",
+				rb.Name, i, s.Kind)
 			}
 			nb.subjects = append(nb.subjects, normalizedSubject{kind: kind, name: name})
 		}
@@ -121,9 +121,9 @@ func (c *AuthzClassifier) Classify(userID string, userGroups []string) (*AuthzRe
 	}
 
 	if userID == "" {
-		return nil, fmt.Errorf("authz signal: x-authz-user-id header is empty but %d role_bindings are configured — "+
-			"ensure Authorino/ext_authz injects the user identity header; refusing to evaluate without user identity "+
-			"(no silent bypass allowed)", len(c.bindings))
+		return nil, fmt.Errorf("authz signal: user identity header is empty but %d role_bindings are configured — "+
+			"ensure your auth backend injects the user identity header (check authz.identity.user_id_header config); "+
+			"refusing to evaluate without user identity (no silent bypass allowed)", len(c.bindings))
 	}
 
 	// Deduplicate roles (multiple bindings can grant the same role)

@@ -10,7 +10,6 @@ import (
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
-	headers_pkg "github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
@@ -404,6 +403,11 @@ type Classifier struct {
 	// Authz classifier for user-level authorization signal classification
 	authzClassifier *AuthzClassifier
 
+	// Identity header names resolved from authz.identity config (or defaults).
+	// Used by EvaluateAllSignalsWithHeaders to read user identity from requests.
+	authzUserIDHeader     string
+	authzUserGroupsHeader string
+
 	Config           *config.RouterConfig
 	CategoryMapping  *CategoryMapping
 	PIIMapping       *PIIMapping
@@ -564,6 +568,10 @@ func newClassifierWithOptions(cfg *config.RouterConfig, options ...option) (*Cla
 	}
 
 	classifier := &Classifier{Config: cfg}
+
+	// Resolve identity header names from authz.identity config (or defaults).
+	classifier.authzUserIDHeader = cfg.Authz.Identity.GetUserIDHeader()
+	classifier.authzUserGroupsHeader = cfg.Authz.Identity.GetUserGroupsHeader()
 
 	for _, option := range options {
 		option(classifier)
@@ -1080,8 +1088,8 @@ func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText stri
 
 	if isSignalTypeUsed(usedSignals, config.SignalTypeAuthz) && c.authzClassifier != nil {
 		start := time.Now()
-		userID := headers[headers_pkg.AuthzUserID]
-		userGroups := ParseUserGroups(headers[headers_pkg.AuthzUserGroups])
+		userID := headers[c.authzUserIDHeader]
+		userGroups := ParseUserGroups(headers[c.authzUserGroupsHeader])
 
 		authzResult, err := c.authzClassifier.Classify(userID, userGroups)
 		elapsed := time.Since(start)
