@@ -8,6 +8,7 @@ from cli.consts import (
     VLLM_SR_DOCKER_NAME,
     HEALTH_CHECK_TIMEOUT,
     DEFAULT_API_PORT,
+    DEFAULT_ENVOY_PORT,
 )
 from cli.docker_cli import (
     docker_container_status,
@@ -378,42 +379,66 @@ def show_status(service: str = "all"):
     # Check router status
     if service in ["all", "router"]:
         try:
-            # Check if router is responding - look for "Starting insecure LLM Router ExtProc server"
-            cmd = f"docker logs --tail 100 {VLLM_SR_DOCKER_NAME} 2>&1 | grep -i 'Starting.*Router.*server\\|router entered RUNNING' | tail -1"
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            # Check if router service is running via health endpoint
+            return_code, stdout, stderr = docker_exec(
+                VLLM_SR_DOCKER_NAME,
+                ["curl", "-f", "-s", f"http://localhost:{DEFAULT_API_PORT}/health"],
+            )
 
-            if result.stdout.strip():
+            if return_code == 0:
                 log.info("✓ Router: Running")
             else:
-                log.info("⚠ Router: Status unknown (check logs)")
+                log.info("⚠ Router: Status unknown")
         except Exception as e:
             log.error(f"Failed to check router status: {e}")
 
     # Check envoy status
     if service in ["all", "envoy"]:
         try:
-            # Check if envoy is responding - look for "envoy entered RUNNING"
-            cmd = f"docker logs --tail 100 {VLLM_SR_DOCKER_NAME} 2>&1 | grep -i 'envoy entered RUNNING' | tail -1"
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            # Check if envoy service is running via ready endpoint
+            return_code, stdout, stderr = docker_exec(
+                VLLM_SR_DOCKER_NAME,
+                [
+                    "curl",
+                    "-f",
+                    "-s",
+                    "-o",
+                    "/dev/null",
+                    "-w",
+                    "%{http_code}",
+                    f"http://localhost:{DEFAULT_ENVOY_PORT}/ready",
+                ],
+            )
 
-            if result.stdout.strip():
+            if return_code == 0 and stdout.strip() == "200":
                 log.info("✓ Envoy: Running")
             else:
-                log.info("⚠ Envoy: Status unknown (check logs)")
+                log.info("⚠ Envoy: Status unknown")
         except Exception as e:
             log.error(f"Failed to check envoy status: {e}")
 
     # Check dashboard status
     if service in ["all", "dashboard"]:
         try:
-            # Check if dashboard is responding - look for "dashboard entered RUNNING"
-            cmd = f"docker logs --tail 100 {VLLM_SR_DOCKER_NAME} 2>&1 | grep -i 'dashboard entered RUNNING' | tail -1"
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            # Check if dashboard is responding via HTTP
+            return_code, stdout, stderr = docker_exec(
+                VLLM_SR_DOCKER_NAME,
+                [
+                    "curl",
+                    "-f",
+                    "-s",
+                    "-o",
+                    "/dev/null",
+                    "-w",
+                    "%{http_code}",
+                    "http://localhost:8700",
+                ],
+            )
 
-            if result.stdout.strip():
+            if return_code == 0 and stdout.strip() in ["200", "301", "302"]:
                 log.info("✓ Dashboard: Running (http://localhost:8700)")
             else:
-                log.info("⚠ Dashboard: Status unknown (check logs)")
+                log.info("⚠ Dashboard: Status unknown")
         except Exception as e:
             log.error(f"Failed to check dashboard status: {e}")
 
