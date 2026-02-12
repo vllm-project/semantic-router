@@ -112,6 +112,7 @@ func (e *ImageGenBackendEntry) ToPluginConfig() *ImageGenPluginConfig {
 }
 
 // ModalityRoutingConfig is the top-level configuration for modality-based routing.
+//
 // Deprecated: Use ModalityDetectorConfig (in InlineModels) + ImageGenBackendEntry (in BackendModels) instead.
 type ModalityRoutingConfig struct {
 	// Enabled activates modality routing. When false, the feature is completely skipped.
