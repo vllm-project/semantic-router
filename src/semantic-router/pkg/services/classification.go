@@ -180,7 +180,6 @@ type MatchedSignals struct {
 	UserFeedback []string `json:"user_feedback,omitempty"`
 	Preferences  []string `json:"preferences,omitempty"`
 	Language     []string `json:"language,omitempty"`
-	Latency      []string `json:"latency,omitempty"`
 	Context      []string `json:"context,omitempty"`
 	Complexity   []string `json:"complexity,omitempty"`
 }
