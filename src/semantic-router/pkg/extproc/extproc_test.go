@@ -25,6 +25,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -644,6 +645,12 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 		responseAPIFilter = NewResponseAPIFilter(mockStore)
 	}
 
+	// Build credential resolver (default chain: header-injection → static-config)
+	credResolver := authz.NewCredentialResolver(
+		authz.NewHeaderInjectionProvider(authz.DefaultHeaderMap()),
+		authz.NewStaticConfigProvider(cfg),
+	)
+
 	// Create router manually with proper initialization
 	router := &OpenAIRouter{
 		Config:               cfg,
@@ -653,6 +660,7 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 		Cache:                semanticCache,
 		ToolsDatabase:        toolsDatabase,
 		ResponseAPIFilter:    responseAPIFilter,
+		CredentialResolver:   credResolver,
 	}
 
 	return router, nil
