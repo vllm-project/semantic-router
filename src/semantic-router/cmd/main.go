@@ -377,9 +377,8 @@ func main() {
 			cfg.VectorStore.EmbeddingDimension, cfg.VectorStore.IngestionWorkers)
 	}
 
-	// Initialize modality classifier if top-level modality_routing is enabled
-	if mr := cfg.ModalityRouting; mr != nil && mr.Enabled {
-		md := &mr.Detection
+	// Initialize modality classifier if modality_detector is enabled
+	if md := &cfg.ModalityDetector; md.Enabled {
 		method := md.GetMethod()
 		if (method == config.ModalityDetectionClassifier || method == config.ModalityDetectionHybrid) &&
 			md.Classifier != nil && md.Classifier.ModelPath != "" {

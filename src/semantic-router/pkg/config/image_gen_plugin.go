@@ -16,14 +16,103 @@ const (
 	ModalityDetectionHybrid = "hybrid"
 )
 
-// ModalityRoutingConfig is the top-level configuration for modality-based routing.
-// The Detection field configures the modality signal evaluator (type: "modality" in decisions).
-// The ImageGen + endpoint fields configure execution when a DIFFUSION or BOTH decision matches.
+// ModalityDetectorConfig configures the modality signal detector.
+// Lives in InlineModels alongside hallucination_mitigation and feedback_detector.
+// The detector classifies user prompts into AR / DIFFUSION / BOTH signals.
+type ModalityDetectorConfig struct {
+	// Enabled activates the modality detector. When false, modality signals are not evaluated.
+	Enabled bool `yaml:"enabled" json:"enabled"`
+
+	// PromptPrefixes are prefix strings stripped from the user prompt before
+	// sending it to the diffusion model (e.g. "generate an image of ", "draw ").
+	// Matched case-insensitively; the first match is stripped. Optional.
+	PromptPrefixes []string `yaml:"prompt_prefixes,omitempty" json:"prompt_prefixes,omitempty"`
+
+	// Detection configuration (inlined from ModalityDetectionConfig)
+	ModalityDetectionConfig `yaml:",inline"`
+}
+
+// ImageGenBackendEntry defines a named image generation backend configuration.
+// Follows the same pattern as ReasoningFamilyConfig — named map entries referenced
+// by model_config. The Type field determines which provider-specific fields are relevant.
 //
-//   - AR        → passthrough to the AR text model (normal flow)
-//   - DIFFUSION → generate image via diffusion endpoint, return immediately
-//   - BOTH      → call AR for text AND diffusion for image in parallel,
-//     return a combined multimodal response with both text and image content
+// vllm_omni fields: BaseURL, Model, NumInferenceSteps, CFGScale, Seed
+// openai fields:    APIKey, Model, Quality, Style
+type ImageGenBackendEntry struct {
+	// Type identifies the image generation provider: "vllm_omni" or "openai"
+	Type string `yaml:"type" json:"type"`
+
+	// Model name to use for image generation
+	Model string `yaml:"model,omitempty" json:"model,omitempty"`
+
+	// Default image dimensions
+	DefaultWidth  int `yaml:"default_width,omitempty" json:"default_width,omitempty"`
+	DefaultHeight int `yaml:"default_height,omitempty" json:"default_height,omitempty"`
+
+	// Timeout in seconds for image generation requests
+	TimeoutSeconds int `yaml:"timeout_seconds,omitempty" json:"timeout_seconds,omitempty"`
+
+	// --- vllm_omni-specific fields ---
+
+	// BaseURL for vLLM-Omni server (e.g., "http://localhost:8001")
+	BaseURL string `yaml:"base_url,omitempty" json:"base_url,omitempty"`
+
+	// NumInferenceSteps is the number of denoising steps
+	NumInferenceSteps int `yaml:"num_inference_steps,omitempty" json:"num_inference_steps,omitempty"`
+
+	// CFGScale controls classifier-free guidance scale
+	CFGScale float64 `yaml:"cfg_scale,omitempty" json:"cfg_scale,omitempty"`
+
+	// Seed for reproducibility (optional)
+	Seed *int `yaml:"seed,omitempty" json:"seed,omitempty"`
+
+	// --- openai-specific fields ---
+
+	// APIKey for OpenAI image generation API
+	APIKey string `yaml:"api_key,omitempty" json:"api_key,omitempty"`
+
+	// Quality setting: "standard" or "hd" (OpenAI only)
+	Quality string `yaml:"quality,omitempty" json:"quality,omitempty"`
+
+	// Style setting: "vivid" or "natural" (OpenAI only)
+	Style string `yaml:"style,omitempty" json:"style,omitempty"`
+}
+
+// ToPluginConfig converts an ImageGenBackendEntry to an ImageGenPluginConfig
+// that can be used with the existing imagegen.CreateBackend factory.
+func (e *ImageGenBackendEntry) ToPluginConfig() *ImageGenPluginConfig {
+	cfg := &ImageGenPluginConfig{
+		Enabled:        true,
+		Backend:        e.Type,
+		DefaultWidth:   e.DefaultWidth,
+		DefaultHeight:  e.DefaultHeight,
+		TimeoutSeconds: e.TimeoutSeconds,
+	}
+
+	switch e.Type {
+	case "vllm_omni":
+		cfg.BackendConfig = &VLLMOmniImageGenConfig{
+			BaseURL:           e.BaseURL,
+			Model:             e.Model,
+			NumInferenceSteps: e.NumInferenceSteps,
+			CFGScale:          e.CFGScale,
+			Seed:              e.Seed,
+		}
+	case "openai":
+		cfg.BackendConfig = &OpenAIImageGenConfig{
+			APIKey:  e.APIKey,
+			BaseURL: e.BaseURL,
+			Model:   e.Model,
+			Quality: e.Quality,
+			Style:   e.Style,
+		}
+	}
+
+	return cfg
+}
+
+// ModalityRoutingConfig is the top-level configuration for modality-based routing.
+// Deprecated: Use ModalityDetectorConfig (in InlineModels) + ImageGenBackendEntry (in BackendModels) instead.
 type ModalityRoutingConfig struct {
 	// Enabled activates modality routing. When false, the feature is completely skipped.
 	Enabled bool `yaml:"enabled" json:"enabled"`

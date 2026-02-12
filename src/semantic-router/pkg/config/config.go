@@ -104,11 +104,6 @@ type RouterConfig struct {
 	BackendModels `yaml:",inline"`
 	// ToolSelection for automatic tool selection
 	ToolSelection `yaml:",inline"`
-
-	// ModalityRouting configures modality-based classification and image generation settings.
-	// Detection config is used by the modality signal evaluator (type: "modality" in decisions).
-	// Image generation config is used when a matched decision triggers DIFFUSION or BOTH execution.
-	ModalityRouting *ModalityRoutingConfig `yaml:"modality_routing,omitempty"`
 }
 
 // ToolSelection represents the configuration for automatic tool selection
@@ -163,6 +158,11 @@ type InlineModels struct {
 
 	// Feedback detector configuration for user satisfaction detection
 	FeedbackDetector FeedbackDetectorConfig `yaml:"feedback_detector"`
+
+	// Modality detector configuration for AR/DIFFUSION/BOTH classification
+	// Follows the same pattern as hallucination_mitigation and feedback_detector:
+	// signal rules in modality_rules (Signals), detector config here (InlineModels)
+	ModalityDetector ModalityDetectorConfig `yaml:"modality_detector"`
 }
 
 // IntelligentRouting represents the configuration for intelligent routing
@@ -445,7 +445,7 @@ type Signals struct {
 
 	// Modality rules for modality-based signal classification
 	// When matched, outputs "AR", "DIFFUSION", or "BOTH" based on the modality classifier/keyword detection
-	// Detection configuration is read from modality_routing.detection
+	// Detection configuration is read from modality_detector (InlineModels)
 	ModalityRules []ModalityRule `yaml:"modality_rules,omitempty"`
 }
 
@@ -459,6 +459,12 @@ type BackendModels struct {
 
 	// vLLM endpoints configuration for multiple backend support
 	VLLMEndpoints []VLLMEndpoint `yaml:"vllm_endpoints"`
+
+	// Image generation backend configurations (like reasoning_families)
+	// Named map of provider-specific configs referenced by model_config entries.
+	// vllm_omni and openai use completely different APIs — each entry's Type
+	// determines which fields are relevant.
+	ImageGenBackends map[string]ImageGenBackendEntry `yaml:"image_gen_backends,omitempty"`
 }
 
 type ReasoningConfig struct {
@@ -1452,6 +1458,15 @@ type ModelParams struct {
 	// Example: {"huggingface": "meta-llama/Llama-3.1-8B-Instruct", "ollama": "llama3.1:8b"}
 	// +optional
 	ExternalModelIDs map[string]string `yaml:"external_model_ids,omitempty"`
+
+	// Modality role for this model: "ar" (text/autoregressive) or "diffusion" (image generation)
+	// Used by modality routing to identify which model handles which modality.
+	// When empty, the model has no modality role.
+	Modality string `yaml:"modality,omitempty"`
+
+	// ImageGenBackend references a named entry in image_gen_backends (like reasoning_family references reasoning_families)
+	// Required when modality is "diffusion" — tells the router which provider config to use for image generation.
+	ImageGenBackend string `yaml:"image_gen_backend,omitempty"`
 }
 
 // LoRAAdapter represents a LoRA adapter configuration for a model
@@ -2196,7 +2211,7 @@ type UserFeedbackRule struct {
 // ModalityRule defines a rule for modality-based signal classification.
 // The modality classifier determines whether a prompt requires AR (text), DIFFUSION (image),
 // or BOTH (text + image) and outputs one of these signal names.
-// Detection configuration is read from modality_routing.detection.
+// Detection configuration is read from modality_detector (InlineModels).
 type ModalityRule struct {
 	// Name is the signal name that can be referenced in decision rules
 	// e.g., "AR", "DIFFUSION", or "BOTH"

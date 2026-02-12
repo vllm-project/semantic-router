@@ -1497,13 +1497,13 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 	}
 
 	// Evaluate modality rules in parallel (only if used in decisions)
-	// Uses the modality_routing.detection config for classifier/keyword/hybrid detection
-	if isSignalTypeUsed(usedSignals, config.SignalTypeModality) && len(c.Config.ModalityRules) > 0 && c.Config.ModalityRouting != nil && c.Config.ModalityRouting.Enabled {
+	// Uses modality_detector config for classifier/keyword/hybrid detection
+	if isSignalTypeUsed(usedSignals, config.SignalTypeModality) && len(c.Config.ModalityRules) > 0 && c.Config.ModalityDetector.Enabled {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			modalityResult := c.classifyModality(text, &c.Config.ModalityRouting.Detection)
+			modalityResult := c.classifyModality(text, &c.Config.ModalityDetector.ModalityDetectionConfig)
 			elapsed := time.Since(start)
 			latencySeconds := elapsed.Seconds()
 

@@ -21,32 +21,128 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
+// defaultImageResponseText is the canned text returned alongside generated images.
+const defaultImageResponseText = "Here is the generated image based on your request."
+
 // InitModalityClassifier initializes the modality routing classifier.
 // This should be called during application startup if the modality model is available.
 func InitModalityClassifier(modelPath string, useCPU bool) error {
 	return candle_binding.InitMmBert32KModalityClassifier(modelPath, useCPU)
 }
 
+// resolveARModelEndpoint derives the HTTP endpoint URL for a named AR model
+// from model_config -> preferred_endpoints -> vllm_endpoints.
+// The model name must come from the matched decision's ModelRefs.
+func resolveARModelEndpoint(cfg *config.RouterConfig, modelName string) (string, error) {
+	if modelName == "" {
+		return "", fmt.Errorf("AR model name is required (must come from decision modelRefs)")
+	}
+
+	params, ok := cfg.ModelConfig[modelName]
+	if !ok {
+		return "", fmt.Errorf("AR model %q not found in model_config", modelName)
+	}
+
+	if len(params.PreferredEndpoints) == 0 {
+		return "", fmt.Errorf("model %q has no preferred_endpoints", modelName)
+	}
+
+	endpointName := params.PreferredEndpoints[0]
+	for _, ep := range cfg.VLLMEndpoints {
+		if ep.Name == endpointName {
+			return fmt.Sprintf("http://%s:%d/v1", ep.Address, ep.Port), nil
+		}
+	}
+	return "", fmt.Errorf("endpoint %q (for model %q) not found in vllm_endpoints", endpointName, modelName)
+}
+
+// resolveDiffusionBackend finds the image_gen_backend for a named diffusion model
+// from model_config -> image_gen_backends.
+// The model name must come from the matched decision's ModelRefs.
+func resolveDiffusionBackend(cfg *config.RouterConfig, modelName string) (*config.ImageGenBackendEntry, error) {
+	if modelName == "" {
+		return nil, fmt.Errorf("diffusion model name is required (must come from decision modelRefs)")
+	}
+
+	params, ok := cfg.ModelConfig[modelName]
+	if !ok {
+		return nil, fmt.Errorf("diffusion model %q not found in model_config", modelName)
+	}
+
+	if params.ImageGenBackend == "" {
+		return nil, fmt.Errorf("model %q has no image_gen_backend configured", modelName)
+	}
+
+	entry, ok := cfg.ImageGenBackends[params.ImageGenBackend]
+	if !ok {
+		return nil, fmt.Errorf("image_gen_backend %q (for model %q) not found in image_gen_backends", params.ImageGenBackend, modelName)
+	}
+
+	return &entry, nil
+}
+
+// resolveModalityModelsFromDecision extracts the AR and diffusion model names
+// from a decision's ModelRefs by looking up each model's modality in model_config.
+// Returns (arModel, diffusionModel, error). Either may be empty if the decision
+// doesn't include that modality — callers should check based on the modality type.
+func resolveModalityModelsFromDecision(decision *config.Decision, modelConfig map[string]config.ModelParams) (string, string, error) {
+	if decision == nil {
+		return "", "", fmt.Errorf("decision is nil")
+	}
+	if len(decision.ModelRefs) == 0 {
+		return "", "", fmt.Errorf("decision %q has no modelRefs", decision.Name)
+	}
+
+	var arModel, diffusionModel string
+	for _, ref := range decision.ModelRefs {
+		params, ok := modelConfig[ref.Model]
+		if !ok {
+			continue // model not in model_config — skip
+		}
+		switch params.Modality {
+		case "ar":
+			if arModel == "" {
+				arModel = ref.Model
+			}
+		case "diffusion":
+			if diffusionModel == "" {
+				diffusionModel = ref.Model
+			}
+		}
+	}
+
+	return arModel, diffusionModel, nil
+}
+
 // handleModalityFromDecision executes modality-based routing based on the modality signal
 // that was evaluated as part of the decision engine. The signal results are stored in
 // ctx.VSRMatchedModality and ctx.ModalityClassification during signal evaluation.
 //
-// This replaces the old handleModalityRouting which ran as a top-level bypass before
-// the decision engine. Now modality is a first-class signal (type: "modality") that
-// participates in the decision framework and can be composed with other signals.
+// Model selection comes from the matched decision's ModelRefs (ctx.VSRSelectedDecision),
+// NOT from scanning model_config. This ensures the decision engine is the single source
+// of truth for which models handle each modality.
+//
+// Config resolution:
+//
+//   - Models: decision.ModelRefs -> model_config[model].modality to classify AR vs diffusion
+//
+//   - Image gen backend: model_config[model].image_gen_backend -> image_gen_backends[name]
+//
+//   - AR endpoint: model_config[model].preferred_endpoints -> vllm_endpoints
 //
 //   - AR:        returns (nil, nil) — continue normal LLM routing
+//
 //   - DIFFUSION: generates image, returns (*ProcessingResponse, nil)
-//   - BOTH:      calls AR for text AND diffusion for image in parallel,
-//     returns a combined multimodal response (*ProcessingResponse, nil)
+//
+//   - BOTH:      calls AR for text AND diffusion for image in parallel
 func (r *OpenAIRouter) handleModalityFromDecision(ctx *RequestContext, openAIRequest *openai.ChatCompletionNewParams) (*ext_proc.ProcessingResponse, error) {
 	cfg := config.Get()
 	if cfg == nil {
 		return nil, nil
 	}
-	mr := cfg.ModalityRouting
-	if mr == nil || !mr.Enabled {
-		return nil, nil // Modality routing config not present — normal flow
+
+	if !cfg.ModalityDetector.Enabled {
+		return nil, nil // Modality detector not enabled — normal flow
 	}
 
 	// Check the modality classification from signal evaluation
@@ -58,19 +154,47 @@ func (r *OpenAIRouter) handleModalityFromDecision(ctx *RequestContext, openAIReq
 
 	switch result.Modality {
 	case ModalityAR:
-		logging.Infof("[ModalityRouter] AR (method=%s) — passthrough to %s",
-			result.Method, mr.ARModel)
+		logging.Infof("[ModalityRouter] AR (method=%s) — passthrough", result.Method)
 		return nil, nil
 
 	case ModalityDiffusion:
-		logging.Infof("[ModalityRouter] DIFFUSION (method=%s) — generating image via %s",
-			result.Method, mr.DiffusionModel)
-		return r.executeDiffusion(ctx, mr, result)
+		logging.Infof("[ModalityRouter] DIFFUSION (method=%s) — generating image", result.Method)
+
+		// Resolve diffusion model from the matched decision's ModelRefs
+		decision := ctx.VSRSelectedDecision
+		if decision == nil {
+			return nil, fmt.Errorf("modality DIFFUSION matched but no decision selected")
+		}
+		_, diffusionModel, err := resolveModalityModelsFromDecision(decision, cfg.ModelConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve models from decision %q: %w", decision.Name, err)
+		}
+		if diffusionModel == "" {
+			return nil, fmt.Errorf("decision %q has no diffusion model in modelRefs", decision.Name)
+		}
+
+		return r.executeDiffusion(ctx, cfg, result, diffusionModel)
 
 	case ModalityBoth:
-		logging.Infof("[ModalityRouter] BOTH (method=%s) — parallel: AR(%s) + diffusion(%s)",
-			result.Method, mr.ARModel, mr.DiffusionModel)
-		return r.executeBoth(ctx, mr, openAIRequest, result)
+		logging.Infof("[ModalityRouter] BOTH (method=%s) — parallel AR + diffusion", result.Method)
+
+		// Resolve AR and diffusion models from the matched decision's ModelRefs
+		decision := ctx.VSRSelectedDecision
+		if decision == nil {
+			return nil, fmt.Errorf("modality BOTH matched but no decision selected")
+		}
+		arModel, diffusionModel, err := resolveModalityModelsFromDecision(decision, cfg.ModelConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve models from decision %q: %w", decision.Name, err)
+		}
+		if arModel == "" {
+			return nil, fmt.Errorf("decision %q has no AR model in modelRefs", decision.Name)
+		}
+		if diffusionModel == "" {
+			return nil, fmt.Errorf("decision %q has no diffusion model in modelRefs", decision.Name)
+		}
+
+		return r.executeBoth(ctx, cfg, openAIRequest, result, arModel, diffusionModel)
 
 	default:
 		// AR fallback for unrecognized modality
@@ -79,8 +203,9 @@ func (r *OpenAIRouter) handleModalityFromDecision(ctx *RequestContext, openAIReq
 }
 
 // executeDiffusion generates an image and returns an immediate response.
-func (r *OpenAIRouter) executeDiffusion(ctx *RequestContext, mr *config.ModalityRoutingConfig, result ModalityClassificationResult) (*ext_proc.ProcessingResponse, error) {
-	imgResult, err := r.generateImage(ctx, mr)
+// diffusionModel is the model name from the decision's ModelRefs.
+func (r *OpenAIRouter) executeDiffusion(ctx *RequestContext, cfg *config.RouterConfig, result ModalityClassificationResult, diffusionModel string) (*ext_proc.ProcessingResponse, error) {
+	imgResult, err := r.generateImage(ctx, cfg, diffusionModel)
 	if err != nil {
 		return nil, err
 	}
@@ -95,9 +220,8 @@ func (r *OpenAIRouter) executeDiffusion(ctx *RequestContext, mr *config.Modality
 
 // executeBoth calls the AR model for text and the diffusion model for image
 // generation in parallel, then combines them into a single multimodal response.
-func (r *OpenAIRouter) executeBoth(ctx *RequestContext, mr *config.ModalityRoutingConfig, openAIRequest *openai.ChatCompletionNewParams, result ModalityClassificationResult) (*ext_proc.ProcessingResponse, error) {
-	// Each goroutine writes to its own dedicated variable; no shared writes.
-	// wg.Wait() provides the happens-before guarantee for safe reads after Wait.
+// arModel and diffusionModel are model names from the decision's ModelRefs.
+func (r *OpenAIRouter) executeBoth(ctx *RequestContext, cfg *config.RouterConfig, openAIRequest *openai.ChatCompletionNewParams, result ModalityClassificationResult, arModel, diffusionModel string) (*ext_proc.ProcessingResponse, error) {
 	var (
 		wg       sync.WaitGroup
 		textResp map[string]interface{}
@@ -110,27 +234,24 @@ func (r *OpenAIRouter) executeBoth(ctx *RequestContext, mr *config.ModalityRouti
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		textResp, textErr = r.callARModel(ctx, mr, openAIRequest)
+		textResp, textErr = r.callARModel(ctx, cfg, openAIRequest, arModel)
 	}()
 
 	// --- Diffusion image call (parallel) ---
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		imgRes, imgErr = r.generateImage(ctx, mr)
+		imgRes, imgErr = r.generateImage(ctx, cfg, diffusionModel)
 	}()
 
 	wg.Wait()
 
-	// If text call failed, still try to return image-only
 	if textErr != nil {
 		logging.Errorf("[ModalityRouter] BOTH: AR call failed: %v", textErr)
 	}
-	// If image call failed, still try to return text-only
 	if imgErr != nil {
 		logging.Errorf("[ModalityRouter] BOTH: diffusion call failed: %v", imgErr)
 	}
-	// If both failed, return error
 	if textErr != nil && imgErr != nil {
 		return nil, fmt.Errorf("BOTH: AR failed (%w) and diffusion failed (%w)", textErr, imgErr)
 	}
@@ -145,8 +266,15 @@ func (r *OpenAIRouter) executeBoth(ctx *RequestContext, mr *config.ModalityRouti
 
 // callARModel sends the user's chat completion request to the AR model endpoint
 // directly and returns the parsed response.
-func (r *OpenAIRouter) callARModel(ctx *RequestContext, mr *config.ModalityRoutingConfig, openAIRequest *openai.ChatCompletionNewParams) (map[string]interface{}, error) {
-	// Serialize the original request (without tool injection)
+// arModel is the model name from the decision's ModelRefs; its endpoint is resolved
+// from model_config -> preferred_endpoints -> vllm_endpoints.
+func (r *OpenAIRouter) callARModel(ctx *RequestContext, cfg *config.RouterConfig, openAIRequest *openai.ChatCompletionNewParams, arModel string) (map[string]interface{}, error) {
+	arEndpoint, err := resolveARModelEndpoint(cfg, arModel)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve AR model endpoint: %w", err)
+	}
+
+	// Serialize the original request
 	reqBody, err := json.Marshal(openAIRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal AR request: %w", err)
@@ -157,8 +285,7 @@ func (r *OpenAIRouter) callARModel(ctx *RequestContext, mr *config.ModalityRouti
 	if unmarshalErr := json.Unmarshal(reqBody, &reqMap); unmarshalErr != nil {
 		return nil, fmt.Errorf("failed to parse AR request: %w", unmarshalErr)
 	}
-	reqMap["model"] = mr.ARModel
-	// Remove tools/tool_choice — we want pure text from the AR model
+	reqMap["model"] = arModel
 	delete(reqMap, "tools")
 	delete(reqMap, "tool_choice")
 	reqBody, err = json.Marshal(reqMap)
@@ -166,8 +293,8 @@ func (r *OpenAIRouter) callARModel(ctx *RequestContext, mr *config.ModalityRouti
 		return nil, fmt.Errorf("failed to marshal modified AR request: %w", err)
 	}
 
-	url := mr.AREndpoint + "/chat/completions"
-	logging.Infof("[ModalityRouter] BOTH: calling AR endpoint %s (model=%s)", url, mr.ARModel)
+	url := arEndpoint + "/chat/completions"
+	logging.Infof("[ModalityRouter] BOTH: calling AR endpoint %s (model=%s)", url, arModel)
 
 	start := time.Now()
 	httpReq, err := http.NewRequestWithContext(ctx.TraceContext, http.MethodPost, url, bytes.NewReader(reqBody))
@@ -176,10 +303,7 @@ func (r *OpenAIRouter) callARModel(ctx *RequestContext, mr *config.ModalityRouti
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	timeout := time.Duration(mr.ImageGen.TimeoutSeconds) * time.Second
-	if timeout <= 0 {
-		timeout = 120 * time.Second // same default as diffusion timeout
-	}
+	timeout := 120 * time.Second
 	client := &http.Client{Timeout: timeout}
 	resp, err := client.Do(httpReq)
 	if err != nil {
@@ -208,27 +332,29 @@ func (r *OpenAIRouter) callARModel(ctx *RequestContext, mr *config.ModalityRouti
 }
 
 // generateImage creates the diffusion backend, sends the prompt, and returns the result.
-// Shared by executeDiffusion and executeBoth.
-func (r *OpenAIRouter) generateImage(ctx *RequestContext, mr *config.ModalityRoutingConfig) (*ImageGenResult, error) {
-	pluginCfg := &config.ImageGenPluginConfig{
-		Enabled:       true,
-		Backend:       mr.ImageGen.Backend,
-		BackendConfig: mr.ImageGen.BackendConfig,
-		DefaultWidth:  mr.ImageGen.DefaultWidth,
-		DefaultHeight: mr.ImageGen.DefaultHeight,
+// diffusionModel is the model name from the decision's ModelRefs; its backend config
+// is resolved from model_config -> image_gen_backends.
+// Prompt prefixes are read from modality_detector config.
+func (r *OpenAIRouter) generateImage(ctx *RequestContext, cfg *config.RouterConfig, diffusionModel string) (*ImageGenResult, error) {
+	// Find the diffusion model's image_gen_backend using the decision-selected model
+	backendEntry, err := resolveDiffusionBackend(cfg, diffusionModel)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve diffusion backend: %w", err)
 	}
 
-	if err := pluginCfg.UnmarshalBackendConfig(); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal backend config: %w", err)
-	}
+	// Convert ImageGenBackendEntry -> ImageGenPluginConfig for the imagegen factory
+	pluginCfg := backendEntry.ToPluginConfig()
 
 	backend, err := imagegen.CreateBackend(pluginCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create image generation backend: %w", err)
 	}
 
+	// Get prompt prefixes from modality_detector config
+	promptPrefixes := cfg.ModalityDetector.PromptPrefixes
+
 	genReq := &imagegen.GenerateRequest{
-		Prompt: ExtractImagePrompt(ctx.UserContent, mr.ImageGen.PromptPrefixes),
+		Prompt: ExtractImagePrompt(ctx.UserContent, promptPrefixes),
 		Width:  pluginCfg.DefaultWidth,
 		Height: pluginCfg.DefaultHeight,
 	}
@@ -250,14 +376,13 @@ func (r *OpenAIRouter) generateImage(ctx *RequestContext, mr *config.ModalityRou
 		ImageBase64:   genResp.ImageBase64,
 		RevisedPrompt: genResp.RevisedPrompt,
 		Model:         genResp.Model,
-		ResponseText:  mr.ImageGen.ResponseText,
+		ResponseText:  defaultImageResponseText,
 	}, nil
 }
 
 // buildBothResponse combines the AR text response with the diffusion image into
 // a single Chat Completions response containing multi-part content (text + image_url).
 func (r *OpenAIRouter) buildBothResponse(textResp map[string]interface{}, imgResult *ImageGenResult, ctx *RequestContext) ([]byte, error) {
-	// Extract text content from the AR response
 	textContent := ""
 	arModel := ""
 	if textResp != nil {
@@ -275,7 +400,6 @@ func (r *OpenAIRouter) buildBothResponse(textResp map[string]interface{}, imgRes
 		}
 	}
 
-	// Build multi-part content: text first, then image
 	var contentParts []map[string]interface{}
 
 	if textContent != "" {
@@ -294,7 +418,6 @@ func (r *OpenAIRouter) buildBothResponse(textResp map[string]interface{}, imgRes
 		})
 	}
 
-	// Fall back: if we somehow have neither, return an error message
 	if len(contentParts) == 0 {
 		contentParts = append(contentParts, map[string]interface{}{
 			"type": "text",
