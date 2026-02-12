@@ -34,6 +34,104 @@ class ValidationError:
         return self.message
 
 
+def _is_latency_condition(condition_type: str) -> bool:
+    return condition_type.strip().lower() == "latency"
+
+
+def _is_latency_aware_algorithm(decision) -> bool:
+    if not decision.algorithm:
+        return False
+    return (decision.algorithm.type or "").strip().lower() == "latency_aware"
+
+
+def validate_latency_compatibility(config: UserConfig) -> List[ValidationError]:
+    errors = []
+    has_legacy_signals = (
+        config.signals is not None
+        and config.signals.latency is not None
+        and len(config.signals.latency) > 0
+    )
+    has_legacy_conditions = any(
+        _is_latency_condition(condition.type)
+        for decision in config.decisions
+        for condition in decision.rules.conditions
+    )
+    has_latency_aware = any(
+        _is_latency_aware_algorithm(decision) for decision in config.decisions
+    )
+
+    if (has_legacy_signals or has_legacy_conditions) and has_latency_aware:
+        errors.append(
+            ValidationError(
+                "legacy latency config (signals.latency / conditions.type=latency) "
+                "cannot be used with decision.algorithm.type=latency_aware",
+                field="decisions.algorithm",
+            )
+        )
+        return errors
+
+    # TODO(v0.2-Athena): Remove legacy latency compatibility after deprecation period.
+    if has_legacy_signals:
+        log.warning(
+            "DEPRECATED: signals.latency is deprecated; migrate to decision.algorithm.type=latency_aware"
+        )
+    if has_legacy_conditions:
+        log.warning(
+            "DEPRECATED: conditions.type=latency is deprecated; migrate to decision.algorithm.type=latency_aware"
+        )
+
+    if has_legacy_conditions and not has_legacy_signals:
+        errors.append(
+            ValidationError(
+                "conditions.type=latency requires signals.latency for migration",
+                field="signals.latency",
+            )
+        )
+
+    return errors
+
+
+def validate_latency_aware_algorithm_config(config: UserConfig) -> List[ValidationError]:
+    errors = []
+    for decision in config.decisions:
+        if not _is_latency_aware_algorithm(decision):
+            continue
+        latency_cfg = decision.algorithm.latency_aware
+        if latency_cfg is None:
+            errors.append(
+                ValidationError(
+                    f"decision '{decision.name}' requires algorithm.latency_aware when algorithm.type=latency_aware",
+                    field=f"decisions.{decision.name}.algorithm.latency_aware",
+                )
+            )
+            continue
+
+        has_tpot = latency_cfg.tpot_percentile is not None and latency_cfg.tpot_percentile > 0
+        has_ttft = latency_cfg.ttft_percentile is not None and latency_cfg.ttft_percentile > 0
+        if not has_tpot and not has_ttft:
+            errors.append(
+                ValidationError(
+                    f"decision '{decision.name}' must set tpot_percentile or ttft_percentile in algorithm.latency_aware",
+                    field=f"decisions.{decision.name}.algorithm.latency_aware",
+                )
+            )
+        if has_tpot and not (1 <= latency_cfg.tpot_percentile <= 100):
+            errors.append(
+                ValidationError(
+                    f"decision '{decision.name}' algorithm.latency_aware.tpot_percentile must be between 1 and 100",
+                    field=f"decisions.{decision.name}.algorithm.latency_aware.tpot_percentile",
+                )
+            )
+        if has_ttft and not (1 <= latency_cfg.ttft_percentile <= 100):
+            errors.append(
+                ValidationError(
+                    f"decision '{decision.name}' algorithm.latency_aware.ttft_percentile must be between 1 and 100",
+                    field=f"decisions.{decision.name}.algorithm.latency_aware.ttft_percentile",
+                )
+            )
+    return errors
+
+
 def validate_signal_references(config: UserConfig) -> List[ValidationError]:
     """
     Validate that all signal references in decisions exist.
@@ -66,9 +164,6 @@ def validate_signal_references(config: UserConfig) -> List[ValidationError]:
         if config.signals.language:
             for signal in config.signals.language:
                 signal_names.add(signal.name)
-        if config.signals.latency:
-            for signal in config.signals.latency:
-                signal_names.add(signal.name)
         if config.signals.context:
             for signal in config.signals.context:
                 signal_names.add(signal.name)
@@ -90,7 +185,6 @@ def validate_signal_references(config: UserConfig) -> List[ValidationError]:
                 "user_feedback",
                 "preference",
                 "language",
-                "latency",
                 "context",
                 "complexity",
             ]:
@@ -333,6 +427,8 @@ def validate_user_config(config: UserConfig) -> List[ValidationError]:
 
     # Validate signal references
     errors.extend(validate_signal_references(config))
+    errors.extend(validate_latency_compatibility(config))
+    errors.extend(validate_latency_aware_algorithm_config(config))
 
     # Validate domain references
     errors.extend(validate_domain_references(config))
