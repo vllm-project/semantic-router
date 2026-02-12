@@ -70,6 +70,8 @@ type SignalMatches struct {
 	ContextRules      []string // Context rule names matched (e.g. "low_token_count")
 	ComplexityRules   []string // Complexity rules with difficulty level (e.g. "code_complexity:hard")
 	ModalityRules     []string // Modality classification: "AR", "DIFFUSION", or "BOTH"
+
+	SignalConfidences map[string]float64 // "signalType:ruleName" → real score (0.0-1.0), e.g. {"embedding:ai": 0.88}. Defaults to 1.0 if missing
 }
 
 // DecisionResult represents the result of decision evaluation
@@ -201,7 +203,21 @@ func (e *DecisionEngine) evaluateRuleCombinationWithSignals(
 
 		if conditionMatched {
 			matchedCount++
-			totalConfidence += 1.0 // Each matched condition contributes 1.0 to confidence
+
+			// Use real confidence score if available (e.g., embedding similarity = 0.88),
+			// otherwise fall back to 1.0 for backward compatibility with signals that
+			// don't provide confidence (e.g., fact_check, language).
+			signalKey := fmt.Sprintf("%s:%s", normalizedType, condition.Name)
+			if signals.SignalConfidences != nil {
+				if score, ok := signals.SignalConfidences[signalKey]; ok && score > 0 {
+					totalConfidence += score
+				} else {
+					totalConfidence += 1.0
+				}
+			} else {
+				totalConfidence += 1.0
+			}
+
 			allMatchedRules = append(allMatchedRules, fmt.Sprintf("%s:%s", condition.Type, condition.Name))
 		}
 	}

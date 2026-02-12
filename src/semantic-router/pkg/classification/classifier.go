@@ -986,6 +986,8 @@ type SignalResults struct {
 	MatchedComplexityRules   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
 	MatchedModalityRules     []string // Matched modality: "AR", "DIFFUSION", or "BOTH"
 
+	SignalConfidences map[string]float64 // Real confidence scores per signal, e.g. "embedding:ai" → 0.88
+
 	// Signal metrics (only populated in eval mode)
 	Metrics *SignalMetricsCollection
 }
@@ -1102,33 +1104,53 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 	}
 
 	// Evaluate embedding rules in parallel (only if used in decisions)
+	// Uses ClassifyAll() to return ALL matched rules (not just the single best),
+	// enabling AND conditions in the Decision Engine (e.g., embedding:"ai" AND embedding:"programming").
+	// Also stores real similarity scores in SignalConfidences for quality-based routing.
 	if isSignalTypeUsed(usedSignals, config.SignalTypeEmbedding) && c.keywordEmbeddingClassifier != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			category, confidence, err := c.keywordEmbeddingClassifier.Classify(text)
+			matchedRules, err := c.keywordEmbeddingClassifier.ClassifyAll(text)
 			elapsed := time.Since(start)
-			latencySeconds := elapsed.Seconds()
 
-			// Record signal extraction metrics
-			metrics.RecordSignalExtraction(config.SignalTypeEmbedding, category, latencySeconds)
-
-			// Record metrics (use microseconds for better precision)
+			// Record metrics
 			results.Metrics.Embedding.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
-			if category != "" && err == nil && confidence > 0 {
-				results.Metrics.Embedding.Confidence = confidence
-			}
 
 			logging.Infof("[Signal Computation] Embedding signal evaluation completed in %v", elapsed)
 			if err != nil {
 				logging.Errorf("embedding rule evaluation failed: %v", err)
-			} else if category != "" {
-				// Record signal match
-				metrics.RecordSignalMatch(config.SignalTypeEmbedding, category)
+			} else if len(matchedRules) > 0 {
+				// Record the highest confidence for metrics display
+				var bestConfidence float64
+				for _, mr := range matchedRules {
+					if mr.Score > bestConfidence {
+						bestConfidence = mr.Score
+					}
+				}
+				results.Metrics.Embedding.Confidence = bestConfidence
 
 				mu.Lock()
-				results.MatchedEmbeddingRules = append(results.MatchedEmbeddingRules, category)
+				// Add ALL matched rules (not just the best one)
+				for _, mr := range matchedRules {
+					// Record signal extraction and match metrics for each matched rule
+					metrics.RecordSignalExtraction(config.SignalTypeEmbedding, mr.RuleName, elapsed.Seconds())
+					metrics.RecordSignalMatch(config.SignalTypeEmbedding, mr.RuleName)
+
+					// Append rule name to the matched list
+					results.MatchedEmbeddingRules = append(results.MatchedEmbeddingRules, mr.RuleName)
+
+					// Store real similarity score for this rule
+					// The Decision Engine will use this instead of hardcoded 1.0
+					if results.SignalConfidences == nil {
+						results.SignalConfidences = make(map[string]float64)
+					}
+					results.SignalConfidences["embedding:"+mr.RuleName] = mr.Score
+
+					logging.Infof("[Signal Computation] Embedding match: rule=%q, score=%.4f, method=%s",
+						mr.RuleName, mr.Score, mr.Method)
+				}
 				mu.Unlock()
 			}
 		}()
@@ -1579,6 +1601,7 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		ContextRules:      signals.MatchedContextRules,
 		ComplexityRules:   signals.MatchedComplexityRules,
 		ModalityRules:     signals.MatchedModalityRules,
+		SignalConfidences: signals.SignalConfidences,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("decision evaluation failed: %w", err)
