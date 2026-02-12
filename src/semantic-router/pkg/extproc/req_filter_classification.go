@@ -91,7 +91,6 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	ctx.VSRMatchedUserFeedback = signals.MatchedUserFeedbackRules
 	ctx.VSRMatchedPreference = signals.MatchedPreferenceRules
 	ctx.VSRMatchedLanguage = signals.MatchedLanguageRules
-	ctx.VSRMatchedLatency = signals.MatchedLatencyRules
 	ctx.VSRMatchedContext = signals.MatchedContextRules
 	ctx.VSRContextTokenCount = signals.TokenCount
 	ctx.VSRMatchedComplexity = signals.MatchedComplexityRules
@@ -106,10 +105,10 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	r.setModalityFromSignals(ctx, signals.MatchedModalityRules)
 
 	// Log signal evaluation results
-	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, latency=%v, modality=%v",
+	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, modality=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
 		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules,
-		signals.MatchedLanguageRules, signals.MatchedLatencyRules, signals.MatchedModalityRules)
+		signals.MatchedLanguageRules, signals.MatchedModalityRules)
 
 	// Set signal span attributes
 	allMatchedRules := []string{}
@@ -120,7 +119,6 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	allMatchedRules = append(allMatchedRules, signals.MatchedUserFeedbackRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedPreferenceRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedLanguageRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedLatencyRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedModalityRules...)
 
 	// End signal evaluation span

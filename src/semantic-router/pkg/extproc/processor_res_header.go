@@ -251,15 +251,6 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 			})
 		}
 
-		if len(ctx.VSRMatchedLatency) > 0 {
-			setHeaders = append(setHeaders, &core.HeaderValueOption{
-				Header: &core.HeaderValue{
-					Key:      headers.VSRMatchedLatency,
-					RawValue: []byte(strings.Join(ctx.VSRMatchedLatency, ",")),
-				},
-			})
-		}
-
 		// Add x-vsr-matched-context header (from context signal classification)
 		if len(ctx.VSRMatchedContext) > 0 {
 			setHeaders = append(setHeaders, &core.HeaderValueOption{

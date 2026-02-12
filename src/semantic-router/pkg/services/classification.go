@@ -282,7 +282,6 @@ func (s *ClassificationService) buildIntentResponseFromSignals(
 			UserFeedback: signals.MatchedUserFeedbackRules,
 			Preferences:  signals.MatchedPreferenceRules,
 			Language:     signals.MatchedLanguageRules,
-			Latency:      signals.MatchedLatencyRules,
 			Context:      signals.MatchedContextRules,
 			Complexity:   signals.MatchedComplexityRules,
 		}
@@ -894,7 +893,6 @@ func (s *ClassificationService) buildEvalResponse(
 		UserFeedback: signals.MatchedUserFeedbackRules,
 		Preferences:  signals.MatchedPreferenceRules,
 		Language:     signals.MatchedLanguageRules,
-		Latency:      signals.MatchedLatencyRules,
 		Context:      signals.MatchedContextRules,
 		Complexity:   signals.MatchedComplexityRules,
 	}
@@ -984,10 +982,6 @@ func (s *ClassificationService) extractSignalsFromRuleCombination(rules config.R
 			if !contains(usedSignals.Language, signalName) {
 				usedSignals.Language = append(usedSignals.Language, signalName)
 			}
-		case "latency":
-			if !contains(usedSignals.Latency, signalName) {
-				usedSignals.Latency = append(usedSignals.Latency, signalName)
-			}
 		case "context":
 			if !contains(usedSignals.Context, signalName) {
 				usedSignals.Context = append(usedSignals.Context, signalName)
@@ -1074,13 +1068,6 @@ func (s *ClassificationService) getUnmatchedSignals(signals *classification.Sign
 	for _, rule := range s.classifier.Config.LanguageRules {
 		if !isMatched(rule.Name, signals.MatchedLanguageRules) {
 			unmatched.Language = append(unmatched.Language, rule.Name)
-		}
-	}
-
-	// Check latency rules
-	for _, rule := range s.classifier.Config.LatencyRules {
-		if !isMatched(rule.Name, signals.MatchedLatencyRules) {
-			unmatched.Latency = append(unmatched.Latency, rule.Name)
 		}
 	}
 
