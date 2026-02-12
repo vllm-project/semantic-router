@@ -153,6 +153,67 @@ def validate_latency_aware_algorithm_config(config: UserConfig) -> List[Validati
     return errors
 
 
+def validate_algorithm_one_of(config: UserConfig) -> List[ValidationError]:
+    errors = []
+
+    expected_block_by_type = {
+        "confidence": "confidence",
+        "concurrent": "concurrent",
+        "remom": "remom",
+        "latency_aware": "latency_aware",
+    }
+
+    for decision in config.decisions:
+        if decision.algorithm is None:
+            continue
+
+        algorithm = decision.algorithm
+        configured_blocks = []
+        if algorithm.confidence is not None:
+            configured_blocks.append("confidence")
+        if algorithm.concurrent is not None:
+            configured_blocks.append("concurrent")
+        if algorithm.remom is not None:
+            configured_blocks.append("remom")
+        if algorithm.latency_aware is not None:
+            configured_blocks.append("latency_aware")
+
+        display_type = (algorithm.type or "").strip() or "<empty>"
+        normalized_type = (algorithm.type or "").strip().lower()
+
+        if len(configured_blocks) > 1:
+            errors.append(
+                ValidationError(
+                    f"decision '{decision.name}' algorithm.type={display_type} cannot be combined with multiple algorithm config blocks: "
+                    f"{', '.join(configured_blocks)}",
+                    field=f"decisions.{decision.name}.algorithm",
+                )
+            )
+            continue
+
+        expected_block = expected_block_by_type.get(normalized_type)
+        if expected_block is None:
+            if configured_blocks:
+                errors.append(
+                    ValidationError(
+                        f"decision '{decision.name}' algorithm.type={display_type} cannot be used with algorithm.{configured_blocks[0]} configuration",
+                        field=f"decisions.{decision.name}.algorithm.{configured_blocks[0]}",
+                    )
+                )
+            continue
+
+        if len(configured_blocks) == 1 and configured_blocks[0] != expected_block:
+            errors.append(
+                ValidationError(
+                    f"decision '{decision.name}' algorithm.type={display_type} requires algorithm.{expected_block} configuration; "
+                    f"found algorithm.{configured_blocks[0]}",
+                    field=f"decisions.{decision.name}.algorithm.{configured_blocks[0]}",
+                )
+            )
+
+    return errors
+
+
 def validate_signal_references(config: UserConfig) -> List[ValidationError]:
     """
     Validate that all signal references in decisions exist.
@@ -449,6 +510,7 @@ def validate_user_config(config: UserConfig) -> List[ValidationError]:
     # Validate signal references
     errors.extend(validate_signal_references(config))
     errors.extend(validate_latency_compatibility(config))
+    errors.extend(validate_algorithm_one_of(config))
     errors.extend(validate_latency_aware_algorithm_config(config))
 
     # Validate domain references

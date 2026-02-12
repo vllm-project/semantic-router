@@ -131,14 +131,9 @@ func validateConfigStructure(cfg *RouterConfig) error {
 			}
 		}
 
-		// Validate algorithm.latency_aware only when algorithm.type=latency_aware.
-		if decision.Algorithm != nil && strings.EqualFold(strings.TrimSpace(decision.Algorithm.Type), "latency_aware") {
-			if decision.Algorithm.LatencyAware == nil {
-				return fmt.Errorf("decision '%s': algorithm.type=latency_aware requires algorithm.latency_aware configuration", decision.Name)
-			}
-			if err := validateLatencyAwareAlgorithmConfig(decision.Algorithm.LatencyAware); err != nil {
-				return fmt.Errorf("decision '%s', algorithm.latency_aware: %w", decision.Name, err)
-			}
+		// Validate algorithm one-of semantics and type-specific configuration.
+		if err := validateDecisionAlgorithmConfig(decision.Name, decision.Algorithm); err != nil {
+			return err
 		}
 	}
 
@@ -318,6 +313,92 @@ func hasAnyLatencyAwareDecision(decisions []Decision) bool {
 		}
 	}
 	return false
+}
+
+func validateDecisionAlgorithmConfig(decisionName string, algorithm *AlgorithmConfig) error {
+	if algorithm == nil {
+		return nil
+	}
+
+	normalizedType := strings.ToLower(strings.TrimSpace(algorithm.Type))
+	displayType := strings.TrimSpace(algorithm.Type)
+	if displayType == "" {
+		displayType = "<empty>"
+	}
+
+	configuredBlocks := make([]string, 0, 10)
+	addBlock := func(name string, configured bool) {
+		if configured {
+			configuredBlocks = append(configuredBlocks, name)
+		}
+	}
+
+	addBlock("confidence", algorithm.Confidence != nil)
+	addBlock("ratings", algorithm.Ratings != nil)
+	addBlock("remom", algorithm.ReMoM != nil)
+	addBlock("elo", algorithm.Elo != nil)
+	addBlock("router_dc", algorithm.RouterDC != nil)
+	addBlock("automix", algorithm.AutoMix != nil)
+	addBlock("hybrid", algorithm.Hybrid != nil)
+	addBlock("rl_driven", algorithm.RLDriven != nil)
+	addBlock("gmtrouter", algorithm.GMTRouter != nil)
+	addBlock("latency_aware", algorithm.LatencyAware != nil)
+
+	if len(configuredBlocks) > 1 {
+		return fmt.Errorf(
+			"decision '%s': algorithm.type=%s cannot be combined with multiple algorithm config blocks: %s",
+			decisionName,
+			displayType,
+			strings.Join(configuredBlocks, ", "),
+		)
+	}
+
+	expectedBlockByType := map[string]string{
+		"confidence":    "confidence",
+		"ratings":       "ratings",
+		"remom":         "remom",
+		"elo":           "elo",
+		"router_dc":     "router_dc",
+		"automix":       "automix",
+		"hybrid":        "hybrid",
+		"rl_driven":     "rl_driven",
+		"gmtrouter":     "gmtrouter",
+		"latency_aware": "latency_aware",
+	}
+
+	expectedBlock, hasExpectedBlock := expectedBlockByType[normalizedType]
+	if !hasExpectedBlock {
+		if len(configuredBlocks) > 0 {
+			return fmt.Errorf(
+				"decision '%s': algorithm.type=%s cannot be used with algorithm.%s configuration",
+				decisionName,
+				displayType,
+				configuredBlocks[0],
+			)
+		}
+		return nil
+	}
+
+	if len(configuredBlocks) == 1 && configuredBlocks[0] != expectedBlock {
+		return fmt.Errorf(
+			"decision '%s': algorithm.type=%s requires algorithm.%s configuration; found algorithm.%s",
+			decisionName,
+			displayType,
+			expectedBlock,
+			configuredBlocks[0],
+		)
+	}
+
+	if normalizedType == "latency_aware" {
+		if algorithm.LatencyAware == nil {
+			return fmt.Errorf("decision '%s': algorithm.type=latency_aware requires algorithm.latency_aware configuration", decisionName)
+		}
+		if err := validateLatencyAwareAlgorithmConfig(algorithm.LatencyAware); err != nil {
+			return fmt.Errorf("decision '%s', algorithm.latency_aware: %w", decisionName, err)
+		}
+	}
+
+	return nil
 }
 
 // validateLatencyRules validates latency rule configurations

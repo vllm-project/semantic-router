@@ -323,6 +323,73 @@ var _ = Describe("validateConfigStructure", func() {
 		Expect(validateConfigStructure(cfg)).To(Succeed())
 	})
 
+	It("rejects multiple algorithm config blocks in one decision", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "mixed-algo-blocks",
+					ModelRefs: []ModelRef{{
+						Model:                 "model-a",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+					}},
+					Algorithm: &AlgorithmConfig{
+						Type:         "latency_aware",
+						LatencyAware: &LatencyAwareAlgorithmConfig{TPOTPercentile: 20},
+						AutoMix:      &AutoMixSelectionConfig{},
+					},
+				}},
+			},
+		}
+
+		err := validateConfigStructure(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("cannot be combined with multiple algorithm config blocks"))
+	})
+
+	It("rejects algorithm type and config block mismatch", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "mismatched-algo-block",
+					ModelRefs: []ModelRef{{
+						Model:                 "model-a",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+					}},
+					Algorithm: &AlgorithmConfig{
+						Type:   "automix",
+						Hybrid: &HybridSelectionConfig{},
+					},
+				}},
+			},
+		}
+
+		err := validateConfigStructure(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("requires algorithm.automix configuration; found algorithm.hybrid"))
+	})
+
+	It("rejects unsupported algorithm block for static type", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "static-with-block",
+					ModelRefs: []ModelRef{{
+						Model:                 "model-a",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+					}},
+					Algorithm: &AlgorithmConfig{
+						Type:    "static",
+						AutoMix: &AutoMixSelectionConfig{},
+					},
+				}},
+			},
+		}
+
+		err := validateConfigStructure(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("algorithm.type=static cannot be used with algorithm.automix configuration"))
+	})
+
 	It("accepts deprecated latency signal config and latency conditions (warning only)", func() {
 		cfg := &RouterConfig{
 			IntelligentRouting: IntelligentRouting{
