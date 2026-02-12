@@ -400,6 +400,14 @@ type Classifier struct {
 	// Complexity classifier for complexity-based routing using embedding similarity
 	complexityClassifier *ComplexityClassifier
 
+	// Authz classifier for user-level authorization signal classification
+	authzClassifier *AuthzClassifier
+
+	// Identity header names resolved from authz.identity config (or defaults).
+	// Used by EvaluateAllSignalsWithHeaders to read user identity from requests.
+	authzUserIDHeader     string
+	authzUserGroupsHeader string
+
 	Config           *config.RouterConfig
 	CategoryMapping  *CategoryMapping
 	PIIMapping       *PIIMapping
@@ -460,6 +468,12 @@ func withContextClassifier(contextClassifier *ContextClassifier) option {
 func withComplexityClassifier(complexityClassifier *ComplexityClassifier) option {
 	return func(c *Classifier) {
 		c.complexityClassifier = complexityClassifier
+	}
+}
+
+func withAuthzClassifier(authzClassifier *AuthzClassifier) option {
+	return func(c *Classifier) {
+		c.authzClassifier = authzClassifier
 	}
 }
 
@@ -555,6 +569,10 @@ func newClassifierWithOptions(cfg *config.RouterConfig, options ...option) (*Cla
 
 	classifier := &Classifier{Config: cfg}
 
+	// Resolve identity header names from authz.identity config (or defaults).
+	classifier.authzUserIDHeader = cfg.Authz.Identity.GetUserIDHeader()
+	classifier.authzUserGroupsHeader = cfg.Authz.Identity.GetUserGroupsHeader()
+
 	for _, option := range options {
 		option(classifier)
 	}
@@ -647,6 +665,17 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 			return nil, err
 		}
 		options = append(options, withComplexityClassifier(complexityClassifier))
+	}
+
+	// Add authz classifier if authz rules are configured
+	roleBindings := cfg.GetRoleBindings()
+	if len(roleBindings) > 0 {
+		authzClassifier, err := NewAuthzClassifier(roleBindings)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create authz classifier: %w", err)
+		}
+		options = append(options, withAuthzClassifier(authzClassifier))
+		logging.Infof("Authz classifier initialized with %d role bindings", len(roleBindings))
 	}
 
 	// Add in-tree classifier if configured
@@ -958,6 +987,9 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 	// Add all configured modality rules
 	for _, rule := range c.Config.ModalityRules {
 		key := strings.ToLower(config.SignalTypeModality + ":" + rule.Name)
+	// Add all configured role bindings (authz signal uses the Role name, not binding name)
+	for _, rb := range c.Config.GetRoleBindings() {
+		key := strings.ToLower(config.SignalTypeAuthz + ":" + rb.Role)
 		allSignals[key] = true
 	}
 
@@ -985,6 +1017,7 @@ type SignalResults struct {
 	TokenCount               int      // Total token count
 	MatchedComplexityRules   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
 	MatchedModalityRules     []string // Matched modality: "AR", "DIFFUSION", or "BOTH"
+	MatchedAuthzRules        []string // Matched authz role names for user-level RBAC routing
 
 	SignalConfidences map[string]float64 // Real confidence scores per signal, e.g. "embedding:ai" → 0.88
 
@@ -1005,6 +1038,7 @@ type SignalMetricsCollection struct {
 	Context      SignalMetrics `json:"context"`
 	Complexity   SignalMetrics `json:"complexity"`
 	Modality     SignalMetrics `json:"modality"`
+	Authz        SignalMetrics `json:"authz"`
 }
 
 // analyzeRuleCombination recursively analyzes rule combinations to find used signals
@@ -1038,6 +1072,61 @@ func isSignalTypeUsed(usedSignals map[string]bool, signalType string) bool {
 func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 	// For backward compatibility, use the same text for both evaluation and context counting
 	return c.EvaluateAllSignalsWithContext(text, text, false)
+}
+
+// EvaluateAllSignalsWithHeaders evaluates all signal types including the authz signal.
+// The authz signal reads user identity and groups from request headers (x-authz-user-id,
+// x-authz-user-groups) and evaluates role_bindings. Other signals are evaluated via
+// EvaluateAllSignalsWithContext as before.
+//
+// Returns an error if authz evaluation fails (e.g., missing user identity header when
+// role_bindings are configured). Errors are NOT swallowed — the caller must handle them.
+// This prevents silent bypass of authz policies.
+//
+// headers: request headers from ext_proc (includes Authorino-injected authz headers)
+func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText string, headers map[string]string, forceEvaluateAll bool) (*SignalResults, error) {
+	results := c.EvaluateAllSignalsWithContext(text, contextText, forceEvaluateAll)
+
+	// Evaluate authz signal if role bindings are configured and the signal type is used
+	usedSignals := c.getUsedSignals()
+	if forceEvaluateAll {
+		usedSignals = c.getAllSignalTypes()
+	}
+
+	if isSignalTypeUsed(usedSignals, config.SignalTypeAuthz) && c.authzClassifier != nil {
+		start := time.Now()
+		userID := headers[c.authzUserIDHeader]
+		userGroups := ParseUserGroups(headers[c.authzUserGroupsHeader])
+
+		authzResult, err := c.authzClassifier.Classify(userID, userGroups)
+		elapsed := time.Since(start)
+		latencySeconds := elapsed.Seconds()
+
+		// Record metrics
+		results.Metrics.Authz.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
+		results.Metrics.Authz.Confidence = 1.0 // Rule-based, always 1.0
+
+		if err != nil {
+			// Do NOT swallow authz errors — propagate to caller.
+			// A missing user identity header when role_bindings are configured is a hard failure,
+			// not a signal that "didn't fire." Silent bypass is not allowed.
+			logging.Errorf("[Authz Signal] classification failed: %v", err)
+			metrics.RecordSignalExtraction(config.SignalTypeAuthz, "error", latencySeconds)
+			return nil, fmt.Errorf("authz signal evaluation failed: %w", err)
+		}
+
+		for _, ruleName := range authzResult.MatchedRules {
+			metrics.RecordSignalExtraction(config.SignalTypeAuthz, ruleName, latencySeconds)
+			metrics.RecordSignalMatch(config.SignalTypeAuthz, ruleName)
+		}
+		results.MatchedAuthzRules = authzResult.MatchedRules
+
+		logging.Infof("[Signal Computation] Authz signal evaluation completed in %v", elapsed)
+	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeAuthz) {
+		logging.Infof("[Signal Computation] Authz signal not used in any decision, skipping evaluation")
+	}
+
+	return results, nil
 }
 
 // EvaluateAllSignalsWithForceOption evaluates signals with option to force evaluate all
@@ -1579,6 +1668,11 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules,
 		signals.MatchedLanguageRules, signals.MatchedLatencyRules, signals.MatchedContextRules,
 		signals.MatchedComplexityRules, signals.MatchedModalityRules)
+	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, latency=%v, context=%v, complexity=%v, authz=%v",
+		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
+		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules,
+		signals.MatchedLanguageRules, signals.MatchedLatencyRules, signals.MatchedContextRules,
+		signals.MatchedComplexityRules, signals.MatchedAuthzRules)
 	// Create decision engine
 	engine := decision.NewDecisionEngine(
 		c.Config.KeywordRules,
@@ -1602,6 +1696,7 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		ComplexityRules:   signals.MatchedComplexityRules,
 		ModalityRules:     signals.MatchedModalityRules,
 		SignalConfidences: signals.SignalConfidences,
+		AuthzRules:        signals.MatchedAuthzRules,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("decision evaluation failed: %w", err)

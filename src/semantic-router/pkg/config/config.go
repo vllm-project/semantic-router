@@ -42,6 +42,7 @@ const (
 	SignalTypeContext      = "context"
 	SignalTypeComplexity   = "complexity"
 	SignalTypeModality     = "modality"
+	SignalTypeAuthz        = "authz"
 )
 
 // API format constants for model backends
@@ -104,6 +105,113 @@ type RouterConfig struct {
 	BackendModels `yaml:",inline"`
 	// ToolSelection for automatic tool selection
 	ToolSelection `yaml:",inline"`
+
+	// Authz configures the credential resolution chain for per-user LLM API keys.
+	// If omitted, defaults to: header-injection (standard headers) → static-config.
+	Authz AuthzConfig `yaml:"authz,omitempty"`
+}
+
+// AuthzConfig configures how the router resolves per-user LLM API keys.
+// The provider chain is tried in order; the first provider that returns a
+// non-empty key wins.
+//
+// If Providers is empty, the router uses a default chain:
+//
+//  1. header-injection (reads x-user-openai-key, x-user-anthropic-key)
+//  2. static-config    (reads model_config.*.access_key from this YAML)
+//
+// Security: By default, the resolver operates in fail-closed mode — if no
+// provider can resolve a key, the request is rejected. Set fail_open: true
+// only if you intentionally want to allow requests without API keys (e.g.,
+// routing to local vLLM backends that don't require auth).
+//
+// Example (Authorino — uses defaults, identity section optional):
+//
+//	authz:
+//	  fail_open: false
+//	  providers:
+//	    - type: header-injection
+//	    - type: static-config
+//
+// Example (Envoy Gateway JWT — custom identity headers):
+//
+//	authz:
+//	  fail_open: false
+//	  identity:
+//	    user_id_header: "x-jwt-sub"
+//	    user_groups_header: "x-jwt-groups"
+//	  providers:
+//	    - type: header-injection
+//	      headers:
+//	        openai: "x-user-openai-key"
+//	    - type: static-config
+type AuthzConfig struct {
+	// FailOpen controls behavior when no provider can resolve an API key.
+	//   false (default): reject the request with a clear error — prevents
+	//                    silent bypass from misconfig or ext_authz failures.
+	//   true:            allow the request through without a key — use only
+	//                    for local/vLLM backends that don't require auth.
+	FailOpen bool `yaml:"fail_open,omitempty"`
+
+	// Identity configures which request headers carry the authenticated user's
+	// identity (user ID and group memberships). These headers are injected by
+	// the auth backend before the request reaches the router.
+	//
+	// Defaults (when omitted) match Authorino conventions:
+	//   user_id_header:     "x-authz-user-id"
+	//   user_groups_header: "x-authz-user-groups"
+	//
+	// Override these when using a different auth backend:
+	//   Envoy Gateway JWT (claim_to_headers): "x-jwt-sub", "x-jwt-groups"
+	//   oauth2-proxy:                         "x-forwarded-user", "x-forwarded-groups"
+	//   Istio RequestAuthentication:           "x-jwt-claim-sub", "x-jwt-claim-groups"
+	Identity IdentityConfig `yaml:"identity,omitempty"`
+
+	Providers []AuthzProviderConfig `yaml:"providers,omitempty"`
+}
+
+// IdentityConfig controls how the router reads user identity from request headers.
+// These headers are set by the auth backend (Authorino, Envoy Gateway JWT,
+// oauth2-proxy, etc.) after successful authentication. The AuthzClassifier uses
+// them to match role_bindings subjects.
+//
+// When omitted, defaults match the Authorino convention (x-authz-user-id,
+// x-authz-user-groups). Override when using a different backend.
+type IdentityConfig struct {
+	// UserIDHeader is the request header carrying the authenticated user's ID.
+	// Default: "x-authz-user-id" (Authorino: Secret metadata.name)
+	UserIDHeader string `yaml:"user_id_header,omitempty"`
+
+	// UserGroupsHeader is the request header carrying comma-separated group names.
+	// Default: "x-authz-user-groups" (Authorino: Secret annotation authz-groups)
+	UserGroupsHeader string `yaml:"user_groups_header,omitempty"`
+}
+
+// GetUserIDHeader returns the configured user ID header, or the default if empty.
+func (ic IdentityConfig) GetUserIDHeader() string {
+	if ic.UserIDHeader == "" {
+		return "x-authz-user-id"
+	}
+	return ic.UserIDHeader
+}
+
+// GetUserGroupsHeader returns the configured user groups header, or the default if empty.
+func (ic IdentityConfig) GetUserGroupsHeader() string {
+	if ic.UserGroupsHeader == "" {
+		return "x-authz-user-groups"
+	}
+	return ic.UserGroupsHeader
+}
+
+// AuthzProviderConfig describes a single credential provider in the chain.
+type AuthzProviderConfig struct {
+	// Type is the provider type: "header-injection" or "static-config".
+	Type string `yaml:"type"`
+
+	// Headers maps LLM provider name → request header name.
+	// Only used when Type is "header-injection".
+	// Example: {"openai": "x-user-openai-key", "anthropic": "x-user-anthropic-key"}
+	Headers map[string]string `yaml:"headers,omitempty"`
 }
 
 // ToolSelection represents the configuration for automatic tool selection
@@ -460,6 +568,13 @@ type Signals struct {
 	// When matched, outputs "AR", "DIFFUSION", or "BOTH" based on the modality classifier/keyword detection
 	// Detection configuration is read from modality_detector (InlineModels)
 	ModalityRules []ModalityRule `yaml:"modality_rules,omitempty"`
+	// RoleBindings defines RBAC role assignments for user-level authorization.
+	// Each binding maps subjects (users/groups) to a named role (K8s RoleBinding pattern).
+	// The role name is emitted as a signal in the decision engine (type: "authz").
+	// Model access is controlled by decisions via modelRefs, NOT by the role binding.
+	// User identity and groups are read from x-authz-user-id and x-authz-user-groups headers
+	// (injected by Authorino / ext_authz). Subject names MUST match Authorino output.
+	RoleBindings []RoleBinding `yaml:"role_bindings,omitempty"`
 }
 
 // BackendModels represents the configuration for backend models
@@ -2325,6 +2440,77 @@ type ContextRule struct {
 	MinTokens   TokenCount `yaml:"min_tokens"`
 	MaxTokens   TokenCount `yaml:"max_tokens"`
 	Description string     `yaml:"description,omitempty"`
+}
+
+// Subject identifies a user or group for RBAC role binding.
+// Modeled after Kubernetes RoleBinding subjects:
+//
+//	subjects:
+//	  - kind: User
+//	    name: "admin"
+//	  - kind: Group
+//	    name: "engineering"
+//
+// The Kind field must be "User" or "Group" (case-insensitive, validated at startup).
+// The Name must match exactly what Authorino injects in x-authz-user-id (for User)
+// or x-authz-user-groups (for Group).
+type Subject struct {
+	// Kind is "User" or "Group" (case-insensitive)
+	Kind string `yaml:"kind"`
+
+	// Name is the user ID or group name — must match the value from Authorino headers
+	Name string `yaml:"name"`
+}
+
+// RoleBinding maps subjects (users/groups) to a named role, following the Kubernetes
+// RBAC RoleBinding pattern. The role name is emitted as a signal in the decision engine
+// (type: "authz"), and decisions define which models each role can access via modelRefs.
+//
+// Kubernetes RBAC analog:
+//
+//	kind: RoleBinding
+//	metadata:
+//	  name: "premium-users"          → RoleBinding.Name
+//	subjects:
+//	  - kind: Group
+//	    name: "premium"              → RoleBinding.Subjects
+//	roleRef:
+//	  name: "premium_tier"           → RoleBinding.Role
+//
+// The RoleBinding does NOT define permissions (model access, pricing, latency).
+// Those are the decision engine's responsibility via modelRefs.
+//
+// RBAC mapping:
+//   - Subject    → users / groups (from Authorino x-authz-user-id / x-authz-user-groups)
+//   - Role       → RoleBinding.Role (the role name used in decision conditions)
+//   - Permission → Decision modelRefs (which models the role can use)
+//
+// Sync contract: the Subject names MUST match the values Authorino injects.
+// User names come from the K8s Secret metadata.name.
+// Group names come from the K8s Secret "authz-groups" annotation.
+type RoleBinding struct {
+	// Name is the binding name (for audit logs and error messages)
+	// This is NOT the role name — it identifies this specific binding.
+	Name string `yaml:"name"`
+
+	// Description provides human-readable explanation of this binding
+	Description string `yaml:"description,omitempty"`
+
+	// Subjects lists the users and groups assigned to this role.
+	// At least one subject must be specified (validated at startup).
+	// A request matches if the user ID matches a User subject OR
+	// any of the user's groups matches a Group subject (OR logic).
+	Subjects []Subject `yaml:"subjects"`
+
+	// Role is the role name that this binding grants.
+	// Referenced in decision conditions as type: "authz", name: "<Role>".
+	// Multiple bindings can grant the same role to different subjects.
+	Role string `yaml:"role"`
+}
+
+// GetRoleBindings returns the configured role bindings.
+func (s *Signals) GetRoleBindings() []RoleBinding {
+	return s.RoleBindings
 }
 
 // ComplexityCandidates defines hard and easy candidates for complexity classification
