@@ -16,6 +16,7 @@ import (
 	istio "github.com/vllm-project/semantic-router/e2e/profiles/istio"
 	llmd "github.com/vllm-project/semantic-router/e2e/profiles/llm-d"
 	mlmodelselection "github.com/vllm-project/semantic-router/e2e/profiles/ml-model-selection"
+	multiendpoint "github.com/vllm-project/semantic-router/e2e/profiles/multi-endpoint"
 	productionstack "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
 	responseapi "github.com/vllm-project/semantic-router/e2e/profiles/response-api"
 	responseapiredis "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis"
@@ -36,6 +37,9 @@ import (
 
 	// ML-based model selection profile
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/ml-model-selection"
+
+	// Multi-endpoint profile
+	_ "github.com/vllm-project/semantic-router/e2e/profiles/multi-endpoint"
 )
 
 const version = "v1.0.0"
@@ -141,6 +145,8 @@ func getProfile(name string) (framework.Profile, error) {
 		return routingstrategies.NewProfile(), nil
 	case "ml-model-selection":
 		return mlmodelselection.NewProfile(), nil
+	case "multi-endpoint":
+		return multiendpoint.NewProfile(), nil
 	default:
 		return nil, fmt.Errorf("unknown profile: %s", name)
 	}
