@@ -13,7 +13,7 @@ bert_model:
   use_cpu: true
 
 # Embedding models — mmBERT 2D Matryoshka for high-quality multilingual embeddings
-# Download with: make download-mmbert-embedding
+# Model downloads automatically on router startup, or run: make download-models
 embedding_models:
   mmbert_model_path: "models/mom-embedding-ultra"
   use_cpu: true
