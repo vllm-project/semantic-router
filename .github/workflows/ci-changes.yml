@@ -45,6 +45,8 @@ on:
         value: ${{ jobs.filter.outputs.e2e_ml_model_selection }}
       e2e_multi_endpoint:
         value: ${{ jobs.filter.outputs.e2e_multi_endpoint }}
+      e2e_authz_rbac:
+        value: ${{ jobs.filter.outputs.e2e_authz_rbac }}
       e2e_common:
         value: ${{ jobs.filter.outputs.e2e_common }}
 
@@ -74,6 +76,7 @@ jobs:
       e2e_response_api_redis_cluster: ${{ steps.changes.outputs.e2e_response_api_redis_cluster }}
       e2e_ml_model_selection: ${{ steps.changes.outputs.e2e_ml_model_selection }}
       e2e_multi_endpoint: ${{ steps.changes.outputs.e2e_multi_endpoint }}
+      e2e_authz_rbac: ${{ steps.changes.outputs.e2e_authz_rbac }}
       e2e_common: ${{ steps.changes.outputs.e2e_common }}
     steps:
       - uses: actions/checkout@v4
@@ -163,6 +166,11 @@ jobs:
               - 'e2e/profiles/multi-endpoint/**'
               - 'config/testing/config.multi-endpoint.yaml'
               - 'scripts/multi-endpoint/**'
+            e2e_authz_rbac:
+              - 'e2e/profiles/authz-rbac/**'
+              - 'config/testing/config.authz-rbac.yaml'
+              - 'config/authz/**'
+              - 'src/semantic-router/pkg/classification/authz*.go'
             # Common e2e code that affects all profiles
             e2e_common:
               - 'e2e/pkg/**'

@@ -11,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	aigateway "github.com/vllm-project/semantic-router/e2e/profiles/ai-gateway"
 	aibrix "github.com/vllm-project/semantic-router/e2e/profiles/aibrix"
+	authzrbac "github.com/vllm-project/semantic-router/e2e/profiles/authz-rbac"
 	dynamicconfig "github.com/vllm-project/semantic-router/e2e/profiles/dynamic-config"
 	dynamo "github.com/vllm-project/semantic-router/e2e/profiles/dynamo"
 	istio "github.com/vllm-project/semantic-router/e2e/profiles/istio"
@@ -26,6 +27,7 @@ import (
 	// Import profiles to register test cases
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/ai-gateway"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/aibrix"
+	_ "github.com/vllm-project/semantic-router/e2e/profiles/authz-rbac"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/dynamo"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/istio"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/llm-d"
@@ -147,6 +149,8 @@ func getProfile(name string) (framework.Profile, error) {
 		return mlmodelselection.NewProfile(), nil
 	case "multi-endpoint":
 		return multiendpoint.NewProfile(), nil
+	case "authz-rbac":
+		return authzrbac.NewProfile(), nil
 	default:
 		return nil, fmt.Errorf("unknown profile: %s", name)
 	}
