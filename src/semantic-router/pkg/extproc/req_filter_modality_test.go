@@ -45,7 +45,7 @@ func TestResolveModalityModelsFromDecision_DiffusionOnly(t *testing.T) {
 
 	ar, diffusion, err := resolveModalityModelsFromDecision(decision, modelConfig)
 	require.NoError(t, err)
-	assert.Equal(t, "", ar, "AR model should be empty for diffusion-only decision")
+	assert.Empty(t, ar, "AR model should be empty for diffusion-only decision")
 	assert.Equal(t, "Qwen/Qwen-Image", diffusion)
 }
 
@@ -63,7 +63,7 @@ func TestResolveModalityModelsFromDecision_AROnly(t *testing.T) {
 	ar, diffusion, err := resolveModalityModelsFromDecision(decision, modelConfig)
 	require.NoError(t, err)
 	assert.Equal(t, "Qwen/Qwen2.5-14B-Instruct", ar)
-	assert.Equal(t, "", diffusion, "Diffusion model should be empty for AR-only decision")
+	assert.Empty(t, diffusion, "Diffusion model should be empty for AR-only decision")
 }
 
 func TestResolveModalityModelsFromDecision_NilDecision(t *testing.T) {
@@ -95,8 +95,8 @@ func TestResolveModalityModelsFromDecision_ModelNotInConfig(t *testing.T) {
 
 	ar, diffusion, err := resolveModalityModelsFromDecision(decision, modelConfig)
 	require.NoError(t, err, "should not error, just return empty strings for unresolvable models")
-	assert.Equal(t, "", ar)
-	assert.Equal(t, "", diffusion)
+	assert.Empty(t, ar)
+	assert.Empty(t, diffusion)
 }
 
 func TestResolveModalityModelsFromDecision_MultipleARModels_PicksFirst(t *testing.T) {
@@ -159,7 +159,7 @@ func TestResolveModalityModelsFromDecision_ModelWithNoModality(t *testing.T) {
 	ar, diffusion, err := resolveModalityModelsFromDecision(decision, modelConfig)
 	require.NoError(t, err)
 	assert.Equal(t, "model-ar", ar)
-	assert.Equal(t, "", diffusion)
+	assert.Empty(t, diffusion)
 }
 
 // =============================================================================
