@@ -998,7 +998,6 @@ type SignalResults struct {
 	MatchedUserFeedbackRules []string // "satisfied", "need_clarification", "wrong_answer", "want_different"
 	MatchedPreferenceRules   []string // Route preference names matched via external LLM
 	MatchedLanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
-	MatchedLatencyRules      []string // Latency rule names that matched based on model TPOT
 	MatchedContextRules      []string // Matched context rule names (e.g. "low_token_count")
 	TokenCount               int      // Total token count
 	MatchedComplexityRules   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
@@ -1020,7 +1019,6 @@ type SignalMetricsCollection struct {
 	UserFeedback SignalMetrics `json:"user_feedback"`
 	Preference   SignalMetrics `json:"preference"`
 	Language     SignalMetrics `json:"language"`
-	Latency      SignalMetrics `json:"latency"`
 	Context      SignalMetrics `json:"context"`
 	Complexity   SignalMetrics `json:"complexity"`
 	Modality     SignalMetrics `json:"modality"`
