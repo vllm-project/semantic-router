@@ -48,6 +48,7 @@ def validate_signal_references(config: UserConfig) -> List[ValidationError]:
 
     # Build signal name index
     signal_names = set()
+    complexity_signal_names = set()  # Track complexity signal base names
     if config.signals:
         for signal in config.signals.keywords:
             signal_names.add(signal.name)
@@ -73,7 +74,11 @@ def validate_signal_references(config: UserConfig) -> List[ValidationError]:
                 signal_names.add(signal.name)
         if config.signals.complexity:
             for signal in config.signals.complexity:
-                signal_names.add(signal.name)
+                # Complexity signals generate three variants: name:easy, name:medium, name:hard
+                complexity_signal_names.add(signal.name)
+                signal_names.add(f"{signal.name}:easy")
+                signal_names.add(f"{signal.name}:medium")
+                signal_names.add(f"{signal.name}:hard")
 
     # Check decision conditions
     for decision in config.decisions:
