@@ -1,19 +1,29 @@
-# Envoy config simulating Envoy Gateway JWT authentication
+# Standalone Envoy config with JWT authentication (no Kubernetes required)
 #
-# This config has NO ext_authz filter — it simulates the scenario where
-# Envoy Gateway's SecurityPolicy has already validated the JWT and injected
-# claim_to_headers (x-jwt-sub, x-jwt-groups) before the request reaches
-# the ext_proc semantic router.
+# Single Envoy does everything:
+#   1. jwt_authn filter — validates JWT RSA256 signature, checks issuer/audience,
+#      extracts claims to headers (sub → x-jwt-sub, groups → x-jwt-groups)
+#   2. ext_proc filter — calls semantic router for RBAC + model selection
+#   3. ORIGINAL_DST cluster — routes to the correct vLLM backend dynamically
 #
-# The client sends these headers directly to simulate EG's claim injection.
+# Flow:
+#   Client (Authorization: Bearer <JWT>)
+#     → Envoy :8802
+#       → jwt_authn (validate + extract claims)
+#       → ext_proc (semantic router :50053, reads x-jwt-sub/x-jwt-groups)
+#       → ORIGINAL_DST (routes via x-vsr-destination-endpoint to vLLM)
+#
+# Prerequisites:
+#   - JWKS file at /etc/envoy/jwks.json (mounted by setup.sh)
+#   - Semantic router on 127.0.0.1:50053 with EG identity config
+#   - vLLM 14B on 127.0.0.1:8000, 7B on 127.0.0.1:8001
 #
 # Listener: 0.0.0.0:8802
-# ext_proc:  127.0.0.1:50053 (EG-mode router)
-# Admin:     127.0.0.1:19002
+# Admin:    127.0.0.1:19002
 
 static_resources:
   listeners:
-  - name: eg_listener
+  - name: jwt_listener
     address:
       socket_address:
         address: 0.0.0.0
@@ -23,7 +33,7 @@ static_resources:
       - name: envoy.filters.network.http_connection_manager
         typed_config:
           "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
-          stat_prefix: eg_ingress
+          stat_prefix: jwt_ingress
           access_log:
           - name: envoy.access_loggers.stdout
             typed_config:
@@ -31,34 +41,62 @@ static_resources:
               log_format:
                 json_format:
                   time: "%START_TIME%"
-                  request_method: "%REQ(:METHOD)%"
-                  request_path: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"
-                  response_code: "%RESPONSE_CODE%"
-                  upstream_host: "%UPSTREAM_HOST%"
-                  upstream_cluster: "%UPSTREAM_CLUSTER%"
-                  selected_model: "%REQ(X-SELECTED-MODEL)%"
+                  method: "%REQ(:METHOD)%"
+                  path: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"
+                  status: "%RESPONSE_CODE%"
+                  upstream: "%UPSTREAM_HOST%"
+                  model: "%REQ(X-SELECTED-MODEL)%"
+                  jwt_sub: "%REQ(x-jwt-sub)%"
+                  jwt_groups: "%REQ(x-jwt-groups)%"
           route_config:
-            name: eg_route
+            name: jwt_route
             virtual_hosts:
-            - name: eg_service
+            - name: llm_service
               domains: ["*"]
               routes:
-              # Default route — vLLM dynamic cluster
               - match:
                   prefix: "/"
                 route:
                   cluster: vllm_dynamic_cluster
                   timeout: 300s
           http_filters:
-          # NO ext_authz — EG SecurityPolicy handles JWT validation externally
-          # The client sends x-jwt-sub and x-jwt-groups headers directly
-          # (simulating what EG claim_to_headers would inject after JWT validation)
+          # ── Filter 1: JWT Authentication ──
+          # Validates RSA256 signature against local JWKS, checks issuer/audience,
+          # extracts claims to request headers for the semantic router.
+          - name: envoy.filters.http.jwt_authn
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
+              providers:
+                jwt_provider:
+                  issuer: "https://eg-jwt-issuer.example.com"
+                  audiences:
+                    - "semantic-router"
+                  local_jwks:
+                    filename: "/etc/envoy/jwks.json"
+                  forward: true
+                  claim_to_headers:
+                    - header_name: x-jwt-sub
+                      claim_name: sub
+                    - header_name: x-jwt-groups
+                      claim_name: groups
+              rules:
+                # /health — no JWT required (health checks)
+                - match:
+                    prefix: /health
+                # All other paths — require valid JWT
+                - match:
+                    prefix: /
+                  requires:
+                    provider_name: jwt_provider
+          # ── Filter 2: ext_proc (Semantic Router) ──
+          # Reads x-jwt-sub / x-jwt-groups headers, evaluates RBAC role bindings,
+          # selects model, sets x-vsr-destination-endpoint for dynamic routing.
           - name: envoy.filters.http.ext_proc
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
               grpc_service:
                 envoy_grpc:
-                  cluster_name: eg_extproc_service
+                  cluster_name: extproc_service
               allow_mode_override: true
               processing_mode:
                 request_header_mode: "SEND"
@@ -69,6 +107,7 @@ static_resources:
                 response_trailer_mode: "SKIP"
               failure_mode_allow: true
               message_timeout: 300s
+          # ── Filter 3: Router ──
           - name: envoy.filters.http.router
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
@@ -83,8 +122,8 @@ static_resources:
             idle_timeout: "300s"
 
   clusters:
-  # ext_proc pointing to the EG-mode router on port 50053
-  - name: eg_extproc_service
+  # Semantic Router ext_proc gRPC service
+  - name: extproc_service
     connect_timeout: 300s
     per_connection_buffer_limit_bytes: 52428800
     type: STATIC
@@ -98,7 +137,7 @@ static_resources:
               interval: 300s
               timeout: 300s
     load_assignment:
-      cluster_name: eg_extproc_service
+      cluster_name: extproc_service
       endpoints:
       - lb_endpoints:
         - endpoint:
@@ -107,7 +146,7 @@ static_resources:
                 address: 127.0.0.1
                 port_value: 50053
 
-  # Dynamic vLLM cluster
+  # Dynamic vLLM cluster — routes based on x-vsr-destination-endpoint header
   - name: vllm_dynamic_cluster
     connect_timeout: 300s
     per_connection_buffer_limit_bytes: 52428800

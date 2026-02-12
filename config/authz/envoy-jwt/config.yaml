@@ -1,7 +1,7 @@
-# EG (Envoy Gateway) RBAC Test Config — Two local Qwen vLLM endpoints
+# JWT RBAC Config — Two local Qwen vLLM endpoints
 #
-# This config simulates Envoy Gateway's JWT authentication with claim_to_headers.
-# Identity headers are set to the names EG would inject from JWT claims:
+# Used with Envoy's jwt_authn filter (standalone, no Kubernetes required).
+# The jwt_authn filter validates the JWT and extracts claims to headers:
 #   - JWT "sub"    claim → header "x-jwt-sub"
 #   - JWT "groups" claim → header "x-jwt-groups"
 #
@@ -23,13 +23,13 @@
 #
 
 # --------------------------------------------------------------------------
-# Authz — Envoy Gateway JWT backend (custom identity headers)
+# Authz — Envoy JWT backend (custom identity headers)
 # --------------------------------------------------------------------------
 authz:
   fail_open: true        # local vLLM backends don't require API keys
   identity:
-    user_id_header: "x-jwt-sub"        # from EG SecurityPolicy claim_to_headers
-    user_groups_header: "x-jwt-groups"  # from EG SecurityPolicy claim_to_headers
+    user_id_header: "x-jwt-sub"        # from Envoy jwt_authn claim_to_headers
+    user_groups_header: "x-jwt-groups"  # from Envoy jwt_authn claim_to_headers
 
 # --------------------------------------------------------------------------
 # vLLM Endpoints — same backends as Authorino test
@@ -96,7 +96,7 @@ context_rules:
 # --------------------------------------------------------------------------
 # Role Bindings — JWT claim values as subject names
 # --------------------------------------------------------------------------
-# Subject names match what EG claim_to_headers extracts from the JWT:
+# Subject names match what Envoy's jwt_authn claim_to_headers extracts:
 #   - "sub" claim value → kind: User match
 #   - "groups" claim values → kind: Group match
 # --------------------------------------------------------------------------

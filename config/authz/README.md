@@ -7,7 +7,7 @@ Each subdirectory contains the complete set of configs for a specific auth backe
 | Directory | Auth Backend | Identity Headers |
 |---|---|---|
 | `authorino/` | Authorino (ext_authz, K8s Secrets) | `x-authz-user-id`, `x-authz-user-groups` (defaults) |
-| `envoy-gateway/` | Envoy Gateway (JWT, claim_to_headers) | `x-jwt-sub`, `x-jwt-groups` (custom via `authz.identity`) |
+| `envoy-jwt/` | Envoy jwt_authn (RSA256, local JWKS) | `x-jwt-sub`, `x-jwt-groups` (custom via `authz.identity`) |
 
 ## File Layout
 
@@ -24,10 +24,9 @@ config/authz/
 │       ├── secrets-byot.yaml
 │       ├── secrets-per-user.yaml
 │       └── secrets-shared.yaml
-└── envoy-gateway/
+└── envoy-jwt/
     ├── config.yaml        # router config — custom identity headers (x-jwt-sub/x-jwt-groups)
-    ├── envoy.yaml         # Envoy — NO ext_authz (EG handles JWT externally)
-    └── profile.yaml       # authz credential chain profile (EG JWT)
+    └── envoy.yaml         # Envoy — jwt_authn + ext_proc + ORIGINAL_DST (no K8s needed)
 ```
 
 ## Usage
@@ -38,8 +37,8 @@ Start the router with the provider-specific config:
 # Authorino
 go run cmd/main.go --config ../../config/authz/authorino/config.yaml --port 50051
 
-# Envoy Gateway
-go run cmd/main.go --config ../../config/authz/envoy-gateway/config.yaml --port 50053
+# JWT (Envoy jwt_authn)
+go run cmd/main.go --config ../../config/authz/envoy-jwt/config.yaml --port 50053
 ```
 
 ## Adding a New Provider
@@ -47,5 +46,4 @@ go run cmd/main.go --config ../../config/authz/envoy-gateway/config.yaml --port 
 1. Create `config/authz/<provider-name>/`
 2. Add `config.yaml` with the appropriate `authz.identity` headers
 3. Add `envoy.yaml` for the Envoy/gateway configuration
-4. Add `profile.yaml` for the credential chain
-5. Add a test script in `scripts/authz/<provider-name>/test.sh`
+4. Add a test script in `scripts/authz/<provider-name>/test.sh`
