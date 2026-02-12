@@ -156,6 +156,7 @@ def _is_latency_aware_algorithm(decision) -> bool:
 
 
 def _normalize_legacy_latency_routing(cfg: UserConfig) -> UserConfig:
+    # legacy latency compatibility is now temporary and will be removed after the backward-compatibility period.
     has_legacy_signals = (
         cfg.signals is not None
         and cfg.signals.latency is not None
@@ -222,10 +223,13 @@ def _normalize_legacy_latency_routing(cfg: UserConfig) -> UserConfig:
             continue
 
         if decision.algorithm is not None:
-            algo_type = decision.algorithm.type or "<empty>"
-            raise ValueError(
-                f"decision '{decision.name}' cannot auto-migrate legacy latency when algorithm is set (type={algo_type})"
-            )
+            normalized_algo_type = (decision.algorithm.type or "").strip().lower()
+            if normalized_algo_type != "static":
+                algo_type = (decision.algorithm.type or "").strip() or "<empty>"
+                raise ValueError(
+                    f"decision '{decision.name}' has legacy latency condition but algorithm.type={algo_type}; "
+                    "only static can be auto-migrated to latency_aware"
+                )
         if len(latency_indexes) > 1:
             raise ValueError(
                 f"decision '{decision.name}' has multiple latency conditions"
