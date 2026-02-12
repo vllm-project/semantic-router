@@ -70,24 +70,24 @@ static_resources:
                 jwt_provider:
                   issuer: "https://eg-jwt-issuer.example.com"
                   audiences:
-                    - "semantic-router"
+                  - "semantic-router"
                   local_jwks:
                     filename: "/etc/envoy/jwks.json"
                   forward: true
                   claim_to_headers:
-                    - header_name: x-jwt-sub
-                      claim_name: sub
-                    - header_name: x-jwt-groups
-                      claim_name: groups
+                  - header_name: x-jwt-sub
+                    claim_name: sub
+                  - header_name: x-jwt-groups
+                    claim_name: groups
               rules:
-                # /health — no JWT required (health checks)
-                - match:
-                    prefix: /health
-                # All other paths — require valid JWT
-                - match:
-                    prefix: /
-                  requires:
-                    provider_name: jwt_provider
+              # /health — no JWT required (health checks)
+              - match:
+                  prefix: /health
+              # All other paths — require valid JWT
+              - match:
+                  prefix: /
+                requires:
+                  provider_name: jwt_provider
           # ── Filter 2: ext_proc (Semantic Router) ──
           # Reads x-jwt-sub / x-jwt-groups headers, evaluates RBAC role bindings,
           # selects model, sets x-vsr-destination-endpoint for dynamic routing.
