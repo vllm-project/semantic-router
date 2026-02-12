@@ -69,6 +69,7 @@ type SignalMatches struct {
 	LatencyRules      []string // Latency rule names that matched based on model TPOT
 	ContextRules      []string // Context rule names matched (e.g. "low_token_count")
 	ComplexityRules   []string // Complexity rules with difficulty level (e.g. "code_complexity:hard")
+	AuthzRules        []string // Authz rule names matched for user-level routing (e.g. "premium_tier")
 }
 
 // DecisionResult represents the result of decision evaluation
@@ -192,6 +193,8 @@ func (e *DecisionEngine) evaluateRuleCombinationWithSignals(
 			conditionMatched = slices.Contains(signals.ContextRules, condition.Name)
 		case "complexity":
 			conditionMatched = slices.Contains(signals.ComplexityRules, condition.Name)
+		case "authz":
+			conditionMatched = slices.Contains(signals.AuthzRules, condition.Name)
 		default:
 			continue
 		}

@@ -1,0 +1,21 @@
+# Profile E: Local vLLM backend (fail-open)
+#
+# FAIL-OPEN: allows requests through without API keys. Use ONLY when routing
+# to local vLLM/Ollama backends that don't require authentication.
+#
+# WARNING: With fail_open=true, if ext_authz is misconfigured or down, requests
+# will silently proceed without per-user keys. The router logs a WARN for each
+# such request so operators can detect the issue via monitoring.
+#
+# Do NOT use this profile when routing to external LLM providers (OpenAI,
+# Anthropic, etc.) — those requests will fail with 401 at the provider side.
+
+authz:
+  fail_open: true              # allow requests without keys (local backends only)
+  providers:
+    - type: static-config      # optional: still try static config first
+
+model_config:
+  my-local-llama:
+    model_name: meta-llama/Llama-3-8B
+    access_key: ""             # no key needed for local vLLM

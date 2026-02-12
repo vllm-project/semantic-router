@@ -107,6 +107,10 @@ const (
 	// VSRMatchedComplexity contains comma-separated list of matched complexity rules with difficulty levels.
 	// Example: "code_complexity:hard,math_complexity:easy"
 	VSRMatchedComplexity = "x-vsr-matched-complexity"
+
+	// VSRMatchedAuthz contains comma-separated list of matched authz rule names.
+	// Example: "premium_tier,admin_tier"
+	VSRMatchedAuthz = "x-vsr-matched-authz"
 )
 
 // Security Headers
@@ -160,6 +164,36 @@ const (
 	// This header is set alongside UnverifiedFactualResponse to explain why verification couldn't occur.
 	// Value: "true"
 	VerificationContextMissing = "x-vsr-verification-context-missing"
+)
+
+// Auth Backend Injected Headers
+// These headers are set by the external authorization service (Authorino, Envoy Gateway JWT,
+// oauth2-proxy, etc.) after successful user authentication.
+// They carry per-user provider API keys and identity for routing.
+const (
+	// UserOpenAIKey carries the user's OpenAI API key, injected by the auth backend.
+	// Used by the ext_proc when routing requests to OpenAI models.
+	UserOpenAIKey = "x-user-openai-key"
+
+	// UserAnthropicKey carries the user's Anthropic API key, injected by the auth backend.
+	// Used by the ext_proc when routing requests to Anthropic models.
+	UserAnthropicKey = "x-user-anthropic-key"
+
+	// AuthzUserID is the default header for the authenticated user's identity.
+	// Default for Authorino (K8s Secret metadata.name).
+	// Override via authz.identity.user_id_header for other backends:
+	//   Envoy Gateway JWT: "x-jwt-sub" (from claim_to_headers)
+	//   oauth2-proxy:      "x-forwarded-user"
+	// Used by the authz signal classifier for user-level routing.
+	AuthzUserID = "x-authz-user-id"
+
+	// AuthzUserGroups is the default header for comma-separated group memberships.
+	// Default for Authorino (K8s Secret annotation authz-groups).
+	// Override via authz.identity.user_groups_header for other backends:
+	//   Envoy Gateway JWT: "x-jwt-groups" (from claim_to_headers)
+	//   oauth2-proxy:      "x-forwarded-groups"
+	// Used by the authz signal classifier for group-level routing.
+	AuthzUserGroups = "x-authz-user-groups"
 )
 
 // Looper Request Headers

@@ -82,6 +82,7 @@ type RequestContext struct {
 	VSRMatchedContext      []string // Matched context rule names (e.g. "low_token_count")
 	VSRContextTokenCount   int      // Actual token count for the request
 	VSRMatchedComplexity   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
+	VSRMatchedAuthz        []string // Matched authz rule names for user-level routing
 
 	// Endpoint tracking for windowed metrics
 	SelectedEndpoint string // The endpoint address selected for this request
@@ -137,6 +138,9 @@ type RequestContext struct {
 	// Memory retrieval tracking
 	// Stores formatted memory context to be injected after system prompt
 	MemoryContext string // Formatted memory context (empty if no memories retrieved)
+
+	// Note: Per-user API keys from ext_authz / Authorino are read directly from
+	// ctx.Headers by the CredentialResolver (pkg/authz). No separate fields needed.
 }
 
 // handleRequestHeaders processes the request headers
@@ -184,6 +188,9 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 			ctx.LooperRequest = true
 			logging.Infof("Detected looper internal request, will skip plugin processing")
 		}
+
+		// Note: ext_authz / Authorino injected headers (x-user-openai-key, x-user-anthropic-key)
+		// are stored in ctx.Headers and read by the CredentialResolver at routing time.
 	}
 
 	// Set request metadata on span

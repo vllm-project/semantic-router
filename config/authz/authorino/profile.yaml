@@ -1,0 +1,292 @@
+# Profile A: Authorino / Standard ext_authz (RBAC)
+#
+# This config demonstrates the Kubernetes RBAC-inspired role_bindings pattern:
+#   - role_bindings map subjects (users/groups) to named roles (K8s RoleBinding)
+#   - decisions define permissions per role: which models, reasoning, etc. (K8s Role)
+#   - latency, keyword, context signals compose with authz in decisions
+#   - cost control is implicit in which models are in modelRefs
+#
+# Sync contract:
+#   role_bindings subjects MUST match the values Authorino injects:
+#   - kind: User  → must match x-authz-user-id (from Secret metadata.name)
+#   - kind: Group → must match x-authz-user-groups (from Secret authz-groups annotation)
+#
+# authz:           ← intentionally omitted (defaults to fail_open: false)
+
+# --------------------------------------------------------------------------
+# Model Config — endpoint-specific settings
+# --------------------------------------------------------------------------
+model_config:
+  gpt-4o-mini:
+    model_name: gpt-4o-mini
+    access_key: ""
+    quality_score: 0.7
+
+  gpt-4o:
+    model_name: gpt-4o
+    access_key: ""
+    quality_score: 0.95
+
+  claude-sonnet-4-5-20250929:
+    model_name: claude-sonnet-4-5-20250929
+    access_key: ""
+    quality_score: 0.95
+
+  o1-mini:
+    model_name: o1-mini
+    access_key: ""
+    quality_score: 0.90
+
+  llama-3-70b:
+    model_name: llama-3-70b
+    quality_score: 0.75
+
+# --------------------------------------------------------------------------
+# Latency Rules — pure signal for performance-aware routing
+# --------------------------------------------------------------------------
+latency_rules:
+  - name: "realtime"
+    tpot_percentile: 10
+    ttft_percentile: 10
+    description: "Top 10% fastest endpoints"
+
+  - name: "balanced"
+    tpot_percentile: 50
+    description: "Median performance endpoints"
+
+# --------------------------------------------------------------------------
+# Keyword Rules — content-aware signals
+# --------------------------------------------------------------------------
+keyword_rules:
+  - name: "complex_analysis"
+    operator: "OR"
+    keywords: ["analyze", "reasoning", "think step by step", "explain why"]
+
+# --------------------------------------------------------------------------
+# Context Rules — token count signals
+# --------------------------------------------------------------------------
+context_rules:
+  - name: "short"
+    min_tokens: "0"
+    max_tokens: "1K"
+    description: "Short queries under 1K tokens"
+
+  - name: "long"
+    min_tokens: "32K"
+    max_tokens: "128K"
+    description: "Long documents 32K-128K tokens"
+
+# --------------------------------------------------------------------------
+# Role Bindings — RBAC subject-to-role assignment
+# --------------------------------------------------------------------------
+# K8s RoleBinding analog: maps subjects to role names.
+# The role name is used in decision conditions (type: "authz", name: "<role>").
+# Subject names MUST match what Authorino injects in headers.
+#
+# Multiple bindings can grant the same role (e.g., regional teams → same tier).
+# --------------------------------------------------------------------------
+role_bindings:
+  # Free tier: trial users, contractors, interns
+  - name: "external-free"
+    description: "External free-tier users"
+    subjects:
+      - kind: Group
+        name: "free"
+      - kind: Group
+        name: "trial"
+      - kind: Group
+        name: "contractor"
+    role: "free_tier"
+
+  # Pro tier: engineering, product, design teams
+  - name: "internal-pro"
+    description: "Internal professional users"
+    subjects:
+      - kind: Group
+        name: "engineering"
+      - kind: Group
+        name: "product"
+      - kind: Group
+        name: "design"
+    role: "pro_tier"
+
+  # Premium tier: premium and enterprise customers
+  - name: "premium-customers"
+    description: "Premium and enterprise customers"
+    subjects:
+      - kind: Group
+        name: "premium"
+      - kind: Group
+        name: "enterprise"
+    role: "premium_tier"
+
+  # ML research: dedicated team with reasoning needs
+  - name: "ml-research-team"
+    description: "ML research team"
+    subjects:
+      - kind: Group
+        name: "ml-research"
+    role: "ml_research"
+
+  # Admin: explicit user override (K8s cluster-admin equivalent)
+  - name: "admin-override"
+    description: "Admin users — unrestricted access"
+    subjects:
+      - kind: User
+        name: "admin"
+      - kind: User
+        name: "root"
+    role: "admin"
+
+# --------------------------------------------------------------------------
+# Decisions — RBAC permissions (K8s Role analog)
+# --------------------------------------------------------------------------
+# Each decision = one permission grant:
+#   conditions  → who qualifies (authz role + optional signals)
+#   modelRefs   → what models (resources) with what operations (verbs)
+#
+# Cost control is implicit in which models are in modelRefs:
+#   free_tier   → llama-3-70b (self-hosted, $0/request)
+#   pro_tier    → gpt-4o-mini ($0.15/1M input tokens)
+#   premium     → gpt-4o ($5.00/1M input tokens)
+#
+# Latency is composed as conditions alongside authz.
+# Keyword/context signals combine for content-aware routing.
+# --------------------------------------------------------------------------
+decisions:
+  # ── Admin: unrestricted (K8s cluster-admin) ──
+  - name: "admin_unrestricted"
+    description: "Admin users get any model they request"
+    priority: 300
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "authz"
+          name: "admin"
+    modelRefs:
+      - model: "gpt-4o"
+        use_reasoning: true
+      - model: "claude-sonnet-4-5-20250929"
+      - model: "o1-mini"
+      - model: "gpt-4o-mini"
+      - model: "llama-3-70b"
+
+  # ── ML Research + complex query → reasoning ──
+  - name: "ml_research_complex"
+    description: "ML team + complex query gets o1-mini with reasoning"
+    priority: 250
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "authz"
+          name: "ml_research"
+        - type: "keyword"
+          name: "complex_analysis"
+    modelRefs:
+      - model: "o1-mini"
+        use_reasoning: true
+
+  # ── Premium + realtime latency → fast model ──
+  - name: "premium_realtime"
+    description: "Premium users needing low latency get fast model"
+    priority: 250
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "authz"
+          name: "premium_tier"
+        - type: "latency"
+          name: "realtime"
+    modelRefs:
+      - model: "gpt-4o-mini"
+
+  # ── Premium + complex query → reasoning ──
+  - name: "premium_complex"
+    description: "Premium users + complex query gets reasoning model"
+    priority: 200
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "authz"
+          name: "premium_tier"
+        - type: "keyword"
+          name: "complex_analysis"
+    modelRefs:
+      - model: "gpt-4o"
+        use_reasoning: true
+
+  # ── Premium + long document → large-context model ──
+  - name: "premium_long_doc"
+    description: "Premium users + long document gets large-context model"
+    priority: 200
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "authz"
+          name: "premium_tier"
+        - type: "context"
+          name: "long"
+    modelRefs:
+      - model: "claude-sonnet-4-5-20250929"
+
+  # ── ML Research default ──
+  - name: "ml_research_default"
+    description: "ML team default route"
+    priority: 200
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "authz"
+          name: "ml_research"
+    modelRefs:
+      - model: "gpt-4o"
+
+  # ── Premium default ──
+  - name: "premium_default"
+    description: "Premium users default route"
+    priority: 150
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "authz"
+          name: "premium_tier"
+    modelRefs:
+      - model: "gpt-4o"
+
+  # ── Pro + realtime latency → fast model ──
+  - name: "pro_realtime"
+    description: "Pro users needing low latency"
+    priority: 180
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "authz"
+          name: "pro_tier"
+        - type: "latency"
+          name: "realtime"
+    modelRefs:
+      - model: "gpt-4o-mini"
+
+  # ── Pro default ──
+  - name: "pro_default"
+    description: "Pro users default route"
+    priority: 120
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "authz"
+          name: "pro_tier"
+    modelRefs:
+      - model: "gpt-4o-mini"
+
+  # ── Free tier (cost = $0, self-hosted) ──
+  - name: "free_default"
+    description: "Free tier users get self-hosted model (zero cost)"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "authz"
+          name: "free_tier"
+    modelRefs:
+      - model: "llama-3-70b"

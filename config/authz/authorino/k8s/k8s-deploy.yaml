@@ -1,0 +1,91 @@
+# Authorino standalone deployment for kind testing
+# Deploys Authorino + ClusterRoleBinding for watching Secrets & AuthConfigs
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: authorino
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: authorino
+rules:
+- apiGroups: ["authorino.kuadrant.io"]
+  resources: ["authconfigs", "authconfigs/status"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get", "list", "create", "update"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: authorino
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: authorino
+subjects:
+- kind: ServiceAccount
+  name: authorino
+  namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authorino
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: authorino
+  template:
+    metadata:
+      labels:
+        app: authorino
+    spec:
+      serviceAccountName: authorino
+      containers:
+      - name: authorino
+        image: quay.io/kuadrant/authorino:latest
+        imagePullPolicy: Never
+        args:
+        - --watch-namespace=default
+        - --log-level=debug
+        - --log-mode=development
+        ports:
+        - containerPort: 50051
+          name: grpc
+        - containerPort: 5001
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 2
+          periodSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: authorino
+  namespace: default
+spec:
+  selector:
+    app: authorino
+  ports:
+  - name: grpc
+    port: 50051
+    targetPort: 50051
+  - name: http
+    port: 5001
+    targetPort: 5001

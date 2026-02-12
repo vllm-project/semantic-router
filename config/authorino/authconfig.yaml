@@ -1,0 +1,68 @@
+# Authorino AuthConfig for Semantic Router
+#
+# This CRD configures Authorino to:
+#   1. Authenticate incoming requests via API key (Bearer token matched against Kubernetes Secrets)
+#   2. Inject per-user provider API keys as response headers (x-user-openai-key, x-user-anthropic-key)
+#   3. Inject user identity and group membership for RBAC role_bindings (x-authz-user-id, x-authz-user-groups)
+#
+# The router (ext_proc) reads these injected headers for two purposes:
+#   - Credential resolution: x-user-openai-key / x-user-anthropic-key → upstream API auth
+#   - RBAC signal: x-authz-user-id / x-authz-user-groups → role_bindings → decisions → model access
+#
+# RBAC contract:
+#   The values injected by Authorino MUST match the subjects in the router's role_bindings config.
+#   - x-authz-user-id  ← Secret metadata.name (e.g., "alice")
+#   - x-authz-user-groups ← Secret annotation "authz-groups" (e.g., "engineering,premium")
+#   - role_bindings subjects must reference the same user/group names
+#
+# Token management patterns are encoded in the Secrets (see secrets-*.yaml):
+#   - 1:1 (BYOT): Secret api_key == the user's own provider key
+#   - 1:N (per-user): Secret api_key is a local token; annotations hold distinct provider keys
+#   - N:1 (shared): Multiple Secrets share the same provider key annotations
+#
+apiVersion: authorino.kuadrant.io/v1beta3
+kind: AuthConfig
+metadata:
+  name: semantic-router-auth
+spec:
+  hosts:
+  - "semantic-router.example.com"   # adjust to match your Envoy virtual host
+
+  # ─── Authentication ─────────────────────────────────────────────
+  # Match the Bearer token against Kubernetes Secrets labeled app=semantic-router
+  authentication:
+    "api-key-users":
+      apiKey:
+        selector:
+          matchLabels:
+            app: semantic-router
+      credentials:
+        authorizationHeader:
+          prefix: Bearer
+
+  # ─── Dynamic Response (header injection) ────────────────────────
+  # After successful auth, Authorino injects headers from the matched Secret.
+  # These headers serve two purposes:
+  #   1. Credential resolution (provider API keys for upstream auth)
+  #   2. RBAC identity (user ID and groups for role_bindings)
+  response:
+    success:
+      headers:
+        # ── Credential headers (for upstream LLM provider auth) ──
+        x-user-openai-key:
+          plain:
+            expression: auth.identity.metadata.annotations['openai-key']
+        x-user-anthropic-key:
+          plain:
+            expression: auth.identity.metadata.annotations['anthropic-key']
+
+        # ── RBAC identity headers (for role_bindings matching) ──
+        # These MUST sync with the router's role_bindings config.
+        # The user ID comes from the Secret's metadata.name.
+        # The groups come from the Secret's "authz-groups" annotation (comma-separated).
+        x-authz-user-id:
+          plain:
+            expression: auth.identity.metadata.name
+        x-authz-user-groups:
+          plain:
+            expression: auth.identity.metadata.annotations['authz-groups']
