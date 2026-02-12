@@ -45,6 +45,7 @@ def _is_latency_aware_algorithm(decision) -> bool:
 
 
 def validate_latency_compatibility(config: UserConfig) -> List[ValidationError]:
+    # legacy latency compatibility is now temporary and will be removed after the backward-compatibility period.
     errors = []
     has_legacy_signals = (
         config.signals is not None
@@ -87,6 +88,26 @@ def validate_latency_compatibility(config: UserConfig) -> List[ValidationError]:
                 field="signals.latency",
             )
         )
+
+    if has_legacy_conditions:
+        for decision in config.decisions:
+            has_decision_legacy_latency = any(
+                _is_latency_condition(condition.type)
+                for condition in decision.rules.conditions
+            )
+            if not has_decision_legacy_latency or decision.algorithm is None:
+                continue
+
+            algo_type = (decision.algorithm.type or "").strip().lower()
+            if algo_type != "static":
+                display_algo_type = (decision.algorithm.type or "").strip() or "<empty>"
+                errors.append(
+                    ValidationError(
+                        f"decision '{decision.name}' has legacy latency condition but algorithm.type={display_algo_type}; "
+                        "only static can be auto-migrated to latency_aware",
+                        field=f"decisions.{decision.name}.algorithm.type",
+                    )
+                )
 
     return errors
 

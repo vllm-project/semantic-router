@@ -197,7 +197,7 @@ var _ = Describe("normalizeLegacyLatencyRouting", func() {
 		Expect(err.Error()).To(ContainSubstring("no non-latency conditions remain"))
 	})
 
-	It("returns error when decision already has algorithm configured", func() {
+	It("migrates when decision has static algorithm configured", func() {
 		cfg := &RouterConfig{
 			IntelligentRouting: IntelligentRouting{
 				Signals: Signals{
@@ -213,7 +213,42 @@ var _ = Describe("normalizeLegacyLatencyRouting", func() {
 								{Type: "latency", Name: "low_latency"},
 							},
 						},
-						Algorithm: &AlgorithmConfig{Type: "static"},
+						Algorithm: &AlgorithmConfig{Type: "static", OnError: "skip"},
+					},
+				},
+			},
+		}
+
+		err := normalizeLegacyLatencyRouting(cfg)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.Decisions[0].Algorithm).NotTo(BeNil())
+		Expect(cfg.Decisions[0].Algorithm.Type).To(Equal("latency_aware"))
+		Expect(cfg.Decisions[0].Algorithm.OnError).To(Equal("skip"))
+		Expect(cfg.Decisions[0].Algorithm.LatencyAware).NotTo(BeNil())
+		Expect(cfg.Decisions[0].Algorithm.LatencyAware.TPOTPercentile).To(Equal(20))
+		Expect(cfg.Decisions[0].Rules.Conditions).To(Equal([]RuleCondition{
+			{Type: "domain", Name: "math"},
+		}))
+		Expect(cfg.Signals.LatencyRules).To(BeEmpty())
+	})
+
+	It("returns error when decision has non-static algorithm configured", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Signals: Signals{
+					LatencyRules: []LatencyRule{{Name: "low_latency", TPOTPercentile: 20}},
+				},
+				Decisions: []Decision{
+					{
+						Name: "legacy",
+						Rules: RuleCombination{
+							Operator: "AND",
+							Conditions: []RuleCondition{
+								{Type: "domain", Name: "math"},
+								{Type: "latency", Name: "low_latency"},
+							},
+						},
+						Algorithm: &AlgorithmConfig{Type: "automix"},
 					},
 				},
 			},
@@ -221,7 +256,7 @@ var _ = Describe("normalizeLegacyLatencyRouting", func() {
 
 		err := normalizeLegacyLatencyRouting(cfg)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("cannot be auto-migrated when decision.algorithm is configured"))
+		Expect(err.Error()).To(ContainSubstring("only static can be auto-migrated to latency_aware"))
 	})
 
 	It("migrates multiple decisions when each has a valid single legacy latency condition", func() {
@@ -322,5 +357,45 @@ decisions:
 		Expect(cfg.Decisions[0].Rules.Conditions).To(HaveLen(1))
 		Expect(cfg.Decisions[0].Rules.Conditions[0]).To(Equal(RuleCondition{Type: "domain", Name: "mathematics"}))
 		Expect(cfg.Signals.LatencyRules).To(BeEmpty())
+	})
+
+	It("allows legacy latency condition with static algorithm and migrates to latency_aware", func() {
+		tempDir, err := os.MkdirTemp("", "latency_migration_parse_static_test")
+		Expect(err).NotTo(HaveOccurred())
+		defer os.RemoveAll(tempDir)
+
+		configPath := filepath.Join(tempDir, "config.yaml")
+		content := `
+latency_rules:
+  - name: low_latency
+    tpot_percentile: 20
+decisions:
+  - name: math_route
+    rules:
+      operator: AND
+      conditions:
+        - type: domain
+          name: mathematics
+        - type: latency
+          name: low_latency
+    modelRefs:
+      - model: model-a
+        use_reasoning: true
+    algorithm:
+      type: static
+`
+		Expect(os.WriteFile(configPath, []byte(content), 0o644)).To(Succeed())
+
+		cfg, err := Parse(configPath)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg).NotTo(BeNil())
+		Expect(cfg.Decisions).To(HaveLen(1))
+		Expect(cfg.Decisions[0].Algorithm).NotTo(BeNil())
+		Expect(cfg.Decisions[0].Algorithm.Type).To(Equal("latency_aware"))
+		Expect(cfg.Decisions[0].Algorithm.LatencyAware).NotTo(BeNil())
+		Expect(cfg.Decisions[0].Algorithm.LatencyAware.TPOTPercentile).To(Equal(20))
+		Expect(cfg.Decisions[0].Rules.Conditions).To(Equal([]RuleCondition{
+			{Type: "domain", Name: "mathematics"},
+		}))
 	})
 })

@@ -12,6 +12,8 @@ const legacyLatencyMixedConfigErr = "deprecated latency signal routing config ca
 // normalizeLegacyLatencyRouting migrates old latency signal-based routing config
 // to decision.algorithm.type=latency_aware when migration is guaranteed to be lossless.
 //
+// legacy latency compatibility is now temporary and will be removed after the backward-compatibility period.
+//
 // Rules:
 //   - mixed new+old latency config is rejected
 //   - old-only config is auto-migrated only for strict AND + single latency condition cases
@@ -46,12 +48,17 @@ func normalizeLegacyLatencyRouting(cfg *RouterConfig) error {
 			continue
 		}
 
+		legacyAlgorithmOnError := ""
 		if decision.Algorithm != nil {
-			algoType := strings.TrimSpace(decision.Algorithm.Type)
-			if algoType == "" {
-				algoType = "<empty>"
+			normalizedAlgoType := strings.ToLower(strings.TrimSpace(decision.Algorithm.Type))
+			if normalizedAlgoType != "static" {
+				algoType := strings.TrimSpace(decision.Algorithm.Type)
+				if algoType == "" {
+					algoType = "<empty>"
+				}
+				return fmt.Errorf("decision '%s': legacy latency condition conflicts with decision.algorithm.type=%s; only static can be auto-migrated to latency_aware", decision.Name, algoType)
 			}
-			return fmt.Errorf("decision '%s': legacy latency condition cannot be auto-migrated when decision.algorithm is configured (type=%s)", decision.Name, algoType)
+			legacyAlgorithmOnError = decision.Algorithm.OnError
 		}
 
 		if latencyConditionCount > 1 {
@@ -75,7 +82,8 @@ func normalizeLegacyLatencyRouting(cfg *RouterConfig) error {
 
 		decision.Rules.Conditions = remainingConditions
 		decision.Algorithm = &AlgorithmConfig{
-			Type: "latency_aware",
+			Type:    "latency_aware",
+			OnError: legacyAlgorithmOnError,
 			LatencyAware: &LatencyAwareAlgorithmConfig{
 				TPOTPercentile: latencyRule.TPOTPercentile,
 				TTFTPercentile: latencyRule.TTFTPercentile,
