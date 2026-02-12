@@ -38,7 +38,7 @@ spec:
   config:
     # Embedding models configuration with mmBERT 2D Matryoshka
     embedding_models:
-      # Path to mmBERT model (download using: make download-mmbert-embedding)
+      # Path to mmBERT model (downloads automatically on startup, or run: make download-models)
       mmbert_model_path: "models/mmbert-embedding"
       use_cpu: true
 
