@@ -864,17 +864,8 @@ func (r *OpenAIRouter) getMemoryStore() *memory.MilvusStore {
 	return r.MemoryStore
 }
 
-// getUserIDFromContext extracts user ID from Response API context or request.
+// getUserIDFromContext extracts user ID from the trusted auth header (x-authz-user-id).
+// Falls back to untrusted metadata["user_id"] only for development/testing without an auth layer.
 func (r *OpenAIRouter) getUserIDFromContext(ctx *RequestContext) string {
-	// Check Response API context first
-	// userID is provided via metadata.user_id (OpenAI API spec-compliant)
-	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.OriginalRequest != nil {
-		if ctx.ResponseAPICtx.OriginalRequest.Metadata != nil {
-			if userID, ok := ctx.ResponseAPICtx.OriginalRequest.Metadata["user_id"]; ok {
-				return userID
-			}
-		}
-	}
-
-	return ""
+	return extractUserID(ctx)
 }
