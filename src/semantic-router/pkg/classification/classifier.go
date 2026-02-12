@@ -987,6 +987,9 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 	// Add all configured modality rules
 	for _, rule := range c.Config.ModalityRules {
 		key := strings.ToLower(config.SignalTypeModality + ":" + rule.Name)
+		allSignals[key] = true
+	}
+
 	// Add all configured role bindings (authz signal uses the Role name, not binding name)
 	for _, rb := range c.Config.GetRoleBindings() {
 		key := strings.ToLower(config.SignalTypeAuthz + ":" + rb.Role)
