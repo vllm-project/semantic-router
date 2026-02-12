@@ -41,7 +41,7 @@ const (
 	SignalTypeLatency      = "latency"
 	SignalTypeContext      = "context"
 	SignalTypeComplexity   = "complexity"
-	SignalTypeModality    = "modality"
+	SignalTypeModality     = "modality"
 )
 
 // API format constants for model backends
