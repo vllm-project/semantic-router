@@ -91,9 +91,9 @@ func NewAuthzClassifier(bindings []config.RoleBinding) (*AuthzClassifier, error)
 			}
 			name := strings.TrimSpace(s.Name)
 			if name == "" {
-			return nil, fmt.Errorf("role_bindings: binding %q subject[%d] (kind: %s) has empty name — "+
-				"the name must match the value your auth backend injects in the identity headers (configured via authz.identity)",
-				rb.Name, i, s.Kind)
+				return nil, fmt.Errorf("role_bindings: binding %q subject[%d] (kind: %s) has empty name — "+
+					"the name must match the value your auth backend injects in the identity headers (configured via authz.identity)",
+					rb.Name, i, s.Kind)
 			}
 			nb.subjects = append(nb.subjects, normalizedSubject{kind: kind, name: name})
 		}
