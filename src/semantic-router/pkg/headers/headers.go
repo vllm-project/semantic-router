@@ -95,10 +95,6 @@ const (
 	// Example: "en,zh,es"
 	VSRMatchedLanguage = "x-vsr-matched-language"
 
-	// VSRMatchedLatency contains comma-separated list of matched latency signals.
-	// Example: "low_latency,medium_latency"
-	VSRMatchedLatency = "x-vsr-matched-latency"
-
 	// VSRMatchedContext contains comma-separated list of matched context rule names.
 	// Example: "low_token_count,high_token_count"
 	VSRMatchedContext = "x-vsr-matched-context"
