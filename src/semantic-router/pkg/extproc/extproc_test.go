@@ -646,10 +646,12 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 	}
 
 	// Build credential resolver (default chain: header-injection → static-config)
+	// Set fail_open=true for tests since no real API keys are available
 	credResolver := authz.NewCredentialResolver(
 		authz.NewHeaderInjectionProvider(authz.DefaultHeaderMap()),
 		authz.NewStaticConfigProvider(cfg),
 	)
+	credResolver.SetFailOpen(true)
 
 	// Create router manually with proper initialization
 	router := &OpenAIRouter{
