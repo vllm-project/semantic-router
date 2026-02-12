@@ -1,0 +1,211 @@
+# Multi-Endpoint Model Routing Test Configuration
+#
+# Demonstrates environment-based AI safety policies: the SAME model
+# (Qwen2.5-14B-Instruct) is deployed in Dev and Prod environments, each
+# with DIFFERENT PII and jailbreak policies enforced by the router.
+#
+# Architecture:
+#   Client -> Envoy -> ext_proc (semantic router) -> vLLM endpoints
+#
+#   "qwen14b-dev"  alias -> vllm-14b-dev  (127.0.0.1:8100) -> Qwen/Qwen2.5-14B-Instruct
+#   "qwen14b-prod" alias -> vllm-14b-prod (127.0.0.1:8200) -> Qwen/Qwen2.5-14B-Instruct
+#
+# Both endpoints serve the exact same model. The router distinguishes them
+# via aliases so that decisions can enforce different safety postures:
+#
+#   Dev  — relaxed PII, low jailbreak threshold (fewer false positives)
+#   Prod — strict PII, high jailbreak threshold (maximum user safety)
+
+# --- Endpoints ---
+vllm_endpoints:
+  - name: "vllm-14b-dev"
+    address: "127.0.0.1"
+    port: 8100
+    weight: 1
+    type: "vllm"
+
+  - name: "vllm-14b-prod"
+    address: "127.0.0.1"
+    port: 8200
+    weight: 1
+    type: "vllm"
+
+# --- Model Configuration ---
+# Two aliases for the exact same underlying model, each pinned to a different env.
+# external_model_ids tells the router what name to put in the JSON body
+# when forwarding to the backend.
+model_config:
+  "qwen14b-dev":
+    preferred_endpoints: ["vllm-14b-dev"]
+    param_size: "14b"
+    quality_score: 0.85
+    description: "Qwen2.5 14B — Dev environment (internal)"
+    capabilities: ["chat", "code", "reasoning", "math"]
+    external_model_ids:
+      vllm: "Qwen/Qwen2.5-14B-Instruct"
+
+  "qwen14b-prod":
+    preferred_endpoints: ["vllm-14b-prod"]
+    param_size: "14b"
+    quality_score: 0.85
+    description: "Qwen2.5 14B — Prod environment (user-facing)"
+    capabilities: ["chat", "code", "reasoning", "math"]
+    external_model_ids:
+      vllm: "Qwen/Qwen2.5-14B-Instruct"
+
+default_model: "qwen14b-dev"
+
+# --- Categories ---
+categories:
+  - name: code
+    description: "Programming, debugging, and software engineering tasks"
+  - name: general
+    description: "General knowledge, conversation, and miscellaneous topics"
+
+# --- Routing Decisions ---
+# Code / tech queries go to Dev (internal developer environment)
+# General / user-facing queries go to Prod (strict safety)
+strategy: "priority"
+
+decisions:
+  # ── Dev: Code / Internal Workloads ─────────────────────────
+  # Internal developer traffic — relaxed safety policies.
+  # Lower jailbreak threshold (0.5) avoids false positives on code snippets
+  # that resemble injection patterns. PII allows organization and location
+  # names that commonly appear in code comments and config files.
+  - name: "code_to_dev"
+    description: "Route code/tech queries to Dev (internal developer env)"
+    priority: 100
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "code_keywords"
+    modelRefs:
+      - model: "qwen14b-dev"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a senior software engineer. Provide clear, production-quality code with best practices."
+      - type: "jailbreak"
+        configuration:
+          enabled: true
+          threshold: 0.5  # Relaxed — reduce false positives on code/technical prompts
+      - type: "pii"
+        configuration:
+          enabled: true
+          threshold: 0.6  # Relaxed — code context has many org/location references
+          pii_types_allowed: ["GPE", "ORGANIZATION", "DATE_TIME"]  # Allow geo, org, dates in code
+
+  # ── Prod: General / User-Facing Workloads ──────────────────
+  # Production user traffic — strict safety policies.
+  # High jailbreak threshold (0.9) blocks adversarial prompts targeting
+  # user-facing systems. PII blocks ALL personal data types to comply
+  # with privacy regulations and data minimization policies.
+  - name: "general_to_prod"
+    description: "Route general/user queries to Prod (strict safety)"
+    priority: 50
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "general_keywords"
+    modelRefs:
+      - model: "qwen14b-prod"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a helpful assistant operating under strict data protection policies. Never store, log, or repeat any personal information shared by the user. If a user shares personal data, remind them to avoid sharing sensitive details."
+      - type: "jailbreak"
+        configuration:
+          enabled: true
+          threshold: 0.9  # Strict — user-facing endpoint must block adversarial prompts
+      - type: "pii"
+        configuration:
+          enabled: true
+          threshold: 0.9  # Strict — block all PII in production
+          pii_types_allowed: []  # Block ALL PII types (data minimization)
+
+# --- Keyword Rules ---
+keyword_rules:
+  - name: "code_keywords"
+    operator: "OR"
+    keywords:
+      - "code"
+      - "function"
+      - "implement"
+      - "debug"
+      - "refactor"
+      - "python"
+      - "golang"
+      - "javascript"
+      - "algorithm"
+      - "class"
+      - "API"
+      - "bug"
+      - "compile"
+
+  - name: "general_keywords"
+    operator: "OR"
+    keywords:
+      - "hello"
+      - "what is"
+      - "explain"
+      - "tell me"
+      - "how does"
+      - "history"
+      - "science"
+      - "who"
+      - "where"
+      - "when"
+
+# --- Prompt Guard (global defaults) ---
+# Per-decision plugins above override these defaults.
+prompt_guard:
+  enabled: true
+  use_modernbert: false
+  model_id: "models/mom-jailbreak-classifier"
+  jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
+  threshold: 0.7  # Global default — overridden per-decision above
+  use_cpu: true
+
+# --- PII Classifier ---
+classifier:
+  pii_model:
+    model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+    use_modernbert: false
+    threshold: 0.7  # Global default — overridden per-decision above
+    use_cpu: true
+    pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
+
+# --- Other ---
+semantic_cache:
+  enabled: false
+
+clear_route_cache: true
+
+# ═══════════════════════════════════════════════════════════════
+# Safety Policy Summary
+# ═══════════════════════════════════════════════════════════════
+#
+#                        Dev (internal)      Prod (user-facing)
+#   ─────────────────────────────────────────────────────────
+#   Jailbreak detection   enabled             enabled
+#   Jailbreak threshold   0.5 (relaxed)       0.9 (strict)
+#   PII detection         enabled             enabled
+#   PII threshold         0.6 (relaxed)       0.9 (strict)
+#   PII types allowed     GPE, ORG, DATE      none (block all)
+#   System prompt         Code engineer        Privacy-aware assistant
+#   ─────────────────────────────────────────────────────────
+#
+# Rationale:
+#   - Dev serves internal developers writing code. Technical prompts
+#     often trigger jailbreak false positives (SQL injection examples,
+#     shell escapes, etc.). A lower threshold avoids blocking legitimate
+#     dev work. Organization and location names are common in code.
+#
+#   - Prod serves end users. All PII must be detected and blocked.
+#     Jailbreak protection is maximized to prevent adversarial prompt
+#     attacks on user-facing systems.

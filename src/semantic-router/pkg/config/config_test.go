@@ -1022,6 +1022,305 @@ default_model: "model-b"
 			})
 		})
 
+		Describe("SelectBestEndpointWithDetailsForModel", func() {
+			It("should return address and endpoint name for model with single endpoint", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				// model-b has a single preferred endpoint: endpoint2
+				address, endpointName, found := cfg.SelectBestEndpointWithDetailsForModel("model-b")
+				Expect(found).To(BeTrue())
+				Expect(address).To(Equal("127.0.0.1:8000"))
+				Expect(endpointName).To(Equal("endpoint2"))
+			})
+
+			It("should return the highest-weight endpoint for model with multiple endpoints", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				// model-a has endpoint1 (weight 1) and endpoint3 (weight 1)
+				// Both have the same weight, so we get one of them
+				address, endpointName, found := cfg.SelectBestEndpointWithDetailsForModel("model-a")
+				Expect(found).To(BeTrue())
+				Expect(address).To(Equal("127.0.0.1:8000"))
+				Expect(endpointName).To(BeElementOf("endpoint1", "endpoint3"))
+			})
+
+			It("should return false for non-existent model", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				address, endpointName, found := cfg.SelectBestEndpointWithDetailsForModel("non-existent-model")
+				Expect(found).To(BeFalse())
+				Expect(address).To(BeEmpty())
+				Expect(endpointName).To(BeEmpty())
+			})
+
+			It("should return false for model with no preferred endpoints", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				// model-c has no preferred endpoints configured
+				address, endpointName, found := cfg.SelectBestEndpointWithDetailsForModel("model-c")
+				Expect(found).To(BeFalse())
+				Expect(address).To(BeEmpty())
+				Expect(endpointName).To(BeEmpty())
+			})
+
+			It("should select the endpoint with the highest weight when weights differ", func() {
+				configContent := `
+vllm_endpoints:
+  - name: "ep-low"
+    address: "10.0.0.1"
+    port: 9000
+    weight: 1
+  - name: "ep-high"
+    address: "10.0.0.2"
+    port: 9001
+    weight: 10
+
+model_config:
+  "weighted-model":
+    preferred_endpoints: ["ep-low", "ep-high"]
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "weighted-model"
+        score: 0.9
+
+default_model: "weighted-model"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				address, endpointName, found := cfg.SelectBestEndpointWithDetailsForModel("weighted-model")
+				Expect(found).To(BeTrue())
+				Expect(address).To(Equal("10.0.0.2:9001"))
+				Expect(endpointName).To(Equal("ep-high"))
+			})
+		})
+
+		Describe("ResolveExternalModelID", func() {
+			It("should resolve external model ID for vllm endpoint type", func() {
+				configContent := `
+vllm_endpoints:
+  - name: "vllm-ep"
+    address: "127.0.0.1"
+    port: 8000
+    type: "vllm"
+
+model_config:
+  "my-alias":
+    preferred_endpoints: ["vllm-ep"]
+    external_model_ids:
+      vllm: "Qwen/Qwen2.5-14B-Instruct"
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "my-alias"
+        score: 0.9
+
+default_model: "my-alias"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				resolved := cfg.ResolveExternalModelID("my-alias", "vllm-ep")
+				Expect(resolved).To(Equal("Qwen/Qwen2.5-14B-Instruct"))
+			})
+
+			It("should default to vllm type when endpoint has no type set", func() {
+				configContent := `
+vllm_endpoints:
+  - name: "no-type-ep"
+    address: "127.0.0.1"
+    port: 8000
+
+model_config:
+  "my-alias":
+    preferred_endpoints: ["no-type-ep"]
+    external_model_ids:
+      vllm: "Qwen/Qwen2.5-14B-Instruct"
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "my-alias"
+        score: 0.9
+
+default_model: "my-alias"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Endpoint has no type, so defaults to "vllm"
+				resolved := cfg.ResolveExternalModelID("my-alias", "no-type-ep")
+				Expect(resolved).To(Equal("Qwen/Qwen2.5-14B-Instruct"))
+			})
+
+			It("should default to vllm type when endpoint name does not exist", func() {
+				configContent := `
+vllm_endpoints:
+  - name: "real-ep"
+    address: "127.0.0.1"
+    port: 8000
+
+model_config:
+  "my-alias":
+    preferred_endpoints: ["real-ep"]
+    external_model_ids:
+      vllm: "Qwen/Qwen2.5-14B-Instruct"
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "my-alias"
+        score: 0.9
+
+default_model: "my-alias"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Non-existent endpoint name falls back to "vllm" type
+				resolved := cfg.ResolveExternalModelID("my-alias", "non-existent-ep")
+				Expect(resolved).To(Equal("Qwen/Qwen2.5-14B-Instruct"))
+			})
+
+			It("should resolve correct type for ollama endpoint", func() {
+				configContent := `
+vllm_endpoints:
+  - name: "ollama-ep"
+    address: "127.0.0.1"
+    port: 11434
+    type: "ollama"
+
+model_config:
+  "my-alias":
+    preferred_endpoints: ["ollama-ep"]
+    external_model_ids:
+      vllm: "Qwen/Qwen2.5-14B-Instruct"
+      ollama: "qwen2.5:14b"
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "my-alias"
+        score: 0.9
+
+default_model: "my-alias"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				resolved := cfg.ResolveExternalModelID("my-alias", "ollama-ep")
+				Expect(resolved).To(Equal("qwen2.5:14b"))
+			})
+
+			It("should return original model name when no external_model_ids configured", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Using the base fixture which has no external_model_ids
+				resolved := cfg.ResolveExternalModelID("model-a", "endpoint1")
+				Expect(resolved).To(Equal("model-a"))
+			})
+
+			It("should return original model name for non-existent model", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				resolved := cfg.ResolveExternalModelID("non-existent-model", "endpoint1")
+				Expect(resolved).To(Equal("non-existent-model"))
+			})
+
+			It("should return original model name when endpoint type has no mapping", func() {
+				configContent := `
+vllm_endpoints:
+  - name: "custom-ep"
+    address: "127.0.0.1"
+    port: 8000
+    type: "openrouter"
+
+model_config:
+  "my-alias":
+    preferred_endpoints: ["custom-ep"]
+    external_model_ids:
+      vllm: "Qwen/Qwen2.5-14B-Instruct"
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "my-alias"
+        score: 0.9
+
+default_model: "my-alias"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Endpoint type is "openrouter" but external_model_ids only has "vllm"
+				resolved := cfg.ResolveExternalModelID("my-alias", "custom-ep")
+				Expect(resolved).To(Equal("my-alias"))
+			})
+
+			It("should return original model name when config is nil", func() {
+				var nilCfg *RouterConfig
+				resolved := nilCfg.ResolveExternalModelID("some-model", "some-endpoint")
+				Expect(resolved).To(Equal("some-model"))
+			})
+
+			It("should return original model name when external_model_ids map is empty", func() {
+				configContent := `
+vllm_endpoints:
+  - name: "ep1"
+    address: "127.0.0.1"
+    port: 8000
+
+model_config:
+  "my-alias":
+    preferred_endpoints: ["ep1"]
+    external_model_ids: {}
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "my-alias"
+        score: 0.9
+
+default_model: "my-alias"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				resolved := cfg.ResolveExternalModelID("my-alias", "ep1")
+				Expect(resolved).To(Equal("my-alias"))
+			})
+		})
+
 		Describe("ValidateEndpoints", func() {
 			It("should pass validation when all models have endpoints", func() {
 				cfg, err := Load(configFile)

@@ -603,6 +603,61 @@ func (c *RouterConfig) GetHallucinationAction() string {
 	return "warn"
 }
 
+// ResolveExternalModelID resolves the external model ID for a given model name and endpoint.
+// When a model alias (e.g., "qwen14b-rack1") is configured with external_model_ids,
+// this returns the real model name that the backend expects (e.g., "Qwen/Qwen2.5-14B-Instruct").
+// The endpoint type (e.g., "vllm", "ollama") is looked up from the selected endpoint.
+// Returns the original modelName if no mapping is found.
+func (c *RouterConfig) ResolveExternalModelID(modelName string, endpointName string) string {
+	if c == nil || c.ModelConfig == nil {
+		return modelName
+	}
+
+	modelConfig, ok := c.ModelConfig[modelName]
+	if !ok || len(modelConfig.ExternalModelIDs) == 0 {
+		return modelName
+	}
+
+	// Get the endpoint type from the endpoint name
+	endpointType := ""
+	if endpoint, found := c.GetEndpointByName(endpointName); found && endpoint.Type != "" {
+		endpointType = endpoint.Type
+	} else {
+		// Default endpoint type is "vllm"
+		endpointType = "vllm"
+	}
+
+	// Look up the external model ID for this endpoint type
+	if externalID, ok := modelConfig.ExternalModelIDs[endpointType]; ok && externalID != "" {
+		return externalID
+	}
+
+	return modelName
+}
+
+// SelectBestEndpointWithDetailsForModel selects the best endpoint for a model and returns
+// both the address:port and the endpoint name (needed for external_model_ids resolution).
+// Returns (address, endpointName, found).
+func (c *RouterConfig) SelectBestEndpointWithDetailsForModel(modelName string) (string, string, bool) {
+	endpoints := c.GetEndpointsForModel(modelName)
+	if len(endpoints) == 0 {
+		return "", "", false
+	}
+
+	if len(endpoints) == 1 {
+		return fmt.Sprintf("%s:%d", endpoints[0].Address, endpoints[0].Port), endpoints[0].Name, true
+	}
+
+	bestEndpoint := endpoints[0]
+	for _, endpoint := range endpoints[1:] {
+		if endpoint.Weight > bestEndpoint.Weight {
+			bestEndpoint = endpoint
+		}
+	}
+
+	return fmt.Sprintf("%s:%d", bestEndpoint.Address, bestEndpoint.Port), bestEndpoint.Name, true
+}
+
 // IsFeedbackDetectorEnabled checks if feedback detection is enabled
 func (c *RouterConfig) IsFeedbackDetectorEnabled() bool {
 	return c.InlineModels.FeedbackDetector.Enabled &&

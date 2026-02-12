@@ -311,15 +311,19 @@ func (r *OpenAIRouter) handleAutoModelRouting(openAIRequest *openai.ChatCompleti
 	metrics.RecordModelRouting(originalModel, matchedModel)
 
 	// Select endpoint for the matched model
-	selectedEndpoint := r.selectEndpointForModel(ctx, matchedModel)
+	selectedEndpoint, selectedEndpointName := r.selectEndpointForModel(ctx, matchedModel)
 
-	// Modify request body with new model, reasoning mode, and system prompt
-	modifiedBody, err := r.modifyRequestBodyForAutoRouting(openAIRequest, matchedModel, decisionName, reasoningDecision.UseReasoning, ctx)
+	// Resolve model name alias to real model name for the selected endpoint
+	// e.g., "qwen14b-rack1" -> "Qwen/Qwen2.5-14B-Instruct"
+	upstreamModel := r.resolveModelNameForEndpoint(matchedModel, selectedEndpointName)
+
+	// Modify request body with resolved model name, reasoning mode, and system prompt
+	modifiedBody, err := r.modifyRequestBodyForAutoRouting(openAIRequest, upstreamModel, decisionName, reasoningDecision.UseReasoning, ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create response with mutations
+	// Create response with mutations (use original alias for headers/tracing, upstream model in body)
 	response = r.createRoutingResponse(matchedModel, selectedEndpoint, modifiedBody, ctx)
 
 	// Log routing decision
@@ -356,10 +360,13 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCom
 	// Memory injection already happened in handleMemoryRetrieval (before routing diverged)
 
 	// Select endpoint for the specified model
-	selectedEndpoint := r.selectEndpointForModel(ctx, originalModel)
+	selectedEndpoint, selectedEndpointName := r.selectEndpointForModel(ctx, originalModel)
 
-	// Create response with headers
-	response := r.createSpecifiedModelResponse(originalModel, selectedEndpoint, ctx)
+	// Resolve model name alias to real model name for the selected endpoint
+	upstreamModel := r.resolveModelNameForEndpoint(originalModel, selectedEndpointName)
+
+	// Create response with headers (and body mutation if model name changed)
+	response := r.createSpecifiedModelResponse(originalModel, upstreamModel, selectedEndpoint, ctx)
 
 	// Handle route cache clearing
 	if r.shouldClearRouteCache() {
@@ -381,12 +388,13 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCom
 	return response, nil
 }
 
-// selectEndpointForModel selects the best endpoint for the given model
+// selectEndpointForModel selects the best endpoint for the given model.
+// Returns the endpoint address:port and the endpoint name.
 // Backend selection is now part of the model layer (upstream request span)
-func (r *OpenAIRouter) selectEndpointForModel(ctx *RequestContext, model string) string {
-	endpointAddress, endpointFound := r.Config.SelectBestEndpointAddressForModel(model)
+func (r *OpenAIRouter) selectEndpointForModel(ctx *RequestContext, model string) (string, string) {
+	endpointAddress, endpointName, endpointFound := r.Config.SelectBestEndpointWithDetailsForModel(model)
 	if endpointFound {
-		logging.Infof("Selected endpoint address: %s for model: %s", endpointAddress, model)
+		logging.Infof("Selected endpoint address: %s (name: %s) for model: %s", endpointAddress, endpointName, model)
 	}
 
 	// Store the selected endpoint in context (for routing/logging purposes)
@@ -395,7 +403,21 @@ func (r *OpenAIRouter) selectEndpointForModel(ctx *RequestContext, model string)
 	// Increment active request count for queue depth estimation (model-level)
 	metrics.IncrementModelActiveRequests(model)
 
-	return endpointAddress
+	return endpointAddress, endpointName
+}
+
+// resolveModelNameForEndpoint resolves the model name alias to the real model name
+// that the backend endpoint expects, using external_model_ids configuration.
+// For example, "qwen14b-rack1" -> "Qwen/Qwen2.5-14B-Instruct" for a vllm endpoint.
+func (r *OpenAIRouter) resolveModelNameForEndpoint(modelName string, endpointName string) string {
+	if r.Config == nil {
+		return modelName
+	}
+	resolved := r.Config.ResolveExternalModelID(modelName, endpointName)
+	if resolved != modelName {
+		logging.Infof("Resolved model name: %s -> %s (endpoint: %s)", modelName, resolved, endpointName)
+	}
+	return resolved
 }
 
 // modifyRequestBodyForAutoRouting modifies the request body for auto routing
@@ -569,8 +591,10 @@ func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, modi
 	}
 }
 
-// createSpecifiedModelResponse creates a response for specified model routing
-func (r *OpenAIRouter) createSpecifiedModelResponse(model string, endpoint string, ctx *RequestContext) *ext_proc.ProcessingResponse {
+// createSpecifiedModelResponse creates a response for specified model routing.
+// model is the internal alias (used for headers/tracing), upstreamModel is the real model
+// name that the backend endpoint expects (resolved via external_model_ids).
+func (r *OpenAIRouter) createSpecifiedModelResponse(model string, upstreamModel string, endpoint string, ctx *RequestContext) *ext_proc.ProcessingResponse {
 	setHeaders := []*core.HeaderValueOption{}
 	removeHeaders := []string{}
 
@@ -605,8 +629,18 @@ func (r *OpenAIRouter) createSpecifiedModelResponse(model string, endpoint strin
 		},
 	})
 
-	// For Response API requests, modify :path to /v1/chat/completions and use translated body
+	// Determine if we need to mutate the request body
 	var bodyMutation *ext_proc.BodyMutation
+	needsBodyMutation := false
+
+	// Model name rewriting: if the upstream model name differs from the alias,
+	// we need to rewrite the "model" field in the request body
+	if upstreamModel != model {
+		needsBodyMutation = true
+		logging.Infof("Model name rewriting: %s -> %s in request body", model, upstreamModel)
+	}
+
+	// For Response API requests, modify :path to /v1/chat/completions and use translated body
 	if ctx != nil && ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{
@@ -614,17 +648,45 @@ func (r *OpenAIRouter) createSpecifiedModelResponse(model string, endpoint strin
 				RawValue: []byte("/v1/chat/completions"),
 			},
 		})
+		needsBodyMutation = true
+		logging.Infof("Response API: Rewriting path to /v1/chat/completions (specified model)")
+	}
+
+	if needsBodyMutation {
 		removeHeaders = append(removeHeaders, "content-length")
 
-		// Use the translated body from Response API context
-		if len(ctx.ResponseAPICtx.TranslatedBody) > 0 {
+		// Start with the original request body or Response API translated body
+		var bodyBytes []byte
+		if ctx != nil && ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest && len(ctx.ResponseAPICtx.TranslatedBody) > 0 {
+			bodyBytes = ctx.ResponseAPICtx.TranslatedBody
+		} else if ctx != nil && len(ctx.OriginalRequestBody) > 0 {
+			bodyBytes = ctx.OriginalRequestBody
+		}
+
+		// Rewrite model name in body if needed
+		if upstreamModel != model && len(bodyBytes) > 0 {
+			rewritten, err := rewriteModelInBody(bodyBytes, upstreamModel)
+			if err != nil {
+				logging.Warnf("Failed to rewrite model in body: %v, sending original body", err)
+			} else {
+				bodyBytes = rewritten
+			}
+		}
+
+		if len(bodyBytes) > 0 {
+			// Update content-length for the modified body
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      "content-length",
+					RawValue: []byte(fmt.Sprintf("%d", len(bodyBytes))),
+				},
+			})
 			bodyMutation = &ext_proc.BodyMutation{
 				Mutation: &ext_proc.BodyMutation_Body{
-					Body: ctx.ResponseAPICtx.TranslatedBody,
+					Body: bodyBytes,
 				},
 			}
 		}
-		logging.Infof("Response API: Rewriting path to /v1/chat/completions (specified model)")
 	}
 
 	return &ext_proc.ProcessingResponse{
@@ -641,6 +703,28 @@ func (r *OpenAIRouter) createSpecifiedModelResponse(model string, endpoint strin
 			},
 		},
 	}
+}
+
+// rewriteModelInBody rewrites the "model" field in a JSON request body.
+// Uses a generic map approach to preserve all other fields.
+func rewriteModelInBody(body []byte, newModel string) ([]byte, error) {
+	var requestMap map[string]json.RawMessage
+	if err := json.Unmarshal(body, &requestMap); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal request body: %w", err)
+	}
+
+	modelJSON, err := json.Marshal(newModel)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal new model name: %w", err)
+	}
+	requestMap["model"] = json.RawMessage(modelJSON)
+
+	rewritten, err := json.Marshal(requestMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal rewritten request: %w", err)
+	}
+
+	return rewritten, nil
 }
 
 // getModelAccessKey retrieves the access_key for a given model from the config

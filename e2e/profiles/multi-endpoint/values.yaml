@@ -1,0 +1,243 @@
+# Multi-Endpoint E2E Profile Values
+#
+# Demonstrates environment-based routing (Dev vs Prod) with per-environment
+# PII and jailbreak safety policies. Two model aliases (qwen14b-dev,
+# qwen14b-prod) map to the same physical model but are pinned to separate
+# vLLM endpoints, each with different safety postures.
+#
+# Architecture:
+#   Client -> Envoy -> ext_proc (semantic router) -> vLLM endpoints
+#
+#   "qwen14b-dev"  alias -> vllm-14b-dev  -> Qwen/Qwen2.5-14B-Instruct
+#   "qwen14b-prod" alias -> vllm-14b-prod -> Qwen/Qwen2.5-14B-Instruct
+#
+# Safety Policy Summary:
+#                        Dev (internal)      Prod (user-facing)
+#   ─────────────────────────────────────────────────────────
+#   Jailbreak threshold   0.5 (relaxed)       0.9 (strict)
+#   PII threshold         0.6 (relaxed)       0.9 (strict)
+#   PII types allowed     GPE, ORG, DATE      none (block all)
+#   System prompt         Code engineer        Privacy-aware assistant
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/vllm-project/semantic-router/extproc
+  pullPolicy: Never
+  tag: "e2e-test"
+
+service:
+  type: ClusterIP
+  port: 8080
+
+config:
+  clear_route_cache: true
+  default_model: "qwen14b-dev"
+
+  # --- Endpoints ---
+  # Two vLLM simulator instances (llm-d-inference-sim) deployed as
+  # separate k8s Deployments + Services in the default namespace.
+  vllm_endpoints:
+    - name: "vllm-14b-dev"
+      address: "vllm-14b-dev.default.svc.cluster.local"
+      port: 8000
+      weight: 1
+      type: "vllm"
+
+    - name: "vllm-14b-prod"
+      address: "vllm-14b-prod.default.svc.cluster.local"
+      port: 8000
+      weight: 1
+      type: "vllm"
+
+  # --- Model Configuration ---
+  # Two aliases for the same physical model, each pinned to its own endpoint.
+  # external_model_ids tells the router what model name the backend expects.
+  model_config:
+    "qwen14b-dev":
+      preferred_endpoints: ["vllm-14b-dev"]
+      param_size: "14b"
+      quality_score: 0.85
+      description: "Qwen2.5 14B — Dev environment (internal)"
+      capabilities: ["chat", "code", "reasoning", "math"]
+      external_model_ids:
+        vllm: "Qwen/Qwen2.5-14B-Instruct"
+
+    "qwen14b-prod":
+      preferred_endpoints: ["vllm-14b-prod"]
+      param_size: "14b"
+      quality_score: 0.85
+      description: "Qwen2.5 14B — Prod environment (user-facing)"
+      capabilities: ["chat", "code", "reasoning", "math"]
+      external_model_ids:
+        vllm: "Qwen/Qwen2.5-14B-Instruct"
+
+  # --- Classifier ---
+  classifier:
+    category_model:
+      model_id: "models/mom-domain-classifier"
+      use_modernbert: false
+      threshold: 0.6
+      use_cpu: true
+      category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
+    pii_model:
+      model_id: "models/mom-pii-classifier"
+      use_modernbert: false
+      threshold: 0.7
+      use_cpu: true
+      pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
+
+  # --- Prompt Guard (global defaults) ---
+  prompt_guard:
+    enabled: true
+    use_modernbert: false
+    model_id: "models/mom-jailbreak-classifier"
+    jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
+    threshold: 0.7
+    use_cpu: true
+
+  # --- BERT Model for embeddings ---
+  bert_model:
+    model_id: models/mom-embedding-light
+    threshold: 0.6
+    use_cpu: true
+
+  # --- Categories ---
+  categories:
+    - name: code
+      description: "Programming, debugging, and software engineering tasks"
+    - name: general
+      description: "General knowledge, conversation, and miscellaneous topics"
+    - name: other
+      description: "Catch-all for unclassified queries"
+
+  # --- Keyword Rules ---
+  keyword_rules:
+    - name: "code_keywords"
+      operator: "OR"
+      keywords:
+        - "code"
+        - "function"
+        - "implement"
+        - "debug"
+        - "refactor"
+        - "python"
+        - "golang"
+        - "javascript"
+        - "algorithm"
+        - "class"
+        - "API"
+        - "bug"
+        - "compile"
+
+    - name: "general_keywords"
+      operator: "OR"
+      keywords:
+        - "hello"
+        - "what is"
+        - "explain"
+        - "tell me"
+        - "how does"
+        - "history"
+        - "science"
+        - "who"
+        - "where"
+        - "when"
+
+  # --- Routing Strategy ---
+  strategy: "priority"
+
+  # --- Routing Decisions ---
+  decisions:
+    # ── Dev: Code / Internal Workloads ────────────────────────
+    - name: "code_to_dev"
+      description: "Route code/tech queries to Dev (internal developer env)"
+      priority: 100
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "keyword"
+            name: "code_keywords"
+      modelRefs:
+        - model: "qwen14b-dev"
+          use_reasoning: false
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            system_prompt: "You are a senior software engineer. Provide clear, production-quality code with best practices."
+        - type: "jailbreak"
+          configuration:
+            enabled: true
+            threshold: 0.5  # Relaxed — reduce false positives on code/technical prompts
+        - type: "pii"
+          configuration:
+            enabled: true
+            threshold: 0.6
+            pii_types_allowed: ["GPE", "ORGANIZATION", "DATE_TIME"]
+
+    # ── Prod: General / User-Facing Workloads ─────────────────
+    - name: "general_to_prod"
+      description: "Route general/user queries to Prod (strict safety)"
+      priority: 50
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "keyword"
+            name: "general_keywords"
+      modelRefs:
+        - model: "qwen14b-prod"
+          use_reasoning: false
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            system_prompt: "You are a helpful assistant operating under strict data protection policies. Never store, log, or repeat any personal information shared by the user."
+        - type: "jailbreak"
+          configuration:
+            enabled: true
+            threshold: 0.9  # Strict — user-facing endpoint must block adversarial prompts
+        - type: "pii"
+          configuration:
+            enabled: true
+            threshold: 0.9
+            pii_types_allowed: []  # Block ALL PII types (data minimization)
+
+  # --- Semantic Cache ---
+  semantic_cache:
+    enabled: false
+
+  # --- Router Configuration ---
+  router:
+    high_confidence_threshold: 0.99
+    low_latency_threshold_ms: 2000
+    default_confidence_threshold: 0.95
+    default_max_latency_ms: 5000
+
+  # --- Observability ---
+  observability:
+    metrics:
+      enabled: true
+    tracing:
+      enabled: false
+
+  # --- API Configuration ---
+  api:
+    batch_classification:
+      max_batch_size: 100
+      concurrency_threshold: 5
+      max_concurrency: 8
+      metrics:
+        enabled: true
+        detailed_goroutine_tracking: true
+        high_resolution_timing: false
+        sample_rate: 1.0
+        duration_buckets:
+          [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
+        size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 8Gi
+  requests:
+    cpu: 500m
+    memory: 2Gi
