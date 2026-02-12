@@ -58,6 +58,7 @@ extern bool init_mmbert_32k_factcheck_classifier(const char* model_id, bool use_
 extern bool init_mmbert_32k_jailbreak_classifier(const char* model_id, bool use_cpu);
 extern bool init_mmbert_32k_feedback_classifier(const char* model_id, bool use_cpu);
 extern bool init_mmbert_32k_pii_classifier(const char* model_id, bool use_cpu);
+extern bool init_mmbert_32k_modality_classifier(const char* model_id, bool use_cpu);
 extern bool is_mmbert_32k_model(const char* config_path);
 
 // Token classification structures
@@ -263,6 +264,7 @@ extern ModernBertClassificationResult classify_mmbert_32k_factcheck(const char* 
 extern ModernBertClassificationResult classify_mmbert_32k_jailbreak(const char* text);
 extern ModernBertClassificationResult classify_mmbert_32k_feedback(const char* text);
 extern ModernBertTokenClassificationResult classify_mmbert_32k_pii_tokens(const char* text, const char* model_config_path);
+extern ModernBertClassificationResult classify_mmbert_32k_modality(const char* text);
 
 // New official Candle BERT functions
 extern bool init_candle_bert_classifier(const char* model_path, int num_classes, bool use_cpu);
@@ -2008,6 +2010,7 @@ var (
 	mmBert32KJailbreakClassifierInitOnce sync.Once
 	mmBert32KFeedbackClassifierInitOnce  sync.Once
 	mmBert32KPIIClassifierInitOnce       sync.Once
+	mmBert32KModalityClassifierInitOnce  sync.Once
 )
 
 // IsMmBert32KModel checks if a model is mmBERT-32K (YaRN scaled) based on its config.json
@@ -2255,6 +2258,72 @@ func ClassifyMmBert32KPII(text string, modelConfigPath string) ([]TokenEntity, e
 	}
 
 	return entities, nil
+}
+
+// ModalityResult represents the output of modality routing classification
+type ModalityResult struct {
+	Modality   string  // "AR", "DIFFUSION", or "BOTH"
+	ClassID    int     // 0=AR, 1=DIFFUSION, 2=BOTH
+	Confidence float32 // Confidence score (0.0-1.0)
+}
+
+// InitMmBert32KModalityClassifier initializes the mmBERT-32K modality routing classifier
+// This model classifies user prompt intent into response modality:
+// - AR (0): Text-only response via autoregressive LLM
+// - DIFFUSION (1): Image generation via diffusion model
+// - BOTH (2): Hybrid response requiring both text and image
+// Reference: https://huggingface.co/llm-semantic-router/mmbert32k-modality-router-merged
+func InitMmBert32KModalityClassifier(modelPath string, useCPU bool) error {
+	if modelPath == "" {
+		return fmt.Errorf("modality classifier model_path is required (set classifier.model_path in modality_detection config)")
+	}
+	var err error
+	mmBert32KModalityClassifierInitOnce.Do(func() {
+		log.Printf("🎯 Initializing mmBERT-32K modality routing classifier: %s", modelPath)
+
+		cModelID := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelID))
+
+		success := C.init_mmbert_32k_modality_classifier(cModelID, C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize mmBERT-32K modality routing classifier")
+		} else {
+			log.Printf("   ✓ mmBERT-32K modality router initialized (AR/DIFFUSION/BOTH)")
+		}
+	})
+	return err
+}
+
+// ClassifyMmBert32KModality classifies user prompt intent into response modality
+// Returns ModalityResult with modality label ("AR", "DIFFUSION", "BOTH") and confidence
+func ClassifyMmBert32KModality(text string) (ModalityResult, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_mmbert_32k_modality(cText)
+
+	if result.class < 0 {
+		return ModalityResult{}, fmt.Errorf("failed to classify modality with mmBERT-32K")
+	}
+
+	// Map class ID to modality label
+	modalityLabels := map[int]string{
+		0: "AR",
+		1: "DIFFUSION",
+		2: "BOTH",
+	}
+
+	classID := int(result.class)
+	modality, ok := modalityLabels[classID]
+	if !ok {
+		return ModalityResult{}, fmt.Errorf("mmBERT-32K modality classifier returned unknown class_id %d (expected 0=AR, 1=DIFFUSION, 2=BOTH)", classID)
+	}
+
+	return ModalityResult{
+		Modality:   modality,
+		ClassID:    classID,
+		Confidence: float32(result.confidence),
+	}, nil
 }
 
 // InitFactCheckClassifier initializes the halugate-sentinel fact-check classifier

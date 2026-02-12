@@ -451,6 +451,9 @@ pub static MMBERT_32K_FEEDBACK_CLASSIFIER: OnceLock<
 pub static MMBERT_32K_PII_CLASSIFIER: OnceLock<
     Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertTokenClassifier>,
 > = OnceLock::new();
+pub static MMBERT_32K_MODALITY_CLASSIFIER: OnceLock<
+    Arc<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>,
+> = OnceLock::new();
 
 /// Initialize mmBERT classifier (multilingual ModernBERT)
 ///
@@ -809,6 +812,52 @@ pub extern "C" fn init_mmbert_32k_pii_classifier(model_id: *const c_char, use_cp
         }
         Err(e) => {
             eprintln!("   ✗ Failed to initialize mmBERT-32K PII detector: {}", e);
+            false
+        }
+    }
+}
+
+/// Initialize mmBERT-32K modality routing classifier
+///
+/// Classifies user prompt intent into response modality:
+/// - AR (0): Text-only response via autoregressive LLM
+/// - DIFFUSION (1): Image generation via diffusion model
+/// - BOTH (2): Hybrid response requiring both text and image
+///
+/// Reference: https://huggingface.co/llm-semantic-router/mmbert32k-modality-router-merged
+///
+/// # Safety
+/// - `model_id` must be a valid null-terminated C string
+#[no_mangle]
+pub extern "C" fn init_mmbert_32k_modality_classifier(
+    model_id: *const c_char,
+    use_cpu: bool,
+) -> bool {
+    use crate::model_architectures::traditional::modernbert::ModernBertVariant;
+
+    let model_id = unsafe {
+        match CStr::from_ptr(model_id).to_str() {
+            Ok(s) => s,
+            Err(_) => return false,
+        }
+    };
+
+    eprintln!(
+        "🎯 Initializing mmBERT-32K modality routing classifier from: {}",
+        model_id
+    );
+
+    match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory_with_variant(
+        model_id,
+        use_cpu,
+        ModernBertVariant::Multilingual32K,
+    ) {
+        Ok(model) => {
+            eprintln!("   ✓ mmBERT-32K modality router loaded (AR/DIFFUSION/BOTH, 32K context)");
+            MMBERT_32K_MODALITY_CLASSIFIER.set(Arc::new(model)).is_ok()
+        }
+        Err(e) => {
+            eprintln!("   ✗ Failed to initialize mmBERT-32K modality router: {}", e);
             false
         }
     }
