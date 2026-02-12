@@ -2048,7 +2048,7 @@ pub extern "C" fn detect_hallucinations_with_nli(
 
 use crate::ffi::init::{
     MMBERT_32K_FACTCHECK_CLASSIFIER, MMBERT_32K_FEEDBACK_CLASSIFIER, MMBERT_32K_INTENT_CLASSIFIER,
-    MMBERT_32K_JAILBREAK_CLASSIFIER, MMBERT_32K_PII_CLASSIFIER,
+    MMBERT_32K_JAILBREAK_CLASSIFIER, MMBERT_32K_MODALITY_CLASSIFIER, MMBERT_32K_PII_CLASSIFIER,
 };
 
 /// Classify text using mmBERT-32K intent classifier
@@ -2347,6 +2347,56 @@ pub extern "C" fn classify_mmbert_32k_pii_tokens(
         }
     } else {
         eprintln!("mmBERT-32K PII classifier not initialized");
+        default_result
+    }
+}
+
+/// Classify text using mmBERT-32K modality routing classifier
+///
+/// Determines the appropriate response modality for a user prompt:
+/// - AR (0): Text-only response via autoregressive LLM
+/// - DIFFUSION (1): Image generation via diffusion model
+/// - BOTH (2): Hybrid response requiring both text and image
+///
+/// # Safety
+/// - `text` must be a valid null-terminated C string
+///
+/// # Returns
+/// `ModernBertClassificationResult` with:
+/// - `predicted_class`: 0=AR, 1=DIFFUSION, 2=BOTH, -1=error
+/// - `confidence`: confidence score (0.0-1.0)
+#[no_mangle]
+pub extern "C" fn classify_mmbert_32k_modality(
+    text: *const c_char,
+) -> ModernBertClassificationResult {
+    let default_result = ModernBertClassificationResult {
+        predicted_class: -1,
+        confidence: 0.0,
+    };
+
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                eprintln!("Failed to convert text from C string");
+                return default_result;
+            }
+        }
+    };
+
+    if let Some(classifier) = MMBERT_32K_MODALITY_CLASSIFIER.get() {
+        match classifier.classify_text(text) {
+            Ok((class_id, confidence)) => ModernBertClassificationResult {
+                predicted_class: class_id as i32,
+                confidence,
+            },
+            Err(e) => {
+                eprintln!("mmBERT-32K modality classification failed: {}", e);
+                default_result
+            }
+        }
+    } else {
+        eprintln!("mmBERT-32K modality classifier not initialized");
         default_result
     }
 }

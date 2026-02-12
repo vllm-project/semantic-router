@@ -131,6 +131,20 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 			})
 		}
 
+		// Add x-vsr-selected-modality header (from modality routing)
+		if ctx.ModalityClassification != nil && ctx.ModalityClassification.Modality != "" {
+			modalityValue := ctx.ModalityClassification.Modality
+			if ctx.ModalityClassification.Method != "" {
+				modalityValue += ";" + ctx.ModalityClassification.Method
+			}
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.VSRSelectedModality,
+					RawValue: []byte(modalityValue),
+				},
+			})
+		}
+
 		// Add x-vsr-matched-keywords header (from keyword classification)
 		if len(ctx.VSRMatchedKeywords) > 0 {
 			setHeaders = append(setHeaders, &core.HeaderValueOption{

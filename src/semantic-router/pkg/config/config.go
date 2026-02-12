@@ -41,6 +41,7 @@ const (
 	SignalTypeLatency      = "latency"
 	SignalTypeContext      = "context"
 	SignalTypeComplexity   = "complexity"
+	SignalTypeModality     = "modality"
 )
 
 // API format constants for model backends
@@ -157,6 +158,11 @@ type InlineModels struct {
 
 	// Feedback detector configuration for user satisfaction detection
 	FeedbackDetector FeedbackDetectorConfig `yaml:"feedback_detector"`
+
+	// Modality detector configuration for AR/DIFFUSION/BOTH classification
+	// Follows the same pattern as hallucination_mitigation and feedback_detector:
+	// signal rules in modality_rules (Signals), detector config here (InlineModels)
+	ModalityDetector ModalityDetectorConfig `yaml:"modality_detector"`
 }
 
 // IntelligentRouting represents the configuration for intelligent routing
@@ -449,6 +455,11 @@ type Signals struct {
 	// Complexity rules for complexity-based classification using embedding similarity
 	// When matched, outputs the rule name with difficulty level (e.g., "code_complexity:hard", "math_complexity:easy")
 	ComplexityRules []ComplexityRule `yaml:"complexity_rules,omitempty"`
+
+	// Modality rules for modality-based signal classification
+	// When matched, outputs "AR", "DIFFUSION", or "BOTH" based on the modality classifier/keyword detection
+	// Detection configuration is read from modality_detector (InlineModels)
+	ModalityRules []ModalityRule `yaml:"modality_rules,omitempty"`
 }
 
 // BackendModels represents the configuration for backend models
@@ -461,6 +472,12 @@ type BackendModels struct {
 
 	// vLLM endpoints configuration for multiple backend support
 	VLLMEndpoints []VLLMEndpoint `yaml:"vllm_endpoints"`
+
+	// Image generation backend configurations (like reasoning_families)
+	// Named map of provider-specific configs referenced by model_config entries.
+	// vllm_omni and openai use completely different APIs — each entry's Type
+	// determines which fields are relevant.
+	ImageGenBackends map[string]ImageGenBackendEntry `yaml:"image_gen_backends,omitempty"`
 }
 
 type ReasoningConfig struct {
@@ -1454,6 +1471,15 @@ type ModelParams struct {
 	// Example: {"huggingface": "meta-llama/Llama-3.1-8B-Instruct", "ollama": "llama3.1:8b"}
 	// +optional
 	ExternalModelIDs map[string]string `yaml:"external_model_ids,omitempty"`
+
+	// Modality role for this model: "ar" (text/autoregressive) or "diffusion" (image generation)
+	// Used by modality routing to identify which model handles which modality.
+	// When empty, the model has no modality role.
+	Modality string `yaml:"modality,omitempty"`
+
+	// ImageGenBackend references a named entry in image_gen_backends (like reasoning_family references reasoning_families)
+	// Required when modality is "diffusion" — tells the router which provider config to use for image generation.
+	ImageGenBackend string `yaml:"image_gen_backend,omitempty"`
 }
 
 // LoRAAdapter represents a LoRA adapter configuration for a model
@@ -2164,11 +2190,12 @@ type RuleCombination struct {
 
 // RuleCondition references a specific rule by type and name
 type RuleCondition struct {
-	// Type specifies the rule type: "keyword", "embedding", "domain", or "fact_check"
+	// Type specifies the rule type: "keyword", "embedding", "domain", "fact_check",
+	// "user_feedback", "preference", "language", "latency", "context", "complexity", or "modality".
 	Type string `yaml:"type"`
 
-	// Name is the name of the rule to reference
-	// For fact_check type, use "needs_fact_check" to match queries that need fact verification
+	// Name is the name of the rule to reference.
+	// For fact_check type, use "needs_fact_check" to match queries that need fact verification.
 	Name string `yaml:"name"`
 }
 
@@ -2194,6 +2221,19 @@ type FactCheckRule struct {
 type UserFeedbackRule struct {
 	// Name is the signal name that can be referenced in decision rules
 	// e.g., "need_clarification", "satisfied", "want_different", "wrong_answer"
+	Name string `yaml:"name"`
+
+	// Description provides human-readable explanation of when this signal is triggered
+	Description string `yaml:"description,omitempty"`
+}
+
+// ModalityRule defines a rule for modality-based signal classification.
+// The modality classifier determines whether a prompt requires AR (text), DIFFUSION (image),
+// or BOTH (text + image) and outputs one of these signal names.
+// Detection configuration is read from modality_detector (InlineModels).
+type ModalityRule struct {
+	// Name is the signal name that can be referenced in decision rules
+	// e.g., "AR", "DIFFUSION", or "BOTH"
 	Name string `yaml:"name"`
 
 	// Description provides human-readable explanation of when this signal is triggered

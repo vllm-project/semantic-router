@@ -70,6 +70,9 @@ type RequestContext struct {
 	VSRInjectedSystemPrompt       bool             // Whether a system prompt was injected into the request
 	VSRSelectedDecision           *config.Decision // The decision object selected by DecisionEngine (for plugins)
 
+	// Modality routing classification result (AR/DIFFUSION/BOTH)
+	ModalityClassification *ModalityClassificationResult // Set by classifyModality()
+
 	// VSR signal tracking - stores all matched signals for response headers
 	VSRMatchedKeywords     []string // Matched keyword rule names
 	VSRMatchedEmbeddings   []string // Matched embedding rule names
@@ -82,6 +85,7 @@ type RequestContext struct {
 	VSRMatchedContext      []string // Matched context rule names (e.g. "low_token_count")
 	VSRContextTokenCount   int      // Actual token count for the request
 	VSRMatchedComplexity   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
+	VSRMatchedModality     []string // Matched modality signals: "AR", "DIFFUSION", or "BOTH"
 
 	// Endpoint tracking for windowed metrics
 	SelectedEndpoint string // The endpoint address selected for this request

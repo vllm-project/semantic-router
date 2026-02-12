@@ -121,6 +121,37 @@ func validateConfigStructure(cfg *RouterConfig) error {
 		}
 	}
 
+	// Validate plugin configurations within each decision
+	for _, decision := range cfg.Decisions {
+		if imageGenCfg := decision.GetImageGenConfig(); imageGenCfg != nil {
+			if err := imageGenCfg.Validate(); err != nil {
+				return fmt.Errorf("decision '%s': %w", decision.Name, err)
+			}
+		}
+	}
+
+	// Validate modality detector configuration
+	if cfg.ModalityDetector.Enabled {
+		if err := cfg.ModalityDetector.ModalityDetectionConfig.Validate(); err != nil {
+			return fmt.Errorf("modality_detector: %w", err)
+		}
+	}
+
+	// Validate image_gen_backends entries
+	if err := validateImageGenBackends(cfg); err != nil {
+		return err
+	}
+
+	// Validate modality decision constraints
+	if err := validateModalityDecisions(cfg); err != nil {
+		return err
+	}
+
+	// Validate modality rules (signal names must be valid)
+	if err := validateModalityRules(cfg.Signals.ModalityRules); err != nil {
+		return err
+	}
+
 	// Validate vLLM classifier configurations
 	if err := validateVLLMClassifierConfig(&cfg.PromptGuard); err != nil {
 		return err
@@ -134,6 +165,87 @@ func validateConfigStructure(cfg *RouterConfig) error {
 	// Validate latency rules
 	if err := validateLatencyRules(cfg.Signals.LatencyRules); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// validateModalityRules validates modality rule configurations
+func validateModalityRules(rules []ModalityRule) error {
+	validNames := map[string]bool{"AR": true, "DIFFUSION": true, "BOTH": true}
+	for i, rule := range rules {
+		if rule.Name == "" {
+			return fmt.Errorf("modality_rules[%d]: name cannot be empty", i)
+		}
+		if !validNames[rule.Name] {
+			return fmt.Errorf("modality_rules[%d] (%s): name must be one of \"AR\", \"DIFFUSION\", or \"BOTH\"", i, rule.Name)
+		}
+	}
+	return nil
+}
+
+// validateModalityDecisions validates that decisions using modality signals have correct modelRefs.
+// Specifically, a BOTH decision must reference both an AR and a diffusion model.
+func validateModalityDecisions(cfg *RouterConfig) error {
+	for _, decision := range cfg.Decisions {
+		for _, cond := range decision.Rules.Conditions {
+			if cond.Type != SignalTypeModality || cond.Name != "BOTH" {
+				continue
+			}
+
+			// This decision matches modality=BOTH — must have both AR and diffusion modelRefs
+			hasAR := false
+			hasDiffusion := false
+			for _, ref := range decision.ModelRefs {
+				if params, ok := cfg.ModelConfig[ref.Model]; ok {
+					switch params.Modality {
+					case "ar":
+						hasAR = true
+					case "diffusion":
+						hasDiffusion = true
+					}
+				}
+			}
+
+			if !hasAR || !hasDiffusion {
+				return fmt.Errorf("decision %q uses modality condition \"BOTH\" but modelRefs must include both an AR model (modality: \"ar\") and a diffusion model (modality: \"diffusion\")", decision.Name)
+			}
+		}
+	}
+	return nil
+}
+
+// validateImageGenBackends validates image_gen_backends entries and model_config references
+func validateImageGenBackends(cfg *RouterConfig) error {
+	validTypes := map[string]bool{"vllm_omni": true, "openai": true}
+
+	for name, entry := range cfg.ImageGenBackends {
+		if entry.Type == "" {
+			return fmt.Errorf("image_gen_backends[%s]: type is required (one of \"vllm_omni\", \"openai\")", name)
+		}
+		if !validTypes[entry.Type] {
+			return fmt.Errorf("image_gen_backends[%s]: unknown type %q (must be \"vllm_omni\" or \"openai\")", name, entry.Type)
+		}
+
+		switch entry.Type {
+		case "vllm_omni":
+			if entry.BaseURL == "" {
+				return fmt.Errorf("image_gen_backends[%s]: base_url is required for vllm_omni", name)
+			}
+		case "openai":
+			if entry.APIKey == "" {
+				return fmt.Errorf("image_gen_backends[%s]: api_key is required for openai", name)
+			}
+		}
+	}
+
+	// Validate model_config image_gen_backend references
+	for modelName, params := range cfg.ModelConfig {
+		if params.ImageGenBackend != "" {
+			if _, ok := cfg.ImageGenBackends[params.ImageGenBackend]; !ok {
+				return fmt.Errorf("model_config[%s]: image_gen_backend %q not found in image_gen_backends", modelName, params.ImageGenBackend)
+			}
+		}
 	}
 
 	return nil

@@ -42,6 +42,10 @@ const (
 	// Values: "on" (reasoning enabled) or "off" (reasoning disabled)
 	VSRSelectedReasoning = "x-vsr-selected-reasoning"
 
+	// VSRSelectedModality indicates the response modality determined by the modality router.
+	// Values: "AR" (text-only), "DIFFUSION" (image generation), "BOTH" (text + image)
+	VSRSelectedModality = "x-vsr-selected-modality"
+
 	// VSRSelectedModel indicates the model selected by VSR for processing the request.
 	// Example values: "deepseek-v31", "phi4", "gpt-4"
 	VSRSelectedModel = "x-vsr-selected-model"

@@ -1,0 +1,9 @@
+# Modality Routing Classifier - Dependencies
+torch>=2.0.0
+transformers>=4.40.0
+peft>=0.10.0
+accelerate>=0.28.0
+datasets>=2.18.0
+scikit-learn>=1.4.0
+tqdm>=4.66.0
+requests>=2.31.0

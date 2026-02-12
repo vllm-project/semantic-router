@@ -130,19 +130,13 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		return r.createErrorResponse(503, fmt.Sprintf("RAG retrieval failed: %v", ragErr)), nil
 	}
 
-	// Execute image generation plugin if enabled and request matches
-	// Image generation returns an immediate response, bypassing model routing
-	if imageGenResult, err := r.executeImageGenPlugin(ctx, decisionName); err != nil {
-		logging.Errorf("[ImageGen] Plugin execution failed: %v", err)
-		return r.createErrorResponse(503, fmt.Sprintf("Image generation failed: %v", err)), nil
-	} else if imageGenResult != nil {
-		// Image was generated - return immediate response
-		logging.Infof("[ImageGen] Returning generated image response")
-		responseBody, err := r.buildImageGenResponse(imageGenResult, ctx)
-		if err != nil {
-			return r.createErrorResponse(500, fmt.Sprintf("Failed to build image response: %v", err)), nil
-		}
-		return r.createJSONResponseWithBody(200, responseBody), nil
+	// Modality routing: if the decision matched a modality signal (DIFFUSION/BOTH),
+	// execute image generation. This is driven by the modality signal in the decision engine.
+	if resp, err := r.handleModalityFromDecision(ctx, openAIRequest); err != nil {
+		logging.Errorf("[ModalityRouter] Error: %v", err)
+		return r.createErrorResponse(503, fmt.Sprintf("Modality routing failed: %v", err)), nil
+	} else if resp != nil {
+		return resp, nil // DIFFUSION/BOTH short-circuit — image already generated
 	}
 
 	// Handle memory retrieval (if enabled)

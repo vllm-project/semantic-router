@@ -83,6 +83,9 @@ train_task "PII Detector" "pii_model_fine_tuning_lora/pii_bert_finetuning_lora.p
 # 4. Jailbreak Detection
 train_task "Jailbreak Detector" "prompt_guard_fine_tuning_lora/jailbreak_bert_finetuning_lora.py"
 
+# 5. Modality Routing (AR vs Diffusion vs Both)
+train_task "Modality Router" "modality_routing_classifier/modality_routing_bert_finetuning_lora.py"
+
 echo -e "${BLUE}========================================${NC}"
 echo -e "${GREEN}  All Training Complete!              ${NC}"
 echo -e "${BLUE}========================================${NC}"

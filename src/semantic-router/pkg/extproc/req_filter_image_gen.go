@@ -3,114 +3,24 @@ package extproc
 import (
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/imagegen"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
-// Image generation detection patterns
-var imageGenPatterns = regexp.MustCompile(`(?i)(generate|create|draw|make|produce|render)\s+(an?\s+)?(image|picture|photo|illustration|artwork|diagram|visualization)`)
+// Modality constants returned by the modality routing classifier
+const (
+	ModalityAR        = "AR"        // Text-only response via autoregressive LLM
+	ModalityDiffusion = "DIFFUSION" // Image generation via diffusion model
+	ModalityBoth      = "BOTH"      // Hybrid response requiring both text and image
+)
 
-// detectImageGenerationRequest checks if the request requires image generation
-func (r *OpenAIRouter) detectImageGenerationRequest(ctx *RequestContext) bool {
-	// Check 1: Request contains image_generation tool in Responses API format
-	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
-		if hasImageGenTool(ctx.OriginalRequestBody) {
-			logging.Infof("[ImageGen] Detected image_generation tool in Responses API request")
-			return true
-		}
-	}
-
-	// Check 2: Prompt analysis for image generation keywords
-	if imageGenPatterns.MatchString(ctx.UserContent) {
-		logging.Infof("[ImageGen] Detected image generation intent in prompt")
-		return true
-	}
-
-	return false
-}
-
-// hasImageGenTool checks if the request contains image_generation tool
-func hasImageGenTool(requestBody []byte) bool {
-	var req map[string]interface{}
-	if err := json.Unmarshal(requestBody, &req); err != nil {
-		return false
-	}
-
-	tools, ok := req["tools"].([]interface{})
-	if !ok {
-		return false
-	}
-
-	for _, tool := range tools {
-		toolMap, ok := tool.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		if toolType, ok := toolMap["type"].(string); ok && toolType == "image_generation" {
-			return true
-		}
-	}
-
-	return false
-}
-
-// executeImageGenPlugin executes image generation if enabled for the decision
-func (r *OpenAIRouter) executeImageGenPlugin(ctx *RequestContext, decisionName string) (*ImageGenResult, error) {
-	decision := ctx.VSRSelectedDecision
-	if decision == nil {
-		return nil, nil
-	}
-
-	// Get image gen config
-	imageGenConfig := decision.GetImageGenConfig()
-	if imageGenConfig == nil || !imageGenConfig.Enabled {
-		return nil, nil
-	}
-
-	// Check if this request requires image generation
-	if !r.detectImageGenerationRequest(ctx) {
-		return nil, nil
-	}
-
-	logging.Infof("[ImageGen] Executing image generation plugin for decision: %s", decisionName)
-
-	// Create backend using factory
-	backend, err := imagegen.CreateBackend(imageGenConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create image generation backend: %w", err)
-	}
-
-	// Build generation request
-	genReq := &imagegen.GenerateRequest{
-		Prompt: ctx.UserContent,
-		Width:  getOrDefault(imageGenConfig.DefaultWidth, 1024),
-		Height: getOrDefault(imageGenConfig.DefaultHeight, 1024),
-	}
-
-	// Execute generation
-	start := time.Now()
-	resp, err := backend.GenerateImage(ctx.TraceContext, genReq)
-	latency := time.Since(start).Seconds()
-
-	if err != nil {
-		metrics.RecordImageGenRequest(backend.Name(), "error", latency)
-		return nil, fmt.Errorf("image generation failed: %w", err)
-	}
-
-	metrics.RecordImageGenRequest(backend.Name(), "success", latency)
-	logging.Infof("[ImageGen] Generated image in %.2fs via %s", latency, backend.Name())
-
-	return &ImageGenResult{
-		ImageURL:      resp.ImageURL,
-		ImageBase64:   resp.ImageBase64,
-		RevisedPrompt: resp.RevisedPrompt,
-		Model:         resp.Model,
-	}, nil
+// ModalityClassificationResult holds the result of modality routing classification.
+// Classification logic lives in the signal evaluator (classifier.go);
+// this struct is shared across the extproc package for context passing and response building.
+type ModalityClassificationResult struct {
+	Modality   string  // "AR", "DIFFUSION", or "BOTH"
+	Confidence float32 // Confidence score (0.0-1.0)
+	Method     string  // Detection method used: "classifier", "keyword", "hybrid", or "signal"
 }
 
 // ImageGenResult represents the result of image generation
@@ -119,6 +29,7 @@ type ImageGenResult struct {
 	ImageBase64   string `json:"image_base64,omitempty"`
 	RevisedPrompt string `json:"revised_prompt,omitempty"`
 	Model         string `json:"model,omitempty"`
+	ResponseText  string `json:"response_text,omitempty"` // Canned text for Responses API (from config)
 }
 
 // buildImageGenResponse builds the response with generated image
@@ -153,7 +64,7 @@ func (r *OpenAIRouter) buildResponsesAPIImageResponse(result *ImageGenResult, ct
 				"content": []map[string]interface{}{
 					{
 						"type": "output_text",
-						"text": "I've generated an image based on your request.",
+						"text": result.ResponseText,
 					},
 				},
 			},
@@ -192,40 +103,39 @@ func (r *OpenAIRouter) buildChatCompletionsImageResponse(result *ImageGenResult,
 	return json.Marshal(response)
 }
 
-// Helper functions
-func getOrDefault(value, defaultValue int) int {
-	if value == 0 {
-		return defaultValue
-	}
-	return value
-}
-
-// ExtractImagePrompt extracts and cleans the image generation prompt
-func ExtractImagePrompt(userContent string) string {
-	// Remove common prefixes like "generate an image of", "create a picture of", etc.
+// ExtractImagePrompt strips configured prefixes from the user prompt before
+// sending it to the diffusion model. Prefixes come from config; if none are
+// configured, the prompt is returned as-is (no hardcoded defaults).
+func ExtractImagePrompt(userContent string, prefixes []string) string {
 	prompt := userContent
-
-	// Common patterns to remove
-	prefixes := []string{
-		"generate an image of ",
-		"create an image of ",
-		"draw an image of ",
-		"make an image of ",
-		"generate a picture of ",
-		"create a picture of ",
-		"draw a picture of ",
-		"generate ",
-		"create ",
-		"draw ",
+	if len(prefixes) == 0 {
+		return strings.TrimSpace(prompt)
 	}
 
 	lowerPrompt := strings.ToLower(prompt)
 	for _, prefix := range prefixes {
-		if strings.HasPrefix(lowerPrompt, prefix) {
-			prompt = prompt[len(prefix):]
+		lowerPrefix := strings.ToLower(prefix)
+		if strings.HasPrefix(lowerPrompt, lowerPrefix) {
+			prompt = prompt[len(lowerPrefix):]
 			break
 		}
 	}
 
 	return strings.TrimSpace(prompt)
+}
+
+// setModalityFromSignals sets the ModalityClassification on the request context
+// based on the modality signal evaluation results. This is called after
+// EvaluateAllSignals to populate ctx.ModalityClassification for response headers.
+func (r *OpenAIRouter) setModalityFromSignals(ctx *RequestContext, matchedModalityRules []string) {
+	if len(matchedModalityRules) == 0 {
+		return
+	}
+	// Use the first matched modality signal
+	modality := matchedModalityRules[0]
+	ctx.ModalityClassification = &ModalityClassificationResult{
+		Modality:   modality,
+		Confidence: 0, // Confidence is set by the signal evaluator; here we just need the modality name
+		Method:     "signal",
+	}
 }

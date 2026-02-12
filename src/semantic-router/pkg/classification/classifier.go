@@ -955,6 +955,12 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 		allSignals[key] = true
 	}
 
+	// Add all configured modality rules
+	for _, rule := range c.Config.ModalityRules {
+		key := strings.ToLower(config.SignalTypeModality + ":" + rule.Name)
+		allSignals[key] = true
+	}
+
 	return allSignals
 }
 
@@ -978,6 +984,7 @@ type SignalResults struct {
 	MatchedContextRules      []string // Matched context rule names (e.g. "low_token_count")
 	TokenCount               int      // Total token count
 	MatchedComplexityRules   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
+	MatchedModalityRules     []string // Matched modality: "AR", "DIFFUSION", or "BOTH"
 
 	// Signal metrics (only populated in eval mode)
 	Metrics *SignalMetricsCollection
@@ -995,6 +1002,7 @@ type SignalMetricsCollection struct {
 	Latency      SignalMetrics `json:"latency"`
 	Context      SignalMetrics `json:"context"`
 	Complexity   SignalMetrics `json:"complexity"`
+	Modality     SignalMetrics `json:"modality"`
 }
 
 // analyzeRuleCombination recursively analyzes rule combinations to find used signals
@@ -1488,6 +1496,44 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		logging.Infof("[Signal Computation] Complexity signal not used in any decision, skipping evaluation")
 	}
 
+	// Evaluate modality rules in parallel (only if used in decisions)
+	// Uses modality_detector config for classifier/keyword/hybrid detection
+	if isSignalTypeUsed(usedSignals, config.SignalTypeModality) && len(c.Config.ModalityRules) > 0 && c.Config.ModalityDetector.Enabled {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			start := time.Now()
+			modalityResult := c.classifyModality(text, &c.Config.ModalityDetector.ModalityDetectionConfig)
+			elapsed := time.Since(start)
+			latencySeconds := elapsed.Seconds()
+
+			signalName := modalityResult.Modality
+
+			// Record signal extraction metrics
+			metrics.RecordSignalExtraction(config.SignalTypeModality, signalName, latencySeconds)
+
+			// Record metrics
+			results.Metrics.Modality.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
+			results.Metrics.Modality.Confidence = float64(modalityResult.Confidence)
+
+			logging.Infof("[Signal Computation] Modality signal evaluation completed in %v: %s (confidence=%.3f, method=%s)",
+				elapsed, signalName, modalityResult.Confidence, modalityResult.Method)
+
+			// Check if this signal name is defined in modality_rules
+			for _, rule := range c.Config.ModalityRules {
+				if strings.EqualFold(rule.Name, signalName) {
+					metrics.RecordSignalMatch(config.SignalTypeModality, rule.Name)
+					mu.Lock()
+					results.MatchedModalityRules = append(results.MatchedModalityRules, rule.Name)
+					mu.Unlock()
+					break
+				}
+			}
+		}()
+	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeModality) {
+		logging.Infof("[Signal Computation] Modality signal not used in any decision, skipping evaluation")
+	}
+
 	// Wait for all signal evaluations to complete
 	wg.Wait()
 
@@ -1506,11 +1552,11 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		return nil, fmt.Errorf("no decisions configured")
 	}
 
-	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, latency=%v, context=%v, complexity=%v",
+	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, latency=%v, context=%v, complexity=%v, modality=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
 		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules,
 		signals.MatchedLanguageRules, signals.MatchedLatencyRules, signals.MatchedContextRules,
-		signals.MatchedComplexityRules)
+		signals.MatchedComplexityRules, signals.MatchedModalityRules)
 	// Create decision engine
 	engine := decision.NewDecisionEngine(
 		c.Config.KeywordRules,
@@ -1532,6 +1578,7 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		LatencyRules:      signals.MatchedLatencyRules,
 		ContextRules:      signals.MatchedContextRules,
 		ComplexityRules:   signals.MatchedComplexityRules,
+		ModalityRules:     signals.MatchedModalityRules,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("decision evaluation failed: %w", err)
@@ -1547,6 +1594,147 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		result.Decision.Name, result.Confidence, result.MatchedRules, result.MatchedKeywords)
 
 	return result, nil
+}
+
+// ModalityClassificationResult holds the result of modality signal classification
+type ModalityClassificationResult struct {
+	Modality   string  // "AR", "DIFFUSION", or "BOTH"
+	Confidence float32 // Confidence score (0.0-1.0)
+	Method     string  // Detection method used: "classifier", "keyword", or "hybrid"
+}
+
+// classifyModality determines the response modality for a text prompt.
+// It supports three configurable methods via ModalityDetectionConfig:
+//   - "classifier": ML-based (mmBERT-32K) — errors if model not loaded
+//   - "keyword":    Configurable keyword matching — requires keywords in config
+//   - "hybrid":     Classifier when available + keyword confirmation/fallback (default)
+func (c *Classifier) classifyModality(text string, detectionConfig *config.ModalityDetectionConfig) ModalityClassificationResult {
+	if text == "" {
+		return ModalityClassificationResult{Modality: "AR", Confidence: 1.0, Method: "default"}
+	}
+
+	method := detectionConfig.GetMethod()
+
+	switch method {
+	case config.ModalityDetectionClassifier:
+		return c.classifyModalityByClassifier(text, detectionConfig)
+	case config.ModalityDetectionKeyword:
+		return c.classifyModalityByKeyword(text, detectionConfig)
+	case config.ModalityDetectionHybrid:
+		return c.classifyModalityHybrid(text, detectionConfig)
+	default:
+		logging.Errorf("[ModalitySignal] BUG: unknown detection method %q — defaulting to AR", method)
+		return ModalityClassificationResult{Modality: "AR", Confidence: 0.0, Method: "error/unknown-method"}
+	}
+}
+
+// classifyModalityByClassifier uses the mmBERT-32K ML classifier exclusively.
+func (c *Classifier) classifyModalityByClassifier(text string, cfg *config.ModalityDetectionConfig) ModalityClassificationResult {
+	result, err := candle_binding.ClassifyMmBert32KModality(text)
+	if err == nil {
+		logging.Infof("[ModalitySignal] Classifier: %s (confidence=%.3f) for prompt: %.80s",
+			result.Modality, result.Confidence, text)
+		return ModalityClassificationResult{
+			Modality:   result.Modality,
+			Confidence: result.Confidence,
+			Method:     "classifier",
+		}
+	}
+
+	logging.Errorf("[ModalitySignal] Classifier unavailable: %v — defaulting to AR", err)
+	return ModalityClassificationResult{Modality: "AR", Confidence: 0.0, Method: "classifier/error"}
+}
+
+// classifyModalityByKeyword uses keyword patterns from config to detect modality.
+func (c *Classifier) classifyModalityByKeyword(text string, cfg *config.ModalityDetectionConfig) ModalityClassificationResult {
+	if cfg == nil || len(cfg.Keywords) == 0 {
+		logging.Warnf("[ModalitySignal] Keyword detection requested but no keywords configured — defaulting to AR")
+		return ModalityClassificationResult{Modality: "AR", Confidence: 0.5, Method: "keyword/no-config"}
+	}
+
+	lowerContent := strings.ToLower(text)
+
+	// Check if any configured image keyword matches
+	hasImageIntent := false
+	for _, kw := range cfg.Keywords {
+		if strings.Contains(lowerContent, strings.ToLower(kw)) {
+			hasImageIntent = true
+			break
+		}
+	}
+
+	if !hasImageIntent {
+		return ModalityClassificationResult{Modality: "AR", Confidence: 0.8, Method: "keyword"}
+	}
+
+	// Image intent detected — check if it's BOTH using both_keywords from config
+	if len(cfg.BothKeywords) > 0 {
+		for _, kw := range cfg.BothKeywords {
+			if strings.Contains(lowerContent, strings.ToLower(kw)) {
+				logging.Infof("[ModalitySignal] Keyword: BOTH detected (image + both_keyword %q) for: %.80s", kw, text)
+				return ModalityClassificationResult{Modality: "BOTH", Confidence: 0.75, Method: "keyword"}
+			}
+		}
+	}
+
+	logging.Infof("[ModalitySignal] Keyword: DIFFUSION detected for: %.80s", text)
+	return ModalityClassificationResult{Modality: "DIFFUSION", Confidence: 0.8, Method: "keyword"}
+}
+
+// classifyModalityHybrid uses the ML classifier as primary, with keyword matching as
+// fallback (when classifier is unavailable) or confirmation (when classifier confidence is low).
+func (c *Classifier) classifyModalityHybrid(text string, cfg *config.ModalityDetectionConfig) ModalityClassificationResult {
+	confThreshold := cfg.GetConfidenceThreshold()
+
+	// Try classifier first
+	classifierResult, err := candle_binding.ClassifyMmBert32KModality(text)
+	if err == nil && classifierResult.Confidence >= confThreshold {
+		logging.Infof("[ModalitySignal] Hybrid(classifier): %s (confidence=%.3f, threshold=%.2f) for: %.80s",
+			classifierResult.Modality, classifierResult.Confidence, confThreshold, text)
+		return ModalityClassificationResult{
+			Modality:   classifierResult.Modality,
+			Confidence: classifierResult.Confidence,
+			Method:     "hybrid/classifier",
+		}
+	}
+
+	if err == nil {
+		// Classifier available but low confidence - use keyword to confirm/override
+		keywordResult := c.classifyModalityByKeyword(text, cfg)
+
+		if classifierResult.Modality == keywordResult.Modality {
+			logging.Infof("[ModalitySignal] Hybrid(agree): %s (classifier=%.3f, keyword=%.3f) for: %.80s",
+				classifierResult.Modality, classifierResult.Confidence, keywordResult.Confidence, text)
+			return ModalityClassificationResult{
+				Modality:   classifierResult.Modality,
+				Confidence: (classifierResult.Confidence + keywordResult.Confidence) / 2,
+				Method:     "hybrid/agree",
+			}
+		}
+
+		lowerThreshold := confThreshold * cfg.GetLowerThresholdRatio()
+		if classifierResult.Confidence >= lowerThreshold {
+			logging.Infof("[ModalitySignal] Hybrid(classifier-preferred): %s (classifier=%.3f vs keyword=%s) for: %.80s",
+				classifierResult.Modality, classifierResult.Confidence, keywordResult.Modality, text)
+			return ModalityClassificationResult{
+				Modality:   classifierResult.Modality,
+				Confidence: classifierResult.Confidence,
+				Method:     "hybrid/classifier-preferred",
+			}
+		}
+
+		logging.Infof("[ModalitySignal] Hybrid(keyword-override): %s (classifier=%s@%.3f too low) for: %.80s",
+			keywordResult.Modality, classifierResult.Modality, classifierResult.Confidence, text)
+		return ModalityClassificationResult{
+			Modality:   keywordResult.Modality,
+			Confidence: keywordResult.Confidence,
+			Method:     "hybrid/keyword-override",
+		}
+	}
+
+	// Classifier unavailable - fall back to keyword detection
+	logging.Debugf("[ModalitySignal] Hybrid: classifier unavailable (%v), using keyword detection", err)
+	return c.classifyModalityByKeyword(text, cfg)
 }
 
 // ClassifyCategoryWithEntropy performs category classification with entropy-based reasoning decision
@@ -2630,6 +2818,8 @@ func (c *Classifier) evaluateComposerCondition(
 		return slices.Contains(signals.MatchedLatencyRules, condition.Name)
 	case "context":
 		return slices.Contains(signals.MatchedContextRules, condition.Name)
+	case "modality":
+		return slices.Contains(signals.MatchedModalityRules, condition.Name)
 	default:
 		logging.Warnf("Unknown composer condition type: %s", condition.Type)
 		return false
