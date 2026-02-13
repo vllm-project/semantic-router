@@ -425,7 +425,7 @@ func (r *OpenAIRouter) buildOmniResponsesAPIResponse(omniResp map[string]interfa
 					}
 					outputItems = append(outputItems, map[string]interface{}{
 						"type":    "message",
-						"id":     fmt.Sprintf("msg_%d", time.Now().UnixNano()),
+						"id":      fmt.Sprintf("msg_%d", time.Now().UnixNano()),
 						"role":    "assistant",
 						"status":  "completed",
 						"content": contentParts,
