@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -458,12 +460,12 @@ func (r *OpenAIRouter) buildOmniResponsesAPIResponse(omniResp map[string]interfa
 	}
 
 	response := map[string]interface{}{
-		"id":      fmt.Sprintf("resp_%d", time.Now().UnixNano()),
-		"object":  "response",
-		"created": time.Now().Unix(),
-		"model":   model,
-		"status":  "completed",
-		"output":  outputItems,
+		"id":         fmt.Sprintf("resp_%d", time.Now().UnixNano()),
+		"object":     "response",
+		"created_at": time.Now().Unix(),
+		"model":      model,
+		"status":     "completed",
+		"output":     outputItems,
 	}
 
 	return json.Marshal(response)
@@ -501,17 +503,18 @@ func extractOmniContentParts(content interface{}) (texts []string, imageURLs []s
 }
 
 // parseSizeString parses an OpenAI image size string like "1024x1536" into width and height.
+// Supports arbitrary "WIDTHxHEIGHT" formats in addition to common presets.
 func parseSizeString(size string) (int, int) {
-	switch size {
-	case "1024x1024":
-		return 1024, 1024
-	case "1024x1536":
-		return 1024, 1536
-	case "1536x1024":
-		return 1536, 1024
-	default:
+	parts := strings.SplitN(size, "x", 2)
+	if len(parts) != 2 {
 		return 0, 0
 	}
+	w, errW := strconv.Atoi(parts[0])
+	h, errH := strconv.Atoi(parts[1])
+	if errW != nil || errH != nil || w <= 0 || h <= 0 {
+		return 0, 0
+	}
+	return w, h
 }
 
 // callARModel sends the user's chat completion request to the AR model endpoint

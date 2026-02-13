@@ -108,8 +108,12 @@ func (f *ResponseAPIFilter) TranslateRequest(ctx context.Context, body []byte) (
 		if req.Tools[i].Type == responseapi.ToolTypeImageGeneration {
 			respCtx.HasImageGenerationTool = true
 			respCtx.ImageGenToolParams = req.Tools[i].ExtractImageGenParams()
-			logging.Infof("Response API: Detected image_generation tool (model=%s, size=%s, quality=%s)",
-				respCtx.ImageGenToolParams.Model, respCtx.ImageGenToolParams.Size, respCtx.ImageGenToolParams.Quality)
+			if respCtx.ImageGenToolParams != nil {
+				logging.Infof("Response API: Detected image_generation tool (model=%s, size=%s, quality=%s)",
+					respCtx.ImageGenToolParams.Model, respCtx.ImageGenToolParams.Size, respCtx.ImageGenToolParams.Quality)
+			} else {
+				logging.Warnf("Response API: Detected image_generation tool but ImageGenToolParams is nil")
+			}
 			break
 		}
 	}
