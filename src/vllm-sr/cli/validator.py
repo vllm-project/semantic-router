@@ -89,6 +89,23 @@ def validate_latency_compatibility(config: UserConfig) -> List[ValidationError]:
             )
         )
 
+    latency_signal_names = set()
+    if has_legacy_signals:
+        latency_signal_names = {signal.name for signal in config.signals.latency}
+
+    if has_legacy_conditions and has_legacy_signals:
+        for decision in config.decisions:
+            for condition in decision.rules.conditions:
+                if not _is_latency_condition(condition.type):
+                    continue
+                if condition.name not in latency_signal_names:
+                    errors.append(
+                        ValidationError(
+                            f"decision '{decision.name}' references unknown legacy latency signal '{condition.name}'",
+                            field=f"decisions.{decision.name}.rules.conditions",
+                        )
+                    )
+
     if has_legacy_conditions:
         for decision in config.decisions:
             has_decision_legacy_latency = any(
