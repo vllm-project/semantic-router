@@ -107,7 +107,6 @@ var _ = Describe("validateLatencyAwareAlgorithmConfig", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("ttft_percentile must be between 1 and 100"))
 	})
-
 })
 
 var _ = Describe("validateLoRAName", func() {
