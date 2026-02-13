@@ -156,7 +156,7 @@ func (s *LatencyAwareSelector) Select(ctx context.Context, selCtx *SelectionCont
 			continue
 		}
 
-		score = score / float64(parts)
+		score /= float64(parts)
 		allScores[candidate.modelRef.Model] = score
 
 		if score < bestScore {

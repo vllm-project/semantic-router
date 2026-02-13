@@ -112,7 +112,9 @@ def validate_latency_compatibility(config: UserConfig) -> List[ValidationError]:
     return errors
 
 
-def validate_latency_aware_algorithm_config(config: UserConfig) -> List[ValidationError]:
+def validate_latency_aware_algorithm_config(
+    config: UserConfig,
+) -> List[ValidationError]:
     errors = []
     for decision in config.decisions:
         if not _is_latency_aware_algorithm(decision):
@@ -127,8 +129,12 @@ def validate_latency_aware_algorithm_config(config: UserConfig) -> List[Validati
             )
             continue
 
-        has_tpot = latency_cfg.tpot_percentile is not None and latency_cfg.tpot_percentile > 0
-        has_ttft = latency_cfg.ttft_percentile is not None and latency_cfg.ttft_percentile > 0
+        has_tpot = (
+            latency_cfg.tpot_percentile is not None and latency_cfg.tpot_percentile > 0
+        )
+        has_ttft = (
+            latency_cfg.ttft_percentile is not None and latency_cfg.ttft_percentile > 0
+        )
         if not has_tpot and not has_ttft:
             errors.append(
                 ValidationError(

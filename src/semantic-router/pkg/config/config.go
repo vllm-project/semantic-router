@@ -1791,12 +1791,12 @@ type AlgorithmConfig struct {
 
 	// Selection algorithm configurations (for single model selection)
 	// These align with the global ModelSelectionConfig but can be overridden per-decision
-	Elo       *EloSelectionConfig       `yaml:"elo,omitempty"`
-	RouterDC  *RouterDCSelectionConfig  `yaml:"router_dc,omitempty"`
-	AutoMix   *AutoMixSelectionConfig   `yaml:"automix,omitempty"`
-	Hybrid    *HybridSelectionConfig    `yaml:"hybrid,omitempty"`
-	RLDriven  *RLDrivenSelectionConfig  `yaml:"rl_driven,omitempty"`
-	GMTRouter *GMTRouterSelectionConfig `yaml:"gmtrouter,omitempty"`
+	Elo          *EloSelectionConfig          `yaml:"elo,omitempty"`
+	RouterDC     *RouterDCSelectionConfig     `yaml:"router_dc,omitempty"`
+	AutoMix      *AutoMixSelectionConfig      `yaml:"automix,omitempty"`
+	Hybrid       *HybridSelectionConfig       `yaml:"hybrid,omitempty"`
+	RLDriven     *RLDrivenSelectionConfig     `yaml:"rl_driven,omitempty"`
+	GMTRouter    *GMTRouterSelectionConfig    `yaml:"gmtrouter,omitempty"`
 	LatencyAware *LatencyAwareAlgorithmConfig `yaml:"latency_aware,omitempty"`
 
 	// OnError defines behavior when algorithm fails: "skip" or "fail"

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -26,7 +27,7 @@ func normalizeLegacyLatencyRouting(cfg *RouterConfig) error {
 	hasLegacy := hasLegacyLatencyRoutingConfig(cfg)
 	hasLatencyAware := hasAnyLatencyAwareDecision(cfg.Decisions)
 	if hasLegacy && hasLatencyAware {
-		return fmt.Errorf(legacyLatencyMixedConfigErr)
+		return errors.New(legacyLatencyMixedConfigErr)
 	}
 
 	migratedCount := 0

@@ -193,9 +193,7 @@ def _normalize_legacy_latency_routing(cfg: UserConfig) -> UserConfig:
     latency_by_name = {}
     for signal in cfg.signals.latency:
         if signal.name in latency_by_name:
-            raise ValueError(
-                f"duplicate legacy latency signal name: {signal.name}"
-            )
+            raise ValueError(f"duplicate legacy latency signal name: {signal.name}")
         has_tpot = signal.tpot_percentile is not None and signal.tpot_percentile > 0
         has_ttft = signal.ttft_percentile is not None and signal.ttft_percentile > 0
         if not has_tpot and not has_ttft:
