@@ -183,6 +183,18 @@ const (
 	// Used by the ext_proc when routing requests to Anthropic models.
 	UserAnthropicKey = "x-user-anthropic-key"
 
+	// UserAzureOpenAIKey carries the user's Azure OpenAI API key, injected by the auth backend.
+	UserAzureOpenAIKey = "x-user-azure-openai-key"
+
+	// UserBedrockKey carries the user's AWS Bedrock bearer token, injected by the auth backend.
+	UserBedrockKey = "x-user-bedrock-key"
+
+	// UserGeminiKey carries the user's Google Gemini API key, injected by the auth backend.
+	UserGeminiKey = "x-user-gemini-key"
+
+	// UserVertexAIKey carries the user's Vertex AI OAuth token, injected by the auth backend.
+	UserVertexAIKey = "x-user-vertex-ai-key"
+
 	// AuthzUserID is the default header for the authenticated user's identity.
 	// Default for Authorino (K8s Secret metadata.name).
 	// Override via authz.identity.user_id_header for other backends:

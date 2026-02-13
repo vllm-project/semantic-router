@@ -59,8 +59,20 @@ func TestDefaultHeaderMap(t *testing.T) {
 	if m["anthropic"] != headers.UserAnthropicKey {
 		t.Errorf("DefaultHeaderMap[anthropic] = %q, want %q", m["anthropic"], headers.UserAnthropicKey)
 	}
-	if len(m) != 2 {
-		t.Errorf("DefaultHeaderMap has %d entries, want 2", len(m))
+	if m["azure-openai"] != headers.UserAzureOpenAIKey {
+		t.Errorf("DefaultHeaderMap[azure-openai] = %q, want %q", m["azure-openai"], headers.UserAzureOpenAIKey)
+	}
+	if m["bedrock"] != headers.UserBedrockKey {
+		t.Errorf("DefaultHeaderMap[bedrock] = %q, want %q", m["bedrock"], headers.UserBedrockKey)
+	}
+	if m["gemini"] != headers.UserGeminiKey {
+		t.Errorf("DefaultHeaderMap[gemini] = %q, want %q", m["gemini"], headers.UserGeminiKey)
+	}
+	if m["vertex-ai"] != headers.UserVertexAIKey {
+		t.Errorf("DefaultHeaderMap[vertex-ai] = %q, want %q", m["vertex-ai"], headers.UserVertexAIKey)
+	}
+	if len(m) != 6 {
+		t.Errorf("DefaultHeaderMap has %d entries, want 6", len(m))
 	}
 }
 

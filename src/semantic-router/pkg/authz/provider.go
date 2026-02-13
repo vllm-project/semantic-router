@@ -24,11 +24,12 @@ package authz
 type LLMProvider string
 
 const (
-	ProviderOpenAI    LLMProvider = "openai"
-	ProviderAnthropic LLMProvider = "anthropic"
-	// Future providers:
-	// ProviderGemini    LLMProvider = "gemini"
-	// ProviderMistral   LLMProvider = "mistral"
+	ProviderOpenAI      LLMProvider = "openai"
+	ProviderAnthropic   LLMProvider = "anthropic"
+	ProviderAzureOpenAI LLMProvider = "azure-openai"
+	ProviderBedrock     LLMProvider = "bedrock"
+	ProviderGemini      LLMProvider = "gemini"
+	ProviderVertexAI    LLMProvider = "vertex-ai"
 )
 
 // Credentials holds per-user API keys for all known LLM providers.

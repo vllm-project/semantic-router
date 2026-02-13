@@ -1578,7 +1578,8 @@ var _ = Describe("Endpoint Selection", func() {
 			Expect(bestEndpoint).To(BeElementOf("test-endpoint1", "test-endpoint2"))
 
 			// Test best endpoint address selection
-			bestEndpointAddress, found := cfg.SelectBestEndpointAddressForModel("model-b")
+			bestEndpointAddress, found, addrErr := cfg.SelectBestEndpointAddressForModel("model-b")
+			Expect(addrErr).NotTo(HaveOccurred())
 			Expect(found).To(BeTrue())
 			Expect(bestEndpointAddress).To(BeElementOf("127.0.0.1:8000", "127.0.0.1:8001"))
 		})

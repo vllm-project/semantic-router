@@ -14,7 +14,7 @@ func TestNewUnifiedClassificationService(t *testing.T) {
 	service := NewUnifiedClassificationService(nil, nil, config)
 
 	if service == nil {
-		t.Error("Expected non-nil service")
+		t.Fatal("Expected non-nil service")
 	}
 	if service.classifier != nil {
 		t.Error("Expected legacy classifier to be nil")
@@ -36,7 +36,7 @@ func TestNewUnifiedClassificationService_WithBothClassifiers(t *testing.T) {
 	service := NewUnifiedClassificationService(unifiedClassifier, legacyClassifier, config)
 
 	if service == nil {
-		t.Error("Expected non-nil service")
+		t.Fatal("Expected non-nil service")
 	}
 	if service.classifier != legacyClassifier {
 		t.Error("Expected legacy classifier to match provided classifier")
@@ -190,7 +190,7 @@ func TestClassificationService_BasicFunctionality(t *testing.T) {
 		service := NewClassificationService(nil, config)
 
 		if service == nil {
-			t.Error("Expected non-nil service")
+			t.Fatal("Expected non-nil service")
 		}
 		if service.config != config {
 			t.Error("Expected config to match")

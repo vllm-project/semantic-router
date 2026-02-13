@@ -593,6 +593,13 @@ type BackendModels struct {
 	// vllm_omni and openai use completely different APIs — each entry's Type
 	// determines which fields are relevant.
 	ImageGenBackends map[string]ImageGenBackendEntry `yaml:"image_gen_backends,omitempty"`
+
+	// Provider profiles define cloud provider connection and protocol details
+	// (like reasoning_families defines reasoning syntax per model family).
+	// Each entry describes how to talk to a provider: URL, auth header format, path.
+	// Endpoints reference a profile by name via provider_profile field.
+	// The actual API key comes from the authz CredentialResolver chain, not from here.
+	ProviderProfiles map[string]ProviderProfile `yaml:"provider_profiles,omitempty"`
 }
 
 type ReasoningConfig struct {
@@ -1524,6 +1531,59 @@ type VLLMEndpoint struct {
 	// Can also be set via environment variables: HF_API_KEY, OPENROUTER_API_KEY
 	// +optional
 	APIKey string `yaml:"api_key,omitempty"`
+
+	// ProviderProfileName references a named entry in provider_profiles
+	// (like reasoning_family references reasoning_families).
+	// When set, the profile's base_url, auth header format, and chat path
+	// are used instead of address:port. The API key comes from authz.
+	// +optional
+	ProviderProfileName string `yaml:"provider_profile,omitempty"`
+}
+
+// ProviderProfile defines cloud provider connection and protocol details.
+// The type field drives sensible defaults for auth header, chat path, and
+// LLMProvider mapping. Explicit fields override the defaults.
+//
+// Keys are NOT stored here — they come from the authz CredentialResolver chain
+// (header-injection from Authorino/ext_authz, or static-config from model_config.access_key).
+//
+// Example:
+//
+//	provider_profiles:
+//	  openai-prod:
+//	    type: "openai"
+//	    base_url: "https://api.openai.com/v1"
+//	  azure-east:
+//	    type: "azure-openai"
+//	    base_url: "https://myresource.openai.azure.com/openai/deployments/gpt-4o"
+//	    api_version: "2024-10-21"
+type ProviderProfile struct {
+	// Type drives defaults for auth header, path, and LLMProvider mapping.
+	// Values: "openai", "anthropic", "azure-openai", "bedrock", "gemini", "vertex-ai"
+	Type string `yaml:"type"`
+
+	// BaseURL is the provider's base URL (e.g., "https://api.openai.com/v1").
+	// host:port is extracted for x-vsr-destination-endpoint; path is used for :path header.
+	BaseURL string `yaml:"base_url,omitempty"`
+
+	// AuthHeader overrides the default auth header name for the type
+	// (e.g., "Authorization" for openai, "api-key" for azure-openai, "x-api-key" for anthropic).
+	AuthHeader string `yaml:"auth_header,omitempty"`
+
+	// AuthPrefix overrides the default auth value prefix
+	// (e.g., "Bearer" for openai, "" for azure-openai).
+	AuthPrefix string `yaml:"auth_prefix,omitempty"`
+
+	// ExtraHeaders are added to every request to this provider
+	// (e.g., {"anthropic-version": "2023-06-01"}).
+	ExtraHeaders map[string]string `yaml:"extra_headers,omitempty"`
+
+	// APIVersion for Azure OpenAI — appended as ?api-version= to the chat path.
+	APIVersion string `yaml:"api_version,omitempty"`
+
+	// ChatPath overrides the default chat completion path suffix for the type.
+	// When empty, the type-specific default is used (e.g., "/chat/completions" for openai).
+	ChatPath string `yaml:"chat_path,omitempty"`
 }
 
 // ModelPricing represents configuration for model-specific parameters

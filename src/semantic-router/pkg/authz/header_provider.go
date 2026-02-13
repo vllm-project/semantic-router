@@ -29,8 +29,12 @@ type HeaderInjectionProvider struct {
 // the custom ext_authz service. Used as the default when no YAML config is provided.
 func DefaultHeaderMap() map[string]string {
 	return map[string]string{
-		string(ProviderOpenAI):    headers.UserOpenAIKey,
-		string(ProviderAnthropic): headers.UserAnthropicKey,
+		string(ProviderOpenAI):      headers.UserOpenAIKey,
+		string(ProviderAnthropic):   headers.UserAnthropicKey,
+		string(ProviderAzureOpenAI): headers.UserAzureOpenAIKey,
+		string(ProviderBedrock):     headers.UserBedrockKey,
+		string(ProviderGemini):      headers.UserGeminiKey,
+		string(ProviderVertexAI):    headers.UserVertexAIKey,
 	}
 }
 
