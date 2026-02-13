@@ -43,32 +43,51 @@ func (r *OpenAIRouter) buildImageGenResponse(result *ImageGenResult, ctx *Reques
 	return r.buildChatCompletionsImageResponse(result, ctx)
 }
 
-// buildResponsesAPIImageResponse builds Responses API format response
+// buildResponsesAPIImageResponse builds Responses API format response with
+// image_generation_call output items matching the OpenAI spec.
+// Per the spec, ImageGenerationCall has: id, type, status, result (base64 image data).
+// If only a URL is available (no base64), the result field contains the URL as a fallback.
 func (r *OpenAIRouter) buildResponsesAPIImageResponse(result *ImageGenResult, ctx *RequestContext) ([]byte, error) {
-	response := map[string]interface{}{
-		"id":      fmt.Sprintf("resp_%d", time.Now().UnixNano()),
-		"object":  "response",
-		"created": time.Now().Unix(),
-		"model":   result.Model,
-		"status":  "completed",
-		"output": []map[string]interface{}{
-			{
-				"type":   "image_generation_call",
-				"id":     fmt.Sprintf("ig_%d", time.Now().UnixNano()),
-				"status": "completed",
-				"result": result.ImageURL,
-			},
-			{
-				"type": "message",
-				"role": "assistant",
-				"content": []map[string]interface{}{
-					{
-						"type": "output_text",
-						"text": result.ResponseText,
-					},
+	// Use base64 data if available, otherwise fall back to URL
+	imageResult := result.ImageBase64
+	if imageResult == "" {
+		imageResult = result.ImageURL
+	}
+
+	now := time.Now()
+	outputItems := []map[string]interface{}{
+		{
+			"type":   "image_generation_call",
+			"id":     fmt.Sprintf("ig_%d", now.UnixNano()),
+			"status": "completed",
+			"result": imageResult,
+		},
+	}
+
+	// Only add the text message if there's meaningful response text
+	if result.ResponseText != "" {
+		outputItems = append(outputItems, map[string]interface{}{
+			"type":   "message",
+			"id":     fmt.Sprintf("msg_%d", now.UnixNano()),
+			"role":   "assistant",
+			"status": "completed",
+			"content": []map[string]interface{}{
+				{
+					"type":        "output_text",
+					"text":        result.ResponseText,
+					"annotations": []interface{}{},
 				},
 			},
-		},
+		})
+	}
+
+	response := map[string]interface{}{
+		"id":         fmt.Sprintf("resp_%d", now.UnixNano()),
+		"object":     "response",
+		"created_at": now.Unix(),
+		"model":      result.Model,
+		"status":     "completed",
+		"output":     outputItems,
 	}
 
 	return json.Marshal(response)

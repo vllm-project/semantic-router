@@ -1647,7 +1647,9 @@ type ModelParams struct {
 	// +optional
 	ExternalModelIDs map[string]string `yaml:"external_model_ids,omitempty"`
 
-	// Modality role for this model: "ar" (text/autoregressive) or "diffusion" (image generation)
+	// Modality role for this model: "ar" (text/autoregressive), "diffusion" (image generation),
+	// or "omni" (can handle both text and image generation in a single request, e.g. vllm-omni
+	// serving Qwen2.5-Omni or similar multimodal models).
 	// Used by modality routing to identify which model handles which modality.
 	// When empty, the model has no modality role.
 	Modality string `yaml:"modality,omitempty"`

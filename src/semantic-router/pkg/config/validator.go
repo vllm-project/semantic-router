@@ -185,7 +185,7 @@ func validateModalityRules(rules []ModalityRule) error {
 }
 
 // validateModalityDecisions validates that decisions using modality signals have correct modelRefs.
-// Specifically, a BOTH decision must reference both an AR and a diffusion model.
+// Specifically, a BOTH decision must reference both an AR and a diffusion model, OR a single omni model.
 func validateModalityDecisions(cfg *RouterConfig) error {
 	for _, decision := range cfg.Decisions {
 		for _, cond := range decision.Rules.Conditions {
@@ -193,9 +193,11 @@ func validateModalityDecisions(cfg *RouterConfig) error {
 				continue
 			}
 
-			// This decision matches modality=BOTH — must have both AR and diffusion modelRefs
+			// This decision matches modality=BOTH — must have both AR and diffusion modelRefs,
+			// OR at least one omni model that can handle both.
 			hasAR := false
 			hasDiffusion := false
+			hasOmni := false
 			for _, ref := range decision.ModelRefs {
 				if params, ok := cfg.ModelConfig[ref.Model]; ok {
 					switch params.Modality {
@@ -203,12 +205,19 @@ func validateModalityDecisions(cfg *RouterConfig) error {
 						hasAR = true
 					case "diffusion":
 						hasDiffusion = true
+					case "omni":
+						hasOmni = true
 					}
 				}
 			}
 
+			// An omni model satisfies both AR and diffusion requirements
+			if hasOmni {
+				continue
+			}
+
 			if !hasAR || !hasDiffusion {
-				return fmt.Errorf("decision %q uses modality condition \"BOTH\" but modelRefs must include both an AR model (modality: \"ar\") and a diffusion model (modality: \"diffusion\")", decision.Name)
+				return fmt.Errorf("decision %q uses modality condition \"BOTH\" but modelRefs must include both an AR model (modality: \"ar\") and a diffusion model (modality: \"diffusion\"), or an omni model (modality: \"omni\")", decision.Name)
 			}
 		}
 	}
