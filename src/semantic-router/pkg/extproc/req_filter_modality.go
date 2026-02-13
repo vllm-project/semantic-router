@@ -473,7 +473,10 @@ func (r *OpenAIRouter) buildOmniResponsesAPIResponse(omniResp map[string]interfa
 
 // extractOmniContentParts extracts text strings and image URLs from a message content.
 // The content can be a string, or an array of content parts (text + image_url).
-func extractOmniContentParts(content interface{}) (texts []string, imageURLs []string) {
+func extractOmniContentParts(content interface{}) ([]string, []string) {
+	var texts []string
+	var imageURLs []string
+
 	switch v := content.(type) {
 	case string:
 		if v != "" {
@@ -499,7 +502,8 @@ func extractOmniContentParts(content interface{}) (texts []string, imageURLs []s
 			}
 		}
 	}
-	return
+
+	return texts, imageURLs
 }
 
 // parseSizeString parses an OpenAI image size string like "1024x1536" into width and height.
