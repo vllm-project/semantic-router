@@ -447,16 +447,17 @@ func buildCredentialResolver(cfg *config.RouterConfig) *authz.CredentialResolver
 	authzCfg := cfg.Authz
 
 	if len(authzCfg.Providers) == 0 {
-		// Default chain — backward compatible, no config required
+		// Default chain — backward compatible, no config required.
+		// Always fail-open when no providers are explicitly configured:
+		// without an auth backend there is no credential source, so
+		// fail-closed would reject every request. Users who need
+		// fail-closed must explicitly configure providers.
 		resolver := authz.NewCredentialResolver(
 			authz.NewHeaderInjectionProvider(authz.DefaultHeaderMap()),
 			authz.NewStaticConfigProvider(cfg),
 		)
-		resolver.SetFailOpen(authzCfg.FailOpen)
-		if authzCfg.FailOpen {
-			logging.Warnf("Authz fail_open=true with default chain — requests without valid credentials will be allowed through")
-		}
-		logging.Infof("Authz: using default chain [header-injection(defaults) → static-config], fail_open=%v", authzCfg.FailOpen)
+		resolver.SetFailOpen(true)
+		logging.Infof("Authz: using default chain [header-injection(defaults) → static-config], fail_open=true (no explicit providers configured)")
 		logging.Infof("Authz identity: user_id_header=%q, user_groups_header=%q",
 			cfg.Authz.Identity.GetUserIDHeader(), cfg.Authz.Identity.GetUserGroupsHeader())
 		return resolver

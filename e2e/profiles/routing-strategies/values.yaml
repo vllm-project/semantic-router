@@ -1,10 +1,5 @@
 # Semantic Router Configuration for Routing Strategies E2E Tests
 config:
-  # Allow requests through without API keys — E2E tests use local vLLM backends
-  # that don't require authentication.
-  authz:
-    fail_open: true
-
   bert_model:
     model_id: models/mom-embedding-light
     threshold: 0.6
