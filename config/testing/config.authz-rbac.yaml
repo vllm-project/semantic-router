@@ -1,0 +1,216 @@
+# Authz RBAC Model Routing Test Configuration
+#
+# Demonstrates user-level RBAC routing: the same router serves all users,
+# but routes to different models based on authenticated user identity.
+#
+# Architecture:
+#   Client -> Envoy -> ext_proc (semantic router) -> vLLM endpoints
+#
+# Identity headers are injected by the auth backend (JWT, Authorino, etc.).
+# For e2e testing, we simulate this by injecting headers directly in the
+# test requests — the router doesn't care who set the headers.
+#
+# RBAC tiers:
+#   admin        → 14B (unrestricted, reasoning enabled)
+#   premium_user → 14B (complex queries) or 7B (simple)
+#   free_user    → 7B only
+#   (no match)   → 7B (default_model)
+#
+# Test matrix (inject x-authz-user-id / x-authz-user-groups headers):
+#
+#   alice / platform-admins  → admin        → 14B
+#   bob   / premium-tier     → premium_user → 14B (complex) or 7B (simple)
+#   carol / free-tier        → free_user    → 7B
+#   (none)                   → no match     → 7B (default)
+
+# --------------------------------------------------------------------------
+# Authz — default identity headers (Authorino convention)
+# In e2e tests, we inject these headers directly in curl requests.
+# --------------------------------------------------------------------------
+authz:
+  fail_open: true
+
+# --------------------------------------------------------------------------
+# vLLM Endpoints
+# --------------------------------------------------------------------------
+vllm_endpoints:
+  - name: "vllm-14b"
+    address: "127.0.0.1"
+    port: 8000
+    weight: 1
+    type: "vllm"
+  - name: "vllm-7b"
+    address: "127.0.0.1"
+    port: 8001
+    weight: 1
+    type: "vllm"
+
+# --------------------------------------------------------------------------
+# Model Config
+# --------------------------------------------------------------------------
+model_config:
+  "Qwen/Qwen2.5-14B-Instruct":
+    preferred_endpoints: ["vllm-14b"]
+    param_size: "14b"
+    quality_score: 0.90
+    description: "Qwen2.5 14B — high-capability model for admin and premium users"
+    capabilities: ["chat", "code", "reasoning", "math"]
+    external_model_ids:
+      vllm: "Qwen/Qwen2.5-14B-Instruct"
+
+  "Qwen/Qwen2.5-7B-Instruct":
+    preferred_endpoints: ["vllm-7b"]
+    param_size: "7b"
+    quality_score: 0.70
+    description: "Qwen2.5 7B — efficient model for free tier and simple queries"
+    capabilities: ["chat", "code"]
+    external_model_ids:
+      vllm: "Qwen/Qwen2.5-7B-Instruct"
+
+default_model: "Qwen/Qwen2.5-7B-Instruct"
+
+# --------------------------------------------------------------------------
+# Keyword Rules
+# --------------------------------------------------------------------------
+keyword_rules:
+  - name: "complex_analysis"
+    operator: "OR"
+    keywords: ["analyze", "reasoning", "think step by step", "explain why", "compare", "evaluate"]
+
+  - name: "code_request"
+    operator: "OR"
+    keywords: ["write code", "implement", "function", "algorithm", "debug", "refactor"]
+
+# --------------------------------------------------------------------------
+# Role Bindings — RBAC role assignments
+# --------------------------------------------------------------------------
+# Subjects are matched against identity headers:
+#   x-authz-user-id     (default) — matches kind: User
+#   x-authz-user-groups (default) — matches kind: Group
+# --------------------------------------------------------------------------
+role_bindings:
+  - name: "admin-binding"
+    description: "Platform admins — full model access"
+    subjects:
+      - kind: Group
+        name: "platform-admins"
+    role: "admin"
+
+  - name: "premium-binding"
+    description: "Premium tier users"
+    subjects:
+      - kind: Group
+        name: "premium-tier"
+    role: "premium_user"
+
+  - name: "free-binding"
+    description: "Free tier users"
+    subjects:
+      - kind: Group
+        name: "free-tier"
+    role: "free_user"
+
+# --------------------------------------------------------------------------
+# Routing Strategy
+# --------------------------------------------------------------------------
+strategy: "priority"
+
+# --------------------------------------------------------------------------
+# Decisions
+# --------------------------------------------------------------------------
+decisions:
+  # ── Admin: unrestricted, gets 14B ──
+  - name: "admin_unrestricted"
+    description: "Admin users get 14B with reasoning"
+    priority: 300
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "authz"
+          name: "admin"
+    modelRefs:
+      - model: "Qwen/Qwen2.5-14B-Instruct"
+        use_reasoning: true
+      - model: "Qwen/Qwen2.5-7B-Instruct"
+        use_reasoning: false
+
+  # ── Premium + complex → 14B ──
+  - name: "premium_complex"
+    description: "Premium users + complex queries get 14B"
+    priority: 250
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "authz"
+          name: "premium_user"
+        - type: "keyword"
+          name: "complex_analysis"
+    modelRefs:
+      - model: "Qwen/Qwen2.5-14B-Instruct"
+        use_reasoning: true
+
+  # ── Premium + code → 14B ──
+  - name: "premium_code"
+    description: "Premium users + code requests get 14B"
+    priority: 240
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "authz"
+          name: "premium_user"
+        - type: "keyword"
+          name: "code_request"
+    modelRefs:
+      - model: "Qwen/Qwen2.5-14B-Instruct"
+        use_reasoning: false
+
+  # ── Premium default → 7B ──
+  - name: "premium_default"
+    description: "Premium users simple queries get 7B"
+    priority: 150
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "authz"
+          name: "premium_user"
+    modelRefs:
+      - model: "Qwen/Qwen2.5-7B-Instruct"
+        use_reasoning: false
+
+  # ── Free tier → 7B ──
+  - name: "free_default"
+    description: "Free users get 7B"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "authz"
+          name: "free_user"
+    modelRefs:
+      - model: "Qwen/Qwen2.5-7B-Instruct"
+        use_reasoning: false
+
+# --------------------------------------------------------------------------
+# Classifier (minimal — no embedding/PII needed for RBAC tests)
+# --------------------------------------------------------------------------
+classifier:
+  category_model:
+    model_id: "models/mom-domain-classifier"
+    use_modernbert: false
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
+  pii_model:
+    model_id: "models/mom-pii-classifier"
+    use_modernbert: false
+    threshold: 0.7
+    use_cpu: true
+    pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
+
+# --------------------------------------------------------------------------
+# Other
+# --------------------------------------------------------------------------
+semantic_cache:
+  enabled: false
+
+clear_route_cache: true

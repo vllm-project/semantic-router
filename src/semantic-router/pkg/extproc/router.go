@@ -13,6 +13,7 @@ import (
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -43,6 +44,11 @@ type OpenAIRouter struct {
 	ReplayRecorders map[string]*routerreplay.Recorder
 	MemoryStore     *memory.MilvusStore
 	MemoryExtractor *memory.MemoryExtractor
+
+	// CredentialResolver resolves per-user LLM API keys from multiple sources
+	// (ext_authz injected headers → static config fallback).
+	// Initialized in NewOpenAIRouter.
+	CredentialResolver *authz.CredentialResolver
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls
@@ -398,6 +404,10 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		}
 	}
 
+	// Build credential resolver chain from config (or use default chain if authz section is omitted)
+	credResolver := buildCredentialResolver(cfg)
+	logging.Infof("Credential resolver initialized with providers: %v", credResolver.ProviderNames())
+
 	router := &OpenAIRouter{
 		Config:               cfg,
 		CategoryDescriptions: categoryDescriptions,
@@ -411,9 +421,110 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		ReplayRecorders:      replayRecorders,
 		MemoryStore:          memoryStore,
 		MemoryExtractor:      memoryExtractor,
+		CredentialResolver:   credResolver,
 	}
 
 	return router, nil
+}
+
+// knownAuthzProviderTypes is the set of valid provider type strings.
+// Unknown types cause a startup error (not a runtime surprise).
+var knownAuthzProviderTypes = map[string]bool{
+	"header-injection": true,
+	"static-config":    true,
+}
+
+// buildCredentialResolver constructs the credential provider chain from config.
+// If the authz section is omitted (no providers configured), it returns the
+// default chain: header-injection (standard headers) → static-config.
+//
+// Startup validation (catches misconfig before any request is served):
+//   - Unknown provider types → error (not silently skipped)
+//   - header-injection with empty headers → warning (will use defaults)
+//   - Empty chain after explicit config → error
+//   - Logs the resolved chain, fail_open mode, and header mappings
+func buildCredentialResolver(cfg *config.RouterConfig) *authz.CredentialResolver {
+	authzCfg := cfg.Authz
+
+	if len(authzCfg.Providers) == 0 {
+		// Default chain — backward compatible, no config required.
+		// Always fail-open when no providers are explicitly configured:
+		// without an auth backend there is no credential source, so
+		// fail-closed would reject every request. Users who need
+		// fail-closed must explicitly configure providers.
+		resolver := authz.NewCredentialResolver(
+			authz.NewHeaderInjectionProvider(authz.DefaultHeaderMap()),
+			authz.NewStaticConfigProvider(cfg),
+		)
+		resolver.SetFailOpen(true)
+		logging.Infof("Authz: using default chain [header-injection(defaults) → static-config], fail_open=true (no explicit providers configured)")
+		logging.Infof("Authz identity: user_id_header=%q, user_groups_header=%q",
+			cfg.Authz.Identity.GetUserIDHeader(), cfg.Authz.Identity.GetUserGroupsHeader())
+		return resolver
+	}
+
+	// --- Startup validation ---
+	var validationErrors []string
+
+	for i, p := range authzCfg.Providers {
+		if !knownAuthzProviderTypes[p.Type] {
+			validationErrors = append(validationErrors,
+				fmt.Sprintf("authz.providers[%d]: unknown type %q (valid types: header-injection, static-config)", i, p.Type))
+		}
+		if p.Type == "header-injection" && len(p.Headers) > 0 {
+			// Validate header values are non-empty
+			for provider, header := range p.Headers {
+				if header == "" {
+					validationErrors = append(validationErrors,
+						fmt.Sprintf("authz.providers[%d].headers: provider %q has empty header name", i, provider))
+				}
+			}
+		}
+	}
+
+	if len(validationErrors) > 0 {
+		for _, e := range validationErrors {
+			logging.Errorf("Authz config validation error: %s", e)
+		}
+		logging.Errorf("Authz config has %d validation error(s) — falling back to default chain to prevent startup failure. FIX YOUR CONFIG.", len(validationErrors))
+		resolver := authz.NewCredentialResolver(
+			authz.NewHeaderInjectionProvider(authz.DefaultHeaderMap()),
+			authz.NewStaticConfigProvider(cfg),
+		)
+		// Force fail-closed when config is invalid — don't trust a broken config's fail_open setting
+		resolver.SetFailOpen(false)
+		return resolver
+	}
+
+	// --- Build chain ---
+	providers := make([]authz.Provider, 0, len(authzCfg.Providers))
+	for _, p := range authzCfg.Providers {
+		switch p.Type {
+		case "header-injection":
+			hip := authz.NewHeaderInjectionProvider(p.Headers)
+			providers = append(providers, hip)
+			if len(p.Headers) == 0 {
+				logging.Infof("Authz: header-injection provider using default headers: %v", authz.DefaultHeaderMap())
+			} else {
+				logging.Infof("Authz: header-injection provider using custom headers: %v", p.Headers)
+			}
+		case "static-config":
+			providers = append(providers, authz.NewStaticConfigProvider(cfg))
+			logging.Infof("Authz: static-config provider (reads model_config.*.access_key)")
+		}
+	}
+
+	resolver := authz.NewCredentialResolver(providers...)
+	resolver.SetFailOpen(authzCfg.FailOpen)
+
+	if authzCfg.FailOpen {
+		logging.Warnf("Authz fail_open=true — requests without valid credentials will be allowed through. Ensure this is intentional.")
+	}
+	logging.Infof("Authz: chain=%v, fail_open=%v", resolver.ProviderNames(), authzCfg.FailOpen)
+	logging.Infof("Authz identity: user_id_header=%q, user_groups_header=%q",
+		cfg.Authz.Identity.GetUserIDHeader(), cfg.Authz.Identity.GetUserGroupsHeader())
+
+	return resolver
 }
 
 // initializeReplayRecorders creates replay recorders for decisions with router_replay plugin configured.

@@ -18,7 +18,7 @@ import (
 // This is the new approach that uses Decision-based routing with AND/OR rule combinations
 // Decision evaluation is ALWAYS performed when decisions are configured (for plugin features like
 // hallucination detection), but model selection only happens for auto models.
-func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userContent string, nonUserMessages []string, ctx *RequestContext) (string, float64, entropy.ReasoningDecision, string) {
+func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userContent string, nonUserMessages []string, ctx *RequestContext) (string, float64, entropy.ReasoningDecision, string, error) {
 	var decisionName string
 	var evaluationConfidence float64
 	var reasoningDecision entropy.ReasoningDecision
@@ -26,16 +26,16 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 
 	// Check if there's content to evaluate
 	if len(nonUserMessages) == 0 && userContent == "" {
-		return "", 0.0, entropy.ReasoningDecision{}, ""
+		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
 	// Check if decisions are configured
 	if len(r.Config.Decisions) == 0 {
 		if r.Config.IsAutoModelName(originalModel) {
 			logging.Warnf("No decisions configured, using default model")
-			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel
+			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel, nil
 		}
-		return "", 0.0, entropy.ReasoningDecision{}, ""
+		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
 	// Determine text to use for evaluation
@@ -45,7 +45,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	}
 
 	if evaluationText == "" {
-		return "", 0.0, entropy.ReasoningDecision{}, ""
+		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
 	// For context token counting, we need to include ALL messages (user + non-user)
@@ -69,8 +69,17 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 
 	// Evaluate all signals first to get detailed signal information
 	// Use evaluationText for most signals, but pass allMessagesText for context counting
+	// EvaluateAllSignalsWithHeaders also evaluates the authz signal using request headers
+	// (x-authz-user-id, x-authz-user-groups injected by Authorino / ext_authz).
 	// In extproc, we always use normal mode (only evaluate signals used in decisions)
-	signals := r.Classifier.EvaluateAllSignalsWithContext(evaluationText, allMessagesText, false)
+	signals, authzErr := r.Classifier.EvaluateAllSignalsWithHeaders(evaluationText, allMessagesText, ctx.Headers, false)
+	if authzErr != nil {
+		signalSpan.End()
+		// Authz failure is a hard error — do not silently bypass.
+		// Propagate the error to the caller, which returns 403 to the client.
+		logging.Errorf("[Signal Evaluation] Authz evaluation failed: %v", authzErr)
+		return "", 0, entropy.ReasoningDecision{}, "", authzErr
+	}
 
 	signalLatency := time.Since(signalStart).Milliseconds()
 
@@ -87,6 +96,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	ctx.VSRContextTokenCount = signals.TokenCount
 	ctx.VSRMatchedComplexity = signals.MatchedComplexityRules
 	ctx.VSRMatchedModality = signals.MatchedModalityRules
+	ctx.VSRMatchedAuthz = signals.MatchedAuthzRules
 
 	// Set fact-check context fields from signal results
 	// This replaces the old performFactCheckClassification call to avoid duplicate computation
@@ -141,9 +151,9 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, r.Config.Strategy)
 		ctx.TraceContext = decisionCtx
 		if r.Config.IsAutoModelName(originalModel) {
-			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel
+			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel, nil
 		}
-		return "", 0.0, entropy.ReasoningDecision{}, ""
+		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
 	if result == nil || result.Decision == nil {
@@ -151,9 +161,9 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, r.Config.Strategy)
 		ctx.TraceContext = decisionCtx
 		if r.Config.IsAutoModelName(originalModel) {
-			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel
+			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel, nil
 		}
-		return "", 0.0, entropy.ReasoningDecision{}, ""
+		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
 	// Record decision match with confidence
@@ -200,7 +210,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	if !r.Config.IsAutoModelName(originalModel) {
 		logging.Infof("Model %s explicitly specified, keeping original model (decision %s plugins will be applied)",
 			originalModel, decisionName)
-		return decisionName, evaluationConfidence, reasoningDecision, ""
+		return decisionName, evaluationConfidence, reasoningDecision, "", nil
 	}
 
 	// Select best model from the decision's ModelRefs using configured selection algorithm
@@ -253,7 +263,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 		logging.Infof("No model refs in decision %s, using default model: %s", decisionName, selectedModel)
 	}
 
-	return decisionName, evaluationConfidence, reasoningDecision, selectedModel
+	return decisionName, evaluationConfidence, reasoningDecision, selectedModel, nil
 }
 
 // selectModelFromCandidates uses the configured selection algorithm to choose the best model

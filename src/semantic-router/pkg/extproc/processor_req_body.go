@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
@@ -93,7 +94,13 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	// Perform decision evaluation and model selection once at the beginning
 	// Use decision-based routing if decisions are configured, otherwise fall back to category-based
 	// This also evaluates fact-check signal as part of the signal evaluation
-	decisionName, _, reasoningDecision, selectedModel := r.performDecisionEvaluation(originalModel, userContent, nonUserMessages, ctx)
+	decisionName, _, reasoningDecision, selectedModel, authzErr := r.performDecisionEvaluation(originalModel, userContent, nonUserMessages, ctx)
+	if authzErr != nil {
+		// Authz failure is a hard error — return 403 Forbidden.
+		// This happens when role_bindings are configured but the x-authz-user-id header is missing.
+		logging.Errorf("[Request Body] Authz evaluation failed: %v", authzErr)
+		return r.createErrorResponse(403, authzErr.Error()), nil
+	}
 
 	// Record the initial request to this model (count all requests)
 	metrics.RecordModelRequest(selectedModel)
@@ -210,11 +217,14 @@ func (r *OpenAIRouter) handleAnthropicRouting(openAIRequest *openai.ChatCompleti
 		return r.createErrorResponse(400, "Streaming is not supported for Anthropic models. Please set stream=false in your request."), nil
 	}
 
-	// Get API key for the model
-	accessKey := r.Config.GetModelAccessKey(targetModel)
+	// Resolve API key for Anthropic via credential chain (ext_authz headers → static config)
+	accessKey, err := r.CredentialResolver.KeyForProvider(authz.ProviderAnthropic, targetModel, ctx.Headers)
+	if err != nil {
+		return r.createErrorResponse(401, fmt.Sprintf("Credential resolution failed for model %s: %v", targetModel, err)), nil
+	}
 	if accessKey == "" {
-		logging.Errorf("No access_key configured for Anthropic model: %s", targetModel)
-		return r.createErrorResponse(500, fmt.Sprintf("No API key configured for model: %s", targetModel)), nil
+		// fail_open=true path: no key but allowed through — warn operator
+		logging.Warnf("No API key for Anthropic model %q (fail_open=true) — request will use empty key", targetModel)
 	}
 
 	// Update model in request to target model
@@ -264,6 +274,9 @@ func (r *OpenAIRouter) handleAnthropicRouting(openAIRequest *openai.ChatCompleti
 
 	logging.Infof("Transformed request for Anthropic API, body size: %d bytes", len(anthropicBody))
 
+	// Strip ext_authz / Authorino injected headers before forwarding upstream (prevent key leakage)
+	removeHeaders := append(anthropic.HeadersToRemove(), r.CredentialResolver.HeadersToStrip()...)
+
 	// Return response with body and header mutations - let Envoy route to Anthropic
 	// ClearRouteCache forces Envoy to re-evaluate routing after we set x-selected-model header
 	return &ext_proc.ProcessingResponse{
@@ -274,7 +287,7 @@ func (r *OpenAIRouter) handleAnthropicRouting(openAIRequest *openai.ChatCompleti
 					ClearRouteCache: true,
 					HeaderMutation: &ext_proc.HeaderMutation{
 						SetHeaders:    setHeaders,
-						RemoveHeaders: anthropic.HeadersToRemove(),
+						RemoveHeaders: removeHeaders,
 					},
 					BodyMutation: &ext_proc.BodyMutation{
 						Mutation: &ext_proc.BodyMutation_Body{
@@ -311,7 +324,10 @@ func (r *OpenAIRouter) handleAutoModelRouting(openAIRequest *openai.ChatCompleti
 	metrics.RecordModelRouting(originalModel, matchedModel)
 
 	// Select endpoint for the matched model
-	selectedEndpoint, selectedEndpointName := r.selectEndpointForModel(ctx, matchedModel)
+	selectedEndpoint, selectedEndpointName, endpointErr := r.selectEndpointForModel(ctx, matchedModel)
+	if endpointErr != nil {
+		return nil, fmt.Errorf("auto routing: %w", endpointErr)
+	}
 
 	// Resolve model name alias to real model name for the selected endpoint
 	// e.g., "qwen14b-rack1" -> "Qwen/Qwen2.5-14B-Instruct"
@@ -324,7 +340,7 @@ func (r *OpenAIRouter) handleAutoModelRouting(openAIRequest *openai.ChatCompleti
 	}
 
 	// Create response with mutations (use original alias for headers/tracing, upstream model in body)
-	response = r.createRoutingResponse(matchedModel, selectedEndpoint, modifiedBody, ctx)
+	response = r.createRoutingResponse(matchedModel, selectedEndpoint, selectedEndpointName, modifiedBody, ctx)
 
 	// Log routing decision
 	r.logRoutingDecision(ctx, "auto_routing", originalModel, matchedModel, decisionName, reasoningDecision.UseReasoning)
@@ -360,13 +376,16 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCom
 	// Memory injection already happened in handleMemoryRetrieval (before routing diverged)
 
 	// Select endpoint for the specified model
-	selectedEndpoint, selectedEndpointName := r.selectEndpointForModel(ctx, originalModel)
+	selectedEndpoint, selectedEndpointName, endpointErr := r.selectEndpointForModel(ctx, originalModel)
+	if endpointErr != nil {
+		return nil, fmt.Errorf("specified model routing: %w", endpointErr)
+	}
 
 	// Resolve model name alias to real model name for the selected endpoint
 	upstreamModel := r.resolveModelNameForEndpoint(originalModel, selectedEndpointName)
 
 	// Create response with headers (and body mutation if model name changed)
-	response := r.createSpecifiedModelResponse(originalModel, upstreamModel, selectedEndpoint, ctx)
+	response := r.createSpecifiedModelResponse(originalModel, upstreamModel, selectedEndpoint, selectedEndpointName, ctx)
 
 	// Handle route cache clearing
 	if r.shouldClearRouteCache() {
@@ -389,10 +408,13 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCom
 }
 
 // selectEndpointForModel selects the best endpoint for the given model.
-// Returns the endpoint address:port and the endpoint name.
+// Returns the endpoint address:port, the endpoint name, and any error.
 // Backend selection is now part of the model layer (upstream request span)
-func (r *OpenAIRouter) selectEndpointForModel(ctx *RequestContext, model string) (string, string) {
-	endpointAddress, endpointName, endpointFound := r.Config.SelectBestEndpointWithDetailsForModel(model)
+func (r *OpenAIRouter) selectEndpointForModel(ctx *RequestContext, model string) (string, string, error) {
+	endpointAddress, endpointName, endpointFound, err := r.Config.SelectBestEndpointWithDetailsForModel(model)
+	if err != nil {
+		return "", "", fmt.Errorf("endpoint resolution for model %q: %w", model, err)
+	}
 	if endpointFound {
 		logging.Infof("Selected endpoint address: %s (name: %s) for model: %s", endpointAddress, endpointName, model)
 	}
@@ -403,7 +425,7 @@ func (r *OpenAIRouter) selectEndpointForModel(ctx *RequestContext, model string)
 	// Increment active request count for queue depth estimation (model-level)
 	metrics.IncrementModelActiveRequests(model)
 
-	return endpointAddress, endpointName
+	return endpointAddress, endpointName, nil
 }
 
 // resolveModelNameForEndpoint resolves the model name alias to the real model name
@@ -493,8 +515,39 @@ func (r *OpenAIRouter) startUpstreamSpanAndInjectHeaders(model string, endpoint 
 	return traceContextHeaders
 }
 
-// createRoutingResponse creates a routing response with mutations
-func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, modifiedBody []byte, ctx *RequestContext) *ext_proc.ProcessingResponse {
+// resolveProviderAuth determines the LLMProvider, auth header name, and auth prefix
+// from a provider profile.
+//
+// When profile is nil (legacy endpoint without provider_profile), the caller MUST
+// have already determined LLMProvider from the endpoint's Type field or from the
+// pre-existing openai-compatible convention.
+//
+// When profile is non-nil, all three values are derived from the profile's type.
+// Returns error if the profile type is unrecognised.
+func resolveProviderAuth(profile *config.ProviderProfile) (authz.LLMProvider, string, string, error) {
+	if profile == nil {
+		// Legacy endpoint (no provider_profile set).
+		// Use ProviderOpenAI — this is the only provider type that existed
+		// before provider_profiles were introduced. The auth header format
+		// comes from the same openai convention that was previously hardcoded
+		// in this function's callers.
+		return authz.ProviderOpenAI, "Authorization", "Bearer", nil
+	}
+	providerType, err := profile.ProviderType()
+	if err != nil {
+		return "", "", "", fmt.Errorf("resolving provider auth: %w", err)
+	}
+	llmProvider := authz.LLMProvider(providerType)
+	authHeader, authPrefix, err := profile.ResolveAuthHeader()
+	if err != nil {
+		return "", "", "", fmt.Errorf("resolving auth header: %w", err)
+	}
+	return llmProvider, authHeader, authPrefix, nil
+}
+
+// createRoutingResponse creates a routing response with mutations.
+// endpointName is the name of the selected VLLMEndpoint (used to look up provider profile).
+func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, endpointName string, modifiedBody []byte, ctx *RequestContext) *ext_proc.ProcessingResponse {
 	bodyMutation := &ext_proc.BodyMutation{
 		Mutation: &ext_proc.BodyMutation_Body{
 			Body: modifiedBody,
@@ -520,16 +573,49 @@ func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, modi
 	traceContextHeaders := r.startUpstreamSpanAndInjectHeaders(model, endpoint, ctx)
 	setHeaders = append(setHeaders, traceContextHeaders...)
 
-	// Add Authorization header if model has access_key configured
-	if accessKey := r.getModelAccessKey(model); accessKey != "" {
+	// Resolve provider type and auth format from endpoint's provider profile
+	profile, profileErr := r.Config.GetProviderProfileForEndpoint(endpointName)
+	if profileErr != nil {
+		return r.createErrorResponse(500, fmt.Sprintf("Provider profile resolution failed for endpoint %s: %v", endpointName, profileErr))
+	}
+	llmProvider, authHeader, authPrefix, authErr := resolveProviderAuth(profile)
+	if authErr != nil {
+		return r.createErrorResponse(500, fmt.Sprintf("Provider auth resolution failed for endpoint %s: %v", endpointName, authErr))
+	}
+
+	// Resolve API key via credential chain (ext_authz headers → static config)
+	accessKey, credErr := r.CredentialResolver.KeyForProvider(llmProvider, model, ctx.Headers)
+	if credErr != nil {
+		return r.createErrorResponse(401, fmt.Sprintf("Credential resolution failed for model %s: %v", model, credErr))
+	}
+	if accessKey != "" {
+		value := accessKey
+		if authPrefix != "" {
+			value = authPrefix + " " + accessKey
+		}
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{
-				Key:      "Authorization",
-				RawValue: []byte(fmt.Sprintf("Bearer %s", accessKey)),
+				Key:      authHeader,
+				RawValue: []byte(value),
 			},
 		})
-		logging.Infof("Added Authorization header for model %s", model)
+		logging.Infof("Added %s header for model %s (provider=%s)", authHeader, model, llmProvider)
+	} else {
+		// fail_open=true path: no key but allowed through
+		logging.Warnf("No API key for %s model %q (fail_open=true) — forwarding without auth header", llmProvider, model)
 	}
+
+	// Add explicit extra headers from provider profile config
+	if profile != nil {
+		for k, v := range profile.ExtraHeaders {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{Key: k, RawValue: []byte(v)},
+			})
+		}
+	}
+
+	// Strip ext_authz injected headers before forwarding upstream (prevent key leakage)
+	removeHeaders = append(removeHeaders, r.CredentialResolver.HeadersToStrip()...)
 
 	// Add standard routing headers
 	if endpoint != "" {
@@ -549,7 +635,7 @@ func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, modi
 		})
 	}
 
-	// For Response API requests, modify :path to /v1/chat/completions
+	// Set :path from provider profile, or use Response API override
 	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{
@@ -558,6 +644,20 @@ func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, modi
 			},
 		})
 		logging.Infof("Response API: Rewriting path to /v1/chat/completions")
+	} else if profile != nil {
+		chatPath, pathErr := profile.ResolveChatPath()
+		if pathErr != nil {
+			return r.createErrorResponse(500, fmt.Sprintf("Chat path resolution failed for endpoint %s: %v", endpointName, pathErr))
+		}
+		if chatPath != "" {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      ":path",
+					RawValue: []byte(chatPath),
+				},
+			})
+			logging.Infof("Provider profile: Rewriting path to %s", chatPath)
+		}
 	}
 
 	// Apply header mutations from decision's header_mutation plugin
@@ -594,7 +694,8 @@ func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, modi
 // createSpecifiedModelResponse creates a response for specified model routing.
 // model is the internal alias (used for headers/tracing), upstreamModel is the real model
 // name that the backend endpoint expects (resolved via external_model_ids).
-func (r *OpenAIRouter) createSpecifiedModelResponse(model string, upstreamModel string, endpoint string, ctx *RequestContext) *ext_proc.ProcessingResponse {
+// endpointName is the name of the selected VLLMEndpoint (used to look up provider profile).
+func (r *OpenAIRouter) createSpecifiedModelResponse(model string, upstreamModel string, endpoint string, endpointName string, ctx *RequestContext) *ext_proc.ProcessingResponse {
 	setHeaders := []*core.HeaderValueOption{}
 	removeHeaders := []string{}
 
@@ -602,16 +703,49 @@ func (r *OpenAIRouter) createSpecifiedModelResponse(model string, upstreamModel 
 	traceContextHeaders := r.startUpstreamSpanAndInjectHeaders(model, endpoint, ctx)
 	setHeaders = append(setHeaders, traceContextHeaders...)
 
-	// Add Authorization header if model has access_key configured
-	if accessKey := r.getModelAccessKey(model); accessKey != "" {
+	// Resolve provider type and auth format from endpoint's provider profile
+	profile, profileErr := r.Config.GetProviderProfileForEndpoint(endpointName)
+	if profileErr != nil {
+		return r.createErrorResponse(500, fmt.Sprintf("Provider profile resolution failed for endpoint %s: %v", endpointName, profileErr))
+	}
+	llmProvider, authHeader, authPrefix, authErr := resolveProviderAuth(profile)
+	if authErr != nil {
+		return r.createErrorResponse(500, fmt.Sprintf("Provider auth resolution failed for endpoint %s: %v", endpointName, authErr))
+	}
+
+	// Resolve API key via credential chain (ext_authz headers → static config)
+	accessKey, credErr := r.CredentialResolver.KeyForProvider(llmProvider, model, ctx.Headers)
+	if credErr != nil {
+		return r.createErrorResponse(401, fmt.Sprintf("Credential resolution failed for model %s: %v", model, credErr))
+	}
+	if accessKey != "" {
+		value := accessKey
+		if authPrefix != "" {
+			value = authPrefix + " " + accessKey
+		}
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{
-				Key:      "Authorization",
-				RawValue: []byte(fmt.Sprintf("Bearer %s", accessKey)),
+				Key:      authHeader,
+				RawValue: []byte(value),
 			},
 		})
-		logging.Infof("Added Authorization header for model %s", model)
+		logging.Infof("Added %s header for model %s (provider=%s)", authHeader, model, llmProvider)
+	} else {
+		// fail_open=true path: no key but allowed through
+		logging.Warnf("No API key for %s model %q (fail_open=true) — forwarding without auth header", llmProvider, model)
 	}
+
+	// Add explicit extra headers from provider profile config
+	if profile != nil {
+		for k, v := range profile.ExtraHeaders {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{Key: k, RawValue: []byte(v)},
+			})
+		}
+	}
+
+	// Strip ext_authz injected headers before forwarding upstream (prevent key leakage)
+	removeHeaders = append(removeHeaders, r.CredentialResolver.HeadersToStrip()...)
 
 	if endpoint != "" {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
@@ -640,7 +774,7 @@ func (r *OpenAIRouter) createSpecifiedModelResponse(model string, upstreamModel 
 		logging.Infof("Model name rewriting: %s -> %s in request body", model, upstreamModel)
 	}
 
-	// For Response API requests, modify :path to /v1/chat/completions and use translated body
+	// Set :path from provider profile, or use Response API override
 	if ctx != nil && ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{
@@ -650,6 +784,20 @@ func (r *OpenAIRouter) createSpecifiedModelResponse(model string, upstreamModel 
 		})
 		needsBodyMutation = true
 		logging.Infof("Response API: Rewriting path to /v1/chat/completions (specified model)")
+	} else if profile != nil {
+		chatPath, pathErr := profile.ResolveChatPath()
+		if pathErr != nil {
+			return r.createErrorResponse(500, fmt.Sprintf("Chat path resolution failed for endpoint %s: %v", endpointName, pathErr))
+		}
+		if chatPath != "" {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      ":path",
+					RawValue: []byte(chatPath),
+				},
+			})
+			logging.Infof("Provider profile: Rewriting path to %s (specified model)", chatPath)
+		}
 	}
 
 	if needsBodyMutation {
