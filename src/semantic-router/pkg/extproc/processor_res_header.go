@@ -290,6 +290,16 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 			})
 		}
 
+		// Add x-vsr-matched-authz header (from authz signal classification)
+		if len(ctx.VSRMatchedAuthz) > 0 {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.VSRMatchedAuthz,
+					RawValue: []byte(strings.Join(ctx.VSRMatchedAuthz, ",")),
+				},
+			})
+		}
+
 		// Attach router replay identifier when available
 		if ctx.RouterReplayID != "" {
 			setHeaders = append(setHeaders, &core.HeaderValueOption{

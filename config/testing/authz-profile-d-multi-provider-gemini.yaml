@@ -1,0 +1,28 @@
+# Profile D: Multi-provider with Gemini
+#
+# Adds Gemini support without touching Go code — the LLMProvider type is a
+# string, so any value works. The Authorino AuthConfig just needs an additional
+# annotation (e.g., "gemini-key") and this config maps it to a header.
+#
+# FAIL-CLOSED: prevents requests from reaching any provider without a key.
+
+authz:
+  fail_open: false
+  providers:
+    - type: header-injection
+      headers:
+        openai: "x-user-openai-key"
+        anthropic: "x-user-anthropic-key"
+        gemini: "x-user-gemini-key"
+    - type: static-config
+
+model_config:
+  gpt-4o-mini:
+    model_name: gpt-4o-mini
+    access_key: ""
+  claude-sonnet-4-5-20250929:
+    model_name: claude-sonnet-4-5-20250929
+    access_key: ""
+  gemini-2.0-flash:
+    model_name: gemini-2.0-flash
+    access_key: ""

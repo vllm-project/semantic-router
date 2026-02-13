@@ -2861,7 +2861,7 @@ func TestAdvanced_MemoryBoundedness(t *testing.T) {
 func TestAdvanced_AllAlgorithmsConsistency(t *testing.T) {
 	t.Skip("Skipping: requires Go-based training. Use pretrained models from HuggingFace instead.")
 	embeddingDim := 256
-	rand.Seed(42) // Fixed seed for reproducibility
+	// rand.Seed removed (deprecated since Go 1.20; test is skipped anyway)
 
 	// Generate consistent training data
 	trainingData := generateEnhancedTrainingData(400, embeddingDim)
