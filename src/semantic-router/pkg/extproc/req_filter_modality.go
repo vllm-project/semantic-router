@@ -81,19 +81,29 @@ func resolveDiffusionBackend(cfg *config.RouterConfig, modelName string) (*confi
 	return &entry, nil
 }
 
-// resolveModalityModelsFromDecision extracts the AR and diffusion model names
+// ModalityModels holds the resolved model names for each modality role from a decision.
+type ModalityModels struct {
+	ARModel        string // Text-only autoregressive model
+	DiffusionModel string // Image generation via diffusion backend
+	OmniModel      string // Omni model that can handle both text and image
+}
+
+// resolveModalityModelsFromDecision extracts the AR, diffusion, and omni model names
 // from a decision's ModelRefs by looking up each model's modality in model_config.
-// Returns (arModel, diffusionModel, error). Either may be empty if the decision
+// Returns a ModalityModels struct and an error. Fields may be empty if the decision
 // doesn't include that modality — callers should check based on the modality type.
 func resolveModalityModelsFromDecision(decision *config.Decision, modelConfig map[string]config.ModelParams) (string, string, error) {
-	if decision == nil {
-		return "", "", fmt.Errorf("decision is nil")
-	}
-	if len(decision.ModelRefs) == 0 {
-		return "", "", fmt.Errorf("decision %q has no modelRefs", decision.Name)
+	models := resolveAllModalityModels(decision, modelConfig)
+	return models.ARModel, models.DiffusionModel, nil
+}
+
+// resolveAllModalityModels extracts all modality model names including omni.
+func resolveAllModalityModels(decision *config.Decision, modelConfig map[string]config.ModelParams) ModalityModels {
+	if decision == nil || len(decision.ModelRefs) == 0 {
+		return ModalityModels{}
 	}
 
-	var arModel, diffusionModel string
+	var models ModalityModels
 	for _, ref := range decision.ModelRefs {
 		params, ok := modelConfig[ref.Model]
 		if !ok {
@@ -101,17 +111,21 @@ func resolveModalityModelsFromDecision(decision *config.Decision, modelConfig ma
 		}
 		switch params.Modality {
 		case "ar":
-			if arModel == "" {
-				arModel = ref.Model
+			if models.ARModel == "" {
+				models.ARModel = ref.Model
 			}
 		case "diffusion":
-			if diffusionModel == "" {
-				diffusionModel = ref.Model
+			if models.DiffusionModel == "" {
+				models.DiffusionModel = ref.Model
+			}
+		case "omni":
+			if models.OmniModel == "" {
+				models.OmniModel = ref.Model
 			}
 		}
 	}
 
-	return arModel, diffusionModel, nil
+	return models
 }
 
 // handleModalityFromDecision executes modality-based routing based on the modality signal
@@ -152,6 +166,13 @@ func (r *OpenAIRouter) handleModalityFromDecision(ctx *RequestContext, openAIReq
 
 	result := *ctx.ModalityClassification
 
+	// Resolve all modality models (AR, diffusion, omni) from the decision
+	decision := ctx.VSRSelectedDecision
+	var models ModalityModels
+	if decision != nil {
+		models = resolveAllModalityModels(decision, cfg.ModelConfig)
+	}
+
 	switch result.Modality {
 	case ModalityAR:
 		logging.Infof("[ModalityRouter] AR (method=%s) — passthrough", result.Method)
@@ -160,41 +181,45 @@ func (r *OpenAIRouter) handleModalityFromDecision(ctx *RequestContext, openAIReq
 	case ModalityDiffusion:
 		logging.Infof("[ModalityRouter] DIFFUSION (method=%s) — generating image", result.Method)
 
-		// Resolve diffusion model from the matched decision's ModelRefs
-		decision := ctx.VSRSelectedDecision
 		if decision == nil {
 			return nil, fmt.Errorf("modality DIFFUSION matched but no decision selected")
 		}
-		_, diffusionModel, err := resolveModalityModelsFromDecision(decision, cfg.ModelConfig)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve models from decision %q: %w", decision.Name, err)
-		}
-		if diffusionModel == "" {
-			return nil, fmt.Errorf("decision %q has no diffusion model in modelRefs", decision.Name)
+
+		// Prefer omni model if available (can handle image generation natively)
+		if models.OmniModel != "" {
+			logging.Infof("[ModalityRouter] DIFFUSION: using omni model %s for image generation", models.OmniModel)
+			return r.executeOmni(ctx, cfg, openAIRequest, result, models.OmniModel)
 		}
 
-		return r.executeDiffusion(ctx, cfg, result, diffusionModel)
+		if models.DiffusionModel == "" {
+			return nil, fmt.Errorf("decision %q has no diffusion or omni model in modelRefs", decision.Name)
+		}
+
+		return r.executeDiffusion(ctx, cfg, result, models.DiffusionModel)
 
 	case ModalityBoth:
-		logging.Infof("[ModalityRouter] BOTH (method=%s) — parallel AR + diffusion", result.Method)
+		logging.Infof("[ModalityRouter] BOTH (method=%s)", result.Method)
 
-		// Resolve AR and diffusion models from the matched decision's ModelRefs
-		decision := ctx.VSRSelectedDecision
 		if decision == nil {
 			return nil, fmt.Errorf("modality BOTH matched but no decision selected")
 		}
-		arModel, diffusionModel, err := resolveModalityModelsFromDecision(decision, cfg.ModelConfig)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve models from decision %q: %w", decision.Name, err)
-		}
-		if arModel == "" {
-			return nil, fmt.Errorf("decision %q has no AR model in modelRefs", decision.Name)
-		}
-		if diffusionModel == "" {
-			return nil, fmt.Errorf("decision %q has no diffusion model in modelRefs", decision.Name)
+
+		// Prefer omni model: single call handles both text and image
+		if models.OmniModel != "" {
+			logging.Infof("[ModalityRouter] BOTH: using omni model %s (single call for text+image)", models.OmniModel)
+			return r.executeOmni(ctx, cfg, openAIRequest, result, models.OmniModel)
 		}
 
-		return r.executeBoth(ctx, cfg, openAIRequest, result, arModel, diffusionModel)
+		// Fallback: parallel AR + diffusion calls
+		logging.Infof("[ModalityRouter] BOTH: parallel AR + diffusion")
+		if models.ARModel == "" {
+			return nil, fmt.Errorf("decision %q has no AR or omni model in modelRefs", decision.Name)
+		}
+		if models.DiffusionModel == "" {
+			return nil, fmt.Errorf("decision %q has no diffusion or omni model in modelRefs", decision.Name)
+		}
+
+		return r.executeBoth(ctx, cfg, openAIRequest, result, models.ARModel, models.DiffusionModel)
 
 	default:
 		// AR fallback for unrecognized modality
@@ -262,6 +287,225 @@ func (r *OpenAIRouter) executeBoth(ctx *RequestContext, cfg *config.RouterConfig
 	}
 
 	return r.buildImmediateResponseWithModality(200, responseBody, result), nil
+}
+
+// executeOmni sends a single request to an omni model endpoint that can handle both
+// text and image generation natively (e.g. vllm-omni serving Qwen2.5-Omni).
+// The omni model processes the request as a whole and returns a combined response
+// containing text and/or images, without needing separate AR + diffusion calls.
+func (r *OpenAIRouter) executeOmni(ctx *RequestContext, cfg *config.RouterConfig, openAIRequest *openai.ChatCompletionNewParams, result ModalityClassificationResult, omniModel string) (*ext_proc.ProcessingResponse, error) {
+	omniEndpoint, err := resolveARModelEndpoint(cfg, omniModel)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve omni model endpoint: %w", err)
+	}
+
+	// Serialize the original request
+	reqBody, err := json.Marshal(openAIRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal omni request: %w", err)
+	}
+
+	// Override model to the omni model name and inject image generation extra_body params
+	var reqMap map[string]interface{}
+	if unmarshalErr := json.Unmarshal(reqBody, &reqMap); unmarshalErr != nil {
+		return nil, fmt.Errorf("failed to parse omni request: %w", unmarshalErr)
+	}
+	reqMap["model"] = omniModel
+
+	// If image_generation tool params are present (from Responses API), apply them
+	// as extra_body parameters for vllm-omni diffusion control.
+	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.ImageGenToolParams != nil {
+		params := ctx.ResponseAPICtx.ImageGenToolParams
+		extraBody := map[string]interface{}{}
+
+		// Parse size string (e.g. "1024x1536") into width/height
+		if params.Size != "" && params.Size != "auto" {
+			w, h := parseSizeString(params.Size)
+			if w > 0 && h > 0 {
+				extraBody["width"] = w
+				extraBody["height"] = h
+			}
+		}
+
+		if len(extraBody) > 0 {
+			reqMap["extra_body"] = extraBody
+		}
+	}
+
+	reqBody, err = json.Marshal(reqMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal modified omni request: %w", err)
+	}
+
+	url := omniEndpoint + "/chat/completions"
+	logging.Infof("[ModalityRouter] OMNI: calling endpoint %s (model=%s)", url, omniModel)
+
+	start := time.Now()
+	httpReq, err := http.NewRequestWithContext(ctx.TraceContext, http.MethodPost, url, bytes.NewReader(reqBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create omni request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	timeout := 120 * time.Second
+	client := &http.Client{Timeout: timeout}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("omni request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	latency := time.Since(start).Seconds()
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to read omni response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("omni endpoint returned status %d: %s", resp.StatusCode, string(body[:min(len(body), 200)]))
+	}
+
+	logging.Infof("[ModalityRouter] OMNI: responded in %.2fs (%d bytes)", latency, len(body))
+
+	// Parse the omni response to extract text and image parts
+	var omniResp map[string]interface{}
+	if err := json.Unmarshal(body, &omniResp); err != nil {
+		return nil, fmt.Errorf("failed to parse omni response: %w", err)
+	}
+
+	// Build response: if this is a Responses API request, format as Responses API;
+	// otherwise return the raw Chat Completions response.
+	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
+		responseBody, err := r.buildOmniResponsesAPIResponse(omniResp, ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build omni Responses API response: %w", err)
+		}
+		return r.buildImmediateResponseWithModality(200, responseBody, result), nil
+	}
+
+	// For Chat Completions API, return the raw omni model response
+	return r.buildImmediateResponseWithModality(200, body, result), nil
+}
+
+// buildOmniResponsesAPIResponse builds a Responses API format response from an omni model's
+// Chat Completions response. It extracts text and image content parts and formats them
+// as output items, including image_generation_call items for any generated images.
+func (r *OpenAIRouter) buildOmniResponsesAPIResponse(omniResp map[string]interface{}, ctx *RequestContext) ([]byte, error) {
+	var outputItems []map[string]interface{}
+	model := ""
+	if m, ok := omniResp["model"].(string); ok {
+		model = m
+	}
+
+	// Extract content from choices
+	if choices, ok := omniResp["choices"].([]interface{}); ok && len(choices) > 0 {
+		if choice, ok := choices[0].(map[string]interface{}); ok {
+			if msg, ok := choice["message"].(map[string]interface{}); ok {
+				textParts, imageParts := extractOmniContentParts(msg["content"])
+
+				// Add image_generation_call items for each image
+				for _, imgURL := range imageParts {
+					outputItems = append(outputItems, map[string]interface{}{
+						"type":   "image_generation_call",
+						"id":     fmt.Sprintf("ig_%d", time.Now().UnixNano()),
+						"status": "completed",
+						"result": imgURL,
+					})
+				}
+
+				// Add message item with text content
+				if len(textParts) > 0 {
+					var contentParts []map[string]interface{}
+					for _, text := range textParts {
+						contentParts = append(contentParts, map[string]interface{}{
+							"type":        "output_text",
+							"text":        text,
+							"annotations": []interface{}{},
+						})
+					}
+					outputItems = append(outputItems, map[string]interface{}{
+						"type":    "message",
+						"id":     fmt.Sprintf("msg_%d", time.Now().UnixNano()),
+						"role":    "assistant",
+						"status":  "completed",
+						"content": contentParts,
+					})
+				}
+			}
+		}
+	}
+
+	// If no output items were extracted, add a fallback message
+	if len(outputItems) == 0 {
+		outputItems = append(outputItems, map[string]interface{}{
+			"type": "message",
+			"id":   fmt.Sprintf("msg_%d", time.Now().UnixNano()),
+			"role": "assistant",
+			"content": []map[string]interface{}{
+				{
+					"type":        "output_text",
+					"text":        defaultImageResponseText,
+					"annotations": []interface{}{},
+				},
+			},
+		})
+	}
+
+	response := map[string]interface{}{
+		"id":      fmt.Sprintf("resp_%d", time.Now().UnixNano()),
+		"object":  "response",
+		"created": time.Now().Unix(),
+		"model":   model,
+		"status":  "completed",
+		"output":  outputItems,
+	}
+
+	return json.Marshal(response)
+}
+
+// extractOmniContentParts extracts text strings and image URLs from a message content.
+// The content can be a string, or an array of content parts (text + image_url).
+func extractOmniContentParts(content interface{}) (texts []string, imageURLs []string) {
+	switch v := content.(type) {
+	case string:
+		if v != "" {
+			texts = append(texts, v)
+		}
+	case []interface{}:
+		for _, part := range v {
+			partMap, ok := part.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			switch partMap["type"] {
+			case "text":
+				if text, ok := partMap["text"].(string); ok && text != "" {
+					texts = append(texts, text)
+				}
+			case "image_url":
+				if imageURL, ok := partMap["image_url"].(map[string]interface{}); ok {
+					if url, ok := imageURL["url"].(string); ok && url != "" {
+						imageURLs = append(imageURLs, url)
+					}
+				}
+			}
+		}
+	}
+	return
+}
+
+// parseSizeString parses an OpenAI image size string like "1024x1536" into width and height.
+func parseSizeString(size string) (int, int) {
+	switch size {
+	case "1024x1024":
+		return 1024, 1024
+	case "1024x1536":
+		return 1024, 1536
+	case "1536x1024":
+		return 1536, 1024
+	default:
+		return 0, 0
+	}
 }
 
 // callARModel sends the user's chat completion request to the AR model endpoint
@@ -335,6 +579,8 @@ func (r *OpenAIRouter) callARModel(ctx *RequestContext, cfg *config.RouterConfig
 // diffusionModel is the model name from the decision's ModelRefs; its backend config
 // is resolved from model_config -> image_gen_backends.
 // Prompt prefixes are read from modality_detector config.
+// If the Responses API request included image_generation tool params, those are used
+// to override default width/height/quality.
 func (r *OpenAIRouter) generateImage(ctx *RequestContext, cfg *config.RouterConfig, diffusionModel string) (*ImageGenResult, error) {
 	// Find the diffusion model's image_gen_backend using the decision-selected model
 	backendEntry, err := resolveDiffusionBackend(cfg, diffusionModel)
@@ -357,6 +603,30 @@ func (r *OpenAIRouter) generateImage(ctx *RequestContext, cfg *config.RouterConf
 		Prompt: ExtractImagePrompt(ctx.UserContent, promptPrefixes),
 		Width:  pluginCfg.DefaultWidth,
 		Height: pluginCfg.DefaultHeight,
+	}
+
+	// Apply image_generation tool params if present (from Responses API)
+	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.ImageGenToolParams != nil {
+		params := ctx.ResponseAPICtx.ImageGenToolParams
+
+		// Override size from tool params
+		if params.Size != "" && params.Size != "auto" {
+			w, h := parseSizeString(params.Size)
+			if w > 0 && h > 0 {
+				genReq.Width = w
+				genReq.Height = h
+			}
+		}
+
+		// Pass quality through for OpenAI backend
+		if params.Quality != "" && params.Quality != "auto" {
+			genReq.Quality = params.Quality
+		}
+
+		// Override model if specified in tool params
+		if params.Model != "" {
+			genReq.Model = params.Model
+		}
 	}
 
 	start := time.Now()

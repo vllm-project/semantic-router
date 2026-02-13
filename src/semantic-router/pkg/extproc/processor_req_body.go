@@ -137,8 +137,26 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		return r.createErrorResponse(503, fmt.Sprintf("RAG retrieval failed: %v", ragErr)), nil
 	}
 
+	// If the Responses API request includes an explicit image_generation tool and the
+	// modality classifier did not already detect a modality, use the tool presence as a
+	// strong signal. With text content present we classify as BOTH; otherwise DIFFUSION.
+	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.HasImageGenerationTool &&
+		(ctx.ModalityClassification == nil || ctx.ModalityClassification.Modality == "" || ctx.ModalityClassification.Modality == ModalityAR) {
+		modality := ModalityDiffusion
+		if userContent != "" {
+			modality = ModalityBoth
+		}
+		ctx.ModalityClassification = &ModalityClassificationResult{
+			Modality:   modality,
+			Confidence: 1.0,
+			Method:     "image_generation_tool",
+		}
+		logging.Infof("[ModalityRouter] Explicit image_generation tool detected — forcing modality=%s", modality)
+	}
+
 	// Modality routing: if the decision matched a modality signal (DIFFUSION/BOTH),
-	// execute image generation. This is driven by the modality signal in the decision engine.
+	// execute image generation. This is driven by the modality signal in the decision engine
+	// or by the explicit image_generation tool detection above.
 	if resp, err := r.handleModalityFromDecision(ctx, openAIRequest); err != nil {
 		logging.Errorf("[ModalityRouter] Error: %v", err)
 		return r.createErrorResponse(503, fmt.Sprintf("Modality routing failed: %v", err)), nil
