@@ -64,6 +64,16 @@ type ResponseAPIContext struct {
 
 	// TranslatedBody is the Chat Completions request body after translation
 	TranslatedBody []byte
+
+	// HasImageGenerationTool is true when the request includes
+	// tools: [{"type": "image_generation"}]. This signals that the client
+	// explicitly requests image generation capability.
+	HasImageGenerationTool bool
+
+	// ImageGenToolParams holds the parameters from the image_generation tool
+	// definition (model, quality, size, output_format, background, action).
+	// Non-nil only when HasImageGenerationTool is true.
+	ImageGenToolParams *responseapi.ImageGenerationToolParams
 }
 
 // TranslateRequest translates a Response API request to Chat Completions format.
@@ -90,6 +100,22 @@ func (f *ResponseAPIFilter) TranslateRequest(ctx context.Context, body []byte) (
 		OriginalRequest:      &req,
 		PreviousResponseID:   req.PreviousResponseID,
 		GeneratedResponseID:  responseapi.GenerateResponseID(),
+	}
+
+	// Detect image_generation tool in the request tools list.
+	// This is an explicit signal that the client wants image generation.
+	for i := range req.Tools {
+		if req.Tools[i].Type == responseapi.ToolTypeImageGeneration {
+			respCtx.HasImageGenerationTool = true
+			respCtx.ImageGenToolParams = req.Tools[i].ExtractImageGenParams()
+			if respCtx.ImageGenToolParams != nil {
+				logging.Infof("Response API: Detected image_generation tool (model=%s, size=%s, quality=%s)",
+					respCtx.ImageGenToolParams.Model, respCtx.ImageGenToolParams.Size, respCtx.ImageGenToolParams.Quality)
+			} else {
+				logging.Warnf("Response API: Detected image_generation tool but ImageGenToolParams is nil")
+			}
+			break
+		}
 	}
 
 	// Fetch conversation history if previous_response_id is provided
