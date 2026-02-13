@@ -743,7 +743,7 @@ func mapKeys(m map[string]ProviderProfile) []string {
 //
 // Two distinct modes — no silent fallback between them:
 //   - provider_profile set → host:port is extracted from the profile's base_url.
-//     Returns error if profile is missing, has no base_url, or base_url is unparseable.
+//     Returns error if profile is missing, has no base_url, or base_url is unparsable.
 //   - provider_profile NOT set → uses address:port fields directly.
 func (ep *VLLMEndpoint) ResolveAddress(profiles map[string]ProviderProfile) (string, error) {
 	if ep.ProviderProfileName == "" {
@@ -832,7 +832,7 @@ func (p *ProviderProfile) ResolveAuthHeader() (string, string, error) {
 //  2. base_url path + type-default suffix from providerTypeRegistry.
 //  3. Type-default suffix alone if base_url has no path component.
 //
-// Returns error if the type is not recognised or base_url is unparseable.
+// Returns error if the type is not recognised or base_url is unparsable.
 func (p *ProviderProfile) ResolveChatPath() (string, error) {
 	if p == nil {
 		return "", fmt.Errorf("provider profile is nil")
