@@ -180,7 +180,8 @@ def _normalize_legacy_latency_routing(cfg: UserConfig) -> UserConfig:
     if not has_legacy_conditions:
         if has_legacy_signals:
             log.warning(
-                "DEPRECATED: signals.latency is ignored when no decision uses conditions.type=latency"
+                "DEPRECATED: signals.latency is deprecated and will be removed in a future release. "
+                "It is ignored when no decision uses conditions.type=latency."
             )
             cfg.signals.latency = []
         return cfg
@@ -266,12 +267,14 @@ def _normalize_legacy_latency_routing(cfg: UserConfig) -> UserConfig:
         )
         migrated += 1
         log.warning(
-            f"DEPRECATED: auto-migrated decision '{decision.name}' from conditions.type=latency to algorithm.type=latency_aware"
+            f"DEPRECATED: decision '{decision.name}' uses conditions.type=latency, which is deprecated and "
+            "will be removed in a future release. Auto-migrated to decision.algorithm.type=latency_aware."
         )
 
     if migrated > 0:
         log.warning(
-            "DEPRECATED: auto-migrated signals.latency to decision.algorithm.latency_aware"
+            "DEPRECATED: signals.latency is deprecated and will be removed in a future release. "
+            "Auto-migrated to decision.algorithm.latency_aware."
         )
         cfg.signals.latency = []
 

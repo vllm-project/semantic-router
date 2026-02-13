@@ -74,11 +74,13 @@ def validate_latency_compatibility(config: UserConfig) -> List[ValidationError]:
     # TODO(v0.2-Athena): Remove legacy latency compatibility after deprecation period.
     if has_legacy_signals:
         log.warning(
-            "DEPRECATED: signals.latency is deprecated; migrate to decision.algorithm.type=latency_aware"
+            "DEPRECATED: signals.latency is deprecated and will be removed in a future release. "
+            "Migrate to decision.algorithm.type=latency_aware."
         )
     if has_legacy_conditions:
         log.warning(
-            "DEPRECATED: conditions.type=latency is deprecated; migrate to decision.algorithm.type=latency_aware"
+            "DEPRECATED: conditions.type=latency is deprecated and will be removed in a future release. "
+            "Migrate to decision.algorithm.type=latency_aware."
         )
 
     if has_legacy_conditions and not has_legacy_signals:
