@@ -31,6 +31,8 @@ const sidebars: SidebarsConfig = {
       label: 'Installation',
       items: [
         'installation/installation',
+        'installation/configuration',
+        'installation/latency-migration',
         {
           type: 'category',
           label: 'Install with Gateways',
