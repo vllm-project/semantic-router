@@ -31,7 +31,7 @@ if (keyword_match AND domain_match) OR high_embedding_similarity:
 
 **为什么这很重要**：多个 signal 共同投票比任何单一 signal 做出更准确的决策。
 
-## 10 种 Signal 类型
+## 9 种 Signal 类型
 
 ### 1. Keyword Signal
 
@@ -153,41 +153,31 @@ signals:
 - **示例 1**："Hola, ¿cómo estás?" → Spanish (es) → Spanish model
 - **示例 2**："你好，世界" → Chinese (zh) → Chinese model
 
-### 8. 延迟信号 — 基于百分位的路由
+### 延迟路由已迁移到 decision algorithm
 
-- **内容**：使用 TPOT（Time Per Output Token，每个输出 Token 的耗时）和
-  TTFT（Time To First Token，首 Token 延迟）的百分位数对模型延迟进行评估。
-- **延迟**：通常为 2–5ms（针对 10 个模型，异步运行）。百分位计算的时间复杂度为
-  O(n log n)，其中 n 为每个模型的观测样本数（通常 10–100，最大 1000）。
-- **用例**：基于自适应的百分位阈值，将对延迟敏感的请求路由到更快的模型。
+在新配置中，延迟应作为模型选择算法配置，而不是请求信号。
 
 ```yaml
-signals:
-  latency:
-    - name: "low_latency_comprehensive"
-      tpot_percentile: 10  # TPOT 的第 10 百分位（最快的前 10% Token 生成速度）
-      ttft_percentile: 10  # TTFT 的第 10 百分位（最快的前 10% 首 Token）
-      description: "适用于实时应用——启动快、生成快"
-    - name: "balanced_latency"
-      tpot_percentile: 50  # TPOT 的中位数
-      ttft_percentile: 10  # TTFT 的前 10%（优先保证快速启动）
-      description: "优先快速启动，接受中等的生成速度"
+decisions:
+  - name: "fast_route"
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "other"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+      - model: "gpt-5.2"
+    algorithm:
+      type: "latency_aware"
+      latency_aware:
+        tpot_percentile: 10
+        ttft_percentile: 10
 ```
 
-**示例**：
-实时聊天请求 → `low_latency_comprehensive` 信号 → 路由到同时满足 TPOT 和 TTFT 百分位阈值的模型。
+如果您在使用旧的 latency signal 配置，请参考[延迟路由迁移指南](../installation/latency-migration.md)。
 
-**工作原理**：
-
-- TPOT 和 TTFT 会从每一次模型响应中自动采集和统计
-- 基于百分位的阈值会自适应每个模型的实际性能分布
-- 支持任意数量的观测样本：
-  - 1–2 个样本时使用平均值
-  - 3 个及以上样本时使用百分位计算
-- 当同时设置 TPOT 和 TTFT 百分位时，模型必须**同时满足两个条件**（AND 逻辑）
-- **推荐做法**：同时使用 TPOT 和 TTFT 百分位，以获得更全面的延迟评估
-
-### 9. Context Signal
+### 8. Context Signal
 
 - **内容**：基于 token 计数的短/长请求处理路由
 - **延迟**：1ms（处理过程中计算）
@@ -209,7 +199,7 @@ signals:
 
 **示例**：一个包含 5,000 个 token 的请求 → 匹配 "high_token_count" → 路由到 `claude-3-opus`
 
-### 10. Complexity Signal
+### 9. Complexity Signal
 
 - **内容**：基于 embedding 的查询复杂度分类（困难/简单/中等）
 - **延迟**：50-100ms（embedding 计算）
