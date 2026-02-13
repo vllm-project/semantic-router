@@ -269,13 +269,13 @@ func validateImageGenBackends(cfg *RouterConfig) error {
 
 func warnDeprecatedLatencyConfig(cfg *RouterConfig) {
 	if len(cfg.Signals.LatencyRules) > 0 {
-		logging.Warnf("DEPRECATED: signals.latency_rules is deprecated and will be removed in a future release. Migrate to decision.algorithm.type=latency_aware")
+		logging.Warnf("DEPRECATED: signals.latency_rules is deprecated and will be removed in a future release. Migrate to decision.algorithm.type=latency_aware.")
 	}
 
 	for _, decision := range cfg.Decisions {
 		for _, condition := range decision.Rules.Conditions {
 			if strings.EqualFold(strings.TrimSpace(condition.Type), SignalTypeLatency) {
-				logging.Warnf("DEPRECATED: decision '%s' uses conditions.type=latency (name=%s). Migrate to decision.algorithm.type=latency_aware", decision.Name, condition.Name)
+				logging.Warnf("DEPRECATED: decision '%s' uses conditions.type=latency (name=%s), which is deprecated and will be removed in a future release. Migrate to decision.algorithm.type=latency_aware.", decision.Name, condition.Name)
 			}
 		}
 	}

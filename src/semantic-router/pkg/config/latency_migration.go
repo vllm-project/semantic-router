@@ -93,12 +93,12 @@ func normalizeLegacyLatencyRouting(cfg *RouterConfig) error {
 		}
 
 		migratedCount++
-		logging.Warnf("DEPRECATED: decision '%s' uses legacy latency condition (name=%s); auto-migrated to decision.algorithm.type=latency_aware. Please update config.", decision.Name, latencyCondition.Name)
+		logging.Warnf("DEPRECATED: decision '%s' uses conditions.type=latency (name=%s), which is deprecated and will be removed in a future release. Auto-migrated to decision.algorithm.type=latency_aware.", decision.Name, latencyCondition.Name)
 	}
 
 	if migratedCount > 0 {
 		cfg.Signals.LatencyRules = nil
-		logging.Warnf("DEPRECATED: signals.latency_rules is deprecated and has been auto-migrated to decision.algorithm.type=latency_aware")
+		logging.Warnf("DEPRECATED: signals.latency_rules is deprecated and will be removed in a future release. Auto-migrated to decision.algorithm.type=latency_aware.")
 	}
 
 	return nil
