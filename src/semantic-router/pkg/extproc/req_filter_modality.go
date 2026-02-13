@@ -93,6 +93,12 @@ type ModalityModels struct {
 // Returns a ModalityModels struct and an error. Fields may be empty if the decision
 // doesn't include that modality — callers should check based on the modality type.
 func resolveModalityModelsFromDecision(decision *config.Decision, modelConfig map[string]config.ModelParams) (string, string, error) {
+	if decision == nil {
+		return "", "", fmt.Errorf("decision is nil")
+	}
+	if len(decision.ModelRefs) == 0 {
+		return "", "", fmt.Errorf("decision %q has no modelRefs", decision.Name)
+	}
 	models := resolveAllModalityModels(decision, modelConfig)
 	return models.ARModel, models.DiffusionModel, nil
 }

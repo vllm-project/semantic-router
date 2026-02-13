@@ -63,12 +63,12 @@ type Tool struct {
 
 	// Image generation tool parameters (for image_generation type)
 	// These fields match the OpenAI Responses API ImageGeneration tool spec.
-	ImageGenModel         string `json:"image_gen_model,omitempty" yaml:"image_gen_model,omitempty"`
-	ImageGenQuality       string `json:"image_gen_quality,omitempty" yaml:"image_gen_quality,omitempty"`
-	ImageGenSize          string `json:"size,omitempty" yaml:"size,omitempty"`
-	ImageGenOutputFormat  string `json:"output_format,omitempty" yaml:"output_format,omitempty"`
-	ImageGenBackground    string `json:"background,omitempty" yaml:"background,omitempty"`
-	ImageGenAction        string `json:"action,omitempty" yaml:"action,omitempty"`
+	ImageGenModel        string `json:"image_gen_model,omitempty" yaml:"image_gen_model,omitempty"`
+	ImageGenQuality      string `json:"image_gen_quality,omitempty" yaml:"image_gen_quality,omitempty"`
+	ImageGenSize         string `json:"size,omitempty" yaml:"size,omitempty"`
+	ImageGenOutputFormat string `json:"output_format,omitempty" yaml:"output_format,omitempty"`
+	ImageGenBackground   string `json:"background,omitempty" yaml:"background,omitempty"`
+	ImageGenAction       string `json:"action,omitempty" yaml:"action,omitempty"`
 }
 
 // ExtractImageGenParams extracts ImageGenerationToolParams from a Tool of type "image_generation".
@@ -152,10 +152,10 @@ const (
 
 // ItemType constants
 const (
-	ItemTypeMessage            = "message"
-	ItemTypeFunctionCall       = "function_call"
-	ItemTypeFunctionCallOutput = "function_call_output"
-	ItemTypeItemReference      = "item_reference"
+	ItemTypeMessage             = "message"
+	ItemTypeFunctionCall        = "function_call"
+	ItemTypeFunctionCallOutput  = "function_call_output"
+	ItemTypeItemReference       = "item_reference"
 	ItemTypeImageGenerationCall = "image_generation_call"
 )
 
