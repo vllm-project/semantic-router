@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import clsx from 'clsx'
 import Link from '@docusaurus/Link'
-import Translate from '@docusaurus/Translate'
+import Translate, { translate } from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import Layout from '@theme/Layout'
 import HomepageFeatures from '@site/src/components/HomepageFeatures'
@@ -12,7 +12,12 @@ import TeamCarousel from '@site/src/components/TeamCarousel'
 
 import styles from './index.module.css'
 
-const ROTATING_WORDS = ['Modality', 'Models', 'Tools', 'Skills']
+const ROTATING_WORDS = [
+  translate({ id: 'homepage.hero.rotating.modality', message: 'Modality' }),
+  translate({ id: 'homepage.hero.rotating.models', message: 'Models' }),
+  translate({ id: 'homepage.hero.rotating.tools', message: 'Tools' }),
+  translate({ id: 'homepage.hero.rotating.skills', message: 'Skills' }),
+]
 
 const HomepageHeader: React.FC = () => {
   const [wordIndex, setWordIndex] = useState(0)
@@ -50,7 +55,7 @@ const HomepageHeader: React.FC = () => {
                 <Translate id="homepage.hero.intelligentRouting">Intelligent Routing</Translate>
               </span>
               <span className={styles.headlineMain}>
-                for Mixture-of-
+                <Translate id="homepage.hero.mixtureOf">for Mixture-of-</Translate>
                 <span
                   className={`${styles.rotatingWord} ${isAnimating ? styles.rotatingWordOut : styles.rotatingWordIn}`}
                 >
@@ -61,14 +66,15 @@ const HomepageHeader: React.FC = () => {
 
             {/* Subtitle */}
             <p className={styles.heroSubtitle}>
-              <strong>Signal-driven</strong>
+              <strong><Translate id="homepage.hero.subtitle.signalDriven">Signal-driven</Translate></strong>
               {' '}
-              decisions ·
-              <strong>Plugin-chain</strong>
+              <Translate id="homepage.hero.subtitle.decisions">decisions</Translate>
+              {' · '}
+              <strong><Translate id="homepage.hero.subtitle.pluginChain">Plugin-chain</Translate></strong>
               {' '}
-              architecture
+              <Translate id="homepage.hero.subtitle.architecture">architecture</Translate>
               <br />
-              Cloud · Data Center · Edge
+              <Translate id="homepage.hero.subtitle.line2">Cloud · Data Center · Edge</Translate>
             </p>
 
             {/* Feature Pills */}
