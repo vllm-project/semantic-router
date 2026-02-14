@@ -322,53 +322,105 @@
     "message": "标签",
     "description": "The title of the tag list page"
   },
-  "homepage.hero.aiPowered": {
-    "message": "AI 赋能"
+
+  "homepage.hero.intelligentRouting": {
+    "message": "智能路由"
   },
-  "homepage.hero.intelligent": {
-    "message": "智能"
+  "homepage.hero.mixtureOf": {
+    "message": "面向混合"
   },
-  "homepage.hero.autoReasoning": {
-    "message": "自动推理"
+  "homepage.hero.rotating.modality": {
+    "message": "模态"
   },
-  "homepage.hero.routerFor": {
-    "message": "高效 LLM 推理路由器，基于"
+  "homepage.hero.rotating.models": {
+    "message": "模型"
   },
-  "homepage.hero.mixtureOfModels": {
-    "message": "混合模型"
+  "homepage.hero.rotating.tools": {
+    "message": "工具"
   },
-  "homepage.hero.badge.neural": {
-    "message": "神经网络"
+  "homepage.hero.rotating.skills": {
+    "message": "技能"
   },
-  "homepage.hero.badge.llm": {
-    "message": "LLM 优化"
+  "homepage.hero.subtitle.signalDriven": {
+    "message": "信号驱动"
   },
-  "homepage.hero.badge.economics": {
-    "message": "按 Token 计费"
+  "homepage.hero.subtitle.decisions": {
+    "message": "决策"
+  },
+  "homepage.hero.subtitle.pluginChain": {
+    "message": "插件链"
+  },
+  "homepage.hero.subtitle.architecture": {
+    "message": "架构"
+  },
+  "homepage.hero.subtitle.line2": {
+    "message": "云 · 数据中心 · 边缘"
+  },
+  "homepage.hero.pill.signals": {
+    "message": "信号驱动"
+  },
+  "homepage.hero.pill.plugins": {
+    "message": "插件链"
+  },
+  "homepage.hero.pill.deployment": {
+    "message": "云 · 数据中心 · 边缘"
   },
   "homepage.hero.getStarted": {
-    "message": "快速开始 - 5分钟 ⏱️"
+    "message": "快速开始"
   },
   "homepage.hero.publicBeta": {
-    "message": "公开测试版 ☁️"
+    "message": "在线体验"
+  },
+  "homepage.aiTech.label": {
+    "message": "基于编码器模型"
   },
   "homepage.aiTech.title": {
-    "message": "神经网络处理架构"
+    "message": "编码器驱动的智能"
   },
   "homepage.aiTech.description": {
-    "message": "采用前沿 AI 技术，包括 ModernBERT 微调模型和先进的语义理解能力，实现智能模型路由和选择。"
+    "message": "专用编码器模型从每个请求中提取语义 — 理解意图、排序相关性、跨模态实时分类内容。"
   },
-  "homepage.aiTech.feature.slm": {
-    "message": "小型语言模型"
+  "homepage.aiTech.cap.multiModality": {
+    "message": "多模态"
   },
-  "homepage.aiTech.feature.neural": {
-    "message": "神经网络处理"
+  "homepage.aiTech.cap.multiModality.desc": {
+    "message": "检测并路由文本、图像和音频输入到合适的模态模型。"
   },
-  "homepage.aiTech.feature.inference": {
-    "message": "实时推理"
+  "homepage.aiTech.cap.biEncoder": {
+    "message": "Bi-Encoder 嵌入"
   },
-  "homepage.aiTech.feature.semantic": {
-    "message": "语义理解"
+  "homepage.aiTech.cap.biEncoder.desc": {
+    "message": "独立编码查询和候选项为稠密向量，用于相似度搜索和语义缓存。"
+  },
+  "homepage.aiTech.cap.crossEncoder": {
+    "message": "Cross-Encoder 学习"
+  },
+  "homepage.aiTech.cap.crossEncoder.desc": {
+    "message": "联合交叉注意力评分查询-候选对，实现高精度重排序。"
+  },
+  "homepage.aiTech.cap.classification": {
+    "message": "分类"
+  },
+  "homepage.aiTech.cap.classification.desc": {
+    "message": "基于自研 BERT 的领域、越狱、PII 和事实核查的分类器，覆盖多个 signal"
+  },
+  "homepage.aiTech.cap.attention": {
+    "message": "全注意力"
+  },
+  "homepage.aiTech.cap.attention.desc": {
+    "message": "跨 token 和句子的双向注意力 — 双向完整上下文，非因果掩码。"
+  },
+  "homepage.aiTech.cap.2dmse": {
+    "message": "2DMSE"
+  },
+  "homepage.aiTech.cap.2dmse.desc": {
+    "message": "推理时自适应调整嵌入层数和维度，按需平衡计算量与精度。"
+  },
+  "homepage.aiTech.cap.mrl": {
+    "message": "MRL"
+  },
+  "homepage.aiTech.cap.mrl.desc": {
+    "message": "无需重训即可截断嵌入向量到任意维度 — 按请求平衡精度与速度。"
   },
   "homepage.architecture.title": {
     "message": "架构"
@@ -1554,12 +1606,7 @@
   "publications.filter.talks": {
     "message": "🎤 演讲"
   },
-  "homepage.hero.systemLevel": {
-    "message": "系统级"
-  },
-  "homepage.hero.intelligentRouter": {
-    "message": "智能路由"
-  },
+
   "homepage.whereItLives.title": {
     "message": "它的位置"
   },
@@ -1604,11 +1651,5 @@
   },
   "acknowledgements.subtitle": {
     "message": "vLLM Semantic Router 诞生于开源，构建于开源"
-  },
-  "aiChip.title": {
-    "message": "神经处理单元"
-  },
-  "aiChip.subtitle": {
-    "message": "嵌入式 • 分级 • 相似度"
   }
 }
