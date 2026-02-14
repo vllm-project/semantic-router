@@ -9,6 +9,7 @@ import ChainOfThoughtTerminal from '@site/src/components/ChainOfThoughtTerminal'
 
 import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection'
 import TeamCarousel from '@site/src/components/TeamCarousel'
+import TransformerPipelineAnimation from '@site/src/components/TransformerPipelineAnimation'
 
 import styles from './index.module.css'
 
@@ -151,6 +152,8 @@ const AITechShowcase: React.FC = () => {
             </Translate>
           </p>
         </div>
+
+        <TransformerPipelineAnimation />
 
         <div className={styles.capabilitiesGrid}>
           {/* Row 1: Multi-Modality — wide hero card */}
