@@ -960,19 +960,21 @@ class AccuracyEarlyStoppingCallback(TrainerCallback):
 class Jailbreak_Dataset:
     """Dataset class for jailbreak sequence classification fine-tuning."""
 
-    def __init__(self, dataset_sources=None, max_samples_per_source=None):
+    def __init__(self, dataset_sources=None, max_samples_per_source=None, languages=None):
         """
         Initialize the dataset loader with multiple data sources.
 
         Args:
             dataset_sources: List of dataset names to load. If None, uses default datasets.
             max_samples_per_source: Maximum samples to load per dataset source
+            languages: List of languages to include (for multilingual datasets). Default: ["en"]
         """
         if dataset_sources is None:
             dataset_sources = ["default"]  # Load default datasets by default
 
         self.dataset_sources = dataset_sources
         self.max_samples_per_source = max_samples_per_source
+        self.languages = languages if languages else ["en"]
         self.label2id = {}
         self.id2label = {}
 
@@ -1043,6 +1045,72 @@ class Jailbreak_Dataset:
                 "description": "High-quality instruction dataset from Databricks",
             },
         }
+        
+        # Add multilingual dataset configurations
+        self._add_multilingual_configs()
+
+    def _add_multilingual_configs(self):
+        """Add configurations for multilingual datasets."""
+        multilingual_languages = ["fr", "es", "de", "it", "pt", "zh", "ja", "ko", "ru", "ar"]
+        
+        # Add multilingual dataset configurations
+        for lang in multilingual_languages:
+            lang_names = {
+                "fr": "French", "es": "Spanish", "de": "German", "it": "Italian", 
+                "pt": "Portuguese", "zh": "Chinese", "ja": "Japanese", "ko": "Korean",
+                "ru": "Russian", "ar": "Arabic"
+            }
+            
+            self.dataset_configs[f"multilingual-{lang}"] = {
+                "name": f"local:multilingual_datasets/prompt_guard_{lang}.json",
+                "type": "multilingual",
+                "text_field": "text",
+                "label_field": "label",
+                "language": lang,
+                "description": f"Multilingual prompt guard dataset in {lang_names.get(lang, lang)}"
+            }
+            
+    def load_multilingual_dataset(self, file_path: str, language: str = None):
+        """Load multilingual dataset from local JSON file."""
+        import json
+        from pathlib import Path
+        
+        if not Path(file_path).exists():
+            logger.warning(f"Multilingual dataset not found: {file_path}")
+            return [], []
+            
+        logger.info(f"Loading multilingual dataset from {file_path}")
+        
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                
+            texts = []
+            labels = []
+            
+            for item in data:
+                # Filter by language if specified
+                if language and item.get("language") != language:
+                    continue
+                    
+                # Filter by supported languages if specified
+                item_lang = item.get("language", "en")
+                if item_lang not in self.languages and "all" not in self.languages:
+                    continue
+                    
+                text = item.get("text", "")
+                label = item.get("label", "unknown")
+                
+                if text and label:
+                    texts.append(text)
+                    labels.append(label)
+                    
+            logger.info(f"Loaded {len(texts)} samples from multilingual dataset")
+            return texts, labels
+            
+        except Exception as e:
+            logger.error(f"Failed to load multilingual dataset {file_path}: {e}")
+            return [], []
 
     @retry_with_backoff(max_retries=3, base_delay=2)
     def _load_dataset_with_retries(self, dataset_name, config_name=None):
@@ -1068,6 +1136,12 @@ class Jailbreak_Dataset:
         text_field = config["text_field"]
 
         logger.info(f"Loading {config['description']} from {dataset_name}...")
+
+        # Handle local multilingual datasets
+        if dataset_type == "multilingual" and dataset_name.startswith("local:"):
+            file_path = dataset_name.replace("local:", "")
+            language = config.get("language")
+            return self.load_multilingual_dataset(file_path, language)
 
         try:
             # Load the dataset with multiple fallback strategies
@@ -1783,6 +1857,7 @@ def main_with_oom_recovery(
     enable_auto_optimization=True,
     use_cache=True,
     max_retries=4,
+    languages=None,
 ):
     """Main function with OOM recovery - tries multiple configurations if memory issues occur."""
 
@@ -1826,6 +1901,7 @@ def main_with_oom_recovery(
                 enable_auto_optimization,
                 use_cache,
                 retry_count,
+                languages,
             )
 
         except (RuntimeError, torch.cuda.OutOfMemoryError) as e:
@@ -1872,6 +1948,7 @@ def main(
     patience=3,
     enable_auto_optimization=True,
     use_cache=True,
+    languages=None,
 ):
     """Main function wrapper that calls the OOM recovery version."""
     return main_with_oom_recovery(
@@ -1884,6 +1961,7 @@ def main(
         patience,
         enable_auto_optimization,
         use_cache,
+        languages=languages,
     )
 
 
@@ -1898,6 +1976,7 @@ def main_single_attempt(
     enable_auto_optimization=True,
     use_cache=True,
     retry_count=0,
+    languages=None,
 ):
     """Main function to demonstrate jailbreak classification fine-tuning with accuracy-based early stopping."""
 
@@ -1967,12 +2046,13 @@ def main_single_attempt(
             f"Retry {retry_count}: Limiting to {effective_limit} samples per source to conserve memory"
         )
         dataset_loader = Jailbreak_Dataset(
-            dataset_sources=dataset_sources, max_samples_per_source=effective_limit
+            dataset_sources=dataset_sources, max_samples_per_source=effective_limit, languages=languages
         )
     else:
         dataset_loader = Jailbreak_Dataset(
             dataset_sources=dataset_sources,
             max_samples_per_source=max_samples_per_source,
+            languages=languages,
         )
 
     datasets = dataset_loader.prepare_datasets(use_cache=use_cache)
@@ -2711,6 +2791,12 @@ if __name__ == "__main__":
         help="Disable automatic GPU optimization (use manual batch size and settings)",
     )
     parser.add_argument(
+        "--languages", 
+        nargs="+",
+        default=["en"],
+        help="Languages to include for multilingual training. Options: en fr es de it pt zh ja ko ru ar all. Default: ['en']"
+    )
+    parser.add_argument(
         "--clear-cache",
         action="store_true",
         help="Clear all cached datasets before training",
@@ -2809,6 +2895,7 @@ if __name__ == "__main__":
             args.patience,
             not args.disable_auto_optimization,
             not args.disable_cache,
+            args.languages,
         )
     elif args.mode == "test":
         demo_inference(args.model)
