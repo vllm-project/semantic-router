@@ -36,11 +36,13 @@ type MockMilvusClient struct {
 	SearchFunc           func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error)
 	HasCollectionFunc    func(ctx context.Context, coll string) (bool, error)
 	InsertFunc           func(ctx context.Context, coll string, part string, cols ...entity.Column) (entity.Column, error)
+	UpsertFunc           func(ctx context.Context, coll string, part string, cols ...entity.Column) (entity.Column, error)
 	DeleteFunc           func(ctx context.Context, coll string, part string, expr string) error
 	QueryFunc            func(ctx context.Context, coll string, parts []string, expr string, out []string, opts ...client.SearchQueryOptionFunc) (client.ResultSet, error)
 	CreateCollectionFunc func(ctx context.Context, schema *entity.Schema, shardNum int32, opts ...client.CreateCollectionOption) error
 	SearchCallCount      int
 	InsertCallCount      int
+	UpsertCallCount      int
 	DeleteCallCount      int
 	QueryCallCount       int
 	CapturedSchema       *entity.Schema // Captures schema passed to CreateCollection
@@ -237,7 +239,11 @@ func (m *MockMilvusClient) Delete(ctx context.Context, coll string, part string,
 	return nil
 }
 
-func (m *MockMilvusClient) Upsert(context.Context, string, string, ...entity.Column) (entity.Column, error) {
+func (m *MockMilvusClient) Upsert(ctx context.Context, coll string, part string, cols ...entity.Column) (entity.Column, error) {
+	m.UpsertCallCount++
+	if m.UpsertFunc != nil {
+		return m.UpsertFunc(ctx, coll, part, cols...)
+	}
 	return nil, nil
 }
 
@@ -847,10 +853,11 @@ func TestMilvusStore_Update_Success(t *testing.T) {
 	store, mockClient := setupTestStore()
 	ctx := context.Background()
 
-	// Setup mock for Get (Query) - returns existing memory
-	queryCount := 0
+	// Setup mock for Get (Query) - returns existing memory with embedding
+	// Update calls Get to fetch CreatedAt and Embedding when missing from the input
 	mockClient.QueryFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, opts ...client.SearchQueryOptionFunc) (client.ResultSet, error) {
-		queryCount++
+		embedding := make([]float32, 384)
+		embedding[0] = 0.1
 		return []entity.Column{
 			entity.NewColumnVarChar("id", []string{"mem-123"}),
 			entity.NewColumnVarChar("content", []string{"Old content"}),
@@ -859,16 +866,12 @@ func TestMilvusStore_Update_Success(t *testing.T) {
 			entity.NewColumnVarChar("metadata", []string{`{}`}),
 			entity.NewColumnInt64("created_at", []int64{1704067200}),
 			entity.NewColumnInt64("updated_at", []int64{1704067200}),
+			entity.NewColumnFloatVector("embedding", 384, [][]float32{embedding}),
 		}, nil
 	}
 
-	// Setup mock for Delete
-	mockClient.DeleteFunc = func(ctx context.Context, coll string, part string, expr string) error {
-		return nil
-	}
-
-	// Setup mock for Insert
-	mockClient.InsertFunc = func(ctx context.Context, coll string, part string, cols ...entity.Column) (entity.Column, error) {
+	// Setup mock for Upsert (Update now uses atomic Upsert instead of Delete+Insert)
+	mockClient.UpsertFunc = func(ctx context.Context, coll string, part string, cols ...entity.Column) (entity.Column, error) {
 		return nil, nil
 	}
 
@@ -881,8 +884,9 @@ func TestMilvusStore_Update_Success(t *testing.T) {
 
 	err := store.Update(ctx, "mem-123", updatedMemory)
 	require.NoError(t, err)
-	assert.Equal(t, 1, mockClient.DeleteCallCount)
-	assert.Equal(t, 1, mockClient.InsertCallCount)
+	assert.Equal(t, 1, mockClient.UpsertCallCount, "Update should call Upsert once")
+	assert.Equal(t, 0, mockClient.DeleteCallCount, "Update should not call Delete (uses Upsert)")
+	assert.Equal(t, 0, mockClient.InsertCallCount, "Update should not call Insert (uses Upsert)")
 }
 
 func TestMilvusStore_Update_NotFound(t *testing.T) {
