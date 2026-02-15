@@ -119,9 +119,26 @@ exact-match queries achieve 100\% hit rate with $< 5$\,ms lookup latency;
 paraphrased queries achieve 60--80\% hit rate depending on paraphrase distance.
 Cache hits eliminate backend model invocation entirely, reducing per-request cost to embedding computation only.
 
-\subsection{Open Evaluation}
+\subsection{Unified MoM Evaluation Framework}
 
-Detailed model selection quality comparisons across algorithms, HaluGate detection accuracy on standard benchmarks (HaluEval, FActScore), and large-scale routing quality evaluation are under preparation in collaboration with the RouterArena team.
+To ensure the robustness of the Mixture of Models (MoM) collection, we developed a unified evaluation pipeline capable of assessing both merged models and LoRA adapters across diverse tasks (Text and Token Classification).
+
+The framework, illustrated in \Cref{fig:eval_pipeline}, addresses the heterogeneity of the 10+ active models by standardizing the evaluation flow.Key architectural features include:
+
+\begin{itemize}
+    \item \textbf{Dynamic Data Alignment:} Specialized data loaders normalize inputs from diverse sources, including MMLU-Pro for intent classification and synthetic Presidio data for PII detection, while automatically filtering samples by language (e.g., distinguishing between \texttt{es}, \texttt{fr}, \texttt{zh}) to validate cross-lingual performance.
+    \item \textbf{LoRA vs. Merged Comparison:} The pipeline supports toggleable evaluation between full fine-tuned checkpoints and LoRA adapters loaded onto the \texttt{ModernBERT-base} backbone, ensuring that the memory efficiency gains described in \Cref{tab:lora_memory} do not come at the cost of predictive quality.
+    \item \textbf{Robust Parallel Inference:} To handle large-scale benchmarks, the system utilizes \texttt{ProcessPoolExecutor} for parallel model evaluation with built-in OOM (Out-Of-Memory) recovery and exponential backoff strategies for network reliability.
+\end{itemize}
+
+We report comprehensive metrics including accuracy, weighted F1-score, and per-class precision/recall, alongside p50/p99 latency profiling to verify that model quality meets production standards before deployment.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\linewidth]{figures/evaluation_flow.svg}
+    \caption{The Unified MoM Evaluation Pipeline. The system parallelizes evaluation across the model registry, handling dynamic dataset loading (Presidio, MMLU-Pro), language filtering, and comparative metrics generation for both Merged and LoRA model variants.}
+    \label{fig:eval_pipeline}
+\end{figure}
 
 \paragraph{Contributors.}
-Senan Zedan, Xunzhuo, yehudit1987, abdallahsamabd, Noa Limoy, Yossi Ovadia, Liav Weiss, Huamin Chen, samzong, Jintao Zhang, asaadbalum, Xunzhuo, Srinivas A, Marina Koushnir, Chever John, Chaojun Zhang, Avishek Goswami.
+Senan Zedan, Xunzhuo, yehudit1987, abdallahsamabd, Noa Limoy, Yossi Ovadia, Liav Weiss, Huamin Chen, samzong, Jintao Zhang, asaadbalum, Xunzhuo, Srinivas A, Marina Koushnir, Chever John, Chaojun Zhang, Avishek Goswami, Zohaib Hassnain.
