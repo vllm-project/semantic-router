@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
@@ -200,14 +201,12 @@ func TestExtractMemoryInfo_WithConversationID(t *testing.T) {
 func TestExtractMemoryInfo_WithoutConversationID_WithUserID(t *testing.T) {
 	// When no ConversationID in request, TranslateRequest generates one.
 	// extractMemoryInfo just reads it from context.
-	// userID is provided via metadata (OpenAI API spec-compliant)
 	ctx := &RequestContext{
 		RequestID: "req_123",
 		ResponseAPICtx: &ResponseAPIContext{
 			IsResponseAPIRequest: true,
 			ConversationID:       "conv_generated_by_translate", // Set by TranslateRequest
 			OriginalRequest: &responseapi.ResponseAPIRequest{
-				// No ConversationID in request = new conversation
 				Metadata: map[string]string{
 					"user_id": "user_789",
 				},
@@ -228,9 +227,8 @@ func TestExtractMemoryInfo_UserIDFromMetadata(t *testing.T) {
 		RequestID: "req_123",
 		ResponseAPICtx: &ResponseAPIContext{
 			IsResponseAPIRequest: true,
-			ConversationID:       "conv_from_translate", // Set by TranslateRequest
+			ConversationID:       "conv_from_translate",
 			OriginalRequest: &responseapi.ResponseAPIRequest{
-				// No ConversationID in request
 				Metadata: map[string]string{
 					"user_id": "user_from_metadata",
 				},
@@ -246,30 +244,147 @@ func TestExtractMemoryInfo_UserIDFromMetadata(t *testing.T) {
 	assert.Empty(t, history)
 }
 
-func TestExtractMemoryInfo_HeadersNotSupported(t *testing.T) {
-	// Headers are NOT supported for userID - must use metadata["user_id"]
-	// This ensures consistent behavior between extraction and retrieval
+// =============================================================================
+// extractUserID Tests
+// =============================================================================
+
+func TestExtractUserID_AuthHeaderTakesPrecedence(t *testing.T) {
+	// Auth header (x-authz-user-id) takes precedence over metadata["user_id"]
+	ctx := &RequestContext{
+		Headers: map[string]string{
+			headers.AuthzUserID: "user_from_auth",
+		},
+		ResponseAPICtx: &ResponseAPIContext{
+			OriginalRequest: &responseapi.ResponseAPIRequest{
+				Metadata: map[string]string{
+					"user_id": "user_from_metadata",
+				},
+			},
+		},
+	}
+
+	result := extractUserID(ctx)
+	assert.Equal(t, "user_from_auth", result, "auth header should take precedence over metadata")
+}
+
+func TestExtractUserID_AuthHeaderOnly(t *testing.T) {
+	// Auth header present, no metadata
+	ctx := &RequestContext{
+		Headers: map[string]string{
+			headers.AuthzUserID: "user_from_auth",
+		},
+	}
+
+	result := extractUserID(ctx)
+	assert.Equal(t, "user_from_auth", result)
+}
+
+func TestExtractUserID_FallbackToMetadataWhenNoAuthHeader(t *testing.T) {
+	// No auth header, falls back to metadata["user_id"]
+	ctx := &RequestContext{
+		Headers: map[string]string{},
+		ResponseAPICtx: &ResponseAPIContext{
+			OriginalRequest: &responseapi.ResponseAPIRequest{
+				Metadata: map[string]string{
+					"user_id": "user_from_metadata",
+				},
+			},
+		},
+	}
+
+	result := extractUserID(ctx)
+	assert.Equal(t, "user_from_metadata", result, "should fall back to metadata when auth header absent")
+}
+
+func TestExtractUserID_EmptyAuthHeaderFallsBackToMetadata(t *testing.T) {
+	// Auth header present but empty, falls back to metadata
+	ctx := &RequestContext{
+		Headers: map[string]string{
+			headers.AuthzUserID: "",
+		},
+		ResponseAPICtx: &ResponseAPIContext{
+			OriginalRequest: &responseapi.ResponseAPIRequest{
+				Metadata: map[string]string{
+					"user_id": "user_from_metadata",
+				},
+			},
+		},
+	}
+
+	result := extractUserID(ctx)
+	assert.Equal(t, "user_from_metadata", result, "empty auth header should fall back to metadata")
+}
+
+func TestExtractUserID_NoAuthHeaderNoMetadata(t *testing.T) {
+	// Neither auth header nor metadata present
+	ctx := &RequestContext{
+		Headers: map[string]string{},
+	}
+
+	result := extractUserID(ctx)
+	assert.Empty(t, result, "should return empty string when no user ID source available")
+}
+
+func TestExtractUserID_UnrelatedHeaderIgnored(t *testing.T) {
+	// Unrelated headers should not be used as user ID
+	ctx := &RequestContext{
+		Headers: map[string]string{
+			"x-custom-user-id": "user_from_wrong_header",
+			"authorization":    "Bearer token123",
+		},
+	}
+
+	result := extractUserID(ctx)
+	assert.Empty(t, result, "should not use unrelated headers as user ID")
+}
+
+func TestExtractMemoryInfo_AuthHeaderUserID(t *testing.T) {
+	// Auth header (x-authz-user-id) provides trusted user ID
 	ctx := &RequestContext{
 		RequestID: "req_123",
 		Headers: map[string]string{
-			"x-user-id": "user_from_header", // This should be ignored
+			headers.AuthzUserID: "user_from_auth",
 		},
 		ResponseAPICtx: &ResponseAPIContext{
 			IsResponseAPIRequest: true,
 			ConversationID:       "conv_from_translate",
-			OriginalRequest:      &responseapi.ResponseAPIRequest{
-				// No Metadata - userID must come from metadata, not headers
+			OriginalRequest: &responseapi.ResponseAPIRequest{
+				Metadata: map[string]string{
+					"user_id": "user_from_metadata", // Should be ignored
+				},
 			},
 		},
 	}
 
 	sessionID, userID, history, err := extractMemoryInfo(ctx)
 
-	require.Error(t, err, "should return error when userID is only in headers (not supported)")
-	assert.Contains(t, err.Error(), "userID is required", "error should mention userID requirement")
-	assert.Contains(t, err.Error(), "metadata", "error should mention metadata as the correct source")
-	assert.Empty(t, sessionID)
-	assert.Empty(t, userID)
+	require.NoError(t, err)
+	assert.Equal(t, "conv_from_translate", sessionID)
+	assert.Equal(t, "user_from_auth", userID, "should use auth header over metadata")
+	assert.Empty(t, history)
+}
+
+func TestExtractMemoryInfo_FallbackToMetadata(t *testing.T) {
+	// No auth header, falls back to metadata["user_id"]
+	ctx := &RequestContext{
+		RequestID: "req_123",
+		Headers:   map[string]string{},
+		ResponseAPICtx: &ResponseAPIContext{
+			IsResponseAPIRequest: true,
+			ConversationID:       "conv_from_translate",
+			OriginalRequest: &responseapi.ResponseAPIRequest{
+				Metadata: map[string]string{
+					"user_id": "user_from_metadata",
+				},
+			},
+		},
+	}
+
+	sessionID, userID, history, err := extractMemoryInfo(ctx)
+
+	require.NoError(t, err, "should not return error when falling back to metadata")
+	assert.Equal(t, "conv_from_translate", sessionID)
+	assert.Equal(t, "user_from_metadata", userID, "should fall back to metadata when no auth header")
 	assert.Empty(t, history)
 }
 
