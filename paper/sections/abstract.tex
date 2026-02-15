@@ -1,0 +1,14 @@
+% sections/abstract.tex
+
+\begin{abstract}
+As large language models (LLMs) diversify across modalities, capabilities, and cost profiles, the problem of \emph{intelligent request routing}---selecting the right model for each query at inference time---has become a critical systems challenge.
+We present \textbf{vLLM Semantic Router}, a signal-driven decision routing framework for Mixture-of-Modality (MoM) model deployments.
+
+The central innovation is \emph{composable signal orchestration}: the system extracts heterogeneous signal types from each request---from sub-millisecond heuristic features (keyword patterns, language detection, context length, role-based authorization) to neural classifiers (domain, embedding similarity, factual grounding, modality)---and composes them through configurable Boolean decision rules into deployment-specific routing policies.
+Different deployment scenarios---multi-cloud enterprise, privacy-regulated, cost-optimized, latency-sensitive---are expressed as different signal-decision configurations over the same architecture, without code changes.
+
+Matched decisions drive \emph{semantic model routing}: over a dozen of selection algorithms analyze request characteristics to find the best model cost-effectively, while per-decision plugin chains enforce privacy and safety constraints (jailbreak detection, PII filtering, hallucination detection via the three-stage \emph{HaluGate} pipeline).
+
+The system provides OpenAI API support for stateful multi-turn conversations, multi-endpoint and multi-provider routing across heterogeneous backends (vLLM, OpenAI, Anthropic, Azure, Bedrock, Gemini, Vertex AI), and a pluggable authorization factory supporting multiple auth providers.
+Deployed in production as an Envoy external processor, the architecture demonstrates that composable signal orchestration enables a single routing framework to serve diverse deployment scenarios with differentiated cost, privacy, and safety policies.
+\end{abstract}

@@ -1,0 +1,438 @@
+% =============================================================================
+%  references.bib -- vLLM Semantic Router arXiv paper
+% =============================================================================
+
+% ---------------------------------------------------------------------------
+%  LLM Routing
+% ---------------------------------------------------------------------------
+
+@article{ong2024routellm,
+  title     = {{RouteLLM}: Learning to Route {LLMs} with Preference Data},
+  author    = {Isaac Ong and Amjad Almahairi and Vincent Wu and Wei-Lin Chiang and Tianhao Wu and Joseph E.\ Gonzalez and M Waleed Kadous and Ion Stoica},
+  journal   = {arXiv preprint arXiv:2406.18665},
+  year      = {2024}
+}
+
+@article{chen2024routerdc,
+  title     = {{RouterDC}: Query-Based Router by Dual Contrastive Learning for Assembling Large Language Models},
+  author    = {Shuhao Chen and Weisen Jiang and Baijiong Lin and James T.\ Kwok and Yu Zhang},
+  journal   = {arXiv preprint arXiv:2409.19886},
+  year      = {2024}
+}
+
+@article{aggarwal2023automix,
+  title     = {{AutoMix}: Automatically Mixing Language Models},
+  author    = {Pranjal Aggarwal and Aman Madaan and Ankit Anand and Srividya Pranavi Potharaju and Swaroop Mishra and Pei Zhou and Aditya Gupta and Dheeraj Rajagopal and Karthik Kappaganthu and Yiming Yang and Shyam Upadhyay and Manaal Faruqui and Mausam},
+  journal   = {arXiv preprint arXiv:2310.12963},
+  year      = {2023}
+}
+
+@article{hu2024routerbench,
+  title     = {{RouterBench}: A Benchmark for Multi-{LLM} Routing System},
+  author    = {Qitian Jason Hu and Jacob Bieker and Xiuyu Li and Nan Jiang and Benjamin Keigwin and Gaurav Ranganath and Kurt Keutzer and Shriyash Kaustubh Upadhyay},
+  journal   = {arXiv preprint arXiv:2403.12031},
+  year      = {2024}
+}
+
+@article{zhang2025routerr1,
+  title     = {{Router-R1}: Teaching {LLMs} Multi-Round Routing and Aggregation via Reinforcement Learning},
+  author    = {Haozhen Zhang and Tao Feng and Jiaxuan You},
+  journal   = {arXiv preprint arXiv:2506.09033},
+  year      = {2025}
+}
+
+@article{xie2025gmtrouter,
+  title     = {{GMTRouter}: Personalized {LLM} Router over Multi-turn User Interactions},
+  author    = {Encheng Xie and Yihang Sun and Tao Feng and Jiaxuan You},
+  journal   = {arXiv preprint arXiv:2511.08590},
+  year      = {2025}
+}
+
+% ---------------------------------------------------------------------------
+%  LoRA and Parameter-Efficient Fine-Tuning
+% ---------------------------------------------------------------------------
+
+@article{hu2022lora,
+  title     = {{LoRA}: Low-Rank Adaptation of Large Language Models},
+  author    = {Edward J.\ Hu and Yelong Shen and Phillip Wallis and Zeyuan Allen-Zhu and Yuanzhi Li and Shean Wang and Lu Wang and Weizhu Chen},
+  journal   = {arXiv preprint arXiv:2106.09685},
+  year      = {2022}
+}
+
+@inproceedings{mangrulkar2022peft,
+  title     = {{PEFT}: State-of-the-art Parameter-Efficient Fine-Tuning methods},
+  author    = {Sourab Mangrulkar and Sylvain Gugger and Lysandre Debut and Younes Belkada and Sayak Paul and Benjamin Bossan},
+  booktitle = {Hugging Face},
+  year      = {2022},
+  url       = {https://github.com/huggingface/peft}
+}
+
+% ---------------------------------------------------------------------------
+%  Transformer Models
+% ---------------------------------------------------------------------------
+
+@article{devlin2019bert,
+  title     = {{BERT}: Pre-training of Deep Bidirectional Transformers for Language Understanding},
+  author    = {Jacob Devlin and Ming-Wei Chang and Kenton Lee and Kristina Toutanova},
+  journal   = {arXiv preprint arXiv:1810.04805},
+  year      = {2019}
+}
+
+@article{warner2024modernbert,
+  title     = {Smarter, Better, Faster, Longer: A Modern Bidirectional Encoder for Fast, Memory Efficient, and Long Context Fine-tuning and Inference},
+  author    = {Benjamin Warner and Antoine Chaffin and Benjamin Clavie and Orion Weller and Oskar Hallstrom and Said Taghadouini and Alexis Gallagher and Raja Biswas and Faisal Ladhak and Tom Aarsen and Nathan Cooper and Griffin Adams and Jeremy Howard and Iacopo Poli},
+  journal   = {arXiv preprint arXiv:2412.13663},
+  year      = {2024}
+}
+
+% ---------------------------------------------------------------------------
+%  Hallucination Detection
+% ---------------------------------------------------------------------------
+
+@article{manakul2023selfcheckgpt,
+  title     = {{SelfCheckGPT}: Zero-Resource Black-Box Hallucination Detection for Generative Large Language Models},
+  author    = {Potsawee Manakul and Adian Liusie and Mark J.\ F.\ Gales},
+  journal   = {arXiv preprint arXiv:2303.08896},
+  year      = {2023}
+}
+
+@article{min2023factscore,
+  title     = {{FActScore}: Fine-grained Atomic Evaluation of Factual Precision in Long Form Text Generation},
+  author    = {Sewon Min and Kalpesh Krishna and Xinxi Lyu and Mike Lewis and Wen-tau Yih and Pang Wei Koh and Mohit Iyyer and Luke Zettlemoyer and Hannaneh Hajishirzi},
+  journal   = {arXiv preprint arXiv:2305.14251},
+  year      = {2023}
+}
+
+% ---------------------------------------------------------------------------
+%  Prompt Injection / Jailbreak
+% ---------------------------------------------------------------------------
+
+@article{inan2023llamaguard,
+  title     = {{Llama Guard}: {LLM}-based Input-Output Safeguard for Human-{AI} Conversations},
+  author    = {Hakan Inan and Kartikeya Upasani and Jianfeng Chi and Rashi Rungta and Krithika Iyer and Yuning Mao and Michael Tontchev and Qing Hu and Brian Fuller and Davide Testuggine and Madian Khabsa},
+  journal   = {arXiv preprint arXiv:2312.06674},
+  year      = {2023}
+}
+
+@article{jain2023promptguard,
+  title     = {Baseline Defenses for Adversarial Attacks Against Aligned Language Models},
+  author    = {Neel Jain and Avi Schwarzschild and Yuxin Wen and Gowthami Somepalli and John Kirchenbauer and Ping-yeh Chiang and Micah Goldblum and Aniruddha Saha and Jonas Geiping and Tom Goldstein},
+  journal   = {arXiv preprint arXiv:2309.00614},
+  year      = {2023}
+}
+
+% ---------------------------------------------------------------------------
+%  PII Detection
+% ---------------------------------------------------------------------------
+
+@inproceedings{lison2021anonymisation,
+  title     = {Anonymisation Models for Text Data: State of the Art, Challenges and Future Directions},
+  author    = {Pierre Lison and Ildik{\'o} Pil{\'a}n and David S{\'a}nchez and Montserrat Batet and Lilja {\O}vrelid},
+  booktitle = {Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics (ACL)},
+  pages     = {4188--4203},
+  year      = {2021}
+}
+
+% ---------------------------------------------------------------------------
+%  Envoy / Service Mesh
+% ---------------------------------------------------------------------------
+
+@misc{envoyproxy2024,
+  title     = {Envoy Proxy: An open source edge and service proxy},
+  author    = {{Envoy Proxy Authors}},
+  year      = {2024},
+  url       = {https://www.envoyproxy.io/}
+}
+
+@misc{envoyextproc2024,
+  title     = {Envoy External Processing Filter},
+  author    = {{Envoy Proxy Authors}},
+  year      = {2024},
+  url       = {https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/ext_proc_filter}
+}
+
+% ---------------------------------------------------------------------------
+%  vLLM and Inference
+% ---------------------------------------------------------------------------
+
+@inproceedings{kwon2023vllm,
+  title     = {Efficient Memory Management for Large Language Model Serving with {PagedAttention}},
+  author    = {Woosuk Kwon and Zhuohan Li and Sicheng Zuo and Ying Sheng and Lianmin Zheng and Cody Hao Yu and Joseph E.\ Gonzalez and Hao Zhang and Ion Stoica},
+  booktitle = {Proceedings of the 29th Symposium on Operating Systems Principles (SOSP)},
+  year      = {2023}
+}
+
+@misc{candleml2024,
+  title     = {Candle: Minimalist {ML} framework for {Rust}},
+  author    = {{Hugging Face}},
+  year      = {2024},
+  url       = {https://github.com/huggingface/candle}
+}
+
+@misc{linfa2024,
+  title     = {Linfa: A {Rust} machine learning framework},
+  author    = {{Linfa Contributors}},
+  year      = {2024},
+  url       = {https://github.com/rust-ml/linfa}
+}
+
+@misc{onnxruntime2024,
+  title     = {{ONNX Runtime}: Cross-platform, high performance {ML} inferencing and training accelerator},
+  author    = {{Microsoft}},
+  year      = {2024},
+  url       = {https://onnxruntime.ai/}
+}
+
+% ---------------------------------------------------------------------------
+%  Mixture of Experts / Mixture of Models
+% ---------------------------------------------------------------------------
+
+@article{shazeer2017moe,
+  title     = {Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer},
+  author    = {Noam Shazeer and Azalia Mirhoseini and Krzysztof Maziarz and Andy Davis and Quoc Le and Geoffrey Hinton and Jeff Dean},
+  journal   = {arXiv preprint arXiv:1701.06538},
+  year      = {2017}
+}
+
+@article{jiang2024mixtral,
+  title     = {Mixtral of Experts},
+  author    = {Albert Q.\ Jiang and Alexandre Sablayrolles and Antoine Roux and Arthur Mensch and Blanche Savary and Chris Bamford and Devendra Singh Chaplot and Diego de las Casas and Emma Bou Hanna and Florian Bressand and others},
+  journal   = {arXiv preprint arXiv:2401.04088},
+  year      = {2024}
+}
+
+% ---------------------------------------------------------------------------
+%  Embeddings
+% ---------------------------------------------------------------------------
+
+@article{kusupati2022matryoshka,
+  title     = {Matryoshka Representation Learning},
+  author    = {Aditya Kusupati and Gantavya Bhatt and Aniket Rege and Matthew Wallingford and Aditya Sinha and Vivek Ramanujan and William Howard-Snyder and Kaifeng Chen and Sham Kakade and Prateek Jain and Ali Farhadi},
+  journal   = {arXiv preprint arXiv:2205.13147},
+  year      = {2022}
+}
+
+% ---------------------------------------------------------------------------
+%  Observability
+% ---------------------------------------------------------------------------
+
+@misc{opentelemetry2024,
+  title     = {{OpenTelemetry}: An observability framework for cloud-native software},
+  author    = {{OpenTelemetry Authors}},
+  year      = {2024},
+  url       = {https://opentelemetry.io/}
+}
+
+@misc{prometheus2024,
+  title     = {Prometheus: From metrics to insight},
+  author    = {{Prometheus Authors}},
+  year      = {2024},
+  url       = {https://prometheus.io/}
+}
+
+% ---------------------------------------------------------------------------
+%  Kubernetes / Operators
+% ---------------------------------------------------------------------------
+
+@misc{kubernetes2024,
+  title     = {{Kubernetes}: Production-Grade Container Orchestration},
+  author    = {{The Kubernetes Authors}},
+  year      = {2024},
+  url       = {https://kubernetes.io/}
+}
+
+% ---------------------------------------------------------------------------
+%  NLI / Textual Entailment
+% ---------------------------------------------------------------------------
+
+@article{williams2018mnli,
+  title     = {A Broad-Coverage Challenge Corpus for Sentence Understanding through Inference},
+  author    = {Adina Williams and Nikita Nangia and Samuel R.\ Bowman},
+  journal   = {arXiv preprint arXiv:1704.05426},
+  year      = {2018}
+}
+
+% ---------------------------------------------------------------------------
+%  RAG / Vector Databases
+% ---------------------------------------------------------------------------
+
+@article{lewis2020rag,
+  title     = {Retrieval-Augmented Generation for Knowledge-Intensive {NLP} Tasks},
+  author    = {Patrick Lewis and Ethan Perez and Aleksandra Piktus and Fabio Petroni and Vladimir Karpukhin and Naman Goyal and Heinrich K{\"u}ttler and Mike Lewis and Wen-tau Yih and Tim Rockt{\"a}schel and Sebastian Riedel and Douwe Kiela},
+  journal   = {arXiv preprint arXiv:2005.11401},
+  year      = {2020}
+}
+
+@inproceedings{wang2021milvus,
+  title     = {Milvus: A Purpose-Built Vector Data Management System},
+  author    = {Jianguo Wang and Xiaomeng Yi and Rentong Guo and Hai Jin and Peng Xu and Shengjun Li and Xiangyu Wang and Xiangzhou Guo and Chengming Li and Xiaohai Xu and others},
+  booktitle = {Proceedings of the 2021 International Conference on Management of Data (SIGMOD)},
+  year      = {2021}
+}
+
+% ---------------------------------------------------------------------------
+%  Reinforcement Learning
+% ---------------------------------------------------------------------------
+
+@article{thompson1933likelihood,
+  title     = {On the Likelihood that One Unknown Probability Exceeds Another in View of the Evidence of Two Samples},
+  author    = {William R.\ Thompson},
+  journal   = {Biometrika},
+  volume    = {25},
+  number    = {3/4},
+  pages     = {285--294},
+  year      = {1933}
+}
+
+% ---------------------------------------------------------------------------
+%  Semantic Router Blog Posts (for self-citation)
+% ---------------------------------------------------------------------------
+
+@misc{vllmsr2025announce,
+  title     = {vLLM Semantic Router: System Level Intelligence for Mixture-of-Models},
+  author    = {{vLLM Semantic Router Team}},
+  year      = {2025},
+  url       = {https://blog.vllm.ai/2025/09/11/semantic-router.html}
+}
+
+@misc{vllmsr2025signaldecision,
+  title     = {Signal-Decision Architecture for Intelligent {LLM} Routing},
+  author    = {{vLLM Semantic Router Team}},
+  year      = {2025},
+  url       = {https://blog.vllm.ai/2025/11/19/signal-decision.html}
+}
+
+@misc{vllmsr2025modularlora,
+  title     = {Modular {LoRA} Architecture for Multi-Task Classification},
+  author    = {{vLLM Semantic Router Team}},
+  year      = {2025},
+  url       = {https://blog.vllm.ai/2025/10/27/semantic-router-modular.html}
+}
+
+@misc{vllmsr2025halugate,
+  title     = {{HaluGate}: Three-Stage Hallucination Detection for {LLM} Responses},
+  author    = {{vLLM Semantic Router Team}},
+  year      = {2025},
+  url       = {https://blog.vllm.ai/2025/12/14/halugate.html}
+}
+
+@misc{vllmsr2026iris,
+  title     = {vLLM Semantic Router v0.1 Iris: The First Major Release},
+  author    = {{vLLM Semantic Router Team}},
+  year      = {2026},
+  url       = {https://blog.vllm.ai/2026/01/05/vllm-sr-iris.html}
+}
+
+
+@article{huntington1904sets,
+  title     = {Sets of Independent Postulates for the Algebra of Logic},
+  author    = {Huntington, Edward V.},
+  journal   = {Transactions of the American Mathematical Society},
+  volume    = {5},
+  number    = {3},
+  pages     = {288--309},
+  year      = {1904},
+  publisher = {American Mathematical Society}
+}
+
+@article{rivest1987learning,
+  title     = {Learning Decision Lists},
+  author    = {Rivest, Ronald L.},
+  journal   = {Machine Learning},
+  volume    = {2},
+  number    = {3},
+  pages     = {229--246},
+  year      = {1987},
+  publisher = {Springer}
+}
+
+@article{fleisher1975introduction,
+  title     = {An Introduction to Array Logic},
+  author    = {Fleisher, Harvey and Maissel, Lester I.},
+  journal   = {IBM Journal of Research and Development},
+  volume    = {19},
+  number    = {2},
+  pages     = {98--109},
+  year      = {1975},
+  publisher = {IBM}
+}
+
+@book{brayton1984logic,
+  title     = {Logic Minimization Algorithms for {VLSI} Synthesis},
+  author    = {Brayton, Robert K. and Hachtel, Gary D. and McMullen, Curtis T. and Sangiovanni-Vincentelli, Alberto L.},
+  year      = {1984},
+  publisher = {Kluwer Academic Publishers},
+  address   = {Boston, MA}
+}
+
+@article{zadeh1965fuzzy,
+  title     = {Fuzzy Sets},
+  author    = {Zadeh, Lotfi A.},
+  journal   = {Information and Control},
+  volume    = {8},
+  number    = {3},
+  pages     = {338--353},
+  year      = {1965},
+  publisher = {Elsevier}
+}
+
+@article{bellman1970decision,
+  title     = {Decision-Making in a Fuzzy Environment},
+  author    = {Bellman, Richard E. and Zadeh, Lotfi A.},
+  journal   = {Management Science},
+  volume    = {17},
+  number    = {4},
+  pages     = {B-141--B-164},
+  year      = {1970},
+  publisher = {INFORMS}
+}
+
+@article{shannon1948mathematical,
+  title     = {A Mathematical Theory of Communication},
+  author    = {Shannon, Claude E.},
+  journal   = {The Bell System Technical Journal},
+  volume    = {27},
+  number    = {3},
+  pages     = {379--423},
+  year      = {1948},
+  publisher = {Nokia Bell Labs}
+}
+
+@article{rissanen1978modeling,
+  title     = {Modeling by Shortest Data Description},
+  author    = {Rissanen, Jorma},
+  journal   = {Automatica},
+  volume    = {14},
+  number    = {5},
+  pages     = {465--471},
+  year      = {1978},
+  publisher = {Elsevier}
+}
+
+@book{astrom2008feedback,
+  title     = {Feedback Systems: An Introduction for Scientists and Engineers},
+  author    = {\AA{}str\"{o}m, Karl Johan and Murray, Richard M.},
+  year      = {2008},
+  publisher = {Princeton University Press},
+  address   = {Princeton, NJ}
+}
+
+@inproceedings{li2010contextual,
+  title     = {A Contextual-Bandit Approach to Personalized News Article Recommendation},
+  author    = {Li, Lihong and Chu, Wei and Langford, John and Schapire, Robert E.},
+  booktitle = {Proceedings of the 19th International Conference on World Wide Web},
+  pages     = {661--670},
+  year      = {2010},
+  publisher = {ACM}
+}
+
+@article{shalev2012online,
+  title     = {Online Learning and Online Convex Optimization},
+  author    = {Shalev-Shwartz, Shai},
+  journal   = {Foundations and Trends in Machine Learning},
+  volume    = {4},
+  number    = {2},
+  pages     = {107--194},
+  year      = {2012},
+  publisher = {Now Publishers}
+}

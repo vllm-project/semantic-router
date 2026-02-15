@@ -1,0 +1,44 @@
+% sections/deployment.tex
+
+\section{Deployment}
+\label{sec:deployment}
+
+We describe the deployment architecture that enables the routing system to operate from single-node development to production Kubernetes clusters.
+
+\subsection{Deployment Modes}
+
+\textbf{Local development.}
+A single command (\texttt{pip install vllm-sr \&\& vllm-sr serve}) bootstraps the complete stack: router, Envoy proxy, and dashboard.
+This lowers the barrier to experimentation with routing configurations.
+
+\textbf{Kubernetes: Standalone mode.}
+Envoy runs as a sidecar container alongside the router in the same pod.
+The ExtProc filter connects via localhost gRPC.
+Deployed via Helm charts with configurable replicas, resource limits, cache backends, and autoscaling.
+
+\textbf{Kubernetes: Gateway mode.}
+The router runs as an independent service behind an existing Istio or Envoy Gateway deployment, referenced via the gateway's ExtProc configuration.
+This mode shares the gateway infrastructure across multiple services.
+
+\subsection{Kubernetes Operator}
+
+A custom operator manages the lifecycle of routing deployments through a \texttt{SemanticRouter} Custom Resource Definition (CRD).
+The reconciliation loop manages: service accounts, configuration (ConfigMap or CRD-sourced), persistent storage, gateway/route resources, Envoy configuration, deployments, services, and horizontal pod autoscalers.
+
+\textbf{Backend discovery.}
+The operator discovers model backends via three mechanisms:
+KServe InferenceService resources (for managed model serving),
+label-based Llama Stack discovery, and
+direct Kubernetes Service references.
+
+\subsection{Dashboard}
+
+A web console (React frontend, Go backend) provides:
+configuration editing with live validation,
+topology visualization of routing flows,
+an interactive playground for testing routing decisions,
+embedded Grafana/Prometheus/Jaeger dashboards for monitoring and tracing, and
+an evaluation framework for benchmarking routing quality.
+
+\paragraph{Contributors.}
+Xunzhuo, Yossi Ovadia, Jared, Huamin Chen, Xunzhuo, Senan Zedan, Brent Salisbury, samzong, Sanjeev Rampal, yehudit1987, abdallahsamabd, Ryan Cook, shown, Noa Limoy, Jintao Zhang, Liav Weiss, henschwartz, haowu1234, Qiping Pan, asaadbalum, R3hankhan, aeft, Wilson Wu, Peng Lu, Marina Koushnir, Fang Han, Avinash Changrani, Anusha Pant, Florencio Cano, Chever John.

@@ -1,0 +1,111 @@
+% sections/architecture.tex
+
+\section{System Architecture}
+\label{sec:architecture}
+
+We formalize the routing problem and present the three-layer architecture that decomposes it into composable signal extraction, decision evaluation, and plugin execution---enabling a single framework to serve diverse deployment scenarios through configuration.
+
+\subsection{Problem Formulation}
+
+Let $\mathcal{M} = \{m_1, \ldots, m_K\}$ denote a set of $K$ available model backends, each characterized by capability profile, cost, and latency.
+Each backend may be served by a different provider $p_k \in \mathcal{P}$ (e.g., local vLLM, OpenAI, Anthropic, Azure, Bedrock, Gemini), with provider-specific API protocols and authentication mechanisms.
+A deployment may expose multiple endpoints $\mathcal{E} = \{e_1, \ldots, e_L\}$ with weighted load distribution across backends.
+
+Given an incoming request $r$ (consisting of a message sequence, metadata, user identity, and headers), the routing problem is to:
+\begin{enumerate}[leftmargin=*]
+  \item Select a model $m^* \in \mathcal{M}$ that maximizes response quality while respecting cost and latency constraints;
+  \item Apply deployment-specific safety and privacy transformations $\mathcal{T}(r)$ before and after model invocation;
+  \item Route through the correct provider endpoint with appropriate authentication.
+\end{enumerate}
+
+Na\"ive approaches either fix $m^*$ statically or route based on a single dimension (e.g., estimated difficulty).
+We argue that production routing requires reasoning over \emph{multiple orthogonal signal dimensions simultaneously}, with different \emph{policies} (safety thresholds, caching strategies, prompt augmentation, model pools) for different routing outcomes---and that these policies must be \emph{composable} to support diverse deployment scenarios without architectural changes.
+
+\subsection{Composable Signal Orchestration}
+
+The key architectural innovation is that the same signal extraction, decision evaluation, and plugin execution machinery can be \emph{composed differently} for different deployment scenarios:
+
+\begin{definition}[Deployment Configuration]
+A deployment configuration $\Gamma = (\mathcal{S}_\Gamma, \mathcal{D}_\Gamma, \Pi_\Gamma, \mathcal{E}_\Gamma)$ specifies which signal types $\mathcal{S}_\Gamma \subseteq \mathcal{S}$ are active, what decisions $\mathcal{D}_\Gamma$ are evaluated, which plugin chains $\Pi_\Gamma$ are attached, and which endpoints $\mathcal{E}_\Gamma$ are available.
+\end{definition}
+
+\noindent\textbf{Example configurations:}
+\begin{itemize}[leftmargin=*]
+  \item \emph{Privacy-regulated (healthcare)}: Active signals include domain, authz, and language. Decisions route sensitive queries to on-premise models only. Plugins enforce strict PII redaction with no caching.
+  \item \emph{Cost-optimized (developer tool)}: Active signals include complexity, embedding, and keyword. Decisions cascade from cheap to expensive models. Plugins enable aggressive semantic caching.
+  \item \emph{Multi-cloud enterprise}: Active signals include domain, modality, and authz. Decisions distribute across multiple provider endpoints using latency-aware model selection with weighted failover. Plugins inject provider-specific auth headers.
+\end{itemize}
+
+All three scenarios use the same architecture; only $\Gamma$ differs. This composability is the central design contribution.
+
+\subsection{Three-Layer Architecture}
+
+The architecture decomposes routing into three layers, each with a well-defined interface (\Cref{fig:architecture}):
+
+\begin{figure}[t]
+  \centering
+  \fbox{\parbox{0.95\textwidth}{\centering\vspace{1.2cm}
+    \textbf{Three-Layer Architecture}\\[8pt]
+    \begin{tabular}{ccc}
+    \textbf{Layer 1: Signals} & $\xrightarrow{S(r)}$ & \textbf{Layer 2: Decisions} \\[2pt]
+    $r \mapsto \mathbf{s} \in \{0,1\}^{|\mathcal{R}|} \times [0,1]^{|\mathcal{R}|}$ & &
+    $\mathbf{s} \mapsto d^* \in \mathcal{D}$ \\[12pt]
+    \multicolumn{3}{c}{\textbf{Layer 3: Plugin Chain}} \\[2pt]
+    \multicolumn{3}{c}{$d^* \mapsto (\mathcal{T}_{\text{pre}}, m^*, \mathcal{T}_{\text{post}})$}
+    \end{tabular}
+  \vspace{1.2cm}}}
+  \caption{The three-layer architecture. Layer~1 extracts a binary match vector and confidence scores over rules. Layer~2 evaluates Boolean combinations to select a decision. Layer~3 executes the decision's plugin chain, selects a model from the decision's candidate set, and routes to the appropriate provider endpoint.}
+  \label{fig:architecture}
+\end{figure}
+
+\textbf{Layer 1: Signal Extraction.}
+The signal layer maps a request $r$ to a structured signal result $\mathbf{s}$, consisting of binary match indicators and real-valued confidences for each configured rule across eleven signal types.
+Heuristic signals (keyword, language, context length, authorization) complete in sub-millisecond time.
+ML-based signals (embedding similarity, domain classification, factual grounding, modality detection, complexity, preference, user feedback) require neural inference at 10--120\,ms.
+Signals are evaluated in parallel, and only signal types referenced by at least one active decision are computed---a critical optimization for deployment configurations that use a subset of available signals.
+
+\textbf{Layer 2: Decision Evaluation.}
+The decision layer takes the signal result $\mathbf{s}$ and evaluates a set of decisions $\mathcal{D} = \{d_1, \ldots, d_M\}$, each defined as a Boolean formula over signal conditions.
+The engine selects the best-matching decision $d^*$ using either priority-based or confidence-weighted ranking.
+Each decision carries its own model candidate set $\mathcal{M}_{d^*} \subseteq \mathcal{M}$, enabling deployment-specific model pools (e.g., a privacy decision restricts candidates to on-premise models).
+
+\textbf{Layer 3: Plugin Chain.}
+Each decision $d^*$ carries a per-decision plugin configuration that defines:
+(a)~\emph{pre-routing plugins} (jailbreak detection, PII filtering, semantic caching, RAG context injection, modality routing, memory retrieval, system prompt augmentation, header mutation for provider auth), executed before model invocation;
+(b)~a \emph{semantic model selection algorithm} applied to $d^*$'s candidate model set $\mathcal{M}_{d^*}$ to find the best model cost-effectively;
+(c)~\emph{post-routing plugins} (hallucination detection, cache updates), executed on the model response.
+
+\subsection{Design Principles}
+
+Four principles guide the architecture:
+
+\textbf{Composability.}
+Complex routing policies are expressed as compositions of simple primitives: Boolean combinations of signal conditions form decisions; sequences of typed plugins form execution chains; deployment scenarios are expressed as configuration profiles.
+This avoids monolithic routing logic and enables the same system to serve fundamentally different deployment requirements.
+
+\textbf{Orthogonality.}
+Signals, decisions, and plugins are independent modules with a uniform interface boundary.
+New signal types can be added by implementing a single evaluation function---the decision engine references signals solely by type and rule name, requiring no modification.
+Likewise, new plugins and providers are registered independently.
+The current eleven signal types are the built-in set; the framework is designed to be extended with domain-specific signals as deployment requirements evolve.
+
+\textbf{Closed-loop adaptivity.}
+The bidirectional signal flow described in \Cref{sec:signal_engine} enables the architecture to operate as a \emph{closed-loop control system}~\cite{astrom2008feedback}.
+In control-theoretic terms, the signal--decision--plugin pipeline is the \emph{plant}, response-side signals (hallucination detection, user feedback, latency measurements) are the \emph{sensors}, and a policy adjustment mechanism is the \emph{controller} that updates decision parameters $\theta^{(t)}$ (priorities, model weights) based on observed response quality:
+\begin{equation}
+  \theta^{(t+1)} = \theta^{(t)} + \eta \,\nabla_\theta\, \mathbb{E}\bigl[Q\bigl(r,\, m^*(r;\theta^{(t)})\bigr)\bigr]
+\end{equation}
+where $Q(r, m^*)$ is a response quality metric and $\eta$ is a learning rate.
+This formulation connects to the \emph{contextual bandit} framework~\cite{li2010contextual}: the signal vector $S(r)$ serves as the context, model selection is the action, and response quality is the reward.
+Standard regret bounds from online learning theory~\cite{shalev2012online} guarantee that the cumulative routing quality of such an adaptive policy converges to that of the best fixed policy in hindsight at a rate of $O(\sqrt{T})$, providing formal performance guarantees for self-improving routing.
+
+\textbf{Per-decision scoping.}
+Safety thresholds, caching policies, model candidates, and auth mechanisms are scoped to individual decisions rather than applied globally.
+A coding-focused decision can disable PII detection while a customer-support decision enforces strict filtering---using the same system configuration.
+
+\textbf{Provider abstraction.}
+The architecture abstracts over provider-specific protocols, authentication, and endpoint topologies.
+Multi-endpoint routing with weighted distribution and failover is handled at the infrastructure layer, enabling decisions to reference models by capability rather than by provider-specific endpoint.
+
+\paragraph{Contributors.}
+Xunzhuo, Huamin Chen, Jintao Zhang, Xunzhuo, OneZero-Y, asaadbalum, Noa Limoy, Liav Weiss, yehudit1987, samzong, Yossi Ovadia, shown, Senan Zedan, R3hankhan, Srinivas A, Alex Wang, cryo, abdallahsamabd, Fang Han.
