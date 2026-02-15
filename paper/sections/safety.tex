@@ -1,0 +1,63 @@
+% sections/safety.tex
+
+\section{Request-Time Safety: Jailbreak and PII Detection}
+\label{sec:safety}
+
+Request-time safety plugins detect adversarial inputs and sensitive information before queries reach model backends.
+Both operate as gating plugins that can terminate request processing with an immediate rejection.
+
+\subsection{Jailbreak Detection}
+
+Jailbreak attacks~\cite{jain2023promptguard} attempt to override model safety instructions through adversarial prompt construction.
+Our detection pipeline addresses this as a binary classification problem with per-decision sensitivity control.
+
+\textbf{Formulation.}
+Given a text input $x$ (the user's latest message, or the full conversation history when context-aware detection is enabled), a classifier $g_\text{jb}$ produces:
+\begin{equation}
+  g_\text{jb}(x) = (y, c) \in \{\textsc{benign}, \textsc{injection}, \textsc{jailbreak}\} \times [0, 1]
+\end{equation}
+The request is blocked iff $y \neq \textsc{benign}$ and $c \geq \theta_d$, where $\theta_d$ is the per-decision threshold.
+
+\textbf{Classifier architecture.}
+We support four inference backends with varying context-length and deployment characteristics:
+(1)~BERT with LoRA adapters (standard context);
+(2)~ModernBERT~\cite{warner2024modernbert} with Flash Attention;
+(3)~mmBERT-32K with YaRN RoPE for 32K-token contexts;
+(4)~external vLLM-served guardrail models for decoupled scaling.
+All local backends use the LoRA adapter architecture (\Cref{sec:lora_mom}), reducing model memory footprint.
+
+\textbf{Per-decision sensitivity.}
+Different decisions configure different thresholds: a public-facing endpoint might use $\theta = 0.7$ for aggressive detection, while an internal developer tool uses $\theta = 0.95$ to minimize false positives.
+History inclusion is also per-decision: some decisions analyze only the latest message (low latency), while others analyze the full conversation (higher recall for multi-turn attacks).
+
+\subsection{PII Detection}
+
+PII detection identifies personally identifiable information at the token level and enforces configurable allow/deny policies.
+
+\textbf{Formulation.}
+A token classifier $g_\text{pii}$ operates on the input sequence $x = (x_1, \ldots, x_T)$ and produces BIO-tagged predictions:
+\begin{equation}
+  g_\text{pii}(x) = \bigl\{(i, j, \ell, c) \mid \text{span } x_i \ldots x_j \text{ is PII type } \ell \text{ with confidence } c\bigr\}
+\end{equation}
+where $\ell \in \{\textsc{person}, \textsc{email}, \textsc{phone}, \textsc{ssn}, \textsc{credit\_card}, \ldots\}$.
+
+\textbf{Policy model.}
+Detected PII entities are evaluated against a per-decision policy:
+\begin{equation}
+  \text{allowed}(\ell) =
+  \begin{cases}
+    \ell \notin \mathcal{L}_\text{deny} & \text{if allow-by-default} \\
+    \ell \in \mathcal{L}_\text{allow} & \text{otherwise}
+  \end{cases}
+\end{equation}
+If any entity $(\cdot, \cdot, \ell, c)$ satisfies $c \geq \theta_d$ and $\neg\text{allowed}(\ell)$, the request is blocked.
+
+This two-mode policy (allow-by-default with deny list, or deny-by-default with allow list) provides flexible control: a medical application might allow \textsc{person} while blocking \textsc{ssn}, whereas a general chatbot might block all PII types.
+
+\subsection{Safety Pipeline Ordering}
+
+Jailbreak detection executes before PII detection, ensuring that adversarial inputs designed to bypass PII detection are caught first.
+Both use the LoRA adapter architecture (\Cref{sec:lora_mom}), and when run concurrently via parallel goroutines, the wall-clock time is dominated by the slower of the two classifiers rather than their sum.
+
+\paragraph{Contributors.}
+Xunzhuo, Xunzhuo, Huamin Chen, Jintao Zhang, yehudit1987, shown, cryo, Jared, asaadbalum, Noa Limoy, Liav Weiss.

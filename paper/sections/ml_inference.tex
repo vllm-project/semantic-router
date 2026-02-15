@@ -1,0 +1,85 @@
+% sections/ml_inference.tex
+
+\section{Multi-Runtime ML Inference}
+\label{sec:ml_inference}
+
+The routing system requires low-latency ML inference for signal extraction, classification, and embedding computation---all on the critical path of every request.
+We describe the multi-runtime architecture that addresses the tension between inference speed, hardware flexibility, and model diversity.
+
+\subsection{Design Constraints}
+
+Three constraints shape the inference architecture:
+\begin{enumerate}
+  \item \textbf{Latency}: Signal extraction must complete within the tail latency budget of the routing system (target: $<$100\,ms for all signals combined).
+  \item \textbf{Hardware heterogeneity}: Deployments range from GPU-equipped data centers to CPU-only edge nodes.
+  \item \textbf{Model diversity}: Different tasks require different model architectures (sequence classification, token classification, NLI, embeddings, MLP).
+\end{enumerate}
+
+\subsection{Three-Runtime Architecture}
+
+We implement three inference runtimes, each optimized for different hardware and task profiles, all exposed to the routing layer via C FFI:
+
+\begin{table}[h]
+\centering
+\caption{Inference runtime characteristics}
+\label{tab:runtimes}
+\begin{tabular}{llll}
+\toprule
+\textbf{Runtime} & \textbf{Target Hardware} & \textbf{Tasks} & \textbf{Framework} \\
+\midrule
+Candle   & GPU (CUDA), CPU & Classification, LoRA, MLP & HF Candle~\cite{candleml2024} \\
+Linfa    & CPU only        & KNN, KMeans, SVM         & Linfa~\cite{linfa2024} \\
+ONNX RT  & CPU, GPU        & Embeddings               & ONNX Runtime~\cite{onnxruntime2024} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All runtimes are compiled as Rust shared libraries and linked to the Go routing process via CGo.
+This eliminates Python runtime overhead, GIL contention, and inter-process communication latency that would arise from serving models in separate Python processes.
+
+\subsection{Candle Runtime: GPU-Accelerated Classification}
+
+The Candle runtime handles all transformer-based classification tasks, including LoRA adapter loading and inference (\Cref{sec:lora_mom}).
+
+\textbf{Supported architectures.}
+BERT~\cite{devlin2019bert}, ModernBERT~\cite{warner2024modernbert} (with Flash Attention and GeGLU), mmBERT-32K (YaRN RoPE for 32K context), DeBERTa v3 (NLI), and feed-forward MLPs (model selection).
+
+\textbf{Optimization features.}
+Flash Attention 2 kernels reduce attention memory from $O(n^2)$ to $O(n)$ and improve throughput.
+Optional Intel MKL integration for CPU deployments.
+LoRA adapter hot-loading enables runtime model updates without restart.
+
+\subsection{Linfa Runtime: CPU ML Inference}
+
+Classical ML model selection algorithms (KNN, KMeans, SVM) are served by the Linfa runtime.
+These algorithms operate on pre-computed feature vectors and do not require GPU acceleration, making Linfa's lightweight CPU implementation ideal.
+
+\textbf{Training-inference split.}
+Models are trained in Python (scikit-learn, custom implementations) and serialized to JSON.
+The Rust runtime loads serialized models at startup and performs inference-only computation.
+This decouples the training environment (Python, GPU-optional) from the inference environment (Rust, CPU-only), enabling simpler deployment.
+
+\subsection{ONNX Runtime: Efficient Embeddings}
+
+Embedding computation is served by ONNX Runtime, optimized for the mmBERT-Embed-32K model with 2D Matryoshka representation learning~\cite{kusupati2022matryoshka}.
+
+\textbf{2D Matryoshka trade-offs.}
+The architecture supports two-dimensional quality-latency trade-offs:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Layer early-exit}: Extract embeddings from intermediate layers (6, 11, 16, or 22 out of 22), achieving $\sim$3--4$\times$ speedup at layer 6 with modest quality degradation.
+  \item \textbf{Dimension truncation}: Reduce embedding dimension from 768 to 64, 128, 256, or 512, reducing memory and computation for similarity search.
+\end{itemize}
+
+For the $\sim$150M parameter embedding model, CPU inference with 2D Matryoshka (layer 11, dimension 256) achieves latency comparable to GPU inference on the full model, making GPU optional for embedding computation.
+
+\subsection{Runtime Selection Strategy}
+
+The routing system selects runtimes based on deployment configuration:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{GPU available}: Candle (classification + LoRA) + ONNX (embeddings) + Linfa (ML selection).
+  \item \textbf{CPU only}: Candle with MKL (classification) + ONNX with early-exit (embeddings) + Linfa (ML selection).
+  \item \textbf{Minimal}: ONNX (embeddings) + Linfa (ML selection), with classification delegated to external vLLM-served models.
+\end{itemize}
+
+\paragraph{Contributors.}
+Huamin Chen, yehudit1987, Xunzhuo, abdallahsamabd, Yue Zhu, OneZero-Y, shown, Yossi Ovadia, cryo, Xunzhuo, aias00, Wilson Wu, Tien Nguyen, Srinivas A, Qiping Pan, Nengxing Shen, Liav Weiss, GuanMu, ERIK.

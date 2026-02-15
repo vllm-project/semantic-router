@@ -1,0 +1,68 @@
+% sections/plugins.tex
+
+\section{Plugin Framework}
+\label{sec:plugins}
+
+The plugin layer provides a composable middleware architecture where each matched decision activates an independent chain of typed transformations.
+We describe the plugin model and three core infrastructure plugins; safety plugins are covered in \Cref{sec:safety,sec:halugate}, and memory retrieval and RAG injection are covered in \Cref{sec:memory_rag}.
+
+\subsection{Plugin Execution Model}
+
+Formally, a plugin $\pi$ is a typed transformation on the request-response pair:
+\begin{equation}
+  \pi: (\text{Request}, \text{Context}, \text{Config}_\pi) \to (\text{Request}', \text{Response}') \cup \{\bot\}
+\end{equation}
+where $\bot$ denotes early termination (e.g., a cache hit returning immediately or a safety violation blocking the request).
+
+Plugins execute in a fixed pipeline order within each decision's chain.
+On the \emph{request path}: jailbreak $\to$ PII $\to$ cache $\to$ RAG $\to$ modality $\to$ memory $\to$ system prompt $\to$ header mutation.
+On the \emph{response path}: hallucination detection $\to$ cache write.
+Each plugin is independently enabled per decision, and its configuration (thresholds, modes, policies) is scoped to that decision.
+
+This per-decision scoping is a key architectural distinction from systems that apply safety and caching globally: it allows differentiated policies for different routing outcomes within the same deployment.
+
+\subsection{Semantic Cache}
+
+The semantic cache exploits the observation that semantically similar queries often produce equivalent responses, avoiding redundant model invocations.
+
+\textbf{Similarity model.}
+Given a query $q$ extracted from request $r$, the cache searches for an entry $e$ such that:
+\begin{equation}
+  \cos(\mathbf{e}_q, \mathbf{e}_e) \geq \theta_d
+\end{equation}
+where $\mathbf{e}_q, \mathbf{e}_e$ are embeddings computed by the shared embedding model and $\theta_d$ is the per-decision similarity threshold.
+On hit, the cached response is returned immediately, bypassing model invocation entirely.
+
+\textbf{Write-through protocol.}
+On cache miss, a pending entry is registered before forwarding to the model.
+Upon receiving the response, the entry is completed with the response content.
+This ensures that concurrent identical queries observe the pending state rather than triggering redundant model calls.
+
+\textbf{Backend abstraction.}
+Four backends provide different latency-persistence tradeoffs:
+(1)~in-memory HNSW for single-node low-latency deployments;
+(2)~Redis for distributed persistent caching;
+(3)~Milvus for large-scale approximate nearest neighbor search;
+(4)~a hybrid two-tier design combining in-memory HNSW (fast path) with Milvus (persistent store).
+
+\subsection{System Prompt Injection}
+
+Per-decision system prompt injection enables different routing paths to carry different instructions.
+Two composition modes are defined:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Replace}: Substitutes the entire system message, providing complete control over the model's behavioral context.
+  \item \textbf{Insert}: Prepends the decision's prompt to the existing system message, augmenting without overriding user-provided instructions.
+\end{itemize}
+
+This enables patterns such as injecting domain-specific instructions for expert routing or safety preambles for sensitive query categories.
+
+\subsection{Header Mutation}
+
+Header mutation enables metadata propagation to downstream model backends via HTTP header modifications (add, update, delete).
+This supports use cases including:
+backend-specific authentication injection,
+routing decision metadata propagation for downstream observability,
+and custom signaling to model-serving frameworks (e.g., LoRA adapter selection via headers).
+
+\paragraph{Contributors.}
+cryo, Huamin Chen, Xunzhuo, shown, Xunzhuo, Alex Wang, yehudit1987, wangxiaolei, asaadbalum, Yue Zhu, UiJong (Jace) Yang, Srinivas A, Ryan Cook, QIN2DIM, Nengxing Shen, Liav Weiss, Avishek Goswami.
