@@ -1,0 +1,474 @@
+/* Transformer Pipeline Animation */
+.pipelineWrapper {
+  margin: 0 auto 3rem;
+  max-width: 600px;
+  padding: 1rem 0;
+}
+
+.pipeline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: 2rem 1.5rem;
+  position: relative;
+}
+
+/* Down-arrow connector between stages */
+.downArrow {
+  display: flex;
+  justify-content: center;
+  padding: 0.25rem 0;
+}
+
+.downArrowLine {
+  width: 2px;
+  height: 28px;
+  background: linear-gradient(180deg, #6366f1, #818cf8);
+  position: relative;
+}
+
+.downArrowLine::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: -3px;
+  border: solid #818cf8;
+  border-width: 0 2px 2px 0;
+  padding: 3px;
+  transform: rotate(45deg);
+}
+
+[data-theme='dark'] .downArrowLine {
+  background: linear-gradient(180deg, #818cf8, #a5b4fc);
+}
+
+[data-theme='dark'] .downArrowLine::after {
+  border-color: #a5b4fc;
+}
+
+/* Shared stage styling */
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.stageLabel {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6366f1;
+  margin-bottom: 0.4rem;
+  white-space: nowrap;
+}
+
+[data-theme='dark'] .stageLabel {
+  color: #a5b4fc;
+}
+
+/* Input text stage */
+.inputBox {
+  background: linear-gradient(135deg, #f0f4ff, #e8ecff);
+  border: 1.5px solid #c7d2fe;
+  border-radius: 10px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.72rem;
+  color: #3730a3;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  max-width: 320px;
+  text-align: center;
+  line-height: 1.35;
+}
+
+[data-theme='dark'] .inputBox {
+  background: linear-gradient(135deg, #1e1b4b, #272463);
+  border-color: #4338ca;
+  color: #c7d2fe;
+}
+
+/* Token boxes */
+.tokenRow {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.token {
+  padding: 0.2rem 0.3rem;
+  border-radius: 4px;
+  font-size: 0.58rem;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid;
+}
+
+.tokenSpecial {
+  background: #eef2ff;
+  border-color: #6366f1;
+  color: #3730a3;
+}
+
+[data-theme='dark'] .tokenSpecial {
+  background: #1e1b4b;
+  border-color: #818cf8;
+  color: #c7d2fe;
+}
+
+.tokenNormal {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+[data-theme='dark'] .tokenNormal {
+  background: #1e293b;
+  border-color: #475569;
+  color: #cbd5e1;
+}
+
+/* Embedding layer */
+.embeddingStack {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: center;
+}
+
+.embeddingBar {
+  width: 160px;
+  height: 6px;
+  border-radius: 3px;
+}
+
+.embBarToken {
+  background: #6366f1;
+}
+
+.embBarSeg {
+  background: #818cf8;
+}
+
+.embBarPos {
+  background: #a5b4fc;
+}
+
+.embBarSum {
+  background: #4f46e5;
+}
+
+.embLabel {
+  font-size: 0.5rem;
+  color: #64748b;
+  margin-top: 1px;
+}
+
+[data-theme='dark'] .embLabel {
+  color: #94a3b8;
+}
+
+/* Encoder block */
+.encoderBlock {
+  background: #f8fafc;
+  border: 1.5px solid #c7d2fe;
+  border-radius: 12px;
+  padding: 0.5rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  position: relative;
+}
+
+[data-theme='dark'] .encoderBlock {
+  background: #1e1b4b;
+  border-color: #4338ca;
+}
+
+.encoderRepeat {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  background: #6366f1;
+  color: white;
+  font-size: 0.55rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 8px;
+}
+
+.encoderSub {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0.2rem 0.35rem;
+  border-radius: 6px;
+  font-size: 0.55rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.subAttention {
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: #3730a3;
+}
+
+[data-theme='dark'] .subAttention {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.3);
+  color: #a5b4fc;
+}
+
+.subNorm {
+  background: rgba(99, 102, 241, 0.06);
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  color: #475569;
+}
+
+[data-theme='dark'] .subNorm {
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.2);
+  color: #94a3b8;
+}
+
+.subFFN {
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: #3730a3;
+}
+
+[data-theme='dark'] .subFFN {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.3);
+  color: #a5b4fc;
+}
+
+/* Output branches */
+.branchesArea {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.branchGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: 100%;
+}
+
+.branch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.4rem 0.55rem;
+  border-radius: 10px;
+  border: 1.5px solid;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  position: relative;
+}
+
+.branch:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* Branch colors — unified indigo palette */
+.branchCLS {
+  background: #eef2ff;
+  border-color: #6366f1;
+}
+
+[data-theme='dark'] .branchCLS {
+  background: #1e1b4b;
+  border-color: #818cf8;
+}
+
+.branchToken {
+  background: #eef2ff;
+  border-color: #6366f1;
+}
+
+[data-theme='dark'] .branchToken {
+  background: #1e1b4b;
+  border-color: #818cf8;
+}
+
+.branchPool {
+  background: #eef2ff;
+  border-color: #6366f1;
+}
+
+[data-theme='dark'] .branchPool {
+  background: #1e1b4b;
+  border-color: #818cf8;
+}
+
+.branchCross {
+  background: #eef2ff;
+  border-color: #6366f1;
+}
+
+[data-theme='dark'] .branchCross {
+  background: #1e1b4b;
+  border-color: #818cf8;
+}
+
+.branchIcon {
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.branchContent {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.branchTitle {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+[data-theme='dark'] .branchTitle {
+  color: #f1f5f9;
+}
+
+.branchDetail {
+  font-size: 0.5rem;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+[data-theme='dark'] .branchDetail {
+  color: #94a3b8;
+}
+
+.branchSignals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.signalTag {
+  font-size: 0.45rem;
+  padding: 0px 4px;
+  border-radius: 3px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.signalTagCLS,
+.signalTagToken,
+.signalTagPool,
+.signalTagCross {
+  background: rgba(99, 102, 241, 0.12);
+  color: #4338ca;
+}
+
+[data-theme='dark'] .signalTagCLS,
+[data-theme='dark'] .signalTagToken,
+[data-theme='dark'] .signalTagPool,
+[data-theme='dark'] .signalTagCross {
+  background: rgba(99, 102, 241, 0.2);
+  color: #a5b4fc;
+}
+
+/* Data flow particle animation */
+@keyframes flowParticle {
+  0% { opacity: 0; transform: translateX(-4px); }
+  30% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(4px); }
+}
+
+.flowDot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #6366f1;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: flowParticle 1.5s ease-in-out infinite;
+}
+
+/* Tab selector for branch focus */
+.tabRow {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.tab {
+  padding: 0.35rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid #e2e8f0;
+  background: transparent;
+  color: #64748b;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  border-color: #6366f1;
+  color: #6366f1;
+}
+
+[data-theme='dark'] .tab {
+  border-color: #334155;
+  color: #94a3b8;
+}
+
+[data-theme='dark'] .tab:hover {
+  border-color: #818cf8;
+  color: #818cf8;
+}
+
+.tabActive {
+  background: #6366f1;
+  border-color: #6366f1;
+  color: white;
+}
+
+.tabActive:hover {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: white;
+}
+
+[data-theme='dark'] .tabActive {
+  background: #6366f1;
+  border-color: #6366f1;
+  color: white;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .pipelineWrapper {
+    max-width: 100%;
+  }
+
+  .pipeline {
+    padding: 1rem 0.5rem;
+  }
+
+  .branchGrid {
+    grid-template-columns: 1fr;
+  }
+}
