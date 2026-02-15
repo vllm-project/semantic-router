@@ -1,8 +1,8 @@
 # Thompson Sampling Selection
 
-Thompson Sampling is a Bayesian approach to the exploration-exploitation tradeoff. It naturally balances trying new models (exploration) with using known good models (exploitation).
+Thompson Sampling is a Bayesian approach to the exploration-exploitation tradeoff. It naturally balances trying new models (exploration) with using known good models (exploitation), applied to LLM model selection as a multi-armed bandit problem.
 
-Based on classical [Thompson Sampling theory](https://arxiv.org/abs/1707.02038) - "Analysis of Thompson Sampling for the Multi-armed Bandit Problem" by Agrawal & Goyal, applied to LLM model selection as a multi-armed bandit.
+> **Reference**: [A Tutorial on Thompson Sampling](https://arxiv.org/abs/1707.02038) by Russo, Van Roy, Kazerouni, Osband & Wen. This comprehensive tutorial covers the theoretical foundations we apply here.
 
 ## Algorithm Flow
 

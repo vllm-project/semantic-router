@@ -2,7 +2,7 @@
 
 AutoMix optimizes the trade-off between response quality and cost using a cascading approach with self-verification. It starts with cheaper models and escalates to more expensive ones only when confidence is low.
 
-This approach can achieve **>50% cost reduction** while maintaining comparable performance, and up to **89% improvement** in cost-efficiency ratio ([AutoMix, NeurIPS 2024](https://arxiv.org/abs/2310.12963)).
+This approach can achieve **>50% cost reduction** while maintaining comparable performance ([AutoMix](https://arxiv.org/abs/2310.12963), Madaan et al., NeurIPS 2024).
 
 ## Algorithm Flow
 

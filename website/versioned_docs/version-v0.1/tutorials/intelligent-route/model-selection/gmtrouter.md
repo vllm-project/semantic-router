@@ -1,8 +1,10 @@
 # GMTRouter Selection
 
-GMTRouter uses a heterogeneous graph neural network (GNN) to learn personalized routing decisions based on multi-turn user-model-query interactions. It builds a graph of relationships and learns which models work best for each user over time.
+GMTRouter uses a heterogeneous graph neural network to learn personalized routing decisions based on multi-turn user interactions. It builds a graph capturing user-LLM-query-response relationships and learns which models work best for each user over time.
 
-This personalized approach can achieve **0.9% - 21.6% higher accuracy** and **0.006 - 0.309 higher AUC** compared to non-personalized routing, adapting to new users with few-shot data ([GMTRouter](https://arxiv.org/abs/2511.08590)).
+This personalized approach can achieve **0.9% - 21.6% higher accuracy** and **0.006 - 0.309 higher AUC** compared to non-personalized routing.
+
+> **Reference**: [GMTRouter: Personalized LLM Router over Multi-turn User Interactions](https://arxiv.org/abs/2511.08590) by Wang et al. Our implementation is inspired by this paper's graph-based personalization approach.
 
 ## Algorithm Flow
 
@@ -12,66 +14,59 @@ flowchart TD
     A --> C[Embed Query]
     B --> D[Build/Update<br/>Heterogeneous Graph]
     C --> D
-    D --> E[Apply Graph<br/>Transformer Layers]
-    E --> F[Compute User-Model<br/>Preference Scores]
+    D --> E[Apply HGT<br/>Convolution Layers]
+    E --> F[Cross-Attention<br/>Prediction Head]
     F --> G[Select Model with<br/>Highest Score]
     G --> H[Route to Model]
-    H --> I[Record Interaction<br/>in Graph]
+    H --> I[Record Response<br/>in Graph]
     
     style E stroke:#000,stroke-width:2px,stroke-dasharray: 5 5
-    style G stroke:#000,stroke-width:2px,stroke-dasharray: 5 5
+    style F stroke:#000,stroke-width:2px,stroke-dasharray: 5 5
 ```
 
 ## Mathematical Foundation
 
 ### Heterogeneous Graph Structure
 
-The graph contains multiple node types to capture rich interaction patterns:
+The graph contains 4 node types to capture multi-turn interaction patterns:
 
 ```text
-G = (V, E) where V = V_user ∪ V_query ∪ V_model ∪ V_category ∪ V_feedback
+G = (V, E) where V = V_user ∪ V_llm ∪ V_query ∪ V_response
 ```
 
 Node types:
 
-- **User nodes**: Represent individual users with their preferences
+- **User nodes**: Represent individual users with their interaction history
+- **LLM nodes**: Represent available language models
 - **Query nodes**: Represent queries submitted by users
-- **Model nodes**: Represent available LLMs
-- **Category nodes**: Group queries by topic/type
-- **Feedback nodes**: Capture user satisfaction signals
+- **Response nodes**: Capture model outputs and quality signals
 
-### Graph Transformer Layer
+Virtual **turn nodes** connect sequential interactions within a conversation.
 
-Each layer applies multi-head attention:
+### HGT Convolution Layer
+
+The paper uses Heterogeneous Graph Transformer (HGT) convolution with layer normalization:
 
 ```text
-h'_v = Σ_{u∈N(v)} α_vu · W · h_u
+h_v^(l+1) = LayerNorm(h_v^(l) + HGTConv(h_v^(l), {h_u^(l) : u ∈ N(v)}))
 
-where:
-  α_vu = softmax(Q_v · K_u^T / √d)
-  Q_v = W_Q · h_v  (query)
-  K_u = W_K · h_u  (key)
+HGTConv applies type-specific attention:
+  Attention(v, u) = softmax_u(W_τ(v),τ(u) · h_v · h_u^T / √d)
 ```
 
-### User-Model Preference Score
+where τ(v) denotes the node type of v.
 
-Final preference computed via attention:
+### Cross-Attention Prediction Head
+
+Final user-model preference score uses cross-attention:
 
 ```text
-score(u, m) = σ(h_u^T · W_pref · h_m)
+s_{u,q,m} = f_pred(h_u^(L), h_q^(0), h_m^(L))
 
 where:
-  h_u = user embedding
-  h_m = model embedding
-  σ = sigmoid activation
-```
-
-### Message Passing
-
-Information propagates through the graph:
-
-```text
-h_v^(l+1) = ReLU(Σ_{r∈R} Σ_{u∈N_r(v)} 1/|N_r(v)| · W_r^(l) · h_u^(l))
+  h_u^(L) = user embedding after L layers
+  h_q^(0) = query embedding
+  h_m^(L) = model embedding after L layers
 ```
 
 ## Core Algorithm (Go)
@@ -85,18 +80,18 @@ func (s *GMTRouterSelector) Select(ctx context.Context, selCtx *SelectionContext
     // Update graph with new query node
     s.addQueryNode(userID, queryEmbed)
     
-    // Run graph transformer layers
-    embeddings := s.runGraphTransformer(userID)
+    // Run HGT convolution layers
+    embeddings := s.runHGTLayers(userID)
     
-    // Compute preference scores
+    // Compute preference scores via cross-attention
     var bestModel string
     var bestScore float64 = -1
     
     for _, candidate := range selCtx.CandidateModels {
         userEmbed := embeddings.User[userID]
-        modelEmbed := embeddings.Model[candidate.Model]
+        modelEmbed := embeddings.LLM[candidate.Model]
         
-        score := s.computePreference(userEmbed, modelEmbed)
+        score := s.crossAttentionPredict(userEmbed, queryEmbed, modelEmbed)
         
         if score > bestScore {
             bestScore = score
@@ -114,10 +109,11 @@ func (s *GMTRouterSelector) Select(ctx context.Context, selCtx *SelectionContext
 
 ## How It Works
 
-1. Build a heterogeneous graph with 5 node types: users, queries, models, categories, feedback
-2. Apply Graph Transformer layers to learn embeddings
-3. Compute user-specific model preferences via attention
-4. Select the model with highest preference score for the user
+1. Build a heterogeneous graph with 4 node types: users, LLMs, queries, responses
+2. Connect nodes to form multi-turn interaction chains (via virtual turn nodes)
+3. Apply HGT convolution layers to learn embeddings
+4. Use cross-attention prediction head to compute user-specific model preferences
+5. Select the model with highest preference score for the user
 
 ## Configuration
 
@@ -126,7 +122,7 @@ decision:
   algorithm:
     type: gmtrouter
     gmtrouter:
-      num_layers: 2           # GNN depth
+      num_layers: 2           # HGT layer depth
       hidden_dim: 64          # Embedding dimension
       num_heads: 4            # Attention heads
       learn_preferences: true # Enable preference learning
@@ -145,7 +141,7 @@ models:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `num_layers` | 2 | Number of GNN layers (1-5) |
+| `num_layers` | 2 | Number of HGT layers (1-5) |
 | `hidden_dim` | 64 | Hidden dimension size |
 | `num_heads` | 4 | Number of attention heads |
 | `learn_preferences` | true | Enable online preference learning |
@@ -153,22 +149,20 @@ models:
 
 ## Graph Structure
 
-GMTRouter builds a graph with these node types:
+GMTRouter builds a graph capturing multi-turn interactions:
 
 ```
-User ←→ Query ←→ Model
-  ↓       ↓        ↓
-  └─→ Category ←──┘
-         ↓
-      Feedback
+User ←→ Query ←→ Response ←→ LLM
+         ↑           ↑
+         └── Turn ───┘
 ```
 
 Edges represent:
 
 - User-Query: User submitted this query
-- Query-Model: Query was routed to this model
-- Model-Category: Model specializes in this category
-- Feedback: User feedback on model response
+- Query-Response: Query received this response
+- Response-LLM: Response was generated by this LLM
+- Turn edges: Connect sequential interactions in a conversation
 
 ## Pre-training (Optional)
 
@@ -191,8 +185,8 @@ gmtrouter:
 **Good for:**
 
 - Multi-user environments with diverse preferences
-- Systems with rich interaction history
-- Personalization requirements
+- Systems with rich multi-turn interaction history
+- Personalization requirements across conversations
 
 **Consider alternatives when:**
 
@@ -203,6 +197,6 @@ gmtrouter:
 ## Best Practices
 
 1. **Start without pre-training**: Online learning works for many cases
-2. **Collect interaction data**: More data = better personalization
+2. **Collect interaction data**: More turns = better personalization
 3. **Monitor per-user metrics**: Verify personalization is working
 4. **Use moderate hidden_dim**: 64 balances quality and speed

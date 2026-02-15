@@ -1,8 +1,10 @@
 # RouterDC Selection
 
-RouterDC uses semantic embeddings and contrastive learning to match user queries with the most suitable model. It embeds both queries and model descriptions into a shared vector space, then selects the model with highest similarity to the query.
+RouterDC uses semantic embeddings to match user queries with the most suitable model. It computes similarity between query embeddings and model representations to select the best match.
 
-This approach can improve routing accuracy by **+2.76%** on in-distribution tasks and **+1.90%** on out-of-distribution tasks compared to baselines ([RouterDC, NeurIPS 2024](https://arxiv.org/abs/2409.19886)).
+> **Reference**: [RouterDC: Query-Based Router by Dual Contrastive Learning](https://arxiv.org/abs/2409.19886) (Guo et al., NeurIPS 2024) achieves **+2.76%** in-distribution and **+1.90%** out-of-distribution accuracy improvements.
+>
+> The paper trains a query encoder using **dual contrastive losses** (Sample-LLM loss + Sample-Sample loss) with jointly learned LLM embeddings. Our implementation provides a **simplified approach** using pre-computed embeddings of model descriptions rather than jointly trained LLM-specific embeddings.
 
 ## Algorithm Flow
 

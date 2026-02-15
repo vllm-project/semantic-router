@@ -1,8 +1,14 @@
 # Router-R1 Selection
 
-Router-R1 uses an LLM as the router itself, performing multi-round "think" and "route" actions to make intelligent routing decisions. Unlike simple routers, it can reason about query requirements, model capabilities, and cost trade-offs before making a selection.
+Router-R1 uses an LLM as the router itself, performing multi-round "think" and "route" actions to make intelligent routing decisions. The router can reason about query requirements, model capabilities, and cost trade-offs before making selections.
 
-This approach outperforms single-round routing baselines with strong generalization to unseen models and robust cost management ([Router-R1, NeurIPS 2025](https://arxiv.org/abs/2506.09033)).
+> **Reference**: [Router-R1: Teaching LLMs Multi-Round Routing and Aggregation via Reinforcement Learning](https://arxiv.org/abs/2506.09033) by Hu et al., NeurIPS 2025. Our implementation is inspired by this paper's think/route action pattern.
+
+## Paper vs Implementation
+
+The original Router-R1 paper introduces **multi-round, multi-model routing and aggregation** - the router calls multiple models sequentially, integrates their responses into its context, and synthesizes a final answer. This is the paper's core contribution.
+
+Our implementation provides a **simplified single-model selection** variant that uses the think/route action pattern for deliberative routing. For full multi-model aggregation, see the advanced configuration below.
 
 ## Algorithm Flow
 
@@ -48,15 +54,28 @@ Analyzing query: "Debug this Python code"
 
 ## How It Works
 
+### Single-Model Selection (Default)
+
 1. Router LLM receives the user query and model descriptions
-2. LLM performs **THINK** actions to analyze query requirements, model capabilities, and cost
+2. LLM performs **THINK** actions to analyze query requirements
 3. LLM performs **ROUTE** action to select the best model
 4. Selected model processes the request
 5. If the route is invalid, retry up to max_iterations
 
-### RL-Based Training
+### Multi-Model Aggregation (Advanced)
 
-The router is trained using reinforcement learning with a reward structure that optimizes:
+When `enable_aggregation: true`, Router-R1 can call multiple models:
+
+1. Router LLM reasons about which models to consult
+2. Router calls Model A, receives response, integrates into context
+3. Router decides whether to call additional models
+4. Router synthesizes final answer from all responses
+
+This matches the paper's multi-round aggregation approach.
+
+## RL-Based Training
+
+The router is trained using reinforcement learning with rewards for:
 
 - **Format correctness**: Proper use of think/route tags
 - **Outcome quality**: Quality of the final response
@@ -105,15 +124,9 @@ func (s *RouterR1Selector) Select(ctx context.Context, selCtx *SelectionContext)
 }
 ```
 
-## How It Works
-
-1. Router LLM receives the user query
-2. LLM performs THINK actions to analyze the query
-3. LLM performs ROUTE action to select a model
-4. Selected model processes the request
-5. (Optional) Iterate if verification fails
-
 ## Configuration
+
+### Single-Model Selection
 
 ```yaml
 decision:
@@ -138,6 +151,19 @@ models:
     description: "Code generation and debugging"
 ```
 
+### Multi-Model Aggregation (Advanced)
+
+```yaml
+decision:
+  algorithm:
+    type: router_r1
+    router_r1:
+      router_endpoint: http://localhost:8001
+      enable_aggregation: true  # Enable multi-model calling
+      max_models_per_query: 3   # Max models to consult
+      aggregation_strategy: "synthesize"  # or "best_of"
+```
+
 ## Key Parameters
 
 | Parameter | Default | Description |
@@ -147,6 +173,7 @@ models:
 | `temperature` | 0.7 | Temperature for router LLM |
 | `use_cot` | true | Enable chain-of-thought reasoning |
 | `fallback_to_static` | true | Use static selection if router unavailable |
+| `enable_aggregation` | false | Enable multi-model aggregation |
 
 ## Router-R1 Server
 
@@ -160,19 +187,6 @@ python router_r1_server.py --port 8001 --model Qwen/Qwen2.5-3B-Instruct
 The server exposes:
 
 - `POST /route` - Route a query to a model
-
-## Think/Route Actions
-
-The router LLM outputs structured actions:
-
-```
-<think>
-This query asks about Python debugging.
-The code-llama model specializes in code.
-Let me route to code-llama.
-</think>
-<route>code-llama</route>
-```
 
 ## Without Router Server
 
@@ -189,6 +203,7 @@ If `router_endpoint` is null and `fallback_to_static: true`, Router-R1 falls bac
 - Complex routing logic that's hard to encode in rules
 - Queries requiring semantic understanding
 - Systems with diverse, specialized models
+- Multi-model synthesis (with aggregation enabled)
 
 **Consider alternatives when:**
 

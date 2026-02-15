@@ -1,8 +1,10 @@
 # Elo Rating Selection
 
-Elo Rating selection uses a rating system to rank models based on user feedback. Models that receive positive feedback gain rating points; those with negative feedback lose points. Over time, better-performing models rise to the top and get selected more often.
+Elo Rating selection uses a **runtime rating system** to rank models based on user feedback. Models that receive positive feedback gain rating points; those with negative feedback lose points. Over time, better-performing models rise to the top and get selected more often.
 
-This approach leverages preference-based learning to continuously improve model selection. Research shows preference-based routing can achieve up to **85% cost reduction** while maintaining **95% of top-model performance** ([RouteLLM, ICLR 2025](https://arxiv.org/abs/2406.18665)).
+This approach uses the Bradley-Terry model (pairwise comparison framework) to continuously improve model selection through online learning.
+
+> **Note on RouteLLM**: The [RouteLLM paper](https://arxiv.org/abs/2406.18665) (Ong et al.) trains **static router models** on preference data and achieves ~50% cost reduction (2x savings). Our implementation takes a different approach: a **runtime Elo rating system** that updates dynamically based on live feedback rather than pre-trained static routing.
 
 ## Algorithm Flow
 

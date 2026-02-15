@@ -2,7 +2,7 @@
 
 Hybrid selection combines multiple selection methods (Elo, RouterDC, AutoMix, Cost) with configurable weights. This allows you to balance different factors like user feedback history, semantic matching, cost efficiency, and quality scores for optimal model selection.
 
-Cost-quality aware routing can reduce expensive model calls by **40% or more** while maintaining response quality ([Hybrid LLM, ICLR 2024](https://arxiv.org/abs/2404.14618)).
+> **Note on Hybrid LLM paper**: The [Hybrid LLM paper](https://arxiv.org/abs/2404.14618) (Ding et al.) trains a **BERT-based quality-gap predictor** for binary routing between two models, achieving up to **40% fewer expensive model calls**. Our implementation takes a different approach: a **weighted ensemble** that combines multiple signals (Elo ratings, semantic similarity, POMDP values, cost) rather than a trained binary classifier.
 
 ## Algorithm Flow
 

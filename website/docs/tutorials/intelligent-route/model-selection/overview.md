@@ -187,13 +187,13 @@ The selection algorithms are based on these research papers:
 
 ### Core Algorithms
 
-- **Elo**: [RouteLLM: Learning to Route LLMs with Preference Data](https://arxiv.org/abs/2406.18665) (ICLR 2025) - 85% cost reduction, 95% GPT-4 performance
+- **Elo**: Inspired by preference-based routing concepts; see [RouteLLM](https://arxiv.org/abs/2406.18665) (Ong et al., ICLR 2025) which trains static routers achieving ~50% cost reduction (2x savings)
 - **RouterDC**: [Query-Based Router by Dual Contrastive Learning](https://arxiv.org/abs/2409.19886) (NeurIPS 2024) - +2.76% accuracy improvement
 - **AutoMix**: [Automatically Mixing Language Models](https://arxiv.org/abs/2310.12963) (NeurIPS 2024) - >50% cost reduction
 - **Hybrid**: [Cost-Efficient Quality-Aware Query Routing](https://arxiv.org/abs/2404.14618) (ICLR 2024) - 40% fewer expensive calls
 
 ### RL-Driven Algorithms
 
-- **Thompson Sampling**: Classical multi-armed bandit approach (Agrawal & Goyal) - Bayesian exploration/exploitation
-- **GMTRouter**: [Personalized LLM Routing via Graph Neural Networks](https://arxiv.org/abs/2511.08590) (arXiv) - 0.9-21.6% accuracy improvement
-- **Router-R1**: [Teaching LLMs Multi-Round Routing via RL](https://arxiv.org/abs/2506.09033) (NeurIPS 2025) - Outperforms single-round baselines
+- **Thompson Sampling**: Classical multi-armed bandit approach; see [A Tutorial on Thompson Sampling](https://arxiv.org/abs/1707.02038) (Russo, Van Roy et al.)
+- **GMTRouter**: [GMTRouter: Personalized LLM Router over Multi-turn User Interactions](https://arxiv.org/abs/2511.08590) (Wang et al.) - 0.9-21.6% accuracy improvement
+- **Router-R1**: [Router-R1: Teaching LLMs Multi-Round Routing and Aggregation via RL](https://arxiv.org/abs/2506.09033) (Hu et al., NeurIPS 2025)
