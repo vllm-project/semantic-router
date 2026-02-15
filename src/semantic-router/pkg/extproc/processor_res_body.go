@@ -11,8 +11,8 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -73,7 +73,7 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 				ctx.TTFTSeconds = ttft
 				ctx.TTFTRecorded = true
 				// Update TTFT cache for latency signal evaluation
-				classification.UpdateTTFT(ctx.RequestModel, ttft)
+				latency.UpdateTTFT(ctx.RequestModel, ttft)
 				logging.Debugf("Recorded TTFT on first streamed body chunk: model=%q, TTFT=%.4fs", ctx.RequestModel, ttft)
 			}
 		}
@@ -153,7 +153,7 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 			// (either ModelRef.Model or ModelRef.LoRAName, depending on selection)
 			// UpdateTPOT will trim whitespace to ensure canonical matching
 			logging.Debugf("Updating TPOT cache for model: %q, TPOT: %.4f", ctx.RequestModel, timePerToken)
-			classification.UpdateTPOT(ctx.RequestModel, timePerToken)
+			latency.UpdateTPOT(ctx.RequestModel, timePerToken)
 		}
 
 		// Record windowed model metrics for load balancing
@@ -486,7 +486,7 @@ func (r *OpenAIRouter) cacheStreamingResponse(ctx *RequestContext) error {
 			timePerToken := completionLatency / float64(usage.CompletionTokens)
 			metrics.RecordModelTPOT(ctx.RequestModel, timePerToken)
 			logging.Infof("Recorded TPOT for streaming response: model=%s, TPOT=%.4f", ctx.RequestModel, timePerToken)
-			classification.UpdateTPOT(ctx.RequestModel, timePerToken)
+			latency.UpdateTPOT(ctx.RequestModel, timePerToken)
 		}
 	}
 

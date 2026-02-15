@@ -182,6 +182,9 @@ signals:
       description: "Japanese language queries"
 
   # latency - Latency-based routing signals (TPOT and TTFT percentile-based)
+  # DEPRECATED (backward compatibility period): legacy latency signals are still accepted
+  # and auto-migrated to decision.algorithm.type=latency_aware during merge/validation.
+  # TODO(v0.2-Athena): Remove legacy latency compatibility after backward compatibility period.
   # Percentile-based rules adapt to each model's actual performance distribution
   # Works with any number of observations (1+): uses average for 1-2, percentile for 3+
   # 
@@ -494,6 +497,9 @@ decisions:
           enabled: true
           similarity_threshold: 0.85
 
+  # DEPRECATED (backward compatibility period): legacy latency condition examples.
+  # These are still accepted and auto-migrated to algorithm.type=latency_aware.
+  # TODO(v0.2-Athena): Remove legacy latency condition examples after backward compatibility period.
   # Latency-based routing example: Route to models that meet latency requirements
   - name: "low_latency_route"
     description: "Route to models with low latency (fast TPOT and TTFT)"
@@ -526,6 +532,45 @@ decisions:
       - type: "system_prompt"
         configuration:
           system_prompt: "Start responding quickly. User is waiting for immediate feedback."
+
+  # Recommended new format: latency-aware model selection via algorithm.type
+  # Latency now applies at model-selection time within the matched decision modelRefs.
+  - name: "low_latency_route_v2"
+    description: "Preferred: select fastest model using latency_aware algorithm"
+    priority: 90
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "other"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false
+      - model: "gpt-5.2"
+    algorithm:
+      type: "latency_aware"
+      latency_aware:
+        tpot_percentile: 10
+        ttft_percentile: 10
+        description: "Prefer models in top 10% for both TPOT and TTFT"
+
+  - name: "fast_start_route_v2"
+    description: "Preferred: prioritize fast first token using latency_aware"
+    priority: 85
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "other"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false
+      - model: "gpt-5.2"
+    algorithm:
+      type: "latency_aware"
+      latency_aware:
+        ttft_percentile: 10
+        description: "Prioritize fast first-token latency for chat UX"
 
   # Size-aware routing example: Try smaller models first, escalate if confidence is low
   - name: "confidence_route"

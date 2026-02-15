@@ -91,7 +91,6 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	ctx.VSRMatchedUserFeedback = signals.MatchedUserFeedbackRules
 	ctx.VSRMatchedPreference = signals.MatchedPreferenceRules
 	ctx.VSRMatchedLanguage = signals.MatchedLanguageRules
-	ctx.VSRMatchedLatency = signals.MatchedLatencyRules
 	ctx.VSRMatchedContext = signals.MatchedContextRules
 	ctx.VSRContextTokenCount = signals.TokenCount
 	ctx.VSRMatchedComplexity = signals.MatchedComplexityRules
@@ -106,10 +105,10 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	r.setModalityFromSignals(ctx, signals.MatchedModalityRules)
 
 	// Log signal evaluation results
-	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, latency=%v, modality=%v",
+	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, modality=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
 		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules,
-		signals.MatchedLanguageRules, signals.MatchedLatencyRules, signals.MatchedModalityRules)
+		signals.MatchedLanguageRules, signals.MatchedModalityRules)
 
 	// Set signal span attributes
 	allMatchedRules := []string{}
@@ -120,7 +119,6 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	allMatchedRules = append(allMatchedRules, signals.MatchedUserFeedbackRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedPreferenceRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedLanguageRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedLatencyRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedModalityRules...)
 
 	// End signal evaluation span
@@ -298,14 +296,17 @@ func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, de
 
 	// Build selection context with cost/quality weights
 	costWeight, qualityWeight := r.getSelectionWeights(algorithm)
+	latencyAwareTPOTPercentile, latencyAwareTTFTPercentile := r.getLatencyAwarePercentiles(algorithm)
 
 	selCtx := &selection.SelectionContext{
-		Query:           query,
-		DecisionName:    decisionName,
-		CategoryName:    categoryName,
-		CandidateModels: modelRefs,
-		CostWeight:      costWeight,
-		QualityWeight:   qualityWeight,
+		Query:                      query,
+		DecisionName:               decisionName,
+		CategoryName:               categoryName,
+		CandidateModels:            modelRefs,
+		CostWeight:                 costWeight,
+		QualityWeight:              qualityWeight,
+		LatencyAwareTPOTPercentile: latencyAwareTPOTPercentile,
+		LatencyAwareTTFTPercentile: latencyAwareTTFTPercentile,
 	}
 
 	// Perform selection
@@ -351,6 +352,8 @@ func (r *OpenAIRouter) getSelectionMethod(algorithm *config.AlgorithmConfig) sel
 			return selection.MethodRLDriven
 		case "gmtrouter":
 			return selection.MethodGMTRouter
+		case "latency_aware":
+			return selection.MethodLatencyAware
 		case "static":
 			return selection.MethodStatic
 		case "knn":
@@ -386,6 +389,15 @@ func (r *OpenAIRouter) getSelectionWeights(algorithm *config.AlgorithmConfig) (f
 
 	// Default: equal weighting (0.5 cost, 0.5 quality)
 	return 0.5, 0.5
+}
+
+// getLatencyAwarePercentiles extracts TPOT/TTFT percentile settings for latency_aware selection.
+// Returns (0, 0) when latency_aware is not configured for the decision.
+func (r *OpenAIRouter) getLatencyAwarePercentiles(algorithm *config.AlgorithmConfig) (int, int) {
+	if algorithm == nil || algorithm.LatencyAware == nil {
+		return 0, 0
+	}
+	return algorithm.LatencyAware.TPOTPercentile, algorithm.LatencyAware.TTFTPercentile
 }
 
 // processUserFeedbackForElo automatically updates Elo ratings based on detected user feedback signals.

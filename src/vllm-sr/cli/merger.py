@@ -3,7 +3,12 @@
 import copy
 from typing import Dict, Any, List
 
-from cli.models import UserConfig, PluginType
+from cli.models import (
+    UserConfig,
+    PluginType,
+    AlgorithmConfig,
+    LatencyAwareAlgorithmConfig,
+)
 from cli.defaults import load_embedded_defaults
 from cli.utils import getLogger
 
@@ -140,38 +145,140 @@ def translate_language_signals(languages: list) -> list:
     return rules
 
 
-def translate_latency_signals(latencies: list) -> list:
-    """
-    Translate latency signals to router format.
+def _is_latency_condition(condition_type: str) -> bool:
+    return condition_type.strip().lower() == "latency"
 
-    Args:
-        latencies: List of Latency objects
 
-    Returns:
-        list: Router latency rules
-    """
-    rules = []
-    for signal in latencies:
-        rule = {
-            "name": signal.name,
-        }
-        # At least one of tpot_percentile or ttft_percentile should be set
-        if signal.tpot_percentile is not None and signal.tpot_percentile > 0:
-            rule["tpot_percentile"] = signal.tpot_percentile
-        if signal.ttft_percentile is not None and signal.ttft_percentile > 0:
-            rule["ttft_percentile"] = signal.ttft_percentile
+def _is_latency_aware_algorithm(decision) -> bool:
+    if not decision.algorithm:
+        return False
+    return (decision.algorithm.type or "").strip().lower() == "latency_aware"
 
-        # Validate that at least one is set
-        if "tpot_percentile" not in rule and "ttft_percentile" not in rule:
-            log.warn(
-                f"Latency signal '{signal.name}' has neither tpot_percentile nor ttft_percentile set, skipping"
+
+def _normalize_legacy_latency_routing(cfg: UserConfig) -> UserConfig:
+    # legacy latency compatibility is now temporary and will be removed after the backward-compatibility period.
+    has_legacy_signals = (
+        cfg.signals is not None
+        and cfg.signals.latency is not None
+        and len(cfg.signals.latency) > 0
+    )
+    has_legacy_conditions = any(
+        _is_latency_condition(condition.type)
+        for decision in cfg.decisions
+        for condition in decision.rules.conditions
+    )
+    has_latency_aware = any(
+        _is_latency_aware_algorithm(decision) for decision in cfg.decisions
+    )
+
+    if (has_legacy_signals or has_legacy_conditions) and has_latency_aware:
+        raise ValueError(
+            "legacy latency config (signals.latency / conditions.type=latency) "
+            "cannot be used with decision.algorithm.type=latency_aware"
+        )
+
+    if not has_legacy_conditions:
+        if has_legacy_signals:
+            log.warning(
+                "DEPRECATED: signals.latency is deprecated and will be removed in a future release. "
+                "It is ignored when no decision uses conditions.type=latency."
             )
+            cfg.signals.latency = []
+        return cfg
+
+    if not has_legacy_signals:
+        raise ValueError(
+            "conditions.type=latency requires signals.latency for migration"
+        )
+
+    latency_by_name = {}
+    for signal in cfg.signals.latency:
+        if signal.name in latency_by_name:
+            raise ValueError(f"duplicate legacy latency signal name: {signal.name}")
+        has_tpot = signal.tpot_percentile is not None and signal.tpot_percentile > 0
+        has_ttft = signal.ttft_percentile is not None and signal.ttft_percentile > 0
+        if not has_tpot and not has_ttft:
+            raise ValueError(
+                f"legacy latency signal '{signal.name}' must set tpot_percentile or ttft_percentile"
+            )
+        if has_tpot and not (1 <= signal.tpot_percentile <= 100):
+            raise ValueError(
+                f"legacy latency signal '{signal.name}' tpot_percentile must be between 1 and 100"
+            )
+        if has_ttft and not (1 <= signal.ttft_percentile <= 100):
+            raise ValueError(
+                f"legacy latency signal '{signal.name}' ttft_percentile must be between 1 and 100"
+            )
+        latency_by_name[signal.name] = signal
+
+    migrated = 0
+    for decision in cfg.decisions:
+        latency_indexes = [
+            idx
+            for idx, condition in enumerate(decision.rules.conditions)
+            if _is_latency_condition(condition.type)
+        ]
+        if not latency_indexes:
             continue
 
-        if signal.description:
-            rule["description"] = signal.description
-        rules.append(rule)
-    return rules
+        if decision.algorithm is not None:
+            normalized_algo_type = (decision.algorithm.type or "").strip().lower()
+            if normalized_algo_type != "static":
+                algo_type = (decision.algorithm.type or "").strip() or "<empty>"
+                raise ValueError(
+                    f"decision '{decision.name}' has legacy latency condition but algorithm.type={algo_type}; "
+                    "only static can be auto-migrated to latency_aware"
+                )
+        if len(latency_indexes) > 1:
+            raise ValueError(
+                f"decision '{decision.name}' has multiple latency conditions"
+            )
+        if decision.rules.operator.strip().upper() != "AND":
+            raise ValueError(
+                f"decision '{decision.name}' must use rules.operator=AND for legacy latency migration"
+            )
+
+        latency_idx = latency_indexes[0]
+        latency_condition = decision.rules.conditions[latency_idx]
+        latency_signal = latency_by_name.get(latency_condition.name)
+        if latency_signal is None:
+            raise ValueError(
+                f"decision '{decision.name}' references unknown legacy latency signal '{latency_condition.name}'"
+            )
+
+        remaining_conditions = [
+            condition
+            for idx, condition in enumerate(decision.rules.conditions)
+            if idx != latency_idx
+        ]
+        if len(remaining_conditions) == 0:
+            raise ValueError(
+                f"decision '{decision.name}' has no non-latency conditions after migration"
+            )
+
+        decision.rules.conditions = remaining_conditions
+        decision.algorithm = AlgorithmConfig(
+            type="latency_aware",
+            latency_aware=LatencyAwareAlgorithmConfig(
+                tpot_percentile=latency_signal.tpot_percentile,
+                ttft_percentile=latency_signal.ttft_percentile,
+                description=latency_signal.description,
+            ),
+        )
+        migrated += 1
+        log.warning(
+            f"DEPRECATED: decision '{decision.name}' uses conditions.type=latency, which is deprecated and "
+            "will be removed in a future release. Auto-migrated to decision.algorithm.type=latency_aware."
+        )
+
+    if migrated > 0:
+        log.warning(
+            "DEPRECATED: signals.latency is deprecated and will be removed in a future release. "
+            "Auto-migrated to decision.algorithm.latency_aware."
+        )
+        cfg.signals.latency = []
+
+    return cfg
 
 
 def translate_context_signals(context_rules: list) -> list:
@@ -430,6 +537,8 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
 
     # Start with defaults
     merged = copy.deepcopy(defaults)
+    # TODO(v0.2-Athena): Remove legacy latency compatibility after deprecation period.
+    user_config = _normalize_legacy_latency_routing(copy.deepcopy(user_config))
 
     # Translate signals
     if user_config.signals:
@@ -477,12 +586,6 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
                 user_config.signals.language
             )
             log.info(f"  Added {len(user_config.signals.language)} language signals")
-
-        if user_config.signals.latency and len(user_config.signals.latency) > 0:
-            merged["latency_rules"] = translate_latency_signals(
-                user_config.signals.latency
-            )
-            log.info(f"  Added {len(user_config.signals.latency)} latency signals")
 
         if user_config.signals.context and len(user_config.signals.context) > 0:
             merged["context_rules"] = translate_context_signals(

@@ -118,6 +118,7 @@ class Signals(BaseModel):
     user_feedbacks: Optional[List[UserFeedback]] = []
     preferences: Optional[List[Preference]] = []
     language: Optional[List[Language]] = []
+    # TODO(v0.2-Athena): Remove legacy latency compatibility after backward compatibility period.
     latency: Optional[List[Latency]] = []
     context: Optional[List[ContextRule]] = []
     complexity: Optional[List[ComplexityRule]] = []
@@ -237,19 +238,28 @@ class ReMoMAlgorithmConfig(BaseModel):
     max_responses_per_round: Optional[int] = None
 
 
+class LatencyAwareAlgorithmConfig(BaseModel):
+    """Configuration for latency_aware algorithm."""
+
+    tpot_percentile: Optional[int] = None
+    ttft_percentile: Optional[int] = None
+    description: Optional[str] = None
+
+
 class AlgorithmConfig(BaseModel):
     """Algorithm configuration for multi-model decisions.
 
     Specifies how multiple models in a decision should be orchestrated.
     """
 
-    # Algorithm type: "sequential", "confidence", "concurrent", "remom"
+    # Algorithm type: "sequential", "confidence", "concurrent", "remom", "latency_aware"
     type: str
 
     # Algorithm-specific configurations (only one should be set based on type)
     confidence: Optional[ConfidenceAlgorithmConfig] = None
     concurrent: Optional[ConcurrentAlgorithmConfig] = None
     remom: Optional[ReMoMAlgorithmConfig] = None
+    latency_aware: Optional[LatencyAwareAlgorithmConfig] = None
 
 
 class PluginType(str, Enum):

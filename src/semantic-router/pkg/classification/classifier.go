@@ -391,9 +391,6 @@ type Classifier struct {
 	// Language classifier
 	languageClassifier *LanguageClassifier
 
-	// Latency classifier
-	latencyClassifier *LatencyClassifier
-
 	// Context classifier for token count-based routing
 	contextClassifier *ContextClassifier
 
@@ -547,14 +544,6 @@ func initModels(classifier *Classifier) (*Classifier, error) {
 		if err := classifier.initializeLanguageClassifier(); err != nil {
 			logging.Warnf("Failed to initialize language classifier: %v", err)
 			// Non-fatal - continue without language classification
-		}
-	}
-
-	// Initialize latency classifier
-	if len(classifier.Config.LatencyRules) > 0 {
-		if err := classifier.initializeLatencyClassifier(); err != nil {
-			logging.Warnf("Failed to initialize latency classifier: %v", err)
-			// Non-fatal - continue without latency classification
 		}
 	}
 
@@ -966,12 +955,6 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 		allSignals[key] = true
 	}
 
-	// Add all configured latency rules
-	for _, rule := range c.Config.LatencyRules {
-		key := strings.ToLower(config.SignalTypeLatency + ":" + rule.Name)
-		allSignals[key] = true
-	}
-
 	// Add all configured context rules
 	for _, rule := range c.Config.ContextRules {
 		key := strings.ToLower(config.SignalTypeContext + ":" + rule.Name)
@@ -1015,7 +998,6 @@ type SignalResults struct {
 	MatchedUserFeedbackRules []string // "satisfied", "need_clarification", "wrong_answer", "want_different"
 	MatchedPreferenceRules   []string // Route preference names matched via external LLM
 	MatchedLanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
-	MatchedLatencyRules      []string // Latency rule names that matched based on model TPOT
 	MatchedContextRules      []string // Matched context rule names (e.g. "low_token_count")
 	TokenCount               int      // Total token count
 	MatchedComplexityRules   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
@@ -1037,7 +1019,6 @@ type SignalMetricsCollection struct {
 	UserFeedback SignalMetrics `json:"user_feedback"`
 	Preference   SignalMetrics `json:"preference"`
 	Language     SignalMetrics `json:"language"`
-	Latency      SignalMetrics `json:"latency"`
 	Context      SignalMetrics `json:"context"`
 	Complexity   SignalMetrics `json:"complexity"`
 	Modality     SignalMetrics `json:"modality"`
@@ -1494,61 +1475,6 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		logging.Infof("[Signal Computation] Language signal not used in any decision, skipping evaluation")
 	}
 
-	// Evaluate latency rules in parallel (only if used in decisions)
-	// Latency evaluation is model-aware, so we need to collect models from decisions that use latency signals
-	if isSignalTypeUsed(usedSignals, config.SignalTypeLatency) && len(c.Config.LatencyRules) > 0 && c.IsLatencyEnabled() {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			start := time.Now()
-
-			// Collect all models from decisions that use latency signals
-			availableModels := c.collectModelsForLatencySignals(usedSignals)
-
-			if len(availableModels) > 0 {
-				latencyResult, err := c.latencyClassifier.Classify(availableModels)
-				elapsed := time.Since(start)
-				latencySeconds := elapsed.Seconds()
-
-				// Record signal extraction metrics for each matched latency rule
-				if err == nil && latencyResult != nil {
-					for _, ruleName := range latencyResult.MatchedRules {
-						metrics.RecordSignalExtraction(config.SignalTypeLatency, ruleName, latencySeconds)
-						metrics.RecordSignalMatch(config.SignalTypeLatency, ruleName)
-					}
-				} else {
-					// Record extraction even if no match
-					metrics.RecordSignalExtraction(config.SignalTypeLatency, "", latencySeconds)
-				}
-
-				// Record metrics (use microseconds for better precision)
-				results.Metrics.Latency.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
-				results.Metrics.Latency.Confidence = 1.0 // Rule-based, always 1.0
-
-				logging.Infof("[Signal Computation] Latency signal evaluation completed in %v", elapsed)
-				if err != nil {
-					logging.Errorf("latency rule evaluation failed: %v", err)
-				} else if latencyResult != nil {
-					mu.Lock()
-					results.MatchedLatencyRules = latencyResult.MatchedRules
-					mu.Unlock()
-				}
-			} else if isSignalTypeUsed(usedSignals, config.SignalTypeLatency) {
-				// Diagnostic: latency signals are used but no models found
-				// This can happen if decisions reference latency signals but have no ModelRefs
-				latencySignals := []string{}
-				for key := range usedSignals {
-					if strings.HasPrefix(strings.ToLower(key), config.SignalTypeLatency+":") {
-						latencySignals = append(latencySignals, key)
-					}
-				}
-				logging.Warnf("[Signal Computation] Latency signals are used (%v) but no models found in decisions. Latency routing will be skipped.", latencySignals)
-			}
-		}()
-	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeLatency) {
-		logging.Infof("[Signal Computation] Latency signal not used in any decision, skipping evaluation")
-	}
-
 	// Evaluate context rules in parallel (only if used in decisions)
 	// Use contextText for token counting to include all messages in multi-turn conversations
 	if isSignalTypeUsed(usedSignals, config.SignalTypeContext) && c.contextClassifier != nil {
@@ -1666,15 +1592,15 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		return nil, fmt.Errorf("no decisions configured")
 	}
 
-	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, latency=%v, context=%v, complexity=%v, modality=%v",
+	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, context=%v, complexity=%v, modality=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
 		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules,
-		signals.MatchedLanguageRules, signals.MatchedLatencyRules, signals.MatchedContextRules,
+		signals.MatchedLanguageRules, signals.MatchedContextRules,
 		signals.MatchedComplexityRules, signals.MatchedModalityRules)
-	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, latency=%v, context=%v, complexity=%v, authz=%v",
+	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, context=%v, complexity=%v, authz=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
 		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules,
-		signals.MatchedLanguageRules, signals.MatchedLatencyRules, signals.MatchedContextRules,
+		signals.MatchedLanguageRules, signals.MatchedContextRules,
 		signals.MatchedComplexityRules, signals.MatchedAuthzRules)
 	// Create decision engine
 	engine := decision.NewDecisionEngine(
@@ -1694,7 +1620,6 @@ func (c *Classifier) EvaluateDecisionWithEngine(signals *SignalResults) (*decisi
 		UserFeedbackRules: signals.MatchedUserFeedbackRules,
 		PreferenceRules:   signals.MatchedPreferenceRules,
 		LanguageRules:     signals.MatchedLanguageRules,
-		LatencyRules:      signals.MatchedLatencyRules,
 		ContextRules:      signals.MatchedContextRules,
 		ComplexityRules:   signals.MatchedComplexityRules,
 		ModalityRules:     signals.MatchedModalityRules,
@@ -2448,71 +2373,6 @@ func (c *Classifier) GetModelsForCategory(categoryName string) []string {
 	return models
 }
 
-// collectModelsForLatencySignals collects all models from decisions that use latency signals
-func (c *Classifier) collectModelsForLatencySignals(usedSignals map[string]bool) []string {
-	modelSet := make(map[string]bool)
-
-	for i := range c.Config.Decisions {
-		decision := &c.Config.Decisions[i]
-		// Check if this decision uses latency signals
-		usesLatency := false
-		// usedSignals keys are already normalized to lowercase by analyzeRuleCombination
-		latencyPrefix := config.SignalTypeLatency + ":"
-		for key := range usedSignals {
-			if strings.HasPrefix(key, latencyPrefix) {
-				// Check if this decision's rules reference this latency signal
-				// decisionUsesLatencySignal normalizes condition.Type/Name from config
-				if c.decisionUsesLatencySignal(decision, key) {
-					usesLatency = true
-					break
-				}
-			}
-		}
-
-		if usesLatency {
-			// Collect models from this decision
-			for _, modelRef := range decision.ModelRefs {
-				modelName := ""
-				if modelRef.LoRAName != "" {
-					modelName = modelRef.LoRAName
-				} else {
-					modelName = modelRef.Model
-				}
-				// Skip empty model names
-				if modelName != "" {
-					modelSet[modelName] = true
-				}
-			}
-		}
-	}
-
-	// Convert set to slice and sort deterministically
-	var models []string
-	for model := range modelSet {
-		models = append(models, model)
-	}
-	// Sort deterministically to ensure consistent ordering
-	slices.Sort(models)
-
-	return models
-}
-
-// decisionUsesLatencySignal checks if a decision uses a latency signal key
-// condition.Type and condition.Name come from config, so we normalize them for comparison
-func (c *Classifier) decisionUsesLatencySignal(decision *config.Decision, normalizedSignalKey string) bool {
-	for _, condition := range decision.Rules.Conditions {
-		// Normalize condition from config for comparison (all signals are normalized to lowercase)
-		normalizedType := strings.ToLower(strings.TrimSpace(condition.Type))
-		if normalizedType == config.SignalTypeLatency {
-			currentKey := normalizedType + ":" + strings.ToLower(strings.TrimSpace(condition.Name))
-			if currentKey == normalizedSignalKey {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // updateBestModel updates the best model, score if the new score is better.
 func (c *Classifier) updateBestModel(score float64, model string, bestScore *float64, bestModel *string) {
 	if score > *bestScore {
@@ -2660,27 +2520,6 @@ func (c *Classifier) initializeLanguageClassifier() error {
 	c.languageClassifier = classifier
 	logging.Infof("Language classifier initialized")
 	return nil
-}
-
-// initializeLatencyClassifier initializes the latency classifier
-func (c *Classifier) initializeLatencyClassifier() error {
-	if len(c.Config.LatencyRules) == 0 {
-		return nil
-	}
-
-	classifier, err := NewLatencyClassifier(c.Config.LatencyRules)
-	if err != nil {
-		return fmt.Errorf("failed to create latency classifier: %w", err)
-	}
-
-	c.latencyClassifier = classifier
-	logging.Infof("Latency classifier initialized")
-	return nil
-}
-
-// IsLatencyEnabled checks if latency classification is enabled
-func (c *Classifier) IsLatencyEnabled() bool {
-	return len(c.Config.LatencyRules) > 0 && c.latencyClassifier != nil
 }
 
 // ClassifyFactCheck performs fact-check classification on the given text
@@ -2935,8 +2774,6 @@ func (c *Classifier) evaluateComposerCondition(
 		return slices.Contains(signals.MatchedPreferenceRules, condition.Name)
 	case "language":
 		return slices.Contains(signals.MatchedLanguageRules, condition.Name)
-	case "latency":
-		return slices.Contains(signals.MatchedLatencyRules, condition.Name)
 	case "context":
 		return slices.Contains(signals.MatchedContextRules, condition.Name)
 	case "modality":

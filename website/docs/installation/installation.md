@@ -218,6 +218,7 @@ For local development and testing:
 ## Next Steps
 
 - **[Configuration Guide](configuration.md)** - Advanced routing and signal configuration
+- **[Latency Routing Migration Guide](latency-migration.md)** - Convert deprecated latency-signal configs to `algorithm.type: latency_aware`
 - **[Kubernetes Operator](k8s/operator)** - Production Kubernetes deployment
 - **[API Documentation](../api/router.md)** - Complete API reference
 - **[Tutorials](../tutorials/intelligent-route/keyword-routing.md)** - Learn by example
