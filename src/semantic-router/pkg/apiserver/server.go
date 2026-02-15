@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
@@ -54,10 +55,19 @@ func Init(configPath string, port int, enableSystemPromptAPI bool) error {
 		metrics.SetBatchMetricsConfig(metricsConfig)
 	}
 
+	// Get memory store if available (set by ExtProc router during init)
+	memoryStore := initMemoryStore(5, 500*time.Millisecond)
+	if memoryStore != nil {
+		logging.Infof("Memory management API enabled")
+	} else {
+		logging.Infof("Memory store not available, memory management API will return 503")
+	}
+
 	// Create server instance
 	apiServer := &ClassificationAPIServer{
 		classificationSvc:     classificationSvc,
 		config:                cfg,
+		memoryStore:           memoryStore,
 		enableSystemPromptAPI: enableSystemPromptAPI,
 	}
 
@@ -89,6 +99,24 @@ func initClassify(maxRetries int, retryInterval time.Duration) *services.Classif
 	}
 
 	logging.Warnf("Failed to find global classification service after %d attempts", maxRetries)
+	return nil
+}
+
+// initMemoryStore attempts to get the global memory store with retry logic.
+// The memory store is created by the ExtProc router which may start concurrently.
+func initMemoryStore(maxRetries int, retryInterval time.Duration) memory.Store {
+	for i := 0; i < maxRetries; i++ {
+		if store := memory.GetGlobalMemoryStore(); store != nil {
+			return store
+		}
+
+		if i < maxRetries-1 {
+			logging.Infof("Global memory store not ready, retrying in %v (attempt %d/%d)", retryInterval, i+1, maxRetries)
+			time.Sleep(retryInterval)
+		}
+	}
+
+	logging.Warnf("Memory store not available after %d attempts", maxRetries)
 	return nil
 }
 
@@ -142,6 +170,12 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	// Configuration endpoints
 	mux.HandleFunc("GET /config/classification", s.handleGetConfig)
 	mux.HandleFunc("PUT /config/classification", s.handleUpdateConfig)
+
+	// Memory management endpoints
+	mux.HandleFunc("GET /v1/memory/{id}", s.handleGetMemory)
+	mux.HandleFunc("GET /v1/memory", s.handleListMemories)
+	mux.HandleFunc("DELETE /v1/memory/{id}", s.handleDeleteMemory)
+	mux.HandleFunc("DELETE /v1/memory", s.handleDeleteMemoriesByScope)
 
 	// System prompt configuration endpoints (only if explicitly enabled)
 	if s.enableSystemPromptAPI {

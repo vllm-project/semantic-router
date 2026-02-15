@@ -387,6 +387,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 			logging.Warnf("Failed to create memory store: %v, Memory will be disabled", err)
 		} else {
 			memoryStore = memStore
+			memory.SetGlobalMemoryStore(memStore)
 			logging.Infof("Memory enabled with Milvus backend")
 		}
 	}
