@@ -36,6 +36,17 @@ while [[ $# -gt 0 ]]; do
             USE_CLASSIFIER_GPU=true
             shift
             ;;
+        --kind)
+            # Delegate to kind-specific deployment script
+            KIND_SCRIPT="$SCRIPT_DIR/kind/deploy-kind.sh"
+            if [[ ! -x "$KIND_SCRIPT" ]]; then
+                echo -e "${RED}[ERROR]${NC} Kind deploy script not found or not executable: $KIND_SCRIPT"
+                exit 1
+            fi
+            shift
+            # Pass remaining arguments to kind script
+            exec "$KIND_SCRIPT" "$@"
+            ;;
         --help|-h)
             echo "Usage: $0 [OPTIONS]"
             echo ""
@@ -43,6 +54,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --simulator           Use mock-vllm simulator instead of llm-katan (no GPU required)"
             echo "  --kserve              Deploy semantic-router with a KServe backend (use --simulator for KServe sim)"
             echo "  --classifier-gpu      Run semantic router classifier on GPU"
+            echo "  --kind                Deploy to a kind cluster"
             echo "  --no-observability    Skip deploying dashboard, OpenWebUI, Grafana, and Prometheus"
             echo "  --help, -h            Show this help message"
             echo ""
