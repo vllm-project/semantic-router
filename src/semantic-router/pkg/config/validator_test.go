@@ -66,6 +66,49 @@ var _ = Describe("validateLatencyRules", func() {
 	})
 })
 
+var _ = Describe("validateLatencyAwareAlgorithmConfig", func() {
+	It("accepts both percentiles set", func() {
+		cfg := &LatencyAwareAlgorithmConfig{TPOTPercentile: 10, TTFTPercentile: 50}
+		Expect(validateLatencyAwareAlgorithmConfig(cfg)).To(Succeed())
+	})
+
+	It("accepts TPOT-only", func() {
+		cfg := &LatencyAwareAlgorithmConfig{TPOTPercentile: 50}
+		Expect(validateLatencyAwareAlgorithmConfig(cfg)).To(Succeed())
+	})
+
+	It("accepts TTFT-only", func() {
+		cfg := &LatencyAwareAlgorithmConfig{TTFTPercentile: 50}
+		Expect(validateLatencyAwareAlgorithmConfig(cfg)).To(Succeed())
+	})
+
+	It("accepts boundary values 1 and 100", func() {
+		cfg := &LatencyAwareAlgorithmConfig{TPOTPercentile: 1, TTFTPercentile: 100}
+		Expect(validateLatencyAwareAlgorithmConfig(cfg)).To(Succeed())
+	})
+
+	It("rejects zero percentiles", func() {
+		cfg := &LatencyAwareAlgorithmConfig{}
+		err := validateLatencyAwareAlgorithmConfig(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("must specify at least one of"))
+	})
+
+	It("rejects TPOT > 100", func() {
+		cfg := &LatencyAwareAlgorithmConfig{TPOTPercentile: 101}
+		err := validateLatencyAwareAlgorithmConfig(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("tpot_percentile must be between 1 and 100"))
+	})
+
+	It("rejects TTFT > 100", func() {
+		cfg := &LatencyAwareAlgorithmConfig{TTFTPercentile: 200}
+		err := validateLatencyAwareAlgorithmConfig(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("ttft_percentile must be between 1 and 100"))
+	})
+})
+
 var _ = Describe("validateLoRAName", func() {
 	loraConfig := func(model string, loras ...string) *RouterConfig {
 		adapters := make([]LoRAAdapter, len(loras))
@@ -237,5 +280,179 @@ var _ = Describe("validateConfigStructure", func() {
 		err := validateConfigStructure(cfg)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("name cannot be empty"))
+	})
+
+	It("rejects latency_aware without algorithm.latency_aware", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "x",
+					ModelRefs: []ModelRef{{
+						Model:                 "model-a",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+					}},
+					Algorithm: &AlgorithmConfig{
+						Type: "latency_aware",
+					},
+				}},
+			},
+		}
+		err := validateConfigStructure(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("algorithm.type=latency_aware requires algorithm.latency_aware configuration"))
+	})
+
+	It("accepts latency_aware-only configuration", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "new-latency-aware",
+					ModelRefs: []ModelRef{{
+						Model:                 "model-a",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+					}},
+					Algorithm: &AlgorithmConfig{
+						Type:         "latency_aware",
+						LatencyAware: &LatencyAwareAlgorithmConfig{TPOTPercentile: 20, TTFTPercentile: 20},
+					},
+				}},
+			},
+		}
+
+		Expect(validateConfigStructure(cfg)).To(Succeed())
+	})
+
+	It("rejects multiple algorithm config blocks in one decision", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "mixed-algo-blocks",
+					ModelRefs: []ModelRef{{
+						Model:                 "model-a",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+					}},
+					Algorithm: &AlgorithmConfig{
+						Type:         "latency_aware",
+						LatencyAware: &LatencyAwareAlgorithmConfig{TPOTPercentile: 20},
+						AutoMix:      &AutoMixSelectionConfig{},
+					},
+				}},
+			},
+		}
+
+		err := validateConfigStructure(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("cannot be combined with multiple algorithm config blocks"))
+	})
+
+	It("rejects algorithm type and config block mismatch", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "mismatched-algo-block",
+					ModelRefs: []ModelRef{{
+						Model:                 "model-a",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+					}},
+					Algorithm: &AlgorithmConfig{
+						Type:   "automix",
+						Hybrid: &HybridSelectionConfig{},
+					},
+				}},
+			},
+		}
+
+		err := validateConfigStructure(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("requires algorithm.automix configuration; found algorithm.hybrid"))
+	})
+
+	It("rejects unsupported algorithm block for static type", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "static-with-block",
+					ModelRefs: []ModelRef{{
+						Model:                 "model-a",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+					}},
+					Algorithm: &AlgorithmConfig{
+						Type:    "static",
+						AutoMix: &AutoMixSelectionConfig{},
+					},
+				}},
+			},
+		}
+
+		err := validateConfigStructure(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("algorithm.type=static cannot be used with algorithm.automix configuration"))
+	})
+
+	It("accepts deprecated latency signal config and latency conditions (warning only)", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Signals: Signals{
+					LatencyRules: []LatencyRule{{Name: "low_latency", TPOTPercentile: 20}},
+				},
+				Decisions: []Decision{{
+					Name: "legacy-latency",
+					Rules: RuleCombination{
+						Operator: "AND",
+						Conditions: []RuleCondition{
+							{Type: "latency", Name: "low_latency"},
+						},
+					},
+					ModelRefs: []ModelRef{{
+						Model:                 "model-a",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+					}},
+					Algorithm: &AlgorithmConfig{Type: "static"},
+				}},
+			},
+		}
+
+		Expect(validateConfigStructure(cfg)).To(Succeed())
+	})
+
+	It("rejects mixed legacy and latency_aware configurations", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Signals: Signals{
+					LatencyRules: []LatencyRule{{Name: "low_latency", TPOTPercentile: 20}},
+				},
+				Decisions: []Decision{
+					{
+						Name: "legacy-latency",
+						Rules: RuleCombination{
+							Operator: "AND",
+							Conditions: []RuleCondition{
+								{Type: "latency", Name: "low_latency"},
+							},
+						},
+						ModelRefs: []ModelRef{{
+							Model:                 "model-a",
+							ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+						}},
+						Algorithm: &AlgorithmConfig{Type: "static"},
+					},
+					{
+						Name: "new-latency-aware",
+						ModelRefs: []ModelRef{{
+							Model:                 "model-b",
+							ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+						}},
+						Algorithm: &AlgorithmConfig{
+							Type:         "latency_aware",
+							LatencyAware: &LatencyAwareAlgorithmConfig{TPOTPercentile: 20, TTFTPercentile: 20},
+						},
+					},
+				},
+			},
+		}
+
+		err := validateConfigStructure(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("cannot be used with decision.algorithm.type=latency_aware"))
 	})
 })

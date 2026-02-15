@@ -6,13 +6,23 @@ sidebar_position: 4
 
 This guide covers the configuration options for the Semantic Router. The system uses a single YAML configuration file that controls **signal-driven routing**, **plugin chain processing**, and **model selection**.
 
+## Migration notice
+
+Latency routing is moving from legacy signal-based config to decision algorithm config.
+
+- Deprecated: `signals.latency` / `signals.latency_rules` with `conditions.type: latency`
+- Recommended: `decision.algorithm.type: latency_aware`
+
+See the [Latency routing migration guide](latency-migration.md) before updating existing configs.
+
 ## Architecture Overview
 
-The configuration defines three main layers:
+The configuration defines four main layers:
 
-1. **Signal Extraction Layer**: Define 9 types of signals (keyword, embedding, domain, fact_check, user_feedback, preference, language, latency, context)
-2. **Decision Engine**: Combine signals using AND/OR operators to make routing decisions
-3. **Plugin Chain**: Configure plugins for caching, security, and optimization
+1. **Signal Extraction Layer**: Define request signals (keyword, embedding, domain, fact_check, user_feedback, preference, language, context, complexity)
+2. **Decision Engine**: Combine signals using AND/OR operators to match decisions
+3. **Model Selection Layer**: Select a model from decision `modelRefs` (for example, `algorithm.type: latency_aware`)
+4. **Plugin Chain**: Configure plugins for caching, security, and optimization
 
 ## Configuration File
 
@@ -291,7 +301,7 @@ Quick usage:
 
 ## Signals Configuration
 
-Signals are the foundation of intelligent routing. The system supports 10 types of signals that can be combined to make routing decisions.
+Signals are the foundation of intelligent routing. The system supports 9 types of request signals that can be combined to make routing decisions.
 
 ### 1. Keyword Signals - Fast Pattern Matching
 
@@ -420,50 +430,17 @@ signals:
 - Support multilingual applications
 - Supports 100+ languages via whatlanggo library
 
-### 8. Latency Signals - Percentile-based Routing
+### Legacy latency signals (deprecated)
 
-```yaml
-signals:
-  latency:
-    # RECOMMENDED: Use both TPOT and TTFT percentiles for comprehensive evaluation
-    - name: "low_latency_comprehensive"
-      tpot_percentile: 10  # 10th percentile for TPOT (top 10% fastest token generation)
-      ttft_percentile: 10  # 10th percentile for TTFT (top 10% fastest first token)
-      description: "For real-time applications - fast start and fast generation"
-    
-    # Different percentiles for different priorities
-    - name: "balanced_latency"
-      tpot_percentile: 50  # Median TPOT (top 50%)
-      ttft_percentile: 10  # Top 10% TTFT (prioritize fast start)
-      description: "Prioritize fast start, accept moderate generation speed"
-    
-    # TPOT percentile only (use case: batch processing)
-    - name: "batch_processing_optimized"
-      tpot_percentile: 10  # 10th percentile for TPOT
-      description: "For batch processing where throughput (TPOT) is critical"
-    
-    # TTFT percentile only (use case: real-time chat)
-    - name: "chat_fast_start"
-      ttft_percentile: 10  # 10th percentile for TTFT
-      description: "For chat applications where fast first token (TTFT) is critical"
-```
+Legacy latency signal config is still accepted during a backward-compatibility window:
 
-**Use Cases:**
+- `signals.latency` (CLI-style config) or `signals.latency_rules` (router-style config)
+- `conditions.type: latency`
 
-- Route latency-sensitive queries to faster models based on adaptive percentile thresholds
-- Optimize for real-time applications (chat, streaming)
-- Balance latency vs. capability based on query requirements
-- TPOT (Time Per Output Token) and TTFT (Time To First Token) are automatically tracked from responses
+New configs should use `decision.algorithm.type: latency_aware` instead.
+See [Latency routing migration guide](latency-migration.md) for conversion details and limitations.
 
-**How it works**:
-
-- Percentile-based thresholds adapt to each model's actual performance distribution
-- Works with any number of observations: uses average for 1-2 observations, percentile calculation for 3+
-- When both TPOT and TTFT percentiles are set, model must meet BOTH thresholds (AND logic)
-- **Performance**: Typically 2-5ms for 10 models (runs asynchronously in goroutine, doesn't block requests) - percentile calculation with O(n log n) complexity where n = observations per model (typically 10-100, max 1000)
-- **Recommendation**: Use both TPOT and TTFT percentiles for comprehensive latency evaluation
-
-### 9. Context Signals - Token Count Routing
+### 8. Context Signals - Token Count Routing
 
 ```yaml
 signals:
@@ -485,7 +462,7 @@ signals:
 - Optimize cost by routing based on request size
 - Supports "K" (thousand) and "M" (million) suffixes
 
-### 10. Complexity Signals - Query Difficulty Classification
+### 9. Complexity Signals - Query Difficulty Classification
 
 **IMPORTANT**: It is **strongly recommended** to configure a `composer` for each complexity rule to filter based on other signals (e.g., domain). This prevents misclassification where a math question might match `code_complexity` or vice versa.
 
@@ -1848,6 +1825,7 @@ This workflow ensures your configuration is:
 
 - **[Installation Guide](installation.md)** - Setup instructions
 - **[Quick Start Guide](installation.md)** - Basic usage examples
+- **[Latency Routing Migration Guide](latency-migration.md)** - Move deprecated latency-signal config to `algorithm.type: latency_aware`
 - **[API Documentation](../api/router.md)** - Complete API reference
 
 The configuration system is designed to be simple yet powerful. Start with the basic configuration and gradually enable advanced features as needed.

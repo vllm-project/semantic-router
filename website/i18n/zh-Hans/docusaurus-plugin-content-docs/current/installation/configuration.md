@@ -11,13 +11,23 @@ sidebar_position: 4
 
 本指南涵盖了 Semantic Router 的配置选项。系统使用单个 YAML 配置文件来控制 **Signal-Driven Routing**、**Plugin Chain 处理**和**模型选择**。
 
+## 迁移说明
+
+延迟路由正在从旧的信号配置迁移到 decision algorithm 配置。
+
+- 已弃用：`signals.latency` / `signals.latency_rules` + `conditions.type: latency`
+- 推荐：`decision.algorithm.type: latency_aware`
+
+更新现有配置前，请先阅读[延迟路由迁移指南](latency-migration.md)。
+
 ## 架构概览
 
-配置定义了三个主要层：
+配置定义了四个主要层：
 
-1. **Signal Extraction Layer（信号提取层）**：定义 9 种类型的信号（keyword、embedding、domain、fact_check、user_feedback、preference、language、latency、context）
-2. **Decision Engine（决策引擎）**：使用 AND/OR 运算符组合信号以做出路由决策
-3. **Plugin Chain（插件链）**：配置用于缓存、安全和优化的插件
+1. **Signal Extraction Layer（信号提取层）**：定义请求信号（keyword、embedding、domain、fact_check、user_feedback、preference、language、context、complexity）
+2. **Decision Engine（决策引擎）**：使用 AND/OR 运算符组合信号并匹配 decision
+3. **Model Selection Layer（模型选择层）**：在 decision 的 `modelRefs` 中选择模型（例如 `algorithm.type: latency_aware`）
+4. **Plugin Chain（插件链）**：配置用于缓存、安全和优化的插件
 
 ## 配置文件
 
@@ -296,7 +306,7 @@ default_reasoning_effort: "medium"
 
 ## 信号配置
 
-信号是智能路由的基础。系统支持 10 种类型的信号，可以组合起来做出路由决策。
+信号是智能路由的基础。系统支持 9 种请求信号，可以组合起来做出路由决策。
 
 ### 1. 关键词信号 - 快速模式匹配
 
@@ -425,44 +435,17 @@ signals:
 - 支持多语言应用
 - 通过 whatlanggo 库支持 100 多种本地化语言
 
-### 8. 延迟信号 — 基于百分位的路由
+### 旧版延迟信号（已弃用）
 
-```yaml
-signals:
-  latency:
-    # 推荐：同时使用 TPOT 和 TTFT 的百分位，以获得更全面的评估
-    - name: "low_latency_comprehensive"
-      tpot_percentile: 10  # TPOT 的第 10 百分位（最快的前 10% Token 生成速度）
-      ttft_percentile: 10  # TTFT 的第 10 百分位（最快的前 10% 首 Token）
-      description: "适用于实时应用——启动快、生成快"
-    
-    # 针对不同优先级使用不同的百分位
-    - name: "balanced_latency"
-      tpot_percentile: 50  # TPOT 的中位数（前 50%）
-      ttft_percentile: 10  # TTFT 的前 10%（优先保证快速启动）
-      description: "优先快速启动，接受中等的生成速度"
-    
-    # 仅使用 TPOT 百分位（使用场景：批处理）
-    - name: "batch_processing_optimized"
-      tpot_percentile: 10  # TPOT 的第 10 百分位
-      description: "适用于对吞吐量（TPOT）要求较高的批处理场景"
-    
-    # 仅使用 TTFT 百分位（使用场景：实时聊天）
-    - name: "chat_fast_start"
-      ttft_percentile: 10  # TTFT 的第 10 百分位
-      description: "适用于对首 Token 延迟（TTFT）要求极高的聊天应用"
-```
+在向后兼容窗口期内，仍可接受以下旧配置：
 
-**用例：**
+- `signals.latency`（CLI 风格）或 `signals.latency_rules`（router 风格）
+- `conditions.type: latency`
 
-- 将延迟敏感的查询路由到更快的模型
-- 为实时应用进行优化（聊天、流式输出）
-- 根据查询需求平衡延迟与能力
-- TPOT（每个输出 Token 的时间）自动从响应中跟踪
+新配置应使用 `decision.algorithm.type: latency_aware`。
+转换方法与限制请参考[延迟路由迁移指南](latency-migration.md)。
 
-**工作原理**：延迟分类器评估可用模型的 TPOT 值与配置的阈值进行对比。TPOT ≤ max_tpot 的模型匹配该延迟规则。
-
-### 9. 上下文信号 - Token 计数路由
+### 8. 上下文信号 - Token 计数路由
 
 ```yaml
 signals:
@@ -484,7 +467,7 @@ signals:
 - 根据请求大小优化成本
 - 支持 "K"（千）和 "M"（百万）后缀
 
-### 10. 复杂度信号 - 查询难度分类
+### 9. 复杂度信号 - 查询难度分类
 
 **重要提示**：**强烈建议**为每个复杂度规则配置 `composer` 来基于其他信号进行过滤（例如 domain）。这可以防止误分类，例如数学问题可能匹配 `code_complexity` 或反之亦然。
 
@@ -1825,6 +1808,7 @@ make test
 
 - **[安装指南](installation.md)** - 设置说明
 - **[快速入门指南](installation.md)** - 基本用法示例
+- **[延迟路由迁移指南](latency-migration.md)** - 将旧版延迟信号配置迁移到 `algorithm.type: latency_aware`
 - **[API 文档](../api/router.md)** - 完整 API 参考
 
 配置系统旨在简单而强大。从基本配置开始，并根据需要逐步启用高级功能。

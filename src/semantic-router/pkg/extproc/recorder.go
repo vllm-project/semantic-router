@@ -170,7 +170,6 @@ func (r *OpenAIRouter) startRouterReplay(
 			UserFeedback: ctx.VSRMatchedUserFeedback,
 			Preference:   ctx.VSRMatchedPreference,
 			Language:     ctx.VSRMatchedLanguage,
-			Latency:      ctx.VSRMatchedLatency,
 			Context:      ctx.VSRMatchedContext,
 			Complexity:   ctx.VSRMatchedComplexity,
 		},

@@ -26,7 +26,7 @@ if (keyword_match AND domain_match) OR high_embedding_similarity:
 
 **Why this matters**: Multiple signals voting together make more accurate decisions than any single signal.
 
-## The 10 Signal Types
+## The 9 Signal Types
 
 ### 1. Keyword Signals
 
@@ -148,36 +148,31 @@ signals:
 - **Example 1**: "Hola, ¿cómo estás?" → Spanish (es) → Spanish model
 - **Example 2**: "你好，世界" → Chinese (zh) → Chinese model
 
-### 8. Latency Signals - Percentile-based Routing
+### Latency routing moved to decision algorithms
 
-**What**: Model latency evaluation using TPOT (Time Per Output Token) and TTFT (Time To First Token) percentiles
-**Latency**: Typically 2-5ms for 10 models (runs asynchronously) - percentile calculation with O(n log n) complexity where n = observations per model (typically 10-100, max 1000)
-**Use Case**: Route latency-sensitive queries to faster models based on adaptive percentile thresholds
+Latency is now configured as a model-selection algorithm, not as a request signal in new configs.
 
 ```yaml
-signals:
-  latency:
-    - name: "low_latency_comprehensive"
-      tpot_percentile: 10  # 10th percentile for TPOT (top 10% fastest token generation)
-      ttft_percentile: 10  # 10th percentile for TTFT (top 10% fastest first token)
-      description: "For real-time applications - fast start and fast generation"
-    - name: "balanced_latency"
-      tpot_percentile: 50  # Median TPOT
-      ttft_percentile: 10  # Top 10% TTFT (prioritize fast start)
-      description: "Prioritize fast start, accept moderate generation speed"
+decisions:
+  - name: "fast_route"
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "other"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+      - model: "gpt-5.2"
+    algorithm:
+      type: "latency_aware"
+      latency_aware:
+        tpot_percentile: 10
+        ttft_percentile: 10
 ```
 
-**Example**: Real-time chat query → low_latency_comprehensive signal → Route to model meeting both TPOT and TTFT percentile thresholds
+For existing latency-signal configs, see [Latency routing migration guide](../installation/latency-migration.md).
 
-**How it works**:
-
-- TPOT and TTFT are automatically tracked from each response
-- Percentile-based thresholds adapt to each model's actual performance distribution
-- Works with any number of observations: uses average for 1-2 observations, percentile calculation for 3+
-- When both TPOT and TTFT percentiles are set, model must meet BOTH thresholds (AND logic)
-- **Recommendation**: Use both TPOT and TTFT percentiles for comprehensive latency evaluation
-
-### 9. Context Signals
+### 8. Context Signals
 
 - **What**: Token-count based routing for short/long request handling
 - **Latency**: 1ms (calculated during processing)
@@ -199,7 +194,7 @@ signals:
 
 **Example**: A request with 5,000 tokens → Matches "high_token_count" → Routes to `claude-3-opus`
 
-### 10. Complexity Signals
+### 9. Complexity Signals
 
 - **What**: Embedding-based query complexity classification (hard/easy/medium)
 - **Latency**: 50-100ms (embedding computation)
