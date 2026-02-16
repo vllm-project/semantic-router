@@ -68,15 +68,6 @@ class Language(BaseModel):
     description: str
 
 
-class Latency(BaseModel):
-    """Latency signal configuration."""
-
-    name: str
-    tpot_percentile: Optional[int] = None
-    ttft_percentile: Optional[int] = None
-    description: str
-
-
 class ContextRule(BaseModel):
     """Context-based (token count) signal configuration."""
 
@@ -118,8 +109,6 @@ class Signals(BaseModel):
     user_feedbacks: Optional[List[UserFeedback]] = []
     preferences: Optional[List[Preference]] = []
     language: Optional[List[Language]] = []
-    # TODO(v0.2-Athena): Remove legacy latency compatibility after backward compatibility period.
-    latency: Optional[List[Latency]] = []
     context: Optional[List[ContextRule]] = []
     complexity: Optional[List[ComplexityRule]] = []
 
