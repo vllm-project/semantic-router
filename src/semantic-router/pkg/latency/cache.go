@@ -22,7 +22,7 @@ const MaxTPOTHistorySize = 1000
 // For 3+ observations, we use percentile calculation
 const MinObservationsForPercentile = 3
 
-// TPOTCache stores recent TPOT values per model for latency signal evaluation
+// TPOTCache stores recent TPOT values per model for latency_aware percentile-based model selection.
 type TPOTCache struct {
 	mu    sync.RWMutex
 	cache map[string]*ModelTPOTStats
@@ -209,7 +209,7 @@ const TTFTAlpha = 0.3
 // This prevents unbounded memory growth while providing enough data for percentile calculation
 const MaxTTFTHistorySize = 1000
 
-// TTFTCache stores recent TTFT values per model for latency signal evaluation
+// TTFTCache stores recent TTFT values per model for latency_aware percentile-based model selection.
 type TTFTCache struct {
 	mu    sync.RWMutex
 	cache map[string]*ModelTTFTStats

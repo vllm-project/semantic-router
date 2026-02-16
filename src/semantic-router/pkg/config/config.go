@@ -2378,7 +2378,7 @@ type RuleCombination struct {
 // RuleCondition references a specific rule by type and name
 type RuleCondition struct {
 	// Type specifies the rule type: "keyword", "embedding", "domain", "fact_check",
-	// "user_feedback", "preference", "language", "latency", "context", "complexity", or "modality".
+	// "user_feedback", "preference", "language", "context", "complexity", or "modality".
 	Type string `yaml:"type"`
 
 	// Name is the name of the rule to reference.
