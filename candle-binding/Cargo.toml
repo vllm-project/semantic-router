@@ -109,6 +109,16 @@ path = "examples/test_full_inference_32k.rs"
 name = "test_32k_classifier_inference"
 path = "examples/test_32k_classifier_inference.rs"
 
+# Example for performance benchmarking (Phase 6)
+[[example]]
+name = "benchmark_performance"
+path = "examples/benchmark_performance.rs"
+
+# Example for concurrent request benchmarking (Phase 6 - Chunking Threshold Analysis)
+[[example]]
+name = "benchmark_concurrent"
+path = "examples/benchmark_concurrent.rs"
+
 # Note: Benchmark binaries are located in ../bench/scripts/rust/candle-binding/
 # They are not included in the library build to keep it self-contained.
 # To run benchmarks, use the workspace-level Cargo.toml or run them directly from the bench directory.
