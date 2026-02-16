@@ -98,14 +98,8 @@ func validateConfigStructure(cfg *RouterConfig) error {
 	}
 
 	hasLegacyLatencyConfig := hasLegacyLatencyRoutingConfig(cfg)
-	hasLatencyAwareDecision := hasAnyLatencyAwareDecision(cfg.Decisions)
-	if hasLegacyLatencyConfig && hasLatencyAwareDecision {
-		return fmt.Errorf("deprecated latency signal routing config cannot be used with decision.algorithm.type=latency_aware; remove either legacy latency config (signals.latency_rules / conditions.type=latency) or latency_aware decisions")
-	}
-
-	// Emit migration warnings for legacy latency signal-based routing config.
 	if hasLegacyLatencyConfig {
-		warnDeprecatedLatencyConfig(cfg)
+		return fmt.Errorf("legacy latency config is no longer supported; use decision.algorithm.type=latency_aware and remove signals.latency_rules / conditions.type=latency")
 	}
 
 	// File mode: validate decisions have at least one model ref
@@ -175,11 +169,6 @@ func validateConfigStructure(cfg *RouterConfig) error {
 
 	// Validate advanced tool filtering configuration (opt-in)
 	if err := validateAdvancedToolFilteringConfig(cfg); err != nil {
-		return err
-	}
-
-	// Validate latency rules
-	if err := validateLatencyRules(cfg.Signals.LatencyRules); err != nil {
 		return err
 	}
 
@@ -276,20 +265,6 @@ func validateImageGenBackends(cfg *RouterConfig) error {
 	return nil
 }
 
-func warnDeprecatedLatencyConfig(cfg *RouterConfig) {
-	if len(cfg.Signals.LatencyRules) > 0 {
-		logging.Warnf("DEPRECATED: signals.latency_rules is deprecated and will be removed in a future release. Migrate to decision.algorithm.type=latency_aware.")
-	}
-
-	for _, decision := range cfg.Decisions {
-		for _, condition := range decision.Rules.Conditions {
-			if strings.EqualFold(strings.TrimSpace(condition.Type), SignalTypeLatency) {
-				logging.Warnf("DEPRECATED: decision '%s' uses conditions.type=latency (name=%s), which is deprecated and will be removed in a future release. Migrate to decision.algorithm.type=latency_aware.", decision.Name, condition.Name)
-			}
-		}
-	}
-}
-
 func hasLegacyLatencyRoutingConfig(cfg *RouterConfig) bool {
 	if len(cfg.Signals.LatencyRules) > 0 {
 		return true
@@ -297,21 +272,12 @@ func hasLegacyLatencyRoutingConfig(cfg *RouterConfig) bool {
 
 	for _, decision := range cfg.Decisions {
 		for _, condition := range decision.Rules.Conditions {
-			if strings.EqualFold(strings.TrimSpace(condition.Type), SignalTypeLatency) {
+			if condition.Type == "latency" {
 				return true
 			}
 		}
 	}
 
-	return false
-}
-
-func hasAnyLatencyAwareDecision(decisions []Decision) bool {
-	for _, decision := range decisions {
-		if decision.Algorithm != nil && strings.EqualFold(strings.TrimSpace(decision.Algorithm.Type), "latency_aware") {
-			return true
-		}
-	}
 	return false
 }
 
