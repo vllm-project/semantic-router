@@ -148,30 +148,6 @@ signals:
 - **Example 1**: "Hola, ¿cómo estás?" → Spanish (es) → Spanish model
 - **Example 2**: "你好，世界" → Chinese (zh) → Chinese model
 
-### Latency routing moved to decision algorithms
-
-Latency is now configured as a model-selection algorithm, not as a request signal in new configs.
-
-```yaml
-decisions:
-  - name: "fast_route"
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "domain"
-          name: "other"
-    modelRefs:
-      - model: "openai/gpt-oss-120b"
-      - model: "gpt-5.2"
-    algorithm:
-      type: "latency_aware"
-      latency_aware:
-        tpot_percentile: 10
-        ttft_percentile: 10
-```
-
-For existing latency-signal configs, see [Latency routing migration guide](../installation/latency-migration.md).
-
 ### 8. Context Signals
 
 - **What**: Token-count based routing for short/long request handling

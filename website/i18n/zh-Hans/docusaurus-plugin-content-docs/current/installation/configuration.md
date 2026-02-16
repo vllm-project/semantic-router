@@ -11,15 +11,6 @@ sidebar_position: 4
 
 本指南涵盖了 Semantic Router 的配置选项。系统使用单个 YAML 配置文件来控制 **Signal-Driven Routing**、**Plugin Chain 处理**和**模型选择**。
 
-## 迁移说明
-
-延迟路由正在从旧的信号配置迁移到 decision algorithm 配置。
-
-- 已弃用：`signals.latency` / `signals.latency_rules` + `conditions.type: latency`
-- 推荐：`decision.algorithm.type: latency_aware`
-
-更新现有配置前，请先阅读[延迟路由迁移指南](latency-migration.md)。
-
 ## 架构概览
 
 配置定义了四个主要层：
@@ -435,16 +426,6 @@ signals:
 - 支持多语言应用
 - 通过 whatlanggo 库支持 100 多种本地化语言
 
-### 旧版延迟信号（已弃用）
-
-在向后兼容窗口期内，仍可接受以下旧配置：
-
-- `signals.latency`（CLI 风格）或 `signals.latency_rules`（router 风格）
-- `conditions.type: latency`
-
-新配置应使用 `decision.algorithm.type: latency_aware`。
-转换方法与限制请参考[延迟路由迁移指南](latency-migration.md)。
-
 ### 8. 上下文信号 - Token 计数路由
 
 ```yaml
@@ -593,6 +574,41 @@ decisions:
     modelRefs:
       - model: math-specialist
         weight: 1.0
+```
+
+### 模型选择算法
+
+当一个 decision 包含多个 `modelRefs` 时，使用 `decision.algorithm.type` 配置模型选择算法。
+
+支持的选择算法：
+
+- `static`
+- `elo`
+- `router_dc`
+- `automix`
+- `hybrid`
+- `rl_driven`
+- `gmtrouter`
+- `latency_aware`
+
+`latency_aware` 用于按延迟分位数进行模型路由：
+
+```yaml
+decisions:
+  - name: "fast_route"
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "other"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+      - model: "gpt-5.2"
+    algorithm:
+      type: "latency_aware"
+      latency_aware:
+        tpot_percentile: 10
+        ttft_percentile: 10
 ```
 
 **策略：**
@@ -1808,7 +1824,7 @@ make test
 
 - **[安装指南](installation.md)** - 设置说明
 - **[快速入门指南](installation.md)** - 基本用法示例
-- **[延迟路由迁移指南](latency-migration.md)** - 将旧版延迟信号配置迁移到 `algorithm.type: latency_aware`
+- **Latency-Aware 路由** - 在 decision algorithm 中配置 `decision.algorithm.type: latency_aware`
 - **[API 文档](../api/router.md)** - 完整 API 参考
 
 配置系统旨在简单而强大。从基本配置开始，并根据需要逐步启用高级功能。
