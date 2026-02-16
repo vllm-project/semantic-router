@@ -38,7 +38,6 @@ const (
 	SignalTypeUserFeedback = "user_feedback"
 	SignalTypePreference   = "preference"
 	SignalTypeLanguage     = "language"
-	SignalTypeLatency      = "latency"
 	SignalTypeContext      = "context"
 	SignalTypeComplexity   = "complexity"
 	SignalTypeModality     = "modality"
@@ -564,10 +563,6 @@ type Signals struct {
 	// Language rules for multi-language detection signal classification
 	// When matched, outputs the detected language code (e.g., "en", "es", "zh", "fr")
 	LanguageRules []LanguageRule `yaml:"language_rules,omitempty"`
-
-	// Latency rules for latency-based signal classification
-	// When matched, outputs the latency rule name if available models meet TPOT requirements
-	LatencyRules []LatencyRule `yaml:"latency_rules,omitempty"`
 
 	// Context rules for token count-based classification
 	// When matched, outputs the rule name (e.g., "low_token_count", "high_token_count")
@@ -2455,31 +2450,6 @@ type LanguageRule struct {
 	Name string `yaml:"name"`
 
 	// Description provides human-readable explanation of the language
-	Description string `yaml:"description,omitempty"`
-}
-
-// LatencyRule defines a rule for latency-based signal classification
-// The latency classifier evaluates if available models meet TPOT (Time Per Output Token) requirements
-type LatencyRule struct {
-	// Name is the latency rule name that can be referenced in decision rules
-	Name string `yaml:"name"`
-
-	// TPOTPercentile is the percentile bucket to use for TPOT (Time Per Output Token) evaluation (1-100)
-	// Models with current TPOT <= the calculated TPOT percentile threshold will match this rule
-	// Example: 10 means 10th percentile (top 10% fastest TPOT)
-	// Example: 50 means median (top 50% fastest TPOT)
-	// Works with any number of observations (1+), adapts to model's actual performance
-	TPOTPercentile int `yaml:"tpot_percentile,omitempty"`
-
-	// TTFTPercentile is the percentile bucket to use for TTFT (Time To First Token) evaluation (1-100)
-	// Models with current TTFT <= the calculated TTFT percentile threshold will match this rule
-	// Example: 10 means 10th percentile (top 10% fastest TTFT)
-	// Example: 50 means median (top 50% fastest TTFT)
-	// Works with any number of observations (1+), adapts to model's actual performance
-	// At least one of TPOTPercentile or TTFTPercentile must be set
-	TTFTPercentile int `yaml:"ttft_percentile,omitempty"`
-
-	// Description provides human-readable explanation of the latency requirement
 	Description string `yaml:"description,omitempty"`
 }
 
