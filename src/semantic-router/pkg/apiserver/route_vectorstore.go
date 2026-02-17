@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
@@ -229,6 +230,11 @@ func (s *ClassificationAPIServer) handleSearchVectorStore(w http.ResponseWriter,
 		return
 	}
 
+	// Backend search can be slow (e.g., Llama Stack embeds queries on CPU),
+	// so extend the server's write deadline beyond the default 30s.
+	rc := http.NewResponseController(w)
+	_ = rc.SetWriteDeadline(time.Now().Add(180 * time.Second))
+
 	// Extract vector store ID from /v1/vector_stores/{id}/search
 	path := strings.TrimPrefix(r.URL.Path, "/v1/vector_stores/")
 	id := strings.TrimSuffix(path, "/search")
@@ -268,6 +274,13 @@ func (s *ClassificationAPIServer) handleSearchVectorStore(w http.ResponseWriter,
 		s.writeErrorResponse(w, http.StatusInternalServerError, "EMBEDDING_ERROR", "failed to generate query embedding")
 		return
 	}
+
+	// Llama Stack searches by text, not embedding. Pass the query text via
+	// the filter map so it can use it. Other backends safely ignore this key.
+	if req.Filters == nil {
+		req.Filters = make(map[string]interface{})
+	}
+	req.Filters["_query_text"] = req.Query
 
 	results, err := vectorStoreManager.Backend().Search(r.Context(), id, queryEmbedding, topK, threshold, req.Filters)
 	if err != nil {

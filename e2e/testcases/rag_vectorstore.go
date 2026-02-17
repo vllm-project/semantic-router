@@ -38,7 +38,9 @@ func RAGVectorStoreTestCase(ctx context.Context, client *kubernetes.Clientset, o
 	defer stopPortForward()
 
 	baseURL := fmt.Sprintf("http://localhost:%s", localPort)
-	httpClient := &http.Client{Timeout: 30 * time.Second}
+	// Use a longer timeout for vector store operations — the Llama Stack backend
+	// embeds the query on CPU during search, which can exceed 30s on first call.
+	httpClient := &http.Client{Timeout: 180 * time.Second}
 
 	if opts.Verbose {
 		fmt.Println("[RAG VectorStore] Starting local vector store E2E test")
@@ -297,6 +299,11 @@ func searchAndVerify(ctx context.Context, client *http.Client, baseURL, vectorSt
 	var result map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return err
+	}
+
+	if opts.Verbose {
+		prettyJSON, _ := json.MarshalIndent(result, "  ", "  ")
+		fmt.Printf("[RAG VectorStore] Search response:\n  %s\n", string(prettyJSON))
 	}
 
 	data, ok := result["data"].([]interface{})

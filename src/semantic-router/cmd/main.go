@@ -329,21 +329,29 @@ func main() {
 		apiserver.SetFileStore(vsFileStore)
 
 		// Create backend
-		var memoryCfg vectorstore.MemoryBackendConfig
-		var milvusCfg vectorstore.MilvusBackendConfig
+		var backendCfgs vectorstore.BackendConfigs
 		switch cfg.VectorStore.BackendType {
 		case "memory":
 			maxEntries := 100000
 			if cfg.VectorStore.Memory != nil && cfg.VectorStore.Memory.MaxEntriesPerStore > 0 {
 				maxEntries = cfg.VectorStore.Memory.MaxEntriesPerStore
 			}
-			memoryCfg = vectorstore.MemoryBackendConfig{MaxEntriesPerStore: maxEntries}
+			backendCfgs.Memory = vectorstore.MemoryBackendConfig{MaxEntriesPerStore: maxEntries}
 		case "milvus":
-			milvusCfg = vectorstore.MilvusBackendConfig{
+			backendCfgs.Milvus = vectorstore.MilvusBackendConfig{
 				Address: fmt.Sprintf("%s:%d", cfg.VectorStore.Milvus.Connection.Host, cfg.VectorStore.Milvus.Connection.Port),
 			}
+		case "llama_stack":
+			lsCfg := cfg.VectorStore.LlamaStack
+			backendCfgs.LlamaStack = vectorstore.LlamaStackBackendConfig{
+				Endpoint:              lsCfg.Endpoint,
+				AuthToken:             lsCfg.AuthToken,
+				EmbeddingModel:        lsCfg.EmbeddingModel,
+				EmbeddingDimension:    cfg.VectorStore.EmbeddingDimension,
+				RequestTimeoutSeconds: lsCfg.RequestTimeoutSeconds,
+			}
 		}
-		vsBackend, vsErr := vectorstore.NewBackend(cfg.VectorStore.BackendType, memoryCfg, milvusCfg)
+		vsBackend, vsErr := vectorstore.NewBackend(cfg.VectorStore.BackendType, backendCfgs)
 		if vsErr != nil {
 			logging.Fatalf("Failed to create vector store backend: %v", vsErr)
 		}

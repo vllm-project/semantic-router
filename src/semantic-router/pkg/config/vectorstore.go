@@ -23,7 +23,7 @@ type VectorStoreConfig struct {
 	// Enabled controls whether vector store functionality is active.
 	Enabled bool `json:"enabled" yaml:"enabled"`
 
-	// BackendType selects the storage backend: "memory" or "milvus".
+	// BackendType selects the storage backend: "memory", "milvus", or "llama_stack".
 	BackendType string `json:"backend_type" yaml:"backend_type"`
 
 	// FileStorageDir is the base directory for uploaded file storage.
@@ -55,6 +55,13 @@ type VectorStoreConfig struct {
 
 	// Memory holds in-memory backend configuration.
 	Memory *VectorStoreMemoryConfig `json:"memory,omitempty" yaml:"memory,omitempty"`
+
+	// LlamaStack holds Llama Stack backend configuration.
+	// When backend_type is "llama_stack", vSR delegates vector storage and
+	// embedding to a locally-running Llama Stack instance via its REST API.
+	// Llama Stack handles embedding internally, so vSR's CandleEmbedder is
+	// not used for insert/search — only Llama Stack's configured model is used.
+	LlamaStack *LlamaStackVectorStoreConfig `json:"llama_stack,omitempty" yaml:"llama_stack,omitempty"`
 }
 
 // VectorStoreMemoryConfig holds configuration for the in-memory backend.
@@ -64,6 +71,23 @@ type VectorStoreMemoryConfig struct {
 	MaxEntriesPerStore int `json:"max_entries_per_store,omitempty" yaml:"max_entries_per_store,omitempty"`
 }
 
+// LlamaStackVectorStoreConfig holds configuration for the Llama Stack backend.
+type LlamaStackVectorStoreConfig struct {
+	// Endpoint is the base URL of the Llama Stack server (e.g. "http://localhost:8321").
+	Endpoint string `json:"endpoint" yaml:"endpoint"`
+
+	// AuthToken is an optional bearer token for Llama Stack authentication.
+	AuthToken string `json:"auth_token,omitempty" yaml:"auth_token,omitempty"`
+
+	// EmbeddingModel is the embedding model ID registered in Llama Stack
+	// (e.g. "all-MiniLM-L6-v2"). Llama Stack uses this to embed chunks and queries.
+	// If empty, Llama Stack uses its configured default embedding model.
+	EmbeddingModel string `json:"embedding_model,omitempty" yaml:"embedding_model,omitempty"`
+
+	// RequestTimeoutSeconds is the HTTP request timeout in seconds. Default: 30.
+	RequestTimeoutSeconds int `json:"request_timeout_seconds,omitempty" yaml:"request_timeout_seconds,omitempty"`
+}
+
 // Validate checks the vector store configuration for errors.
 func (c *VectorStoreConfig) Validate() error {
 	if !c.Enabled {
@@ -71,16 +95,25 @@ func (c *VectorStoreConfig) Validate() error {
 	}
 
 	switch c.BackendType {
-	case "memory", "milvus":
+	case "memory", "milvus", "llama_stack":
 		// valid
 	case "":
 		return fmt.Errorf("vector_store.backend_type is required when enabled")
 	default:
-		return fmt.Errorf("vector_store.backend_type must be 'memory' or 'milvus', got '%s'", c.BackendType)
+		return fmt.Errorf("vector_store.backend_type must be 'memory', 'milvus', or 'llama_stack', got '%s'", c.BackendType)
 	}
 
 	if c.BackendType == "milvus" && c.Milvus == nil {
 		return fmt.Errorf("vector_store.milvus configuration is required when backend_type is 'milvus'")
+	}
+
+	if c.BackendType == "llama_stack" {
+		if c.LlamaStack == nil {
+			return fmt.Errorf("vector_store.llama_stack configuration is required when backend_type is 'llama_stack'")
+		}
+		if c.LlamaStack.Endpoint == "" {
+			return fmt.Errorf("vector_store.llama_stack.endpoint is required")
+		}
 	}
 
 	return nil

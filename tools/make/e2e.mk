@@ -49,6 +49,11 @@ e2e-test-dynamo: ## Run E2E tests with Dynamo profile (requires 3+ GPUs)
 e2e-test-dynamo: E2E_PROFILE=dynamo
 e2e-test-dynamo: e2e-test
 
+# Run E2E tests with RAG Llama Stack profile
+e2e-test-rag-llama-stack: ## Run E2E tests with RAG Llama Stack profile
+e2e-test-rag-llama-stack: E2E_PROFILE=rag-llama-stack
+e2e-test-rag-llama-stack: e2e-test
+
 # Run E2E tests and keep cluster for debugging
 e2e-test-debug: ## Run E2E tests and keep cluster for debugging
 e2e-test-debug: E2E_KEEP_CLUSTER=true
@@ -105,6 +110,7 @@ e2e-help: ## Show help for E2E testing
 	@echo "  istio            - Test Semantic Router with Istio service mesh"
 	@echo "  llm-d            - Test Semantic Router with LLM-D"
 	@echo "  production-stack - Test Semantic Router in production-like stack (HA/LB/Obs)"
+	@echo "  rag-llama-stack  - Test RAG vector store pipeline with Llama Stack backend"
 	@echo "  response-api     - Test Response API endpoints (POST/GET/DELETE /v1/responses)"
 	@echo ""
 	@echo "Environment Variables:"
