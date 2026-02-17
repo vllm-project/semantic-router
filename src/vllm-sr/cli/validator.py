@@ -446,9 +446,9 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
     """
     Validate algorithm configurations in decisions.
 
-    Validates both looper algorithms (confidence, concurrent, remom) and
-    selection algorithms (static, elo, router_dc, automix, hybrid,
-    thompson, gmtrouter, router_r1).
+    Validates both looper algorithms (confidence, concurrent, sequential, remom)
+    and selection algorithms (static, elo, router_dc, automix, hybrid,
+    latency_aware, thompson, gmtrouter, router_r1).
 
     Args:
         config: User configuration
@@ -466,6 +466,7 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
         "router_dc",
         "automix",
         "hybrid",
+        "latency_aware",
         "thompson",
         "gmtrouter",
         "router_r1",
