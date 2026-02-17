@@ -448,6 +448,13 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		} else if importance, ok := hit.Metadata["importance"].(float32); ok {
 			memory.Importance = importance
 		}
+		// Access tracking for retention scoring
+		if accessCount, ok := hit.Metadata["access_count"].(float64); ok {
+			memory.AccessCount = int(accessCount)
+		}
+		if lastAccessed, ok := hit.Metadata["last_accessed"].(float64); ok {
+			memory.LastAccessed = time.Unix(int64(lastAccessed), 0)
+		}
 
 		// Create RetrieveResult with Memory and Score
 		result := &RetrieveResult{
@@ -460,6 +467,16 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 
 	logging.Debugf("MilvusStore.Retrieve: returning %d results (filtered from %d candidates)",
 		len(results), len(scores))
+
+	// Update access tracking in background (reinforcement: S += 1, t = 0).
+	// Always active when memory is enabled; runs async so Retrieve latency is unaffected.
+	if len(results) > 0 {
+		ids := make([]string, len(results))
+		for i, r := range results {
+			ids[i] = r.Memory.ID
+		}
+		go m.recordRetrievalBatch(ids)
+	}
 
 	// TODO: Remove demo logging after POC
 	logging.Infof("╔══════════════════════════════════════════════════════════════════╗")
@@ -546,20 +563,24 @@ func (m *MilvusStore) Store(ctx context.Context, memory *Memory) error {
 		}
 	}
 
-	// Set timestamps
+	// Set timestamps; on first save LastAccessed = now (t=0 for retention score)
 	now := time.Now()
 	if memory.CreatedAt.IsZero() {
 		memory.CreatedAt = now
 	}
 	memory.UpdatedAt = now
+	if memory.LastAccessed.IsZero() {
+		memory.LastAccessed = now
+	}
 
-	// Build metadata JSON
+	// Build metadata JSON (last_accessed and access_count used for retention scoring)
 	metadata := map[string]interface{}{
-		"user_id":      memory.UserID,
-		"project_id":   memory.ProjectID,
-		"source":       memory.Source,
-		"importance":   memory.Importance,
-		"access_count": memory.AccessCount,
+		"user_id":       memory.UserID,
+		"project_id":    memory.ProjectID,
+		"source":        memory.Source,
+		"importance":    memory.Importance,
+		"access_count":  memory.AccessCount,
+		"last_accessed": memory.LastAccessed.Unix(),
 	}
 	metadataJSON, err := json.Marshal(metadata)
 	if err != nil {
@@ -619,6 +640,79 @@ func (m *MilvusStore) Store(ctx context.Context, memory *Memory) error {
 	return nil
 }
 
+// upsert atomically replaces a row in Milvus by primary key.
+// The memory must be fully populated (including Embedding, timestamps, etc.).
+// Used by Update to avoid the delete+insert data-loss window.
+func (m *MilvusStore) upsert(ctx context.Context, memory *Memory) error {
+	// Build metadata JSON
+	metadata := map[string]interface{}{
+		"user_id":       memory.UserID,
+		"project_id":    memory.ProjectID,
+		"source":        memory.Source,
+		"importance":    memory.Importance,
+		"access_count":  memory.AccessCount,
+		"last_accessed": memory.LastAccessed.Unix(),
+	}
+	metadataJSON, err := json.Marshal(metadata)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
+	projectID := memory.ProjectID
+	if projectID == "" {
+		projectID = "default"
+	}
+	source := memory.Source
+	if source == "" {
+		source = "extraction"
+	}
+
+	embedding := memory.Embedding
+	if len(embedding) == 0 {
+		return fmt.Errorf("embedding is required for upsert")
+	}
+
+	idCol := entity.NewColumnVarChar("id", []string{memory.ID})
+	contentCol := entity.NewColumnVarChar("content", []string{memory.Content})
+	userIDCol := entity.NewColumnVarChar("user_id", []string{memory.UserID})
+	projectIDCol := entity.NewColumnVarChar("project_id", []string{projectID})
+	memTypeCol := entity.NewColumnVarChar("memory_type", []string{string(memory.Type)})
+	sourceCol := entity.NewColumnVarChar("source", []string{source})
+	metadataCol := entity.NewColumnVarChar("metadata", []string{string(metadataJSON)})
+	embeddingCol := entity.NewColumnFloatVector("embedding", len(embedding), [][]float32{embedding})
+	createdAtCol := entity.NewColumnInt64("created_at", []int64{memory.CreatedAt.Unix()})
+	updatedAtCol := entity.NewColumnInt64("updated_at", []int64{memory.UpdatedAt.Unix()})
+	accessCountCol := entity.NewColumnInt64("access_count", []int64{int64(memory.AccessCount)})
+	importanceCol := entity.NewColumnFloat("importance", []float32{float32(memory.Importance)})
+
+	err = m.retryWithBackoff(ctx, func() error {
+		_, upsertErr := m.client.Upsert(
+			ctx,
+			m.collectionName,
+			"",
+			idCol,
+			contentCol,
+			userIDCol,
+			projectIDCol,
+			memTypeCol,
+			sourceCol,
+			metadataCol,
+			embeddingCol,
+			createdAtCol,
+			updatedAtCol,
+			accessCountCol,
+			importanceCol,
+		)
+		return upsertErr
+	})
+	if err != nil {
+		return fmt.Errorf("milvus upsert failed: %w", err)
+	}
+
+	logging.Debugf("MilvusStore.upsert: successfully upserted memory id=%s", memory.ID)
+	return nil
+}
+
 // Get retrieves a memory by ID from Milvus.
 func (m *MilvusStore) Get(ctx context.Context, id string) (*Memory, error) {
 	if !m.enabled {
@@ -631,9 +725,9 @@ func (m *MilvusStore) Get(ctx context.Context, id string) (*Memory, error) {
 
 	logging.Debugf("MilvusStore.Get: retrieving memory id=%s", id)
 
-	// Query by ID
+	// Query by ID (includes embedding so the caller can Upsert without re-generating it)
 	filterExpr := fmt.Sprintf("id == \"%s\"", id)
-	outputFields := []string{"id", "content", "user_id", "memory_type", "metadata", "created_at", "updated_at"}
+	outputFields := []string{"id", "content", "user_id", "memory_type", "metadata", "created_at", "updated_at", "embedding"}
 
 	var queryResult []entity.Column
 	err := m.retryWithBackoff(ctx, func() error {
@@ -710,6 +804,9 @@ func (m *MilvusStore) Get(ctx context.Context, id string) (*Memory, error) {
 						if accessCount, ok := metadata["access_count"].(float64); ok {
 							memory.AccessCount = int(accessCount)
 						}
+						if lastAccessed, ok := metadata["last_accessed"].(float64); ok {
+							memory.LastAccessed = time.Unix(int64(lastAccessed), 0)
+						}
 					}
 				}
 			}
@@ -723,6 +820,10 @@ func (m *MilvusStore) Get(ctx context.Context, id string) (*Memory, error) {
 				val, _ := c.ValueByIdx(0)
 				memory.UpdatedAt = time.Unix(val, 0)
 			}
+		case "embedding":
+			if c, ok := col.(*entity.ColumnFloatVector); ok && c.Len() > 0 {
+				memory.Embedding = c.Data()[0]
+			}
 		}
 	}
 
@@ -734,11 +835,9 @@ func (m *MilvusStore) Get(ctx context.Context, id string) (*Memory, error) {
 	return memory, nil
 }
 
-// Update modifies an existing memory in Milvus.
-// Uses delete + insert pattern (upsert) since Milvus doesn't support in-place updates.
-//
-// NOTE: This operation is NOT atomic. There is a brief window between delete and insert
-// where the memory doesn't exist. Acceptable for POC; consider transaction support for production.
+// Update modifies an existing memory in Milvus using Upsert (atomic replace by primary key).
+// The caller must provide a fully populated Memory (including Embedding); Update preserves CreatedAt
+// from the existing row and sets UpdatedAt to now.
 func (m *MilvusStore) Update(ctx context.Context, id string, memory *Memory) error {
 	if !m.enabled {
 		return fmt.Errorf("milvus store is not enabled")
@@ -748,33 +847,50 @@ func (m *MilvusStore) Update(ctx context.Context, id string, memory *Memory) err
 		return fmt.Errorf("memory ID is required")
 	}
 
-	logging.Debugf("MilvusStore.Update: updating memory id=%s", id)
+	logging.Debugf("MilvusStore.Update: upserting memory id=%s", id)
 
-	// First, check if memory exists
-	existing, err := m.Get(ctx, id)
-	if err != nil {
-		return fmt.Errorf("memory not found: %s", id)
-	}
-
-	// Delete existing memory
-	err = m.Forget(ctx, id)
-	if err != nil {
-		return fmt.Errorf("failed to delete existing memory: %w", err)
-	}
-
-	// Preserve original creation time, update the UpdatedAt
 	memory.ID = id
-	memory.CreatedAt = existing.CreatedAt
 	memory.UpdatedAt = time.Now()
 
-	// Store the updated memory
-	err = m.Store(ctx, memory)
-	if err != nil {
-		return fmt.Errorf("failed to store updated memory: %w", err)
+	// If CreatedAt or Embedding are missing, fetch from the existing row so we don't lose data
+	if memory.CreatedAt.IsZero() || len(memory.Embedding) == 0 {
+		existing, err := m.Get(ctx, id)
+		if err != nil {
+			return fmt.Errorf("memory not found: %s", id)
+		}
+		if memory.CreatedAt.IsZero() {
+			memory.CreatedAt = existing.CreatedAt
+		}
+		if len(memory.Embedding) == 0 {
+			memory.Embedding = existing.Embedding
+		}
 	}
 
-	logging.Debugf("MilvusStore.Update: successfully updated memory id=%s", id)
-	return nil
+	return m.upsert(ctx, memory)
+}
+
+// recordRetrievalBatch updates LastAccessed and AccessCount for each retrieved memory in the background.
+// Uses a detached context with a timeout so request cancellation does not abort the writes.
+func (m *MilvusStore) recordRetrievalBatch(ids []string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	for _, id := range ids {
+		if err := m.recordRetrieval(ctx, id); err != nil {
+			logging.Warnf("MilvusStore.recordRetrievalBatch: id=%s: %v", id, err)
+		}
+	}
+}
+
+// recordRetrieval updates LastAccessed and AccessCount for a single memory (reinforcement: S += 1, t = 0).
+func (m *MilvusStore) recordRetrieval(ctx context.Context, id string) error {
+	existing, err := m.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	existing.AccessCount++
+	existing.LastAccessed = time.Now()
+	existing.UpdatedAt = existing.LastAccessed
+	return m.Update(ctx, id, existing)
 }
 
 // Forget deletes a memory by ID from Milvus.
@@ -955,6 +1071,133 @@ func (m *MilvusStore) forgetByScopeWithQuery(ctx context.Context, scope MemorySc
 
 	logging.Debugf("MilvusStore.ForgetByScope: deleted %d memories", len(idsToDelete))
 	return nil
+}
+
+// MemoryPruneEntry holds minimal fields needed to compute retention score for pruning.
+type MemoryPruneEntry struct {
+	ID           string
+	LastAccessed time.Time
+	AccessCount  int
+}
+
+// ListForPrune returns all memories for a user with id, last_accessed, access_count for pruning.
+func (m *MilvusStore) ListForPrune(ctx context.Context, userID string) ([]MemoryPruneEntry, error) {
+	if !m.enabled {
+		return nil, fmt.Errorf("milvus store is not enabled")
+	}
+	if userID == "" {
+		return nil, fmt.Errorf("user ID is required")
+	}
+	filterExpr := fmt.Sprintf("user_id == \"%s\"", userID)
+	outputFields := []string{"id", "metadata", "created_at"}
+
+	var queryResult []entity.Column
+	err := m.retryWithBackoff(ctx, func() error {
+		var retryErr error
+		queryResult, retryErr = m.client.Query(
+			ctx,
+			m.collectionName,
+			[]string{},
+			filterExpr,
+			outputFields,
+		)
+		return retryErr
+	})
+	if err != nil {
+		return nil, fmt.Errorf("milvus query failed: %w", err)
+	}
+
+	var idCol, metadataCol *entity.ColumnVarChar
+	var createdAtCol *entity.ColumnInt64
+	for _, col := range queryResult {
+		switch col.Name() {
+		case "id":
+			if c, ok := col.(*entity.ColumnVarChar); ok {
+				idCol = c
+			}
+		case "metadata":
+			if c, ok := col.(*entity.ColumnVarChar); ok {
+				metadataCol = c
+			}
+		case "created_at":
+			if c, ok := col.(*entity.ColumnInt64); ok {
+				createdAtCol = c
+			}
+		}
+	}
+	if idCol == nil {
+		return []MemoryPruneEntry{}, nil
+	}
+
+	now := time.Now()
+	var entries []MemoryPruneEntry
+	for i := 0; i < idCol.Len(); i++ {
+		id, _ := idCol.ValueByIdx(i)
+		entry := MemoryPruneEntry{ID: id}
+		if metadataCol != nil && metadataCol.Len() > i {
+			metadataStr, _ := metadataCol.ValueByIdx(i)
+			var meta map[string]interface{}
+			if json.Unmarshal([]byte(metadataStr), &meta) == nil {
+				if la, ok := meta["last_accessed"].(float64); ok {
+					entry.LastAccessed = time.Unix(int64(la), 0)
+				}
+				if ac, ok := meta["access_count"].(float64); ok {
+					entry.AccessCount = int(ac)
+				}
+			}
+		}
+		// Pre-existing memories stored before access tracking may have zero LastAccessed.
+		// Fall back to created_at so they don't get R ≈ 0 and get pruned immediately.
+		if entry.LastAccessed.IsZero() {
+			if createdAtCol != nil && createdAtCol.Len() > i {
+				val, _ := createdAtCol.ValueByIdx(i)
+				if val > 0 {
+					entry.LastAccessed = time.Unix(val, 0)
+				}
+			}
+			// If still zero (no created_at either), treat as "just now" to protect the memory
+			if entry.LastAccessed.IsZero() {
+				entry.LastAccessed = now
+			}
+		}
+		entries = append(entries, entry)
+	}
+	return entries, nil
+}
+
+// PruneUser deletes memories for userID that have R < PruneThreshold, then if over MaxMemoriesPerUser
+// deletes lowest-R memories until at cap. No-op if the store is disabled.
+func (m *MilvusStore) PruneUser(ctx context.Context, userID string) (deleted int, err error) {
+	if !m.enabled {
+		return 0, nil
+	}
+	cfg := m.config.QualityScoring
+
+	initialStrength := cfg.InitialStrengthDays
+	if initialStrength <= 0 {
+		initialStrength = DefaultInitialStrengthDays
+	}
+	delta := cfg.PruneThreshold
+	if delta <= 0 {
+		delta = DefaultPruneThreshold
+	}
+	maxPerUser := cfg.MaxMemoriesPerUser
+
+	entries, err := m.ListForPrune(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+
+	toDelete := PruneCandidates(entries, time.Now(), initialStrength, delta, maxPerUser)
+	for _, id := range toDelete {
+		if err := m.Forget(ctx, id); err != nil {
+			logging.Warnf("MilvusStore.PruneUser: Forget id=%s: %v", id, err)
+			continue
+		}
+		deleted++
+	}
+	logging.Debugf("MilvusStore.PruneUser: user_id=%s deleted %d memories", userID, deleted)
+	return deleted, nil
 }
 
 // isTransientError checks if an error is transient and should be retried

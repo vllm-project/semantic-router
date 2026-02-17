@@ -70,8 +70,11 @@ type Memory struct {
 	// UpdatedAt is when the memory was last modified
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 
-	// AccessCount tracks how often this memory is retrieved
+	// AccessCount tracks how often this memory is retrieved (used for retention score S = S0 + AccessCount)
 	AccessCount int `json:"access_count"`
+
+	// LastAccessed is when the memory was last retrieved (used for retention score t and reinforcement)
+	LastAccessed time.Time `json:"last_accessed,omitempty"`
 
 	// Importance is a score for prioritizing memories (0.0 to 1.0)
 	Importance float32 `json:"importance"`
