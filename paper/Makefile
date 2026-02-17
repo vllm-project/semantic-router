@@ -8,9 +8,10 @@
 #   make check    - Check for common LaTeX issues
 
 MAIN     = main
+OUTNAME  = vllm-semantic-router
 TEX      = pdflatex
 BIB      = bibtex
-TEXFLAGS = -interaction=nonstopmode -halt-on-error -file-line-error
+TEXFLAGS = -interaction=nonstopmode -halt-on-error -file-line-error -jobname=$(OUTNAME)
 
 SECTIONS = $(wildcard sections/*.tex)
 SOURCES  = $(MAIN).tex $(SECTIONS) references.bib
@@ -21,28 +22,28 @@ AUX_EXTS = aux bbl blg log out toc lof lot fls fdb_latexmk synctex.gz nav snm vr
 .PHONY: all quick clean watch wc check
 
 # Full build: pdflatex -> bibtex -> pdflatex -> pdflatex
-all: $(MAIN).pdf
+all: $(OUTNAME).pdf
 
-$(MAIN).pdf: $(SOURCES)
+$(OUTNAME).pdf: $(SOURCES)
 	$(TEX) $(TEXFLAGS) $(MAIN)
-	$(BIB) $(MAIN) || true
+	$(BIB) $(OUTNAME) || true
 	$(TEX) $(TEXFLAGS) $(MAIN)
 	$(TEX) $(TEXFLAGS) $(MAIN)
 	@echo ""
-	@echo "=== Build complete: $(MAIN).pdf ==="
+	@echo "=== Build complete: $(OUTNAME).pdf ==="
 
 # Quick single-pass build (no bibliography update)
 quick:
 	$(TEX) $(TEXFLAGS) $(MAIN)
 	@echo ""
-	@echo "=== Quick build complete: $(MAIN).pdf ==="
+	@echo "=== Quick build complete: $(OUTNAME).pdf ==="
 
 # Remove all generated files
 clean:
 	@for ext in $(AUX_EXTS); do \
-		rm -f $(MAIN).$$ext; \
+		rm -f $(OUTNAME).$$ext; \
 	done
-	rm -f $(MAIN).pdf
+	rm -f $(OUTNAME).pdf
 	@echo "=== Cleaned ==="
 
 # Watch for changes and rebuild (requires inotifywait from inotify-tools)
@@ -71,8 +72,8 @@ wc:
 check:
 	@echo "=== Checking for common issues ==="
 	@echo "Undefined references:"
-	@grep -c 'undefined' $(MAIN).log 2>/dev/null || echo "  (none or not yet compiled)"
+	@grep -c 'undefined' $(OUTNAME).log 2>/dev/null || echo "  (none or not yet compiled)"
 	@echo "Missing citations:"
-	@grep -c 'Citation.*undefined' $(MAIN).log 2>/dev/null || echo "  (none or not yet compiled)"
+	@grep -c 'Citation.*undefined' $(OUTNAME).log 2>/dev/null || echo "  (none or not yet compiled)"
 	@echo "Overfull boxes:"
-	@grep -c 'Overfull' $(MAIN).log 2>/dev/null || echo "  (none or not yet compiled)"
+	@grep -c 'Overfull' $(OUTNAME).log 2>/dev/null || echo "  (none or not yet compiled)"
