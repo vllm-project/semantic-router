@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"net"
 	"strings"
 	"time"
 
@@ -12,6 +13,18 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
+
+// getAvailablePort finds an available port on the local machine
+// Returns the port number as a string, or error if none found
+func getAvailablePort() (string, error) {
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		return "", fmt.Errorf("failed to find available port: %w", err)
+	}
+	defer listener.Close()
+	addr := listener.Addr().(*net.TCPAddr)
+	return fmt.Sprintf("%d", addr.Port), nil
+}
 
 // setupServiceConnection sets up port forwarding to the configured service
 // and returns the local port to use for HTTP requests and a cleanup function
@@ -54,6 +67,36 @@ func setupServiceConnection(ctx context.Context, client *kubernetes.Clientset, o
 	}
 
 	return portParts[0], stopFunc, nil
+}
+
+// setupRouterAPIConnection sets up port forwarding to the semantic-router API service
+// This is used for accessing /api/v1/feedback and /api/v1/ratings endpoints
+// which are not exposed through the Envoy Gateway
+func setupRouterAPIConnection(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) (string, func(), error) {
+	namespace := "vllm-semantic-router-system"
+	serviceName := "semantic-router"
+
+	// Find an available ephemeral port to avoid conflicts during parallel tests
+	localPort, err := getAvailablePort()
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to get available port: %w", err)
+	}
+	portMapping := fmt.Sprintf("%s:8080", localPort)
+
+	if opts.Verbose {
+		fmt.Printf("[Test] Setting up Router API connection: %s/%s (local port %s)\n", namespace, serviceName, localPort)
+	}
+
+	// Start port forwarding to the router's API port
+	stopFunc, err := helpers.StartPortForward(ctx, client, opts.RestConfig, namespace, serviceName, portMapping, opts.Verbose)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to start router API port forwarding: %w", err)
+	}
+
+	// Wait a bit for port forwarding to stabilize
+	time.Sleep(2 * time.Second)
+
+	return localPort, stopFunc, nil
 }
 
 // Random content generation for stress tests
