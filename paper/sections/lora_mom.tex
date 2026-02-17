@@ -1,0 +1,96 @@
+% sections/lora_mom.tex
+
+\section{LoRA-Based Multi-Task Classification and MoM Model Family}
+\label{sec:lora_mom}
+
+Signal-driven routing requires multiple classification tasks on the critical path of every request.
+Na\"ively, each task requires a separate fine-tuned model, creating a memory scaling problem.
+We describe the LoRA-based architecture that addresses this and the purpose-built model family trained for semantic routing.
+
+\subsection{Problem: Linear Memory Scaling}
+
+Let $n$ denote the number of active classification tasks (domain, jailbreak, PII, fact-check, feedback, modality).
+With independently fine-tuned models, the total model memory is:
+\begin{equation}
+  M_\text{indep} = n \cdot |\theta_\text{base}|
+\end{equation}
+where $|\theta_\text{base}|$ is the parameter count of a single base model.
+For $n = 6$ tasks with a 150M-parameter base model, this requires storing and loading six full model copies ($\sim$900M parameters total)---a significant memory burden, especially in GPU-constrained environments.
+
+Additionally, managing $n$ independent model checkpoints complicates deployment, versioning, and updates.
+
+\subsection{Solution: Single Base Model with LoRA Adapters}
+
+Low-Rank Adaptation (LoRA)~\cite{hu2022lora} represents task-specific weight modifications as low-rank decompositions:
+\begin{equation}
+  W'_i = W + \Delta W_i = W + B_i A_i, \quad B_i \in \mathbb{R}^{d \times r}, \; A_i \in \mathbb{R}^{r \times d}
+\end{equation}
+where $W$ is the shared base weight, $r \ll d$ is the adapter rank, and $B_i A_i$ is the task-specific perturbation.
+
+The aggregate model memory becomes:
+\begin{equation}
+  M_\text{LoRA} = |\theta_\text{base}| + \sum_{i=1}^{n} 2 r d = |\theta_\text{base}| + n \cdot 2rd
+\end{equation}
+
+With rank $r = 32$ and hidden dimension $d = 768$, each adapter adds $2 \times 32 \times 768 = 49{,}152$ parameters ($\sim$0.02\% of the base model).
+For $n = 6$, total adapter overhead is $\sim$295K parameters---negligible compared to the 150M-parameter base.
+
+\textbf{Memory reduction.}
+\begin{equation}
+  \frac{M_\text{LoRA}}{M_\text{indep}} = \frac{|\theta_\text{base}| + n \cdot 2rd}{n \cdot |\theta_\text{base}|} \approx \frac{1}{n} \quad \text{for } 2nrd \ll |\theta_\text{base}|
+\end{equation}
+At $n = 6$, this yields $\sim$6$\times$ memory reduction: one 150M-parameter model plus six tiny adapters instead of six full copies.
+
+\subsection{Inference Architecture}
+
+Each classification task proceeds as a full forward pass through the base model with the task-specific LoRA perturbation applied:
+
+\begin{enumerate}
+  \item \textbf{Load}: A single base model is loaded into GPU/CPU memory at startup. Each LoRA adapter (a pair of small matrices per adapted layer) is loaded alongside it.
+  \item \textbf{Inference}: For each classification task $i$, the base model runs a forward pass with adapter $i$'s weights merged: $W'_i = W + B_i A_i$. Each task still requires its own forward pass.
+  \item \textbf{Parallelism}: Multiple classification tasks execute concurrently via parallel threads/goroutines. Wall-clock time is determined by the slowest classifier, not the sum.
+\end{enumerate}
+
+Note that LoRA does \emph{not} eliminate the per-task forward pass---each adapter requires a full inference through the modified model.
+The primary benefit is \textbf{memory efficiency}: deploying six classifiers requires the memory footprint of approximately one model rather than six, and all adapters can be updated independently without reloading the base model.
+
+\subsection{MoM Model Family}
+
+We train a family of purpose-built models (MoM: Mixture-of-Models) optimized for routing classification tasks:
+
+\begin{table}[h]
+\centering
+\caption{MoM model family.
+All models share a common base (ModernBERT~\cite{warner2024modernbert} or mmBERT-32K) and are distributed as LoRA adapters.}
+\label{tab:mom_family}
+\begin{tabular}{lll}
+\toprule
+\textbf{Model} & \textbf{Task} & \textbf{Training Data} \\
+\midrule
+\texttt{mom-domain}         & Domain classification     & MMLU categories \\
+\texttt{mom-pii}            & PII token classification  & Presidio-annotated corpora \\
+\texttt{mom-jailbreak}      & Prompt injection detection & Adversarial prompt datasets \\
+\texttt{mom-sentinel}       & Fact-check gating         & Factual vs.\ creative queries \\
+\texttt{mom-detector}       & Hallucination detection   & Annotated LLM outputs \\
+\texttt{mom-explainer}      & NLI explanation           & NLI benchmarks \\
+\texttt{mom-feedback}       & User feedback analysis    & Conversation annotations \\
+\texttt{mom-modality}       & Modality classification   & DiffusionDB + text corpora \\
+\texttt{mom-embedding}      & Semantic embeddings       & Contrastive pre-training \\
+\texttt{mom-toolcall}       & Tool selection            & Function-calling datasets \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The key benefit of distributing these as LoRA adapters rather than independent models is \textbf{operational simplicity}: a single base model binary serves all ten tasks, adapters can be hot-swapped without reloading the base, and new tasks can be added by training a new adapter without retraining or redistributing the base model.
+
+\subsection{Training Methodology}
+
+All LoRA adapters are trained using PEFT~\cite{mangrulkar2022peft} with the following protocol:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Base model}: ModernBERT or mmBERT-32K (for long-context tasks).
+  \item \textbf{Adapter configuration}: Rank $r \in \{16, 32, 64\}$, applied to query and value projection matrices.
+  \item \textbf{Training}: Task-specific datasets with standard cross-entropy loss.
+  \item \textbf{Export}: Both LoRA-only (separate adapter files for hot-swapping) and merged (single model file for simplified deployment) formats.
+\end{itemize}
+
+The modality classifier, for instance, is trained on a balanced mixture of DiffusionDB (image generation prompts), OASST2, Alpaca, and Dolly (text generation), achieving three-class classification (autoregressive, diffusion, both) with $\sim$0.02\% trainable parameters relative to the base model.

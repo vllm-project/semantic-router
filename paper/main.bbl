@@ -1,0 +1,238 @@
+\begin{thebibliography}{10}
+
+\bibitem{astrom2008feedback}
+Karl~Johan \AA{}str\"{o}m and Richard~M. Murray.
+\newblock {\em Feedback Systems: An Introduction for Scientists and Engineers}.
+\newblock Princeton University Press, Princeton, NJ, 2008.
+
+\bibitem{aggarwal2023automix}
+Pranjal Aggarwal, Aman Madaan, Ankit Anand, Srividya~Pranavi Potharaju, Swaroop
+  Mishra, Pei Zhou, Aditya Gupta, Dheeraj Rajagopal, Karthik Kappaganthu,
+  Yiming Yang, Shyam Upadhyay, Manaal Faruqui, and Mausam.
+\newblock {AutoMix}: Automatically mixing language models.
+\newblock {\em arXiv preprint arXiv:2310.12963}, 2023.
+
+\bibitem{bellman1970decision}
+Richard~E. Bellman and Lotfi~A. Zadeh.
+\newblock Decision-making in a fuzzy environment.
+\newblock {\em Management Science}, 17(4):B--141--B--164, 1970.
+
+\bibitem{brayton1984logic}
+Robert~K. Brayton, Gary~D. Hachtel, Curtis~T. McMullen, and Alberto~L.
+  Sangiovanni-Vincentelli.
+\newblock {\em Logic Minimization Algorithms for {VLSI} Synthesis}.
+\newblock Kluwer Academic Publishers, Boston, MA, 1984.
+
+\bibitem{chen2024routerdc}
+Shuhao Chen, Weisen Jiang, Baijiong Lin, James~T.\ Kwok, and Yu~Zhang.
+\newblock {RouterDC}: Query-based router by dual contrastive learning for
+  assembling large language models.
+\newblock {\em arXiv preprint arXiv:2409.19886}, 2024.
+
+\bibitem{devlin2019bert}
+Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova.
+\newblock {BERT}: Pre-training of deep bidirectional transformers for language
+  understanding.
+\newblock {\em arXiv preprint arXiv:1810.04805}, 2019.
+
+\bibitem{envoyextproc2024}
+{Envoy Proxy Authors}.
+\newblock Envoy external processing filter, 2024.
+
+\bibitem{fleisher1975introduction}
+Harvey Fleisher and Lester~I. Maissel.
+\newblock An introduction to array logic.
+\newblock {\em IBM Journal of Research and Development}, 19(2):98--109, 1975.
+
+\bibitem{hu2022lora}
+Edward~J.\ Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean
+  Wang, Lu~Wang, and Weizhu Chen.
+\newblock {LoRA}: Low-rank adaptation of large language models.
+\newblock {\em arXiv preprint arXiv:2106.09685}, 2022.
+
+\bibitem{hu2024routerbench}
+Qitian~Jason Hu, Jacob Bieker, Xiuyu Li, Nan Jiang, Benjamin Keigwin, Gaurav
+  Ranganath, Kurt Keutzer, and Shriyash~Kaustubh Upadhyay.
+\newblock {RouterBench}: A benchmark for multi-{LLM} routing system.
+\newblock {\em arXiv preprint arXiv:2403.12031}, 2024.
+
+\bibitem{candleml2024}
+{Hugging Face}.
+\newblock Candle: Minimalist {ML} framework for {Rust}, 2024.
+
+\bibitem{huntington1904sets}
+Edward~V. Huntington.
+\newblock Sets of independent postulates for the algebra of logic.
+\newblock {\em Transactions of the American Mathematical Society},
+  5(3):288--309, 1904.
+
+\bibitem{inan2023llamaguard}
+Hakan Inan, Kartikeya Upasani, Jianfeng Chi, Rashi Rungta, Krithika Iyer,
+  Yuning Mao, Michael Tontchev, Qing Hu, Brian Fuller, Davide Testuggine, and
+  Madian Khabsa.
+\newblock {Llama Guard}: {LLM}-based input-output safeguard for human-{AI}
+  conversations.
+\newblock {\em arXiv preprint arXiv:2312.06674}, 2023.
+
+\bibitem{jain2023promptguard}
+Neel Jain, Avi Schwarzschild, Yuxin Wen, Gowthami Somepalli, John Kirchenbauer,
+  Ping yeh Chiang, Micah Goldblum, Aniruddha Saha, Jonas Geiping, and Tom
+  Goldstein.
+\newblock Baseline defenses for adversarial attacks against aligned language
+  models.
+\newblock {\em arXiv preprint arXiv:2309.00614}, 2023.
+
+\bibitem{jiang2024mixtral}
+Albert~Q.\ Jiang, Alexandre Sablayrolles, Antoine Roux, Arthur Mensch, Blanche
+  Savary, Chris Bamford, Devendra~Singh Chaplot, Diego de~las Casas, Emma~Bou
+  Hanna, Florian Bressand, et~al.
+\newblock Mixtral of experts.
+\newblock {\em arXiv preprint arXiv:2401.04088}, 2024.
+
+\bibitem{kusupati2022matryoshka}
+Aditya Kusupati, Gantavya Bhatt, Aniket Rege, Matthew Wallingford, Aditya
+  Sinha, Vivek Ramanujan, William Howard-Snyder, Kaifeng Chen, Sham Kakade,
+  Prateek Jain, and Ali Farhadi.
+\newblock Matryoshka representation learning.
+\newblock {\em arXiv preprint arXiv:2205.13147}, 2022.
+
+\bibitem{kwon2023vllm}
+Woosuk Kwon, Zhuohan Li, Sicheng Zuo, Ying Sheng, Lianmin Zheng, Cody~Hao Yu,
+  Joseph~E.\ Gonzalez, Hao Zhang, and Ion Stoica.
+\newblock Efficient memory management for large language model serving with
+  {PagedAttention}.
+\newblock In {\em Proceedings of the 29th Symposium on Operating Systems
+  Principles (SOSP)}, 2023.
+
+\bibitem{lewis2020rag}
+Patrick Lewis, Ethan Perez, Aleksandra Piktus, Fabio Petroni, Vladimir
+  Karpukhin, Naman Goyal, Heinrich K{\"u}ttler, Mike Lewis, Wen tau Yih, Tim
+  Rockt{\"a}schel, Sebastian Riedel, and Douwe Kiela.
+\newblock Retrieval-augmented generation for knowledge-intensive {NLP} tasks.
+\newblock {\em arXiv preprint arXiv:2005.11401}, 2020.
+
+\bibitem{li2010contextual}
+Lihong Li, Wei Chu, John Langford, and Robert~E. Schapire.
+\newblock A contextual-bandit approach to personalized news article
+  recommendation.
+\newblock In {\em Proceedings of the 19th International Conference on World
+  Wide Web}, pages 661--670. ACM, 2010.
+
+\bibitem{linfa2024}
+{Linfa Contributors}.
+\newblock Linfa: A {Rust} machine learning framework, 2024.
+
+\bibitem{lison2021anonymisation}
+Pierre Lison, Ildik{\'o} Pil{\'a}n, David S{\'a}nchez, Montserrat Batet, and
+  Lilja {\O}vrelid.
+\newblock Anonymisation models for text data: State of the art, challenges and
+  future directions.
+\newblock In {\em Proceedings of the 59th Annual Meeting of the Association for
+  Computational Linguistics (ACL)}, pages 4188--4203, 2021.
+
+\bibitem{manakul2023selfcheckgpt}
+Potsawee Manakul, Adian Liusie, and Mark J.\~F.\ Gales.
+\newblock {SelfCheckGPT}: Zero-resource black-box hallucination detection for
+  generative large language models.
+\newblock {\em arXiv preprint arXiv:2303.08896}, 2023.
+
+\bibitem{mangrulkar2022peft}
+Sourab Mangrulkar, Sylvain Gugger, Lysandre Debut, Younes Belkada, Sayak Paul,
+  and Benjamin Bossan.
+\newblock {PEFT}: State-of-the-art parameter-efficient fine-tuning methods.
+\newblock In {\em Hugging Face}, 2022.
+
+\bibitem{onnxruntime2024}
+{Microsoft}.
+\newblock {ONNX Runtime}: Cross-platform, high performance {ML} inferencing and
+  training accelerator, 2024.
+
+\bibitem{min2023factscore}
+Sewon Min, Kalpesh Krishna, Xinxi Lyu, Mike Lewis, Wen tau Yih, Pang~Wei Koh,
+  Mohit Iyyer, Luke Zettlemoyer, and Hannaneh Hajishirzi.
+\newblock {FActScore}: Fine-grained atomic evaluation of factual precision in
+  long form text generation.
+\newblock {\em arXiv preprint arXiv:2305.14251}, 2023.
+
+\bibitem{ong2024routellm}
+Isaac Ong, Amjad Almahairi, Vincent Wu, Wei-Lin Chiang, Tianhao Wu, Joseph~E.\
+  Gonzalez, M~Waleed Kadous, and Ion Stoica.
+\newblock {RouteLLM}: Learning to route {LLMs} with preference data.
+\newblock {\em arXiv preprint arXiv:2406.18665}, 2024.
+
+\bibitem{opentelemetry2024}
+{OpenTelemetry Authors}.
+\newblock {OpenTelemetry}: An observability framework for cloud-native
+  software, 2024.
+
+\bibitem{prometheus2024}
+{Prometheus Authors}.
+\newblock Prometheus: From metrics to insight, 2024.
+
+\bibitem{rissanen1978modeling}
+Jorma Rissanen.
+\newblock Modeling by shortest data description.
+\newblock {\em Automatica}, 14(5):465--471, 1978.
+
+\bibitem{rivest1987learning}
+Ronald~L. Rivest.
+\newblock Learning decision lists.
+\newblock {\em Machine Learning}, 2(3):229--246, 1987.
+
+\bibitem{shalev2012online}
+Shai Shalev-Shwartz.
+\newblock Online learning and online convex optimization.
+\newblock {\em Foundations and Trends in Machine Learning}, 4(2):107--194,
+  2012.
+
+\bibitem{shannon1948mathematical}
+Claude~E. Shannon.
+\newblock A mathematical theory of communication.
+\newblock {\em The Bell System Technical Journal}, 27(3):379--423, 1948.
+
+\bibitem{shazeer2017moe}
+Noam Shazeer, Azalia Mirhoseini, Krzysztof Maziarz, Andy Davis, Quoc Le,
+  Geoffrey Hinton, and Jeff Dean.
+\newblock Outrageously large neural networks: The sparsely-gated
+  mixture-of-experts layer.
+\newblock {\em arXiv preprint arXiv:1701.06538}, 2017.
+
+\bibitem{wang2021milvus}
+Jianguo Wang, Xiaomeng Yi, Rentong Guo, Hai Jin, Peng Xu, Shengjun Li, Xiangyu
+  Wang, Xiangzhou Guo, Chengming Li, Xiaohai Xu, et~al.
+\newblock Milvus: A purpose-built vector data management system.
+\newblock In {\em Proceedings of the 2021 International Conference on
+  Management of Data (SIGMOD)}, 2021.
+
+\bibitem{warner2024modernbert}
+Benjamin Warner, Antoine Chaffin, Benjamin Clavie, Orion Weller, Oskar
+  Hallstrom, Said Taghadouini, Alexis Gallagher, Raja Biswas, Faisal Ladhak,
+  Tom Aarsen, Nathan Cooper, Griffin Adams, Jeremy Howard, and Iacopo Poli.
+\newblock Smarter, better, faster, longer: A modern bidirectional encoder for
+  fast, memory efficient, and long context fine-tuning and inference.
+\newblock {\em arXiv preprint arXiv:2412.13663}, 2024.
+
+\bibitem{williams2018mnli}
+Adina Williams, Nikita Nangia, and Samuel~R.\ Bowman.
+\newblock A broad-coverage challenge corpus for sentence understanding through
+  inference.
+\newblock {\em arXiv preprint arXiv:1704.05426}, 2018.
+
+\bibitem{xie2025gmtrouter}
+Encheng Xie, Yihang Sun, Tao Feng, and Jiaxuan You.
+\newblock {GMTRouter}: Personalized {LLM} router over multi-turn user
+  interactions.
+\newblock {\em arXiv preprint arXiv:2511.08590}, 2025.
+
+\bibitem{zadeh1965fuzzy}
+Lotfi~A. Zadeh.
+\newblock Fuzzy sets.
+\newblock {\em Information and Control}, 8(3):338--353, 1965.
+
+\bibitem{zhang2025routerr1}
+Haozhen Zhang, Tao Feng, and Jiaxuan You.
+\newblock {Router-R1}: Teaching {LLMs} multi-round routing and aggregation via
+  reinforcement learning.
+\newblock {\em arXiv preprint arXiv:2506.09033}, 2025.
+
+\end{thebibliography}

@@ -1,0 +1,193 @@
+% sections/decision_engine.tex
+
+\section{Decision Engine}
+\label{sec:decision_engine}
+
+The decision engine evaluates a set of routing decisions against the signal result and selects the best match.
+We formalize the decision model, present the evaluation algorithm, and analyze the selection strategies.
+
+\subsection{Decision Model}
+
+\begin{definition}[Decision]
+A \emph{decision} $d = (n, \phi, \mathcal{M}_d, \Pi_d, p)$ consists of a name $n$, a Boolean formula $\phi$ over signal conditions, a candidate model set $\mathcal{M}_d \subseteq \mathcal{M}$, a plugin configuration $\Pi_d$, and a priority $p \in \mathbb{Z}$.
+\end{definition}
+
+\begin{definition}[Signal Condition]
+A \emph{signal condition} $\gamma = (\tau, n, \nu)$ references a signal type $\tau$, a rule name $n$, and an optional negation flag $\nu \in \{0, 1\}$.
+The base satisfaction is:
+\begin{equation}
+  \text{sat}_0(\gamma, S(r)) = \mathbf{1}\bigl[\exists\, (\rho, 1, c) \in S(r) : \rho.\tau = \tau \wedge \rho.n = n\bigr]
+\end{equation}
+With negation applied:
+\begin{equation}
+  \text{sat}(\gamma, S(r)) =
+  \begin{cases}
+    1 - \text{sat}_0(\gamma, S(r)) & \text{if } \nu = 1 \\[2pt]
+    \text{sat}_0(\gamma, S(r)) & \text{otherwise}
+  \end{cases}
+\end{equation}
+\end{definition}
+
+Negation enables exclusion patterns: a condition $(\tau_\text{dom}, \text{``code''}, 1)$ matches requests that are \emph{not} classified as code, allowing decisions to route non-code queries without enumerating all other domains.
+
+\begin{definition}[Rule Formula]
+A \emph{rule formula} $\phi = (\textsc{op}, \Gamma)$ combines conditions $\Gamma = \{\gamma_1, \ldots, \gamma_L\}$ with an operator $\textsc{op} \in \{\textsc{and}, \textsc{or}\}$:
+\begin{equation}
+  \text{eval}(\phi, S(r)) =
+  \begin{cases}
+    \bigwedge_{j=1}^{L} \text{sat}(\gamma_j, S(r)) & \text{if } \textsc{op} = \textsc{and} \\[4pt]
+    \bigvee_{j=1}^{L} \text{sat}(\gamma_j, S(r)) & \text{if } \textsc{op} = \textsc{or}
+  \end{cases}
+\end{equation}
+\end{definition}
+
+The combination of per-condition negation with AND/OR operators and inter-decision priority yields full Boolean expressiveness: AND with negated conditions expresses ``match A but not B''; OR with negated conditions expresses ``match unless both A and B''; priority-ordered decisions with progressively broader conditions implement fallback chains.
+This model is deliberately kept flat rather than nested: it provides interpretable, auditable routing policies that administrators can reason about directly, while achieving complex routing logic through composition of multiple prioritized decisions.
+
+\subsection{Confidence Computation}
+
+When a decision matches, we compute a confidence score as the mean confidence over satisfied conditions:
+
+\begin{equation}
+  \text{conf}(d, S(r)) = \frac{1}{|\Gamma_\text{sat}|} \sum_{\gamma_j \in \Gamma_\text{sat}} c_j(r)
+  \label{eq:confidence}
+\end{equation}
+
+where $\Gamma_\text{sat} = \{\gamma_j \in \Gamma \mid \text{sat}(\gamma_j, S(r)) = 1\}$ and $c_j(r)$ is the signal confidence for condition $\gamma_j$.
+For embedding signals, $c_j$ is the cosine similarity; for heuristic and binary ML signals, $c_j = 1.0$.
+
+\subsection{Selection Strategies}
+
+Given the set of matched decisions $\mathcal{D}_\text{match} = \{d \in \mathcal{D} \mid \text{eval}(\phi_d, S(r)) = 1\}$, two strategies select $d^*$:
+
+\textbf{Priority Strategy.}
+\begin{equation}
+  d^* = \arg\max_{d \in \mathcal{D}_\text{match}} p_d
+\end{equation}
+This provides deterministic, administrator-controlled routing.
+Ties are broken by insertion order.
+
+\textbf{Confidence Strategy.}
+\begin{equation}
+  d^* = \arg\max_{d \in \mathcal{D}_\text{match}} \text{conf}(d, S(r))
+\end{equation}
+This enables data-driven routing where embedding similarity and classifier confidence drive selection.
+
+The priority strategy is the default for production deployments where predictability is paramount.
+The confidence strategy is preferred for experimental settings where the system should adapt to query characteristics.
+
+\subsection{Evaluation Algorithm}
+
+\begin{algorithm}[t]
+\caption{Decision Evaluation}
+\label{alg:decision_eval}
+\begin{algorithmic}[1]
+\REQUIRE Signal result $S(r)$, decisions $\mathcal{D}$, strategy $\sigma \in \{\text{priority}, \text{confidence}\}$
+\ENSURE Selected decision $d^*$, confidence $c^*$
+\STATE $\mathcal{D}_\text{match} \leftarrow \emptyset$
+\FOR{$d \in \mathcal{D}$}
+  \IF{$\text{eval}(\phi_d, S(r))$}
+    \STATE $c_d \leftarrow \text{conf}(d, S(r))$
+    \STATE $\mathcal{D}_\text{match} \leftarrow \mathcal{D}_\text{match} \cup \{(d, c_d)\}$
+  \ENDIF
+\ENDFOR
+\IF{$\sigma = \text{priority}$}
+  \STATE $(d^*, c^*) \leftarrow \arg\max_{(d, c) \in \mathcal{D}_\text{match}} p_d$
+\ELSE
+  \STATE $(d^*, c^*) \leftarrow \arg\max_{(d, c) \in \mathcal{D}_\text{match}} c$
+\ENDIF
+\RETURN $(d^*, c^*)$
+\end{algorithmic}
+\end{algorithm}
+
+The algorithm runs in $O(M \cdot L_{\max})$ where $M = |\mathcal{D}|$ is the number of decisions and $L_{\max}$ is the maximum number of conditions per decision.
+In practice, $M \leq 50$ and $L_{\max} \leq 10$, making decision evaluation negligible ($< 0.1$\,ms) relative to signal extraction.
+
+\subsection{Expressiveness Analysis}
+
+The Boolean combination model can express common routing patterns:
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Domain routing}: A single domain condition (OR with one condition) routes by classified domain.
+  \item \textbf{Guarded routing}: AND of a domain condition and a complexity condition routes complex queries within a domain to a capable model.
+  \item \textbf{Exclusion routing}: AND of a domain condition and a \emph{negated} complexity condition routes simple queries within a domain to a lightweight model, avoiding the cost of a full-capability model for straightforward requests.
+  \item \textbf{Multi-signal routing}: AND of keyword, embedding, and language conditions provides precise routing for specific query patterns.
+  \item \textbf{Fallback chains}: Multiple decisions with decreasing priority and progressively broader conditions implement fallback routing.
+\end{itemize}
+
+\paragraph{Functional completeness.}
+The expressiveness of this model rests on a classical result from Boolean algebra~\cite{huntington1904sets}: the operator set $\{\wedge, \vee, \neg\}$ is \emph{functionally complete}---any Boolean function $f: \{0,1\}^N \to \{0,1\}$ can be expressed as a formula over these operators.
+In our setting, the $N$ signal match indicators form the input bits, and each decision formula $\phi$ computes a Boolean function over them using AND, OR, and per-condition NOT.
+A single flat formula can express any clause (conjunction or disjunction of literals); priority-ordered decisions then compose multiple clauses into an ordered evaluation, equivalent to a decision list~\cite{rivest1987learning} over Boolean features.
+
+\begin{proposition}
+For any routing policy expressible as a function $\pi: \{0,1\}^N \to \mathcal{M} \cup \{\bot\}$ mapping signal vectors to model selections, there exists a decision set $\mathcal{D}$ with AND/OR/NOT formulas and priority ordering such that $\pi$ is realized by the evaluation algorithm (\Cref{alg:decision_eval}).
+\end{proposition}
+
+\begin{proof}[Proof sketch]
+Express $\pi$ in disjunctive normal form: for each model $m_k$, collect the minterms (signal vectors) that map to $m_k$ and form their disjunction.
+Each disjunction becomes a decision $d_k$ with $\textsc{op} = \textsc{or}$ over AND-clauses (each AND-clause is itself a decision at higher priority with $\textsc{op} = \textsc{and}$ over literals).
+Since $\{\wedge, \vee, \neg\}$ is functionally complete, every minterm is expressible, and priority ordering resolves overlaps deterministically.
+\end{proof}
+
+This universality guarantee means the decision engine imposes \emph{no inherent limitation} on what routing policies can be configured---any policy that depends on the binary signal outcomes is realizable.
+
+\paragraph{Structural analogy to programmable logic.}
+The signal--decision architecture is structurally isomorphic to a \emph{Programmable Logic Array} (PLA)~\cite{fleisher1975introduction}, a well-studied circuit primitive that implements arbitrary two-level Boolean functions:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{PLA Component} & \textbf{Routing System} & \textbf{Role} \\
+\midrule
+Input lines & Signal extractors ($\tau_1, \ldots, \tau_N$) & Produce binary feature vector \\
+AND-plane (product terms) & Decision AND-formulas & Compute conjunctions of literals \\
+OR-plane (sum terms) & Decision OR-formulas & Compute disjunctions of clauses \\
+Priority encoder & Priority-ordered evaluation & Select highest-priority match \\
+Output lines & Model selection + plugin chain & Execute the routed action \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+In a PLA, the AND-plane and OR-plane are ``programmed'' by setting fuse connections; in our system, they are programmed by YAML configuration.
+Just as a PLA can implement any Boolean function within its capacity (number of product terms and inputs), the decision engine can implement any routing policy within its configured signal and decision budget.
+This correspondence provides a well-understood theoretical foundation: decades of results on PLA minimization, hazard-free design, and testability~\cite{brayton1984logic} apply directly to reasoning about decision set optimization and coverage analysis.
+
+\paragraph{Decision set verification and minimization.}
+The PLA correspondence makes formal analysis tools from logic synthesis directly applicable to routing configurations.
+\emph{Coverage analysis} checks whether every reachable point in the signal space $\{0,1\}^N$ is matched by at least one decision, identifying dead zones where requests would receive no routing directive.
+\emph{Conflict detection} identifies signal combinations where multiple decisions match but route to incompatible model pools, flagging ambiguities that priority ordering must resolve.
+\emph{Decision minimization}, analogous to the Espresso heuristic for two-level logic optimization~\cite{brayton1984logic}, can reduce a decision set to a minimal equivalent form by merging decisions with compatible conditions and eliminating subsumed rules.
+These standard logic-verification techniques become applicable to routing policy validation without adaptation, a direct consequence of the structural isomorphism.
+
+\subsection{Generalization to Fuzzy Evaluation}
+
+The Boolean decision model admits a natural generalization when signal confidence scores are continuous.
+Rather than binarizing each signal's output before Boolean combination, we evaluate decision formulas over the continuous confidence values directly, using fuzzy logic operators~\cite{zadeh1965fuzzy}.
+
+\begin{definition}[Fuzzy Rule Evaluation]
+Given continuous signal confidences $c_j(r) \in [0,1]$ for each condition $\gamma_j$, and letting $\tilde{c}_j(r) = 1 - c_j(r)$ when $\gamma_j$ is negated and $\tilde{c}_j(r) = c_j(r)$ otherwise, the fuzzy evaluation of a rule formula $\phi = (\textsc{op}, \Gamma)$ is:
+\begin{equation}
+  \widetilde{\text{eval}}(\phi, S(r)) =
+  \begin{cases}
+    \displaystyle\min_{j=1}^{L}\, \tilde{c}_j(r) & \text{if } \textsc{op} = \textsc{and} \\[6pt]
+    \displaystyle\max_{j=1}^{L}\, \tilde{c}_j(r) & \text{if } \textsc{op} = \textsc{or}
+  \end{cases}
+\end{equation}
+\end{definition}
+
+The operators $(\min, \max, 1{-}x)$ form the standard fuzzy complement triple and satisfy De~Morgan's laws, preserving the algebraic properties of the crisp model~\cite{bellman1970decision}.
+This fuzzy evaluation is a \emph{strict generalization}: when all confidences are binary ($c_j \in \{0,1\}$), $\min$ reduces to $\wedge$ and $\max$ reduces to $\vee$, so the evaluation coincides exactly with the crisp Boolean model.
+
+The practical consequence is significant.
+The current confidence strategy (\Cref{eq:confidence}) uses mean confidence as a tiebreaker \emph{after} binary matching.
+Fuzzy evaluation incorporates confidence \emph{during} formula evaluation: a decision with three conditions matched at confidences $(0.95, 0.88, 0.72)$ yields a fuzzy AND score of $0.72$, while a decision with two conditions at $(0.99, 0.98)$ scores $0.98$---correctly preferring the more confident partial match even when both decisions pass binary evaluation.
+The functional completeness result of the previous section extends directly: the fuzzy operator triple $(\min, \max, 1{-}x)$ is functionally complete over the continuous lattice $[0,1]$, so any monotone routing policy over continuous signal scores is realizable.
+
+\subsection{Composable Decision Profiles}
+
+The decision model directly enables \emph{composable signal orchestration}: different deployment scenarios are expressed as different decision sets $\mathcal{D}$ over the same signal infrastructure.
+A healthcare deployment defines decisions with authz and domain conditions routing to compliant model pools; a developer-tool deployment defines decisions with complexity and keyword conditions routing to cost-optimized cascades; a multi-cloud deployment defines decisions with domain and modality conditions, using latency-aware model selection across provider endpoints.
+
+Formally, switching deployment scenarios corresponds to loading a different decision profile $\mathcal{D}_\Gamma$, while the signal extraction layer $\mathcal{S}$ and plugin implementations $\Pi$ remain unchanged.
+This separation of \emph{policy} (what decisions to evaluate) from \emph{mechanism} (how signals are computed and plugins execute) is the architectural basis for the composability claimed in \Cref{sec:architecture}.

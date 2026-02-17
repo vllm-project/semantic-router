@@ -1,0 +1,62 @@
+% sections/related_work.tex
+
+\section{Related Work}
+\label{sec:related_work}
+
+\subsection{LLM Routing and Model Selection}
+
+\textbf{Binary routing.}
+RouteLLM~\cite{ong2024routellm} pioneered preference-data-driven routing between a strong and weak model, training BERT, MLP, and causal LLM classifiers to estimate query difficulty.
+Our work extends this to multi-model, multi-signal routing with per-decision plugin chains.
+
+\textbf{Contrastive selection.}
+RouterDC~\cite{chen2024routerdc} learns shared query-model embeddings via dual contrastive learning.
+We integrate RouterDC as one of thirteen selection algorithms and extend it with signal-conditioned features (domain category, complexity).
+
+\textbf{Cascading.}
+AutoMix~\cite{aggarwal2023automix} formulates model cascading as a POMDP with self-verification.
+We integrate AutoMix within our plugin-aware framework, where safety checks and caching can prevent unnecessary escalation.
+
+\textbf{Benchmarking.}
+RouterBench~\cite{hu2024routerbench} proposed a benchmark for multi-LLM routing with hybrid scoring.
+Our Hybrid selector builds on this approach.
+
+\textbf{RL-based routing.}
+Router-R1~\cite{zhang2025routerr1} applies reinforcement learning with Thompson sampling for multi-round routing.
+GMTRouter~\cite{xie2025gmtrouter} uses graph-based learning for personalized multi-turn interactions.
+We integrate both within the unified selection interface and extend them with the ReMoM multi-round reasoning strategy.
+
+A key distinction of our work is that prior approaches address model selection in isolation, while we embed selection within a composable signal orchestration framework that also handles signal extraction, safety enforcement, caching, context augmentation, and multi-provider routing---enabling the same selection algorithms to serve fundamentally different deployment scenarios through configuration.
+
+\subsection{Multi-Provider and Multi-Endpoint Routing}
+
+Commercial LLM gateway products (OpenRouter, AWS Bedrock, Azure AI Studio) provide multi-provider access but lack the composable signal-driven routing that enables differentiated policies per routing decision.
+API management platforms (Kong, Apigee) offer gateway functionality but are not designed for semantic analysis of LLM requests.
+Our system uniquely combines semantic model selection with multi-provider protocol abstraction, a pluggable authorization factory, and full OpenAI Responses API support for stateful conversations within the same composable framework.
+
+\subsection{Mixture-of-Experts vs.\ Mixture-of-Models}
+
+Sparse Mixture-of-Experts (MoE)~\cite{shazeer2017moe,jiang2024mixtral} routes \emph{tokens} to specialized sub-networks \emph{within} a single model architecture.
+Our system operates at the \emph{request level}, routing entire requests across \emph{different model deployments}---a Mixture-of-Models (MoM) approach.
+The two paradigms are complementary: our router can route to MoE models as backends.
+
+\subsection{LLM Safety}
+
+Prompt injection defenses~\cite{jain2023promptguard,inan2023llamaguard} detect adversarial inputs via fine-tuned classifiers.
+PII detection systems~\cite{lison2021anonymisation} identify sensitive information using rule-based and ML approaches.
+Our safety subsystem integrates both within the routing pipeline with per-decision thresholds and policies, using LoRA adapters for memory-efficient multi-task classification.
+
+\subsection{Hallucination Detection}
+
+SelfCheckGPT~\cite{manakul2023selfcheckgpt} detects hallucinations via multi-sample consistency.
+FActScore~\cite{min2023factscore} evaluates factual precision at the atomic fact level.
+HaluGate differs in three respects:
+(1)~a gating Sentinel that skips verification for non-factual queries;
+(2)~token-level span identification rather than sentence-level scoring;
+(3)~NLI-based explanation distinguishing contradiction from neutral unsupported content.
+
+\subsection{Semantic Caching and RAG}
+
+Semantic caching for LLMs~\cite{lewis2020rag} uses embedding similarity for query matching.
+Our cache extends this with per-decision policies, multiple backends, and integration with the safety pipeline (cache lookups occur \emph{after} safety checks but \emph{before} model invocation).
+RAG integration~\cite{lewis2020rag,wang2021milvus} augments responses with retrieved context; our contribution is embedding RAG as a per-decision plugin within the routing framework.

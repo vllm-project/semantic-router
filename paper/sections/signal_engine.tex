@@ -1,0 +1,114 @@
+% sections/signal_engine.tex
+
+\section{Signal Extraction Layer}
+\label{sec:signal_engine}
+
+The signal extraction layer maps an incoming request $r$ to a structured signal result that characterizes the request along eleven orthogonal dimensions.
+We formalize the signal model and describe the extraction algorithms.
+
+\subsection{Signal Model}
+
+\begin{definition}[Signal Rule]
+A \emph{signal rule} $\rho = (\tau, n, f)$ consists of a signal type $\tau \in \mathcal{T}$, a rule name $n$, and an evaluation function $f: \mathcal{R} \to \{0, 1\} \times [0, 1]$ that maps a request to a binary match indicator and a confidence score.
+\end{definition}
+
+\begin{definition}[Signal Result]
+Given a rule set $\mathcal{R} = \{\rho_1, \ldots, \rho_N\}$, the signal result for request $r$ is:
+\begin{equation}
+  S(r) = \bigl\{ \bigl(\rho_i, \; \mathbf{1}[f_i(r)], \; c_i(r)\bigr) \mid \rho_i \in \mathcal{R} \bigr\}
+\end{equation}
+where $\mathbf{1}[f_i(r)]$ is the match indicator and $c_i(r) \in [0,1]$ is the confidence.
+\end{definition}
+
+The eleven signal types partition into \emph{heuristic} and \emph{learned} categories based on whether they require neural inference.
+
+\subsection{Heuristic Signals}
+
+Heuristic signals use deterministic or statistical algorithms with sub-millisecond latency:
+
+\textbf{Keyword} ($\tau_\text{kw}$).
+Rules are defined as pattern sets with Boolean combinators.
+Each rule specifies a set of patterns $P = \{p_1, \ldots, p_k\}$ with a combinator $\in \{\textsc{and}, \textsc{or}, \textsc{nor}\}$ and a match mode $\in \{\text{exact}, \text{contains}, \text{regex}\}$.
+For \textsc{and}: $f(r) = \bigwedge_{i} \text{match}(p_i, r)$; for \textsc{or}: $f(r) = \bigvee_{i} \text{match}(p_i, r)$.
+Confidence is 1.0 on match.
+
+\textbf{Context Length} ($\tau_\text{ctx}$).
+Rules define token-count intervals $[l, u]$.
+Given estimated token count $t(r)$, the rule matches iff $l \leq t(r) \leq u$.
+This enables complexity-aware routing (e.g., short queries to fast models, long contexts to extended-context models).
+
+\textbf{Language} ($\tau_\text{lang}$).
+Rules bind detected language codes to named signals using statistical n-gram detection over 100+ languages.
+Enables language-specific routing (e.g., CJK queries to multilingual-specialized models).
+
+\textbf{Authorization} ($\tau_\text{authz}$).
+Role-based access control signals extracted from request headers, supporting a pluggable authentication factory.
+The authz signal layer abstracts over multiple identity providers (API key, OAuth2/OIDC, cloud IAM, custom JWT, LDAP) through provider-specific extractors that resolve user identities and group memberships from credentials.
+Role bindings then map resolved identities to named signals, enabling per-role routing policies (e.g., premium users routed to higher-quality models, free-tier users restricted to cost-effective models).
+This \emph{inbound} authorization (who is the user and what can they access?) is complementary to the \emph{outbound} authorization factory (\Cref{subsec:authz_factory}) that injects provider-specific credentials when forwarding to backends.
+
+\subsection{Learned Signals}
+
+Learned signals require neural inference, typically 10--100\,ms, using the LoRA-based classifiers described in \Cref{sec:lora_mom}:
+
+\textbf{Embedding Similarity} ($\tau_\text{emb}$).
+Each rule defines reference texts $\{t_1, \ldots, t_k\}$ and a similarity threshold $\theta$.
+The request embedding $\mathbf{e}_r$ is computed via a shared embedding model, and the rule matches iff:
+\begin{equation}
+  \max_i \cos(\mathbf{e}_r, \mathbf{e}_{t_i}) \geq \theta
+\end{equation}
+The confidence equals the maximum cosine similarity.
+This provides scalable semantic matching without per-rule model training.
+
+\textbf{Domain Classification} ($\tau_\text{dom}$).
+A LoRA-adapted classifier trained on MMLU categories maps requests to domain labels (STEM, humanities, code, creative writing, etc.).
+The classification confidence serves as the signal confidence.
+
+\textbf{Factual Grounding} ($\tau_\text{fact}$).
+A binary classifier (the HaluGate Sentinel, \Cref{sec:halugate}) determines whether the query requires factual verification, distinguishing factual questions from creative or code-generation tasks.
+
+\textbf{User Feedback} ($\tau_\text{fb}$).
+A multi-class classifier detects satisfaction, dissatisfaction, clarification requests, and preference for alternatives, enabling feedback-driven routing adjustments.
+
+\textbf{Modality} ($\tau_\text{mod}$).
+A three-class classifier (autoregressive, diffusion, both) determines the appropriate model modality for the request, trained on mixed text-generation and image-generation datasets.
+
+\textbf{Complexity} ($\tau_\text{cpx}$) and \textbf{Preference} ($\tau_\text{pref}$).
+Additional learned signals for query difficulty estimation and personalized routing based on user interaction history.
+
+\subsection{Parallel Evaluation with Lazy Computation}
+
+A key optimization is \emph{demand-driven evaluation}: the engine computes only signal types referenced by at least one configured decision.
+Let $\mathcal{T}_\text{used} = \bigcup_{d \in \mathcal{D}} \{\tau \mid \exists\, \text{condition in } d \text{ of type } \tau\}$.
+Signal evaluators for types in $\mathcal{T}_\text{used}$ are launched as concurrent coroutines, with heuristic signals completing before learned signals due to their sub-millisecond latency.
+
+This demand-driven approach avoids the cost of unused signal types.
+In typical configurations with 3--5 active signal types out of eleven, this reduces total signal extraction latency by 50--70\% compared to exhaustive evaluation.
+
+\subsection{Extensibility}
+
+The eleven signal types described above represent the current built-in set; the framework is not limited to these.
+The signal extraction layer defines a uniform interface---each signal type implements an evaluation function $f: \mathcal{R} \to \{0,1\} \times [0,1]$---and the decision engine references signals solely by type and rule name.
+Adding a new signal type requires only implementing this interface and registering the type; no changes to the decision engine, plugin chain, or deployment infrastructure are needed.
+This open architecture allows operators to introduce domain-specific signals (e.g., regulatory compliance classifiers, custom toxicity detectors) alongside the built-in types.
+
+\subsection{Bidirectional Signal Flow}
+
+Signals are not limited to the inbound request path.
+The system also extracts signals from model \emph{responses}, enabling closed-loop routing policies that adapt based on output characteristics.
+The primary example is \halugate{} (\Cref{sec:halugate}): the Sentinel classifier on the request path determines whether a query requires factual verification (the $\tau_\text{fact}$ signal), and if so, the Detector and Explainer stages analyze the model's response for unsupported claims---producing response-side detection results (confidence scores, hallucinated spans, NLI explanations) that are propagated via HTTP headers or body annotations.
+This bidirectional flow---request signals gating which response analyses to perform, and response signals feeding back into observability and policy enforcement---enables adaptive quality assurance without imposing uniform overhead on all requests.
+
+\subsection{Information-Theoretic Signal Analysis}
+
+With $N$ signal types evaluated per request, a natural question is whether all signals contribute independently to routing quality or whether some carry redundant information.
+Information theory provides the formal framework for this analysis~\cite{shannon1948mathematical}.
+
+For a signal type $\tau_i$ and the routing outcome variable $Y$ (the selected model), the \emph{mutual information} $I(\tau_i; Y)$ quantifies the reduction in uncertainty about the routing decision provided by observing signal $\tau_i$.
+The \emph{conditional mutual information} $I(\tau_i; Y \mid \tau_j)$ measures the additional information from $\tau_i$ given that $\tau_j$ is already observed.
+When $I(\tau_i; Y \mid \tau_j) \approx 0$, signals $\tau_i$ and $\tau_j$ are redundant with respect to routing---observing both provides no more discriminative power than observing one.
+
+This analysis enables two optimizations.
+First, \emph{adaptive signal pruning}: in a given deployment configuration, signals with near-zero mutual information with the routing outcome can be disabled without affecting routing quality, reducing extraction latency beyond the demand-driven approach of \Cref{sec:signal_engine}.
+Second, \emph{information-ordered evaluation}: evaluating high-$I(\tau_i; Y)$ signals first and short-circuiting when the decision outcome is already determined---analogous to early termination in decision trees---can reduce average per-request evaluation cost.
+The minimum description length (MDL) principle~\cite{rissanen1978modeling} provides a complementary perspective: the optimal signal subset is the one that describes the routing policy with minimum total code length, balancing signal extraction cost against routing precision.
