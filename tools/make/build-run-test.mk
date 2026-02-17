@@ -19,7 +19,7 @@ build-router: $(if $(CI),rust-ci,rust)
 run-router: ## Run the router with the specified config
 run-router: build-router
 	@echo "Running router with config: ${CONFIG_FILE}"
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
 		./bin/router -config=${CONFIG_FILE} --enable-system-prompt-api=true
 
 # Run the router with e2e config for testing
