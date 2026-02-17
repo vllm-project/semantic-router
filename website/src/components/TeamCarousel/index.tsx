@@ -142,6 +142,18 @@ const teamMembers: TeamMember[] = [
     avatar: 'https://github.com/aeft.png',
     memberType: 'committer',
   },
+  {
+    name: 'Hao Wu',
+    role: 'Individual Contributor',
+    avatar: 'https://github.com/haowu1234.png',
+    memberType: 'committer',
+  },
+  {
+    name: 'Qiping Pan',
+    role: 'Individual Contributor',
+    avatar: 'https://github.com/ppppqp.png',
+    memberType: 'committer',
+  },
 ]
 
 const TeamCarousel: React.FC = () => {

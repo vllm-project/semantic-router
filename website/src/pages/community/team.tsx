@@ -221,6 +221,23 @@ const allTeamMembers: TeamMember[] = [
     bio: <Translate id="team.members.aeft.bio">Open source contributor to vLLM Semantic Router.</Translate>,
     memberType: 'committer',
   },
+  {
+    name: 'Hao Wu',
+    role: <Translate id="team.members.HaoWu.role">Individual Contributor</Translate>,
+    avatar: 'https://github.com/haowu1234.png',
+    github: 'https://github.com/haowu1234',
+    bio: <Translate id="team.members.HaoWu.bio">Open source contributor to vLLM Semantic Router.</Translate>,
+    memberType: 'committer',
+  },
+  {
+    name: 'Qiping Pan',
+    role: <Translate id="team.members.QipingPan.role">Individual Contributor</Translate>,
+    avatar: 'https://github.com/ppppqp.png',
+    github: 'https://github.com/ppppqp',
+    linkedin: 'https://www.linkedin.com/in/qiping-pan-8662ab215/',
+    bio: <Translate id="team.members.QipingPan.bio">Open source contributor to vLLM Semantic Router.</Translate>,
+    memberType: 'committer',
+  },
 ]
 
 const TeamMemberCard: React.FC<TeamMemberProps> = ({ member }) => {
