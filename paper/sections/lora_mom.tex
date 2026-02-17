@@ -51,6 +51,13 @@ Each classification task proceeds as a full forward pass through the base model 
   \item \textbf{Parallelism}: Multiple classification tasks execute concurrently via parallel threads/goroutines. Wall-clock time is determined by the slowest classifier, not the sum.
 \end{enumerate}
 
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=\linewidth]{figures/lora_architecture.svg}
+    \caption{LoRA-based MoM Inference Architecture. The input query is processed by a single, shared frozen base model ($W$). Simultaneously, task-specific low-rank adapters ($A \times B$) calculate perturbations. The outputs are summed element-wise to produce final task-specific classifications, enabling multi-task support with minimal memory overhead.}
+    \label{fig:lora_arch}
+\end{figure}
+
 Note that LoRA does \emph{not} eliminate the per-task forward pass---each adapter requires a full inference through the modified model.
 The primary benefit is \textbf{memory efficiency}: deploying six classifiers requires the memory footprint of approximately one model rather than six, and all adapters can be updated independently without reloading the base model.
 
@@ -77,6 +84,7 @@ All models share a common base (ModernBERT~\cite{warner2024modernbert} or mmBERT
 \texttt{mom-modality}       & Modality classification   & DiffusionDB + text corpora \\
 \texttt{mom-embedding}      & Semantic embeddings       & Contrastive pre-training \\
 \texttt{mom-toolcall}       & Tool selection            & Function-calling datasets \\
+\texttt{mom-intent} & User intent classification & Customer support dialogues \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -94,3 +102,9 @@ All LoRA adapters are trained using PEFT~\cite{mangrulkar2022peft} with the foll
 \end{itemize}
 
 The modality classifier, for instance, is trained on a balanced mixture of DiffusionDB (image generation prompts), OASST2, Alpaca, and Dolly (text generation), achieving three-class classification (autoregressive, diffusion, both) with $\sim$0.02\% trainable parameters relative to the base model.
+
+
+
+
+\paragraph{Contributors.}
+Huamin Chen, Yossi Ovadia, Xunzhuo, yehudit1987, abdallahsamabd, Yue Zhu, OneZero-Y, shown, Xunzhuo, asaadbalum, Jared, aeft, Wilson Wu, Tien Nguyen, Srinivas A, Qiping Pan, Nengxing Shen, Liav Weiss, GuanMu, ERIK, Alex Wang, Sanjeev Rampal, Zohaib Hassnain.

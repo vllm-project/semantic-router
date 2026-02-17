@@ -119,6 +119,31 @@ exact-match queries achieve 100\% hit rate with $< 5$\,ms lookup latency;
 paraphrased queries achieve 60--80\% hit rate depending on paraphrase distance.
 Cache hits eliminate backend model invocation entirely, reducing per-request cost to embedding computation only.
 
+\subsection{Unified MoM Evaluation Framework}
+
+To validate the robustness of the Mixture of Models (MoM) collection, we implemented a unified evaluation pipeline that benchmarks both merged models and LoRA adapters. The framework standardizes the assessment of heterogeneous model variants across intent classification and PII detection tasks.
+
+The evaluation architecture, shown in \Cref{fig:eval_pipeline}, utilizes the following components:
+
+\begin{itemize}
+    \item \textbf{Schema Normalization:} Inputs from diverse sources—including MMLU-Pro for intent and Presidio for token classification—are mapped to a common evaluation schema.
+    \item \textbf{Comparative Quality Validation:} The system computes weighted F1-scores and per-class precision/recall to ensure that the memory efficiency gains reported in \Cref{tab:lora_memory} do not result in significant predictive degradation compared to full-parameter models.
+    \item \textbf{Parallelized Benchmarking:} Large-scale evaluations are executed via \texttt{ProcessPoolExecutor} to minimize wall-clock time. The pipeline incorporates automated OOM recovery and exponential backoff for API-based signal providers to ensure benchmark reliability.
+\end{itemize}
+
+Results include p50 and p99 latency profiling to confirm that model orchestration remains within the operational bounds required for real-time routing.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\linewidth]{figures/evaluation_flow.svg}
+    \caption{Unified MoM evaluation pipeline. The system parallelizes assessment across the model registry, managing dynamic dataset loading and comparative metric generation for merged and LoRA variants.}
+    \label{fig:eval_pipeline}
+\end{figure}
+
 \subsection{Open Evaluation}
 
 Detailed model selection quality comparisons across algorithms, HaluGate detection accuracy on standard benchmarks (HaluEval, FActScore), and large-scale routing quality evaluation are under preparation in collaboration with the RouterArena team.
+
+\paragraph{Contributors.}
+Senan Zedan, Xunzhuo, yehudit1987, abdallahsamabd, Noa Limoy, Yossi Ovadia, Liav Weiss, Huamin Chen, samzong, Jintao Zhang, asaadbalum, Xunzhuo, Srinivas A, Marina Koushnir, Chever John, Chaojun Zhang, Avishek Goswami, Zohaib Hassnain.
+
