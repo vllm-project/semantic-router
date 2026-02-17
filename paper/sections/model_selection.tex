@@ -1,0 +1,162 @@
+% sections/model_selection.tex
+
+\section{Semantic Model Selection}
+\label{sec:model_selection}
+
+The core routing innovation is \emph{semantic model selection}: once the decision engine matches a routing decision $d^*$, the system analyzes the request's semantic content---its embedding, domain, complexity, and interaction history---to select the most cost-effective model from the decision's candidate set.
+Unlike static routing or single-criterion difficulty classifiers, semantic selection operates over the full signal context produced by the signal engine, enabling cost-quality optimization that respects per-decision privacy and safety constraints.
+
+We integrate thirteen algorithms within a unified interface, enabling systematic comparison and hybrid combinations across deployment scenarios.
+
+\subsection{Problem Setting}
+
+Given query embedding $\mathbf{e}_q \in \mathbb{R}^d$, domain category $z \in \{1, \ldots, C\}$, candidate models $\mathcal{M}_{d^*} = \{m_1, \ldots, m_K\}$ with associated costs $\{c_1, \ldots, c_K\}$, and quality estimators, the semantic selection problem is:
+\begin{equation}
+  m^* = \arg\max_{m_k \in \mathcal{M}_{d^*}} \; \text{Quality}(\mathbf{e}_q, z, m_k; \Theta) - \lambda \cdot \text{Cost}(m_k)
+\end{equation}
+where $\lambda \geq 0$ is a cost-sensitivity parameter and $\Theta$ represents algorithm-specific parameters.
+The per-decision candidate set $\mathcal{M}_{d^*}$ is critical: privacy-constrained decisions restrict candidates to compliant models, while cost-optimized decisions include a broader pool with aggressive cost weighting.
+We categorize algorithms into five families.
+
+\subsection{Rating-Based Selection}
+
+\textbf{Static.}
+Each model carries a pre-configured quality score $s_k$; selection is $m^* = \arg\max_k s_k$.
+Serves as a deterministic baseline.
+
+\textbf{Elo Rating} (adapted from RouteLLM~\cite{ong2024routellm}).
+Models maintain Elo ratings $R_k$ updated from pairwise user preference feedback.
+Selection probability follows the Bradley-Terry model:
+\begin{equation}
+  P(m_i \succ m_j) = \frac{1}{1 + 10^{(R_j - R_i)/400}}
+\end{equation}
+Models are sampled proportional to their expected win rate against the candidate pool.
+Ratings are updated online as user feedback arrives.
+
+\subsection{Embedding-Based Selection}
+
+\textbf{RouterDC}~\cite{chen2024routerdc}.
+Dual contrastive learning trains query and model encoders to produce embeddings in a shared space.
+Selection maximizes cosine similarity:
+\begin{equation}
+  m^* = \arg\max_{m_k \in \mathcal{M}_{d^*}} \cos(\mathbf{e}_q, \mathbf{e}_{m_k})
+\end{equation}
+The contrastive training objective encourages queries to be close to their best-performing model's embedding and distant from poorly-performing models.
+
+\textbf{Hybrid}~\cite{hu2024routerbench}.
+Combines Elo ratings, embedding similarity, and cost in a weighted score:
+\begin{equation}
+  \text{score}(m_k) = \alpha \cdot \tilde{R}_k + \beta \cdot \cos(\mathbf{e}_q, \mathbf{e}_{m_k}) + \gamma \cdot (1 - \tilde{c}_k)
+\end{equation}
+where $\tilde{R}_k$ and $\tilde{c}_k$ are normalized ratings and costs, and $\alpha + \beta + \gamma = 1$ are configurable weights.
+
+\subsection{Cascading Selection}
+
+\textbf{AutoMix}~\cite{aggarwal2023automix}.
+Formulated as a Partially Observable Markov Decision Process (POMDP).
+Models are ordered by capability $m_1 \prec m_2 \prec \cdots \prec m_K$.
+The cascade:
+\begin{enumerate}
+  \item Generate response $a_k$ with current model $m_k$ (starting from $k=1$, the cheapest).
+  \item Self-verify: estimate response quality $\hat{q}_k$ using $m_k$ itself.
+  \item If $\hat{q}_k \geq \tau_k$, accept $a_k$; otherwise, escalate to $m_{k+1}$.
+\end{enumerate}
+The expected cost is:
+\begin{equation}
+  \mathbb{E}[C] = \sum_{k=1}^{K} C_k \cdot \prod_{j=1}^{k-1}(1 - P(\hat{q}_j \geq \tau_j))
+\end{equation}
+where $P(\hat{q}_j \geq \tau_j)$ is the probability that model $m_j$ passes self-verification.
+This naturally trades off cost against quality.
+
+\subsection{Classical ML Selection}
+
+These methods train on routing records $\{(\mathbf{e}_q^{(i)}, z^{(i)}, m^{*(i)}, q^{(i)})\}$ where $q^{(i)}$ is a quality score.
+Feature vectors combine embeddings and domain information:
+\begin{equation}
+  \mathbf{f} = [\mathbf{e}_q \in \mathbb{R}^d; \; \text{onehot}(z) \in \{0,1\}^C]
+\end{equation}
+
+\textbf{KNN.}
+$k$-nearest neighbor search with Ball Tree indexing.
+Quality-weighted majority voting:
+\begin{equation}
+  m^* = \arg\max_m \sum_{i \in \text{kNN}(\mathbf{f})} \mathbf{1}[m^{*(i)} = m] \cdot q^{(i)}
+\end{equation}
+
+\textbf{KMeans.}
+Assigns queries to pre-computed clusters; selects the best model for the assigned cluster based on a combined quality-latency score:
+\begin{equation}
+  m^* = \arg\max_m \bigl(\alpha \cdot \text{quality}(m, z_\text{cluster}) - (1-\alpha) \cdot \text{latency}(m)\bigr)
+\end{equation}
+
+\textbf{SVM.}
+Multi-class SVM with RBF or linear kernel, trained to classify feature vectors directly into model selections.
+
+\textbf{MLP.}
+A feed-forward neural network (two hidden layers with ReLU activation) mapping $\mathbf{f}$ to a softmax distribution over candidate models:
+\begin{equation}
+  P(m_k \mid \mathbf{f}) = \text{softmax}\bigl(W_2 \cdot \text{ReLU}(W_1 \mathbf{f} + b_1) + b_2\bigr)_k
+\end{equation}
+The MLP is implemented in the GPU-accelerated Candle runtime for low-latency inference.
+
+\subsection{Reinforcement Learning Selection}
+
+\textbf{RL-Driven (Thompson Sampling).}
+Adapted from Router-R1~\cite{zhang2025routerr1}.
+Each model maintains a Beta prior:
+\begin{equation}
+  \theta_k \sim \text{Beta}(\alpha_k, \beta_k)
+\end{equation}
+Selection samples from each posterior and picks the maximum: $m^* = \arg\max_k \theta_k$.
+Parameters $(\alpha_k, \beta_k)$ are updated from user preference feedback, naturally balancing exploration and exploitation.
+
+\textbf{GMTRouter}~\cite{xie2025gmtrouter}.
+Models multi-turn user-query-model interactions as a heterogeneous graph.
+Graph neural network message passing captures complex interaction patterns:
+\begin{equation}
+  \mathbf{h}_v^{(l+1)} = \text{AGG}\bigl(\{\mathbf{h}_u^{(l)} \mid u \in \mathcal{N}(v)\}\bigr)
+\end{equation}
+where nodes represent users, queries, and models, and edges encode historical routing outcomes.
+
+\subsection{Latency-Aware Selection}
+
+\textbf{Latency-Aware.}
+Selects the model with the best observed latency using percentile-based Time-per-Output-Token (TPOT) and Time-to-First-Token (TTFT) statistics collected at runtime.
+For each candidate model $m_k$, the selector computes a normalized latency score:
+\begin{equation}
+  s_k = \frac{1}{|P|} \sum_{p \in P} \frac{\text{perc}_p(m_k)}{\min_{j}\, \text{perc}_p(m_j)}
+\end{equation}
+where $P \subseteq \{\text{TPOT}, \text{TTFT}\}$ is the set of configured performance metrics and $\text{perc}_p(m_k)$ is the observed percentile value for model $m_k$ on metric $p$.
+Selection minimizes this score: $m^* = \arg\min_k s_k$.
+This enables adaptive routing that responds to real-time backend performance degradation without requiring explicit latency thresholds as signal conditions.
+
+\subsection{Multi-Round Reasoning (ReMoM)}
+
+The ReMoM (Reasoning for Mixture of Models) strategy extends single-shot selection to iterative refinement:
+
+\begin{enumerate}
+  \item \textbf{Parallel generation}: Distribute the query to $k$ selected models simultaneously.
+  \item \textbf{Quality assessment}: Score each response using an evaluator.
+  \item \textbf{Synthesis}: Combine responses using quality-weighted aggregation.
+  \item \textbf{Iteration}: Optionally refine with additional rounds using updated model selection.
+\end{enumerate}
+
+ReMoM is particularly effective when model capabilities are uncertain or when the task benefits from diverse perspectives (e.g., complex reasoning, multi-faceted analysis).
+
+\subsection{Unified Selection Interface}
+
+All thirteen algorithms implement a common interface:
+\begin{equation}
+  \text{Select}: (\mathbf{e}_q, z, \mathcal{M}, \Theta) \to (m^*, c)
+\end{equation}
+returning the selected model and a confidence score.
+This uniformity enables:
+(1)~per-decision algorithm selection---different routing decisions can use different selection algorithms, allowing cost-optimized decisions to use cascading (AutoMix) while quality-sensitive decisions use embedding-based (RouterDC) selection;
+(2)~A/B testing across algorithms on live traffic;
+(3)~ensemble methods that combine multiple selectors.
+
+\subsection{Cost-Aware Selection in Multi-Provider Settings}
+
+In multi-endpoint deployments where the same logical model may be served by different providers at different price points, the selection algorithms operate in conjunction with the endpoint router (\Cref{subsec:multi_endpoint}).
+The selection algorithm chooses the best \emph{model} based on semantic analysis, and the endpoint router resolves it to the most cost-effective \emph{provider endpoint}.
+This two-stage process separates quality optimization (which model is best for this query?) from cost optimization (which provider endpoint offers the best price for this model?), enabling fine-grained cost management across heterogeneous multi-cloud deployments.
