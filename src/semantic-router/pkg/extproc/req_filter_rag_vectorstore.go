@@ -75,10 +75,13 @@ func (r *OpenAIRouter) retrieveFromVectorStore(traceCtx context.Context, ctx *Re
 	}
 
 	// Build filter.
-	var filter map[string]interface{}
+	// Llama Stack searches by text, not embedding. Pass the query text via
+	// the filter map so it can use it.
+	filter := map[string]interface{}{
+		"_query_text": query,
+	}
 	if len(vsConfig.FileIDs) > 0 {
-		// If specific file IDs are configured, filter to those.
-		filter = map[string]interface{}{"file_id": vsConfig.FileIDs[0]}
+		filter["file_id"] = vsConfig.FileIDs[0]
 	}
 
 	// Search.

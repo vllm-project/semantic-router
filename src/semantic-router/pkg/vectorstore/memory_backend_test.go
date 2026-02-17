@@ -271,7 +271,7 @@ var _ = Describe("cosineSimilarity", func() {
 
 var _ = Describe("NewBackend factory", func() {
 	It("should create memory backend", func() {
-		b, err := NewBackend(BackendTypeMemory, MemoryBackendConfig{}, MilvusBackendConfig{})
+		b, err := NewBackend(BackendTypeMemory, BackendConfigs{Memory: MemoryBackendConfig{}})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(b).NotTo(BeNil())
 
@@ -280,15 +280,34 @@ var _ = Describe("NewBackend factory", func() {
 	})
 
 	It("should return error for unsupported type", func() {
-		_, err := NewBackend("redis", MemoryBackendConfig{}, MilvusBackendConfig{})
+		_, err := NewBackend("redis", BackendConfigs{})
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("unsupported backend type"))
 	})
 
 	It("should return error for milvus without address", func() {
-		_, err := NewBackend(BackendTypeMilvus, MemoryBackendConfig{}, MilvusBackendConfig{})
+		_, err := NewBackend(BackendTypeMilvus, BackendConfigs{})
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("milvus address is required"))
+	})
+
+	It("should create llama_stack backend", func() {
+		b, err := NewBackend(BackendTypeLlamaStack, BackendConfigs{
+			LlamaStack: LlamaStackBackendConfig{
+				Endpoint: "http://localhost:8321",
+			},
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(b).NotTo(BeNil())
+
+		_, ok := b.(*LlamaStackBackend)
+		Expect(ok).To(BeTrue())
+	})
+
+	It("should return error for llama_stack without endpoint", func() {
+		_, err := NewBackend(BackendTypeLlamaStack, BackendConfigs{})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("endpoint is required"))
 	})
 })
 

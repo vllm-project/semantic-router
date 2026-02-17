@@ -46,6 +46,17 @@ semantic_cache:
   ttl_seconds: 3600
   eviction_policy: "fifo"  # Options: "fifo", "lru", "lfu"
 
+# Vector Store — local document ingestion and search (RAG)
+vector_store:
+  enabled: false
+  backend_type: "memory"  # Options: "memory", "milvus", or "llama_stack"
+  file_storage_dir: "/tmp/vsr-data"
+  embedding_model: "bert"
+  embedding_dimension: 384
+  # llama_stack:
+  #   endpoint: "http://localhost:8321"
+  #   embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
+
 # Tool auto-selection
 tools:
   enabled: false

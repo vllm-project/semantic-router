@@ -20,19 +20,31 @@ import "fmt"
 
 // BackendType constants for selecting a vector store backend.
 const (
-	BackendTypeMemory = "memory"
-	BackendTypeMilvus = "milvus"
+	BackendTypeMemory     = "memory"
+	BackendTypeMilvus     = "milvus"
+	BackendTypeLlamaStack = "llama_stack"
 )
 
+// BackendConfigs aggregates configuration for all supported backends.
+// Only the config matching the selected backendType is used; others are ignored.
+type BackendConfigs struct {
+	Memory     MemoryBackendConfig
+	Milvus     MilvusBackendConfig
+	LlamaStack LlamaStackBackendConfig
+}
+
 // NewBackend creates a VectorStoreBackend based on the given type.
-// For "memory", milvusCfg is ignored. For "milvus", memoryCfg is ignored.
-func NewBackend(backendType string, memoryCfg MemoryBackendConfig, milvusCfg MilvusBackendConfig) (VectorStoreBackend, error) {
+// Only the config field matching backendType is used; others are ignored.
+func NewBackend(backendType string, cfgs BackendConfigs) (VectorStoreBackend, error) {
 	switch backendType {
 	case BackendTypeMemory:
-		return NewMemoryBackend(memoryCfg), nil
+		return NewMemoryBackend(cfgs.Memory), nil
 	case BackendTypeMilvus:
-		return NewMilvusBackend(milvusCfg)
+		return NewMilvusBackend(cfgs.Milvus)
+	case BackendTypeLlamaStack:
+		return NewLlamaStackBackend(cfgs.LlamaStack)
 	default:
-		return nil, fmt.Errorf("unsupported backend type: %s (supported: %s, %s)", backendType, BackendTypeMemory, BackendTypeMilvus)
+		return nil, fmt.Errorf("unsupported backend type: %s (supported: %s, %s, %s)",
+			backendType, BackendTypeMemory, BackendTypeMilvus, BackendTypeLlamaStack)
 	}
 }
