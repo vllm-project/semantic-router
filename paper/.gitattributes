@@ -1,0 +1,17 @@
+# Treat PDF files as binary (no diff, no merge, no line-ending conversion)
+*.pdf binary
+
+# Treat image files as binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.svg binary
+*.eps binary
+
+# Ensure LaTeX source files use LF line endings
+*.tex text eol=lf
+*.bib text eol=lf
+*.sty text eol=lf
+*.cls text eol=lf
+Makefile text eol=lf
