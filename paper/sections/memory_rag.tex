@@ -1,0 +1,59 @@
+% sections/memory_rag.tex
+
+\section{Memory and Retrieval-Augmented Generation}
+\label{sec:memory_rag}
+
+Production routing systems must support multi-turn conversations with persistent context and knowledge-augmented responses.
+We describe the memory and RAG subsystems that operate as plugins within the routing pipeline.
+
+\subsection{Persistent Memory}
+
+The memory system maintains user-scoped knowledge across conversation sessions, enabling personalized routing and context-aware responses.
+
+\textbf{Memory extraction.}
+An LLM-based extractor analyzes conversation turns to identify user-specific facts, classified into three types:
+\emph{semantic} (factual knowledge: preferences, background),
+\emph{procedural} (workflows, how-to knowledge), and
+\emph{episodic} (specific events and interactions).
+
+\textbf{Deduplication.}
+Before storage, extracted facts undergo similarity-based deduplication against existing memories, preventing redundant entries that would degrade retrieval precision.
+
+\textbf{Retrieval.}
+At query time, relevant memories are retrieved via embedding similarity search over the user's memory store, formatted as context, and injected into the system message.
+An optional query-rewriting step reformulates the user's query for improved retrieval recall.
+
+\subsection{Retrieval-Augmented Generation}
+
+The RAG plugin retrieves relevant documents from vector stores and injects them as context before model invocation.
+
+\textbf{Indexing pipeline.}
+Documents are chunked (configurable size and overlap), embedded using the shared embedding model (\Cref{sec:ml_inference}), and indexed in a vector store.
+
+\textbf{Retrieval.}
+For each request, the query embedding is computed and the top-$k$ most similar chunks are retrieved via approximate nearest neighbor search.
+Retrieved chunks are formatted and injected into the prompt as additional context.
+
+\textbf{Backend abstraction.}
+Vector stores are accessed through a common interface supporting in-memory (development), Milvus~\cite{wang2021milvus} (production), and file-based (persistent, no external dependencies) backends.
+
+\subsection{Stateful Conversations (Response API)}
+
+The system supports the OpenAI Responses API for stateful multi-turn conversations:
+
+\textbf{Conversation chaining.}
+Each response is stored with a unique ID.
+Subsequent requests reference \texttt{previous\_response\_id} to reconstruct the full conversation history.
+A bidirectional translator converts between the Response API format and Chat Completions format for backend model invocation.
+
+\textbf{Routing continuity.}
+Stored responses include routing metadata (decision, model selection, signal results), enabling consistent routing across conversation turns and providing context for feedback-driven model selection.
+
+\textbf{State backends.}
+Conversation state is persisted via in-memory (development), Redis (distributed), or Milvus (semantic retrieval) backends.
+
+\subsection{Integration with Signal-Decision Architecture}
+
+Both memory and RAG operate as per-decision plugins.
+Different decisions can activate different RAG configurations (different vector stores, different $k$ values, different chunk strategies) or disable retrieval entirely.
+This enables, for example, a ``research assistant'' decision that activates RAG with a technical knowledge base while a ``casual chat'' decision disables retrieval.

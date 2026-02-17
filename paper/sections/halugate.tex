@@ -1,0 +1,76 @@
+% sections/halugate.tex
+
+\section{HaluGate: Gated Hallucination Detection}
+\label{sec:halugate}
+
+Hallucination---generating plausible but unsupported content---is a fundamental limitation of autoregressive language models~\cite{manakul2023selfcheckgpt,min2023factscore}.
+We introduce \halugate{}, a three-stage pipeline that addresses a key efficiency challenge: most queries (creative writing, code generation, brainstorming) do not require factual verification, yet na\"ive hallucination detection incurs overhead on every response.
+
+\subsection{Design Rationale}
+
+Existing approaches apply hallucination detection uniformly to all responses~\cite{manakul2023selfcheckgpt} or require multiple response samples~\cite{min2023factscore}.
+\halugate{} introduces two innovations:
+(1)~a \emph{gating stage} that skips verification for non-factual queries, amortizing detection cost over the query distribution; and
+(2)~a \emph{span-level} detection and explanation pipeline that identifies \emph{which} tokens are hallucinated and \emph{why}, rather than providing only a binary judgment.
+
+\subsection{Three-Stage Pipeline}
+
+\textbf{Stage 1: Sentinel (Gating).}
+A lightweight binary classifier $g_\text{sent}$ determines whether the query warrants factual verification:
+\begin{equation}
+  g_\text{sent}(q) \in \{\textsc{needs\_fact\_check}, \textsc{no\_fact\_check}\}
+\end{equation}
+If $g_\text{sent}(q) = \textsc{no\_fact\_check}$, Stages 2--3 are skipped entirely.
+The Sentinel operates on the request text and is implemented as a LoRA-adapted classifier sharing the base model with other signal extractors.
+In practice, 40--60\% of queries are classified as non-factual, proportionally reducing the average detection cost.
+
+The Sentinel also serves dual duty as the \texttt{fact\_check} signal in the signal extraction layer (\Cref{sec:signal_engine}), enabling decisions to incorporate factual grounding into routing logic.
+
+\textbf{Stage 2: Detector (Span Identification).}
+A token-level classifier $g_\text{det}$ identifies hallucinated spans in the model response:
+\begin{equation}
+  g_\text{det}(q, \mathbf{c}, a) = \bigl\{(i, j, c_{ij}) \mid a_i \ldots a_j \text{ is unsupported by context } \mathbf{c}\bigr\}
+\end{equation}
+where $q$ is the user query, $\mathbf{c}$ is the grounding context (user-provided context and tool-call results), $a$ is the assistant's response, and $(i, j, c_{ij})$ denotes a flagged span with confidence.
+
+When tool-calling is present, tool execution results provide high-quality ground truth: database query results, API responses, and calculations serve as authoritative context $\mathbf{c}$, substantially improving detection precision.
+
+\textbf{Stage 3: Explainer (NLI Classification).}
+For each flagged span $(i, j)$, a Natural Language Inference (NLI) model~\cite{williams2018mnli} classifies the relationship between the span and the grounding context:
+\begin{equation}
+  g_\text{nli}(a_{i:j}, \mathbf{c}) \in \{\textsc{entailment}, \textsc{contradiction}, \textsc{neutral}\}
+\end{equation}
+This distinguishes between content that \emph{contradicts} the context (definitive hallucination) and content that is merely \emph{unsupported} (potential hallucination), providing actionable diagnostics.
+
+\subsection{Cost Analysis}
+
+Let $p_\text{factual}$ be the fraction of queries requiring factual verification, $C_\text{sent}$, $C_\text{det}$, $C_\text{nli}$ be the costs of each stage, and $\bar{k}$ be the average number of flagged spans.
+The expected cost per query is:
+\begin{equation}
+  \mathbb{E}[\text{Cost}] = C_\text{sent} + p_\text{factual} \cdot \bigl(C_\text{det} + \bar{k} \cdot C_\text{nli}\bigr)
+\end{equation}
+
+Since the Sentinel is a lightweight LoRA-adapted classifier (\Cref{sec:lora_mom}) that runs concurrently with other signal extractors, its wall-clock cost is largely hidden behind other ML signals.
+For a workload with $p_\text{factual} = 0.5$, the gating stage reduces the expected Detector and Explainer cost by approximately 50\% compared to applying full detection to all responses.
+
+\subsection{Action Policies}
+
+\halugate{} supports four configurable response actions:
+
+\begin{table}[h]
+\centering
+\caption{\halugate{} action policies upon hallucination detection}
+\label{tab:halugate_actions}
+\begin{tabular}{lp{8cm}}
+\toprule
+\textbf{Action} & \textbf{Semantics} \\
+\midrule
+\texttt{block}  & Reject the response; return an error to the client. Appropriate for high-stakes factual applications. \\
+\texttt{header} & Propagate detection metadata via HTTP headers, enabling downstream policy enforcement by the client or API gateway. \\
+\texttt{body}   & Prepend a warning to the response body, alerting users to potential inaccuracies. \\
+\texttt{none}   & Log detection results without modifying the response. Useful for monitoring and threshold calibration. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The progressive architecture enables incremental deployment: organizations begin with Sentinel-only gating (signal-layer integration at minimal cost), add the Detector for span-level monitoring, and enable the Explainer for full diagnostic output.

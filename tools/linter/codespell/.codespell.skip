@@ -20,3 +20,4 @@
 ./e2e/testcases/testdata/*
 ./data/cache_embeddings/*
 ./models/*
+./paper/*
