@@ -12,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/evaluation"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
+	"github.com/vllm-project/semantic-router/dashboard/backend/mlpipeline"
 	"github.com/vllm-project/semantic-router/dashboard/backend/proxy"
 )
 
@@ -293,6 +294,52 @@ func Setup(cfg *config.Config) *http.ServeMux {
 
 	// MCP endpoints (if enabled)
 	SetupMCP(mux, cfg)
+
+	// ML Pipeline endpoints (if enabled)
+	if cfg.MLPipelineEnabled {
+		// Resolve training dir - try common locations
+		trainingDir := cfg.MLTrainingDir
+		if trainingDir == "" {
+			// Try relative to project root
+			projectRoot := filepath.Dir(cfg.ConfigDir)
+			candidate := filepath.Join(projectRoot, "src", "training", "ml_model_selection")
+			if _, err := os.Stat(candidate); err == nil {
+				trainingDir = candidate
+			}
+		}
+
+		mlRunner := mlpipeline.NewRunner(mlpipeline.RunnerConfig{
+			DataDir:      cfg.MLPipelineDataDir,
+			TrainingDir:  trainingDir,
+			PythonPath:   cfg.PythonPath,
+			MLServiceURL: cfg.MLServiceURL,
+		})
+
+		mlHandler := handlers.NewMLPipelineHandler(mlRunner)
+
+		// /api/ml-pipeline/jobs - GET list all jobs
+		mux.HandleFunc("/api/ml-pipeline/jobs", mlHandler.ListJobsHandler())
+		// /api/ml-pipeline/jobs/{id} - GET specific job
+		mux.HandleFunc("/api/ml-pipeline/jobs/", mlHandler.GetJobHandler())
+		// /api/ml-pipeline/benchmark - POST start benchmark
+		mux.HandleFunc("/api/ml-pipeline/benchmark", mlHandler.RunBenchmarkHandler())
+		// /api/ml-pipeline/train - POST start training
+		mux.HandleFunc("/api/ml-pipeline/train", mlHandler.RunTrainHandler())
+		// /api/ml-pipeline/config - POST generate config
+		mux.HandleFunc("/api/ml-pipeline/config", mlHandler.GenerateConfigHandler())
+		// /api/ml-pipeline/download/{jobID} - GET download output
+		mux.HandleFunc("/api/ml-pipeline/download/", mlHandler.DownloadOutputHandler())
+		// /api/ml-pipeline/stream/{jobID} - SSE progress
+		mux.HandleFunc("/api/ml-pipeline/stream/", mlHandler.StreamProgressHandler())
+		log.Printf("ML Pipeline API endpoints registered: /api/ml-pipeline/*")
+		if trainingDir != "" {
+			log.Printf("ML Training scripts directory: %s", trainingDir)
+		} else {
+			log.Printf("Warning: ML training scripts directory not configured (set ML_TRAINING_DIR)")
+		}
+	} else {
+		log.Printf("ML Pipeline feature disabled")
+	}
 
 	// Envoy proxy for chat completions (if configured)
 	// Chat completions must go through Envoy's ext_proc pipeline
