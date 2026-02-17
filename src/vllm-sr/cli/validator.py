@@ -185,7 +185,6 @@ def validate_signal_references(config: UserConfig) -> List[ValidationError]:
 
     # Build signal name index
     signal_names = set()
-    complexity_signal_names = set()  # Track complexity signal base names
     if config.signals:
         for signal in config.signals.keywords:
             signal_names.add(signal.name)
@@ -206,13 +205,6 @@ def validate_signal_references(config: UserConfig) -> List[ValidationError]:
         if config.signals.context:
             for signal in config.signals.context:
                 signal_names.add(signal.name)
-        if config.signals.complexity:
-            for signal in config.signals.complexity:
-                # Complexity signals generate three variants: name:easy, name:medium, name:hard
-                complexity_signal_names.add(signal.name)
-                signal_names.add(f"{signal.name}:easy")
-                signal_names.add(f"{signal.name}:medium")
-                signal_names.add(f"{signal.name}:hard")
 
     # Check decision conditions
     for decision in config.decisions:
@@ -267,10 +259,10 @@ def validate_domain_references(config: UserConfig) -> List[ValidationError]:
     for decision in config.decisions:
         for condition in decision.rules.conditions:
             if condition.type == "domain":
-                if condition.name not in domain_names:
+                if not domain_names:
                     errors.append(
                         ValidationError(
-                            f"Decision '{decision.name}' references unknown domain '{condition.name}'",
+                            f"Decision '{decision.name}' references domain '{condition.name}' but no domains are defined",
                             field=f"decisions.{decision.name}.rules.conditions",
                         )
                     )
@@ -450,6 +442,102 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
     return errors
 
 
+def validate_algorithm_configurations(config: UserConfig) -> List[ValidationError]:
+    """
+    Validate algorithm configurations in decisions.
+
+    Validates both looper algorithms (confidence, concurrent, remom) and
+    selection algorithms (static, elo, router_dc, automix, hybrid,
+    thompson, gmtrouter, router_r1).
+
+    Args:
+        config: User configuration
+
+    Returns:
+        list: List of validation errors
+    """
+    errors = []
+
+    # Valid algorithm types
+    looper_types = {"confidence", "concurrent", "sequential", "remom"}
+    selection_types = {
+        "static",
+        "elo",
+        "router_dc",
+        "automix",
+        "hybrid",
+        "thompson",
+        "gmtrouter",
+        "router_r1",
+    }
+    all_types = looper_types | selection_types
+
+    for decision in config.decisions:
+        if not decision.algorithm:
+            continue
+
+        algo = decision.algorithm
+        algo_type = algo.type
+
+        # Validate algorithm type
+        if algo_type not in all_types:
+            errors.append(
+                ValidationError(
+                    f"Decision '{decision.name}' has invalid algorithm type '{algo_type}'. "
+                    f"Valid types: {', '.join(sorted(all_types))}",
+                    field=f"decisions.{decision.name}.algorithm.type",
+                )
+            )
+            continue
+
+        # Validate selection algorithm has corresponding config
+        if algo_type == "elo" and algo.elo is None:
+            # elo config is optional (uses defaults)
+            pass
+        if algo_type == "router_dc":
+            # Warn if require_descriptions is true but models lack descriptions
+            if algo.router_dc and algo.router_dc.require_descriptions:
+                for model_ref in decision.modelRefs:
+                    # Find model config
+                    model = next(
+                        (
+                            m
+                            for m in config.providers.models
+                            if m.name == model_ref.model
+                        ),
+                        None,
+                    )
+                    if model and not model.description:
+                        errors.append(
+                            ValidationError(
+                                f"Decision '{decision.name}' uses router_dc with require_descriptions=true, "
+                                f"but model '{model.name}' has no description",
+                                field=f"providers.models.{model.name}.description",
+                            )
+                        )
+
+        # Validate hybrid weights sum to ~1.0 (with tolerance)
+        # Note: Use `is None` check instead of `or` to handle 0.0 weights correctly
+        if algo_type == "hybrid" and algo.hybrid:
+            h = algo.hybrid
+            total = (
+                (0.3 if h.elo_weight is None else h.elo_weight)
+                + (0.3 if h.router_dc_weight is None else h.router_dc_weight)
+                + (0.2 if h.automix_weight is None else h.automix_weight)
+                + (0.2 if h.cost_weight is None else h.cost_weight)
+            )
+            if abs(total - 1.0) > 0.01:
+                errors.append(
+                    ValidationError(
+                        f"Decision '{decision.name}' hybrid weights sum to {total:.2f}, "
+                        "should sum to 1.0",
+                        field=f"decisions.{decision.name}.algorithm.hybrid",
+                    )
+                )
+
+    return errors
+
+
 def validate_user_config(config: UserConfig) -> List[ValidationError]:
     """
     Validate user configuration.
@@ -478,6 +566,9 @@ def validate_user_config(config: UserConfig) -> List[ValidationError]:
 
     # Validate plugin configurations
     errors.extend(validate_plugin_configurations(config))
+
+    # Validate algorithm configurations
+    errors.extend(validate_algorithm_configurations(config))
 
     if errors:
         log.warning(f"Found {len(errors)} validation error(s)")

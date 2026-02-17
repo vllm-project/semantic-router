@@ -644,6 +644,14 @@ memory:
   embedding_model: "bert"  # "bert" (fast) or "qwen3" (quality)
   similarity_threshold: 0.7
   
+  # Quality scoring: MemoryBank-style retention scoring R = exp(-t/S)
+  # Access tracking (LastAccessed, AccessCount) is always active when memory is enabled.
+  # Pruning runs only when PruneUser is called externally.
+  quality_scoring:
+    initial_strength_days: 30   # S0: higher = slower decay for new memories
+    prune_threshold: 0.1        # δ: delete memories with R < threshold
+    max_memories_per_user: 1000 # 0 = no cap
+
   # Security: auth header for trusted user_id (optional)
   # auth_user_id_header: "x-authenticated-user-id"
   # require_auth_header: false

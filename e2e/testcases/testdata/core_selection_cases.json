@@ -1,0 +1,72 @@
+{
+  "description": "Test cases for all 8 model selection algorithms",
+  "algorithms": ["static", "elo", "router_dc", "automix", "hybrid", "thompson", "gmtrouter", "router_r1"],
+  "test_cases": [
+    {
+      "name": "static_basic",
+      "algorithm": "static",
+      "query": "What is machine learning?",
+      "expected_behavior": "Use first configured model",
+      "expected_models": ["gpt-4", "gpt-3.5-turbo"]
+    },
+    {
+      "name": "elo_after_feedback",
+      "algorithm": "elo",
+      "query": "Explain quantum computing",
+      "expected_behavior": "Prefer higher-rated model after feedback",
+      "feedback_before": [
+        {"winner_model": "gpt-4", "loser_model": "gpt-3.5-turbo", "category": "general"}
+      ],
+      "expected_models": ["gpt-4"]
+    },
+    {
+      "name": "router_dc_coding",
+      "algorithm": "router_dc",
+      "query": "Write a Python function to sort a list",
+      "expected_behavior": "Match to model with coding capability description",
+      "expected_models": ["gpt-4", "claude-3-opus"]
+    },
+    {
+      "name": "automix_simple",
+      "algorithm": "automix",
+      "query": "What is 2+2?",
+      "expected_behavior": "Use cost-effective model for simple query",
+      "expected_models": ["gpt-3.5-turbo", "gpt-4"]
+    },
+    {
+      "name": "automix_complex",
+      "algorithm": "automix",
+      "query": "Derive the Navier-Stokes equations from first principles",
+      "expected_behavior": "May escalate to more capable model",
+      "expected_models": ["gpt-4", "claude-3-opus"]
+    },
+    {
+      "name": "hybrid_multi_signal",
+      "algorithm": "hybrid",
+      "query": "Explain the theory of relativity",
+      "expected_behavior": "Consider Elo rating, embedding similarity, and cost",
+      "expected_models": ["gpt-4", "gpt-3.5-turbo", "claude-3-opus"]
+    },
+    {
+      "name": "thompson_exploration",
+      "algorithm": "thompson",
+      "query": "What is the meaning of life?",
+      "expected_behavior": "Balance exploration and exploitation using Beta distributions",
+      "expected_models": ["gpt-4", "gpt-3.5-turbo", "claude-3-opus"]
+    },
+    {
+      "name": "gmtrouter_personalized",
+      "algorithm": "gmtrouter",
+      "query": "Recommend a book about AI",
+      "expected_behavior": "Use graph neural network for personalized routing based on user history",
+      "expected_models": ["gpt-4", "gpt-3.5-turbo", "claude-3-opus"]
+    },
+    {
+      "name": "router_r1_reasoning",
+      "algorithm": "router_r1",
+      "query": "Debug this Python code: for i in range(10) print(i)",
+      "expected_behavior": "LLM reasons about query requirements and model capabilities",
+      "expected_models": ["gpt-4", "claude-3-opus"]
+    }
+  ]
+}
