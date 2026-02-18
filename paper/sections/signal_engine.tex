@@ -28,9 +28,14 @@ Heuristic signals use deterministic or statistical algorithms with sub-milliseco
 
 \textbf{Keyword} ($\tau_\text{kw}$).
 Rules are defined as pattern sets with Boolean combinators.
-Each rule specifies a set of patterns $P = \{p_1, \ldots, p_k\}$ with a combinator $\in \{\textsc{and}, \textsc{or}, \textsc{nor}\}$ and a match mode $\in \{\text{exact}, \text{contains}, \text{regex}\}$.
+Each rule specifies a set of patterns $P = \{p_1, \ldots, p_k\}$ with a combinator $\in \{\textsc{and}, \textsc{or}, \textsc{nor}\}$ and one of three matching methods:
+\begin{itemize}[nosep,leftmargin=1.5em]
+  \item \emph{Regex} (default): compiled regular expressions with word boundaries; confidence is 1.0 on match.
+  \item \emph{BM25}: BM25 scoring dispatched to a Rust-backed classifier via FFI. Each keyword is scored against the request using TF-IDF term weighting, and the rule matches when the score exceeds a configurable threshold (default 0.1). Confidence is derived from the BM25 score, providing a graded relevance signal rather than a binary match.
+  \item \emph{N-gram}: character $n$-gram similarity (default trigram) dispatched to the same Rust binding. The rule matches when the Jaccard similarity between the keyword and request $n$-gram sets exceeds a threshold (default 0.4), providing inherent tolerance to typos and morphological variation without a dedicated fuzzy-matching pass.
+\end{itemize}
 For \textsc{and}: $f(r) = \bigwedge_{i} \text{match}(p_i, r)$; for \textsc{or}: $f(r) = \bigvee_{i} \text{match}(p_i, r)$.
-Confidence is 1.0 on match.
+The combinators apply uniformly across all three methods.
 
 \textbf{Context Length} ($\tau_\text{ctx}$).
 Rules define token-count intervals $[l, u]$.
