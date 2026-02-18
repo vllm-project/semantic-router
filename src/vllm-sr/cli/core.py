@@ -117,6 +117,9 @@ def start_vllm_sr(
             }
         )
 
+    # Detect minimal mode (dashboard disabled)
+    dashboard_disabled = env_vars.get("DISABLE_DASHBOARD") == "true"
+
     # Start vllm-sr container
     return_code, stdout, stderr = docker_start_vllm_sr(
         config_file,
@@ -125,6 +128,7 @@ def start_vllm_sr(
         image=image,
         pull_policy=pull_policy,
         network_name=network_name,
+        minimal=dashboard_disabled,
     )
 
     if return_code != 0:
@@ -209,7 +213,8 @@ def start_vllm_sr(
     log.info("✓ vLLM Semantic Router is running!")
     log.info("")
     log.info("Endpoints:")
-    log.info(f"  • Dashboard: http://localhost:8700")
+    if not dashboard_disabled:
+        log.info(f"  • Dashboard: http://localhost:8700")
     for listener in listeners:
         name = listener.get("name", "unknown")
         port = listener.get("port", "unknown")
@@ -225,7 +230,8 @@ def start_vllm_sr(
 
     log.info("")
     log.info("Commands:")
-    log.info("  • vllm-sr dashboard              Open dashboard in browser")
+    if not dashboard_disabled:
+        log.info("  • vllm-sr dashboard              Open dashboard in browser")
     log.info("  • vllm-sr logs <envoy|router|dashboard> [-f]")
     log.info("  • vllm-sr status [envoy|router|dashboard|all]")
     log.info("  • vllm-sr stop")
