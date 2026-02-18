@@ -223,15 +223,25 @@ func (e *DecisionEngine) evaluateRuleCombinationWithSignals(
 	}
 
 	// Calculate final match result based on operator
-	if rules.Operator == "AND" {
+	switch strings.ToUpper(rules.Operator) {
+	case "AND":
 		matched = matchedCount == len(rules.Conditions)
-	} else { // OR
+	case "NOT":
+		// NOT (NOR semantics): matches only when none of the conditions match.
+		// Useful for exclusion routing: route here only if these signals are absent.
+		matched = matchedCount == 0
+	default: // OR
 		matched = matchedCount > 0
 	}
 
-	// Calculate confidence as ratio of matched conditions
+	// Calculate confidence as ratio of matched conditions.
+	// For NOT: when matched (0 conditions fired) confidence is 1.0 (full certainty of absence).
 	if len(rules.Conditions) > 0 {
-		confidence = totalConfidence / float64(len(rules.Conditions))
+		if strings.ToUpper(rules.Operator) == "NOT" && matched {
+			confidence = 1.0
+		} else {
+			confidence = totalConfidence / float64(len(rules.Conditions))
+		}
 	}
 
 	return matched, confidence, allMatchedRules

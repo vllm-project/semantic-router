@@ -2736,15 +2736,24 @@ func (c *Classifier) evaluateComposer(
 		conditionResults[i] = c.evaluateComposerCondition(&condition, signals)
 	}
 
-	// Apply operator (AND/OR)
-	if composer.Operator == "OR" {
+	// Apply operator (AND/OR/NOT)
+	switch strings.ToUpper(composer.Operator) {
+	case "OR":
 		for _, result := range conditionResults {
 			if result {
 				return true
 			}
 		}
 		return false
-	} else { // Default to AND
+	case "NOT":
+		// NOT (NOR semantics): composer passes only when none of the conditions match.
+		for _, result := range conditionResults {
+			if result {
+				return false
+			}
+		}
+		return true
+	default: // AND
 		for _, result := range conditionResults {
 			if !result {
 				return false

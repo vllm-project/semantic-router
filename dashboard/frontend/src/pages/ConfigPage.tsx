@@ -173,7 +173,7 @@ interface ConfigData {
       easy: { candidates: string[] }
       description?: string
       composer?: {
-        operator: 'AND' | 'OR'
+        operator: 'AND' | 'OR' | 'NOT'
         conditions: Array<{ type: string; name: string }>
       }
     }>
@@ -183,7 +183,7 @@ interface ConfigData {
     description: string
     priority: number
     rules: {
-      operator: 'AND' | 'OR'
+      operator: 'AND' | 'OR' | 'NOT'
       conditions: Array<{ type: string; name: string }>
     }
     modelRefs: Array<{ model: string; use_reasoning: boolean }>
@@ -257,7 +257,7 @@ interface DecisionFormState {
   name: string
   description: string
   priority: number
-  operator: 'AND' | 'OR'
+  operator: 'AND' | 'OR' | 'NOT'
   conditions: { type: string; name: string }[]
   modelRefs: { model: string; use_reasoning: boolean }[]
   plugins: { type: string; configuration: string | Record<string, unknown> }[]
@@ -279,7 +279,7 @@ interface AddSignalFormState {
   complexity_threshold?: number
   hard_candidates?: string
   easy_candidates?: string
-  composer_operator?: 'AND' | 'OR'
+  composer_operator?: 'AND' | 'OR' | 'NOT'
   composer_conditions?: string
 }
 
@@ -3535,7 +3535,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           name: 'operator',
           label: 'Rules Operator',
           type: 'select',
-          options: ['AND', 'OR'],
+          options: ['AND', 'OR', 'NOT'],
+          description: 'AND: all conditions must match. OR: any condition matches. NOT: none of the conditions must match (exclusion routing).',
           required: true
         },
         {

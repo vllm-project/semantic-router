@@ -1137,10 +1137,11 @@ spec:
                               type: array
                             operator:
                               description: Operator for combining conditions (AND,
-                                OR)
+                                OR, NOT). NOT uses NOR semantics.
                               enum:
                               - AND
                               - OR
+                              - NOT
                               type: string
                           required:
                           - conditions
@@ -1276,10 +1277,12 @@ spec:
                               type: array
                             operator:
                               description: 'Operator specifies how to combine conditions:
-                                "AND" or "OR"'
+                                "AND", "OR", or "NOT". NOT uses NOR semantics: matches
+                                only when none of the conditions match.'
                               enum:
                               - AND
                               - OR
+                              - NOT
                               type: string
                           required:
                           - conditions

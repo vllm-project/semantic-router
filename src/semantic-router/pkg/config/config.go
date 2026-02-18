@@ -2409,9 +2409,12 @@ func (d *Decision) GetMemoryConfig() *MemoryPluginConfig {
 	return result
 }
 
-// RuleCombination defines how to combine multiple rule conditions with AND/OR operators
+// RuleCombination defines how to combine multiple rule conditions with AND/OR/NOT operators
 type RuleCombination struct {
-	// Operator specifies how to combine conditions: "AND" or "OR"
+	// Operator specifies how to combine conditions: "AND", "OR", or "NOT".
+	// AND: all conditions must match.
+	// OR: at least one condition must match.
+	// NOT: none of the conditions must match (NOR semantics; useful for exclusion routing).
 	Operator string `yaml:"operator"`
 
 	// Conditions is the list of rule references to evaluate
