@@ -11,11 +11,25 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// sendResponse sends a response with proper error handling and logging
+// sendResponse sends a response with proper error handling and logging.
+// If response is nil, a CONTINUE BodyResponse is sent as a safe fallback
+// to prevent nil pointer dereferences in Envoy or test assertions.
 func sendResponse(stream ext_proc.ExternalProcessor_ProcessServer, response *ext_proc.ProcessingResponse, msgType string) error {
+	if response == nil {
+		logging.Warnf("Nil response for %s stage — sending CONTINUE fallback to avoid nil dereference", msgType)
+		response = &ext_proc.ProcessingResponse{
+			Response: &ext_proc.ProcessingResponse_RequestBody{
+				RequestBody: &ext_proc.BodyResponse{
+					Response: &ext_proc.CommonResponse{
+						Status: ext_proc.CommonResponse_CONTINUE,
+					},
+				},
+			},
+		}
+	}
+
 	logging.Debugf("Processing at stage [%s]: %+v", msgType, response)
 
-	// Debug: dump response structure if needed
 	if err := stream.Send(response); err != nil {
 		logging.Errorf("Error sending %s response: %v", msgType, err)
 		return err
@@ -55,11 +69,20 @@ func serializeOpenAIRequestWithStream(req *openai.ChatCompletionNewParams, hasSt
 		return nil, err
 	}
 
-	// If original request had stream parameter, add it back
+	// If original request had stream parameter, add it back along with stream_options
 	if hasStreamParam {
 		var sdkMap map[string]interface{}
 		if err := json.Unmarshal(sdkBytes, &sdkMap); err == nil {
 			sdkMap["stream"] = true
+
+			// Automatically add stream_options to enable usage tracking in streaming responses
+			// This ensures vLLM returns token usage information in the final chunk
+			sdkMap["stream_options"] = map[string]interface{}{
+				"include_usage": true,
+			}
+
+			logging.Infof("Added stream_options.include_usage=true for streaming request")
+
 			if modifiedBytes, err := json.Marshal(sdkMap); err == nil {
 				return modifiedBytes, nil
 			}

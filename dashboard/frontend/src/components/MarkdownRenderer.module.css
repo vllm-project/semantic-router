@@ -2,6 +2,10 @@
   font-size: 0.9375rem;
   line-height: 1.6;
   color: var(--color-text);
+  /* Prevent content overflow on mobile */
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
 }
 
 /* Headings */
@@ -75,10 +79,17 @@
   overflow: hidden;
 }
 
-.codeLanguage {
+.codeHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 0.5rem 1rem;
   background-color: var(--color-bg-secondary);
   border-bottom: 1px solid var(--color-border);
+  min-height: 2rem;
+}
+
+.codeLanguage {
   font-size: 0.75rem;
   font-weight: 500;
   color: var(--color-text-secondary);
@@ -87,10 +98,43 @@
   font-family: var(--font-mono);
 }
 
+.copyButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background-color: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-tertiary, #6b7280);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  margin-left: auto;
+}
+
+.copyButton:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--color-text-secondary, #9ca3af);
+}
+
+.copyButton:active {
+  transform: scale(0.92);
+}
+
+.copyButton svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.5;
+}
+
 .codeBlock code {
   display: block;
   padding: 1rem;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   font-family: var(--font-mono);
   font-size: 0.875rem;
   line-height: 1.5;
@@ -143,13 +187,16 @@
 /* Tables */
 .tableWrapper {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   margin: 1em 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+  max-width: 100%;
 }
 
 .markdown table {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
   font-size: 0.875rem;
 }
@@ -159,6 +206,7 @@
   padding: 0.75rem 1rem;
   text-align: left;
   border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
 }
 
 .markdown th {
@@ -209,20 +257,92 @@
   padding: 0;
 }
 
-/* Ensure code blocks work in both light and dark themes */
-[data-theme='light'] .codeBlock {
-  background-color: #f6f8fa;
-}
-
-[data-theme='light'] .codeBlock code {
-  color: #24292f;
-}
-
-[data-theme='dark'] .codeBlock {
+/* Dark theme only */
+.codeBlock {
   background-color: #0d1117;
 }
 
-[data-theme='dark'] .codeBlock code {
+.codeBlock code {
   color: #c9d1d9;
 }
 
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .markdown {
+    font-size: 0.875rem;
+  }
+
+  .markdown h1 {
+    font-size: 1.5em;
+  }
+
+  .markdown h2 {
+    font-size: 1.25em;
+  }
+
+  .markdown h3 {
+    font-size: 1.125em;
+  }
+
+  .markdown ul,
+  .markdown ol {
+    padding-left: 1.5em;
+  }
+
+  .codeBlock {
+    margin: 0.75em 0;
+  }
+
+  .codeHeader {
+    padding: 0.375rem 0.75rem;
+  }
+
+  .codeLanguage {
+    font-size: 0.6875rem;
+  }
+
+  .codeBlock code {
+    padding: 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .tableWrapper {
+    margin: 0.75em 0;
+    /* Visual indicator that table is scrollable */
+    position: relative;
+  }
+
+  .markdown table {
+    font-size: 0.8125rem;
+  }
+
+  .markdown th,
+  .markdown td {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .markdown blockquote {
+    margin: 0.75em 0;
+    padding: 0.375em 0.75em;
+  }
+}
+
+@media (max-width: 480px) {
+  .markdown {
+    font-size: 0.8125rem;
+  }
+
+  .codeBlock code {
+    padding: 0.625rem;
+    font-size: 0.75rem;
+  }
+
+  .markdown table {
+    font-size: 0.75rem;
+  }
+
+  .markdown th,
+  .markdown td {
+    padding: 0.375rem 0.5rem;
+  }
+}

@@ -1,0 +1,20 @@
+# Downloaded and processed data
+data/raw/
+data/labeled_data/
+data/verified_dataset/
+
+# Trained models (download from HuggingFace)
+models/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Checkpoints during training
+checkpoint-*/
+*.pt
+*.bin
+
+# Logs
+*.log

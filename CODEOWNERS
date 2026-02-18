@@ -1,0 +1,34 @@
+# CODEOWNERS for vLLM Semantic Router
+#
+# Code ownership in this project is managed through per-directory OWNER files.
+# Each OWNER file lists the GitHub handles responsible for reviewing changes
+# in that directory. The owner-notification.yml workflow uses these files to
+# automatically assign reviewers on pull requests.
+#
+# This file serves as an index to those OWNER files.
+#
+# Root owners (fallback reviewers for any unmatched path):
+#   ./OWNER                        — @rootfs, @Xunzhuo
+#
+# Per-directory OWNER files:
+#   ./bench/OWNER                  — Benchmarks & performance
+#   ./candle-binding/OWNER         — Rust/Candle ML binding
+#   ./config/OWNER                 — Configuration
+#   ./dashboard/OWNER              — Dashboard UI
+#   ./deploy/OWNER                 — Deployment (Helm, K8s, operator)
+#   ./e2e/OWNER                    — Integration tests
+#   ./e2e/testing/OWNER            — End-to-end test suite
+#   ./src/OWNER                    — Core source code
+#   ./src/training/training_lora/OWNER — LoRA training
+#   ./tools/OWNER                  — Build tooling & Makefiles
+#   ./website/OWNER                — Website & Docusaurus
+#   ./website/docs/OWNER           — Documentation content
+#   ./website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/OWNER
+#   ./website/i18n/zh-Hans/docusaurus-plugin-content-docs/version-v0.1/OWNER
+#   ./website/versioned_docs/version-v0.1/OWNER
+#
+# To view ownership for a specific directory, read the OWNER file in that path.
+# GitHub Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default — root-level owners as fallback
+*  @rootfs @Xunzhuo

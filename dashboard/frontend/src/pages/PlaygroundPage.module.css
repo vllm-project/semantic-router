@@ -1,5 +1,6 @@
 /* Console Style - Playground */
 .container {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -7,7 +8,17 @@
   min-height: 0;
   padding: 0;
   overflow: hidden;
-  background-color: var(--color-bg);
+  background: #000;
+}
+
+.chatWrapper {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 0;
 }
 
 .controls {
@@ -145,4 +156,98 @@
   width: 100%;
   height: 100%;
   border: none;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .container {
+    padding: 0;
+  }
+
+  .controls {
+    padding: 0.75rem;
+    border-radius: var(--radius-md);
+  }
+
+  .controlGroup {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .label {
+    font-size: 0.8125rem;
+  }
+
+  .input {
+    min-width: 0;
+    width: 100%;
+    font-size: 0.8125rem;
+    padding: 0.5rem;
+  }
+
+  .button {
+    width: 100%;
+    padding: 0.625rem 1rem;
+    font-size: 0.8125rem;
+  }
+
+  .hint {
+    font-size: 0.6875rem;
+  }
+
+  .placeholder {
+    padding: 1.5rem 1rem;
+    max-width: 100%;
+  }
+
+  .placeholderIcon {
+    font-size: 3rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .placeholder h3 {
+    font-size: 1.25rem;
+  }
+
+  .placeholder p {
+    font-size: 0.875rem;
+  }
+
+  .note {
+    font-size: 0.8125rem;
+    padding: 0.625rem 0.875rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .controls {
+    padding: 0.625rem;
+  }
+
+  .label {
+    font-size: 0.75rem;
+  }
+
+  .input {
+    font-size: 0.75rem;
+    padding: 0.5rem;
+  }
+
+  .button {
+    font-size: 0.75rem;
+    padding: 0.5rem 0.875rem;
+  }
+
+  .placeholderIcon {
+    font-size: 2.5rem;
+  }
+
+  .placeholder h3 {
+    font-size: 1.125rem;
+  }
+
+  .placeholder p {
+    font-size: 0.8125rem;
+  }
 }

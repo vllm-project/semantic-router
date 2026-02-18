@@ -340,6 +340,41 @@ class HallucinationBenchmark:
         )
         accuracy = (tp + tn) / total_with_gt if total_with_gt > 0 else 0.0
 
+        # False positive rates and specificity
+        false_positive_rate = fp / (fp + tn) if (fp + tn) > 0 else 0.0
+        specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+
+        if fp > 0:
+            print(f"\n⚠️  False Positives Detected: {fp}")
+            false_positive_samples = []
+            for r in successful:
+                if (
+                    r.gt_is_faithful is not None
+                    and r.hallucination_detected
+                    and r.gt_is_faithful
+                ):
+                    false_positive_samples.append(
+                        {
+                            "sample_id": r.sample_id,
+                            "question": r.question[:100],
+                            "spans": r.hallucination_spans,
+                        }
+                    )
+
+                if false_positive_samples:
+                    print("\nFalse Positive Examples:")
+                    for i, fp_sample in enumerate(
+                        false_positive_samples[:5], 1
+                    ):  # Show first 5
+                        print(f"\n  {i}. Sample ID: {fp_sample['sample_id']}")
+                        print(f"     Question: {fp_sample['question']}...")
+                        print(f"     Flagged spans: {fp_sample['spans']}")
+
+                    if len(false_positive_samples) > 5:
+                        print(
+                            f"\n  ... and {len(false_positive_samples) - 5} more false positives"
+                        )
+
         # Latency metrics
         latencies = [r.latency_ms for r in successful if r.latency_ms is not None]
         avg_latency = sum(latencies) / len(latencies) if latencies else 0.0

@@ -1,18 +1,23 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+	"github.com/milvus-io/milvus-sdk-go/v2/client"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responsestore"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
@@ -37,6 +42,13 @@ type OpenAIRouter struct {
 	// Initialized from config.IntelligentRouting.ModelSelection
 	ModelSelector   *selection.Registry
 	ReplayRecorders map[string]*routerreplay.Recorder
+	MemoryStore     *memory.MilvusStore
+	MemoryExtractor *memory.MemoryExtractor
+
+	// CredentialResolver resolves per-user LLM API keys from multiple sources
+	// (ext_authz injected headers → static config fallback).
+	// Initialized in NewOpenAIRouter.
+	CredentialResolver *authz.CredentialResolver
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls
@@ -94,18 +106,29 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		logging.Infof("Loaded jailbreak mapping with %d jailbreak types", jailbreakMapping.GetJailbreakTypeCount())
 	}
 
-	// Initialize the BERT model for similarity search (only if configured)
-	if cfg.BertModel.ModelID != "" {
-		if initErr := candle_binding.InitModel(cfg.BertModel.ModelID, cfg.BertModel.UseCPU); initErr != nil {
-			return nil, fmt.Errorf("failed to initialize BERT model: %w", initErr)
-		}
-		logging.Infof("BERT similarity model initialized: %s", cfg.BertModel.ModelID)
-	} else {
-		logging.Infof("BERT model not configured, skipping initialization")
-	}
-
 	categoryDescriptions := cfg.GetCategoryDescriptions()
 	logging.Debugf("Category descriptions: %v", categoryDescriptions)
+
+	// Auto-detect embedding model for semantic cache from embedding_models configuration
+	// This provides a unified configuration entry point
+	embeddingModel := cfg.SemanticCache.EmbeddingModel
+	if embeddingModel == "" {
+		// Auto-select based on embedding_models configuration
+		if cfg.EmbeddingModels.MmBertModelPath != "" {
+			embeddingModel = "mmbert"
+			logging.Infof("Auto-selected mmbert for semantic cache (from embedding_models.mmbert_model_path)")
+		} else if cfg.EmbeddingModels.Qwen3ModelPath != "" {
+			embeddingModel = "qwen3"
+			logging.Infof("Auto-selected qwen3 for semantic cache (from embedding_models.qwen3_model_path)")
+		} else if cfg.EmbeddingModels.GemmaModelPath != "" {
+			embeddingModel = "gemma"
+			logging.Infof("Auto-selected gemma for semantic cache (from embedding_models.gemma_model_path)")
+		} else {
+			// Fallback to bert if no embedding models configured
+			embeddingModel = "bert"
+			logging.Warnf("No embedding models configured, falling back to bert for semantic cache")
+		}
+	}
 
 	// Create semantic cache with config options
 	cacheConfig := cache.CacheConfig{
@@ -118,7 +141,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		Redis:               cfg.SemanticCache.Redis,
 		Milvus:              cfg.SemanticCache.Milvus,
 		BackendConfigPath:   cfg.SemanticCache.BackendConfigPath,
-		EmbeddingModel:      cfg.SemanticCache.EmbeddingModel,
+		EmbeddingModel:      embeddingModel,
 	}
 
 	// Use default backend type if not specified
@@ -151,6 +174,8 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	toolsOptions := tools.ToolsDatabaseOptions{
 		SimilarityThreshold: toolsThreshold,
 		Enabled:             cfg.Tools.Enabled,
+		ModelType:           cfg.EmbeddingModels.HNSWConfig.ModelType,       // Pass model type from config
+		TargetDimension:     cfg.EmbeddingModels.HNSWConfig.TargetDimension, // Pass target dimension from config
 	}
 	toolsDatabase := tools.NewToolsDatabase(toolsOptions)
 
@@ -170,17 +195,11 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		return nil, fmt.Errorf("failed to create classifier: %w", err)
 	}
 
-	// Create global classification service for API access with auto-discovery
-	// This will prioritize LoRA models over legacy ModernBERT
-	autoSvc, err := services.NewClassificationServiceWithAutoDiscovery(cfg)
-	if err != nil {
-		logging.Warnf("Auto-discovery failed during router initialization: %v, using legacy classifier", err)
-		services.NewClassificationService(classifier, cfg)
-	} else {
-		logging.Infof("Router initialization: Using auto-discovered unified classifier")
-		// The service is already set as global in NewUnifiedClassificationService
-		_ = autoSvc
-	}
+	// Immediately set global classification service so API server can access it
+	// This prevents API server from creating a duplicate classifier due to timeout
+	// The API server starts concurrently and may timeout waiting for the global service
+	services.NewClassificationService(classifier, cfg)
+	logging.Infof("Global classification service initialized with legacy classifier")
 
 	// Create Response API filter if enabled
 	var responseAPIFilter *ResponseAPIFilter
@@ -296,6 +315,34 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		NormalizeScores:     hybridCfg.NormalizeScores,
 	}
 
+	// Copy ML config for KNN, KMeans, SVM, MLP selectors
+	mlCfg := cfg.IntelligentRouting.ModelSelection.ML
+	if mlCfg.ModelsPath != "" || mlCfg.KNN.PretrainedPath != "" || mlCfg.KMeans.PretrainedPath != "" || mlCfg.SVM.PretrainedPath != "" || mlCfg.MLP.PretrainedPath != "" {
+		modelSelectionCfg.ML = &selection.MLSelectorConfig{
+			ModelsPath:   mlCfg.ModelsPath,
+			EmbeddingDim: mlCfg.EmbeddingDim,
+			KNN: &selection.KNNConfig{
+				K:              mlCfg.KNN.K,
+				PretrainedPath: mlCfg.KNN.PretrainedPath,
+			},
+			KMeans: &selection.KMeansConfig{
+				NumClusters:      mlCfg.KMeans.NumClusters,
+				EfficiencyWeight: mlCfg.KMeans.EfficiencyWeight,
+				PretrainedPath:   mlCfg.KMeans.PretrainedPath,
+			},
+			SVM: &selection.SVMConfig{
+				Kernel:         mlCfg.SVM.Kernel,
+				Gamma:          mlCfg.SVM.Gamma,
+				PretrainedPath: mlCfg.SVM.PretrainedPath,
+			},
+			MLP: &selection.MLPConfig{
+				Device:         mlCfg.MLP.Device,
+				PretrainedPath: mlCfg.MLP.PretrainedPath,
+			},
+		}
+		logging.Infof("[Router] ML model selection enabled with models_path=%s", mlCfg.ModelsPath)
+	}
+
 	// Create selection factory and initialize all selectors
 	selectionFactory := selection.NewFactory(modelSelectionCfg)
 	if cfg.BackendModels.ModelConfig != nil {
@@ -304,13 +351,63 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	if len(cfg.Categories) > 0 {
 		selectionFactory = selectionFactory.WithCategories(cfg.Categories)
 	}
-	// Wire embedding function for RouterDC to convert model descriptions to vectors
+	// Wire embedding function for ML model selection using Qwen3 (1024-dim)
+	// This must match the embedding model used during training (Qwen/Qwen3-Embedding-0.6B)
 	selectionFactory = selectionFactory.WithEmbeddingFunc(func(text string) ([]float32, error) {
-		return candle_binding.GetEmbedding(text, 0)
+		output, err := candle_binding.GetEmbeddingBatched(text, "qwen3", 1024)
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
 	})
 	modelSelectorRegistry := selectionFactory.CreateAll()
 
+	// Set as global registry so feedback API can access it
+	selection.GlobalRegistry = modelSelectorRegistry
+
 	logging.Infof("[Router] Initialized model selection registry (per-decision algorithm config)")
+
+	// Auto-enable memory if any decision uses memory plugin
+	memoryEnabled := cfg.Memory.Enabled
+	if !memoryEnabled {
+		for _, decision := range cfg.Decisions {
+			if decision.GetPluginConfig("memory") != nil {
+				memoryEnabled = true
+				logging.Infof("Memory auto-enabled: decision '%s' uses memory plugin", decision.Name)
+				break
+			}
+		}
+	}
+
+	// Create memory store if enabled
+	var memoryStore *memory.MilvusStore
+	if memoryEnabled {
+		memStore, err := createMemoryStore(cfg)
+		if err != nil {
+			logging.Warnf("Failed to create memory store: %v, Memory will be disabled", err)
+		} else {
+			memoryStore = memStore
+			memory.SetGlobalMemoryStore(memStore)
+			logging.Infof("Memory enabled with Milvus backend")
+		}
+	}
+
+	// Create memory extractor if memory_extraction external model is configured
+	var memoryExtractor *memory.MemoryExtractor
+	if memoryEnabled && cfg.FindExternalModelByRole(config.ModelRoleMemoryExtraction) != nil {
+		if memoryStore != nil {
+			memoryExtractor = memory.NewMemoryExtractorWithStore(cfg, cfg.Memory.ExtractionBatchSize, memoryStore)
+			if memoryExtractor != nil {
+				logging.Infof("Memory extractor enabled with model_role: %s", config.ModelRoleMemoryExtraction)
+			}
+		} else {
+			logging.Warnf("Memory extraction enabled but memory store not available, extraction will be disabled")
+		}
+	}
+
+	// Build credential resolver chain from config (or use default chain if authz section is omitted)
+	credResolver := buildCredentialResolver(cfg)
+	logging.Infof("Credential resolver initialized with providers: %v", credResolver.ProviderNames())
 
 	router := &OpenAIRouter{
 		Config:               cfg,
@@ -323,24 +420,131 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		ReplayRecorder:       replayRecorder,
 		ModelSelector:        modelSelectorRegistry,
 		ReplayRecorders:      replayRecorders,
+		MemoryStore:          memoryStore,
+		MemoryExtractor:      memoryExtractor,
+		CredentialResolver:   credResolver,
 	}
 
 	return router, nil
 }
 
-// initializeReplayRecorders creates replay recorders for all decisions with router_replay enabled.
+// knownAuthzProviderTypes is the set of valid provider type strings.
+// Unknown types cause a startup error (not a runtime surprise).
+var knownAuthzProviderTypes = map[string]bool{
+	"header-injection": true,
+	"static-config":    true,
+}
+
+// buildCredentialResolver constructs the credential provider chain from config.
+// If the authz section is omitted (no providers configured), it returns the
+// default chain: header-injection (standard headers) → static-config.
+//
+// Startup validation (catches misconfig before any request is served):
+//   - Unknown provider types → error (not silently skipped)
+//   - header-injection with empty headers → warning (will use defaults)
+//   - Empty chain after explicit config → error
+//   - Logs the resolved chain, fail_open mode, and header mappings
+func buildCredentialResolver(cfg *config.RouterConfig) *authz.CredentialResolver {
+	authzCfg := cfg.Authz
+
+	if len(authzCfg.Providers) == 0 {
+		// Default chain — backward compatible, no config required.
+		// Always fail-open when no providers are explicitly configured:
+		// without an auth backend there is no credential source, so
+		// fail-closed would reject every request. Users who need
+		// fail-closed must explicitly configure providers.
+		resolver := authz.NewCredentialResolver(
+			authz.NewHeaderInjectionProvider(authz.DefaultHeaderMap()),
+			authz.NewStaticConfigProvider(cfg),
+		)
+		resolver.SetFailOpen(true)
+		logging.Infof("Authz: using default chain [header-injection(defaults) → static-config], fail_open=true (no explicit providers configured)")
+		logging.Infof("Authz identity: user_id_header=%q, user_groups_header=%q",
+			cfg.Authz.Identity.GetUserIDHeader(), cfg.Authz.Identity.GetUserGroupsHeader())
+		return resolver
+	}
+
+	// --- Startup validation ---
+	var validationErrors []string
+
+	for i, p := range authzCfg.Providers {
+		if !knownAuthzProviderTypes[p.Type] {
+			validationErrors = append(validationErrors,
+				fmt.Sprintf("authz.providers[%d]: unknown type %q (valid types: header-injection, static-config)", i, p.Type))
+		}
+		if p.Type == "header-injection" && len(p.Headers) > 0 {
+			// Validate header values are non-empty
+			for provider, header := range p.Headers {
+				if header == "" {
+					validationErrors = append(validationErrors,
+						fmt.Sprintf("authz.providers[%d].headers: provider %q has empty header name", i, provider))
+				}
+			}
+		}
+	}
+
+	if len(validationErrors) > 0 {
+		for _, e := range validationErrors {
+			logging.Errorf("Authz config validation error: %s", e)
+		}
+		logging.Errorf("Authz config has %d validation error(s) — falling back to default chain to prevent startup failure. FIX YOUR CONFIG.", len(validationErrors))
+		resolver := authz.NewCredentialResolver(
+			authz.NewHeaderInjectionProvider(authz.DefaultHeaderMap()),
+			authz.NewStaticConfigProvider(cfg),
+		)
+		// Force fail-closed when config is invalid — don't trust a broken config's fail_open setting
+		resolver.SetFailOpen(false)
+		return resolver
+	}
+
+	// --- Build chain ---
+	providers := make([]authz.Provider, 0, len(authzCfg.Providers))
+	for _, p := range authzCfg.Providers {
+		switch p.Type {
+		case "header-injection":
+			hip := authz.NewHeaderInjectionProvider(p.Headers)
+			providers = append(providers, hip)
+			if len(p.Headers) == 0 {
+				logging.Infof("Authz: header-injection provider using default headers: %v", authz.DefaultHeaderMap())
+			} else {
+				logging.Infof("Authz: header-injection provider using custom headers: %v", p.Headers)
+			}
+		case "static-config":
+			providers = append(providers, authz.NewStaticConfigProvider(cfg))
+			logging.Infof("Authz: static-config provider (reads model_config.*.access_key)")
+		}
+	}
+
+	resolver := authz.NewCredentialResolver(providers...)
+	resolver.SetFailOpen(authzCfg.FailOpen)
+
+	if authzCfg.FailOpen {
+		logging.Warnf("Authz fail_open=true — requests without valid credentials will be allowed through. Ensure this is intentional.")
+	}
+	logging.Infof("Authz: chain=%v, fail_open=%v", resolver.ProviderNames(), authzCfg.FailOpen)
+	logging.Infof("Authz identity: user_id_header=%q, user_groups_header=%q",
+		cfg.Authz.Identity.GetUserIDHeader(), cfg.Authz.Identity.GetUserGroupsHeader())
+
+	return resolver
+}
+
+// initializeReplayRecorders creates replay recorders for decisions with router_replay plugin configured.
+// Only decisions with explicit router_replay plugin configuration will have recorders created.
+// System-level settings (store_backend, ttl, etc.) are inherited from global router_replay config.
 func initializeReplayRecorders(cfg *config.RouterConfig) map[string]*routerreplay.Recorder {
 	recorders := make(map[string]*routerreplay.Recorder)
 
-	// Check if router replay
-	if !cfg.RouterReplay.Enabled {
-		return recorders
-	}
-
-	// Create a recorder for each decision
-	// Each decision gets its own storage isolation via collection/table/keyspace naming
+	// Create a recorder only for decisions that have router_replay plugin configured
 	for _, d := range cfg.Decisions {
-		recorder, err := createReplayRecorder(d.Name, &cfg.RouterReplay)
+		// Check if this decision has router_replay plugin configured
+		pluginCfg := d.GetRouterReplayConfig()
+		if pluginCfg == nil || !pluginCfg.Enabled {
+			// No plugin config or not enabled, skip this decision
+			continue
+		}
+
+		// Create recorder with plugin config (per-decision) and global config (system-level)
+		recorder, err := createReplayRecorder(d.Name, pluginCfg, &cfg.RouterReplay)
 		if err != nil {
 			logging.Errorf("Failed to initialize replay recorder for decision %s: %v", d.Name, err)
 			continue
@@ -353,13 +557,15 @@ func initializeReplayRecorders(cfg *config.RouterConfig) map[string]*routerrepla
 }
 
 // createReplayRecorder creates a single replay recorder with the appropriate storage backend.
-func createReplayRecorder(decisionName string, replayCfg *config.RouterReplayConfig) (*routerreplay.Recorder, error) {
-	backend := replayCfg.StoreBackend
+// pluginCfg contains per-decision settings (max_records, capture settings)
+// globalCfg contains system-level settings (store_backend, ttl, connection configs)
+func createReplayRecorder(decisionName string, pluginCfg *config.RouterReplayPluginConfig, globalCfg *config.RouterReplayConfig) (*routerreplay.Recorder, error) {
+	backend := globalCfg.StoreBackend
 	if backend == "" {
 		backend = "memory"
 	}
 
-	maxBodyBytes := replayCfg.MaxBodyBytes
+	maxBodyBytes := pluginCfg.MaxBodyBytes
 	if maxBodyBytes <= 0 {
 		maxBodyBytes = routerreplay.DefaultMaxBodyBytes
 	}
@@ -369,97 +575,97 @@ func createReplayRecorder(decisionName string, replayCfg *config.RouterReplayCon
 
 	switch backend {
 	case "memory":
-		maxRecords := replayCfg.MaxRecords
+		maxRecords := pluginCfg.MaxRecords
 		if maxRecords <= 0 {
 			maxRecords = routerreplay.DefaultMaxRecords
 		}
-		storage = store.NewMemoryStore(maxRecords, replayCfg.TTLSeconds)
+		storage = store.NewMemoryStore(maxRecords, globalCfg.TTLSeconds)
 		logging.Infof("Router replay for %s using memory backend (max_records=%d)", decisionName, maxRecords)
 
 	case "redis":
-		if replayCfg.Redis == nil {
+		if globalCfg.Redis == nil {
 			return nil, fmt.Errorf("redis config required when store_backend is 'redis'")
 		}
 		// Use decision name as key prefix for Redis isolation
 		keyPrefix := decisionName + ":"
-		if replayCfg.Redis.KeyPrefix != "" {
-			keyPrefix = replayCfg.Redis.KeyPrefix + ":" + decisionName + ":"
+		if globalCfg.Redis.KeyPrefix != "" {
+			keyPrefix = globalCfg.Redis.KeyPrefix + ":" + decisionName + ":"
 		}
 		redisConfig := &store.RedisConfig{
-			Address:       replayCfg.Redis.Address,
-			DB:            replayCfg.Redis.DB,
-			Password:      replayCfg.Redis.Password,
-			UseTLS:        replayCfg.Redis.UseTLS,
-			TLSSkipVerify: replayCfg.Redis.TLSSkipVerify,
-			MaxRetries:    replayCfg.Redis.MaxRetries,
-			PoolSize:      replayCfg.Redis.PoolSize,
+			Address:       globalCfg.Redis.Address,
+			DB:            globalCfg.Redis.DB,
+			Password:      globalCfg.Redis.Password,
+			UseTLS:        globalCfg.Redis.UseTLS,
+			TLSSkipVerify: globalCfg.Redis.TLSSkipVerify,
+			MaxRetries:    globalCfg.Redis.MaxRetries,
+			PoolSize:      globalCfg.Redis.PoolSize,
 			KeyPrefix:     keyPrefix,
 		}
-		storage, err = store.NewRedisStore(redisConfig, replayCfg.TTLSeconds, replayCfg.AsyncWrites)
+		storage, err = store.NewRedisStore(redisConfig, globalCfg.TTLSeconds, globalCfg.AsyncWrites)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create redis store: %w", err)
 		}
 		logging.Infof("Router replay for %s using redis backend (address=%s, key_prefix=%s, ttl=%ds, async=%v)",
-			decisionName, redisConfig.Address, keyPrefix, replayCfg.TTLSeconds, replayCfg.AsyncWrites)
+			decisionName, redisConfig.Address, keyPrefix, globalCfg.TTLSeconds, globalCfg.AsyncWrites)
 
 	case "postgres":
-		if replayCfg.Postgres == nil {
+		if globalCfg.Postgres == nil {
 			return nil, fmt.Errorf("postgres config required when store_backend is 'postgres'")
 		}
 		// Use decision name as table name for PostgreSQL isolation
 		tableName := decisionName + "_replay_records"
-		if replayCfg.Postgres.TableName != "" {
-			tableName = replayCfg.Postgres.TableName + "_" + decisionName
+		if globalCfg.Postgres.TableName != "" {
+			tableName = globalCfg.Postgres.TableName + "_" + decisionName
 		}
 		pgConfig := &store.PostgresConfig{
-			Host:            replayCfg.Postgres.Host,
-			Port:            replayCfg.Postgres.Port,
-			Database:        replayCfg.Postgres.Database,
-			User:            replayCfg.Postgres.User,
-			Password:        replayCfg.Postgres.Password,
-			SSLMode:         replayCfg.Postgres.SSLMode,
-			MaxOpenConns:    replayCfg.Postgres.MaxOpenConns,
-			MaxIdleConns:    replayCfg.Postgres.MaxIdleConns,
-			ConnMaxLifetime: replayCfg.Postgres.ConnMaxLifetime,
+			Host:            globalCfg.Postgres.Host,
+			Port:            globalCfg.Postgres.Port,
+			Database:        globalCfg.Postgres.Database,
+			User:            globalCfg.Postgres.User,
+			Password:        globalCfg.Postgres.Password,
+			SSLMode:         globalCfg.Postgres.SSLMode,
+			MaxOpenConns:    globalCfg.Postgres.MaxOpenConns,
+			MaxIdleConns:    globalCfg.Postgres.MaxIdleConns,
+			ConnMaxLifetime: globalCfg.Postgres.ConnMaxLifetime,
 			TableName:       tableName,
 		}
-		storage, err = store.NewPostgresStore(pgConfig, replayCfg.TTLSeconds, replayCfg.AsyncWrites)
+		storage, err = store.NewPostgresStore(pgConfig, globalCfg.TTLSeconds, globalCfg.AsyncWrites)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create postgres store: %w", err)
 		}
 		logging.Infof("Router replay for %s using postgres backend (host=%s, db=%s, table=%s, ttl=%ds, async=%v)",
-			decisionName, pgConfig.Host, pgConfig.Database, pgConfig.TableName, replayCfg.TTLSeconds, replayCfg.AsyncWrites)
+			decisionName, pgConfig.Host, pgConfig.Database, pgConfig.TableName, globalCfg.TTLSeconds, globalCfg.AsyncWrites)
 
 	case "milvus":
-		if replayCfg.Milvus == nil {
+		if globalCfg.Milvus == nil {
 			return nil, fmt.Errorf("milvus config required when store_backend is 'milvus'")
 		}
 		// Use decision name as collection name for Milvus isolation
 		collectionName := decisionName + "_replay_records"
-		if replayCfg.Milvus.CollectionName != "" {
-			collectionName = replayCfg.Milvus.CollectionName + "_" + decisionName
+		if globalCfg.Milvus.CollectionName != "" {
+			collectionName = globalCfg.Milvus.CollectionName + "_" + decisionName
 		}
 		milvusConfig := &store.MilvusConfig{
-			Address:          replayCfg.Milvus.Address,
-			Username:         replayCfg.Milvus.Username,
-			Password:         replayCfg.Milvus.Password,
+			Address:          globalCfg.Milvus.Address,
+			Username:         globalCfg.Milvus.Username,
+			Password:         globalCfg.Milvus.Password,
 			CollectionName:   collectionName,
-			ConsistencyLevel: replayCfg.Milvus.ConsistencyLevel,
-			ShardNum:         replayCfg.Milvus.ShardNum,
+			ConsistencyLevel: globalCfg.Milvus.ConsistencyLevel,
+			ShardNum:         globalCfg.Milvus.ShardNum,
 		}
-		storage, err = store.NewMilvusStore(milvusConfig, replayCfg.TTLSeconds, replayCfg.AsyncWrites)
+		storage, err = store.NewMilvusStore(milvusConfig, globalCfg.TTLSeconds, globalCfg.AsyncWrites)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create milvus store: %w", err)
 		}
 		logging.Infof("Router replay for %s using milvus backend (address=%s, collection=%s, ttl=%ds, async=%v)",
-			decisionName, milvusConfig.Address, milvusConfig.CollectionName, replayCfg.TTLSeconds, replayCfg.AsyncWrites)
+			decisionName, milvusConfig.Address, milvusConfig.CollectionName, globalCfg.TTLSeconds, globalCfg.AsyncWrites)
 
 	default:
 		return nil, fmt.Errorf("unknown store_backend: %s (supported: memory, redis, postgres, milvus)", backend)
 	}
 
 	recorder := routerreplay.NewRecorder(storage)
-	recorder.SetCapturePolicy(replayCfg.CaptureRequestBody, replayCfg.CaptureResponseBody, maxBodyBytes)
+	recorder.SetCapturePolicy(pluginCfg.CaptureRequestBody, pluginCfg.CaptureResponseBody, maxBodyBytes)
 	return recorder, nil
 }
 
@@ -629,6 +835,86 @@ func createResponseStore(cfg *config.RouterConfig) (responsestore.ResponseStore,
 	}
 
 	return responsestore.NewStore(storeConfig)
+}
+
+// createMemoryStore creates a memory store based on configuration.
+func createMemoryStore(cfg *config.RouterConfig) (*memory.MilvusStore, error) {
+	milvusAddress := cfg.Memory.Milvus.Address
+	if milvusAddress == "" {
+		milvusAddress = "localhost:19530"
+	}
+
+	collectionName := cfg.Memory.Milvus.Collection
+	if collectionName == "" {
+		collectionName = "agentic_memory"
+	}
+
+	// Auto-detect embedding model from embedding_models configuration
+	// Priority: bert (384-dim, best for memory) > mmbert > qwen3 > gemma
+	embeddingModel := cfg.Memory.EmbeddingModel
+	if embeddingModel == "" {
+		if cfg.EmbeddingModels.BertModelPath != "" {
+			embeddingModel = "bert"
+			logging.Infof("Memory: Auto-selected bert from embedding_models config (384-dim, recommended for memory)")
+		} else if cfg.EmbeddingModels.MmBertModelPath != "" {
+			embeddingModel = "mmbert"
+			logging.Infof("Memory: Auto-selected mmbert from embedding_models config")
+		} else if cfg.EmbeddingModels.Qwen3ModelPath != "" {
+			embeddingModel = "qwen3"
+			logging.Infof("Memory: Auto-selected qwen3 from embedding_models config")
+		} else if cfg.EmbeddingModels.GemmaModelPath != "" {
+			embeddingModel = "gemma"
+			logging.Infof("Memory: Auto-selected gemma from embedding_models config")
+		} else {
+			embeddingModel = "bert"
+			logging.Warnf("Memory: No embedding models configured, bert will be used but may fail without bert_model_path")
+		}
+	}
+
+	embeddingConfig := memory.EmbeddingConfig{
+		Model:     memory.EmbeddingModelType(embeddingModel),
+		Dimension: cfg.Memory.Milvus.Dimension, // Pass dimension from config for Matryoshka models
+	}
+
+	logging.Infof("Memory: Connecting to Milvus at %s, collection=%s", milvusAddress, collectionName)
+	logging.Infof("Memory: Using embedding model=%s", embeddingConfig.Model)
+
+	// Create Milvus client
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	milvusClient, err := client.NewGrpcClient(ctx, milvusAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Milvus client: %w", err)
+	}
+
+	// Check connection
+	state, err := milvusClient.CheckHealth(ctx)
+	if err != nil {
+		milvusClient.Close()
+		return nil, fmt.Errorf("failed to check Milvus connection: %w", err)
+	}
+	if state == nil || !state.IsHealthy {
+		milvusClient.Close()
+		return nil, fmt.Errorf("milvus connection is not healthy")
+	}
+
+	// Create memory store with unified embedding config
+	store, err := memory.NewMilvusStore(memory.MilvusStoreOptions{
+		Client:          milvusClient,
+		CollectionName:  collectionName,
+		Config:          cfg.Memory,
+		Enabled:         true, // Always enabled if we reach here (auto-detected or explicit)
+		EmbeddingConfig: &embeddingConfig,
+	})
+	if err != nil {
+		milvusClient.Close()
+		return nil, fmt.Errorf("failed to create memory store: %w", err)
+	}
+
+	logging.Infof("Memory store initialized: address=%s, collection=%s, embedding=%s",
+		milvusAddress, collectionName, embeddingConfig.Model)
+	return store, nil
 }
 
 // LoadToolsDatabase loads tools from file after embedding models are initialized

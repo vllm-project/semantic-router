@@ -876,6 +876,7 @@ impl Qwen3MultiLoRAClassifier {
     /// - No LoRA weights applied (base model only)
     /// - Lower accuracy than fine-tuned adapters
     /// - Useful for quick testing or when no adapter is available
+    /// - This method only works if the labels have only one token
     pub fn classify_zero_shot(
         &mut self,
         text: &str,
@@ -959,7 +960,7 @@ impl Qwen3MultiLoRAClassifier {
                 input_context: None,
             })?;
 
-        // Extract category token IDs on-the-fly
+        // Extract category token IDs on-the-fly (first token of each label)
         let mut category_token_ids = Vec::new();
         for category in &categories {
             let tokens = self
@@ -998,6 +999,205 @@ impl Qwen3MultiLoRAClassifier {
         // Apply softmax
         let probabilities = softmax(&category_logits);
 
+        // Find best category
+        let (best_idx, &best_confidence) = probabilities
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
+            .unwrap();
+
+        let best_category = categories[best_idx].clone();
+
+        Ok(MultiAdapterClassificationResult {
+            adapter_name: "zero-shot".to_string(),
+            category: best_category,
+            confidence: best_confidence,
+            probabilities,
+            all_categories: categories,
+        })
+    }
+
+    /// Zero-shot classification that properly handles multi-token labels by
+    /// reusing the prompt KV cache and stepping through each label token.
+    /// Keeping it in a separate method since it introduces more overhead.
+    pub fn classify_zero_shot_multi_tokens(
+        &mut self,
+        text: &str,
+        categories: Vec<String>,
+    ) -> UnifiedResult<MultiAdapterClassificationResult> {
+        if categories.is_empty() {
+            return Err(UnifiedError::Configuration {
+                operation: "validate categories".to_string(),
+                source: ConfigErrorType::ParseError("Categories list cannot be empty".to_string()),
+                context: None,
+            });
+        }
+
+        // Clear KV cache before new classification
+        self.base_model.clear_kv_cache();
+
+        // Format prompt for zero-shot classification
+        let categories_str = categories.join(", ");
+        let instruction = format!(
+            "You are an expert classifier. Classify the following into exactly ONE category. Respond with ONLY the category name.\n\nCategories: {}\n\nClassify:\n{}\nAnswer:",
+            categories_str, text
+        );
+
+        let prompt = format!(
+            "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+            instruction
+        );
+
+        // Tokenize prompt
+        let prompt_encoding = self.tokenizer.encode(prompt.as_str(), true).map_err(|e| {
+            UnifiedError::Configuration {
+                operation: "tokenize".to_string(),
+                source: ConfigErrorType::ParseError(e.to_string()),
+                context: None,
+            }
+        })?;
+
+        // Keep prompt tokens to reuse across category scoring
+        // TODO: remove prompt_ids since it's only used to get length
+        let prompt_ids: Vec<u32> = prompt_encoding.get_ids().to_vec();
+        let prompt_token_ids = Tensor::new(prompt_encoding.get_ids(), &self.device)
+            .map_err(|e| UnifiedError::Processing {
+                operation: "create prompt tensor".to_string(),
+                source: e.to_string(),
+                input_context: None,
+            })?
+            .unsqueeze(0)
+            .map_err(|e| UnifiedError::Processing {
+                operation: "unsqueeze prompt tensor".to_string(),
+                source: e.to_string(),
+                input_context: None,
+            })?;
+
+        // base_logits is needed to predict the first category token
+        let base_logits =
+            self.base_model
+                .forward(&prompt_token_ids, 0)
+                .map_err(|e| UnifiedError::Model {
+                    model_type: crate::core::ModelErrorType::Embedding,
+                    operation: "forward prompt".to_string(),
+                    source: e.to_string(),
+                    context: None,
+                })?;
+        let prompt_len = prompt_ids.len();
+        // Snapshot prompt KV cache so each category can start from the same state
+        let prompt_cache = self.base_model.kv_cache_snapshot();
+
+        // Tokenize each category to full token sequences (handles multi-token labels)
+        let mut category_token_seqs: Vec<Vec<u32>> = Vec::with_capacity(categories.len());
+        for category in &categories {
+            let tokens = self
+                .tokenizer
+                .encode(format!(" {}", category), false)
+                .map_err(|e| UnifiedError::Configuration {
+                    operation: "tokenize category".to_string(),
+                    source: ConfigErrorType::ParseError(e.to_string()),
+                    context: Some(format!("category: {}", category)),
+                })?;
+            let ids = tokens.get_ids();
+            if ids.is_empty() {
+                return Err(UnifiedError::Configuration {
+                    operation: "tokenize category".to_string(),
+                    source: ConfigErrorType::ParseError("Category produced no tokens".to_string()),
+                    context: Some(format!("category: {}", category)),
+                });
+            }
+
+            category_token_seqs.push(ids.to_vec());
+        }
+        // Compute log-probability for each category with a single forward per category,
+        // reusing the prompt KV cache.
+        let mut category_log_probs = Vec::with_capacity(categories.len());
+
+        for (cat_idx, token_seq) in category_token_seqs.iter().enumerate() {
+            // Restore prompt cache so each category starts from identical prefix state
+            self.base_model.kv_cache_restore(&prompt_cache);
+            let label_ids = Tensor::from_vec(token_seq.clone(), (1, token_seq.len()), &self.device)
+                .map_err(|e| UnifiedError::Processing {
+                    operation: "create label tensor".to_string(),
+                    source: e.to_string(),
+                    input_context: Some(format!("category={}", categories[cat_idx])),
+                })?;
+
+            // Forward all label tokens with prefix cache already populated
+            let logits = self
+                .base_model
+                .forward_all(&label_ids, prompt_len)
+                .map_err(|e| UnifiedError::Model {
+                    model_type: crate::core::ModelErrorType::Embedding,
+                    operation: "full forward".to_string(),
+                    source: e.to_string(),
+                    context: Some(format!("category={}", categories[cat_idx])),
+                })?;
+            // logits shape: [1, label_len, vocab]; score each label token
+            let mut total_log_prob = 0f32;
+            for (tok_idx, &token_id) in token_seq.iter().enumerate() {
+                // for first token, use base_logits from prompt forward
+                // for subsequent tokens, use logits from full forward, offset by 1
+                // TODO: clean this up
+                let step_logits = if tok_idx == 0 {
+                    base_logits
+                        .clone()
+                        .i((0, 0))
+                        .map_err(|e| UnifiedError::Processing {
+                            operation: "index batch".to_string(),
+                            source: e.to_string(),
+                            input_context: None,
+                        })?
+                        .to_dtype(DType::F32)
+                        .map_err(|e| UnifiedError::Processing {
+                            operation: "convert to f32".to_string(),
+                            source: e.to_string(),
+                            input_context: None,
+                        })?
+                } else {
+                    logits
+                        .i((0, tok_idx - 1))
+                        .map_err(|e| UnifiedError::Processing {
+                            operation: "index logits".to_string(),
+                            source: e.to_string(),
+                            input_context: Some(format!("category={}", categories[cat_idx])),
+                        })?
+                        .to_dtype(DType::F32)
+                        .map_err(|e| UnifiedError::Processing {
+                            operation: "convert logits to f32".to_string(),
+                            source: e.to_string(),
+                            input_context: Some(format!("category={}", categories[cat_idx])),
+                        })?
+                };
+                let logits_vec =
+                    step_logits
+                        .to_vec1::<f32>()
+                        .map_err(|e| UnifiedError::Processing {
+                            operation: "logits to vec".to_string(),
+                            source: e.to_string(),
+                            input_context: Some(format!("category={}", categories[cat_idx])),
+                        })?;
+                if (token_id as usize) >= logits_vec.len() {
+                    return Err(UnifiedError::Processing {
+                        operation: "token index out of bounds".to_string(),
+                        source: format!(
+                            "token_id {} out of vocab range {}",
+                            token_id,
+                            logits_vec.len()
+                        ),
+                        input_context: Some(format!("category={}", categories[cat_idx])),
+                    });
+                }
+                // for each label token, compute log-probability
+                let probs = softmax(&logits_vec);
+                let prob = probs[token_id as usize].max(f32::MIN_POSITIVE);
+                total_log_prob += prob.ln();
+            }
+            let norm_log_prob = total_log_prob / (token_seq.len() as f32);
+            category_log_probs.push(norm_log_prob);
+        }
+        // Normalize log-probabilities across categories
+        let probabilities = softmax(&category_log_probs);
         // Find best category
         let (best_idx, &best_confidence) = probabilities
             .iter()

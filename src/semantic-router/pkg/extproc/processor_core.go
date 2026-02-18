@@ -42,7 +42,6 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 			if s, ok := status.FromError(err); ok {
 				switch s.Code() {
 				case codes.Canceled:
-					metrics.RecordRequestError(ctx.RequestModel, "cancellation")
 					return nil
 				case codes.DeadlineExceeded:
 					logging.Infof("Stream deadline exceeded")
@@ -54,7 +53,6 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 			// Handle context cancellation from the server-side context
 			if errors.Is(err, context.Canceled) {
 				logging.Infof("Stream canceled gracefully")
-				metrics.RecordRequestError(ctx.RequestModel, "cancellation")
 				return nil
 			}
 			if errors.Is(err, context.DeadlineExceeded) {
@@ -85,7 +83,6 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 				logging.Errorf("handleRequestBody failed: %v", err)
 				return err
 			}
-			logging.Infof("Modified request body: %+v", response)
 			if err := sendResponse(stream, response, "request body"); err != nil {
 				logging.Errorf("sendResponse for body failed: %v", err)
 				return err

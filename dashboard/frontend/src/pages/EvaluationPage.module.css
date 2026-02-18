@@ -1,0 +1,120 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg, 1.5rem);
+  padding: var(--spacing-lg, 1.5rem);
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--spacing-md, 1rem);
+}
+
+.titleSection h1 {
+  margin: 0;
+  font-size: var(--text-2xl, 1.5rem);
+  font-weight: 600;
+}
+
+.titleSection p {
+  margin: var(--spacing-xs, 0.25rem) 0 0;
+  color: var(--color-text-secondary, #999);
+}
+
+.errorBanner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-sm, 0.5rem) var(--spacing-md, 1rem);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-md, 0.375rem);
+  color: var(--color-danger, #ef4444);
+}
+
+.errorBanner button {
+  padding: var(--spacing-xs, 0.25rem) var(--spacing-sm, 0.5rem);
+  background: transparent;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  border-radius: var(--radius-sm, 0.25rem);
+  color: var(--color-danger, #ef4444);
+  cursor: pointer;
+  font-size: var(--text-sm, 0.875rem);
+}
+
+.errorBanner button:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.progressView {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md, 1rem);
+}
+
+.backButton {
+  align-self: flex-start;
+  padding: var(--spacing-sm, 0.5rem) var(--spacing-md, 1rem);
+  background: transparent;
+  border: 1px solid var(--color-border, #333);
+  border-radius: var(--radius-md, 0.375rem);
+  color: var(--color-text-secondary, #999);
+  cursor: pointer;
+  transition: all var(--transition-fast, 150ms);
+}
+
+.backButton:hover {
+  border-color: var(--color-primary, #76b900);
+  color: var(--color-text, #e8e8e8);
+}
+
+.tabs {
+  display: flex;
+  gap: var(--spacing-xs, 0.25rem);
+  padding: var(--spacing-xs, 0.25rem);
+  background: var(--color-bg-secondary, #242424);
+  border: 1px solid var(--color-border, #333);
+  border-radius: var(--radius-lg, 0.5rem);
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs, 0.25rem);
+  padding: var(--spacing-sm, 0.5rem) var(--spacing-lg, 1.5rem);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md, 0.375rem);
+  color: var(--color-text-secondary, #999);
+  cursor: pointer;
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: 500;
+  transition: all var(--transition-fast, 150ms);
+}
+
+.tab:hover {
+  color: var(--color-text, #e8e8e8);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tab.activeTab {
+  color: var(--color-text, #e8e8e8);
+  background: var(--color-bg, #1a1a1a);
+}
+
+.tabIcon {
+  font-size: 16px;
+}
+
+.tabLabel {
+  font-weight: 500;
+}
+
+.tabContent {
+  flex: 1;
+}

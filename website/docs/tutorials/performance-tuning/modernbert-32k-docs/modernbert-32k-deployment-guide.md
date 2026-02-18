@@ -10,6 +10,7 @@
 This guide provides deployment recommendations for ModernBERT-base-32k based on empirical testing results. All recommendations are based on validated test results for context lengths from 512 tokens to 8K tokens.
 
 **For long context (16K-32K) and big batch testing, see separate test plans:**
+
 - [Long Context Test Plan](./modernbert-32k-long-context-test-plan.md)
 - [Big Batch Test Plan](./modernbert-32k-big-batch-test-plan.md)
 
@@ -19,28 +20,30 @@ This guide provides deployment recommendations for ModernBERT-base-32k based on 
 
 ### 1.1 Latency Expectations
 
-| Context Length | GPU Latency (C=1) | GPU Latency (C=10) | CPU Latency |
-|----------------|-------------------|--------------------|-------------|
-| 512 tokens     | 163ms             | N/A                | 7367ms      |
-| 1K tokens      | 785ms             | 996ms              | 806ms       |
-| 4K tokens      | 896ms             | 9066ms (88% success) | N/A        |
-| 8K tokens      | 3294ms            | N/A (fails)        | N/A         |
+| Context Length | GPU Latency (C=1) | GPU Latency (C=10)       | CPU Latency |
+|----------------|-------------------|--------------------------|-------------|
+| 512 tokens     | 163ms             | N/A                      | 7367ms      |
+| 1K tokens      | 785ms             | 996ms                    | 806ms       |
+| 4K tokens      | 896ms             | 9066ms (88% success)      | N/A         |
+| 8K tokens      | 3294ms            | N/A (fails)              | N/A         |
 
 **Recommendations:**
+
 - Use GPU for all production deployments (45x faster for 512 tokens)
 - Flash Attention 2 provides 1.75x-11.9x speedup (highly recommended)
 - CPU only suitable for 512 tokens (similar performance to GPU for 1K+)
 
 ### 1.2 Memory Requirements
 
-| Context Length | GPU Memory per Request | Total Memory (C=10) |
+| Context Length | GPU Memory per Request | Total Memory (C=10)  |
 |----------------|------------------------|----------------------|
-| 512 tokens     | ~5MB                  | ~50MB                |
-| 1K tokens      | ~11MB                 | ~110MB               |
-| 4K tokens      | ~estimated            | ~estimated           |
-| 8K tokens      | ~estimated            | ~estimated           |
+| 512 tokens     | ~5MB                   | ~50MB                |
+| 1K tokens      | ~11MB                  | ~110MB               |
+| 4K tokens      | ~estimated             | ~estimated           |
+| 8K tokens      | ~estimated             | ~estimated           |
 
 **Recommendations:**
+
 - Memory usage is very efficient (~5-11MB per request)
 - For 8K tokens with C=1, ensure at least 2GB free GPU memory
 - For 4K tokens with C=10, ensure at least 1GB free GPU memory
@@ -51,12 +54,12 @@ This guide provides deployment recommendations for ModernBERT-base-32k based on 
 
 ### 2.1 Recommended Concurrency by Context Length
 
-| Context Length | Max Concurrency | Notes |
-|----------------|-----------------|-------|
-| 1024 tokens    | C=10            | Tested and works reliably |
-| 4096 tokens    | C=10            | 88% success rate (12 OOM errors) |
-| 8192 tokens    | C=1             | Only C=1 works reliably |
-| 16384+ tokens  | C=1 (with chunking) | Requires A100 or chunking |
+| Context Length | Max Concurrency      | Notes                              |
+|----------------|----------------------|------------------------------------|
+| 1024 tokens    | C=10                 | Tested and works reliably           |
+| 4096 tokens    | C=10                 | 88% success rate (12 OOM errors)   |
+| 8192 tokens    | C=1                  | Only C=1 works reliably            |
+| 16384+ tokens  | C=1 (with chunking)   | Requires A100 or chunking          |
 
 ### 2.2 Concurrency Best Practices
 
@@ -72,12 +75,12 @@ This guide provides deployment recommendations for ModernBERT-base-32k based on 
 
 ### 3.1 GPU vs CPU Decision Matrix
 
-| Context Length | Recommended Device | Reason |
-|----------------|---------------------|--------|
-| 512 tokens     | GPU                 | 45x faster than CPU |
-| 1K tokens      | GPU                 | Similar to CPU, but more scalable |
-| 4K tokens      | GPU                 | CPU not tested, GPU recommended |
-| 8K tokens      | GPU                 | CPU not tested, GPU recommended |
+| Context Length | Recommended Device | Reason                              |
+|----------------|--------------------|-------------------------------------|
+| 512 tokens     | GPU                | 45x faster than CPU                 |
+| 1K tokens      | GPU                | Similar to CPU, but more scalable   |
+| 4K tokens      | GPU                | CPU not tested, GPU recommended     |
+| 8K tokens      | GPU                | CPU not tested, GPU recommended     |
 
 ### 3.2 Device Selection Heuristics
 
@@ -94,6 +97,7 @@ fn select_device(context_length: usize, available_gpu: bool) -> Device {
 ```
 
 **Recommendations:**
+
 - Always use GPU if available
 - Flash Attention 2 provides 1.75x-11.9x speedup
 - CPU only as fallback for 512 tokens
@@ -104,11 +108,11 @@ fn select_device(context_length: usize, available_gpu: bool) -> Device {
 
 ### 4.1 When to Use Chunking
 
-| Context Length | Chunking Required | Reason |
-|----------------|-------------------|--------|
-| ≤ 8K tokens    | No                | Can process in single pass |
-| > 8K tokens    | Yes               | Memory limitations or latency optimization |
-| > 32K tokens   | Yes               | Model limit is 32K, must chunk |
+| Context Length | Chunking Required | Reason                                      |
+|----------------|--------------------|---------------------------------------------|
+| ≤ 8K tokens    | No                 | Can process in single pass                  |
+| > 8K tokens    | Yes                | Memory limitations or latency optimization  |
+| > 32K tokens   | Yes                | Model limit is 32K, must chunk              |
 
 ### 4.2 Chunking Threshold Recommendations
 
@@ -134,7 +138,7 @@ fn should_chunk(context_length: usize, concurrency: usize) -> bool {
 
 1. **Overlap**: Use 10-20% overlap between chunks
 2. **Size**: Keep chunks ≤ 8K tokens for optimal performance
-3. **Aggregation**: 
+3. **Aggregation**:
    - Domain classification: Average scores
    - PII detection: Union with deduplication
    - Jailbreak detection: Maximum score
@@ -176,10 +180,12 @@ fn should_chunk(context_length: usize, concurrency: usize) -> bool {
 #### OOM (Out of Memory) Errors
 
 **Symptoms:**
+
 - `CUDA_ERROR_OUT_OF_MEMORY` errors
 - Requests failing at high concurrency
 
 **Solutions:**
+
 1. Reduce concurrency (C=10 → C=1)
 2. Use chunking for sequences > 8K tokens
 3. Increase wait time between requests
@@ -188,10 +194,12 @@ fn should_chunk(context_length: usize, concurrency: usize) -> bool {
 #### High Latency
 
 **Symptoms:**
+
 - Latency higher than expected
 - p95/p99 latency spikes
 
 **Solutions:**
+
 1. Enable Flash Attention 2
 2. Reduce concurrency
 3. Use chunking for long sequences
@@ -200,10 +208,12 @@ fn should_chunk(context_length: usize, concurrency: usize) -> bool {
 #### Memory Fragmentation
 
 **Symptoms:**
+
 - Tests pass initially, then fail
 - Memory not released between requests
 
 **Solutions:**
+
 1. Add explicit memory cleanup
 2. Increase wait time between requests
 3. Restart service periodically
@@ -271,4 +281,3 @@ fn should_chunk(context_length: usize, concurrency: usize) -> bool {
 - **Benchmark Results**: `BENCHMARK_RESULTS_ANALYSIS.md`
 
 ---
-

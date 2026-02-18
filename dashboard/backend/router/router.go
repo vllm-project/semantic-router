@@ -4,11 +4,15 @@ import (
 	"log"
 	"net/http"
 	"net/http/httputil"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
+	"github.com/vllm-project/semantic-router/dashboard/backend/evaluation"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
+	"github.com/vllm-project/semantic-router/dashboard/backend/mlpipeline"
 	"github.com/vllm-project/semantic-router/dashboard/backend/proxy"
 )
 
@@ -192,6 +196,14 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	mux.HandleFunc("/api/tools-db", handlers.ToolsDBHandler(cfg.ConfigDir))
 	log.Printf("Tools DB API endpoint registered: /api/tools-db")
 
+	// Web Search endpoint for Playground tool execution
+	mux.HandleFunc("/api/tools/web-search", handlers.WebSearchHandler())
+	log.Printf("Web Search API endpoint registered: /api/tools/web-search")
+
+	// Open Web endpoint for Playground tool execution (avoid CORS issues)
+	mux.HandleFunc("/api/tools/open-web", handlers.OpenWebHandler())
+	log.Printf("Open Web API endpoint registered: /api/tools/open-web")
+
 	// Status endpoint - shows service health status (aligns with vllm-sr status)
 	mux.HandleFunc("/api/status", handlers.StatusHandler(cfg.RouterAPIURL))
 	log.Printf("Status API endpoint registered: /api/status")
@@ -199,6 +211,135 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	// Logs endpoint - shows service logs (aligns with vllm-sr logs)
 	mux.HandleFunc("/api/logs", handlers.LogsHandler(cfg.RouterAPIURL))
 	log.Printf("Logs API endpoint registered: /api/logs")
+
+	// Topology Test Query endpoint - for testing routing decisions
+	// dry-run mode calls real Router API, simulate mode uses local config
+	mux.HandleFunc("/api/topology/test-query", handlers.TopologyTestQueryHandler(cfg.AbsConfigPath, cfg.RouterAPIURL))
+	log.Printf("Topology Test Query API endpoint registered: /api/topology/test-query (Router API: %s)", cfg.RouterAPIURL)
+
+	// Evaluation endpoints (if enabled)
+	if cfg.EvaluationEnabled {
+		// Register datasets endpoint first - it doesn't require DB and returns static data
+		// This ensures datasets are always available even if DB initialization fails
+		mux.HandleFunc("/api/evaluation/datasets", handlers.GetDatasetsHandler())
+		log.Printf("Evaluation datasets endpoint registered: /api/evaluation/datasets")
+
+		// Get project root for evaluation benchmarks
+		// In local dev: config is in config/config.yaml, so project root is one level up
+		// In container: config is at /app/config.yaml, and bench is at /app/bench
+		projectRoot := filepath.Dir(cfg.ConfigDir)
+		// Check if bench directory exists in ConfigDir (container case)
+		if _, err := os.Stat(filepath.Join(cfg.ConfigDir, "bench")); err == nil {
+			projectRoot = cfg.ConfigDir
+		}
+		log.Printf("Evaluation project root: %s", projectRoot)
+
+		// Initialize evaluation database
+		evalDB, err := evaluation.NewDB(cfg.EvaluationDBPath)
+		if err != nil {
+			log.Printf("Warning: failed to initialize evaluation database: %v (other evaluation endpoints disabled)", err)
+		} else {
+			// Initialize evaluation runner
+			runner := evaluation.NewRunner(evaluation.RunnerConfig{
+				DB:            evalDB,
+				ProjectRoot:   projectRoot,
+				PythonPath:    cfg.PythonPath,
+				ResultsDir:    cfg.EvaluationResultsDir,
+				MaxConcurrent: 10,
+			})
+
+			// Create evaluation handler
+			evalHandler := handlers.NewEvaluationHandler(evalDB, runner, cfg.ReadonlyMode, cfg.RouterAPIURL, cfg.EnvoyURL)
+
+			// Register evaluation endpoints that require the database
+			// /api/evaluation/tasks - GET for list, POST for create
+			mux.HandleFunc("/api/evaluation/tasks", func(w http.ResponseWriter, r *http.Request) {
+				if middleware.HandleCORSPreflight(w, r) {
+					return
+				}
+				switch r.Method {
+				case http.MethodGet:
+					evalHandler.ListTasksHandler().ServeHTTP(w, r)
+				case http.MethodPost:
+					evalHandler.CreateTaskHandler().ServeHTTP(w, r)
+				default:
+					http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				}
+			})
+			// /api/evaluation/tasks/{id} - GET for details, DELETE for remove
+			mux.HandleFunc("/api/evaluation/tasks/", func(w http.ResponseWriter, r *http.Request) {
+				if middleware.HandleCORSPreflight(w, r) {
+					return
+				}
+				switch r.Method {
+				case http.MethodGet:
+					evalHandler.GetTaskHandler().ServeHTTP(w, r)
+				case http.MethodDelete:
+					evalHandler.DeleteTaskHandler().ServeHTTP(w, r)
+				default:
+					http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				}
+			})
+			mux.HandleFunc("/api/evaluation/run", evalHandler.RunTaskHandler())
+			mux.HandleFunc("/api/evaluation/cancel/", evalHandler.CancelTaskHandler())
+			mux.HandleFunc("/api/evaluation/stream/", evalHandler.StreamProgressHandler())
+			mux.HandleFunc("/api/evaluation/results/", evalHandler.GetResultsHandler())
+			mux.HandleFunc("/api/evaluation/export/", evalHandler.ExportResultsHandler())
+			mux.HandleFunc("/api/evaluation/history", evalHandler.GetHistoryHandler())
+			log.Printf("Evaluation API endpoints registered: /api/evaluation/*")
+		}
+	} else {
+		log.Printf("Evaluation feature disabled")
+	}
+
+	// MCP endpoints (if enabled)
+	SetupMCP(mux, cfg)
+
+	// ML Pipeline endpoints (if enabled)
+	if cfg.MLPipelineEnabled {
+		// Resolve training dir - try common locations
+		trainingDir := cfg.MLTrainingDir
+		if trainingDir == "" {
+			// Try relative to project root
+			projectRoot := filepath.Dir(cfg.ConfigDir)
+			candidate := filepath.Join(projectRoot, "src", "training", "ml_model_selection")
+			if _, err := os.Stat(candidate); err == nil {
+				trainingDir = candidate
+			}
+		}
+
+		mlRunner := mlpipeline.NewRunner(mlpipeline.RunnerConfig{
+			DataDir:      cfg.MLPipelineDataDir,
+			TrainingDir:  trainingDir,
+			PythonPath:   cfg.PythonPath,
+			MLServiceURL: cfg.MLServiceURL,
+		})
+
+		mlHandler := handlers.NewMLPipelineHandler(mlRunner)
+
+		// /api/ml-pipeline/jobs - GET list all jobs
+		mux.HandleFunc("/api/ml-pipeline/jobs", mlHandler.ListJobsHandler())
+		// /api/ml-pipeline/jobs/{id} - GET specific job
+		mux.HandleFunc("/api/ml-pipeline/jobs/", mlHandler.GetJobHandler())
+		// /api/ml-pipeline/benchmark - POST start benchmark
+		mux.HandleFunc("/api/ml-pipeline/benchmark", mlHandler.RunBenchmarkHandler())
+		// /api/ml-pipeline/train - POST start training
+		mux.HandleFunc("/api/ml-pipeline/train", mlHandler.RunTrainHandler())
+		// /api/ml-pipeline/config - POST generate config
+		mux.HandleFunc("/api/ml-pipeline/config", mlHandler.GenerateConfigHandler())
+		// /api/ml-pipeline/download/{jobID} - GET download output
+		mux.HandleFunc("/api/ml-pipeline/download/", mlHandler.DownloadOutputHandler())
+		// /api/ml-pipeline/stream/{jobID} - SSE progress
+		mux.HandleFunc("/api/ml-pipeline/stream/", mlHandler.StreamProgressHandler())
+		log.Printf("ML Pipeline API endpoints registered: /api/ml-pipeline/*")
+		if trainingDir != "" {
+			log.Printf("ML Training scripts directory: %s", trainingDir)
+		} else {
+			log.Printf("Warning: ML training scripts directory not configured (set ML_TRAINING_DIR)")
+		}
+	} else {
+		log.Printf("ML Pipeline feature disabled")
+	}
 
 	// Envoy proxy for chat completions (if configured)
 	// Chat completions must go through Envoy's ext_proc pipeline
@@ -234,6 +375,17 @@ func Setup(cfg *config.Config) *http.ServeMux {
 				// Strip /api/router prefix and forward to Envoy
 				r.URL.Path = strings.TrimPrefix(r.URL.Path, "/api/router")
 				log.Printf("Proxying chat completions to Envoy: %s %s", r.Method, r.URL.Path)
+				if middleware.HandleCORSPreflight(w, r) {
+					return
+				}
+				envoyProxy.ServeHTTP(w, r)
+				return
+			}
+			// Route router_replay to Envoy proxy
+			if envoyProxy != nil && strings.HasPrefix(r.URL.Path, "/api/router/v1/router_replay") {
+				// Strip /api/router prefix and forward to Envoy
+				r.URL.Path = strings.TrimPrefix(r.URL.Path, "/api/router")
+				log.Printf("Proxying router_replay to Envoy: %s %s", r.Method, r.URL.Path)
 				if middleware.HandleCORSPreflight(w, r) {
 					return
 				}
@@ -405,9 +557,9 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		log.Printf("Warning: Prometheus URL not configured")
 	}
 
-	// Jaeger proxy (optional)
+	// Jaeger proxy (optional) - use NewJaegerProxy for dark theme injection
 	if cfg.JaegerURL != "" {
-		jp, err := proxy.NewReverseProxy(cfg.JaegerURL, "/embedded/jaeger", false)
+		jp, err := proxy.NewJaegerProxy(cfg.JaegerURL, "/embedded/jaeger")
 		if err != nil {
 			log.Fatalf("jaeger proxy error: %v", err)
 		}

@@ -10,6 +10,10 @@ import TopologyPage from './pages/TopologyPage'
 import TracingPage from './pages/TracingPage'
 import StatusPage from './pages/StatusPage'
 import LogsPage from './pages/LogsPage'
+import ReplayPage from './pages/ReplayPage'
+import EvaluationPage from './pages/EvaluationPage'
+import MLSetupPage from './pages/MLSetupPage'
+import RatingsPage from './pages/RatingsPage'
 import { ConfigSection } from './components/ConfigNav'
 import { ReadonlyProvider } from './contexts/ReadonlyContext'
 
@@ -110,6 +114,7 @@ const App: React.FC = () => {
               <Layout
                 configSection={configSection}
                 onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                hideHeaderOnMobile={true}
               >
                 <PlaygroundPage />
               </Layout>
@@ -160,6 +165,50 @@ const App: React.FC = () => {
                 onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
               >
                 <LogsPage />
+              </Layout>
+            }
+          />
+          <Route
+            path="/replay"
+            element={
+              <Layout
+                configSection={configSection}
+                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+              >
+                <ReplayPage />
+              </Layout>
+            }
+          />
+          <Route
+            path="/evaluation"
+            element={
+              <Layout
+                configSection={configSection}
+                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+              >
+                <EvaluationPage />
+              </Layout>
+            }
+          />
+          <Route
+            path="/ml-setup"
+            element={
+              <Layout
+                configSection={configSection}
+                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+              >
+                <MLSetupPage />
+              </Layout>
+            }
+          />
+          <Route
+            path="/ratings"
+            element={
+              <Layout
+                configSection={configSection}
+                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+              >
+                <RatingsPage />
               </Layout>
             }
           />

@@ -1,3 +1,12 @@
+---
+translation:
+  source_commit: "7e2f073"
+  source_file: "docs/installation/k8s/istio.md"
+  outdated: false
+is_mtpe: true
+sidebar_position: 1
+---
+
 # 使用 Istio Gateway 安装
 
 本指南提供了在 Kubernetes 上使用 Istio Gateway 部署 vLLM Semantic Router (vsr) 的分步说明。Istio Gateway 底层使用 Envoy，因此可以与 vsr 配合使用。但是，不同的基于 Envoy 的 Gateway 处理 ExtProc 协议的方式有所不同，因此这里描述的部署与其他基于 Envoy 的 Gateway 部署有所不同。将 Istio Gateway 与 vsr 结合有多种架构选项。本文档描述其中一种选项。
@@ -19,6 +28,7 @@
 - [minikube](https://minikube.sigs.k8s.io/docs/start/) - 本地 Kubernetes
 - [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) - Kubernetes in Docker
 - [kubectl](https://kubernetes.io/docs/tasks/tools/) - Kubernetes CLI
+- [Helm](https://helm.sh/docs/intro/install/) - Kubernetes 包管理器
 
 minikube 或 kind 都可以用于部署本练习所需的本地 kubernetes 集群，因此您只需要其中一个。我们在下面的描述中使用 minikube，但相同的步骤在创建集群后也适用于 Kind 集群。
 
@@ -51,14 +61,14 @@ kubectl create secret generic hf-token-secret --from-literal=token=$HF_TOKEN
 
 ```bash
 # 创建运行 llama3-8b 的 vLLM 服务
-kubectl apply -f deploy/kubernetes/istio/vLlama3.yaml
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/vLlama3.yaml
 ```
 
 第一次运行时可能需要几分钟（10+）来下载模型，直到运行此模型的 vLLM pod 处于 READY 状态。同样地部署第二个 LLM (phi4-mini) 并等待几分钟直到 pod 处于 READY 状态。
 
 ```bash
 # 创建运行 phi4-mini 的 vLLM 服务
-kubectl apply -f deploy/kubernetes/istio/vPhi4.yaml
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/vPhi4.yaml
 ```
 
 完成后，您应该能够使用以下命令看到两个 vLLM pod 都处于 READY 状态并正在服务这些 LLM。您还应该看到 Kubernetes 服务暴露了这些模型服务的 IP/端口。在下面的示例中，llama3-8b 模型通过服务 IP 为 10.108.250.109 和端口 80 的 kubernetes 服务提供服务。
@@ -102,13 +112,20 @@ kubectl get pods | grep istio
 kubectl get pods -n istio-system
 ```
 
-## 步骤 4：更新 vsr 配置
+## 步骤 4：更新 vsr 配置（可选）
 
-文件 deploy/kubernetes/istio/config.yaml 将在下一步安装 vsr 时用于配置它。确保配置文件中的模型与您使用的模型匹配，并且文件中的 vllm_endpoints 与您正在运行的 llm kubernetes 服务的 ip/端口匹配。通常最好从 vsr 的基本功能开始，如提示词分类和模型路由，然后再尝试其他功能如 PromptGuard 或 ToolCalling。
+semantic router 配置通过 Helm values 文件提供。如果您需要自定义配置（例如匹配不同的模型名称或端点），请下载 values 文件并进行修改：
+
+```bash
+# 下载 values 文件以进行自定义
+curl -O https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/semantic-router-values/values.yaml
+```
+
+确保配置文件中的模型与您使用的模型匹配。通常最好从 vsr 的基本功能开始，如提示词分类和模型路由，然后再尝试其他功能如 PromptGuard 或 ToolCalling。
 
 ## 步骤 5：部署 vLLM Semantic Router
 
-部署包含所有必需组件的 Semantic Router 服务：
+使用 Helm 部署包含所有必需组件的 Semantic Router 服务：
 
 ```bash
 # 使用 Kustomize 部署 Semantic Router 

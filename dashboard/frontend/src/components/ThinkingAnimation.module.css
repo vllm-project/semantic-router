@@ -4,7 +4,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(255, 255, 255, 0.95);
+  background-color: rgba(0, 0, 0, 0.95);
   backdrop-filter: blur(40px) saturate(180%);
   -webkit-backdrop-filter: blur(40px) saturate(180%);
   z-index: 10001;
@@ -28,6 +28,9 @@
   flex-direction: column;
   align-items: center;
   gap: 2rem;
+  padding: 1rem;
+  width: 100%;
+  max-width: 100%;
 }
 
 .grid {
@@ -35,6 +38,7 @@
   grid-template-columns: repeat(20, 1fr);
   gap: 0.5rem;
   max-width: 800px;
+  width: 100%;
   padding: 2rem;
 }
 
@@ -42,7 +46,7 @@
   font-family: 'SF Mono', 'Monaco', 'Menlo', 'Courier New', monospace;
   font-size: 1.125rem;
   font-weight: 400;
-  color: #1d1d1f;
+  color: #f5f5f7;
   text-align: center;
   animation: flicker 0.1s infinite;
   user-select: none;
@@ -62,7 +66,7 @@
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', 'Roboto', sans-serif;
   font-size: 1rem;
   font-weight: 400;
-  color: #1d1d1f;
+  color: #f5f5f7;
   letter-spacing: -0.01em;
   animation: pulse 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
@@ -89,3 +93,125 @@
   color: #f5f5f7;
 }
 
+/* Thinking process display */
+.thinkingContent {
+  max-width: 800px;
+  width: 100%;
+  max-height: 400px;
+  overflow-y: auto;
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.thinkingLabel {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', 'Roboto', sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #f5f5f7;
+  margin-bottom: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.thinkingText {
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: #f5f5f7;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
+  opacity: 0.8;
+}
+
+/* Dark mode for thinking content */
+:global([data-theme='dark']) .thinkingContent {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+:global([data-theme='dark']) .thinkingLabel {
+  color: #f5f5f7;
+}
+
+:global([data-theme='dark']) .thinkingText {
+  color: #f5f5f7;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .container {
+    gap: 1.5rem;
+    padding: 0.75rem;
+  }
+
+  .grid {
+    grid-template-columns: repeat(15, 1fr);
+    gap: 0.375rem;
+    padding: 1.5rem 1rem;
+    max-width: 100%;
+  }
+
+  .char {
+    font-size: 0.875rem;
+  }
+
+  .statusText {
+    font-size: 0.875rem;
+    text-align: center;
+    padding: 0 1rem;
+  }
+
+  .thinkingContent {
+    max-width: 100%;
+    max-height: 300px;
+    padding: 1rem;
+    margin-top: 1rem;
+  }
+
+  .thinkingLabel {
+    font-size: 0.75rem;
+  }
+
+  .thinkingText {
+    font-size: 0.75rem;
+    line-height: 1.5;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    gap: 1rem;
+    padding: 0.5rem;
+  }
+
+  .grid {
+    grid-template-columns: repeat(10, 1fr);
+    gap: 0.25rem;
+    padding: 1rem 0.5rem;
+  }
+
+  .char {
+    font-size: 0.75rem;
+  }
+
+  .statusText {
+    font-size: 0.8125rem;
+  }
+
+  .thinkingContent {
+    max-height: 250px;
+    padding: 0.875rem;
+  }
+
+  .thinkingLabel {
+    font-size: 0.6875rem;
+  }
+
+  .thinkingText {
+    font-size: 0.6875rem;
+  }
+}

@@ -3,7 +3,12 @@
 import copy
 from typing import Dict, Any, List
 
-from cli.models import UserConfig, Domain
+from cli.models import (
+    UserConfig,
+    PluginType,
+    AlgorithmConfig,
+    LatencyAwareAlgorithmConfig,
+)
 from cli.defaults import load_embedded_defaults
 from cli.utils import getLogger
 
@@ -136,6 +141,60 @@ def translate_language_signals(languages: list) -> list:
         }
         if signal.description:
             rule["description"] = signal.description
+        rules.append(rule)
+    return rules
+
+
+def translate_context_signals(context_rules: list) -> list:
+    """
+    Translate context signals to router format.
+
+    Args:
+        context_rules: List of ContextRule objects
+
+    Returns:
+        list: Router context rules
+    """
+    rules = []
+    for signal in context_rules:
+        rule = {
+            "name": signal.name,
+            "min_tokens": signal.min_tokens,
+            "max_tokens": signal.max_tokens,
+        }
+        if signal.description:
+            rule["description"] = signal.description
+        rules.append(rule)
+    return rules
+
+
+def translate_complexity_signals(complexity_rules: list) -> list:
+    """
+    Translate complexity signals to router format.
+
+    Args:
+        complexity_rules: List of ComplexityRule objects
+
+    Returns:
+        list: Router complexity rules
+    """
+    rules = []
+    for signal in complexity_rules:
+        rule = {
+            "name": signal.name,
+            "threshold": signal.threshold,
+            "hard": {"candidates": signal.hard.candidates},
+            "easy": {"candidates": signal.easy.candidates},
+        }
+        if signal.description:
+            rule["description"] = signal.description
+        if signal.composer:
+            rule["composer"] = {
+                "operator": signal.composer.operator,
+                "conditions": [
+                    {"type": c.type, "name": c.name} for c in signal.composer.conditions
+                ],
+            }
         rules.append(rule)
     return rules
 
@@ -312,12 +371,18 @@ def translate_providers_to_router_format(providers) -> Dict[str, Any]:
                     "parameter": family_config.parameter,
                 }
 
+    # Translate external_models if present
+    external_models = []
+    if providers.external_models:
+        external_models = translate_external_models(providers.external_models)
+
     return {
         "vllm_endpoints": vllm_endpoints,
         "model_config": model_config,
         "default_model": providers.default_model,
         "reasoning_families": reasoning_families_dict,
         "default_reasoning_effort": providers.default_reasoning_effort,
+        "external_models": external_models,
     }
 
 
@@ -384,6 +449,20 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
             )
             log.info(f"  Added {len(user_config.signals.language)} language signals")
 
+        if user_config.signals.context and len(user_config.signals.context) > 0:
+            merged["context_rules"] = translate_context_signals(
+                user_config.signals.context
+            )
+            log.info(f"  Added {len(user_config.signals.context)} context signals")
+
+        if user_config.signals.complexity and len(user_config.signals.complexity) > 0:
+            merged["complexity_rules"] = translate_complexity_signals(
+                user_config.signals.complexity
+            )
+            log.info(
+                f"  Added {len(user_config.signals.complexity)} complexity signals"
+            )
+
         # Translate domains to categories
         if user_config.signals.domains:
             merged["categories"] = translate_domains_to_categories(
@@ -406,7 +485,21 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
         )
 
     # Add decisions (convert to dict)
-    merged["decisions"] = [decision.model_dump() for decision in user_config.decisions]
+    # Use mode='python' to ensure proper enum handling
+    decisions_list = []
+    for decision in user_config.decisions:
+        decision_dict = decision.model_dump(mode="python")
+        # Post-process plugins to ensure PluginType enums are converted to strings
+        if "plugins" in decision_dict and decision_dict["plugins"]:
+            for plugin in decision_dict["plugins"]:
+                if "type" in plugin:
+                    # Convert PluginType enum to string value
+                    if isinstance(plugin["type"], PluginType):
+                        plugin["type"] = plugin["type"].value
+                    elif hasattr(plugin["type"], "value"):
+                        plugin["type"] = plugin["type"].value
+        decisions_list.append(decision_dict)
+    merged["decisions"] = decisions_list
     log.info(f"  Added {len(user_config.decisions)} decisions")
 
     # Translate providers
@@ -414,6 +507,21 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
     merged.update(provider_config)
     log.info(f"  Added {len(user_config.providers.models)} models")
     log.info(f"  Added {len(provider_config['vllm_endpoints'])} endpoints")
+    if provider_config.get("external_models"):
+        log.info(f"  Added {len(provider_config['external_models'])} external_models")
+
+    # Pass through memory configuration if provided
+    if user_config.memory:
+        memory_config = user_config.memory.model_dump(exclude_none=True)
+        merged["memory"] = memory_config
+        log.info(f"  Added memory configuration (enabled={user_config.memory.enabled})")
+
+    # Pass through embedding_models configuration if provided
+    # BERT is recommended for memory retrieval (forgiving semantic matching)
+    if user_config.embedding_models:
+        embedding_config = user_config.embedding_models.model_dump(exclude_none=True)
+        merged["embedding_models"] = embedding_config
+        log.info(f"  Added embedding_models configuration")
 
     log.info("✓ Configuration merged successfully")
 

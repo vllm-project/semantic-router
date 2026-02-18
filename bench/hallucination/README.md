@@ -96,6 +96,34 @@ hallucination_mitigation:
   on_hallucination_detected: "warn"  # or "block"
 ```
 
+### Multi-Level Filtering Parameters
+
+The following multi-stage filtering parameters help to reduce false positives while maintaining high detection accuracy:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `min_span_length` | int | 1 | **Length-based filtering**: Minimum number of tokens in a detected span to report. Filters out single-token spans which are often false positives (e.g., common words, articles). Higher values = fewer false positives but may miss short hallucinations. |
+| `min_span_confidence` | float | 0.0 | **Confidence-based filtering**: Minimum confidence score (0.0-1.0) required for a span to be reported. Spans below this threshold are discarded. Higher values = higher precision but lower recall. |
+| `context_window_size` | int | 50 | **Context extraction**: Number of characters of surrounding context to include when reporting flagged spans. Used for debugging and understanding why a span was flagged. Does not affect detection. |
+| `enable_nli_filtering` | bool | true | **NLI-based false positive reduction**: Enable Natural Language Inference filtering to reduce false positives. When enabled, detected spans are checked for entailment with the context. Highly entailed spans (paraphrases, inferences) are filtered out. |
+| `nli_entailment_threshold` | float | 0.75 | **NLI filtering threshold**: Entailment score above which spans are considered false positives and filtered out. Higher values = stricter filtering (fewer spans removed). Only used when `enable_nli_filtering=true`. Range: 0.0 (filter nothing) to 1.0 (filter only perfect entailment). |
+
+**Example: Conservative vs Sensitive Configuration**
+
+```yaml
+# Conservative: High precision, fewer false positives
+min_span_length: 3
+min_span_confidence: 0.7
+enable_nli_filtering: true
+nli_entailment_threshold: 0.7
+
+# Sensitive: High recall, catch more hallucinations
+min_span_length: 1
+min_span_confidence: 0.4
+enable_nli_filtering: true
+nli_entailment_threshold: 0.65
+```
+
 ## Datasets
 
 | Dataset | Command |

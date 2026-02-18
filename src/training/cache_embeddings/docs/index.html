@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Domain Cache LoRA - Training Results & Methodology</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1e40af;
+            --secondary: #10b981;
+            --accent: #f59e0b;
+            --bg: #0f172a;
+            --bg-light: #1e293b;
+            --text: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border: #334155;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --medical: #ec4899;
+            --law: #8b5cf6;
+            --programming: #06b6d4;
+            --psychology: #f97316;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            line-height: 1.6;
+            color: var(--text);
+            background: var(--bg);
+            overflow-x: hidden;
+        }
+
+        /* Navigation */
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            z-index: 1000;
+            padding: 1rem 0;
+        }
+
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: color 0.3s;
+            font-weight: 500;
+        }
+
+        .nav-links a:hover {
+            color: var(--primary);
+        }
+
+        /* Hero Section */
+        .hero {
+            margin-top: 80px;
+            padding: 4rem 2rem;
+            text-align: center;
+            background: linear-gradient(135deg, var(--bg) 0%, var(--bg-light) 100%);
+            border-bottom: 2px solid var(--primary);
+        }
+
+        .hero h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-subtitle {
+            font-size: 1.25rem;
+            color: var(--text-muted);
+            max-width: 800px;
+            margin: 0 auto 2rem;
+        }
+
+        .hero-stats {
+            display: flex;
+            justify-content: center;
+            gap: 3rem;
+            margin-top: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--secondary);
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 0.5rem;
+        }
+
+        /* Container */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 3rem 2rem;
+        }
+
+        /* Section */
+        .section {
+            margin-bottom: 4rem;
+        }
+
+        .section-title {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: var(--primary);
+            border-bottom: 3px solid var(--primary);
+            padding-bottom: 0.5rem;
+            display: inline-block;
+        }
+
+        .section-description {
+            color: var(--text-muted);
+            margin-bottom: 2rem;
+            font-size: 1.1rem;
+        }
+
+        /* Cards */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: var(--bg-light);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: all 0.3s;
+        }
+
+        .card:hover {
+            border-color: var(--primary);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(37, 99, 235, 0.2);
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            color: var(--primary);
+        }
+
+        .card-content {
+            color: var(--text-muted);
+            line-height: 1.7;
+        }
+
+        /* Domain Results Table */
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--bg-light);
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 2rem 0;
+        }
+
+        .results-table th,
+        .results-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .results-table th {
+            background: var(--primary);
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        .results-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .domain-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.875rem;
+        }
+
+        .domain-medical { background: var(--medical); color: white; }
+        .domain-law { background: var(--law); color: white; }
+        .domain-programming { background: var(--programming); color: white; }
+        .domain-psychology { background: var(--psychology); color: white; }
+
+        .improvement-positive {
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        .improvement-negative {
+            color: var(--error);
+            font-weight: 600;
+        }
+
+        /* Code Block */
+        pre {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+
+        code {
+            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+            font-size: 0.9rem;
+            color: var(--secondary);
+        }
+
+        /* Links */
+        a {
+            color: var(--primary);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        a:hover {
+            color: var(--secondary);
+        }
+
+        /* Highlight Box */
+        .highlight {
+            background: var(--bg-light);
+            border-left: 4px solid var(--primary);
+            padding: 1.5rem;
+            margin: 2rem 0;
+            border-radius: 8px;
+        }
+
+        .highlight-title {
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+        }
+
+        /* Footer */
+        footer {
+            background: var(--bg-light);
+            border-top: 1px solid var(--border);
+            padding: 2rem;
+            text-align: center;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-container">
+            <div class="nav-title">Multi-Domain Cache LoRA</div>
+            <ul class="nav-links">
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#results">Results</a></li>
+                <li><a href="#architecture">Architecture</a></li>
+                <li><a href="#usage">Usage</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="hero">
+        <h1>Multi-Domain Cache LoRA</h1>
+        <p class="hero-subtitle">
+            Single LoRA adapter for improved semantic cache accuracy across medical, law, programming, and psychology domains
+        </p>
+        <div class="hero-stats">
+            <div class="stat">
+                <div class="stat-value">+21.5%</div>
+                <div class="stat-label">Avg Improvement</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">4</div>
+                <div class="stat-label">Domains</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">596 KB</div>
+                <div class="stat-label">Adapter Size</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">90.6 MB</div>
+                <div class="stat-label">Total Memory</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <section id="overview" class="section">
+            <h2 class="section-title">Overview</h2>
+            <p class="section-description">
+                Multi-domain LoRA is a single 596KB adapter trained on semantic cache triplets from medical, law, programming,
+                and psychology domains. It improves cache accuracy by helping the base embedding model better distinguish
+                between semantically similar but different queries.
+            </p>
+
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-title">🎯 Purpose</div>
+                    <div class="card-content">
+                        Enhance semantic cache hit/miss decisions by improving the separation between true duplicates
+                        and related-but-different queries across multiple specialized domains.
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">⚡ Performance</div>
+                    <div class="card-content">
+                        Achieves 11-27% margin improvement across all tested domains with a single small adapter,
+                        no domain detection required.
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">💾 Efficiency</div>
+                    <div class="card-content">
+                        Only 596KB adapter size, 0.44% trainable parameters. Total memory: 90.6MB (base 90MB + adapter 0.6MB).
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="results" class="section">
+            <h2 class="section-title">Performance Results</h2>
+            <p class="section-description">
+                Comparison of baseline (no LoRA), domain-specific LoRAs, and multi-domain LoRA across test sets.
+            </p>
+
+            <table class="results-table">
+                <thead>
+                    <tr>
+                        <th>Domain</th>
+                        <th>Test Triplets</th>
+                        <th>Baseline Margin</th>
+                        <th>Domain-Specific</th>
+                        <th>Multi-Domain</th>
+                        <th>Winner</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="domain-badge domain-medical">Medical</span></td>
+                        <td>200</td>
+                        <td>0.4416</td>
+                        <td class="improvement-positive">0.6305 (+42.8%)</td>
+                        <td>0.5517 (+24.9%)</td>
+                        <td>Domain-Specific</td>
+                    </tr>
+                    <tr>
+                        <td><span class="domain-badge domain-law">Law</span></td>
+                        <td>20,862</td>
+                        <td>0.4940</td>
+                        <td>0.6219 (+25.9%)</td>
+                        <td class="improvement-positive">0.6290 (+27.3%)</td>
+                        <td>Multi-Domain ✓</td>
+                    </tr>
+                    <tr>
+                        <td><span class="domain-badge domain-programming">Programming</span></td>
+                        <td>20,862</td>
+                        <td>0.2358</td>
+                        <td class="improvement-negative">0.2367 (+0.4%)</td>
+                        <td class="improvement-positive">0.2651 (+12.4%)</td>
+                        <td>Multi-Domain ✓</td>
+                    </tr>
+                    <tr>
+                        <td><span class="domain-badge domain-psychology">Psychology</span></td>
+                        <td>N/A</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>No test set</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="highlight">
+                <div class="highlight-title">📊 Key Finding</div>
+                <p>
+                    The multi-domain LoRA achieves <strong>≥10% improvement on all tested domains</strong> with a single adapter.
+                    While domain-specific LoRAs excel in medical (+42.8%), the multi-domain approach wins for law and programming,
+                    making it the <strong>recommended choice for production</strong> due to simplicity and consistency.
+                </p>
+            </div>
+        </section>
+
+        <section id="architecture" class="section">
+            <h2 class="section-title">Architecture</h2>
+
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-title">Base Model</div>
+                    <div class="card-content">
+                        <strong>sentence-transformers/all-MiniLM-L12-v2</strong><br>
+                        • 12-layer transformer<br>
+                        • 384-dimensional embeddings<br>
+                        • 90MB model size<br>
+                        • Fast CPU inference
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">LoRA Configuration</div>
+                    <div class="card-content">
+                        <strong>Low-Rank Adaptation</strong><br>
+                        • Rank: 8<br>
+                        • Alpha: 16<br>
+                        • Target: query, value projections<br>
+                        • 0.44% trainable params
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Training</div>
+                    <div class="card-content">
+                        <strong>Triplet Loss</strong><br>
+                        • 1 epoch training<br>
+                        • Combined multi-domain data<br>
+                        • ~40 min on 4x A10G GPUs<br>
+                        • Final loss: 0.0955
+                    </div>
+                </div>
+            </div>
+
+            <h3 style="color: var(--primary); margin: 2rem 0 1rem;">Training Data Generation</h3>
+            <p class="section-description">
+                Triplets are synthetically generated using <strong>Qwen/Qwen2.5-7B-Instruct</strong> to create:
+            </p>
+            <ul style="color: var(--text-muted); margin-left: 2rem; line-height: 2;">
+                <li><strong>Anchor:</strong> Original query</li>
+                <li><strong>Positive:</strong> Semantically equivalent query (paraphrase - should cache)</li>
+                <li><strong>Negative:</strong> Related but different query (hard negative - should NOT cache)</li>
+            </ul>
+            <p class="section-description" style="margin-top: 1rem;">
+                The 7B model provides high-quality paraphrases and challenging hard negatives that are semantically
+                related but distinct enough to require separate LLM responses.
+            </p>
+        </section>
+
+        <section id="usage" class="section">
+            <h2 class="section-title">Usage</h2>
+
+            <h3 style="color: var(--primary); margin: 2rem 0 1rem;">Download from HuggingFace</h3>
+            <pre><code>from sentence_transformers import SentenceTransformer
+from peft import PeftModel
+
+# Load base model
+base_model = SentenceTransformer("sentence-transformers/all-MiniLM-L12-v2")
+
+# Apply multi-domain LoRA
+base_model[0].auto_model = PeftModel.from_pretrained(
+    base_model[0].auto_model,
+    "llm-semantic-router/multi-domain-cache-lora-L12"
+)
+
+# Use for embeddings
+embedding = base_model.encode("What are the symptoms of diabetes?")</code></pre>
+
+            <h3 style="color: var(--primary); margin: 2rem 0 1rem;">Resources</h3>
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-title">🤗 Models</div>
+                    <div class="card-content">
+                        <a href="https://huggingface.co/llm-semantic-router/multi-domain-cache-lora-L12" target="_blank">Multi-Domain LoRA</a><br>
+                        <a href="https://huggingface.co/llm-semantic-router/medical-cache-lora" target="_blank">Medical LoRA</a><br>
+                        <a href="https://huggingface.co/llm-semantic-router/law-cache-lora" target="_blank">Law LoRA</a><br>
+                        <a href="https://huggingface.co/llm-semantic-router/programming-cache-lora" target="_blank">Programming LoRA</a>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">📊 Test Datasets</div>
+                    <div class="card-content">
+                        <a href="https://huggingface.co/datasets/llm-semantic-router/cache-embedding-test-sets" target="_blank">
+                            Test Sets Repository
+                        </a><br>
+                        • Medical: 200 triplets<br>
+                        • Law: 20,862 triplets<br>
+                        • Programming: 20,862 triplets
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">📚 Documentation</div>
+                    <div class="card-content">
+                        <a href="https://github.com/vllm-project/semantic-router/tree/main/src/training/cache_embeddings" target="_blank">
+                            Training Scripts
+                        </a><br>
+                        <a href="https://github.com/vllm-project/semantic-router/blob/main/src/training/cache_embeddings/README.md" target="_blank">
+                            README
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="highlight" style="margin-top: 2rem;">
+                <div class="highlight-title">💡 Production Recommendation</div>
+                <p>
+                    Use the <strong>multi-domain LoRA</strong> for production deployments. It provides consistent performance
+                    across all domains with a single 596KB adapter, requires no domain detection logic, and is easier to maintain
+                    than managing multiple domain-specific adapters.
+                </p>
+            </div>
+        </section>
+    </div>
+
+    <footer>
+        <p>Multi-Domain Cache LoRA Training Results</p>
+        <p style="margin-top: 0.5rem;">
+            <a href="https://github.com/vllm-project/semantic-router" target="_blank">GitHub Repository</a> |
+            <a href="https://huggingface.co/llm-semantic-router" target="_blank">HuggingFace Organization</a>
+        </p>
+    </footer>
+</body>
+</html>

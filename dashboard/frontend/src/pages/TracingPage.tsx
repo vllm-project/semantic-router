@@ -16,15 +16,13 @@ const JAEGER_SERVICE: ServiceConfig = {
 }
 
 const TracingPage: React.FC = () => {
-  const [theme, setTheme] = useState(
-    document.documentElement.getAttribute('data-theme') || 'dark'
-  )
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [serviceAvailable, setServiceAvailable] = useState<boolean | null>(
     null
   )
   const iframeRef = useRef<HTMLIFrameElement>(null)
+  const [themeSet, setThemeSet] = useState(false)
 
   // Check if Jaeger service is available
   const checkServiceAvailability = useCallback(async () => {
@@ -50,39 +48,73 @@ const TracingPage: React.FC = () => {
     checkServiceAvailability()
   }, [checkServiceAvailability])
 
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      const t = document.documentElement.getAttribute('data-theme') || 'dark'
-      if (t !== theme) {
-        setTheme(t)
-        if (serviceAvailable) {
-          setLoading(true)
-        }
-      }
-    })
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['data-theme'],
-    })
-    return () => observer.disconnect()
-  }, [theme, serviceAvailable])
+  // Theme monitoring removed since we only support dark mode
+  // If light mode support is added in the future, uncomment this code
 
   const buildJaegerUrl = () => {
-    // Default Jaeger landing page; could navigate to search with params later
-    return `/embedded/jaeger/search?lookback=1h&limit=20&service=vllm-semantic-router`
+    // Jaeger UI theme is controlled by localStorage, not URL parameters
+    // We can only set the service and lookback time via URL
+    // The theme will be inherited from the parent page's theme
+    // Note: Jaeger may show light theme initially if it hasn't loaded the theme preference yet
+    return `/embedded/jaeger/search?lookback=1h&limit=20&service=vllm-sr`
   }
 
   useEffect(() => {
-    // Slight delay to ensure iframe renders (only if service is available)
-    if (serviceAvailable) {
-      const timer = setTimeout(() => setLoading(false), 100)
+    // Set a timeout to hide loading overlay if iframe doesn't trigger onLoad
+    // This prevents the loading overlay from staying forever if iframe load event doesn't fire
+    if (serviceAvailable && loading) {
+      const timer = setTimeout(() => {
+        setLoading(false)
+      }, 5000) // 5 second timeout
       return () => clearTimeout(timer)
     }
-  }, [theme, serviceAvailable])
+  }, [serviceAvailable, loading])
 
   const handleIframeLoad = () => {
     setLoading(false)
     setError(null)
+
+    // Force Jaeger UI to use LIGHT theme for consistent display
+    // This avoids theme conflicts that cause "patchy" appearance (深一块浅一块)
+    // Since Jaeger is served from the same origin (via proxy), we can access its localStorage
+    try {
+      const iframe = iframeRef.current
+      if (iframe && iframe.contentWindow) {
+        // Wait a bit for Jaeger to initialize
+        setTimeout(() => {
+          try {
+            const iframeWindow = iframe.contentWindow
+            if (iframeWindow && iframeWindow.localStorage) {
+              // Check current theme
+              const currentTheme = iframeWindow.localStorage.getItem('jaeger-ui-theme') ||
+                                   iframeWindow.localStorage.getItem('theme')
+
+              // If not already light, set it to light and reload
+              if (currentTheme !== 'light' && !themeSet) {
+                iframeWindow.localStorage.setItem('jaeger-ui-theme', 'light')
+                iframeWindow.localStorage.setItem('theme', 'light')
+                setThemeSet(true)
+                // Reload iframe to apply the theme
+                iframeWindow.location.reload()
+                return
+              }
+
+              // Also set data-theme attribute for immediate effect
+              if (iframeWindow.document && iframeWindow.document.documentElement) {
+                iframeWindow.document.documentElement.setAttribute('data-theme', 'light')
+                iframeWindow.document.documentElement.setAttribute('data-bs-theme', 'light')
+                iframeWindow.document.documentElement.style.colorScheme = 'light'
+              }
+            }
+          } catch (e) {
+            // Cross-origin restrictions - this is expected if Jaeger is on a different domain
+            console.log('Note: Could not access Jaeger iframe (cross-origin):', e)
+          }
+        }, 100)
+      }
+    } catch (e) {
+      console.log('Note: Could not access iframe:', e)
+    }
   }
 
   const handleIframeError = () => {
@@ -127,7 +159,6 @@ const TracingPage: React.FC = () => {
         {serviceAvailable && (
           <iframe
             ref={iframeRef}
-            key={`jaeger-${theme}`}
             src={buildJaegerUrl()}
             className={styles.iframe}
             title="Jaeger Tracing"

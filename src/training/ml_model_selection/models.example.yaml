@@ -1,0 +1,81 @@
+# Example model configuration for benchmark.py
+#
+# This file defines multiple LLM models with different endpoints and authentication.
+# Copy this file to models.yaml and customize for your setup.
+#
+# Usage:
+#   python benchmark.py --queries queries.jsonl --model-config models.yaml
+#
+# Environment variables:
+#   Values like ${VAR_NAME} are replaced with the corresponding environment variable.
+#   Example: api_key: ${OPENAI_API_KEY} uses the OPENAI_API_KEY env var.
+
+models:
+  # =============================================================================
+  # LOCAL MODELS (no authentication needed)
+  # =============================================================================
+
+  # Local vLLM server (default port 8000)
+  - name: llama-3.2-1b
+    endpoint: http://localhost:8000/v1
+    max_tokens: 1024
+    temperature: 0.0
+
+  - name: llama-3.2-3b
+    endpoint: http://localhost:8000/v1
+    max_tokens: 1024
+    temperature: 0.0
+
+  # Local Ollama server (default port 11434)
+  - name: mistral
+    endpoint: http://localhost:11434/v1
+    max_tokens: 2048
+    temperature: 0.0
+
+  # =============================================================================
+  # CLOUD MODELS (require API keys)
+  # =============================================================================
+
+  # OpenAI GPT-4
+  - name: gpt-4
+    endpoint: https://api.openai.com/v1
+    api_key: ${OPENAI_API_KEY}
+    max_tokens: 4096
+    temperature: 0.0
+
+  # OpenAI GPT-3.5-turbo (faster, cheaper)
+  - name: gpt-3.5-turbo
+    endpoint: https://api.openai.com/v1
+    api_key: ${OPENAI_API_KEY}
+    max_tokens: 2048
+    temperature: 0.0
+
+  # Azure OpenAI (with custom endpoint)
+  - name: gpt-4-azure
+    endpoint: https://your-resource.openai.azure.com/openai/deployments/gpt-4
+    api_key: ${AZURE_OPENAI_KEY}
+    max_tokens: 4096
+    temperature: 0.0
+
+  # =============================================================================
+  # MODELS WITH CUSTOM HEADERS
+  # =============================================================================
+
+  # Custom API with Bearer token
+  - name: custom-llm
+    endpoint: https://api.custom-llm.com/v1
+    headers:
+      Authorization: Bearer ${CUSTOM_API_TOKEN}
+      X-Custom-Header: custom-value
+    max_tokens: 1024
+    temperature: 0.0
+
+  # Model with multiple custom headers
+  - name: enterprise-llm
+    endpoint: https://enterprise.example.com/api/v1
+    api_key: ${ENTERPRISE_API_KEY}
+    headers:
+      X-Organization-ID: ${ORG_ID}
+      X-Project-ID: ${PROJECT_ID}
+    max_tokens: 2048
+    temperature: 0.1

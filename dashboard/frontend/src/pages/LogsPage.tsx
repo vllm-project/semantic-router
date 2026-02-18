@@ -162,7 +162,7 @@ const LogsPage: React.FC = () => {
           </label>
 
           <button onClick={fetchLogs} className={styles.refreshButton}>
-            🔄 Refresh
+            Refresh
           </button>
         </div>
       </div>

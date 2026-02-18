@@ -31,6 +31,7 @@ type MilvusCache struct {
 	missCount           int64
 	lastCleanupTime     *time.Time
 	mu                  sync.RWMutex
+	embeddingModel      string // "bert", "qwen3", "gemma", or "mmbert"
 }
 
 // MilvusCacheOptions contains configuration parameters for Milvus cache initialization
@@ -40,6 +41,7 @@ type MilvusCacheOptions struct {
 	Enabled             bool
 	Config              *config.MilvusConfig
 	ConfigPath          string
+	EmbeddingModel      string
 }
 
 // NewMilvusCache initializes a new Milvus-backed semantic cache instance
@@ -85,6 +87,12 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 		return nil, fmt.Errorf("failed to create Milvus client: %w", err)
 	}
 
+	// Default to "bert" if no embedding model specified
+	embeddingModel := options.EmbeddingModel
+	if embeddingModel == "" {
+		embeddingModel = "bert"
+	}
+
 	cache := &MilvusCache{
 		client:              milvusClient,
 		config:              milvusConfig,
@@ -92,6 +100,7 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 		similarityThreshold: options.SimilarityThreshold,
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
+		embeddingModel:      embeddingModel,
 	}
 
 	// Test connection using the new CheckConnection method
@@ -244,12 +253,49 @@ func (c *MilvusCache) initializeCollection() error {
 	return nil
 }
 
+// getEmbedding generates an embedding based on the configured embedding model
+func (c *MilvusCache) getEmbedding(text string) ([]float32, error) {
+	modelName := c.embeddingModel
+	if modelName == "" {
+		modelName = "bert"
+	}
+
+	switch modelName {
+	case "qwen3":
+		// Use GetEmbeddingBatched for Qwen3 with batching support
+		output, err := candle_binding.GetEmbeddingBatched(text, modelName, 0)
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
+	case "gemma":
+		// Use GetEmbeddingWithModelType for Gemma
+		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, 0)
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
+	case "mmbert":
+		// Use GetEmbedding2DMatryoshka for mmBERT
+		output, err := candle_binding.GetEmbedding2DMatryoshka(text, modelName, 0, 0)
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
+	case "bert", "":
+		// Use traditional GetEmbedding for BERT (default)
+		return candle_binding.GetEmbedding(text, 0)
+	default:
+		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', 'gemma', or 'mmbert')", c.embeddingModel)
+	}
+}
+
 // createCollection builds the Milvus collection with the appropriate schema
 func (c *MilvusCache) createCollection() error {
 	ctx := context.Background()
 
 	// Determine embedding dimension automatically
-	testEmbedding, err := candle_binding.GetEmbedding("test", 0) // Auto-detect
+	testEmbedding, err := c.getEmbedding("test")
 	if err != nil {
 		return fmt.Errorf("failed to detect embedding dimension: %w", err)
 	}
@@ -543,7 +589,7 @@ func (c *MilvusCache) AddEntriesBatch(entries []CacheEntry) error {
 	// Generate embeddings and prepare data for all entries
 	for i, entry := range entries {
 		// Generate semantic embedding for the query
-		embedding, err := candle_binding.GetEmbedding(entry.Query, 0)
+		embedding, err := c.getEmbedding(entry.Query)
 		if err != nil {
 			return fmt.Errorf("failed to generate embedding for entry %d: %w", i, err)
 		}
@@ -621,7 +667,7 @@ func (c *MilvusCache) addEntry(id string, requestID string, model string, query 
 	}
 
 	// Generate semantic embedding for the query
-	embedding, err := candle_binding.GetEmbedding(query, 0) // Auto-detect dimension
+	embedding, err := c.getEmbedding(query)
 	if err != nil {
 		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
@@ -713,7 +759,7 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 		model, queryPreview, len(query), threshold)
 
 	// Generate semantic embedding for similarity comparison
-	queryEmbedding, err := candle_binding.GetEmbedding(query, 0) // Auto-detect dimension
+	queryEmbedding, err := c.getEmbedding(query)
 	if err != nil {
 		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
 		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)
@@ -748,7 +794,6 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 		logging.Debugf("MilvusCache.FindSimilarWithThreshold: search failed: %v", err)
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -756,7 +801,6 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 		atomic.AddInt64(&c.missCount, 1)
 		logging.Debugf("MilvusCache.FindSimilarWithThreshold: no entries found")
 		metrics.RecordCacheOperation("milvus", "find_similar", "miss", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -773,7 +817,6 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 			"collection":      c.collectionName,
 		})
 		metrics.RecordCacheOperation("milvus", "find_similar", "miss", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -801,7 +844,6 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 		logging.Debugf("MilvusCache.FindSimilarWithThreshold: cache hit but response_body is missing or not a string")
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -816,7 +858,6 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 		"collection": c.collectionName,
 	})
 	metrics.RecordCacheOperation("milvus", "find_similar", "hit", time.Since(start).Seconds())
-	metrics.RecordCacheHit()
 	return responseBody, true, nil
 }
 
@@ -1008,6 +1049,124 @@ func (c *MilvusCache) Close() error {
 		return c.client.Close()
 	}
 	return nil
+}
+
+// SearchDocuments performs vector search on a specified collection for RAG retrieval
+// This method is used by the RAG plugin to retrieve context from knowledge bases
+//
+// Parameters:
+//   - vectorFieldName: Name of the vector field in the collection (defaults to cache config)
+//   - metricType: Metric type for similarity search (defaults to cache config)
+//   - ef: HNSW search parameter ef (defaults to cache config)
+//
+// If these parameters are empty/zero, the method uses the cache collection's configuration.
+// This allows RAG collections to use different configurations when needed.
+func (c *MilvusCache) SearchDocuments(ctx context.Context, collectionName string, queryEmbedding []float32, threshold float32, topK int, filterExpr string, contentField string, vectorFieldName string, metricType string, ef int) ([]string, []float32, error) {
+	if !c.enabled {
+		return nil, nil, fmt.Errorf("milvus cache is not enabled")
+	}
+
+	if c.client == nil {
+		return nil, nil, fmt.Errorf("milvus client is not initialized")
+	}
+
+	// Use provided parameters or fall back to cache config defaults
+	actualVectorFieldName := vectorFieldName
+	if actualVectorFieldName == "" {
+		actualVectorFieldName = c.config.Collection.VectorField.Name
+	}
+
+	actualMetricType := metricType
+	if actualMetricType == "" {
+		actualMetricType = c.config.Collection.VectorField.MetricType
+	}
+
+	actualEf := ef
+	if actualEf == 0 {
+		actualEf = c.config.Search.Params.Ef
+	}
+
+	// Define search parameters
+	searchParam, err := entity.NewIndexHNSWSearchParam(actualEf)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create search parameters: %w", err)
+	}
+
+	// Build filter expression
+	// If no filter provided and contentField is specified, default to filtering for non-empty content
+	if filterExpr == "" && contentField != "" {
+		filterExpr = fmt.Sprintf("%s != \"\"", contentField)
+	}
+
+	// Use Milvus Search with collection-specific or default parameters
+	searchResult, err := c.client.Search(
+		ctx,
+		collectionName,
+		[]string{},
+		filterExpr,
+		[]string{contentField},
+		[]entity.Vector{entity.FloatVector(queryEmbedding)},
+		actualVectorFieldName,
+		entity.MetricType(actualMetricType),
+		topK,
+		searchParam,
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("milvus search failed: %w", err)
+	}
+
+	if len(searchResult) == 0 || searchResult[0].ResultCount == 0 {
+		return nil, nil, nil // No results, but not an error
+	}
+
+	// Extract results
+	var contents []string
+	var scores []float32
+
+	for i := 0; i < searchResult[0].ResultCount; i++ {
+		score := searchResult[0].Scores[i]
+		if score < threshold {
+			continue // Skip results below threshold
+		}
+
+		// Extract content from result
+		// Milvus may include the primary key field even when we only request one field,
+		// so we need to find the contentField by checking field types and values.
+		// We iterate through fields to find the VarChar column that matches our contentField.
+		var content string
+		found := false
+
+		for _, field := range searchResult[0].Fields {
+			if contentCol, ok := field.(*entity.ColumnVarChar); ok {
+				// Check if this column has enough entries and get the value
+				if contentCol.Len() > i {
+					fieldValue, err := contentCol.ValueByIdx(i)
+					if err == nil && fieldValue != "" {
+						// If we requested only one field, assume it's the content field
+						// Otherwise, we'd need to match by field name (not available in Milvus API)
+						// For now, since we only request contentField, the first VarChar field
+						// that's not a 32-char hex string (likely an ID) should be our content
+						if len(fieldValue) != 32 || !isHexString(fieldValue) {
+							content = fieldValue
+							found = true
+							break
+						}
+					}
+				}
+			}
+		}
+
+		if found && content != "" {
+			contents = append(contents, content)
+			scores = append(scores, score)
+		} else {
+			// Fallback: if we couldn't find content, log a warning but continue
+			// This shouldn't happen if the collection is properly configured
+			logging.Warnf("SearchDocuments: could not extract content for result %d (score=%.3f)", i, score)
+		}
+	}
+
+	return contents, scores, nil
 }
 
 // GetStats provides current cache performance metrics

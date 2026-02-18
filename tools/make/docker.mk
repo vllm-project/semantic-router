@@ -246,7 +246,6 @@ response-api-test: response-api-test-up
 	@sleep 10
 	@$(MAKE) response-api-test-run
 	@$(MAKE) response-api-test-down
-
 # Help target for Docker commands
 docker-help:
 docker-help: ## Show help for Docker-related make targets and environment variables
@@ -261,6 +260,12 @@ docker-help: ## Show help for Docker-related make targets and environment variab
 # vLLM-SR specific variables
 VLLM_SR_IMAGE ?= ghcr.io/vllm-project/semantic-router/vllm-sr:latest
 VLLM_SR_CONTAINER ?= vllm-sr-container
+# Default 1 so vllm-sr build works behind corporate proxies; set GIT_SSL_NO_VERIFY=0 for strict SSL verification.
+GIT_SSL_NO_VERIFY ?= 1
+VLLM_SR_BUILD_ARGS := --network=host --build-arg TARGETARCH=amd64 --build-arg BUILDPLATFORM=linux/amd64
+ifeq ($(GIT_SSL_NO_VERIFY),1)
+VLLM_SR_BUILD_ARGS += --build-arg GIT_SSL_NO_VERIFY=1
+endif
 
 vllm-sr-dev: ## Rebuild vLLM Semantic Router image and install CLI
 vllm-sr-dev:
@@ -281,7 +286,7 @@ vllm-sr-dev:
 	@echo "  Building from: $(PWD)"
 	@echo "  Image: $(VLLM_SR_IMAGE)"
 	@echo ""
-	@$(CONTAINER_RUNTIME) build -t $(VLLM_SR_IMAGE) -f src/vllm-sr/Dockerfile .
+	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_IMAGE) -f src/vllm-sr/Dockerfile .
 	@echo ""
 	@echo "✓ Image built: $(VLLM_SR_IMAGE)"
 	@echo ""
@@ -302,7 +307,7 @@ vllm-sr-build: ## Build vLLM Semantic Router Docker image
 vllm-sr-build:
 	@$(LOG_TARGET)
 	@echo "Building vLLM Semantic Router Docker image..."
-	@$(CONTAINER_RUNTIME) build -t $(VLLM_SR_IMAGE) -f src/vllm-sr/Dockerfile .
+	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_IMAGE) -f src/vllm-sr/Dockerfile .
 	@echo "✓ Image built: $(VLLM_SR_IMAGE)"
 
 vllm-sr-start: ## Start vLLM Semantic Router service
@@ -311,3 +316,16 @@ vllm-sr-start: vllm-sr-dev
 	@echo "Starting vLLM Semantic Router service..."
 	@vllm-sr serve --image-pull-policy=ifnotpresent --image $(VLLM_SR_IMAGE)
 	@vllm-sr dashboard
+
+##@ vLLM-SR Tests (e2e tests for vllm-sr CLI)
+# Tests are located in e2e/testing/vllm-sr-cli/
+
+vllm-sr-test: ## Run CLI unit tests (fast, no Docker image required)
+vllm-sr-test:
+	@$(LOG_TARGET)
+	@cd e2e/testing/vllm-sr-cli && python run_cli_tests.py --verbose
+
+vllm-sr-test-integration: ## Run CLI unit + integration tests (requires Docker image)
+vllm-sr-test-integration: vllm-sr-build
+	@$(LOG_TARGET)
+	@cd e2e/testing/vllm-sr-cli && RUN_INTEGRATION_TESTS=true python run_cli_tests.py --verbose --integration

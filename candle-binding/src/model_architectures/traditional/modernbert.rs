@@ -38,6 +38,10 @@ pub enum ModernBertVariant {
     /// ModernBERT-base-32k - Extended context ModernBERT (32,768 max length with RoPE)
     /// Reference: https://huggingface.co/llm-semantic-router/modernbert-base-32k
     Extended32K,
+    /// mmBERT-32K - YaRN-scaled Multilingual ModernBERT (32768 max length)
+    /// Extended from 8K to 32K using YaRN RoPE scaling (theta=160000)
+    /// Reference: https://huggingface.co/llm-semantic-router/mmbert-32k-yarn
+    Multilingual32K,
 }
 
 impl ModernBertVariant {
@@ -47,6 +51,7 @@ impl ModernBertVariant {
             ModernBertVariant::Standard => 512,
             ModernBertVariant::Multilingual => 8192,
             ModernBertVariant::Extended32K => 32768,
+            ModernBertVariant::Multilingual32K => 32768,
         }
     }
 
@@ -56,7 +61,7 @@ impl ModernBertVariant {
             ModernBertVariant::Standard => {
                 crate::core::tokenization::TokenizationStrategy::ModernBERT
             }
-            ModernBertVariant::Multilingual => {
+            ModernBertVariant::Multilingual | ModernBertVariant::Multilingual32K => {
                 crate::core::tokenization::TokenizationStrategy::MmBERT
             }
             ModernBertVariant::Extended32K => {
@@ -72,6 +77,25 @@ impl ModernBertVariant {
             ModernBertVariant::Standard => "[PAD]",
             ModernBertVariant::Multilingual => "<pad>",
             ModernBertVariant::Extended32K => "[PAD]",
+            ModernBertVariant::Multilingual32K => "<pad>",
+        }
+    }
+
+    /// Check if this variant uses YaRN RoPE scaling
+    pub fn uses_yarn_scaling(&self) -> bool {
+        matches!(
+            self,
+            ModernBertVariant::Multilingual32K | ModernBertVariant::Extended32K
+        )
+    }
+
+    /// Get the expected RoPE theta for this variant
+    pub fn expected_rope_theta(&self) -> f64 {
+        match self {
+            ModernBertVariant::Standard => 10000.0,
+            ModernBertVariant::Multilingual => 10000.0,
+            ModernBertVariant::Extended32K => 10000.0, // Uses YaRN but different theta
+            ModernBertVariant::Multilingual32K => 160000.0, // YaRN-scaled
         }
     }
 
@@ -100,7 +124,12 @@ impl ModernBertVariant {
         let max_position_embeddings = config_json
             .get("max_position_embeddings")
             .and_then(|v| v.as_u64())
-            .unwrap_or(0);
+            .unwrap_or(512);
+
+        let global_rope_theta = config_json
+            .get("global_rope_theta")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(10000.0);
 
         // Check for 32K support via YaRN RoPE scaling in training_config.json
         // ModernBERT-base-32k uses YaRN to extend from 8K to 32K
@@ -125,24 +154,36 @@ impl ModernBertVariant {
                         .and_then(|v| v.as_u64())
                         .unwrap_or(0);
 
-                    // If YaRN scaling is configured and model_max_length is 32K, it's Extended32K
+                    // If YaRN scaling is configured and model_max_length is 32K
                     if (rope_scaling_type == "yarn" || rope_scaling_type == "YaRN")
                         && model_max_length >= 32768
                     {
-                        return Ok(ModernBertVariant::Extended32K);
+                        // Distinguish between Extended32K (English) and Multilingual32K
+                        if vocab_size >= 200000 {
+                            return Ok(ModernBertVariant::Multilingual32K);
+                        } else {
+                            return Ok(ModernBertVariant::Extended32K);
+                        }
                     }
                 }
             }
         }
 
-        // ModernBERT-base-32k: max_position_embeddings >= 32768 and uses sans_pos (RoPE)
-        // This should be checked before mmBERT to avoid false positives
-        if max_position_embeddings >= 32768 && position_embedding_type == "sans_pos" {
-            Ok(ModernBertVariant::Extended32K)
-        }
         // mmBERT has vocab_size >= 200000 and uses sans_pos (RoPE)
-        else if vocab_size >= 200000 && position_embedding_type == "sans_pos" {
-            Ok(ModernBertVariant::Multilingual)
+        if vocab_size >= 200000 && position_embedding_type == "sans_pos" {
+            // Check for 32K YaRN-scaled variant:
+            // - max_position_embeddings >= 16384 (extended context)
+            // - OR global_rope_theta >= 100000 (YaRN scaling indicator)
+            if max_position_embeddings >= 16384 || global_rope_theta >= 100000.0 {
+                Ok(ModernBertVariant::Multilingual32K)
+            } else {
+                Ok(ModernBertVariant::Multilingual)
+            }
+        }
+        // ModernBERT-base-32k: max_position_embeddings >= 32768 and uses sans_pos (RoPE)
+        // This should be checked after mmBERT to avoid false positives
+        else if max_position_embeddings >= 32768 && position_embedding_type == "sans_pos" {
+            Ok(ModernBertVariant::Extended32K)
         } else {
             Ok(ModernBertVariant::Standard)
         }
@@ -185,6 +226,10 @@ pub struct TraditionalModernBertTokenClassifier {
 pub type MmBertClassifier = TraditionalModernBertClassifier;
 /// mmBERT token classifier (alias for TraditionalModernBertTokenClassifier with Multilingual variant)
 pub type MmBertTokenClassifier = TraditionalModernBertTokenClassifier;
+/// mmBERT-32K sequence classifier (alias for TraditionalModernBertClassifier with Multilingual32K variant)
+pub type MmBert32KClassifier = TraditionalModernBertClassifier;
+/// mmBERT-32K token classifier (alias for TraditionalModernBertTokenClassifier with Multilingual32K variant)
+pub type MmBert32KTokenClassifier = TraditionalModernBertTokenClassifier;
 
 // Global static instances using OnceLock pattern for zero-cost reads after initialization
 pub static TRADITIONAL_MODERNBERT_CLASSIFIER: OnceLock<Arc<TraditionalModernBertClassifier>> =
@@ -483,6 +528,64 @@ impl TraditionalModernBertClassifier {
         }
     }
 
+    /// Normalize config JSON to handle different HuggingFace model config formats
+    /// Some models (e.g., mmbert-32k-yarn) use top-level global_rope_theta/local_rope_theta
+    /// Other models (e.g., feedback-detector) use nested rope_parameters structure
+    /// This function extracts rope_theta from rope_parameters if top-level fields are missing
+    pub fn normalize_config_json(config_str: &str) -> String {
+        let Ok(mut config_json) = serde_json::from_str::<serde_json::Value>(config_str) else {
+            return config_str.to_string();
+        };
+
+        let obj = match config_json.as_object_mut() {
+            Some(obj) => obj,
+            None => return config_str.to_string(),
+        };
+
+        // If global_rope_theta is missing, try to extract from rope_parameters
+        if !obj.contains_key("global_rope_theta") {
+            if let Some(rope_params) = obj.get("rope_parameters") {
+                // Try to get from full_attention or sliding_attention
+                let theta = rope_params
+                    .get("full_attention")
+                    .and_then(|v| v.get("rope_theta"))
+                    .and_then(|v| v.as_f64())
+                    .or_else(|| {
+                        rope_params
+                            .get("sliding_attention")
+                            .and_then(|v| v.get("rope_theta"))
+                            .and_then(|v| v.as_f64())
+                    })
+                    .unwrap_or(160000.0); // Default for mmBERT-32K
+
+                obj.insert(
+                    "global_rope_theta".to_string(),
+                    serde_json::Value::from(theta),
+                );
+            } else {
+                // No rope_parameters either, use default
+                obj.insert(
+                    "global_rope_theta".to_string(),
+                    serde_json::Value::from(160000.0),
+                );
+            }
+        }
+
+        // If local_rope_theta is missing, use the same value as global_rope_theta
+        if !obj.contains_key("local_rope_theta") {
+            let global_theta = obj
+                .get("global_rope_theta")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(160000.0);
+            obj.insert(
+                "local_rope_theta".to_string(),
+                serde_json::Value::from(global_theta),
+            );
+        }
+
+        serde_json::to_string(&config_json).unwrap_or_else(|_| config_str.to_string())
+    }
+
     /// Load from directory with auto-detected variant (Standard or Multilingual/mmBERT)
     pub fn load_from_directory(
         model_path: &str,
@@ -512,6 +615,10 @@ impl TraditionalModernBertClassifier {
             let unified_err = config_errors::file_not_found(&config_path);
             candle_core::Error::from(unified_err)
         })?;
+
+        // Pre-process config to handle different HuggingFace config formats
+        // Some models use top-level global_rope_theta/local_rope_theta, others use nested rope_parameters
+        let config_str = Self::normalize_config_json(&config_str);
 
         let mut config: Config = serde_json::from_str(&config_str).map_err(|e| {
             let unified_err = config_errors::invalid_json(&config_path, &e.to_string());
@@ -970,14 +1077,37 @@ impl TraditionalModernBertClassifier {
         Self::load_from_directory_with_variant(model_path, use_cpu, ModernBertVariant::Multilingual)
     }
 
-    /// Get the model variant (Standard or Multilingual)
+    /// Load mmBERT-32K (YaRN-scaled multilingual) model from directory
+    /// Convenience method that explicitly loads as Multilingual32K variant
+    /// This variant supports 32K context length with YaRN RoPE scaling (theta=160000)
+    /// Reference: https://huggingface.co/llm-semantic-router/mmbert-32k-yarn
+    pub fn load_mmbert_32k_from_directory(
+        model_path: &str,
+        use_cpu: bool,
+    ) -> Result<Self, candle_core::Error> {
+        Self::load_from_directory_with_variant(
+            model_path,
+            use_cpu,
+            ModernBertVariant::Multilingual32K,
+        )
+    }
+
+    /// Get the model variant (Standard, Multilingual, or Multilingual32K)
     pub fn variant(&self) -> ModernBertVariant {
         self.variant
     }
 
-    /// Check if this is a multilingual (mmBERT) model
+    /// Check if this is a multilingual (mmBERT) model (8K or 32K)
     pub fn is_multilingual(&self) -> bool {
-        self.variant == ModernBertVariant::Multilingual
+        matches!(
+            self.variant,
+            ModernBertVariant::Multilingual | ModernBertVariant::Multilingual32K
+        )
+    }
+
+    /// Check if this is a 32K YaRN-scaled model
+    pub fn is_32k_yarn(&self) -> bool {
+        self.variant == ModernBertVariant::Multilingual32K
     }
 
     /// Classify text using real model inference - REAL IMPLEMENTATION
@@ -1102,6 +1232,8 @@ impl TraditionalModernBertTokenClassifier {
         let config_path = std::path::Path::new(model_id).join("config.json");
         let config_str = std::fs::read_to_string(&config_path)
             .map_err(|e| E::msg(format!("Failed to read config.json: {}", e)))?;
+        // Pre-process config to handle different HuggingFace config formats
+        let config_str = TraditionalModernBertClassifier::normalize_config_json(&config_str);
         let config: Config = serde_json::from_str(&config_str)
             .map_err(|e| E::msg(format!("Failed to parse config.json: {}", e)))?;
 
@@ -1112,7 +1244,7 @@ impl TraditionalModernBertTokenClassifier {
 
         // Create dual-path compatible tokenizer based on variant
         let tokenizer = match variant {
-            ModernBertVariant::Multilingual => {
+            ModernBertVariant::Multilingual | ModernBertVariant::Multilingual32K => {
                 crate::core::tokenization::create_mmbert_compatibility_tokenizer(
                     base_tokenizer,
                     device.clone(),
@@ -1185,14 +1317,29 @@ impl TraditionalModernBertTokenClassifier {
         Self::new_with_variant(model_id, use_cpu, ModernBertVariant::Multilingual)
     }
 
-    /// Get the model variant
+    /// Create mmBERT-32K (YaRN-scaled multilingual) token classifier
+    /// This variant supports 32K context length with YaRN RoPE scaling (theta=160000)
+    /// Reference: https://huggingface.co/llm-semantic-router/mmbert-32k-yarn
+    pub fn new_mmbert_32k(model_id: &str, use_cpu: bool) -> Result<Self> {
+        Self::new_with_variant(model_id, use_cpu, ModernBertVariant::Multilingual32K)
+    }
+
+    /// Get the model variant (Standard, Multilingual, or Multilingual32K)
     pub fn variant(&self) -> ModernBertVariant {
         self.variant
     }
 
-    /// Check if this is a multilingual (mmBERT) model
+    /// Check if this is a multilingual (mmBERT) model (8K or 32K)
     pub fn is_multilingual(&self) -> bool {
-        self.variant == ModernBertVariant::Multilingual
+        matches!(
+            self.variant,
+            ModernBertVariant::Multilingual | ModernBertVariant::Multilingual32K
+        )
+    }
+
+    /// Check if this is a 32K YaRN-scaled model
+    pub fn is_32k_yarn(&self) -> bool {
+        self.variant == ModernBertVariant::Multilingual32K
     }
 
     /// Classify tokens in text
@@ -1312,8 +1459,9 @@ impl TraditionalModernBertTokenClassifier {
             .zip(tokenization_result.offsets.iter())
             .enumerate()
         {
-            // Skip special tokens (they have offset (0,0))
-            if offset.0 == 0 && offset.1 == 0 && i > 0 {
+            // Skip special tokens (BOS, EOS, PAD, etc. have offset (0,0))
+            // Note: All special tokens have zero-length offsets, including BOS at index 0
+            if offset.0 == 0 && offset.1 == 0 {
                 continue;
             }
 

@@ -6,6 +6,7 @@
 package candle_binding
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"regexp"
@@ -50,6 +51,15 @@ extern bool init_mmbert_classifier(const char* model_id, bool use_cpu);
 extern bool init_mmbert_classifier_auto(const char* model_id, bool use_cpu);
 extern bool init_mmbert_token_classifier(const char* model_id, bool use_cpu);
 extern bool is_mmbert_model(const char* config_path);
+
+// mmBERT-32K (YaRN RoPE scaled, 32K context) initialization functions
+extern bool init_mmbert_32k_intent_classifier(const char* model_id, bool use_cpu);
+extern bool init_mmbert_32k_factcheck_classifier(const char* model_id, bool use_cpu);
+extern bool init_mmbert_32k_jailbreak_classifier(const char* model_id, bool use_cpu);
+extern bool init_mmbert_32k_feedback_classifier(const char* model_id, bool use_cpu);
+extern bool init_mmbert_32k_pii_classifier(const char* model_id, bool use_cpu);
+extern bool init_mmbert_32k_modality_classifier(const char* model_id, bool use_cpu);
+extern bool is_mmbert_32k_model(const char* config_path);
 
 // Token classification structures
 typedef struct {
@@ -216,8 +226,11 @@ extern EmbeddingResult get_text_embedding(const char* text, int max_length);
 extern int get_embedding_smart(const char* text, float quality_priority, float latency_priority, EmbeddingResult* result);
 extern int get_embedding_with_dim(const char* text, float quality_priority, float latency_priority, int target_dim, EmbeddingResult* result);
 extern int get_embedding_with_model_type(const char* text, const char* model_type, int target_dim, EmbeddingResult* result);
+extern int get_embedding_2d_matryoshka(const char* text, const char* model_type, int target_layer, int target_dim, EmbeddingResult* result);
 extern int get_embedding_batched(const char* text, const char* model_type, int target_dim, EmbeddingResult* result);
 extern bool init_embedding_models(const char* qwen3_model_path, const char* gemma_model_path, bool use_cpu);
+extern bool init_embedding_models_with_mmbert(const char* qwen3_model_path, const char* gemma_model_path, const char* mmbert_model_path, bool use_cpu);
+extern bool init_mmbert_embedding_model(const char* model_path, bool use_cpu);
 extern bool init_embedding_models_batched(const char* qwen3_model_path, int max_batch_size, unsigned long long max_wait_ms, bool use_cpu);
 extern int calculate_embedding_similarity(const char* text1, const char* text2, const char* model_type, int target_dim, EmbeddingSimilarityResult* result);
 extern int calculate_similarity_batch(const char* query, const char** candidates, int num_candidates, int top_k, const char* model_type, int target_dim, BatchSimilarityResult* result);
@@ -234,6 +247,8 @@ extern void free_probabilities(float* probabilities, int num_classes);
 extern ClassificationResult classify_pii_text(const char* text);
 extern ClassificationResult classify_jailbreak_text(const char* text);
 extern ClassificationResult classify_bert_text(const char* text);
+extern bool init_qwen3_preference_classifier(const char* model_path, bool use_cpu);
+extern ClassificationResult classify_qwen3_preference(const char* text, const char* labels_json);
 extern ModernBertClassificationResult classify_modernbert_text(const char* text);
 extern ModernBertClassificationResultWithProbs classify_modernbert_text_with_probabilities(const char* text);
 extern void free_modernbert_probabilities(float* probabilities, int num_classes);
@@ -242,6 +257,14 @@ extern ModernBertClassificationResult classify_modernbert_jailbreak_text(const c
 extern ClassificationResult classify_deberta_jailbreak_text(const char* text);
 extern ModernBertClassificationResult classify_fact_check_text(const char* text);
 extern ModernBertClassificationResult classify_feedback_text(const char* text);
+
+// mmBERT-32K classification functions (32K context, YaRN RoPE scaling)
+extern ModernBertClassificationResult classify_mmbert_32k_intent(const char* text);
+extern ModernBertClassificationResult classify_mmbert_32k_factcheck(const char* text);
+extern ModernBertClassificationResult classify_mmbert_32k_jailbreak(const char* text);
+extern ModernBertClassificationResult classify_mmbert_32k_feedback(const char* text);
+extern ModernBertTokenClassificationResult classify_mmbert_32k_pii_tokens(const char* text, const char* model_config_path);
+extern ModernBertClassificationResult classify_mmbert_32k_modality(const char* text);
 
 // New official Candle BERT functions
 extern bool init_candle_bert_classifier(const char* model_path, int num_classes, bool use_cpu);
@@ -391,6 +414,22 @@ typedef struct {
 extern bool init_lora_unified_classifier(const char* intent_model_path, const char* pii_model_path, const char* security_model_path, const char* architecture, bool use_cpu);
 extern LoRABatchResult classify_batch_with_lora(const char** texts, int num_texts);
 extern void free_lora_batch_result(LoRABatchResult result);
+
+// =============================================================================
+// MLP Selector for Model Selection (GPU-accelerated)
+// Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
+// =============================================================================
+extern void* candle_mlp_new();
+extern void* candle_mlp_new_with_device(int device_type);
+extern void* candle_mlp_new_with_device_and_dtype(int device_type, int dtype);
+extern void candle_mlp_free(void* handle);
+extern char* candle_mlp_select(void* handle, double* query, size_t query_len);
+extern int candle_mlp_is_trained(void* handle);
+extern char* candle_mlp_to_json(void* handle);
+extern void* candle_mlp_from_json(char* json);
+extern void* candle_mlp_from_json_with_device(char* json, int device_type);
+extern void* candle_mlp_from_json_with_device_and_dtype(char* json, int device_type, int dtype);
+extern void candle_mlp_free_string(char* ptr);
 */
 import "C"
 
@@ -420,6 +459,8 @@ var (
 	factCheckClassifierInitErr            error
 	feedbackDetectorInitOnce              sync.Once
 	feedbackDetectorInitErr               error
+	qwenPreferenceInitOnce                sync.Once
+	qwenPreferenceInitErr                 error
 )
 
 // TokenizeResult represents the result of tokenization
@@ -776,15 +817,16 @@ func GetEmbeddingBatched(text string, modelType string, targetDim int) (*Embeddi
 	}, nil
 }
 
-// InitEmbeddingModels initializes Qwen3 and/or Gemma embedding models (standard version).
+// InitEmbeddingModels initializes Qwen3, Gemma, and/or mmBERT embedding models (standard version).
 //
 // Note: For high-concurrency workloads, use InitEmbeddingModelsBatched instead for 2-5x better throughput.
 //
-// This function must be called before using GetEmbeddingWithDim for Qwen3/Gemma models.
+// This function must be called before using GetEmbeddingWithDim for Qwen3/Gemma/mmBERT models.
 //
 // Parameters:
 //   - qwen3ModelPath: Path to Qwen3 model directory (or empty string "" to skip)
 //   - gemmaModelPath: Path to Gemma model directory (or empty string "" to skip)
+//   - mmBertModelPath: Path to mmBERT model directory (or empty string "" to skip)
 //   - useCPU: If true, use CPU for inference; if false, use GPU if available
 //
 // Returns:
@@ -792,18 +834,20 @@ func GetEmbeddingBatched(text string, modelType string, targetDim int) (*Embeddi
 //
 // Example:
 //
-//	// Load both models on GPU
+//	// Load all three models on GPU
 //	err := InitEmbeddingModels(
 //	    "/path/to/qwen3-0.6B",
 //	    "/path/to/embeddinggemma-300m",
+//	    "/path/to/mom-embedding-ultra",
 //	    false,
 //	)
 //
-//	// Load only Gemma on CPU
-//	err := InitEmbeddingModels("", "/path/to/embeddinggemma-300m", true)
-func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath string, useCPU bool) error {
+//	// Load only mmBERT on CPU
+//	err := InitEmbeddingModels("", "", "/path/to/mom-embedding-ultra", true)
+func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath, mmBertModelPath string, useCPU bool) error {
 	var cQwen3Path *C.char
 	var cGemmaPath *C.char
+	var cMmBertPath *C.char
 
 	// Convert paths to C strings (NULL if empty)
 	if qwen3ModelPath != "" {
@@ -816,11 +860,29 @@ func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath string, useCPU bool) err
 		defer C.free(unsafe.Pointer(cGemmaPath))
 	}
 
-	success := C.init_embedding_models(
-		cQwen3Path,
-		cGemmaPath,
-		C.bool(useCPU),
-	)
+	if mmBertModelPath != "" {
+		cMmBertPath = C.CString(mmBertModelPath)
+		defer C.free(unsafe.Pointer(cMmBertPath))
+	}
+
+	// Choose appropriate FFI function based on whether mmBERT is provided
+	var success C.bool
+	if mmBertModelPath != "" {
+		// Use the mmBERT-aware initialization function
+		success = C.init_embedding_models_with_mmbert(
+			cQwen3Path,
+			cGemmaPath,
+			cMmBertPath,
+			C.bool(useCPU),
+		)
+	} else {
+		// Use the original initialization function (backward compatible)
+		success = C.init_embedding_models(
+			cQwen3Path,
+			cGemmaPath,
+			C.bool(useCPU),
+		)
+	}
 
 	if !bool(success) {
 		return fmt.Errorf("failed to initialize embedding models")
@@ -828,6 +890,104 @@ func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath string, useCPU bool) err
 
 	log.Printf("INFO: Embedding models initialized successfully")
 
+	return nil
+}
+
+// InitMmBertEmbeddingModel initializes the mmBERT embedding model with 2D Matryoshka support.
+//
+// This model supports:
+//   - 32K context length (YaRN-scaled RoPE)
+//   - Multilingual (1800+ languages via Glot500)
+//   - 2D Matryoshka: dimension reduction (768→64) AND layer early exit (22→3 layers)
+//
+// After initialization, use GetEmbedding2DMatryoshka with modelType="mmbert" to generate embeddings.
+//
+// Parameters:
+//   - modelPath: Path to the mmBERT model directory
+//   - useCPU: If true, use CPU for inference; if false, use GPU if available
+//
+// Returns:
+//   - error: Non-nil if initialization fails
+//
+// Example:
+//
+//	err := InitMmBertEmbeddingModel("/path/to/mmbert-embed-32k-2d-matryoshka", false)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	// Generate embedding with early exit (3 layers, 256 dimensions)
+//	output, err := GetEmbedding2DMatryoshka("Hello world", "mmbert", 3, 256)
+func InitMmBertEmbeddingModel(modelPath string, useCPU bool) error {
+	if modelPath == "" {
+		return fmt.Errorf("modelPath cannot be empty")
+	}
+
+	cModelPath := C.CString(modelPath)
+	defer C.free(unsafe.Pointer(cModelPath))
+
+	success := C.init_mmbert_embedding_model(cModelPath, C.bool(useCPU))
+
+	if !bool(success) {
+		return fmt.Errorf("failed to initialize mmBERT embedding model")
+	}
+
+	log.Printf("INFO: mmBERT embedding model initialized with 2D Matryoshka support")
+	return nil
+}
+
+// InitEmbeddingModelsWithMmBert initializes all embedding models including mmBERT.
+//
+// This is a convenience function to initialize qwen3, gemma, and mmbert models together.
+// Pass empty string "" for any model you don't want to load.
+//
+// Parameters:
+//   - qwen3ModelPath: Path to Qwen3 model (or "" to skip)
+//   - gemmaModelPath: Path to Gemma model (or "" to skip)
+//   - mmBertModelPath: Path to mmBERT model (or "" to skip)
+//   - useCPU: If true, use CPU for inference
+//
+// Returns:
+//   - error: Non-nil if initialization fails
+//
+// Example:
+//
+//	// Load only mmBERT
+//	err := InitEmbeddingModelsWithMmBert("", "", "/path/to/mmbert", false)
+//
+//	// Load qwen3 and mmbert
+//	err := InitEmbeddingModelsWithMmBert("/path/to/qwen3", "", "/path/to/mmbert", false)
+func InitEmbeddingModelsWithMmBert(qwen3ModelPath, gemmaModelPath, mmBertModelPath string, useCPU bool) error {
+	var cQwen3Path *C.char
+	var cGemmaPath *C.char
+	var cMmBertPath *C.char
+
+	if qwen3ModelPath != "" {
+		cQwen3Path = C.CString(qwen3ModelPath)
+		defer C.free(unsafe.Pointer(cQwen3Path))
+	}
+
+	if gemmaModelPath != "" {
+		cGemmaPath = C.CString(gemmaModelPath)
+		defer C.free(unsafe.Pointer(cGemmaPath))
+	}
+
+	if mmBertModelPath != "" {
+		cMmBertPath = C.CString(mmBertModelPath)
+		defer C.free(unsafe.Pointer(cMmBertPath))
+	}
+
+	success := C.init_embedding_models_with_mmbert(
+		cQwen3Path,
+		cGemmaPath,
+		cMmBertPath,
+		C.bool(useCPU),
+	)
+
+	if !bool(success) {
+		return fmt.Errorf("failed to initialize embedding models with mmBERT")
+	}
+
+	log.Printf("INFO: Embedding models initialized (with mmBERT 2D Matryoshka support)")
 	return nil
 }
 
@@ -989,9 +1149,40 @@ func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority floa
 //	}
 //	fmt.Printf("Used model: %s\n", output.ModelType)
 func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
-	// Validate model type (only accept "qwen3" or "gemma")
-	if modelType != "qwen3" && modelType != "gemma" {
-		return nil, fmt.Errorf("invalid model type: %s (must be 'qwen3' or 'gemma')", modelType)
+	// Validate model type (accept "qwen3", "gemma", or "mmbert")
+	if modelType != "qwen3" && modelType != "gemma" && modelType != "mmbert" {
+		return nil, fmt.Errorf("invalid model type: %s (must be 'qwen3', 'gemma', or 'mmbert')", modelType)
+	}
+
+	// For mmbert, delegate to 2D Matryoshka function with default layer (full model)
+	return GetEmbedding2DMatryoshka(text, modelType, 0, targetDim)
+}
+
+// GetEmbedding2DMatryoshka generates embeddings with 2D Matryoshka support.
+//
+// This function supports the full 2D Matryoshka API for mmBERT models:
+//   - Layer early exit: Use fewer layers (3, 6, 11, or 22) for faster inference
+//   - Dimension truncation: Use smaller dimensions (64, 128, 256, 512, 768)
+//
+// For qwen3 and gemma models, only dimension truncation is supported (targetLayer is ignored).
+//
+// Parameters:
+//   - text: Input text to generate embedding for
+//   - modelType: "qwen3", "gemma", or "mmbert"
+//   - targetLayer: Target layer for early exit (0 for full model, mmbert: 3/6/11/22)
+//   - targetDim: Target embedding dimension (0 for default)
+//
+// Returns:
+//   - EmbeddingOutput containing the embedding vector and metadata
+//   - error if embedding generation fails
+//
+// Example for mmbert with early exit (3 layers, 256 dimensions):
+//
+//	output, err := GetEmbedding2DMatryoshka("Hello world", "mmbert", 3, 256)
+func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, targetDim int) (*EmbeddingOutput, error) {
+	// Validate model type
+	if modelType != "qwen3" && modelType != "gemma" && modelType != "mmbert" {
+		return nil, fmt.Errorf("invalid model type: %s (must be 'qwen3', 'gemma', or 'mmbert')", modelType)
 	}
 
 	cText := C.CString(text)
@@ -1001,9 +1192,10 @@ func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*E
 	defer C.free(unsafe.Pointer(cModelType))
 
 	var result C.EmbeddingResult
-	status := C.get_embedding_with_model_type(
+	status := C.get_embedding_2d_matryoshka(
 		cText,
 		cModelType,
+		C.int(targetLayer),
 		C.int(targetDim),
 		&result,
 	)
@@ -1026,13 +1218,15 @@ func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*E
 
 	embedding := cFloatArrayToGoSlice(result.data, result.length)
 
-	// Convert model_type to string
+	// Convert model_type to string (0=qwen3, 1=gemma, 2=mmbert)
 	var actualModelType string
 	switch int(result.model_type) {
 	case 0:
 		actualModelType = "qwen3"
 	case 1:
 		actualModelType = "gemma"
+	case 2:
+		actualModelType = "mmbert"
 	default:
 		actualModelType = "unknown"
 	}
@@ -1561,6 +1755,63 @@ func ClassifyJailbreakText(text string) (ClassResult, error) {
 	}, nil
 }
 
+// InitQwen3PreferenceClassifier initializes the Qwen3 preference classifier model
+func InitQwen3PreferenceClassifier(modelPath string, useCPU bool) error {
+	var err error
+	qwenPreferenceInitOnce.Do(func() {
+		if modelPath == "" {
+			// Default to Qwen3 preference classifier model if path is empty
+			modelPath = "./models/mom-preference-classifier"
+		}
+
+		log.Printf("Initializing Qwen3 preference classifier model: %s", modelPath)
+
+		cModelID := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelID))
+
+		success := C.init_qwen3_preference_classifier(cModelID, C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize Qwen3 preference classifier model")
+		}
+	})
+
+	if err != nil {
+		qwenPreferenceInitOnce = sync.Once{}
+	}
+
+	return err
+}
+
+// ClassifyQwen3Preference classifies a conversation using Qwen3 preference model
+// labels must match the preference_rules order (label names only)
+func ClassifyQwen3Preference(text string, labels []string) (ClassResult, error) {
+	if len(labels) == 0 {
+		return ClassResult{}, fmt.Errorf("labels cannot be empty")
+	}
+
+	labelsJSON, err := json.Marshal(labels)
+	if err != nil {
+		return ClassResult{}, fmt.Errorf("failed to marshal labels: %w", err)
+	}
+
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	cLabels := C.CString(string(labelsJSON))
+	defer C.free(unsafe.Pointer(cLabels))
+
+	result := C.classify_qwen3_preference(cText, cLabels)
+
+	if result.class < 0 {
+		return ClassResult{}, fmt.Errorf("qwen3 preference classification failed")
+	}
+
+	return ClassResult{
+		Class:      int(result.class),
+		Confidence: float32(result.confidence),
+	}, nil
+}
+
 // InitModernBertClassifier initializes the ModernBERT classifier with the specified model path
 // Number of classes is automatically inferred from the model weights
 func InitModernBertClassifier(modelPath string, useCPU bool) error {
@@ -1746,6 +1997,333 @@ func IsMmBertModel(configPath string) bool {
 	defer C.free(unsafe.Pointer(cConfigPath))
 
 	return bool(C.is_mmbert_model(cConfigPath))
+}
+
+// ============================================================================
+// mmBERT-32K (32K Context, YaRN RoPE Scaling) Functions
+// Reference: https://huggingface.co/llm-semantic-router/mmbert-32k-yarn
+// ============================================================================
+
+var (
+	mmBert32KIntentClassifierInitOnce    sync.Once
+	mmBert32KFactcheckClassifierInitOnce sync.Once
+	mmBert32KJailbreakClassifierInitOnce sync.Once
+	mmBert32KFeedbackClassifierInitOnce  sync.Once
+	mmBert32KPIIClassifierInitOnce       sync.Once
+	mmBert32KModalityClassifierInitOnce  sync.Once
+)
+
+// IsMmBert32KModel checks if a model is mmBERT-32K (YaRN scaled) based on its config.json
+// Returns true if the model has max_position_embeddings >= 16384 or rope_theta >= 100000
+func IsMmBert32KModel(configPath string) bool {
+	cConfigPath := C.CString(configPath)
+	defer C.free(unsafe.Pointer(cConfigPath))
+
+	return bool(C.is_mmbert_32k_model(cConfigPath))
+}
+
+// InitMmBert32KIntentClassifier initializes the mmBERT-32K intent classifier
+// This model classifies text into MMLU-Pro academic categories for request routing.
+// Reference: https://huggingface.co/llm-semantic-router/mmbert32k-intent-classifier-lora
+func InitMmBert32KIntentClassifier(modelPath string, useCPU bool) error {
+	var err error
+	mmBert32KIntentClassifierInitOnce.Do(func() {
+		if modelPath == "" {
+			modelPath = "./models/mmbert32k-intent-classifier-lora"
+		}
+
+		log.Printf("🎯 Initializing mmBERT-32K intent classifier: %s", modelPath)
+
+		cModelID := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelID))
+
+		success := C.init_mmbert_32k_intent_classifier(cModelID, C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize mmBERT-32K intent classifier")
+		} else {
+			log.Printf("   ✓ mmBERT-32K intent classifier initialized (32K context)")
+		}
+	})
+	return err
+}
+
+// ClassifyMmBert32KIntent classifies text using mmBERT-32K intent classifier
+// Returns the predicted category and confidence
+func ClassifyMmBert32KIntent(text string) (ClassResult, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_mmbert_32k_intent(cText)
+
+	if result.class < 0 {
+		return ClassResult{}, fmt.Errorf("failed to classify intent with mmBERT-32K")
+	}
+
+	return ClassResult{
+		Class:      int(result.class),
+		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// InitMmBert32KFactcheckClassifier initializes the mmBERT-32K fact-check classifier
+// This model determines if text needs fact-checking.
+// Outputs: 0=NO_FACT_CHECK_NEEDED, 1=FACT_CHECK_NEEDED
+// Reference: https://huggingface.co/llm-semantic-router/mmbert32k-factcheck-classifier-lora
+func InitMmBert32KFactcheckClassifier(modelPath string, useCPU bool) error {
+	var err error
+	mmBert32KFactcheckClassifierInitOnce.Do(func() {
+		if modelPath == "" {
+			modelPath = "./models/mmbert32k-factcheck-classifier-lora"
+		}
+
+		log.Printf("✓ Initializing mmBERT-32K fact-check classifier: %s", modelPath)
+
+		cModelID := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelID))
+
+		success := C.init_mmbert_32k_factcheck_classifier(cModelID, C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize mmBERT-32K fact-check classifier")
+		} else {
+			log.Printf("   ✓ mmBERT-32K fact-check classifier initialized")
+		}
+	})
+	return err
+}
+
+// ClassifyMmBert32KFactcheck classifies text using mmBERT-32K fact-check classifier
+// Returns: 0=NO_FACT_CHECK_NEEDED, 1=FACT_CHECK_NEEDED
+func ClassifyMmBert32KFactcheck(text string) (ClassResult, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_mmbert_32k_factcheck(cText)
+
+	if result.class < 0 {
+		return ClassResult{}, fmt.Errorf("failed to classify fact-check with mmBERT-32K")
+	}
+
+	return ClassResult{
+		Class:      int(result.class),
+		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// InitMmBert32KJailbreakClassifier initializes the mmBERT-32K jailbreak detector
+// This model detects prompt injection/jailbreak attempts.
+// Outputs: 0=benign, 1=jailbreak
+// Reference: https://huggingface.co/llm-semantic-router/mmbert32k-jailbreak-detector-lora
+func InitMmBert32KJailbreakClassifier(modelPath string, useCPU bool) error {
+	var err error
+	mmBert32KJailbreakClassifierInitOnce.Do(func() {
+		if modelPath == "" {
+			modelPath = "./models/mmbert32k-jailbreak-detector-lora"
+		}
+
+		log.Printf("🛡️  Initializing mmBERT-32K jailbreak detector: %s", modelPath)
+
+		cModelID := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelID))
+
+		success := C.init_mmbert_32k_jailbreak_classifier(cModelID, C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize mmBERT-32K jailbreak detector")
+		} else {
+			log.Printf("   ✓ mmBERT-32K jailbreak detector initialized")
+		}
+	})
+	return err
+}
+
+// ClassifyMmBert32KJailbreak classifies text using mmBERT-32K jailbreak detector
+// Returns: 0=benign, 1=jailbreak
+func ClassifyMmBert32KJailbreak(text string) (ClassResult, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_mmbert_32k_jailbreak(cText)
+
+	if result.class < 0 {
+		return ClassResult{}, fmt.Errorf("failed to classify jailbreak with mmBERT-32K")
+	}
+
+	return ClassResult{
+		Class:      int(result.class),
+		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// InitMmBert32KFeedbackClassifier initializes the mmBERT-32K feedback detector
+// This model detects user satisfaction from follow-up messages.
+// Outputs: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT
+// Reference: https://huggingface.co/llm-semantic-router/mmbert32k-feedback-detector-lora
+func InitMmBert32KFeedbackClassifier(modelPath string, useCPU bool) error {
+	var err error
+	mmBert32KFeedbackClassifierInitOnce.Do(func() {
+		if modelPath == "" {
+			modelPath = "./models/mmbert32k-feedback-detector-lora"
+		}
+
+		log.Printf("📊 Initializing mmBERT-32K feedback detector: %s", modelPath)
+
+		cModelID := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelID))
+
+		success := C.init_mmbert_32k_feedback_classifier(cModelID, C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize mmBERT-32K feedback detector")
+		} else {
+			log.Printf("   ✓ mmBERT-32K feedback detector initialized")
+		}
+	})
+	return err
+}
+
+// ClassifyMmBert32KFeedback classifies text using mmBERT-32K feedback detector
+// Returns: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT
+func ClassifyMmBert32KFeedback(text string) (ClassResult, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_mmbert_32k_feedback(cText)
+
+	if result.class < 0 {
+		return ClassResult{}, fmt.Errorf("failed to classify feedback with mmBERT-32K")
+	}
+
+	return ClassResult{
+		Class:      int(result.class),
+		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// InitMmBert32KPIIClassifier initializes the mmBERT-32K PII detector
+// This model detects 17 types of PII entities using BIO tagging.
+// Reference: https://huggingface.co/llm-semantic-router/mmbert32k-pii-detector-lora
+func InitMmBert32KPIIClassifier(modelPath string, useCPU bool) error {
+	var err error
+	mmBert32KPIIClassifierInitOnce.Do(func() {
+		if modelPath == "" {
+			modelPath = "./models/mmbert32k-pii-detector-lora"
+		}
+
+		log.Printf("🔒 Initializing mmBERT-32K PII detector: %s", modelPath)
+
+		cModelID := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelID))
+
+		success := C.init_mmbert_32k_pii_classifier(cModelID, C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize mmBERT-32K PII detector")
+		} else {
+			log.Printf("   ✓ mmBERT-32K PII detector initialized")
+		}
+	})
+	return err
+}
+
+// ClassifyMmBert32KPII detects PII entities in text using mmBERT-32K
+// Returns a list of detected PII entities with their types and positions
+func ClassifyMmBert32KPII(text string, modelConfigPath string) ([]TokenEntity, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	var cConfigPath *C.char
+	if modelConfigPath != "" {
+		cConfigPath = C.CString(modelConfigPath)
+		defer C.free(unsafe.Pointer(cConfigPath))
+	}
+
+	result := C.classify_mmbert_32k_pii_tokens(cText, cConfigPath)
+	defer C.free_modernbert_token_result(C.ModernBertTokenClassificationResult{
+		entities:     (*C.ModernBertTokenEntity)(unsafe.Pointer(result.entities)),
+		num_entities: result.num_entities,
+	})
+
+	if result.num_entities == 0 {
+		return []TokenEntity{}, nil
+	}
+
+	entities := make([]TokenEntity, result.num_entities)
+	entityPtr := result.entities
+	for i := 0; i < int(result.num_entities); i++ {
+		entity := (*C.ModernBertTokenEntity)(unsafe.Pointer(uintptr(unsafe.Pointer(entityPtr)) + uintptr(i)*unsafe.Sizeof(*entityPtr)))
+		entities[i] = TokenEntity{
+			EntityType: C.GoString(entity.entity_type),
+			Start:      int(entity.start),
+			End:        int(entity.end),
+			Text:       C.GoString(entity.text),
+			Confidence: float32(entity.confidence),
+		}
+	}
+
+	return entities, nil
+}
+
+// ModalityResult represents the output of modality routing classification
+type ModalityResult struct {
+	Modality   string  // "AR", "DIFFUSION", or "BOTH"
+	ClassID    int     // 0=AR, 1=DIFFUSION, 2=BOTH
+	Confidence float32 // Confidence score (0.0-1.0)
+}
+
+// InitMmBert32KModalityClassifier initializes the mmBERT-32K modality routing classifier
+// This model classifies user prompt intent into response modality:
+// - AR (0): Text-only response via autoregressive LLM
+// - DIFFUSION (1): Image generation via diffusion model
+// - BOTH (2): Hybrid response requiring both text and image
+// Reference: https://huggingface.co/llm-semantic-router/mmbert32k-modality-router-merged
+func InitMmBert32KModalityClassifier(modelPath string, useCPU bool) error {
+	if modelPath == "" {
+		return fmt.Errorf("modality classifier model_path is required (set classifier.model_path in modality_detection config)")
+	}
+	var err error
+	mmBert32KModalityClassifierInitOnce.Do(func() {
+		log.Printf("🎯 Initializing mmBERT-32K modality routing classifier: %s", modelPath)
+
+		cModelID := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cModelID))
+
+		success := C.init_mmbert_32k_modality_classifier(cModelID, C.bool(useCPU))
+		if !bool(success) {
+			err = fmt.Errorf("failed to initialize mmBERT-32K modality routing classifier")
+		} else {
+			log.Printf("   ✓ mmBERT-32K modality router initialized (AR/DIFFUSION/BOTH)")
+		}
+	})
+	return err
+}
+
+// ClassifyMmBert32KModality classifies user prompt intent into response modality
+// Returns ModalityResult with modality label ("AR", "DIFFUSION", "BOTH") and confidence
+func ClassifyMmBert32KModality(text string) (ModalityResult, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_mmbert_32k_modality(cText)
+
+	if result.class < 0 {
+		return ModalityResult{}, fmt.Errorf("failed to classify modality with mmBERT-32K")
+	}
+
+	// Map class ID to modality label
+	modalityLabels := map[int]string{
+		0: "AR",
+		1: "DIFFUSION",
+		2: "BOTH",
+	}
+
+	classID := int(result.class)
+	modality, ok := modalityLabels[classID]
+	if !ok {
+		return ModalityResult{}, fmt.Errorf("mmBERT-32K modality classifier returned unknown class_id %d (expected 0=AR, 1=DIFFUSION, 2=BOTH)", classID)
+	}
+
+	return ModalityResult{
+		Modality:   modality,
+		ClassID:    classID,
+		Confidence: float32(result.confidence),
+	}, nil
 }
 
 // InitFactCheckClassifier initializes the halugate-sentinel fact-check classifier
@@ -3102,4 +3680,174 @@ func extractLabelAndCategories(content string) (string, []string) {
 
 // ================================================================================================
 // END OF LORA UNIFIED CLASSIFIER GO BINDINGS
+// ================================================================================================
+
+// ================================================================================================
+// MLP SELECTOR FOR MODEL SELECTION (GPU-ACCELERATED)
+// Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
+// ================================================================================================
+
+// MLPDeviceType defines the device type for MLP inference
+type MLPDeviceType int
+
+const (
+	// MLPDeviceCPU uses CPU for inference
+	MLPDeviceCPU MLPDeviceType = 0
+	// MLPDeviceCUDA uses NVIDIA GPU for inference
+	MLPDeviceCUDA MLPDeviceType = 1
+	// MLPDeviceMetal uses Apple Silicon GPU for inference
+	MLPDeviceMetal MLPDeviceType = 2
+)
+
+// MLPDType defines the data type for mixed precision inference
+type MLPDType int
+
+const (
+	// MLPF32 uses full precision (32-bit float) - default, best accuracy
+	MLPF32 MLPDType = 0
+	// MLPF16 uses half precision (16-bit float) - faster on GPUs with tensor cores
+	MLPF16 MLPDType = 1
+	// MLPBF16 uses BFloat16 - good balance of dynamic range and speed
+	MLPBF16 MLPDType = 2
+)
+
+// MLPSelector wraps the Candle MLP implementation for GPU-accelerated inference
+type MLPSelector struct {
+	handle unsafe.Pointer
+	mu     sync.RWMutex
+}
+
+// NewMLPSelector creates a new MLP selector (CPU)
+func NewMLPSelector() *MLPSelector {
+	handle := C.candle_mlp_new()
+	if handle == nil {
+		return nil
+	}
+	return &MLPSelector{handle: handle}
+}
+
+// NewMLPSelectorWithDevice creates a new MLP selector with specified device
+func NewMLPSelectorWithDevice(deviceType MLPDeviceType) *MLPSelector {
+	handle := C.candle_mlp_new_with_device(C.int(deviceType))
+	if handle == nil {
+		return nil
+	}
+	return &MLPSelector{handle: handle}
+}
+
+// NewMLPSelectorWithDeviceAndDType creates a new MLP selector with device and dtype for mixed precision
+func NewMLPSelectorWithDeviceAndDType(deviceType MLPDeviceType, dtype MLPDType) *MLPSelector {
+	handle := C.candle_mlp_new_with_device_and_dtype(C.int(deviceType), C.int(dtype))
+	if handle == nil {
+		return nil
+	}
+	return &MLPSelector{handle: handle}
+}
+
+// Close releases the MLP selector resources
+func (s *MLPSelector) Close() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.handle != nil {
+		C.candle_mlp_free(s.handle)
+		s.handle = nil
+	}
+}
+
+// Select selects the best model for a query embedding
+func (s *MLPSelector) Select(query []float64) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.handle == nil {
+		return "", fmt.Errorf("MLP selector not initialized")
+	}
+
+	if len(query) == 0 {
+		return "", fmt.Errorf("empty query embedding")
+	}
+
+	cQuery := make([]C.double, len(query))
+	for i, v := range query {
+		cQuery[i] = C.double(v)
+	}
+
+	result := C.candle_mlp_select(s.handle, &cQuery[0], C.size_t(len(query)))
+	if result == nil {
+		return "", fmt.Errorf("MLP selection failed")
+	}
+	defer C.candle_mlp_free_string(result)
+
+	return C.GoString(result), nil
+}
+
+// IsTrained returns whether the model has been loaded
+func (s *MLPSelector) IsTrained() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.handle == nil {
+		return false
+	}
+	return C.candle_mlp_is_trained(s.handle) != 0
+}
+
+// ToJSON serializes the model to JSON
+func (s *MLPSelector) ToJSON() (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.handle == nil {
+		return "", fmt.Errorf("MLP selector not initialized")
+	}
+
+	result := C.candle_mlp_to_json(s.handle)
+	if result == nil {
+		return "", fmt.Errorf("JSON serialization failed")
+	}
+	defer C.candle_mlp_free_string(result)
+
+	return C.GoString(result), nil
+}
+
+// MLPFromJSON loads an MLP selector from JSON (the primary way to load trained models)
+func MLPFromJSON(jsonStr string) (*MLPSelector, error) {
+	cJSON := C.CString(jsonStr)
+	defer C.free(unsafe.Pointer(cJSON))
+
+	handle := C.candle_mlp_from_json(cJSON)
+	if handle == nil {
+		return nil, fmt.Errorf("failed to load MLP from JSON")
+	}
+
+	return &MLPSelector{handle: handle}, nil
+}
+
+// MLPFromJSONWithDevice loads an MLP selector from JSON with specific device
+func MLPFromJSONWithDevice(jsonStr string, deviceType MLPDeviceType) (*MLPSelector, error) {
+	cJSON := C.CString(jsonStr)
+	defer C.free(unsafe.Pointer(cJSON))
+
+	handle := C.candle_mlp_from_json_with_device(cJSON, C.int(deviceType))
+	if handle == nil {
+		return nil, fmt.Errorf("failed to load MLP from JSON with device")
+	}
+
+	return &MLPSelector{handle: handle}, nil
+}
+
+// MLPFromJSONWithDeviceAndDType loads an MLP selector from JSON with device and dtype for mixed precision
+func MLPFromJSONWithDeviceAndDType(jsonStr string, deviceType MLPDeviceType, dtype MLPDType) (*MLPSelector, error) {
+	cJSON := C.CString(jsonStr)
+	defer C.free(unsafe.Pointer(cJSON))
+
+	handle := C.candle_mlp_from_json_with_device_and_dtype(cJSON, C.int(deviceType), C.int(dtype))
+	if handle == nil {
+		return nil, fmt.Errorf("failed to load MLP from JSON with device and dtype")
+	}
+
+	return &MLPSelector{handle: handle}, nil
+}
+
+// ================================================================================================
+// END OF MLP SELECTOR GO BINDINGS
 // ================================================================================================

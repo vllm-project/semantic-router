@@ -1,0 +1,245 @@
+.container {
+  background: var(--color-bg-secondary, #242424);
+  border: 1px solid var(--color-border, #333);
+  border-radius: var(--radius-lg, 0.5rem);
+  overflow: hidden;
+}
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-2xl, 3rem);
+  gap: var(--spacing-md, 1rem);
+  color: var(--color-text-secondary, #999);
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--color-border, #333);
+  border-top-color: var(--color-primary, #76b900);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: var(--spacing-lg, 1.5rem);
+  border-bottom: 1px solid var(--color-border, #333);
+}
+
+.taskInfo h3 {
+  margin: 0;
+  font-size: var(--text-xl, 1.25rem);
+}
+
+.description {
+  margin: var(--spacing-xs, 0.25rem) 0 0;
+  color: var(--color-text-secondary, #999);
+  font-size: var(--text-sm, 0.875rem);
+}
+
+.statusBadge {
+  padding: 0.125rem 0.75rem;
+  border-radius: var(--radius-sm, 0.25rem);
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: 500;
+}
+
+.progressSection {
+  padding: var(--spacing-lg, 1.5rem);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.progressHeader {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-sm, 0.5rem);
+}
+
+.progressLabel {
+  font-weight: 500;
+}
+
+.progressPercent {
+  font-weight: 600;
+  color: var(--color-primary, #76b900);
+}
+
+.progressBar {
+  height: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--color-primary, #76b900);
+  border-radius: 6px;
+  transition: width 0.5s ease;
+}
+
+.progressFill.animated {
+  background: linear-gradient(
+    90deg,
+    var(--color-primary, #76b900) 0%,
+    var(--color-primary-light, #8fd400) 50%,
+    var(--color-primary, #76b900) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.progressMessage {
+  margin: var(--spacing-sm, 0.5rem) 0 0;
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--color-text-secondary, #999);
+}
+
+.details {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-md, 1rem);
+  padding: var(--spacing-md, 1rem) var(--spacing-lg, 1.5rem);
+  border-bottom: 1px solid var(--color-border, #333);
+}
+
+.detailItem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs, 0.25rem);
+}
+
+.detailLabel {
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--color-text-secondary, #999);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.detailValue {
+  font-weight: 500;
+}
+
+.connected {
+  color: var(--color-success, #22c55e);
+}
+
+.disconnected {
+  color: var(--color-text-secondary, #999);
+}
+
+.dimensions {
+  padding: var(--spacing-lg, 1.5rem);
+}
+
+.dimensions h4 {
+  margin: 0 0 var(--spacing-sm, 0.5rem);
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--color-text-secondary, #999);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dimensionList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm, 0.5rem);
+}
+
+.dimension {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs, 0.25rem);
+  padding: var(--spacing-xs, 0.25rem) var(--spacing-sm, 0.5rem);
+  background: var(--color-bg, #1a1a1a);
+  border: 1px solid var(--color-border, #333);
+  border-radius: var(--radius-sm, 0.25rem);
+  transition: all var(--transition-fast, 150ms);
+}
+
+.activeDimension {
+  border-color: var(--dim-color);
+  background: color-mix(in srgb, var(--dim-color) 15%, var(--color-bg, #1a1a1a));
+}
+
+.dimensionIndicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.dimensionName {
+  font-size: var(--text-sm, 0.875rem);
+}
+
+.error {
+  margin: 0 var(--spacing-lg, 1.5rem) var(--spacing-md, 1rem);
+  padding: var(--spacing-sm, 0.5rem) var(--spacing-md, 1rem);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-md, 0.375rem);
+  color: var(--color-danger, #ef4444);
+  font-size: var(--text-sm, 0.875rem);
+}
+
+.taskError {
+  margin: 0 var(--spacing-lg, 1.5rem) var(--spacing-md, 1rem);
+  padding: var(--spacing-md, 1rem);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-md, 0.375rem);
+}
+
+.taskError h4 {
+  margin: 0 0 var(--spacing-xs, 0.25rem);
+  color: var(--color-danger, #ef4444);
+}
+
+.taskError p {
+  margin: 0;
+  color: var(--color-text-secondary, #999);
+  font-size: var(--text-sm, 0.875rem);
+}
+
+.actions {
+  padding: var(--spacing-md, 1rem) var(--spacing-lg, 1.5rem);
+  border-top: 1px solid var(--color-border, #333);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.cancelButton {
+  padding: var(--spacing-sm, 0.5rem) var(--spacing-lg, 1.5rem);
+  background: transparent;
+  border: 1px solid var(--color-danger, #ef4444);
+  border-radius: var(--radius-md, 0.375rem);
+  color: var(--color-danger, #ef4444);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast, 150ms);
+}
+
+.cancelButton:hover {
+  background: rgba(239, 68, 68, 0.1);
+}

@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -11,6 +12,8 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
@@ -22,10 +25,15 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	// Decrement active request count for queue depth estimation
 	defer metrics.DecrementModelActiveRequests(ctx.RequestModel)
 
-	// If this is a looper internal request, skip all processing and just continue
+	// If this is a looper internal request, capture response body for router replay and continue
 	// The response will be handled by the looper client directly
 	if ctx.LooperRequest {
-		logging.Debugf("[Looper] Skipping response body processing for internal request")
+		logging.Debugf("[Looper] Capturing response body for router replay")
+
+		// Capture response body for router replay if enabled
+		responseBody := v.ResponseBody.Body
+		r.attachRouterReplayResponse(ctx, responseBody, true)
+
 		return &ext_proc.ProcessingResponse{
 			Response: &ext_proc.ProcessingResponse_ResponseBody{
 				ResponseBody: &ext_proc.BodyResponse{
@@ -64,7 +72,9 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 				metrics.RecordModelTTFT(ctx.RequestModel, ttft)
 				ctx.TTFTSeconds = ttft
 				ctx.TTFTRecorded = true
-				logging.Infof("Recorded TTFT on first streamed body chunk: %.3fs", ttft)
+				// Update TTFT cache for latency_aware percentile-based model selection
+				latency.UpdateTTFT(ctx.RequestModel, ttft)
+				logging.Debugf("Recorded TTFT on first streamed body chunk: model=%q, TTFT=%.4fs", ctx.RequestModel, ttft)
 			}
 		}
 
@@ -83,6 +93,15 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		if strings.Contains(chunk, "data: [DONE]") {
 			ctx.StreamingComplete = true
 			logging.Infof("Streaming response completed, attempting to cache")
+
+			// Record completion latency for streaming responses
+			if ctx.RequestModel != "" && !ctx.StartTime.IsZero() {
+				completionLatency := time.Since(ctx.StartTime).Seconds()
+				metrics.RecordModelCompletionLatency(ctx.RequestModel, completionLatency)
+				logging.Infof("Recorded completion latency for streaming response: model=%s, latency=%.3fs",
+					ctx.RequestModel, completionLatency)
+			}
+
 			// Reconstruct and cache the complete response
 			if err := r.cacheStreamingResponse(ctx); err != nil {
 				logging.Errorf("Failed to cache streaming response: %v", err)
@@ -129,6 +148,12 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		if completionTokens > 0 {
 			timePerToken := completionLatency.Seconds() / float64(completionTokens)
 			metrics.RecordModelTPOT(ctx.RequestModel, timePerToken)
+			// Update latency classifier cache for real-time routing decisions
+			// Note: ctx.RequestModel should match the model name used in decision ModelRefs
+			// (either ModelRef.Model or ModelRef.LoRAName, depending on selection)
+			// UpdateTPOT will trim whitespace to ensure canonical matching
+			logging.Debugf("Updating TPOT cache for model: %q, TPOT: %.4f", ctx.RequestModel, timePerToken)
+			latency.UpdateTPOT(ctx.RequestModel, timePerToken)
 		}
 
 		// Record windowed model metrics for load balancing
@@ -190,6 +215,56 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		} else {
 			logging.Infof("Cache updated for request ID: %s", ctx.RequestID)
 		}
+	}
+
+	// Memory Extraction (async, if auto_store enabled)
+	// Runs in background, does NOT add latency to response
+	autoStoreEnabled := extractAutoStore(ctx)
+	// Fallback to global config if no decision/request-level config
+	if !autoStoreEnabled && r.Config != nil && r.Config.Memory.AutoStore {
+		logging.Infof("extractAutoStore: Falling back to global config, AutoStore=%v", r.Config.Memory.AutoStore)
+		autoStoreEnabled = true
+	}
+	logging.Infof("Memory extraction check: MemoryExtractor=%v, autoStore=%v", r.MemoryExtractor != nil, autoStoreEnabled)
+	if r.MemoryExtractor != nil && autoStoreEnabled {
+		// Capture current turn for extraction (must be done before goroutine)
+		currentUserMessage := extractCurrentUserMessage(ctx)
+		currentAssistantResponse := extractAssistantResponseText(responseBody)
+		go func() {
+			// Use a background context for the goroutine to ensure it runs to completion
+			// even if the original request context is cancelled.
+			bgCtx := context.Background()
+			sessionID, userID, history, err := extractMemoryInfo(ctx)
+			// extractMemoryInfo returns error if userID is missing (required for memory extraction)
+			if err != nil {
+				logging.Errorf("Memory extraction failed: %v", err)
+				return
+			}
+
+			logging.Infof("Memory extraction: sessionID=%s, userID=%s, historyLen=%d", sessionID, userID, len(history))
+
+			// Append current turn to history (not yet in ConversationHistory)
+			// This ensures the current user message + assistant response are extracted
+			if currentUserMessage != "" {
+				history = append(history, memory.Message{Role: "user", Content: currentUserMessage})
+			}
+			if currentAssistantResponse != "" {
+				history = append(history, memory.Message{Role: "assistant", Content: currentAssistantResponse})
+			}
+
+			logging.Infof("Memory extraction: sessionID=%s, userID=%s, historyLen=%d (including current turn)", sessionID, userID, len(history))
+
+			// Only extract if we have history (not relevant for first request)
+			if len(history) == 0 {
+				logging.Infof("Memory extraction: skipping - no history to extract")
+				return // No history to extract from
+			}
+
+			logging.Infof("Memory extraction: calling ProcessResponse with %d messages", len(history))
+			if err := r.MemoryExtractor.ProcessResponse(bgCtx, sessionID, userID, history); err != nil {
+				logging.Warnf("Memory extraction failed: %v", err)
+			}
+		}()
 	}
 
 	// Translate response for Response API requests
@@ -278,6 +353,9 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 			},
 		}
 	}
+
+	// Update router replay with hallucination detection results if enabled
+	r.updateRouterReplayHallucinationStatus(ctx)
 
 	// Capture replay response payload if enabled
 	r.attachRouterReplayResponse(ctx, finalBody, true)
@@ -389,6 +467,26 @@ func (r *OpenAIRouter) cacheStreamingResponse(ctx *RequestContext) error {
 		}
 		if totalTokens, ok := usageMap["total_tokens"].(float64); ok {
 			usage.TotalTokens = int64(totalTokens)
+		}
+	}
+
+	// Record token metrics for streaming responses
+	if ctx.RequestModel != "" && (usage.PromptTokens > 0 || usage.CompletionTokens > 0) {
+		metrics.RecordModelTokensDetailed(
+			ctx.RequestModel,
+			float64(usage.PromptTokens),
+			float64(usage.CompletionTokens),
+		)
+		logging.Infof("Recorded token metrics for streaming response: model=%s, prompt=%d, completion=%d",
+			ctx.RequestModel, usage.PromptTokens, usage.CompletionTokens)
+
+		// Record TPOT for streaming responses if completion tokens are available
+		if usage.CompletionTokens > 0 && !ctx.StartTime.IsZero() {
+			completionLatency := time.Since(ctx.StartTime).Seconds()
+			timePerToken := completionLatency / float64(usage.CompletionTokens)
+			metrics.RecordModelTPOT(ctx.RequestModel, timePerToken)
+			logging.Infof("Recorded TPOT for streaming response: model=%s, TPOT=%.4f", ctx.RequestModel, timePerToken)
+			latency.UpdateTPOT(ctx.RequestModel, timePerToken)
 		}
 	}
 

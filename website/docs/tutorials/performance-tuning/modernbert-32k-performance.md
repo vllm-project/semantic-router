@@ -11,6 +11,7 @@ This tutorial provides benchmark results and performance tuning guidance for Mod
 ModernBERT-base-32k extends the context window from 512 tokens (BERT-base) to 32,768 tokens, enabling processing of long documents and conversations. This guide presents empirical benchmark results from comprehensive testing across different context lengths and concurrency levels.
 
 **Test Environment:**
+
 - **GPU**: NVIDIA L4 (23GB VRAM)
 - **Flash Attention 2**: Enabled
 - **Model**: `llm-semantic-router/modernbert-base-32k`
@@ -29,6 +30,7 @@ ModernBERT-base-32k extends the context window from 512 tokens (BERT-base) to 32
 | 8,192 tokens   | 3,299.92ms   | 3,524.62ms  | 3,526.34ms  | 3,526.34ms  | Pass |
 
 **Notes:**
+
 - 1K tokens: Stable performance with mean ≈ p50
 - 4K and 8K tokens: Stable performance with mean ≈ p50
 
@@ -41,6 +43,7 @@ ModernBERT-base-32k extends the context window from 512 tokens (BERT-base) to 32
 | 8,192 tokens   | N/A          | N/A         | N/A         | 0%           | Fail |
 
 **Notes:**
+
 - 1K tokens: Excellent performance with 100% success rate
 - 4K tokens: 93% success rate (7 OOM errors out of 100 requests)
 - 8K tokens: Failed due to insufficient GPU memory
@@ -65,12 +68,14 @@ All high concurrency tests (C=50+) failed due to hardware limitations. The curre
 ### Recommended Configuration
 
 **For Production (1K-8K tokens):**
+
 - **GPU**: NVIDIA L4 (23GB VRAM) or better
 - **System RAM**: 32GB+
 - **CUDA**: Version 12.0+
 - **Flash Attention 2**: Enabled (provides 1.75x-11.9x speedup)
 
 **For Long Context (16K-32K tokens):**
+
 - **GPU**: NVIDIA A100 (40GB+ VRAM) - **Required**
 - **System RAM**: 64GB+
 - See [Long Context Test Plan](./modernbert-32k-docs/modernbert-32k-long-context-test-plan.md) for details
@@ -91,23 +96,25 @@ All high concurrency tests (C=50+) failed due to hardware limitations. The curre
 ### Latency Expectations
 
 **Single Request (C=1):**
+
 - 1K tokens: ~100ms (p50)
 - 4K tokens: ~950ms (p50)
 - 8K tokens: ~3,500ms (p50)
 
 **Concurrent Requests (C=10):**
+
 - 1K tokens: ~1,000ms (mean)
 - 4K tokens: ~9,400ms (mean, 93% success)
 - 8K tokens: Not supported (OOM)
 
 ### Memory Usage
 
-| Context Length | GPU Memory per Request | Notes |
-|----------------|------------------------|-------|
-| 512 tokens     | ~5MB                   | Very efficient |
-| 1K tokens      | ~11MB                  | Very efficient |
-| 4K tokens      | ~estimated             | Moderate |
-| 8K tokens      | ~estimated             | High (requires 22GB+ VRAM) |
+| Context Length | GPU Memory per Request | Notes                        |
+|----------------|------------------------|------------------------------|
+| 512 tokens     | ~5MB                   | Very efficient               |
+| 1K tokens      | ~11MB                  | Very efficient               |
+| 4K tokens      | ~estimated             | Moderate                     |
+| 8K tokens      | ~estimated             | High (requires 22GB+ VRAM)   |
 
 ---
 
@@ -164,12 +171,14 @@ Choose context length based on your use case:
 ### 2. Concurrency Tuning
 
 **Start Conservative:**
+
 1. Begin with C=1 for all context lengths
 2. Gradually increase to C=10 for 1K-4K tokens
 3. Monitor GPU memory and error rates
 4. Reduce concurrency if OOM errors occur
 
 **Production Settings:**
+
 ```yaml
 # Recommended concurrency limits
 concurrency_limits:
@@ -188,6 +197,7 @@ concurrency_limits:
 ### 4. Device Selection
 
 **Always prefer GPU:**
+
 - GPU provides 45x speedup for 512 tokens
 - Flash Attention 2 provides additional 1.75x-11.9x speedup
 - CPU only suitable as fallback for very short sequences
@@ -199,6 +209,7 @@ concurrency_limits:
 ### Prerequisites
 
 1. **Install Rust and CUDA:**
+
    ```bash
    # Install Rust
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -208,6 +219,7 @@ concurrency_limits:
    ```
 
 2. **Build with Flash Attention 2:**
+
    ```bash
    cd candle-binding
    cargo build --example benchmark_concurrent --release --features cuda,flash-attn
@@ -225,6 +237,7 @@ cargo run --example benchmark_concurrent --release --features cuda,flash-attn
 For testing 16K-32K tokens (requires A100 GPU):
 
 1. **Uncomment test cases** in `benchmark_concurrent.rs`:
+
    ```rust
    let context_lengths = vec![
        1024,
@@ -236,6 +249,7 @@ For testing 16K-32K tokens (requires A100 GPU):
    ```
 
 2. **Run benchmark:**
+
    ```bash
    cargo run --example benchmark_concurrent --release --features cuda,flash-attn
    ```
@@ -249,10 +263,12 @@ For testing 16K-32K tokens (requires A100 GPU):
 ### Out of Memory (OOM) Errors
 
 **Symptoms:**
+
 - `CUDA_ERROR_OUT_OF_MEMORY` errors
 - Requests failing at high concurrency
 
 **Solutions:**
+
 1. Reduce concurrency (C=10 → C=1)
 2. Use chunking for sequences > 8K tokens
 3. Increase wait time between requests
@@ -261,10 +277,12 @@ For testing 16K-32K tokens (requires A100 GPU):
 ### High Latency
 
 **Symptoms:**
+
 - Latency higher than expected
 - p95/p99 latency spikes
 
 **Solutions:**
+
 1. Enable Flash Attention 2
 2. Reduce concurrency
 3. Use chunking for long sequences
@@ -273,11 +291,13 @@ For testing 16K-32K tokens (requires A100 GPU):
 ### Memory Constraints
 
 **Symptoms:**
+
 - Tests pass initially, then fail
 - Memory not released between requests
 - OOM errors after initial successful tests
 
 **Solutions:**
+
 1. **Upgrade hardware**: Use GPU with more VRAM (A100 40GB+ for high concurrency)
 2. Add explicit memory cleanup between requests
 3. Increase wait time between requests
@@ -308,6 +328,7 @@ For testing 16K-32K tokens (requires A100 GPU):
 - **High concurrency (C=50+)**: Test plan ready, waiting for A100 environment (40GB+ VRAM)
 
 See:
+
 - [Long Context Test Plan](./modernbert-32k-docs/modernbert-32k-long-context-test-plan.md)
 - [Big Batch Test Plan](./modernbert-32k-docs/modernbert-32k-big-batch-test-plan.md)
 

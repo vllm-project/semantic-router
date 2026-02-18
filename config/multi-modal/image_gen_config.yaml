@@ -1,0 +1,72 @@
+# Example configuration for vLLM-Omni image generation plugin
+# Add this to your semantic router config under a decision's plugins section
+
+# Decision with image generation enabled
+decisions:
+  - name: "image_generation"
+    description: "Handle image generation requests"
+    signal:
+      type: "intent_classifier"
+      config:
+        intents: ["generate_image", "create_artwork", "visualize"]
+    plugins:
+      image_gen:
+        enabled: true
+        backend: "vllm_omni"
+        default_width: 1024
+        default_height: 1024
+        max_inference_steps: 50
+        timeout_seconds: 120
+        backend_config:
+          base_url: "http://localhost:8001"  # vLLM-Omni server URL
+          model: "Qwen/Qwen-Image"
+          num_inference_steps: 50
+          cfg_scale: 4.0
+          # seed: 42  # Optional: for reproducible results
+
+  # Alternative: OpenAI image generation (via Responses API)
+  - name: "openai_image_generation"
+    description: "Handle image generation via OpenAI"
+    signal:
+      type: "keyword"
+      config:
+        keywords: ["generate image", "create picture"]
+    plugins:
+      image_gen:
+        enabled: true
+        backend: "openai"
+        default_width: 1024
+        default_height: 1024
+        timeout_seconds: 60
+        backend_config:
+          api_key: "${OPENAI_API_KEY}"
+          model: "gpt-image-1"
+          quality: "hd"
+          style: "vivid"
+
+# Usage example with curl:
+#
+# Using vLLM-Omni directly:
+# curl http://localhost:8001/v1/chat/completions \
+#   -H "Content-Type: application/json" \
+#   -d '{
+#     "messages": [{"role": "user", "content": "A sunset over mountains"}],
+#     "extra_body": {"height": 1024, "width": 1024, "num_inference_steps": 50}
+#   }'
+#
+# Using Semantic Router (routes to vLLM-Omni based on decision):
+# curl http://localhost:8080/v1/chat/completions \
+#   -H "Content-Type: application/json" \
+#   -d '{
+#     "model": "auto",
+#     "messages": [{"role": "user", "content": "Generate an image of a sunset over mountains"}]
+#   }'
+#
+# Using Responses API with image_generation tool:
+# curl http://localhost:8080/v1/responses \
+#   -H "Content-Type: application/json" \
+#   -d '{
+#     "model": "auto",
+#     "input": "Generate an image of a sunset over mountains",
+#     "tools": [{"type": "image_generation"}]
+#   }'

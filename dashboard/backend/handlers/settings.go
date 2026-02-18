@@ -9,7 +9,9 @@ import (
 
 // SettingsResponse represents the dashboard settings returned to frontend
 type SettingsResponse struct {
-	ReadonlyMode bool `json:"readonlyMode"`
+	ReadonlyMode bool   `json:"readonlyMode"`
+	Platform     string `json:"platform"`
+	EnvoyURL     string `json:"envoyUrl"` // Envoy proxy URL for evaluation endpoint
 }
 
 // SettingsHandler returns dashboard settings for frontend consumption
@@ -22,6 +24,8 @@ func SettingsHandler(cfg *config.Config) http.HandlerFunc {
 
 		response := SettingsResponse{
 			ReadonlyMode: cfg.ReadonlyMode,
+			Platform:     cfg.Platform,
+			EnvoyURL:     cfg.EnvoyURL,
 		}
 
 		w.Header().Set("Content-Type", "application/json")

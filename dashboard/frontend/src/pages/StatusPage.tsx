@@ -112,7 +112,7 @@ const StatusPage: React.FC = () => {
             <span>Auto-refresh</span>
           </label>
           <button onClick={fetchStatus} className={styles.refreshButton}>
-            🔄 Refresh
+            Refresh
           </button>
         </div>
       </div>

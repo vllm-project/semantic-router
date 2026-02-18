@@ -54,6 +54,33 @@ def validate_command(config_path: str):
         log.info(f"  Signals: None (will auto-generate categories)")
 
     log.info(f"  Decisions: {len(user_config.decisions)}")
+
+    # Count plugins
+    total_plugins = 0
+    plugins_by_type = {}
+    decisions_with_plugins = 0
+    for decision in user_config.decisions:
+        if decision.plugins:
+            decisions_with_plugins += 1
+            for plugin in decision.plugins:
+                total_plugins += 1
+                plugin_type = (
+                    plugin.type.value
+                    if hasattr(plugin.type, "value")
+                    else str(plugin.type)
+                )
+                plugins_by_type[plugin_type] = plugins_by_type.get(plugin_type, 0) + 1
+
+    if total_plugins > 0:
+        log.info(
+            f"  Plugins: {total_plugins} total ({decisions_with_plugins} decisions)"
+        )
+        if len(plugins_by_type) > 0:
+            plugin_types_str = ", ".join(
+                f"{ptype}: {count}" for ptype, count in sorted(plugins_by_type.items())
+            )
+            log.info(f"    Types: {plugin_types_str}")
+
     log.info(f"  Models: {len(user_config.providers.models)}")
     log.info(f"  Default model: {user_config.providers.default_model}")
     log.info("")

@@ -20,7 +20,7 @@ We are building the **System Level Intelligence** for Mixture-of-Models (MoM), b
 
 ### Signal-Driven Decision Engine
 
-Captures and combines **7 types of signals** to make intelligent routing decisions:
+Captures and combines **9 types of request signals** to make intelligent routing decisions:
 
 | Signal Type | Description | Use Case |
 |------------|-------------|----------|
@@ -31,6 +31,8 @@ Captures and combines **7 types of signals** to make intelligent routing decisio
 | **user_feedback** | User satisfaction and feedback classification | Handle follow-up messages and corrections |
 | **preference** | LLM-based route preference matching | Complex intent analysis via external LLM |
 | **language** | Multi-language detection (100+ languages) | Route queries to language-specific models |
+| **context** | Token-count based context classification | Route short/long context requests to suitable models |
+| **complexity** | Query difficulty classification (easy/medium/hard) | Match model capability to task difficulty |
 
 **How it works**: Signals are extracted from requests, combined using AND/OR operators in decision rules, and used to select the best model and configuration.
 
@@ -67,11 +69,13 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
         Feedback[User Feedback Signals<br/>Satisfaction Analysis]
         Preference[Preference Signals<br/>LLM-based Matching]
         Language[Language Signals<br/>Multi-language Detection]
+        Context[Context Signals<br/>Token Count]
+        Complexity[Complexity Signals<br/>Difficulty Classification]
     end
 
     subgraph "Decision Engine"
         Rules[Decision Rules<br/>AND/OR Operators]
-        ModelSelect[Model Selection<br/>Priority/Confidence]
+        ModelSelect[Model Selection<br/>Priority/Confidence/Algorithms]
     end
 
     subgraph "Plugin Chain"
@@ -91,6 +95,8 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
     Router --> Feedback
     Router --> Preference
     Router --> Language
+    Router --> Context
+    Router --> Complexity
 
     Keyword --> Rules
     Embedding --> Rules
@@ -99,6 +105,8 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
     Feedback --> Rules
     Preference --> Rules
     Language --> Rules
+    Context --> Rules
+    Complexity --> Rules
 
     Rules --> ModelSelect
     ModelSelect --> Cache
@@ -174,7 +182,7 @@ Step-by-step guides for implementing intelligent routing, semantic caching, cont
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](./community/overview) for details.
+We welcome contributions! Please see our [Contributing Guide](https://github.com/vllm-project/semantic-router/blob/main/CONTRIBUTING.md) for details.
 
 ## License
 

@@ -54,6 +54,40 @@ const (
 
 	// MethodStatic uses static scores from configuration (default behavior)
 	MethodStatic SelectionMethod = "static"
+
+	// MethodKNN uses K-Nearest Neighbors for query-based model selection
+	// Finds similar historical queries and uses quality-weighted voting
+	// Reference: FusionFactory (arXiv:2507.10540) query-level fusion
+	MethodKNN SelectionMethod = "knn"
+
+	// MethodKMeans uses KMeans clustering for model selection
+	// Clusters queries and assigns models based on quality+latency scores
+	// Reference: Avengers-Pro (arXiv:2508.12631) performance-efficiency routing
+	MethodKMeans SelectionMethod = "kmeans"
+
+	// MethodSVM uses Support Vector Machine for model classification
+	// Learns decision boundaries between model preferences using RBF kernel
+	// Reference: FusionFactory (arXiv:2507.10540), Avengers-Pro (arXiv:2508.12631)
+	MethodSVM SelectionMethod = "svm"
+
+	// MethodMLP uses Multi-Layer Perceptron for GPU-accelerated model selection
+	// Neural network classifier using Candle for efficient GPU inference
+	// Reference: FusionFactory (arXiv:2507.10540) query-level fusion via MLP routers
+	MethodMLP SelectionMethod = "mlp"
+
+	// MethodRLDriven uses reinforcement learning for personalized model selection
+	// Implements Router-R1 reward structure (format, outcome, cost) for RL training
+	// Reference: Router-R1 (arXiv:2506.09033)
+	MethodRLDriven SelectionMethod = "rl_driven"
+
+	// MethodGMTRouter uses heterogeneous graph learning for personalized routing
+	// Learns user preferences from multi-turn interactions using HGT message passing
+	// Reference: GMTRouter (arXiv:2511.08590)
+	MethodGMTRouter SelectionMethod = "gmtrouter"
+
+	// MethodLatencyAware uses TPOT/TTFT percentile data for latency-aware model selection
+	// Selects the fastest model from candidates based on configured latency percentiles
+	MethodLatencyAware SelectionMethod = "latency_aware"
 )
 
 // SelectionContext provides context for model selection decisions
@@ -71,6 +105,10 @@ type SelectionContext struct {
 	// DecisionName is the name of the matched decision for category-specific selection
 	DecisionName string
 
+	// CategoryName is the detected domain category (e.g., "physics", "math")
+	// Used by ML selectors to create feature vectors with category one-hot encoding
+	CategoryName string
+
 	// CandidateModels is the list of models to select from
 	CandidateModels []config.ModelRef
 
@@ -81,6 +119,20 @@ type SelectionContext struct {
 	// QualityWeight indicates how much to weight quality/score (0.0-1.0)
 	// Higher values prefer higher-quality models
 	QualityWeight float64
+
+	// UserID identifies the user for personalized selection (optional)
+	// When set, enables per-user preference learning in RL-driven selection
+	UserID string
+
+	// SessionID identifies the conversation session for multi-turn context (optional)
+	// Used to track within-session model performance
+	SessionID string
+
+	// LatencyAwareTPOTPercentile is the configured TPOT percentile (1-100) for latency_aware selection
+	LatencyAwareTPOTPercentile int
+
+	// LatencyAwareTTFTPercentile is the configured TTFT percentile (1-100) for latency_aware selection
+	LatencyAwareTTFTPercentile int
 }
 
 // SelectionResult contains the result of a model selection decision
@@ -125,6 +177,10 @@ type Feedback struct {
 	// Query is the original query that was processed
 	Query string
 
+	// Response is the model's response text (optional)
+	// Used for response embedding in GMTRouter (Paper G4)
+	Response string
+
 	// WinnerModel is the model that was preferred
 	WinnerModel string
 
@@ -139,6 +195,21 @@ type Feedback struct {
 
 	// Timestamp is when the feedback was recorded
 	Timestamp int64
+
+	// UserID identifies the user providing feedback (optional)
+	// When set, enables per-user preference learning
+	UserID string
+
+	// SessionID identifies the session for multi-turn context (optional)
+	SessionID string
+
+	// FeedbackType indicates the type of implicit feedback (optional)
+	// Values: "satisfied", "need_clarification", "wrong_answer", "want_different"
+	FeedbackType string
+
+	// Confidence indicates the confidence in this feedback (0.0-1.0)
+	// Used for implicit feedback where detection may be uncertain
+	Confidence float64
 }
 
 // Registry maintains available selection methods and their configurations

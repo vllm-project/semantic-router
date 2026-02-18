@@ -3,9 +3,12 @@ package extproc
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
@@ -15,7 +18,7 @@ import (
 // This is the new approach that uses Decision-based routing with AND/OR rule combinations
 // Decision evaluation is ALWAYS performed when decisions are configured (for plugin features like
 // hallucination detection), but model selection only happens for auto models.
-func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userContent string, nonUserMessages []string, ctx *RequestContext) (string, float64, entropy.ReasoningDecision, string) {
+func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userContent string, nonUserMessages []string, ctx *RequestContext) (string, float64, entropy.ReasoningDecision, string, error) {
 	var decisionName string
 	var evaluationConfidence float64
 	var reasoningDecision entropy.ReasoningDecision
@@ -23,16 +26,16 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 
 	// Check if there's content to evaluate
 	if len(nonUserMessages) == 0 && userContent == "" {
-		return "", 0.0, entropy.ReasoningDecision{}, ""
+		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
 	// Check if decisions are configured
 	if len(r.Config.Decisions) == 0 {
 		if r.Config.IsAutoModelName(originalModel) {
 			logging.Warnf("No decisions configured, using default model")
-			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel
+			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel, nil
 		}
-		return "", 0.0, entropy.ReasoningDecision{}, ""
+		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
 	// Determine text to use for evaluation
@@ -42,11 +45,43 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	}
 
 	if evaluationText == "" {
-		return "", 0.0, entropy.ReasoningDecision{}, ""
+		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
+	// For context token counting, we need to include ALL messages (user + non-user)
+	// This ensures multi-turn conversations are properly counted
+	var allMessagesText string
+	if userContent != "" && len(nonUserMessages) > 0 {
+		// Combine user content with all non-user messages for full context
+		allMessages := make([]string, 0, len(nonUserMessages)+1)
+		allMessages = append(allMessages, nonUserMessages...)
+		allMessages = append(allMessages, userContent)
+		allMessagesText = strings.Join(allMessages, " ")
+	} else if userContent != "" {
+		allMessagesText = userContent
+	} else {
+		allMessagesText = strings.Join(nonUserMessages, " ")
+	}
+
+	// Start signal evaluation span (Layer 1)
+	signalStart := time.Now()
+	signalCtx, signalSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanSignalEvaluation)
+
 	// Evaluate all signals first to get detailed signal information
-	signals := r.Classifier.EvaluateAllSignals(evaluationText)
+	// Use evaluationText for most signals, but pass allMessagesText for context counting
+	// EvaluateAllSignalsWithHeaders also evaluates the authz signal using request headers
+	// (x-authz-user-id, x-authz-user-groups injected by Authorino / ext_authz).
+	// In extproc, we always use normal mode (only evaluate signals used in decisions)
+	signals, authzErr := r.Classifier.EvaluateAllSignalsWithHeaders(evaluationText, allMessagesText, ctx.Headers, false)
+	if authzErr != nil {
+		signalSpan.End()
+		// Authz failure is a hard error — do not silently bypass.
+		// Propagate the error to the caller, which returns 403 to the client.
+		logging.Errorf("[Signal Evaluation] Authz evaluation failed: %v", authzErr)
+		return "", 0, entropy.ReasoningDecision{}, "", authzErr
+	}
+
+	signalLatency := time.Since(signalStart).Milliseconds()
 
 	// Store signal results in context for response headers
 	ctx.VSRMatchedKeywords = signals.MatchedKeywordRules
@@ -56,15 +91,39 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	ctx.VSRMatchedUserFeedback = signals.MatchedUserFeedbackRules
 	ctx.VSRMatchedPreference = signals.MatchedPreferenceRules
 	ctx.VSRMatchedLanguage = signals.MatchedLanguageRules
+	ctx.VSRMatchedContext = signals.MatchedContextRules
+	ctx.VSRContextTokenCount = signals.TokenCount
+	ctx.VSRMatchedComplexity = signals.MatchedComplexityRules
+	ctx.VSRMatchedModality = signals.MatchedModalityRules
+	ctx.VSRMatchedAuthz = signals.MatchedAuthzRules
 
 	// Set fact-check context fields from signal results
 	// This replaces the old performFactCheckClassification call to avoid duplicate computation
 	r.setFactCheckFromSignals(ctx, signals.MatchedFactCheckRules)
 
+	// Set modality classification on context from signal results for response headers
+	r.setModalityFromSignals(ctx, signals.MatchedModalityRules)
+
 	// Log signal evaluation results
-	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v",
+	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, modality=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
-		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules, signals.MatchedLanguageRules)
+		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules,
+		signals.MatchedLanguageRules, signals.MatchedModalityRules)
+
+	// Set signal span attributes
+	allMatchedRules := []string{}
+	allMatchedRules = append(allMatchedRules, signals.MatchedKeywordRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedEmbeddingRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedDomainRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedFactCheckRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedUserFeedbackRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedPreferenceRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedLanguageRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedModalityRules...)
+
+	// End signal evaluation span
+	tracing.EndSignalSpan(signalSpan, allMatchedRules, 1.0, signalLatency)
+	ctx.TraceContext = signalCtx
 
 	// Process user feedback signals to automatically update Elo ratings
 	// This implements "automatic scoring by signals" as requested
@@ -73,30 +132,52 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	// Perform decision evaluation using pre-computed signals
 	// This is ALWAYS done when decisions are configured, regardless of model type,
 	// because plugins (e.g., hallucination detection) depend on the matched decision
+
+	// Start decision evaluation span (Layer 2)
+	decisionStart := time.Now()
+	decisionCtx, decisionSpan := tracing.StartDecisionSpan(ctx.TraceContext, "decision_evaluation")
+
 	result, err := r.Classifier.EvaluateDecisionWithEngine(signals)
+	decisionLatency := time.Since(decisionStart).Seconds()
+
+	// Record decision evaluation metrics
+	metrics.RecordDecisionEvaluation(decisionLatency)
+
 	if err != nil {
 		logging.Errorf("Decision evaluation error: %v", err)
+		// End decision span with error
+		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, r.Config.Strategy)
+		ctx.TraceContext = decisionCtx
 		if r.Config.IsAutoModelName(originalModel) {
-			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel
+			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel, nil
 		}
-		return "", 0.0, entropy.ReasoningDecision{}, ""
+		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
 	if result == nil || result.Decision == nil {
+		// End decision span with no match
+		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, r.Config.Strategy)
+		ctx.TraceContext = decisionCtx
 		if r.Config.IsAutoModelName(originalModel) {
-			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel
+			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel, nil
 		}
-		return "", 0.0, entropy.ReasoningDecision{}, ""
+		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
+
+	// Record decision match with confidence
+	metrics.RecordDecisionMatch(result.Decision.Name, result.Confidence)
+
+	// End decision span with success
+	tracing.EndDecisionSpan(decisionSpan, result.Confidence, result.MatchedRules, r.Config.Strategy)
+	ctx.TraceContext = decisionCtx
 
 	// Store the selected decision in context for later use (e.g., plugins, header mutations)
 	// This is critical for hallucination detection and other per-decision plugins
 	ctx.VSRSelectedDecision = result.Decision
 
-	// Set router replay config from system-level configuration if enabled
-	if r.Config.RouterReplay.Enabled {
-		cfgCopy := r.Config.RouterReplay
-		ctx.RouterReplayConfig = &cfgCopy
+	// Set router replay plugin config from per-decision plugin if configured
+	if pluginCfg := result.Decision.GetRouterReplayConfig(); pluginCfg != nil && pluginCfg.Enabled {
+		ctx.RouterReplayPluginConfig = pluginCfg
 	}
 
 	// Extract domain category from matched rules (for VSRSelectedCategory header)
@@ -111,13 +192,14 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	}
 	// Store category in context for response headers
 	ctx.VSRSelectedCategory = categoryName
-	ctx.VSRSelectedDecisionConfidence = evaluationConfidence
 
-	// Store matched keywords in context for response headers
-	ctx.VSRMatchedKeywords = result.MatchedKeywords
+	// Note: VSRMatchedKeywords is already set from signals.MatchedKeywordRules (line 61)
+	// We should NOT overwrite it with result.MatchedKeywords which contains actual keywords
+	// The header should show rule names, not the actual matched keywords
 
 	decisionName = result.Decision.Name
 	evaluationConfidence = result.Confidence
+	ctx.VSRSelectedDecisionConfidence = evaluationConfidence
 	logging.Infof("Decision Evaluation Result: decision=%s, category=%s, confidence=%.3f, matched_rules=%v",
 		decisionName, categoryName, evaluationConfidence, result.MatchedRules)
 
@@ -126,14 +208,15 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	if !r.Config.IsAutoModelName(originalModel) {
 		logging.Infof("Model %s explicitly specified, keeping original model (decision %s plugins will be applied)",
 			originalModel, decisionName)
-		return decisionName, evaluationConfidence, reasoningDecision, ""
+		return decisionName, evaluationConfidence, reasoningDecision, "", nil
 	}
 
 	// Select best model from the decision's ModelRefs using configured selection algorithm
 	if len(result.Decision.ModelRefs) > 0 {
 		// Use advanced model selection (Elo, RouterDC, AutoMix, Hybrid, or Static)
 		// Pass decision's algorithm config for per-decision algorithm override
-		selectedModelRef, usedMethod := r.selectModelFromCandidates(result.Decision.ModelRefs, decisionName, userContent, result.Decision.Algorithm)
+		// Pass categoryName for ML selectors to create feature vectors with category one-hot encoding
+		selectedModelRef, usedMethod := r.selectModelFromCandidates(result.Decision.ModelRefs, decisionName, userContent, result.Decision.Algorithm, categoryName)
 
 		// Use LoRA name if specified, otherwise use the base model name
 		selectedModel = selectedModelRef.Model
@@ -146,6 +229,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 				decisionName, selectedModel, usedMethod)
 		}
 		ctx.VSRSelectedModel = selectedModel
+		ctx.VSRSelectionMethod = usedMethod
 
 		// Determine reasoning mode from the selected model's configuration
 		if selectedModelRef.UseReasoning != nil {
@@ -172,17 +256,20 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	} else {
 		// No model refs in decision, use default model
 		selectedModel = r.Config.DefaultModel
+		ctx.VSRSelectedModel = selectedModel
+		ctx.VSRSelectionMethod = "default"
 		logging.Infof("No model refs in decision %s, using default model: %s", decisionName, selectedModel)
 	}
 
-	return decisionName, evaluationConfidence, reasoningDecision, selectedModel
+	return decisionName, evaluationConfidence, reasoningDecision, selectedModel, nil
 }
 
 // selectModelFromCandidates uses the configured selection algorithm to choose the best model
 // from the decision's candidate models. Falls back to first model if selection fails.
 // The algorithm parameter allows per-decision algorithm override (aligned with looper pattern).
+// The categoryName parameter is the detected domain category (e.g., "physics", "math") for ML feature vectors.
 // Returns the selected model and the method name used for logging.
-func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, decisionName string, query string, algorithm *config.AlgorithmConfig) (*config.ModelRef, string) {
+func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, decisionName string, query string, algorithm *config.AlgorithmConfig, categoryName string) (*config.ModelRef, string) {
 	if len(modelRefs) == 0 {
 		return nil, ""
 	}
@@ -209,13 +296,17 @@ func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, de
 
 	// Build selection context with cost/quality weights
 	costWeight, qualityWeight := r.getSelectionWeights(algorithm)
+	latencyAwareTPOTPercentile, latencyAwareTTFTPercentile := r.getLatencyAwarePercentiles(algorithm)
 
 	selCtx := &selection.SelectionContext{
-		Query:           query,
-		DecisionName:    decisionName,
-		CandidateModels: modelRefs,
-		CostWeight:      costWeight,
-		QualityWeight:   qualityWeight,
+		Query:                      query,
+		DecisionName:               decisionName,
+		CategoryName:               categoryName,
+		CandidateModels:            modelRefs,
+		CostWeight:                 costWeight,
+		QualityWeight:              qualityWeight,
+		LatencyAwareTPOTPercentile: latencyAwareTPOTPercentile,
+		LatencyAwareTTFTPercentile: latencyAwareTTFTPercentile,
 	}
 
 	// Perform selection
@@ -257,8 +348,20 @@ func (r *OpenAIRouter) getSelectionMethod(algorithm *config.AlgorithmConfig) sel
 			return selection.MethodAutoMix
 		case "hybrid":
 			return selection.MethodHybrid
+		case "rl_driven":
+			return selection.MethodRLDriven
+		case "gmtrouter":
+			return selection.MethodGMTRouter
+		case "latency_aware":
+			return selection.MethodLatencyAware
 		case "static":
 			return selection.MethodStatic
+		case "knn":
+			return selection.MethodKNN
+		case "kmeans":
+			return selection.MethodKMeans
+		case "svm":
+			return selection.MethodSVM
 		case "confidence", "ratings":
 			// These are looper algorithms, not selection algorithms
 			// Fall through to default
@@ -286,6 +389,15 @@ func (r *OpenAIRouter) getSelectionWeights(algorithm *config.AlgorithmConfig) (f
 
 	// Default: equal weighting (0.5 cost, 0.5 quality)
 	return 0.5, 0.5
+}
+
+// getLatencyAwarePercentiles extracts TPOT/TTFT percentile settings for latency_aware selection.
+// Returns (0, 0) when latency_aware is not configured for the decision.
+func (r *OpenAIRouter) getLatencyAwarePercentiles(algorithm *config.AlgorithmConfig) (int, int) {
+	if algorithm == nil || algorithm.LatencyAware == nil {
+		return 0, 0
+	}
+	return algorithm.LatencyAware.TPOTPercentile, algorithm.LatencyAware.TTFTPercentile
 }
 
 // processUserFeedbackForElo automatically updates Elo ratings based on detected user feedback signals.

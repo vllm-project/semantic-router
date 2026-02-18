@@ -1,7 +1,7 @@
 # Performance & Functionality Validation Report
 
-**Project**: Issue #995 - ModernBERT-base-32k Integration  
-**Phase**: Phase 6 - Advanced Evaluation Metrics  
+**Project**: Issue #995 - ModernBERT-base-32k Integration
+**Phase**: Phase 6 - Advanced Evaluation Metrics
 **Environment**: NVIDIA L4 GPU (23GB VRAM), Flash Attention 2 enabled
 
 ---
@@ -11,6 +11,7 @@
 This document summarizes all performance and functionality validation tests completed for ModernBERT-base-32k integration. All tests were conducted with context lengths from 512 tokens to 8K tokens, covering the majority of production use cases.
 
 **Key Findings:**
+
 - 1K-4K tokens: Reliable performance with concurrency up to C=10
 - 8K tokens: Works reliably with C=1
 - 4K tokens: C=10 has 88% success rate (12 OOM errors)
@@ -21,11 +22,12 @@ This document summarizes all performance and functionality validation tests comp
 ## 1. Concurrent Request Benchmark Results
 
 ### Test Tool
+
 - **File**: `candle-binding/examples/benchmark_concurrent.rs`
 - **Purpose**: Measure inference latency under concurrent load
 - **Features**: Flash Attention 2 support, comprehensive latency statistics
 
-### Results: C=1 (Concurrency=1) 
+### Results: C=1 (Concurrency=1)
 
 | Context Length | Mean (ms) | p50 (ms) | p95 (ms) | p99 (ms) | Success | Errors |
 |----------------|-----------|----------|----------|----------|---------|--------|
@@ -34,11 +36,12 @@ This document summarizes all performance and functionality validation tests comp
 | 8192 tokens    | 3293.71   | 3508.68  | 3514.06  | 3514.06  | 10      | 0      |
 
 **Notes:**
+
 - 1K tokens: Mean high due to outlier (p50=94.45ms, mean=1078.78ms)
 - 4K tokens: Stable (mean ≈ p50)
 - 8K tokens: Stable (mean ≈ p50)
 
-### Results: C=10 (Concurrency=10) 
+### Results: C=10 (Concurrency=10)
 
 | Context Length | Mean (ms) | p50 (ms) | p95 (ms) | p99 (ms) | Success | Errors |
 |----------------|-----------|----------|----------|----------|---------|--------|
@@ -47,11 +50,12 @@ This document summarizes all performance and functionality validation tests comp
 | 8192 tokens    | N/A       | N/A      | N/A      | N/A      | 0       | 0      |
 
 **Notes:**
+
 - 1K tokens: Passed successfully (100 requests)
 - 4K tokens: 12 errors out of 100 (OOM) - 88% success rate
 - 8K tokens: Failed due to low memory (0.32GB free)
 
-### Results: C=50, C=100 
+### Results: C=50, C=100
 
 All tests failed due to low GPU memory (0.32GB free after initial tests).
 
@@ -62,6 +66,7 @@ All tests failed due to low GPU memory (0.32GB free after initial tests).
 ## 2. Performance Benchmark Results
 
 ### Test Tool
+
 - **File**: `candle-binding/examples/benchmark_performance.rs`
 - **Purpose**: Detailed performance profiling, breaking down latency by component
 
@@ -92,17 +97,18 @@ All tests failed due to low GPU memory (0.32GB free after initial tests).
 ## 3. Comprehensive Test Results (Phase 4)
 
 ### Test Tool
+
 - **File**: `candle-binding/examples/test_modernbert_32k_validation.rs`
 - **Purpose**: Comprehensive validation including backward compatibility, extended context, and performance
 
-### Backward Compatibility 
+### Backward Compatibility
 
 - 512-token sequences work correctly
 - Accuracy maintained (≥ 0.90 for domain, ≥ 0.85 for PII)
 - No breaking changes
 - Latency: 163ms on GPU
 
-### Extended Context Testing 
+### Extended Context Testing
 
 | Context Length | Status | Notes |
 |----------------|--------|-------|
@@ -111,11 +117,12 @@ All tests failed due to low GPU memory (0.32GB free after initial tests).
 | 8K tokens      | PASSED | Works correctly |
 | 16K tokens     | PASSED | Truncated to 8192 (before RoPE fix) |
 
-### LoRA Adapters Compatibility 
+### LoRA Adapters Compatibility
 
 **Status**: Traditional classifiers tested and working
 
 **What Was Tested**:
+
 - Traditional classifier compatibility with ModernBERT-32k
 - Dimension compatibility verified (hidden_size: 768 matches BERT-base)
 - Inference works correctly with traditional classifiers
@@ -127,12 +134,14 @@ All tests failed due to low GPU memory (0.32GB free after initial tests).
 **Status**: Fully tested and working with Extended32K base model
 
 **Test Results** (2026-02-18):
+
 - **Model Download**: Successfully downloaded from HuggingFace Hub (`LLM-Semantic-Router/pii_classifier_modernbert-base_model`)
 - **Classifier Compatibility**: PASSED - Existing PII classifier weights compatible with Extended32K base model
 - **Full Inference 32K**: PASSED - Complete inference pipeline working
 - **32K Classifier Inference**: PASSED - All components loading and working correctly
 
 **What Was Tested**:
+
 - PII classifier model download and verification
 - Compatibility of existing PII classifier weights with Extended32K base model
 - Full inference pipeline with Extended32K base model + PII classifier
@@ -143,6 +152,7 @@ All tests failed due to low GPU memory (0.32GB free after initial tests).
   - Very long text (6K-36K chars): Moderate confidence (0.32-0.38)
 
 **Key Findings**:
+
 - PII classifier weights are fully compatible with Extended32K base model
 - No retraining required - existing classifier weights work directly
 - Classification works correctly on texts from 28 characters to 36K characters
@@ -150,6 +160,7 @@ All tests failed due to low GPU memory (0.32GB free after initial tests).
 - All test cases passed successfully
 
 **Test Files**:
+
 - `test_classifier_compatibility.rs` - Compatibility verification
 - `test_full_inference_32k.rs` - Full inference pipeline testing
 - `test_32k_classifier_inference.rs` - Component loading and inference testing
@@ -179,15 +190,15 @@ All tests failed due to low GPU memory (0.32GB free after initial tests).
 if context_length <= 1024:
     max_concurrency = 10  # Tested and works
     chunking_threshold = 100  # High concurrency OK
-    
+
 elif context_length <= 4096:
     max_concurrency = 10  # Works with 88% success rate
     chunking_threshold = 50  # Medium concurrency
-    
+
 elif context_length <= 8192:
     max_concurrency = 1   # Only C=1 works reliably
     chunking_threshold = 10  # Low concurrency or chunk
-    
+
 else:
     # 16K+ tokens require chunking or larger GPU
     max_concurrency = 1
@@ -233,7 +244,7 @@ else:
 
 ## 7. Summary
 
-### What Works 
+### What Works
 
 - 1K-4K tokens: Reliable with C=1 and C=10
 - 8K tokens: Reliable with C=1
@@ -241,13 +252,14 @@ else:
 - LoRA adapters: Traditional classifiers tested and working
 - Backward compatibility: Maintained
 
-### What Needs A100 
+### What Needs A100
 
 - 16K, 32K tokens testing
 - High concurrency (C=50+) for 8K+ tokens
 - Big batch testing
 
 **See separate test plans:**
+
 - [Long Context Test Plan](./modernbert-32k-long-context-test-plan.md) - Long context (16K-32K) test plan
 - [Big Batch Test Plan](./modernbert-32k-big-batch-test-plan.md) - Big batch (high concurrency) test plan
 
@@ -260,4 +272,3 @@ else:
 - **Comprehensive Tests**: `candle-binding/examples/test_modernbert_32k_validation.rs`
 
 ---
-

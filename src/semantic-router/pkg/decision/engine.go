@@ -20,9 +20,12 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strings"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // DecisionEngine evaluates routing decisions based on rule combinations
@@ -63,6 +66,12 @@ type SignalMatches struct {
 	UserFeedbackRules []string // "need_clarification", "satisfied", "want_different", "wrong_answer"
 	PreferenceRules   []string // Route preference names matched via external LLM
 	LanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
+	ContextRules      []string // Context rule names matched (e.g. "low_token_count")
+	ComplexityRules   []string // Complexity rules with difficulty level (e.g. "code_complexity:hard")
+	ModalityRules     []string // Modality classification: "AR", "DIFFUSION", or "BOTH"
+	AuthzRules        []string // Authz rule names matched for user-level routing (e.g. "premium_tier")
+
+	SignalConfidences map[string]float64 // "signalType:ruleName" → real score (0.0-1.0), e.g. {"embedding:ai": 0.88}. Defaults to 1.0 if missing
 }
 
 // DecisionResult represents the result of decision evaluation
@@ -94,6 +103,13 @@ func (e *DecisionEngine) EvaluateDecisions(
 // EvaluateDecisionsWithSignals evaluates all decisions using SignalMatches
 // This is the new method that supports all signal types including fact_check
 func (e *DecisionEngine) EvaluateDecisionsWithSignals(signals *SignalMatches) (*DecisionResult, error) {
+	// Record decision evaluation start time
+	start := time.Now()
+	defer func() {
+		latencySeconds := time.Since(start).Seconds()
+		metrics.RecordDecisionEvaluation(latencySeconds)
+	}()
+
 	if len(e.decisions) == 0 {
 		return nil, fmt.Errorf("no decisions configured")
 	}
@@ -106,6 +122,9 @@ func (e *DecisionEngine) EvaluateDecisionsWithSignals(signals *SignalMatches) (*
 		matched, confidence, matchedRules := e.evaluateDecisionWithSignals(decision, signals)
 
 		if matched {
+			// Record decision match with confidence
+			metrics.RecordDecisionMatch(decision.Name, confidence)
+
 			results = append(results, DecisionResult{
 				Decision:     decision,
 				Confidence:   confidence,
@@ -147,7 +166,11 @@ func (e *DecisionEngine) evaluateRuleCombinationWithSignals(
 	for _, condition := range rules.Conditions {
 		conditionMatched := false
 
-		switch condition.Type {
+		// Normalize condition type to lowercase for case-insensitive matching
+		// All signal types are normalized to match constants and switch cases
+		normalizedType := strings.ToLower(strings.TrimSpace(condition.Type))
+
+		switch normalizedType {
 		case "keyword":
 			conditionMatched = slices.Contains(signals.KeywordRules, condition.Name)
 		case "embedding":
@@ -166,13 +189,35 @@ func (e *DecisionEngine) evaluateRuleCombinationWithSignals(
 			conditionMatched = slices.Contains(signals.PreferenceRules, condition.Name)
 		case "language":
 			conditionMatched = slices.Contains(signals.LanguageRules, condition.Name)
+		case "context":
+			conditionMatched = slices.Contains(signals.ContextRules, condition.Name)
+		case "complexity":
+			conditionMatched = slices.Contains(signals.ComplexityRules, condition.Name)
+		case "modality":
+			conditionMatched = slices.Contains(signals.ModalityRules, condition.Name)
+		case "authz":
+			conditionMatched = slices.Contains(signals.AuthzRules, condition.Name)
 		default:
 			continue
 		}
 
 		if conditionMatched {
 			matchedCount++
-			totalConfidence += 1.0 // Each matched condition contributes 1.0 to confidence
+
+			// Use real confidence score if available (e.g., embedding similarity = 0.88),
+			// otherwise fall back to 1.0 for backward compatibility with signals that
+			// don't provide confidence (e.g., fact_check, language).
+			signalKey := fmt.Sprintf("%s:%s", normalizedType, condition.Name)
+			if signals.SignalConfidences != nil {
+				if score, ok := signals.SignalConfidences[signalKey]; ok && score > 0 {
+					totalConfidence += score
+				} else {
+					totalConfidence += 1.0
+				}
+			} else {
+				totalConfidence += 1.0
+			}
+
 			allMatchedRules = append(allMatchedRules, fmt.Sprintf("%s:%s", condition.Type, condition.Name))
 		}
 	}

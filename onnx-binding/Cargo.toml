@@ -1,0 +1,69 @@
+[package]
+name = "onnx-semantic-router"
+version = "0.1.0"
+edition = "2021"
+description = "Go bindings for ONNX Runtime semantic embedding model with 2D Matryoshka support (AMD GPU via ROCm)"
+license = "MIT OR Apache-2.0"
+
+[lib]
+name = "onnx_semantic_router"
+# Order: rlib for Rust-to-Rust linking, staticlib for C/Go FFI (static), cdylib for dynamic linking
+crate-type = ["rlib", "staticlib", "cdylib"]
+
+[features]
+default = []
+# ROCm support (enables AMD GPU acceleration via ROCm EP)
+rocm = ["ort/rocm"]
+# MIGraphX support (enables AMD GPU acceleration via MIGraphX EP - FASTER than ROCm EP)
+migraphx = ["ort/migraphx"]
+# CUDA support (enables NVIDIA GPU acceleration)
+cuda = ["ort/cuda"]
+# DirectML support (Windows GPU acceleration)
+directml = ["ort/directml"]
+# OpenVINO support (Intel acceleration) - requires building ORT with OpenVINO
+openvino = ["ort/openvino"]
+# OpenVINO support via dynamic loading (use with onnxruntime-openvino Python package)
+openvino-dynamic = ["ort/load-dynamic", "ort/openvino"]
+# MIGraphX via dynamic loading (use system ORT with MIGraphX compiled in)
+# Includes ROCm for full AMD GPU support
+migraphx-dynamic = ["migraphx", "rocm", "ort/load-dynamic"]
+# ROCm via dynamic loading (for Docker containers with ROCm ORT)
+rocm-dynamic = ["rocm", "ort/load-dynamic"]
+
+[dependencies]
+# ONNX Runtime via ort crate - supports AMD GPU (ROCm), NVIDIA GPU (CUDA), and more
+ort = { version = "2.0.0-rc.11", default-features = false, features = ["std", "ndarray", "copy-dylibs", "download-binaries", "tls-native"] }
+ndarray = "0.17"
+tokenizers = { version = "0.21.0", features = ["http"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = { version = "1", features = ["backtrace"] }
+tracing = "0.1"
+libc = "0.2"
+parking_lot = "0.12"
+half = "2.4"
+
+[dev-dependencies]
+rstest = "0.18"
+tempfile = "3.8"
+criterion = "0.5"
+
+[[example]]
+name = "test_gpu"
+path = "examples/test_gpu.rs"
+
+[[example]]
+name = "benchmark_cpu_vs_gpu"
+path = "examples/benchmark_cpu_vs_gpu.rs"
+
+[[example]]
+name = "benchmark_f16_openvino"
+path = "examples/benchmark_f16_openvino.rs"
+
+[[example]]
+name = "test_classifier"
+path = "examples/test_classifier.rs"
+
+[[example]]
+name = "benchmark_mmbert_latency"
+path = "examples/benchmark_mmbert_latency.rs"

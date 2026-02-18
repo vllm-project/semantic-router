@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 // Config holds all application configuration
@@ -24,6 +25,24 @@ type Config struct {
 
 	// Read-only mode for public beta deployments
 	ReadonlyMode bool
+
+	// Platform branding (e.g., "amd" for AMD GPU deployments)
+	Platform string
+
+	// Evaluation configuration
+	EvaluationEnabled    bool
+	EvaluationDBPath     string
+	EvaluationResultsDir string
+	PythonPath           string
+
+	// MCP configuration
+	MCPEnabled bool
+
+	// ML Pipeline configuration
+	MLPipelineEnabled bool
+	MLPipelineDataDir string
+	MLTrainingDir     string // path to src/training/ml_model_selection
+	MLServiceURL      string // URL of the Python ML service sidecar (empty = subprocess mode)
 }
 
 // env returns the env var or default
@@ -54,6 +73,28 @@ func LoadConfig() (*Config, error) {
 	// Read-only mode for public beta deployments
 	readonlyMode := flag.Bool("readonly", env("DASHBOARD_READONLY", "false") == "true", "enable read-only mode (disable config editing)")
 
+	// Platform branding
+	platform := flag.String("platform", env("DASHBOARD_PLATFORM", ""), "platform branding (e.g., 'amd' for AMD GPU deployments)")
+
+	// Evaluation configuration
+	evaluationEnabled := flag.Bool("evaluation", env("EVALUATION_ENABLED", "true") == "true", "enable evaluation feature")
+	evaluationDBPath := flag.String("evaluation-db", env("EVALUATION_DB_PATH", "./data/evaluations.db"), "evaluation database path")
+	evaluationResultsDir := flag.String("evaluation-results", env("EVALUATION_RESULTS_DIR", "./data/results"), "evaluation results directory")
+	defaultPython := "python3"
+	if runtime.GOOS == "windows" {
+		defaultPython = "python"
+	}
+	pythonPath := flag.String("python", env("PYTHON_PATH", defaultPython), "path to Python interpreter")
+
+	// MCP configuration
+	mcpEnabled := flag.Bool("mcp", env("MCP_ENABLED", "true") == "true", "enable MCP (Model Context Protocol) feature")
+
+	// ML Onboarding configuration
+	mlPipelineEnabled := flag.Bool("ml-pipeline", env("ML_PIPELINE_ENABLED", "true") == "true", "enable ML pipeline (benchmark, train, config)")
+	mlPipelineDataDir := flag.String("ml-pipeline-data", env("ML_PIPELINE_DATA_DIR", "./data/ml-pipeline"), "ML pipeline data directory")
+	mlTrainingDir := flag.String("ml-training-dir", env("ML_TRAINING_DIR", ""), "path to src/training/ml_model_selection")
+	mlServiceURL := flag.String("ml-service-url", env("ML_SERVICE_URL", ""), "URL of Python ML service sidecar (empty = subprocess mode)")
+
 	flag.Parse()
 
 	cfg.Port = *port
@@ -66,6 +107,16 @@ func LoadConfig() (*Config, error) {
 	cfg.JaegerURL = *jaegerURL
 	cfg.EnvoyURL = *envoyURL
 	cfg.ReadonlyMode = *readonlyMode
+	cfg.Platform = *platform
+	cfg.EvaluationEnabled = *evaluationEnabled
+	cfg.EvaluationDBPath = *evaluationDBPath
+	cfg.EvaluationResultsDir = *evaluationResultsDir
+	cfg.PythonPath = *pythonPath
+	cfg.MCPEnabled = *mcpEnabled
+	cfg.MLPipelineEnabled = *mlPipelineEnabled
+	cfg.MLPipelineDataDir = *mlPipelineDataDir
+	cfg.MLTrainingDir = *mlTrainingDir
+	cfg.MLServiceURL = *mlServiceURL
 
 	// Resolve config file path to absolute path
 	absConfigPath, err := filepath.Abs(cfg.ConfigFile)

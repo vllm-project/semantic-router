@@ -18,6 +18,7 @@ package selection
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -383,6 +384,11 @@ func TestFactory_Create(t *testing.T) {
 			expectedMethod: MethodHybrid,
 		},
 		{
+			name:           "create latency_aware selector",
+			method:         "latency_aware",
+			expectedMethod: MethodLatencyAware,
+		},
+		{
 			name:           "create static selector (default)",
 			method:         "static",
 			expectedMethod: MethodStatic,
@@ -404,6 +410,178 @@ func TestFactory_Create(t *testing.T) {
 				t.Errorf("expected method %s, got %s", tt.expectedMethod, selector.Method())
 			}
 		})
+	}
+}
+
+func TestFactory_CreateAll_IncludesMLSelectors(t *testing.T) {
+	cfg := &ModelSelectionConfig{
+		Method: "static",
+		ML:     DefaultMLSelectorConfig(),
+	}
+	factory := NewFactory(cfg)
+	registry := factory.CreateAll()
+
+	// Test that ML selectors are registered
+	mlMethods := []SelectionMethod{MethodKNN, MethodKMeans, MethodSVM}
+	for _, method := range mlMethods {
+		selector, ok := registry.Get(method)
+		if !ok {
+			t.Errorf("expected %s selector to be registered", method)
+			continue
+		}
+		if selector == nil {
+			t.Errorf("expected %s selector to not be nil", method)
+			continue
+		}
+		if selector.Method() != method {
+			t.Errorf("expected method %s, got %s", method, selector.Method())
+		}
+	}
+}
+
+func TestMLSelectorAdapter_Select(t *testing.T) {
+	ctx := context.Background()
+
+	// Create KNN adapter
+	knnAdapter, err := CreateKNNSelector(DefaultMLSelectorConfig(), nil)
+	if err != nil {
+		t.Fatalf("failed to create KNN adapter: %v", err)
+	}
+
+	// Test selection without training - ML selectors require pretrained models
+	selCtx := &SelectionContext{
+		Query:           "test query for model selection",
+		CandidateModels: createCandidateModels("model-a", "model-b", "model-c"),
+	}
+
+	result, err := knnAdapter.Select(ctx, selCtx)
+	// ML selectors return error when not trained - this is expected behavior
+	if err != nil {
+		if strings.Contains(err.Error(), "model not trained") {
+			t.Logf("Expected behavior: ML selector requires pretrained model: %v", err)
+			return // Test passes - correct behavior for untrained model
+		}
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Method != MethodKNN {
+		t.Errorf("expected method %s, got %s", MethodKNN, result.Method)
+	}
+
+	// Result should have a valid model
+	if result.SelectedModel == "" {
+		t.Error("expected a selected model")
+	}
+}
+
+func TestMLSelectorAdapter_Method(t *testing.T) {
+	tests := []struct {
+		name           string
+		createFunc     func(*MLSelectorConfig, func(string) ([]float32, error)) (*MLSelectorAdapter, error)
+		expectedMethod SelectionMethod
+	}{
+		{
+			name:           "KNN adapter method",
+			createFunc:     CreateKNNSelector,
+			expectedMethod: MethodKNN,
+		},
+		{
+			name:           "KMeans adapter method",
+			createFunc:     CreateKMeansSelector,
+			expectedMethod: MethodKMeans,
+		},
+		{
+			name:           "SVM adapter method",
+			createFunc:     CreateSVMSelector,
+			expectedMethod: MethodSVM,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			adapter, err := tt.createFunc(DefaultMLSelectorConfig(), nil)
+			if err != nil {
+				t.Fatalf("failed to create adapter: %v", err)
+			}
+
+			if adapter.Method() != tt.expectedMethod {
+				t.Errorf("expected method %s, got %s", tt.expectedMethod, adapter.Method())
+			}
+		})
+	}
+}
+
+func TestMLSelectorAdapter_UpdateFeedback(t *testing.T) {
+	ctx := context.Background()
+
+	knnAdapter, err := CreateKNNSelector(DefaultMLSelectorConfig(), nil)
+	if err != nil {
+		t.Fatalf("failed to create KNN adapter: %v", err)
+	}
+
+	// UpdateFeedback should not error (it's a no-op for now)
+	feedback := &Feedback{
+		Query:       "test query",
+		WinnerModel: "model-a",
+		LoserModel:  "model-b",
+	}
+
+	err = knnAdapter.UpdateFeedback(ctx, feedback)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestMLSelectorAdapter_WithEmbedding(t *testing.T) {
+	ctx := context.Background()
+
+	// Create mock embedding function
+	mockEmbedding := func(text string) ([]float32, error) {
+		embedding := make([]float32, 768)
+		for i := range embedding {
+			embedding[i] = float32(len(text)%10) / 10.0
+		}
+		return embedding, nil
+	}
+
+	knnAdapter, err := CreateKNNSelector(DefaultMLSelectorConfig(), mockEmbedding)
+	if err != nil {
+		t.Fatalf("failed to create KNN adapter: %v", err)
+	}
+
+	selCtx := &SelectionContext{
+		Query:           "test query with embedding",
+		CandidateModels: createCandidateModels("model-a", "model-b"),
+	}
+
+	result, err := knnAdapter.Select(ctx, selCtx)
+	// ML selectors return error when not trained - this is expected behavior
+	if err != nil {
+		if strings.Contains(err.Error(), "model not trained") {
+			t.Logf("Expected behavior: ML selector requires pretrained model: %v", err)
+			return // Test passes - correct behavior for untrained model
+		}
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.SelectedModel == "" {
+		t.Error("expected a selected model")
+	}
+}
+
+func TestMLSelectorAdapter_GetMLSelector(t *testing.T) {
+	knnAdapter, err := CreateKNNSelector(DefaultMLSelectorConfig(), nil)
+	if err != nil {
+		t.Fatalf("failed to create KNN adapter: %v", err)
+	}
+
+	mlSelector := knnAdapter.GetMLSelector()
+	if mlSelector == nil {
+		t.Error("expected ML selector to not be nil")
+	}
+
+	if mlSelector.Name() != "knn" {
+		t.Errorf("expected name 'knn', got '%s'", mlSelector.Name())
 	}
 }
 

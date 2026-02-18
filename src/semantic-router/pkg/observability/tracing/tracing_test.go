@@ -175,7 +175,7 @@ func TestGetTracerWhenNotInitialized(t *testing.T) {
 func TestStartSpanWithNilContext(t *testing.T) {
 	// Test that StartSpan handles nil context gracefully
 	// This simulates the scenario where TraceContext may not be initialized
-	ctx, span := StartSpan(nil, "test-span")
+	ctx, span := StartSpan(context.TODO(), "test-span")
 	if span == nil {
 		t.Error("StartSpan returned nil span with nil context")
 	}
@@ -236,19 +236,35 @@ func TestInjectTraceContextToSlice(t *testing.T) {
 }
 
 func TestSpanAttributeConstants(t *testing.T) {
-	// Verify span name constants are defined
+	// Verify span name constants are defined following the new hierarchy:
+	// signal -> decision -> plugin -> model
 	spanNames := []string{
+		// Root span
 		SpanRequestReceived,
-		SpanClassification,
-		SpanPIIDetection,
-		SpanJailbreakDetection,
-		SpanCacheLookup,
-		SpanRoutingDecision,
-		SpanBackendSelection,
+
+		// Signal evaluation layer
+		SpanSignalEvaluation,
+		SpanSignalKeyword,
+		SpanSignalEmbedding,
+		SpanSignalDomain,
+		SpanSignalFactCheck,
+		SpanSignalUserFeedback,
+		SpanSignalPreference,
+		SpanSignalLanguage,
+		SpanSignalLatency,
+
+		// Decision evaluation layer
+		SpanDecisionEvaluation,
+
+		// Plugin execution layer
+		SpanPluginExecution,
+
+		// Model invocation layer
 		SpanUpstreamRequest,
 		SpanResponseProcessing,
-		SpanToolSelection,
-		SpanSystemPromptInjection,
+
+		// Legacy spans (for backward compatibility)
+		SpanClassification,
 	}
 
 	for _, name := range spanNames {

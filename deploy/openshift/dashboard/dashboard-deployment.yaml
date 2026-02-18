@@ -11,6 +11,9 @@ data:
   TARGET_ROUTER_API_URL: "http://semantic-router:8080"
   TARGET_ROUTER_METRICS_URL: "http://semantic-router:9190/metrics"
   ROUTER_CONFIG_PATH: "/app/config/config.yaml"
+  # ML service sidecar: connect to localhost since it's in the same pod
+  ML_SERVICE_URL: "http://localhost:8686"
+  ML_PIPELINE_ENABLED: "true"
 
 ---
 apiVersion: apps/v1
@@ -45,6 +48,8 @@ spec:
             - name: config
               mountPath: /app/config
               readOnly: true
+            - name: ml-data
+              mountPath: /app/data/ml-pipeline
           livenessProbe:
             httpGet:
               path: /healthz
@@ -64,10 +69,49 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "500m"
+
+        # ML Training Service sidecar (Python)
+        - name: ml-service
+          image: image-registry.openshift-image-registry.svc:5000/vllm-semantic-router-system/ml-training-service:latest
+          imagePullPolicy: Always
+          ports:
+            - name: ml-http
+              containerPort: 8686
+              protocol: TCP
+          env:
+            - name: ML_SERVICE_PORT
+              value: "8686"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          volumeMounts:
+            - name: ml-data
+              mountPath: /app/data
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "4Gi"
+              cpu: "2"
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8686
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8686
+            initialDelaySeconds: 30
+            periodSeconds: 30
+
       volumes:
         - name: config
           configMap:
             name: semantic-router-config
+        - name: ml-data
+          emptyDir: {}
 
 ---
 apiVersion: v1

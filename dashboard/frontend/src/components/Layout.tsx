@@ -6,9 +6,10 @@ interface LayoutProps {
   children: ReactNode
   configSection?: string
   onConfigSectionChange?: (section: string) => void
+  hideHeaderOnMobile?: boolean
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectionChange }) => {
+const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectionChange, hideHeaderOnMobile }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [systemDropdownOpen, setSystemDropdownOpen] = useState(false)
   const location = useLocation()
@@ -16,11 +17,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
   const isConfigPage = location.pathname === '/config'
   const isSystemPage = isConfigPage && configSection === 'router-config'
   const isObservabilityPage = ['/status', '/logs', '/monitoring', '/tracing'].includes(location.pathname)
-
-  useEffect(() => {
-    // Always use dark theme
-    document.documentElement.setAttribute('data-theme', 'dark')
-  }, [])
+  const isMCPPage = isConfigPage && configSection === 'mcp'
 
   // Close system dropdown when clicking outside
   useEffect(() => {
@@ -35,14 +32,14 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
   }, [])
 
   return (
-    <div className={styles.container}>
+    <div className={`${styles.container} ${hideHeaderOnMobile ? styles.hideHeaderMobile : ''}`}>
       {/* Top Navigation Bar */}
-      <header className={styles.header}>
+      <header className={`${styles.header} ${hideHeaderOnMobile ? styles.headerHideMobile : ''}`}>
         <div className={styles.headerContent}>
           {/* Left: Brand */}
           <NavLink to="/" className={styles.brand}>
             <img src="/vllm.png" alt="vLLM" className={styles.logo} />
-            <span className={styles.brandText}>vLLM Semantic Router</span>
+            <span className={styles.brandText}></span>
           </NavLink>
 
           {/* Center: Navigation - Flat structure */}
@@ -86,10 +83,55 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
               Decisions
             </button>
 
+            <NavLink
+              to="/topology"
+              className={({ isActive }) =>
+                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+              }
+            >
+              Brain
+            </NavLink>
+
+            <NavLink
+              to="/replay"
+              className={({ isActive }) =>
+                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+              }
+            >
+              Replay
+            </NavLink>
+
+            <NavLink
+              to="/evaluation"
+              className={({ isActive }) =>
+                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+              }
+            >
+              Evaluation
+            </NavLink>
+
+            <NavLink
+              to="/ml-setup"
+              className={({ isActive }) =>
+                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+              }
+            >
+              ML Setup
+            </NavLink>
+
+            <NavLink
+              to="/ratings"
+              className={({ isActive }) =>
+                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+              }
+            >
+              Ratings
+            </NavLink>
+
             {/* System Dropdown (includes router-config and observability) */}
             <div className={styles.systemDropdown}>
               <button
-                className={`${styles.navLink} ${styles.dropdownTrigger} ${(isSystemPage || isObservabilityPage) ? styles.navLinkActive : ''}`}
+                className={`${styles.navLink} ${styles.dropdownTrigger} ${(isSystemPage || isMCPPage || isObservabilityPage) ? styles.navLinkActive : ''}`}
                 onClick={(e) => {
                   e.stopPropagation()
                   setSystemDropdownOpen(!systemDropdownOpen)
@@ -119,6 +161,16 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
                     }}
                   >
                     Router Config
+                  </button>
+                  <button
+                    className={`${styles.dropdownItem} ${isMCPPage ? styles.dropdownItemActive : ''}`}
+                    onClick={() => {
+                      onConfigSectionChange?.('mcp')
+                      navigate('/config')
+                      setSystemDropdownOpen(false)
+                    }}
+                  >
+                    MCP Servers & Tools
                   </button>
                   <div className={styles.dropdownDivider}></div>
                   <NavLink
@@ -242,6 +294,21 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
             >
               Decisions
             </button>
+            <NavLink to="/topology" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+              Brain
+            </NavLink>
+            <NavLink to="/replay" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+              Replay
+            </NavLink>
+            <NavLink to="/evaluation" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+              Evaluation
+            </NavLink>
+            <NavLink to="/ml-setup" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+              ML Setup
+            </NavLink>
+            <NavLink to="/ratings" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+              Ratings
+            </NavLink>
             <div className={styles.mobileNavSection}>
               <div className={styles.mobileNavSectionTitle}>System</div>
               <button
@@ -253,6 +320,16 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
                 }}
               >
                 Router Config
+              </button>
+              <button
+                className={styles.mobileNavLink}
+                onClick={() => {
+                  onConfigSectionChange?.('mcp')
+                  navigate('/config')
+                  setMobileMenuOpen(false)
+                }}
+              >
+                MCP Servers & Tools
               </button>
               <NavLink to="/status" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
                 Status

@@ -112,9 +112,9 @@ func TestMaxContextLength_DescriptionsUpdated(t *testing.T) {
 
 // Helper function to check if string contains substring (case-insensitive)
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && 
-		(s == substr || 
-		 (len(s) > len(substr) && indexOf(s, substr) >= 0))
+	return len(s) >= len(substr) &&
+		(s == substr ||
+			(len(s) > len(substr) && indexOf(s, substr) >= 0))
 }
 
 func indexOf(s, substr string) int {

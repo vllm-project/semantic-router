@@ -2,11 +2,13 @@
 
 import time
 import sys
+import os
 from cli.utils import getLogger, load_config, wait_for_healthy, get_envoy_port
 from cli.consts import (
     VLLM_SR_DOCKER_NAME,
     HEALTH_CHECK_TIMEOUT,
     DEFAULT_API_PORT,
+    DEFAULT_ENVOY_PORT,
 )
 from cli.docker_cli import (
     docker_container_status,
@@ -16,13 +18,20 @@ from cli.docker_cli import (
     docker_logs,
     docker_logs_since,
     docker_exec,
+    docker_create_network,
+    docker_remove_network,
+    docker_start_jaeger,
+    docker_start_prometheus,
+    docker_start_grafana,
 )
 from cli.logo import print_vllm_logo
 
 log = getLogger(__name__)
 
 
-def start_vllm_sr(config_file, env_vars=None, image=None, pull_policy=None):
+def start_vllm_sr(
+    config_file, env_vars=None, image=None, pull_policy=None, enable_observability=True
+):
     """
     Start vLLM Semantic Router.
 
@@ -31,6 +40,7 @@ def start_vllm_sr(config_file, env_vars=None, image=None, pull_policy=None):
         env_vars: Environment variables dict (optional)
         image: Docker image to use (optional)
         pull_policy: Image pull policy (optional)
+        enable_observability: Enable Jaeger + Grafana + Prometheus (default: True)
     """
     if env_vars is None:
         env_vars = {}
@@ -62,16 +72,70 @@ def start_vllm_sr(config_file, env_vars=None, image=None, pull_policy=None):
         docker_stop_container(VLLM_SR_DOCKER_NAME)
         docker_remove_container(VLLM_SR_DOCKER_NAME)
 
-    # Start container
+    network_name = None
+    config_dir = os.path.dirname(os.path.abspath(config_file))
+
+    # Start observability stack if enabled
+    if enable_observability:
+        log.info("Starting observability stack (Jaeger + Prometheus + Grafana)...")
+        network_name = "vllm-sr-network"
+
+        # Create Docker network
+        return_code, stdout, stderr = docker_create_network(network_name)
+        if return_code != 0:
+            log.error(f"Failed to create network: {stderr}")
+            sys.exit(1)
+
+        # Start Jaeger
+        return_code, stdout, stderr = docker_start_jaeger(network_name)
+        if return_code != 0:
+            log.error(f"Failed to start Jaeger: {stderr}")
+            sys.exit(1)
+        log.info("✓ Jaeger started successfully")
+
+        # Start Prometheus
+        return_code, stdout, stderr = docker_start_prometheus(network_name, config_dir)
+        if return_code != 0:
+            log.error(f"Failed to start Prometheus: {stderr}")
+            sys.exit(1)
+        log.info("✓ Prometheus started successfully")
+
+        # Start Grafana
+        return_code, stdout, stderr = docker_start_grafana(network_name, config_dir)
+        if return_code != 0:
+            log.error(f"Failed to start Grafana: {stderr}")
+            sys.exit(1)
+        log.info("✓ Grafana started successfully")
+
+        # Add observability environment variables
+        env_vars.update(
+            {
+                "TARGET_JAEGER_URL": "http://vllm-sr-jaeger:16686",
+                "TARGET_GRAFANA_URL": "http://vllm-sr-grafana:3000",
+                "TARGET_PROMETHEUS_URL": "http://vllm-sr-prometheus:9090",
+                "OTEL_EXPORTER_OTLP_ENDPOINT": "http://vllm-sr-jaeger:4317",
+            }
+        )
+
+    # Detect minimal mode (dashboard disabled)
+    dashboard_disabled = env_vars.get("DISABLE_DASHBOARD") == "true"
+
+    # Start vllm-sr container
     return_code, stdout, stderr = docker_start_vllm_sr(
-        config_file, env_vars, listeners, image=image, pull_policy=pull_policy
+        config_file,
+        env_vars,
+        listeners,
+        image=image,
+        pull_policy=pull_policy,
+        network_name=network_name,
+        minimal=dashboard_disabled,
     )
 
     if return_code != 0:
         log.error(f"Failed to start container: {stderr}")
         sys.exit(1)
 
-    log.info("✓ Container started successfully")
+    log.info("✓ vLLM Semantic Router container started successfully")
 
     # Wait for services to be healthy
     log.info("Waiting for Router to become healthy...")
@@ -149,15 +213,25 @@ def start_vllm_sr(config_file, env_vars=None, image=None, pull_policy=None):
     log.info("✓ vLLM Semantic Router is running!")
     log.info("")
     log.info("Endpoints:")
-    log.info(f"  • Dashboard: http://localhost:8700")
+    if not dashboard_disabled:
+        log.info(f"  • Dashboard: http://localhost:8700")
     for listener in listeners:
         name = listener.get("name", "unknown")
         port = listener.get("port", "unknown")
         log.info(f"  • {name}: http://localhost:{port}")
     log.info(f"  • Metrics: http://localhost:9190/metrics")
+
+    if enable_observability:
+        log.info("")
+        log.info("Observability:")
+        log.info(f"  • Jaeger UI: http://localhost:16686")
+        log.info(f"  • Grafana: http://localhost:3000 (admin/admin)")
+        log.info(f"  • Prometheus: http://localhost:9090")
+
     log.info("")
     log.info("Commands:")
-    log.info("  • vllm-sr dashboard              Open dashboard in browser")
+    if not dashboard_disabled:
+        log.info("  • vllm-sr dashboard              Open dashboard in browser")
     log.info("  • vllm-sr logs <envoy|router|dashboard> [-f]")
     log.info("  • vllm-sr status [envoy|router|dashboard|all]")
     log.info("  • vllm-sr stop")
@@ -181,7 +255,7 @@ def start_vllm_sr(config_file, env_vars=None, image=None, pull_policy=None):
 
 
 def stop_vllm_sr():
-    """Stop vLLM Semantic Router."""
+    """Stop vLLM Semantic Router and observability containers."""
     log.info("Stopping vLLM Semantic Router...")
 
     status = docker_container_status(VLLM_SR_DOCKER_NAME)
@@ -194,6 +268,28 @@ def stop_vllm_sr():
 
     docker_remove_container(VLLM_SR_DOCKER_NAME)
     log.info("✓ vLLM Semantic Router stopped")
+
+    # Stop observability containers if they exist
+    observability_containers = [
+        "vllm-sr-grafana",
+        "vllm-sr-prometheus",
+        "vllm-sr-jaeger",
+    ]
+
+    for container_name in observability_containers:
+        status = docker_container_status(container_name)
+        if status != "not found":
+            log.info(f"Stopping {container_name}...")
+            if status == "running":
+                docker_stop_container(container_name)
+            docker_remove_container(container_name)
+            log.info(f"✓ {container_name} stopped")
+
+    # Remove network
+    network_name = "vllm-sr-network"
+    return_code, stdout, stderr = docker_remove_network(network_name)
+    if return_code == 0:
+        log.info(f"✓ Network {network_name} removed")
 
 
 def show_logs(service: str, follow: bool = False):
@@ -289,42 +385,66 @@ def show_status(service: str = "all"):
     # Check router status
     if service in ["all", "router"]:
         try:
-            # Check if router is responding - look for "Starting insecure LLM Router ExtProc server"
-            cmd = f"docker logs --tail 100 {VLLM_SR_DOCKER_NAME} 2>&1 | grep -i 'Starting.*Router.*server\\|router entered RUNNING' | tail -1"
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            # Check if router service is running via health endpoint
+            return_code, stdout, stderr = docker_exec(
+                VLLM_SR_DOCKER_NAME,
+                ["curl", "-f", "-s", f"http://localhost:{DEFAULT_API_PORT}/health"],
+            )
 
-            if result.stdout.strip():
+            if return_code == 0:
                 log.info("✓ Router: Running")
             else:
-                log.info("⚠ Router: Status unknown (check logs)")
+                log.info("⚠ Router: Status unknown")
         except Exception as e:
             log.error(f"Failed to check router status: {e}")
 
     # Check envoy status
     if service in ["all", "envoy"]:
         try:
-            # Check if envoy is responding - look for "envoy entered RUNNING"
-            cmd = f"docker logs --tail 100 {VLLM_SR_DOCKER_NAME} 2>&1 | grep -i 'envoy entered RUNNING' | tail -1"
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            # Check if envoy service is running via ready endpoint
+            return_code, stdout, stderr = docker_exec(
+                VLLM_SR_DOCKER_NAME,
+                [
+                    "curl",
+                    "-f",
+                    "-s",
+                    "-o",
+                    "/dev/null",
+                    "-w",
+                    "%{http_code}",
+                    f"http://localhost:{DEFAULT_ENVOY_PORT}/ready",
+                ],
+            )
 
-            if result.stdout.strip():
+            if return_code == 0 and stdout.strip() == "200":
                 log.info("✓ Envoy: Running")
             else:
-                log.info("⚠ Envoy: Status unknown (check logs)")
+                log.info("⚠ Envoy: Status unknown")
         except Exception as e:
             log.error(f"Failed to check envoy status: {e}")
 
     # Check dashboard status
     if service in ["all", "dashboard"]:
         try:
-            # Check if dashboard is responding - look for "dashboard entered RUNNING"
-            cmd = f"docker logs --tail 100 {VLLM_SR_DOCKER_NAME} 2>&1 | grep -i 'dashboard entered RUNNING' | tail -1"
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            # Check if dashboard is responding via HTTP
+            return_code, stdout, stderr = docker_exec(
+                VLLM_SR_DOCKER_NAME,
+                [
+                    "curl",
+                    "-f",
+                    "-s",
+                    "-o",
+                    "/dev/null",
+                    "-w",
+                    "%{http_code}",
+                    "http://localhost:8700",
+                ],
+            )
 
-            if result.stdout.strip():
+            if return_code == 0 and stdout.strip() in ["200", "301", "302"]:
                 log.info("✓ Dashboard: Running (http://localhost:8700)")
             else:
-                log.info("⚠ Dashboard: Status unknown (check logs)")
+                log.info("⚠ Dashboard: Status unknown")
         except Exception as e:
             log.error(f"Failed to check dashboard status: {e}")
 

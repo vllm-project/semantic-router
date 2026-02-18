@@ -23,6 +23,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
 
 func main() {
@@ -116,6 +117,10 @@ func main() {
 		}
 	}
 
+	// Shutdown hooks for components initialized later (e.g. vector store pipeline).
+	// The signal handler calls these before exiting since os.Exit skips defers.
+	var shutdownHooks []func()
+
 	// Set up signal handling for graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
@@ -123,6 +128,12 @@ func main() {
 	go func() {
 		<-sigChan
 		logging.Infof("Received shutdown signal, cleaning up...")
+
+		// Run shutdown hooks (vector store pipeline, backend, etc.)
+		for _, hook := range shutdownHooks {
+			hook()
+		}
+
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if shutdownErr := tracing.ShutdownTracing(shutdownCtx); shutdownErr != nil {
@@ -152,55 +163,96 @@ func main() {
 		logging.Infof("Metrics server disabled")
 	}
 
-	// Initialize embedding models BEFORE creating server, this ensures Qwen3/Gemma models are ready when semantic cache is initialized
+	// Initialize embedding models BEFORE creating server, this ensures Qwen3/Gemma/mmBERT/BERT models are ready when semantic cache is initialized
 	// Use the already loaded config instead of calling config.Load() again
-	if cfg.Qwen3ModelPath != "" || cfg.GemmaModelPath != "" {
-		var initErr error
+	var embeddingModelsInitialized bool
 
-		// Check if semantic cache uses qwen3 and needs batched initialization
-		// The cache uses GetEmbeddingBatched() which requires InitEmbeddingModelsBatched()
-		useBatchedInit := cfg.SemanticCache.Enabled &&
-			strings.ToLower(strings.TrimSpace(cfg.SemanticCache.EmbeddingModel)) == "qwen3" &&
-			cfg.Qwen3ModelPath != ""
+	// Resolve model paths using registry (supports aliases like "qwen3", "gemma", "mmbert", "bert")
+	qwen3Path := config.ResolveModelPath(cfg.Qwen3ModelPath)
+	gemmaPath := config.ResolveModelPath(cfg.GemmaModelPath)
+	mmBertPath := config.ResolveModelPath(cfg.EmbeddingModels.MmBertModelPath)
+	bertPath := config.ResolveModelPath(cfg.EmbeddingModels.BertModelPath)
 
-		// If semantic cache uses qwen3, use batched initialization for better performance
-		if useBatchedInit {
-			logging.Infof("Semantic cache uses qwen3, initializing with batched embedding model...")
-			maxBatchSize := 64      // Batch up to 64 requests together
-			maxWaitMs := uint64(10) // Wait max 10ms for batch to fill
-			initErr = candle_binding.InitEmbeddingModelsBatched(
-				cfg.Qwen3ModelPath,
-				maxBatchSize,
-				maxWaitMs,
-				cfg.EmbeddingModels.UseCPU,
-			)
-			if initErr == nil {
-				logging.Infof("Batched embedding model initialized successfully (qwen3 for semantic cache)")
-			}
+	// Check if any unified models (qwen3/gemma/mmbert) are configured
+	hasUnifiedModels := qwen3Path != "" || gemmaPath != "" || mmBertPath != ""
+	hasBertModel := bertPath != ""
 
-			// Also initialize standard ModelFactory for classification and other features
-			// Both need to be initialized when cache uses qwen3
-			if initErr == nil {
+	if hasUnifiedModels || hasBertModel {
+		logging.Infof("Initializing embedding models: qwen3=%q, gemma=%q, mmbert=%q, bert=%q, useCPU=%t",
+			qwen3Path, gemmaPath, mmBertPath, bertPath, cfg.EmbeddingModels.UseCPU)
+
+		// Initialize unified models (qwen3/gemma/mmbert) if any are configured
+		if hasUnifiedModels {
+			var initErr error
+
+			// Check if semantic cache uses qwen3 and needs batched initialization
+			// The cache uses GetEmbeddingBatched() which requires InitEmbeddingModelsBatched()
+			semanticCacheNeedsBatched := cfg.SemanticCache.Enabled &&
+				strings.ToLower(strings.TrimSpace(cfg.SemanticCache.EmbeddingModel)) == "qwen3" &&
+				qwen3Path != ""
+
+			// ML model selection (KNN, KMeans, SVM) also needs batched embeddings for query embedding
+			mlSelectionNeedsBatched := cfg.ModelSelection.Enabled &&
+				cfg.ModelSelection.ML.ModelsPath != "" &&
+				cfg.Qwen3ModelPath != ""
+
+			useBatchedInit := semanticCacheNeedsBatched || mlSelectionNeedsBatched
+
+			if useBatchedInit {
+				if semanticCacheNeedsBatched {
+					logging.Infof("Semantic cache uses qwen3, initializing with batched embedding model...")
+				}
+				if mlSelectionNeedsBatched {
+					logging.Infof("ML model selection enabled, initializing with batched embedding model...")
+				}
+				maxBatchSize := 64      // Batch up to 64 requests together
+				maxWaitMs := uint64(10) // Wait max 10ms for batch to fill
+				initErr = candle_binding.InitEmbeddingModelsBatched(
+					qwen3Path,
+					maxBatchSize,
+					maxWaitMs,
+					cfg.EmbeddingModels.UseCPU,
+				)
+				if initErr == nil {
+					logging.Infof("Batched embedding model initialized successfully")
+					// Also initialize standard ModelFactory
+					initErr = candle_binding.InitEmbeddingModels(
+						qwen3Path,
+						gemmaPath,
+						mmBertPath,
+						cfg.EmbeddingModels.UseCPU,
+					)
+				}
+			} else {
 				initErr = candle_binding.InitEmbeddingModels(
-					cfg.Qwen3ModelPath, // Initialize qwen3 in standard factory too (for classification)
-					cfg.GemmaModelPath, // Also initialize gemma if configured
+					qwen3Path,
+					gemmaPath,
+					mmBertPath,
 					cfg.EmbeddingModels.UseCPU,
 				)
 			}
-		} else {
-			// Use standard initialization for other use cases (both qwen3 and gemma)
-			initErr = candle_binding.InitEmbeddingModels(
-				cfg.Qwen3ModelPath,
-				cfg.GemmaModelPath,
-				cfg.EmbeddingModels.UseCPU,
-			)
+
+			if initErr != nil {
+				logging.Errorf("Failed to initialize unified embedding models: %v", initErr)
+				logging.Warnf("Embedding API endpoints will return placeholder embeddings")
+				logging.Warnf("Tools database will NOT be loaded (requires embedding models)")
+			} else {
+				logging.Infof("Unified embedding models initialized successfully")
+				embeddingModelsInitialized = true
+			}
 		}
 
-		if initErr != nil {
-			logging.Errorf("Failed to initialize embedding models: %v", initErr)
-			logging.Warnf("Embedding API endpoints will return placeholder embeddings")
-		} else {
-			logging.Infof("Embedding models initialized successfully")
+		// Initialize BERT model separately (for memory with 384-dim embeddings)
+		// This uses a different initialization path (InitModel vs InitEmbeddingModels)
+		if hasBertModel {
+			logging.Infof("Initializing BERT model for memory: %s", bertPath)
+			if bertErr := candle_binding.InitModel(bertPath, cfg.EmbeddingModels.UseCPU); bertErr != nil {
+				logging.Warnf("Failed to initialize BERT model: %v", bertErr)
+				logging.Warnf("Memory retrieval with 'bert' embedding type will not work")
+			} else {
+				logging.Infof("BERT model initialized successfully (384-dim for memory)")
+				embeddingModelsInitialized = true
+			}
 		}
 	} else {
 		logging.Infof("No embedding models configured, skipping initialization")
@@ -208,7 +260,139 @@ func main() {
 		logging.Infof("  embedding_models:")
 		logging.Infof("    qwen3_model_path: 'models/mom-embedding-pro'")
 		logging.Infof("    gemma_model_path: 'models/mom-embedding-flash'")
+		logging.Infof("    mmbert_model_path: 'models/mom-embedding-ultra'")
+		logging.Infof("    bert_model_path: 'models/all-MiniLM-L12-v2'  # For memory (384-dim)")
 		logging.Infof("    use_cpu: true")
+		embeddingModelsInitialized = false
+	}
+
+	// Initialize BERT model if semantic cache is configured to use it
+	// This is required because Redis/Milvus caches call candle_binding.GetEmbedding() for "bert" embeddings
+	// which requires the BERT model to be initialized via InitModel()
+	if cfg.SemanticCache.Enabled {
+		embeddingModel := strings.ToLower(strings.TrimSpace(cfg.SemanticCache.EmbeddingModel))
+		// Auto-detect embedding model if not explicitly set (matches router.go logic)
+		if embeddingModel == "" {
+			if cfg.EmbeddingModels.MmBertModelPath != "" {
+				embeddingModel = "mmbert"
+			} else if cfg.Qwen3ModelPath != "" {
+				embeddingModel = "qwen3"
+			} else if cfg.GemmaModelPath != "" {
+				embeddingModel = "gemma"
+			} else {
+				embeddingModel = "bert"
+			}
+		}
+
+		if embeddingModel == "bert" {
+			bertModelID := cfg.BertModel.ModelID
+			if bertModelID == "" {
+				bertModelID = "sentence-transformers/all-MiniLM-L6-v2" // Default BERT model
+			}
+			bertModelID = config.ResolveModelPath(bertModelID)
+
+			logging.Infof("Semantic cache uses BERT embeddings, initializing BERT model: %s", bertModelID)
+			if initErr := candle_binding.InitModel(bertModelID, cfg.BertModel.UseCPU); initErr != nil {
+				logging.Fatalf("Failed to initialize BERT model for semantic cache: %v", initErr)
+			}
+			logging.Infof("BERT model initialized successfully for semantic cache")
+		}
+	}
+
+	// Initialize vector store if configured
+	if cfg.VectorStore != nil && cfg.VectorStore.Enabled {
+		logging.Infof("Initializing vector store feature...")
+
+		if validateErr := cfg.VectorStore.Validate(); validateErr != nil {
+			logging.Fatalf("Invalid vector store configuration: %v", validateErr)
+		}
+		cfg.VectorStore.ApplyDefaults()
+
+		// Ensure BERT is initialized if vector store uses it and semantic cache didn't already
+		if cfg.VectorStore.EmbeddingModel == "bert" && !cfg.SemanticCache.Enabled {
+			bertModelID := cfg.BertModel.ModelID
+			if bertModelID == "" {
+				bertModelID = "sentence-transformers/all-MiniLM-L6-v2"
+			}
+			bertModelID = config.ResolveModelPath(bertModelID)
+			logging.Infof("Vector store uses BERT embeddings, initializing BERT model: %s", bertModelID)
+			if initErr := candle_binding.InitModel(bertModelID, cfg.BertModel.UseCPU); initErr != nil {
+				logging.Fatalf("Failed to initialize BERT model for vector store: %v", initErr)
+			}
+		}
+
+		// Create file store
+		vsFileStore, vsErr := vectorstore.NewFileStore(cfg.VectorStore.FileStorageDir)
+		if vsErr != nil {
+			logging.Fatalf("Failed to create vector store file store: %v", vsErr)
+		}
+		apiserver.SetFileStore(vsFileStore)
+
+		// Create backend
+		var memoryCfg vectorstore.MemoryBackendConfig
+		var milvusCfg vectorstore.MilvusBackendConfig
+		switch cfg.VectorStore.BackendType {
+		case "memory":
+			maxEntries := 100000
+			if cfg.VectorStore.Memory != nil && cfg.VectorStore.Memory.MaxEntriesPerStore > 0 {
+				maxEntries = cfg.VectorStore.Memory.MaxEntriesPerStore
+			}
+			memoryCfg = vectorstore.MemoryBackendConfig{MaxEntriesPerStore: maxEntries}
+		case "milvus":
+			milvusCfg = vectorstore.MilvusBackendConfig{
+				Address: fmt.Sprintf("%s:%d", cfg.VectorStore.Milvus.Connection.Host, cfg.VectorStore.Milvus.Connection.Port),
+			}
+		}
+		vsBackend, vsErr := vectorstore.NewBackend(cfg.VectorStore.BackendType, memoryCfg, milvusCfg)
+		if vsErr != nil {
+			logging.Fatalf("Failed to create vector store backend: %v", vsErr)
+		}
+
+		// Create manager
+		vsMgr := vectorstore.NewManager(vsBackend, cfg.VectorStore.EmbeddingDimension, cfg.VectorStore.BackendType)
+		apiserver.SetVectorStoreManager(vsMgr)
+
+		// Create embedder
+		vsEmbedder := vectorstore.NewCandleEmbedder(cfg.VectorStore.EmbeddingModel, cfg.VectorStore.EmbeddingDimension)
+		apiserver.SetEmbedder(vsEmbedder)
+
+		// Create and start ingestion pipeline
+		vsPipeline := vectorstore.NewIngestionPipeline(vsBackend, vsFileStore, vsMgr, vsEmbedder, vectorstore.PipelineConfig{
+			Workers:   cfg.VectorStore.IngestionWorkers,
+			QueueSize: 100,
+		})
+		vsPipeline.Start()
+		apiserver.SetIngestionPipeline(vsPipeline)
+
+		// Register shutdown hooks so signal handler can clean up
+		// (defer won't run when os.Exit is called from signal handler)
+		shutdownHooks = append(shutdownHooks, func() {
+			logging.Infof("Shutting down vector store pipeline...")
+			vsPipeline.Stop()
+			vsBackend.Close()
+		})
+
+		logging.Infof("Vector store initialized: backend=%s, model=%s, dim=%d, workers=%d",
+			cfg.VectorStore.BackendType, cfg.VectorStore.EmbeddingModel,
+			cfg.VectorStore.EmbeddingDimension, cfg.VectorStore.IngestionWorkers)
+	}
+
+	// Initialize modality classifier if modality_detector is enabled
+	if md := &cfg.ModalityDetector; md.Enabled {
+		method := md.GetMethod()
+		if (method == config.ModalityDetectionClassifier || method == config.ModalityDetectionHybrid) &&
+			md.Classifier != nil && md.Classifier.ModelPath != "" {
+			modelPath := config.ResolveModelPath(md.Classifier.ModelPath)
+			logging.Infof("Initializing modality classifier (method=%s) from model: %s", method, modelPath)
+			if initErr := extproc.InitModalityClassifier(modelPath, md.Classifier.UseCPU); initErr != nil {
+				if method == config.ModalityDetectionClassifier {
+					logging.Fatalf("Failed to initialize modality classifier (required for method=%q): %v", method, initErr)
+				}
+				logging.Warnf("Failed to initialize modality classifier (hybrid will fall back to keywords): %v", initErr)
+			} else {
+				logging.Infof("Modality classifier initialized successfully")
+			}
+		}
 	}
 
 	// Create and start the ExtProc server
@@ -220,11 +404,18 @@ func main() {
 	logging.Infof("Starting vLLM Semantic Router ExtProc with config: %s", *configPath)
 
 	// Load tools database after server initialization
-	// Tools database can work with or without embedding models
+	// Note: Tools database requires embedding models to be initialized first
+	// If embedding models failed to initialize, tools will not be loaded
 	router := server.GetRouter()
 	if router != nil {
-		if err := router.LoadToolsDatabase(); err != nil {
-			logging.Warnf("Failed to load tools database: %v", err)
+		// Only load tools if embedding models were successfully initialized
+		if embeddingModelsInitialized {
+			logging.Infof("Loading tools database (embedding models are ready)...")
+			if err := router.LoadToolsDatabase(); err != nil {
+				logging.Warnf("Failed to load tools database: %v", err)
+			}
+		} else {
+			logging.Infof("Skipping tools database loading (embedding models not initialized)")
 		}
 	}
 

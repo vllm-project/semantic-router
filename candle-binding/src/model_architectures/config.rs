@@ -225,7 +225,7 @@ impl DualPathConfig {
             ModelType::LoRA => {
                 config.global.path_selection = PathSelectionStrategy::AlwaysLoRA;
             }
-            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding => {
+            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding | ModelType::MmBertEmbedding => {
                 //   Embedding models use automatic selection
                 // Selection is handled by UnifiedClassifier::select_embedding_model()
                 config.global.path_selection = PathSelectionStrategy::Automatic;
@@ -283,6 +283,7 @@ impl DualPathConfig {
             ModelType::LoRA => self.lora.parallel_batch_size,
             ModelType::Qwen3Embedding => self.embedding.qwen3_batch_size,
             ModelType::GemmaEmbedding => self.embedding.gemma_batch_size,
+            ModelType::MmBertEmbedding => 32, // mmBERT optimal batch size for 32K context
         }
     }
 
@@ -291,7 +292,7 @@ impl DualPathConfig {
         match model_type {
             ModelType::Traditional => self.traditional.confidence_threshold,
             ModelType::LoRA => self.lora.confidence_threshold,
-            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding => {
+            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding | ModelType::MmBertEmbedding => {
                 //  Embedding models don't produce classification confidence
                 // Embeddings are vector representations, not classification predictions
                 // Return 0.0 as embeddings don't have confidence scores

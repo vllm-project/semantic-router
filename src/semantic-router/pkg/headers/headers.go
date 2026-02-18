@@ -34,9 +34,17 @@ const (
 	// Example values: "math_decision", "business_decision", "thinking_decision"
 	VSRSelectedDecision = "x-vsr-selected-decision"
 
+	// VSRSelectedConfidence indicates the confidence score of the selected decision.
+	// Value: decimal between 0.0 and 1.0 (e.g., "0.75")
+	VSRSelectedConfidence = "x-vsr-selected-confidence"
+
 	// VSRSelectedReasoning indicates whether reasoning mode was determined to be used.
 	// Values: "on" (reasoning enabled) or "off" (reasoning disabled)
 	VSRSelectedReasoning = "x-vsr-selected-reasoning"
+
+	// VSRSelectedModality indicates the response modality determined by the modality router.
+	// Values: "AR" (text-only), "DIFFUSION" (image generation), "BOTH" (text + image)
+	VSRSelectedModality = "x-vsr-selected-modality"
 
 	// VSRSelectedModel indicates the model selected by VSR for processing the request.
 	// Example values: "deepseek-v31", "phi4", "gpt-4"
@@ -86,6 +94,23 @@ const (
 	// VSRMatchedLanguage contains comma-separated list of matched language signals.
 	// Example: "en,zh,es"
 	VSRMatchedLanguage = "x-vsr-matched-language"
+
+	// VSRMatchedContext contains comma-separated list of matched context rule names.
+	// Example: "low_token_count,high_token_count"
+	VSRMatchedContext = "x-vsr-matched-context"
+
+	// VSRContextTokenCount contains the actual token count for the request.
+	// Example: "1500"
+	//nolint:gosec
+	VSRContextTokenCount = "x-vsr-context-token-count"
+
+	// VSRMatchedComplexity contains comma-separated list of matched complexity rules with difficulty levels.
+	// Example: "code_complexity:hard,math_complexity:easy"
+	VSRMatchedComplexity = "x-vsr-matched-complexity"
+
+	// VSRMatchedAuthz contains comma-separated list of matched authz rule names.
+	// Example: "premium_tier,admin_tier"
+	VSRMatchedAuthz = "x-vsr-matched-authz"
 )
 
 // Security Headers
@@ -141,19 +166,66 @@ const (
 	VerificationContextMissing = "x-vsr-verification-context-missing"
 )
 
+// Auth Backend Injected Headers
+// These headers are set by the external authorization service (Authorino, Envoy Gateway JWT,
+// oauth2-proxy, etc.) after successful user authentication.
+// They carry per-user provider API keys and identity for routing.
+const (
+	// UserOpenAIKey carries the user's OpenAI API key, injected by the auth backend.
+	// Used by the ext_proc when routing requests to OpenAI models.
+	UserOpenAIKey = "x-user-openai-key"
+
+	// UserAnthropicKey carries the user's Anthropic API key, injected by the auth backend.
+	// Used by the ext_proc when routing requests to Anthropic models.
+	UserAnthropicKey = "x-user-anthropic-key"
+
+	// UserAzureOpenAIKey carries the user's Azure OpenAI API key, injected by the auth backend.
+	UserAzureOpenAIKey = "x-user-azure-openai-key"
+
+	// UserBedrockKey carries the user's AWS Bedrock bearer token, injected by the auth backend.
+	UserBedrockKey = "x-user-bedrock-key"
+
+	// UserGeminiKey carries the user's Google Gemini API key, injected by the auth backend.
+	UserGeminiKey = "x-user-gemini-key"
+
+	// UserVertexAIKey carries the user's Vertex AI OAuth token, injected by the auth backend.
+	UserVertexAIKey = "x-user-vertex-ai-key"
+
+	// AuthzUserID is the default header for the authenticated user's identity.
+	// Default for Authorino (K8s Secret metadata.name).
+	// Override via authz.identity.user_id_header for other backends:
+	//   Envoy Gateway JWT: "x-jwt-sub" (from claim_to_headers)
+	//   oauth2-proxy:      "x-forwarded-user"
+	// Used by the authz signal classifier for user-level routing,
+	// and by memory operations for secure per-user isolation.
+	AuthzUserID = "x-authz-user-id"
+
+	// AuthzUserGroups is the default header for comma-separated group memberships.
+	// Default for Authorino (K8s Secret annotation authz-groups).
+	// Override via authz.identity.user_groups_header for other backends:
+	//   Envoy Gateway JWT: "x-jwt-groups" (from claim_to_headers)
+	//   oauth2-proxy:      "x-forwarded-groups"
+	// Used by the authz signal classifier for group-level routing.
+	AuthzUserGroups = "x-authz-user-groups"
+)
+
 // Looper Request Headers
 // These headers are added to looper internal requests to identify them
-// and allow the extproc to skip plugin processing for looper requests.
+// and allow the extproc to lookup decision configuration and apply plugins.
 const (
 	// VSRLooperRequest indicates this is an internal looper request.
-	// When present, extproc should skip plugin processing (jailbreak, PII, hallucination, etc.)
-	// and pass the request directly to the backend.
+	// When present, extproc should lookup the decision and execute configured plugins.
 	// Value: "true"
 	VSRLooperRequest = "x-vsr-looper-request"
 
 	// VSRLooperIteration indicates the current iteration number in the looper loop.
 	// Value: "1", "2", "3", etc.
 	VSRLooperIteration = "x-vsr-looper-iteration"
+
+	// VSRLooperDecision indicates the decision name for looper internal requests.
+	// Used by extproc to lookup decision configuration and apply plugins.
+	// Value: decision name (e.g., "remom_low_effort")
+	VSRLooperDecision = "x-vsr-looper-decision"
 )
 
 // Looper Response Headers

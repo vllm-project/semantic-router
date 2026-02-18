@@ -14,7 +14,7 @@ import (
 )
 
 // logRoutingDecision logs routing decision with structured logging
-func (r *OpenAIRouter) logRoutingDecision(ctx *RequestContext, reasonCode string, originalModel string, selectedModel string, decisionName string, reasoningEnabled bool, endpoint string) {
+func (r *OpenAIRouter) logRoutingDecision(ctx *RequestContext, reasonCode string, originalModel string, selectedModel string, decisionName string, reasoningEnabled bool) {
 	effortForMetrics := ""
 	if reasoningEnabled && decisionName != "" {
 		effortForMetrics = r.getReasoningEffort(decisionName, selectedModel)
@@ -35,7 +35,8 @@ func (r *OpenAIRouter) logRoutingDecision(ctx *RequestContext, reasonCode string
 
 // recordRoutingDecision records routing decision with tracing
 func (r *OpenAIRouter) recordRoutingDecision(ctx *RequestContext, decisionName string, originalModel string, matchedModel string, reasoningDecision entropy.ReasoningDecision) {
-	routingCtx, routingSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanRoutingDecision)
+	// Start decision evaluation span
+	routingCtx, routingSpan := tracing.StartDecisionSpan(ctx.TraceContext, decisionName)
 
 	useReasoning := reasoningDecision.UseReasoning
 	logging.Infof("Entropy-based reasoning decision for this query: %v on [%s] model (confidence: %.3f, reason: %s)",
@@ -44,6 +45,7 @@ func (r *OpenAIRouter) recordRoutingDecision(ctx *RequestContext, decisionName s
 	effortForMetrics := r.getReasoningEffort(decisionName, matchedModel)
 	metrics.RecordReasoningDecision(decisionName, matchedModel, useReasoning, effortForMetrics)
 
+	// Keep legacy attributes for backward compatibility
 	tracing.SetSpanAttributes(routingSpan,
 		attribute.String(tracing.AttrRoutingStrategy, "auto"),
 		attribute.String(tracing.AttrRoutingReason, reasoningDecision.DecisionReason),
@@ -52,7 +54,9 @@ func (r *OpenAIRouter) recordRoutingDecision(ctx *RequestContext, decisionName s
 		attribute.Bool(tracing.AttrReasoningEnabled, useReasoning),
 		attribute.String(tracing.AttrReasoningEffort, effortForMetrics))
 
-	routingSpan.End()
+	// End decision span with evaluation results
+	// matchedRules would come from signal evaluation, using empty slice for now
+	tracing.EndDecisionSpan(routingSpan, float64(reasoningDecision.Confidence), []string{}, "auto")
 	ctx.TraceContext = routingCtx
 }
 
@@ -92,7 +96,7 @@ func (r *OpenAIRouter) startRouterReplay(
 	selectedModel string,
 	decisionName string,
 ) {
-	if ctx == nil || ctx.RouterReplayConfig == nil || !ctx.RouterReplayConfig.Enabled {
+	if ctx == nil || ctx.RouterReplayPluginConfig == nil || !ctx.RouterReplayPluginConfig.Enabled {
 		return
 	}
 	if ctx.RouterReplayID != "" {
@@ -109,7 +113,7 @@ func (r *OpenAIRouter) startRouterReplay(
 		}
 	}
 
-	cfg := ctx.RouterReplayConfig
+	cfg := ctx.RouterReplayPluginConfig
 	maxBodyBytes := cfg.MaxBodyBytes
 	if maxBodyBytes <= 0 {
 		maxBodyBytes = routerreplay.DefaultMaxBodyBytes
@@ -131,13 +135,33 @@ func (r *OpenAIRouter) startRouterReplay(
 		modelForRecord = originalModel
 	}
 
+	// Determine plugin status from decision configuration
+	var jailbreakEnabled, piiEnabled, hallucinationEnabled bool
+	if ctx.VSRSelectedDecision != nil {
+		if jailbreakCfg := ctx.VSRSelectedDecision.GetJailbreakConfig(); jailbreakCfg != nil {
+			jailbreakEnabled = jailbreakCfg.Enabled
+		}
+		if piiCfg := ctx.VSRSelectedDecision.GetPIIConfig(); piiCfg != nil {
+			piiEnabled = piiCfg.Enabled
+		}
+		if hallucinationCfg := ctx.VSRSelectedDecision.GetHallucinationConfig(); hallucinationCfg != nil {
+			hallucinationEnabled = hallucinationCfg.Enabled
+		}
+	}
+	guardrailsEnabled := jailbreakEnabled || piiEnabled
+
+	// Determine RAG status from context
+	ragEnabled := ctx.RAGRetrievedContext != ""
+
 	rec := routerreplay.RoutingRecord{
-		RequestID:     ctx.RequestID,
-		Decision:      decisionName,
-		Category:      ctx.VSRSelectedCategory,
-		OriginalModel: originalModel,
-		SelectedModel: modelForRecord,
-		ReasoningMode: reasoningMode,
+		RequestID:       ctx.RequestID,
+		Decision:        decisionName,
+		Category:        ctx.VSRSelectedCategory,
+		OriginalModel:   originalModel,
+		SelectedModel:   modelForRecord,
+		ReasoningMode:   reasoningMode,
+		ConfidenceScore: ctx.VSRSelectedDecisionConfidence,
+		SelectionMethod: ctx.VSRSelectionMethod,
 		Signals: routerreplay.Signal{
 			Keyword:      ctx.VSRMatchedKeywords,
 			Embedding:    ctx.VSRMatchedEmbeddings,
@@ -145,9 +169,31 @@ func (r *OpenAIRouter) startRouterReplay(
 			FactCheck:    ctx.VSRMatchedFactCheck,
 			UserFeedback: ctx.VSRMatchedUserFeedback,
 			Preference:   ctx.VSRMatchedPreference,
+			Language:     ctx.VSRMatchedLanguage,
+			Context:      ctx.VSRMatchedContext,
+			Complexity:   ctx.VSRMatchedComplexity,
 		},
 		Streaming: ctx.ExpectStreamingResponse,
 		FromCache: ctx.VSRCacheHit,
+
+		GuardrailsEnabled: guardrailsEnabled,
+		JailbreakEnabled:  jailbreakEnabled,
+		PIIEnabled:        piiEnabled,
+
+		JailbreakDetected:   ctx.JailbreakDetected,
+		JailbreakType:       ctx.JailbreakType,
+		JailbreakConfidence: ctx.JailbreakConfidence,
+
+		PIIDetected: ctx.PIIDetected,
+		PIIEntities: ctx.PIIEntities,
+		PIIBlocked:  ctx.PIIBlocked,
+
+		RAGEnabled:         ragEnabled,
+		RAGBackend:         ctx.RAGBackend,
+		RAGContextLength:   len(ctx.RAGRetrievedContext),
+		RAGSimilarityScore: ctx.RAGSimilarityScore,
+
+		HallucinationEnabled: hallucinationEnabled,
 	}
 
 	// Attach request body directly; recorder will enforce capture + truncation
@@ -215,5 +261,39 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 				routerreplay.LogFields(rec, "router_replay_complete"),
 			)
 		}
+	}
+}
+
+// updateRouterReplayHallucinationStatus updates the hallucination detection results in the replay record.
+func (r *OpenAIRouter) updateRouterReplayHallucinationStatus(ctx *RequestContext) {
+	if ctx == nil || ctx.RouterReplayID == "" {
+		return
+	}
+
+	// Only update if hallucination detection was enabled
+	if ctx.VSRSelectedDecision == nil {
+		return
+	}
+	hallucinationConfig := ctx.VSRSelectedDecision.GetHallucinationConfig()
+	if hallucinationConfig == nil || !hallucinationConfig.Enabled {
+		return
+	}
+
+	recorder := ctx.RouterReplayRecorder
+	if recorder == nil {
+		recorder = r.ReplayRecorder
+	}
+	if recorder == nil {
+		return
+	}
+
+	err := recorder.UpdateHallucinationStatus(
+		ctx.RouterReplayID,
+		ctx.HallucinationDetected,
+		ctx.HallucinationConfidence,
+		ctx.HallucinationSpans,
+	)
+	if err != nil {
+		logging.Errorf("Failed to update router replay hallucination status: %v", err)
 	}
 }

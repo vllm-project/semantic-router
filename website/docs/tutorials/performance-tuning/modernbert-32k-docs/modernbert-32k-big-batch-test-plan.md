@@ -1,5 +1,6 @@
 # Big Batch Test Plan (High Concurrency C=50+)
 
+**Project**: Issue #995 - ModernBERT-base-32k Integration  
 **Required**: NVIDIA A100 GPU (40GB+ VRAM)
 
 ---
@@ -36,14 +37,15 @@ This test plan covers validation of ModernBERT-base-32k under high concurrency (
 
 #### 1.1 Low Context Length (1K-4K tokens)
 
-| Context Length | Concurrency | Expected Success Rate | Expected Latency |
-|----------------|-------------|----------------------|------------------|
-| 1024 tokens    | C=50        | ≥ 90%                | < 2000ms (p95)   |
-| 1024 tokens    | C=100       | ≥ 80%                | < 3000ms (p95)   |
-| 4096 tokens    | C=50        | ≥ 80%                | < 15000ms (p95)  |
-| 4096 tokens    | C=100       | ≥ 70%                | < 20000ms (p95)  |
+| Context Length | Concurrency | Expected Success Rate | Expected Latency      |
+|----------------|-------------|-----------------------|-----------------------|
+| 1024 tokens    | C=50        | ≥ 90%                 | < 2000ms (p95)        |
+| 1024 tokens    | C=100       | ≥ 80%                 | < 3000ms (p95)        |
+| 4096 tokens    | C=50        | ≥ 80%                 | < 15000ms (p95)       |
+| 4096 tokens    | C=100       | ≥ 70%                 | < 20000ms (p95)       |
 
 **Test Steps:**
+
 1. Run `benchmark_concurrent.rs` with C=50, C=100
 2. Test with 1K, 4K tokens
 3. Measure latency (mean, p50, p95, p99)
@@ -51,6 +53,7 @@ This test plan covers validation of ModernBERT-base-32k under high concurrency (
 5. Document memory usage
 
 **Deliverables:**
+
 - Latency statistics for each concurrency level
 - Success/error rates
 - Memory usage profiles
@@ -60,12 +63,13 @@ This test plan covers validation of ModernBERT-base-32k under high concurrency (
 
 #### 1.2 Medium Context Length (8K tokens)
 
-| Context Length | Concurrency | Expected Success Rate | Expected Latency |
-|----------------|-------------|----------------------|------------------|
-| 8192 tokens    | C=50        | ≥ 70%                | < 25000ms (p95)  |
-| 8192 tokens    | C=100       | ≥ 60%                | < 35000ms (p95)  |
+| Context Length | Concurrency | Expected Success Rate | Expected Latency      |
+|----------------|-------------|-----------------------|-----------------------|
+| 8192 tokens    | C=50        | ≥ 70%                 | < 25000ms (p95)       |
+| 8192 tokens    | C=100       | ≥ 60%                 | < 35000ms (p95)       |
 
 **Test Steps:**
+
 1. Run `benchmark_concurrent.rs` with C=50, C=100
 2. Test with 8K tokens
 3. Measure latency (mean, p50, p95, p99)
@@ -73,6 +77,7 @@ This test plan covers validation of ModernBERT-base-32k under high concurrency (
 5. Document memory usage and fragmentation
 
 **Deliverables:**
+
 - Latency statistics
 - Success/error rates
 - Memory fragmentation analysis
@@ -85,12 +90,14 @@ This test plan covers validation of ModernBERT-base-32k under high concurrency (
 #### 2.1 Requests Per Second (RPS)
 
 **Test Steps:**
+
 1. Measure throughput at different concurrency levels
 2. Calculate RPS for C=50, C=100
 3. Compare with C=1, C=10 baseline
 4. Document throughput scaling
 
 **Deliverables:**
+
 - RPS measurements
 - Throughput scaling analysis
 - Bottleneck identification
@@ -102,6 +109,7 @@ This test plan covers validation of ModernBERT-base-32k under high concurrency (
 #### 3.1 Memory Management Under High Concurrency
 
 **Test Steps:**
+
 1. Monitor GPU memory usage during high concurrency tests
 2. Track memory allocation/deallocation patterns
 3. Identify memory fragmentation issues
@@ -109,6 +117,7 @@ This test plan covers validation of ModernBERT-base-32k under high concurrency (
 5. Document recommendations
 
 **Deliverables:**
+
 - Memory usage profiles
 - Fragmentation analysis
 - Cleanup strategy recommendations
@@ -120,12 +129,14 @@ This test plan covers validation of ModernBERT-base-32k under high concurrency (
 #### 4.1 P95/P99 Latency Under High Concurrency
 
 **Test Steps:**
+
 1. Measure latency distribution at C=50, C=100
 2. Analyze p50, p95, p99 percentiles
 3. Identify latency spikes
 4. Document tail latency behavior
 
 **Deliverables:**
+
 - Latency distribution charts
 - P95/P99 analysis
 - Tail latency recommendations
@@ -137,12 +148,14 @@ This test plan covers validation of ModernBERT-base-32k under high concurrency (
 #### 5.1 OOM Error Patterns
 
 **Test Steps:**
+
 1. Track OOM errors at different concurrency levels
 2. Analyze error patterns
 3. Identify failure modes
 4. Document error recovery strategies
 
 **Deliverables:**
+
 - Error rate analysis
 - Failure mode documentation
 - Recovery strategy recommendations
@@ -176,7 +189,7 @@ This test plan covers validation of ModernBERT-base-32k under high concurrency (
 
 ## Infrastructure Readiness
 
-### Tools Ready 
+### Tools Ready
 
 - `benchmark_concurrent.rs` - Supports C=50, C=100 (currently fails due to memory)
 - `benchmark_performance.rs` - Performance profiling ready
@@ -188,11 +201,13 @@ This test plan covers validation of ModernBERT-base-32k under high concurrency (
 1. **Ensure sufficient GPU memory** (A100 40GB+)
 
 2. **Run benchmark with high concurrency**:
+
    ```bash
    cargo run --example benchmark_concurrent --release --features cuda,flash-attn
    ```
 
 3. **Monitor memory usage**:
+
    ```bash
    watch -n 1 nvidia-smi
    ```
@@ -216,7 +231,6 @@ This test plan covers validation of ModernBERT-base-32k under high concurrency (
 - **GPU**: A100 (40GB VRAM) - **Required**
 - **System RAM**: 64GB+ recommended
 - **Storage**: ~10GB for test data and results
-
 
 ---
 

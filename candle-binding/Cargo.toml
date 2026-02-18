@@ -18,6 +18,13 @@ cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
 # Enable with: cargo build --features flash-attn
 # Note: Requires CUDA Compute Capability >= 8.0 (Ampere or newer)
 flash-attn = ["cuda", "candle-flash-attn"]
+# Intel MKL support for faster CPU inference (Linux/Windows)
+# Enable with: cargo build --no-default-features --features mkl
+# Requires: Intel MKL libraries installed
+mkl = ["candle-core/mkl", "candle-nn/mkl", "candle-transformers/mkl"]
+# macOS Accelerate framework support for faster CPU inference
+# Enable with: cargo build --no-default-features --features accelerate
+accelerate = ["candle-core/accelerate", "candle-nn/accelerate", "candle-transformers/accelerate"]
 
 [dependencies]
 anyhow = { version = "1", features = ["backtrace"] }

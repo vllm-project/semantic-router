@@ -12,6 +12,10 @@ docs-dev: docs-install ## Start documentation website in dev mode
 	@$(LOG_TARGET)
 	cd website && npm start
 
+docs-dev-zh: docs-install ## Start documentation website in dev mode
+	@$(LOG_TARGET)
+	cd website && npm run start:zh
+
 docs-build: docs-install ## Build static documentation website
 	@$(LOG_TARGET)
 	cd website && npm run build

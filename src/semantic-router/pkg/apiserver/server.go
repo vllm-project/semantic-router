@@ -10,8 +10,10 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
@@ -53,10 +55,19 @@ func Init(configPath string, port int, enableSystemPromptAPI bool) error {
 		metrics.SetBatchMetricsConfig(metricsConfig)
 	}
 
+	// Get memory store if available (set by ExtProc router during init)
+	memoryStore := initMemoryStore(5, 500*time.Millisecond)
+	if memoryStore != nil {
+		logging.Infof("Memory management API enabled")
+	} else {
+		logging.Infof("Memory store not available, memory management API will return 503")
+	}
+
 	// Create server instance
 	apiServer := &ClassificationAPIServer{
 		classificationSvc:     classificationSvc,
 		config:                cfg,
+		memoryStore:           memoryStore,
 		enableSystemPromptAPI: enableSystemPromptAPI,
 	}
 
@@ -91,6 +102,24 @@ func initClassify(maxRetries int, retryInterval time.Duration) *services.Classif
 	return nil
 }
 
+// initMemoryStore attempts to get the global memory store with retry logic.
+// The memory store is created by the ExtProc router which may start concurrently.
+func initMemoryStore(maxRetries int, retryInterval time.Duration) memory.Store {
+	for i := 0; i < maxRetries; i++ {
+		if store := memory.GetGlobalMemoryStore(); store != nil {
+			return store
+		}
+
+		if i < maxRetries-1 {
+			logging.Infof("Global memory store not ready, retrying in %v (attempt %d/%d)", retryInterval, i+1, maxRetries)
+			time.Sleep(retryInterval)
+		}
+	}
+
+	logging.Warnf("Memory store not available after %d attempts", maxRetries)
+	return nil
+}
+
 // setupRoutes configures all API routes
 func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
@@ -109,8 +138,13 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	mux.HandleFunc("POST /api/v1/classify/intent", s.handleIntentClassification)
 	mux.HandleFunc("POST /api/v1/classify/pii", s.handlePIIDetection)
 	mux.HandleFunc("POST /api/v1/classify/security", s.handleSecurityDetection)
+	mux.HandleFunc("POST /api/v1/classify/fact-check", s.handleFactCheckClassification)
+	mux.HandleFunc("POST /api/v1/classify/user-feedback", s.handleUserFeedbackClassification)
 	mux.HandleFunc("POST /api/v1/classify/combined", s.handleCombinedClassification)
 	mux.HandleFunc("POST /api/v1/classify/batch", s.handleBatchClassification)
+
+	// Evaluation endpoint - evaluates all configured signals regardless of decision usage
+	mux.HandleFunc("POST /api/v1/eval", s.handleEvalClassification)
 
 	// Embedding endpoints
 	mux.HandleFunc("POST /api/v1/embeddings", s.handleEmbeddings)
@@ -131,10 +165,17 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	// Model selection feedback endpoints
 	mux.HandleFunc("POST /api/v1/feedback", s.handleFeedback)
 	mux.HandleFunc("GET /api/v1/ratings", s.handleGetRatings)
+	mux.HandleFunc("GET /api/v1/rl-state", s.handleRLState)
 
 	// Configuration endpoints
 	mux.HandleFunc("GET /config/classification", s.handleGetConfig)
 	mux.HandleFunc("PUT /config/classification", s.handleUpdateConfig)
+
+	// Memory management endpoints
+	mux.HandleFunc("GET /v1/memory/{id}", s.handleGetMemory)
+	mux.HandleFunc("GET /v1/memory", s.handleListMemories)
+	mux.HandleFunc("DELETE /v1/memory/{id}", s.handleDeleteMemory)
+	mux.HandleFunc("DELETE /v1/memory", s.handleDeleteMemoriesByScope)
 
 	// System prompt configuration endpoints (only if explicitly enabled)
 	if s.enableSystemPromptAPI {
@@ -144,6 +185,12 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	} else {
 		logging.Infof("System prompt configuration endpoints disabled for security")
 	}
+
+	// Vector store management endpoints
+	registerVectorStoreRoutes(mux, s)
+
+	// File management endpoints
+	registerFileRoutes(mux, s)
 
 	return mux
 }
@@ -189,4 +236,29 @@ func (s *ClassificationAPIServer) writeErrorResponse(w http.ResponseWriter, stat
 	}
 
 	s.writeJSONResponse(w, statusCode, errorResponse)
+}
+
+// handleRLState returns the current state of RL-based selectors for debugging
+func (s *ClassificationAPIServer) handleRLState(w http.ResponseWriter, r *http.Request) {
+	userID := r.URL.Query().Get("user_id")
+
+	state := map[string]interface{}{
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	}
+
+	// Get RLDriven selector state
+	if rlSelector, ok := selection.GlobalRegistry.Get(selection.MethodRLDriven); ok {
+		if rlDriven, ok := rlSelector.(*selection.RLDrivenSelector); ok {
+			state["rl_driven"] = rlDriven.GetDebugState(userID)
+		}
+	}
+
+	// Get GMTRouter selector state
+	if gmtSelector, ok := selection.GlobalRegistry.Get(selection.MethodGMTRouter); ok {
+		if gmtRouter, ok := gmtSelector.(*selection.GMTRouterSelector); ok {
+			state["gmtrouter"] = gmtRouter.GetDebugState(userID)
+		}
+	}
+
+	s.writeJSONResponse(w, http.StatusOK, state)
 }

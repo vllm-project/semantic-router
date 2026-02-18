@@ -33,6 +33,7 @@ type RedisCache struct {
 	missCount           int64
 	lastCleanupTime     *time.Time
 	mu                  sync.RWMutex
+	embeddingModel      string // "bert", "qwen3", "gemma", or "mmbert"
 }
 
 // RedisCacheOptions contains configuration parameters for Redis cache initialization
@@ -42,6 +43,7 @@ type RedisCacheOptions struct {
 	Enabled             bool
 	Config              *config.RedisConfig
 	ConfigPath          string
+	EmbeddingModel      string
 }
 
 // NewRedisCache initializes a new Redis-backed semantic cache instance
@@ -79,6 +81,12 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 		Protocol: 2, // Use RESP2 protocol for compatibility
 	})
 
+	// Default to "bert" if no embedding model specified
+	embeddingModel := options.EmbeddingModel
+	if embeddingModel == "" {
+		embeddingModel = "bert"
+	}
+
 	cache := &RedisCache{
 		client:              redisClient,
 		config:              redisConfig,
@@ -86,6 +94,7 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 		similarityThreshold: options.SimilarityThreshold,
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
+		embeddingModel:      embeddingModel,
 	}
 
 	// Test connection using the new CheckConnection method
@@ -205,12 +214,46 @@ func (c *RedisCache) initializeIndex() error {
 	return nil
 }
 
+// getEmbedding generates an embedding based on the configured embedding model
+func (c *RedisCache) getEmbedding(text string) ([]float32, error) {
+	modelName := strings.ToLower(strings.TrimSpace(c.embeddingModel))
+
+	switch modelName {
+	case "qwen3":
+		// Use GetEmbeddingBatched for Qwen3 with batching support
+		output, err := candle_binding.GetEmbeddingBatched(text, modelName, 0)
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
+	case "gemma":
+		// Use GetEmbeddingWithModelType for Gemma
+		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, 0)
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
+	case "mmbert":
+		// Use GetEmbedding2DMatryoshka for mmBERT
+		output, err := candle_binding.GetEmbedding2DMatryoshka(text, modelName, 0, 0)
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
+	case "bert", "":
+		// Use traditional GetEmbedding for BERT (default)
+		return candle_binding.GetEmbedding(text, 0)
+	default:
+		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', 'gemma', or 'mmbert')", c.embeddingModel)
+	}
+}
+
 // createIndex builds the Redis index with the appropriate schema
 func (c *RedisCache) createIndex() error {
 	ctx := context.Background()
 
 	// Determine embedding dimension automatically
-	testEmbedding, err := candle_binding.GetEmbedding("test", 0)
+	testEmbedding, err := c.getEmbedding("test")
 	if err != nil {
 		return fmt.Errorf("failed to detect embedding dimension: %w", err)
 	}
@@ -472,7 +515,7 @@ func (c *RedisCache) addEntry(id string, requestID string, model string, query s
 	}
 
 	// Generate semantic embedding for the query
-	embedding, err := candle_binding.GetEmbedding(query, 0)
+	embedding, err := c.getEmbedding(query)
 	if err != nil {
 		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
@@ -556,7 +599,7 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 	logging.Infof("FindSimilarWithThreshold: cache enabled, generating embedding for query")
 
 	// Generate semantic embedding for similarity comparison
-	queryEmbedding, err := candle_binding.GetEmbedding(query, 0)
+	queryEmbedding, err := c.getEmbedding(query)
 	if err != nil {
 		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
 		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)
@@ -590,7 +633,6 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 		logging.Infof("RedisCache.FindSimilarWithThreshold: search failed: %v", err)
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -600,7 +642,6 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 		atomic.AddInt64(&c.missCount, 1)
 		logging.Infof("RedisCache.FindSimilarWithThreshold: no entries found - cache miss")
 		metrics.RecordCacheOperation("redis", "find_similar", "miss", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -616,7 +657,6 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 		logging.Infof("RedisCache.FindSimilarWithThreshold: vector_distance field not found in result")
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -625,7 +665,6 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 		logging.Infof("RedisCache.FindSimilarWithThreshold: failed to parse distance value: %v", err)
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -661,7 +700,6 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 			"index":           c.indexName,
 		})
 		metrics.RecordCacheOperation("redis", "find_similar", "miss", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -672,7 +710,6 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 		logging.Infof("RedisCache.FindSimilarWithThreshold: cache hit BUT response_body field is MISSING - treating as miss")
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -681,7 +718,6 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 		logging.Infof("RedisCache.FindSimilarWithThreshold: cache hit BUT response_body is EMPTY - treating as miss")
 		atomic.AddInt64(&c.missCount, 1)
 		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
-		metrics.RecordCacheMiss()
 		return nil, false, nil
 	}
 
@@ -700,7 +736,6 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 		"index":      c.indexName,
 	})
 	metrics.RecordCacheOperation("redis", "find_similar", "hit", time.Since(start).Seconds())
-	metrics.RecordCacheHit()
 	return responseBody, true, nil
 }
 

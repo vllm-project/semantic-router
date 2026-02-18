@@ -7,6 +7,7 @@ export type ConfigSection =
   | 'decisions'      // config.yaml: decisions (routing rules)
   | 'models'         // config.yaml: providers.models
   | 'router-config'  // .vllm-sr/router-defaults.yaml (cache, prompt guard, tools, etc.)
+  | 'mcp'            // MCP servers configuration
   | 'topology'       // Separate page for visualization
 
 interface ConfigNavProps {
@@ -39,6 +40,12 @@ const ConfigNav: React.FC<ConfigNavProps> = ({ activeSection, onSectionChange })
       icon: '⚙️',
       title: 'Router Configuration',
       description: 'Cache, prompt guard, tools & observability'
+    },
+    {
+      id: 'mcp' as ConfigSection,
+      icon: '🔌',
+      title: 'MCP Servers & Tools',
+      description: 'MCP servers and all available tools'
     },
     {
       id: 'topology' as ConfigSection,

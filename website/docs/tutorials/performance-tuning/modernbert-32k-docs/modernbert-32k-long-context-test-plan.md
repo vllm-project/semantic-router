@@ -39,11 +39,12 @@ This test plan covers validation of ModernBERT-base-32k for long context sequenc
 
 | Context Length | Expected Latency | Success Criteria |
 |----------------|------------------|------------------|
-| 16384 tokens   | < 10s            | Latency < 10s |
-| 24576 tokens   | < 15s            | Latency < 15s |
-| 32768 tokens   | < 20s            | Latency < 20s |
+| 16384 tokens   | < 10s            | Latency < 10s    |
+| 24576 tokens   | < 15s            | Latency < 15s    |
+| 32768 tokens   | < 20s            | Latency < 20s    |
 
 **Test Steps:**
+
 1. Load ModernBERT-base-32k model
 2. Create test sequences of 16K, 24K, 32K tokens
 3. Measure inference latency for each
@@ -51,6 +52,7 @@ This test plan covers validation of ModernBERT-base-32k for long context sequenc
 5. Document results
 
 **Deliverables:**
+
 - Latency measurements for each context length
 - Memory usage profiles
 - Success/failure status
@@ -62,13 +64,14 @@ This test plan covers validation of ModernBERT-base-32k for long context sequenc
 #### 2.1 Low Concurrency (C=1, C=10)
 
 | Context Length | Concurrency | Expected Success Rate |
-|----------------|-------------|----------------------|
-| 16384 tokens   | C=1         | 100%                 |
-| 16384 tokens   | C=10        | ≥ 80%                |
-| 32768 tokens   | C=1         | 100%                 |
-| 32768 tokens   | C=10        | ≥ 80%                |
+|----------------|-------------|-----------------------|
+| 16384 tokens   | C=1         | 100%                  |
+| 16384 tokens   | C=10        | ≥ 80%                 |
+| 32768 tokens   | C=1         | 100%                  |
+| 32768 tokens   | C=10        | ≥ 80%                 |
 
 **Test Steps:**
+
 1. Run `benchmark_concurrent.rs` with 16K, 32K tokens
 2. Test with C=1 and C=10
 3. Measure latency (mean, p50, p95, p99)
@@ -76,6 +79,7 @@ This test plan covers validation of ModernBERT-base-32k for long context sequenc
 5. Document memory usage
 
 **Deliverables:**
+
 - Latency statistics for each concurrency level
 - Success/error rates
 - Memory usage profiles
@@ -87,6 +91,7 @@ This test plan covers validation of ModernBERT-base-32k for long context sequenc
 #### 3.1 Component Breakdown
 
 **Test Steps:**
+
 1. Run `benchmark_performance.rs` for 16K, 32K tokens
 2. Measure:
    - Tokenization time
@@ -97,6 +102,7 @@ This test plan covers validation of ModernBERT-base-32k for long context sequenc
 4. Document performance breakdown
 
 **Deliverables:**
+
 - Performance breakdown by component
 - Flash Attention 2 impact
 - Bottleneck identification
@@ -108,12 +114,14 @@ This test plan covers validation of ModernBERT-base-32k for long context sequenc
 #### 4.1 Memory Usage Analysis
 
 **Test Steps:**
+
 1. Measure GPU memory usage for each context length
 2. Track memory allocation patterns
 3. Identify memory peaks
 4. Document memory requirements
 
 **Deliverables:**
+
 - Memory usage profiles
 - Peak memory requirements
 - Memory efficiency metrics
@@ -125,6 +133,7 @@ This test plan covers validation of ModernBERT-base-32k for long context sequenc
 #### 5.1 Signal Extraction Accuracy
 
 **Test Steps:**
+
 1. Test domain classification accuracy at 16K, 32K tokens
 2. Test PII detection accuracy at 16K, 32K tokens
 3. Test jailbreak detection accuracy at 16K, 32K tokens
@@ -132,6 +141,7 @@ This test plan covers validation of ModernBERT-base-32k for long context sequenc
 5. Document accuracy degradation (if any)
 
 **Deliverables:**
+
 - Accuracy measurements for each signal type
 - Comparison with baseline
 - Accuracy degradation analysis
@@ -143,6 +153,7 @@ This test plan covers validation of ModernBERT-base-32k for long context sequenc
 #### 6.1 Information Retrieval at Different Positions
 
 **Test Steps:**
+
 1. Place test information at beginning, middle, end of sequence
 2. Test with 16K, 32K tokens
 3. Measure retrieval accuracy for each position
@@ -150,6 +161,7 @@ This test plan covers validation of ModernBERT-base-32k for long context sequenc
 5. Document position accuracy
 
 **Deliverables:**
+
 - Position accuracy results
 - Comparison with baseline
 - Recommendations
@@ -160,7 +172,7 @@ This test plan covers validation of ModernBERT-base-32k for long context sequenc
 
 ### Success Criteria
 
-1. **16K tokens**: 
+1. **16K tokens**:
    - C=1 latency < 10s
    - C=10 success rate ≥ 80%
    - No OOM errors
@@ -182,7 +194,7 @@ This test plan covers validation of ModernBERT-base-32k for long context sequenc
 
 ## Infrastructure Readiness
 
-### Tools Ready 
+### Tools Ready
 
 - `benchmark_concurrent.rs` - Supports 16K/32K (uncomment test cases)
 - `benchmark_performance.rs` - Performance profiling ready
@@ -192,6 +204,7 @@ This test plan covers validation of ModernBERT-base-32k for long context sequenc
 ### How to Run Tests
 
 1. **Uncomment test cases** in `benchmark_concurrent.rs`:
+
    ```rust
    let context_lengths = vec![
        1024,
@@ -203,11 +216,13 @@ This test plan covers validation of ModernBERT-base-32k for long context sequenc
    ```
 
 2. **Run benchmark**:
+
    ```bash
    cargo run --example benchmark_concurrent --release --features cuda,flash-attn
    ```
 
 3. **Run performance profiling**:
+
    ```bash
    cargo run --example benchmark_performance --release --features cuda,flash-attn
    ```
@@ -263,4 +278,3 @@ This test plan covers validation of ModernBERT-base-32k for long context sequenc
 - **Performance Tool**: `candle-binding/examples/benchmark_performance.rs`
 
 ---
-

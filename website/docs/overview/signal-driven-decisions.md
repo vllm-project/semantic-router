@@ -26,7 +26,7 @@ if (keyword_match AND domain_match) OR high_embedding_similarity:
 
 **Why this matters**: Multiple signals voting together make more accurate decisions than any single signal.
 
-## The 7 Signal Types
+## The 9 Signal Types
 
 ### 1. Keyword Signals
 
@@ -148,6 +148,65 @@ signals:
 - **Example 1**: "Hola, ¿cómo estás?" → Spanish (es) → Spanish model
 - **Example 2**: "你好，世界" → Chinese (zh) → Chinese model
 
+### 8. Context Signals
+
+- **What**: Token-count based routing for short/long request handling
+- **Latency**: 1ms (calculated during processing)
+- **Use Case**: Route long-context requests to models with larger context windows
+- **Metrics**: Tracks input token counts with `llm_context_token_count` histogram
+
+```yaml
+signals:
+  context_rules:
+    - name: "low_token_count"
+      min_tokens: "0"
+      max_tokens: "1K"
+      description: "Short requests"
+    - name: "high_token_count"
+      min_tokens: "1K"
+      max_tokens: "128K"
+      description: "Long requests requiring large context window"
+```
+
+**Example**: A request with 5,000 tokens → Matches "high_token_count" → Routes to `claude-3-opus`
+
+### 9. Complexity Signals
+
+- **What**: Embedding-based query complexity classification (hard/easy/medium)
+- **Latency**: 50-100ms (embedding computation)
+- **Use Case**: Route complex queries to powerful models, simple queries to efficient models
+- **Logic**: Two-step classification:
+  1. Find best matching rule by comparing query to rule descriptions
+  2. Classify difficulty within that rule using hard/easy candidate embeddings
+
+```yaml
+signals:
+  complexity:
+    - name: "code_complexity"
+      threshold: 0.1
+      description: "Detects code complexity level"
+      hard:
+        candidates:
+          - "design distributed system"
+          - "implement consensus algorithm"
+          - "optimize for scale"
+      easy:
+        candidates:
+          - "print hello world"
+          - "loop through array"
+          - "read file"
+```
+
+**Example**: "How do I implement a distributed consensus algorithm?" → Matches "code_complexity" rule → High similarity to hard candidates → Returns "code_complexity:hard"
+
+**How it works**:
+
+1. Query embedding is compared to each rule's description
+2. Best matching rule is selected (highest description similarity)
+3. Within that rule, query is compared to hard and easy candidates
+4. Difficulty signal = max_hard_similarity - max_easy_similarity
+5. If signal > threshold: "hard", if signal < -threshold: "easy", else: "medium"
+
 ## How Signals Combine
 
 ### AND Operator - All Must Match
@@ -244,3 +303,5 @@ selected_model: "qwen-math"
 - [Keyword Routing Tutorial](../tutorials/intelligent-route/keyword-routing.md) - Learn keyword signals
 - [Embedding Routing Tutorial](../tutorials/intelligent-route/embedding-routing.md) - Learn embedding signals
 - [Domain Routing Tutorial](../tutorials/intelligent-route/domain-routing.md) - Learn domain signals
+- [Context Routing Tutorial](../tutorials/intelligent-route/context-routing.md) - Learn context signals
+- [Complexity Routing Tutorial](../tutorials/intelligent-route/complexity-routing.md) - Learn complexity signals

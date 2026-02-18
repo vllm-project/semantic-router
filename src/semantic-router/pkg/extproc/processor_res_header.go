@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -12,14 +13,24 @@ import (
 	"go.opentelemetry.io/otel/codes"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
 
 // handleResponseHeaders processes the response headers
 func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_ResponseHeaders, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
-	// If this is a looper internal request, skip most processing and just continue
+	// If this is a looper internal request, update router replay status and continue
 	if ctx.LooperRequest {
+		// Extract status code from response headers
+		statusCode := 200 // Default
+		if v.ResponseHeaders != nil && v.ResponseHeaders.Headers != nil {
+			statusCode = getStatusFromHeaders(v.ResponseHeaders.Headers)
+		}
+
+		// Update router replay with status code
+		r.updateRouterReplayStatus(ctx, statusCode, false)
+
 		return &ext_proc.ProcessingResponse{
 			Response: &ext_proc.ProcessingResponse_ResponseHeaders{
 				ResponseHeaders: &ext_proc.HeadersResponse{
@@ -75,6 +86,8 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 			metrics.RecordModelTTFT(ctx.RequestModel, ttft)
 			ctx.TTFTSeconds = ttft
 			ctx.TTFTRecorded = true
+			// Update TTFT cache for latency_aware percentile-based model selection
+			latency.UpdateTTFT(ctx.RequestModel, ttft)
 		}
 	}
 
@@ -104,6 +117,30 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 				Header: &core.HeaderValue{
 					Key:      headers.VSRSelectedDecision,
 					RawValue: []byte(ctx.VSRSelectedDecisionName),
+				},
+			})
+		}
+
+		// Add x-vsr-selected-confidence header (from decision evaluation)
+		if ctx.VSRSelectedDecisionConfidence > 0 {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.VSRSelectedConfidence,
+					RawValue: []byte(fmt.Sprintf("%.4f", ctx.VSRSelectedDecisionConfidence)),
+				},
+			})
+		}
+
+		// Add x-vsr-selected-modality header (from modality routing)
+		if ctx.ModalityClassification != nil && ctx.ModalityClassification.Modality != "" {
+			modalityValue := ctx.ModalityClassification.Modality
+			if ctx.ModalityClassification.Method != "" {
+				modalityValue += ";" + ctx.ModalityClassification.Method
+			}
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.VSRSelectedModality,
+					RawValue: []byte(modalityValue),
 				},
 			})
 		}
@@ -210,6 +247,46 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 				Header: &core.HeaderValue{
 					Key:      headers.VSRMatchedLanguage,
 					RawValue: []byte(strings.Join(ctx.VSRMatchedLanguage, ",")),
+				},
+			})
+		}
+
+		// Add x-vsr-matched-context header (from context signal classification)
+		if len(ctx.VSRMatchedContext) > 0 {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.VSRMatchedContext,
+					RawValue: []byte(strings.Join(ctx.VSRMatchedContext, ",")),
+				},
+			})
+		}
+
+		// Add x-vsr-context-token-count header
+		if ctx.VSRContextTokenCount > 0 {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.VSRContextTokenCount,
+					RawValue: []byte(strconv.Itoa(ctx.VSRContextTokenCount)),
+				},
+			})
+		}
+
+		// Add x-vsr-matched-complexity header (from complexity signal classification)
+		if len(ctx.VSRMatchedComplexity) > 0 {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.VSRMatchedComplexity,
+					RawValue: []byte(strings.Join(ctx.VSRMatchedComplexity, ",")),
+				},
+			})
+		}
+
+		// Add x-vsr-matched-authz header (from authz signal classification)
+		if len(ctx.VSRMatchedAuthz) > 0 {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.VSRMatchedAuthz,
+					RawValue: []byte(strings.Join(ctx.VSRMatchedAuthz, ",")),
 				},
 			})
 		}

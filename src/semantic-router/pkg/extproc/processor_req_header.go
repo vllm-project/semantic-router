@@ -65,9 +65,13 @@ type RequestContext struct {
 	VSRSelectedDecisionConfidence float64          // Confidence score from DecisionEngine evaluation
 	VSRReasoningMode              string           // "on" or "off" - whether reasoning mode was determined to be used
 	VSRSelectedModel              string           // The model selected by VSR
+	VSRSelectionMethod            string           // Model selection algorithm used (e.g., "elo", "static", "router_dc")
 	VSRCacheHit                   bool             // Whether this request hit the cache
 	VSRInjectedSystemPrompt       bool             // Whether a system prompt was injected into the request
 	VSRSelectedDecision           *config.Decision // The decision object selected by DecisionEngine (for plugins)
+
+	// Modality routing classification result (AR/DIFFUSION/BOTH)
+	ModalityClassification *ModalityClassificationResult // Set by classifyModality()
 
 	// VSR signal tracking - stores all matched signals for response headers
 	VSRMatchedKeywords     []string // Matched keyword rule names
@@ -77,6 +81,11 @@ type RequestContext struct {
 	VSRMatchedUserFeedback []string // Matched user feedback signals
 	VSRMatchedPreference   []string // Matched preference signals
 	VSRMatchedLanguage     []string // Matched language signals
+	VSRMatchedContext      []string // Matched context rule names (e.g. "low_token_count")
+	VSRContextTokenCount   int      // Actual token count for the request
+	VSRMatchedComplexity   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
+	VSRMatchedModality     []string // Matched modality signals: "AR", "DIFFUSION", or "BOTH"
+	VSRMatchedAuthz        []string // Matched authz rule names for user-level routing
 
 	// Endpoint tracking for windowed metrics
 	SelectedEndpoint string // The endpoint address selected for this request
@@ -92,6 +101,16 @@ type RequestContext struct {
 	EnhancedHallucinationInfo *EnhancedHallucinationInfo // Detailed NLI info (when use_nli enabled)
 	UnverifiedFactualResponse bool                       // True if fact-check needed but no tools to verify against
 
+	// Jailbreak Detection Results
+	JailbreakDetected   bool    // True if jailbreak was detected
+	JailbreakType       string  // Type of jailbreak detected
+	JailbreakConfidence float32 // Confidence score of jailbreak detection
+
+	// PII Detection Results
+	PIIDetected bool     // True if PII was detected
+	PIIEntities []string // PII entity types detected (e.g., ["EMAIL", "PHONE_NUMBER"])
+	PIIBlocked  bool     // True if request was blocked due to PII policy violation
+
 	// Tracing context
 	TraceContext context.Context // OpenTelemetry trace context for span propagation
 	UpstreamSpan trace.Span      // Span for tracking upstream vLLM request duration
@@ -100,9 +119,9 @@ type RequestContext struct {
 	ResponseAPICtx *ResponseAPIContext // Non-nil if this is a Response API request
 
 	// Router replay context
-	RouterReplayID       string                     // ID of the router replay session, if applicable
-	RouterReplayConfig   *config.RouterReplayConfig // Configuration for router replay, if applicable
-	RouterReplayRecorder *routerreplay.Recorder     // The recorder instance for this decision
+	RouterReplayID           string                           // ID of the router replay session, if applicable
+	RouterReplayPluginConfig *config.RouterReplayPluginConfig // Per-decision plugin configuration for router replay
+	RouterReplayRecorder     *routerreplay.Recorder           // The recorder instance for this decision
 
 	// Looper context
 	LooperRequest   bool // True if this request is from looper (internal request, skip plugins)
@@ -112,6 +131,19 @@ type RequestContext struct {
 	// APIFormat indicates the target API format (e.g., "anthropic", "gemini")
 	// Empty string means standard OpenAI-compatible backend (no transformation needed)
 	APIFormat string
+
+	// RAG (Retrieval-Augmented Generation) tracking
+	RAGRetrievedContext string  // Retrieved context from RAG plugin
+	RAGBackend          string  // Backend used for retrieval ("milvus", "external_api", "mcp", "hybrid")
+	RAGSimilarityScore  float32 // Best similarity score from retrieval
+	RAGRetrievalLatency float64 // Retrieval latency in seconds
+
+	// Memory retrieval tracking
+	// Stores formatted memory context to be injected after system prompt
+	MemoryContext string // Formatted memory context (empty if no memories retrieved)
+
+	// Note: Per-user API keys from ext_authz / Authorino are read directly from
+	// ctx.Headers by the CredentialResolver (pkg/authz). No separate fields needed.
 }
 
 // handleRequestHeaders processes the request headers
@@ -159,6 +191,9 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 			ctx.LooperRequest = true
 			logging.Infof("Detected looper internal request, will skip plugin processing")
 		}
+
+		// Note: ext_authz / Authorino injected headers (x-user-openai-key, x-user-anthropic-key)
+		// are stored in ctx.Headers and read by the CredentialResolver at routing time.
 	}
 
 	// Set request metadata on span

@@ -302,3 +302,32 @@ func TestDecisionEngine_EvaluateDecisionsWithFactCheck(t *testing.T) {
 		})
 	}
 }
+
+func TestDecisionEngine_LatencyConditionIsIgnored(t *testing.T) {
+	engine := NewDecisionEngine(
+		[]config.KeywordRule{},
+		[]config.EmbeddingRule{},
+		[]config.Category{},
+		[]config.Decision{
+			{
+				Name:     "legacy-latency",
+				Priority: 10,
+				Rules: config.RuleCombination{
+					Operator: "AND",
+					Conditions: []config.RuleCondition{
+						{Type: "latency", Name: "low_latency"},
+					},
+				},
+			},
+		},
+		"priority",
+	)
+
+	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if result != nil {
+		t.Fatalf("Expected no decision match for deprecated latency condition, got %q", result.Decision.Name)
+	}
+}

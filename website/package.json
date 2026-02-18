@@ -8,7 +8,10 @@
   "scripts": {
     "docusaurus": "docusaurus",
     "start": "docusaurus start",
+    "start:zh": "docusaurus start --locale zh-Hans",
     "build": "docusaurus build",
+    "build:en": "docusaurus build --locale en",
+    "build:zh": "docusaurus build --locale zh-Hans",
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy",
     "clear": "docusaurus clear",
@@ -35,6 +38,7 @@
     "@stylistic/eslint-plugin": "2.13.0",
     "eslint": "9.18.0",
     "eslint-plugin-react": "^7.37.4",
+    "motion": "^12.34.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-icons": "^5.5.0"

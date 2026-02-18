@@ -1,0 +1,841 @@
+/* CustomNodes.module.css - Styles for custom topology nodes */
+
+/* ============== Common Node Styles ============== */
+.nodeBase {
+  padding: 12px 16px;
+  border-radius: 8px;
+  min-width: 160px;
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.nodeBase:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.highlighted {
+  transform: scale(1.08);
+  box-shadow:
+    0 0 0 3px #76b900,
+    0 0 25px rgba(118, 185, 0, 0.8),
+    0 0 50px rgba(118, 185, 0, 0.4);
+  z-index: 1000;
+  animation: highlightPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes highlightPulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 3px #76b900,
+      0 0 25px rgba(118, 185, 0, 0.8),
+      0 0 50px rgba(118, 185, 0, 0.4);
+  }
+  50% {
+    box-shadow:
+      0 0 0 4px #8fd400,
+      0 0 35px rgba(143, 212, 0, 1),
+      0 0 70px rgba(143, 212, 0, 0.6);
+  }
+}
+
+/* ============== Client Node (NVIDIA Green) ============== */
+.clientNode {
+  composes: nodeBase;
+  background: #76b900;
+  color: white;
+  border: 2px solid #5a8f00;
+  min-width: 140px;
+}
+
+.clientIcon {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+
+.clientLabel {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* ============== Global Plugin Node ============== */
+.globalPluginNode {
+  composes: nodeBase;
+  color: white;
+}
+
+.globalPluginNode.disabled {
+  background: #3d4a59 !important;
+  border-color: #2d3748 !important;
+}
+
+.pluginHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.pluginIcon {
+  font-size: 18px;
+}
+
+.pluginTitle {
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.pluginStatus {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  font-weight: 500;
+}
+
+/* ============== Signal Group Node ============== */
+.signalGroupNode {
+  composes: nodeBase;
+  color: white;
+  min-width: 180px;
+  cursor: pointer;
+}
+
+.signalGroupHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.signalGroupIcon {
+  font-size: 16px;
+}
+
+.signalGroupTitle {
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  flex: 1;
+}
+
+.signalGroupBadge {
+  background: rgba(255, 255, 255, 0.3);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.signalGroupContent {
+  width: 100%;
+  margin-top: 6px;
+}
+
+.signalLatency {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  opacity: 0.9;
+}
+
+.collapseIcon {
+  font-size: 10px;
+  margin-left: auto;
+  opacity: 0.7;
+}
+
+.signalList {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.signalItem {
+  font-size: 11px;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mlTag {
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+/* Dynamic signal group styles (detected by ML, not in config) */
+.dynamicSignal {
+  position: relative;
+}
+
+.dynamicSignal::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 12px;
+  height: 12px;
+  background: #FF9800;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.3);
+}
+
+.dynamicBadge {
+  font-size: 8px;
+  background: rgba(255, 152, 0, 0.8);
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-weight: 700;
+  margin-left: 4px;
+}
+
+/* ============== Decision Node ============== */
+.decisionNode {
+  composes: nodeBase;
+  color: white;
+  min-width: 200px;
+}
+
+.decisionNode.unreachable {
+  opacity: 0.75;
+  border-style: dashed !important;
+}
+
+.unreachableBanner {
+  width: 100%;
+  padding: 4px 8px;
+  margin-top: 4px;
+  background: rgba(255, 152, 0, 0.3);
+  border-radius: 4px;
+  font-size: 10px;
+  text-align: center;
+  color: #FFE082;
+  font-weight: 500;
+}
+
+.decisionHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.decisionIcon {
+  font-size: 16px;
+}
+
+.decisionName {
+  font-weight: 600;
+  font-size: 13px;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.decisionPriority {
+  background: rgba(255, 255, 255, 0.3);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.rulesSection {
+  width: 100%;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.rulesHeader {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.rulesOperator {
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+
+.rulesCount {
+  opacity: 0.8;
+}
+
+.conditionsList {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.condition {
+  font-size: 10px;
+  padding: 2px 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.decisionMeta {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.metaTag {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.modelsList {
+  margin-top: 6px;
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.modelItem {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+.moreModels {
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+/* ============== Algorithm Node ============== */
+.algorithmNode {
+  composes: nodeBase;
+  color: white;
+  min-width: 150px;
+}
+
+.algorithmHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.algorithmIcon {
+  font-size: 16px;
+}
+
+.algorithmType {
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
+.algorithmConfig {
+  margin-top: 6px;
+  font-size: 10px;
+  opacity: 0.9;
+}
+
+/* ============== Plugin Chain Node ============== */
+.pluginChainNode {
+  composes: nodeBase;
+  background: var(--bg-secondary, #1a1a1a);
+  color: var(--text-primary, #e8e8e8);
+  border: 2px solid var(--border-color, #333);
+  min-width: 180px;
+}
+
+.pluginChainHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  cursor: pointer;
+}
+
+.pluginChainTitle {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pluginChain {
+  display: flex;
+  flex-direction: column;  /* Changed to vertical layout */
+  align-items: center;
+  gap: 8px;  /* Increased gap for vertical spacing */
+  margin-top: 8px;
+}
+
+.chainPlugin {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  color: white;
+  width: 100%;  /* Full width for vertical layout */
+  justify-content: center;
+}
+
+.chainPlugin.disabled {
+  opacity: 0.5;
+}
+
+.pluginOverride {
+  font-size: 9px;
+  margin-left: 2px;
+  opacity: 0.75;
+  font-style: italic;
+}
+
+.chainArrow {
+  font-size: 14px;  /* Slightly larger for vertical arrow */
+  opacity: 0.5;
+  /* No rotation needed - arrow is already ↓ in the component */
+}
+
+/* ============== Model Node ============== */
+.modelNode {
+  composes: nodeBase;
+  min-width: 160px;
+  color: white;
+}
+
+.modelHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.modelIcon {
+  font-size: 16px;
+}
+
+.modelName {
+  font-weight: 600;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
+}
+
+.modelFeatures {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.reasoningBadge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: rgba(118, 185, 0, 0.2);
+  border: 1px solid #76b900;
+  border-radius: 4px;
+  font-size: 10px;
+  color: white;
+}
+
+.reasoningIcon {
+  font-size: 11px;
+}
+
+.reasoningFamily {
+  opacity: 0.8;
+  font-size: 9px;
+}
+
+.effortBadge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  color: white;
+  font-weight: 500;
+}
+
+.loraBadge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  background: linear-gradient(135deg, #673AB7, #3F51B5);
+  border-radius: 4px;
+  font-size: 10px;
+  color: white;
+}
+
+.loraIcon {
+  font-size: 11px;
+}
+
+.loraName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100px;
+}
+
+.modelSource {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  padding-top: 6px;
+  margin-top: 4px;
+  opacity: 0.8;
+}
+
+.sourceLabel {
+  opacity: 0.7;
+}
+
+.sourceName {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
+}
+
+/* ============== Multi-Mode Model Styles ============== */
+.modesContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.modeBadge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  color: white;
+  border: 1px solid;
+}
+
+.modeBadge span:first-child {
+  font-size: 11px;
+}
+
+.effortTag {
+  margin-left: auto;
+  font-size: 9px;
+  opacity: 0.9;
+}
+
+.standardBadge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: rgba(100, 100, 100, 0.4);
+  border-radius: 4px;
+  font-size: 10px;
+  color: white;
+}
+
+/* ============== Default Route Node ============== */
+.defaultRouteNode {
+  composes: nodeBase;
+  background: linear-gradient(135deg, #607D8B, #455A64);
+  color: white;
+  border: 2px dashed #90A4AE;
+  min-width: 160px;
+}
+
+.defaultRouteHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.defaultRouteIcon {
+  font-size: 18px;
+}
+
+.defaultRouteTitle {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.defaultRouteInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.defaultRouteLabel {
+  font-size: 10px;
+  opacity: 0.8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.defaultRouteModel {
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.15);
+  padding: 3px 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ============== Fallback Decision Node ============== */
+.fallbackDecisionNode {
+  composes: nodeBase;
+  background: linear-gradient(135deg, #FF9800, #F57C00);
+  color: white;
+  border: 2px solid #EF6C00;
+  min-width: 180px;
+}
+
+.fallbackDecisionNode.highlighted {
+  box-shadow: 0 0 20px rgba(255, 152, 0, 0.8);
+  border-color: #FFE082;
+}
+
+.fallbackDecisionHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.fallbackDecisionIcon {
+  font-size: 18px;
+}
+
+.fallbackDecisionTitle {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.fallbackDecisionInfo {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.fallbackDecisionBadge {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.fallbackDecisionReason {
+  font-size: 10px;
+  opacity: 0.9;
+  padding: 4px 6px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+
+.fallbackDecisionModel {
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.15);
+  padding: 3px 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  /* Fallback Decision Node - fix layout on mobile */
+  .fallbackDecisionNode {
+    min-width: 160px;
+    padding: 10px 12px;
+  }
+
+  .fallbackDecisionHeader {
+    margin-bottom: 4px;
+  }
+
+  .fallbackDecisionIcon {
+    font-size: 16px;
+  }
+
+  .fallbackDecisionTitle {
+    font-size: 12px;
+  }
+
+  .fallbackDecisionBadge {
+    font-size: 8px;
+    padding: 2px 5px;
+  }
+
+  .fallbackDecisionReason {
+    font-size: 9px;
+    padding: 3px 5px;
+    margin-bottom: 4px;
+    word-break: break-word;
+    white-space: normal;
+  }
+
+  .fallbackDecisionModel {
+    font-size: 10px;
+    padding: 3px 6px;
+    word-break: break-word;
+    white-space: normal;
+  }
+
+  /* Default Route Node - fix layout on mobile */
+  .defaultRouteNode {
+    min-width: 140px;
+    padding: 10px 12px;
+  }
+
+  .defaultRouteIcon {
+    font-size: 16px;
+  }
+
+  .defaultRouteTitle {
+    font-size: 12px;
+  }
+
+  .defaultRouteLabel {
+    font-size: 9px;
+  }
+
+  .defaultRouteModel {
+    font-size: 10px;
+    padding: 3px 6px;
+    word-break: break-word;
+    white-space: normal;
+  }
+
+  /* Decision Node - optimize for mobile */
+  .decisionNode {
+    min-width: 180px;
+    padding: 10px 12px;
+  }
+
+  .decisionName {
+    font-size: 12px;
+  }
+
+  .decisionPriority {
+    font-size: 9px;
+    padding: 1px 5px;
+  }
+
+  /* Signal Group Node - optimize for mobile */
+  .signalGroupNode {
+    min-width: 140px;
+    padding: 10px 12px;
+  }
+
+  .signalGroupTitle {
+    font-size: 11px;
+  }
+
+  .signalGroupBadge {
+    font-size: 9px;
+    padding: 1px 5px;
+  }
+
+  .signalItem {
+    font-size: 10px;
+    padding: 2px 5px;
+  }
+
+  /* Model Node - optimize for mobile */
+  .modelNode {
+    min-width: 140px;
+    padding: 10px 12px;
+  }
+
+  .modelName {
+    font-size: 11px;
+    max-width: 100px;
+  }
+
+  .modeBadge {
+    font-size: 9px;
+    padding: 2px 6px;
+  }
+
+  .effortTag {
+    font-size: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Further reduce sizes on very small screens */
+  .fallbackDecisionNode,
+  .defaultRouteNode,
+  .decisionNode,
+  .signalGroupNode,
+  .modelNode {
+    min-width: 120px;
+    padding: 8px 10px;
+  }
+
+  .fallbackDecisionTitle,
+  .defaultRouteTitle,
+  .decisionName {
+    font-size: 11px;
+  }
+
+  .fallbackDecisionReason,
+  .fallbackDecisionModel,
+  .defaultRouteModel {
+    font-size: 9px;
+    padding: 2px 5px;
+  }
+
+  .signalGroupTitle {
+    font-size: 10px;
+  }
+
+  .modelName {
+    font-size: 10px;
+    max-width: 80px;
+  }
+}

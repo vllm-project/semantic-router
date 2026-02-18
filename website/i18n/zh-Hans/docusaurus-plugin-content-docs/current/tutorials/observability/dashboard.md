@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "bac2743"
+  source_commit: "1d0aec2"
   source_file: "docs/tutorials/observability/dashboard.md"
   outdated: false
 ---
@@ -10,7 +10,7 @@ translation:
 Semantic Router 仪表板是一个统一的操作员界面，集成了配置管理 (Configuration Management)、交互式演练场 (Interactive Playground) 以及实时监控与可观测性。它为本地开发、Docker Compose 和 Kubernetes 部署提供了一个统一的入口点。
 
 - 统一查看和编辑配置（带有防护机制）
-- 通过您喜欢的 UI (Open WebUI) 测试提示词
+- 通过内置聊天演练场测试提示词
 - 查看指标/仪表板 (Grafana/Prometheus)
 - 统一后端代理，规范各服务之间的认证、CORS 和 CSP
 
@@ -32,7 +32,7 @@ Semantic Router 仪表板是一个统一的操作员界面，集成了配置管�
 
 ![Dashboard Landing](/img/dashboard/landing.png)
 
-- 演练场：内置聊天演练场，用于快速测试
+- 演练场：内置聊天演练场用于快速测试
 
 - 配置：实时配置查看器/编辑器，具有结构化面板和原始视图
 
@@ -61,7 +61,6 @@ Semantic Router 仪表板是一个统一的操作员界面，集成了配置管�
 - 路由 API：`GET/POST /api/router/*`（转发 Authorization Header）
 - Grafana (嵌入)：`GET /embedded/grafana/*`
 - Prometheus (嵌入)：`GET /embedded/prometheus/*`
-- Open WebUI (嵌入)：`GET /embedded/openwebui/*`
 - 路由指标透传：`GET /metrics/router` → 重定向到路由指标
 
 代理会剥离/覆盖 `X-Frame-Options` 并调整 `Content-Security-Policy` 以允许 `frame-ancestors 'self'`，从而实现在仪表板同源下的安全嵌入。
@@ -75,7 +74,6 @@ Semantic Router 仪表板是一个统一的操作员界面，集成了配置管�
 - `TARGET_PROMETHEUS_URL`
 - `TARGET_ROUTER_API_URL` (http://localhost:8080)
 - `TARGET_ROUTER_METRICS_URL` (http://localhost:9190/metrics)
-- `TARGET_OPENWEBUI_URL` (可选)
 - `ROUTER_CONFIG_PATH` (../../config/config.yaml)
 - `DASHBOARD_STATIC_DIR` (../frontend)
 

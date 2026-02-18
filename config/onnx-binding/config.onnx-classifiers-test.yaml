@@ -1,0 +1,224 @@
+# Test configuration for onnx-binding with classifiers
+# Uses ONNX models for both embeddings and classification
+
+# Model-On-Demand Registry - maps local paths to HuggingFace repos
+# The ONNX models are stored in the onnx/ subdirectory of the merged model repos
+mom_registry:
+  # ONNX classifier models (already downloaded/exported locally)
+  "models/mmbert32k-intent-classifier-merged-onnx": "llm-semantic-router/mmbert32k-intent-classifier-merged"
+  "models/mmbert32k-jailbreak-detector-merged-onnx": "llm-semantic-router/mmbert32k-jailbreak-detector-merged"
+  "models/mmbert32k-pii-detector-merged-onnx": "llm-semantic-router/mmbert32k-pii-detector-merged"
+  "models/mmbert32k-factcheck-classifier-merged-onnx": "llm-semantic-router/mmbert32k-factcheck-classifier-merged"
+  "models/mmbert32k-feedback-detector-merged-onnx": "llm-semantic-router/mmbert32k-feedback-detector-merged"
+  # Required by hallucination_mitigation when enabled
+  "models/mom-halugate-detector": "KRLabsOrg/lettucedect-base-modernbert-en-v1"
+  "models/mom-halugate-explainer": "tasksource/ModernBERT-base-nli"
+
+# Response API Configuration
+response_api:
+  enabled: true
+  store_backend: "memory"
+  ttl_seconds: 86400
+  max_responses: 1000
+
+# Router Replay Configuration
+router_replay:
+  store_backend: "memory"
+  ttl_seconds: 2592000
+  async_writes: true
+
+# Semantic Cache Configuration - uses mmBERT embeddings
+semantic_cache:
+  enabled: true
+  backend_type: "memory"
+  similarity_threshold: 0.85
+  max_entries: 1000
+  ttl_seconds: 3600
+  eviction_policy: "fifo"
+  embedding_model: "mmbert"
+
+# Embedding Models Configuration - mmBERT 32K via ONNX Runtime
+embedding_models:
+  use_cpu: true
+  # mmBERT 32K YaRN model path (local ONNX)
+  mmbert_model_path: "onnx-binding/mmbert-32k-yarn-onnx"
+
+# Tools Configuration - uses embeddings for semantic matching
+tools:
+  enabled: true
+  tools_db_path: "config/tools_db.json"
+  model_type: "mmbert"
+  target_dim: 0
+  similarity_threshold: 0.7
+
+# Classification Models Configuration - ONNX Runtime via mmBERT-32K
+# Enable classifiers with mmBERT-32K (uses onnx-binding)
+prompt_guard:
+  enabled: true
+  use_mmbert_32k: true  # Enable mmBERT-32K for jailbreak detection
+  model_id: "models/mmbert32k-jailbreak-detector-merged-onnx"
+  jailbreak_mapping_path: "models/mmbert32k-jailbreak-detector-merged-onnx/jailbreak_mapping.json"
+  use_cpu: true
+  threshold: 0.5
+
+classifier:
+  category_model:
+    enabled: true
+    use_mmbert_32k: true  # Enable mmBERT-32K for intent classification
+    model_id: "models/mmbert32k-intent-classifier-merged-onnx"
+    category_mapping_path: "models/mmbert32k-intent-classifier-merged-onnx/category_mapping.json"
+    use_cpu: true
+    threshold: 0.5
+  pii_model:
+    enabled: true
+    use_mmbert_32k: true  # Enable mmBERT-32K for PII detection
+    model_id: "models/mmbert32k-pii-detector-merged-onnx"
+    pii_mapping_path: "models/mmbert32k-pii-detector-merged-onnx/pii_mapping.json"
+    use_cpu: true
+    threshold: 0.5
+
+feedback_detector:
+  enabled: true
+  use_mmbert_32k: true
+  model_id: "models/mmbert32k-feedback-detector-merged-onnx"
+  feedback_mapping_path: "models/mmbert32k-feedback-detector-merged-onnx/label_mapping.json"
+  use_cpu: true
+  threshold: 0.5
+
+hallucination_mitigation:
+  enabled: true
+  fact_check_model:
+    model_id: "models/mmbert32k-factcheck-classifier-merged-onnx"
+    use_cpu: true
+    use_mmbert_32k: true
+    threshold: 0.5
+  hallucination_model:
+    model_id: "models/mom-halugate-detector"
+    use_cpu: true
+  nli_model:
+    model_id: "models/mom-halugate-explainer"
+    use_cpu: true
+
+# vLLM Endpoints Configuration
+vllm_endpoints:
+  - name: "ollama"
+    address: "127.0.0.1"
+    port: 11434
+    weight: 1
+
+model_config:
+  "qwen2.5:3b":
+    reasoning_family: "qwen3"
+    preferred_endpoints: ["ollama"]
+
+# Categories for testing
+categories:
+  - name: general
+    description: "General queries"
+  - name: technical
+    description: "Technical questions"
+  - name: biology
+    description: "Biology questions"
+  - name: math
+    description: "Math questions"
+  - name: physics
+    description: "Physics questions"
+  - name: computer_science
+    description: "Computer science questions"
+
+# Fact-check signal rules (matched signals emitted by fact-check classifier)
+fact_check_rules:
+  - name: "needs_fact_check"
+    description: "Query requires factual verification"
+  - name: "no_fact_check_needed"
+    description: "Query does not require factual verification"
+
+# User feedback signal rules (matched signals emitted by feedback detector)
+user_feedback_rules:
+  - name: "satisfied"
+    description: "User is satisfied with the response"
+  - name: "need_clarification"
+    description: "User needs clarification"
+  - name: "wrong_answer"
+    description: "User indicates the answer is wrong"
+  - name: "want_different"
+    description: "User wants a different answer"
+
+decisions:
+  - name: "needs_fact_check"
+    priority: 90
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "fact_check"
+          name: "needs_fact_check"
+    modelRefs:
+      - model: "qwen2.5:3b"
+        use_reasoning: false
+        weight: 100
+  - name: "no_fact_check_needed"
+    priority: 89
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "fact_check"
+          name: "no_fact_check_needed"
+    modelRefs:
+      - model: "qwen2.5:3b"
+        use_reasoning: false
+        weight: 100
+  - name: "satisfied"
+    priority: 88
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "user_feedback"
+          name: "satisfied"
+    modelRefs:
+      - model: "qwen2.5:3b"
+        use_reasoning: false
+        weight: 100
+  - name: "need_clarification"
+    priority: 87
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "user_feedback"
+          name: "need_clarification"
+    modelRefs:
+      - model: "qwen2.5:3b"
+        use_reasoning: false
+        weight: 100
+  - name: "wrong_answer"
+    priority: 86
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "user_feedback"
+          name: "wrong_answer"
+    modelRefs:
+      - model: "qwen2.5:3b"
+        use_reasoning: false
+        weight: 100
+  - name: "want_different"
+    priority: 85
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "user_feedback"
+          name: "want_different"
+    modelRefs:
+      - model: "qwen2.5:3b"
+        use_reasoning: false
+        weight: 100
+  - name: "default"
+    priority: 100
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "general"
+    modelRefs:
+      - model: "qwen2.5:3b"
+        use_reasoning: false
+        weight: 100

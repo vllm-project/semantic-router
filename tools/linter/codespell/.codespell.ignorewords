@@ -7,9 +7,13 @@ alle
 Meu
 meu
 hava
+hace
+Calle
 tread
 ot
 Sie
+# Language codes (ISO 639-1) used in HuggingFace dataset configs
+te
 # NPM package names (not spelling errors)
 devlop
 trough
@@ -32,8 +36,20 @@ expalin
 calculte
 follwing
 strcture
+# Legal and medical terms (training data)
+lien
+liens
+infarction
 # Kubernetes operators (not spelling errors)
 NotIn
 notin
 # Cloud provider acronyms (not spelling errors)
 AKS
+# Rust programming terms (not spelling errors)
+statics
+# Intentional typos for fuzzy matching tests (keyword_accuracy_test.go, keyword_nlp_test.go)
+immedaite
+pasword
+critcal
+# Intentional partial name for exact-match test (authz_classifier_test.go)
+admi

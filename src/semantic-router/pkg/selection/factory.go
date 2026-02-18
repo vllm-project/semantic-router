@@ -37,6 +37,17 @@ type ModelSelectionConfig struct {
 
 	// Hybrid configuration (used when method is "hybrid")
 	Hybrid *HybridConfig `yaml:"hybrid,omitempty"`
+
+	// ML configuration (used for knn, kmeans, svm methods)
+	ML *MLSelectorConfig `yaml:"ml,omitempty"`
+
+	// RLDriven configuration (used when method is "rl_driven")
+	// Implements Router-R1 reward structure for RL training
+	RLDriven *RLDrivenConfig `yaml:"rl_driven,omitempty"`
+
+	// GMTRouter configuration (used when method is "gmtrouter")
+	// Implements heterogeneous graph learning for personalized routing
+	GMTRouter *GMTRouterConfig `yaml:"gmtrouter,omitempty"`
 }
 
 // DefaultModelSelectionConfig returns the default configuration
@@ -126,6 +137,26 @@ func (f *Factory) Create() Selector {
 		}
 		selector = hybridSelector
 
+	case MethodGMTRouter:
+		gmtRouterSelector := NewGMTRouterSelector(f.cfg.GMTRouter)
+		if f.modelConfig != nil {
+			gmtRouterSelector.InitializeFromConfig(f.modelConfig)
+		}
+		if f.embeddingFunc != nil {
+			gmtRouterSelector.SetEmbeddingFunc(f.embeddingFunc)
+		}
+		selector = gmtRouterSelector
+
+	case MethodRLDriven:
+		rlDrivenSelector := NewRLDrivenSelector(f.cfg.RLDriven)
+		if f.modelConfig != nil {
+			rlDrivenSelector.InitializeFromConfig(f.modelConfig, f.categories)
+		}
+		selector = rlDrivenSelector
+
+	case MethodLatencyAware:
+		selector = NewLatencyAwareSelector(nil)
+
 	default:
 		// Default to static selector
 		staticSelector := NewStaticSelector(DefaultStaticConfig())
@@ -141,6 +172,9 @@ func (f *Factory) Create() Selector {
 
 // CreateAll creates all available selectors and registers them
 func (f *Factory) CreateAll() *Registry {
+	// Initialize metrics for model selection tracking
+	InitializeMetrics()
+
 	registry := NewRegistry()
 
 	// Always create static selector
@@ -200,7 +234,74 @@ func (f *Factory) CreateAll() *Registry {
 	}
 	registry.Register(MethodHybrid, hybridSelector)
 
-	logging.Infof("[SelectionFactory] Created all selectors: static, elo, router_dc, automix, hybrid")
+	// Create ML-based selectors (KNN, KMeans, SVM)
+	mlCfg := f.cfg.ML
+	if mlCfg == nil {
+		mlCfg = DefaultMLSelectorConfig()
+	}
+
+	// Create KNN selector
+	knnAdapter, err := CreateKNNSelector(mlCfg, f.embeddingFunc)
+	if err != nil {
+		logging.Warnf("[SelectionFactory] Failed to create KNN selector: %v", err)
+	} else {
+		registry.Register(MethodKNN, knnAdapter)
+	}
+
+	// Create KMeans selector
+	kmeansAdapter, err := CreateKMeansSelector(mlCfg, f.embeddingFunc)
+	if err != nil {
+		logging.Warnf("[SelectionFactory] Failed to create KMeans selector: %v", err)
+	} else {
+		registry.Register(MethodKMeans, kmeansAdapter)
+	}
+
+	// Create SVM selector
+	svmAdapter, err := CreateSVMSelector(mlCfg, f.embeddingFunc)
+	if err != nil {
+		logging.Warnf("[SelectionFactory] Failed to create SVM selector: %v", err)
+	} else {
+		registry.Register(MethodSVM, svmAdapter)
+	}
+
+	// Create MLP selector (GPU-accelerated via Candle)
+	mlpAdapter, err := CreateMLPSelector(mlCfg, f.embeddingFunc)
+	if err != nil {
+		logging.Warnf("[SelectionFactory] Failed to create MLP selector: %v", err)
+	} else {
+		registry.Register(MethodMLP, mlpAdapter)
+	}
+
+	// Create RL-Driven selector
+	rlDrivenCfg := f.cfg.RLDriven
+	if rlDrivenCfg == nil {
+		rlDrivenCfg = DefaultRLDrivenConfig()
+	}
+	rlDrivenSelector := NewRLDrivenSelector(rlDrivenCfg)
+	if f.modelConfig != nil {
+		rlDrivenSelector.InitializeFromConfig(f.modelConfig, f.categories)
+	}
+	registry.Register(MethodRLDriven, rlDrivenSelector)
+
+	// Create GMTRouter selector
+	gmtRouterCfg := f.cfg.GMTRouter
+	if gmtRouterCfg == nil {
+		gmtRouterCfg = DefaultGMTRouterConfig()
+	}
+	gmtRouterSelector := NewGMTRouterSelector(gmtRouterCfg)
+	if f.modelConfig != nil {
+		gmtRouterSelector.InitializeFromConfig(f.modelConfig)
+	}
+	if f.embeddingFunc != nil {
+		gmtRouterSelector.SetEmbeddingFunc(f.embeddingFunc)
+	}
+	registry.Register(MethodGMTRouter, gmtRouterSelector)
+
+	// Create LatencyAware selector
+	latencyAwareSelector := NewLatencyAwareSelector(nil)
+	registry.Register(MethodLatencyAware, latencyAwareSelector)
+
+	logging.Infof("[SelectionFactory] Created all selectors: static, elo, router_dc, automix, hybrid, knn, kmeans, svm, mlp, rl_driven, gmtrouter, latency_aware")
 	return registry
 }
 

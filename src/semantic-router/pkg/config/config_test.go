@@ -996,7 +996,8 @@ default_model: "model-b"
 					Expect(err).NotTo(HaveOccurred())
 
 					// model-a has preferred endpoints
-					endpointAddress, found := cfg.SelectBestEndpointAddressForModel("model-a")
+					endpointAddress, found, addrErr := cfg.SelectBestEndpointAddressForModel("model-a")
+					Expect(addrErr).NotTo(HaveOccurred())
 					Expect(found).To(BeTrue())
 					Expect(endpointAddress).To(MatchRegexp(`127\.0\.0\.1:\d+`))
 				})
@@ -1006,7 +1007,8 @@ default_model: "model-b"
 					Expect(err).NotTo(HaveOccurred())
 
 					// model-c has no preferred_endpoints configured
-					endpointAddress, found := cfg.SelectBestEndpointAddressForModel("model-c")
+					endpointAddress, found, addrErr := cfg.SelectBestEndpointAddressForModel("model-c")
+					Expect(addrErr).NotTo(HaveOccurred())
 					Expect(found).To(BeFalse())
 					Expect(endpointAddress).To(BeEmpty())
 				})
@@ -1015,10 +1017,315 @@ default_model: "model-b"
 					cfg, err := Load(configFile)
 					Expect(err).NotTo(HaveOccurred())
 
-					endpointAddress, found := cfg.SelectBestEndpointAddressForModel("non-existent-model")
+					endpointAddress, found, addrErr := cfg.SelectBestEndpointAddressForModel("non-existent-model")
+					Expect(addrErr).NotTo(HaveOccurred())
 					Expect(found).To(BeFalse())
 					Expect(endpointAddress).To(BeEmpty())
 				})
+			})
+		})
+
+		Describe("SelectBestEndpointWithDetailsForModel", func() {
+			It("should return address and endpoint name for model with single endpoint", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				// model-b has a single preferred endpoint: endpoint2
+				address, endpointName, found, detailErr := cfg.SelectBestEndpointWithDetailsForModel("model-b")
+				Expect(detailErr).NotTo(HaveOccurred())
+				Expect(found).To(BeTrue())
+				Expect(address).To(Equal("127.0.0.1:8000"))
+				Expect(endpointName).To(Equal("endpoint2"))
+			})
+
+			It("should return the highest-weight endpoint for model with multiple endpoints", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				// model-a has endpoint1 (weight 1) and endpoint3 (weight 1)
+				// Both have the same weight, so we get one of them
+				address, endpointName, found, detailErr := cfg.SelectBestEndpointWithDetailsForModel("model-a")
+				Expect(detailErr).NotTo(HaveOccurred())
+				Expect(found).To(BeTrue())
+				Expect(address).To(Equal("127.0.0.1:8000"))
+				Expect(endpointName).To(BeElementOf("endpoint1", "endpoint3"))
+			})
+
+			It("should return false for non-existent model", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				address, endpointName, found, detailErr := cfg.SelectBestEndpointWithDetailsForModel("non-existent-model")
+				Expect(detailErr).NotTo(HaveOccurred())
+				Expect(found).To(BeFalse())
+				Expect(address).To(BeEmpty())
+				Expect(endpointName).To(BeEmpty())
+			})
+
+			It("should return false for model with no preferred endpoints", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				// model-c has no preferred endpoints configured
+				address, endpointName, found, detailErr := cfg.SelectBestEndpointWithDetailsForModel("model-c")
+				Expect(detailErr).NotTo(HaveOccurred())
+				Expect(found).To(BeFalse())
+				Expect(address).To(BeEmpty())
+				Expect(endpointName).To(BeEmpty())
+			})
+
+			It("should select the endpoint with the highest weight when weights differ", func() {
+				configContent := `
+vllm_endpoints:
+  - name: "ep-low"
+    address: "10.0.0.1"
+    port: 9000
+    weight: 1
+  - name: "ep-high"
+    address: "10.0.0.2"
+    port: 9001
+    weight: 10
+
+model_config:
+  "weighted-model":
+    preferred_endpoints: ["ep-low", "ep-high"]
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "weighted-model"
+        score: 0.9
+
+default_model: "weighted-model"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				address, endpointName, found, detailErr := cfg.SelectBestEndpointWithDetailsForModel("weighted-model")
+				Expect(detailErr).NotTo(HaveOccurred())
+				Expect(found).To(BeTrue())
+				Expect(address).To(Equal("10.0.0.2:9001"))
+				Expect(endpointName).To(Equal("ep-high"))
+			})
+		})
+
+		Describe("ResolveExternalModelID", func() {
+			It("should resolve external model ID for vllm endpoint type", func() {
+				configContent := `
+vllm_endpoints:
+  - name: "vllm-ep"
+    address: "127.0.0.1"
+    port: 8000
+    type: "vllm"
+
+model_config:
+  "my-alias":
+    preferred_endpoints: ["vllm-ep"]
+    external_model_ids:
+      vllm: "Qwen/Qwen2.5-14B-Instruct"
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "my-alias"
+        score: 0.9
+
+default_model: "my-alias"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				resolved := cfg.ResolveExternalModelID("my-alias", "vllm-ep")
+				Expect(resolved).To(Equal("Qwen/Qwen2.5-14B-Instruct"))
+			})
+
+			It("should default to vllm type when endpoint has no type set", func() {
+				configContent := `
+vllm_endpoints:
+  - name: "no-type-ep"
+    address: "127.0.0.1"
+    port: 8000
+
+model_config:
+  "my-alias":
+    preferred_endpoints: ["no-type-ep"]
+    external_model_ids:
+      vllm: "Qwen/Qwen2.5-14B-Instruct"
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "my-alias"
+        score: 0.9
+
+default_model: "my-alias"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Endpoint has no type, so defaults to "vllm"
+				resolved := cfg.ResolveExternalModelID("my-alias", "no-type-ep")
+				Expect(resolved).To(Equal("Qwen/Qwen2.5-14B-Instruct"))
+			})
+
+			It("should default to vllm type when endpoint name does not exist", func() {
+				configContent := `
+vllm_endpoints:
+  - name: "real-ep"
+    address: "127.0.0.1"
+    port: 8000
+
+model_config:
+  "my-alias":
+    preferred_endpoints: ["real-ep"]
+    external_model_ids:
+      vllm: "Qwen/Qwen2.5-14B-Instruct"
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "my-alias"
+        score: 0.9
+
+default_model: "my-alias"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Non-existent endpoint name falls back to "vllm" type
+				resolved := cfg.ResolveExternalModelID("my-alias", "non-existent-ep")
+				Expect(resolved).To(Equal("Qwen/Qwen2.5-14B-Instruct"))
+			})
+
+			It("should resolve correct type for ollama endpoint", func() {
+				configContent := `
+vllm_endpoints:
+  - name: "ollama-ep"
+    address: "127.0.0.1"
+    port: 11434
+    type: "ollama"
+
+model_config:
+  "my-alias":
+    preferred_endpoints: ["ollama-ep"]
+    external_model_ids:
+      vllm: "Qwen/Qwen2.5-14B-Instruct"
+      ollama: "qwen2.5:14b"
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "my-alias"
+        score: 0.9
+
+default_model: "my-alias"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				resolved := cfg.ResolveExternalModelID("my-alias", "ollama-ep")
+				Expect(resolved).To(Equal("qwen2.5:14b"))
+			})
+
+			It("should return original model name when no external_model_ids configured", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Using the base fixture which has no external_model_ids
+				resolved := cfg.ResolveExternalModelID("model-a", "endpoint1")
+				Expect(resolved).To(Equal("model-a"))
+			})
+
+			It("should return original model name for non-existent model", func() {
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				resolved := cfg.ResolveExternalModelID("non-existent-model", "endpoint1")
+				Expect(resolved).To(Equal("non-existent-model"))
+			})
+
+			It("should return original model name when endpoint type has no mapping", func() {
+				configContent := `
+vllm_endpoints:
+  - name: "custom-ep"
+    address: "127.0.0.1"
+    port: 8000
+    type: "openrouter"
+
+model_config:
+  "my-alias":
+    preferred_endpoints: ["custom-ep"]
+    external_model_ids:
+      vllm: "Qwen/Qwen2.5-14B-Instruct"
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "my-alias"
+        score: 0.9
+
+default_model: "my-alias"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Endpoint type is "openrouter" but external_model_ids only has "vllm"
+				resolved := cfg.ResolveExternalModelID("my-alias", "custom-ep")
+				Expect(resolved).To(Equal("my-alias"))
+			})
+
+			It("should return original model name when config is nil", func() {
+				var nilCfg *RouterConfig
+				resolved := nilCfg.ResolveExternalModelID("some-model", "some-endpoint")
+				Expect(resolved).To(Equal("some-model"))
+			})
+
+			It("should return original model name when external_model_ids map is empty", func() {
+				configContent := `
+vllm_endpoints:
+  - name: "ep1"
+    address: "127.0.0.1"
+    port: 8000
+
+model_config:
+  "my-alias":
+    preferred_endpoints: ["ep1"]
+    external_model_ids: {}
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "my-alias"
+        score: 0.9
+
+default_model: "my-alias"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := Load(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				resolved := cfg.ResolveExternalModelID("my-alias", "ep1")
+				Expect(resolved).To(Equal("my-alias"))
 			})
 		})
 
@@ -2548,7 +2855,7 @@ var _ = Describe("IP Address Validation", func() {
 				for _, addr := range domainPortAddresses {
 					err := validateIPAddress(addr)
 					Expect(err).To(HaveOccurred(), "Expected %s to be rejected", addr)
-					// 这些会被域名检测捕获，而不是端口检测
+					// These will be caught by domain detection, not port detection
 					Expect(err.Error()).To(ContainSubstring("invalid IP address format"))
 				}
 			})
@@ -3156,6 +3463,400 @@ default_model: "test-model"
 			cfg.HallucinationMitigation.OnHallucinationDetected = "invalid"
 
 			Expect(cfg.GetHallucinationAction()).To(Equal("warn"))
+		})
+	})
+
+	Describe("Decision.GetMemoryConfig", func() {
+		It("should return nil when no memory plugin is configured", func() {
+			decision := &Decision{
+				Name: "test_decision",
+				Plugins: []DecisionPlugin{
+					{Type: "pii", Configuration: map[string]interface{}{"enabled": true}},
+				},
+			}
+
+			Expect(decision.GetMemoryConfig()).To(BeNil())
+		})
+
+		It("should return memory config when memory plugin is configured", func() {
+			decision := &Decision{
+				Name: "test_decision",
+				Plugins: []DecisionPlugin{
+					{
+						Type: "memory",
+						Configuration: map[string]interface{}{
+							"enabled":              true,
+							"retrieval_limit":      10,
+							"similarity_threshold": 0.75,
+							"auto_store":           true,
+						},
+					},
+				},
+			}
+
+			memConfig := decision.GetMemoryConfig()
+			Expect(memConfig).NotTo(BeNil())
+			Expect(memConfig.Enabled).To(BeTrue())
+			Expect(*memConfig.RetrievalLimit).To(Equal(10))
+			Expect(*memConfig.SimilarityThreshold).To(BeNumerically("~", 0.75, 0.001))
+			Expect(*memConfig.AutoStore).To(BeTrue())
+		})
+
+		It("should return memory config with partial settings", func() {
+			decision := &Decision{
+				Name: "test_decision",
+				Plugins: []DecisionPlugin{
+					{
+						Type: "memory",
+						Configuration: map[string]interface{}{
+							"enabled": false,
+							// Only enabled is set, other fields are nil
+						},
+					},
+				},
+			}
+
+			memConfig := decision.GetMemoryConfig()
+			Expect(memConfig).NotTo(BeNil())
+			Expect(memConfig.Enabled).To(BeFalse())
+			Expect(memConfig.RetrievalLimit).To(BeNil())
+			Expect(memConfig.SimilarityThreshold).To(BeNil())
+			Expect(memConfig.AutoStore).To(BeNil())
+		})
+	})
+
+	// -----------------------------------------------------------------
+	// Provider profiles
+	// -----------------------------------------------------------------
+	Describe("Provider Profiles", func() {
+		Context("YAML parsing", func() {
+			It("should parse provider_profiles and endpoint references", func() {
+				yamlData := `
+provider_profiles:
+  openai-prod:
+    type: "openai"
+    base_url: "https://api.openai.com/v1"
+  azure-east:
+    type: "azure-openai"
+    base_url: "https://myresource.openai.azure.com/openai/deployments/gpt-4o"
+    api_version: "2024-10-21"
+  anthropic-prod:
+    type: "anthropic"
+    base_url: "https://api.anthropic.com"
+    extra_headers:
+      anthropic-version: "2023-06-01"
+  bedrock-west:
+    type: "bedrock"
+    base_url: "https://bedrock-mantle.us-west-2.api.aws/v1"
+vllm_endpoints:
+  - name: "openai"
+    provider_profile: "openai-prod"
+  - name: "azure"
+    provider_profile: "azure-east"
+  - name: "local-vllm"
+    address: "127.0.0.1"
+    port: 8000
+model_config:
+  "gpt-4o":
+    preferred_endpoints: ["openai", "azure"]
+  "Qwen/Qwen2.5-14B":
+    preferred_endpoints: ["local-vllm"]
+`
+				var cfg RouterConfig
+				err := yaml.Unmarshal([]byte(yamlData), &cfg)
+				Expect(err).NotTo(HaveOccurred())
+
+				// provider_profiles parsed
+				Expect(cfg.ProviderProfiles).To(HaveLen(4))
+				Expect(cfg.ProviderProfiles["openai-prod"].Type).To(Equal("openai"))
+				Expect(cfg.ProviderProfiles["azure-east"].APIVersion).To(Equal("2024-10-21"))
+				Expect(cfg.ProviderProfiles["anthropic-prod"].ExtraHeaders).To(HaveKeyWithValue("anthropic-version", "2023-06-01"))
+
+				// endpoint references
+				Expect(cfg.VLLMEndpoints).To(HaveLen(3))
+				Expect(cfg.VLLMEndpoints[0].ProviderProfileName).To(Equal("openai-prod"))
+				Expect(cfg.VLLMEndpoints[2].ProviderProfileName).To(BeEmpty())
+			})
+		})
+
+		Context("ResolveAddress", func() {
+			It("should extract host:port from base_url", func() {
+				profiles := map[string]ProviderProfile{
+					"openai-prod": {Type: "openai", BaseURL: "https://api.openai.com/v1"},
+					"azure-east":  {Type: "azure-openai", BaseURL: "https://myresource.openai.azure.com/openai/deployments/gpt-4o"},
+				}
+
+				ep := VLLMEndpoint{Name: "openai", ProviderProfileName: "openai-prod"}
+				addr, err := ep.ResolveAddress(profiles)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(addr).To(Equal("api.openai.com:443"))
+
+				ep2 := VLLMEndpoint{Name: "azure", ProviderProfileName: "azure-east"}
+				addr2, err2 := ep2.ResolveAddress(profiles)
+				Expect(err2).NotTo(HaveOccurred())
+				Expect(addr2).To(Equal("myresource.openai.azure.com:443"))
+			})
+
+			It("should use address:port for legacy endpoints (no provider_profile)", func() {
+				ep := VLLMEndpoint{Name: "local", Address: "127.0.0.1", Port: 8000}
+				addr, err := ep.ResolveAddress(nil)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(addr).To(Equal("127.0.0.1:8000"))
+			})
+
+			It("should error when profile is set but has no base_url", func() {
+				profiles := map[string]ProviderProfile{
+					"minimal": {Type: "openai"},
+				}
+				ep := VLLMEndpoint{Name: "ep1", Address: "10.0.0.1", Port: 9000, ProviderProfileName: "minimal"}
+				_, err := ep.ResolveAddress(profiles)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("no base_url"))
+			})
+
+			It("should error when profile is set but does not exist", func() {
+				profiles := map[string]ProviderProfile{}
+				ep := VLLMEndpoint{Name: "ep1", ProviderProfileName: "missing"}
+				_, err := ep.ResolveAddress(profiles)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("does not exist"))
+			})
+
+			It("should error when profile is set but profiles map is nil", func() {
+				ep := VLLMEndpoint{Name: "ep1", ProviderProfileName: "some-profile"}
+				_, err := ep.ResolveAddress(nil)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("no provider_profiles map"))
+			})
+
+			It("should handle explicit port in base_url", func() {
+				profiles := map[string]ProviderProfile{
+					"custom": {Type: "openai", BaseURL: "http://localhost:8080/v1"},
+				}
+				ep := VLLMEndpoint{Name: "ep1", ProviderProfileName: "custom"}
+				addr, err := ep.ResolveAddress(profiles)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(addr).To(Equal("localhost:8080"))
+			})
+
+			It("should error on unsupported URL scheme", func() {
+				profiles := map[string]ProviderProfile{
+					"ftp": {Type: "openai", BaseURL: "ftp://files.example.com/v1"},
+				}
+				ep := VLLMEndpoint{Name: "ep1", ProviderProfileName: "ftp"}
+				_, err := ep.ResolveAddress(profiles)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unsupported scheme"))
+			})
+		})
+
+		Context("ProviderType", func() {
+			It("should return correct provider type", func() {
+				for _, t := range []string{"openai", "anthropic", "azure-openai", "bedrock", "gemini", "vertex-ai"} {
+					pt, err := (&ProviderProfile{Type: t}).ProviderType()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(pt).To(Equal(t))
+				}
+			})
+
+			It("should error on unknown type", func() {
+				_, err := (&ProviderProfile{Type: "unknown"}).ProviderType()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unknown provider profile type"))
+			})
+
+			It("should error on empty type", func() {
+				_, err := (&ProviderProfile{}).ProviderType()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("empty type"))
+			})
+
+			It("should error on nil profile", func() {
+				var nilProfile *ProviderProfile
+				_, err := nilProfile.ProviderType()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("nil"))
+			})
+		})
+
+		Context("ResolveAuthHeader", func() {
+			It("should return type-specific defaults", func() {
+				h, p, err := (&ProviderProfile{Type: "openai"}).ResolveAuthHeader()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(h).To(Equal("Authorization"))
+				Expect(p).To(Equal("Bearer"))
+
+				h, p, err = (&ProviderProfile{Type: "anthropic"}).ResolveAuthHeader()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(h).To(Equal("x-api-key"))
+				Expect(p).To(BeEmpty())
+
+				h, p, err = (&ProviderProfile{Type: "azure-openai"}).ResolveAuthHeader()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(h).To(Equal("api-key"))
+				Expect(p).To(BeEmpty())
+
+				h, p, err = (&ProviderProfile{Type: "bedrock"}).ResolveAuthHeader()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(h).To(Equal("Authorization"))
+				Expect(p).To(Equal("Bearer"))
+			})
+
+			It("should allow explicit overrides", func() {
+				profile := &ProviderProfile{
+					Type:       "openai",
+					AuthHeader: "X-Custom-Auth",
+					AuthPrefix: "Token",
+				}
+				h, p, err := profile.ResolveAuthHeader()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(h).To(Equal("X-Custom-Auth"))
+				Expect(p).To(Equal("Token"))
+			})
+
+			It("should error on unknown type", func() {
+				_, _, err := (&ProviderProfile{Type: "bogus"}).ResolveAuthHeader()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unknown provider type"))
+			})
+		})
+
+		Context("ResolveChatPath", func() {
+			It("should return type-specific default paths", func() {
+				path, err := (&ProviderProfile{Type: "openai", BaseURL: "https://api.openai.com/v1"}).ResolveChatPath()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(path).To(Equal("/v1/chat/completions"))
+
+				path, err = (&ProviderProfile{Type: "anthropic", BaseURL: "https://api.anthropic.com"}).ResolveChatPath()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(path).To(Equal("/v1/messages"))
+			})
+
+			It("should append api-version for azure-openai", func() {
+				profile := &ProviderProfile{
+					Type:       "azure-openai",
+					BaseURL:    "https://myresource.openai.azure.com/openai/deployments/gpt-4o",
+					APIVersion: "2024-10-21",
+				}
+				path, err := profile.ResolveChatPath()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(path).To(Equal("/openai/deployments/gpt-4o/chat/completions?api-version=2024-10-21"))
+			})
+
+			It("should error for unrecognised type", func() {
+				_, err := (&ProviderProfile{Type: "vllm"}).ResolveChatPath()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unknown provider type"))
+			})
+
+			It("should use explicit ChatPath override", func() {
+				profile := &ProviderProfile{Type: "openai", ChatPath: "/custom/path"}
+				path, err := profile.ResolveChatPath()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(path).To(Equal("/custom/path"))
+			})
+
+			It("should error for nil profile", func() {
+				var nilProfile *ProviderProfile
+				_, err := nilProfile.ResolveChatPath()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("nil"))
+			})
+		})
+
+		Context("ExtraHeaders", func() {
+			It("should pass through explicit extra_headers only", func() {
+				profile := &ProviderProfile{
+					Type:         "anthropic",
+					ExtraHeaders: map[string]string{"anthropic-version": "2023-06-01", "custom": "value"},
+				}
+				Expect(profile.ExtraHeaders).To(HaveKeyWithValue("anthropic-version", "2023-06-01"))
+				Expect(profile.ExtraHeaders).To(HaveKeyWithValue("custom", "value"))
+			})
+
+			It("should be nil when not configured", func() {
+				profile := &ProviderProfile{Type: "openai"}
+				Expect(profile.ExtraHeaders).To(BeNil())
+			})
+		})
+
+		Context("GetProviderProfileForEndpoint", func() {
+			It("should resolve endpoint to profile", func() {
+				cfg := &RouterConfig{
+					BackendModels: BackendModels{
+						VLLMEndpoints: []VLLMEndpoint{
+							{Name: "openai", ProviderProfileName: "openai-prod"},
+							{Name: "local", Address: "127.0.0.1", Port: 8000},
+						},
+						ProviderProfiles: map[string]ProviderProfile{
+							"openai-prod": {Type: "openai", BaseURL: "https://api.openai.com/v1"},
+						},
+					},
+				}
+				profile, err := cfg.GetProviderProfileForEndpoint("openai")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(profile).NotTo(BeNil())
+				Expect(profile.Type).To(Equal("openai"))
+
+				// Endpoint without profile — valid, returns nil profile and no error
+				profile, err = cfg.GetProviderProfileForEndpoint("local")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(profile).To(BeNil())
+			})
+
+			It("should error on non-existent endpoint", func() {
+				cfg := &RouterConfig{
+					BackendModels: BackendModels{
+						VLLMEndpoints: []VLLMEndpoint{
+							{Name: "local", Address: "127.0.0.1", Port: 8000},
+						},
+					},
+				}
+				_, err := cfg.GetProviderProfileForEndpoint("nonexistent")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("not found"))
+			})
+
+			It("should error on dangling profile reference", func() {
+				cfg := &RouterConfig{
+					BackendModels: BackendModels{
+						VLLMEndpoints: []VLLMEndpoint{
+							{Name: "openai", ProviderProfileName: "missing-profile"},
+						},
+						ProviderProfiles: map[string]ProviderProfile{
+							"other-profile": {Type: "openai"},
+						},
+					},
+				}
+				_, err := cfg.GetProviderProfileForEndpoint("openai")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("does not exist"))
+				Expect(err.Error()).To(ContainSubstring("missing-profile"))
+			})
+		})
+
+		Context("SelectBestEndpointWithDetailsForModel with profiles", func() {
+			It("should use base_url for address resolution", func() {
+				cfg := &RouterConfig{
+					BackendModels: BackendModels{
+						ModelConfig: map[string]ModelParams{
+							"gpt-4o": {PreferredEndpoints: []string{"openai"}},
+						},
+						VLLMEndpoints: []VLLMEndpoint{
+							{Name: "openai", ProviderProfileName: "openai-prod"},
+						},
+						ProviderProfiles: map[string]ProviderProfile{
+							"openai-prod": {Type: "openai", BaseURL: "https://api.openai.com/v1"},
+						},
+					},
+				}
+
+				addr, name, found, detailErr := cfg.SelectBestEndpointWithDetailsForModel("gpt-4o")
+				Expect(detailErr).NotTo(HaveOccurred())
+				Expect(found).To(BeTrue())
+				Expect(name).To(Equal("openai"))
+				Expect(addr).To(Equal("api.openai.com:443"))
+			})
 		})
 	})
 })
