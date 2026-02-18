@@ -223,7 +223,6 @@ kubectl apply -f config/samples/vllm_v1alpha1_semanticrouter.yaml
 ## 下一步
 
 - **[配置指南](configuration.md)** - 高级路由和信号配置
-- **[延迟路由迁移指南](latency-migration.md)** - 将旧版延迟信号配置迁移到 `algorithm.type: latency_aware`
 - **[API 文档](../api/router.md)** - 完整 API 参考
 - **[教程](../tutorials/intelligent-route/keyword-routing.md)** - 通过示例学习
 

@@ -11,7 +11,6 @@ export const SIGNAL_ICONS: Record<SignalType, string> = {
   user_feedback: '💬',
   preference: '⚙️',
   language: '🌐',
-  latency: '⚡',
   context: '📏',
   complexity: '🧠',
 }
@@ -25,7 +24,6 @@ export const SIGNAL_COLORS: Record<SignalType, { background: string; border: str
   user_feedback: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
   preference: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
   language: { background: '#4a5568', border: '#2d3748' },     // Dark Gray
-  latency: { background: '#4a5568', border: '#2d3748' },      // Dark Gray
   context: { background: '#4a5568', border: '#2d3748' },      // Dark Gray
   complexity: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
 }
@@ -39,7 +37,6 @@ export const SIGNAL_LATENCY: Record<SignalType, string> = {
   user_feedback: '10-50ms',
   preference: '200-500ms',
   language: '<1ms',
-  latency: '<1ms',
   context: '<1ms',
   complexity: '50-100ms',
 }
@@ -78,6 +75,7 @@ export const ALGORITHM_ICONS: Record<AlgorithmType, string> = {
   automix: '🤖',
   hybrid: '🔄',
   remom: '🧠',  // Brain icon for reasoning/thinking
+  latency_aware: '⏱️',
 }
 
 // ============== Algorithm Colors (NVIDIA Dark Theme) ==============
@@ -92,6 +90,7 @@ export const ALGORITHM_COLORS: Record<AlgorithmType, { background: string; borde
   remom: { background: '#76b900', border: '#5a8f00' },         // NVIDIA Green (same as plugins)
   automix: { background: '#5d6d7e', border: '#3d4a59' },       // Steel Gray
   hybrid: { background: '#4a5568', border: '#2d3748' },        // Dark Gray
+  latency_aware: { background: '#5a6c7d', border: '#3d4a59' }, // Blue Gray
 }
 
 // ============== Reasoning Effort Display (NVIDIA Dark Theme) ==============
@@ -166,7 +165,6 @@ export const SIGNAL_TYPES: SignalType[] = [
   'user_feedback',
   'preference',
   'language',
-  'latency',
   'context',
   'complexity',
 ]

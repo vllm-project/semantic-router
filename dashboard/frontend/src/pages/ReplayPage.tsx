@@ -17,7 +17,6 @@ interface Signal {
   user_feedback?: string[]
   preference?: string[]
   language?: string[]
-  latency?: string[]
   context?: string[]
   complexity?: string[]
 }
@@ -376,27 +375,6 @@ const ReplayPage: React.FC = () => {
                 fontSize: '0.875rem'
               }}>
                 {lang}
-              </span>
-            ))}
-          </div>
-        ),
-        fullWidth: true
-      })
-    }
-
-    if (record.signals?.latency?.length) {
-      signalFields.push({
-        label: 'Latency signals',
-        value: (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-            {record.signals.latency.map((lat, i) => (
-              <span key={i} style={{
-                padding: '0.25rem 0.75rem',
-                background: 'rgba(245, 158, 11, 0.1)',
-                borderRadius: '4px',
-                fontSize: '0.875rem'
-              }}>
-                {lat}
               </span>
             ))}
           </div>
@@ -785,7 +763,6 @@ const ReplayPage: React.FC = () => {
     if (signals.user_feedback?.length) allSignals.push(...signals.user_feedback)
     if (signals.preference?.length) allSignals.push(...signals.preference)
     if (signals.language?.length) allSignals.push(...signals.language)
-    if (signals.latency?.length) allSignals.push(...signals.latency)
     if (signals.context?.length) allSignals.push(...signals.context)
     if (signals.complexity?.length) allSignals.push(...signals.complexity)
     return allSignals

@@ -2,9 +2,9 @@
 
 Model selection is an advanced feature of vLLM Semantic Router that automatically chooses the best LLM from multiple candidates based on learned preferences, query similarity, and cost-quality optimization.
 
-The semantic router supports **8 selection algorithms** across two categories:
+The semantic router supports **9 selection algorithms** across two categories:
 
-- **Core algorithms**: Static, Elo, RouterDC, AutoMix, Hybrid
+- **Core algorithms**: Static, Latency-Aware, Elo, RouterDC, AutoMix, Hybrid
 - **RL-driven algorithms**: Thompson Sampling, GMTRouter, Router-R1
 
 ## What Problem Does It Solve?
@@ -31,6 +31,7 @@ Model selection solves this by **intelligently matching queries to models** base
 | Algorithm | Best For | Key Benefit |
 |-----------|----------|-------------|
 | [**Static**](./static.md) | Simple deployments | Predictable, zero overhead |
+| **Latency-Aware** | Latency-sensitive routing | Selects by TPOT/TTFT percentiles |
 | [**Elo**](./elo.md) | Learning from feedback | Adapts to user preferences |
 | [**RouterDC**](./router-dc.md) | Query-model matching | Matches specialties to queries |
 | [**AutoMix**](./automix.md) | Cost optimization | Balances quality and cost |
@@ -79,6 +80,17 @@ Uses the first model in `modelRefs`. No learning, fully deterministic.
 ```yaml
 algorithm:
   type: "static"
+```
+
+#### Latency-Aware
+Selects the fastest model by TPOT/TTFT percentiles.
+
+```yaml
+algorithm:
+  type: "latency_aware"
+  latency_aware:
+    tpot_percentile: 10
+    ttft_percentile: 10
 ```
 
 #### Elo Rating
@@ -170,10 +182,11 @@ See [Choosing the Right Algorithm](./choosing-algorithm.md) for detailed guidanc
 **Quick Decision Tree:**
 
 1. **Just getting started?** → Use `static` (default)
-2. **Have user feedback?** → Use `elo`
-3. **Have model descriptions?** → Use `router_dc`
-4. **Want cost optimization?** → Use `automix`
-5. **Need everything?** → Use `hybrid`
+2. **Need latency-based routing?** → Use `latency_aware`
+3. **Have user feedback?** → Use `elo`
+4. **Have model descriptions?** → Use `router_dc`
+5. **Want cost optimization?** → Use `automix`
+6. **Need everything?** → Use `hybrid`
 
 ## Related Features
 

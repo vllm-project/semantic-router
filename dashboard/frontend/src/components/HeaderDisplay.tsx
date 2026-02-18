@@ -66,10 +66,6 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
     label: 'Language',
     type: 'info',
   },
-  'x-vsr-matched-latency': {
-    label: 'Latency',
-    type: 'info',
-  },
   'x-vsr-matched-context': {
     label: 'Context',
     type: 'info',
@@ -123,4 +119,3 @@ const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
 }
 
 export default HeaderDisplay
-

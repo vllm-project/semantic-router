@@ -77,7 +77,7 @@ export async function simulateSignalMatching(
     })
 
   // 3. Other signal types - mark as "needs backend verification"
-  const backendOnlyTypes: SignalType[] = ['embedding', 'domain', 'fact_check', 'user_feedback', 'preference', 'latency']
+  const backendOnlyTypes: SignalType[] = ['embedding', 'domain', 'fact_check', 'user_feedback', 'preference']
   backendOnlyTypes.forEach(type => {
     topology.signals
       .filter(s => s.type === type)
@@ -178,7 +178,6 @@ export function getSignalIcon(type: SignalType): string {
     user_feedback: '💬',
     preference: '⚙️',
     language: '🌐',
-    latency: '⚡',
     context: '📏',
     complexity: '🧠',
   }
@@ -197,7 +196,6 @@ export function getSignalColor(type: SignalType): string {
     user_feedback: '#E91E63',
     preference: '#00BCD4',
     language: '#795548',
-    latency: '#FFC107',
     context: '#607D8B', // Blue Grey
     complexity: '#4299e1', // Blue
   }

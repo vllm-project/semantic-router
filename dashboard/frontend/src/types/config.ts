@@ -84,13 +84,6 @@ export interface LanguageSignal {
   description?: string
 }
 
-export interface LatencySignal {
-  name: string
-  tpot_percentile?: number
-  ttft_percentile?: number
-  description?: string
-}
-
 export interface ContextSignal {
   name: string
   min_tokens: string
@@ -127,7 +120,6 @@ export interface Signals {
   user_feedbacks?: UserFeedbackSignal[]
   preferences?: PreferenceSignal[]
   language?: LanguageSignal[]
-  latency?: LatencySignal[]
   context?: ContextSignal[]
   complexity?: ComplexitySignal[]
 }
@@ -137,7 +129,7 @@ export interface Signals {
 // =============================================================================
 
 
-export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'latency' | 'context' | 'complexity'
+export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'context' | 'complexity'
 export interface DecisionCondition {
   type: DecisionConditionType
   name: string
@@ -345,4 +337,3 @@ export function isPythonCLIFormat(config: any): config is PythonCLIConfig {
 export function isLegacyFormat(config: any): config is LegacyConfig {
   return detectConfigFormat(config) === 'legacy'
 }
-

@@ -271,35 +271,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
 
-  // 8. Latency Rules
-  // From latency_rules (Go/Router format)
-  config.latency_rules?.forEach(rule => {
-    addSignal({
-      type: 'latency',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.latency,
-      config: {
-        tpot_percentile: rule.tpot_percentile,
-        ttft_percentile: rule.ttft_percentile,
-      },
-    })
-  })
-  // From signals.latency (Python CLI format)
-  config.signals?.latency?.forEach(rule => {
-    addSignal({
-      type: 'latency',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.latency,
-      config: {
-        tpot_percentile: rule.tpot_percentile,
-        ttft_percentile: rule.ttft_percentile,
-      },
-    })
-  })
-
-  // 9. Context Rules
+  // 8. Context Rules
   // From context_rules (Go/Router format)
   config.context_rules?.forEach(rule => {
     addSignal({
@@ -325,7 +297,7 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
 
-  // 10. Complexity Rules
+  // 9. Complexity Rules
   // From complexity_rules (Go/Router format)
   config.complexity_rules?.forEach(rule => {
     addSignal({
@@ -380,6 +352,7 @@ function extractDecisions(config: ConfigData): DecisionConfig[] {
             type: decision.algorithm.type as AlgorithmConfig['type'],
             confidence: decision.algorithm.confidence,
             concurrent: decision.algorithm.concurrent,
+            latency_aware: decision.algorithm.latency_aware,
           }
         : undefined
 
@@ -513,7 +486,6 @@ export function groupSignalsByType(signals: SignalConfig[]): Record<SignalType, 
     user_feedback: [],
     preference: [],
     language: [],
-    latency: [],
     context: [],
     complexity: [],
   }

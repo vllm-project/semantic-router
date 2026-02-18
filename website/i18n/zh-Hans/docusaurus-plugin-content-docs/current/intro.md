@@ -41,8 +41,6 @@ is_mtpe: true
 
 **工作原理**：从请求中提取信号，在决策规则中使用 AND/OR 运算符进行组合，并用于选择最佳模型和配置。
 
-延迟路由应配置在 decision algorithm 中（例如 `algorithm.type: latency_aware`），而不是作为请求信号。详见[延迟路由迁移指南](installation/latency-migration.md)。
-
 ### Plugin Chain 架构
 
 用于请求/响应处理的可扩展插件系统：

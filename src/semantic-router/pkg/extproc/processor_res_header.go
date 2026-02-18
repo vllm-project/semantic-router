@@ -86,7 +86,7 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 			metrics.RecordModelTTFT(ctx.RequestModel, ttft)
 			ctx.TTFTSeconds = ttft
 			ctx.TTFTRecorded = true
-			// Update TTFT cache for latency signal evaluation
+			// Update TTFT cache for latency_aware percentile-based model selection
 			latency.UpdateTTFT(ctx.RequestModel, ttft)
 		}
 	}

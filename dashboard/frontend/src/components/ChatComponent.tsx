@@ -987,7 +987,6 @@ const ChatComponent = ({
         'x-vsr-matched-user-feedback',
         'x-vsr-matched-preference',
         'x-vsr-matched-language',
-        'x-vsr-matched-latency',
         'x-vsr-matched-context',
         'x-vsr-context-token-count',
         'x-vsr-matched-complexity',
@@ -1924,4 +1923,3 @@ const ChatComponent = ({
 }
 
 export default ChatComponent
-

@@ -14,7 +14,6 @@ type Signal struct {
 	UserFeedback []string `json:"user_feedback,omitempty"`
 	Preference   []string `json:"preference,omitempty"`
 	Language     []string `json:"language,omitempty"`
-	Latency      []string `json:"latency,omitempty"`
 	Context      []string `json:"context,omitempty"`
 	Complexity   []string `json:"complexity,omitempty"`
 }

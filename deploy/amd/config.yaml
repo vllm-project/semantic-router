@@ -302,21 +302,6 @@ signals:
     - name: "other"
       description: "General knowledge and miscellaneous topics"
 
-  # latency - Latency-based routing signals (TPOT-based)
-  latency:
-    - name: "top10"
-      tpot_percentile: 10
-      ttft_percentile: 10
-      description: "For real-time chat applications requiring fast responses"
-    - name: "top50"
-      tpot_percentile: 50
-      ttft_percentile: 50
-      description: "For standard applications with moderate latency tolerance"
-    - name: "top90"
-      tpot_percentile: 90
-      ttft_percentile: 90
-      description: "For applications with high latency tolerance"
-
   # Fact-check signals for verification needs
   # Strategy: Identify queries that DON'T need fact checking (creative/code/opinion)
   # All other queries will be routed to fact-check-capable models
@@ -1181,13 +1166,19 @@ decisions:
           name: "en"
         - type: "language"
           name: "zh"
-        - type: "latency"
-          name: "top50"
         - type: "context"
           name: "short_context"
     modelRefs:
       - model: "openai/gpt-oss-20b"
         use_reasoning: false
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false
+    algorithm:
+      type: "latency_aware"
+      latency_aware:
+        tpot_percentile: 50
+        ttft_percentile: 50
+        description: "Prefer models with balanced TPOT and TTFT latency"
     plugins:
       - type: "system_prompt"
         configuration:
