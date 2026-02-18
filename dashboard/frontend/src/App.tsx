@@ -13,6 +13,7 @@ import LogsPage from './pages/LogsPage'
 import ReplayPage from './pages/ReplayPage'
 import EvaluationPage from './pages/EvaluationPage'
 import MLSetupPage from './pages/MLSetupPage'
+import RatingsPage from './pages/RatingsPage'
 import { ConfigSection } from './components/ConfigNav'
 import { ReadonlyProvider } from './contexts/ReadonlyContext'
 
@@ -197,6 +198,17 @@ const App: React.FC = () => {
                 onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
               >
                 <MLSetupPage />
+              </Layout>
+            }
+          />
+          <Route
+            path="/ratings"
+            element={
+              <Layout
+                configSection={configSection}
+                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+              >
+                <RatingsPage />
               </Layout>
             }
           />

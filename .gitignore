@@ -143,6 +143,8 @@ dashboard/frontend/dist/
 dashboard/frontend/build/
 dashboard/frontend/.vite/
 dashboard/frontend/*.local
+dashboard/frontend/test-results/
+dashboard/frontend/playwright-report/
 
 # Dashboard backend build artifacts
 dashboard/backend/dashboard-backend
