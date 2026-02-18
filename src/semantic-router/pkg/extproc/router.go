@@ -15,6 +15,7 @@ import (
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
@@ -49,6 +50,10 @@ type OpenAIRouter struct {
 	// (ext_authz injected headers → static config fallback).
 	// Initialized in NewOpenAIRouter.
 	CredentialResolver *authz.CredentialResolver
+
+	// RateLimiter enforces per-user/model rate limits from multiple sources
+	// (Envoy RLS → local limiter). Initialized in NewOpenAIRouter.
+	RateLimiter *ratelimit.RateLimitResolver
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls
@@ -408,6 +413,12 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	credResolver := buildCredentialResolver(cfg)
 	logging.Infof("Credential resolver initialized with providers: %v", credResolver.ProviderNames())
 
+	// Build rate limit resolver chain from config (no-op if ratelimit section is omitted)
+	rateLimiter := buildRateLimitResolver(cfg)
+	if rateLimiter != nil {
+		logging.Infof("Rate limit resolver initialized with providers: %v", rateLimiter.ProviderNames())
+	}
+
 	router := &OpenAIRouter{
 		Config:               cfg,
 		CategoryDescriptions: categoryDescriptions,
@@ -422,6 +433,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		MemoryStore:          memoryStore,
 		MemoryExtractor:      memoryExtractor,
 		CredentialResolver:   credResolver,
+		RateLimiter:          rateLimiter,
 	}
 
 	return router, nil
@@ -523,6 +535,100 @@ func buildCredentialResolver(cfg *config.RouterConfig) *authz.CredentialResolver
 	logging.Infof("Authz: chain=%v, fail_open=%v", resolver.ProviderNames(), authzCfg.FailOpen)
 	logging.Infof("Authz identity: user_id_header=%q, user_groups_header=%q",
 		cfg.Authz.Identity.GetUserIDHeader(), cfg.Authz.Identity.GetUserGroupsHeader())
+
+	return resolver
+}
+
+// knownRateLimitProviderTypes is the set of valid rate limit provider type strings.
+var knownRateLimitProviderTypes = map[string]bool{
+	"envoy-ratelimit": true,
+	"local-limiter":   true,
+}
+
+// buildRateLimitResolver constructs the rate limit provider chain from config.
+// If the ratelimit section is omitted (no providers configured), returns nil
+// (no rate limiting). Unlike authz, there is no default chain.
+func buildRateLimitResolver(cfg *config.RouterConfig) *ratelimit.RateLimitResolver {
+	rlCfg := cfg.RateLimit
+
+	if len(rlCfg.Providers) == 0 {
+		logging.Infof("RateLimit: no providers configured, rate limiting disabled")
+		return nil
+	}
+
+	// Startup validation
+	var validationErrors []string
+	for i, p := range rlCfg.Providers {
+		if !knownRateLimitProviderTypes[p.Type] {
+			validationErrors = append(validationErrors,
+				fmt.Sprintf("ratelimit.providers[%d]: unknown type %q (valid types: envoy-ratelimit, local-limiter)", i, p.Type))
+		}
+		if p.Type == "envoy-ratelimit" && p.Address == "" {
+			validationErrors = append(validationErrors,
+				fmt.Sprintf("ratelimit.providers[%d]: envoy-ratelimit requires 'address'", i))
+		}
+		if p.Type == "local-limiter" && len(p.Rules) == 0 {
+			validationErrors = append(validationErrors,
+				fmt.Sprintf("ratelimit.providers[%d]: local-limiter requires at least one rule", i))
+		}
+	}
+
+	if len(validationErrors) > 0 {
+		for _, e := range validationErrors {
+			logging.Errorf("RateLimit config validation error: %s", e)
+		}
+		logging.Errorf("RateLimit config has %d validation error(s) — rate limiting disabled", len(validationErrors))
+		return nil
+	}
+
+	// Build chain
+	providers := make([]ratelimit.Provider, 0, len(rlCfg.Providers))
+	for _, p := range rlCfg.Providers {
+		switch p.Type {
+		case "envoy-ratelimit":
+			domain := p.Domain
+			if domain == "" {
+				domain = "semantic-router"
+			}
+			envoyProvider, err := ratelimit.NewEnvoyRLSProvider(p.Address, domain)
+			if err != nil {
+				logging.Errorf("RateLimit: failed to create envoy-ratelimit provider: %v", err)
+				continue
+			}
+			providers = append(providers, envoyProvider)
+			logging.Infof("RateLimit: envoy-ratelimit provider at %s (domain=%s)", p.Address, domain)
+		case "local-limiter":
+			rules := make([]ratelimit.Rule, 0, len(p.Rules))
+			for _, r := range p.Rules {
+				rules = append(rules, ratelimit.Rule{
+					Name: r.Name,
+					Match: ratelimit.RuleMatch{
+						User:  r.Match.User,
+						Group: r.Match.Group,
+						Model: r.Match.Model,
+					},
+					RequestsPerUnit: r.RequestsPerUnit,
+					TokensPerUnit:   r.TokensPerUnit,
+					Unit:            ratelimit.ParseUnit(r.Unit),
+				})
+			}
+			providers = append(providers, ratelimit.NewLocalLimiter(rules))
+			logging.Infof("RateLimit: local-limiter provider with %d rules", len(rules))
+		}
+	}
+
+	if len(providers) == 0 {
+		logging.Warnf("RateLimit: no valid providers after construction, rate limiting disabled")
+		return nil
+	}
+
+	resolver := ratelimit.NewRateLimitResolver(providers...)
+	resolver.SetFailOpen(rlCfg.FailOpen)
+
+	if rlCfg.FailOpen {
+		logging.Warnf("RateLimit fail_open=true — provider errors will not block requests")
+	}
+	logging.Infof("RateLimit: chain=%v, fail_open=%v", resolver.ProviderNames(), rlCfg.FailOpen)
 
 	return resolver
 }

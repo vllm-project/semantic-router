@@ -3,10 +3,12 @@ package extproc
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/openai/openai-go"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -21,6 +23,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
 
@@ -121,6 +124,24 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		r.updateRouterReplayStatus(ctx, 403, false) // 403 Forbidden for PII block
 		// PII policy violation - return error response
 		return piiResponse, nil
+	}
+
+	// Rate limit check — after security checks, before cache/RAG/routing.
+	// This prevents rate-limited users from consuming cache or RAG resources.
+	if r.RateLimiter != nil {
+		rlCtx := r.buildRateLimitContext(ctx, selectedModel)
+		decision, err := r.RateLimiter.Check(rlCtx)
+		if err != nil {
+			logging.Errorf("[Request Body] Rate limit check error: %v", err)
+			return r.createRateLimitResponse(decision), nil
+		}
+		if decision != nil && !decision.Allowed {
+			logging.Infof("[Request Body] Rate limited: user=%s model=%s provider=%s remaining=%d",
+				rlCtx.UserID, rlCtx.Model, decision.Provider, decision.Remaining)
+			return r.createRateLimitResponse(decision), nil
+		}
+		// Store context on RequestContext for post-response reporting
+		ctx.RateLimitCtx = &rlCtx
 	}
 
 	// Handle caching with decision-specific settings
@@ -1088,4 +1109,71 @@ func (r *OpenAIRouter) getUserIDFromContext(ctx *RequestContext) string {
 	}
 
 	return ""
+}
+
+// buildRateLimitContext constructs a ratelimit.Context from the request context.
+func (r *OpenAIRouter) buildRateLimitContext(ctx *RequestContext, selectedModel string) ratelimit.Context {
+	userID := ctx.Headers[r.Config.Authz.Identity.GetUserIDHeader()]
+	groupsStr := ctx.Headers[r.Config.Authz.Identity.GetUserGroupsHeader()]
+	var groups []string
+	if groupsStr != "" {
+		for _, g := range strings.Split(groupsStr, ",") {
+			g = strings.TrimSpace(g)
+			if g != "" {
+				groups = append(groups, g)
+			}
+		}
+	}
+
+	return ratelimit.Context{
+		UserID:     userID,
+		Groups:     groups,
+		Model:      selectedModel,
+		Headers:    ctx.Headers,
+		TokenCount: ctx.VSRContextTokenCount,
+	}
+}
+
+// createRateLimitResponse builds a 429 Too Many Requests response with
+// standard rate limit headers.
+func (r *OpenAIRouter) createRateLimitResponse(decision *ratelimit.Decision) *ext_proc.ProcessingResponse {
+	retryAfterSec := "60"
+	if decision != nil && decision.RetryAfter > 0 {
+		retryAfterSec = fmt.Sprintf("%d", int(decision.RetryAfter.Seconds()))
+	}
+
+	body := []byte(fmt.Sprintf(`{"error":{"message":"Rate limit exceeded. Retry after %s seconds.","type":"rate_limit_error","code":429}}`, retryAfterSec))
+
+	respHeaders := []*core.HeaderValueOption{
+		{Header: &core.HeaderValue{Key: "content-type", RawValue: []byte("application/json")}},
+		{Header: &core.HeaderValue{Key: "retry-after", RawValue: []byte(retryAfterSec)}},
+	}
+
+	if decision != nil {
+		respHeaders = append(respHeaders,
+			&core.HeaderValueOption{Header: &core.HeaderValue{
+				Key: "x-ratelimit-limit", RawValue: []byte(fmt.Sprintf("%d", decision.Limit)),
+			}},
+			&core.HeaderValueOption{Header: &core.HeaderValue{
+				Key: "x-ratelimit-remaining", RawValue: []byte(fmt.Sprintf("%d", decision.Remaining)),
+			}},
+		)
+		if !decision.ResetAt.IsZero() {
+			respHeaders = append(respHeaders, &core.HeaderValueOption{Header: &core.HeaderValue{
+				Key: "x-ratelimit-reset", RawValue: []byte(fmt.Sprintf("%d", decision.ResetAt.Unix())),
+			}})
+		}
+	}
+
+	return &ext_proc.ProcessingResponse{
+		Response: &ext_proc.ProcessingResponse_ImmediateResponse{
+			ImmediateResponse: &ext_proc.ImmediateResponse{
+				Status: &typev3.HttpStatus{Code: typev3.StatusCode_TooManyRequests},
+				Headers: &ext_proc.HeaderMutation{
+					SetHeaders: respHeaders,
+				},
+				Body: body,
+			},
+		},
+	}
 }
