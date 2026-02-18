@@ -68,21 +68,6 @@ class Language(BaseModel):
     description: str
 
 
-class Latency(BaseModel):
-    """Latency signal configuration.
-
-    At least one of tpot_percentile or ttft_percentile must be set.
-    When both are set, model must meet BOTH thresholds (AND logic).
-    """
-
-    name: str
-    tpot_percentile: Optional[int] = None  # 10th percentile = top 10% fastest
-    ttft_percentile: Optional[int] = (
-        None  # 10th percentile = top 10% fastest first token
-    )
-    description: Optional[str] = None
-
-
 class ContextRule(BaseModel):
     """Context-based (token count) signal configuration."""
 
@@ -124,8 +109,6 @@ class Signals(BaseModel):
     user_feedbacks: Optional[List[UserFeedback]] = []
     preferences: Optional[List[Preference]] = []
     language: Optional[List[Language]] = []
-    # TODO(v0.2-Athena): Remove legacy latency compatibility after backward compatibility period.
-    latency: Optional[List[Latency]] = []
     context: Optional[List[ContextRule]] = []
     complexity: Optional[List[ComplexityRule]] = []
 

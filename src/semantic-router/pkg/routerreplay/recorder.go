@@ -162,7 +162,6 @@ func LogFields(r RoutingRecord, event string) map[string]interface{} {
 			"user_feedback": r.Signals.UserFeedback,
 			"preference":    r.Signals.Preference,
 			"language":      r.Signals.Language,
-			"latency":       r.Signals.Latency,
 			"context":       r.Signals.Context,
 			"complexity":    r.Signals.Complexity,
 		},

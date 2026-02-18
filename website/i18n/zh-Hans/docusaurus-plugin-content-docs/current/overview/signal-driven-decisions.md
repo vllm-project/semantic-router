@@ -153,30 +153,6 @@ signals:
 - **示例 1**："Hola, ¿cómo estás?" → Spanish (es) → Spanish model
 - **示例 2**："你好，世界" → Chinese (zh) → Chinese model
 
-### 延迟路由已迁移到 decision algorithm
-
-在新配置中，延迟应作为模型选择算法配置，而不是请求信号。
-
-```yaml
-decisions:
-  - name: "fast_route"
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "domain"
-          name: "other"
-    modelRefs:
-      - model: "openai/gpt-oss-120b"
-      - model: "gpt-5.2"
-    algorithm:
-      type: "latency_aware"
-      latency_aware:
-        tpot_percentile: 10
-        ttft_percentile: 10
-```
-
-如果您在使用旧的 latency signal 配置，请参考[延迟路由迁移指南](../installation/latency-migration.md)。
-
 ### 8. Context Signal
 
 - **内容**：基于 token 计数的短/长请求处理路由

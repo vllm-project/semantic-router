@@ -45,88 +45,20 @@ def _is_latency_aware_algorithm(decision) -> bool:
 
 
 def validate_latency_compatibility(config: UserConfig) -> List[ValidationError]:
-    # legacy latency compatibility is now temporary and will be removed after the backward-compatibility period.
     errors = []
-    has_legacy_signals = (
-        config.signals is not None
-        and config.signals.latency is not None
-        and len(config.signals.latency) > 0
-    )
     has_legacy_conditions = any(
         _is_latency_condition(condition.type)
         for decision in config.decisions
         for condition in decision.rules.conditions
     )
-    has_latency_aware = any(
-        _is_latency_aware_algorithm(decision) for decision in config.decisions
-    )
-
-    if (has_legacy_signals or has_legacy_conditions) and has_latency_aware:
-        errors.append(
-            ValidationError(
-                "legacy latency config (signals.latency / conditions.type=latency) "
-                "cannot be used with decision.algorithm.type=latency_aware",
-                field="decisions.algorithm",
-            )
-        )
-        return errors
-
-    # TODO(v0.2-Athena): Remove legacy latency compatibility after deprecation period.
-    if has_legacy_signals:
-        log.warning(
-            "DEPRECATED: signals.latency is deprecated and will be removed in a future release. "
-            "Migrate to decision.algorithm.type=latency_aware."
-        )
-    if has_legacy_conditions:
-        log.warning(
-            "DEPRECATED: conditions.type=latency is deprecated and will be removed in a future release. "
-            "Migrate to decision.algorithm.type=latency_aware."
-        )
-
-    if has_legacy_conditions and not has_legacy_signals:
-        errors.append(
-            ValidationError(
-                "conditions.type=latency requires signals.latency for migration",
-                field="signals.latency",
-            )
-        )
-
-    latency_signal_names = set()
-    if has_legacy_signals:
-        latency_signal_names = {signal.name for signal in config.signals.latency}
-
-    if has_legacy_conditions and has_legacy_signals:
-        for decision in config.decisions:
-            for condition in decision.rules.conditions:
-                if not _is_latency_condition(condition.type):
-                    continue
-                if condition.name not in latency_signal_names:
-                    errors.append(
-                        ValidationError(
-                            f"decision '{decision.name}' references unknown legacy latency signal '{condition.name}'",
-                            field=f"decisions.{decision.name}.rules.conditions",
-                        )
-                    )
 
     if has_legacy_conditions:
-        for decision in config.decisions:
-            has_decision_legacy_latency = any(
-                _is_latency_condition(condition.type)
-                for condition in decision.rules.conditions
+        errors.append(
+            ValidationError(
+                "legacy latency config is no longer supported; use decision.algorithm.type=latency_aware and remove conditions.type=latency",
+                field="decisions.rules.conditions",
             )
-            if not has_decision_legacy_latency or decision.algorithm is None:
-                continue
-
-            algo_type = (decision.algorithm.type or "").strip().lower()
-            if algo_type != "static":
-                display_algo_type = (decision.algorithm.type or "").strip() or "<empty>"
-                errors.append(
-                    ValidationError(
-                        f"decision '{decision.name}' has legacy latency condition but algorithm.type={display_algo_type}; "
-                        "only static can be auto-migrated to latency_aware",
-                        field=f"decisions.{decision.name}.algorithm.type",
-                    )
-                )
+        )
 
     return errors
 
@@ -514,9 +446,9 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
     """
     Validate algorithm configurations in decisions.
 
-    Validates both looper algorithms (confidence, concurrent, remom) and
-    selection algorithms (static, elo, router_dc, automix, hybrid,
-    thompson, gmtrouter, router_r1).
+    Validates both looper algorithms (confidence, concurrent, sequential, remom)
+    and selection algorithms (static, elo, router_dc, automix, hybrid,
+    latency_aware, thompson, gmtrouter, router_r1).
 
     Args:
         config: User configuration
@@ -534,6 +466,7 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
         "router_dc",
         "automix",
         "hybrid",
+        "latency_aware",
         "thompson",
         "gmtrouter",
         "router_r1",

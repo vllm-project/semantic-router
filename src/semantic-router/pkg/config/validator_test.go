@@ -7,65 +7,6 @@ import (
 
 func boolPtr(b bool) *bool { return &b }
 
-var _ = Describe("validateLatencyRules", func() {
-	It("accepts nil and empty", func() {
-		Expect(validateLatencyRules(nil)).To(Succeed())
-		Expect(validateLatencyRules([]LatencyRule{})).To(Succeed())
-	})
-
-	It("accepts both percentiles set", func() {
-		rules := []LatencyRule{{Name: "fast", TPOTPercentile: 10, TTFTPercentile: 50}}
-		Expect(validateLatencyRules(rules)).To(Succeed())
-	})
-
-	It("accepts TPOT-only", func() {
-		Expect(validateLatencyRules([]LatencyRule{{Name: "t", TPOTPercentile: 50}})).To(Succeed())
-	})
-
-	It("accepts TTFT-only", func() {
-		Expect(validateLatencyRules([]LatencyRule{{Name: "t", TTFTPercentile: 50}})).To(Succeed())
-	})
-
-	It("accepts boundary values 1 and 100", func() {
-		rules := []LatencyRule{{Name: "edge", TPOTPercentile: 1, TTFTPercentile: 100}}
-		Expect(validateLatencyRules(rules)).To(Succeed())
-	})
-
-	It("rejects empty name", func() {
-		err := validateLatencyRules([]LatencyRule{{Name: "", TPOTPercentile: 50}})
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("name cannot be empty"))
-	})
-
-	It("rejects zero percentiles", func() {
-		err := validateLatencyRules([]LatencyRule{{Name: "none"}})
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("must specify at least one of"))
-	})
-
-	It("rejects TPOT > 100", func() {
-		err := validateLatencyRules([]LatencyRule{{Name: "x", TPOTPercentile: 101}})
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("tpot_percentile must be between 1 and 100"))
-	})
-
-	It("rejects TTFT > 100", func() {
-		err := validateLatencyRules([]LatencyRule{{Name: "x", TTFTPercentile: 200}})
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("ttft_percentile must be between 1 and 100"))
-	})
-
-	It("fails on second bad rule, not first", func() {
-		rules := []LatencyRule{
-			{Name: "good", TPOTPercentile: 50},
-			{Name: "", TPOTPercentile: 50},
-		}
-		err := validateLatencyRules(rules)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("latency_rules[1]"))
-	})
-})
-
 var _ = Describe("validateLatencyAwareAlgorithmConfig", func() {
 	It("accepts both percentiles set", func() {
 		cfg := &LatencyAwareAlgorithmConfig{TPOTPercentile: 10, TTFTPercentile: 50}
@@ -269,19 +210,6 @@ var _ = Describe("validateConfigStructure", func() {
 		Expect(err.Error()).To(ContainSubstring("is not defined in model"))
 	})
 
-	It("delegates to latency rule validation", func() {
-		cfg := &RouterConfig{
-			IntelligentRouting: IntelligentRouting{
-				Signals: Signals{
-					LatencyRules: []LatencyRule{{Name: "", TPOTPercentile: 50}},
-				},
-			},
-		}
-		err := validateConfigStructure(cfg)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("name cannot be empty"))
-	})
-
 	It("rejects latency_aware without algorithm.latency_aware", func() {
 		cfg := &RouterConfig{
 			IntelligentRouting: IntelligentRouting{
@@ -389,12 +317,9 @@ var _ = Describe("validateConfigStructure", func() {
 		Expect(err.Error()).To(ContainSubstring("algorithm.type=static cannot be used with algorithm.automix configuration"))
 	})
 
-	It("accepts deprecated latency signal config and latency conditions (warning only)", func() {
+	It("rejects legacy latency conditions", func() {
 		cfg := &RouterConfig{
 			IntelligentRouting: IntelligentRouting{
-				Signals: Signals{
-					LatencyRules: []LatencyRule{{Name: "low_latency", TPOTPercentile: 20}},
-				},
 				Decisions: []Decision{{
 					Name: "legacy-latency",
 					Rules: RuleCombination{
@@ -412,15 +337,14 @@ var _ = Describe("validateConfigStructure", func() {
 			},
 		}
 
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		err := validateConfigStructure(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("legacy latency config is no longer supported"))
 	})
 
-	It("rejects mixed legacy and latency_aware configurations", func() {
+	It("rejects mixed latency condition and latency_aware configurations", func() {
 		cfg := &RouterConfig{
 			IntelligentRouting: IntelligentRouting{
-				Signals: Signals{
-					LatencyRules: []LatencyRule{{Name: "low_latency", TPOTPercentile: 20}},
-				},
 				Decisions: []Decision{
 					{
 						Name: "legacy-latency",
@@ -453,6 +377,6 @@ var _ = Describe("validateConfigStructure", func() {
 
 		err := validateConfigStructure(cfg)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("cannot be used with decision.algorithm.type=latency_aware"))
+		Expect(err.Error()).To(ContainSubstring("legacy latency config is no longer supported"))
 	})
 })
