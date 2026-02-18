@@ -60,11 +60,26 @@ classifier:
     pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
 
 # Keyword rules - Priority 1 (highest)
+# Supports three methods: regex (default), bm25, ngram
 keyword_rules:
+  # BM25 method: natural TF-IDF scoring for topic detection
+  - name: "code_keywords"
+    operator: "OR"
+    method: "bm25"
+    keywords: ["code", "function", "implement", "debug", "algorithm", "compile", "syntax", "variable", "loop", "refactor"]
+    bm25_threshold: 0.1
+    case_sensitive: false
+
+  # N-gram method: typo-tolerant fuzzy matching
   - name: "urgent_request"
     operator: "OR"
+    method: "ngram"
     keywords: ["urgent", "immediate", "asap", "emergency"]
+    ngram_threshold: 0.4
+    ngram_arity: 3
     case_sensitive: false
+
+  # Regex method (default): exact / pattern matching
   - name: "sensitive_data"
     operator: "AND"
     keywords: ["SSN", "social security number", "credit card"]

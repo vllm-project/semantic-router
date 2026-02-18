@@ -77,6 +77,35 @@ RUN cd candle-binding && \
     cargo clean && \
     cargo build --release --no-default-features
 
+# Stage 1a: Rust nlp-binding (BM25 + N-gram keyword classification)
+FROM rustlang/rust:nightly AS nlp-builder
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+WORKDIR /app
+
+COPY nlp-binding/Cargo.toml ./nlp-binding/
+COPY nlp-binding/Cargo.loc[k] ./nlp-binding/
+
+RUN cd nlp-binding && \
+    mkdir -p src && \
+    echo "pub fn _dummy() {}" > src/lib.rs && \
+    cargo build --release && \
+    rm -rf src
+
+COPY nlp-binding/src/ ./nlp-binding/src/
+
+RUN cd nlp-binding && \
+    find target -name "libnlp_binding.so" -delete 2>/dev/null; \
+    find target -name "libnlp_binding.a" -delete 2>/dev/null; \
+    cargo build --release && \
+    ls -la target/release/libnlp_binding.so
+
 # Stage 2: semantic-router (Go)
 FROM golang:1.24 AS go-router-builder
 
@@ -85,15 +114,19 @@ WORKDIR /app
 RUN mkdir -p src/semantic-router
 COPY src/semantic-router/go.mod src/semantic-router/go.sum src/semantic-router/
 COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/
+COPY ml-binding/go.mod ml-binding/ml_binding.go ml-binding/
+COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go nlp-binding/
 
 RUN cd src/semantic-router && go mod download && \
     cd /app/candle-binding && go mod download
 
 COPY src/semantic-router/ src/semantic-router/
 COPY --from=rust-builder /app/candle-binding/target/release/libcandle_semantic_router.so /app/candle-binding/target/release/
+COPY --from=nlp-builder /app/nlp-binding/target/release/libnlp_binding.so /app/nlp-binding/target/release/
+COPY --from=nlp-builder /app/nlp-binding/target/release/libnlp_binding.a /app/nlp-binding/target/release/
 
 ENV CGO_ENABLED=1
-ENV LD_LIBRARY_PATH=/app/candle-binding/target/release
+ENV LD_LIBRARY_PATH=/app/candle-binding/target/release:/app/nlp-binding/target/release
 ENV GOOS=linux
 
 RUN mkdir -p bin && cd src/semantic-router && \
@@ -229,6 +262,7 @@ COPY --from=downloader /downloads/jaeger-all-in-one /usr/local/bin/jaeger-all-in
 # semantic-router
 COPY --from=go-router-builder /app/bin/router /app/extproc-server
 COPY --from=rust-builder /app/candle-binding/target/release/libcandle_semantic_router.so /app/lib/
+COPY --from=nlp-builder /app/nlp-binding/target/release/libnlp_binding.so /app/lib/
 
 # Dashboard
 COPY --from=dashboard-builder /app/dashboard-backend /app/dashboard-backend
