@@ -288,7 +288,13 @@ def docker_remove_container(container_name):
 
 
 def docker_start_vllm_sr(
-    config_file, env_vars, listeners, image=None, pull_policy=None, network_name=None
+    config_file,
+    env_vars,
+    listeners,
+    image=None,
+    pull_policy=None,
+    network_name=None,
+    minimal=False,
 ):
     """
     Start vLLM Semantic Router container.
@@ -300,6 +306,7 @@ def docker_start_vllm_sr(
         image: Container image to use (optional)
         pull_policy: Image pull policy (optional)
         network_name: Docker network name (optional, for observability)
+        minimal: If True, skip dashboard port mapping (default: False)
 
     Returns:
         (return_code, stdout, stderr)
@@ -373,7 +380,8 @@ def docker_start_vllm_sr(
     # Add internal service ports
     cmd.extend(["-p", "50051:50051"])  # Router gRPC port (internal)
     cmd.extend(["-p", "9190:9190"])  # Metrics port
-    cmd.extend(["-p", "8700:8700"])  # Dashboard UI
+    if not minimal:
+        cmd.extend(["-p", "8700:8700"])  # Dashboard UI
     cmd.extend(["-p", "8080:8080"])  # Router API port
 
     # Mount config file (read-write to allow dashboard edits)

@@ -3,6 +3,12 @@
 
 CONFIG_FILE="${1:-/app/config.yaml}"
 
+# Check if dashboard is disabled (minimal mode)
+if [ "${DISABLE_DASHBOARD}" = "true" ]; then
+    echo "Dashboard disabled (minimal mode). Sleeping..."
+    exec sleep infinity
+fi
+
 # Extract the first listener port from config.yaml using Python
 ENVOY_PORT=$(python3 -c "
 import yaml
