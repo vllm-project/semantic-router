@@ -169,7 +169,7 @@ func testFreeTierWithinLimit(ctx context.Context, baseURL string, opts pkgtestca
 }
 
 func testFreeTierExceedsLimit(ctx context.Context, baseURL string, opts pkgtestcases.TestCaseOptions, results *rateLimitResults) error {
-	// Re-use a known-exhausted user: send 3 to fill, then check 4th
+	// Reuse a known-exhausted user: send 3 to fill, then check 4th
 	user := uniqueUser("e2e-free-burst")
 	if opts.Verbose {
 		fmt.Printf("[RateLimit] Test 2: Free-tier exceeds limit (user=%s)\n", user)
@@ -340,21 +340,21 @@ func testPremiumTierHigherLimit(ctx context.Context, baseURL string, opts pkgtes
 }
 
 func testPerUserIsolation(ctx context.Context, baseURL string, opts pkgtestcases.TestCaseOptions, results *rateLimitResults) error {
-	userA := uniqueUser("e2e-free-A")
-	userB := uniqueUser("e2e-free-B")
+	isolatedA := uniqueUser("e2e-free-A")
+	isolatedB := uniqueUser("e2e-free-B")
 	if opts.Verbose {
-		fmt.Printf("[RateLimit] Test 6: Per-user isolation (A=%s, B=%s)\n", userA, userB)
+		fmt.Printf("[RateLimit] Test 6: Per-user isolation (A=%s, B=%s)\n", isolatedA, isolatedB)
 	}
 
-	// Exhaust user A's budget
+	// Exhaust isolated user A's budget
 	for i := 1; i <= 3; i++ {
-		if _, err := sendRateLimitRequest(ctx, baseURL, userA, "free-tier", fmt.Sprintf("a %d", i), 5); err != nil {
+		if _, err := sendRateLimitRequest(ctx, baseURL, isolatedA, "free-tier", fmt.Sprintf("a %d", i), 5); err != nil {
 			return fmt.Errorf("user A request %d: %w", i, err)
 		}
 	}
 
 	// User A's 4th request should be 429
-	respA, err := sendRateLimitRequest(ctx, baseURL, userA, "free-tier", "a overflow", 5)
+	respA, err := sendRateLimitRequest(ctx, baseURL, isolatedA, "free-tier", "a overflow", 5)
 	if err != nil {
 		return fmt.Errorf("user A overflow: %w", err)
 	}
@@ -368,7 +368,7 @@ func testPerUserIsolation(ctx context.Context, baseURL string, opts pkgtestcases
 	}
 
 	// User B should still have full budget
-	respB, err := sendRateLimitRequest(ctx, baseURL, userB, "free-tier", "b first", 5)
+	respB, err := sendRateLimitRequest(ctx, baseURL, isolatedB, "free-tier", "b first", 5)
 	if err != nil {
 		return fmt.Errorf("user B request: %w", err)
 	}
