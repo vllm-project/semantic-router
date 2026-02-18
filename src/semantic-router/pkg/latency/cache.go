@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -23,7 +22,7 @@ const MaxTPOTHistorySize = 1000
 // For 3+ observations, we use percentile calculation
 const MinObservationsForPercentile = 3
 
-// TPOTCache stores recent TPOT values per model for latency signal evaluation
+// TPOTCache stores recent TPOT values per model for latency_aware percentile-based model selection.
 type TPOTCache struct {
 	mu    sync.RWMutex
 	cache map[string]*ModelTPOTStats
@@ -210,7 +209,7 @@ const TTFTAlpha = 0.3
 // This prevents unbounded memory growth while providing enough data for percentile calculation
 const MaxTTFTHistorySize = 1000
 
-// TTFTCache stores recent TTFT values per model for latency signal evaluation
+// TTFTCache stores recent TTFT values per model for latency_aware percentile-based model selection.
 type TTFTCache struct {
 	mu    sync.RWMutex
 	cache map[string]*ModelTTFTStats
@@ -390,197 +389,4 @@ func RemoveModelFromTTFTCache(model string) {
 func RemoveModelFromLatencyCache(model string) {
 	RemoveModelFromTPOTCache(model)
 	RemoveModelFromTTFTCache(model)
-}
-
-// LatencyClassifier implements latency-based signal classification using TPOT
-// Evaluates whether models meet latency requirements based on their TPOT (Time Per Output Token)
-type LatencyClassifier struct {
-	rules []config.LatencyRule
-}
-
-// LatencyResult represents the result of latency classification
-type LatencyResult struct {
-	MatchedRules []string // Names of latency rules that matched
-}
-
-// NewLatencyClassifier creates a new latency classifier
-func NewLatencyClassifier(cfgRules []config.LatencyRule) (*LatencyClassifier, error) {
-	return &LatencyClassifier{
-		rules: cfgRules,
-	}, nil
-}
-
-// Classify evaluates latency rules against available models
-// It checks if models in the decision's ModelRefs meet the latency requirements
-// Uses percentile-based thresholds for TPOT and/or TTFT to determine matches
-func (c *LatencyClassifier) Classify(availableModels []string) (*LatencyResult, error) {
-	if len(c.rules) == 0 {
-		return &LatencyResult{
-			MatchedRules: []string{},
-		}, nil
-	}
-
-	var matchedRules []string
-
-	for _, rule := range c.rules {
-		// Check if any available model meets this latency rule
-		matched := false
-		var bestTPOT float64
-		var bestTTFT float64
-		bestModel := ""
-		bestScore := -1.0 // Initialize to -1 to indicate "no match yet"
-
-		// Determine which metrics to evaluate
-		hasTPOTPercentile := rule.TPOTPercentile > 0
-		hasTTFTPercentile := rule.TTFTPercentile > 0
-
-		if !hasTPOTPercentile && !hasTTFTPercentile {
-			// Invalid rule configuration (should be caught by validator, but handle gracefully)
-			logging.Warnf("Latency rule '%s' has neither tpot_percentile nor ttft_percentile set, skipping", rule.Name)
-			continue
-		}
-
-		for _, model := range availableModels {
-			// Normalize model name to ensure consistent matching with cache keys
-			// (UpdateTPOT/UpdateTTFT normalize model names, so we must normalize here too)
-			model = strings.TrimSpace(model)
-			if model == "" {
-				logging.Debugf("Latency evaluation: skipping empty model name")
-				continue
-			}
-
-			// Evaluate TPOT if configured
-			tpot := 0.0
-			hasTPOT := false
-			tpotMeetsThreshold := true
-			tpotThreshold := 0.0
-			if hasTPOTPercentile {
-				// Use median (50th percentile) as "current" so a few slow requests don't pull average up and stop matching
-				currentTPOT, tpotExists := GetTPOTPercentile(model, 50)
-				if !tpotExists {
-					logging.Infof("[Latency] No TPOT data for model %q, skipping rule %s", model, rule.Name)
-					continue
-				}
-				tpot = currentTPOT
-				hasTPOT = true
-
-				// Get TPOT percentile threshold
-				tpotThresholdValue, hasTPOTThreshold := GetTPOTPercentile(model, rule.TPOTPercentile)
-				if !hasTPOTThreshold {
-					logging.Debugf("Latency evaluation: cannot calculate TPOT percentile %d for model %q, skipping", rule.TPOTPercentile, model)
-					continue
-				}
-				tpotThreshold = tpotThresholdValue
-				tpotMeetsThreshold = tpot <= tpotThreshold
-			}
-
-			// Evaluate TTFT if configured
-			// Use GetTTFT() function for consistent access pattern (same as TPOT)
-			ttft := 0.0
-			hasTTFT := false
-			ttftMeetsThreshold := true
-			ttftThreshold := 0.0
-			if hasTTFTPercentile {
-				// Use median (50th percentile) as "current" so a few slow requests don't pull average up and stop matching
-				currentTTFT, ttftExists := GetTTFTPercentile(model, 50)
-				if !ttftExists {
-					logging.Infof("[Latency] No TTFT data for model %q, skipping rule %s", model, rule.Name)
-					continue
-				}
-				ttft = currentTTFT
-				hasTTFT = true
-
-				// Get TTFT percentile threshold
-				ttftThresholdValue, hasTTFTThreshold := GetTTFTPercentile(model, rule.TTFTPercentile)
-				if !hasTTFTThreshold {
-					logging.Debugf("Latency evaluation: cannot calculate TTFT percentile %d for model %q, skipping", rule.TTFTPercentile, model)
-					continue
-				}
-				ttftThreshold = ttftThresholdValue
-				ttftMeetsThreshold = ttft <= ttftThreshold
-			}
-
-			// Model matches if it meets all configured thresholds (AND logic)
-			// If only one metric is configured, only that metric needs to meet threshold
-			//
-			// Percentile semantics (lower latency is better): The Nth percentile is the value below which N%
-			// of observations fall (the "top N% fastest" boundary). We check current ≤ threshold, so
-			// "current ≤ 10th percentile" means current is in the top 10% fastest; "current ≤ 70th percentile"
-			// means current is in the faster 70% (more lenient). Higher N = easier to match.
-			matchesRule := true
-			if hasTPOTPercentile && !tpotMeetsThreshold {
-				matchesRule = false
-			}
-			if hasTTFTPercentile && !ttftMeetsThreshold {
-				matchesRule = false
-			}
-
-			if matchesRule {
-				// Calculate combined score (lower is better) for selecting best model
-				// Normalize by threshold to make TPOT and TTFT comparable
-				var combinedScore float64
-				// Safety check: prevent division by zero (threshold should never be 0, but protect against edge cases)
-				if hasTPOT && hasTTFT {
-					// Normalize both metrics (use ratio to threshold) and combine
-					if tpotThreshold > 0 && ttftThreshold > 0 {
-						tpotRatio := tpot / tpotThreshold
-						ttftRatio := ttft / ttftThreshold
-						// Use average: both metrics have equal weight
-						combinedScore = (tpotRatio + ttftRatio) / 2.0
-					} else {
-						logging.Warnf("Latency evaluation: zero threshold detected (TPOT=%.4f, TTFT=%.4f), skipping score calculation", tpotThreshold, ttftThreshold)
-						continue
-					}
-				} else if hasTPOT {
-					if tpotThreshold > 0 {
-						combinedScore = tpot / tpotThreshold
-					} else {
-						logging.Warnf("Latency evaluation: zero TPOT threshold detected, skipping score calculation")
-						continue
-					}
-				} else if hasTTFT {
-					if ttftThreshold > 0 {
-						combinedScore = ttft / ttftThreshold
-					} else {
-						logging.Warnf("Latency evaluation: zero TTFT threshold detected, skipping score calculation")
-						continue
-					}
-				}
-
-				// Select best model: lower score = better (closer to threshold = better performance)
-				if !matched || combinedScore < bestScore {
-					matched = true
-					bestTPOT = tpot
-					bestTTFT = ttft
-					bestModel = model
-					bestScore = combinedScore
-				}
-			}
-		}
-
-		if matched {
-			matchedRules = append(matchedRules, rule.Name)
-
-			// Log the match (no confidence - latency matching is deterministic)
-			if hasTPOTPercentile && hasTTFTPercentile {
-				// Get thresholds for logging (recalculate if needed)
-				tpotThreshold, _ := GetTPOTPercentile(bestModel, rule.TPOTPercentile)
-				ttftThreshold, _ := GetTTFTPercentile(bestModel, rule.TTFTPercentile)
-				logging.Infof("Latency rule '%s' matched: model=%s, TPOT=%.4fs (threshold=%.4fs, percentile=%d), TTFT=%.4fs (threshold=%.4fs, percentile=%d), score=%.4f",
-					rule.Name, bestModel, bestTPOT, tpotThreshold, rule.TPOTPercentile, bestTTFT, ttftThreshold, rule.TTFTPercentile, bestScore)
-			} else if hasTPOTPercentile {
-				tpotThreshold, _ := GetTPOTPercentile(bestModel, rule.TPOTPercentile)
-				logging.Infof("Latency rule '%s' matched: model=%s, TPOT=%.4fs (threshold=%.4fs, percentile=%d), score=%.4f",
-					rule.Name, bestModel, bestTPOT, tpotThreshold, rule.TPOTPercentile, bestScore)
-			} else if hasTTFTPercentile {
-				ttftThreshold, _ := GetTTFTPercentile(bestModel, rule.TTFTPercentile)
-				logging.Infof("Latency rule '%s' matched: model=%s, TTFT=%.4fs (threshold=%.4fs, percentile=%d), score=%.4f",
-					rule.Name, bestModel, bestTTFT, ttftThreshold, rule.TTFTPercentile, bestScore)
-			}
-		}
-	}
-
-	return &LatencyResult{
-		MatchedRules: matchedRules,
-	}, nil
 }

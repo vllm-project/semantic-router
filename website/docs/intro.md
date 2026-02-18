@@ -36,8 +36,6 @@ Captures and combines **9 types of request signals** to make intelligent routing
 
 **How it works**: Signals are extracted from requests, combined using AND/OR operators in decision rules, and used to select the best model and configuration.
 
-Latency routing is configured in decision algorithms (for example, `algorithm.type: latency_aware`), not as a request signal. See [Latency routing migration guide](installation/latency-migration.md).
-
 ### Plugin Chain Architecture
 
 Extensible plugin system for request/response processing:

@@ -63,12 +63,6 @@ func Parse(configPath string) (*RouterConfig, error) {
 		cfg.MoMRegistry = ToLegacyRegistry()
 	}
 
-	// Normalize legacy latency signal-based routing config to the new algorithm-based form.
-	// This preserves backward compatibility during the deprecation window.
-	if err := normalizeLegacyLatencyRouting(cfg); err != nil {
-		return nil, err
-	}
-
 	// Validation after parsing
 	if err := validateConfigStructure(cfg); err != nil {
 		return nil, err

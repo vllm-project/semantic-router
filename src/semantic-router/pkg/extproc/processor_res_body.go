@@ -72,7 +72,7 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 				metrics.RecordModelTTFT(ctx.RequestModel, ttft)
 				ctx.TTFTSeconds = ttft
 				ctx.TTFTRecorded = true
-				// Update TTFT cache for latency signal evaluation
+				// Update TTFT cache for latency_aware percentile-based model selection
 				latency.UpdateTTFT(ctx.RequestModel, ttft)
 				logging.Debugf("Recorded TTFT on first streamed body chunk: model=%q, TTFT=%.4fs", ctx.RequestModel, ttft)
 			}

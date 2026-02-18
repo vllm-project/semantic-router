@@ -140,6 +140,69 @@ func (s *InMemoryStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*
 	return results, nil
 }
 
+// List returns memories matching the filter criteria, sorted by created_at descending.
+func (s *InMemoryStore) List(ctx context.Context, opts ListOptions) (*ListResult, error) {
+	if !s.enabled {
+		return nil, fmt.Errorf("store not enabled")
+	}
+
+	if opts.UserID == "" {
+		return nil, fmt.Errorf("user ID is required for listing memories")
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Collect matching memories
+	var matching []*Memory
+	for _, mem := range s.memories {
+		if mem.UserID != opts.UserID {
+			continue
+		}
+
+		if len(opts.Types) > 0 {
+			found := false
+			for _, t := range opts.Types {
+				if mem.Type == t {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+		}
+
+		matching = append(matching, mem)
+	}
+
+	// Sort by created_at descending (newest first)
+	sort.Slice(matching, func(i, j int) bool {
+		return matching[i].CreatedAt.After(matching[j].CreatedAt)
+	})
+
+	total := len(matching)
+
+	// Apply limit
+	limit := opts.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	if limit < len(matching) {
+		matching = matching[:limit]
+	}
+
+	return &ListResult{
+		Memories: matching,
+		Total:    total,
+		Limit:    limit,
+	}, nil
+}
+
 // Get retrieves a memory by ID.
 func (s *InMemoryStore) Get(ctx context.Context, id string) (*Memory, error) {
 	if !s.enabled {

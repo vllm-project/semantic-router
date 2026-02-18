@@ -1477,21 +1477,28 @@ class AccessTrackingTest(MemoryFeaturesTest):
         )
         self.assertIsNotNone(result3, "Failed to retrieve")
 
-        # Step 6: Poll for access_count > 0 (background goroutine needs time to complete
-        # Get + Upsert in Milvus, and the Upsert needs to be flushed before we can read it)
+        # Step 6: Poll for access_count > 0.
+        # The router updates access_count in a background goroutine (fire-and-forget):
+        #   recordRetrievalBatch → Get → increment → Upsert
+        # After the Upsert completes, Milvus needs a flush before the data is visible.
+        # Use generous polling (8 attempts × 5s) to handle CI variability.
         count_after = 0
-        for attempt in range(5):
+        for attempt in range(8):
             time.sleep(5)
             self.milvus.flush()
-            time.sleep(1)
+            time.sleep(2)
             meta_after = self.milvus.get_memory_metadata(self.test_user)
             if meta_after:
-                count_after = meta_after.get("_parsed_metadata", {}).get(
-                    "access_count", 0
-                )
+                # Check top-level column first (direct int64, most reliable),
+                # fall back to parsed metadata JSON
+                count_after = meta_after.get("access_count", 0)
+                if count_after == 0:
+                    count_after = meta_after.get("_parsed_metadata", {}).get(
+                        "access_count", 0
+                    )
                 if count_after > 0:
                     break
-            print(f"   ⏳ Poll {attempt + 1}/5: access_count={count_after}")
+            print(f"   ⏳ Poll {attempt + 1}/8: access_count={count_after}")
 
         print(
             f"   ✓ Final access_count: {count_after} "
@@ -1558,18 +1565,18 @@ class AccessTrackingTest(MemoryFeaturesTest):
             verbose=False,
         )
 
-        # Step 6: Poll for last_accessed update
+        # Step 6: Poll for last_accessed update (same background goroutine timing as access_count)
         last_accessed = 0
-        for attempt in range(5):
+        for attempt in range(8):
             time.sleep(5)
             self.milvus.flush()
-            time.sleep(1)
+            time.sleep(2)
             meta = self.milvus.get_memory_metadata(self.test_user)
             if meta:
                 last_accessed = meta.get("_parsed_metadata", {}).get("last_accessed", 0)
                 if last_accessed >= time_before_retrieve:
                     break
-            print(f"   ⏳ Poll {attempt + 1}/5: last_accessed={last_accessed}")
+            print(f"   ⏳ Poll {attempt + 1}/8: last_accessed={last_accessed}")
 
         print(f"   last_accessed (unix): {last_accessed}")
         print(f"   time before retrieve: {time_before_retrieve}")

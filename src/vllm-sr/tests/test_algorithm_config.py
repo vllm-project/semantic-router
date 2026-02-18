@@ -39,6 +39,7 @@ class TestAlgorithmConfigTypes:
             "router_dc",
             "automix",
             "hybrid",
+            "latency_aware",
             "thompson",
             "gmtrouter",
             "router_r1",

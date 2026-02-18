@@ -4,6 +4,7 @@ package apiserver
 
 import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
@@ -11,6 +12,7 @@ import (
 type ClassificationAPIServer struct {
 	classificationSvc     *services.ClassificationService
 	config                *config.RouterConfig
+	memoryStore           memory.Store
 	enableSystemPromptAPI bool
 }
 
