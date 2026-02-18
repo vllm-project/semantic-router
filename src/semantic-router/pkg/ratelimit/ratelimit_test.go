@@ -65,6 +65,7 @@ func (m *mockProvider) Check(_ Context) (*Decision, error) {
 	}
 	return m.decision, nil
 }
+
 func (m *mockProvider) Report(_ Context, usage TokenUsage) error {
 	m.reported = append(m.reported, usage)
 	return nil
