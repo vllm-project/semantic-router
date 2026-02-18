@@ -19,13 +19,13 @@ use std::path::Path;
 use tokenizers::Tokenizer;
 
 fn main() -> Result<()> {
-    println!("🧪 Testing Long Text Inference with ModernBERT-base-32k");
+    println!("Testing Long Text Inference with ModernBERT-base-32k");
     println!("{}", "=".repeat(70));
 
     let device = Device::Cpu; // Force CPU for testing (GPU would be faster)
 
     // Step 1: Download and load ModernBERT-base-32k
-    println!("\n1️⃣  Downloading ModernBERT-base-32k base model...");
+    println!("\nDownloading ModernBERT-base-32k base model...");
     let base_model_id = "llm-semantic-router/modernbert-base-32k";
     let repo = Repo::with_revision(
         base_model_id.to_string(),
@@ -57,17 +57,17 @@ fn main() -> Result<()> {
     );
 
     // Step 2: Load base model
-    println!("\n2️⃣  Loading ModernBERT-base-32k base model...");
+    println!("\nLoading ModernBERT-base-32k base model...");
     let base_vb = unsafe {
         VarBuilder::from_mmaped_safetensors(&[base_weights_path.clone()], DType::F32, &device)
             .map_err(|e| anyhow!("Failed to load base model weights: {}", e))?
     };
     let base_model = ModernBert::load(base_vb, &config)
         .map_err(|e| anyhow!("Failed to load base ModernBert model: {}", e))?;
-    println!("   ✅ Base model loaded successfully!");
+    println!("   Base model loaded successfully!");
 
     // Step 3: Load tokenizer
-    println!("\n3️⃣  Loading tokenizer...");
+    println!("\nLoading tokenizer...");
     let mut tokenizer = Tokenizer::from_file(&base_tokenizer_path)
         .map_err(|e| anyhow!("Failed to load tokenizer: {}", e))?;
 
@@ -77,10 +77,10 @@ fn main() -> Result<()> {
         pad_token.pad_id = config.pad_token_id;
         pad_token.pad_token = ModernBertVariant::Extended32K.pad_token().to_string();
     }
-    println!("   ✅ Tokenizer loaded and configured for 32K tokens");
+    println!("   Tokenizer loaded and configured for 32K tokens");
 
     // Step 4: Test with different classifiers
-    println!("\n4️⃣  Testing with different classifiers...");
+    println!("\nTesting with different classifiers...");
 
     let classifiers = vec![
         (
@@ -107,7 +107,7 @@ fn main() -> Result<()> {
 
         let model_weights_path = format!("{}/model.safetensors", classifier_path);
         if !Path::new(&model_weights_path).exists() {
-            println!("   ⚠️  Model weights not found: {}", model_weights_path);
+            println!("   Model weights not found: {}", model_weights_path);
             continue;
         }
 
@@ -122,10 +122,10 @@ fn main() -> Result<()> {
             .map_err(|e| anyhow!("Failed to load classifier weight: {}", e))?;
         let classifier_bias = classifier_vb.get(num_classes, "classifier.bias").ok();
         let classifier_head = Linear::new(classifier_weight, classifier_bias);
-        println!("   ✅ Classifier loaded: {} classes", num_classes);
+        println!("   Classifier loaded: {} classes", num_classes);
 
         // Step 5: Test with texts of various lengths
-        println!("\n5️⃣  Testing inference with texts of various lengths...");
+        println!("\nTesting inference with texts of various lengths...");
 
         // Create base text for repetition
         let base_text = "This is a test sentence for ModernBERT-base-32k integration. ";
@@ -172,8 +172,8 @@ fn main() -> Result<()> {
             // Skip if too long for CPU (32K tokens takes 10+ minutes)
             let is_cpu = matches!(device, Device::Cpu);
             if actual_tokens > 2000 && is_cpu {
-                println!("      ⚠️  Skipping on CPU (would take too long)");
-                println!("      💡 Run on GPU for full 32K token testing");
+                println!("      Skipping on CPU (would take too long)");
+                println!("      Run on GPU for full 32K token testing");
                 continue;
             }
 
@@ -207,7 +207,7 @@ fn main() -> Result<()> {
                 .unwrap_or((0, &0.0));
 
             let elapsed = start.elapsed();
-            println!("      ✅ Inference successful!");
+            println!("      Inference successful!");
             println!("         Predicted class: {}", predicted_class);
             println!("         Confidence: {:.4}", max_prob);
             println!(
@@ -222,13 +222,13 @@ fn main() -> Result<()> {
         }
     }
 
-    println!("\n6️⃣  Summary:");
-    println!("   ✅ ModernBERT-base-32k base model: Loaded");
-    println!("   ✅ All classifiers: Loaded and compatible");
-    println!("   ✅ Inference: Working on various text lengths");
-    println!("   📝 Note: Full 32K token testing requires GPU (CPU too slow)");
-    println!("   📝 All traditional classifiers are compatible with ModernBERT-base-32k!");
+    println!("\nSummary:");
+    println!("   ModernBERT-base-32k base model: Loaded");
+    println!("   All classifiers: Loaded and compatible");
+    println!("   Inference: Working on various text lengths");
+    println!("   Note: Full 32K token testing requires GPU (CPU too slow)");
+    println!("   All traditional classifiers are compatible with ModernBERT-base-32k!");
 
-    println!("\n✅ Long text inference test completed!");
+    println!("\nLong text inference test completed!");
     Ok(())
 }

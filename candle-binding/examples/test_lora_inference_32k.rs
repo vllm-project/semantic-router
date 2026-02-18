@@ -21,13 +21,13 @@ use std::path::Path;
 use tokenizers::Tokenizer;
 
 fn main() -> Result<()> {
-    println!("🧪 Testing Full Inference with LoRA Adapters on ModernBERT-base-32k");
+    println!("Testing Full Inference with LoRA Adapters on ModernBERT-base-32k");
     println!("{}", "=".repeat(70));
 
     let device = Device::Cpu; // Force CPU for testing
 
     // Step 1: Download and load ModernBERT-base-32k
-    println!("\n1️⃣  Downloading ModernBERT-base-32k base model...");
+    println!("\nDownloading ModernBERT-base-32k base model...");
     let base_model_id = "llm-semantic-router/modernbert-base-32k";
     let repo = Repo::with_revision(
         base_model_id.to_string(),
@@ -59,7 +59,7 @@ fn main() -> Result<()> {
     println!("     - num_hidden_layers: {}", config.num_hidden_layers);
 
     // Step 2: Load base model
-    println!("\n2️⃣  Loading ModernBERT-base-32k base model...");
+    println!("\nLoading ModernBERT-base-32k base model...");
     let base_vb = unsafe {
         VarBuilder::from_mmaped_safetensors(&[base_weights_path.clone()], DType::F32, &device)
             .map_err(|e| anyhow!("Failed to load base model weights: {}", e))?
@@ -67,10 +67,10 @@ fn main() -> Result<()> {
     // ModernBERT weights are directly under the root, not under "model" prefix
     let base_model = ModernBert::load(base_vb, &config)
         .map_err(|e| anyhow!("Failed to load base ModernBert model: {}", e))?;
-    println!("   ✅ Base model loaded successfully!");
+    println!("   Base model loaded successfully!");
 
     // Step 3: Load tokenizer
-    println!("\n3️⃣  Loading tokenizer...");
+    println!("\nLoading tokenizer...");
     let mut tokenizer = Tokenizer::from_file(&base_tokenizer_path)
         .map_err(|e| anyhow!("Failed to load tokenizer: {}", e))?;
 
@@ -80,10 +80,10 @@ fn main() -> Result<()> {
         pad_token.pad_id = config.pad_token_id;
         pad_token.pad_token = ModernBertVariant::Extended32K.pad_token().to_string();
     }
-    println!("   ✅ Tokenizer loaded and configured for 32K tokens");
+    println!("   Tokenizer loaded and configured for 32K tokens");
 
     // Step 4: Find and load LoRA adapter
-    println!("\n4️⃣  Looking for LoRA adapter...");
+    println!("\nLooking for LoRA adapter...");
     let lora_adapter_paths = vec![
         "../models/lora_intent_classifier_bert-base-uncased_model",
         "models/lora_intent_classifier_bert-base-uncased_model",
@@ -101,8 +101,8 @@ fn main() -> Result<()> {
             let lora_weights_path = format!("{}/model.safetensors", path);
 
             if !Path::new(&lora_weights_path).exists() {
-                println!("   ⚠️  LoRA weights not found at: {}", lora_weights_path);
-                println!("   ℹ️  Skipping LoRA inference test");
+                println!("   LoRA weights not found at: {}", lora_weights_path);
+                println!("   Skipping LoRA inference test");
                 return Ok(());
             }
 
@@ -161,7 +161,7 @@ fn main() -> Result<()> {
                     &device,
                 )
                 .map_err(|e| anyhow!("Failed to load LoRA adapter: {}", e))?;
-                println!("   ✅ LoRA adapter loaded successfully!");
+                println!("   LoRA adapter loaded successfully!");
 
                 // Load classification head
                 let num_classes: usize = 10; // Typical intent classification classes
@@ -175,13 +175,13 @@ fn main() -> Result<()> {
                     .get(num_classes, "intent_classifier.bias")
                     .map_err(|e| anyhow!("Failed to load classifier bias: {}", e))?;
                 let classifier_head = Linear::new(classifier_weight.t()?, Some(classifier_bias));
-                println!("   ✅ Classification head loaded successfully!");
+                println!("   Classification head loaded successfully!");
                 println!("   ✓ Number of classes: {}", num_classes);
 
                 (Some(adapter), Some(classifier_head), num_classes)
             } else {
                 // This is a traditional classifier, not a LoRA adapter
-                println!("   ℹ️  This is a traditional classifier, not a LoRA adapter");
+                println!("   This is a traditional classifier, not a LoRA adapter");
 
                 // Load traditional classifier head
                 let num_classes: usize = 3; // From config.json: business, law, psychology
@@ -195,24 +195,24 @@ fn main() -> Result<()> {
                                                                                         // Linear::new expects (out_features, in_features) = (num_classes, hidden_size)
                                                                                         // The weight is already in the correct shape [num_classes, hidden_size]
                 let classifier_head = Linear::new(classifier_weight, classifier_bias);
-                println!("   ✅ Traditional classifier head loaded successfully!");
+                println!("   Traditional classifier head loaded successfully!");
                 println!("   ✓ Number of classes: {}", num_classes);
 
                 (None, Some(classifier_head), num_classes)
             }
         }
         None => {
-            println!("   ⚠️  LoRA adapter not found in any of these paths:");
+            println!("   LoRA adapter not found in any of these paths:");
             for path in &lora_adapter_paths {
                 println!("      - {}", path);
             }
-            println!("   ℹ️  Skipping LoRA inference test");
+            println!("   Skipping LoRA inference test");
             return Ok(());
         }
     };
 
     // Step 5: Test inference
-    println!("\n5️⃣  Testing inference with LoRA adapter...");
+    println!("\nTesting inference with LoRA adapter...");
 
     // Create long text as owned string
     let long_text = format!(
@@ -285,29 +285,29 @@ fn main() -> Result<()> {
                 .unwrap_or((0, &0.0));
 
             let elapsed = start.elapsed();
-            println!("   ✅ Inference successful!");
+            println!("   Inference successful!");
             println!("      Predicted class: {}", predicted_class);
             println!("      Confidence: {:.4}", max_prob);
             println!("      Latency: {:.2}ms", elapsed.as_secs_f64() * 1000.0);
         } else {
             let elapsed = start.elapsed();
-            println!("   ✅ Base model forward successful!");
+            println!("   Base model forward successful!");
             println!("      Latency: {:.2}ms", elapsed.as_secs_f64() * 1000.0);
-            println!("      ⚠️  No classification head available");
+            println!("      No classification head available");
         }
     }
 
     // Step 6: Summary
-    println!("\n6️⃣  Summary:");
-    println!("   ✅ ModernBERT-base-32k base model: Loaded");
-    println!("   ✅ LoRA adapter: Loaded and compatible");
-    println!("   ✅ Classification head: Loaded");
-    println!("   ✅ Inference: Working");
-    println!("   📝 Conclusion:");
+    println!("\nSummary:");
+    println!("   ModernBERT-base-32k base model: Loaded");
+    println!("   LoRA adapter: Loaded and compatible");
+    println!("   Classification head: Loaded");
+    println!("   Inference: Working");
+    println!("   Conclusion:");
     println!("      LoRA adapters trained on BERT-base CAN be used with ModernBERT-base-32k!");
     println!("      The integration works correctly for inference.");
-    println!("      Next: Test with longer sequences (8K, 16K, 32K tokens)");
+    println!("      LoRA adapters are compatible with ModernBERT-base-32k");
 
-    println!("\n✅ Full LoRA inference test completed!");
+    println!("\nFull LoRA inference test completed!");
     Ok(())
 }

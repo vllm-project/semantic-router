@@ -89,10 +89,10 @@ path = "examples/list_safetensors_keys.rs"
 name = "test_long_text_inference_32k"
 path = "examples/test_long_text_inference_32k.rs"
 
-# Example testing Phase 4 comprehensive testing & validation
+# Example testing ModernBERT-base-32k comprehensive validation
 [[example]]
-name = "test_phase4_comprehensive"
-path = "examples/test_phase4_comprehensive.rs"
+name = "test_modernbert_32k_validation"
+path = "examples/test_modernbert_32k_validation.rs"
 
 # Example testing classifier compatibility with Extended32K (Phase 1.5)
 [[example]]

@@ -17,11 +17,11 @@ use candle_transformers::models::modernbert::Config;
 use hf_hub::{api::sync::Api, Repo, RepoType};
 
 fn main() -> Result<()> {
-    println!("🧪 Testing Full Inference with Extended32K Base Model + Classifier");
+    println!("Testing Full Inference with Extended32K Base Model + Classifier");
     println!("{}", "=".repeat(70));
 
     // Step 1: Download Extended32K base model
-    println!("\n1️⃣  Downloading Extended32K base model...");
+    println!("\nDownloading Extended32K base model...");
     let base_model_id = "llm-semantic-router/modernbert-base-32k";
     let repo = Repo::with_revision(
         base_model_id.to_string(),
@@ -43,7 +43,7 @@ fn main() -> Result<()> {
             path
         }
         Err(_) => {
-            println!("   ⚠️  Safetensors not found, trying PyTorch format...");
+            println!("   Safetensors not found, trying PyTorch format...");
             api.get("pytorch_model.bin")
                 .map_err(|e| anyhow!("Failed to download model weights: {}", e))?
         }
@@ -53,7 +53,7 @@ fn main() -> Result<()> {
     println!("   ✓ Base model directory: {:?}", base_model_dir);
 
     // Step 2: Load base model configuration
-    println!("\n2️⃣  Loading base model configuration...");
+    println!("\nLoading base model configuration...");
     let config_str = std::fs::read_to_string(&base_config_path)
         .map_err(|e| anyhow!("Failed to read config.json: {}", e))?;
     let config: Config = serde_json::from_str(&config_str)
@@ -64,7 +64,7 @@ fn main() -> Result<()> {
     println!("     - vocab_size: {}", config.vocab_size);
 
     // Step 3: Load PII classifier to get classifier weights
-    println!("\n3️⃣  Loading PII classifier weights...");
+    println!("\nLoading PII classifier weights...");
     let pii_classifier_paths = vec![
         "../models/pii_classifier_modernbert-base_model",
         "models/pii_classifier_modernbert-base_model",
@@ -100,10 +100,10 @@ fn main() -> Result<()> {
     println!("   ✓ Number of classes: {}", num_classes);
 
     // Step 4: Create combined classifier using Extended32K base model + PII classifier weights
-    println!("\n4️⃣  Creating combined classifier with Extended32K base model...");
+    println!("\nCreating combined classifier with Extended32K base model...");
 
     let base_model_path = base_model_dir.to_string_lossy().to_string();
-    println!("   ℹ️  Using load_with_custom_base_model to combine:");
+    println!("   Using load_with_custom_base_model to combine:");
     println!(
         "      - Base model: Extended32K (32K tokens) from {}",
         base_model_path
@@ -122,13 +122,13 @@ fn main() -> Result<()> {
     )
     .map_err(|e| anyhow!("Failed to load combined classifier: {}", e))?;
 
-    println!("   ✅ Combined classifier loaded successfully!");
-    println!("   ✅ Base model: Extended32K (supports up to 32K tokens)");
-    println!("   ✅ Classifier: PII classifier weights (18 classes)");
-    println!("   ✅ Tokenizer: Configured for 32K tokens");
+    println!("   Combined classifier loaded successfully!");
+    println!("   Base model: Extended32K (supports up to 32K tokens)");
+    println!("   Classifier: PII classifier weights (18 classes)");
+    println!("   Tokenizer: Configured for 32K tokens");
 
     // Step 9: Test inference on sample texts
-    println!("\n9️⃣  Testing inference on sample texts...");
+    println!("\nTesting inference on sample texts...");
 
     // Create test texts - need to store them as owned strings
     let short_text = "My email is john@example.com".to_string();
@@ -160,19 +160,19 @@ fn main() -> Result<()> {
 
         match combined_classifier.classify_text(text) {
             Ok((class_id, confidence)) => {
-                println!("   ✅ Classification successful!");
+                println!("   Classification successful!");
                 println!("      Class ID: {}", class_id);
                 println!("      Confidence: {:.4}", confidence);
             }
             Err(e) => {
-                println!("   ❌ Classification failed: {}", e);
+                println!("   Classification failed: {}", e);
             }
         }
     }
 
-    println!("\n   📝 Note: This test uses Extended32K base model (32K tokens)");
-    println!("   📝 The classifier should now handle long texts without truncation!");
+    println!("\n   Note: This test uses Extended32K base model (32K tokens)");
+    println!("   The classifier should now handle long texts without truncation!");
 
-    println!("\n✅ Full inference test completed!");
+    println!("\nFull inference test completed!");
     Ok(())
 }

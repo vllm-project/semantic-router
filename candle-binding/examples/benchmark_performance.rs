@@ -28,10 +28,7 @@ struct TimingBreakdown {
 
 impl TimingBreakdown {
     fn print(&self, sequence_length: usize) {
-        println!(
-            "\n   📊 Performance Breakdown ({} tokens):",
-            sequence_length
-        );
+        println!("\n   Performance Breakdown ({} tokens):", sequence_length);
         println!(
             "      Tokenization:      {:.2}ms ({:.1}%)",
             self.tokenization_ms,
@@ -217,14 +214,14 @@ fn benchmark_sequence(
 }
 
 fn main() -> Result<()> {
-    println!("🚀 Performance Benchmark for ModernBERT-base-32k");
+    println!("Performance Benchmark for ModernBERT-base-32k");
     println!("{}", "=".repeat(70));
 
     // Detect device
     let device = if cfg!(feature = "cuda") {
         match Device::new_cuda(0) {
             Ok(d) => {
-                println!("✅ Using GPU (CUDA) for benchmarking");
+                println!("Using GPU (CUDA) for benchmarking");
                 if let Some((total_gb, free_gb)) = check_gpu_memory() {
                     println!(
                         "   GPU Memory: {:.2}GB free / {:.2}GB total",
@@ -234,17 +231,17 @@ fn main() -> Result<()> {
                 d
             }
             Err(e) => {
-                println!("⚠️  GPU not available ({}), falling back to CPU", e);
+                println!("GPU not available ({}), falling back to CPU", e);
                 Device::Cpu
             }
         }
     } else {
-        println!("ℹ️  Running in CPU mode (CUDA feature not enabled)");
+        println!("Running in CPU mode (CUDA feature not enabled)");
         Device::Cpu
     };
 
     // Load model
-    println!("\n📦 Loading ModernBERT-base-32k...");
+    println!("\nLoading ModernBERT-base-32k...");
     let base_model_id = "llm-semantic-router/modernbert-base-32k";
     let repo = Repo::with_revision(
         base_model_id.to_string(),
@@ -303,25 +300,30 @@ fn main() -> Result<()> {
         pad_token.pad_token = ModernBertVariant::Extended32K.pad_token().to_string();
     }
 
-    println!("✅ Model loaded successfully!");
+    println!("Model loaded successfully!");
 
     // Check available GPU memory after model is loaded
-    let mut test_cases = vec![512, 1024, 8192];
+    // For CPU mode, test all available lengths
+    let mut test_cases = if device.is_cuda() {
+        vec![512, 1024, 4096, 8192]
+    } else {
+        vec![512, 1024, 4096, 8192] // CPU can handle all these
+    };
     if let Device::Cuda(_) = device {
         if let Some((_total_gb, free_gb)) = check_gpu_memory() {
             println!(
-                "\n🔍 Current GPU Memory: {:.2}GB free / {:.2}GB total",
+                "\nCurrent GPU Memory: {:.2}GB free / {:.2}GB total",
                 free_gb, _total_gb
             );
 
             // Determine what we can test based on available memory
             // Conservative estimates: 16K needs ~8GB free, 32K needs ~15GB free
             if free_gb >= 8.0 {
-                println!("   ✅ GPU has sufficient memory for 16K testing");
+                println!("GPU has sufficient memory for 16K testing");
                 test_cases.push(16384);
             } else {
                 println!(
-                    "   ⚠️  Insufficient GPU memory for 16K testing (need ~8GB free, have {:.2}GB)",
+                    "Insufficient GPU memory for 16K testing (need ~8GB free, have {:.2}GB)",
                     free_gb
                 );
             }
@@ -335,7 +337,7 @@ fn main() -> Result<()> {
     let benchmark_iterations = 5;
 
     println!("\n{}", "=".repeat(70));
-    println!("📊 PERFORMANCE BENCHMARKING");
+    println!("PERFORMANCE BENCHMARKING");
     println!("{}", "=".repeat(70));
     println!("Warmup iterations: {}", warmup_iterations);
     println!("Benchmark iterations: {}", benchmark_iterations);
@@ -350,7 +352,7 @@ fn main() -> Result<()> {
                 if let Some((_total_gb, free_gb)) = check_gpu_memory() {
                     if free_gb < 8.0 {
                         println!(
-                            "   ⏭️  Skipping {} tokens (insufficient GPU memory: {:.2}GB free)",
+                            "Skipping {} tokens (insufficient GPU memory: {:.2}GB free)",
                             target_tokens, free_gb
                         );
                         continue;
@@ -374,19 +376,16 @@ fn main() -> Result<()> {
                 if e.to_string().contains("out of memory")
                     || e.to_string().contains("OUT_OF_MEMORY")
                 {
-                    println!(
-                        "   ⏭️  Skipping {} tokens (GPU out of memory)",
-                        target_tokens
-                    );
+                    println!("Skipping {} tokens (GPU out of memory)", target_tokens);
                 } else {
-                    println!("   ❌ Benchmark failed: {}", e);
+                    println!("Benchmark failed: {}", e);
                 }
             }
         }
     }
 
     println!("\n{}", "=".repeat(70));
-    println!("✅ Benchmarking complete!");
+    println!("Benchmarking complete!");
     println!("{}", "=".repeat(70));
 
     Ok(())

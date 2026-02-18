@@ -162,7 +162,7 @@ fn benchmark_concurrent_requests(
     requests_per_thread: usize,
 ) -> f64 {
     println!("\n{}", "─".repeat(80));
-    println!("🔥 CONCURRENT REQUEST BENCHMARK (Real-World Scenario)");
+    println!("CONCURRENT REQUEST BENCHMARK (Real-World Scenario)");
     println!("{}", "─".repeat(80));
     println!("  Simulating {} concurrent clients", num_threads);
     println!(
@@ -242,8 +242,8 @@ fn benchmark_concurrent_requests(
     let total_requests = num_threads * requests_per_thread;
     let throughput = total_requests as f64 / elapsed.as_secs_f64();
 
-    println!("  ✅ Completed in {:.2}s", elapsed.as_secs_f64());
-    println!("  📈 Throughput: {:.2} emb/s", throughput);
+    println!("  Completed in {:.2}s", elapsed.as_secs_f64());
+    println!("  Throughput: {:.2} emb/s", throughput);
 
     throughput
 }
@@ -326,8 +326,8 @@ fn benchmark_concurrent_requests_batched(
     let total_requests = num_threads * requests_per_thread;
     let throughput = total_requests as f64 / elapsed.as_secs_f64();
 
-    println!("  ✅ Completed in {:.2}s", elapsed.as_secs_f64());
-    println!("  📈 Throughput: {:.2} emb/s", throughput);
+    println!("  Completed in {:.2}s", elapsed.as_secs_f64());
+    println!("  Throughput: {:.2} emb/s", throughput);
 
     throughput
 }
@@ -349,14 +349,14 @@ fn run_benchmarks(
     let model = match Qwen3EmbeddingModel::load(model_path, device) {
         Ok(m) => m,
         Err(e) => {
-            eprintln!("❌ Failed to load model: {:?}", e);
+            eprintln!("Failed to load model: {:?}", e);
             eprintln!("   Make sure MODEL_PATH points to a valid Qwen3-Embedding model");
             return;
         }
     };
     let model_load_time = model_start.elapsed();
     println!(
-        "✅ Model loaded in {}",
+        "Model loaded in {}",
         format_duration(model_load_time.as_millis())
     );
 
@@ -365,10 +365,7 @@ fn run_benchmarks(
     let tokenizer = match Tokenizer::from_file(&tokenizer_path) {
         Ok(t) => t,
         Err(e) => {
-            eprintln!(
-                "❌ Failed to load tokenizer from {}: {:?}",
-                tokenizer_path, e
-            );
+            eprintln!("Failed to load tokenizer from {}: {:?}", tokenizer_path, e);
             return;
         }
     };
@@ -377,7 +374,7 @@ fn run_benchmarks(
 
     // 1. Single Embedding Latency
     println!("\n{}", "─".repeat(80));
-    println!("1️⃣  Single Embedding Latency");
+    println!("Single Embedding Latency");
     println!("{}", "─".repeat(80));
 
     let text = vec![TEST_TEXTS[0].to_string()];
@@ -392,7 +389,7 @@ fn run_benchmarks(
 
     // 2. Batch Scaling
     println!("\n{}", "─".repeat(80));
-    println!("2️⃣  Batch Scaling Performance");
+    println!("Batch Scaling Performance");
     println!("{}", "─".repeat(80));
     println!("  Batch Size | Latency (ms) | Throughput (emb/s)");
     println!("  -----------|--------------|-------------------");
@@ -413,7 +410,7 @@ fn run_benchmarks(
 
     // 3. Sustained Throughput
     println!("\n{}", "─".repeat(80));
-    println!("3️⃣  Sustained Throughput");
+    println!("Sustained Throughput");
     println!("{}", "─".repeat(80));
 
     let batch_size = 32;
@@ -436,7 +433,7 @@ fn run_benchmarks(
 
     // 4. Sequence Length Scaling
     println!("\n{}", "─".repeat(80));
-    println!("4️⃣  Sequence Length Scaling");
+    println!("Sequence Length Scaling");
     println!("{}", "─".repeat(80));
     println!("  Approx Tokens | Latency (ms)");
     println!("  --------------|-------------");
@@ -471,7 +468,7 @@ fn run_benchmarks(
         println!();
 
         // Test 1: Baseline (without continuous batching)
-        println!("📊 Test 1: BASELINE (Standard Model)");
+        println!("Test 1: BASELINE (Standard Model)");
         println!("  Processing individual requests sequentially...");
         let baseline_throughput = benchmark_concurrent_requests(
             Arc::new(model),
@@ -484,7 +481,7 @@ fn run_benchmarks(
         println!();
 
         // Test 2: With Continuous Batching
-        println!("📊 Test 2: WITH CONTINUOUS BATCHING");
+        println!("Test 2: WITH CONTINUOUS BATCHING");
         println!("  Loading model with continuous batching enabled...");
 
         let max_wait_ms = 5;
@@ -502,7 +499,7 @@ fn run_benchmarks(
         let batched_model = match Qwen3EmbeddingModel::load(model_path, device) {
             Ok(m) => Qwen3EmbeddingModelBatched::from_model(m, batch_config),
             Err(e) => {
-                eprintln!("  ❌ Failed to load batched model: {:?}", e);
+                eprintln!("  Failed to load batched model: {:?}", e);
                 return;
             }
         };
@@ -519,7 +516,7 @@ fn run_benchmarks(
         // Show comparison
         println!();
         println!("{}", "=".repeat(80));
-        println!("📈 PERFORMANCE COMPARISON");
+        println!("PERFORMANCE COMPARISON");
         println!("{}", "=".repeat(80));
         println!();
         println!(
@@ -551,7 +548,7 @@ fn run_benchmarks(
             );
         } else if improvement_pct > 20.0 {
             println!(
-                "  ✅ GOOD: {:.1}% improvement with continuous batching",
+                "  GOOD: {:.1}% improvement with continuous batching",
                 improvement_pct
             );
         } else if improvement_pct > 0.0 {
@@ -560,11 +557,11 @@ fn run_benchmarks(
                 improvement_pct
             );
         } else {
-            println!("  ⚠️  No improvement - baseline already optimal for this workload");
+            println!("  No improvement - baseline already optimal for this workload");
         }
 
         println!();
-        println!("  💡 Note: Continuous batching automatically groups concurrent requests");
+        println!("  Note: Continuous batching automatically groups concurrent requests");
         println!(
             "     arriving within {}ms window into efficient batches of up to {}.",
             max_wait_ms, max_batch
@@ -599,7 +596,7 @@ fn main() {
                     model_path = args[i + 1].clone();
                     i += 2;
                 } else {
-                    eprintln!("❌ --model requires a path argument");
+                    eprintln!("--model requires a path argument");
                     std::process::exit(1);
                 }
             }
@@ -608,7 +605,7 @@ fn main() {
                     device_filter = args[i + 1].to_lowercase();
                     i += 2;
                 } else {
-                    eprintln!("❌ --device requires cpu, gpu, or both");
+                    eprintln!("--device requires cpu, gpu, or both");
                     std::process::exit(1);
                 }
             }
@@ -635,7 +632,7 @@ fn main() {
                 std::process::exit(0);
             }
             _ => {
-                eprintln!("❌ Unknown argument: {}", args[i]);
+                eprintln!("Unknown argument: {}", args[i]);
                 eprintln!("   Use --help for usage information");
                 std::process::exit(1);
             }
@@ -649,10 +646,10 @@ fn main() {
     println!("  Quick mode: {}", quick);
 
     #[cfg(feature = "flash-attn")]
-    println!("  Flash Attention: ✅ Enabled");
+    println!("  Flash Attention: Enabled");
 
     #[cfg(not(feature = "flash-attn"))]
-    println!("  Flash Attention: ❌ Disabled");
+    println!("  Flash Attention: Disabled");
 
     // Run benchmarks
     match device_filter.as_str() {
@@ -664,7 +661,7 @@ fn main() {
                 run_benchmarks("GPU", &device, &model_path, quick, skip_concurrent);
             }
             Err(_) => {
-                eprintln!("❌ GPU not available");
+                eprintln!("GPU not available");
                 std::process::exit(1);
             }
         },
@@ -678,14 +675,14 @@ fn main() {
 
                 // Comparison
                 println!("\n{}", "=".repeat(80));
-                println!("  📊 CPU vs GPU Comparison");
+                println!("  CPU vs GPU Comparison");
                 println!("{}\n", "=".repeat(80));
                 println!("  See individual benchmark results above for detailed comparison");
             } else {
-                println!("\n⚠️  GPU not available, CPU-only results shown");
+                println!("\nGPU not available, CPU-only results shown");
             }
         }
     }
 
-    println!("\n✅ Benchmark complete!\n");
+    println!("\nBenchmark complete!\n");
 }

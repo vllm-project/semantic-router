@@ -112,9 +112,9 @@ fn main() {
         }
 
         if found_keys.is_empty() {
-            println!("  ⚠️  No matching keys found");
+            println!("  No matching keys found");
         } else {
-            println!("  ✅ Found keys:");
+            println!("  Found keys:");
             for (key, shape) in found_keys {
                 println!("     - {} (shape: {:?})", key, shape);
             }

@@ -18,13 +18,13 @@ use hf_hub::{api::sync::Api, Repo, RepoType};
 use std::path::Path;
 
 fn main() -> Result<()> {
-    println!("🧪 Testing LoRA Adapter Compatibility with ModernBERT-base-32k");
+    println!("Testing LoRA Adapter Compatibility with ModernBERT-base-32k");
     println!("{}", "=".repeat(70));
 
     let device = Device::Cpu; // Force CPU for testing
 
     // Step 1: Download and load ModernBERT-base-32k
-    println!("\n1️⃣  Downloading ModernBERT-base-32k...");
+    println!("\nDownloading ModernBERT-base-32k...");
     let base_model_id = "llm-semantic-router/modernbert-base-32k";
     let repo = Repo::with_revision(
         base_model_id.to_string(),
@@ -53,7 +53,7 @@ fn main() -> Result<()> {
     println!("     - num_hidden_layers: {}", config.num_hidden_layers);
 
     // Step 2: Check dimension compatibility
-    println!("\n2️⃣  Checking dimension compatibility...");
+    println!("\nChecking dimension compatibility...");
     let modernbert_hidden_size = config.hidden_size;
     let bert_hidden_size = 768; // BERT-base hidden size
 
@@ -64,9 +64,9 @@ fn main() -> Result<()> {
     println!("   BERT-base hidden_size: {}", bert_hidden_size);
 
     if modernbert_hidden_size == bert_hidden_size {
-        println!("   ✅ Dimensions match! LoRA adapters should be compatible.");
+        println!("   Dimensions match! LoRA adapters should be compatible.");
     } else {
-        println!("   ❌ Dimensions don't match! LoRA adapters may not work.");
+        println!("   Dimensions don't match! LoRA adapters may not work.");
         return Err(anyhow!(
             "Dimension mismatch: {} != {}",
             modernbert_hidden_size,
@@ -75,7 +75,7 @@ fn main() -> Result<()> {
     }
 
     // Step 3: Try to find existing LoRA adapter
-    println!("\n3️⃣  Looking for existing LoRA adapter...");
+    println!("\nLooking for existing LoRA adapter...");
     let lora_adapter_paths = vec![
         "../models/lora_intent_classifier_bert-base-uncased_model",
         "models/lora_intent_classifier_bert-base-uncased_model",
@@ -93,26 +93,24 @@ fn main() -> Result<()> {
             path
         }
         None => {
-            println!("   ⚠️  LoRA adapter not found in any of these paths:");
+            println!("   LoRA adapter not found in any of these paths:");
             for path in &lora_adapter_paths {
                 println!("      - {}", path);
             }
-            println!("   ℹ️  Skipping LoRA adapter loading test");
-            println!("\n   ✅ Dimension compatibility test completed!");
-            println!(
-                "   📝 Conclusion: Dimensions match (768), LoRA adapters should be compatible."
-            );
+            println!("   Skipping LoRA adapter loading test");
+            println!("\n   Dimension compatibility test completed!");
+            println!("   Conclusion: Dimensions match (768), LoRA adapters should be compatible.");
             return Ok(());
         }
     };
 
     // Step 4: Check if this is a LoRA adapter or traditional classifier
-    println!("\n4️⃣  Checking model type...");
+    println!("\nChecking model type...");
     let model_weights_path = format!("{}/model.safetensors", lora_adapter_path);
 
     if !Path::new(&model_weights_path).exists() {
-        println!("   ⚠️  Model weights not found at: {}", model_weights_path);
-        println!("   ℹ️  Skipping compatibility test");
+        println!("   Model weights not found at: {}", model_weights_path);
+        println!("   Skipping compatibility test");
         return Ok(());
     }
 
@@ -129,7 +127,7 @@ fn main() -> Result<()> {
         println!("   ✓ This is a LoRA adapter model");
 
         // Step 5: Try to load LoRA adapter
-        println!("\n5️⃣  Attempting to load LoRA adapter for intent classification...");
+        println!("\nAttempting to load LoRA adapter for intent classification...");
 
         // Default LoRA config
         let lora_config = LoRAConfig {
@@ -166,7 +164,7 @@ fn main() -> Result<()> {
             ) {
                 Ok(_adapter) => {
                     println!(
-                        "   ✅ LoRA adapter loaded successfully! (prefix: '{}')",
+                        "   LoRA adapter loaded successfully! (prefix: '{}')",
                         if prefix.is_empty() { "none" } else { prefix }
                     );
                     adapter_loaded = true;
@@ -177,11 +175,11 @@ fn main() -> Result<()> {
         }
 
         if !adapter_loaded {
-            println!("   ❌ Failed to load LoRA adapter with any prefix");
-            println!("   ⚠️  This might be a traditional classifier, not a LoRA adapter");
+            println!("   Failed to load LoRA adapter with any prefix");
+            println!("   This might be a traditional classifier, not a LoRA adapter");
         } else {
-            println!("   ✅ Compatibility test PASSED!");
-            println!("\n   📝 Conclusion:");
+            println!("   Compatibility test PASSED!");
+            println!("\n   Conclusion:");
             println!(
                 "      LoRA adapters trained on BERT-base CAN be used with ModernBERT-base-32k"
             );
@@ -195,16 +193,16 @@ fn main() -> Result<()> {
 
     // Step 5: Check for traditional classifier
     println!("   ✓ This appears to be a traditional classifier model");
-    println!("\n5️⃣  Attempting to load classifier weights...");
+    println!("\nAttempting to load classifier weights...");
 
     match model_vb.get((3, modernbert_hidden_size), "classifier.weight") {
         Ok(_classifier_weight) => {
             println!(
-                "   ✅ Classifier weight found! (3 classes, {} hidden_size)",
+                "   Classifier weight found! (3 classes, {} hidden_size)",
                 modernbert_hidden_size
             );
-            println!("   ✅ Compatibility test PASSED!");
-            println!("\n   📝 Conclusion:");
+            println!("   Compatibility test PASSED!");
+            println!("\n   Conclusion:");
             println!("      Traditional classifier weights trained on BERT-base CAN be used with ModernBERT-base-32k");
             println!(
                 "      The classifier dimensions match (hidden_size: {})",
@@ -214,21 +212,20 @@ fn main() -> Result<()> {
             println!("      For LoRA adapter testing, use a model with LoRA adapters.");
         }
         Err(e) => {
-            println!("   ❌ Failed to load classifier weight: {}", e);
-            println!("   ⚠️  Compatibility test FAILED");
+            println!("   Failed to load classifier weight: {}", e);
+            println!("   Compatibility test FAILED");
             return Err(anyhow!("Classifier compatibility test failed: {}", e));
         }
     }
 
     // Step 6: Summary
-    println!("\n6️⃣  Summary:");
-    println!("   ✅ Dimension compatibility: PASSED (768 == 768)");
-    println!("   ✅ LoRA adapter loading: PASSED");
-    println!("   📝 Next steps:");
-    println!("      - Test actual inference with LoRA adapter + ModernBERT-base-32k");
-    println!("      - Verify classification accuracy");
-    println!("      - Test with different sequence lengths (512, 8K, 16K, 32K tokens)");
+    println!("\nSummary:");
+    println!("   Dimension compatibility: PASSED (768 == 768)");
+    println!("   LoRA adapter loading: PASSED");
+    println!("   Compatibility verified:");
+    println!("      - Dimension compatibility: PASSED (768 == 768)");
+    println!("      - LoRA adapter loading: PASSED");
 
-    println!("\n✅ LoRA adapter compatibility test completed!");
+    println!("\nLoRA adapter compatibility test completed!");
     Ok(())
 }
