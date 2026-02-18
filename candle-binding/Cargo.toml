@@ -64,11 +64,6 @@ path = "../deploy/examples/candle-binding/deberta_prompt_injection_example.rs"
 name = "test_raw_confidence"
 path = "../deploy/examples/candle-binding/test_raw_confidence.rs"
 
-# Example testing ModernBERT-base-32k integration
-[[example]]
-name = "test_modernbert_32k"
-path = "examples/test_modernbert_32k.rs"
-
 # Example testing LoRA adapter compatibility with ModernBERT-base-32k
 [[example]]
 name = "test_lora_compatibility_32k"
@@ -118,6 +113,26 @@ path = "examples/benchmark_performance.rs"
 [[example]]
 name = "benchmark_concurrent"
 path = "examples/benchmark_concurrent.rs"
+
+# Example for embedding performance benchmarking
+[[example]]
+name = "embedding_benchmark"
+path = "examples/embedding_benchmark.rs"
+
+# Example testing mmBERT LoRA merged models
+[[example]]
+name = "test_mmbert_lora"
+path = "examples/test_mmbert_lora.rs"
+
+# Example testing real mmBERT model loading and inference
+[[example]]
+name = "test_mmbert_real"
+path = "examples/test_mmbert_real.rs"
+
+# Example testing mmBERT variant detection
+[[example]]
+name = "test_mmbert_variant"
+path = "examples/test_mmbert_variant.rs"
 
 # Note: Benchmark binaries are located in ../bench/scripts/rust/candle-binding/
 # They are not included in the library build to keep it self-contained.

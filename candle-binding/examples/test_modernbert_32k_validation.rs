@@ -20,6 +20,7 @@ use candle_semantic_router::model_architectures::traditional::modernbert::{
 };
 use candle_transformers::models::modernbert::{Config, ModernBert};
 use hf_hub::{api::sync::Api, Repo, RepoType};
+use serde_json;
 use std::path::Path;
 use std::process::Command;
 use std::time::Instant;
@@ -299,7 +300,7 @@ fn main() -> Result<()> {
 fn load_model_and_tokenizer(
     device: &Device,
 ) -> Result<(std::path::PathBuf, Config, ModernBert, Tokenizer)> {
-    println!("\n📦 Downloading ModernBERT-base-32k...");
+    println!("\n Downloading ModernBERT-base-32k...");
     let base_model_id = "llm-semantic-router/modernbert-base-32k";
     let repo = Repo::with_revision(
         base_model_id.to_string(),
@@ -322,11 +323,94 @@ fn load_model_and_tokenizer(
     let base_model_dir = base_config_path.parent().unwrap().to_path_buf();
     println!("   ✓ Base model directory: {:?}", base_model_dir);
 
-    // Load config
+    // Load and parse config.json with detailed information
     let config_str = std::fs::read_to_string(&base_config_path)?;
+    let config_json: serde_json::Value = serde_json::from_str(&config_str)?;
+
+    let max_position_embeddings = config_json
+        .get("max_position_embeddings")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+    let position_embedding_type = config_json
+        .get("position_embedding_type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let vocab_size = config_json
+        .get("vocab_size")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+
+    println!("\n   Config.json:");
+    println!("   - max_position_embeddings: {}", max_position_embeddings);
+    println!("   - position_embedding_type: {}", position_embedding_type);
+    println!("   - vocab_size: {}", vocab_size);
+
+    // Check training_config.json for YaRN RoPE scaling
+    let training_config_path = base_model_dir.join("training_config.json");
+    if training_config_path.exists() {
+        println!("\n   Training_config.json (for 32K support):");
+        let training_config_str = std::fs::read_to_string(&training_config_path)?;
+        let training_config_json: serde_json::Value = serde_json::from_str(&training_config_str)?;
+
+        let rope_scaling_type = training_config_json
+            .get("rope_scaling_type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let rope_scaling_factor = training_config_json
+            .get("rope_scaling_factor")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let model_max_length = training_config_json
+            .get("model_max_length")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        let rope_original_max = training_config_json
+            .get("rope_original_max_position_embeddings")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+
+        println!("   - rope_scaling_type: {}", rope_scaling_type);
+        println!("   - rope_scaling_factor: {}", rope_scaling_factor);
+        println!("   - model_max_length: {}", model_max_length);
+        println!(
+            "   - rope_original_max_position_embeddings: {}",
+            rope_original_max
+        );
+
+        // Verify 32K context support via YaRN
+        if rope_scaling_type == "yarn" && model_max_length >= 32768 {
+            println!("\n   Model supports 32K context via YaRN RoPE scaling!");
+            println!(
+                "      (Base: {} tokens → Extended: {} tokens)",
+                rope_original_max, model_max_length
+            );
+        } else {
+            println!("\n   Warning: Model may not support 32K context");
+        }
+    } else {
+        println!("\n   training_config.json not found - cannot verify 32K support");
+    }
+
+    // Test variant detection
+    println!("\n   Testing variant detection...");
+    let config_path_str = base_config_path.to_string_lossy().to_string();
+    match ModernBertVariant::detect_from_config(&config_path_str) {
+        Ok(variant) => {
+            println!("   Variant detected: {:?}", variant);
+            println!("   - Max length: {} tokens", variant.max_length());
+            if variant == ModernBertVariant::Extended32K {
+                println!("   Correctly identified as Extended32K variant!");
+            }
+        }
+        Err(e) => {
+            println!("   Variant detection failed: {}", e);
+        }
+    }
+
+    // Load config for model loading
     let mut config: Config = serde_json::from_str(&config_str)?;
     println!(
-        "   ✓ Config loaded: hidden_size={}, vocab_size={}, max_position_embeddings={}",
+        "\n   ✓ Config loaded: hidden_size={}, vocab_size={}, max_position_embeddings={}",
         config.hidden_size, config.vocab_size, config.max_position_embeddings
     );
 
@@ -528,7 +612,7 @@ fn test_extended_context(
                 free_gb, _total_gb
             );
             println!(
-                "   📏 RoPE cache size: {} tokens (loaded with model)",
+                "    RoPE cache size: {} tokens (loaded with model)",
                 max_rope_len
             );
         }
@@ -538,7 +622,7 @@ fn test_extended_context(
         // Skip if exceeds RoPE cache limit
         if target_token_count > max_rope_len {
             println!(
-                "\n   ⏭️  Skipping {} (exceeds RoPE cache limit of {} tokens)",
+                "\n     Skipping {} (exceeds RoPE cache limit of {} tokens)",
                 name, max_rope_len
             );
             println!("      Need more GPU memory to test this size");
@@ -559,7 +643,7 @@ fn test_extended_context(
 
                 if free_gb < estimated_memory_gb {
                     println!(
-                        "\n   ⏭️  Skipping {} (insufficient memory: {:.2}GB free, need ~{:.1}GB)",
+                        "\n     Skipping {} (insufficient memory: {:.2}GB free, need ~{:.1}GB)",
                         name, free_gb, estimated_memory_gb
                     );
                     continue;
