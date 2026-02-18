@@ -137,6 +137,30 @@ func DefaultMemoryConfig() config.MemoryConfig {
 	}
 }
 
+// ListOptions configures memory listing (non-semantic, filter-based retrieval)
+type ListOptions struct {
+	// UserID filters memories to this user only (required)
+	UserID string
+
+	// Types optionally filters to specific memory types
+	Types []MemoryType
+
+	// Limit is the maximum number of results to return (default: 20, max: 100)
+	Limit int
+}
+
+// ListResult contains the memories returned by a List operation
+type ListResult struct {
+	// Memories is the list of memories returned
+	Memories []*Memory `json:"memories"`
+
+	// Total is the total number of matching memories
+	Total int `json:"total"`
+
+	// Limit is the limit that was applied
+	Limit int `json:"limit"`
+}
+
 // MemoryScope defines the scope for bulk operations (e.g., ForgetByScope)
 type MemoryScope struct {
 	// UserID is required - all operations are user-scoped

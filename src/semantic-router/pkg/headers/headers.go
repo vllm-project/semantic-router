@@ -196,7 +196,8 @@ const (
 	// Override via authz.identity.user_id_header for other backends:
 	//   Envoy Gateway JWT: "x-jwt-sub" (from claim_to_headers)
 	//   oauth2-proxy:      "x-forwarded-user"
-	// Used by the authz signal classifier for user-level routing.
+	// Used by the authz signal classifier for user-level routing,
+	// and by memory operations for secure per-user isolation.
 	AuthzUserID = "x-authz-user-id"
 
 	// AuthzUserGroups is the default header for comma-separated group memberships.
