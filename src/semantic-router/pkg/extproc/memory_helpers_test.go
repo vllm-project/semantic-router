@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
@@ -174,17 +175,16 @@ func TestExtractAutoStore_NoMemoryPlugin_ReturnsFalse(t *testing.T) {
 func TestExtractMemoryInfo_WithConversationID(t *testing.T) {
 	// ConversationID is now set during TranslateRequest, not extractMemoryInfo.
 	// Tests must set ConversationID in ResponseAPIContext.
-	// userID is provided via metadata (OpenAI API spec-compliant)
 	ctx := &RequestContext{
 		RequestID: "req_123",
+		Headers: map[string]string{
+			headers.AuthzUserID: "user_789",
+		},
 		ResponseAPICtx: &ResponseAPIContext{
 			IsResponseAPIRequest: true,
 			ConversationID:       "conv_456", // Set by TranslateRequest
 			OriginalRequest: &responseapi.ResponseAPIRequest{
 				ConversationID: "conv_456",
-				Metadata: map[string]string{
-					"user_id": "user_789",
-				},
 			},
 		},
 	}
@@ -193,25 +193,22 @@ func TestExtractMemoryInfo_WithConversationID(t *testing.T) {
 
 	require.NoError(t, err, "should not return error when userID is provided")
 	assert.Equal(t, "conv_456", sessionID, "should use ConversationID from context")
-	assert.Equal(t, "user_789", userID, "should extract userID from metadata")
+	assert.Equal(t, "user_789", userID, "should extract userID from auth header")
 	assert.Empty(t, history, "should return empty history when ConversationHistory is nil")
 }
 
 func TestExtractMemoryInfo_WithoutConversationID_WithUserID(t *testing.T) {
 	// When no ConversationID in request, TranslateRequest generates one.
 	// extractMemoryInfo just reads it from context.
-	// userID is provided via metadata (OpenAI API spec-compliant)
 	ctx := &RequestContext{
 		RequestID: "req_123",
+		Headers: map[string]string{
+			headers.AuthzUserID: "user_789",
+		},
 		ResponseAPICtx: &ResponseAPIContext{
 			IsResponseAPIRequest: true,
 			ConversationID:       "conv_generated_by_translate", // Set by TranslateRequest
-			OriginalRequest: &responseapi.ResponseAPIRequest{
-				// No ConversationID in request = new conversation
-				Metadata: map[string]string{
-					"user_id": "user_789",
-				},
-			},
+			OriginalRequest:      &responseapi.ResponseAPIRequest{},
 		},
 	}
 
@@ -219,20 +216,35 @@ func TestExtractMemoryInfo_WithoutConversationID_WithUserID(t *testing.T) {
 
 	require.NoError(t, err, "should not return error when userID is provided")
 	assert.Equal(t, "conv_generated_by_translate", sessionID, "should use ConversationID from context")
-	assert.Equal(t, "user_789", userID, "should extract userID from metadata")
+	assert.Equal(t, "user_789", userID, "should extract userID from auth header")
 	assert.Empty(t, history)
 }
 
-func TestExtractMemoryInfo_UserIDFromMetadata(t *testing.T) {
+// =============================================================================
+// extractUserID Tests
+// =============================================================================
+// NOTE: extractUserID tests have been moved to:
+// - user_id_test.go (common tests for both dev and prod builds)
+// - user_id_dev_test.go (dev-only tests for metadata fallback)
+// - user_id_prod_test.go (prod-only tests verifying no metadata fallback)
+
+// =============================================================================
+// extractMemoryInfo Tests
+// =============================================================================
+
+func TestExtractMemoryInfo_AuthHeaderUserID(t *testing.T) {
+	// Auth header (x-authz-user-id) provides trusted user ID
 	ctx := &RequestContext{
 		RequestID: "req_123",
+		Headers: map[string]string{
+			headers.AuthzUserID: "user_from_auth",
+		},
 		ResponseAPICtx: &ResponseAPIContext{
 			IsResponseAPIRequest: true,
-			ConversationID:       "conv_from_translate", // Set by TranslateRequest
+			ConversationID:       "conv_from_translate",
 			OriginalRequest: &responseapi.ResponseAPIRequest{
-				// No ConversationID in request
 				Metadata: map[string]string{
-					"user_id": "user_from_metadata",
+					"user_id": "user_from_metadata", // Should be ignored
 				},
 			},
 		},
@@ -240,36 +252,9 @@ func TestExtractMemoryInfo_UserIDFromMetadata(t *testing.T) {
 
 	sessionID, userID, history, err := extractMemoryInfo(ctx)
 
-	require.NoError(t, err, "should not return error when userID is provided")
-	assert.Equal(t, "conv_from_translate", sessionID, "should use ConversationID from context")
-	assert.Equal(t, "user_from_metadata", userID, "should extract userID from metadata")
-	assert.Empty(t, history)
-}
-
-func TestExtractMemoryInfo_HeadersNotSupported(t *testing.T) {
-	// Headers are NOT supported for userID - must use metadata["user_id"]
-	// This ensures consistent behavior between extraction and retrieval
-	ctx := &RequestContext{
-		RequestID: "req_123",
-		Headers: map[string]string{
-			"x-user-id": "user_from_header", // This should be ignored
-		},
-		ResponseAPICtx: &ResponseAPIContext{
-			IsResponseAPIRequest: true,
-			ConversationID:       "conv_from_translate",
-			OriginalRequest:      &responseapi.ResponseAPIRequest{
-				// No Metadata - userID must come from metadata, not headers
-			},
-		},
-	}
-
-	sessionID, userID, history, err := extractMemoryInfo(ctx)
-
-	require.Error(t, err, "should return error when userID is only in headers (not supported)")
-	assert.Contains(t, err.Error(), "userID is required", "error should mention userID requirement")
-	assert.Contains(t, err.Error(), "metadata", "error should mention metadata as the correct source")
-	assert.Empty(t, sessionID)
-	assert.Empty(t, userID)
+	require.NoError(t, err)
+	assert.Equal(t, "conv_from_translate", sessionID)
+	assert.Equal(t, "user_from_auth", userID, "should use auth header over metadata")
 	assert.Empty(t, history)
 }
 
@@ -298,7 +283,6 @@ func TestExtractMemoryInfo_MissingUserID(t *testing.T) {
 func TestExtractMemoryInfo_ContinuationFromChain(t *testing.T) {
 	// Test case: continuation of conversation (has PreviousResponseID)
 	// TranslateRequest finds ConversationID from the chain and sets it in context
-	// userID is provided via metadata (OpenAI API spec-compliant)
 	storedResponses := []*responseapi.StoredResponse{
 		{
 			ID:             "resp_1",
@@ -328,17 +312,15 @@ func TestExtractMemoryInfo_ContinuationFromChain(t *testing.T) {
 
 	ctx := &RequestContext{
 		RequestID: "req_123",
+		Headers: map[string]string{
+			headers.AuthzUserID: "user_789",
+		},
 		ResponseAPICtx: &ResponseAPIContext{
 			IsResponseAPIRequest: true,
 			ConversationID:       "conv_existing", // Set by TranslateRequest from chain
 			PreviousResponseID:   "resp_2",        // Has PreviousResponseID = continuation
-			OriginalRequest: &responseapi.ResponseAPIRequest{
-				// No ConversationID in request - TranslateRequest found it from chain
-				Metadata: map[string]string{
-					"user_id": "user_789",
-				},
-			},
-			ConversationHistory: storedResponses,
+			OriginalRequest:      &responseapi.ResponseAPIRequest{},
+			ConversationHistory:  storedResponses,
 		},
 	}
 
@@ -346,12 +328,11 @@ func TestExtractMemoryInfo_ContinuationFromChain(t *testing.T) {
 
 	require.NoError(t, err, "should not return error when userID is provided")
 	assert.Equal(t, "conv_existing", sessionID, "should use ConversationID from context (found from chain)")
-	assert.Equal(t, "user_789", userID, "should extract userID from metadata")
+	assert.Equal(t, "user_789", userID, "should extract userID from auth header")
 	assert.Len(t, history, 4, "should extract history from ConversationHistory")
 }
 
 func TestExtractMemoryInfo_WithConversationHistory(t *testing.T) {
-	// userID is provided via metadata (OpenAI API spec-compliant)
 	storedResponses := []*responseapi.StoredResponse{
 		{
 			ID: "resp_1",
@@ -379,14 +360,14 @@ func TestExtractMemoryInfo_WithConversationHistory(t *testing.T) {
 
 	ctx := &RequestContext{
 		RequestID: "req_123",
+		Headers: map[string]string{
+			headers.AuthzUserID: "user_789",
+		},
 		ResponseAPICtx: &ResponseAPIContext{
 			IsResponseAPIRequest: true,
 			ConversationID:       "conv_456", // Set by TranslateRequest
 			OriginalRequest: &responseapi.ResponseAPIRequest{
 				ConversationID: "conv_456",
-				Metadata: map[string]string{
-					"user_id": "user_789",
-				},
 			},
 			ConversationHistory: storedResponses,
 		},
@@ -821,7 +802,6 @@ func TestExtractTextFromContentParts_EmptySlice(t *testing.T) {
 
 func TestExtractMemoryInfo_RealisticScenario(t *testing.T) {
 	// Simulate a realistic conversation with multiple turns
-	// userID is provided via metadata (OpenAI API spec-compliant)
 	storedResponses := []*responseapi.StoredResponse{
 		{
 			ID: "resp_1",
@@ -860,14 +840,14 @@ func TestExtractMemoryInfo_RealisticScenario(t *testing.T) {
 
 	ctx := &RequestContext{
 		RequestID: "req_123",
+		Headers: map[string]string{
+			headers.AuthzUserID: "user_alice",
+		},
 		ResponseAPICtx: &ResponseAPIContext{
 			IsResponseAPIRequest: true,
 			ConversationID:       "conv_hawaii_trip", // Set by TranslateRequest
 			OriginalRequest: &responseapi.ResponseAPIRequest{
 				ConversationID: "conv_hawaii_trip",
-				Metadata: map[string]string{
-					"user_id": "user_alice",
-				},
 			},
 			ConversationHistory: storedResponses,
 		},
