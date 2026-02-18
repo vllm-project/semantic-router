@@ -43,7 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|p| Path::new(&p).to_path_buf())
         .unwrap_or_else(|_| base_path.join("lora_intent_classifier_mmbert-base_r32_rust"));
     if intent_model_path.exists() {
-        println!("Testing Intent Classifier");
+        println!("📋 Testing Intent Classifier");
         println!("   Model: {}", intent_model_path.display());
 
         match IntentLoRAClassifier::new(intent_model_path.to_str().unwrap(), true) {
@@ -110,7 +110,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             } else {
                                 "✗"
                             };
-                            let label = if detected { "🚨 JAILBREAK" } else { "BENIGN" };
+                            let label = if detected {
+                                "🚨 JAILBREAK"
+                            } else {
+                                "✅ BENIGN"
+                            };
                             println!(
                                 "   {} \"{}\" -> {} ({:.1}%)",
                                 status,
@@ -134,7 +138,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Test 3: Verify mmBERT config
-    println!("Testing mmBERT Config Detection");
+    println!("🔍 Testing mmBERT Config Detection");
     let config_path = intent_model_path.join("config.json");
     if config_path.exists() {
         let config_str = std::fs::read_to_string(&config_path)?;
