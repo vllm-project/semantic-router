@@ -38,6 +38,10 @@ Extending safety enforcement from single-turn to multi-turn conversations, detec
 \textbf{Federated signal orchestration.}
 Extending composable signal orchestration to federated deployments where signals from multiple routing instances are aggregated for global optimization.
 
+\textbf{Multi-protocol adapter abstraction.}
+The current system is tightly coupled to Envoy's External Processor protocol. A multi-protocol adapter architecture would abstract the routing engine from protocol-specific code, enabling support for HTTP REST, native gRPC, Nginx/OpenResty, and custom protocols through thin translation layers.
+This would also enable abstraction of backend proxying (currently Envoy-specific), external authorization mechanisms, and traffic management policies, making the routing engine truly protocol-agnostic and deployable in serverless, edge, and non-Envoy environments.
+
 \subsection*{Acknowledgments}
 
 We gratefully acknowledge contributions who contributed to the project.
