@@ -163,6 +163,8 @@ func (p *Profile) GetTestCases() []string {
 	return []string{
 		// Standard functional test — validates end-to-end routing
 		"chat-completions-request",
+		// Rate limiting — validates local-limiter per-user RPM enforcement
+		"ratelimit-limitor",
 	}
 }
 
