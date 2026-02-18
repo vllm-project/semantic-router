@@ -50,6 +50,16 @@ cd deploy/openshift
 
 This deploys only the core components without Dashboard, OpenWebUI, Grafana, and Prometheus.
 
+### KIND / Vanilla Kubernetes
+
+Run against a kind or vanilla Kubernetes cluster:
+
+```bash
+kind create cluster --name semantic-router
+./deploy-to-openshift.sh --kind --no-observability
+kind delete cluster --name semantic-router
+```
+
 ### Command Line Options
 
 | Flag | Description |
