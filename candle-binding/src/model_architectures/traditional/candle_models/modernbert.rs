@@ -1,10 +1,7 @@
-//! ModernBERT
+//! ModernBERT model implementation
 //!
-//! ModernBERT is a modernized bidirectional encoder-only Transformer model.
-//! - [Arxiv](https://arxiv.org/abs/2412.13663) "Smarter, Better, Faster, Longer: A Modern Bidirectional Encoder for Fast, Memory Efficient, and Long Context Finetuning and Inference"
-//! - Upstream [GitHub repo](https://github.com/AnswerDotAI/ModernBERT).
-//! - See modernbert in [candle-examples](https://github.com/huggingface/candle/tree/main/candle-examples/) for runnable code
-//!
+//! ModernBERT is a modernized bidirectional encoder-only Transformer model
+//! supporting extended context windows up to 32K tokens via YaRN RoPE scaling.
 
 use candle_core::{DType, Device, IndexOp, Result, Tensor, D};
 use candle_nn::{
