@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -833,6 +834,193 @@ func (m *MilvusStore) Get(ctx context.Context, id string) (*Memory, error) {
 
 	logging.Debugf("MilvusStore.Get: found memory id=%s, user_id=%s", memory.ID, memory.UserID)
 	return memory, nil
+}
+
+// List returns memories matching the filter criteria with pagination.
+// Queries Milvus with scalar filtering (no vector search) and returns paginated results.
+func (m *MilvusStore) List(ctx context.Context, opts ListOptions) (*ListResult, error) {
+	if !m.enabled {
+		return nil, fmt.Errorf("milvus store is not enabled")
+	}
+
+	if opts.UserID == "" {
+		return nil, fmt.Errorf("user ID is required for listing memories")
+	}
+
+	logging.Debugf("MilvusStore.List: user_id=%s, types=%v, limit=%d",
+		opts.UserID, opts.Types, opts.Limit)
+
+	// Build filter expression
+	filterExpr := fmt.Sprintf("user_id == \"%s\"", opts.UserID)
+
+	if len(opts.Types) > 0 {
+		typeFilter := "("
+		for i, memType := range opts.Types {
+			if i > 0 {
+				typeFilter += " || "
+			}
+			typeFilter += fmt.Sprintf("memory_type == \"%s\"", string(memType))
+		}
+		typeFilter += ")"
+		filterExpr = fmt.Sprintf("%s && %s", filterExpr, typeFilter)
+	}
+
+	outputFields := []string{"id", "content", "user_id", "memory_type", "metadata", "created_at", "updated_at"}
+
+	// Query all matching records to get total count and apply pagination
+	var queryResult []entity.Column
+	err := m.retryWithBackoff(ctx, func() error {
+		var retryErr error
+		queryResult, retryErr = m.client.Query(
+			ctx,
+			m.collectionName,
+			[]string{}, // All partitions
+			filterExpr,
+			outputFields,
+		)
+		return retryErr
+	})
+	if err != nil {
+		return nil, fmt.Errorf("milvus query failed: %w", err)
+	}
+
+	// Parse results into Memory objects (no project_id filtering — field is not populated)
+	memories := m.parseListResults(queryResult, "")
+
+	// Sort by created_at descending for deterministic results.
+	// Milvus Query does not support server-side ORDER BY, so sorting is done client-side.
+	sort.Slice(memories, func(i, j int) bool {
+		return memories[i].CreatedAt.After(memories[j].CreatedAt)
+	})
+
+	total := len(memories)
+
+	// Apply limit
+	limit := opts.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	if limit < len(memories) {
+		memories = memories[:limit]
+	}
+
+	logging.Debugf("MilvusStore.List: found %d total, returning %d (limit=%d)",
+		total, len(memories), limit)
+
+	return &ListResult{
+		Memories: memories,
+		Total:    total,
+		Limit:    limit,
+	}, nil
+}
+
+// parseListResults converts Milvus query columns into Memory objects for List operations.
+// Optionally filters by project_id (stored in metadata JSON).
+func (m *MilvusStore) parseListResults(queryResult []entity.Column, projectIDFilter string) []*Memory {
+	if len(queryResult) == 0 {
+		return []*Memory{}
+	}
+
+	// Determine the number of rows from the first column
+	rowCount := 0
+	for _, col := range queryResult {
+		if col.Len() > rowCount {
+			rowCount = col.Len()
+		}
+	}
+
+	// Build column maps for fast lookup
+	var idCol *entity.ColumnVarChar
+	var contentCol *entity.ColumnVarChar
+	var userIDCol *entity.ColumnVarChar
+	var typeCol *entity.ColumnVarChar
+	var metadataCol *entity.ColumnVarChar
+	var createdAtCol *entity.ColumnInt64
+	var updatedAtCol *entity.ColumnInt64
+
+	for _, col := range queryResult {
+		switch col.Name() {
+		case "id":
+			idCol, _ = col.(*entity.ColumnVarChar)
+		case "content":
+			contentCol, _ = col.(*entity.ColumnVarChar)
+		case "user_id":
+			userIDCol, _ = col.(*entity.ColumnVarChar)
+		case "memory_type":
+			typeCol, _ = col.(*entity.ColumnVarChar)
+		case "metadata":
+			metadataCol, _ = col.(*entity.ColumnVarChar)
+		case "created_at":
+			createdAtCol, _ = col.(*entity.ColumnInt64)
+		case "updated_at":
+			updatedAtCol, _ = col.(*entity.ColumnInt64)
+		}
+	}
+
+	memories := make([]*Memory, 0, rowCount)
+	for i := 0; i < rowCount; i++ {
+		mem := &Memory{}
+
+		if idCol != nil && idCol.Len() > i {
+			mem.ID, _ = idCol.ValueByIdx(i)
+		}
+		if contentCol != nil && contentCol.Len() > i {
+			mem.Content, _ = contentCol.ValueByIdx(i)
+		}
+		if userIDCol != nil && userIDCol.Len() > i {
+			mem.UserID, _ = userIDCol.ValueByIdx(i)
+		}
+		if typeCol != nil && typeCol.Len() > i {
+			val, _ := typeCol.ValueByIdx(i)
+			mem.Type = MemoryType(val)
+		}
+		if metadataCol != nil && metadataCol.Len() > i {
+			val, _ := metadataCol.ValueByIdx(i)
+			if val != "" {
+				var metadata map[string]interface{}
+				if err := json.Unmarshal([]byte(val), &metadata); err == nil {
+					if pid, ok := metadata["project_id"].(string); ok {
+						mem.ProjectID = pid
+					}
+					if src, ok := metadata["source"].(string); ok {
+						mem.Source = src
+					}
+					if imp, ok := metadata["importance"].(float64); ok {
+						mem.Importance = float32(imp)
+					}
+					if ac, ok := metadata["access_count"].(float64); ok {
+						mem.AccessCount = int(ac)
+					}
+				}
+			}
+		}
+		if createdAtCol != nil && createdAtCol.Len() > i {
+			val, _ := createdAtCol.ValueByIdx(i)
+			mem.CreatedAt = time.Unix(val, 0)
+		}
+		if updatedAtCol != nil && updatedAtCol.Len() > i {
+			val, _ := updatedAtCol.ValueByIdx(i)
+			mem.UpdatedAt = time.Unix(val, 0)
+		}
+
+		// Skip if memory ID is empty (corrupt/missing data)
+		if mem.ID == "" {
+			continue
+		}
+
+		// Apply project_id filter (stored in metadata JSON, not a direct Milvus column)
+		if projectIDFilter != "" && mem.ProjectID != projectIDFilter {
+			continue
+		}
+
+		memories = append(memories, mem)
+	}
+
+	return memories
 }
 
 // Update modifies an existing memory in Milvus using Upsert (atomic replace by primary key).

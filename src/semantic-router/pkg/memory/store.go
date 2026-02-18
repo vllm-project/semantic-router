@@ -2,7 +2,31 @@ package memory
 
 import (
 	"context"
+	"sync"
 )
+
+// globalMemoryStore holds the global memory store instance for API access.
+// Set by the ExtProc router during initialization.
+var (
+	globalMemoryStore Store
+	globalStoreMu     sync.RWMutex
+)
+
+// SetGlobalMemoryStore sets the global memory store instance.
+// Called by the ExtProc router after creating the memory store.
+func SetGlobalMemoryStore(store Store) {
+	globalStoreMu.Lock()
+	defer globalStoreMu.Unlock()
+	globalMemoryStore = store
+}
+
+// GetGlobalMemoryStore returns the global memory store instance.
+// Returns nil if memory is not enabled or not yet initialized.
+func GetGlobalMemoryStore() Store {
+	globalStoreMu.RLock()
+	defer globalStoreMu.RUnlock()
+	return globalMemoryStore
+}
 
 // Store defines the interface for storing and retrieving memories.
 // Implementations must be thread-safe.
@@ -22,6 +46,10 @@ type Store interface {
 	// Update modifies an existing memory.
 	// Returns error if the memory doesn't exist.
 	Update(ctx context.Context, id string, memory *Memory) error
+
+	// List returns memories matching the filter criteria with pagination.
+	// UserID is required. Returns memories sorted by created_at descending.
+	List(ctx context.Context, opts ListOptions) (*ListResult, error)
 
 	// Forget deletes a memory by ID.
 	// Returns error if the memory doesn't exist.
