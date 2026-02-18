@@ -57,6 +57,11 @@ spec:
                   key: TARGET_CHATUI_URL
             - name: ROUTER_CONFIG_PATH
               value: /app/config/config.yaml
+            # ML service sidecar: connect to localhost since it's in the same pod
+            - name: ML_SERVICE_URL
+              value: "http://localhost:8686"
+            - name: ML_PIPELINE_ENABLED
+              value: "true"
           ports:
             - name: http
               containerPort: 8700
@@ -64,7 +69,47 @@ spec:
             - name: router-config
               mountPath: /app/config
               readOnly: true
+            - name: ml-data
+              mountPath: /app/data/ml-pipeline
+
+        # ML Training Service sidecar (Python)
+        - name: ml-service
+          image: ghcr.io/vllm-project/semantic-router/ml-training-service:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ML_SERVICE_PORT
+              value: "8686"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          ports:
+            - name: ml-http
+              containerPort: 8686
+          volumeMounts:
+            - name: ml-data
+              mountPath: /app/data
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "4Gi"
+              cpu: "2"
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8686
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8686
+            initialDelaySeconds: 30
+            periodSeconds: 30
+
       volumes:
         - name: router-config
           configMap:
             name: semantic-router-config
+        - name: ml-data
+          emptyDir: {}

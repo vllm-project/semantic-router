@@ -1085,16 +1085,41 @@ type KeywordRule struct {
 	Keywords      []string `yaml:"keywords"`
 	CaseSensitive bool     `yaml:"case_sensitive"`
 
+	// Method selects the matching engine for this rule.
+	// Options: "regex" (default), "bm25", "ngram"
+	//   - "regex": Compiled regexp with word boundaries (current behavior)
+	//   - "bm25":  BM25 (Okapi) scoring via Rust nlp-binding; natural TF-IDF confidence
+	//   - "ngram": N-gram similarity via Rust nlp-binding; inherent typo tolerance
+	// Default: "regex"
+	Method string `yaml:"method,omitempty"`
+
 	// FuzzyMatch enables approximate string matching using Levenshtein distance.
 	// When enabled, keywords will match even with typos (e.g., "urgnt" matches "urgent").
+	// Only applies to method: "regex". For typo tolerance with "ngram", use NgramThreshold instead.
 	// Default: false (exact matching only)
 	FuzzyMatch bool `yaml:"fuzzy_match,omitempty"`
 
 	// FuzzyThreshold sets the maximum Levenshtein distance for fuzzy matching.
 	// Lower values = stricter matching (1-2 recommended for short words, 2-3 for longer).
-	// Only used when FuzzyMatch is true.
+	// Only used when FuzzyMatch is true and method is "regex".
 	// Default: 2
 	FuzzyThreshold int `yaml:"fuzzy_threshold,omitempty"`
+
+	// BM25Threshold sets the minimum BM25 score for a keyword to count as matched.
+	// Only used when method is "bm25".
+	// Default: 0.1
+	BM25Threshold float32 `yaml:"bm25_threshold,omitempty"`
+
+	// NgramThreshold sets the minimum n-gram similarity (0.0-1.0) for a keyword to match.
+	// Lower values = more fuzzy (0.3-0.4 recommended for typo tolerance).
+	// Only used when method is "ngram".
+	// Default: 0.4
+	NgramThreshold float32 `yaml:"ngram_threshold,omitempty"`
+
+	// NgramArity sets the n-gram size (2=bigram, 3=trigram, etc.).
+	// Only used when method is "ngram".
+	// Default: 3
+	NgramArity int `yaml:"ngram_arity,omitempty"`
 }
 
 // Aggregation method used in keyword embedding rule

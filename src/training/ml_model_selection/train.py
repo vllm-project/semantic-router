@@ -204,6 +204,135 @@ def train_models(
     print(f"\n✓ {num_models} model(s) trained and saved to", output_dir)
 
 
+def run_training_pipeline(
+    data_file: str,
+    output_dir: str,
+    embedding_model: str = "qwen3",
+    cache_dir: str = ".cache/ml_model_selection",
+    quality_weight: float = 0.9,
+    batch_size: int = 32,
+    device: str = "cpu",
+    knn_k: int = 5,
+    kmeans_clusters: int = 8,
+    svm_kernel: str = "rbf",
+    svm_gamma: float = 1.0,
+    mlp_hidden_sizes: List[int] = None,
+    mlp_epochs: int = 100,
+    mlp_learning_rate: float = 0.001,
+    mlp_dropout: float = 0.1,
+    skip_mlp: bool = False,
+    algorithm: str = "all",
+    on_progress=None,
+) -> List[str]:
+    """
+    Run the full training pipeline: load data -> embed -> create samples -> train.
+
+    This is the shared entry point used by both the CLI (main()) and the
+    HTTP service (server.py).
+
+    Args:
+        data_file: Path to JSONL benchmark data (or None to download from HF).
+        output_dir: Directory to write model files.
+        embedding_model: Embedding model alias (default: qwen3).
+        cache_dir: Cache directory for downloads and embeddings.
+        quality_weight: Weight for quality in best model selection.
+        batch_size: Batch size for embedding generation.
+        device: Device for MLP training (cpu, cuda, mps).
+        knn_k: Number of neighbors for KNN.
+        kmeans_clusters: Number of clusters for KMeans.
+        svm_kernel: SVM kernel type (rbf or linear).
+        svm_gamma: SVM gamma parameter.
+        mlp_hidden_sizes: Hidden layer sizes for MLP.
+        mlp_epochs: Training epochs for MLP.
+        mlp_learning_rate: Learning rate for MLP.
+        mlp_dropout: Dropout rate for MLP.
+        skip_mlp: Skip MLP training.
+        algorithm: Which algorithm to train (all, knn, kmeans, svm, mlp).
+        on_progress: Optional callback(percent, step, message) for progress.
+
+    Returns:
+        List of output model file paths.
+    """
+    if mlp_hidden_sizes is None:
+        mlp_hidden_sizes = [256, 128]
+
+    def progress(pct, step, msg):
+        if on_progress:
+            on_progress(pct, step, msg)
+        print(f"[{pct}%] {step}: {msg}")
+
+    start_time = time.time()
+
+    # Step 1: Load data
+    progress(10, "Loading data", "Loading benchmark data")
+    if data_file:
+        data_path = Path(data_file)
+    else:
+        data_path = download_data(cache_dir)
+
+    records = load_jsonl(data_path)
+    print_data_stats(records)
+
+    # Step 2: Generate embeddings
+    progress(
+        20, "Generating embeddings", "Loading embedding model and generating embeddings"
+    )
+    queries = get_unique_queries(records)
+    print(f"  {len(queries)} unique queries")
+
+    cache_file = Path(cache_dir) / f"embeddings_{embedding_model}.npz"
+    embeddings = generate_embeddings_for_queries(
+        queries,
+        model_name=embedding_model,
+        batch_size=batch_size,
+        cache_dir=cache_dir,
+        cache_file=str(cache_file),
+    )
+    print(f"  Embedding dim: {len(next(iter(embeddings.values())))}")
+
+    # Step 3: Create training samples
+    progress(45, "Creating samples", "Building training samples from embeddings")
+    samples = create_training_samples(records, embeddings, quality_weight)
+    print(f"  Created {len(samples)} training samples")
+
+    # Step 4: Train models
+    progress(50, "Training", f"Training {algorithm} model(s)")
+    output_path = Path(output_dir)
+    train_models(
+        samples,
+        output_path,
+        knn_k=knn_k,
+        kmeans_clusters=kmeans_clusters,
+        svm_kernel=svm_kernel,
+        svm_gamma=svm_gamma,
+        mlp_hidden_sizes=mlp_hidden_sizes,
+        mlp_epochs=mlp_epochs,
+        mlp_learning_rate=mlp_learning_rate,
+        mlp_dropout=mlp_dropout,
+        device=device,
+        skip_mlp=skip_mlp,
+        algorithm=algorithm,
+    )
+
+    elapsed = time.time() - start_time
+    print(f"\n✅ Training complete in {elapsed:.1f}s")
+    print(f"   Models saved to: {output_path.absolute()}")
+
+    # Collect output files
+    output_files = []
+    for model_name in [
+        "knn_model.json",
+        "kmeans_model.json",
+        "svm_model.json",
+        "mlp_model.json",
+    ]:
+        model_file = output_path / model_name
+        if model_file.exists():
+            output_files.append(str(model_file))
+
+    return output_files
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Train ML models for LLM routing",
@@ -332,8 +461,6 @@ Examples:
     # Parse MLP hidden sizes
     mlp_hidden_sizes = [int(x.strip()) for x in args.mlp_hidden_sizes.split(",")]
 
-    start_time = time.time()
-
     print("\n" + "=" * 60)
     print("  ML Model Selection Training")
     print("=" * 60)
@@ -355,42 +482,15 @@ Examples:
             print("  MLP:              Skipped (PyTorch not available)")
     print("=" * 60 + "\n")
 
-    # Load data
-    print("[1/4] Loading data...")
-    if args.data_file:
-        data_path = Path(args.data_file)
-    else:
-        data_path = download_data(args.cache_dir)
-
-    records = load_jsonl(data_path)
-    print_data_stats(records)
-
-    # Generate embeddings
-    print("[2/4] Generating embeddings...")
-    queries = get_unique_queries(records)
-    print(f"  {len(queries)} unique queries")
-
-    cache_file = Path(args.cache_dir) / f"embeddings_{args.embedding_model}.npz"
-    embeddings = generate_embeddings_for_queries(
-        queries,
-        model_name=args.embedding_model,
-        batch_size=args.batch_size,
+    # Run the shared pipeline
+    run_training_pipeline(
+        data_file=args.data_file,
+        output_dir=args.output_dir,
+        embedding_model=args.embedding_model,
         cache_dir=args.cache_dir,
-        cache_file=str(cache_file),
-    )
-    print(f"  Embedding dim: {len(next(iter(embeddings.values())))}")
-
-    # Create training samples
-    print("[3/4] Creating training samples...")
-    samples = create_training_samples(records, embeddings, args.quality_weight)
-    print(f"  Created {len(samples)} training samples")
-
-    # Train models
-    print("[4/4] Training models...")
-    output_dir = Path(args.output_dir)
-    train_models(
-        samples,
-        output_dir,
+        quality_weight=args.quality_weight,
+        batch_size=args.batch_size,
+        device=args.device,
         knn_k=args.knn_k,
         kmeans_clusters=args.kmeans_clusters,
         svm_kernel=args.svm_kernel,
@@ -399,14 +499,9 @@ Examples:
         mlp_epochs=args.mlp_epochs,
         mlp_learning_rate=args.mlp_learning_rate,
         mlp_dropout=args.mlp_dropout,
-        device=args.device,
         skip_mlp=args.skip_mlp,
         algorithm=args.algorithm,
     )
-
-    elapsed = time.time() - start_time
-    print(f"\n✅ Training complete in {elapsed:.1f}s")
-    print(f"   Models saved to: {output_dir.absolute()}")
 
 
 if __name__ == "__main__":

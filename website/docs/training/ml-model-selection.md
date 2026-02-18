@@ -20,6 +20,65 @@ ML-based model selection uses machine learning algorithms to intelligently route
 - [FusionFactory (arXiv:2507.10540)](https://arxiv.org/abs/2507.10540) - Query-level fusion via LLM routers
 - [Avengers-Pro (arXiv:2508.12631)](https://arxiv.org/abs/2508.12631) - Performance-efficiency optimized routing
 
+## Dashboard GUI Setup
+
+The **Semantic Router Dashboard** includes a guided 3-step wizard for the full ML model selection pipeline. This is the easiest way to get started — no CLI required.
+
+### Accessing the Wizard
+
+Navigate to `http://localhost:8700/ml-setup` (or your dashboard URL).
+
+### Step 1: Benchmark
+
+Upload your **models YAML** (listing your LLM endpoints) and a **queries JSONL** file (test queries with ground truth). Configure concurrency and max tokens, then click **Run Benchmark**. Progress streams in real-time with per-query granularity.
+
+### Step 2: Train
+
+Select one or more algorithms:
+
+| Algorithm | GPU Required | Notes |
+|-----------|-------------|-------|
+| KNN | No | CPU-only (scikit-learn) |
+| K-Means | No | CPU-only (scikit-learn) |
+| SVM | No | CPU-only (scikit-learn) |
+| MLP | Optional | PyTorch — Device selector (CPU/CUDA) appears when selected |
+
+Adjust hyperparameters via the **Advanced Settings** panel, then click **Train Models**. Trained model files (`knn_model.json`, `kmeans_model.json`, etc.) are saved to a fixed `ml-train/` directory.
+
+### Step 3: Generate Config
+
+Define routing decisions — each with a name, priority, algorithm, domain conditions, and target model names. Click **Generate Config** to produce a deployment-ready `ml-model-selection-values.yaml`.
+
+The generated YAML follows the semantic-router config schema. Merge the `model_selection` and `decisions` sections into your main `config.yaml`, or use it as a standalone config file for the router.
+
+### Example Generated Config
+
+```yaml
+config:
+  model_selection:
+    enabled: true
+    ml:
+      models_path: /data/ml-pipeline/ml-train
+      embedding_dim: 1024
+      knn:
+        k: 5
+        pretrained_path: /data/ml-pipeline/ml-train/knn_model.json
+  strategy: priority
+  decisions:
+    - name: math-decision
+      priority: 100
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: math
+      algorithm:
+        type: knn
+      modelRefs:
+        - model: llama3.2:3b
+          use_reasoning: false
+```
+
 ## Configuration
 
 ### Basic Configuration

@@ -52,7 +52,7 @@ clean-redis: stop-redis ## Clean up Redis data
 test-redis-cache: start-redis rust ## Test semantic cache with Redis backend
 	@$(LOG_TARGET)
 	@echo "Testing semantic cache with Redis backend..."
-	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release && \
+	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release:$${PWD}/nlp-binding/target/release && \
 	export SR_TEST_MODE=true && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -v ./pkg/cache/ -run TestRedisCache
 	@echo "Consider running 'make stop-redis' when done testing"
@@ -61,7 +61,7 @@ test-redis-cache: start-redis rust ## Test semantic cache with Redis backend
 test-semantic-router-redis: build-router start-redis ## Test semantic-router with Redis cache backend
 	@$(LOG_TARGET)
 	@echo "Testing semantic-router with Redis cache backend..."
-	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release && \
+	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release:$${PWD}/nlp-binding/target/release && \
 	export SR_TEST_MODE=true && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -v ./...
 	@echo "Consider running 'make stop-redis' when done testing"
@@ -71,7 +71,7 @@ run-redis-example: start-redis rust ## Run the Redis cache example
 	@$(LOG_TARGET)
 	@echo "Running Redis cache example..."
 	@cd src/semantic-router && \
-		export LD_LIBRARY_PATH=$${PWD}/../../candle-binding/target/release && \
+		export LD_LIBRARY_PATH=$${PWD}/../../candle-binding/target/release:$${PWD}/../../nlp-binding/target/release && \
 		go run ../../deploy/examples/redis-cache-example.go
 	@echo ""
 	@echo "Example complete! Check Redis using:"
@@ -143,7 +143,7 @@ benchmark-redis: rust start-redis ## Run Redis cache performance benchmark
 	@echo "═══════════════════════════════════════════════════════════"
 	@echo ""
 	@mkdir -p benchmark_results/redis
-	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release && \
+	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release:$${PWD}/nlp-binding/target/release && \
 		export USE_CPU=$${USE_CPU:-false} && \
 		export SR_BENCHMARK_MODE=true && \
 		cd src/semantic-router/pkg/cache && \
@@ -162,7 +162,7 @@ benchmark-cache-comparison: rust start-redis start-milvus ## Compare all cache b
 	@echo "═══════════════════════════════════════════════════════════"
 	@echo ""
 	@mkdir -p benchmark_results/comparison
-	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release && \
+	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release:$${PWD}/nlp-binding/target/release && \
 		export USE_CPU=$${USE_CPU:-false} && \
 		export SR_BENCHMARK_MODE=true && \
 		cd src/semantic-router/pkg/cache && \
