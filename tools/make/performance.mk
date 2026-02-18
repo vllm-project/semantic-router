@@ -14,7 +14,7 @@ perf-bench: ## Run all performance benchmarks
 perf-bench: build-router ensure-reports-dir
 	@$(LOG_TARGET)
 	@echo "Running performance benchmarks..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/nlp-binding/target/release && \
 	cd perf && go test -bench=. -benchmem -benchtime=10s ./benchmarks/... \
 	  -cpuprofile=../reports/cpu.prof \
 	  -memprofile=../reports/mem.prof \
@@ -25,7 +25,7 @@ perf-bench-quick: ## Run quick performance benchmarks (3s benchtime)
 perf-bench-quick: build-router ensure-reports-dir
 	@$(LOG_TARGET)
 	@echo "Running quick performance benchmarks..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/nlp-binding/target/release && \
 	cd perf && go test -bench=. -benchmem -benchtime=3s ./benchmarks/... \
 	  -timeout=15m
 
@@ -33,19 +33,19 @@ perf-bench-quick: build-router ensure-reports-dir
 perf-bench-classification: ## Run classification benchmarks
 perf-bench-classification: build-router ensure-reports-dir
 	@$(LOG_TARGET)
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/nlp-binding/target/release && \
 	cd perf && go test -bench=BenchmarkClassify.* -benchmem -benchtime=10s ./benchmarks/
 
 perf-bench-decision: ## Run decision engine benchmarks
 perf-bench-decision: build-router ensure-reports-dir
 	@$(LOG_TARGET)
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/nlp-binding/target/release && \
 	cd perf && go test -bench=BenchmarkEvaluate.* -benchmem -benchtime=10s ./benchmarks/
 
 perf-bench-cache: ## Run cache benchmarks
 perf-bench-cache: build-router ensure-reports-dir
 	@$(LOG_TARGET)
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/nlp-binding/target/release && \
 	cd perf && go test -bench=BenchmarkCache.* -benchmem -benchtime=10s ./benchmarks/
 
 # Run E2E performance tests
@@ -92,7 +92,7 @@ perf-baseline-update: ## Update performance baselines
 perf-baseline-update: ensure-reports-dir
 	@$(LOG_TARGET)
 	@echo "Running benchmarks to update baseline..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/nlp-binding/target/release && \
 	cd perf && go test -bench=. -benchmem -benchtime=30s ./benchmarks/... \
 	  | tee ../reports/bench-results.txt
 	@echo "Updating baselines..."
@@ -128,7 +128,7 @@ perf-watch: ## Continuously run quick benchmarks on file changes
 perf-bench-concurrency: ## Run benchmarks with specific concurrency (e.g., CONCURRENCY=4)
 perf-bench-concurrency: build-router ensure-reports-dir
 	@$(LOG_TARGET)
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/nlp-binding/target/release && \
 	export GOMAXPROCS=$${CONCURRENCY:-4} && \
 	cd perf && go test -bench=.*Parallel -benchmem -benchtime=10s ./benchmarks/...
 

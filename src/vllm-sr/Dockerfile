@@ -139,7 +139,59 @@ RUN mkdir -p /build/out && \
     ls -la /build/out/ && \
     file /build/out/libml_semantic_router.so
 
-# Stage 1b: Build dashboard frontend with Node.js
+# Stage 1b: Build Rust nlp-binding (BM25 + N-gram keyword classification, cross-compiled)
+FROM --platform=$BUILDPLATFORM rustlang/rust:nightly AS nlp-builder
+ARG TARGETARCH
+ARG GIT_SSL_NO_VERIFY
+WORKDIR /build
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+      dpkg --add-architecture arm64 && \
+      apt-get update && apt-get install -y \
+        gcc-aarch64-linux-gnu \
+        g++-aarch64-linux-gnu && \
+      rm -rf /var/lib/apt/lists/* && \
+      rustup target add aarch64-unknown-linux-gnu; \
+    fi
+
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+
+COPY nlp-binding/Cargo.toml nlp-binding/Cargo.loc[k] ./
+
+RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false || true; \
+    mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cargo build --release --target aarch64-unknown-linux-gnu; \
+    else \
+      cargo build --release; \
+    fi && \
+    rm -rf src
+
+COPY nlp-binding/src/ ./src/
+
+RUN find target -name "libnlp_binding.so" -delete 2>/dev/null; \
+    find target -name "libnlp_binding.a" -delete 2>/dev/null; \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cargo build --release --target aarch64-unknown-linux-gnu; \
+    else \
+      cargo build --release; \
+    fi
+
+RUN mkdir -p /build/out && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cp target/aarch64-unknown-linux-gnu/release/libnlp_binding.so /build/out/ && \
+      (cp target/aarch64-unknown-linux-gnu/release/libnlp_binding.a /build/out/ 2>/dev/null || true); \
+    else \
+      cp target/release/libnlp_binding.so /build/out/ && \
+      (cp target/release/libnlp_binding.a /build/out/ 2>/dev/null || true); \
+    fi && \
+    echo "=== Built nlp-binding library ===" && \
+    ls -la /build/out/
+
+# Stage 1c: Build dashboard frontend with Node.js
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
 COPY dashboard/frontend/package.json dashboard/frontend/package-lock.json ./
@@ -177,9 +229,10 @@ FROM --platform=$BUILDPLATFORM golang:1.24 AS go-builder
 ARG TARGETARCH
 WORKDIR /build
 
-# Copy Rust libraries from both builders
+# Copy Rust libraries from all builders
 COPY --from=rust-builder /build/out/ /usr/local/lib/
 COPY --from=ml-builder /build/out/ /usr/local/lib/
+COPY --from=nlp-builder /build/out/ /usr/local/lib/
 
 ENV LD_LIBRARY_PATH=/usr/local/lib
 
@@ -190,6 +243,10 @@ COPY --from=rust-builder /build/go.mod /build/semantic-router.go /build/../candl
 # Also copy the built library to ml-binding/target/release/ for CGO linking
 COPY ml-binding/go.mod ml-binding/ml_binding.go /build/../ml-binding/
 COPY --from=ml-builder /build/out/ /build/../ml-binding/target/release/
+
+# Copy nlp-binding Go files (needed for go.mod replace directive)
+COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go /build/../nlp-binding/
+COPY --from=nlp-builder /build/out/ /build/../nlp-binding/target/release/
 
 # Copy Go source (go.mod has local replace directives, so go mod download
 # requires candle-binding and ml-binding to be present first)
@@ -233,6 +290,7 @@ RUN set -eux; \
 COPY --from=go-builder /build/router /usr/local/bin/router
 COPY --from=rust-builder /build/out/libcandle_semantic_router.so /usr/local/lib/
 COPY --from=ml-builder /build/out/libml_semantic_router.so /usr/local/lib/
+COPY --from=nlp-builder /build/out/libnlp_binding.so /usr/local/lib/
 COPY --from=envoy /usr/local/bin/envoy /usr/local/bin/envoy
 COPY --from=dashboard-builder /app/dashboard-backend /usr/local/bin/dashboard-backend
 COPY --from=frontend-builder /app/frontend/dist /app/frontend

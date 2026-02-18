@@ -47,8 +47,9 @@ notin
 AKS
 # Rust programming terms (not spelling errors)
 statics
-# Intentional typos for fuzzy matching tests (keyword_accuracy_test.go)
+# Intentional typos for fuzzy matching tests (keyword_accuracy_test.go, keyword_nlp_test.go)
 immedaite
 pasword
+critcal
 # Intentional partial name for exact-match test (authz_classifier_test.go)
 admi
