@@ -1025,14 +1025,16 @@ type SignalMetricsCollection struct {
 	Authz        SignalMetrics `json:"authz"`
 }
 
-// analyzeRuleCombination recursively analyzes rule combinations to find used signals
-func (c *Classifier) analyzeRuleCombination(rules config.RuleCombination, usedSignals map[string]bool) {
-	for _, condition := range rules.Conditions {
-		// Normalize condition type and name (trim whitespace, lowercase) for consistent matching
-		t := strings.ToLower(strings.TrimSpace(condition.Type))
-		n := strings.ToLower(strings.TrimSpace(condition.Name))
-		signalKey := t + ":" + n
-		usedSignals[signalKey] = true
+// analyzeRuleCombination recursively traverses a rule tree to collect all referenced signals.
+func (c *Classifier) analyzeRuleCombination(node config.RuleNode, usedSignals map[string]bool) {
+	if node.IsLeaf() {
+		t := strings.ToLower(strings.TrimSpace(node.Type))
+		n := strings.ToLower(strings.TrimSpace(node.Name))
+		usedSignals[t+":"+n] = true
+		return
+	}
+	for _, child := range node.Conditions {
+		c.analyzeRuleCombination(child, usedSignals)
 	}
 }
 
@@ -2721,41 +2723,46 @@ func (c *Classifier) filterComplexityByComposer(
 	return filtered
 }
 
-// evaluateComposer evaluates a composer's conditions against signal results
+// evaluateComposer evaluates a composer rule tree against signal results.
+// Returns true when the tree matches (allowing the complexity rule through the filter).
+// A nil composer always returns true (no filter applied).
 func (c *Classifier) evaluateComposer(
-	composer *config.RuleCombination,
+	composer *config.RuleNode,
 	signals *SignalResults,
 ) bool {
 	if composer == nil {
 		return true
 	}
+	return c.evalComposerNode(*composer, signals)
+}
 
-	// Evaluate each condition
-	conditionResults := make([]bool, len(composer.Conditions))
-	for i, condition := range composer.Conditions {
-		conditionResults[i] = c.evaluateComposerCondition(&condition, signals)
+// evalComposerNode recursively evaluates a RuleNode against signal results.
+func (c *Classifier) evalComposerNode(
+	node config.RuleNode,
+	signals *SignalResults,
+) bool {
+	if node.IsLeaf() {
+		return c.evalComposerLeaf(node.Type, node.Name, signals)
 	}
 
-	// Apply operator (AND/OR/NOT)
-	switch strings.ToUpper(composer.Operator) {
+	switch strings.ToUpper(node.Operator) {
 	case "OR":
-		for _, result := range conditionResults {
-			if result {
+		for _, child := range node.Conditions {
+			if c.evalComposerNode(child, signals) {
 				return true
 			}
 		}
 		return false
 	case "NOT":
-		// NOT (NOR semantics): composer passes only when none of the conditions match.
-		for _, result := range conditionResults {
-			if result {
-				return false
-			}
+		// Strictly unary: negate the single child's result.
+		if len(node.Conditions) != 1 {
+			logging.Warnf("Composer NOT operator requires exactly 1 child, got %d — treating as false", len(node.Conditions))
+			return false
 		}
-		return true
+		return !c.evalComposerNode(node.Conditions[0], signals)
 	default: // AND
-		for _, result := range conditionResults {
-			if !result {
+		for _, child := range node.Conditions {
+			if !c.evalComposerNode(child, signals) {
 				return false
 			}
 		}
@@ -2763,32 +2770,32 @@ func (c *Classifier) evaluateComposer(
 	}
 }
 
-// evaluateComposerCondition evaluates a single condition against signal results
-func (c *Classifier) evaluateComposerCondition(
-	condition *config.RuleCondition,
+// evalComposerLeaf evaluates a single signal reference against signal results.
+func (c *Classifier) evalComposerLeaf(
+	typ, name string,
 	signals *SignalResults,
 ) bool {
-	switch condition.Type {
+	switch typ {
 	case "keyword":
-		return slices.Contains(signals.MatchedKeywordRules, condition.Name)
+		return slices.Contains(signals.MatchedKeywordRules, name)
 	case "embedding":
-		return slices.Contains(signals.MatchedEmbeddingRules, condition.Name)
+		return slices.Contains(signals.MatchedEmbeddingRules, name)
 	case "domain":
-		return slices.Contains(signals.MatchedDomainRules, condition.Name)
+		return slices.Contains(signals.MatchedDomainRules, name)
 	case "fact_check":
-		return slices.Contains(signals.MatchedFactCheckRules, condition.Name)
+		return slices.Contains(signals.MatchedFactCheckRules, name)
 	case "user_feedback":
-		return slices.Contains(signals.MatchedUserFeedbackRules, condition.Name)
+		return slices.Contains(signals.MatchedUserFeedbackRules, name)
 	case "preference":
-		return slices.Contains(signals.MatchedPreferenceRules, condition.Name)
+		return slices.Contains(signals.MatchedPreferenceRules, name)
 	case "language":
-		return slices.Contains(signals.MatchedLanguageRules, condition.Name)
+		return slices.Contains(signals.MatchedLanguageRules, name)
 	case "context":
-		return slices.Contains(signals.MatchedContextRules, condition.Name)
+		return slices.Contains(signals.MatchedContextRules, name)
 	case "modality":
-		return slices.Contains(signals.MatchedModalityRules, condition.Name)
+		return slices.Contains(signals.MatchedModalityRules, name)
 	default:
-		logging.Warnf("Unknown composer condition type: %s", condition.Type)
+		logging.Warnf("Unknown composer condition type: %s", typ)
 		return false
 	}
 }
