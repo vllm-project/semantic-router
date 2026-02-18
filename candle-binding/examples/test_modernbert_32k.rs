@@ -129,7 +129,6 @@ fn main() -> Result<()> {
     // Step 3: Test variant detection
     println!("\nTesting variant detection...");
     let config_path_str = config_path.to_string_lossy().to_string();
-    use candle_semantic_router::model_architectures::traditional::modernbert::ModernBertVariant;
 
     match ModernBertVariant::detect_from_config(&config_path_str) {
         Ok(variant) => {

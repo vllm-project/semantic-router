@@ -12,13 +12,13 @@ use anyhow::{anyhow, Result};
 use candle_core::{DType, Device};
 use candle_nn::VarBuilder;
 use candle_semantic_router::core::tokenization::{
-    create_modernbert_compatibility_tokenizer, TokenDataType, TokenizationConfig, UnifiedTokenizer,
+    TokenDataType, TokenizationConfig, UnifiedTokenizer,
 };
 use candle_semantic_router::model_architectures::traditional::modernbert::{
     FixedModernBertClassifier, FixedModernBertHead, ModernBertVariant,
     TraditionalModernBertClassifier,
 };
-use candle_transformers::models::modernbert::{ClassifierPooling, Config, ModernBert};
+use candle_semantic_router::model_architectures::traditional::{Config, ModernBert};
 use hf_hub::{api::sync::Api, Repo, RepoType};
 
 fn main() -> Result<()> {
@@ -72,15 +72,30 @@ fn main() -> Result<()> {
 
     // Step 3: Load PII classifier to get classifier weights
     println!("\nLoading PII classifier weights...");
-    let pii_classifier_paths = vec![
-        "../models/pii_classifier_modernbert-base_model",
-        "models/pii_classifier_modernbert-base_model",
-    ];
+    // Check environment variable first, then try common paths
+    let pii_classifier_paths = if let Ok(env_path) = std::env::var("PII_CLASSIFIER_PATH") {
+        vec![env_path]
+    } else {
+        vec![
+            "../models/pii_classifier_modernbert-base_model",
+            "../models/mom-pii-classifier",
+            "../models/lora_pii_detector_bert-base-uncased_model",
+            "models/pii_classifier_modernbert-base_model",
+            "models/mom-pii-classifier",
+            "models/lora_pii_detector_bert-base-uncased_model",
+            "./models/pii_classifier_modernbert-base_model",
+            "./models/mom-pii-classifier",
+            "./models/lora_pii_detector_bert-base-uncased_model",
+        ]
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect()
+    };
 
     let pii_classifier_path = pii_classifier_paths
         .iter()
         .find(|path| std::path::Path::new(path).exists())
-        .copied()
+        .cloned()
         .ok_or_else(|| anyhow!("PII classifier not found"))?;
 
     println!("   ✓ Found PII classifier at: {}", pii_classifier_path);
@@ -120,13 +135,13 @@ fn main() -> Result<()> {
             .map_err(|e| anyhow!("Failed to load base model weights: {}", e))?
     };
 
-    let base_model = ModernBert::load(base_vb.clone(), &config)
+    let _base_model = ModernBert::load(base_vb.clone(), &config)
         .map_err(|e| anyhow!("Failed to load base ModernBert model: {}", e))?;
     println!("   Base model loaded successfully!");
 
     // Step 5: Load classifier weights
     println!("\nLoading classifier weights...");
-    let classifier =
+    let _classifier =
         FixedModernBertClassifier::load_with_classes(pii_vb.pp("classifier"), &config, num_classes)
             .map_err(|e| anyhow!("Failed to load classifier weights: {}", e))?;
     println!("   Classifier weights loaded successfully!");
@@ -187,7 +202,7 @@ fn main() -> Result<()> {
     };
 
     // Create unified tokenizer
-    let unified_tokenizer = UnifiedTokenizer::new(tokenizer, tokenizer_config, device.clone())?;
+    let _unified_tokenizer = UnifiedTokenizer::new(tokenizer, tokenizer_config, device.clone())?;
     println!("   Tokenizer configured for 32K tokens!");
 
     println!("\nCreating combined Extended32K classifier...");
@@ -204,7 +219,7 @@ fn main() -> Result<()> {
     // Note: This uses Standard ModernBERT (512 tokens) as the base model
     // The Extended32K base model is loaded separately above for component verification
     let pii_classifier = TraditionalModernBertClassifier::load_from_directory(
-        pii_classifier_path,
+        &pii_classifier_path,
         true, // use_cpu
     )
     .map_err(|e| anyhow!("Failed to load PII classifier: {}", e))?;

@@ -10,9 +10,7 @@ use anyhow::{anyhow, Result};
 use candle_core::{DType, Device, Tensor};
 use candle_nn::VarBuilder;
 use candle_semantic_router::model_architectures::traditional::modernbert::ModernBertVariant;
-// Use local copy of ModernBERT with Flash Attention support
-// Using full path to avoid re-export issues
-use candle_semantic_router::model_architectures::traditional::candle_models::{Config, ModernBert};
+use candle_transformers::models::modernbert::{Config, ModernBert};
 use hf_hub::{api::sync::Api, Repo, RepoType};
 use std::time::Instant;
 use tokenizers::Tokenizer;

@@ -34,7 +34,8 @@ pub use modernbert::{
 // Re-export local candle_models (ModernBERT with Flash Attention support)
 // Note: candle_models/mod.rs already re-exports these from modernbert
 pub use candle_models::{
-    Config, ModernBert, ModernBertForMaskedLM, ModernBertForSequenceClassification,
+    ClassifierConfig, ClassifierPooling, Config, ModernBert, ModernBertForMaskedLM,
+    ModernBertForSequenceClassification,
 };
 
 // Re-export traditional models

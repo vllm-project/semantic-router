@@ -15,9 +15,8 @@ use anyhow::{Error as E, Result};
 use candle_core::{DType, Device, IndexOp, Tensor, D};
 use candle_nn::{ops, LayerNorm, Linear, Module, VarBuilder};
 // Use local copy of ModernBERT with Flash Attention support
-use crate::model_architectures::traditional::candle_models::modernbert::{
-    ClassifierConfig, ClassifierPooling, Config, ModernBert,
-};
+// Import from parent module's re-exports (more reliable across branches)
+use super::{ClassifierConfig, ClassifierPooling, Config, ModernBert};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 use tokenizers::{PaddingParams, PaddingStrategy, Tokenizer};
@@ -521,7 +520,7 @@ impl TraditionalModernBertClassifier {
 
         // Debug: Print original config value
         eprintln!(
-            "🔍 Original max_position_embeddings from config.json: {}",
+            "Original max_position_embeddings from config.json: {}",
             config.max_position_embeddings
         );
 
@@ -531,18 +530,18 @@ impl TraditionalModernBertClassifier {
         if variant == ModernBertVariant::Extended32K {
             let expected_max_len = variant.max_length(); // 32768
             eprintln!(
-                "🔍 Detected variant: Extended32K, expected max_len: {}",
+                "Detected variant: Extended32K, expected max_len: {}",
                 expected_max_len
             );
             if config.max_position_embeddings < expected_max_len {
                 eprintln!(
-                    "⚠️  Overriding max_position_embeddings from {} to {} for Extended32K variant",
+                    "Overriding max_position_embeddings from {} to {} for Extended32K variant",
                     config.max_position_embeddings, expected_max_len
                 );
                 config.max_position_embeddings = expected_max_len;
             } else {
                 eprintln!(
-                    "✅ max_position_embeddings already set to {} (no override needed)",
+                    "max_position_embeddings already set to {} (no override needed)",
                     config.max_position_embeddings
                 );
             }
@@ -550,7 +549,7 @@ impl TraditionalModernBertClassifier {
 
         // Debug: Print final config value before model loading
         eprintln!(
-            "🔍 Final max_position_embeddings before model load: {}",
+            "Final max_position_embeddings before model load: {}",
             config.max_position_embeddings
         );
 

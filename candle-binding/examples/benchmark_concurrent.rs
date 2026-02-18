@@ -278,12 +278,14 @@ fn main() -> Result<()> {
     // Check if Flash Attention is enabled
     #[cfg(feature = "flash-attn")]
     {
-        println!("✅ Flash Attention 2 is ENABLED - will use memory-efficient attention");
+        println!("Flash Attention 2 is ENABLED - will use memory-efficient attention");
     }
     #[cfg(not(feature = "flash-attn"))]
     {
-        println!("⚠️  Flash Attention 2 is DISABLED - large contexts (16K+) may fail due to OOM");
-        println!("   To enable: cargo run --example benchmark_concurrent --release --features cuda,flash-attn");
+        println!(
+            "WARNING: Flash Attention 2 is DISABLED - large contexts (16K+) may fail due to OOM"
+        );
+        println!("To enable: cargo run --example benchmark_concurrent --release --features cuda,flash-attn");
     }
 
     let device = if cfg!(feature = "cuda") {
@@ -361,7 +363,7 @@ fn main() -> Result<()> {
             if device.is_cuda() && (context_length >= 8192 || concurrency >= 50) {
                 if let Some((_total_gb, free_gb)) = check_gpu_memory() {
                     if free_gb < 2.0 {
-                        println!("  ⚠️  Low GPU memory ({:.2}GB), skipping test", free_gb);
+                        println!("Low GPU memory ({:.2}GB), skipping test", free_gb);
                         results.push((context_length, concurrency, LatencyStats::default()));
                         continue;
                     }

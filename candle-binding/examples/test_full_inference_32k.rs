@@ -10,10 +10,9 @@
 //!   cargo run --example test_full_inference_32k --release --no-default-features
 
 use anyhow::{anyhow, Result};
-use candle_semantic_router::model_architectures::traditional::modernbert::{
-    ModernBertVariant, TraditionalModernBertClassifier,
+use candle_semantic_router::model_architectures::traditional::{
+    Config, ModernBertVariant, TraditionalModernBertClassifier,
 };
-use candle_transformers::models::modernbert::Config;
 use hf_hub::{api::sync::Api, Repo, RepoType};
 
 fn main() -> Result<()> {
@@ -65,15 +64,30 @@ fn main() -> Result<()> {
 
     // Step 3: Load PII classifier to get classifier weights
     println!("\nLoading PII classifier weights...");
-    let pii_classifier_paths = vec![
-        "../models/pii_classifier_modernbert-base_model",
-        "models/pii_classifier_modernbert-base_model",
-    ];
+    // Check environment variable first, then try common paths
+    let pii_classifier_paths = if let Ok(env_path) = std::env::var("PII_CLASSIFIER_PATH") {
+        vec![env_path]
+    } else {
+        vec![
+            "../models/pii_classifier_modernbert-base_model",
+            "../models/mom-pii-classifier",
+            "../models/lora_pii_detector_bert-base-uncased_model",
+            "models/pii_classifier_modernbert-base_model",
+            "models/mom-pii-classifier",
+            "models/lora_pii_detector_bert-base-uncased_model",
+            "./models/pii_classifier_modernbert-base_model",
+            "./models/mom-pii-classifier",
+            "./models/lora_pii_detector_bert-base-uncased_model",
+        ]
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect()
+    };
 
     let pii_classifier_path = pii_classifier_paths
         .iter()
         .find(|path| std::path::Path::new(path).exists())
-        .copied()
+        .cloned()
         .ok_or_else(|| anyhow!("PII classifier not found"))?;
 
     println!("   ✓ Found PII classifier at: {}", pii_classifier_path);
@@ -116,7 +130,7 @@ fn main() -> Result<()> {
     // Use the new method to load base model from one path and classifier from another
     let combined_classifier = TraditionalModernBertClassifier::load_with_custom_base_model(
         &base_model_path,
-        pii_classifier_path,
+        &pii_classifier_path,
         ModernBertVariant::Extended32K,
         true, // use_cpu
     )

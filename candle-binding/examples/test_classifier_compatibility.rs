@@ -9,8 +9,9 @@
 use anyhow::{anyhow, Result};
 use candle_core::{DType, Device};
 use candle_nn::VarBuilder;
-use candle_semantic_router::model_architectures::traditional::modernbert::FixedModernBertClassifier;
-use candle_transformers::models::modernbert::{Config, ModernBert};
+use candle_semantic_router::model_architectures::traditional::{
+    modernbert::FixedModernBertClassifier, Config, ModernBert,
+};
 use hf_hub::{api::sync::Api, Repo, RepoType};
 
 fn main() -> Result<()> {
@@ -78,17 +79,30 @@ fn main() -> Result<()> {
 
     // Step 4: Test with existing PII classifier
     println!("\nTesting with existing PII classifier...");
-    // Try multiple possible paths (relative to candle-binding directory)
-    let pii_classifier_paths = vec![
-        "../models/pii_classifier_modernbert-base_model",
-        "models/pii_classifier_modernbert-base_model",
-        "./models/pii_classifier_modernbert-base_model",
-    ];
+    // Check environment variable first, then try common paths
+    let pii_classifier_paths = if let Ok(env_path) = std::env::var("PII_CLASSIFIER_PATH") {
+        vec![env_path]
+    } else {
+        vec![
+            "../models/pii_classifier_modernbert-base_model",
+            "../models/mom-pii-classifier",
+            "../models/lora_pii_detector_bert-base-uncased_model",
+            "models/pii_classifier_modernbert-base_model",
+            "models/mom-pii-classifier",
+            "models/lora_pii_detector_bert-base-uncased_model",
+            "./models/pii_classifier_modernbert-base_model",
+            "./models/mom-pii-classifier",
+            "./models/lora_pii_detector_bert-base-uncased_model",
+        ]
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect()
+    };
 
     let pii_classifier_path = pii_classifier_paths
         .iter()
         .find(|path| std::path::Path::new(path).exists())
-        .copied();
+        .cloned();
 
     let pii_classifier_path = match pii_classifier_path {
         Some(path) => {

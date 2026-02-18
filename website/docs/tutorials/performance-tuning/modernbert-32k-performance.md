@@ -24,25 +24,25 @@ ModernBERT-base-32k extends the context window from 512 tokens (BERT-base) to 32
 
 | Context Length | Mean Latency | p50 Latency | p95 Latency | p99 Latency | Status |
 |----------------|--------------|-------------|-------------|-------------|--------|
-| 1,024 tokens   | 1,078.78ms   | 94.45ms     | 94.58ms     | 94.58ms     | Pass |
-| 4,096 tokens   | 896.08ms     | 953.31ms    | 953.39ms    | 953.39ms    | Pass |
-| 8,192 tokens   | 3,293.71ms   | 3,508.68ms  | 3,514.06ms  | 3,514.06ms  | Pass |
+| 1,024 tokens   | 90.98ms      | 94.18ms     | 94.24ms     | 94.24ms     | Pass |
+| 4,096 tokens   | 899.87ms     | 955.05ms    | 955.93ms    | 955.93ms    | Pass |
+| 8,192 tokens   | 3,299.92ms   | 3,524.62ms  | 3,526.34ms  | 3,526.34ms  | Pass |
 
 **Notes:**
-- 1K tokens: Mean latency appears high due to an outlier (p50=94.45ms is more representative)
+- 1K tokens: Stable performance with mean ≈ p50
 - 4K and 8K tokens: Stable performance with mean ≈ p50
 
 ### Concurrent Requests (C=10)
 
 | Context Length | Mean Latency | p50 Latency | p95 Latency | Success Rate | Status |
 |----------------|--------------|-------------|-------------|--------------|--------|
-| 1,024 tokens   | 996.55ms     | 961.17ms    | 1,381.20ms  | 100%         | Pass |
-| 4,096 tokens   | 9,065.91ms   | 9,242.60ms  | 10,428.34ms | 88%          | Partial |
+| 1,024 tokens   | 1,001.22ms   | 970.65ms    | 1,379.32ms  | 100%         | Pass |
+| 4,096 tokens   | 9,323.45ms   | 9,389.28ms  | 10,349.11ms | 93%          | Partial |
 | 8,192 tokens   | N/A          | N/A         | N/A         | 0%           | Fail |
 
 **Notes:**
 - 1K tokens: Excellent performance with 100% success rate
-- 4K tokens: 88% success rate (12 OOM errors out of 100 requests)
+- 4K tokens: 93% success rate (7 OOM errors out of 100 requests)
 - 8K tokens: Failed due to insufficient GPU memory
 
 ### High Concurrency (C=50, C=100)
@@ -97,7 +97,7 @@ All high concurrency tests (C=50+) failed due to hardware limitations. The curre
 
 **Concurrent Requests (C=10):**
 - 1K tokens: ~1,000ms (mean)
-- 4K tokens: ~9,200ms (mean, 88% success)
+- 4K tokens: ~9,400ms (mean, 93% success)
 - 8K tokens: Not supported (OOM)
 
 ### Memory Usage
@@ -321,4 +321,3 @@ See:
 - **Deployment Guide**: [Deployment Guide](./modernbert-32k-docs/modernbert-32k-deployment-guide.md)
 
 ---
-

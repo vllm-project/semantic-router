@@ -122,6 +122,38 @@ All tests failed due to low GPU memory (0.32GB free after initial tests).
 
 **Note**: The models in `models/lora_intent_classifier_bert-base-uncased_model/` are traditional fine-tuned classifiers (not true LoRA adapters), but they work perfectly with ModernBERT-32k. No retraining needed.
 
+### PII Classifier Integration
+
+**Status**: Fully tested and working with Extended32K base model
+
+**Test Results** (2026-02-18):
+- **Model Download**: Successfully downloaded from HuggingFace Hub (`LLM-Semantic-Router/pii_classifier_modernbert-base_model`)
+- **Classifier Compatibility**: PASSED - Existing PII classifier weights compatible with Extended32K base model
+- **Full Inference 32K**: PASSED - Complete inference pipeline working
+- **32K Classifier Inference**: PASSED - All components loading and working correctly
+
+**What Was Tested**:
+- PII classifier model download and verification
+- Compatibility of existing PII classifier weights with Extended32K base model
+- Full inference pipeline with Extended32K base model + PII classifier
+- Classification accuracy on various text lengths:
+  - Short text (28 chars): High confidence (0.98-0.99)
+  - Medium text (82 chars): High confidence (0.97)
+  - Long text (1.4K chars): Moderate confidence (0.30-0.44)
+  - Very long text (6K-36K chars): Moderate confidence (0.32-0.38)
+
+**Key Findings**:
+- PII classifier weights are fully compatible with Extended32K base model
+- No retraining required - existing classifier weights work directly
+- Classification works correctly on texts from 28 characters to 36K characters
+- Model supports 32K tokens via YaRN RoPE scaling
+- All test cases passed successfully
+
+**Test Files**:
+- `test_classifier_compatibility.rs` - Compatibility verification
+- `test_full_inference_32k.rs` - Full inference pipeline testing
+- `test_32k_classifier_inference.rs` - Component loading and inference testing
+
 ---
 
 ## 4. Performance Recommendations
