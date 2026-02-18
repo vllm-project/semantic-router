@@ -114,28 +114,33 @@ decisions:
         configuration:
           system_prompt: "You are a STEM expert. Provide rigorous, step-by-step explanations with examples and derivations where appropriate."
 
-  # --- General fallback (NOT operator) ---
+  # --- General fallback (NOR = NOT(OR(...))) ---
   #
-  # The NOT operator uses NOR semantics: this decision fires only when
-  # NONE of the listed conditions match.  It acts as an exclusion gate —
-  # instead of listing every non-STEM domain (biology, health, economics, …),
-  # simply declare what to exclude and anything outside that set lands here.
+  # NOT is strictly unary: it takes exactly one child and negates its result.
+  # To express "none of these domains", wrap them in OR first, then negate:
+  #   NOR(A,B,C,D,E)  ≡  NOT(OR(A,B,C,D,E))
+  #
+  # This fires only when the OR child evaluates to false, i.e. when NONE of
+  # the five STEM domains are detected — the natural catch-all for the other
+  # 9 non-STEM domains without enumerating them explicitly.
   - name: "general_fallback"
     description: "Route all non-STEM queries to the fast general model"
     priority: 50
     rules:
       operator: "NOT"
       conditions:
-        - type: "domain"
-          name: "computer_science"
-        - type: "domain"
-          name: "math"
-        - type: "domain"
-          name: "physics"
-        - type: "domain"
-          name: "engineering"
-        - type: "domain"
-          name: "chemistry"
+        - operator: "OR"
+          conditions:
+            - type: "domain"
+              name: "computer_science"
+            - type: "domain"
+              name: "math"
+            - type: "domain"
+              name: "physics"
+            - type: "domain"
+              name: "engineering"
+            - type: "domain"
+              name: "chemistry"
     modelRefs:
       - model: "general_model"
         use_reasoning: false
