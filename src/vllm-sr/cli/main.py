@@ -180,6 +180,12 @@ ALGORITHM_TYPES = [
     help="Run dashboard in read-only mode (disable config editing, allow playground only)",
 )
 @click.option(
+    "--minimal",
+    is_flag=True,
+    default=False,
+    help="Start in minimal mode: only router + envoy, no dashboard or observability (Jaeger, Prometheus, Grafana)",
+)
+@click.option(
     "--platform",
     default=None,
     help="Platform branding (e.g., 'amd' for AMD GPU deployments)",
@@ -192,7 +198,7 @@ ALGORITHM_TYPES = [
     "router_dc (embedding similarity), automix (cost-quality optimization), "
     "hybrid (combined methods). Overrides config file setting.",
 )
-def serve(config, image, image_pull_policy, readonly, platform, algorithm):
+def serve(config, image, image_pull_policy, readonly, minimal, platform, algorithm):
     """
     Start vLLM Semantic Router.
 
@@ -232,6 +238,9 @@ def serve(config, image, image_pull_policy, readonly, platform, algorithm):
         # Read-only dashboard (for public beta)
         vllm-sr serve --readonly
 
+        # Minimal mode (no dashboard, no observability)
+        vllm-sr serve --minimal
+
         # Platform branding (for AMD deployments)
         vllm-sr serve --platform amd
     """
@@ -266,8 +275,17 @@ def serve(config, image, image_pull_policy, readonly, platform, algorithm):
                 env_vars[var] = os.environ[var]
                 log.info(f"Passing environment variable: {var}=***")
 
+        # Minimal mode: disable dashboard and observability
+        if minimal:
+            env_vars["DISABLE_DASHBOARD"] = "true"
+            log.info("Minimal mode: ENABLED (no dashboard, no observability)")
+            if readonly:
+                log.warning(
+                    "--readonly is ignored in minimal mode (dashboard is disabled)"
+                )
+
         # Dashboard read-only mode
-        if readonly:
+        if readonly and not minimal:
             env_vars["DASHBOARD_READONLY"] = "true"
             log.info("Dashboard read-only mode: ENABLED")
 
@@ -309,6 +327,7 @@ def serve(config, image, image_pull_policy, readonly, platform, algorithm):
             env_vars=env_vars,
             image=image,
             pull_policy=image_pull_policy,
+            enable_observability=not minimal,
         )
 
     except KeyboardInterrupt:
