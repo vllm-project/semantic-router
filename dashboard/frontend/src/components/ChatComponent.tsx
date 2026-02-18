@@ -7,6 +7,7 @@ import HeaderReveal from './HeaderReveal'
 import ThinkingBlock from './ThinkingBlock'
 import ErrorBoundary from './ErrorBoundary'
 import ReMoMResponsesDisplay from './ReMoMResponsesDisplay'
+import FeedbackButtons from './FeedbackButtons'
 import { useToolRegistry } from '../tools'
 import { useMCPToolSync } from '../tools/mcp'
 import { getTranslateAttr } from '../hooks/useNoTranslate'
@@ -1688,7 +1689,9 @@ const ChatComponent = ({
                 </div>
               ) : (
                 <div className={styles.messages}>
-                  {messages.map(message => (
+                  {messages.map((message, msgIdx) => {
+                    const prevUserQuery = messages[msgIdx - 1]?.role === 'user' ? messages[msgIdx - 1].content : undefined
+                    return (
                     <div
                       key={message.id}
                       className={`${styles.message} ${styles[message.role]}`}
@@ -1763,6 +1766,16 @@ const ChatComponent = ({
                                       <span className={styles.cursor}>▊</span>
                                     )}
                                   </div>
+                                  {!message.isStreaming && choice.model && (
+                                    <div className={styles.choiceActions}>
+                                      <FeedbackButtons
+                                        modelId={choice.model}
+                                        category={message.headers?.['x-vsr-selected-decision']}
+                                        query={prevUserQuery}
+                                        otherModelIds={message.choices?.map(c => c.model).filter((m): m is string => m != null && m !== choice.model) ?? []}
+                                      />
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -1851,11 +1864,21 @@ const ChatComponent = ({
                           </>
                         )}
                         {message.role === 'assistant' && message.content && !message.isStreaming && (
-                          <MessageActionBar content={message.content} />
+                          <div className={styles.messageActionRow}>
+                            <MessageActionBar content={message.content} />
+                            {message.headers?.['x-vsr-selected-model'] && (
+                              <FeedbackButtons
+                                modelId={message.headers['x-vsr-selected-model']}
+                                category={message.headers['x-vsr-selected-decision']}
+                                query={prevUserQuery}
+                              />
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
-                  ))}
+                    )
+                  })}
                   <div ref={messagesEndRef} />
                 </div>
               )}

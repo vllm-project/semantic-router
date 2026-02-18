@@ -518,13 +518,20 @@ body.playground-fullscreen .container {
   color: var(--color-text-secondary);
 }
 
+/* Wrapper for action bar + feedback buttons */
+.messageActionRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+  margin-top: 0.5rem;
+}
+
 /* Message action bar - bottom toolbar like CodeBuddy */
 .messageActionBar {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  padding-top: 0.75rem;
-  margin-top: 0.5rem;
 }
 
 .actionButton {
@@ -823,6 +830,14 @@ body.playground-fullscreen .container {
   font-size: var(--text-sm);
   line-height: 1.6;
   word-break: break-word;
+}
+
+.choiceActions {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  border-top: 1px solid var(--color-border);
+  background-color: var(--color-bg-secondary);
 }
 
 /* Footer for platform branding */
