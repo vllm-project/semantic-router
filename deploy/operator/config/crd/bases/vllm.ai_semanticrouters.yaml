@@ -1137,7 +1137,8 @@ spec:
                               type: array
                             operator:
                               description: Operator for combining conditions (AND,
-                                OR, NOT). NOT uses NOR semantics.
+                                OR, NOT). NOT is strictly unary and negates its single
+                                child.
                               enum:
                               - AND
                               - OR
@@ -1276,9 +1277,9 @@ spec:
                                 type: object
                               type: array
                             operator:
-                              description: 'Operator specifies how to combine conditions:
-                                "AND", "OR", or "NOT". NOT uses NOR semantics: matches
-                                only when none of the conditions match.'
+                              description: |-
+                                Operator specifies how to combine conditions: "AND", "OR", or "NOT". NOT is strictly unary: it takes
+                                exactly one child condition and negates its result. Compose NOR/NAND by nesting NOT around OR/AND.
                               enum:
                               - AND
                               - OR
