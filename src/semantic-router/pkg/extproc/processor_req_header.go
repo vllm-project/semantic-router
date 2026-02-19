@@ -13,6 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
@@ -144,6 +145,9 @@ type RequestContext struct {
 
 	// Note: Per-user API keys from ext_authz / Authorino are read directly from
 	// ctx.Headers by the CredentialResolver (pkg/authz). No separate fields needed.
+
+	// Rate limit context — stored after Check() for post-response Report()
+	RateLimitCtx *ratelimit.Context
 }
 
 // handleRequestHeaders processes the request headers

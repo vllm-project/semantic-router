@@ -42,6 +42,33 @@ config:
   authz:
     fail_open: true
 
+  # --- Rate Limiting ---
+  # Local limiter: per-user sliding window counters, no external service.
+  # Limits are intentionally low for testability:
+  #   free-tier       → 3 RPM  (easy to exhaust in e2e tests)
+  #   premium-tier    → 10 RPM
+  #   platform-admins → 500 RPM
+  ratelimit:
+    fail_open: false
+    providers:
+      - type: local-limiter
+        rules:
+          - name: "free-rpm"
+            match:
+              group: "free-tier"
+            requests_per_unit: 3
+            unit: minute
+          - name: "premium-rpm"
+            match:
+              group: "premium-tier"
+            requests_per_unit: 10
+            unit: minute
+          - name: "admin-rpm"
+            match:
+              group: "platform-admins"
+            requests_per_unit: 500
+            unit: minute
+
   # --- Endpoints ---
   # Two vLLM simulator instances: 14B (high capability) and 7B (efficient)
   vllm_endpoints:
