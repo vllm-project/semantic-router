@@ -550,7 +550,20 @@ In this example, the complexity signal will only match if:
 
 ## Decision Rules - Signal Fusion
 
-Combine signals using AND/OR operators:
+Decision rules form a **recursive boolean expression tree (AST)**. Each `conditions` element is either:
+
+- a **leaf node** — a signal reference with `type` + `name`
+- a **composite node** — a sub-expression with `operator` + `conditions`
+
+Three primitive operators are supported:
+
+| Operator | Semantics | Children |
+| --- | --- | --- |
+| `AND` | All children must match | 1 or more |
+| `OR` | At least one child must match | 1 or more |
+| `NOT` | Negates its single child | **exactly 1** |
+
+Derived gates (NOR, NAND, XOR, XNOR) are expressed by composing these primitives — see examples below.
 
 ```yaml
 decisions:
@@ -569,6 +582,51 @@ decisions:
     modelRefs:
       - model: math-specialist
         weight: 1.0
+```
+
+**NOT — exclusion routing** (`NOT` is strictly unary):
+
+```yaml
+decisions:
+  - name: non_stem_fallback
+    description: "Route when NOT a STEM domain"
+    priority: 50
+    rules:
+      operator: "NOT"
+      conditions:
+        - operator: "OR"          # NOR = NOT(OR(...))
+          conditions:
+            - type: "domain"
+              name: "computer_science"
+            - type: "domain"
+              name: "math"
+    modelRefs:
+      - model: general-model
+```
+
+**Arbitrary nesting** — `(cs ∨ math_kw) ∧ en ∧ ¬long_context`:
+
+```yaml
+decisions:
+  - name: stem_english_short
+    priority: 500
+    rules:
+      operator: "AND"
+      conditions:
+        - operator: "OR"
+          conditions:
+            - type: "domain"
+              name: "computer_science"
+            - type: "keyword"
+              name: "math_request"
+        - type: "language"
+          name: "en"
+        - operator: "NOT"
+          conditions:
+            - type: "context"
+              name: "long_context"
+    modelRefs:
+      - model: en-cs-specialist
 ```
 
 **Example with Complexity Signal:**
