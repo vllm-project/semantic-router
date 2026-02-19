@@ -166,6 +166,9 @@ func (p *Profile) GetTestCases() []string {
 		"response-api-error-nonexistent-response-id-get",
 		"response-api-error-nonexistent-response-id-delete",
 		"response-api-error-backend-passthrough",
+
+		// Memory resilience
+		"memory-graceful-degradation",
 	}
 }
 
