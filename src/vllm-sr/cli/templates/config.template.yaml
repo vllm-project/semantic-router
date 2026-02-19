@@ -367,7 +367,11 @@ decisions:
           enabled: true
           similarity_threshold: 0.92
       # RAG Plugin: Retrieval-Augmented Generation
-      # Supports backends: milvus, external_api, openai, mcp, hybrid
+      # Supports backends: vectorstore, milvus, external_api, openai, mcp, hybrid
+      #
+      # When using vectorstore backend with Llama Stack hybrid search:
+      #   - search_type: "vector"  → scores are cosine similarity (0.0–1.0), threshold ~0.7 is typical
+      #   - search_type: "hybrid"  → scores are RRF (0.001–0.05), threshold is ignored automatically
       - type: "rag"
         configuration:
           enabled: true
