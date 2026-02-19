@@ -35,7 +35,7 @@ type VectorStore struct {
 	FileCounts   FileCounts             `json:"file_counts"`
 	ExpiresAfter *ExpirationPolicy      `json:"expires_after,omitempty"`
 	Metadata     map[string]interface{} `json:"metadata,omitempty"`
-	BackendType  string                 `json:"backend_type"` // "milvus", "memory"
+	BackendType  string                 `json:"backend_type"` // "memory", "milvus", "llama_stack"
 }
 
 // FileCounts tracks the processing status of files in a vector store.

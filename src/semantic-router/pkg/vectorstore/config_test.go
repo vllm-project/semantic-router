@@ -69,7 +69,7 @@ var _ = Describe("VectorStoreConfig", func() {
 			}
 			err := cfg.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("must be 'memory' or 'milvus'"))
+			Expect(err.Error()).To(ContainSubstring("must be 'memory', 'milvus', or 'llama_stack'"))
 		})
 	})
 

@@ -21,7 +21,7 @@ embedding_models:
 # Vector Store — local document ingestion and search
 vector_store:
   enabled: true
-  backend_type: "memory"         # "memory" (dev/testing) or "milvus" (production)
+  backend_type: "memory"         # "memory" (dev/testing), "milvus" (production), or "llama_stack"
   file_storage_dir: "/tmp/vsr-data"
   max_file_size_mb: 50
   embedding_model: "mmbert"      # "bert", "qwen3", "gemma", "mmbert"
@@ -39,6 +39,11 @@ vector_store:
   #   connection:
   #     host: "localhost"
   #     port: 19530
+  # llama_stack:
+  #   endpoint: "http://localhost:8321"
+  #   embedding_model: "all-MiniLM-L6-v2"
+  #   # auth_token: ""                # optional bearer token
+  #   # request_timeout_seconds: 30   # optional HTTP timeout
 
 # Semantic cache (independent of vector store)
 semantic_cache:
