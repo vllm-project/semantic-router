@@ -53,8 +53,73 @@ Each classification task proceeds as a full forward pass through the base model 
 
 \begin{figure}[ht]
     \centering
-    \includegraphics[width=\linewidth]{figures/lora_architecture.pdf}
-    \caption{LoRA-based MoM Inference Architecture. The input query is processed by a single, shared frozen base model ($W$). Simultaneously, task-specific low-rank adapters ($A \times B$) calculate perturbations. The outputs are summed element-wise to produce final task-specific classifications, enabling multi-task support with minimal memory overhead.}
+    \begin{tikzpicture}[
+      box/.style={rectangle, draw, thick, rounded corners=3pt,
+                  minimum height=1cm, align=center, inner sep=5pt, font=\small},
+      adapter/.style={box, minimum width=1.8cm},
+      sum/.style={circle, draw, thick, inner sep=0pt, minimum size=0.7cm,
+                  font=\normalsize},
+      outbox/.style={box, rounded corners=10pt},
+      arr/.style={->, >=stealth, thick},
+      lbl/.style={font=\scriptsize, midway},
+    ]
+
+    % Input
+    \node[outbox] (input) at (3.2, 5.2) {Input Query $\mathbf{x}$};
+
+    % Frozen base model
+    \node[box, fill=gray!15, minimum width=2.6cm, thick,
+          minimum height=1.1cm] (base) at (0, 3)
+      {\textbf{Frozen Base Model}\\$W$};
+
+    % Adapter group 1 (PII) -- left
+    \node[adapter, fill=blue!10] (a1) at (3.2, 3.9) {$A_{\text{pii}}$\;\scriptsize(rank $r$)};
+    \node[adapter, fill=blue!10] (b1) at (3.2, 2.1) {$B_{\text{pii}}$\;\scriptsize(rank $r$)};
+
+    % Dots
+    \node[font=\large] at (5.0, 3) {\dots};
+
+    % Adapter group N (intent) -- right
+    \node[adapter, fill=yellow!20] (an) at (6.8, 3.9) {$A_{\text{intent}}$\;\scriptsize(rank $r$)};
+    \node[adapter, fill=yellow!20] (bn) at (6.8, 2.1) {$B_{\text{intent}}$\;\scriptsize(rank $r$)};
+
+    % Adapters bounding box
+    \node[rectangle, draw, dashed, gray!60, rounded corners=3pt,
+          fit=(a1)(bn)(an), inner sep=8pt, label={[font=\scriptsize,gray]above:LoRA Adapters}] {};
+
+    % Sum nodes
+    \node[sum] (s1) at (1.2, 0.6) {$+$};
+    \node[sum] (sn) at (5.5, 0.6) {$+$};
+
+    % Outputs
+    \node[outbox, fill=blue!5] (o1) at (1.2, -0.8) {\scriptsize Task 1: $W'\mathbf{x}$};
+    \node[outbox, fill=yellow!10] (on) at (5.5, -0.8) {\scriptsize Task $N$: $W'\mathbf{x}$};
+
+    % Arrows: input to base and adapters
+    \draw[arr] (input.south) -- ++(0,-0.4) -| (base.north);
+    \draw[arr] (input) -- (a1);
+    \draw[arr] (input.south) -- ++(0,-0.4) -| (an.north);
+
+    % Arrows: A to B within adapters
+    \draw[arr] (a1) -- (b1);
+    \draw[arr] (an) -- (bn);
+
+    % Arrows: base to sum nodes
+    \draw[arr] (base.south) -- ++(0,-0.6) -| (s1.north west);
+    \draw[arr] (base.south) -- ++(0,-0.6) -| (sn.north west);
+
+    % Arrows: adapters to sum nodes
+    \draw[arr] (b1.south) -- ++(0,-0.3) -|
+      node[lbl, right, pos=0.2] {\scriptsize $B_1 A_1 \mathbf{x}$} (s1.north east);
+    \draw[arr] (bn.south) -- ++(0,-0.3) -|
+      node[lbl, right, pos=0.2] {\scriptsize $B_N A_N \mathbf{x}$} (sn.north east);
+
+    % Arrows: sum to output
+    \draw[arr] (s1) -- node[lbl, right] {\scriptsize $W\mathbf{x} + B_1 A_1 \mathbf{x}$} (o1);
+    \draw[arr] (sn) -- node[lbl, right] {\scriptsize $W\mathbf{x} + B_N A_N \mathbf{x}$} (on);
+
+    \end{tikzpicture}
+    \caption{LoRA-based MoM inference architecture. The input query~$\mathbf{x}$ is processed by a single frozen base model~($W$). Each task-specific LoRA adapter pair ($A_i$, $B_i$) computes a low-rank perturbation $B_i A_i \mathbf{x}$. The base output and adapter perturbation are summed to produce task-specific classifications, enabling multi-task support with minimal memory overhead.}
     \label{fig:lora_arch}
 \end{figure}
 

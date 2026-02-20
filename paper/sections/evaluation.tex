@@ -133,10 +133,66 @@ The evaluation architecture, shown in \Cref{fig:eval_pipeline}, utilizes the fol
 
 Results include p50 and p99 latency profiling to confirm that model orchestration remains within the operational bounds required for real-time routing.
 
-\begin{figure}[h]
+\begin{figure}[ht]
     \centering
-    \includegraphics[width=\linewidth]{figures/evaluation_flow.pdf}
-    \caption{Unified MoM evaluation pipeline. The system parallelizes assessment across the model registry, managing dynamic dataset loading and comparative metric generation for merged and LoRA variants.}
+    \begin{tikzpicture}[
+      box/.style={rectangle, draw, thick, rounded corners=3pt,
+                  minimum height=0.9cm, minimum width=2.3cm,
+                  align=center, inner sep=4pt, font=\small},
+      src/.style={box, fill=gray!12},
+      proc/.style={box, fill=blue!8},
+      outbox/.style={box, fill=green!10},
+      arr/.style={->, >=stealth, thick},
+      lbl/.style={font=\scriptsize, midway, above},
+    ]
+
+    % Row 1: Config + Data sources
+    \node[src] (cli) at (0, 3) {CLI Config};
+    \node[src] (ds)  at (3, 3) {Dataset Source\\[-1pt]\scriptsize(MMLU-Pro, Presidio)};
+    \node[src] (hf)  at (6.6, 3) {HF Hub / LoRA};
+
+    % Row 2: Loaders
+    \node[proc] (dl) at (1.5, 1.5) {Data Loader};
+    \node[proc] (ml) at (4.8, 1.5) {Model Loader};
+
+    % Row 3: Central engine
+    \node[proc, fill=blue!15, minimum width=3cm] (reg) at (3.2, 0)
+      {Model Registry};
+    \node[proc, fill=orange!10, minimum width=3cm] (pool) at (7.8, 0)
+      {Process Pool\\[-1pt]Executor};
+
+    % Row 4: Inference + metrics
+    \node[proc] (inf) at (1.5, -1.5) {Inference\\Engine};
+    \node[proc] (agg) at (5.5, -1.5) {Metrics\\Aggregator};
+
+    % Row 5: Outputs
+    \node[outbox] (cm)   at (1.5, -3) {Confusion\\Matrix};
+    \node[outbox] (json) at (5.5, -3) {JSON Stats\\[-1pt]\scriptsize(F1, precision, recall)};
+
+    % Arrows: sources to loaders
+    \draw[arr] (cli) -- (dl);
+    \draw[arr] (ds)  -- (dl);
+    \draw[arr] (ds)  -- (ml);
+    \draw[arr] (hf)  -- (ml);
+
+    % Arrows: loaders to registry
+    \draw[arr] (dl) -- (reg);
+    \draw[arr] (ml) -- (reg);
+
+    % Arrow: registry to pool
+    \draw[arr] (reg) -- (pool);
+
+    % Arrows: pool to inference and metrics
+    \draw[arr] (pool.south) -- ++(0,-0.3) -| (inf.north);
+    \draw[arr] (pool.south) -- ++(0,-0.3) -| (agg.north);
+
+    % Arrows: inference to outputs
+    \draw[arr] (inf) -- (cm);
+    \draw[arr] (inf.east) -- ++(0.4,0) |- (agg.west);
+    \draw[arr] (agg) -- (json);
+
+    \end{tikzpicture}
+    \caption{Unified MoM evaluation pipeline. Configuration and dataset sources feed into the data and model loaders, which populate the model registry. A process pool executor parallelizes inference across model variants, producing confusion matrices and aggregated metrics (weighted F1, per-class precision/recall) for both merged and LoRA models.}
     \label{fig:eval_pipeline}
 \end{figure}
 
