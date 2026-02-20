@@ -31,8 +31,18 @@ type MemoryBackendConfig struct {
 
 // memoryCollection holds the data for one in-memory vector store collection.
 type memoryCollection struct {
-	dimension int
-	chunks    map[string]EmbeddedChunk // chunk ID -> chunk
+	dimension  int
+	chunks     map[string]EmbeddedChunk // chunk ID -> chunk
+	bm25Index  *BM25Index              // rebuilt on chunk mutations
+	ngramIndex *NgramIndex             // rebuilt on chunk mutations
+}
+
+const defaultNgramSize = 3
+
+// rebuildTextIndexes rebuilds the BM25 and n-gram indexes from current chunks.
+func (col *memoryCollection) rebuildTextIndexes() {
+	col.bm25Index = NewBM25Index(col.chunks)
+	col.ngramIndex = NewNgramIndex(col.chunks, defaultNgramSize)
 }
 
 // MemoryBackend implements VectorStoreBackend using in-memory storage
@@ -107,6 +117,7 @@ func (m *MemoryBackend) InsertChunks(_ context.Context, vectorStoreID string, ch
 		col.chunks[chunk.ID] = chunk
 	}
 
+	col.rebuildTextIndexes()
 	return nil
 }
 
@@ -120,12 +131,17 @@ func (m *MemoryBackend) DeleteByFileID(_ context.Context, vectorStoreID string, 
 		return fmt.Errorf("collection not found: %s", vectorStoreID)
 	}
 
+	deleted := false
 	for id, chunk := range col.chunks {
 		if chunk.FileID == fileID {
 			delete(col.chunks, id)
+			deleted = true
 		}
 	}
 
+	if deleted {
+		col.rebuildTextIndexes()
+	}
 	return nil
 }
 
@@ -189,6 +205,123 @@ func (m *MemoryBackend) Search(
 	for i, c := range candidates {
 		results[i] = c.result
 	}
+	return results, nil
+}
+
+// HybridSearch performs hybrid search combining vector similarity, BM25, and
+// n-gram scoring. Implements the HybridSearcher interface.
+func (m *MemoryBackend) HybridSearch(
+	_ context.Context, vectorStoreID string,
+	query string, queryEmbedding []float32,
+	topK int, threshold float32,
+	filter map[string]interface{},
+	config *HybridSearchConfig,
+) ([]SearchResult, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	col, exists := m.collections[vectorStoreID]
+	if !exists {
+		return nil, fmt.Errorf("collection not found: %s", vectorStoreID)
+	}
+
+	if config == nil {
+		config = &HybridSearchConfig{}
+	}
+	config.applyDefaults()
+
+	var filterFileID string
+	if filter != nil {
+		if fid, ok := filter["file_id"].(string); ok {
+			filterFileID = fid
+		}
+	}
+
+	// Build the set of candidate chunk IDs (respecting file_id filter).
+	candidates := make(map[string]EmbeddedChunk)
+	for id, chunk := range col.chunks {
+		if filterFileID != "" && chunk.FileID != filterFileID {
+			continue
+		}
+		candidates[id] = chunk
+	}
+
+	// 1. Vector similarity scores.
+	vectorScores := make(map[string]float64, len(candidates))
+	for id, chunk := range candidates {
+		sim := cosineSimilarity(queryEmbedding, chunk.Embedding)
+		if sim > 0 {
+			vectorScores[id] = sim
+		}
+	}
+
+	// 2. BM25 scores (use the pre-built index, score with request-time k1/b).
+	var bm25Scores map[string]float64
+	if col.bm25Index != nil {
+		allBM25 := col.bm25Index.Score(query, config.BM25K1, config.BM25B)
+		if filterFileID != "" {
+			bm25Scores = make(map[string]float64)
+			for id, s := range allBM25 {
+				if _, ok := candidates[id]; ok {
+					bm25Scores[id] = s
+				}
+			}
+		} else {
+			bm25Scores = allBM25
+		}
+	}
+
+	// 3. N-gram scores. Rebuild if requested size differs from pre-built index.
+	var ngramScores map[string]float64
+	ngramIdx := col.ngramIndex
+	if ngramIdx != nil && ngramIdx.NgramN() != config.NgramSize {
+		ngramIdx = NewNgramIndex(col.chunks, config.NgramSize)
+	}
+	if ngramIdx != nil {
+		allNgram := ngramIdx.Score(query)
+		if filterFileID != "" {
+			ngramScores = make(map[string]float64)
+			for id, s := range allNgram {
+				if _, ok := candidates[id]; ok {
+					ngramScores[id] = s
+				}
+			}
+		} else {
+			ngramScores = allNgram
+		}
+	}
+
+	// 4. Fuse scores.
+	fused := FuseScores(vectorScores, bm25Scores, ngramScores, config)
+
+	// 5. Apply threshold and topK, build results.
+	results := make([]SearchResult, 0, topK)
+	for _, fc := range fused {
+		if fc.finalScore < float64(threshold) {
+			continue
+		}
+		chunk, ok := col.chunks[fc.chunkID]
+		if !ok {
+			continue
+		}
+		vs := fc.vectorScore
+		bs := fc.bm25Score
+		ns := fc.ngramScore
+		results = append(results, SearchResult{
+			FileID:      chunk.FileID,
+			Filename:    chunk.Filename,
+			Content:     chunk.Content,
+			Score:       fc.finalScore,
+			ChunkIndex:  chunk.ChunkIndex,
+			VectorScore: &vs,
+			BM25Score:   &bs,
+			NgramScore:  &ns,
+		})
+		if topK > 0 && len(results) >= topK {
+			break
+		}
+	}
+
 	return results, nil
 }
 
