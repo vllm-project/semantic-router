@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 var (
@@ -103,6 +105,52 @@ func BenchmarkPreference_VeryLongQuery(b *testing.B) {
 	labels := []string{"code_generation", "bug_fixing", "code_review", "weather_inquiry"}
 	text := strings.Repeat("Generate some python code for me.", 200)
 	benchmarkPreference(b, text, labels, "code_generation")
+}
+
+// Contrastive few-shot preference benchmark (uses mocked embeddings, no model weights needed).
+func BenchmarkPreference_ContrastiveFewShot(b *testing.B) {
+	reset := classification.SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*binding.EmbeddingOutput, error) {
+		lower := strings.ToLower(text)
+		switch {
+		case strings.Contains(lower, "bug") || strings.Contains(lower, "fix"):
+			return &binding.EmbeddingOutput{Embedding: []float32{0.1, 0.9}}, nil
+		case strings.Contains(lower, "code"):
+			return &binding.EmbeddingOutput{Embedding: []float32{0.9, 0.1}}, nil
+		default:
+			return &binding.EmbeddingOutput{Embedding: []float32{0.5, 0.5}}, nil
+		}
+	})
+	defer reset()
+
+	rules := []config.PreferenceRule{
+		{Name: "code_generation", Description: "Writes code", Examples: []string{"write python"}},
+		{Name: "bug_fixing", Description: "Fixes bugs", Examples: []string{"fix this bug"}},
+	}
+
+	cfg := &config.PreferenceModelConfig{UseContrastive: true, EmbeddingModel: "mock"}
+
+	classifier, err := classification.NewPreferenceClassifier(nil, rules, cfg)
+	if err != nil {
+		b.Fatalf("failed to create contrastive preference classifier: %v", err)
+	}
+
+	conv := `[{"role":"user","content":"please fix this bug"}]`
+
+	// warmup
+	if _, err := classifier.Classify(conv); err != nil {
+		b.Fatalf("warmup failed: %v", err)
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		if _, err := classifier.Classify(conv); err != nil {
+			b.Fatalf("classification failed: %v", err)
+		}
+	}
+
+	b.StopTimer()
 }
 
 // =============================================================================================
