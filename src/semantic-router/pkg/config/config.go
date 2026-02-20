@@ -1444,6 +1444,19 @@ type PreferenceModelConfig struct {
 
 	// Use Qwen3 preference classifier (zero-shot / fine-tuned)
 	UseQwen3 bool `yaml:"use_qwen3"`
+
+	// UseContrastive enables few-shot contrastive preference routing using embeddings
+	// When true, the classifier will ignore ModelID/UseQwen3 and instead pick the
+	// route whose examples are most similar to the query embedding.
+	UseContrastive bool `yaml:"use_contrastive"`
+
+	// EmbeddingModel selects the embedding backbone for contrastive preference
+	// Supported values follow GetEmbeddingWithModelType (e.g. "qwen3", "gemma", "mmbert")
+	EmbeddingModel string `yaml:"embedding_model,omitempty"`
+
+	// MaxExamples controls how many few-shot examples per rule are used for
+	// preloading. If 0, all provided examples are used.
+	MaxExamples int `yaml:"max_examples,omitempty"`
 }
 
 // ExternalModelConfig represents configuration for external LLM-based models
@@ -2607,6 +2620,10 @@ type PreferenceRule struct {
 	// Description provides human-readable explanation of what this route handles
 	// This description is sent to the external LLM for route matching
 	Description string `yaml:"description,omitempty"`
+
+	// Examples are few-shot preference hints used by the contrastive classifier
+	// Each example should resemble a user request that maps to this preference.
+	Examples []string `yaml:"examples,omitempty"`
 }
 
 // LanguageRule defines a rule for multi-language detection signal classification
