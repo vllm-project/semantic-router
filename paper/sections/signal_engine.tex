@@ -166,7 +166,7 @@ This bidirectional flow---request signals gating which response analyses to perf
 \subsection{Information-Theoretic Signal Analysis}
 
 With $N$ signal types evaluated per request, a natural question is whether all signals contribute independently to routing quality or whether some carry redundant information.
-Information theory provides the formal framework for this analysis~\cite{shannon1948mathematical}.
+Information theory provides the formal framework for this analysis.
 
 For a signal type $\tau_i$ and the routing outcome variable $Y$ (the selected model), the \emph{mutual information} $I(\tau_i; Y)$ quantifies the reduction in uncertainty about the routing decision provided by observing signal $\tau_i$.
 The \emph{conditional mutual information} $I(\tau_i; Y \mid \tau_j)$ measures the additional information from $\tau_i$ given that $\tau_j$ is already observed.

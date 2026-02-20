@@ -22,7 +22,7 @@ RouterBench~\cite{hu2024routerbench} proposed a benchmark for multi-LLM routing 
 Our Hybrid selector builds on this approach.
 
 \textbf{RL-based routing.}
-Router-R1~\cite{zhang2025routerr1} applies reinforcement learning with Thompson sampling for multi-round routing.
+Router-R1~\cite{zhang2025routerr1} formulates multi-LLM routing as a sequential decision process, using rule-based reward RL for multi-round routing and aggregation.
 GMTRouter~\cite{xie2025gmtrouter} uses graph-based learning for personalized multi-turn interactions.
 We integrate both within the unified selection interface and extend them with the ReMoM multi-round reasoning strategy.
 
@@ -42,7 +42,7 @@ The two paradigms are complementary: our router can route to MoE models as backe
 
 \subsection{LLM Safety}
 
-Prompt injection defenses~\cite{jain2023promptguard,inan2023llamaguard} detect adversarial inputs via fine-tuned classifiers.
+Prompt injection defenses range from perplexity filtering and input preprocessing~\cite{jain2023baseline} to fine-tuned safety classifiers~\cite{inan2023llamaguard}.
 PII detection systems~\cite{lison2021anonymisation} identify sensitive information using rule-based and ML approaches.
 Our safety subsystem integrates both within the routing pipeline with per-decision thresholds and policies, using LoRA adapters for memory-efficient multi-task classification.
 
@@ -57,6 +57,6 @@ HaluGate differs in three respects:
 
 \subsection{Semantic Caching and RAG}
 
-Semantic caching for LLMs~\cite{lewis2020rag} uses embedding similarity for query matching.
+Semantic caching for LLMs uses embedding similarity to match incoming queries against previously seen requests, avoiding redundant model invocations.
 Our cache extends this with per-decision policies, multiple backends, and integration with the safety pipeline (cache lookups occur \emph{after} safety checks but \emph{before} model invocation).
 RAG integration~\cite{lewis2020rag,wang2021milvus} augments responses with retrieved context; our contribution is embedding RAG as a per-decision plugin within the routing framework.
