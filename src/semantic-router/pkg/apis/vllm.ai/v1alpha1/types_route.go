@@ -204,9 +204,10 @@ type Decision struct {
 
 // SignalCombination defines how to combine multiple signals
 type SignalCombination struct {
-	// Operator defines the logical operator for combining conditions (AND/OR)
+	// Operator defines the logical operator for combining conditions (AND/OR/NOT)
+	// NOT uses NOR semantics: matches only when none of the conditions match.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=AND;OR
+	// +kubebuilder:validation:Enum=AND;OR;NOT
 	Operator string `json:"operator" yaml:"operator"`
 
 	// Conditions defines the list of signal conditions

@@ -243,26 +243,113 @@ decisions:
 - **Logic**: Route to code_help **if** keyword OR embedding matches
 - **Use Case**: Broad coverage (reduce false negatives)
 
-### Nested Logic - Complex Rules
+### NOT Operator — Unary Negation
+
+`NOT` is strictly unary: it takes **exactly one child** and negates its result.
 
 ```yaml
 decisions:
-  - name: "verified_math"
+  - name: "non_code"
+    rules:
+      operator: "NOT"
+      conditions:
+        - type: "keyword"       # single child — always required
+          name: "code_request"
+```
+
+- **Logic**: Route if the query does **not** contain code-related keywords
+- **Use Case**: Complement routing, exclusion gates
+
+### Derived Operators (composed from AND / OR / NOT)
+
+Because `NOT` is unary, compound gates are built by nesting:
+
+| Operator | Boolean identity | YAML pattern |
+| --- | --- | --- |
+| **NOR** | `¬(A ∨ B)` | `NOT → OR → [A, B]` |
+| **NAND** | `¬(A ∧ B)` | `NOT → AND → [A, B]` |
+| **XOR** | `(A ∧ ¬B) ∨ (¬A ∧ B)` | `OR → [AND(A,NOT(B)), AND(NOT(A),B)]` |
+| **XNOR** | `(A ∧ B) ∨ (¬A ∧ ¬B)` | `OR → [AND(A,B), AND(NOT(A),NOT(B))]` |
+
+**NOR** — route when *none* of the conditions match:
+
+```yaml
+rules:
+  operator: "NOT"
+  conditions:
+    - operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "computer_science"
+        - type: "domain"
+          name: "math"
+```
+
+**NAND** — route unless *all* conditions match simultaneously:
+
+```yaml
+rules:
+  operator: "NOT"
+  conditions:
+    - operator: "AND"
+      conditions:
+        - type: "language"
+          name: "zh"
+        - type: "keyword"
+          name: "code_request"
+```
+
+**XOR** — route when *exactly one* condition matches:
+
+```yaml
+rules:
+  operator: "OR"
+  conditions:
+    - operator: "AND"
+      conditions:
+        - type: "keyword"
+          name: "code_request"
+        - operator: "NOT"
+          conditions:
+            - type: "keyword"
+              name: "math_request"
+    - operator: "AND"
+      conditions:
+        - operator: "NOT"
+          conditions:
+            - type: "keyword"
+              name: "code_request"
+        - type: "keyword"
+          name: "math_request"
+```
+
+### Arbitrary Nesting — Boolean Expression Trees
+
+Every `conditions` element can be either a **leaf node** (a signal reference with `type` + `name`) or a **composite node** (a sub-tree with `operator` + `conditions`). This makes the rule structure a recursive boolean expression tree (AST) of unlimited depth.
+
+```yaml
+# (cs ∨ math_keyword) ∧ en ∧ ¬long_context
+decisions:
+  - name: "stem_english_short"
     rules:
       operator: "AND"
       conditions:
-        - type: "domain"
-          name: "mathematics"
-        - operator: "OR"
+        - operator: "OR"                    # composite child
           conditions:
+            - type: "domain"
+              name: "computer_science"
             - type: "keyword"
-              name: "proof_keywords"
-            - type: "fact_check"
-              name: "factual_queries"
+              name: "math_request"
+        - type: "language"                  # leaf child
+          name: "en"
+        - operator: "NOT"                   # composite child (unary NOT)
+          conditions:
+            - type: "context"
+              name: "long_context"
 ```
 
-- **Logic**: Route if (mathematics domain) AND (proof keywords OR needs fact checking)
-- **Use Case**: Complex routing scenarios
+- **Logic**: `(CS domain OR math keyword) AND English AND NOT long context`
+- **Use Case**: Multi-signal, multi-level routing
 
 ## Real-World Example
 

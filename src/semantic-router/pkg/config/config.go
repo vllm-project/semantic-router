@@ -2506,25 +2506,53 @@ func (d *Decision) GetMemoryConfig() *MemoryPluginConfig {
 	return result
 }
 
-// RuleCombination defines how to combine multiple rule conditions with AND/OR operators
-type RuleCombination struct {
-	// Operator specifies how to combine conditions: "AND" or "OR"
-	Operator string `yaml:"operator"`
+// RuleNode is a recursive union type that represents a node in a boolean expression tree.
+// It can act as either a leaf node (a signal reference) or a composite node (an operator
+// with child nodes), enabling arbitrarily nested boolean logic such as:
+//
+//	NOT ((A OR B) AND C AND (NOT D))
+//
+// Discriminator rules:
+//   - If Type != "" → leaf node: references a signal by type and name.
+//   - If Operator != "" → composite node: applies the operator to its children.
+//
+// Supported operators:
+//   - "AND": all children must match.
+//   - "OR":  at least one child must match.
+//   - "NOT": strictly unary — exactly one child; result is negated.
+type RuleNode struct {
+	// Leaf node fields (signal reference). Mutually exclusive with composite fields.
 
-	// Conditions is the list of rule references to evaluate
-	Conditions []RuleCondition `yaml:"conditions"`
+	// Type specifies the signal type: "keyword", "embedding", "domain", "fact_check",
+	// "user_feedback", "preference", "language", "latency", "context", "complexity",
+	// "modality", or "authz".
+	Type string `yaml:"type,omitempty" json:"type,omitempty"`
+
+	// Name is the name of the signal rule to reference.
+	Name string `yaml:"name,omitempty" json:"name,omitempty"`
+
+	// Composite node fields (boolean operator). Mutually exclusive with leaf fields.
+
+	// Operator specifies the logical operator: "AND", "OR", or "NOT".
+	// NOT is strictly unary — it must have exactly one child in Conditions.
+	Operator string `yaml:"operator,omitempty" json:"operator,omitempty"`
+
+	// Conditions holds the child nodes for a composite node.
+	Conditions []RuleNode `yaml:"conditions,omitempty" json:"conditions,omitempty"`
 }
 
-// RuleCondition references a specific rule by type and name
-type RuleCondition struct {
-	// Type specifies the rule type: "keyword", "embedding", "domain", "fact_check",
-	// "user_feedback", "preference", "language", "context", "complexity", or "modality".
-	Type string `yaml:"type"`
-
-	// Name is the name of the rule to reference.
-	// For fact_check type, use "needs_fact_check" to match queries that need fact verification.
-	Name string `yaml:"name"`
+// IsLeaf returns true when this node is a leaf (signal reference).
+func (n *RuleNode) IsLeaf() bool {
+	return n.Type != ""
 }
+
+// RuleCombination is an alias for RuleNode kept for backward compatibility.
+// New code should use RuleNode directly.
+type RuleCombination = RuleNode
+
+// RuleCondition is an alias for RuleNode kept for backward compatibility.
+// New code should use RuleNode directly.
+type RuleCondition = RuleNode
 
 // FactCheckRule defines a rule for fact-check signal classification
 // Similar to KeywordRule and EmbeddingRule, but based on ML model classification
