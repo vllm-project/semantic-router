@@ -22,6 +22,65 @@ where $\mathbf{1}[f_i(r)]$ is the match indicator and $c_i(r) \in [0,1]$ is the 
 
 The eleven signal types partition into \emph{heuristic} and \emph{learned} categories based on whether they require neural inference.
 
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    node distance=0.4cm,
+    sig/.style={rectangle, draw, rounded corners=2pt,
+                minimum height=0.5cm, minimum width=1.55cm,
+                align=center, font=\scriptsize, inner sep=2pt},
+    arr/.style={->, >=stealth, thick},
+    grp/.style={rectangle, draw, dashed, rounded corners=4pt,
+                inner sep=6pt, gray!40},
+  ]
+  % Input request
+  \node[sig, fill=black!4, minimum width=1.2cm] (req) at (0, 0) {Request $r$};
+
+  % --- Heuristic group (top) ---
+  \node[sig, fill=blue!6] (kw) at (3.0, 1.8) {$\tau_{\text{kw}}$\;Keyword};
+  \node[sig, fill=blue!6] (ctx) at (5.6, 1.8) {$\tau_{\text{ctx}}$\;Context};
+  \node[sig, fill=blue!6] (lang) at (3.0, 1.0) {$\tau_{\text{lang}}$\;Language};
+  \node[sig, fill=blue!6] (authz) at (5.6, 1.0) {$\tau_{\text{authz}}$\;Authz};
+  \node[font=\scriptsize, text=gray] (hdots) at (7.2, 1.4) {$\cdots$};
+  % Heuristic bounding box (on background so it doesn't cover signal nodes)
+  \begin{scope}[on background layer]
+  \node[grp, fill=blue!3, fit=(kw)(ctx)(lang)(authz)(hdots),
+        label={[font=\scriptsize\bfseries, text=blue!50, anchor=south]above:Heuristic {\normalfont\scriptsize($<$1\,ms)}}] (hbox) {};
+  \end{scope}
+
+  % --- Learned group (bottom) ---
+  \node[sig, fill=green!6] (emb) at (2.4, -0.7) {$\tau_{\text{emb}}$\;Embed};
+  \node[sig, fill=green!6] (dom) at (4.3, -0.7) {$\tau_{\text{dom}}$\;Domain};
+  \node[sig, fill=green!6] (fact) at (6.2, -0.7) {$\tau_{\text{fact}}$\;Factual};
+  \node[sig, fill=green!6] (fb) at (2.4, -1.5) {$\tau_{\text{fb}}$\;Feedback};
+  \node[sig, fill=green!6] (mod) at (4.3, -1.5) {$\tau_{\text{mod}}$\;Modality};
+  \node[sig, fill=green!6] (cpx) at (6.2, -1.5) {$\tau_{\text{cpx}}$\;Complex.};
+  \node[sig, fill=green!6] (pref) at (4.3, -2.3) {$\tau_{\text{pref}}$\;Prefer.};
+  \node[font=\scriptsize, text=gray] (ldots) at (6.2, -2.3) {$\cdots$};
+  % Learned bounding box (on background so it doesn't cover signal nodes)
+  \begin{scope}[on background layer]
+  \node[grp, fill=green!3, fit=(emb)(dom)(fact)(fb)(mod)(cpx)(pref)(ldots),
+        label={[font=\scriptsize\bfseries, text=green!50, anchor=north]below:Learned {\normalfont\scriptsize(10--100\,ms)}}] (lbox) {};
+  \end{scope}
+
+  % Output
+  \node[sig, fill=orange!5, minimum width=1.4cm] (sr) at (8.6, 0) {$S(r)$};
+
+  % Arrows: request → groups
+  \draw[arr] (req.east) -- ++(0.4,0) |- (hbox.west);
+  \draw[arr] (req.east) -- ++(0.4,0) |- (lbox.west);
+
+  % Arrows: groups → S(r)
+  \draw[arr] (hbox.east) -| ++(0.6, -0.55) -- (sr.north west);
+  \draw[arr] (lbox.east) -| ++(0.6, 0.55) -- (sr.south west);
+
+  % Parallel annotation
+  \node[font=\scriptsize, text=gray, rotate=90, anchor=south] at (1.3, 0.2) {parallel};
+\end{tikzpicture}
+\caption{Signal extraction taxonomy and evaluation flow.  An incoming request is evaluated in parallel against heuristic signals (sub-millisecond, deterministic) and learned signals (neural inference via LoRA classifiers).  Only signal types referenced by configured decisions are computed (demand-driven evaluation).  Results merge into the structured signal result $S(r)$.}
+\label{fig:signal_taxonomy}
+\end{figure}
+
 \subsection{Heuristic Signals}
 
 Heuristic signals use deterministic or statistical algorithms with sub-millisecond latency:

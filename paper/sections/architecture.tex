@@ -46,23 +46,23 @@ The architecture decomposes routing into three layers, each with a well-defined 
   \centering
   \begin{tikzpicture}[
     layer/.style={rectangle, draw, thick, rounded corners=3pt,
-                  minimum height=1.4cm, minimum width=4cm, align=center,
-                  inner sep=6pt, font=\small},
-    io/.style={rectangle, draw, rounded corners=2pt, fill=gray!12,
-               font=\small, inner sep=6pt, align=center,
-               minimum width=1.6cm},
+                  minimum height=1.3cm, minimum width=3.4cm, align=center,
+                  inner sep=5pt, font=\small},
+    io/.style={rectangle, draw, rounded corners=2pt, fill=black!4,
+               font=\small, inner sep=5pt, align=center,
+               minimum width=1.4cm},
     detail/.style={rectangle, draw, thin, rounded corners=2pt,
                    fill=white, font=\scriptsize, align=left,
-                   text width=3.8cm, inner sep=5pt},
+                   text width=3.4cm, inner sep=4pt},
     arr/.style={->, >=stealth, thick},
-    darr/.style={->, >=stealth, densely dashed, gray!60},
+    darr/.style={->, >=stealth, densely dashed, gray!40},
     lbl/.style={font=\small, above, midway},
   ]
 
   % Configuration bar
-  \node[rectangle, draw, thick, rounded corners=3pt, fill=yellow!8,
-        minimum width=16.8cm, inner sep=5pt, font=\small]
-    (cfg) at (6.4, 3.2)
+  \node[rectangle, draw, thick, rounded corners=3pt, fill=yellow!6,
+        minimum width=14.4cm, inner sep=5pt, font=\small]
+    (cfg) at (5.6, 3.0)
     {\textbf{Deployment Configuration}\;
      $\Gamma = (\mathcal{S}_\Gamma,\;
      \mathcal{D}_\Gamma,\;
@@ -70,15 +70,15 @@ The architecture decomposes routing into three layers, each with a well-defined 
      \mathcal{E}_\Gamma)$};
 
   % Input
-  \node[io] (req) at (-1.6, 0.8) {Request\\$r$};
+  \node[io] (req) at (-1.2, 0.8) {Request\\$r$};
 
-  % Layer boxes -- spread out with 5.2cm spacing
-  \node[layer, fill=blue!8]   (L1) at (2.4,  0.8) {\textbf{Layer 1}\\Signal Extraction};
-  \node[layer, fill=green!8]  (L2) at (6.8,  0.8) {\textbf{Layer 2}\\Decision Engine};
-  \node[layer, fill=orange!8] (L3) at (11.2, 0.8) {\textbf{Layer 3}\\Plugin Chain};
+  % Layer boxes
+  \node[layer, fill=blue!6]   (L1) at (2.0,  0.8) {\textbf{Layer 1}\\Signal Extraction};
+  \node[layer, fill=green!6]  (L2) at (5.8,  0.8) {\textbf{Layer 2}\\Decision Engine};
+  \node[layer, fill=orange!5] (L3) at (9.6, 0.8) {\textbf{Layer 3}\\Plugin Chain};
 
   % Output
-  \node[io] (out) at (14.8, 0.8) {Provider\\Endpoint};
+  \node[io] (out) at (12.8, 0.8) {Provider\\Endpoint};
 
   % Main flow arrows
   \draw[arr] (req)  -- (L1);
@@ -91,8 +91,8 @@ The architecture decomposes routing into three layers, each with a well-defined 
   \draw[darr] (cfg.south -| L2) -- (L2.north);
   \draw[darr] (cfg.south -| L3) -- (L3.north);
 
-  % Detail boxes -- anchored to top, well below the layer boxes
-  \node[detail, anchor=north] (d1) at (2.4, -0.5) {%
+  % Detail boxes
+  \node[detail, anchor=north] (d1) at (2.0, -0.4) {%
     \textbf{Heuristic} ({$<$}1\,ms):\\
     keyword, language,\\
     context length, authz\\[2pt]
@@ -101,15 +101,15 @@ The architecture decomposes routing into three layers, each with a well-defined 
     modality, factual, preference,\\
     feedback};
 
-  \node[detail, anchor=north] (d2) at (6.8, -0.5) {%
+  \node[detail, anchor=north] (d2) at (5.8, -0.4) {%
     Boolean $\varphi$ over signal\\
-    conditions (AND / OR)\\[2pt]
+    conditions (AND / OR / NOT tree)\\[2pt]
     Priority or confidence\\
     ranking $\to$ select $d^*$\\[2pt]
     Per-decision model pool\\
     $\mathcal{M}_{d^*} \subseteq \mathcal{M}$};
 
-  \node[detail, anchor=north] (d3) at (11.2, -0.5) {%
+  \node[detail, anchor=north] (d3) at (9.6, -0.4) {%
     \textbf{Pre:} jailbreak, PII, cache,\\
     RAG, modality, memory,\\
     system prompt, header auth\\[2pt]
@@ -121,11 +121,11 @@ The architecture decomposes routing into three layers, each with a well-defined 
   \draw[thin, gray!40] (L2.south) -- (d2.north);
   \draw[thin, gray!40] (L3.south) -- (d3.north);
 
-  % Feedback loop -- runs below the detail boxes
+  % Feedback loop
   \draw[darr, rounded corners=6pt]
-    (out.south) -- ++(0,-4.0) -| (L1.south west);
+    (out.south) -- ++(0,-3.8) -| (L1.south west);
   \node[font=\scriptsize, fill=white, inner sep=2pt]
-    at (6.4, -3.7)
+    at (5.6, -3.5)
     {Response signals: hallucination, feedback, latency};
 
   \end{tikzpicture}

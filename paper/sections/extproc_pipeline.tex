@@ -23,6 +23,100 @@ The request body phase implements the core routing logic as a sequential pipelin
   r \xrightarrow{\text{parse}} r' \xrightarrow{\text{signals}} S(r') \xrightarrow{\text{decide}} d^* \xrightarrow{\Pi_\text{pre}} \xrightarrow{\text{select}} m^* \xrightarrow{\text{route}} e^*
 \end{equation}
 
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    node distance=0.3cm,
+    phase/.style={rectangle, draw, thick, rounded corners=3pt,
+                  align=center, inner sep=5pt, font=\small,
+                  minimum height=1.6cm},
+    io/.style={rectangle, draw, rounded corners=2pt, fill=black!4,
+               font=\small, inner sep=4pt, align=center,
+               minimum width=1.2cm},
+    sub/.style={font=\scriptsize, align=left, text=black!70},
+    arr/.style={->, >=stealth, thick},
+    darr/.style={->, >=stealth, densely dashed, gray!40},
+    pathlbl/.style={font=\scriptsize\bfseries, text=gray!60},
+  ]
+
+  % ===== Request path (top, left → right) =====
+  \node[pathlbl] at (-0.4, 1.6) {Request};
+  \node[pathlbl] at (-0.4, 1.2) {path};
+
+  \node[io] (req) at (0.8, 1.4) {$r$};
+
+  % Layer 1: Signal
+  \node[phase, fill=blue!6, minimum width=2.4cm] (sig) at (3.2, 1.4) {%
+    \textbf{Signal}\\[-1pt]
+    {\scriptsize parse, detect,}\\[-2pt]
+    {\scriptsize extract $S(r)$}};
+
+  % Layer 2: Decision
+  \node[phase, fill=green!6, minimum width=2.4cm] (dec) at (6.2, 1.4) {%
+    \textbf{Decision}\\[-1pt]
+    {\scriptsize evaluate $\varphi$}\\[-2pt]
+    {\scriptsize select $d^*$}};
+
+  % Layer 3: Plugins (Pre) + Select + Route
+  \node[phase, fill=orange!5, minimum width=3.6cm] (plug) at (9.8, 1.4) {%
+    \textbf{Plugins (Pre)}\\[-1pt]
+    {\scriptsize jailbreak, PII, cache,}\\[-2pt]
+    {\scriptsize RAG, modality, memory,}\\[-2pt]
+    {\scriptsize select $m^*$, route $e^*$}};
+
+  \node[io] (ep) at (12.6, 1.4) {$e^*$};
+
+  % Request arrows
+  \draw[arr] (req) -- (sig);
+  \draw[arr] (sig) -- node[above, font=\scriptsize]{$S(r)$} (dec);
+  \draw[arr] (dec) -- node[above, font=\scriptsize]{$d^*$} (plug);
+  \draw[arr] (plug) -- (ep);
+
+  % Cache hit short-circuit
+  \node[io, minimum width=0.8cm, font=\scriptsize] (hit) at (9.8, 3.1) {resp};
+  \draw[darr] (plug.north) -- (hit.south);
+  \node[font=\tiny, text=gray, anchor=west] at (10.1, 2.65) {cache hit};
+
+  % ===== Response path (bottom, right → left) =====
+  \node[pathlbl, anchor=east] at (-0.1, -1.4) {Response};
+  \node[pathlbl, anchor=east] at (-0.1, -1.8) {path};
+
+  \node[io] (ep2) at (12.6, -1.6) {$e^*$};
+
+  % Layer 1: Signal (response) — first stage after e*
+  \node[phase, fill=blue!6, minimum width=2.6cm] (rsig) at (10.2, -1.6) {%
+    \textbf{Signal}\\[-1pt]
+    {\scriptsize usage, HaluGate,}\\[-2pt]
+    {\scriptsize metrics (TTFT/TPOT)}};
+
+  % Layer 2: Decision (response)
+  \node[phase, fill=green!6, minimum width=2.6cm] (rdec) at (6.8, -1.6) {%
+    \textbf{Decision}\\[-1pt]
+    {\scriptsize quality gating,}\\[-2pt]
+    {\scriptsize cache eligibility}};
+
+  % Layer 3: Plugins (Post)
+  \node[phase, fill=orange!5, minimum width=2.6cm] (post) at (3.4, -1.6) {%
+    \textbf{Plugin (Post)}\\[-1pt]
+    {\scriptsize format translation,}\\[-2pt]
+    {\scriptsize cache write, API xlat}};
+
+  \node[io] (resp) at (0.8, -1.6) {resp};
+
+  % Response arrows (right → left): Signal → Decision → Plugin
+  \draw[arr] (ep2) -- (rsig);
+  \draw[arr] (rsig) -- (rdec);
+  \draw[arr] (rdec) -- (post);
+  \draw[arr] (post) -- (resp);
+
+  % Vertical connection: provider endpoint shared
+  \draw[thin, densely dotted, gray!40] (ep.south) -- ++(0, -0.15) -| (ep2.north);
+
+\end{tikzpicture}
+\caption{Bidirectional request processing pipeline aligned with the three-layer architecture.  \textbf{Request path} (top, left$\to$right): the signal layer parses and extracts $S(r)$; the decision layer evaluates Boolean formulas to select $d^*$; the plugin chain executes pre-processing (safety, caching, RAG, memory), model selection, and endpoint routing.  A cache hit short-circuits the pipeline (dashed).  \textbf{Response path} (bottom, right$\to$left): the same three layers operate in the same order---the signal layer extracts response-side signals (token usage, HaluGate hallucination scores, streaming latency metrics); the decision layer evaluates quality gating and cache eligibility; plugins perform format translation, cache writes, and API translation.}
+\label{fig:extproc_pipeline}
+\end{figure}
+
 The stages execute in strict order:
 (1)~API translation (Responses API $\to$ Chat Completions if applicable, see \Cref{subsec:responses_api});
 (2)~request parsing and provider detection;

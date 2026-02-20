@@ -12,37 +12,98 @@ We formalize the decision model, present the evaluation algorithm, and analyze t
 A \emph{decision} $d = (n, \phi, \mathcal{M}_d, \Pi_d, p)$ consists of a name $n$, a Boolean formula $\phi$ over signal conditions, a candidate model set $\mathcal{M}_d \subseteq \mathcal{M}$, a plugin configuration $\Pi_d$, and a priority $p \in \mathbb{Z}$.
 \end{definition}
 
-\begin{definition}[Signal Condition]
-A \emph{signal condition} $\gamma = (\tau, n, \nu)$ references a signal type $\tau$, a rule name $n$, and an optional negation flag $\nu \in \{0, 1\}$.
-The base satisfaction is:
-\begin{equation}
-  \text{sat}_0(\gamma, S(r)) = \mathbf{1}\bigl[\exists\, (\rho, 1, c) \in S(r) : \rho.\tau = \tau \wedge \rho.n = n\bigr]
-\end{equation}
-With negation applied:
-\begin{equation}
-  \text{sat}(\gamma, S(r)) =
-  \begin{cases}
-    1 - \text{sat}_0(\gamma, S(r)) & \text{if } \nu = 1 \\[2pt]
-    \text{sat}_0(\gamma, S(r)) & \text{otherwise}
-  \end{cases}
-\end{equation}
-\end{definition}
-
-Negation enables exclusion patterns: a condition $(\tau_\text{dom}, \text{``code''}, 1)$ matches requests that are \emph{not} classified as code, allowing decisions to route non-code queries without enumerating all other domains.
-
-\begin{definition}[Rule Formula]
-A \emph{rule formula} $\phi = (\textsc{op}, \Gamma)$ combines conditions $\Gamma = \{\gamma_1, \ldots, \gamma_L\}$ with an operator $\textsc{op} \in \{\textsc{and}, \textsc{or}\}$:
+\begin{definition}[Rule Node --- Boolean Expression Tree]
+A \emph{rule node} $\phi$ is defined recursively as one of two forms:
+\begin{itemize}[nosep,leftmargin=1.5em]
+  \item \textbf{Leaf} (signal reference): $\phi = \textsc{leaf}(\tau, n)$, referencing a signal type $\tau$ and rule name $n$.
+  \item \textbf{Composite} (Boolean operator): $\phi = (\textsc{op}, [\phi_1, \ldots, \phi_k])$, where $\textsc{op} \in \{\textsc{and}, \textsc{or}, \textsc{not}\}$ and $\phi_1, \ldots, \phi_k$ are child rule nodes. $\textsc{not}$ is strictly unary ($k = 1$).
+\end{itemize}
+Evaluation proceeds by structural recursion:
 \begin{equation}
   \text{eval}(\phi, S(r)) =
   \begin{cases}
-    \bigwedge_{j=1}^{L} \text{sat}(\gamma_j, S(r)) & \text{if } \textsc{op} = \textsc{and} \\[4pt]
-    \bigvee_{j=1}^{L} \text{sat}(\gamma_j, S(r)) & \text{if } \textsc{op} = \textsc{or}
+    \mathbf{1}\bigl[\exists\, (\rho, 1, c) \in S(r) : \rho.\tau = \tau \wedge \rho.n = n\bigr]
+      & \text{if } \phi = \textsc{leaf}(\tau, n) \\[4pt]
+    \bigwedge_{i=1}^{k} \text{eval}(\phi_i, S(r))
+      & \text{if } \textsc{op} = \textsc{and} \\[4pt]
+    \bigvee_{i=1}^{k} \text{eval}(\phi_i, S(r))
+      & \text{if } \textsc{op} = \textsc{or} \\[4pt]
+    \neg\, \text{eval}(\phi_1, S(r))
+      & \text{if } \textsc{op} = \textsc{not}
   \end{cases}
 \end{equation}
 \end{definition}
 
-The combination of per-condition negation with AND/OR operators and inter-decision priority yields full Boolean expressiveness: AND with negated conditions expresses ``match A but not B''; OR with negated conditions expresses ``match unless both A and B''; priority-ordered decisions with progressively broader conditions implement fallback chains.
-This model is deliberately kept flat rather than nested: it provides interpretable, auditable routing policies that administrators can reason about directly, while achieving complex routing logic through composition of multiple prioritized decisions.
+The recursive structure enables arbitrarily nested Boolean expressions.
+Classical flat formulas---a single AND or OR over leaf conditions---are the depth-1 special case and remain the recommended form for simple routing policies.
+When richer logic is needed, nesting expresses compound operators directly within a single decision:
+$\textsc{nor}(A,B) = \textsc{not}(\textsc{or}(A,B))$;
+$\textsc{nand}(A,B) = \textsc{not}(\textsc{and}(A,B))$;
+$\textsc{xor}(A,B) = \textsc{or}(\textsc{and}(A, \textsc{not}(B)),\; \textsc{and}(\textsc{not}(A), B))$.
+YAML's natural indentation mirrors the logical nesting, preserving readability and auditability even for complex formulas.
+Priority-ordered decisions compose multiple such formulas into an ordered evaluation, providing conflict resolution and organizational structure for deployment-scale routing policies.
+
+\begin{figure}[ht]
+  \centering
+  \begin{tikzpicture}[
+    gate/.style={rectangle, draw, thick, rounded corners=3pt,
+                 minimum height=0.75cm, minimum width=1.2cm,
+                 align=center, inner sep=3pt, font=\small\bfseries},
+    leaf/.style={rectangle, draw, rounded corners=2pt, fill=black!4,
+                 minimum height=0.65cm, align=center,
+                 inner sep=3pt, font=\small},
+    arr/.style={->, >=stealth, thick},
+    lbl/.style={font=\scriptsize, text=gray!70},
+  ]
+
+  % --- (a) Flat depth-1: AND(A, B, C) ---
+  \node[font=\small\bfseries, anchor=south] at (0, 2.6) {(a) Flat (depth-1)};
+  \node[gate, fill=blue!6] (and1) at (0, 1.8) {\textsc{and}};
+  \node[leaf] (a1) at (-1.5, 0.5) {$\tau_\text{dom}$: \texttt{cs}};
+  \node[leaf] (b1) at (0, 0.5) {$\tau_\text{kw}$: \texttt{code}};
+  \node[leaf] (c1) at (1.5, 0.5) {$\tau_\text{lang}$: \texttt{en}};
+  \draw[arr] (and1) -- (a1);
+  \draw[arr] (and1) -- (b1);
+  \draw[arr] (and1) -- (c1);
+
+  % --- (b) NOR: NOT(OR(A, B)) ---
+  \node[font=\small\bfseries, anchor=south] at (5.2, 2.6) {(b) NOR};
+  \node[gate, fill=orange!5] (not2) at (5.2, 1.8) {\textsc{not}};
+  \node[gate, fill=green!6] (or2) at (5.2, 0.8) {\textsc{or}};
+  \node[leaf] (a2) at (4.2, -0.3) {$\tau_\text{dom}$: \texttt{cs}};
+  \node[leaf] (b2) at (6.2, -0.3) {$\tau_\text{dom}$: \texttt{math}};
+  \draw[arr] (not2) -- (or2);
+  \draw[arr] (or2) -- (a2);
+  \draw[arr] (or2) -- (b2);
+
+  % --- (c) XOR: OR(AND(A, NOT(B)), AND(NOT(A), B)) ---
+  \node[font=\small\bfseries, anchor=south] at (11.0, 2.6) {(c) XOR};
+  \node[gate, fill=green!6] (or3) at (11.0, 1.8) {\textsc{or}};
+  \node[gate, fill=blue!6] (and3l) at (9.2, 0.6) {\textsc{and}};
+  \node[gate, fill=blue!6] (and3r) at (12.8, 0.6) {\textsc{and}};
+  \draw[arr] (or3) -- (and3l);
+  \draw[arr] (or3) -- (and3r);
+
+  % Left branch: AND(A, NOT(B))
+  \node[leaf] (a3) at (8.3, -0.6) {$\tau_\text{kw}$: \texttt{code}};
+  \node[gate, fill=orange!5] (not3l) at (10.1, -0.6) {\textsc{not}};
+  \node[leaf] (b3l) at (10.1, -1.7) {$\tau_\text{dom}$: \texttt{math}};
+  \draw[arr] (and3l) -- (a3);
+  \draw[arr] (and3l) -- (not3l);
+  \draw[arr] (not3l) -- (b3l);
+
+  % Right branch: AND(NOT(A), B)
+  \node[gate, fill=orange!5] (not3r) at (11.9, -0.6) {\textsc{not}};
+  \node[leaf] (a3r) at (11.9, -1.7) {$\tau_\text{kw}$: \texttt{code}};
+  \node[leaf] (b3r) at (13.7, -0.6) {$\tau_\text{dom}$: \texttt{math}};
+  \draw[arr] (and3r) -- (not3r);
+  \draw[arr] (and3r) -- (b3r);
+  \draw[arr] (not3r) -- (a3r);
+
+  \end{tikzpicture}
+  \caption{Rule-node expression trees at increasing depth. (a)~A flat depth-1 tree: AND over three leaf conditions. (b)~A NOR expression: $\textsc{not}(\textsc{or}(\text{cs},\text{math}))$, matching all non-STEM queries. (c)~An XOR expression composed from AND, OR, and NOT primitives, routing requests that match exactly one of two signals. Leaf nodes (gray) reference signal conditions; composite nodes use AND (\textcolor{blue!50}{blue}), OR (\textcolor{green!50}{green}), and NOT (\textcolor{orange!45}{orange}).}
+  \label{fig:rule_node_tree}
+\end{figure}
 
 \subsection{Confidence Computation}
 
@@ -105,79 +166,225 @@ In practice, $M \leq 50$ and $L_{\max} \leq 10$, making decision evaluation negl
 
 \subsection{Expressiveness Analysis}
 
-The Boolean combination model can express common routing patterns:
+The recursive rule-node model can express common routing patterns with depth-1 trees (flat formulas) and richer patterns through nesting:
 
 \begin{itemize}[leftmargin=*]
-  \item \textbf{Domain routing}: A single domain condition (OR with one condition) routes by classified domain.
+  \item \textbf{Domain routing}: A single leaf condition routes by classified domain.
   \item \textbf{Guarded routing}: AND of a domain condition and a complexity condition routes complex queries within a domain to a capable model.
-  \item \textbf{Exclusion routing}: AND of a domain condition and a \emph{negated} complexity condition routes simple queries within a domain to a lightweight model, avoiding the cost of a full-capability model for straightforward requests.
+  \item \textbf{Exclusion routing}: $\textsc{and}(\text{domain}, \textsc{not}(\text{complexity}))$ routes simple queries within a domain to a lightweight model, avoiding the cost of a full-capability model for straightforward requests.
   \item \textbf{Multi-signal routing}: AND of keyword, embedding, and language conditions provides precise routing for specific query patterns.
   \item \textbf{Fallback chains}: Multiple decisions with decreasing priority and progressively broader conditions implement fallback routing.
+  \item \textbf{NOR routing} (blanket exclusion): $\textsc{not}(\textsc{or}(\text{cs}, \text{math}, \text{physics}))$ routes all non-STEM queries to a general-purpose model without enumerating every non-STEM domain.
+  \item \textbf{NAND routing} (conditional exemption): $\textsc{not}(\textsc{and}(\text{zh}, \text{code}))$ matches all requests \emph{except} Chinese-language code queries, useful for compliance-based routing.
+  \item \textbf{XOR routing} (mutual exclusion): $\textsc{or}(\textsc{and}(A, \textsc{not}(B)),\; \textsc{and}(\textsc{not}(A), B))$ routes requests matching exactly one of two signals, enabling exclusive specialization.
+  \item \textbf{Nested multi-signal}: $\textsc{and}(\textsc{or}(\text{cs}, \text{math\_kw}),\; \text{en},\; \textsc{not}(\text{long\_ctx}))$ combines disjunctive, conjunctive, and negated sub-trees in a single decision for fine-grained routing.
 \end{itemize}
 
 \paragraph{Functional completeness.}
-The expressiveness of this model rests on a classical result from Boolean algebra~\cite{huntington1904sets}: the operator set $\{\wedge, \vee, \neg\}$ is \emph{functionally complete}---any Boolean function $f: \{0,1\}^N \to \{0,1\}$ can be expressed as a formula over these operators.
-In our setting, the $N$ signal match indicators form the input bits, and each decision formula $\phi$ computes a Boolean function over them using AND, OR, and per-condition NOT.
-A single flat formula can express any clause (conjunction or disjunction of literals); priority-ordered decisions then compose multiple clauses into an ordered evaluation, equivalent to a decision list~\cite{rivest1987learning} over Boolean features.
+The expressiveness of the recursive rule-node model rests on a classical result from Boolean algebra~\cite{huntington1904sets}: the operator set $\{\wedge, \vee, \neg\}$ is \emph{functionally complete}---any Boolean function $f: \{0,1\}^N \to \{0,1\}$ can be expressed as a formula over these operators.
+Because each rule node may nest AND, OR, and NOT to arbitrary depth, a \emph{single} decision formula $\phi$ can already represent any Boolean function over the $N$ signal match indicators---no multi-decision composition is required for completeness.
 
-\begin{proposition}
-For any routing policy expressible as a function $\pi: \{0,1\}^N \to \mathcal{M} \cup \{\bot\}$ mapping signal vectors to model selections, there exists a decision set $\mathcal{D}$ with AND/OR/NOT formulas and priority ordering such that $\pi$ is realized by the evaluation algorithm (\Cref{alg:decision_eval}).
+\begin{proposition}[Single-decision completeness]
+For any Boolean function $f: \{0,1\}^N \to \{0,1\}$ over signal match indicators, there exists a rule node $\phi$ using AND, OR, and NOT such that $\text{eval}(\phi, S(r)) = f(S(r))$ for all signal results $S(r)$.
 \end{proposition}
 
 \begin{proof}[Proof sketch]
-Express $\pi$ in disjunctive normal form: for each model $m_k$, collect the minterms (signal vectors) that map to $m_k$ and form their disjunction.
-Each disjunction becomes a decision $d_k$ with $\textsc{op} = \textsc{or}$ over AND-clauses (each AND-clause is itself a decision at higher priority with $\textsc{op} = \textsc{and}$ over literals).
-Since $\{\wedge, \vee, \neg\}$ is functionally complete, every minterm is expressible, and priority ordering resolves overlaps deterministically.
+Construct $\phi$ directly from the truth table of $f$.
+For each minterm (input assignment where $f = 1$), form an AND-node over the corresponding literals (a leaf $\textsc{leaf}(\tau_i, n_i)$ when the $i$-th signal is 1, or $\textsc{not}(\textsc{leaf}(\tau_i, n_i))$ when it is 0).
+Collect all such AND-nodes under a single OR-node.
+Since $\{\wedge, \vee, \neg\}$ is functionally complete, the resulting tree evaluates to $f$.
 \end{proof}
 
-This universality guarantee means the decision engine imposes \emph{no inherent limitation} on what routing policies can be configured---any policy that depends on the binary signal outcomes is realizable.
+\begin{proposition}[Routing policy completeness]
+For any routing policy $\pi: \{0,1\}^N \to \mathcal{M} \cup \{\bot\}$ mapping signal vectors to model selections, there exists a decision set $\mathcal{D}$ with recursive AND/OR/NOT formulas and priority ordering such that $\pi$ is realized by the evaluation algorithm (\Cref{alg:decision_eval}).
+\end{proposition}
 
-\paragraph{Structural analogy to programmable logic.}
-The signal--decision architecture is structurally isomorphic to a \emph{Programmable Logic Array} (PLA)~\cite{fleisher1975introduction}, a well-studied circuit primitive that implements arbitrary two-level Boolean functions:
+\begin{proof}[Proof sketch]
+For each model $m_k$ in the range of $\pi$, construct a single decision $d_k$ whose rule node encodes the Boolean function $f_k(\mathbf{s}) = \mathbf{1}[\pi(\mathbf{s}) = m_k]$ using the single-decision completeness result above.
+Assign priorities to resolve overlaps deterministically.
+\end{proof}
+
+This two-level universality guarantee---completeness within a single decision \emph{and} across a decision set---means the decision engine imposes \emph{no inherent limitation} on what routing policies can be configured.
+Priority ordering across decisions is no longer required for expressiveness; it serves as an organizational and conflict-resolution mechanism, equivalent to a decision list~\cite{rivest1987learning} over Boolean features.
+
+\paragraph{Structural analogy to combinational logic circuits.}
+The recursive rule-node model maps naturally onto the hierarchy of combinational logic circuits studied in digital design~\cite{brayton1984logic}.
+The following table summarizes the correspondence at three levels of generality:
 
 \begin{center}
-\begin{tabular}{lll}
+\begin{tabular}{llp{4.2cm}}
 \toprule
-\textbf{PLA Component} & \textbf{Routing System} & \textbf{Role} \\
+\textbf{Circuit Model} & \textbf{Routing System} & \textbf{Expressiveness} \\
 \midrule
-Input lines & Signal extractors ($\tau_1, \ldots, \tau_N$) & Produce binary feature vector \\
-AND-plane (product terms) & Decision AND-formulas & Compute conjunctions of literals \\
-OR-plane (sum terms) & Decision OR-formulas & Compute disjunctions of clauses \\
-Priority encoder & Priority-ordered evaluation & Select highest-priority match \\
-Output lines & Model selection + plugin chain & Execute the routed action \\
+PLA (two-level)~\cite{fleisher1975introduction}
+  & Flat decision (depth-1 tree)
+  & Any two-level Boolean function \\
+General combinational circuit
+  & Recursive rule-node tree
+  & Any Boolean function \\
+Circuit array + priority encoder
+  & Decision set + priority ordering
+  & Any routing policy $\pi: \{0,1\}^N \!\to\! \mathcal{M}$ \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-In a PLA, the AND-plane and OR-plane are ``programmed'' by setting fuse connections; in our system, they are programmed by YAML configuration.
-Just as a PLA can implement any Boolean function within its capacity (number of product terms and inputs), the decision engine can implement any routing policy within its configured signal and decision budget.
-This correspondence provides a well-understood theoretical foundation: decades of results on PLA minimization, hazard-free design, and testability~\cite{brayton1984logic} apply directly to reasoning about decision set optimization and coverage analysis.
+At the first level, a depth-1 rule node---a single AND or OR over leaf conditions---is structurally isomorphic to a \emph{Programmable Logic Array} (PLA)~\cite{fleisher1975introduction}: signal extractors correspond to input lines, leaf conditions to the AND-plane, and the top-level operator to the OR-plane.
+At the second level, a recursive rule-node tree corresponds to a general combinational logic circuit---a directed acyclic graph of AND, OR, and NOT gates---where each decision is a complete circuit computing an arbitrary Boolean function.
+At the third level, the priority-ordered decision set acts as an array of such circuits with a priority encoder selecting the output, realizing any routing policy.
+\Cref{fig:circuit_analogy} illustrates this three-level correspondence.
+
+\begin{figure*}[ht]
+  \centering
+  \begin{tikzpicture}[
+    gate/.style={rectangle, draw, thick, rounded corners=3pt,
+                 minimum height=0.6cm, minimum width=0.9cm,
+                 align=center, inner sep=2pt, font=\scriptsize\bfseries},
+    io/.style={rectangle, draw, rounded corners=2pt, fill=black!4,
+               minimum height=0.55cm, align=center,
+               inner sep=2pt, font=\scriptsize},
+    prio/.style={rectangle, draw, thick, rounded corners=3pt, fill=yellow!6,
+                 minimum height=0.6cm, align=center,
+                 inner sep=3pt, font=\scriptsize\bfseries},
+    arr/.style={->, >=stealth, semithick},
+    darr/.style={->, >=stealth, densely dashed, gray!50},
+    brace/.style={decorate, decoration={brace, amplitude=5pt, mirror}},
+    titl/.style={font=\small\bfseries, anchor=south},
+  ]
+
+  % ===== Level 1: PLA (flat) =====
+  \node[titl] at (1.8, 3.6) {Level 1: PLA};
+
+  % Input signals
+  \node[io] (s1a) at (-0.2, 2.8) {$s_1$};
+  \node[io] (s2a) at (0.7, 2.8) {$s_2$};
+  \node[io] (s3a) at (1.6, 2.8) {$s_3$};
+  \node[io] (s4a) at (2.5, 2.8) {$s_4$};
+
+  % AND-plane
+  \node[gate, fill=blue!6, minimum width=2.9cm] (andp) at (1.15, 1.8) {AND-plane};
+  % OR-plane
+  \node[gate, fill=green!6, minimum width=2.9cm] (orp) at (1.15, 0.8) {OR-plane};
+  % Output
+  \node[io] (out1) at (1.15, -0.1) {match};
+
+  \draw[arr] (s1a) -- (andp);
+  \draw[arr] (s2a) -- (andp);
+  \draw[arr] (s3a) -- (andp);
+  \draw[arr] (s4a) -- (andp);
+  \draw[arr] (andp) -- (orp);
+  \draw[arr] (orp) -- (out1);
+
+  \node[font=\scriptsize, text=gray, anchor=north] at (1.15, -0.5) {depth-1 tree};
+
+  % ===== Level 2: General circuit (recursive) =====
+  \node[titl] at (6.6, 3.6) {Level 2: General Circuit};
+
+  % Input signals
+  \node[io] (s1b) at (4.6, 2.8) {$s_1$};
+  \node[io] (s2b) at (5.5, 2.8) {$s_2$};
+  \node[io] (s3b) at (7.0, 2.8) {$s_3$};
+  \node[io] (s4b) at (8.6, 2.8) {$s_4$};
+
+  % Gate network
+  \node[gate, fill=blue!6] (g1) at (5.05, 1.8) {\textsc{and}};
+  \node[gate, fill=orange!5] (g2) at (7.0, 1.8) {\textsc{not}};
+  \node[gate, fill=green!6] (g3) at (6.0, 0.8) {\textsc{or}};
+  \node[gate, fill=blue!6] (g4) at (7.6, 0.8) {\textsc{and}};
+  \node[gate, fill=blue!6, minimum width=1.2cm] (g5) at (6.8, -0.1) {\textsc{and}};
+
+  \draw[arr] (s1b) -- (g1);
+  \draw[arr] (s2b) -- (g1);
+  \draw[arr] (s3b) -- (g2);
+  \draw[arr] (g1) -- (g3);
+  \draw[arr] (g2) -- (g3);
+  \draw[arr] (g3) -- (g5);
+  \draw[arr] (s4b) -- (g4);
+  \draw[arr] (g2.south east) -- ++(0.1,-0.15) -- (g4.north west);
+  \draw[arr] (g4) -- (g5);
+
+  \node[io] (out2) at (6.8, -0.9) {match};
+  \draw[arr] (g5) -- (out2);
+
+  \node[font=\scriptsize, text=gray, anchor=north] at (6.6, -1.3) {arbitrary depth};
+
+  % ===== Level 3: Circuit array + priority encoder =====
+  \node[titl] at (13.0, 3.6) {Level 3: Circuit Array};
+
+  % Decision circuits as boxes
+  \node[gate, fill=blue!3, minimum width=1.6cm, minimum height=1.6cm,
+        draw, thick, rounded corners=3pt] (d1) at (11.0, 1.5) {};
+  \node[font=\scriptsize, anchor=center] at (11.0, 1.5) {$\phi_1$};
+  \node[font=\scriptsize, text=gray, anchor=south] at (11.0, 2.35) {$d_1$};
+
+  \node[gate, fill=blue!3, minimum width=1.6cm, minimum height=1.6cm,
+        draw, thick, rounded corners=3pt] (d2) at (13.0, 1.5) {};
+  \node[font=\scriptsize, anchor=center] at (13.0, 1.5) {$\phi_2$};
+  \node[font=\scriptsize, text=gray, anchor=south] at (13.0, 2.35) {$d_2$};
+
+  \node[gate, fill=blue!3, minimum width=1.6cm, minimum height=1.6cm,
+        draw, thick, rounded corners=3pt] (d3) at (15.0, 1.5) {};
+  \node[font=\scriptsize, anchor=center] at (15.0, 1.5) {$\phi_3$};
+  \node[font=\scriptsize, text=gray, anchor=south] at (15.0, 2.35) {$d_3$};
+
+  % Input signals shared
+  \node[io] (sinp) at (13.0, 2.8) {$s_1, \ldots, s_N$};
+  \draw[arr] (sinp) -- (11.0, 2.3);
+  \draw[arr] (sinp) -- (13.0, 2.3);
+  \draw[arr] (sinp) -- (15.0, 2.3);
+
+  % Priority encoder
+  \node[prio, minimum width=5.2cm] (pe) at (13.0, -0.1) {Priority Encoder};
+  \draw[arr] (11.0, 0.7) -- (11.0, 0.2);
+  \draw[arr] (13.0, 0.7) -- (13.0, 0.2);
+  \draw[arr] (15.0, 0.7) -- (15.0, 0.2);
+
+  % Output
+  \node[io] (out3) at (13.0, -0.9) {$d^* \!\to\! m^*$};
+  \draw[arr] (pe) -- (out3);
+
+  \node[font=\scriptsize, text=gray, anchor=north] at (13.0, -1.3) {routing policy};
+
+  \end{tikzpicture}
+  \caption{Three-level correspondence between combinational logic circuits and the decision engine. \textbf{Level~1}: A PLA with AND-plane and OR-plane corresponds to a flat (depth-1) decision formula. \textbf{Level~2}: A general combinational circuit with arbitrarily nested AND, OR, and NOT gates corresponds to a recursive rule-node tree within a single decision. \textbf{Level~3}: An array of circuits with a priority encoder corresponds to the full decision set with priority-ordered evaluation, realizing any routing policy.}
+  \label{fig:circuit_analogy}
+\end{figure*}
+
+In a PLA, logic is ``programmed'' by setting fuse connections; in a general circuit, by wiring gates; in our system, by YAML configuration whose indentation directly mirrors the gate-level nesting.
+This correspondence provides a well-understood theoretical foundation: decades of results on logic minimization, hazard-free design, and testability~\cite{brayton1984logic} apply directly to reasoning about decision optimization and coverage analysis.
 
 \paragraph{Decision set verification and minimization.}
-The PLA correspondence makes formal analysis tools from logic synthesis directly applicable to routing configurations.
+The combinational-logic correspondence makes formal analysis tools from logic synthesis directly applicable to routing configurations.
 \emph{Coverage analysis} checks whether every reachable point in the signal space $\{0,1\}^N$ is matched by at least one decision, identifying dead zones where requests would receive no routing directive.
 \emph{Conflict detection} identifies signal combinations where multiple decisions match but route to incompatible model pools, flagging ambiguities that priority ordering must resolve.
-\emph{Decision minimization}, analogous to the Espresso heuristic for two-level logic optimization~\cite{brayton1984logic}, can reduce a decision set to a minimal equivalent form by merging decisions with compatible conditions and eliminating subsumed rules.
+\emph{Decision minimization}, analogous to the Espresso heuristic for two-level logic optimization~\cite{brayton1984logic} and multi-level logic restructuring~\cite{brayton1984logic}, can reduce a decision set to a minimal equivalent form by merging decisions with compatible conditions and eliminating subsumed rules.
 These standard logic-verification techniques become applicable to routing policy validation without adaptation, a direct consequence of the structural isomorphism.
 
 \subsection{Generalization to Fuzzy Evaluation}
 
 The Boolean decision model admits a natural generalization when signal confidence scores are continuous.
-Rather than binarizing each signal's output before Boolean combination, we evaluate decision formulas over the continuous confidence values directly, using fuzzy logic operators~\cite{zadeh1965fuzzy}.
+Rather than binarizing each signal's output before Boolean combination, we evaluate rule-node trees over the continuous confidence values directly, using fuzzy logic operators~\cite{zadeh1965fuzzy}.
 
-\begin{definition}[Fuzzy Rule Evaluation]
-Given continuous signal confidences $c_j(r) \in [0,1]$ for each condition $\gamma_j$, and letting $\tilde{c}_j(r) = 1 - c_j(r)$ when $\gamma_j$ is negated and $\tilde{c}_j(r) = c_j(r)$ otherwise, the fuzzy evaluation of a rule formula $\phi = (\textsc{op}, \Gamma)$ is:
+\begin{definition}[Fuzzy Rule-Node Evaluation]
+Given continuous signal confidences $c(r) \in [0,1]$ for each leaf condition, the fuzzy evaluation of a rule node $\phi$ is defined by structural recursion:
 \begin{equation}
   \widetilde{\text{eval}}(\phi, S(r)) =
   \begin{cases}
-    \displaystyle\min_{j=1}^{L}\, \tilde{c}_j(r) & \text{if } \textsc{op} = \textsc{and} \\[6pt]
-    \displaystyle\max_{j=1}^{L}\, \tilde{c}_j(r) & \text{if } \textsc{op} = \textsc{or}
+    c_\phi(r)
+      & \text{if } \phi = \textsc{leaf}(\tau, n) \\[6pt]
+    \displaystyle\min_{i=1}^{k}\, \widetilde{\text{eval}}(\phi_i, S(r))
+      & \text{if } \textsc{op} = \textsc{and} \\[6pt]
+    \displaystyle\max_{i=1}^{k}\, \widetilde{\text{eval}}(\phi_i, S(r))
+      & \text{if } \textsc{op} = \textsc{or} \\[6pt]
+    1 - \widetilde{\text{eval}}(\phi_1, S(r))
+      & \text{if } \textsc{op} = \textsc{not}
   \end{cases}
 \end{equation}
+where $c_\phi(r)$ is the confidence score of the signal matching leaf $\phi$.
 \end{definition}
 
-The operators $(\min, \max, 1{-}x)$ form the standard fuzzy complement triple and satisfy De~Morgan's laws, preserving the algebraic properties of the crisp model~\cite{bellman1970decision}.
-This fuzzy evaluation is a \emph{strict generalization}: when all confidences are binary ($c_j \in \{0,1\}$), $\min$ reduces to $\wedge$ and $\max$ reduces to $\vee$, so the evaluation coincides exactly with the crisp Boolean model.
+The operators $(\min, \max, 1{-}x)$ form the standard fuzzy complement triple and satisfy De~Morgan's laws at every level of the tree, preserving the algebraic properties of the crisp model~\cite{bellman1970decision}.
+This fuzzy evaluation is a \emph{strict generalization}: when all confidences are binary ($c \in \{0,1\}$), $\min$ reduces to $\wedge$, $\max$ reduces to $\vee$, and $1{-}x$ reduces to $\neg$, so the evaluation coincides exactly with the crisp Boolean model.
 
 The practical consequence is significant.
 The current confidence strategy (\Cref{eq:confidence}) uses mean confidence as a tiebreaker \emph{after} binary matching.

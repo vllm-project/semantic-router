@@ -15,6 +15,50 @@ Existing approaches apply hallucination detection uniformly to all responses~\ci
 
 \subsection{Three-Stage Pipeline}
 
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    node distance=0.3cm,
+    box/.style={rectangle, draw, rounded corners=2pt,
+                minimum height=0.6cm, align=center,
+                font=\scriptsize, inner sep=3pt},
+    dia/.style={diamond, draw, aspect=2, inner sep=1pt,
+                font=\scriptsize, fill=yellow!6},
+    arr/.style={->, >=stealth, thick},
+    darr/.style={->, >=stealth, densely dashed, gray!40},
+  ]
+  % Request side
+  \node[box, fill=black!4] (q) at (0, 0) {Query $q$};
+  \node[box, fill=blue!6] (sent) at (2.2, 0) {Sentinel\\[-1pt]$g_{\text{sent}}$};
+  \node[dia] (dec) at (4.4, 0) {factual?};
+
+  % Skip branch (top)
+  \node[box, fill=black!4, minimum width=0.9cm] (skip) at (4.4, 1.3) {\footnotesize skip};
+  \draw[darr] (dec.north) -- node[font=\tiny, right, text=gray]{no} (skip.south);
+
+  % Response side (YES branch)
+  \node[box, fill=black!4] (a) at (6.5, 0) {Response $a$};
+  \node[box, fill=blue!6] (det) at (8.7, 0) {Detector\\[-1pt]$g_{\text{det}}$};
+  \node[box, fill=blue!6] (nli) at (11.0, 0) {Explainer\\[-1pt]$g_{\text{nli}}$};
+  \node[box, fill=orange!5] (out) at (13.2, 0) {Results};
+
+  % Arrows
+  \draw[arr] (q) -- (sent);
+  \draw[arr] (sent) -- (dec);
+  \draw[arr] (dec.east) -- node[font=\tiny, above, text=gray]{yes} (a.west);
+  \draw[arr] (a) -- (det);
+  \draw[arr] (det) -- node[font=\tiny, above]{spans} (nli);
+  \draw[arr] (nli) -- (out);
+
+  % Annotations
+  \node[font=\tiny, text=gray, anchor=north] at (1.1, -0.55) {request path};
+  \node[font=\tiny, text=gray, anchor=north] at (9.8, -0.55) {response path};
+  \draw[densely dotted, gray!30] (5.45, -0.7) -- (5.45, 1.5);
+\end{tikzpicture}
+\caption{\halugate{} three-stage gated pipeline.  The Sentinel classifies queries on the request path; non-factual queries (40--60\%) skip verification entirely (dashed).  For factual queries, the Detector identifies hallucinated spans in the model response, and the Explainer provides NLI-based diagnostics per span.}
+\label{fig:halugate_pipeline}
+\end{figure}
+
 \textbf{Stage 1: Sentinel (Gating).}
 A lightweight binary classifier $g_\text{sent}$ determines whether the query warrants factual verification:
 \begin{equation}

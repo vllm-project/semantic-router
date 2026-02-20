@@ -16,7 +16,73 @@ Given query embedding $\mathbf{e}_q \in \mathbb{R}^d$, domain category $z \in \{
 \end{equation}
 where $\lambda \geq 0$ is a cost-sensitivity parameter and $\Theta$ represents algorithm-specific parameters.
 The per-decision candidate set $\mathcal{M}_{d^*}$ is critical: privacy-constrained decisions restrict candidates to compliant models, while cost-optimized decisions include a broader pool with aggressive cost weighting.
-We categorize algorithms into five families.
+We categorize algorithms into families based on their selection mechanism (\Cref{fig:selection_taxonomy}).
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    node distance=0.2cm,
+    fam/.style={rectangle, draw, rounded corners=2pt, fill=blue!6,
+                minimum height=0.45cm, minimum width=1.6cm,
+                align=left, font=\scriptsize, inner sep=3pt},
+    alg/.style={rectangle, draw, rounded corners=1pt, fill=black!4,
+                minimum height=0.38cm, align=left,
+                font=\scriptsize, inner sep=2pt},
+    root/.style={rectangle, draw, rounded corners=3pt, fill=orange!5,
+                 minimum height=0.5cm, align=center,
+                 font=\scriptsize\bfseries, inner sep=4pt},
+    edge from parent/.style={draw, thick, ->, >=stealth},
+    level 1/.style={sibling distance=1.05cm, level distance=2.6cm},
+  ]
+  % Root
+  \node[root] (rt) at (0, 0) {Semantic\\[-1pt]Selection};
+
+  % Families (y positions)
+  \node[fam] (f1) at (3.0, 3.15) {Rating-Based};
+  \node[fam] (f2) at (3.0, 2.1) {Embedding};
+  \node[fam] (f3) at (3.0, 1.25) {Cascading};
+  \node[fam] (f4) at (3.0, 0.0) {Classical ML};
+  \node[fam] (f5) at (3.0, -1.25) {RL};
+  \node[fam] (f6) at (3.0, -2.1) {Latency};
+  \node[fam] (f7) at (3.0, -3.15) {Multi-Round};
+
+  % Algorithms
+  \node[alg] (a1) at (6.0, 3.45) {Static};
+  \node[alg] (a2) at (6.0, 2.85) {Elo Rating};
+  \node[alg] (a3) at (6.0, 2.4) {RouterDC};
+  \node[alg] (a4) at (6.0, 1.8) {Hybrid};
+  \node[alg] (a5) at (6.0, 1.25) {AutoMix};
+  \node[alg] (a6) at (6.0, 0.6) {KNN};
+  \node[alg] (a7) at (6.0, 0.2) {KMeans};
+  \node[alg] (a8) at (6.0, -0.2) {SVM};
+  \node[alg] (a9) at (6.0, -0.6) {MLP};
+  \node[alg] (a10) at (6.0, -0.95) {Thompson};
+  \node[alg] (a11) at (6.0, -1.55) {GMTRouter};
+  \node[alg] (a12) at (6.0, -2.1) {Latency-Aware};
+  \node[alg] (a13) at (6.0, -3.15) {ReMoM};
+
+  % Root → Families
+  \foreach \f in {f1,f2,f3,f4,f5,f6,f7}
+    \draw[thick, ->, >=stealth] (rt.east) -- (\f.west);
+
+  % Families → Algorithms
+  \draw[thick, ->, >=stealth] (f1.east) -- (a1.west);
+  \draw[thick, ->, >=stealth] (f1.east) -- (a2.west);
+  \draw[thick, ->, >=stealth] (f2.east) -- (a3.west);
+  \draw[thick, ->, >=stealth] (f2.east) -- (a4.west);
+  \draw[thick, ->, >=stealth] (f3.east) -- (a5.west);
+  \draw[thick, ->, >=stealth] (f4.east) -- (a6.west);
+  \draw[thick, ->, >=stealth] (f4.east) -- (a7.west);
+  \draw[thick, ->, >=stealth] (f4.east) -- (a8.west);
+  \draw[thick, ->, >=stealth] (f4.east) -- (a9.west);
+  \draw[thick, ->, >=stealth] (f5.east) -- (a10.west);
+  \draw[thick, ->, >=stealth] (f5.east) -- (a11.west);
+  \draw[thick, ->, >=stealth] (f6.east) -- (a12.west);
+  \draw[thick, ->, >=stealth] (f7.east) -- (a13.west);
+\end{tikzpicture}
+\caption{Taxonomy of thirteen semantic model selection algorithms organized by selection mechanism.  Families span from lightweight rating-based methods (Static, Elo) to learned approaches (RouterDC, Classical ML, RL), adaptive cascading (AutoMix), real-time latency tracking, and multi-round synthesis (ReMoM).}
+\label{fig:selection_taxonomy}
+\end{figure}
 
 \subsection{Rating-Based Selection}
 

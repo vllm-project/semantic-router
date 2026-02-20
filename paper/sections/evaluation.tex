@@ -139,9 +139,9 @@ Results include p50 and p99 latency profiling to confirm that model orchestratio
       box/.style={rectangle, draw, thick, rounded corners=3pt,
                   minimum height=0.9cm, minimum width=2.3cm,
                   align=center, inner sep=4pt, font=\small},
-      src/.style={box, fill=gray!12},
-      proc/.style={box, fill=blue!8},
-      outbox/.style={box, fill=green!10},
+      src/.style={box, fill=black!4},
+      proc/.style={box, fill=blue!6},
+      outbox/.style={box, fill=green!6},
       arr/.style={->, >=stealth, thick},
       lbl/.style={font=\scriptsize, midway, above},
     ]
@@ -156,9 +156,9 @@ Results include p50 and p99 latency profiling to confirm that model orchestratio
     \node[proc] (ml) at (4.8, 1.5) {Model Loader};
 
     % Row 3: Central engine
-    \node[proc, fill=blue!15, minimum width=3cm] (reg) at (3.2, 0)
+    \node[proc, fill=blue!8, minimum width=3cm] (reg) at (3.2, 0)
       {Model Registry};
-    \node[proc, fill=orange!10, minimum width=3cm] (pool) at (7.8, 0)
+    \node[proc, fill=orange!5, minimum width=3cm] (pool) at (7.8, 0)
       {Process Pool\\[-1pt]Executor};
 
     % Row 4: Inference + metrics
@@ -199,7 +199,3 @@ Results include p50 and p99 latency profiling to confirm that model orchestratio
 \subsection{Open Evaluation}
 
 Detailed model selection quality comparisons across algorithms, HaluGate detection accuracy on standard benchmarks (HaluEval, FActScore), and large-scale routing quality evaluation are under preparation in collaboration with the RouterArena team.
-
-\paragraph{Contributors.}
-Senan Zedan, Xunzhuo, yehudit1987, abdallahsamabd, Noa Limoy, Yossi Ovadia, Liav Weiss, Huamin Chen, samzong, Jintao Zhang, asaadbalum, Xunzhuo, Srinivas A, Marina Koushnir, Chever John, Chaojun Zhang, Avishek Goswami, Zohaib Hassnain.
-
