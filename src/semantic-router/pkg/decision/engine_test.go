@@ -312,6 +312,7 @@ func TestDecisionEngine_EvaluateDecisionsWithNOTOperator(t *testing.T) {
 		expectError      bool
 	}{
 		{
+			// NOT(OR(keyword:programming, domain:coding)) — neither signal present → OR=false → NOT=true
 			name: "NOT operator - no conditions match (should match)",
 			decisions: []config.Decision{
 				{
@@ -320,8 +321,13 @@ func TestDecisionEngine_EvaluateDecisionsWithNOTOperator(t *testing.T) {
 					Rules: config.RuleCombination{
 						Operator: "NOT",
 						Conditions: []config.RuleCondition{
-							{Type: "keyword", Name: "programming"},
-							{Type: "domain", Name: "coding"},
+							{
+								Operator: "OR",
+								Conditions: []config.RuleCondition{
+									{Type: "keyword", Name: "programming"},
+									{Type: "domain", Name: "coding"},
+								},
+							},
 						},
 					},
 					ModelRefs: []config.ModelRef{
@@ -334,6 +340,7 @@ func TestDecisionEngine_EvaluateDecisionsWithNOTOperator(t *testing.T) {
 			expectError:      false,
 		},
 		{
+			// NOT(OR(keyword:programming, domain:coding)) — programming present → OR=true → NOT=false
 			name: "NOT operator - one condition matches (should NOT match)",
 			decisions: []config.Decision{
 				{
@@ -342,8 +349,13 @@ func TestDecisionEngine_EvaluateDecisionsWithNOTOperator(t *testing.T) {
 					Rules: config.RuleCombination{
 						Operator: "NOT",
 						Conditions: []config.RuleCondition{
-							{Type: "keyword", Name: "programming"},
-							{Type: "domain", Name: "coding"},
+							{
+								Operator: "OR",
+								Conditions: []config.RuleCondition{
+									{Type: "keyword", Name: "programming"},
+									{Type: "domain", Name: "coding"},
+								},
+							},
 						},
 					},
 				},
@@ -355,6 +367,7 @@ func TestDecisionEngine_EvaluateDecisionsWithNOTOperator(t *testing.T) {
 			expectError:      false,
 		},
 		{
+			// NOT(OR(keyword:programming, domain:coding)) — both present → OR=true → NOT=false
 			name: "NOT operator - all conditions match (should NOT match)",
 			decisions: []config.Decision{
 				{
@@ -363,8 +376,13 @@ func TestDecisionEngine_EvaluateDecisionsWithNOTOperator(t *testing.T) {
 					Rules: config.RuleCombination{
 						Operator: "NOT",
 						Conditions: []config.RuleCondition{
-							{Type: "keyword", Name: "programming"},
-							{Type: "domain", Name: "coding"},
+							{
+								Operator: "OR",
+								Conditions: []config.RuleCondition{
+									{Type: "keyword", Name: "programming"},
+									{Type: "domain", Name: "coding"},
+								},
+							},
 						},
 					},
 				},
