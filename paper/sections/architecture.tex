@@ -42,21 +42,96 @@ All three scenarios use the same architecture; only $\Gamma$ differs. This compo
 
 The architecture decomposes routing into three layers, each with a well-defined interface (\Cref{fig:architecture}):
 
-\begin{figure}[t]
+\begin{figure*}[t]
   \centering
-  \fbox{\parbox{0.95\textwidth}{\centering\vspace{1.2cm}
-    \textbf{Three-Layer Architecture}\\[8pt]
-    \begin{tabular}{ccc}
-    \textbf{Layer 1: Signals} & $\xrightarrow{S(r)}$ & \textbf{Layer 2: Decisions} \\[2pt]
-    $r \mapsto \mathbf{s} \in \{0,1\}^{|\mathcal{R}|} \times [0,1]^{|\mathcal{R}|}$ & &
-    $\mathbf{s} \mapsto d^* \in \mathcal{D}$ \\[12pt]
-    \multicolumn{3}{c}{\textbf{Layer 3: Plugin Chain}} \\[2pt]
-    \multicolumn{3}{c}{$d^* \mapsto (\mathcal{T}_{\text{pre}}, m^*, \mathcal{T}_{\text{post}})$}
-    \end{tabular}
-  \vspace{1.2cm}}}
-  \caption{The three-layer architecture. Layer~1 extracts a binary match vector and confidence scores over rules. Layer~2 evaluates Boolean combinations to select a decision. Layer~3 executes the decision's plugin chain, selects a model from the decision's candidate set, and routes to the appropriate provider endpoint.}
+  \begin{tikzpicture}[
+    layer/.style={rectangle, draw, thick, rounded corners=3pt,
+                  minimum height=1.4cm, minimum width=4cm, align=center,
+                  inner sep=6pt, font=\small},
+    io/.style={rectangle, draw, rounded corners=2pt, fill=gray!12,
+               font=\small, inner sep=6pt, align=center,
+               minimum width=1.6cm},
+    detail/.style={rectangle, draw, thin, rounded corners=2pt,
+                   fill=white, font=\scriptsize, align=left,
+                   text width=3.8cm, inner sep=5pt},
+    arr/.style={->, >=stealth, thick},
+    darr/.style={->, >=stealth, densely dashed, gray!60},
+    lbl/.style={font=\small, above, midway},
+  ]
+
+  % Configuration bar
+  \node[rectangle, draw, thick, rounded corners=3pt, fill=yellow!8,
+        minimum width=16.8cm, inner sep=5pt, font=\small]
+    (cfg) at (6.4, 3.2)
+    {\textbf{Deployment Configuration}\;
+     $\Gamma = (\mathcal{S}_\Gamma,\;
+     \mathcal{D}_\Gamma,\;
+     \Pi_\Gamma,\;
+     \mathcal{E}_\Gamma)$};
+
+  % Input
+  \node[io] (req) at (-1.6, 0.8) {Request\\$r$};
+
+  % Layer boxes -- spread out with 5.2cm spacing
+  \node[layer, fill=blue!8]   (L1) at (2.4,  0.8) {\textbf{Layer 1}\\Signal Extraction};
+  \node[layer, fill=green!8]  (L2) at (6.8,  0.8) {\textbf{Layer 2}\\Decision Engine};
+  \node[layer, fill=orange!8] (L3) at (11.2, 0.8) {\textbf{Layer 3}\\Plugin Chain};
+
+  % Output
+  \node[io] (out) at (14.8, 0.8) {Provider\\Endpoint};
+
+  % Main flow arrows
+  \draw[arr] (req)  -- (L1);
+  \draw[arr] (L1)   -- node[lbl] {$\mathbf{s}$} (L2);
+  \draw[arr] (L2)   -- node[lbl] {$d^*$} (L3);
+  \draw[arr] (L3)   -- node[lbl] {$m^*$} (out);
+
+  % Config arrows down
+  \draw[darr] (cfg.south -| L1) -- (L1.north);
+  \draw[darr] (cfg.south -| L2) -- (L2.north);
+  \draw[darr] (cfg.south -| L3) -- (L3.north);
+
+  % Detail boxes -- anchored to top, well below the layer boxes
+  \node[detail, anchor=north] (d1) at (2.4, -0.5) {%
+    \textbf{Heuristic} ({$<$}1\,ms):\\
+    keyword, language,\\
+    context length, authz\\[2pt]
+    \textbf{ML-based} (10--120\,ms):\\
+    embedding, domain, complexity,\\
+    modality, factual, preference,\\
+    feedback};
+
+  \node[detail, anchor=north] (d2) at (6.8, -0.5) {%
+    Boolean $\varphi$ over signal\\
+    conditions (AND / OR)\\[2pt]
+    Priority or confidence\\
+    ranking $\to$ select $d^*$\\[2pt]
+    Per-decision model pool\\
+    $\mathcal{M}_{d^*} \subseteq \mathcal{M}$};
+
+  \node[detail, anchor=north] (d3) at (11.2, -0.5) {%
+    \textbf{Pre:} jailbreak, PII, cache,\\
+    RAG, modality, memory,\\
+    system prompt, header auth\\[2pt]
+    \textbf{Select:} model from $\mathcal{M}_{d^*}$\\[2pt]
+    \textbf{Post:} HaluGate, cache write};
+
+  % Thin lines connecting layer boxes to detail boxes
+  \draw[thin, gray!40] (L1.south) -- (d1.north);
+  \draw[thin, gray!40] (L2.south) -- (d2.north);
+  \draw[thin, gray!40] (L3.south) -- (d3.north);
+
+  % Feedback loop -- runs below the detail boxes
+  \draw[darr, rounded corners=6pt]
+    (out.south) -- ++(0,-4.0) -| (L1.south west);
+  \node[font=\scriptsize, fill=white, inner sep=2pt]
+    at (6.4, -3.7)
+    {Response signals: hallucination, feedback, latency};
+
+  \end{tikzpicture}
+  \caption{Three-layer architecture with closed-loop feedback. A deployment configuration~$\Gamma$ selects which signals, decisions, and plugins are active. Layer~1 extracts a signal vector~$\mathbf{s}$ from the request. Layer~2 evaluates Boolean decision formulas to select~$d^*$. Layer~3 executes the per-decision plugin chain, selects a model from~$d^*$'s candidate set, and routes to the provider endpoint. Response-side signals feed back to enable adaptive routing.}
   \label{fig:architecture}
-\end{figure}
+\end{figure*}
 
 \textbf{Layer 1: Signal Extraction.}
 The signal layer maps a request $r$ to a structured signal result $\mathbf{s}$, consisting of binary match indicators and real-valued confidences for each configured rule across eleven signal types.

@@ -43,7 +43,7 @@ At $n = 6$, this yields $\sim$6$\times$ memory reduction: one 150M-parameter mod
 
 \subsection{Inference Architecture}
 
-Each classification task proceeds as a full forward pass through the base model with the task-specific LoRA perturbation applied:
+Each classification task proceeds as a full forward pass through the base model with the task-specific LoRA perturbation applied (\Cref{fig:lora_arch}):
 
 \begin{enumerate}
   \item \textbf{Load}: A single base model is loaded into GPU/CPU memory at startup. Each LoRA adapter (a pair of small matrices per adapted layer) is loaded alongside it.
@@ -53,7 +53,7 @@ Each classification task proceeds as a full forward pass through the base model 
 
 \begin{figure}[ht]
     \centering
-    \includegraphics[width=\linewidth]{figures/lora_architecture.svg}
+    \includegraphics[width=\linewidth]{figures/lora_architecture.pdf}
     \caption{LoRA-based MoM Inference Architecture. The input query is processed by a single, shared frozen base model ($W$). Simultaneously, task-specific low-rank adapters ($A \times B$) calculate perturbations. The outputs are summed element-wise to produce final task-specific classifications, enabling multi-task support with minimal memory overhead.}
     \label{fig:lora_arch}
 \end{figure}
