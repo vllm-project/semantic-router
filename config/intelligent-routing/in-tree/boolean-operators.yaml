@@ -1,0 +1,373 @@
+# Boolean Operator Reference — AND · OR · NOT · NOR · NAND · XOR · XNOR · Nested
+#
+# Demonstrates every classical Boolean operator using the recursive RuleNode tree.
+# NOT is strictly unary (exactly one child). All other operators (NOR, NAND, XOR,
+# XNOR) are composed from AND / OR / NOT using standard Boolean identities:
+#
+#   NOR (A,B)  = NOT(OR(A,B))          ¬A ∧ ¬B
+#   NAND(A,B)  = NOT(AND(A,B))         ¬A ∨ ¬B
+#   XOR (A,B)  = OR(AND(A,¬B),AND(¬A,B))   A ⊕ B
+#   XNOR(A,B)  = OR(AND(A,B),AND(¬A,¬B))   A ⊙ B
+#
+# Signals used
+# ─────────────
+#   keyword : code_request  — query contains code-related keywords
+#             math_request  — query contains math-related keywords
+#   language: en            — English query
+#             zh            — Chinese query
+#   context : short_context — ≤ 1 K tokens
+#             long_context  — ≥ 8 K tokens
+#   domain  : computer_science, math, physics, engineering, chemistry (STEM)
+#             biology, health, economics, business, law,
+#             psychology, history, philosophy, other   (non-STEM)
+#
+# Decision priority ladder (higher fires first)
+#   500  nested_stem_english_short  — (STEM ∨ math_kw) ∧ en ∧ ¬long   [Nested]
+#   400  and_cs_english             — cs ∧ en                          [AND]
+#   300  or_stem                    — cs ∨ math ∨ physics ∨ …          [OR]
+#   200  not_code                   — ¬code_request                    [NOT]
+#   180  nor_cs_math                — ¬(cs ∨ math)                     [NOR]
+#   160  nand_zh_code               — ¬(zh ∧ code_request)             [NAND]
+#   140  xor_code_math              — code_request ⊕ math_request      [XOR]
+#   120  xnor_code_math             — code_request ⊙ math_request      [XNOR]
+#    50  fallback                   — always                           [OR-leaf]
+
+vllm_endpoints:
+  - name: "endpoint1"
+    address: "172.28.0.20"
+    port: 8002
+    weight: 1
+
+model_config:
+  "en_cs_model":
+    preferred_endpoints: ["endpoint1"]
+  "stem_model":
+    reasoning_family: "qwen3"
+    preferred_endpoints: ["endpoint1"]
+  "conversation_model":
+    preferred_endpoints: ["endpoint1"]
+  "humanities_model":
+    preferred_endpoints: ["endpoint1"]
+  "non_zh_code_model":
+    preferred_endpoints: ["endpoint1"]
+  "xor_model":
+    preferred_endpoints: ["endpoint1"]
+  "xnor_model":
+    preferred_endpoints: ["endpoint1"]
+  "fast_model":
+    preferred_endpoints: ["endpoint1"]
+
+classifier:
+  category_model:
+    model_id: "models/mom-domain-classifier"
+    use_modernbert: false
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
+
+keyword_rules:
+  - name: "code_request"
+    operator: "OR"
+    keywords: ["code", "function", "implement", "debug", "algorithm", "compile", "class", "variable"]
+    case_sensitive: false
+  - name: "math_request"
+    operator: "OR"
+    keywords: ["equation", "integral", "derivative", "matrix", "proof", "theorem", "calculus"]
+    case_sensitive: false
+
+language_rules:
+  - name: "en"
+    description: "English"
+  - name: "zh"
+    description: "Chinese (Simplified or Traditional)"
+
+context_rules:
+  - name: "short_context"
+    min_tokens: "0"
+    max_tokens: "1K"
+    description: "Brief queries (≤ 1 000 tokens)"
+  - name: "long_context"
+    min_tokens: "8K"
+    max_tokens: "128K"
+    description: "Long documents (≥ 8 000 tokens)"
+
+categories:
+  - name: computer_science
+    description: "CS and programming"
+    mmlu_categories: ["computer_science"]
+  - name: math
+    description: "Mathematics"
+    mmlu_categories: ["math"]
+  - name: physics
+    description: "Physics"
+    mmlu_categories: ["physics"]
+  - name: engineering
+    description: "Engineering"
+    mmlu_categories: ["engineering"]
+  - name: chemistry
+    description: "Chemistry"
+    mmlu_categories: ["chemistry"]
+  - name: biology
+    description: "Biology and life sciences"
+    mmlu_categories: ["biology"]
+  - name: health
+    description: "Health and medicine"
+    mmlu_categories: ["health"]
+  - name: economics
+    description: "Economics and finance"
+    mmlu_categories: ["economics"]
+  - name: business
+    description: "Business and management"
+    mmlu_categories: ["business"]
+  - name: law
+    description: "Law and legal topics"
+    mmlu_categories: ["law"]
+  - name: psychology
+    description: "Psychology"
+    mmlu_categories: ["psychology"]
+  - name: history
+    description: "History and culture"
+    mmlu_categories: ["history"]
+  - name: philosophy
+    description: "Philosophy and ethics"
+    mmlu_categories: ["philosophy"]
+  - name: other
+    description: "General / miscellaneous"
+    mmlu_categories: ["other"]
+
+strategy: "priority"
+
+decisions:
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # [Nested] Priority 500 — most selective; evaluated first
+  #
+  # Goal: route STEM-or-math, English, short-context queries to the coding model.
+  # Expression:  (cs ∨ math_kw) ∧ en ∧ ¬long_context
+  #
+  # Top-level AND requires ALL three branches to match:
+  #   Branch 1 — OR   : domain:cs OR keyword:math_request
+  #   Branch 2 — leaf : language:en
+  #   Branch 3 — NOT  : NOT(context:long_context)   ← unary NOT
+  # ─────────────────────────────────────────────────────────────────────────────
+  - name: "nested_stem_english_short"
+    description: "(STEM or math keyword) AND English AND NOT long context → code/STEM specialist"
+    priority: 500
+    rules:
+      operator: "AND"
+      conditions:
+        - operator: "OR"
+          conditions:
+            - type: "domain"
+              name: "computer_science"
+            - type: "keyword"
+              name: "math_request"
+        - type: "language"
+          name: "en"
+        - operator: "NOT"
+          conditions:
+            - type: "context"
+              name: "long_context"
+    modelRefs:
+      - model: "en_cs_model"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a precise STEM and coding expert. Provide concise, correct answers with code examples where relevant."
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # [AND] Priority 400
+  #
+  # Goal: route English computer-science queries.
+  # Expression:  cs ∧ en
+  # ─────────────────────────────────────────────────────────────────────────────
+  - name: "and_cs_english"
+    description: "AND — computer_science domain AND English language"
+    priority: 400
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "computer_science"
+        - type: "language"
+          name: "en"
+    modelRefs:
+      - model: "en_cs_model"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # [OR] Priority 300
+  #
+  # Goal: route any STEM domain to the reasoning model.
+  # Expression:  cs ∨ math ∨ physics ∨ engineering ∨ chemistry
+  # ─────────────────────────────────────────────────────────────────────────────
+  - name: "or_stem"
+    description: "OR — any of the five STEM domains → reasoning model"
+    priority: 300
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "computer_science"
+        - type: "domain"
+          name: "math"
+        - type: "domain"
+          name: "physics"
+        - type: "domain"
+          name: "engineering"
+        - type: "domain"
+          name: "chemistry"
+    modelRefs:
+      - model: "stem_model"
+        use_reasoning: true
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # [NOT] Priority 200  — strictly unary: NOT takes exactly one child
+  #
+  # Goal: route queries that are NOT code requests to the conversation model.
+  # Expression:  ¬code_request
+  # ─────────────────────────────────────────────────────────────────────────────
+  - name: "not_code"
+    description: "NOT — not a code request → conversation model"
+    priority: 200
+    rules:
+      operator: "NOT"
+      conditions:
+        - type: "keyword"
+          name: "code_request"
+    modelRefs:
+      - model: "conversation_model"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # [NOR] Priority 180
+  #
+  # NOR(A,B) ≡ NOT(OR(A,B))  ←  ¬A ∧ ¬B
+  #
+  # Goal: route queries that are neither CS nor math to the humanities model.
+  # Expression:  ¬(cs ∨ math)  =  ¬cs ∧ ¬math
+  # ─────────────────────────────────────────────────────────────────────────────
+  - name: "nor_cs_math"
+    description: "NOR — neither computer_science nor math domain → humanities model"
+    priority: 180
+    rules:
+      operator: "NOT"          # outer NOT (unary)
+      conditions:
+        - operator: "OR"       # inner OR collects what we want to exclude
+          conditions:
+            - type: "domain"
+              name: "computer_science"
+            - type: "domain"
+              name: "math"
+    modelRefs:
+      - model: "humanities_model"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # [NAND] Priority 160
+  #
+  # NAND(A,B) ≡ NOT(AND(A,B))  ←  ¬A ∨ ¬B
+  #
+  # Goal: route unless the query is simultaneously Chinese AND a code request.
+  #       i.e. allow all queries EXCEPT Chinese code questions.
+  # Expression:  ¬(zh ∧ code_request)
+  # ─────────────────────────────────────────────────────────────────────────────
+  - name: "nand_zh_code"
+    description: "NAND — not (Chinese AND code request) → non-Chinese code model"
+    priority: 160
+    rules:
+      operator: "NOT"          # outer NOT (unary)
+      conditions:
+        - operator: "AND"      # inner AND: both zh AND code must be true to block
+          conditions:
+            - type: "language"
+              name: "zh"
+            - type: "keyword"
+              name: "code_request"
+    modelRefs:
+      - model: "non_zh_code_model"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # [XOR] Priority 140
+  #
+  # XOR(A,B) ≡ OR(AND(A,¬B), AND(¬A,B))  ←  A ⊕ B
+  #
+  # Goal: route queries that match exactly one of {code_request, math_request}.
+  # Expression:  (code ∧ ¬math) ∨ (¬code ∧ math)
+  # ─────────────────────────────────────────────────────────────────────────────
+  - name: "xor_code_math"
+    description: "XOR — exactly one of code_request or math_request → XOR specialist"
+    priority: 140
+    rules:
+      operator: "OR"
+      conditions:
+        # Branch A: code AND NOT math
+        - operator: "AND"
+          conditions:
+            - type: "keyword"
+              name: "code_request"
+            - operator: "NOT"
+              conditions:
+                - type: "keyword"
+                  name: "math_request"
+        # Branch B: NOT code AND math
+        - operator: "AND"
+          conditions:
+            - operator: "NOT"
+              conditions:
+                - type: "keyword"
+                  name: "code_request"
+            - type: "keyword"
+              name: "math_request"
+    modelRefs:
+      - model: "xor_model"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # [XNOR] Priority 120
+  #
+  # XNOR(A,B) ≡ OR(AND(A,B), AND(¬A,¬B))  ←  A ⊙ B
+  #
+  # Goal: route queries where code_request and math_request either both match
+  #       or both are absent (they agree on their truth value).
+  # Expression:  (code ∧ math) ∨ (¬code ∧ ¬math)
+  # ─────────────────────────────────────────────────────────────────────────────
+  - name: "xnor_code_math"
+    description: "XNOR — code_request and math_request agree (both or neither) → XNOR model"
+    priority: 120
+    rules:
+      operator: "OR"
+      conditions:
+        # Branch A: both code AND math
+        - operator: "AND"
+          conditions:
+            - type: "keyword"
+              name: "code_request"
+            - type: "keyword"
+              name: "math_request"
+        # Branch B: neither code NOR math  (NOR as sub-expression)
+        - operator: "AND"
+          conditions:
+            - operator: "NOT"
+              conditions:
+                - type: "keyword"
+                  name: "code_request"
+            - operator: "NOT"
+              conditions:
+                - type: "keyword"
+                  name: "math_request"
+    modelRefs:
+      - model: "xnor_model"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # [Fallback] Priority 50 — catch-all, lowest priority
+  # ─────────────────────────────────────────────────────────────────────────────
+  - name: "fallback"
+    description: "Fallback — route everything else to the fast general model"
+    priority: 50
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "other"
+    modelRefs:
+      - model: "fast_model"
+
+default_model: fast_model
+

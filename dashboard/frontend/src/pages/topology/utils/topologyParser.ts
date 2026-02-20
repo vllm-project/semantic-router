@@ -340,7 +340,7 @@ function extractDecisions(config: ConfigData): DecisionConfig[] {
   if (config.decisions && config.decisions.length > 0) {
     config.decisions.forEach(decision => {
       const rules: RuleCombination = {
-        operator: (decision.rules?.operator as 'AND' | 'OR') || 'AND',
+        operator: (decision.rules?.operator as 'AND' | 'OR' | 'NOT') || 'AND',
         conditions: (decision.rules?.conditions || []).map(cond => ({
           type: cond.type as SignalType,
           name: cond.name,

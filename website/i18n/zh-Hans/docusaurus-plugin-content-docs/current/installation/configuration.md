@@ -555,7 +555,20 @@ decisions:
 
 ## 决策规则 - 信号融合
 
-使用 AND/OR 运算符组合信号：
+决策规则构成一棵**递归布尔表达式树（AST）**。`conditions` 中的每个元素可以是：
+
+- **叶子节点** — 包含 `type` + `name` 的信号引用
+- **复合节点** — 包含 `operator` + `conditions` 的子表达式
+
+支持三种原语运算符：
+
+| 运算符 | 语义 | 子节点数量 |
+| --- | --- | --- |
+| `AND` | 所有子节点必须匹配 | 1 个或多个 |
+| `OR` | 至少一个子节点匹配 | 1 个或多个 |
+| `NOT` | 对唯一子节点取反 | **恰好 1 个** |
+
+派生门（NOR、NAND、XOR、XNOR）通过组合这些原语来表达，详见下方示例。
 
 ```yaml
 decisions:
@@ -574,6 +587,51 @@ decisions:
     modelRefs:
       - model: math-specialist
         weight: 1.0
+```
+
+**NOT — 排除路由**（`NOT` 严格为一元）：
+
+```yaml
+decisions:
+  - name: non_stem_fallback
+    description: "非 STEM 领域时路由"
+    priority: 50
+    rules:
+      operator: "NOT"
+      conditions:
+        - operator: "OR"          # NOR = NOT(OR(...))
+          conditions:
+            - type: "domain"
+              name: "computer_science"
+            - type: "domain"
+              name: "math"
+    modelRefs:
+      - model: general-model
+```
+
+**任意嵌套** — `(cs ∨ math_kw) ∧ en ∧ ¬long_context`：
+
+```yaml
+decisions:
+  - name: stem_english_short
+    priority: 500
+    rules:
+      operator: "AND"
+      conditions:
+        - operator: "OR"
+          conditions:
+            - type: "domain"
+              name: "computer_science"
+            - type: "keyword"
+              name: "math_request"
+        - type: "language"
+          name: "en"
+        - operator: "NOT"
+          conditions:
+            - type: "context"
+              name: "long_context"
+    modelRefs:
+      - model: en-cs-specialist
 ```
 
 ### 模型选择算法

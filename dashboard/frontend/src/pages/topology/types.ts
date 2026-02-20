@@ -65,7 +65,7 @@ export interface DecisionConfig {
 }
 
 export interface RuleCombination {
-  operator: 'AND' | 'OR'
+  operator: 'AND' | 'OR' | 'NOT'
   conditions: RuleCondition[]
 }
 

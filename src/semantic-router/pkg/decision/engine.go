@@ -142,99 +142,149 @@ func (e *DecisionEngine) EvaluateDecisionsWithSignals(signals *SignalMatches) (*
 	return e.selectBestDecision(results), nil
 }
 
-// evaluateDecisionWithSignals evaluates a single decision's rule combination with all signals
+// evaluateDecisionWithSignals evaluates a single decision's rule tree with all signals.
 func (e *DecisionEngine) evaluateDecisionWithSignals(
 	decision *config.Decision,
 	signals *SignalMatches,
 ) (matched bool, confidence float64, matchedRules []string) {
-	return e.evaluateRuleCombinationWithSignals(decision.Rules, signals)
+	return e.evalNode(decision.Rules, signals)
 }
 
-// evaluateRuleCombinationWithSignals evaluates a rule combination with all signal types
-func (e *DecisionEngine) evaluateRuleCombinationWithSignals(
-	rules config.RuleCombination,
+// evalNode recursively evaluates a RuleNode (boolean expression tree) against signal matches.
+// Leaf nodes check whether a specific named signal is present.
+// Composite nodes apply AND / OR / NOT logic over their children.
+func (e *DecisionEngine) evalNode(
+	node config.RuleNode,
 	signals *SignalMatches,
 ) (matched bool, confidence float64, matchedRules []string) {
-	if len(rules.Conditions) == 0 {
+	if node.IsLeaf() {
+		return e.evalLeaf(node.Type, node.Name, signals)
+	}
+
+	switch strings.ToUpper(node.Operator) {
+	case "AND":
+		return e.evalAND(node.Conditions, signals)
+	case "NOT":
+		return e.evalNOT(node.Conditions, signals)
+	default: // OR
+		return e.evalOR(node.Conditions, signals)
+	}
+}
+
+// evalLeaf evaluates a single signal condition (leaf node).
+func (e *DecisionEngine) evalLeaf(
+	typ, name string,
+	signals *SignalMatches,
+) (matched bool, confidence float64, matchedRules []string) {
+	normalizedType := strings.ToLower(strings.TrimSpace(typ))
+
+	switch normalizedType {
+	case "keyword":
+		matched = slices.Contains(signals.KeywordRules, name)
+	case "embedding":
+		matched = slices.Contains(signals.EmbeddingRules, name)
+	case "domain":
+		matched = e.matchesDomainCondition(name, signals.DomainRules)
+	case "fact_check":
+		matched = slices.Contains(signals.FactCheckRules, name)
+	case "user_feedback":
+		matched = slices.Contains(signals.UserFeedbackRules, name)
+	case "preference":
+		matched = slices.Contains(signals.PreferenceRules, name)
+	case "language":
+		matched = slices.Contains(signals.LanguageRules, name)
+	case "context":
+		matched = slices.Contains(signals.ContextRules, name)
+	case "complexity":
+		matched = slices.Contains(signals.ComplexityRules, name)
+	case "modality":
+		matched = slices.Contains(signals.ModalityRules, name)
+	case "authz":
+		matched = slices.Contains(signals.AuthzRules, name)
+	default:
 		return false, 0, nil
 	}
 
-	matchedCount := 0
-	totalConfidence := 0.0
-	var allMatchedRules []string
+	if !matched {
+		return false, 0, nil
+	}
 
-	for _, condition := range rules.Conditions {
-		conditionMatched := false
-
-		// Normalize condition type to lowercase for case-insensitive matching
-		// All signal types are normalized to match constants and switch cases
-		normalizedType := strings.ToLower(strings.TrimSpace(condition.Type))
-
-		switch normalizedType {
-		case "keyword":
-			conditionMatched = slices.Contains(signals.KeywordRules, condition.Name)
-		case "embedding":
-			conditionMatched = slices.Contains(signals.EmbeddingRules, condition.Name)
-		case "domain":
-			// Domain matching: check if the detected domain matches the category
-			// A match occurs if:
-			// 1. The detected domain equals the category name, OR
-			// 2. The detected domain is in the category's mmlu_categories list
-			conditionMatched = e.matchesDomainCondition(condition.Name, signals.DomainRules)
-		case "fact_check":
-			conditionMatched = slices.Contains(signals.FactCheckRules, condition.Name)
-		case "user_feedback":
-			conditionMatched = slices.Contains(signals.UserFeedbackRules, condition.Name)
-		case "preference":
-			conditionMatched = slices.Contains(signals.PreferenceRules, condition.Name)
-		case "language":
-			conditionMatched = slices.Contains(signals.LanguageRules, condition.Name)
-		case "context":
-			conditionMatched = slices.Contains(signals.ContextRules, condition.Name)
-		case "complexity":
-			conditionMatched = slices.Contains(signals.ComplexityRules, condition.Name)
-		case "modality":
-			conditionMatched = slices.Contains(signals.ModalityRules, condition.Name)
-		case "authz":
-			conditionMatched = slices.Contains(signals.AuthzRules, condition.Name)
-		default:
-			continue
+	// Use real confidence score if available (e.g., embedding similarity = 0.88),
+	// otherwise fall back to 1.0 for backward compatibility.
+	signalKey := fmt.Sprintf("%s:%s", normalizedType, name)
+	if signals.SignalConfidences != nil {
+		if score, ok := signals.SignalConfidences[signalKey]; ok && score > 0 {
+			confidence = score
+		} else {
+			confidence = 1.0
 		}
+	} else {
+		confidence = 1.0
+	}
 
-		if conditionMatched {
-			matchedCount++
+	return true, confidence, []string{fmt.Sprintf("%s:%s", typ, name)}
+}
 
-			// Use real confidence score if available (e.g., embedding similarity = 0.88),
-			// otherwise fall back to 1.0 for backward compatibility with signals that
-			// don't provide confidence (e.g., fact_check, language).
-			signalKey := fmt.Sprintf("%s:%s", normalizedType, condition.Name)
-			if signals.SignalConfidences != nil {
-				if score, ok := signals.SignalConfidences[signalKey]; ok && score > 0 {
-					totalConfidence += score
-				} else {
-					totalConfidence += 1.0
-				}
-			} else {
-				totalConfidence += 1.0
+// evalAND returns true only when every child matches; confidence is the average.
+func (e *DecisionEngine) evalAND(
+	children []config.RuleNode,
+	signals *SignalMatches,
+) (matched bool, confidence float64, matchedRules []string) {
+	if len(children) == 0 {
+		return false, 0, nil
+	}
+	totalConf := 0.0
+	for _, child := range children {
+		m, c, r := e.evalNode(child, signals)
+		if !m {
+			return false, 0, nil
+		}
+		totalConf += c
+		matchedRules = append(matchedRules, r...)
+	}
+	return true, totalConf / float64(len(children)), matchedRules
+}
+
+// evalOR returns true when at least one child matches; returns the best-confidence match.
+func (e *DecisionEngine) evalOR(
+	children []config.RuleNode,
+	signals *SignalMatches,
+) (matched bool, confidence float64, matchedRules []string) {
+	bestConf := 0.0
+	var bestRules []string
+	for _, child := range children {
+		m, c, r := e.evalNode(child, signals)
+		if m {
+			matched = true
+			if c > bestConf {
+				bestConf = c
+				bestRules = r
 			}
-
-			allMatchedRules = append(allMatchedRules, fmt.Sprintf("%s:%s", condition.Type, condition.Name))
 		}
 	}
-
-	// Calculate final match result based on operator
-	if rules.Operator == "AND" {
-		matched = matchedCount == len(rules.Conditions)
-	} else { // OR
-		matched = matchedCount > 0
+	if matched {
+		return true, bestConf, bestRules
 	}
+	return false, 0, nil
+}
 
-	// Calculate confidence as ratio of matched conditions
-	if len(rules.Conditions) > 0 {
-		confidence = totalConfidence / float64(len(rules.Conditions))
+// evalNOT is a strictly unary operator: it negates the result of its single child.
+// Configuration errors (0 or 2+ children) are treated as non-matching.
+func (e *DecisionEngine) evalNOT(
+	children []config.RuleNode,
+	signals *SignalMatches,
+) (matched bool, confidence float64, matchedRules []string) {
+	if len(children) != 1 {
+		logging.Warnf("NOT operator requires exactly 1 child, got %d — treating as non-match", len(children))
+		return false, 0, nil
 	}
-
-	return matched, confidence, allMatchedRules
+	m, c, r := e.evalNode(children[0], signals)
+	if !m {
+		// Child did not match → NOT matches with full certainty.
+		return true, 1.0, r
+	}
+	// Child matched → NOT does not match.
+	return false, c, r
 }
 
 // matchesDomainCondition checks if any of the detected domains match the given category name

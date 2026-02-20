@@ -161,6 +161,9 @@ function evaluateRules(rules: RuleCombination, matchedSignals: MatchedSignal[]):
 
   if (rules.operator === 'AND') {
     return conditionResults.every(r => r)
+  } else if (rules.operator === 'NOT') {
+    // NOT (NOR semantics): matches only when none of the conditions match
+    return conditionResults.every(r => !r)
   } else {
     return conditionResults.some(r => r)
   }
