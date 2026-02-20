@@ -39,14 +39,23 @@ vllm_endpoints:
     weight: 1
 
 model_config:
-  "en_cs_model":         { preferred_endpoints: ["endpoint1"] }
-  "stem_model":          { reasoning_family: "qwen3", preferred_endpoints: ["endpoint1"] }
-  "conversation_model":  { preferred_endpoints: ["endpoint1"] }
-  "humanities_model":    { preferred_endpoints: ["endpoint1"] }
-  "non_zh_code_model":   { preferred_endpoints: ["endpoint1"] }
-  "xor_model":           { preferred_endpoints: ["endpoint1"] }
-  "xnor_model":          { preferred_endpoints: ["endpoint1"] }
-  "fast_model":          { preferred_endpoints: ["endpoint1"] }
+  "en_cs_model":
+    preferred_endpoints: ["endpoint1"]
+  "stem_model":
+    reasoning_family: "qwen3"
+    preferred_endpoints: ["endpoint1"]
+  "conversation_model":
+    preferred_endpoints: ["endpoint1"]
+  "humanities_model":
+    preferred_endpoints: ["endpoint1"]
+  "non_zh_code_model":
+    preferred_endpoints: ["endpoint1"]
+  "xor_model":
+    preferred_endpoints: ["endpoint1"]
+  "xnor_model":
+    preferred_endpoints: ["endpoint1"]
+  "fast_model":
+    preferred_endpoints: ["endpoint1"]
 
 classifier:
   category_model:
@@ -83,24 +92,52 @@ context_rules:
     description: "Long documents (≥ 8 000 tokens)"
 
 categories:
-  - { name: computer_science, description: "CS and programming",         mmlu_categories: ["computer_science"] }
-  - { name: math,             description: "Mathematics",                mmlu_categories: ["math"] }
-  - { name: physics,          description: "Physics",                    mmlu_categories: ["physics"] }
-  - { name: engineering,      description: "Engineering",                mmlu_categories: ["engineering"] }
-  - { name: chemistry,        description: "Chemistry",                  mmlu_categories: ["chemistry"] }
-  - { name: biology,          description: "Biology and life sciences",  mmlu_categories: ["biology"] }
-  - { name: health,           description: "Health and medicine",        mmlu_categories: ["health"] }
-  - { name: economics,        description: "Economics and finance",      mmlu_categories: ["economics"] }
-  - { name: business,         description: "Business and management",    mmlu_categories: ["business"] }
-  - { name: law,              description: "Law and legal topics",       mmlu_categories: ["law"] }
-  - { name: psychology,       description: "Psychology",                 mmlu_categories: ["psychology"] }
-  - { name: history,          description: "History and culture",        mmlu_categories: ["history"] }
-  - { name: philosophy,       description: "Philosophy and ethics",      mmlu_categories: ["philosophy"] }
-  - { name: other,            description: "General / miscellaneous",    mmlu_categories: ["other"] }
+  - name: computer_science
+    description: "CS and programming"
+    mmlu_categories: ["computer_science"]
+  - name: math
+    description: "Mathematics"
+    mmlu_categories: ["math"]
+  - name: physics
+    description: "Physics"
+    mmlu_categories: ["physics"]
+  - name: engineering
+    description: "Engineering"
+    mmlu_categories: ["engineering"]
+  - name: chemistry
+    description: "Chemistry"
+    mmlu_categories: ["chemistry"]
+  - name: biology
+    description: "Biology and life sciences"
+    mmlu_categories: ["biology"]
+  - name: health
+    description: "Health and medicine"
+    mmlu_categories: ["health"]
+  - name: economics
+    description: "Economics and finance"
+    mmlu_categories: ["economics"]
+  - name: business
+    description: "Business and management"
+    mmlu_categories: ["business"]
+  - name: law
+    description: "Law and legal topics"
+    mmlu_categories: ["law"]
+  - name: psychology
+    description: "Psychology"
+    mmlu_categories: ["psychology"]
+  - name: history
+    description: "History and culture"
+    mmlu_categories: ["history"]
+  - name: philosophy
+    description: "Philosophy and ethics"
+    mmlu_categories: ["philosophy"]
+  - name: other
+    description: "General / miscellaneous"
+    mmlu_categories: ["other"]
 
 strategy: "priority"
 
-decisions:  
+decisions:
 
   # ─────────────────────────────────────────────────────────────────────────────
   # [Nested] Priority 500 — most selective; evaluated first
