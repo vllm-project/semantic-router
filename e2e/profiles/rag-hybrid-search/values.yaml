@@ -1,4 +1,5 @@
-# Semantic Router Configuration for RAG with Llama Stack E2E Tests
+# Semantic Router Configuration for RAG Hybrid Search E2E Tests
+# Exercises: multi-store management, hybrid search (BM25 + n-gram + vector)
 config:
   bert_model:
     model_id: models/mom-embedding-light

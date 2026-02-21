@@ -1,4 +1,4 @@
-package ragllamastack
+package raghybridsearch
 
 import (
 	"bytes"
@@ -24,8 +24,8 @@ import (
 const (
 	// Chart and file path constants
 	chartPathSemanticRouter = "deploy/helm/semantic-router"
-	valuesFile              = "e2e/profiles/rag-llama-stack/values.yaml"
-	llamaStackManifest      = "e2e/profiles/rag-llama-stack/manifests/llama-stack.yaml"
+	valuesFile              = "e2e/profiles/rag-hybrid-search/values.yaml"
+	llamaStackManifest      = "e2e/profiles/rag-hybrid-search/manifests/llama-stack.yaml"
 
 	// Timeout constants
 	timeoutSemanticRouterInstall = "30m"
@@ -44,24 +44,24 @@ const (
 	namespaceSemanticRouter = "vllm-semantic-router-system"
 )
 
-// Profile implements the RAG with Llama Stack test profile
+// Profile implements the RAG hybrid search test profile.
 type Profile struct {
 	verbose bool
 }
 
-// NewProfile creates a new RAG Llama Stack profile
+// NewProfile creates a new RAG hybrid search profile.
 func NewProfile() *Profile {
 	return &Profile{}
 }
 
-// Name returns the profile name
+// Name returns the profile name.
 func (p *Profile) Name() string {
-	return "rag-llama-stack"
+	return "rag-hybrid-search"
 }
 
-// Description returns the profile description
+// Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests RAG vector store pipeline with Llama Stack backend"
+	return "Tests RAG vector store pipeline: multi-store management and hybrid search (BM25 + n-gram + vector)"
 }
 
 // Setup deploys all required components for RAG Llama Stack testing.
@@ -69,7 +69,7 @@ func (p *Profile) Description() string {
 // test connects directly to the Semantic Router API server (port 8080).
 func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error {
 	p.verbose = opts.Verbose
-	p.log("Setting up RAG Llama Stack test environment")
+	p.log("Setting up RAG hybrid search test environment")
 
 	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
 
@@ -91,14 +91,14 @@ func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error
 		return fmt.Errorf("failed to verify environment: %w", err)
 	}
 
-	p.log("RAG Llama Stack test environment setup complete")
+	p.log("RAG hybrid search test environment setup complete")
 	return nil
 }
 
 // Teardown cleans up all deployed resources
 func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions) error {
 	p.verbose = opts.Verbose
-	p.log("Tearing down RAG Llama Stack test environment")
+	p.log("Tearing down RAG hybrid search test environment")
 
 	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
 
@@ -109,7 +109,7 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 	p.log("Removing Llama Stack")
 	p.kubectlDelete(ctx, opts.KubeConfig, llamaStackManifest)
 
-	p.log("RAG Llama Stack test environment teardown complete")
+	p.log("RAG hybrid search test environment teardown complete")
 	return nil
 }
 
@@ -117,6 +117,7 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 func (p *Profile) GetTestCases() []string {
 	return []string{
 		"rag-vectorstore",
+		"rag-vectorstore-hybrid",
 	}
 }
 
@@ -313,6 +314,6 @@ func (p *Profile) runKubectl(ctx context.Context, kubeConfig string, args ...str
 
 func (p *Profile) log(format string, args ...interface{}) {
 	if p.verbose {
-		fmt.Printf("[RAG-Llama-Stack] "+format+"\n", args...)
+		fmt.Printf("[RAG-Hybrid-Search] "+format+"\n", args...)
 	}
 }

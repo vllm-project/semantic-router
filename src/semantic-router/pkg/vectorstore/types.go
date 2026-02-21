@@ -88,6 +88,11 @@ type SearchResult struct {
 	Content    string  `json:"content"`
 	Score      float64 `json:"score"`
 	ChunkIndex int     `json:"chunk_index"`
+
+	// Component scores populated when hybrid search is used.
+	VectorScore *float64 `json:"vector_score,omitempty"`
+	BM25Score   *float64 `json:"bm25_score,omitempty"`
+	NgramScore  *float64 `json:"ngram_score,omitempty"`
 }
 
 // EmbeddedChunk is a chunk with its embedding, ready for storage.
