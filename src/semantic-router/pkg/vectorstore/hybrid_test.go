@@ -40,12 +40,12 @@ func TestTokenize(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCharNgrams(t *testing.T) {
-	ngrams := charNgrams("hello", 3)
+	ngrams := charNgrams("world", 3)
 	expected := map[string]struct{}{
-		"hel": {}, "ell": {}, "llo": {},
+		"wor": {}, "orl": {}, "rld": {},
 	}
 	if len(ngrams) != len(expected) {
-		t.Fatalf("charNgrams(hello, 3) produced %d ngrams, want %d", len(ngrams), len(expected))
+		t.Fatalf("charNgrams(world, 3) produced %d ngrams, want %d", len(ngrams), len(expected))
 	}
 	for k := range expected {
 		if _, ok := ngrams[k]; !ok {
