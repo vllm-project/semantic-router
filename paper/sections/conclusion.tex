@@ -29,6 +29,9 @@ Replacing hand-crafted Boolean rules with learned routing policies (e.g., neural
 \textbf{Adaptive cost optimization.}
 Online learning approaches that continuously adapt model and provider selection based on real-time cost signals, latency measurements, and user feedback---extending the current offline-trained ML selectors to fully adaptive cost-quality optimization.
 
+\textbf{Contrastive preference routing.}
+The contrastive embedding method used for complexity classification generalizes to user preference learning: a contrastive preference classifier scores queries against exemplar sets representing different user preference profiles, enabling personalized model selection without per-user fine-tuning.
+
 \textbf{Cross-provider consistency.}
 Techniques for ensuring consistent behavior when routing the same conversation across different providers, addressing differences in instruction following, safety behavior, and output formatting.
 
