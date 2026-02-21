@@ -47,7 +47,7 @@ func resolvePrefModelPath() (string, bool) {
 func resolveContrastiveModelPath() (string, bool) {
 	candidates := []string{
 		os.Getenv(QWEN3_EMBED_MODEL_PATH),
-		"../../models/mom-embedding-pro",
+		"../../models/mom-embedding-ultra",
 	}
 
 	for _, candidate := range candidates {
@@ -143,14 +143,14 @@ func BenchmarkPreference_ContrastiveFewShot(b *testing.B) {
 		{Name: "financial_inquiry", Description: "Answers questions about financial matters", Examples: []string{"What's the stock price of AAPL?", "How is the market performing today?"}},
 	}
 
-	cfg := &config.PreferenceModelConfig{UseContrastive: true, EmbeddingModel: "qwen3"}
+	cfg := &config.PreferenceModelConfig{UseContrastive: true, EmbeddingModel: "mmbert"}
 
 	classifier, err := classification.NewPreferenceClassifier(nil, rules, cfg)
 	if err != nil {
 		b.Fatalf("failed to create contrastive preference classifier: %v", err)
 	}
 
-	conv := `[{"role":"user","content":"Check out my portfolio and give me some feedback on how to improve it."}]`
+	conv := `[{"role":"user","content":"Can you help me fix this bug in my code?"}]`
 	// warmup
 	if _, err := classifier.Classify(conv); err != nil {
 		b.Fatalf("warmup failed: %v", err)
@@ -178,7 +178,7 @@ func initContrastivePreference(b *testing.B) {
 			contrastiveErr = os.ErrNotExist
 			return
 		}
-		contrastiveErr = binding.InitEmbeddingModels(contrastivePath, "", "", true)
+		contrastiveErr = binding.InitEmbeddingModels("", "", contrastivePath, true)
 	})
 
 	if contrastiveErr != nil {
