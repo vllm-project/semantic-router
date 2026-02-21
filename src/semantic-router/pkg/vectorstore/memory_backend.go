@@ -33,8 +33,8 @@ type MemoryBackendConfig struct {
 type memoryCollection struct {
 	dimension  int
 	chunks     map[string]EmbeddedChunk // chunk ID -> chunk
-	bm25Index  *BM25Index              // rebuilt on chunk mutations
-	ngramIndex *NgramIndex             // rebuilt on chunk mutations
+	bm25Index  *BM25Index               // rebuilt on chunk mutations
+	ngramIndex *NgramIndex              // rebuilt on chunk mutations
 }
 
 const defaultNgramSize = 3
