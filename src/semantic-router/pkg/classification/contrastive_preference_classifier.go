@@ -17,6 +17,7 @@ import (
 type ContrastivePreferenceClassifier struct {
 	modelType   string
 	maxExamples int
+	threshold   float32
 
 	rules []config.PreferenceRule
 
@@ -28,7 +29,7 @@ type ContrastivePreferenceClassifier struct {
 
 // NewContrastivePreferenceClassifier builds a contrastive preference classifier.
 // modelType follows GetEmbeddingWithModelType (e.g. "qwen3", "gemma", "mmbert").
-func NewContrastivePreferenceClassifier(rules []config.PreferenceRule, modelType string, maxExamples int) (*ContrastivePreferenceClassifier, error) {
+func NewContrastivePreferenceClassifier(rules []config.PreferenceRule, modelType string, maxExamples int, threshold float32) (*ContrastivePreferenceClassifier, error) {
 	if len(rules) == 0 {
 		return nil, fmt.Errorf("contrastive preference rules cannot be empty")
 	}
@@ -40,6 +41,7 @@ func NewContrastivePreferenceClassifier(rules []config.PreferenceRule, modelType
 	c := &ContrastivePreferenceClassifier{
 		modelType:      modelType,
 		maxExamples:    maxExamples,
+		threshold:      threshold,
 		rules:          rules,
 		ruleEmbeddings: make(map[string][][]float32),
 	}
@@ -188,6 +190,10 @@ func (c *ContrastivePreferenceClassifier) Classify(text string) (*PreferenceResu
 
 	if bestRule == "" {
 		return nil, fmt.Errorf("no preference matched by contrastive classifier")
+	}
+
+	if c.threshold > 0 && bestScore < c.threshold {
+		return nil, fmt.Errorf("preference similarity %.3f below threshold %.3f", bestScore, c.threshold)
 	}
 
 	return &PreferenceResult{
