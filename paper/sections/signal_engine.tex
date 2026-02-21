@@ -137,8 +137,20 @@ A multi-class classifier detects satisfaction, dissatisfaction, clarification re
 \textbf{Modality} ($\tau_\text{mod}$).
 A three-class classifier (autoregressive, diffusion, both) determines the appropriate model modality for the request, trained on mixed text-generation and image-generation datasets.
 
-\textbf{Complexity} ($\tau_\text{cpx}$) and \textbf{Preference} ($\tau_\text{pref}$).
-Additional learned signals for query difficulty estimation and personalized routing based on user interaction history.
+\textbf{Complexity} ($\tau_\text{cpx}$).
+A contrastive embedding classifier estimates query difficulty.
+Each complexity rule defines two sets of candidate exemplars---\emph{hard} (e.g., multi-step reasoning problems) and \emph{easy} (e.g., simple factual lookups)---whose embeddings are precomputed at initialization.
+At query time, the query embedding is compared against both sets via cosine similarity:
+\begin{equation}
+  \delta = \max_{h \in \mathcal{H}} \text{sim}(\mathbf{q}, \mathbf{h}) - \max_{e \in \mathcal{E}} \text{sim}(\mathbf{q}, \mathbf{e})
+\end{equation}
+where $\mathcal{H}$ and $\mathcal{E}$ are the hard and easy candidate sets.
+The difficulty level is then $\text{hard}$ if $\delta > \theta$, $\text{easy}$ if $\delta < -\theta$, and $\text{medium}$ otherwise, for a per-rule threshold $\theta$.
+Multiple complexity rules can coexist (e.g., \texttt{code\_complexity}, \texttt{math\_complexity}), each with its own candidate sets and threshold.
+Composer conditions can restrict when a rule fires---for instance, evaluating \texttt{code\_complexity} only when the domain signal indicates computer science.
+
+\textbf{Preference} ($\tau_\text{pref}$).
+Personalized routing based on user interaction history.
 
 \subsection{Parallel Evaluation with Lazy Computation}
 

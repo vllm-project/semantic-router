@@ -34,6 +34,7 @@ Techniques for ensuring consistent behavior when routing the same conversation a
 
 \textbf{Multi-turn safety.}
 Extending safety enforcement from single-turn to multi-turn conversations, detecting adversarial patterns that span multiple interaction rounds.
+Preliminary work applies the contrastive embedding approach---already used for complexity classification---to multi-turn jailbreak detection: each user turn is scored against known-benign and known-adversarial exemplar sets, and accumulated turn-level signals are fused to detect gradual prompt escalation that evades single-turn classifiers.
 
 \textbf{Federated signal orchestration.}
 Extending composable signal orchestration to federated deployments where signals from multiple routing instances are aggregated for global optimization.
