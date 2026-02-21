@@ -25,7 +25,7 @@ Not every query benefits from memory retrieval.
 A lightweight heuristic determines whether memory search is warranted by filtering out general fact-check queries, tool-augmented requests, and simple greetings, avoiding unnecessary embedding lookups and reducing latency for queries where personal context is irrelevant.
 
 \textbf{Retrieval.}
-At query time, relevant memories are retrieved via embedding similarity search over the user's memory store, formatted as context, and injected into the system message.
+At query time, relevant memories are retrieved via the hybrid search pipeline (vector similarity, BM25, and n-gram matching) over the user's memory store, formatted as context, and injected into the system message.
 An optional query-rewriting step reformulates the user's query for improved retrieval recall.
 
 \textbf{Retention scoring and pruning.}
@@ -108,12 +108,23 @@ The RAG plugin retrieves relevant documents from vector stores and injects them 
 \textbf{Indexing pipeline.}
 Documents are chunked (configurable size and overlap), embedded using the shared embedding model (\Cref{sec:ml_inference}), and indexed in a vector store.
 
-\textbf{Retrieval.}
-For each request, the query embedding is computed and the top-$k$ most similar chunks are retrieved via approximate nearest neighbor search.
-Retrieved chunks are formatted and injected into the prompt as additional context.
+\textbf{Hybrid retrieval.}
+Pure vector search can miss lexically relevant results when the embedding model underweights rare terms.
+We implement a three-signal hybrid retrieval pipeline that scores each candidate chunk along three axes:
+\begin{enumerate}[nosep,leftmargin=*]
+  \item \emph{Vector similarity}: cosine similarity from the embedding index (already in $[0,1]$).
+  \item \emph{BM25}: an Okapi BM25 inverted index built over chunk contents provides keyword-level relevance, with configurable $k_1$ (term-frequency saturation, default~1.2) and $b$ (length normalization, default~0.75) parameters.
+  \item \emph{N-gram Jaccard}: character $n$-gram sets (default $n{=}3$) capture fuzzy lexical overlap, producing Jaccard similarity in $[0,1]$.
+\end{enumerate}
+
+\textbf{Score fusion.}
+Two fusion modes combine the three retriever scores into a single ranking:
+(1)~\emph{Weighted}: BM25 scores are min-max normalized to $[0,1]$, then the final score is $w_v \cdot s_{\text{vec}} + w_b \cdot s_{\text{bm25}} + w_n \cdot s_{\text{ngram}}$ with configurable weights (defaults: 0.7, 0.2, 0.1).
+(2)~\emph{Reciprocal Rank Fusion (RRF)}: $\text{score}(d) = \sum_r 1/(k + \text{rank}_r(d))$, which is parameter-free beyond the constant $k$ (default~60).
 
 \textbf{Backend abstraction.}
 Vector stores are accessed through a common interface supporting in-memory (development), Milvus~\cite{wang2021milvus} (production), and file-based (persistent, no external dependencies) backends.
+Backends that implement native hybrid search use their own BM25 and n-gram indexes; all other backends fall back to a generic rerank path that fetches an expanded candidate set ($4{\times}$ top-$k$) from vector search and applies BM25 and n-gram scoring as a post-retrieval reranking step.
 
 \subsection{Stateful Conversations (Response API)}
 
