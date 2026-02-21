@@ -75,10 +75,11 @@ func GetVectorStoreManager() *vectorstore.Manager {
 
 // SearchRequest represents a vector store search request.
 type SearchRequest struct {
-	Query          string                 `json:"query"`
-	MaxNumResults  int                    `json:"max_num_results,omitempty"`
-	Filters        map[string]interface{} `json:"filters,omitempty"`
-	RankingOptions *RankingOptions        `json:"ranking_options,omitempty"`
+	Query          string                          `json:"query"`
+	MaxNumResults  int                             `json:"max_num_results,omitempty"`
+	Filters        map[string]interface{}          `json:"filters,omitempty"`
+	RankingOptions *RankingOptions                 `json:"ranking_options,omitempty"`
+	Hybrid         *vectorstore.HybridSearchConfig `json:"hybrid,omitempty"`
 }
 
 // RankingOptions controls search result ranking.
@@ -282,7 +283,19 @@ func (s *ClassificationAPIServer) handleSearchVectorStore(w http.ResponseWriter,
 	}
 	req.Filters["_query_text"] = req.Query
 
-	results, err := vectorStoreManager.Backend().Search(r.Context(), id, queryEmbedding, topK, threshold, req.Filters)
+	var results []vectorstore.SearchResult
+	if req.Hybrid != nil {
+		backend := vectorStoreManager.Backend()
+		if hs, ok := backend.(vectorstore.HybridSearcher); ok {
+			// Native hybrid search (e.g. in-memory backend with full-collection BM25/n-gram indexes).
+			results, err = hs.HybridSearch(r.Context(), id, req.Query, queryEmbedding, topK, threshold, req.Filters, req.Hybrid)
+		} else {
+			// Generic fallback: fetch expanded vector candidates, then re-rank with BM25 + n-gram.
+			results, err = vectorstore.GenericHybridRerank(r.Context(), backend, id, req.Query, queryEmbedding, topK, threshold, req.Filters, req.Hybrid)
+		}
+	} else {
+		results, err = vectorStoreManager.Backend().Search(r.Context(), id, queryEmbedding, topK, threshold, req.Filters)
+	}
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "SEARCH_ERROR", "search failed")
 		return
