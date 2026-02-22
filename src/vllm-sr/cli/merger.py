@@ -120,6 +120,10 @@ def translate_preference_signals(preferences: list) -> list:
         }
         if signal.description:
             rule["description"] = signal.description
+        if signal.threshold is not None:
+            rule["threshold"] = signal.threshold
+        if signal.examples:
+            rule["examples"] = signal.examples
         rules.append(rule)
     return rules
 
