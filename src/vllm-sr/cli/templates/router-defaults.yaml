@@ -105,12 +105,9 @@ classifier:
     use_cpu: true
     pii_mapping_path: "models/mmbert32k-pii-detector-merged/pii_type_mapping.json"
 
-  # TODO: Enable preference classifier on V2
-  # preference_model:
-  #   model_id: "models/mom-preference-classifier"
-  #   threshold: 0.9
-  #   use_cpu: true
-  #   use_qwen3: true
+  preference_model:
+    use_contrastive: true
+    embedding_model: "mmbert"
 
 # Hallucination mitigation configuration
 # Disabled by default - enable in decisions via hallucination plugin
