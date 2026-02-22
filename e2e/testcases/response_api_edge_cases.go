@@ -97,7 +97,8 @@ func testResponseAPIEdgeLargeInput(ctx context.Context, client *kubernetes.Clien
 	}
 	defer stopPortForward()
 
-	largeInput := strings.Repeat("The quick brown fox jumps over the lazy dog. ", responseAPILargeInputSize/46+1)
+	sentence := "The quick brown fox jumps over the lazy dog. "
+	largeInput := strings.Repeat(sentence, responseAPILargeInputSize/len(sentence)+1)
 	largeInput = largeInput[:responseAPILargeInputSize]
 	storeFalse := false
 	httpClient := &http.Client{Timeout: 60 * time.Second}
