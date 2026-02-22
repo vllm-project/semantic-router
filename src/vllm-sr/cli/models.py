@@ -59,6 +59,8 @@ class Preference(BaseModel):
 
     name: str
     description: str
+    threshold: Optional[float] = None
+    examples: Optional[List[str]] = None
 
 
 class Language(BaseModel):
