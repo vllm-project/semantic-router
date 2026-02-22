@@ -97,7 +97,8 @@ func testResponseAPIEdgeLargeInput(ctx context.Context, client *kubernetes.Clien
 	}
 	defer stopPortForward()
 
-	largeInput := strings.Repeat("A", responseAPILargeInputSize)
+	largeInput := strings.Repeat("The quick brown fox jumps over the lazy dog. ", responseAPILargeInputSize/46+1)
+	largeInput = largeInput[:responseAPILargeInputSize]
 	storeFalse := false
 	httpClient := &http.Client{Timeout: 60 * time.Second}
 	resp, raw, err := postResponseAPI(ctx, httpClient, localPort, ResponseAPIRequest{
@@ -215,6 +216,9 @@ func testResponseAPIEdgeConcurrentRequests(ctx context.Context, client *kubernet
 		go func() {
 			defer wg.Done()
 			for id := range work {
+				if ctx.Err() != nil {
+					return
+				}
 				input := fmt.Sprintf("concurrent-request-%d", id)
 				resp, _, err := postResponseAPI(ctx, httpClient, localPort, ResponseAPIRequest{
 					Model:    "openai/gpt-oss-20b",
