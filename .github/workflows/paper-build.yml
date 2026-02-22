@@ -1,0 +1,90 @@
+name: Build Paper PDF
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+    paths:
+      - 'paper/**/*.tex'
+      - 'paper/**/*.bib'
+      - 'paper/**/*.sty'
+      - 'paper/**/*.cls'
+      - 'paper/figures/**'
+      - 'paper/Makefile'
+  push:
+    branches:
+      - main
+    paths:
+      - 'paper/**/*.tex'
+      - 'paper/**/*.bib'
+      - 'paper/**/*.sty'
+      - 'paper/**/*.cls'
+      - 'paper/figures/**'
+      - 'paper/Makefile'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-paper:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Install TeX Live
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            texlive-latex-base \
+            texlive-latex-recommended \
+            texlive-latex-extra \
+            texlive-fonts-recommended \
+            texlive-fonts-extra \
+            texlive-bibtex-extra \
+            texlive-science \
+            texlive-pictures \
+            lmodern \
+            latexmk \
+            bibtex2html
+
+      - name: Build PDF
+        working-directory: paper
+        run: make all
+
+      - name: Upload PDF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vllm-semantic-router-paper
+          path: paper/vllm-semantic-router.pdf
+          retention-days: 30
+
+      - name: Comment PDF link on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const sha = context.sha.substring(0, 7);
+            const now = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+            const body = [
+              `### 📄 White Paper Build`,
+              ``,
+              `The paper PDF has been rebuilt from the latest changes.`,
+              ``,
+              `| | |`,
+              `|---|---|`,
+              `| **Commit** | \`${sha}\` |`,
+              `| **Built at** | ${now} |`,
+              `| **Download** | **[vllm-semantic-router.pdf](${runUrl}#artifacts)** |`,
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });

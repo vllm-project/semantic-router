@@ -1,0 +1,59 @@
+% sections/introduction.tex
+
+\section{Introduction}
+\label{sec:introduction}
+
+The landscape of large language models has fragmented along multiple axes: modality (text, code, vision, diffusion), scale (1B to 1T+ parameters), cost (10$\times$ variation in per-token pricing), and specialization (general-purpose vs.\ domain-specific fine-tuning).
+Organizations increasingly operate \emph{heterogeneous model fleets}---local vLLM instances alongside cloud endpoints from OpenAI, Anthropic, Azure, Bedrock, Gemini, and Vertex AI---each with different capabilities, pricing, and compliance characteristics.
+This heterogeneity creates a fundamental inference-time optimization problem: \emph{given a user query, a fleet of diverse models, and deployment-specific constraints, which model should serve it, and what safety and privacy policies should apply?}
+
+This problem is more nuanced than binary difficulty routing.
+A production routing system must simultaneously consider:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Multi-dimensional signals}: Query domain, modality, complexity, language, user identity, latency budgets, and real-time performance metrics all inform the optimal routing decision.
+  \item \textbf{Privacy and safety}: Prompt injection, PII leakage, and hallucinated responses must be detected and mitigated---often with \emph{different policies for different query types and user roles}.
+  \item \textbf{Cost-effective model selection}: Algorithms must balance response quality against inference cost and latency, selecting from a heterogeneous pool of local and cloud-hosted models.
+  \item \textbf{Deployment diversity}: The same routing framework must serve a privacy-regulated healthcare deployment (strict PII filtering, on-premise models only), a cost-optimized developer tool (aggressive caching, cheapest model first), and a multi-cloud enterprise (failover across providers)---through configuration, not code changes.
+  \item \textbf{Multi-turn statefulness}: Routing decisions must be consistent across conversation turns, requiring stateful session management and context preservation.
+\end{itemize}
+
+Prior work on LLM routing has made significant progress on individual aspects.
+RouteLLM~\cite{ong2024routellm} trains classifiers to route between two models based on query difficulty.
+RouterDC~\cite{chen2024routerdc} learns query-model embeddings via dual contrastive learning.
+AutoMix~\cite{aggarwal2023automix} formulates cascading as a POMDP.
+However, these approaches address model selection in isolation, without integrating signal extraction, safety enforcement, multi-provider backend management, or plugin extensibility into a unified framework.
+
+\subsection{Contributions}
+
+We present \sysname{}, a signal-driven decision routing system whose central innovation is \textbf{composable signal orchestration}: heterogeneous signals are extracted, composed through Boolean rules into deployment-specific decisions, and executed through per-decision plugin chains---enabling a single architecture to serve diverse deployment scenarios.
+
+Our contributions are:
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Composable Signal-Decision-Plugin Architecture} (\Cref{sec:architecture,sec:signal_engine,sec:decision_engine,sec:plugins}):
+    A three-layer architecture where eleven signal types are composed through Boolean decision rules into deployment-specific routing policies, with per-decision plugin chains for safety, caching, and augmentation. Different deployment scenarios (privacy-regulated, cost-optimized, multi-cloud) are expressed as different configurations over the same architecture.
+
+  \item \textbf{Semantic Model Routing with Cost-Aware Selection} (\Cref{sec:model_selection}):
+    A unified framework integrating thirteen model selection algorithms---rating-based, contrastive, cascading, classical ML, reinforcement learning, and latency-aware---that analyze request semantics to select the most cost-effective model while respecting per-decision privacy and safety constraints.
+
+  \item \textbf{HaluGate: Gated Hallucination Detection} (\Cref{sec:halugate}):
+    A three-stage pipeline---sentinel gating, token-level detection, NLI-based explanation---that avoids unnecessary verification on non-factual queries while providing span-level diagnostics when hallucination is detected.
+
+  \item \textbf{Multi-Provider and Multi-Endpoint Routing} (\Cref{sec:extproc}):
+    Native support for routing across heterogeneous backends (vLLM, OpenAI, Anthropic, Azure, Bedrock, Gemini, Vertex AI) with provider-specific protocol translation, a pluggable authorization factory for diverse auth mechanisms, weighted multi-endpoint load distribution, and full OpenAI Responses API support for stateful multi-turn conversations.
+
+  \item \textbf{LoRA-Based Multi-Task Classification} (\Cref{sec:lora_mom,sec:ml_inference}):
+    A memory-efficient architecture using Low-Rank Adaptation that serves $n$ classification tasks from a single base model with lightweight adapter heads, reducing aggregate model memory from $n$ full copies to one base plus negligible adapter overhead.
+\end{enumerate}
+
+\subsection{Paper Organization}
+
+\Cref{sec:architecture} presents the system architecture and composable orchestration model.
+\Cref{sec:signal_engine,sec:decision_engine} formalize the signal extraction and decision evaluation layers.
+\Cref{sec:plugins,sec:safety,sec:halugate} describe the plugin framework and safety subsystems.
+\Cref{sec:lora_mom,sec:ml_inference} detail the LoRA-based classification architecture and multi-runtime inference design.
+\Cref{sec:model_selection} surveys the semantic model selection algorithms.
+\Cref{sec:extproc} describes the multi-provider request processing pipeline.
+\Cref{sec:memory_rag,sec:observability,sec:deployment} cover memory, observability, and deployment.
+\Cref{sec:evaluation} presents evaluation results.
+\Cref{sec:related_work} discusses related work, and \Cref{sec:conclusion} concludes.
