@@ -1,0 +1,168 @@
+% vLLM Semantic Router: Signal Driven Decision Routing for Mixture-of-Modality Models
+% Main document -- compile with: pdflatex main && bibtex main && pdflatex main && pdflatex main
+
+\documentclass[11pt,a4paper]{article}
+
+% ---------- packages ----------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+
+% ---------- theorem environments ----------
+\newtheorem{definition}{Definition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}{Proposition}
+\usepackage{multirow}
+\usepackage{enumitem}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{subcaption}
+\usepackage{tabularx}
+\usepackage{url}
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows,positioning,fit,calc,backgrounds}
+
+% ---------- listing style ----------
+\lstset{
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue}\bfseries,
+  commentstyle=\color{gray},
+  stringstyle=\color{red!70!black},
+  breaklines=true,
+  frame=single,
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  captionpos=b,
+  tabsize=2
+}
+
+% ---------- hyperref setup ----------
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!70!black,
+  citecolor=green!50!black,
+  urlcolor=blue!60!black,
+  pdfauthor={vLLM Semantic Router Team},
+  pdftitle={vLLM Semantic Router: Signal Driven Decision Routing for Mixture-of-Modality Models}
+}
+
+% ---------- custom commands ----------
+\newcommand{\sysname}{vLLM Semantic Router}
+\newcommand{\mom}{MoM}
+\newcommand{\halugate}{HaluGate}
+\newcommand{\extproc}{ExtProc}
+\newcommand{\lora}{LoRA}
+\newcommand{\vsr}{\texttt{vllm-sr}}
+
+% =====================================================================
+%  DOCUMENT
+% =====================================================================
+\begin{document}
+
+\begin{center}
+  \vspace*{0.1in}
+  \noindent\rule{\textwidth}{3pt}\\[0.6cm]
+  {\LARGE \textbf{vLLM Semantic Router: Signal Driven Decision\\[0.15cm]
+  Routing for Mixture-of-Modality Models}}\\[0.6cm]
+  \noindent\rule{\textwidth}{1pt}\\[0.5cm]
+  {\large
+  Xunzhuo Liu,
+  Huamin Chen,
+  Samzong Lu,
+  Yossi Ovadia,
+  Guohong Wen,\\
+  Zhengda Tan,
+  Jintao Zhang,
+  Senan Zedan,
+  Yehudit Kerido,
+  Liav Weiss,\\
+  Bishen Yu,
+  Asaad Balum,
+  Noa Limoy,
+  Abdallah Samara,\\
+  Brent Salisbury,
+  Hao Wu,
+  Ryan Cook,
+  Zhijie Wang,
+  Qiping Pan,\\
+  Rehan Khan,
+  Avishek Goswami,
+  Houston H.\ Zhang,
+  Shuyi Wang,
+  Ziang Tang,\\
+  Fang Han,
+  Zohaib Hassan,
+  Jianqiao Zheng,
+  Avinash Changrani}%
+  \footnote{Corresponding repository: \url{https://github.com/vllm-project/semantic-router}}\\[0.15cm]
+  {\normalsize February 2026}
+\end{center}
+\vspace{0.3cm}
+
+% --- Abstract ---
+\input{sections/abstract}
+
+% --- Introduction ---
+\input{sections/introduction}
+
+% --- System Architecture ---
+\input{sections/architecture}
+
+% --- Signal Extraction Engine ---
+\input{sections/signal_engine}
+
+% --- Decision Engine ---
+\input{sections/decision_engine}
+
+% --- Plugin Framework ---
+\input{sections/plugins}
+
+% --- Safety: Jailbreak + PII ---
+\input{sections/safety}
+
+% --- HaluGate ---
+\input{sections/halugate}
+
+% --- Modular LoRA + MoM Family ---
+\input{sections/lora_mom}
+
+% --- Model Selection Algorithms ---
+\input{sections/model_selection}
+
+% --- ML Inference Bindings ---
+\input{sections/ml_inference}
+
+% --- ExtProc Pipeline ---
+\input{sections/extproc_pipeline}
+
+% --- Memory + RAG ---
+\input{sections/memory_rag}
+
+% --- Observability ---
+\input{sections/observability}
+
+% --- Deployment ---
+\input{sections/deployment}
+
+% --- Evaluation ---
+\input{sections/evaluation}
+
+% --- Related Work ---
+\input{sections/related_work}
+
+% --- Conclusion ---
+\input{sections/conclusion}
+
+% --- Bibliography ---
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
