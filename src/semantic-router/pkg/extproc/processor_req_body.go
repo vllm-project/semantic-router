@@ -1044,15 +1044,59 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 		Threshold: retrieveThreshold,
 	}
 
-	// Apply defaults if not configured
 	if retrieveOpts.Limit <= 0 {
-		retrieveOpts.Limit = 5
+		defaults := memory.DefaultMemoryConfig()
+		retrieveOpts.Limit = defaults.DefaultRetrievalLimit
 	}
 	if retrieveOpts.Threshold <= 0 {
-		retrieveOpts.Threshold = 0.6
+		defaults := memory.DefaultMemoryConfig()
+		retrieveOpts.Threshold = defaults.DefaultSimilarityThreshold
 	}
 
-	memories, err := store.Retrieve(ctx.TraceContext, retrieveOpts)
+	// Determine whether to use hierarchical retrieval with group sharing.
+	useHierarchical := memoryPluginConfig != nil && memoryPluginConfig.HierarchicalSearch
+	includeGroup := memoryPluginConfig != nil && memoryPluginConfig.IncludeGroupMemories
+
+	var memories []*memory.RetrieveResult
+
+	if useHierarchical || includeGroup {
+		// Extract user groups from the authz header (already parsed for rate limiting).
+		var groups []string
+		groupsHeader := ctx.Headers[r.Config.Authz.Identity.GetUserGroupsHeader()]
+		if groupsHeader != "" {
+			for _, g := range strings.Split(groupsHeader, ",") {
+				g = strings.TrimSpace(g)
+				if g != "" {
+					groups = append(groups, g)
+				}
+			}
+		}
+
+		hOpts := memory.HierarchicalRetrieveOptions{
+			RetrieveOptions:   retrieveOpts,
+			GroupIDs:          groups,
+			IncludeGroupLevel: includeGroup,
+			EnableRelations:   memoryPluginConfig != nil && memoryPluginConfig.EnableRelations,
+		}
+		if memoryPluginConfig != nil && memoryPluginConfig.MaxDepth > 0 {
+			hOpts.MaxDepth = memoryPluginConfig.MaxDepth
+		}
+		if memoryPluginConfig != nil && memoryPluginConfig.ScorePropAlpha != nil {
+			hOpts.ScorePropAlpha = *memoryPluginConfig.ScorePropAlpha
+		}
+		if memoryPluginConfig != nil && memoryPluginConfig.MaxRelationsPerHit > 0 {
+			hOpts.MaxRelationsPerHit = memoryPluginConfig.MaxRelationsPerHit
+		}
+
+		if hs, ok := memory.AsHierarchicalStore(store); ok {
+			memories, err = hs.HierarchicalRetrieve(ctx.TraceContext, hOpts)
+		} else {
+			memories, err = memory.HierarchicalRetrieveFromStore(ctx.TraceContext, store, hOpts)
+		}
+	} else {
+		memories, err = store.Retrieve(ctx.TraceContext, retrieveOpts)
+	}
+
 	if err != nil {
 		return requestBody, fmt.Errorf("memory retrieval failed: %w", err)
 	}
@@ -1091,8 +1135,8 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 }
 
 // getMemoryStore returns the memory store instance.
-func (r *OpenAIRouter) getMemoryStore() *memory.MilvusStore {
-	// Return the actual memory store from router
+// Returns the Store interface so both flat and hierarchical retrieval paths work.
+func (r *OpenAIRouter) getMemoryStore() memory.Store {
 	return r.MemoryStore
 }
 

@@ -1,0 +1,55 @@
+{
+  "description": "Ground-truth labeled evaluation dataset for hierarchical vs flat retrieval comparison. Each entry has a cluster label. Each query targets a specific cluster. Regenerate this file to test different workloads without modifying Go code.",
+  "config": {
+    "k": 5,
+    "threshold": 0.3,
+    "alphas": [1.0, 0.7, 0.5, 0.3],
+    "max_depth": 3,
+    "score_prop_alpha": 0.6
+  },
+  "entries": [
+    {"id": "d1", "cluster": "deployment", "content": "Production deployment uses Kubernetes with Helm charts that configure Envoy sidecars and ExtProc service replicas"},
+    {"id": "d2", "cluster": "deployment", "content": "Rolling updates use canary deployment strategy with gradual traffic shifting from 10% to 50% to 100% across model backends"},
+    {"id": "d3", "cluster": "deployment", "content": "Horizontal pod autoscaling adjusts ExtProc replicas based on gRPC request rate and CPU utilization metrics"},
+    {"id": "d4", "cluster": "deployment", "content": "Configuration hot-reloading watches for changes in ConfigMaps and reloads routing rules without downtime"},
+    {"id": "d5", "cluster": "deployment", "content": "Multi-cluster deployment supports geographic routing with latency-based backend selection across regions"},
+
+    {"id": "m1", "cluster": "memory", "content": "User memories are extracted from conversation turns by an LLM and stored in Milvus with vector embeddings for retrieval"},
+    {"id": "m2", "cluster": "memory", "content": "Memory retention uses exponential decay model with strength S = S0 + access_count and pruning threshold R < delta"},
+    {"id": "m3", "cluster": "memory", "content": "Query rewriting reformulates vague user queries using conversation history before memory retrieval for better recall"},
+    {"id": "m4", "cluster": "memory", "content": "Deduplication checks cosine similarity of new memories against existing entries to prevent redundant storage"},
+    {"id": "m5", "cluster": "memory", "content": "Retrieval gating uses heuristics to skip memory search for general knowledge questions and simple greetings"},
+
+    {"id": "s1", "cluster": "safety", "content": "Jailbreak detection uses a fine-tuned ModernBERT classifier that flags adversarial prompt injection attempts"},
+    {"id": "s2", "cluster": "safety", "content": "PII detection identifies credit card numbers, social security numbers, and email addresses in requests and responses"},
+    {"id": "s3", "cluster": "safety", "content": "Hallucination gating compares model output against reference knowledge to flag unsupported claims with confidence scores"},
+    {"id": "s4", "cluster": "safety", "content": "Content safety classifier categorizes outputs into hazard taxonomies including violence, hate speech, and self-harm"},
+    {"id": "s5", "cluster": "safety", "content": "Guardrail plugins can block, redact, or flag content at both request and response stages of the pipeline"},
+
+    {"id": "r1", "cluster": "rag", "content": "Hybrid retrieval combines vector similarity, BM25 keyword matching, and character n-gram Jaccard scoring for document search"},
+    {"id": "r2", "cluster": "rag", "content": "Score fusion supports weighted combination with configurable weights and reciprocal rank fusion with parameter k=60"},
+    {"id": "r3", "cluster": "rag", "content": "Documents are chunked with configurable size and overlap then embedded using the shared embedding model"},
+    {"id": "r4", "cluster": "rag", "content": "Vector store backends include in-memory for development, Milvus for production, and file-based for persistence"},
+    {"id": "r5", "cluster": "rag", "content": "RAG plugin configuration supports per-decision activation with different vector stores and chunk strategies"},
+
+    {"id": "a1", "cluster": "architecture", "content": "The routing pipeline uses an ExtProc gRPC filter integrated with Envoy as a sidecar proxy for request interception"},
+    {"id": "a2", "cluster": "architecture", "content": "Signal engine collects embedding similarity, keyword matching, and domain classification signals before the decision engine"},
+    {"id": "a3", "cluster": "architecture", "content": "The decision engine evaluates rule-based conditions over collected signals to select the optimal model backend"},
+    {"id": "a4", "cluster": "architecture", "content": "Plugin architecture allows per-decision activation of memory, RAG, guardrails, and caching plugins"},
+    {"id": "a5", "cluster": "architecture", "content": "Request processing follows a sequential pipeline: headers, body parsing, signal collection, decision, and model dispatch"},
+
+    {"id": "e1", "cluster": "evaluation", "content": "End-to-end evaluation measures routing accuracy, retrieval recall at k, and response latency percentiles"},
+    {"id": "e2", "cluster": "evaluation", "content": "Benchmark suite tests signal collection latency, decision engine throughput, and memory retrieval precision"},
+    {"id": "e3", "cluster": "evaluation", "content": "A/B testing framework compares routing strategies by splitting traffic between candidate decision configurations"},
+    {"id": "e4", "cluster": "evaluation", "content": "Feedback routing loop collects user thumbs-up and thumbs-down signals to adjust model preference scores over time"},
+    {"id": "e5", "cluster": "evaluation", "content": "Load testing with synthetic workloads measures sustained throughput under concurrent multi-user request patterns"}
+  ],
+  "queries": [
+    {"query": "How does the Kubernetes deployment pipeline work with Helm charts and canary rollouts?", "target_cluster": "deployment"},
+    {"query": "How does memory retrieval and retention scoring work with exponential decay?", "target_cluster": "memory"},
+    {"query": "What jailbreak detection and PII safety guardrails are available?", "target_cluster": "safety"},
+    {"query": "How does hybrid RAG search combine vector similarity, BM25, and n-gram scoring?", "target_cluster": "rag"},
+    {"query": "How does the ExtProc signal engine architecture route requests to model backends?", "target_cluster": "architecture"},
+    {"query": "What metrics are used in the end-to-end evaluation and benchmark suite?", "target_cluster": "evaluation"}
+  ]
+}

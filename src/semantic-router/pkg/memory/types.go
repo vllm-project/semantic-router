@@ -11,16 +11,27 @@ type MemoryType string
 
 const (
 	// MemoryTypeSemantic represents facts, preferences, knowledge.
-	// Example: "User's budget for Hawaii is $10,000"
 	MemoryTypeSemantic MemoryType = "semantic"
 
 	// MemoryTypeProcedural represents instructions, how-to, steps.
-	// Example: "To deploy payment-service: run npm build, then docker push"
 	MemoryTypeProcedural MemoryType = "procedural"
 
 	// MemoryTypeEpisodic represents session summaries, past events.
-	// Example: "On Dec 29 2024, user planned Hawaii vacation with $10K budget"
 	MemoryTypeEpisodic MemoryType = "episodic"
+)
+
+// MemoryVisibility controls who can access a memory within a group.
+type MemoryVisibility string
+
+const (
+	// VisibilityUser restricts access to the owning user only (default).
+	VisibilityUser MemoryVisibility = "user"
+
+	// VisibilityGroup allows all members of the same group to retrieve this memory.
+	VisibilityGroup MemoryVisibility = "group"
+
+	// VisibilityPublic allows any user to retrieve this memory.
+	VisibilityPublic MemoryVisibility = "public"
 )
 
 // ExtractedFact represents a fact extracted by the LLM from conversation.
@@ -48,8 +59,7 @@ type Memory struct {
 	// Type is the category of this memory (semantic, procedural, episodic)
 	Type MemoryType `json:"type"`
 
-	// Content is the actual memory text
-	// Should be self-contained with context (e.g., "budget for Hawaii is $10K" not just "$10K")
+	// Content is the actual memory text (L2 full detail)
 	Content string `json:"content"`
 
 	// Embedding is the vector representation (not serialized to JSON)
@@ -78,6 +88,35 @@ type Memory struct {
 
 	// Importance is a score for prioritizing memories (0.0 to 1.0)
 	Importance float32 `json:"importance"`
+
+	// --- Hierarchical organization ---
+
+	// GroupID associates this memory with a group for shared access.
+	GroupID string `json:"group_id,omitempty"`
+
+	// ParentID links this memory to a parent category node, forming a tree.
+	ParentID string `json:"parent_id,omitempty"`
+
+	// IsCategory marks this memory as a category (non-leaf) node.
+	IsCategory bool `json:"is_category,omitempty"`
+
+	// Abstract is a short summary used for fast candidate scoring (L0).
+	// Length is controlled by CategorizerConfig.AbstractMaxLen.
+	Abstract string `json:"abstract,omitempty"`
+
+	// AbstractEmbedding is the vector for the Abstract text (not serialized to JSON).
+	AbstractEmbedding []float32 `json:"-"`
+
+	// Overview is a longer summary for reranking and navigation (L1).
+	// Length is controlled by CategorizerConfig.OverviewMaxLen.
+	// Content serves as the full detail (L2).
+	Overview string `json:"overview,omitempty"`
+
+	// Visibility controls access scope: "user" (default), "group", or "public".
+	Visibility MemoryVisibility `json:"visibility,omitempty"`
+
+	// RelatedIDs holds IDs of related memories for cross-memory linking.
+	RelatedIDs []string `json:"related_ids,omitempty"`
 }
 
 // RetrieveResult represents a memory retrieved from search with its relevance score
@@ -87,6 +126,17 @@ type RetrieveResult struct {
 
 	// Score is the similarity score (0.0 to 1.0, higher = more relevant)
 	Score float32 `json:"score"`
+
+	// Related holds memories linked via cross-memory relations (populated when relations are enabled).
+	Related []*RelatedMemory `json:"related,omitempty"`
+}
+
+// RelatedMemory is a lightweight reference to a linked memory surfaced during retrieval.
+type RelatedMemory struct {
+	ID       string  `json:"id"`
+	Abstract string  `json:"abstract,omitempty"`
+	Reason   string  `json:"reason,omitempty"`
+	Score    float32 `json:"score,omitempty"`
 }
 
 // MemoryHit represents a single memory retrieval result in flat structure
@@ -123,6 +173,121 @@ type RetrieveOptions struct {
 
 	// Threshold is the minimum similarity score (range 0.0 to 1.0, default: 0.70)
 	Threshold float32
+}
+
+// MemoryHybridConfig configures hybrid scoring (BM25 + n-gram + vector fusion)
+// for memory retrieval. When non-nil on HierarchicalRetrieveOptions, every scoring
+// step in the hierarchical pipeline uses fused scores instead of pure cosine similarity.
+type MemoryHybridConfig struct {
+	// Mode selects the score fusion method: "weighted" (default) or "rrf".
+	Mode string
+
+	// VectorWeight is the relative weight for cosine similarity (default: 0.7).
+	VectorWeight float64
+	// BM25Weight is the relative weight for BM25 term matching (default: 0.2).
+	BM25Weight float64
+	// NgramWeight is the relative weight for character n-gram Jaccard (default: 0.1).
+	NgramWeight float64
+
+	// RRFConstant for RRF mode (default: 60).
+	RRFConstant int
+
+	// BM25K1 controls term frequency saturation (default: 1.2).
+	BM25K1 float64
+	// BM25B controls document length normalization (default: 0.75).
+	BM25B float64
+
+	// NgramSize is the character n-gram size for Jaccard similarity (default: 3).
+	NgramSize int
+}
+
+// ApplyDefaults fills zero-valued fields with sensible defaults.
+func (c *MemoryHybridConfig) ApplyDefaults() {
+	if c.Mode == "" {
+		c.Mode = "weighted"
+	}
+	if c.VectorWeight == 0 && c.BM25Weight == 0 && c.NgramWeight == 0 {
+		c.VectorWeight = 0.7
+		c.BM25Weight = 0.2
+		c.NgramWeight = 0.1
+	}
+	if c.RRFConstant <= 0 {
+		c.RRFConstant = 60
+	}
+	if c.BM25K1 == 0 {
+		c.BM25K1 = 1.2
+	}
+	if c.BM25B == 0 {
+		c.BM25B = 0.75
+	}
+	if c.NgramSize <= 0 {
+		c.NgramSize = 3
+	}
+}
+
+// NormalizedWeights returns vector, bm25, ngram weights that sum to 1.
+func (c *MemoryHybridConfig) NormalizedWeights() (float64, float64, float64) {
+	total := c.VectorWeight + c.BM25Weight + c.NgramWeight
+	if total == 0 {
+		return 1.0 / 3, 1.0 / 3, 1.0 / 3
+	}
+	return c.VectorWeight / total, c.BM25Weight / total, c.NgramWeight / total
+}
+
+// HierarchicalRetrieveOptions extends RetrieveOptions with group-aware, hierarchical search parameters.
+type HierarchicalRetrieveOptions struct {
+	RetrieveOptions
+
+	// GroupIDs includes group-shared memories from these groups alongside the user's own.
+	GroupIDs []string
+
+	// IncludeGroupLevel enables searching group-visible memories (requires GroupIDs).
+	IncludeGroupLevel bool
+
+	// MaxDepth limits the tree traversal depth (default: 3).
+	MaxDepth int
+
+	// ScorePropAlpha controls score propagation: final = alpha*child + (1-alpha)*parent (default: 0.5).
+	ScorePropAlpha float32
+
+	// EnableRelations causes retrieval to populate Related on each RetrieveResult.
+	EnableRelations bool
+
+	// MaxRelationsPerHit caps the number of related memories per result (default: 5).
+	MaxRelationsPerHit int
+
+	// Hybrid enables fused BM25 + n-gram + vector scoring at every level of the
+	// hierarchical search. When nil, pure cosine similarity is used (existing behavior).
+	Hybrid *MemoryHybridConfig
+}
+
+const (
+	DefaultHierarchicalMaxDepth         = 3
+	DefaultScorePropAlpha       float32 = 0.5
+	DefaultMaxRelationsPerHit           = 5
+	DefaultHierarchicalLimit            = 5
+)
+
+// ApplyDefaults fills in zero-valued fields.
+func (h *HierarchicalRetrieveOptions) ApplyDefaults() {
+	if h.MaxDepth <= 0 {
+		h.MaxDepth = DefaultHierarchicalMaxDepth
+	}
+	if h.ScorePropAlpha <= 0 {
+		h.ScorePropAlpha = DefaultScorePropAlpha
+	}
+	if h.MaxRelationsPerHit <= 0 {
+		h.MaxRelationsPerHit = DefaultMaxRelationsPerHit
+	}
+}
+
+// MemoryRelation represents a directional link between two memories.
+type MemoryRelation struct {
+	FromID    string    `json:"from_id"`
+	ToID      string    `json:"to_id"`
+	Reason    string    `json:"reason"`
+	Strength  float32   `json:"strength"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // DefaultMemoryConfig returns a default memory configuration.
@@ -168,6 +333,9 @@ type MemoryScope struct {
 
 	// ProjectID optionally narrows scope to a project
 	ProjectID string
+
+	// GroupID optionally narrows scope to a group
+	GroupID string
 
 	// Types optionally narrows scope to specific memory types
 	Types []MemoryType

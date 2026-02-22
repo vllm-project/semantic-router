@@ -120,10 +120,10 @@ func (m *MilvusStore) ensureCollection(ctx context.Context) error {
 
 	logging.Infof("MilvusStore: creating collection '%s' with dimension %d", m.collectionName, m.config.Milvus.Dimension)
 
-	// Define schema for agentic memory
+	// Define schema for agentic memory (v2: includes hierarchical + group fields)
 	schema := &entity.Schema{
 		CollectionName: m.collectionName,
-		Description:    "Agentic Memory storage for cross-session context",
+		Description:    "Agentic Memory storage with hierarchical organization and group sharing",
 		AutoID:         false,
 		Fields: []*entity.Field{
 			{
@@ -136,7 +136,7 @@ func (m *MilvusStore) ensureCollection(ctx context.Context) error {
 				Name:           "user_id",
 				DataType:       entity.FieldTypeVarChar,
 				TypeParams:     map[string]string{"max_length": "256"},
-				IsPartitionKey: true, // Enables efficient per-user queries
+				IsPartitionKey: true,
 			},
 			{
 				Name:       "project_id",
@@ -185,6 +185,31 @@ func (m *MilvusStore) ensureCollection(ctx context.Context) error {
 			{
 				Name:     "importance",
 				DataType: entity.FieldTypeFloat,
+			},
+			// Hierarchical organization fields
+			{
+				Name:       "group_id",
+				DataType:   entity.FieldTypeVarChar,
+				TypeParams: map[string]string{"max_length": "256"},
+			},
+			{
+				Name:       "parent_id",
+				DataType:   entity.FieldTypeVarChar,
+				TypeParams: map[string]string{"max_length": "64"},
+			},
+			{
+				Name:     "is_category",
+				DataType: entity.FieldTypeBool,
+			},
+			{
+				Name:       "visibility",
+				DataType:   entity.FieldTypeVarChar,
+				TypeParams: map[string]string{"max_length": "16"},
+			},
+			{
+				Name:       "abstract",
+				DataType:   entity.FieldTypeVarChar,
+				TypeParams: map[string]string{"max_length": "2048"},
 			},
 		},
 	}
@@ -303,12 +328,13 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		searchResult, retryErr = m.client.Search(
 			ctx,
 			m.collectionName,
-			[]string{}, // Empty partitions means search all
+			[]string{},
 			filterExpr,
-			[]string{"id", "content", "memory_type", "metadata"},
+			[]string{"id", "content", "memory_type", "metadata",
+				"group_id", "parent_id", "is_category", "visibility", "abstract"},
 			[]entity.Vector{entity.FloatVector(embedding)},
-			"embedding",   // Vector field name
-			entity.COSINE, // Metric type
+			"embedding",
+			entity.COSINE,
 			searchTopK,
 			searchParam,
 		)
@@ -330,6 +356,7 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 
 	// Find field indices
 	idIdx, contentIdx, typeIdx, metadataIdx := -1, -1, -1, -1
+	groupIDIdx, parentIDIdx, isCategoryIdx, visibilityIdx, abstractIdx := -1, -1, -1, -1, -1
 	for i, field := range fields {
 		fieldName := field.Name()
 		switch fieldName {
@@ -341,6 +368,16 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 			typeIdx = i
 		case "metadata":
 			metadataIdx = i
+		case "group_id":
+			groupIDIdx = i
+		case "parent_id":
+			parentIDIdx = i
+		case "is_category":
+			isCategoryIdx = i
+		case "visibility":
+			visibilityIdx = i
+		case "abstract":
+			abstractIdx = i
 		}
 		logging.Debugf("MilvusStore.Retrieve: field[%d] name='%s'", i, fieldName)
 	}
@@ -404,6 +441,36 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 			}
 		}
 
+		// Extract new hierarchical fields from Milvus columns
+		var groupIDVal, parentIDVal, visibilityVal, abstractVal string
+		var isCategoryVal bool
+
+		if groupIDIdx >= 0 && groupIDIdx < len(fields) {
+			if col, ok := fields[groupIDIdx].(*entity.ColumnVarChar); ok && col.Len() > i {
+				groupIDVal, _ = col.ValueByIdx(i)
+			}
+		}
+		if parentIDIdx >= 0 && parentIDIdx < len(fields) {
+			if col, ok := fields[parentIDIdx].(*entity.ColumnVarChar); ok && col.Len() > i {
+				parentIDVal, _ = col.ValueByIdx(i)
+			}
+		}
+		if isCategoryIdx >= 0 && isCategoryIdx < len(fields) {
+			if col, ok := fields[isCategoryIdx].(*entity.ColumnBool); ok && col.Len() > i {
+				isCategoryVal, _ = col.ValueByIdx(i)
+			}
+		}
+		if visibilityIdx >= 0 && visibilityIdx < len(fields) {
+			if col, ok := fields[visibilityIdx].(*entity.ColumnVarChar); ok && col.Len() > i {
+				visibilityVal, _ = col.ValueByIdx(i)
+			}
+		}
+		if abstractIdx >= 0 && abstractIdx < len(fields) {
+			if col, ok := fields[abstractIdx].(*entity.ColumnVarChar); ok && col.Len() > i {
+				abstractVal, _ = col.ValueByIdx(i)
+			}
+		}
+
 		// Only add if we have at least ID and content
 		if id == "" || content == "" {
 			continue
@@ -419,47 +486,48 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		}
 
 		// Convert MemoryHit to Memory object
-		memory := &Memory{
-			ID:      hit.ID,
-			Content: hit.Content,
-			Type:    hit.Type,
+		mem := &Memory{
+			ID:         hit.ID,
+			Content:    hit.Content,
+			Type:       hit.Type,
+			GroupID:    groupIDVal,
+			ParentID:   parentIDVal,
+			IsCategory: isCategoryVal,
+			Visibility: MemoryVisibility(visibilityVal),
+			Abstract:   abstractVal,
 		}
 
 		// Extract user_id from metadata if available
 		if userID, ok := hit.Metadata["user_id"].(string); ok {
-			memory.UserID = userID
+			mem.UserID = userID
 		} else if opts.UserID != "" {
-			memory.UserID = opts.UserID
+			mem.UserID = opts.UserID
 		}
 
 		// Extract project_id from metadata if available
 		if projectID, ok := hit.Metadata["project_id"].(string); ok {
-			memory.ProjectID = projectID
+			mem.ProjectID = projectID
 		}
 
 		// Extract source from metadata if available
 		if source, ok := hit.Metadata["source"].(string); ok {
-			memory.Source = source
+			mem.Source = source
 		}
 
-		// Extract importance from metadata if available
-		// Handle both float64 (from JSON) and string (like "high" - skip non-numeric)
 		if importance, ok := hit.Metadata["importance"].(float64); ok {
-			memory.Importance = float32(importance)
+			mem.Importance = float32(importance)
 		} else if importance, ok := hit.Metadata["importance"].(float32); ok {
-			memory.Importance = importance
+			mem.Importance = importance
 		}
-		// Access tracking for retention scoring
 		if accessCount, ok := hit.Metadata["access_count"].(float64); ok {
-			memory.AccessCount = int(accessCount)
+			mem.AccessCount = int(accessCount)
 		}
 		if lastAccessed, ok := hit.Metadata["last_accessed"].(float64); ok {
-			memory.LastAccessed = time.Unix(int64(lastAccessed), 0)
+			mem.LastAccessed = time.Unix(int64(lastAccessed), 0)
 		}
 
-		// Create RetrieveResult with Memory and Score
 		result := &RetrieveResult{
-			Memory: memory,
+			Memory: mem,
 			Score:  hit.Similarity,
 		}
 
@@ -589,15 +657,21 @@ func (m *MilvusStore) Store(ctx context.Context, memory *Memory) error {
 	}
 
 	// Create columns for insert
-	// Use defaults for optional fields if not provided (all fields required by schema)
 	projectID := memory.ProjectID
 	if projectID == "" {
 		projectID = "default"
 	}
 	source := memory.Source
 	if source == "" {
-		source = "extraction" // Default source for extracted memories
+		source = "extraction"
 	}
+	groupID := memory.GroupID
+	parentID := memory.ParentID
+	visibility := string(memory.Visibility)
+	if visibility == "" {
+		visibility = string(VisibilityUser)
+	}
+	abstract := memory.Abstract
 
 	idCol := entity.NewColumnVarChar("id", []string{memory.ID})
 	contentCol := entity.NewColumnVarChar("content", []string{memory.Content})
@@ -611,13 +685,18 @@ func (m *MilvusStore) Store(ctx context.Context, memory *Memory) error {
 	updatedAtCol := entity.NewColumnInt64("updated_at", []int64{memory.UpdatedAt.Unix()})
 	accessCountCol := entity.NewColumnInt64("access_count", []int64{int64(memory.AccessCount)})
 	importanceCol := entity.NewColumnFloat("importance", []float32{float32(memory.Importance)})
+	groupIDCol := entity.NewColumnVarChar("group_id", []string{groupID})
+	parentIDCol := entity.NewColumnVarChar("parent_id", []string{parentID})
+	isCategoryCol := entity.NewColumnBool("is_category", []bool{memory.IsCategory})
+	visibilityCol := entity.NewColumnVarChar("visibility", []string{visibility})
+	abstractCol := entity.NewColumnVarChar("abstract", []string{abstract})
 
 	// Insert with retry logic
 	err = m.retryWithBackoff(ctx, func() error {
 		_, insertErr := m.client.Insert(
 			ctx,
 			m.collectionName,
-			"", // Default partition
+			"",
 			idCol,
 			contentCol,
 			userIDCol,
@@ -630,6 +709,11 @@ func (m *MilvusStore) Store(ctx context.Context, memory *Memory) error {
 			updatedAtCol,
 			accessCountCol,
 			importanceCol,
+			groupIDCol,
+			parentIDCol,
+			isCategoryCol,
+			visibilityCol,
+			abstractCol,
 		)
 		return insertErr
 	})
@@ -673,6 +757,14 @@ func (m *MilvusStore) upsert(ctx context.Context, memory *Memory) error {
 		return fmt.Errorf("embedding is required for upsert")
 	}
 
+	groupID := memory.GroupID
+	parentID := memory.ParentID
+	visibility := string(memory.Visibility)
+	if visibility == "" {
+		visibility = string(VisibilityUser)
+	}
+	abstract := memory.Abstract
+
 	idCol := entity.NewColumnVarChar("id", []string{memory.ID})
 	contentCol := entity.NewColumnVarChar("content", []string{memory.Content})
 	userIDCol := entity.NewColumnVarChar("user_id", []string{memory.UserID})
@@ -685,6 +777,11 @@ func (m *MilvusStore) upsert(ctx context.Context, memory *Memory) error {
 	updatedAtCol := entity.NewColumnInt64("updated_at", []int64{memory.UpdatedAt.Unix()})
 	accessCountCol := entity.NewColumnInt64("access_count", []int64{int64(memory.AccessCount)})
 	importanceCol := entity.NewColumnFloat("importance", []float32{float32(memory.Importance)})
+	groupIDCol := entity.NewColumnVarChar("group_id", []string{groupID})
+	parentIDCol := entity.NewColumnVarChar("parent_id", []string{parentID})
+	isCategoryCol := entity.NewColumnBool("is_category", []bool{memory.IsCategory})
+	visibilityCol := entity.NewColumnVarChar("visibility", []string{visibility})
+	abstractCol := entity.NewColumnVarChar("abstract", []string{abstract})
 
 	err = m.retryWithBackoff(ctx, func() error {
 		_, upsertErr := m.client.Upsert(
@@ -703,6 +800,11 @@ func (m *MilvusStore) upsert(ctx context.Context, memory *Memory) error {
 			updatedAtCol,
 			accessCountCol,
 			importanceCol,
+			groupIDCol,
+			parentIDCol,
+			isCategoryCol,
+			visibilityCol,
+			abstractCol,
 		)
 		return upsertErr
 	})
@@ -728,7 +830,8 @@ func (m *MilvusStore) Get(ctx context.Context, id string) (*Memory, error) {
 
 	// Query by ID (includes embedding so the caller can Upsert without re-generating it)
 	filterExpr := fmt.Sprintf("id == \"%s\"", id)
-	outputFields := []string{"id", "content", "user_id", "memory_type", "metadata", "created_at", "updated_at", "embedding"}
+	outputFields := []string{"id", "content", "user_id", "memory_type", "metadata", "created_at", "updated_at", "embedding",
+		"group_id", "parent_id", "is_category", "visibility", "abstract"}
 
 	var queryResult []entity.Column
 	err := m.retryWithBackoff(ctx, func() error {
@@ -824,6 +927,31 @@ func (m *MilvusStore) Get(ctx context.Context, id string) (*Memory, error) {
 		case "embedding":
 			if c, ok := col.(*entity.ColumnFloatVector); ok && c.Len() > 0 {
 				memory.Embedding = c.Data()[0]
+			}
+		case "group_id":
+			if c, ok := col.(*entity.ColumnVarChar); ok && c.Len() > 0 {
+				val, _ := c.ValueByIdx(0)
+				memory.GroupID = val
+			}
+		case "parent_id":
+			if c, ok := col.(*entity.ColumnVarChar); ok && c.Len() > 0 {
+				val, _ := c.ValueByIdx(0)
+				memory.ParentID = val
+			}
+		case "is_category":
+			if c, ok := col.(*entity.ColumnBool); ok && c.Len() > 0 {
+				val, _ := c.ValueByIdx(0)
+				memory.IsCategory = val
+			}
+		case "visibility":
+			if c, ok := col.(*entity.ColumnVarChar); ok && c.Len() > 0 {
+				val, _ := c.ValueByIdx(0)
+				memory.Visibility = MemoryVisibility(val)
+			}
+		case "abstract":
+			if c, ok := col.(*entity.ColumnVarChar); ok && c.Len() > 0 {
+				val, _ := c.ValueByIdx(0)
+				memory.Abstract = val
 			}
 		}
 	}

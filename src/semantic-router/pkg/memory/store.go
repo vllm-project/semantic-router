@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"fmt"
 	"sync"
 )
 
@@ -68,3 +69,31 @@ type Store interface {
 	// Close releases resources held by the store.
 	Close() error
 }
+
+// HierarchicalStore is an optional interface for stores that support
+// hierarchical two-phase retrieval with group-aware scoping and relation surfacing.
+type HierarchicalStore interface {
+	Store
+
+	// HierarchicalRetrieve performs a two-phase search:
+	//  Phase 1: Search category nodes (is_category=true) with group-aware filters.
+	//  Phase 2: Drill down into top categories, propagating parent scores.
+	HierarchicalRetrieve(ctx context.Context, opts HierarchicalRetrieveOptions) ([]*RetrieveResult, error)
+
+	// StoreRelation persists a link between two memories.
+	StoreRelation(ctx context.Context, rel MemoryRelation) error
+
+	// GetRelations returns relations originating from the given memory ID.
+	GetRelations(ctx context.Context, memoryID string, limit int) ([]MemoryRelation, error)
+}
+
+// AsHierarchicalStore attempts to cast a Store to HierarchicalStore.
+// Returns nil, false if the store does not implement hierarchical retrieval.
+func AsHierarchicalStore(s Store) (HierarchicalStore, bool) {
+	hs, ok := s.(HierarchicalStore)
+	return hs, ok
+}
+
+// ErrHierarchicalNotSupported is returned when hierarchical retrieval is
+// requested on a store that does not implement HierarchicalStore.
+var ErrHierarchicalNotSupported = fmt.Errorf("store does not support hierarchical retrieval")

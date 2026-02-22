@@ -522,6 +522,12 @@ func FormatMemoriesAsContext(memories []*memory.RetrieveResult) string {
 		if result.Memory != nil && result.Memory.Content != "" {
 			sb.WriteString(fmt.Sprintf("- %s\n", result.Memory.Content))
 		}
+		// Append related memories as sub-items for richer context.
+		for _, rel := range result.Related {
+			if rel.Abstract != "" {
+				sb.WriteString(fmt.Sprintf("  - (related) %s\n", rel.Abstract))
+			}
+		}
 	}
 
 	return sb.String()
