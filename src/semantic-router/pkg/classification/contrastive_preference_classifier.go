@@ -17,19 +17,20 @@ import (
 type ContrastivePreferenceClassifier struct {
 	modelType   string
 	maxExamples int
-	threshold   float32
 
 	rules []config.PreferenceRule
 
 	// ruleEmbeddings maps rule name to its support embeddings
 	ruleEmbeddings map[string][][]float32
+	// ruleThresholds stores per-preference similarity thresholds
+	ruleThresholds map[string]float32
 
 	mu sync.RWMutex
 }
 
 // NewContrastivePreferenceClassifier builds a contrastive preference classifier.
 // modelType follows GetEmbeddingWithModelType (e.g. "qwen3", "gemma", "mmbert").
-func NewContrastivePreferenceClassifier(rules []config.PreferenceRule, modelType string, maxExamples int, threshold float32) (*ContrastivePreferenceClassifier, error) {
+func NewContrastivePreferenceClassifier(rules []config.PreferenceRule, modelType string, maxExamples int) (*ContrastivePreferenceClassifier, error) {
 	if len(rules) == 0 {
 		return nil, fmt.Errorf("contrastive preference rules cannot be empty")
 	}
@@ -38,12 +39,17 @@ func NewContrastivePreferenceClassifier(rules []config.PreferenceRule, modelType
 		modelType = "qwen3"
 	}
 
+	ruleThresholds := make(map[string]float32, len(rules))
+	for _, rule := range rules {
+		ruleThresholds[rule.Name] = rule.Threshold
+	}
+
 	c := &ContrastivePreferenceClassifier{
 		modelType:      modelType,
 		maxExamples:    maxExamples,
-		threshold:      threshold,
 		rules:          rules,
 		ruleEmbeddings: make(map[string][][]float32),
+		ruleThresholds: ruleThresholds,
 	}
 
 	if err := c.preloadRuleEmbeddings(); err != nil {
@@ -192,8 +198,9 @@ func (c *ContrastivePreferenceClassifier) Classify(text string) (*PreferenceResu
 		return nil, fmt.Errorf("no preference matched by contrastive classifier")
 	}
 
-	if c.threshold > 0 && bestScore < c.threshold {
-		return nil, fmt.Errorf("preference similarity %.3f below threshold %.3f", bestScore, c.threshold)
+	threshold := c.ruleThresholds[bestRule]
+	if threshold > 0 && bestScore < threshold {
+		return nil, fmt.Errorf("preference similarity %.3f below threshold %.3f", bestScore, threshold)
 	}
 
 	return &PreferenceResult{

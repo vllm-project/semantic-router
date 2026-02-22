@@ -44,7 +44,7 @@ func NewPreferenceClassifier(externalCfg *config.ExternalModelConfig, rules []co
 	// Contrastive few-shot preference routing
 	if localCfg != nil && localCfg.UseContrastive {
 		modelType := localCfg.EmbeddingModel
-		contrastive, err := NewContrastivePreferenceClassifier(rules, modelType, localCfg.MaxExamples, localCfg.Threshold)
+		contrastive, err := NewContrastivePreferenceClassifier(rules, modelType, localCfg.MaxExamples)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize contrastive preference classifier: %w", err)
 		}
