@@ -77,6 +77,8 @@ export interface UserFeedbackSignal {
 export interface PreferenceSignal {
   name: string
   description: string
+  examples?: string[]
+  threshold?: number
 }
 
 export interface LanguageSignal {
