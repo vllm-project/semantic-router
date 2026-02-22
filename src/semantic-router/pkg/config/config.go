@@ -2624,6 +2624,11 @@ type PreferenceRule struct {
 	// Examples are few-shot preference hints used by the contrastive classifier
 	// Each example should resemble a user request that maps to this preference.
 	Examples []string `yaml:"examples,omitempty"`
+
+	// Threshold overrides the classifier-level threshold for this specific preference
+	// When set (>0), similarity scores below this value are rejected even if they are
+	// the highest among all preferences.
+	Threshold float32 `yaml:"threshold,omitempty"`
 }
 
 // LanguageRule defines a rule for multi-language detection signal classification

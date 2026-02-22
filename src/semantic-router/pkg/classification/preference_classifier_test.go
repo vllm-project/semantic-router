@@ -140,3 +140,38 @@ func TestContrastivePreferenceClassifier_EmptyText(t *testing.T) {
 		t.Fatalf("expected error for empty text")
 	}
 }
+
+func TestContrastivePreferenceClassifier_PerRuleThreshold(t *testing.T) {
+	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+		lower := strings.ToLower(text)
+		switch {
+		case strings.Contains(lower, "strict"):
+			return &candle_binding.EmbeddingOutput{Embedding: []float32{1, 0}}, nil
+		case strings.Contains(lower, "lenient"):
+			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.6, 0.6}}, nil
+		case strings.Contains(lower, "query"):
+			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.8, 0.2}}, nil
+		default:
+			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.1, 0.1}}, nil
+		}
+	})
+	defer reset()
+
+	rules := []config.PreferenceRule{
+		{Name: "strict_route", Description: "Strict matching", Examples: []string{"strict example"}, Threshold: 0.99},
+		{Name: "lenient_route", Description: "Lenient matching", Examples: []string{"lenient example"}},
+	}
+
+	localCfg := &config.PreferenceModelConfig{UseContrastive: true}
+
+	classifier, err := NewPreferenceClassifier(nil, rules, localCfg)
+	if err != nil {
+		t.Fatalf("failed to create contrastive classifier: %v", err)
+	}
+
+	if _, err := classifier.Classify(`[{"role":"user","content":"strict query"}]`); err == nil {
+		t.Fatalf("expected threshold error for strict_route")
+	} else if !strings.Contains(err.Error(), "threshold 0.990") {
+		t.Fatalf("expected error to mention rule threshold, got: %v", err)
+	}
+}
