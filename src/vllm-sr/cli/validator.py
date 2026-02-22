@@ -374,6 +374,29 @@ def validate_merged_config(merged_config: Dict[str, Any]) -> List[ValidationErro
                 )
             )
 
+    # Validate contrastive preference classifier prerequisites
+    classifier_cfg = merged_config.get("classifier", {})
+    preference_cfg = (
+        classifier_cfg.get("preference_model", {}) if classifier_cfg else {}
+    )
+    if preference_cfg.get("embedding_model"):
+        embedding_cfg = merged_config.get("embedding_models", {}) or {}
+        has_unified_models = any(
+            embedding_cfg.get(key)
+            for key in (
+                "qwen3_model_path",
+                "gemma_model_path",
+                "mmbert_model_path",
+            )
+        )
+        if not has_unified_models:
+            errors.append(
+                ValidationError(
+                    "preference_model.use_contrastive=true requires an embedding model path (qwen3_model_path, gemma_model_path, or mmbert_model_path)",
+                    field="embedding_models",
+                )
+            )
+
     return errors
 
 
