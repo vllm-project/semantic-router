@@ -1453,10 +1453,6 @@ type PreferenceModelConfig struct {
 	// EmbeddingModel selects the embedding backbone for contrastive preference
 	// Supported values follow GetEmbeddingWithModelType (e.g. "qwen3", "gemma", "mmbert")
 	EmbeddingModel string `yaml:"embedding_model,omitempty"`
-
-	// MaxExamples controls how many few-shot examples per rule are used for
-	// preloading. If 0, all provided examples are used.
-	MaxExamples int `yaml:"max_examples,omitempty"`
 }
 
 // ExternalModelConfig represents configuration for external LLM-based models

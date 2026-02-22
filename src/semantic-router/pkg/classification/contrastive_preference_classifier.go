@@ -15,8 +15,7 @@ import (
 // It preloads embeddings for each preference rule's examples/description and selects
 // the route whose support set is most similar to the incoming query.
 type ContrastivePreferenceClassifier struct {
-	modelType   string
-	maxExamples int
+	modelType string
 
 	rules []config.PreferenceRule
 
@@ -30,7 +29,7 @@ type ContrastivePreferenceClassifier struct {
 
 // NewContrastivePreferenceClassifier builds a contrastive preference classifier.
 // modelType follows GetEmbeddingWithModelType (e.g. "qwen3", "gemma", "mmbert").
-func NewContrastivePreferenceClassifier(rules []config.PreferenceRule, modelType string, maxExamples int) (*ContrastivePreferenceClassifier, error) {
+func NewContrastivePreferenceClassifier(rules []config.PreferenceRule, modelType string) (*ContrastivePreferenceClassifier, error) {
 	if len(rules) == 0 {
 		return nil, fmt.Errorf("contrastive preference rules cannot be empty")
 	}
@@ -46,7 +45,6 @@ func NewContrastivePreferenceClassifier(rules []config.PreferenceRule, modelType
 
 	c := &ContrastivePreferenceClassifier{
 		modelType:      modelType,
-		maxExamples:    maxExamples,
 		rules:          rules,
 		ruleEmbeddings: make(map[string][][]float32),
 		ruleThresholds: ruleThresholds,
@@ -197,12 +195,10 @@ func (c *ContrastivePreferenceClassifier) Classify(text string) (*PreferenceResu
 	if bestRule == "" {
 		return nil, fmt.Errorf("no preference matched by contrastive classifier")
 	}
-
 	threshold := c.ruleThresholds[bestRule]
 	if threshold > 0 && bestScore < threshold {
 		return nil, fmt.Errorf("preference similarity %.3f below threshold %.3f", bestScore, threshold)
 	}
-
 	return &PreferenceResult{
 		Preference: bestRule,
 		Confidence: bestScore,
@@ -217,11 +213,7 @@ func (c *ContrastivePreferenceClassifier) collectExamples(rule config.Preference
 	}
 
 	if len(rule.Examples) > 0 {
-		limit := len(rule.Examples)
-		if c.maxExamples > 0 && c.maxExamples < limit {
-			limit = c.maxExamples
-		}
-		examples = append(examples, rule.Examples[:limit]...)
+		examples = append(examples, rule.Examples...)
 	}
 
 	return examples

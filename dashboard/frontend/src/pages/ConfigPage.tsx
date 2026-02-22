@@ -163,7 +163,7 @@ interface ConfigData {
     }>
     fact_check?: Array<{ name: string; description: string }>
     user_feedbacks?: Array<{ name: string; description: string }>
-    preferences?: Array<{ name: string; description: string }>
+    preferences?: Array<{ name: string; description: string; examples?: string[]; threshold?: number }>
     language?: Array<{ name: string }>
     context?: Array<{ name: string; min_tokens: string; max_tokens: string; description?: string }>
     complexity?: Array<{
@@ -276,6 +276,8 @@ interface AddSignalFormState {
   mmlu_categories: string
   min_tokens?: string
   max_tokens?: string
+  preference_examples?: string
+  preference_threshold?: number
   complexity_threshold?: number
   hard_candidates?: string
   easy_candidates?: string
@@ -2292,10 +2294,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
     // Preferences
     signals?.preferences?.forEach(pref => {
+      const examplesCount = pref.examples?.length || 0
+      const thresholdText = pref.threshold !== undefined ? ` • threshold ${formatThreshold(pref.threshold)}` : ''
+      const examplesText = examplesCount > 0 ? ` • ${examplesCount} ${examplesCount === 1 ? 'example' : 'examples'}` : ''
       allSignals.push({
         name: pref.name,
         type: 'Preference',
-        summary: pref.description || 'No description',
+        summary: `${pref.description || 'No description'}${examplesText}${thresholdText}`,
         rawData: pref
       })
     })
@@ -2502,6 +2507,27 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             }
           ]
         })
+      } else if (signal.type === 'Preference') {
+        sections.push({
+          title: 'Preference Configuration',
+          fields: [
+            { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
+            { label: 'Threshold', value: signal.rawData.threshold !== undefined ? formatThreshold(signal.rawData.threshold) : 'Not set' },
+            {
+              label: 'Examples',
+              value: signal.rawData.examples?.length ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontFamily: 'var(--font-mono)', fontSize: '0.9rem' }}>
+                  {signal.rawData.examples.map((ex: string, i: number) => (
+                    <div key={i} style={{ padding: '0.35rem 0.5rem', background: 'rgba(234, 179, 8, 0.1)', borderRadius: 6 }}>
+                      {ex}
+                    </div>
+                  ))}
+                </div>
+              ) : 'No examples provided',
+              fullWidth: true
+            }
+          ]
+        })
       } else if (signal.type === 'Language') {
         sections.push({
           title: 'Language Signal',
@@ -2610,6 +2636,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         candidates: '',
         aggregation_method: 'mean',
         mmlu_categories: '',
+        preference_examples: '',
+        preference_threshold: undefined,
         min_tokens: '0',
         max_tokens: '8K',
         complexity_threshold: 0.1,
@@ -2630,6 +2658,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         candidates: (signal.rawData.candidates || []).join('\n'),
         aggregation_method: signal.rawData.aggregation_method || 'mean',
         mmlu_categories: (signal.rawData.mmlu_categories || []).join('\n'),
+        preference_examples: (signal.rawData.examples || []).join('\n'),
+        preference_threshold: signal.rawData.threshold,
         min_tokens: signal.rawData.min_tokens || '0',
         max_tokens: signal.rawData.max_tokens || '8K',
         complexity_threshold: signal.rawData.threshold ?? 0.1,
@@ -2702,6 +2732,28 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           type: 'textarea',
           placeholder: 'Comma or newline separated categories',
           shouldHide: conditionallyHideFieldExceptType('Domain')
+        }
+      ]
+
+      const preferenceFields: FieldConfig[] = [
+        {
+          name: 'preference_examples',
+          label: 'Examples (preference only)',
+          type: 'textarea',
+          placeholder: 'One example per line to represent this preference',
+          description: 'Few-shot hints sent to the contrastive preference classifier.',
+          shouldHide: conditionallyHideFieldExceptType('Preference')
+        },
+        {
+          name: 'preference_threshold',
+          label: 'Threshold (preference only)',
+          type: 'number',
+          min: 0,
+          max: 1,
+          step: 0.01,
+          placeholder: 'e.g., 0.35',
+          description: 'Override the global preference threshold for this specific rule.',
+          shouldHide: conditionallyHideFieldExceptType('Preference')
         }
       ]
 
@@ -2789,6 +2841,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           type: 'textarea',
           placeholder: 'Optional description for this signal'
         },
+        ...preferenceFields,
         ...keywordFields,
         ...embeddingFields,
         ...domainFields,
@@ -2872,12 +2925,26 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             break
           }
           case 'Preference': {
+            const examples = listInputToArray(formData.preference_examples || '')
+            const hasThreshold = Number.isFinite(formData.preference_threshold)
+            const threshold = hasThreshold ? Math.max(0, Math.min(1, Number(formData.preference_threshold))) : undefined
+
+            const preferenceRule: { name: string; description: string; examples?: string[]; threshold?: number } = {
+              name,
+              description: formData.description || ''
+            }
+
+            if (examples.length > 0) {
+              preferenceRule.examples = examples
+            }
+
+            if (threshold !== undefined && threshold > 0) {
+              preferenceRule.threshold = threshold
+            }
+
             newConfig.signals.preferences = [
               ...(newConfig.signals.preferences || []),
-              {
-                name,
-                description: formData.description
-              }
+              preferenceRule
             ]
             break
           }

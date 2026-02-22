@@ -1,7 +1,6 @@
 package classification
 
 import (
-	"errors"
 	"strings"
 	"testing"
 
@@ -90,26 +89,6 @@ func TestContrastivePreferenceClassifier_UsesDescriptionsWhenNoExamples(t *testi
 
 	if result.Preference != "code_generation" {
 		t.Fatalf("expected code_generation, got %s", result.Preference)
-	}
-}
-
-func TestContrastivePreferenceClassifier_MaxExamplesLimit(t *testing.T) {
-	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
-		if strings.Contains(text, "extra") {
-			return nil, errors.New("should not embed extra example")
-		}
-		return &candle_binding.EmbeddingOutput{Embedding: []float32{1, 0}}, nil
-	})
-	defer reset()
-
-	rules := []config.PreferenceRule{
-		{Name: "code_generation", Description: "Writes code", Examples: []string{"first example", "extra example"}},
-	}
-
-	localCfg := &config.PreferenceModelConfig{UseContrastive: true, MaxExamples: 1}
-
-	if _, err := NewPreferenceClassifier(nil, rules, localCfg); err != nil {
-		t.Fatalf("unexpected error creating classifier with max_examples: %v", err)
 	}
 }
 

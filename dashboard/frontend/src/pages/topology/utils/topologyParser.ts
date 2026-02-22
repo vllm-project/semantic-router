@@ -236,7 +236,10 @@ function extractSignals(config: ConfigData): SignalConfig[] {
       name: rule.name,
       description: rule.description,
       latency: SIGNAL_LATENCY.preference,
-      config: {},
+      config: {
+        examples: rule.examples,
+        threshold: rule.threshold,
+      },
     })
   })
   // From signals.preferences (Python CLI format)
@@ -246,7 +249,10 @@ function extractSignals(config: ConfigData): SignalConfig[] {
       name: rule.name,
       description: rule.description,
       latency: SIGNAL_LATENCY.preference,
-      config: {},
+      config: {
+        examples: rule.examples,
+        threshold: rule.threshold,
+      },
     })
   })
 
@@ -349,11 +355,11 @@ function extractDecisions(config: ConfigData): DecisionConfig[] {
 
       const algorithm: AlgorithmConfig | undefined = decision.algorithm
         ? {
-            type: decision.algorithm.type as AlgorithmConfig['type'],
-            confidence: decision.algorithm.confidence,
-            concurrent: decision.algorithm.concurrent,
-            latency_aware: decision.algorithm.latency_aware,
-          }
+          type: decision.algorithm.type as AlgorithmConfig['type'],
+          confidence: decision.algorithm.confidence,
+          concurrent: decision.algorithm.concurrent,
+          latency_aware: decision.algorithm.latency_aware,
+        }
         : undefined
 
       const plugins: PluginConfig[] = (decision.plugins || []).map(p => ({
