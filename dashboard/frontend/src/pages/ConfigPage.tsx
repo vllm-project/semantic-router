@@ -28,6 +28,8 @@ interface ModelConfig {
   threshold: number
   use_cpu: boolean
   use_qwen3?: boolean
+  use_contrastive?: boolean
+  embedding_model?: string
   category_mapping_path?: string
   pii_mapping_path?: string
   jailbreak_mapping_path?: string
@@ -1335,12 +1337,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
   const renderPreferenceModel = () => {
     const preferenceModel = routerConfig.classifier?.preference_model
+    const isContrastive = Boolean(preferenceModel?.use_contrastive)
 
     return (
       <div className={styles.section}>
         <div className={styles.sectionHeader}>
-          <h3 className={styles.sectionTitle}>Preference Model (Work In Progress)</h3>
+          <h3 className={styles.sectionTitle}>Preference Model</h3>
           <button
+            hidden // edit does not work for config provided by default template
             className={styles.sectionEditButton}
             onClick={() => {
               openEditModal(
@@ -1350,8 +1354,25 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                   threshold: 0,
                   use_cpu: false,
                   use_qwen3: true,
+                  use_contrastive: false,
+                  embedding_model: '',
                 },
                 [
+                  {
+                    name: 'use_contrastive',
+                    label: 'Use Contrastive Preference',
+                    type: 'boolean',
+                    description: 'Enable embedding-based contrastive routing instead of local classifier',
+                  },
+                  {
+                    name: 'embedding_model',
+                    label: 'Embedding Model',
+                    type: 'select',
+                    options: ['', 'mmbert', 'qwen3', 'gemma'],
+                    placeholder: 'Select embedding model',
+                    description: 'Embedding backbone for contrastive preference routing (requires embedding_models path)',
+                    shouldHide: data => !data.use_contrastive,
+                  },
                   {
                     name: 'model_id',
                     label: 'Model ID or Path',
@@ -1359,6 +1380,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                     required: true,
                     placeholder: '',
                     description: 'Local Candle model path or HuggingFace ID for preference routing',
+                    shouldHide: data => data.use_contrastive,
                   },
                   {
                     name: 'threshold',
@@ -1373,12 +1395,14 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                     label: 'Use CPU',
                     type: 'boolean',
                     description: 'Force CPU inference instead of GPU/Metal when available',
+                    shouldHide: data => data.use_contrastive,
                   },
                   {
                     name: 'use_qwen3',
                     label: 'Use Qwen3 Model',
                     type: 'boolean',
-                    description: 'Enable Qwen3 zero-shot/fine-tuned preference classifier',
+                    description: 'Enable Qwen3 zero-shot/fine-tuned preference classifier. Currently only Qwen3 is supported, so make sure to turn this on.',
+                    shouldHide: data => data.use_contrastive,
                   },
                 ],
                 async (data) => {
@@ -1398,26 +1422,39 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           {preferenceModel ? (
             <div className={styles.modelCard}>
               <div className={styles.modelCardHeader}>
-                <span className={styles.modelCardTitle}>Local Preference Classifier</span>
+                <span className={styles.modelCardTitle}>
+                  {isContrastive ? 'Contrastive Preference Classifier' : 'Local Preference Classifier'}
+                </span>
                 <span className={`${styles.statusBadge} ${styles.statusActive}`}>
-                  {preferenceModel.use_cpu ? 'CPU' : 'GPU'}
+                  {isContrastive ? 'Contrastive' : preferenceModel.use_cpu ? 'CPU' : 'GPU'}
                 </span>
               </div>
               <div className={styles.modelCardBody}>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Model ID</span>
-                  <span className={styles.configValue}>{preferenceModel.model_id}</span>
-                </div>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Threshold</span>
-                  <span className={styles.configValue}>{formatThreshold(preferenceModel.threshold || 0)}</span>
-                </div>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Qwen3</span>
-                  <span className={`${styles.statusBadge} ${preferenceModel.use_qwen3 ? styles.statusActive : styles.statusInactive}`}>
-                    {preferenceModel.use_qwen3 ? '✓ Enabled' : '✗ Disabled'}
-                  </span>
-                </div>
+                {isContrastive ? (
+                  <>
+                    <div className={styles.configRow}>
+                      <span className={styles.configLabel}>Embedding Model</span>
+                      <span className={styles.configValue}>{preferenceModel.embedding_model || 'Not set'}</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className={styles.configRow}>
+                      <span className={styles.configLabel}>Model ID</span>
+                      <span className={styles.configValue}>{preferenceModel.model_id}</span>
+                    </div>
+                    <div className={styles.configRow}>
+                      <span className={styles.configLabel}>Threshold</span>
+                      <span className={styles.configValue}>{formatThreshold(preferenceModel.threshold || 0)}</span>
+                    </div>
+                    <div className={styles.configRow}>
+                      <span className={styles.configLabel}>Qwen3</span>
+                      <span className={`${styles.statusBadge} ${preferenceModel.use_qwen3 ? styles.statusActive : styles.statusInactive}`}>
+                        {preferenceModel.use_qwen3 ? '✓ Enabled' : '✗ Disabled'}
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           ) : (

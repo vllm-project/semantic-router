@@ -157,12 +157,16 @@ signals:
   preferences:
     - name: "code_generation"
       description: "Generating new code snippets, writing functions, creating classes"
+      threshold: 0.5
     - name: "bug_fixing"
       description: "Identifying and fixing errors, debugging issues, troubleshooting problems"
+      threshold: 0.5
     - name: "code_review"
       description: "Reviewing code quality, suggesting improvements, best practices"
+      threshold: 0.5
     - name: "other"
       description: "Irrelevant queries or already fulfilled requests"
+      threshold: 0.5
 
   # language - Multi-language detection signals
   language:
