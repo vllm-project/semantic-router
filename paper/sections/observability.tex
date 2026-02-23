@@ -1,0 +1,39 @@
+% sections/observability.tex
+
+\section{Observability}
+\label{sec:observability}
+
+Intelligent routing introduces a new observability surface: beyond standard model serving metrics, operators must monitor signal extraction quality, decision matching patterns, plugin effectiveness, and model selection outcomes.
+
+\subsection{Metrics Taxonomy}
+
+We instrument four metric categories using Prometheus~\cite{prometheus2024}:
+
+\textbf{Model performance.}
+Per-model request counts, token usage, estimated cost, completion latency, Time-to-First-Token (TTFT), and Time-per-Output-Token (TPOT).
+These metrics enable real-time cost monitoring and performance regression detection across the model fleet.
+
+\textbf{Routing behavior.}
+Routing modification counts (original model vs.\ selected model), reason codes (which signal types triggered which decisions), and routing latency (overhead of the routing pipeline itself).
+These metrics answer the question: \emph{how is the router changing traffic patterns?}
+
+\textbf{Signal and decision quality.}
+Per-signal-type extraction counts and match rates, per-decision match frequencies and confidence distributions, and per-plugin execution counts and outcomes.
+These metrics enable calibration: if a signal type rarely matches, its threshold may need adjustment; if a decision matches too broadly, its conditions may be under-specified.
+
+\textbf{Safety and cache effectiveness.}
+PII violation rates by entity type, jailbreak detection rates, hallucination detection latency, cache hit rates, and cache operation latency.
+These metrics quantify the value delivered by the plugin chain.
+
+\subsection{Distributed Tracing}
+
+We implement OpenTelemetry~\cite{opentelemetry2024} tracing with a hierarchical span model:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Root span}: Covers the full request lifecycle from receipt to response.
+  \item \textbf{Signal spans}: Individual spans for each signal type evaluation, capturing latency and results.
+  \item \textbf{Decision span}: Decision evaluation with the matched decision and confidence.
+  \item \textbf{Plugin spans}: Per-plugin execution with type-specific attributes (cache hit/miss, PII types detected, hallucination spans found).
+  \item \textbf{Upstream span}: Backend model invocation, with W3C Trace Context propagation enabling end-to-end tracing through vLLM~\cite{kwon2023vllm} and other inference frameworks.
+\end{itemize}
+
+This span hierarchy enables operators to diagnose routing latency (``which signal is slow?''), understand routing decisions (``why was this query routed to model X?''), and correlate routing behavior with model serving performance.

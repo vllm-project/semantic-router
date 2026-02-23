@@ -96,7 +96,7 @@ export interface ComplexityCandidates {
 }
 
 export interface RuleComposer {
-  operator: 'AND' | 'OR'
+  operator: 'AND' | 'OR' | 'NOT'
   conditions: Array<{
     type: string
     name: string
@@ -136,7 +136,7 @@ export interface DecisionCondition {
 }
 
 export interface DecisionRules {
-  operator: 'AND' | 'OR'
+  operator: 'AND' | 'OR' | 'NOT'
   conditions: DecisionCondition[]
 }
 

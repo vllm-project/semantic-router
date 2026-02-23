@@ -314,41 +314,48 @@ func (c *InMemoryCache) UpdateWithResponse(requestID string, responseBody []byte
 
 	// Locate the pending request and complete it
 	now := time.Now()
-	for i, entry := range c.entries {
-		if entry.RequestID == requestID && entry.ResponseBody == nil {
-			// Complete the cache entry with the response
-			c.entries[i].ResponseBody = responseBody
-			c.entries[i].Timestamp = now
-			c.entries[i].LastAccessAt = now
-
-			// Update TTL if provided (ttlSeconds != -1)
-			// If ttlSeconds == 0, this means we shouldn't cache - but entry already exists, so just mark as complete
-			if ttlSeconds != -1 {
-				c.entries[i].TTLSeconds = ttlSeconds
-				// Recalculate expiration time
-				effectiveTTL := ttlSeconds
-				if ttlSeconds == -1 {
-					effectiveTTL = c.ttlSeconds
-				}
-				if effectiveTTL > 0 {
-					c.entries[i].ExpiresAt = now.Add(time.Duration(effectiveTTL) * time.Second)
-					// Update expiration heap with new expiration time
-					c.expirationHeap.UpdateExpiration(requestID, c.entries[i].ExpiresAt)
-				}
+	// Fast path: use entryMap for O(1) lookup
+	targetIdx := -1
+	if idx, ok := c.entryMap[requestID]; ok && idx >= 0 && idx < len(c.entries) &&
+		c.entries[idx].RequestID == requestID && c.entries[idx].ResponseBody == nil {
+		targetIdx = idx
+	}
+	// Fallback to linear search if not found
+	if targetIdx == -1 {
+		for i, entry := range c.entries {
+			if entry.RequestID == requestID && entry.ResponseBody == nil {
+				targetIdx = i
+				c.entryMap[requestID] = i
+				break
 			}
+		}
+	}
+	// No matching pending request found
+	if targetIdx == -1 {
+		metrics.RecordCacheOperation("memory", "update_response", "error", time.Since(start).Seconds())
+		return fmt.Errorf("no pending request found for request ID: %s", requestID)
+	}
 
-			logging.Debugf("InMemoryCache.UpdateWithResponse: updated entry with response (response_size: %d bytes, ttl=%d)",
-				len(responseBody), c.entries[i].TTLSeconds)
-
-			// Record successful completion
-			metrics.RecordCacheOperation("memory", "update_response", "success", time.Since(start).Seconds())
-			return nil
+	// Complete the cache entry with the response
+	c.entries[targetIdx].ResponseBody = responseBody
+	c.entries[targetIdx].Timestamp = now
+	c.entries[targetIdx].LastAccessAt = now
+	// Update TTL if provided (ttlSeconds != -1)
+	// If ttlSeconds == 0, this means we shouldn't cache - but entry already exists, so just mark as complete
+	if ttlSeconds != -1 {
+		c.entries[targetIdx].TTLSeconds = ttlSeconds
+		if ttlSeconds > 0 {
+			c.entries[targetIdx].ExpiresAt = now.Add(time.Duration(ttlSeconds) * time.Second)
+			// Update expiration heap with new expiration time
+			c.expirationHeap.UpdateExpiration(requestID, c.entries[targetIdx].ExpiresAt)
 		}
 	}
 
-	// No matching pending request found
-	metrics.RecordCacheOperation("memory", "update_response", "error", time.Since(start).Seconds())
-	return fmt.Errorf("no pending request found for request ID: %s", requestID)
+	// Record successful completion
+	logging.Debugf("InMemoryCache.UpdateWithResponse: updated entry with response (response_size: %d bytes, ttl=%d)",
+		len(responseBody), c.entries[targetIdx].TTLSeconds)
+	metrics.RecordCacheOperation("memory", "update_response", "success", time.Since(start).Seconds())
+	return nil
 }
 
 // AddEntry stores a complete request-response pair in the cache
