@@ -127,8 +127,10 @@ func (m *MilvusStore) HierarchicalRetrieveWithConfig(ctx context.Context, opts H
 		return nil, fmt.Errorf("failed to create search parameters: %w", err)
 	}
 
-	outputFields := []string{"id", "content", "memory_type", "metadata",
-		"group_id", "parent_id", "is_category", "visibility", "abstract"}
+	outputFields := []string{
+		"id", "content", "memory_type", "metadata",
+		"group_id", "parent_id", "is_category", "visibility", "abstract",
+	}
 
 	// Phase 1: Search category nodes only.
 	categoryFilter := BuildCategoryFilter(baseFilter, true)
@@ -404,7 +406,7 @@ func (m *MilvusStore) StoreRelation(ctx context.Context, rel MemoryRelation) err
 	toErr := m.appendRelatedID(ctx, rel.ToID, rel.FromID)
 
 	if fromErr != nil && toErr != nil {
-		return fmt.Errorf("failed to update both endpoints: from=%s: %w, to=%s: %v", rel.FromID, fromErr, rel.ToID, toErr)
+		return fmt.Errorf("failed to update both endpoints: from=%s: %w, to=%s: %w", rel.FromID, fromErr, rel.ToID, toErr)
 	}
 	if fromErr != nil {
 		return fmt.Errorf("failed to update from=%s: %w", rel.FromID, fromErr)

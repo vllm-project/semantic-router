@@ -8,6 +8,7 @@ Usage:
     python3 e2e/testing/mock-vllm-echo.py --port 8003
     python3 e2e/testing/mock-vllm-echo.py --port 8003 --host 0.0.0.0
 """
+
 import json
 import time
 import argparse
@@ -31,9 +32,15 @@ class EchoVLLMHandler(BaseHTTPRequestHandler):
 
         messages = req.get("messages", [])
 
-        all_text = " ".join(m.get("content", "") for m in messages if isinstance(m.get("content", ""), str))
+        all_text = " ".join(
+            m.get("content", "")
+            for m in messages
+            if isinstance(m.get("content", ""), str)
+        )
 
-        if "extract" in all_text.lower() and ("fact" in all_text.lower() or "memory" in all_text.lower()):
+        if "extract" in all_text.lower() and (
+            "fact" in all_text.lower() or "memory" in all_text.lower()
+        ):
             echo_text = self._handle_extraction(messages)
         elif "rewrite" in all_text.lower() and "query" in all_text.lower():
             echo_text = self._handle_rewrite(messages)
@@ -76,10 +83,18 @@ class EchoVLLMHandler(BaseHTTPRequestHandler):
             History:\n...\n\nQuery: <actual query>\n\nRewritten query:
         """
         import re
+
         user_msg = next(
-            (m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), ""
+            (
+                m.get("content", "")
+                for m in reversed(messages)
+                if m.get("role") == "user"
+            ),
+            "",
         )
-        match = re.search(r'Query:\s*(.+?)(?:\n\nRewritten query:|$)', user_msg, re.DOTALL)
+        match = re.search(
+            r"Query:\s*(.+?)(?:\n\nRewritten query:|$)", user_msg, re.DOTALL
+        )
         if match:
             return match.group(1).strip()
         return user_msg.strip()
@@ -92,27 +107,53 @@ class EchoVLLMHandler(BaseHTTPRequestHandler):
         skipping the system prompt that contains example sentences.
         """
         import re
+
         user_text = " ".join(
-            m.get("content", "") for m in messages
+            m.get("content", "")
+            for m in messages
             if m.get("role") == "user" and isinstance(m.get("content", ""), str)
         )
         facts = []
-        sentences = re.split(r'[.!?\n]+', user_text)
+        sentences = re.split(r"[.!?\n]+", user_text)
         for s in sentences:
             s = s.strip()
             if s.startswith("[user]:"):
-                s = s[len("[user]:"):].strip()
+                s = s[len("[user]:") :].strip()
             elif s.startswith("[assistant]:"):
                 continue
-            if len(s) > 15 and any(kw in s.lower() for kw in [
-                "i ", "my ", "i'm", "i've", "i am", "i have",
-                "name is", "favorite", "work", "live", "play",
-                "learning", "visit", "run ", "cook", "drive",
-                "best time", "every ", "walked", "signature",
-            ]):
+            if len(s) > 15 and any(
+                kw in s.lower()
+                for kw in [
+                    "i ",
+                    "my ",
+                    "i'm",
+                    "i've",
+                    "i am",
+                    "i have",
+                    "name is",
+                    "favorite",
+                    "work",
+                    "live",
+                    "play",
+                    "learning",
+                    "visit",
+                    "run ",
+                    "cook",
+                    "drive",
+                    "best time",
+                    "every ",
+                    "walked",
+                    "signature",
+                ]
+            ):
                 facts.append({"type": "semantic", "content": s[:200]})
         if not facts:
-            cleaned = re.sub(r'Extract important information.*?Return JSON array:', '', user_text, flags=re.DOTALL).strip()
+            cleaned = re.sub(
+                r"Extract important information.*?Return JSON array:",
+                "",
+                user_text,
+                flags=re.DOTALL,
+            ).strip()
             if cleaned:
                 facts = [{"type": "semantic", "content": cleaned[:200]}]
         return json.dumps(facts[:10])

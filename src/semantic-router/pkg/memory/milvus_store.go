@@ -330,8 +330,10 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 			m.collectionName,
 			[]string{},
 			filterExpr,
-			[]string{"id", "content", "memory_type", "metadata",
-				"group_id", "parent_id", "is_category", "visibility", "abstract"},
+			[]string{
+				"id", "content", "memory_type", "metadata",
+				"group_id", "parent_id", "is_category", "visibility", "abstract",
+			},
 			[]entity.Vector{entity.FloatVector(embedding)},
 			"embedding",
 			entity.COSINE,

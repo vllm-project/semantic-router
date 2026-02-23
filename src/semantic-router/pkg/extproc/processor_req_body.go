@@ -1138,7 +1138,11 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 
 // getMemoryStore returns the memory store instance.
 // Returns the Store interface so both flat and hierarchical retrieval paths work.
+// Returns nil (not a typed-nil interface) when no store is configured.
 func (r *OpenAIRouter) getMemoryStore() memory.Store {
+	if r.MemoryStore == nil {
+		return nil
+	}
 	return r.MemoryStore
 }
 

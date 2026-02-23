@@ -566,7 +566,7 @@ func TestCategorizerConfig_ApplyDefaults(t *testing.T) {
 	assert.Equal(t, 200, cfg.AbstractMaxLen)
 	assert.Equal(t, 600, cfg.OverviewMaxLen)
 	assert.NotNil(t, cfg.TopicKeywords)
-	assert.Greater(t, len(cfg.TopicKeywords), 0)
+	assert.NotEmpty(t, cfg.TopicKeywords)
 }
 
 func TestAutoLinkOptions_ApplyDefaults(t *testing.T) {
@@ -778,7 +778,7 @@ func TestHierarchicalRetrieve_InMemory_HybridChangesScoring(t *testing.T) {
 			}
 		}
 	}
-	assert.Greater(t, scoreDifferences, 0, "hybrid scoring should produce different scores from cosine-only")
+	assert.Positive(t, scoreDifferences, "hybrid scoring should produce different scores from cosine-only")
 }
 
 func TestHierarchicalRetrieve_InMemory_HybridNilIsCosinePure(t *testing.T) {
@@ -806,7 +806,7 @@ func TestHierarchicalRetrieve_InMemory_HybridNilIsCosinePure(t *testing.T) {
 	res2, err := store.HierarchicalRetrieve(ctx, opts)
 	require.NoError(t, err)
 
-	require.Equal(t, len(res1), len(res2))
+	require.Len(t, res2, len(res1))
 	for i := range res1 {
 		assert.Equal(t, res1[i].Memory.ID, res2[i].Memory.ID)
 		assert.InDelta(t, res1[i].Score, res2[i].Score, 1e-6)

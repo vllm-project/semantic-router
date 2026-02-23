@@ -107,6 +107,7 @@ func buildStores(t *testing.T, ds *evalDatasetFile) (flat, hier *InMemoryStore) 
 		requireNoErr(t, EnrichMemoryBeforeStore(ctx, hier, memH, hier.embeddingConfig, CategorizerConfig{}))
 		requireNoErr(t, hier.Update(ctx, memH.ID, memH))
 	}
+
 	return
 }
 

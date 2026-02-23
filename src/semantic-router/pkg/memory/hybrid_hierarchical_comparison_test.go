@@ -45,11 +45,6 @@ func TestHybridHierarchical_ThreeWayComparison(t *testing.T) {
 		NgramWeight:  0.1,
 	}
 
-	type methodResult struct {
-		name    string
-		results []*RetrieveResult
-	}
-
 	header := fmt.Sprintf("%-70s  %-12s  %7s %7s %7s  %7s %7s %7s  %7s %7s %7s",
 		"Query", "Cluster",
 		"F-P", "HC-P", "HH-P",
