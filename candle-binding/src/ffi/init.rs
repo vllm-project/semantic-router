@@ -604,7 +604,11 @@ pub extern "C" fn is_mmbert_model(config_path: *const c_char) -> bool {
     };
 
     match ModernBertVariant::detect_from_config(config_path) {
-        Ok(variant) => variant == ModernBertVariant::Multilingual,
+        Ok(variant) => {
+            // Both Multilingual and Multilingual32K are mmBERT variants
+            variant == ModernBertVariant::Multilingual
+                || variant == ModernBertVariant::Multilingual32K
+        }
         Err(_) => false,
     }
 }
