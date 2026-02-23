@@ -377,6 +377,9 @@ func (m *MilvusStore) parseHierarchicalResults(searchResult []client.SearchResul
 								}
 							}
 						}
+						if overview, ok := meta["overview"].(string); ok {
+							mem.Overview = overview
+						}
 					}
 				}
 			}

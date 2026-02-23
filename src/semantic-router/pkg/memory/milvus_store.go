@@ -527,6 +527,16 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		if lastAccessed, ok := hit.Metadata["last_accessed"].(float64); ok {
 			mem.LastAccessed = time.Unix(int64(lastAccessed), 0)
 		}
+		if overview, ok := hit.Metadata["overview"].(string); ok {
+			mem.Overview = overview
+		}
+		if rels, ok := hit.Metadata["related_ids"].([]interface{}); ok {
+			for _, r := range rels {
+				if rid, ok := r.(string); ok {
+					mem.RelatedIDs = append(mem.RelatedIDs, rid)
+				}
+			}
+		}
 
 		result := &RetrieveResult{
 			Memory: mem,
@@ -653,6 +663,12 @@ func (m *MilvusStore) Store(ctx context.Context, memory *Memory) error {
 		"access_count":  memory.AccessCount,
 		"last_accessed": memory.LastAccessed.Unix(),
 	}
+	if len(memory.RelatedIDs) > 0 {
+		metadata["related_ids"] = memory.RelatedIDs
+	}
+	if memory.Overview != "" {
+		metadata["overview"] = memory.Overview
+	}
 	metadataJSON, err := json.Marshal(metadata)
 	if err != nil {
 		return fmt.Errorf("failed to marshal metadata: %w", err)
@@ -739,6 +755,12 @@ func (m *MilvusStore) upsert(ctx context.Context, memory *Memory) error {
 		"importance":    memory.Importance,
 		"access_count":  memory.AccessCount,
 		"last_accessed": memory.LastAccessed.Unix(),
+	}
+	if len(memory.RelatedIDs) > 0 {
+		metadata["related_ids"] = memory.RelatedIDs
+	}
+	if memory.Overview != "" {
+		metadata["overview"] = memory.Overview
 	}
 	metadataJSON, err := json.Marshal(metadata)
 	if err != nil {
@@ -912,6 +934,16 @@ func (m *MilvusStore) Get(ctx context.Context, id string) (*Memory, error) {
 						}
 						if lastAccessed, ok := metadata["last_accessed"].(float64); ok {
 							memory.LastAccessed = time.Unix(int64(lastAccessed), 0)
+						}
+						if overview, ok := metadata["overview"].(string); ok {
+							memory.Overview = overview
+						}
+						if rels, ok := metadata["related_ids"].([]interface{}); ok {
+							for _, r := range rels {
+								if rid, ok := r.(string); ok {
+									memory.RelatedIDs = append(memory.RelatedIDs, rid)
+								}
+							}
 						}
 					}
 				}
