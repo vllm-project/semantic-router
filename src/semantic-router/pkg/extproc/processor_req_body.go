@@ -1088,6 +1088,8 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 			hOpts.MaxRelationsPerHit = memoryPluginConfig.MaxRelationsPerHit
 		}
 
+		hOpts.Hybrid = buildHybridConfigFromPlugin(memoryPluginConfig)
+
 		if hs, ok := memory.AsHierarchicalStore(store); ok {
 			memories, err = hs.HierarchicalRetrieve(ctx.TraceContext, hOpts)
 		} else {

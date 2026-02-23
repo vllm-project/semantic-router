@@ -1182,6 +1182,82 @@ func TestInjectMemories_PreservesMessageOrder(t *testing.T) {
 	assert.Equal(t, "Second message", messages[3].(map[string]interface{})["content"])
 }
 
+// =============================================================================
+// Hybrid Config Wiring Tests
+// =============================================================================
+
+func TestBuildHybridConfig_FromPluginConfig(t *testing.T) {
+	vw := 0.6
+	bw := 0.3
+	nw := 0.1
+
+	pluginCfg := &config.MemoryPluginConfig{
+		Enabled:            true,
+		HierarchicalSearch: true,
+		HybridSearch:       true,
+		HybridMode:         "weighted",
+		HybridVectorWeight: &vw,
+		HybridBM25Weight:   &bw,
+		HybridNgramWeight:  &nw,
+	}
+
+	hybridCfg := buildHybridConfigFromPlugin(pluginCfg)
+	require.NotNil(t, hybridCfg)
+	assert.Equal(t, "weighted", hybridCfg.Mode)
+	assert.InDelta(t, 0.6, hybridCfg.VectorWeight, 1e-6)
+	assert.InDelta(t, 0.3, hybridCfg.BM25Weight, 1e-6)
+	assert.InDelta(t, 0.1, hybridCfg.NgramWeight, 1e-6)
+}
+
+func TestBuildHybridConfig_Disabled(t *testing.T) {
+	pluginCfg := &config.MemoryPluginConfig{
+		Enabled:            true,
+		HierarchicalSearch: true,
+		HybridSearch:       false,
+	}
+	assert.Nil(t, buildHybridConfigFromPlugin(pluginCfg))
+}
+
+func TestBuildHybridConfig_NilPlugin(t *testing.T) {
+	assert.Nil(t, buildHybridConfigFromPlugin(nil))
+}
+
+func TestBuildHybridConfig_RRFMode(t *testing.T) {
+	pluginCfg := &config.MemoryPluginConfig{
+		Enabled:            true,
+		HierarchicalSearch: true,
+		HybridSearch:       true,
+		HybridMode:         "rrf",
+	}
+
+	hybridCfg := buildHybridConfigFromPlugin(pluginCfg)
+	require.NotNil(t, hybridCfg)
+	assert.Equal(t, "rrf", hybridCfg.Mode)
+	// Defaults should be applied
+	assert.InDelta(t, 0.7, hybridCfg.VectorWeight, 1e-6)
+	assert.InDelta(t, 0.2, hybridCfg.BM25Weight, 1e-6)
+	assert.InDelta(t, 0.1, hybridCfg.NgramWeight, 1e-6)
+	assert.Equal(t, 60, hybridCfg.RRFConstant)
+}
+
+func TestBuildHybridConfig_PartialWeights(t *testing.T) {
+	vw := 0.5
+	pluginCfg := &config.MemoryPluginConfig{
+		Enabled:            true,
+		HierarchicalSearch: true,
+		HybridSearch:       true,
+		HybridVectorWeight: &vw,
+	}
+
+	hybridCfg := buildHybridConfigFromPlugin(pluginCfg)
+	require.NotNil(t, hybridCfg)
+	assert.InDelta(t, 0.5, hybridCfg.VectorWeight, 1e-6)
+	// BM25 and ngram stay at 0 since only vector was set;
+	// ApplyDefaults only sets all three if ALL are zero
+	assert.InDelta(t, 0.0, hybridCfg.BM25Weight, 1e-6)
+	assert.InDelta(t, 0.0, hybridCfg.NgramWeight, 1e-6)
+}
+
 // Helper function
 func countOccurrences(s, substr string) int {
 	count := 0

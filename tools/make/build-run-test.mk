@@ -36,6 +36,68 @@ run-router-e2e: build-router download-models
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
 		./bin/router -config=config/testing/config.e2e.yaml
 
+# Run the router with hierarchical + hybrid memory config for retrieval testing
+# Requires: Milvus on localhost:19530, echo mock on 127.0.0.1:8003
+run-router-memory-hierarchical: ## Run the router with hierarchical + hybrid memory config
+run-router-memory-hierarchical: build-router download-models
+	@echo "Running router with hierarchical + hybrid memory config..."
+	@echo "  gRPC ExtProc: 50052, API: 8082"
+	@echo "  Requires: Milvus on localhost:19530, echo mock on 127.0.0.1:8003"
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+		./bin/router -config=config/testing/config.memory-hierarchical.yaml -port=50052 -api-port=8082
+
+# Test the Hierarchical + Hybrid Retrieval API
+# Starts echo mock + router + envoy, runs tests, then cleans up.
+# Requires: Milvus running (make start-milvus), models downloaded (make download-models)
+# Ports used: 8003 (echo vLLM), 50052 (gRPC), 8082 (API), 8802 (Envoy), 19002 (Envoy admin)
+test-retrieval-api: ## Test hierarchical + hybrid memory retrieval API
+test-retrieval-api: build-router
+	@$(LOG_TARGET)
+	@echo "=============================================="
+	@echo " Hierarchical + Hybrid Retrieval API Test"
+	@echo "=============================================="
+	@echo ""
+	@echo "0. Cleaning up any previous test services..."
+	@-kill $$(lsof -ti:8003 2>/dev/null) 2>/dev/null || true
+	@-kill $$(lsof -ti:50052 2>/dev/null) 2>/dev/null || true
+	@-kill $$(lsof -ti:8802 2>/dev/null) 2>/dev/null || true
+	@-kill $$(lsof -ti:8082 2>/dev/null) 2>/dev/null || true
+	@rm -f /tmp/echo_vllm_pid.txt /tmp/router_hierarchical_pid.txt /tmp/envoy_retrieval_pid.txt
+	@sleep 1
+	@echo ""
+	@echo "1. Starting echo-mode mock vLLM on port 8003..."
+	@nohup python3 e2e/testing/mock-vllm-echo.py --port 8003 --host 127.0.0.1 > /tmp/echo_vllm.log 2>&1 & echo $$! > /tmp/echo_vllm_pid.txt
+	@sleep 1
+	@curl -sf http://127.0.0.1:8003/health > /dev/null && echo "   ✓ Echo mock is healthy" || (echo "   ✗ Echo mock failed"; cat /tmp/echo_vllm.log; exit 1)
+	@echo ""
+	@echo "2. Starting router (gRPC:50052, API:8082)..."
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+		nohup ./bin/router -config=config/testing/config.memory-hierarchical.yaml -port=50052 -api-port=8082 > /tmp/router_hierarchical.log 2>&1 & echo $$! > /tmp/router_hierarchical_pid.txt
+	@echo "   Waiting for router to initialize (12s)..."
+	@sleep 12
+	@curl -sf http://localhost:8082/health > /dev/null && echo "   ✓ Router API is healthy" || (echo "   ✗ Router failed"; tail -30 /tmp/router_hierarchical.log; exit 1)
+	@echo ""
+	@echo "3. Starting Envoy proxy on port 8802..."
+	@nohup func-e run --config-path config/testing/envoy-retrieval-test.yaml --base-id 2 > /tmp/envoy_retrieval.log 2>&1 & echo $$! > /tmp/envoy_retrieval_pid.txt
+	@sleep 3
+	@echo "   ✓ Envoy started"
+	@echo ""
+	@echo "4. Running retrieval tests against http://localhost:8802..."
+	@API_ENDPOINT=http://localhost:8082 EXTRACTION_WAIT=20 ./scripts/test-retrieval-api.sh http://localhost:8802; TEST_EXIT=$$?; \
+		echo ""; \
+		echo "5. Cleaning up..."; \
+		kill $$(cat /tmp/envoy_retrieval_pid.txt 2>/dev/null) 2>/dev/null || true; \
+		kill $$(cat /tmp/router_hierarchical_pid.txt 2>/dev/null) 2>/dev/null || true; \
+		kill $$(cat /tmp/echo_vllm_pid.txt 2>/dev/null) 2>/dev/null || true; \
+		rm -f /tmp/router_hierarchical_pid.txt /tmp/echo_vllm_pid.txt /tmp/envoy_retrieval_pid.txt; \
+		echo "   ✓ Services stopped"; \
+		echo ""; \
+		echo "   Logs:"; \
+		echo "     Router: /tmp/router_hierarchical.log"; \
+		echo "     Envoy:  /tmp/envoy_retrieval.log"; \
+		echo "     Echo:   /tmp/echo_vllm.log"; \
+		exit $$TEST_EXIT
+
 # Build the ONNX binding Rust library
 build-onnx-binding: ## Build the ONNX Runtime binding (mmBERT 32K support)
 	@echo "Building ONNX binding Rust library..."

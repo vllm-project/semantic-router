@@ -646,3 +646,215 @@ func TestPopulateRelations_FallbackContent(t *testing.T) {
 	require.Len(t, results[0].Related, 1)
 	assert.Equal(t, m2.Content, results[0].Related[0].Abstract, "should fall back to content when abstract is empty")
 }
+
+// ---------------------------------------------------------------------------
+// MemoryHybridConfig
+// ---------------------------------------------------------------------------
+
+func TestMemoryHybridConfig_ApplyDefaults(t *testing.T) {
+	cfg := MemoryHybridConfig{}
+	cfg.ApplyDefaults()
+
+	assert.Equal(t, "weighted", cfg.Mode)
+	assert.InDelta(t, 0.7, cfg.VectorWeight, 1e-6)
+	assert.InDelta(t, 0.2, cfg.BM25Weight, 1e-6)
+	assert.InDelta(t, 0.1, cfg.NgramWeight, 1e-6)
+	assert.Equal(t, 60, cfg.RRFConstant)
+	assert.InDelta(t, 1.2, cfg.BM25K1, 1e-6)
+	assert.InDelta(t, 0.75, cfg.BM25B, 1e-6)
+	assert.Equal(t, 3, cfg.NgramSize)
+}
+
+func TestMemoryHybridConfig_PreservesExplicitValues(t *testing.T) {
+	cfg := MemoryHybridConfig{
+		Mode:         "rrf",
+		VectorWeight: 0.5,
+		BM25Weight:   0.3,
+		NgramWeight:  0.2,
+		RRFConstant:  30,
+		BM25K1:       2.0,
+		BM25B:        0.5,
+		NgramSize:    4,
+	}
+	cfg.ApplyDefaults()
+
+	assert.Equal(t, "rrf", cfg.Mode)
+	assert.InDelta(t, 0.5, cfg.VectorWeight, 1e-6)
+	assert.InDelta(t, 0.3, cfg.BM25Weight, 1e-6)
+	assert.InDelta(t, 0.2, cfg.NgramWeight, 1e-6)
+	assert.Equal(t, 30, cfg.RRFConstant)
+	assert.InDelta(t, 2.0, cfg.BM25K1, 1e-6)
+	assert.InDelta(t, 0.5, cfg.BM25B, 1e-6)
+	assert.Equal(t, 4, cfg.NgramSize)
+}
+
+func TestMemoryHybridConfig_NormalizedWeights(t *testing.T) {
+	cfg := MemoryHybridConfig{VectorWeight: 0.7, BM25Weight: 0.2, NgramWeight: 0.1}
+	v, b, n := cfg.NormalizedWeights()
+	assert.InDelta(t, 0.7, v, 1e-6)
+	assert.InDelta(t, 0.2, b, 1e-6)
+	assert.InDelta(t, 0.1, n, 1e-6)
+	assert.InDelta(t, 1.0, v+b+n, 1e-6)
+
+	cfg2 := MemoryHybridConfig{VectorWeight: 2, BM25Weight: 1, NgramWeight: 1}
+	v2, b2, n2 := cfg2.NormalizedWeights()
+	assert.InDelta(t, 0.5, v2, 1e-6)
+	assert.InDelta(t, 0.25, b2, 1e-6)
+	assert.InDelta(t, 0.25, n2, 1e-6)
+}
+
+func TestMemoryHybridConfig_NormalizedWeightsAllZero(t *testing.T) {
+	cfg := MemoryHybridConfig{}
+	v, b, n := cfg.NormalizedWeights()
+	assert.InDelta(t, 1.0/3, v, 1e-6)
+	assert.InDelta(t, 1.0/3, b, 1e-6)
+	assert.InDelta(t, 1.0/3, n, 1e-6)
+}
+
+// ---------------------------------------------------------------------------
+// HierarchicalRetrieve with Hybrid
+// ---------------------------------------------------------------------------
+
+func TestHierarchicalRetrieve_InMemory_HybridChangesScoring(t *testing.T) {
+	store := newTestInMemoryStore()
+	ctx := context.Background()
+	now := time.Now()
+
+	mems := []*Memory{
+		{ID: "k8s-1", Type: MemoryTypeSemantic, Content: "Kubernetes deployment uses Helm charts for pod configuration management", UserID: "u1", CreatedAt: now},
+		{ID: "k8s-2", Type: MemoryTypeSemantic, Content: "Rolling updates use canary deployment strategy with gradual traffic shifting", UserID: "u1", CreatedAt: now},
+		{ID: "unrelated", Type: MemoryTypeSemantic, Content: "The cat sat on a warm mat in a sunny afternoon", UserID: "u1", CreatedAt: now},
+	}
+
+	for _, m := range mems {
+		require.NoError(t, store.Store(ctx, m))
+		require.NoError(t, EnrichMemoryBeforeStore(ctx, store, m, store.embeddingConfig, CategorizerConfig{}))
+		require.NoError(t, store.Update(ctx, m.ID, m))
+	}
+
+	query := "Helm charts Kubernetes deployment"
+	baseOpts := RetrieveOptions{Query: query, UserID: "u1", Limit: 3, Threshold: 0.1}
+
+	cosineRes, err := store.HierarchicalRetrieve(ctx, HierarchicalRetrieveOptions{
+		RetrieveOptions: baseOpts,
+		MaxDepth:        2,
+		ScorePropAlpha:  0.6,
+	})
+	require.NoError(t, err)
+
+	hybridRes, err := store.HierarchicalRetrieve(ctx, HierarchicalRetrieveOptions{
+		RetrieveOptions: baseOpts,
+		MaxDepth:        2,
+		ScorePropAlpha:  0.6,
+		Hybrid:          &MemoryHybridConfig{VectorWeight: 0.7, BM25Weight: 0.2, NgramWeight: 0.1},
+	})
+	require.NoError(t, err)
+
+	require.NotEmpty(t, cosineRes, "cosine should return results")
+	require.NotEmpty(t, hybridRes, "hybrid should return results")
+
+	t.Logf("Cosine top: %s (%.3f)", cosineRes[0].Memory.ID, cosineRes[0].Score)
+	t.Logf("Hybrid top: %s (%.3f)", hybridRes[0].Memory.ID, hybridRes[0].Score)
+
+	// Both should rank the Kubernetes memory first since the query has exact term overlap
+	assert.Equal(t, "k8s-1", cosineRes[0].Memory.ID, "cosine top should be k8s-1")
+	assert.Equal(t, "k8s-1", hybridRes[0].Memory.ID, "hybrid top should be k8s-1")
+
+	// Hybrid scores and cosine scores should differ because BM25/n-gram contribute
+	cosineScores := make(map[string]float32)
+	hybridScores := make(map[string]float32)
+	for _, r := range cosineRes {
+		cosineScores[r.Memory.ID] = r.Score
+	}
+	for _, r := range hybridRes {
+		hybridScores[r.Memory.ID] = r.Score
+	}
+
+	scoreDifferences := 0
+	for id, cs := range cosineScores {
+		if hs, ok := hybridScores[id]; ok {
+			if cs != hs {
+				scoreDifferences++
+			}
+		}
+	}
+	assert.Greater(t, scoreDifferences, 0, "hybrid scoring should produce different scores from cosine-only")
+}
+
+func TestHierarchicalRetrieve_InMemory_HybridNilIsCosinePure(t *testing.T) {
+	store := newTestInMemoryStore()
+	ctx := context.Background()
+	now := time.Now()
+
+	mems := []*Memory{
+		{ID: "a", Type: MemoryTypeSemantic, Content: "testing memory one", UserID: "u1", CreatedAt: now},
+		{ID: "b", Type: MemoryTypeSemantic, Content: "testing memory two", UserID: "u1", CreatedAt: now},
+	}
+	for _, m := range mems {
+		require.NoError(t, store.Store(ctx, m))
+	}
+
+	opts := HierarchicalRetrieveOptions{
+		RetrieveOptions: RetrieveOptions{Query: "testing", UserID: "u1", Limit: 5, Threshold: 0.1},
+	}
+
+	// Hybrid=nil should behave identically to no hybrid config
+	res1, err := store.HierarchicalRetrieve(ctx, opts)
+	require.NoError(t, err)
+
+	opts.Hybrid = nil
+	res2, err := store.HierarchicalRetrieve(ctx, opts)
+	require.NoError(t, err)
+
+	require.Equal(t, len(res1), len(res2))
+	for i := range res1 {
+		assert.Equal(t, res1[i].Memory.ID, res2[i].Memory.ID)
+		assert.InDelta(t, res1[i].Score, res2[i].Score, 1e-6)
+	}
+}
+
+func TestHierarchicalRetrieve_InMemory_HybridRRFMode(t *testing.T) {
+	store := newTestInMemoryStore()
+	ctx := context.Background()
+	now := time.Now()
+
+	mems := []*Memory{
+		{ID: "x", Type: MemoryTypeSemantic, Content: "BM25 inverse document frequency weighting scores", UserID: "u1", CreatedAt: now},
+		{ID: "y", Type: MemoryTypeSemantic, Content: "cosine similarity vector search embedding", UserID: "u1", CreatedAt: now},
+	}
+	for _, m := range mems {
+		require.NoError(t, store.Store(ctx, m))
+	}
+
+	res, err := store.HierarchicalRetrieve(ctx, HierarchicalRetrieveOptions{
+		RetrieveOptions: RetrieveOptions{Query: "BM25 scoring", UserID: "u1", Limit: 5, Threshold: 0.01},
+		Hybrid:          &MemoryHybridConfig{Mode: "rrf"},
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, res, "rrf mode should return results")
+	t.Logf("RRF top: %s (%.3f)", res[0].Memory.ID, res[0].Score)
+}
+
+func TestGenericHierarchicalRetrieve_WithHybrid(t *testing.T) {
+	store := newTestInMemoryStore()
+	ctx := context.Background()
+	now := time.Now()
+
+	mems := []*Memory{
+		{ID: "g1", Type: MemoryTypeSemantic, Content: "Kubernetes Helm chart deployment configuration", UserID: "u1", CreatedAt: now},
+		{ID: "g2", Type: MemoryTypeSemantic, Content: "Docker container orchestration platform", UserID: "u1", CreatedAt: now},
+	}
+	for _, m := range mems {
+		require.NoError(t, store.Store(ctx, m))
+	}
+
+	hybridCfg := &MemoryHybridConfig{VectorWeight: 0.7, BM25Weight: 0.2, NgramWeight: 0.1}
+
+	res, err := HierarchicalRetrieveFromStore(ctx, store, HierarchicalRetrieveOptions{
+		RetrieveOptions: RetrieveOptions{Query: "Helm Kubernetes", UserID: "u1", Limit: 5, Threshold: 0.1},
+		Hybrid:          hybridCfg,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, res)
+	t.Logf("Generic hybrid top: %s (%.3f)", res[0].Memory.ID, res[0].Score)
+}

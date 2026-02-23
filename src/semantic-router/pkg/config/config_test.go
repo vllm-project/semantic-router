@@ -3523,6 +3523,94 @@ default_model: "test-model"
 			Expect(memConfig.SimilarityThreshold).To(BeNil())
 			Expect(memConfig.AutoStore).To(BeNil())
 		})
+
+		It("should parse hierarchical and hybrid search config", func() {
+			decision := &Decision{
+				Name: "test_decision",
+				Plugins: []DecisionPlugin{
+					{
+						Type: "memory",
+						Configuration: map[string]interface{}{
+							"enabled":              true,
+							"hierarchical_search":  true,
+							"max_depth":            4,
+							"score_prop_alpha":     0.7,
+							"include_group_memories": true,
+							"enable_relations":     true,
+							"max_relations_per_hit": 3,
+							"hybrid_search":        true,
+							"hybrid_mode":          "weighted",
+							"hybrid_vector_weight": 0.6,
+							"hybrid_bm25_weight":   0.3,
+							"hybrid_ngram_weight":  0.1,
+						},
+					},
+				},
+			}
+
+			memConfig := decision.GetMemoryConfig()
+			Expect(memConfig).NotTo(BeNil())
+			Expect(memConfig.Enabled).To(BeTrue())
+			Expect(memConfig.HierarchicalSearch).To(BeTrue())
+			Expect(memConfig.MaxDepth).To(Equal(4))
+			Expect(*memConfig.ScorePropAlpha).To(BeNumerically("~", 0.7, 0.001))
+			Expect(memConfig.IncludeGroupMemories).To(BeTrue())
+			Expect(memConfig.EnableRelations).To(BeTrue())
+			Expect(memConfig.MaxRelationsPerHit).To(Equal(3))
+			Expect(memConfig.HybridSearch).To(BeTrue())
+			Expect(memConfig.HybridMode).To(Equal("weighted"))
+			Expect(*memConfig.HybridVectorWeight).To(BeNumerically("~", 0.6, 0.001))
+			Expect(*memConfig.HybridBM25Weight).To(BeNumerically("~", 0.3, 0.001))
+			Expect(*memConfig.HybridNgramWeight).To(BeNumerically("~", 0.1, 0.001))
+		})
+
+		It("should parse hybrid search with rrf mode", func() {
+			decision := &Decision{
+				Name: "test_decision",
+				Plugins: []DecisionPlugin{
+					{
+						Type: "memory",
+						Configuration: map[string]interface{}{
+							"enabled":             true,
+							"hierarchical_search": true,
+							"hybrid_search":       true,
+							"hybrid_mode":         "rrf",
+						},
+					},
+				},
+			}
+
+			memConfig := decision.GetMemoryConfig()
+			Expect(memConfig).NotTo(BeNil())
+			Expect(memConfig.HybridSearch).To(BeTrue())
+			Expect(memConfig.HybridMode).To(Equal("rrf"))
+			Expect(memConfig.HybridVectorWeight).To(BeNil())
+			Expect(memConfig.HybridBM25Weight).To(BeNil())
+			Expect(memConfig.HybridNgramWeight).To(BeNil())
+		})
+
+		It("should default hybrid fields to false/nil when not set", func() {
+			decision := &Decision{
+				Name: "test_decision",
+				Plugins: []DecisionPlugin{
+					{
+						Type: "memory",
+						Configuration: map[string]interface{}{
+							"enabled":             true,
+							"hierarchical_search": true,
+						},
+					},
+				},
+			}
+
+			memConfig := decision.GetMemoryConfig()
+			Expect(memConfig).NotTo(BeNil())
+			Expect(memConfig.HybridSearch).To(BeFalse())
+			Expect(memConfig.HybridMode).To(BeEmpty())
+			Expect(memConfig.HybridVectorWeight).To(BeNil())
+			Expect(memConfig.HybridBM25Weight).To(BeNil())
+			Expect(memConfig.HybridNgramWeight).To(BeNil())
+		})
 	})
 
 	// -----------------------------------------------------------------

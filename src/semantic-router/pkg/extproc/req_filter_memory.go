@@ -591,3 +591,26 @@ func injectSystemMessage(requestBody []byte, content string) ([]byte, error) {
 
 	return modifiedBody, nil
 }
+
+// buildHybridConfigFromPlugin constructs a MemoryHybridConfig from a
+// MemoryPluginConfig. Returns nil if hybrid search is not enabled.
+func buildHybridConfigFromPlugin(pluginCfg *config.MemoryPluginConfig) *memory.MemoryHybridConfig {
+	if pluginCfg == nil || !pluginCfg.HybridSearch {
+		return nil
+	}
+	cfg := &memory.MemoryHybridConfig{}
+	if pluginCfg.HybridMode != "" {
+		cfg.Mode = pluginCfg.HybridMode
+	}
+	if pluginCfg.HybridVectorWeight != nil {
+		cfg.VectorWeight = *pluginCfg.HybridVectorWeight
+	}
+	if pluginCfg.HybridBM25Weight != nil {
+		cfg.BM25Weight = *pluginCfg.HybridBM25Weight
+	}
+	if pluginCfg.HybridNgramWeight != nil {
+		cfg.NgramWeight = *pluginCfg.HybridNgramWeight
+	}
+	cfg.ApplyDefaults()
+	return cfg
+}
