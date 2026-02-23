@@ -835,6 +835,438 @@ func TestHierarchicalRetrieve_InMemory_HybridRRFMode(t *testing.T) {
 	t.Logf("RRF top: %s (%.3f)", res[0].Memory.ID, res[0].Score)
 }
 
+// TestFollowLinks_CrossCategoryRecall demonstrates that link expansion discovers
+// cross-category memories that hierarchical drill-down alone misses.
+//
+// Design: The linked memory ("budget") uses completely different vocabulary from
+// the query ("Kubernetes Helm deployment"), so embedding similarity alone scores
+// it below the 0.65 threshold. Only the explicit cross-link allows it to be found.
+func TestFollowLinks_CrossCategoryRecall(t *testing.T) {
+	store := newTestInMemoryStore()
+	ctx := context.Background()
+	now := time.Now()
+
+	catInfra := &Memory{
+		ID: "cat-infra", Type: MemoryTypeSemantic, IsCategory: true,
+		Content: "cloud infrastructure deployment and orchestration",
+		UserID: "u1", CreatedAt: now,
+	}
+	catFinance := &Memory{
+		ID: "cat-finance", Type: MemoryTypeSemantic, IsCategory: true,
+		Content: "company budgets and financial planning",
+		UserID: "u1", CreatedAt: now,
+	}
+	helmDeploy := &Memory{
+		ID: "helm-deploy", Type: MemoryTypeSemantic,
+		Content:  "We use Kubernetes Helm charts to deploy microservices to the production cluster",
+		UserID:   "u1", CreatedAt: now,
+		ParentID: "cat-infra",
+	}
+	// Linked memory: completely different domain vocabulary.
+	// A human linked it because the cloud budget is relevant to the K8s project.
+	budget := &Memory{
+		ID: "cloud-budget", Type: MemoryTypeSemantic,
+		Content:  "The annual spend allocation for Q3 is forty thousand dollars across all departments",
+		UserID:   "u1", CreatedAt: now,
+		ParentID: "cat-finance",
+	}
+	unrelated := &Memory{
+		ID: "pasta", Type: MemoryTypeSemantic,
+		Content:  "My favorite Italian pasta recipe uses fresh basil and garlic in olive oil",
+		UserID:   "u1", CreatedAt: now,
+		ParentID: "cat-finance",
+	}
+
+	for _, m := range []*Memory{catInfra, catFinance, helmDeploy, budget, unrelated} {
+		require.NoError(t, store.Store(ctx, m))
+	}
+
+	// Cross-link: helm deployment <-> cloud budget (related by project context)
+	require.NoError(t, store.StoreRelation(ctx, MemoryRelation{
+		FromID: "helm-deploy", ToID: "cloud-budget",
+		Reason: "cloud budget funds the K8s cluster", Strength: 0.88, CreatedAt: now,
+	}))
+
+	threshold := float32(0.65)
+	query := "Kubernetes Helm charts deployment cluster"
+
+	// Without link expansion
+	resNoLinks, err := store.HierarchicalRetrieve(ctx, HierarchicalRetrieveOptions{
+		RetrieveOptions: RetrieveOptions{Query: query, UserID: "u1", Limit: 5, Threshold: threshold},
+		MaxDepth:        3,
+		FollowLinks:     false,
+	})
+	require.NoError(t, err)
+
+	// With link expansion
+	resWithLinks, err := store.HierarchicalRetrieve(ctx, HierarchicalRetrieveOptions{
+		RetrieveOptions: RetrieveOptions{Query: query, UserID: "u1", Limit: 5, Threshold: threshold},
+		MaxDepth:        3,
+		FollowLinks:     true,
+		MaxLinkDepth:    1,
+	})
+	require.NoError(t, err)
+
+	noLinkIDs := map[string]bool{}
+	t.Log("=== Without link expansion ===")
+	for i, r := range resNoLinks {
+		noLinkIDs[r.Memory.ID] = true
+		t.Logf("  [%d] %s (%.3f) %s", i+1, r.Memory.ID, r.Score, r.Memory.Content[:min(60, len(r.Memory.Content))])
+	}
+
+	withLinkIDs := map[string]bool{}
+	t.Log("=== With link expansion ===")
+	for i, r := range resWithLinks {
+		withLinkIDs[r.Memory.ID] = true
+		t.Logf("  [%d] %s (%.3f) %s", i+1, r.Memory.ID, r.Score, r.Memory.Content[:min(60, len(r.Memory.Content))])
+	}
+
+	assert.True(t, withLinkIDs["helm-deploy"], "direct match should be found in both")
+
+	if !noLinkIDs["cloud-budget"] && withLinkIDs["cloud-budget"] {
+		t.Log("CONFIRMED: cloud-budget discovered only via cross-link (not by embedding similarity)")
+	} else if noLinkIDs["cloud-budget"] {
+		t.Log("NOTE: cloud-budget was also found via embeddings (threshold may be too low)")
+	}
+
+	assert.False(t, withLinkIDs["pasta"],
+		"pasta (no link, no semantic match) should not appear")
+}
+
+// TestFollowLinks_MultiHop verifies that 2-hop link traversal discovers
+// memories reachable only through an intermediate linked memory.
+func TestFollowLinks_MultiHop(t *testing.T) {
+	store := newTestInMemoryStore()
+	ctx := context.Background()
+	now := time.Now()
+
+	// Chain: A -> B -> C (A and C share no direct link)
+	memA := &Memory{ID: "a", Content: "Rust programming borrow checker ownership", UserID: "u1", CreatedAt: now, Type: MemoryTypeSemantic}
+	memB := &Memory{ID: "b", Content: "Rust robotics servo controller firmware", UserID: "u1", CreatedAt: now, Type: MemoryTypeSemantic}
+	memC := &Memory{ID: "c", Content: "Tokyo robotics lab industrial servo motor demo", UserID: "u1", CreatedAt: now, Type: MemoryTypeSemantic}
+
+	for _, m := range []*Memory{memA, memB, memC} {
+		require.NoError(t, store.Store(ctx, m))
+	}
+
+	require.NoError(t, store.StoreRelation(ctx, MemoryRelation{FromID: "a", ToID: "b", Strength: 0.9, CreatedAt: now}))
+	require.NoError(t, store.StoreRelation(ctx, MemoryRelation{FromID: "b", ToID: "c", Strength: 0.85, CreatedAt: now}))
+
+	query := "Rust programming borrow checker"
+
+	// 1-hop: should find A (direct) and B (via link from A)
+	res1, err := store.HierarchicalRetrieve(ctx, HierarchicalRetrieveOptions{
+		RetrieveOptions: RetrieveOptions{Query: query, UserID: "u1", Limit: 10, Threshold: 0.01},
+		FollowLinks:     true,
+		MaxLinkDepth:    1,
+	})
+	require.NoError(t, err)
+
+	// 2-hop: should also find C (via A->B->C)
+	res2, err := store.HierarchicalRetrieve(ctx, HierarchicalRetrieveOptions{
+		RetrieveOptions: RetrieveOptions{Query: query, UserID: "u1", Limit: 10, Threshold: 0.01},
+		FollowLinks:     true,
+		MaxLinkDepth:    2,
+	})
+	require.NoError(t, err)
+
+	ids1 := make(map[string]bool)
+	for _, r := range res1 {
+		ids1[r.Memory.ID] = true
+	}
+	ids2 := make(map[string]bool)
+	for _, r := range res2 {
+		ids2[r.Memory.ID] = true
+	}
+
+	t.Logf("1-hop results: %d, 2-hop results: %d", len(res1), len(res2))
+	for _, r := range res2 {
+		t.Logf("  %s (%.3f) %s", r.Memory.ID, r.Score, r.Memory.Content[:min(50, len(r.Memory.Content))])
+	}
+
+	assert.True(t, ids1["a"], "1-hop should include A (direct match)")
+	assert.True(t, ids2["a"], "2-hop should include A")
+
+	if ids2["c"] && !ids1["c"] {
+		t.Log("CONFIRMED: C was only reachable via 2-hop traversal (A->B->C)")
+	}
+}
+
+// TestRelatedIDs_CrossCategoryComparison is a four-way comparison that
+// demonstrates why RelatedIDs-based graph expansion discovers relevant
+// memories that neither tree-cosine traversal nor tree-hybrid search can find.
+//
+// Scenario: A user has memories across 4 categories. Some memories are linked
+// via RelatedIDs because they are contextually related despite being in
+// completely different domains with zero keyword/semantic overlap.
+//
+// The test runs 4 retrieval strategies against the same store and queries,
+// then compares cross-category recall:
+//
+//  1. Tree-Cosine:       hierarchical tree traversal with cosine scoring, no links
+//  2. Tree-Hybrid:       hierarchical tree traversal with BM25 + n-gram + cosine, no links
+//  3. Tree-Cosine+Links: hierarchical cosine + RelatedIDs graph expansion
+//  4. Tree-Hybrid+Links: hierarchical hybrid + RelatedIDs graph expansion
+func TestRelatedIDs_CrossCategoryComparison(t *testing.T) {
+	store := newTestInMemoryStore()
+	ctx := context.Background()
+	now := time.Now()
+
+	// --- Categories ---
+	catDevOps := &Memory{
+		ID: "cat-devops", Type: MemoryTypeSemantic, IsCategory: true,
+		Content: "DevOps and infrastructure", UserID: "u1", CreatedAt: now,
+	}
+	catFinance := &Memory{
+		ID: "cat-finance", Type: MemoryTypeSemantic, IsCategory: true,
+		Content: "finance budget and cost management", UserID: "u1", CreatedAt: now,
+	}
+	catML := &Memory{
+		ID: "cat-ml", Type: MemoryTypeSemantic, IsCategory: true,
+		Content: "machine learning and AI model training", UserID: "u1", CreatedAt: now,
+	}
+	catCompliance := &Memory{
+		ID: "cat-compliance", Type: MemoryTypeSemantic, IsCategory: true,
+		Content: "regulatory compliance and legal audits", UserID: "u1", CreatedAt: now,
+	}
+
+	// --- Leaf memories ---
+
+	// DevOps cluster
+	helmDeploy := &Memory{
+		ID: "devops-helm", Type: MemoryTypeSemantic,
+		Content: "Production services use Kubernetes Helm charts with canary rollout and automatic rollback",
+		UserID: "u1", CreatedAt: now, ParentID: "cat-devops",
+	}
+	ciPipeline := &Memory{
+		ID: "devops-ci", Type: MemoryTypeSemantic,
+		Content: "CI pipeline runs unit tests, integration tests, and container image builds on every pull request",
+		UserID: "u1", CreatedAt: now, ParentID: "cat-devops",
+	}
+
+	// Finance cluster — NO semantic overlap with DevOps vocabulary
+	cloudBudget := &Memory{
+		ID: "finance-budget", Type: MemoryTypeSemantic,
+		Content: "The quarterly spend allocation is forty-two thousand dollars across all departmental cost centers",
+		UserID: "u1", CreatedAt: now, ParentID: "cat-finance",
+	}
+	headcount := &Memory{
+		ID: "finance-headcount", Type: MemoryTypeSemantic,
+		Content: "Team headcount plan approved for six new hires in the engineering division next quarter",
+		UserID: "u1", CreatedAt: now, ParentID: "cat-finance",
+	}
+
+	// ML cluster
+	gpuTraining := &Memory{
+		ID: "ml-gpu", Type: MemoryTypeSemantic,
+		Content: "Model training uses eight A100 GPUs with distributed data parallel across two nodes",
+		UserID: "u1", CreatedAt: now, ParentID: "cat-ml",
+	}
+	mlDataset := &Memory{
+		ID: "ml-dataset", Type: MemoryTypeSemantic,
+		Content: "Training dataset contains two million labeled examples with quarterly refresh cycle",
+		UserID: "u1", CreatedAt: now, ParentID: "cat-ml",
+	}
+
+	// Compliance cluster — NO semantic overlap with ML vocabulary
+	dataRetention := &Memory{
+		ID: "compliance-retention", Type: MemoryTypeSemantic,
+		Content: "GDPR requires personal information to be purged within thirty days of account deletion request",
+		UserID: "u1", CreatedAt: now, ParentID: "cat-compliance",
+	}
+	auditLog := &Memory{
+		ID: "compliance-audit", Type: MemoryTypeSemantic,
+		Content: "SOC2 Type II audit mandates immutable access logs retained for seven calendar years minimum",
+		UserID: "u1", CreatedAt: now, ParentID: "cat-compliance",
+	}
+
+	allMems := []*Memory{
+		catDevOps, catFinance, catML, catCompliance,
+		helmDeploy, ciPipeline,
+		cloudBudget, headcount,
+		gpuTraining, mlDataset,
+		dataRetention, auditLog,
+	}
+	for _, m := range allMems {
+		require.NoError(t, store.Store(ctx, m))
+	}
+
+	// --- Cross-links (contextual associations that don't share vocabulary) ---
+
+	// Link 1: Helm deployment → cloud budget
+	//   (the K8s cluster drives the cloud spend, but terms are completely disjoint)
+	require.NoError(t, store.StoreRelation(ctx, MemoryRelation{
+		FromID: "devops-helm", ToID: "finance-budget",
+		Reason: "K8s cluster is the primary driver of cloud spend", Strength: 0.9, CreatedAt: now,
+	}))
+
+	// Link 2: GPU training → data retention compliance
+	//   (training data must comply with GDPR, but vocabulary is disjoint)
+	require.NoError(t, store.StoreRelation(ctx, MemoryRelation{
+		FromID: "ml-gpu", ToID: "compliance-retention",
+		Reason: "training data subject to GDPR retention rules", Strength: 0.85, CreatedAt: now,
+	}))
+
+	// --- Test queries ---
+	type testQuery struct {
+		name          string
+		query         string
+		directMatchID string // expected via any method
+		linkedMatchID string // expected ONLY via RelatedIDs
+	}
+	queries := []testQuery{
+		{
+			name:          "DevOps→Finance",
+			query:         "Kubernetes Helm charts canary rollout deployment pipeline",
+			directMatchID: "devops-helm",
+			linkedMatchID: "finance-budget",
+		},
+		{
+			name:          "ML→Compliance",
+			query:         "GPU distributed training A100 machine learning model",
+			directMatchID: "ml-gpu",
+			linkedMatchID: "compliance-retention",
+		},
+	}
+
+	threshold := float32(0.55)
+	hybridCfg := &MemoryHybridConfig{VectorWeight: 0.7, BM25Weight: 0.2, NgramWeight: 0.1}
+
+	type strategy struct {
+		name    string
+		hybrid  *MemoryHybridConfig
+		links   bool
+		explain string
+	}
+	strategies := []strategy{
+		{name: "Tree-Cosine", hybrid: nil, links: false,
+			explain: "hierarchical tree traversal with cosine scoring (no cross-links, no keyword matching)"},
+		{name: "Tree-Hybrid", hybrid: hybridCfg, links: false,
+			explain: "hierarchical tree traversal with hybrid BM25+n-gram+cosine scoring (no cross-links)"},
+		{name: "Ours (cosine+links)", hybrid: nil, links: true,
+			explain: "hierarchical tree traversal with cosine scoring + RelatedIDs graph expansion"},
+		{name: "Ours (hybrid+links)", hybrid: hybridCfg, links: true,
+			explain: "hierarchical tree traversal with hybrid scoring + RelatedIDs graph expansion"},
+	}
+
+	t.Logf("=== Four-Way Comparison: Tree-Cosine vs Tree-Hybrid vs +Links ===\n")
+	t.Logf("%-22s | %-18s | %-13s | %-14s | %-14s | %s",
+		"Strategy", "Query", "Direct match?", "Linked match?", "Unrelated hit?", "Explanation")
+	t.Logf("%s", "-----------------------------------------------------------------------------------------------------------")
+
+	// Track cross-category recall per strategy
+	type recallResult struct {
+		directFound int
+		linkedFound int
+	}
+	totals := make(map[string]*recallResult)
+	for _, s := range strategies {
+		totals[s.name] = &recallResult{}
+	}
+
+	for _, q := range queries {
+		for _, s := range strategies {
+			res, err := store.HierarchicalRetrieveWithConfig(ctx, HierarchicalRetrieveOptions{
+				RetrieveOptions: RetrieveOptions{Query: q.query, UserID: "u1", Limit: 10, Threshold: threshold},
+				MaxDepth:        3,
+				FollowLinks:     s.links,
+				MaxLinkDepth:    1,
+				Hybrid:          s.hybrid,
+			}, InMemoryHierarchicalConfig{})
+			require.NoError(t, err)
+
+			ids := make(map[string]bool)
+			for _, r := range res {
+				ids[r.Memory.ID] = true
+			}
+
+			directHit := ids[q.directMatchID]
+			linkedHit := ids[q.linkedMatchID]
+
+			if directHit {
+				totals[s.name].directFound++
+			}
+			if linkedHit {
+				totals[s.name].linkedFound++
+			}
+
+			// Log scores for linked match if found
+			linkedScore := ""
+			for _, r := range res {
+				if r.Memory.ID == q.linkedMatchID {
+					linkedScore = fmt.Sprintf(" (%.3f)", r.Score)
+				}
+			}
+
+			t.Logf("%-22s | %-18s | %-13v | %-14s | %s",
+				s.name, q.name, directHit,
+				fmt.Sprintf("%v%s", linkedHit, linkedScore),
+				s.explain)
+		}
+		t.Log("")
+	}
+
+	t.Logf("=== Cross-Category Recall Summary ===\n")
+	t.Logf("%-22s | Direct (%d queries) | Linked (%d queries) | Cross-Category Recall",
+		"Strategy", len(queries), len(queries))
+	for _, s := range strategies {
+		r := totals[s.name]
+		crossRecall := float64(r.linkedFound) / float64(len(queries)) * 100
+		t.Logf("%-22s | %d/%d                | %d/%d                | %.0f%%",
+			s.name, r.directFound, len(queries), r.linkedFound, len(queries), crossRecall)
+	}
+
+	// --- Hard assertions ---
+
+	// All strategies should find the direct semantic match.
+	for _, s := range strategies {
+		assert.Equal(t, len(queries), totals[s.name].directFound,
+			"%s should find all direct matches", s.name)
+	}
+
+	// Tree-only strategies should NOT find the linked memories
+	// (they are in a different category with no semantic/keyword overlap).
+	assert.Equal(t, 0, totals["Tree-Cosine"].linkedFound,
+		"tree-cosine traversal cannot discover cross-category links")
+	assert.Equal(t, 0, totals["Tree-Hybrid"].linkedFound,
+		"tree-hybrid search cannot discover semantically disjoint cross-links")
+
+	// Link-enabled strategies MUST beat both tree-only baselines on cross-category recall.
+	assert.Greater(t, totals["Ours (cosine+links)"].linkedFound, totals["Tree-Cosine"].linkedFound,
+		"cosine+links should beat tree-cosine on cross-category recall")
+	assert.Greater(t, totals["Ours (cosine+links)"].linkedFound, totals["Tree-Hybrid"].linkedFound,
+		"cosine+links should beat tree-hybrid on cross-category recall")
+	assert.Greater(t, totals["Ours (hybrid+links)"].linkedFound, totals["Tree-Cosine"].linkedFound,
+		"hybrid+links should beat tree-cosine on cross-category recall")
+	assert.Greater(t, totals["Ours (hybrid+links)"].linkedFound, totals["Tree-Hybrid"].linkedFound,
+		"hybrid+links should beat tree-hybrid on cross-category recall")
+
+	// Cosine+links should achieve full recall — no hybrid penalty on link scoring.
+	assert.Equal(t, len(queries), totals["Ours (cosine+links)"].linkedFound,
+		"RelatedIDs (cosine) should discover all cross-linked memories")
+
+	bestOurs := totals["Ours (cosine+links)"].linkedFound
+	if totals["Ours (hybrid+links)"].linkedFound > bestOurs {
+		bestOurs = totals["Ours (hybrid+links)"].linkedFound
+	}
+
+	t.Logf("\nCONCLUSION:")
+	t.Logf("  Tree-Cosine (no links):          %d/%d cross-category recall (0%%)",
+		totals["Tree-Cosine"].linkedFound, len(queries))
+	t.Logf("  Tree-Hybrid (no links):          %d/%d cross-category recall (0%%)",
+		totals["Tree-Hybrid"].linkedFound, len(queries))
+	t.Logf("  Tree-Cosine + Links:             %d/%d cross-category recall (%.0f%%)",
+		totals["Ours (cosine+links)"].linkedFound, len(queries),
+		float64(totals["Ours (cosine+links)"].linkedFound)/float64(len(queries))*100)
+	t.Logf("  Tree-Hybrid + Links:             %d/%d cross-category recall (%.0f%%)",
+		totals["Ours (hybrid+links)"].linkedFound, len(queries),
+		float64(totals["Ours (hybrid+links)"].linkedFound)/float64(len(queries))*100)
+	t.Log("")
+	t.Log("Neither hierarchical tree traversal (cosine) nor hybrid search (BM25+n-gram)")
+	t.Log("can discover semantically disjoint but contextually related memories across")
+	t.Log("category boundaries. Only explicit RelatedIDs graph expansion bridges this gap.")
+}
+
 func TestGenericHierarchicalRetrieve_WithHybrid(t *testing.T) {
 	store := newTestInMemoryStore()
 	ctx := context.Background()

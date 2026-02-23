@@ -288,6 +288,19 @@ func HierarchicalRetrieveFromStoreWithConfig(
 		collected = collected[:limit]
 	}
 
+	// Graph expansion: follow RelatedIDs to discover cross-category memories.
+	if opts.FollowLinks {
+		embCfg := EmbeddingConfig{Model: EmbeddingModelBERT}
+		if opts.LinkEmbeddingConfig != nil {
+			embCfg = *opts.LinkEmbeddingConfig
+		}
+		qEmb, embErr := GenerateEmbedding(opts.Query, embCfg)
+		if embErr != nil {
+			return nil, fmt.Errorf("expandViaLinks: failed to generate query embedding: %w", embErr)
+		}
+		collected = expandViaLinks(ctx, store, collected, opts, qEmb)
+	}
+
 	logging.Debugf("HierarchicalRetrieve: returning %d results after %d convergence rounds",
 		len(collected), convergenceRounds)
 
@@ -354,4 +367,130 @@ func BuildCategoryFilter(baseFilter string, categoryOnly bool) string {
 //	result = alpha * childScore + (1 - alpha) * parentScore
 func PropagateScore(childScore, parentScore, alpha float32) float32 {
 	return alpha*childScore + (1-alpha)*parentScore
+}
+
+// expandViaLinks performs graph expansion on the collected results by following
+// RelatedIDs. For each result, linked memories are fetched and scored against
+// the query using embedding cosine similarity (not hybrid BM25/n-gram).
+//
+// Hybrid scoring is deliberately NOT applied to linked memories. Link expansion
+// discovers cross-domain associations where the linked memory shares zero
+// vocabulary with the query — exactly the scenario BM25/n-gram would penalize.
+// The referrer's score (which may include hybrid fusion from the main pipeline)
+// propagates through linkDecay as the primary relevance signal.
+//
+// This is what distinguishes RelatedIDs from both pure tree traversal (which
+// cannot cross subtree boundaries) and hybrid search (which requires keyword
+// or semantic overlap). Neither approach can discover a Finance memory linked
+// to a DevOps memory when the query is about Kubernetes.
+//
+// Research context: GraphRAG systems show +15–23% recall improvement from
+// cross-document link traversal (HLG, ICLR 2025; Practical GraphRAG, ACL 2025).
+func expandViaLinks(
+	ctx context.Context,
+	store Store,
+	collected []*RetrieveResult,
+	opts HierarchicalRetrieveOptions,
+	queryEmbedding []float32,
+) []*RetrieveResult {
+	if !opts.FollowLinks || len(collected) == 0 {
+		return collected
+	}
+
+	if len(queryEmbedding) == 0 {
+		logging.Warnf("expandViaLinks: no query embedding provided, skipping link expansion")
+		return collected
+	}
+
+	maxDepth := opts.MaxLinkDepth
+	if maxDepth <= 0 {
+		maxDepth = DefaultMaxLinkDepth
+	}
+
+	threshold := opts.Threshold
+	if threshold <= 0 {
+		threshold = DefaultMemoryConfig().DefaultSimilarityThreshold
+	}
+	limit := opts.Limit
+	if limit <= 0 {
+		limit = DefaultHierarchicalLimit
+	}
+
+	seen := make(map[string]bool, len(collected))
+	for _, r := range collected {
+		seen[r.Memory.ID] = true
+	}
+
+	frontier := make([]*RetrieveResult, len(collected))
+	copy(frontier, collected)
+
+	for hop := 0; hop < maxDepth; hop++ {
+		var nextFrontier []*RetrieveResult
+
+		type linkRef struct {
+			mem      *Memory
+			referrer *RetrieveResult
+		}
+		var refs []linkRef
+
+		for _, r := range frontier {
+			for _, linkedID := range r.Memory.RelatedIDs {
+				if seen[linkedID] {
+					continue
+				}
+				seen[linkedID] = true
+
+				linked, err := store.Get(ctx, linkedID)
+				if err != nil || linked == nil || linked.IsCategory {
+					continue
+				}
+				refs = append(refs, linkRef{mem: linked, referrer: r})
+			}
+		}
+
+		if len(refs) == 0 {
+			break
+		}
+
+		for _, ref := range refs {
+			// Cosine similarity only — not hybrid. Link expansion deliberately
+			// skips BM25/n-gram because linked memories are discovered by
+			// association, not by keyword match. Applying keyword scoring to
+			// cross-domain links penalizes the exact scenario links exist to
+			// support (e.g., a DevOps memory linked to a Finance memory shares
+			// zero vocabulary). The referrer's score (which may include hybrid
+			// fusion) already propagates through linkDecay.
+			directScore := cosineSimilarity(queryEmbedding, ref.mem.Embedding)
+
+			// Link-propagated score: the referring memory's relevance is the
+			// primary signal (the link itself is evidence of association).
+			// Direct similarity provides a bonus but is not required — this is
+			// the key difference from pure semantic search.
+			const linkDecay float32 = 0.8
+			const directBonus float32 = 0.2
+			blended := ref.referrer.Score*linkDecay + directScore*directBonus
+
+			if blended >= threshold {
+				result := &RetrieveResult{Memory: ref.mem, Score: blended}
+				collected = append(collected, result)
+				nextFrontier = append(nextFrontier, result)
+			}
+		}
+
+		if len(nextFrontier) == 0 {
+			break
+		}
+		frontier = nextFrontier
+	}
+
+	sort.Slice(collected, func(i, j int) bool {
+		return collected[i].Score > collected[j].Score
+	})
+
+	if len(collected) > limit {
+		collected = collected[:limit]
+	}
+
+	logging.Debugf("expandViaLinks: %d results after %d hop(s) of link expansion", len(collected), maxDepth)
+	return collected
 }

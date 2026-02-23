@@ -2154,6 +2154,11 @@ type MemoryPluginConfig struct {
 	EnableRelations    bool `json:"enable_relations,omitempty" yaml:"enable_relations,omitempty"`
 	MaxRelationsPerHit int  `json:"max_relations_per_hit,omitempty" yaml:"max_relations_per_hit,omitempty"`
 
+	// Link expansion: follow RelatedIDs on retrieved memories to discover
+	// cross-category results that hierarchical drill-down alone would miss.
+	FollowLinks  bool `json:"follow_links,omitempty" yaml:"follow_links,omitempty"`
+	MaxLinkDepth int  `json:"max_link_depth,omitempty" yaml:"max_link_depth,omitempty"` // default 1
+
 	// Hybrid scoring: fuse BM25 + n-gram + vector at every level of hierarchical search.
 	// Only takes effect when hierarchical_search is also true.
 	HybridSearch      bool    `json:"hybrid_search,omitempty" yaml:"hybrid_search,omitempty"`

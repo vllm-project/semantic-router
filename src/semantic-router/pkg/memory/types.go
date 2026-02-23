@@ -259,6 +259,21 @@ type HierarchicalRetrieveOptions struct {
 	// Hybrid enables fused BM25 + n-gram + vector scoring at every level of the
 	// hierarchical search. When nil, pure cosine similarity is used (existing behavior).
 	Hybrid *MemoryHybridConfig
+
+	// FollowLinks enables graph expansion: after collecting initial results,
+	// follow RelatedIDs on each hit to discover cross-category memories that
+	// the tree drill-down alone would miss. Inspired by GraphRAG research
+	// showing +15-23% recall improvement from cross-document traversal.
+	FollowLinks bool
+
+	// MaxLinkDepth controls how many hops to follow (1 = direct links only,
+	// 2 = links-of-links, etc.). Default: 1.
+	MaxLinkDepth int
+
+	// LinkEmbeddingConfig specifies which embedding model to use when scoring
+	// linked memories during graph expansion. Required when FollowLinks is true.
+	// Falls back to EmbeddingModelBERT if not set.
+	LinkEmbeddingConfig *EmbeddingConfig
 }
 
 const (
@@ -266,6 +281,7 @@ const (
 	DefaultScorePropAlpha       float32 = 0.5
 	DefaultMaxRelationsPerHit           = 5
 	DefaultHierarchicalLimit            = 5
+	DefaultMaxLinkDepth                 = 1
 )
 
 // ApplyDefaults fills in zero-valued fields.
@@ -278,6 +294,9 @@ func (h *HierarchicalRetrieveOptions) ApplyDefaults() {
 	}
 	if h.MaxRelationsPerHit <= 0 {
 		h.MaxRelationsPerHit = DefaultMaxRelationsPerHit
+	}
+	if h.FollowLinks && h.MaxLinkDepth <= 0 {
+		h.MaxLinkDepth = DefaultMaxLinkDepth
 	}
 }
 

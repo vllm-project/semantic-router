@@ -1087,6 +1087,12 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 		if memoryPluginConfig != nil && memoryPluginConfig.MaxRelationsPerHit > 0 {
 			hOpts.MaxRelationsPerHit = memoryPluginConfig.MaxRelationsPerHit
 		}
+		if memoryPluginConfig != nil && memoryPluginConfig.FollowLinks {
+			hOpts.FollowLinks = true
+			if memoryPluginConfig.MaxLinkDepth > 0 {
+				hOpts.MaxLinkDepth = memoryPluginConfig.MaxLinkDepth
+			}
+		}
 
 		hOpts.Hybrid = buildHybridConfigFromPlugin(memoryPluginConfig)
 

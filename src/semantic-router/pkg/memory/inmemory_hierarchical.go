@@ -198,6 +198,11 @@ func (s *InMemoryStore) HierarchicalRetrieveWithConfig(ctx context.Context, opts
 		results = results[:limit]
 	}
 
+	// Graph expansion: follow RelatedIDs to discover cross-category memories.
+	if opts.FollowLinks {
+		results = expandViaLinks(ctx, s, results, opts, queryEmbedding)
+	}
+
 	s.populateRelations(results, opts, cfg)
 
 	logging.Debugf("InMemoryStore.HierarchicalRetrieve: returning %d results", len(results))
