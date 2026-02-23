@@ -4,16 +4,22 @@ import (
 	"testing"
 )
 
-// TestMaxContextLength_UpdatedTo32K verifies that the MaxContextLength
-// for ModernBERT-compatible classifiers has been updated to 32768
-func TestMaxContextLength_UpdatedTo32K(t *testing.T) {
+// TestMaxContextLength_SafeValues verifies that MaxContextLength reflects
+// the actual training context length (512 tokens) for BERT LoRA models,
+// while BaseModelMaxContext indicates the base model's capability (32K)
+func TestMaxContextLength_SafeValues(t *testing.T) {
 	// Test Domain Classifier
 	domainModel := GetModelByPath("models/mom-domain-classifier")
 	if domainModel == nil {
 		t.Fatal("Domain classifier model not found")
 	}
-	if domainModel.MaxContextLength != 32768 {
-		t.Errorf("Domain Classifier: Expected MaxContextLength=32768, got %d", domainModel.MaxContextLength)
+	// MaxContextLength should be 512 (trained context length)
+	if domainModel.MaxContextLength != 512 {
+		t.Errorf("Domain Classifier: Expected MaxContextLength=512 (trained length), got %d", domainModel.MaxContextLength)
+	}
+	// BaseModelMaxContext should be 32768 (base model capability)
+	if domainModel.BaseModelMaxContext != 32768 {
+		t.Errorf("Domain Classifier: Expected BaseModelMaxContext=32768 (base model supports 32K), got %d", domainModel.BaseModelMaxContext)
 	}
 
 	// Test PII Detector
@@ -21,8 +27,11 @@ func TestMaxContextLength_UpdatedTo32K(t *testing.T) {
 	if piiModel == nil {
 		t.Fatal("PII detector model not found")
 	}
-	if piiModel.MaxContextLength != 32768 {
-		t.Errorf("PII Detector: Expected MaxContextLength=32768, got %d", piiModel.MaxContextLength)
+	if piiModel.MaxContextLength != 512 {
+		t.Errorf("PII Detector: Expected MaxContextLength=512 (trained length), got %d", piiModel.MaxContextLength)
+	}
+	if piiModel.BaseModelMaxContext != 32768 {
+		t.Errorf("PII Detector: Expected BaseModelMaxContext=32768 (base model supports 32K), got %d", piiModel.BaseModelMaxContext)
 	}
 
 	// Test Jailbreak Classifier
@@ -30,21 +39,27 @@ func TestMaxContextLength_UpdatedTo32K(t *testing.T) {
 	if jailbreakModel == nil {
 		t.Fatal("Jailbreak classifier model not found")
 	}
-	if jailbreakModel.MaxContextLength != 32768 {
-		t.Errorf("Jailbreak Classifier: Expected MaxContextLength=32768, got %d", jailbreakModel.MaxContextLength)
+	if jailbreakModel.MaxContextLength != 512 {
+		t.Errorf("Jailbreak Classifier: Expected MaxContextLength=512 (trained length), got %d", jailbreakModel.MaxContextLength)
+	}
+	if jailbreakModel.BaseModelMaxContext != 32768 {
+		t.Errorf("Jailbreak Classifier: Expected BaseModelMaxContext=32768 (base model supports 32K), got %d", jailbreakModel.BaseModelMaxContext)
 	}
 }
 
-// TestMaxContextLength_ByAlias verifies that MaxContextLength is correct
-// when accessing models by their aliases
+// TestMaxContextLength_ByAlias verifies that MaxContextLength and BaseModelMaxContext
+// are correct when accessing models by their aliases
 func TestMaxContextLength_ByAlias(t *testing.T) {
 	// Test Domain Classifier by alias
 	domainByAlias := GetModelByPath("domain-classifier")
 	if domainByAlias == nil {
 		t.Fatal("Domain classifier not found by alias")
 	}
-	if domainByAlias.MaxContextLength != 32768 {
-		t.Errorf("Domain Classifier (by alias): Expected MaxContextLength=32768, got %d", domainByAlias.MaxContextLength)
+	if domainByAlias.MaxContextLength != 512 {
+		t.Errorf("Domain Classifier (by alias): Expected MaxContextLength=512, got %d", domainByAlias.MaxContextLength)
+	}
+	if domainByAlias.BaseModelMaxContext != 32768 {
+		t.Errorf("Domain Classifier (by alias): Expected BaseModelMaxContext=32768, got %d", domainByAlias.BaseModelMaxContext)
 	}
 
 	// Test PII Detector by alias
@@ -52,8 +67,11 @@ func TestMaxContextLength_ByAlias(t *testing.T) {
 	if piiByAlias == nil {
 		t.Fatal("PII detector not found by alias")
 	}
-	if piiByAlias.MaxContextLength != 32768 {
-		t.Errorf("PII Detector (by alias): Expected MaxContextLength=32768, got %d", piiByAlias.MaxContextLength)
+	if piiByAlias.MaxContextLength != 512 {
+		t.Errorf("PII Detector (by alias): Expected MaxContextLength=512, got %d", piiByAlias.MaxContextLength)
+	}
+	if piiByAlias.BaseModelMaxContext != 32768 {
+		t.Errorf("PII Detector (by alias): Expected BaseModelMaxContext=32768, got %d", piiByAlias.BaseModelMaxContext)
 	}
 
 	// Test Jailbreak Classifier by alias
@@ -61,25 +79,32 @@ func TestMaxContextLength_ByAlias(t *testing.T) {
 	if jailbreakByAlias == nil {
 		t.Fatal("Jailbreak classifier not found by alias")
 	}
-	if jailbreakByAlias.MaxContextLength != 32768 {
-		t.Errorf("Jailbreak Classifier (by alias): Expected MaxContextLength=32768, got %d", jailbreakByAlias.MaxContextLength)
+	if jailbreakByAlias.MaxContextLength != 512 {
+		t.Errorf("Jailbreak Classifier (by alias): Expected MaxContextLength=512, got %d", jailbreakByAlias.MaxContextLength)
+	}
+	if jailbreakByAlias.BaseModelMaxContext != 32768 {
+		t.Errorf("Jailbreak Classifier (by alias): Expected BaseModelMaxContext=32768, got %d", jailbreakByAlias.BaseModelMaxContext)
 	}
 }
 
-// TestMaxContextLength_DescriptionsUpdated verifies that model descriptions
-// mention ModernBERT-base-32k and 32K context support
-func TestMaxContextLength_DescriptionsUpdated(t *testing.T) {
+// TestMaxContextLength_BaseModelContext verifies that models with BaseModelMaxContext
+// have appropriate descriptions explaining the distinction between trained and base model context
+func TestMaxContextLength_BaseModelContext(t *testing.T) {
 	domainModel := GetModelByPath("models/mom-domain-classifier")
 	if domainModel == nil {
 		t.Fatal("Domain classifier model not found")
 	}
-	if domainModel.MaxContextLength == 32768 {
-		// Check that description mentions ModernBERT-base-32k or 32K
+	if domainModel.BaseModelMaxContext > 0 {
+		// Check that description explains the context length distinction
 		desc := domainModel.Description
-		hasModernBERT := contains(desc, "ModernBERT-base-32k") || contains(desc, "modernbert-base-32k")
-		has32K := contains(desc, "32K") || contains(desc, "32768")
-		if !hasModernBERT && !has32K {
-			t.Errorf("Domain Classifier description should mention ModernBERT-base-32k or 32K context, got: %s", desc)
+		hasContextInfo := contains(desc, "512") || contains(desc, "trained") || contains(desc, "32K") || contains(desc, "32768")
+		if !hasContextInfo {
+			t.Errorf("Domain Classifier description should mention context length information, got: %s", desc)
+		}
+		// MaxContextLength should be less than or equal to BaseModelMaxContext
+		if domainModel.MaxContextLength > domainModel.BaseModelMaxContext {
+			t.Errorf("Domain Classifier: MaxContextLength (%d) should be <= BaseModelMaxContext (%d)",
+				domainModel.MaxContextLength, domainModel.BaseModelMaxContext)
 		}
 	}
 
@@ -87,12 +112,15 @@ func TestMaxContextLength_DescriptionsUpdated(t *testing.T) {
 	if piiModel == nil {
 		t.Fatal("PII detector model not found")
 	}
-	if piiModel.MaxContextLength == 32768 {
+	if piiModel.BaseModelMaxContext > 0 {
 		desc := piiModel.Description
-		hasModernBERT := contains(desc, "ModernBERT-base-32k") || contains(desc, "modernbert-base-32k")
-		has32K := contains(desc, "32K") || contains(desc, "32768")
-		if !hasModernBERT && !has32K {
-			t.Errorf("PII Detector description should mention ModernBERT-base-32k or 32K context, got: %s", desc)
+		hasContextInfo := contains(desc, "512") || contains(desc, "trained") || contains(desc, "32K") || contains(desc, "32768")
+		if !hasContextInfo {
+			t.Errorf("PII Detector description should mention context length information, got: %s", desc)
+		}
+		if piiModel.MaxContextLength > piiModel.BaseModelMaxContext {
+			t.Errorf("PII Detector: MaxContextLength (%d) should be <= BaseModelMaxContext (%d)",
+				piiModel.MaxContextLength, piiModel.BaseModelMaxContext)
 		}
 	}
 
@@ -100,12 +128,15 @@ func TestMaxContextLength_DescriptionsUpdated(t *testing.T) {
 	if jailbreakModel == nil {
 		t.Fatal("Jailbreak classifier model not found")
 	}
-	if jailbreakModel.MaxContextLength == 32768 {
+	if jailbreakModel.BaseModelMaxContext > 0 {
 		desc := jailbreakModel.Description
-		hasModernBERT := contains(desc, "ModernBERT-base-32k") || contains(desc, "modernbert-base-32k")
-		has32K := contains(desc, "32K") || contains(desc, "32768")
-		if !hasModernBERT && !has32K {
-			t.Errorf("Jailbreak Classifier description should mention ModernBERT-base-32k or 32K context, got: %s", desc)
+		hasContextInfo := contains(desc, "512") || contains(desc, "trained") || contains(desc, "32K") || contains(desc, "32768")
+		if !hasContextInfo {
+			t.Errorf("Jailbreak Classifier description should mention context length information, got: %s", desc)
+		}
+		if jailbreakModel.MaxContextLength > jailbreakModel.BaseModelMaxContext {
+			t.Errorf("Jailbreak Classifier: MaxContextLength (%d) should be <= BaseModelMaxContext (%d)",
+				jailbreakModel.MaxContextLength, jailbreakModel.BaseModelMaxContext)
 		}
 	}
 }

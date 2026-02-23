@@ -133,6 +133,8 @@ impl ModernBertVariant {
 
         // Check for 32K support via YaRN RoPE scaling in training_config.json
         // ModernBERT-base-32k uses YaRN to extend from 8K to 32K
+        // IMPORTANT: Only trust training_config.json if config.json also indicates extended context
+        // This prevents misclassifying existing models that might have training_config.json
         let model_dir = std::path::Path::new(config_path).parent().ok_or_else(|| {
             let unified_err = config_errors::file_not_found("config.json parent directory");
             candle_core::Error::from(unified_err)
@@ -153,17 +155,40 @@ impl ModernBertVariant {
                         .get("model_max_length")
                         .and_then(|v| v.as_u64())
                         .unwrap_or(0);
+                    let rope_original_max = training_config_json
+                        .get("rope_original_max_position_embeddings")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
 
                     // If YaRN scaling is configured and model_max_length is 32K
+                    // AND config.json indicates this is an extended context model
+                    // (either max_position_embeddings >= 16384 OR we have mmBERT vocab)
                     if (rope_scaling_type == "yarn" || rope_scaling_type == "YaRN")
                         && model_max_length >= 32768
                     {
-                        // Distinguish between Extended32K (English) and Multilingual32K
-                        if vocab_size >= 200000 {
-                            return Ok(ModernBertVariant::Multilingual32K);
+                        // Additional validation: config.json should indicate extended context
+                        // For Extended32K: base max_position_embeddings should be 8192 (extended to 32K via YaRN)
+                        // For Multilingual32K: should have mmBERT vocab (>=200000) or extended context indicators
+                        let is_extended_context = if vocab_size >= 200000 {
+                            // mmBERT with extended context
+                            max_position_embeddings >= 16384 || global_rope_theta >= 100000.0
                         } else {
-                            return Ok(ModernBertVariant::Extended32K);
+                            // Extended32K: base should be 8192, extended to 32K via YaRN
+                            // Check that rope_original_max is 8192 (base) and we're extending to 32K
+                            (rope_original_max == 8192 || max_position_embeddings == 8192)
+                                && position_embedding_type == "sans_pos"
+                        };
+
+                        if is_extended_context {
+                            // Distinguish between Extended32K (English) and Multilingual32K
+                            if vocab_size >= 200000 {
+                                return Ok(ModernBertVariant::Multilingual32K);
+                            } else {
+                                return Ok(ModernBertVariant::Extended32K);
+                            }
                         }
+                        // If training_config.json says 32K but config.json doesn't match,
+                        // fall through to normal detection logic
                     }
                 }
             }
@@ -625,40 +650,18 @@ impl TraditionalModernBertClassifier {
             candle_core::Error::from(unified_err)
         })?;
 
-        // Debug: Print original config value
-        eprintln!(
-            "Original max_position_embeddings from config.json: {}",
-            config.max_position_embeddings
-        );
-
-        // 2.5. Override max_position_embeddings for Extended32K variant to support full 32K context
+        // Override max_position_embeddings for Extended32K variant to support full 32K context
         // The Candle library's ModernBERT uses config.max_position_embeddings to initialize RoPE cache
         // For Extended32K variant, we need to ensure it's set to 32768 even if config.json has a lower value
+        // NOTE: This override is safe because Extended32K models use YaRN RoPE scaling which dynamically
+        // generates position embeddings for any length up to 32K, even if the base config.json specifies
+        // a lower max_position_embeddings value.
         if variant == ModernBertVariant::Extended32K {
             let expected_max_len = variant.max_length(); // 32768
-            eprintln!(
-                "Detected variant: Extended32K, expected max_len: {}",
-                expected_max_len
-            );
             if config.max_position_embeddings < expected_max_len {
-                eprintln!(
-                    "Overriding max_position_embeddings from {} to {} for Extended32K variant",
-                    config.max_position_embeddings, expected_max_len
-                );
                 config.max_position_embeddings = expected_max_len;
-            } else {
-                eprintln!(
-                    "max_position_embeddings already set to {} (no override needed)",
-                    config.max_position_embeddings
-                );
             }
         }
-
-        // Debug: Print final config value before model loading
-        eprintln!(
-            "Final max_position_embeddings before model load: {}",
-            config.max_position_embeddings
-        );
 
         // 3. Dynamic class detection from id2label using unified config loader
         let num_classes = Self::load_modernbert_num_classes(model_path)?;
@@ -979,26 +982,15 @@ impl TraditionalModernBertClassifier {
                         .and_then(|v| v.as_u64())
                         .map(|v| v as usize)
                         .unwrap_or_else(|| {
-                            eprintln!(
-                                "⚠️  Warning: training_config.json found but model_max_length not set, using variant default: {}",
-                                variant.max_length()
-                            );
+                            // Warning: training_config.json found but model_max_length not set, using variant default
                             variant.max_length()
                         })
                 } else {
-                    eprintln!(
-                        "⚠️  Warning: Failed to parse training_config.json for Extended32K variant at {}, using variant default: {}",
-                        training_config_path,
-                        variant.max_length()
-                    );
+                    // Warning: Failed to parse training_config.json for Extended32K variant, using variant default
                     variant.max_length()
                 }
             } else {
-                eprintln!(
-                    "⚠️  Warning: training_config.json not found for Extended32K variant at {}, using variant default: {}. This may limit context length accuracy.",
-                    training_config_path,
-                    variant.max_length()
-                );
+                // Warning: training_config.json not found for Extended32K variant, using variant default
                 variant.max_length()
             }
         } else {
