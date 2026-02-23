@@ -35,8 +35,8 @@ candle-transformers = { git = "https://github.com/huggingface/candle", tag = "0.
 # Reference: https://github.com/huggingface/candle/tree/main/candle-flash-attn
 # Using git dependency to automatically fetch CUTLASS submodule
 candle-flash-attn = { git = "https://github.com/huggingface/candle", tag = "0.9.2-alpha.1", optional = true }
-tokenizers = { version = "0.21.0", features = ["http"] }
-hf-hub = "0.4.1"
+tokenizers = { version = "0.21.0", default-features = false, features = ["http", "onig"] }
+hf-hub = { version = "0.4.1", default-features = false, features = ["rustls-tls"] }
 safetensors = "0.4.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.93"
@@ -70,6 +70,76 @@ path = "../deploy/examples/candle-binding/deberta_prompt_injection_example.rs"
 [[example]]
 name = "test_raw_confidence"
 path = "../deploy/examples/candle-binding/test_raw_confidence.rs"
+
+# Example testing LoRA adapter compatibility with ModernBERT-base-32k
+[[example]]
+name = "test_lora_compatibility_32k"
+path = "examples/test_lora_compatibility_32k.rs"
+
+# Example testing full inference with LoRA adapters on ModernBERT-base-32k
+[[example]]
+name = "test_lora_inference_32k"
+path = "examples/test_lora_inference_32k.rs"
+
+# Example listing safetensors keys
+[[example]]
+name = "list_safetensors_keys"
+path = "examples/list_safetensors_keys.rs"
+
+# Example testing long text inference (8K, 16K, 32K tokens)
+[[example]]
+name = "test_long_text_inference_32k"
+path = "examples/test_long_text_inference_32k.rs"
+
+# Example testing ModernBERT-base-32k comprehensive validation
+[[example]]
+name = "test_modernbert_32k_validation"
+path = "examples/test_modernbert_32k_validation.rs"
+
+# Example testing classifier compatibility with Extended32K (Phase 1.5)
+[[example]]
+name = "test_classifier_compatibility"
+path = "examples/test_classifier_compatibility.rs"
+
+# Example testing full inference with Extended32K base model + classifier (Phase 1.5/2)
+[[example]]
+name = "test_full_inference_32k"
+path = "examples/test_full_inference_32k.rs"
+
+# Example testing 32K classifier inference (Phase 1.5/2)
+[[example]]
+name = "test_32k_classifier_inference"
+path = "examples/test_32k_classifier_inference.rs"
+
+# Example for performance benchmarking (Phase 6)
+[[example]]
+name = "benchmark_performance"
+path = "examples/benchmark_performance.rs"
+
+# Example for concurrent request benchmarking (Phase 6 - Chunking Threshold Analysis)
+[[example]]
+name = "benchmark_concurrent"
+path = "examples/benchmark_concurrent.rs"
+
+# Example for embedding performance benchmarking
+[[example]]
+name = "embedding_benchmark"
+path = "examples/embedding_benchmark.rs"
+
+# Example testing mmBERT LoRA merged models
+[[example]]
+name = "test_mmbert_lora"
+path = "examples/test_mmbert_lora.rs"
+
+# Example testing real mmBERT model loading and inference
+[[example]]
+name = "test_mmbert_real"
+path = "examples/test_mmbert_real.rs"
+
+# Example testing mmBERT variant detection
+[[example]]
+name = "test_mmbert_variant"
+path = "examples/test_mmbert_variant.rs"
 
 # Note: Benchmark binaries are located in ../bench/scripts/rust/candle-binding/
 # They are not included in the library build to keep it self-contained.
