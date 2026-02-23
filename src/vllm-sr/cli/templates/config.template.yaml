@@ -646,11 +646,17 @@ memory:
   
   # Quality scoring: MemoryBank-style retention scoring R = exp(-t/S)
   # Access tracking (LastAccessed, AccessCount) is always active when memory is enabled.
-  # Pruning runs only when PruneUser is called externally.
+  # Pruning has two paths:
+  #   Path 1 (event-driven): on Store(), if user exceeds max_memories_per_user, async prune fires
+  #   Path 2 (background sweep): periodic sweep prunes decayed memories for inactive users
   quality_scoring:
     initial_strength_days: 30   # S0: higher = slower decay for new memories
     prune_threshold: 0.1        # δ: delete memories with R < threshold
-    max_memories_per_user: 1000 # 0 = no cap
+    max_memories_per_user: 1000 # 0 = no cap; triggers Path 1 cap enforcement on Store()
+    prune_interval: "6h"        # Background sweep interval (e.g. "6h", "24h"); empty = disabled
+    prune_batch_size: 50        # Users to prune per batch during sweep (default: 50)
+    prune_sweep_enabled: true   # Enable sweep on this replica (set false on other replicas)
+    max_concurrent_prunes: 10   # Max concurrent prune goroutines per replica (default: 10)
 
   # Security: auth header for trusted user_id (optional)
   # auth_user_id_header: "x-authenticated-user-id"

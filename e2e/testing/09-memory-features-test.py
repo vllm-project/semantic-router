@@ -605,10 +605,10 @@ class QueryRewritingTest(MemoryFeaturesTest):
             self.milvus.flush()
             time.sleep(3)
 
-        # Ask using pronoun in NEW SESSION (no previous_response_id)
-        # Memory context from Milvus should help resolve the pronoun
+        # Ask about the person by name in NEW SESSION (no previous_response_id)
+        # Memory context from Milvus should provide the answer
         result = self.send_memory_request(
-            message="Where does she live?",
+            message="Where does Sarah live?",
             auto_store=False,
             # NO previous_response_id - this is a new session!
         )

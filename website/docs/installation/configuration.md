@@ -1524,6 +1524,87 @@ decisions:
 - Lower thresholds for decisions with low hit rates
 - Raise thresholds for decisions with incorrect cache hits
 
+## Memory (Agentic Memory) Configuration
+
+Agentic Memory enables cross-session, per-user context stored in Milvus. The router extracts facts from conversations and retrieves them on future requests for the same user.
+
+### Basic Configuration
+
+```yaml
+memory:
+  enabled: true
+  auto_store: true
+
+  milvus:
+    address: "localhost:19530"
+    collection: "agentic_memory"
+    dimension: 384              # 384=bert (fast), 1024=qwen3 (quality)
+    num_partitions: 64          # 16 (default), 64 (<10K users), 256 (<1M users)
+
+  embedding_model: "bert"       # "bert" (fast) or "qwen3" (quality)
+  similarity_threshold: 0.7
+```
+
+### Memory Pruning (Quality Scoring)
+
+Memory pruning prevents unbounded growth using a MemoryBank-style retention model where each memory's retention score decays over time: `R = exp(-t / S)`, where `R` is the retention score, `t` is the time since last access (in days), and `S` is the memory strength (`initial_strength_days + access_count`). Memories with `R < prune_threshold` are eligible for deletion.
+
+Pruning operates via two complementary paths:
+
+- **Path 1 (event-driven):** On every `Store()` call, if a user exceeds `max_memories_per_user`, an async prune fires immediately. This keeps active users within their cap with zero extra latency on the write path. Per-user deduplication ensures at most one prune goroutine per user, and a global semaphore (`max_concurrent_prunes`) bounds total Milvus pressure.
+- **Path 2 (background sweep):** A periodic `time.Ticker` goroutine scans for stale memories from inactive users. It queries Milvus for memories older than the decay cutoff, processes users in batches, and deletes low-score entries.
+
+```yaml
+memory:
+  quality_scoring:
+    initial_strength_days: 30     # S0: higher = slower decay for new memories
+    prune_threshold: 0.1          # R threshold below which memories are deleted
+    max_memories_per_user: 1000   # 0 = no cap; >0 enables Path 1
+    prune_interval: "6h"          # Path 2 sweep interval (e.g. "6h", "24h"); empty = disabled
+    prune_batch_size: 50          # Users processed per sweep batch
+    prune_sweep_enabled: true     # Enable sweep on this replica (set false on others)
+    max_concurrent_prunes: 10     # Max concurrent prune goroutines per replica (default: 10)
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `initial_strength_days` | 30 | Controls how fast new memories decay. Higher = slower decay. |
+| `prune_threshold` | 0.1 | Retention score below which a memory is deleted. |
+| `max_memories_per_user` | 0 (disabled) | Per-user memory cap. Triggers Path 1 when exceeded. |
+| `prune_interval` | `""` (disabled) | How often Path 2 runs. Accepts Go duration strings (e.g. `"6h"`, `"24h"`). |
+| `prune_batch_size` | 50 | Number of users to process per sweep iteration. |
+| `prune_sweep_enabled` | false | Set `true` on exactly one replica to avoid duplicate sweeps. |
+| `max_concurrent_prunes` | 10 | Max concurrent prune goroutines per replica. Tune based on Milvus capacity. |
+
+### Prometheus Metrics
+
+Memory pruning exposes the following Prometheus metrics:
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `memory_prune_deleted_total` | Counter (label: `trigger`) | Total memories deleted, labeled `"cap"` (Path 1) or `"sweep"` (Path 2) |
+| `memory_prune_cap_triggered_total` | Counter | Number of times Path 1 cap enforcement fired |
+| `memory_prune_sweep_runs_total` | Counter | Number of completed Path 2 sweep runs |
+| `memory_prune_sweep_duration_seconds` | Histogram | Duration of each sweep run |
+| `memory_prune_sweep_users_processed_total` | Counter | Total users processed across all sweeps |
+| `memory_prune_sweep_errors_total` | Counter | Errors encountered during sweeps |
+
+### Multi-Replica Deployment
+
+In a multi-replica deployment, set `prune_sweep_enabled: true` on only one replica to avoid duplicate background sweeps. Path 1 (event-driven cap enforcement) runs safely on all replicas since it's scoped to the user performing the write.
+
+```yaml
+# Replica 1 (sweep leader)
+memory:
+  quality_scoring:
+    prune_sweep_enabled: true
+
+# Replica 2..N
+memory:
+  quality_scoring:
+    prune_sweep_enabled: false
+```
+
 ## Common Configuration Examples
 
 ### Enable All Security Features
