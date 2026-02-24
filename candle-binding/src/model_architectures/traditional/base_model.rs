@@ -413,11 +413,74 @@ impl SelfAttention {
             ))?
             .transpose(1, 2)?;
 
+        // Compute attention (Flash Attention if available, otherwise standard)
+        let context_layer = {
+            #[cfg(feature = "flash-attn")]
+            {
+                // Try Flash Attention first (with graceful fallback)
+                match self.compute_attention_flash(
+                    &query_layer,
+                    &key_layer,
+                    &value_layer,
+                    attention_mask,
+                    attention_head_size,
+                ) {
+                    Ok(result) => result,
+                    Err(e) => {
+                        // Flash Attention failed (e.g., unsupported GPU or error)
+                        // Fallback to standard attention
+                        eprintln!(
+                            "⚠️  Flash Attention failed, falling back to standard attention: {}",
+                            e
+                        );
+                        self.compute_attention_standard(
+                            &query_layer,
+                            &key_layer,
+                            &value_layer,
+                            attention_mask,
+                            attention_head_size,
+                        )?
+                    }
+                }
+            }
+            #[cfg(not(feature = "flash-attn"))]
+            {
+                // Standard attention only
+                self.compute_attention_standard(
+                    &query_layer,
+                    &key_layer,
+                    &value_layer,
+                    attention_mask,
+                    attention_head_size,
+                )?
+            }
+        };
+
+        let context_layer = context_layer.transpose(1, 2)?.reshape((
+            batch_size,
+            seq_length,
+            self.config.hidden_size,
+        ))?;
+
+        // Output projection
+        self.output.forward(&context_layer)
+    }
+
+    /// Compute attention using standard scaled dot-product attention
+    /// This is the fallback when Flash Attention is not available or fails
+    fn compute_attention_standard(
+        &self,
+        query_layer: &Tensor,
+        key_layer: &Tensor,
+        value_layer: &Tensor,
+        attention_mask: &Tensor,
+        attention_head_size: usize,
+    ) -> Result<Tensor> {
         // Scaled dot-product attention
         let attention_scores = query_layer.matmul(&key_layer.transpose(2, 3)?)?;
         let attention_scores = attention_scores.div(&Tensor::new(
             (attention_head_size as f32).sqrt(),
-            hidden_states.device(),
+            query_layer.device(),
         )?)?;
 
         // Apply attention mask
@@ -444,15 +507,64 @@ impl SelfAttention {
         let attention_probs = self.dropout.forward(&attention_probs, false)?;
 
         // Apply attention to values
-        let context_layer = attention_probs.matmul(&value_layer)?;
-        let context_layer = context_layer.transpose(1, 2)?.reshape((
-            batch_size,
-            seq_length,
-            self.config.hidden_size,
-        ))?;
+        attention_probs.matmul(value_layer)
+    }
 
-        // Output projection
-        self.output.forward(&context_layer)
+    /// Compute attention using Flash Attention 2 (when feature is enabled)
+    ///
+    /// Flash Attention 2 provides significant speedup for long sequences by:
+    /// - Reducing memory from O(n²) to O(n)
+    /// - Using optimized CUDA kernels
+    /// - Processing in blocks that fit in fast SRAM
+    ///
+    /// Requirements:
+    /// - CUDA Compute Capability >= 8.0 (Ampere or newer)
+    /// - `flash-attn` feature enabled
+    ///
+    /// Falls back to standard attention if Flash Attention fails.
+    #[cfg(feature = "flash-attn")]
+    fn compute_attention_flash(
+        &self,
+        q: &Tensor,               // [batch, num_heads, seq_len, head_dim]
+        k: &Tensor,               // [batch, num_heads, seq_len, head_dim]
+        v: &Tensor,               // [batch, num_heads, seq_len, head_dim]
+        _attention_mask: &Tensor, // Note: Flash Attention handles masks differently
+        head_dim: usize,
+    ) -> Result<Tensor> {
+        use candle_flash_attn::flash_attn;
+
+        // Step 1: Transpose to Flash Attention format
+        // Flash Attention expects: [batch, seq_len, num_heads, head_dim]
+        // We have: [batch, num_heads, seq_len, head_dim]
+        // Need to transpose: [B, H, S, D] -> [B, S, H, D]
+        let q_flash = q.transpose(1, 2)?;
+        let k_flash = k.transpose(1, 2)?;
+        let v_flash = v.transpose(1, 2)?;
+
+        // Step 2: Compute softmax scale (1 / sqrt(head_dim))
+        let softmax_scale = 1.0 / (head_dim as f32).sqrt();
+
+        // Step 3: Call Flash Attention 2
+        // Note: ModernBERT uses bidirectional (non-causal) attention
+        let attn_output = flash_attn(
+            &q_flash,
+            &k_flash,
+            &v_flash,
+            softmax_scale,
+            false, // causal: false (bidirectional attention like BERT)
+        )
+        .map_err(|e| {
+            candle_core::Error::msg(format!(
+                "Flash Attention failed: {}. Q shape: {:?}, K shape: {:?}, V shape: {:?}",
+                e,
+                q_flash.dims(),
+                k_flash.dims(),
+                v_flash.dims()
+            ))
+        })?;
+
+        // Step 4: Transpose back to [batch, num_heads, seq_len, head_dim]
+        attn_output.transpose(1, 2)
     }
 }
 

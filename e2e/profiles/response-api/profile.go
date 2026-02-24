@@ -169,6 +169,11 @@ func (p *Profile) GetTestCases() []string {
 
 		// Memory user isolation
 		"memory-user-isolation",
+		// Response API edge cases
+		"response-api-edge-empty-input",
+		"response-api-edge-large-input",
+		"response-api-edge-special-characters",
+		"response-api-edge-concurrent-requests",
 	}
 }
 
