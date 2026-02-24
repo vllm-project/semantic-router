@@ -307,7 +307,7 @@ COPY src/vllm-sr/cli/ /app/cli/
 COPY src/vllm-sr/requirements.txt /app/requirements.txt
 
 # Copy tools database to config directory
-COPY src/vllm-sr/cli/templates/tools_db.json /app/tools_db.json
+COPY src/vllm-sr/cli/templates/tools_db.json /app/config/tools_db.json
 
 # Copy bench directory for evaluation benchmarks
 COPY bench/ /app/bench/
