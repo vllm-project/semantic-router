@@ -14,6 +14,7 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mlpipeline"
 	"github.com/vllm-project/semantic-router/dashboard/backend/proxy"
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // serviceNotConfiguredHTML generates a user-friendly HTML page for unconfigured services
@@ -192,8 +193,16 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	mux.HandleFunc("/api/router/config/defaults/update", handlers.UpdateRouterDefaultsHandler(cfg.ConfigDir, cfg.ReadonlyMode))
 	log.Printf("Router defaults API endpoints registered: /api/router/config/defaults, /api/router/config/defaults/update")
 
+	toolsDBPath := filepath.Join(cfg.ConfigDir, "config", "tools_db.json")
+	parsedCfg, err := routerconfig.Parse(cfg.AbsConfigPath)
+	if err != nil {
+		log.Printf("Warning: failed to parse config for tools_db_path, use the default path %s: %v", toolsDBPath, err)
+	} else if parsedCfg.ToolSelection.Tools.ToolsDBPath != "" {
+		toolsDBPath = parsedCfg.ToolSelection.Tools.ToolsDBPath
+	}
+
 	// Tools DB endpoint
-	mux.HandleFunc("/api/tools-db", handlers.ToolsDBHandler(cfg.ConfigDir))
+	mux.HandleFunc("/api/tools-db", handlers.ToolsDBHandler(toolsDBPath))
 	log.Printf("Tools DB API endpoint registered: /api/tools-db")
 
 	// Web Search endpoint for Playground tool execution
