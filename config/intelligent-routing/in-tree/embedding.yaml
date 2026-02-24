@@ -46,7 +46,7 @@ prompt_guard:
 # NOT supported: domain names (example.com), protocol prefixes (http://), paths (/api), ports in address (use 'port' field)
 vllm_endpoints:
   - name: "endpoint1"
-    address: "172.28.0.20"  # Static IPv4 of llm-katan within docker compose network
+    address: "172.28.0.20"  # Static IPv4 of llm-katan
     port: 8002
     weight: 1
 

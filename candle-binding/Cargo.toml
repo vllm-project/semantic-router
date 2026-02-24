@@ -56,21 +56,6 @@ serial_test = "3.0"
 criterion = "0.5"
 async-std = { version = "1.12", features = ["attributes"] }
 
-# Example demonstrating Qwen3 Multi-LoRA classification
-[[example]]
-name = "qwen3_example"
-path = "../deploy/examples/candle-binding/qwen3_example.rs"
-
-# Example demonstrating DeBERTa v2 Prompt Injection Detection
-[[example]]
-name = "deberta_prompt_injection_example"
-path = "../deploy/examples/candle-binding/deberta_prompt_injection_example.rs"
-
-# Example showing raw softmax confidence values
-[[example]]
-name = "test_raw_confidence"
-path = "../deploy/examples/candle-binding/test_raw_confidence.rs"
-
 # Example testing LoRA adapter compatibility with ModernBERT-base-32k
 [[example]]
 name = "test_lora_compatibility_32k"

@@ -6,7 +6,6 @@ This directory contains Dockerfiles used across the project.
 - `tools/docker/Dockerfile.extproc`: builds the `extproc` image (single-platform, used for PR amd64-only builds).
 - `tools/docker/Dockerfile.extproc.cross`: cross-compilation optimized `extproc` Dockerfile (used for multi-arch push/dispatch builds).
 - `tools/docker/Dockerfile.precommit`: pre-commit / lint tooling image for CI and local use.
-- `tools/docker/Dockerfile.stack`: single-image "stack" build bundling router + dashboard + observability components.
 
 ## Build optimization (CI)
 
