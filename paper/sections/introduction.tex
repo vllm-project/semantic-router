@@ -10,7 +10,7 @@ This heterogeneity creates a fundamental inference-time optimization problem: \e
 This problem is more nuanced than binary difficulty routing.
 A production routing system must simultaneously consider:
 \begin{itemize}[leftmargin=*]
-  \item \textbf{Multi-dimensional signals}: Query domain, modality, complexity, language, user identity, latency budgets, and real-time performance metrics all inform the optimal routing decision.
+  \item \textbf{Multi-dimensional signals}: Query domain, modality, complexity, language, user identity, and real-time performance metrics all inform the optimal routing decision.
   \item \textbf{Privacy and safety}: Prompt injection, PII leakage, and hallucinated responses must be detected and mitigated---often with \emph{different policies for different query types and user roles}.
   \item \textbf{Cost-effective model selection}: Algorithms must balance response quality against inference cost and latency, selecting from a heterogeneous pool of local and cloud-hosted models.
   \item \textbf{Deployment diversity}: The same routing framework must serve a privacy-regulated healthcare deployment (strict PII filtering, on-premise models only), a cost-optimized developer tool (aggressive caching, cheapest model first), and a multi-cloud enterprise (failover across providers)---through configuration, not code changes.
