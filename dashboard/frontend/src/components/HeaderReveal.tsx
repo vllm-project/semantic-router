@@ -38,10 +38,6 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Language',
     description: 'Detected language match',
   },
-  'x-vsr-matched-latency': {
-    label: 'Latency',
-    description: 'Matched latency rule based on model TPOT',
-  },
   'x-vsr-matched-context': {
     label: 'Context',
     description: 'Token count-based context classification',
@@ -196,4 +192,3 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
 }
 
 export default HeaderReveal
-

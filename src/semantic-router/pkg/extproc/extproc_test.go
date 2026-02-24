@@ -25,6 +25,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -644,6 +645,14 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 		responseAPIFilter = NewResponseAPIFilter(mockStore)
 	}
 
+	// Build credential resolver (default chain: header-injection → static-config)
+	// Set fail_open=true for tests since no real API keys are available
+	credResolver := authz.NewCredentialResolver(
+		authz.NewHeaderInjectionProvider(authz.DefaultHeaderMap()),
+		authz.NewStaticConfigProvider(cfg),
+	)
+	credResolver.SetFailOpen(true)
+
 	// Create router manually with proper initialization
 	router := &OpenAIRouter{
 		Config:               cfg,
@@ -653,6 +662,7 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 		Cache:                semanticCache,
 		ToolsDatabase:        toolsDatabase,
 		ResponseAPIFilter:    responseAPIFilter,
+		CredentialResolver:   credResolver,
 	}
 
 	return router, nil
@@ -1169,7 +1179,7 @@ var _ = Describe("ExtProc Package", func() {
 
 			_, err := CreateTestRouter(cfg)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Or(ContainSubstring("no such file or directory"), ContainSubstring("The system cannot find the path specified")))
+			Expect(err.Error()).To(ContainSubstring("no such file or directory"))
 		})
 	})
 
@@ -1568,7 +1578,8 @@ var _ = Describe("Endpoint Selection", func() {
 			Expect(bestEndpoint).To(BeElementOf("test-endpoint1", "test-endpoint2"))
 
 			// Test best endpoint address selection
-			bestEndpointAddress, found := cfg.SelectBestEndpointAddressForModel("model-b")
+			bestEndpointAddress, found, addrErr := cfg.SelectBestEndpointAddressForModel("model-b")
+			Expect(addrErr).NotTo(HaveOccurred())
 			Expect(found).To(BeTrue())
 			Expect(bestEndpointAddress).To(BeElementOf("127.0.0.1:8000", "127.0.0.1:8001"))
 		})

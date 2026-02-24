@@ -54,8 +54,26 @@ type ResponseAPIContext struct {
 	// GeneratedResponseID is the ID generated for this response
 	GeneratedResponseID string
 
+	// ConversationID is the determined ConversationID for this request.
+	// Set early during TranslateRequest to ensure consistent tracking.
+	// Sources (in priority order):
+	//   1. Request's conversation_id field
+	//   2. First response in conversation chain (via previous_response_id)
+	//   3. Newly generated (for new conversations)
+	ConversationID string
+
 	// TranslatedBody is the Chat Completions request body after translation
 	TranslatedBody []byte
+
+	// HasImageGenerationTool is true when the request includes
+	// tools: [{"type": "image_generation"}]. This signals that the client
+	// explicitly requests image generation capability.
+	HasImageGenerationTool bool
+
+	// ImageGenToolParams holds the parameters from the image_generation tool
+	// definition (model, quality, size, output_format, background, action).
+	// Non-nil only when HasImageGenerationTool is true.
+	ImageGenToolParams *responseapi.ImageGenerationToolParams
 }
 
 // TranslateRequest translates a Response API request to Chat Completions format.
@@ -84,6 +102,22 @@ func (f *ResponseAPIFilter) TranslateRequest(ctx context.Context, body []byte) (
 		GeneratedResponseID:  responseapi.GenerateResponseID(),
 	}
 
+	// Detect image_generation tool in the request tools list.
+	// This is an explicit signal that the client wants image generation.
+	for i := range req.Tools {
+		if req.Tools[i].Type == responseapi.ToolTypeImageGeneration {
+			respCtx.HasImageGenerationTool = true
+			respCtx.ImageGenToolParams = req.Tools[i].ExtractImageGenParams()
+			if respCtx.ImageGenToolParams != nil {
+				logging.Infof("Response API: Detected image_generation tool (model=%s, size=%s, quality=%s)",
+					respCtx.ImageGenToolParams.Model, respCtx.ImageGenToolParams.Size, respCtx.ImageGenToolParams.Quality)
+			} else {
+				logging.Warnf("Response API: Detected image_generation tool but ImageGenToolParams is nil")
+			}
+			break
+		}
+	}
+
 	// Fetch conversation history if previous_response_id is provided
 	if req.PreviousResponseID != "" {
 		history, err := f.store.GetConversationChain(ctx, req.PreviousResponseID)
@@ -94,6 +128,12 @@ func (f *ResponseAPIFilter) TranslateRequest(ctx context.Context, body []byte) (
 		respCtx.ConversationHistory = history
 		logging.Infof("Response API: Fetched %d messages from conversation history", len(history))
 	}
+
+	// Determine ConversationID early for consistent tracking across the request lifecycle.
+	// This ensures memory extraction can correctly track turns per conversation.
+	respCtx.ConversationID = f.determineConversationID(&req, respCtx.ConversationHistory)
+	logging.Infof("Response API: ConversationID=%s (source: %s)",
+		respCtx.ConversationID, f.getConversationIDSource(&req, respCtx.ConversationHistory))
 
 	// Translate to Chat Completions request
 	completionReq, err := f.translator.TranslateToCompletionRequest(&req, respCtx.ConversationHistory)
@@ -153,6 +193,13 @@ func (f *ResponseAPIFilter) TranslateResponse(ctx context.Context, respCtx *Resp
 
 	// Override ID with pre-generated ID
 	responseAPIResp.ID = respCtx.GeneratedResponseID
+
+	// Use the ConversationID determined during request translation.
+	// This ensures consistent ConversationID across the request lifecycle,
+	// which is critical for memory extraction turn tracking.
+	if respCtx.ConversationID != "" {
+		responseAPIResp.ConversationID = respCtx.ConversationID
+	}
 
 	// Store response if enabled
 	shouldStore := respCtx.OriginalRequest.Store == nil || *respCtx.OriginalRequest.Store
@@ -379,6 +426,41 @@ func (f *ResponseAPIFilter) storedToResponseAPIResponse(stored *responseapi.Stor
 		Instructions:       stored.Instructions,
 		Metadata:           stored.Metadata,
 	}
+}
+
+// determineConversationID determines the ConversationID for this request.
+// Priority order:
+//  1. Request's conversation_id field (explicit)
+//  2. First response in conversation chain (continuation via previous_response_id)
+//  3. Newly generated (new conversation)
+func (f *ResponseAPIFilter) determineConversationID(req *responseapi.ResponseAPIRequest, history []*responseapi.StoredResponse) string {
+	// Priority 1: Request explicitly provides conversation_id
+	if req.ConversationID != "" {
+		return req.ConversationID
+	}
+
+	// Priority 2: Get from conversation history (continuation)
+	if len(history) > 0 {
+		// Find ConversationID from the first response in the chain
+		firstResponse := history[0]
+		if firstResponse.ConversationID != "" {
+			return firstResponse.ConversationID
+		}
+	}
+
+	// Priority 3: Generate new ConversationID (new conversation)
+	return responseapi.GenerateConversationID()
+}
+
+// getConversationIDSource returns a string describing where the ConversationID came from (for logging).
+func (f *ResponseAPIFilter) getConversationIDSource(req *responseapi.ResponseAPIRequest, history []*responseapi.StoredResponse) string {
+	if req.ConversationID != "" {
+		return "request"
+	}
+	if len(history) > 0 && history[0].ConversationID != "" {
+		return "history"
+	}
+	return "generated"
 }
 
 // createResponseAPIError creates an error response in OpenAI format.

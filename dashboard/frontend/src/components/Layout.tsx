@@ -110,6 +110,24 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
               Evaluation
             </NavLink>
 
+            <NavLink
+              to="/ml-setup"
+              className={({ isActive }) =>
+                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+              }
+            >
+              ML Setup
+            </NavLink>
+
+            <NavLink
+              to="/ratings"
+              className={({ isActive }) =>
+                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+              }
+            >
+              Ratings
+            </NavLink>
+
             {/* System Dropdown (includes router-config and observability) */}
             <div className={styles.systemDropdown}>
               <button
@@ -284,6 +302,12 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
             </NavLink>
             <NavLink to="/evaluation" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
               Evaluation
+            </NavLink>
+            <NavLink to="/ml-setup" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+              ML Setup
+            </NavLink>
+            <NavLink to="/ratings" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+              Ratings
             </NavLink>
             <div className={styles.mobileNavSection}>
               <div className={styles.mobileNavSectionTitle}>System</div>

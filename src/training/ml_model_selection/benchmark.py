@@ -895,8 +895,14 @@ def run_benchmark(
     concurrency: int = 4,
     progress: bool = True,
     concise: bool = False,
+    on_progress=None,
 ) -> List[BenchmarkResult]:
-    """Run benchmark for all queries against all models."""
+    """Run benchmark for all queries against all models.
+
+    Args:
+        on_progress: Optional callback(percent, step, message) called as tasks complete.
+                     percent ranges 0-100 within the benchmark phase.
+    """
 
     results = []
 
@@ -952,6 +958,15 @@ def run_benchmark(
 
                 if result.performance == 0.0 and "Error" in result.response:
                     failed += 1
+
+                # Report per-task progress (scale 0-100 within this function)
+                if on_progress and total_tasks > 0:
+                    pct = int(completed * 100 / total_tasks)
+                    on_progress(
+                        pct,
+                        "Benchmarking",
+                        f"{completed}/{total_tasks} queries completed ({failed} errors)",
+                    )
 
             except Exception as e:
                 print(f"\nError processing {model_config.name}: {e}")
@@ -1017,6 +1032,132 @@ def print_summary(results: List[BenchmarkResult]) -> None:
 
     print("=" * 60)
     print()
+
+
+def run_benchmark_pipeline(
+    queries_path: str,
+    models_yaml_path: str = None,
+    models_list: List[str] = None,
+    endpoint: str = "http://localhost:8000/v1",
+    api_key: str = "dummy",
+    output_path: str = "benchmark_output.jsonl",
+    concurrency: int = 4,
+    max_tokens: int = 1024,
+    temperature: float = 0.0,
+    concise: bool = False,
+    limit: int = 0,
+    show_progress: bool = True,
+    on_progress=None,
+) -> List[BenchmarkResult]:
+    """
+    Run the full benchmark pipeline: load queries -> load models -> benchmark -> save.
+
+    This is the shared entry point used by both the CLI (main()) and the
+    HTTP service (server.py).
+
+    Args:
+        queries_path: Path to JSONL queries file.
+        models_yaml_path: Path to YAML model config (mutually exclusive with models_list).
+        models_list: List of model names sharing the same endpoint.
+        endpoint: API endpoint when using models_list.
+        api_key: API key when using models_list.
+        output_path: Path to write output JSONL.
+        concurrency: Number of concurrent requests.
+        max_tokens: Max tokens in response.
+        temperature: Temperature for generation.
+        concise: Use concise prompts.
+        limit: Limit number of queries (0 = no limit).
+        show_progress: Show progress bar (tqdm).
+        on_progress: Optional callback(percent, step, message) for progress.
+
+    Returns:
+        List of BenchmarkResult objects.
+    """
+
+    def progress(pct, step, msg):
+        if on_progress:
+            on_progress(pct, step, msg)
+
+    progress(5, "Starting benchmark", "Loading queries and model configs")
+
+    # Load queries
+    qpath = Path(queries_path)
+    if not qpath.exists():
+        raise FileNotFoundError(f"Queries file not found: {qpath}")
+
+    queries = load_queries(qpath)
+    if not queries:
+        raise ValueError("No queries loaded from file")
+
+    # Apply limit
+    if limit and limit > 0:
+        original_count = len(queries)
+        queries = queries[:limit]
+        print(f"Limited to {len(queries)} queries (from {original_count})")
+
+    # Load model configs
+    if models_yaml_path:
+        config_path = Path(models_yaml_path)
+        if not config_path.exists():
+            raise FileNotFoundError(f"Model config file not found: {config_path}")
+        model_configs = load_model_configs(config_path)
+        # Override max_tokens and temperature if specified
+        for mc in model_configs:
+            mc.max_tokens = max_tokens
+            mc.temperature = temperature
+        print(f"Loaded {len(model_configs)} model configurations from {config_path}")
+    elif models_list:
+        model_configs = create_model_configs_from_list(
+            models=models_list,
+            endpoint=endpoint,
+            api_key=api_key,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+    else:
+        raise ValueError("Either models_yaml_path or models_list must be provided")
+
+    if not model_configs:
+        raise ValueError("No model configurations loaded")
+
+    total_tasks = len(queries) * len(model_configs)
+    progress(
+        10,
+        "Running benchmark",
+        f"Benchmarking {len(queries)} queries x {len(model_configs)} models = {total_tasks} requests",
+    )
+
+    if concise:
+        print("Using concise prompts for faster inference")
+
+    # Scale on_progress from run_benchmark's 0-100 into pipeline's 10-90 range
+    def benchmark_progress(pct, step, msg):
+        # Map run_benchmark's 0-100% into the pipeline's 10-90% range
+        scaled = 10 + int(pct * 80 / 100)
+        progress(scaled, step, msg)
+
+    # Run benchmark
+    results = run_benchmark(
+        queries=queries,
+        model_configs=model_configs,
+        concurrency=concurrency,
+        progress=show_progress,
+        concise=concise,
+        on_progress=benchmark_progress if on_progress else None,
+    )
+
+    progress(92, "Saving results", f"Writing {len(results)} results to {output_path}")
+
+    # Save results
+    out = Path(output_path)
+    save_results(results, out)
+
+    progress(96, "Summary", "Generating summary")
+
+    # Print summary
+    print_summary(results)
+
+    return results
 
 
 def main():
@@ -1144,70 +1285,34 @@ After benchmarking, train directly (category is preserved from input):
 
     args = parser.parse_args()
 
-    # Load queries
-    queries_path = Path(args.queries)
-    if not queries_path.exists():
-        print(f"Error: Queries file not found: {queries_path}")
-        sys.exit(1)
-
-    queries = load_queries(queries_path)
-
-    if not queries:
-        print("Error: No queries loaded")
-        sys.exit(1)
-
-    # Apply limit if specified
-    if args.limit and args.limit > 0:
-        original_count = len(queries)
-        queries = queries[: args.limit]
-        print(f"Limited to {len(queries)} queries (from {original_count})")
-
-    # Load model configs
-    if args.model_config:
-        # Load from YAML config file
-        config_path = Path(args.model_config)
-        if not config_path.exists():
-            print(f"Error: Model config file not found: {config_path}")
-            sys.exit(1)
-        model_configs = load_model_configs(config_path)
-        print(f"Loaded {len(model_configs)} model configurations from {config_path}")
-    else:
-        # Create from simple model list
-        models = [m.strip() for m in args.models.split(",") if m.strip()]
-        if not models:
+    # Determine model list for simple mode
+    models_list = None
+    if args.models:
+        models_list = [m.strip() for m in args.models.split(",") if m.strip()]
+        if not models_list:
             print("Error: No models specified")
             sys.exit(1)
-        model_configs = create_model_configs_from_list(
-            models=models,
+
+    try:
+        results = run_benchmark_pipeline(
+            queries_path=args.queries,
+            models_yaml_path=args.model_config,
+            models_list=models_list,
             endpoint=args.endpoint,
             api_key=args.api_key,
+            output_path=args.output,
+            concurrency=args.concurrency,
             max_tokens=args.max_tokens,
             temperature=args.temperature,
+            concise=args.concise,
+            limit=args.limit or 0,
+            show_progress=not args.no_progress,
         )
-
-    if not model_configs:
-        print("Error: No model configurations loaded")
+    except (FileNotFoundError, ValueError) as e:
+        print(f"Error: {e}")
         sys.exit(1)
 
-    # Run benchmark
-    if args.concise:
-        print("Using concise prompts for faster inference")
-
-    results = run_benchmark(
-        queries=queries,
-        model_configs=model_configs,
-        concurrency=args.concurrency,
-        progress=not args.no_progress,
-        concise=args.concise,
-    )
-
-    # Save results
     output_path = Path(args.output)
-    save_results(results, output_path)
-
-    # Print summary
-    print_summary(results)
-
     print("Next steps:")
     print("  1. Add categories using VSR classifier:")
     print(

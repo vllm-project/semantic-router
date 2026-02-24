@@ -14,7 +14,7 @@ import (
 )
 
 // logRoutingDecision logs routing decision with structured logging
-func (r *OpenAIRouter) logRoutingDecision(ctx *RequestContext, reasonCode string, originalModel string, selectedModel string, decisionName string, reasoningEnabled bool, endpoint string) {
+func (r *OpenAIRouter) logRoutingDecision(ctx *RequestContext, reasonCode string, originalModel string, selectedModel string, decisionName string, reasoningEnabled bool) {
 	effortForMetrics := ""
 	if reasoningEnabled && decisionName != "" {
 		effortForMetrics = r.getReasoningEffort(decisionName, selectedModel)
@@ -170,7 +170,6 @@ func (r *OpenAIRouter) startRouterReplay(
 			UserFeedback: ctx.VSRMatchedUserFeedback,
 			Preference:   ctx.VSRMatchedPreference,
 			Language:     ctx.VSRMatchedLanguage,
-			Latency:      ctx.VSRMatchedLatency,
 			Context:      ctx.VSRMatchedContext,
 			Complexity:   ctx.VSRMatchedComplexity,
 		},

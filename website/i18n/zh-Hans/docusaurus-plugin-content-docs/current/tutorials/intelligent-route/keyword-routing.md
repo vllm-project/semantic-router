@@ -108,6 +108,44 @@ decisions:
           system_prompt: "此查询似乎是垃圾信息。请提供礼貌的回复。"
 ```
 
+## 匹配方法
+
+每条 keyword 规则可通过 `method` 字段指定不同的匹配方法：
+
+| 方法 | 适用场景 | 容错拼写 | 配置字段 |
+|------|---------|:---:|---------|
+| `regex`（默认） | 精确模式、词边界匹配 | 否 | — |
+| `bm25` | 大量关键词的主题检测 | 否 | `bm25_threshold` |
+| `ngram` | 模糊匹配、拼写容错 | **是** | `ngram_threshold`, `ngram_arity` |
+
+```yaml
+keyword_rules:
+  # BM25：使用 TF-IDF 相关性排序对关键词评分
+  - name: "code_keywords"
+    operator: "OR"
+    method: "bm25"
+    keywords: ["code", "function", "debug", "algorithm", "refactor"]
+    bm25_threshold: 0.1
+    case_sensitive: false
+
+  # N-gram：模糊匹配 - 可捕获拼写错误，如 "urgnt" → "urgent"
+  - name: "urgent_keywords"
+    operator: "OR"
+    method: "ngram"
+    keywords: ["urgent", "immediate", "asap", "emergency"]
+    ngram_threshold: 0.4
+    ngram_arity: 3
+    case_sensitive: false
+
+  # Regex（默认）：精确子串/模式匹配
+  - name: "sensitive_data_keywords"
+    operator: "OR"
+    keywords: ["SSN", "credit card"]
+    case_sensitive: false
+```
+
+BM25 和 N-gram 分类由 Rust crate（`bm25`、`ngrammatic`）通过 `nlp-binding` FFI 提供支持，性能保持亚毫秒级。
+
 ## 运算符
 
 - **OR**：如果找到任意一个 keyword 则匹配
@@ -175,4 +213,5 @@ curl -X POST http://localhost:8801/v1/chat/completions \
 
 ## 参考
 
-完整配置请参见 [keyword.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/keyword.yaml)。
+- [keyword.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/keyword.yaml) — 仅 regex 配置
+- [keyword-nlp.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/keyword-nlp.yaml) — BM25 + N-gram + regex 配置

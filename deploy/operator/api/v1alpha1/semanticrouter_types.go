@@ -986,8 +986,8 @@ type ComplexityCandidates struct {
 
 // RuleComposition defines how to compose/filter rules based on other signals
 type RuleComposition struct {
-	// Operator for combining conditions (AND, OR)
-	// +kubebuilder:validation:Enum=AND;OR
+	// Operator for combining conditions (AND, OR, NOT). NOT is strictly unary and negates its single child.
+	// +kubebuilder:validation:Enum=AND;OR;NOT
 	Operator string `json:"operator"`
 
 	// List of conditions that must be met
@@ -1034,8 +1034,9 @@ type DecisionConfig struct {
 
 // RuleCombinationConfig defines how to combine multiple rule conditions
 type RuleCombinationConfig struct {
-	// Operator specifies how to combine conditions: "AND" or "OR"
-	// +kubebuilder:validation:Enum=AND;OR
+	// Operator specifies how to combine conditions: "AND", "OR", or "NOT". NOT is strictly unary: it takes
+	// exactly one child condition and negates its result. Compose NOR/NAND by nesting NOT around OR/AND.
+	// +kubebuilder:validation:Enum=AND;OR;NOT
 	Operator string `json:"operator" yaml:"operator"`
 
 	// Conditions is the list of rule references to evaluate

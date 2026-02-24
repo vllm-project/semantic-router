@@ -165,7 +165,6 @@ interface ConfigData {
     user_feedbacks?: Array<{ name: string; description: string }>
     preferences?: Array<{ name: string; description: string }>
     language?: Array<{ name: string }>
-    latency?: Array<{ name: string; tpot_percentile?: number; ttft_percentile?: number; description?: string }>
     context?: Array<{ name: string; min_tokens: string; max_tokens: string; description?: string }>
     complexity?: Array<{
       name: string
@@ -174,7 +173,7 @@ interface ConfigData {
       easy: { candidates: string[] }
       description?: string
       composer?: {
-        operator: 'AND' | 'OR'
+        operator: 'AND' | 'OR' | 'NOT'
         conditions: Array<{ type: string; name: string }>
       }
     }>
@@ -184,7 +183,7 @@ interface ConfigData {
     description: string
     priority: number
     rules: {
-      operator: 'AND' | 'OR'
+      operator: 'AND' | 'OR' | 'NOT'
       conditions: Array<{ type: string; name: string }>
     }
     modelRefs: Array<{ model: string; use_reasoning: boolean }>
@@ -251,14 +250,14 @@ interface ConfigPageProps {
   activeSection?: ConfigSection
 }
 
-type SignalType = 'Keywords' | 'Embeddings' | 'Domain' | 'Preference' | 'Fact Check' | 'User Feedback' | 'Language' | 'Latency' | 'Context' | 'Complexity'
+type SignalType = 'Keywords' | 'Embeddings' | 'Domain' | 'Preference' | 'Fact Check' | 'User Feedback' | 'Language' | 'Context' | 'Complexity'
 type DecisionConfig = NonNullable<ConfigData['decisions']>[number]
 
 interface DecisionFormState {
   name: string
   description: string
   priority: number
-  operator: 'AND' | 'OR'
+  operator: 'AND' | 'OR' | 'NOT'
   conditions: { type: string; name: string }[]
   modelRefs: { model: string; use_reasoning: boolean }[]
   plugins: { type: string; configuration: string | Record<string, unknown> }[]
@@ -275,14 +274,12 @@ interface AddSignalFormState {
   candidates: string
   aggregation_method: string
   mmlu_categories: string
-  tpot_percentile?: number
-  ttft_percentile?: number
   min_tokens?: string
   max_tokens?: string
   complexity_threshold?: number
   hard_candidates?: string
   easy_candidates?: string
-  composer_operator?: 'AND' | 'OR'
+  composer_operator?: 'AND' | 'OR' | 'NOT'
   composer_conditions?: string
 }
 
@@ -502,9 +499,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         break
       case 'Language':
         cfg.signals.language = (cfg.signals.language || []).filter(s => s.name !== targetName)
-        break
-      case 'Latency':
-        cfg.signals.latency = (cfg.signals.latency || []).filter(s => s.name !== targetName)
         break
       case 'Context':
         cfg.signals.context = (cfg.signals.context || []).filter(s => s.name !== targetName)
@@ -2336,23 +2330,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       })
     })
 
-    // Latency
-    signals?.latency?.forEach(lat => {
-      const parts: string[] = []
-      if (lat.tpot_percentile) {
-        parts.push(`TPOT: ${lat.tpot_percentile}th percentile`)
-      }
-      if (lat.ttft_percentile) {
-        parts.push(`TTFT: ${lat.ttft_percentile}th percentile`)
-      }
-      allSignals.push({
-        name: lat.name,
-        type: 'Latency',
-        summary: parts.length > 0 ? parts.join(', ') : 'Latency signal',
-        rawData: lat
-      })
-    })
-
     // Context
     signals?.context?.forEach(ctx => {
       allSignals.push({
@@ -2404,7 +2381,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             'Fact Check': 'rgba(34, 197, 94, 0.15)',
             'User Feedback': 'rgba(236, 72, 153, 0.15)',
             'Language': 'rgba(59, 130, 246, 0.15)',
-            'Latency': 'rgba(168, 85, 247, 0.15)',
             'Context': 'rgba(251, 146, 60, 0.15)',
             'Complexity': 'rgba(66, 153, 225, 0.15)'
           }
@@ -2534,15 +2510,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
           ]
         })
-      } else if (signal.type === 'Latency') {
-        sections.push({
-          title: 'Latency Signal',
-          fields: [
-            { label: 'TPOT Percentile', value: signal.rawData.tpot_percentile ? `${signal.rawData.tpot_percentile}th percentile` : 'N/A', fullWidth: true },
-            { label: 'TTFT Percentile', value: signal.rawData.ttft_percentile ? `${signal.rawData.ttft_percentile}th percentile` : 'N/A', fullWidth: true },
-            { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
-          ]
-        })
       } else if (signal.type === 'Context') {
         sections.push({
           title: 'Context Signal',
@@ -2643,8 +2610,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         candidates: '',
         aggregation_method: 'mean',
         mmlu_categories: '',
-        tpot_percentile: undefined,
-        ttft_percentile: undefined,
         min_tokens: '0',
         max_tokens: '8K',
         complexity_threshold: 0.1,
@@ -2665,8 +2630,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         candidates: (signal.rawData.candidates || []).join('\n'),
         aggregation_method: signal.rawData.aggregation_method || 'mean',
         mmlu_categories: (signal.rawData.mmlu_categories || []).join('\n'),
-        tpot_percentile: signal.rawData.tpot_percentile,
-        ttft_percentile: signal.rawData.ttft_percentile,
         min_tokens: signal.rawData.min_tokens || '0',
         max_tokens: signal.rawData.max_tokens || '8K',
         complexity_threshold: signal.rawData.threshold ?? 0.1,
@@ -2742,31 +2705,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         }
       ]
 
-      const latencyFields: FieldConfig[] = [
-        {
-          name: 'tpot_percentile',
-          label: 'TPOT Percentile (latency only)',
-          type: 'number',
-          min: 1,
-          max: 100,
-          step: 1,
-          placeholder: '10',
-          description: 'TPOT (Time Per Output Token) percentile bucket (1-100). Example: 10 = 10th percentile (top 10% fastest TPOT). Works with any number of observations, adapts to model performance. ⚠️ RECOMMENDED: Use both TPOT and TTFT for comprehensive latency evaluation.',
-          shouldHide: conditionallyHideFieldExceptType('Latency')
-        },
-        {
-          name: 'ttft_percentile',
-          label: 'TTFT Percentile (latency only)',
-          type: 'number',
-          min: 1,
-          max: 100,
-          step: 1,
-          placeholder: '10',
-          description: 'TTFT (Time To First Token) percentile bucket (1-100). Example: 10 = 10th percentile (top 10% fastest TTFT). Works with any number of observations, adapts to model performance. ⚠️ RECOMMENDED: Use both TPOT and TTFT for comprehensive latency evaluation. At least one of TPOT or TTFT percentile must be set.',
-          shouldHide: conditionallyHideFieldExceptType('Latency')
-        }
-      ]
-
       const contextFields: FieldConfig[] = [
         {
           name: 'min_tokens',
@@ -2834,7 +2772,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           name: 'type',
           label: 'Type',
           type: 'select',
-          options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Language', 'Latency', 'Context', 'Complexity'],
+          options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Language', 'Context', 'Complexity'],
           required: true,
           description: 'Fields are validated based on the selected type.'
         },
@@ -2854,7 +2792,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         ...keywordFields,
         ...embeddingFields,
         ...domainFields,
-        ...latencyFields,
         ...contextFields,
         ...complexityFields,
       ]
@@ -2970,40 +2907,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
               {
                 name
               }
-            ]
-            break
-          }
-          case 'Latency': {
-            const tpot_percentile = formData.tpot_percentile
-            const ttft_percentile = formData.ttft_percentile
-
-            // Validate: at least one of tpot_percentile or ttft_percentile must be set
-            if ((tpot_percentile === undefined || tpot_percentile <= 0) && (ttft_percentile === undefined || ttft_percentile <= 0)) {
-              throw new Error('Either TPOT Percentile or TTFT Percentile must be set for latency signals (or both)')
-            }
-            if (tpot_percentile !== undefined && (tpot_percentile < 1 || tpot_percentile > 100)) {
-              throw new Error('TPOT Percentile must be between 1 and 100')
-            }
-            if (ttft_percentile !== undefined && (ttft_percentile < 1 || ttft_percentile > 100)) {
-              throw new Error('TTFT Percentile must be between 1 and 100')
-            }
-
-            const latencySignal: { name: string; description?: string; tpot_percentile?: number; ttft_percentile?: number } = {
-              name,
-            }
-            if (formData.description) {
-              latencySignal.description = formData.description
-            }
-            if (tpot_percentile !== undefined && tpot_percentile > 0) {
-              latencySignal.tpot_percentile = tpot_percentile
-            }
-            if (ttft_percentile !== undefined && ttft_percentile > 0) {
-              latencySignal.ttft_percentile = ttft_percentile
-            }
-
-            newConfig.signals.latency = [
-              ...(newConfig.signals.latency || []),
-              latencySignal
             ]
             break
           }
@@ -3302,7 +3205,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
     const openDecisionEditor = (mode: 'add' | 'edit', decision?: DecisionRow) => {
       setViewModalOpen(false)
-      const conditionTypeOptions = ['keyword', 'domain', 'preference', 'user_feedback', 'embedding', 'language', 'latency'] as const
+      const conditionTypeOptions = ['keyword', 'domain', 'preference', 'user_feedback', 'embedding', 'language'] as const
 
       const getConditionNameOptions = (type?: DecisionConditionType) => {
         // derive condition name options based on signals configured
@@ -3317,8 +3220,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             return config?.signals?.user_feedbacks?.map((u) => u.name) || []
           case 'embedding':
             return config?.signals?.embeddings?.map((e) => e.name) || []
-          case 'latency':
-            return config?.signals?.latency?.map((l) => l.name) || []
           default:
             return []
         }
@@ -3634,7 +3535,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           name: 'operator',
           label: 'Rules Operator',
           type: 'select',
-          options: ['AND', 'OR'],
+          options: ['AND', 'OR', 'NOT'],
+          description: 'AND: all conditions must match. OR: any condition matches. NOT: none of the conditions must match (exclusion routing).',
           required: true
         },
         {

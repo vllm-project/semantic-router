@@ -11,7 +11,6 @@ export type SignalType =
   | 'user_feedback'
   | 'preference'
   | 'language'
-  | 'latency'
   | 'context'
   | 'complexity'
 
@@ -50,11 +49,6 @@ export interface ComplexitySignalConfig {
   easy_candidates?: string[]
 }
 
-export interface LatencySignalConfig {
-  tpot_percentile?: number
-  ttft_percentile?: number
-}
-
 export interface GenericSignalConfig {
   [key: string]: unknown
 }
@@ -71,7 +65,7 @@ export interface DecisionConfig {
 }
 
 export interface RuleCombination {
-  operator: 'AND' | 'OR'
+  operator: 'AND' | 'OR' | 'NOT'
   conditions: RuleCondition[]
 }
 
@@ -92,11 +86,13 @@ export type AlgorithmType =
   | 'automix'
   | 'hybrid'
   | 'remom'
+  | 'latency_aware'
 
 export interface AlgorithmConfig {
   type: AlgorithmType
   confidence?: ConfidenceAlgorithmConfig
   concurrent?: ConcurrentAlgorithmConfig
+  latency_aware?: LatencyAwareAlgorithmConfig
   autoMix?: AutoMixConfig
 }
 
@@ -111,6 +107,12 @@ export interface ConfidenceAlgorithmConfig {
 export interface ConcurrentAlgorithmConfig {
   timeout_seconds?: number
   on_error?: 'skip' | 'fail'
+}
+
+export interface LatencyAwareAlgorithmConfig {
+  tpot_percentile?: number
+  ttft_percentile?: number
+  description?: string
 }
 
 export interface AutoMixConfig {
@@ -325,12 +327,6 @@ export interface ConfigData {
     name: string
     languages?: string[]
   }>
-  latency_rules?: Array<{
-    name: string
-    description?: string
-    tpot_percentile?: number
-    ttft_percentile?: number
-  }>
   context_rules?: Array<{
     name: string
     min_tokens?: string
@@ -399,12 +395,6 @@ export interface ConfigData {
       name: string
       description?: string
     }>
-    latency?: Array<{
-      name: string
-      description?: string
-      tpot_percentile?: number
-      ttft_percentile?: number
-    }>
     context?: Array<{
       name: string
       min_tokens?: string
@@ -440,6 +430,11 @@ export interface ConfigData {
       }
       concurrent?: {
         timeout_seconds?: number
+      }
+      latency_aware?: {
+        tpot_percentile?: number
+        ttft_percentile?: number
+        description?: string
       }
     }
     modelRefs?: Array<{

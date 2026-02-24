@@ -168,6 +168,10 @@ func (p *RedisProfile) GetTestCases() []string {
 		"response-api-delete",
 		"response-api-input-items",
 		"response-api-conversation-chaining",
+		"response-api-edge-empty-input",
+		"response-api-edge-large-input",
+		"response-api-edge-special-characters",
+		"response-api-edge-concurrent-requests",
 		"response-api-ttl-expiry",
 	}
 }

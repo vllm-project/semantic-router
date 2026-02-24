@@ -25,7 +25,7 @@ is_mtpe: true
 
 ### Signal-Driven Decision Engine
 
-捕获并结合 **8 种类型的信号**以做出智能路由决策：
+捕获并结合 **9 种请求信号**以做出智能路由决策：
 
 | 信号类型 | 描述 | 用例 |
 |------------|-------------|----------|
@@ -36,7 +36,8 @@ is_mtpe: true
 | **user_feedback** | 用户满意度和反馈分类 | 处理后续消息和更正 |
 | **preference** | 基于 LLM 的路由偏好匹配 | 通过外部 LLM 进行复杂意图分析 |
 | **language** | 多语言检测（100 多种本地化语言） | 路由查询特定语言的模型 |
-| **latency** | 基于 TPOT 的延迟评估 | 根据实时 TPOT 将延迟敏感的查询路由到更快的模型 |
+| **context** | 基于 token 数量的上下文分类 | 将短/长上下文请求路由到更合适的模型 |
+| **complexity** | 查询难度分类（easy/medium/hard） | 将任务难度匹配到模型能力 |
 
 **工作原理**：从请求中提取信号，在决策规则中使用 AND/OR 运算符进行组合，并用于选择最佳模型和配置。
 
@@ -73,12 +74,13 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
         Feedback[User Feedback Signals<br/>Satisfaction Analysis]
         Preference[Preference Signals<br/>LLM-based Matching]
         Language[Language Signals<br/>Multi-language Detection]
-        Latency[Latency Signals<br/>TPOT-based Routing]
+        Context[Context Signals<br/>Token Count]
+        Complexity[Complexity Signals<br/>Difficulty Classification]
     end
 
     subgraph "Decision Engine"
         Rules[Decision Rules<br/>AND/OR Operators]
-        ModelSelect[Model Selection<br/>Priority/Confidence]
+        ModelSelect[Model Selection<br/>Priority/Confidence/Algorithms]
     end
 
     subgraph "Plugin Chain"
@@ -98,7 +100,8 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
     Router --> Feedback
     Router --> Preference
     Router --> Language
-    Router --> Latency
+    Router --> Context
+    Router --> Complexity
 
     Keyword --> Rules
     Embedding --> Rules
@@ -107,7 +110,8 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
     Feedback --> Rules
     Preference --> Rules
     Language --> Rules
-    Latency --> Rules
+    Context --> Rules
+    Complexity --> Rules
 
     Rules --> ModelSelect
     ModelSelect --> Cache

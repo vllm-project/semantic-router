@@ -1,19 +1,25 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+	"github.com/milvus-io/milvus-sdk-go/v2/client"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responsestore"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
@@ -37,6 +43,17 @@ type OpenAIRouter struct {
 	// Initialized from config.IntelligentRouting.ModelSelection
 	ModelSelector   *selection.Registry
 	ReplayRecorders map[string]*routerreplay.Recorder
+	MemoryStore     *memory.MilvusStore
+	MemoryExtractor *memory.MemoryExtractor
+
+	// CredentialResolver resolves per-user LLM API keys from multiple sources
+	// (ext_authz injected headers → static config fallback).
+	// Initialized in NewOpenAIRouter.
+	CredentialResolver *authz.CredentialResolver
+
+	// RateLimiter enforces per-user/model rate limits from multiple sources
+	// (Envoy RLS → local limiter). Initialized in NewOpenAIRouter.
+	RateLimiter *ratelimit.RateLimitResolver
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls
@@ -303,9 +320,9 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		NormalizeScores:     hybridCfg.NormalizeScores,
 	}
 
-	// Copy ML config for KNN, KMeans, SVM selectors
+	// Copy ML config for KNN, KMeans, SVM, MLP selectors
 	mlCfg := cfg.IntelligentRouting.ModelSelection.ML
-	if mlCfg.ModelsPath != "" || mlCfg.KNN.PretrainedPath != "" || mlCfg.KMeans.PretrainedPath != "" || mlCfg.SVM.PretrainedPath != "" {
+	if mlCfg.ModelsPath != "" || mlCfg.KNN.PretrainedPath != "" || mlCfg.KMeans.PretrainedPath != "" || mlCfg.SVM.PretrainedPath != "" || mlCfg.MLP.PretrainedPath != "" {
 		modelSelectionCfg.ML = &selection.MLSelectorConfig{
 			ModelsPath:   mlCfg.ModelsPath,
 			EmbeddingDim: mlCfg.EmbeddingDim,
@@ -322,6 +339,10 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 				Kernel:         mlCfg.SVM.Kernel,
 				Gamma:          mlCfg.SVM.Gamma,
 				PretrainedPath: mlCfg.SVM.PretrainedPath,
+			},
+			MLP: &selection.MLPConfig{
+				Device:         mlCfg.MLP.Device,
+				PretrainedPath: mlCfg.MLP.PretrainedPath,
 			},
 		}
 		logging.Infof("[Router] ML model selection enabled with models_path=%s", mlCfg.ModelsPath)
@@ -351,6 +372,54 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 
 	logging.Infof("[Router] Initialized model selection registry (per-decision algorithm config)")
 
+	// Auto-enable memory if any decision uses memory plugin
+	memoryEnabled := cfg.Memory.Enabled
+	if !memoryEnabled {
+		for _, decision := range cfg.Decisions {
+			if decision.GetPluginConfig("memory") != nil {
+				memoryEnabled = true
+				logging.Infof("Memory auto-enabled: decision '%s' uses memory plugin", decision.Name)
+				break
+			}
+		}
+	}
+
+	// Create memory store if enabled
+	var memoryStore *memory.MilvusStore
+	if memoryEnabled {
+		memStore, err := createMemoryStore(cfg)
+		if err != nil {
+			logging.Warnf("Failed to create memory store: %v, Memory will be disabled", err)
+		} else {
+			memoryStore = memStore
+			memory.SetGlobalMemoryStore(memStore)
+			logging.Infof("Memory enabled with Milvus backend")
+		}
+	}
+
+	// Create memory extractor if memory_extraction external model is configured
+	var memoryExtractor *memory.MemoryExtractor
+	if memoryEnabled && cfg.FindExternalModelByRole(config.ModelRoleMemoryExtraction) != nil {
+		if memoryStore != nil {
+			memoryExtractor = memory.NewMemoryExtractorWithStore(cfg, cfg.Memory.ExtractionBatchSize, memoryStore)
+			if memoryExtractor != nil {
+				logging.Infof("Memory extractor enabled with model_role: %s", config.ModelRoleMemoryExtraction)
+			}
+		} else {
+			logging.Warnf("Memory extraction enabled but memory store not available, extraction will be disabled")
+		}
+	}
+
+	// Build credential resolver chain from config (or use default chain if authz section is omitted)
+	credResolver := buildCredentialResolver(cfg)
+	logging.Infof("Credential resolver initialized with providers: %v", credResolver.ProviderNames())
+
+	// Build rate limit resolver chain from config (no-op if ratelimit section is omitted)
+	rateLimiter := buildRateLimitResolver(cfg)
+	if rateLimiter != nil {
+		logging.Infof("Rate limit resolver initialized with providers: %v", rateLimiter.ProviderNames())
+	}
+
 	router := &OpenAIRouter{
 		Config:               cfg,
 		CategoryDescriptions: categoryDescriptions,
@@ -362,9 +431,207 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		ReplayRecorder:       replayRecorder,
 		ModelSelector:        modelSelectorRegistry,
 		ReplayRecorders:      replayRecorders,
+		MemoryStore:          memoryStore,
+		MemoryExtractor:      memoryExtractor,
+		CredentialResolver:   credResolver,
+		RateLimiter:          rateLimiter,
 	}
 
 	return router, nil
+}
+
+// knownAuthzProviderTypes is the set of valid provider type strings.
+// Unknown types cause a startup error (not a runtime surprise).
+var knownAuthzProviderTypes = map[string]bool{
+	"header-injection": true,
+	"static-config":    true,
+}
+
+// buildCredentialResolver constructs the credential provider chain from config.
+// If the authz section is omitted (no providers configured), it returns the
+// default chain: header-injection (standard headers) → static-config.
+//
+// Startup validation (catches misconfig before any request is served):
+//   - Unknown provider types → error (not silently skipped)
+//   - header-injection with empty headers → warning (will use defaults)
+//   - Empty chain after explicit config → error
+//   - Logs the resolved chain, fail_open mode, and header mappings
+func buildCredentialResolver(cfg *config.RouterConfig) *authz.CredentialResolver {
+	authzCfg := cfg.Authz
+
+	if len(authzCfg.Providers) == 0 {
+		// Default chain — backward compatible, no config required.
+		// Always fail-open when no providers are explicitly configured:
+		// without an auth backend there is no credential source, so
+		// fail-closed would reject every request. Users who need
+		// fail-closed must explicitly configure providers.
+		resolver := authz.NewCredentialResolver(
+			authz.NewHeaderInjectionProvider(authz.DefaultHeaderMap()),
+			authz.NewStaticConfigProvider(cfg),
+		)
+		resolver.SetFailOpen(true)
+		logging.Infof("Authz: using default chain [header-injection(defaults) → static-config], fail_open=true (no explicit providers configured)")
+		logging.Infof("Authz identity: user_id_header=%q, user_groups_header=%q",
+			cfg.Authz.Identity.GetUserIDHeader(), cfg.Authz.Identity.GetUserGroupsHeader())
+		return resolver
+	}
+
+	// --- Startup validation ---
+	var validationErrors []string
+
+	for i, p := range authzCfg.Providers {
+		if !knownAuthzProviderTypes[p.Type] {
+			validationErrors = append(validationErrors,
+				fmt.Sprintf("authz.providers[%d]: unknown type %q (valid types: header-injection, static-config)", i, p.Type))
+		}
+		if p.Type == "header-injection" && len(p.Headers) > 0 {
+			// Validate header values are non-empty
+			for provider, header := range p.Headers {
+				if header == "" {
+					validationErrors = append(validationErrors,
+						fmt.Sprintf("authz.providers[%d].headers: provider %q has empty header name", i, provider))
+				}
+			}
+		}
+	}
+
+	if len(validationErrors) > 0 {
+		for _, e := range validationErrors {
+			logging.Errorf("Authz config validation error: %s", e)
+		}
+		logging.Errorf("Authz config has %d validation error(s) — falling back to default chain to prevent startup failure. FIX YOUR CONFIG.", len(validationErrors))
+		resolver := authz.NewCredentialResolver(
+			authz.NewHeaderInjectionProvider(authz.DefaultHeaderMap()),
+			authz.NewStaticConfigProvider(cfg),
+		)
+		// Force fail-closed when config is invalid — don't trust a broken config's fail_open setting
+		resolver.SetFailOpen(false)
+		return resolver
+	}
+
+	// --- Build chain ---
+	providers := make([]authz.Provider, 0, len(authzCfg.Providers))
+	for _, p := range authzCfg.Providers {
+		switch p.Type {
+		case "header-injection":
+			hip := authz.NewHeaderInjectionProvider(p.Headers)
+			providers = append(providers, hip)
+			if len(p.Headers) == 0 {
+				logging.Infof("Authz: header-injection provider using default headers: %v", authz.DefaultHeaderMap())
+			} else {
+				logging.Infof("Authz: header-injection provider using custom headers: %v", p.Headers)
+			}
+		case "static-config":
+			providers = append(providers, authz.NewStaticConfigProvider(cfg))
+			logging.Infof("Authz: static-config provider (reads model_config.*.access_key)")
+		}
+	}
+
+	resolver := authz.NewCredentialResolver(providers...)
+	resolver.SetFailOpen(authzCfg.FailOpen)
+
+	if authzCfg.FailOpen {
+		logging.Warnf("Authz fail_open=true — requests without valid credentials will be allowed through. Ensure this is intentional.")
+	}
+	logging.Infof("Authz: chain=%v, fail_open=%v", resolver.ProviderNames(), authzCfg.FailOpen)
+	logging.Infof("Authz identity: user_id_header=%q, user_groups_header=%q",
+		cfg.Authz.Identity.GetUserIDHeader(), cfg.Authz.Identity.GetUserGroupsHeader())
+
+	return resolver
+}
+
+// knownRateLimitProviderTypes is the set of valid rate limit provider type strings.
+var knownRateLimitProviderTypes = map[string]bool{
+	"envoy-ratelimit": true,
+	"local-limiter":   true,
+}
+
+// buildRateLimitResolver constructs the rate limit provider chain from config.
+// If the ratelimit section is omitted (no providers configured), returns nil
+// (no rate limiting). Unlike authz, there is no default chain.
+func buildRateLimitResolver(cfg *config.RouterConfig) *ratelimit.RateLimitResolver {
+	rlCfg := cfg.RateLimit
+
+	if len(rlCfg.Providers) == 0 {
+		logging.Infof("RateLimit: no providers configured, rate limiting disabled")
+		return nil
+	}
+
+	// Startup validation
+	var validationErrors []string
+	for i, p := range rlCfg.Providers {
+		if !knownRateLimitProviderTypes[p.Type] {
+			validationErrors = append(validationErrors,
+				fmt.Sprintf("ratelimit.providers[%d]: unknown type %q (valid types: envoy-ratelimit, local-limiter)", i, p.Type))
+		}
+		if p.Type == "envoy-ratelimit" && p.Address == "" {
+			validationErrors = append(validationErrors,
+				fmt.Sprintf("ratelimit.providers[%d]: envoy-ratelimit requires 'address'", i))
+		}
+		if p.Type == "local-limiter" && len(p.Rules) == 0 {
+			validationErrors = append(validationErrors,
+				fmt.Sprintf("ratelimit.providers[%d]: local-limiter requires at least one rule", i))
+		}
+	}
+
+	if len(validationErrors) > 0 {
+		for _, e := range validationErrors {
+			logging.Errorf("RateLimit config validation error: %s", e)
+		}
+		logging.Errorf("RateLimit config has %d validation error(s) — rate limiting disabled", len(validationErrors))
+		return nil
+	}
+
+	// Build chain
+	providers := make([]ratelimit.Provider, 0, len(rlCfg.Providers))
+	for _, p := range rlCfg.Providers {
+		switch p.Type {
+		case "envoy-ratelimit":
+			domain := p.Domain
+			if domain == "" {
+				domain = "semantic-router"
+			}
+			envoyProvider, err := ratelimit.NewEnvoyRLSProvider(p.Address, domain)
+			if err != nil {
+				logging.Errorf("RateLimit: failed to create envoy-ratelimit provider: %v", err)
+				continue
+			}
+			providers = append(providers, envoyProvider)
+			logging.Infof("RateLimit: envoy-ratelimit provider at %s (domain=%s)", p.Address, domain)
+		case "local-limiter":
+			rules := make([]ratelimit.Rule, 0, len(p.Rules))
+			for _, r := range p.Rules {
+				rules = append(rules, ratelimit.Rule{
+					Name: r.Name,
+					Match: ratelimit.RuleMatch{
+						User:  r.Match.User,
+						Group: r.Match.Group,
+						Model: r.Match.Model,
+					},
+					RequestsPerUnit: r.RequestsPerUnit,
+					TokensPerUnit:   r.TokensPerUnit,
+					Unit:            ratelimit.ParseUnit(r.Unit),
+				})
+			}
+			providers = append(providers, ratelimit.NewLocalLimiter(rules))
+			logging.Infof("RateLimit: local-limiter provider with %d rules", len(rules))
+		}
+	}
+
+	if len(providers) == 0 {
+		logging.Warnf("RateLimit: no valid providers after construction, rate limiting disabled")
+		return nil
+	}
+
+	resolver := ratelimit.NewRateLimitResolver(providers...)
+	resolver.SetFailOpen(rlCfg.FailOpen)
+
+	if rlCfg.FailOpen {
+		logging.Warnf("RateLimit fail_open=true — provider errors will not block requests")
+	}
+	logging.Infof("RateLimit: chain=%v, fail_open=%v", resolver.ProviderNames(), rlCfg.FailOpen)
+
+	return resolver
 }
 
 // initializeReplayRecorders creates replay recorders for decisions with router_replay plugin configured.
@@ -674,6 +941,86 @@ func createResponseStore(cfg *config.RouterConfig) (responsestore.ResponseStore,
 	}
 
 	return responsestore.NewStore(storeConfig)
+}
+
+// createMemoryStore creates a memory store based on configuration.
+func createMemoryStore(cfg *config.RouterConfig) (*memory.MilvusStore, error) {
+	milvusAddress := cfg.Memory.Milvus.Address
+	if milvusAddress == "" {
+		milvusAddress = "localhost:19530"
+	}
+
+	collectionName := cfg.Memory.Milvus.Collection
+	if collectionName == "" {
+		collectionName = "agentic_memory"
+	}
+
+	// Auto-detect embedding model from embedding_models configuration
+	// Priority: bert (384-dim, best for memory) > mmbert > qwen3 > gemma
+	embeddingModel := cfg.Memory.EmbeddingModel
+	if embeddingModel == "" {
+		if cfg.EmbeddingModels.BertModelPath != "" {
+			embeddingModel = "bert"
+			logging.Infof("Memory: Auto-selected bert from embedding_models config (384-dim, recommended for memory)")
+		} else if cfg.EmbeddingModels.MmBertModelPath != "" {
+			embeddingModel = "mmbert"
+			logging.Infof("Memory: Auto-selected mmbert from embedding_models config")
+		} else if cfg.EmbeddingModels.Qwen3ModelPath != "" {
+			embeddingModel = "qwen3"
+			logging.Infof("Memory: Auto-selected qwen3 from embedding_models config")
+		} else if cfg.EmbeddingModels.GemmaModelPath != "" {
+			embeddingModel = "gemma"
+			logging.Infof("Memory: Auto-selected gemma from embedding_models config")
+		} else {
+			embeddingModel = "bert"
+			logging.Warnf("Memory: No embedding models configured, bert will be used but may fail without bert_model_path")
+		}
+	}
+
+	embeddingConfig := memory.EmbeddingConfig{
+		Model:     memory.EmbeddingModelType(embeddingModel),
+		Dimension: cfg.Memory.Milvus.Dimension, // Pass dimension from config for Matryoshka models
+	}
+
+	logging.Infof("Memory: Connecting to Milvus at %s, collection=%s", milvusAddress, collectionName)
+	logging.Infof("Memory: Using embedding model=%s", embeddingConfig.Model)
+
+	// Create Milvus client
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	milvusClient, err := client.NewGrpcClient(ctx, milvusAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Milvus client: %w", err)
+	}
+
+	// Check connection
+	state, err := milvusClient.CheckHealth(ctx)
+	if err != nil {
+		milvusClient.Close()
+		return nil, fmt.Errorf("failed to check Milvus connection: %w", err)
+	}
+	if state == nil || !state.IsHealthy {
+		milvusClient.Close()
+		return nil, fmt.Errorf("milvus connection is not healthy")
+	}
+
+	// Create memory store with unified embedding config
+	store, err := memory.NewMilvusStore(memory.MilvusStoreOptions{
+		Client:          milvusClient,
+		CollectionName:  collectionName,
+		Config:          cfg.Memory,
+		Enabled:         true, // Always enabled if we reach here (auto-detected or explicit)
+		EmbeddingConfig: &embeddingConfig,
+	})
+	if err != nil {
+		milvusClient.Close()
+		return nil, fmt.Errorf("failed to create memory store: %w", err)
+	}
+
+	logging.Infof("Memory store initialized: address=%s, collection=%s, embedding=%s",
+		milvusAddress, collectionName, embeddingConfig.Model)
+	return store, nil
 }
 
 // LoadToolsDatabase loads tools from file after embedding models are initialized

@@ -19,6 +19,8 @@ MMBERT_MODELS := \
 	mmbert-jailbreak-detector-merged
 
 # mmBERT embedding model with 2D Matryoshka support
+# Downloaded automatically by the router's built-in downloader (make download-models)
+# Registry maps this to local path models/mom-embedding-ultra (see config/registry.go)
 MMBERT_EMBEDDING_MODEL := mmbert-embed-32k-2d-matryoshka
 
 # mmBERT base 32K YaRN model (extended context MLM model)
@@ -64,7 +66,7 @@ download-models: ## Download models using router's built-in download logic
 	@echo ""
 	@echo "Running router with --download-only flag..."
 	@echo "This may take a few minutes depending on your network speed..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release && \
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
 		./bin/router -config=config/config.yaml --download-only
 	@echo ""
 	@echo "✅ Models downloaded successfully"
@@ -102,7 +104,7 @@ download-mmbert-lora: ## Download mmBERT LoRA adapters for Python fine-tuning
 	@echo "✅ mmBERT LoRA adapters downloaded to $(MODELS_DIR)/"
 	@ls -la $(MODELS_DIR)/
 
-download-mmbert-all: download-mmbert download-mmbert-lora download-mmbert-32k-lora download-mmbert-32k-merged download-mmbert-embedding download-mmbert-32k download-mmbert-32k-onnx ## Download all mmBERT models, LoRA adapters, embedding, ONNX, and 32K base model
+download-mmbert-all: download-mmbert download-mmbert-lora download-mmbert-32k-lora download-mmbert-32k-merged download-mmbert-32k download-mmbert-32k-onnx ## Download all mmBERT models, LoRA adapters, ONNX, and 32K base model
 
 download-mmbert-32k-lora: ## Download mmBERT-32K LoRA adapters (32K context models)
 	@echo "📦 Downloading mmBERT-32K LoRA adapters from Hugging Face..."
@@ -146,25 +148,6 @@ download-mmbert-32k-merged: ## Download mmBERT-32K merged models (for Rust/Go in
 	@echo "  - mmbert32k-pii-detector-merged        (35-class PII NER)"
 	@echo "  - mmbert32k-jailbreak-detector-merged  (binary jailbreak)"
 	@echo "  - mmbert32k-factcheck-classifier-merged (binary fact-check)"
-
-download-mmbert-embedding: ## Download mmBERT 2D Matryoshka embedding model
-	@echo "📦 Downloading mmBERT 2D Matryoshka embedding model..."
-	@mkdir -p $(MODELS_DIR)
-	@echo ""
-	@echo "⬇️  Downloading $(MMBERT_EMBEDDING_MODEL)..."
-	@echo "   This model supports:"
-	@echo "   - 32K context length (YaRN-scaled RoPE)"
-	@echo "   - Multilingual (1800+ languages)"
-	@echo "   - 2D Matryoshka: layer early exit (3/6/11/22) + dimension reduction (64-768)"
-	@if [ -d "$(MODELS_DIR)/$(MMBERT_EMBEDDING_MODEL)" ]; then \
-		echo "   Already exists, updating..."; \
-	fi
-	@huggingface-cli download $(HF_ORG)/$(MMBERT_EMBEDDING_MODEL) --local-dir $(MODELS_DIR)/$(MMBERT_EMBEDDING_MODEL) --local-dir-use-symlinks False
-	@echo ""
-	@echo "✅ mmBERT embedding model downloaded to $(MODELS_DIR)/$(MMBERT_EMBEDDING_MODEL)"
-	@echo ""
-	@echo "Usage example:"
-	@echo "  make run-router CONFIG_FILE=config/intelligent-routing/in-tree/embedding-mmbert.yaml"
 
 download-mmbert-32k: ## Download mmBERT 32K YaRN base model (extended context MLM)
 	@echo "📦 Downloading mmBERT 32K YaRN base model..."

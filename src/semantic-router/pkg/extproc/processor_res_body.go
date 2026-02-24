@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -10,10 +11,12 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 )
 
 // handleResponseBody processes the response body
@@ -70,8 +73,8 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 				metrics.RecordModelTTFT(ctx.RequestModel, ttft)
 				ctx.TTFTSeconds = ttft
 				ctx.TTFTRecorded = true
-				// Update TTFT cache for latency signal evaluation
-				classification.UpdateTTFT(ctx.RequestModel, ttft)
+				// Update TTFT cache for latency_aware percentile-based model selection
+				latency.UpdateTTFT(ctx.RequestModel, ttft)
 				logging.Debugf("Recorded TTFT on first streamed body chunk: model=%q, TTFT=%.4fs", ctx.RequestModel, ttft)
 			}
 		}
@@ -133,6 +136,15 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	promptTokens := int(parsed.Usage.PromptTokens)
 	completionTokens := int(parsed.Usage.CompletionTokens)
 
+	// Report token usage to rate limiter for TPM budget tracking
+	if r.RateLimiter != nil && ctx.RateLimitCtx != nil {
+		r.RateLimiter.Report(*ctx.RateLimitCtx, ratelimit.TokenUsage{
+			InputTokens:  promptTokens,
+			OutputTokens: completionTokens,
+			TotalTokens:  promptTokens + completionTokens,
+		})
+	}
+
 	// Record tokens used with the model that was used
 	if ctx.RequestModel != "" {
 		metrics.RecordModelTokensDetailed(
@@ -151,7 +163,7 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 			// (either ModelRef.Model or ModelRef.LoRAName, depending on selection)
 			// UpdateTPOT will trim whitespace to ensure canonical matching
 			logging.Debugf("Updating TPOT cache for model: %q, TPOT: %.4f", ctx.RequestModel, timePerToken)
-			classification.UpdateTPOT(ctx.RequestModel, timePerToken)
+			latency.UpdateTPOT(ctx.RequestModel, timePerToken)
 		}
 
 		// Record windowed model metrics for load balancing
@@ -213,6 +225,56 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		} else {
 			logging.Infof("Cache updated for request ID: %s", ctx.RequestID)
 		}
+	}
+
+	// Memory Extraction (async, if auto_store enabled)
+	// Runs in background, does NOT add latency to response
+	autoStoreEnabled := extractAutoStore(ctx)
+	// Fallback to global config if no decision/request-level config
+	if !autoStoreEnabled && r.Config != nil && r.Config.Memory.AutoStore {
+		logging.Infof("extractAutoStore: Falling back to global config, AutoStore=%v", r.Config.Memory.AutoStore)
+		autoStoreEnabled = true
+	}
+	logging.Infof("Memory extraction check: MemoryExtractor=%v, autoStore=%v", r.MemoryExtractor != nil, autoStoreEnabled)
+	if r.MemoryExtractor != nil && autoStoreEnabled {
+		// Capture current turn for extraction (must be done before goroutine)
+		currentUserMessage := extractCurrentUserMessage(ctx)
+		currentAssistantResponse := extractAssistantResponseText(responseBody)
+		go func() {
+			// Use a background context for the goroutine to ensure it runs to completion
+			// even if the original request context is cancelled.
+			bgCtx := context.Background()
+			sessionID, userID, history, err := extractMemoryInfo(ctx)
+			// extractMemoryInfo returns error if userID is missing (required for memory extraction)
+			if err != nil {
+				logging.Errorf("Memory extraction failed: %v", err)
+				return
+			}
+
+			logging.Infof("Memory extraction: sessionID=%s, userID=%s, historyLen=%d", sessionID, userID, len(history))
+
+			// Append current turn to history (not yet in ConversationHistory)
+			// This ensures the current user message + assistant response are extracted
+			if currentUserMessage != "" {
+				history = append(history, memory.Message{Role: "user", Content: currentUserMessage})
+			}
+			if currentAssistantResponse != "" {
+				history = append(history, memory.Message{Role: "assistant", Content: currentAssistantResponse})
+			}
+
+			logging.Infof("Memory extraction: sessionID=%s, userID=%s, historyLen=%d (including current turn)", sessionID, userID, len(history))
+
+			// Only extract if we have history (not relevant for first request)
+			if len(history) == 0 {
+				logging.Infof("Memory extraction: skipping - no history to extract")
+				return // No history to extract from
+			}
+
+			logging.Infof("Memory extraction: calling ProcessResponse with %d messages", len(history))
+			if err := r.MemoryExtractor.ProcessResponse(bgCtx, sessionID, userID, history); err != nil {
+				logging.Warnf("Memory extraction failed: %v", err)
+			}
+		}()
 	}
 
 	// Translate response for Response API requests
@@ -418,6 +480,15 @@ func (r *OpenAIRouter) cacheStreamingResponse(ctx *RequestContext) error {
 		}
 	}
 
+	// Report streaming token usage to rate limiter
+	if r.RateLimiter != nil && ctx.RateLimitCtx != nil && (usage.PromptTokens > 0 || usage.CompletionTokens > 0) {
+		r.RateLimiter.Report(*ctx.RateLimitCtx, ratelimit.TokenUsage{
+			InputTokens:  int(usage.PromptTokens),
+			OutputTokens: int(usage.CompletionTokens),
+			TotalTokens:  int(usage.TotalTokens),
+		})
+	}
+
 	// Record token metrics for streaming responses
 	if ctx.RequestModel != "" && (usage.PromptTokens > 0 || usage.CompletionTokens > 0) {
 		metrics.RecordModelTokensDetailed(
@@ -434,7 +505,7 @@ func (r *OpenAIRouter) cacheStreamingResponse(ctx *RequestContext) error {
 			timePerToken := completionLatency / float64(usage.CompletionTokens)
 			metrics.RecordModelTPOT(ctx.RequestModel, timePerToken)
 			logging.Infof("Recorded TPOT for streaming response: model=%s, TPOT=%.4f", ctx.RequestModel, timePerToken)
-			classification.UpdateTPOT(ctx.RequestModel, timePerToken)
+			latency.UpdateTPOT(ctx.RequestModel, timePerToken)
 		}
 	}
 

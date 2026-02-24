@@ -3,7 +3,12 @@
 import copy
 from typing import Dict, Any, List
 
-from cli.models import UserConfig, PluginType
+from cli.models import (
+    UserConfig,
+    PluginType,
+    AlgorithmConfig,
+    LatencyAwareAlgorithmConfig,
+)
 from cli.defaults import load_embedded_defaults
 from cli.utils import getLogger
 
@@ -134,40 +139,6 @@ def translate_language_signals(languages: list) -> list:
         rule = {
             "name": signal.name,
         }
-        if signal.description:
-            rule["description"] = signal.description
-        rules.append(rule)
-    return rules
-
-
-def translate_latency_signals(latencies: list) -> list:
-    """
-    Translate latency signals to router format.
-
-    Args:
-        latencies: List of Latency objects
-
-    Returns:
-        list: Router latency rules
-    """
-    rules = []
-    for signal in latencies:
-        rule = {
-            "name": signal.name,
-        }
-        # At least one of tpot_percentile or ttft_percentile should be set
-        if signal.tpot_percentile is not None and signal.tpot_percentile > 0:
-            rule["tpot_percentile"] = signal.tpot_percentile
-        if signal.ttft_percentile is not None and signal.ttft_percentile > 0:
-            rule["ttft_percentile"] = signal.ttft_percentile
-
-        # Validate that at least one is set
-        if "tpot_percentile" not in rule and "ttft_percentile" not in rule:
-            log.warn(
-                f"Latency signal '{signal.name}' has neither tpot_percentile nor ttft_percentile set, skipping"
-            )
-            continue
-
         if signal.description:
             rule["description"] = signal.description
         rules.append(rule)
@@ -400,12 +371,18 @@ def translate_providers_to_router_format(providers) -> Dict[str, Any]:
                     "parameter": family_config.parameter,
                 }
 
+    # Translate external_models if present
+    external_models = []
+    if providers.external_models:
+        external_models = translate_external_models(providers.external_models)
+
     return {
         "vllm_endpoints": vllm_endpoints,
         "model_config": model_config,
         "default_model": providers.default_model,
         "reasoning_families": reasoning_families_dict,
         "default_reasoning_effort": providers.default_reasoning_effort,
+        "external_models": external_models,
     }
 
 
@@ -472,12 +449,6 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
             )
             log.info(f"  Added {len(user_config.signals.language)} language signals")
 
-        if user_config.signals.latency and len(user_config.signals.latency) > 0:
-            merged["latency_rules"] = translate_latency_signals(
-                user_config.signals.latency
-            )
-            log.info(f"  Added {len(user_config.signals.latency)} latency signals")
-
         if user_config.signals.context and len(user_config.signals.context) > 0:
             merged["context_rules"] = translate_context_signals(
                 user_config.signals.context
@@ -536,6 +507,21 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
     merged.update(provider_config)
     log.info(f"  Added {len(user_config.providers.models)} models")
     log.info(f"  Added {len(provider_config['vllm_endpoints'])} endpoints")
+    if provider_config.get("external_models"):
+        log.info(f"  Added {len(provider_config['external_models'])} external_models")
+
+    # Pass through memory configuration if provided
+    if user_config.memory:
+        memory_config = user_config.memory.model_dump(exclude_none=True)
+        merged["memory"] = memory_config
+        log.info(f"  Added memory configuration (enabled={user_config.memory.enabled})")
+
+    # Pass through embedding_models configuration if provided
+    # BERT is recommended for memory retrieval (forgiving semantic matching)
+    if user_config.embedding_models:
+        embedding_config = user_config.embedding_models.model_dump(exclude_none=True)
+        merged["embedding_models"] = embedding_config
+        log.info(f"  Added embedding_models configuration")
 
     log.info("✓ Configuration merged successfully")
 

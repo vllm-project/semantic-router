@@ -26,7 +26,7 @@ if (keyword_match AND domain_match) OR high_embedding_similarity:
 
 **Why this matters**: Multiple signals voting together make more accurate decisions than any single signal.
 
-## The 10 Signal Types
+## The 9 Signal Types
 
 ### 1. Keyword Signals
 
@@ -148,36 +148,7 @@ signals:
 - **Example 1**: "Hola, ¿cómo estás?" → Spanish (es) → Spanish model
 - **Example 2**: "你好，世界" → Chinese (zh) → Chinese model
 
-### 8. Latency Signals - Percentile-based Routing
-
-**What**: Model latency evaluation using TPOT (Time Per Output Token) and TTFT (Time To First Token) percentiles
-**Latency**: Typically 2-5ms for 10 models (runs asynchronously) - percentile calculation with O(n log n) complexity where n = observations per model (typically 10-100, max 1000)
-**Use Case**: Route latency-sensitive queries to faster models based on adaptive percentile thresholds
-
-```yaml
-signals:
-  latency:
-    - name: "low_latency_comprehensive"
-      tpot_percentile: 10  # 10th percentile for TPOT (top 10% fastest token generation)
-      ttft_percentile: 10  # 10th percentile for TTFT (top 10% fastest first token)
-      description: "For real-time applications - fast start and fast generation"
-    - name: "balanced_latency"
-      tpot_percentile: 50  # Median TPOT
-      ttft_percentile: 10  # Top 10% TTFT (prioritize fast start)
-      description: "Prioritize fast start, accept moderate generation speed"
-```
-
-**Example**: Real-time chat query → low_latency_comprehensive signal → Route to model meeting both TPOT and TTFT percentile thresholds
-
-**How it works**:
-
-- TPOT and TTFT are automatically tracked from each response
-- Percentile-based thresholds adapt to each model's actual performance distribution
-- Works with any number of observations: uses average for 1-2 observations, percentile calculation for 3+
-- When both TPOT and TTFT percentiles are set, model must meet BOTH thresholds (AND logic)
-- **Recommendation**: Use both TPOT and TTFT percentiles for comprehensive latency evaluation
-
-### 9. Context Signals
+### 8. Context Signals
 
 - **What**: Token-count based routing for short/long request handling
 - **Latency**: 1ms (calculated during processing)
@@ -199,7 +170,7 @@ signals:
 
 **Example**: A request with 5,000 tokens → Matches "high_token_count" → Routes to `claude-3-opus`
 
-### 10. Complexity Signals
+### 9. Complexity Signals
 
 - **What**: Embedding-based query complexity classification (hard/easy/medium)
 - **Latency**: 50-100ms (embedding computation)
@@ -272,26 +243,113 @@ decisions:
 - **Logic**: Route to code_help **if** keyword OR embedding matches
 - **Use Case**: Broad coverage (reduce false negatives)
 
-### Nested Logic - Complex Rules
+### NOT Operator — Unary Negation
+
+`NOT` is strictly unary: it takes **exactly one child** and negates its result.
 
 ```yaml
 decisions:
-  - name: "verified_math"
+  - name: "non_code"
+    rules:
+      operator: "NOT"
+      conditions:
+        - type: "keyword"       # single child — always required
+          name: "code_request"
+```
+
+- **Logic**: Route if the query does **not** contain code-related keywords
+- **Use Case**: Complement routing, exclusion gates
+
+### Derived Operators (composed from AND / OR / NOT)
+
+Because `NOT` is unary, compound gates are built by nesting:
+
+| Operator | Boolean identity | YAML pattern |
+| --- | --- | --- |
+| **NOR** | `¬(A ∨ B)` | `NOT → OR → [A, B]` |
+| **NAND** | `¬(A ∧ B)` | `NOT → AND → [A, B]` |
+| **XOR** | `(A ∧ ¬B) ∨ (¬A ∧ B)` | `OR → [AND(A,NOT(B)), AND(NOT(A),B)]` |
+| **XNOR** | `(A ∧ B) ∨ (¬A ∧ ¬B)` | `OR → [AND(A,B), AND(NOT(A),NOT(B))]` |
+
+**NOR** — route when *none* of the conditions match:
+
+```yaml
+rules:
+  operator: "NOT"
+  conditions:
+    - operator: "OR"
+      conditions:
+        - type: "domain"
+          name: "computer_science"
+        - type: "domain"
+          name: "math"
+```
+
+**NAND** — route unless *all* conditions match simultaneously:
+
+```yaml
+rules:
+  operator: "NOT"
+  conditions:
+    - operator: "AND"
+      conditions:
+        - type: "language"
+          name: "zh"
+        - type: "keyword"
+          name: "code_request"
+```
+
+**XOR** — route when *exactly one* condition matches:
+
+```yaml
+rules:
+  operator: "OR"
+  conditions:
+    - operator: "AND"
+      conditions:
+        - type: "keyword"
+          name: "code_request"
+        - operator: "NOT"
+          conditions:
+            - type: "keyword"
+              name: "math_request"
+    - operator: "AND"
+      conditions:
+        - operator: "NOT"
+          conditions:
+            - type: "keyword"
+              name: "code_request"
+        - type: "keyword"
+          name: "math_request"
+```
+
+### Arbitrary Nesting — Boolean Expression Trees
+
+Every `conditions` element can be either a **leaf node** (a signal reference with `type` + `name`) or a **composite node** (a sub-tree with `operator` + `conditions`). This makes the rule structure a recursive boolean expression tree (AST) of unlimited depth.
+
+```yaml
+# (cs ∨ math_keyword) ∧ en ∧ ¬long_context
+decisions:
+  - name: "stem_english_short"
     rules:
       operator: "AND"
       conditions:
-        - type: "domain"
-          name: "mathematics"
-        - operator: "OR"
+        - operator: "OR"                    # composite child
           conditions:
+            - type: "domain"
+              name: "computer_science"
             - type: "keyword"
-              name: "proof_keywords"
-            - type: "fact_check"
-              name: "factual_queries"
+              name: "math_request"
+        - type: "language"                  # leaf child
+          name: "en"
+        - operator: "NOT"                   # composite child (unary NOT)
+          conditions:
+            - type: "context"
+              name: "long_context"
 ```
 
-- **Logic**: Route if (mathematics domain) AND (proof keywords OR needs fact checking)
-- **Use Case**: Complex routing scenarios
+- **Logic**: `(CS domain OR math keyword) AND English AND NOT long context`
+- **Use Case**: Multi-signal, multi-level routing
 
 ## Real-World Example
 

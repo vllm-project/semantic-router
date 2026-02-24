@@ -1,6 +1,6 @@
 # ML Model Selection Training
 
-Python-based training for KNN, KMeans, and SVM model selection algorithms.
+Python-based training for KNN, KMeans, SVM, and MLP model selection algorithms.
 
 > **📝 Important: Data and Model Locations**
 >
@@ -13,7 +13,7 @@ Python-based training for KNN, KMeans, and SVM model selection algorithms.
 >
 > **Files:**
 >
-> - Models: `knn_model.json`, `kmeans_model.json`, `svm_model.json`
+> - Models: `knn_model.json`, `kmeans_model.json`, `svm_model.json`, `mlp_model.json`
 > - Data: `validation_benchmark_with_gt.jsonl`, `benchmark_data.jsonl`
 >
 > These files are deployment-specific and should be generated based on your own LLMs, queries, and benchmarks.
@@ -25,6 +25,7 @@ This module trains machine learning models for query-based LLM routing, implemen
 - **KNN (K-Nearest Neighbors)**: Quality-weighted voting among similar queries
 - **KMeans**: Cluster-based routing with efficiency optimization
 - **SVM (Support Vector Machine)**: RBF kernel decision boundaries
+- **MLP (Multi-Layer Perceptron)**: GPU-accelerated neural network routing (Reference: [FusionFactory arXiv:2507.10540](https://arxiv.org/abs/2507.10540))
 
 ## Reference Papers
 
@@ -39,6 +40,17 @@ pip install -r requirements.txt
 ```
 
 ## Quick Start
+
+### Option 0: Dashboard GUI (Recommended for New Users)
+
+The **Semantic Router Dashboard** provides a guided 3-step wizard for the entire ML model selection pipeline — no CLI needed:
+
+1. **Navigate** to `http://localhost:8700/ml-setup`
+2. **Step 1 — Benchmark**: Upload your `models.yaml` and `queries.jsonl`, configure concurrency/max tokens, and click **Run Benchmark**. Progress streams in real-time.
+3. **Step 2 — Train**: Select algorithms (KNN, K-Means, SVM, MLP), adjust hyperparameters in the advanced settings, and click **Train Models**. Trained models are saved to a fixed `ml-train/` directory.
+4. **Step 3 — Configure**: Define routing decisions (name, priority, algorithm, domains, model names) and click **Generate Config**. Downloads a deployment-ready `ml-model-selection-values.yaml`.
+
+The dashboard handles directory creation, progress tracking, and config generation automatically. See the [Dashboard README](../../dashboard/README.md) for setup instructions.
 
 ### Option 1: Download Pretrained Models from HuggingFace
 
@@ -104,8 +116,11 @@ python benchmark.py \
   --output benchmark_output.jsonl \
   --concurrency 4
 
-# Train
+# Train all algorithms
 python train.py --data-file benchmark_output.jsonl --output-dir models/
+
+# Train only MLP (faster if other models already exist)
+python train.py --data-file benchmark_output.jsonl --output-dir models/ --algorithm mlp
 ```
 
 ### Option 3: Train from Existing Benchmark Data
@@ -124,6 +139,12 @@ python train.py \
   --data-file data.jsonl \
   --output-dir models/ \
   --embedding-model bge
+
+# Train only specific algorithm (faster for updates)
+python train.py --data-file data.jsonl --output-dir models/ --algorithm knn
+python train.py --data-file data.jsonl --output-dir models/ --algorithm kmeans
+python train.py --data-file data.jsonl --output-dir models/ --algorithm svm
+python train.py --data-file data.jsonl --output-dir models/ --algorithm mlp --device cuda
 ```
 
 > **Note:** The file `benchmark_training_data.jsonl` is hosted on HuggingFace, not in this repository.
@@ -186,8 +207,8 @@ python train.py \
 │  ─────────────────────────────────────────────────────────────────  │
 │                                                                     │
 │  Router loads pretrained models:                                    │
-│  • LoadPretrainedSelector("knn_model.json")                         │
-│  • Models loaded via ml_binding.KNNFromJSON()                       │
+│  • LoadPretrainedSelector("knn_model.json") / ... "mlp_model.json"   │
+│  • KNN/KMeans/SVM via ml_binding.*FromJSON(); MLP via candle_binding.MLPFromJSON() │
 │                                                                     │
 │  Runtime selection:                                                 │
 │  • Generate query embedding (Qwen3, 1024-dim)                       │
@@ -278,9 +299,15 @@ See `models.example.yaml` for more examples.
 --kmeans-clusters   Number of clusters for KMeans (default: 8)
 --svm-kernel        SVM kernel type: rbf, linear (default: rbf)
 --svm-gamma         SVM gamma parameter for RBF kernel (default: 1.0)
+--mlp-hidden-sizes  Comma-separated hidden layer sizes for MLP (default: 256,128)
+--mlp-epochs        Training epochs for MLP (default: 100)
+--mlp-learning-rate Learning rate for MLP (default: 0.001)
+--mlp-dropout       Dropout rate for MLP (default: 0.1)
+--skip-mlp          Skip MLP training (if PyTorch not installed)
+--algorithm         Train specific algorithm: all, knn, kmeans, svm, mlp (default: all)
 --quality-weight    Quality weight for best model selection (default: 0.9)
 --batch-size        Batch size for embedding generation (default: 32)
---device            Device for embedding model: cpu, cuda, mps (default: cpu)
+--device            Device for embedding/MLP model: cpu, cuda, mps (default: cpu)
 ```
 
 ### download_model.py
@@ -320,7 +347,7 @@ This uses the same inference path as production:
 ```
 --data-file         Path to benchmark data JSONL file (optional - downloads from HF if not provided)
 --models-dir        Directory for model files (default: .cache/ml-models)
---algorithm         Algorithm to validate: knn, kmeans, svm, all (default: all)
+--algorithm         Algorithm to validate: knn, kmeans, svm, mlp, all (default: all)
 --test-split        Fraction of data to use for testing (default: 1.0 = all data)
 --seed              Random seed for reproducibility (default: 42)
 --models-repo       HuggingFace repo for models (default: abdallah1008/semantic-router-ml-models)
@@ -388,6 +415,7 @@ Generating embeddings for test queries...
 Loaded KNN selector from .cache/ml-models
 Loaded KMEANS selector from .cache/ml-models
 Loaded SVM selector from .cache/ml-models
+Loaded MLP selector from .cache/ml-models
 
 Evaluating strategies...
 
@@ -396,22 +424,25 @@ Validation Results (109 test queries, 4 models)
 Strategy                    Avg Quality  Avg Latency   Best Model %
 ----------------------------------------------------------------------
 Oracle (best)                     0.495       10.57s         100.0%
+MLP Selection                     0.286       33.10s          20.2%
 KMEANS Selection                  0.252       20.23s          23.9%
 Always llama-3.2-3b               0.242       25.08s          15.6%
 SVM Selection                     0.233       25.83s          14.7%
 Always mistral-7b                 0.215       70.08s          13.8%
 Always llama-3.2-1b               0.212        3.65s          26.6%
 KNN Selection                     0.196       36.62s          13.8%
-Random Selection                  0.175       40.46s          13.8%
+Random Selection                  0.194       38.59s          13.8%
 Always codellama-7b               0.161       53.78s           4.6%
 ======================================================================
 
 ML Routing Benefit:
-  - KMEANS Selection improves quality by +44.4% over random
+  - MLP Selection improves quality by +47.1% over random
+  - MLP Selection selects best model 1.5x more often than random
+  - KMEANS Selection improves quality by +29.9% over random
   - KMEANS Selection selects best model 1.7x more often than random
-  - SVM Selection improves quality by +33.3% over random
+  - SVM Selection improves quality by +20.0% over random
   - SVM Selection selects best model 1.1x more often than random
-  - KNN Selection improves quality by +12.2% over random
+  - KNN Selection improves quality by +1.0% over random
   - KNN Selection selects best model 1.0x more often than random
 
 Note: This validation uses the ACTUAL production Go/Rust selectors.
@@ -472,6 +503,7 @@ The training produces three model files:
 | `knn_model.json` | K-Nearest Neighbors | Quality-weighted voting among k similar queries |
 | `kmeans_model.json` | KMeans Clustering | Cluster assignment with efficiency weight |
 | `svm_model.json` | Support Vector Machine | RBF kernel decision boundaries |
+| `mlp_model.json` | Multi-Layer Perceptron | GPU-accelerated neural network (via Candle) |
 
 These files are in JSON format compatible with the Rust inference code in `ml-binding`.
 
@@ -507,7 +539,8 @@ These files are in JSON format compatible with the Rust inference code in `ml-bi
 │  6. Model Training (models.py)                                      │
 │     ├── KNN: Quality-weighted k-nearest neighbor voting             │
 │     ├── KMeans: Cluster assignment with efficiency weight           │
-│     └── SVM: RBF kernel with weighted training samples              │
+│     ├── SVM: RBF kernel with weighted training samples              │
+│     └── MLP: GPU-accelerated neural network (PyTorch/Candle)        │
 │                                                                      │
 │  7. Model Export                                                    │
 │     └── JSON format compatible with Rust inference                  │

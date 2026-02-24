@@ -1,0 +1,208 @@
+% sections/memory_rag.tex
+
+\section{Memory and Retrieval-Augmented Generation}
+\label{sec:memory_rag}
+
+Production routing systems must support multi-turn conversations with persistent context and knowledge-augmented responses.
+We describe the memory and RAG subsystems that operate as plugins within the routing pipeline.
+
+\subsection{Persistent Memory}
+
+The memory system maintains user-scoped knowledge across conversation sessions, enabling personalized routing and context-aware responses.
+\Cref{fig:memory_lifecycle} illustrates the full memory lifecycle.
+
+\textbf{Memory extraction.}
+An LLM-based extractor analyzes conversation turns to identify user-specific facts, classified into three types:
+\emph{semantic} (factual knowledge: preferences, background),
+\emph{procedural} (workflows, how-to knowledge), and
+\emph{episodic} (specific events and interactions).
+
+\textbf{Deduplication.}
+Before storage, extracted facts undergo similarity-based deduplication against existing memories, preventing redundant entries that would degrade retrieval precision.
+
+\textbf{Retrieval gating.}
+Not every query benefits from memory retrieval.
+A lightweight heuristic determines whether memory search is warranted by filtering out general fact-check queries, tool-augmented requests, and simple greetings, avoiding unnecessary embedding lookups and reducing latency for queries where personal context is irrelevant.
+
+\textbf{Retrieval.}
+At query time, relevant memories are retrieved via the hybrid search pipeline (vector similarity, BM25, and n-gram matching) over the user's memory store, formatted as context, and injected into the system message.
+An optional query-rewriting step reformulates the user's query for improved retrieval recall.
+
+\textbf{Retention scoring and pruning.}
+Memory stores grow unbounded without lifecycle management.
+We adopt an exponential decay model inspired by the Ebbinghaus forgetting curve~\cite{zhong2023memorybank}:
+\begin{equation}
+  R = e^{-t/S}, \quad S = S_0 + n_{\text{access}}
+\end{equation}
+where $t$ is the time in days since last retrieval, $S_0$ is the initial strength (default 30 days), and $n_{\text{access}}$ is the cumulative access count.
+Each retrieval reinforces the memory by incrementing $n_{\text{access}}$, slowing future decay.
+Memories falling below a retention threshold $R < \delta$ become pruning candidates.
+An optional per-user capacity limit evicts the lowest-scoring entries when the store exceeds a configurable maximum.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.6cm and 0.8cm,
+    box/.style={draw, rounded corners, fill=blue!6, minimum width=2.2cm,
+                minimum height=0.8cm, align=center, font=\small},
+    storebox/.style={draw, rounded corners, fill=green!6, minimum width=2.2cm,
+                minimum height=0.8cm, align=center, font=\small},
+    typebox/.style={draw, rounded corners, fill=orange!5,
+                minimum height=0.55cm, align=center, font=\scriptsize},
+    arr/.style={->, >=stealth, thick},
+    darr/.style={->, >=stealth, thick, dashed},
+    lbl/.style={font=\scriptsize, text=gray}
+]
+
+% --- Write path (top row) ---
+\node[box] (conv) {Conversation\\Turns};
+\node[box, right=of conv] (extract) {LLM\\Extraction};
+\node[box, right=of extract] (dedup) {Dedup\\Check};
+\node[storebox, right=of dedup] (store) {Memory\\Store};
+
+\draw[arr] (conv) -- (extract);
+\draw[arr] (extract) -- (dedup);
+\draw[arr] (dedup) -- node[above, lbl] {new} (store);
+
+% Memory types below extraction
+\node[typebox, below=0.4cm of extract, xshift=-1.2cm] (sem) {semantic};
+\node[typebox, right=0.2cm of sem] (proc) {procedural};
+\node[typebox, right=0.2cm of proc] (epis) {episodic};
+\draw[darr] (extract) -- (proc);
+
+% Dedup "update existing" loops back above store
+\draw[darr] (dedup.north) -- ++(0,0.45) -| node[above, lbl, pos=0.25] {update existing} (store.north);
+
+% --- Read path (bottom row) ---
+\node[box, below=2.8cm of conv] (query) {User\\Query};
+\node[box, right=of query] (gate) {Retrieval\\Gating};
+\node[box, right=of gate] (retrieve) {Similarity\\Search};
+\node[box, right=of retrieve] (inject) {Inject into\\System Msg};
+
+\draw[arr] (query) -- (gate);
+\draw[arr] (gate) -- node[above, lbl] {pass} (retrieve);
+\draw[arr] (retrieve) -- (inject);
+
+% Store feeds into retrieval
+\draw[arr] (store.south) -- ++(0,-1.15) -| (retrieve.north);
+
+% Skip arrow from gate
+\draw[darr] (gate.south) -- ++(0,-0.5) node[below, lbl] {skip};
+
+% Retrieval reinforces memory (feedback arrow on the right)
+\draw[darr] (inject.north) -- ++(0,0.6) node[right, lbl] {$n_{\text{access}}$\,+\,1} |- (store.east);
+
+% --- Path labels ---
+\node[lbl, above=0.08cm of conv, xshift=1.2cm] {\textit{Write path}};
+\node[lbl, above=0.08cm of query, xshift=1.2cm] {\textit{Read path}};
+
+\end{tikzpicture}
+\caption{Memory lifecycle. The write path extracts facts from conversations, deduplicates against existing entries, and stores new memories. The read path gates retrieval, searches by embedding similarity, and injects context. Each retrieval increments $n_{\text{access}}$, reinforcing the memory's retention score.}
+\label{fig:memory_lifecycle}
+\end{figure}
+
+\subsection{Retrieval-Augmented Generation}
+
+The RAG plugin retrieves relevant documents from vector stores and injects them as context before model invocation.
+
+\textbf{Indexing pipeline.}
+Documents are chunked (configurable size and overlap), embedded using the shared embedding model (\Cref{sec:ml_inference}), and indexed in a vector store.
+
+\textbf{Hybrid retrieval.}
+Pure vector search can miss lexically relevant results when the embedding model underweights rare terms.
+We implement a three-signal hybrid retrieval pipeline that scores each candidate chunk along three axes:
+\begin{enumerate}[nosep,leftmargin=*]
+  \item \emph{Vector similarity}: cosine similarity from the embedding index (already in $[0,1]$).
+  \item \emph{BM25}: an Okapi BM25 inverted index built over chunk contents provides keyword-level relevance, with configurable $k_1$ (term-frequency saturation, default~1.2) and $b$ (length normalization, default~0.75) parameters.
+  \item \emph{N-gram Jaccard}: character $n$-gram sets (default $n{=}3$) capture fuzzy lexical overlap, producing Jaccard similarity in $[0,1]$.
+\end{enumerate}
+
+\textbf{Score fusion.}
+Two fusion modes combine the three retriever scores into a single ranking:
+(1)~\emph{Weighted}: BM25 scores are min-max normalized to $[0,1]$, then the final score is $w_v \cdot s_{\text{vec}} + w_b \cdot s_{\text{bm25}} + w_n \cdot s_{\text{ngram}}$ with configurable weights (defaults: 0.7, 0.2, 0.1).
+(2)~\emph{Reciprocal Rank Fusion (RRF)}: $\text{score}(d) = \sum_r 1/(k + \text{rank}_r(d))$, which is parameter-free beyond the constant $k$ (default~60).
+
+\textbf{Backend abstraction.}
+The RAG plugin accesses vector stores through a common \texttt{VectorStoreBackend} interface, decoupling retrieval logic from storage implementation.
+Six backend types are supported (\Cref{fig:rag_backends}):
+\begin{itemize}[nosep,leftmargin=*]
+  \item \emph{In-memory}: development and testing; no external dependencies.
+  \item \emph{Milvus}~\cite{wang2021milvus}: production-grade distributed vector database with native hybrid search support.
+  \item \emph{Llama Stack}: delegates vector storage and search to a Llama Stack deployment via its OpenAI-compatible \texttt{/v1/vector\_stores} API, enabling unified management of LLM serving and retrieval through a single platform. When the Llama Stack instance is configured with the Milvus \texttt{vector\_io} provider, the backend supports hybrid search by passing \texttt{ranking\_options: \{ranker: ``rrf''\}} in search requests, combining vector similarity with BM25 keyword matching at the provider level.
+  \item \emph{External API}: any OpenAI-compatible vector store endpoint.
+  \item \emph{MCP}: retrieval via Model Context Protocol tool servers.
+  \item \emph{OpenAI file search}: delegated retrieval through OpenAI's hosted file search API.
+\end{itemize}
+Backends that implement native hybrid search (Milvus, Llama Stack with Milvus provider) use their own BM25 and keyword indexes; all other backends fall back to a generic rerank path that fetches an expanded candidate set ($4{\times}$ top-$k$) from vector search and applies BM25 and n-gram scoring as a post-retrieval reranking step.
+
+\textbf{Score-range awareness.}
+Different retrieval modes produce scores on fundamentally different scales: cosine similarity yields values in $[0, 1]$ where a threshold of $\sim$0.7 is typical, while RRF scores follow $\sum 1/(k + \text{rank})$ and typically range from 0.001 to 0.05.
+Applying a cosine-calibrated threshold to RRF scores would silently discard all results.
+The backend interface handles this transparently: when hybrid search is active, score-based filtering is bypassed and result volume is controlled solely by the top-$k$ parameter.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    node distance=0.5cm and 0.7cm,
+    box/.style={draw, rounded corners, fill=blue!6, minimum width=2cm,
+                minimum height=0.7cm, align=center, font=\small},
+    backend/.style={draw, rounded corners, fill=green!6, minimum width=1.8cm,
+                minimum height=0.6cm, align=center, font=\scriptsize},
+    arr/.style={->, >=stealth, thick},
+    lbl/.style={font=\scriptsize, text=gray}
+]
+
+\node[box] (query) {User Query};
+\node[box, right=1.2cm of query] (rag) {RAG Plugin};
+\node[box, right=1.2cm of rag] (iface) {VectorStore\\Interface};
+
+\draw[arr] (query) -- (rag);
+\draw[arr] (rag) -- (iface);
+
+% Backends fan out
+\node[backend, above right=0.4cm and 1.2cm of iface] (milvus) {Milvus};
+\node[backend, right=1.2cm of iface] (llama) {Llama Stack};
+\node[backend, below right=0.4cm and 1.2cm of iface] (others) {MCP / API /\\OpenAI};
+
+\draw[arr] (iface) -- (milvus);
+\draw[arr] (iface) -- (llama);
+\draw[arr] (iface) -- (others);
+
+% Hybrid label
+\node[lbl, right=0.1cm of milvus] {hybrid};
+\node[lbl, right=0.1cm of llama] {hybrid (via Milvus)};
+\node[lbl, right=0.1cm of others] {vector only};
+
+% Inject
+\node[box, below=1.5cm of rag] (inject) {Inject into Prompt};
+\draw[arr] (rag) -- (inject);
+
+\end{tikzpicture}
+\caption{RAG backend architecture. The RAG plugin accesses vector stores through a common interface. Milvus and Llama Stack (with Milvus provider) support native hybrid search combining vector similarity with BM25 keyword matching via Reciprocal Rank Fusion. Other backends use vector-only retrieval with optional post-retrieval reranking.}
+\label{fig:rag_backends}
+\end{figure}
+
+\subsection{Stateful Conversations (Response API)}
+
+The system supports the OpenAI Responses API for stateful multi-turn conversations:
+
+\textbf{Conversation chaining.}
+Each response is stored with a unique ID.
+Subsequent requests reference \texttt{previous\_response\_id} to reconstruct the full conversation history without retransmitting the full message sequence.
+A bidirectional translator converts between the Response API format and Chat Completions format for backend model invocation, enabling all routing, safety, and caching features to operate identically on both API surfaces.
+
+\textbf{Routing continuity.}
+Stored responses include routing metadata (decision, model selection, signal results), enabling consistent routing across conversation turns and providing context for feedback-driven model selection.
+
+\textbf{State backends.}
+Conversation state is persisted via three backends:
+(1)~\emph{in-memory} for development;
+(2)~\emph{Redis} for production deployments requiring distributed state with high availability---supporting both standalone and cluster modes;
+(3)~\emph{Milvus} for deployments that benefit from semantic retrieval over conversation history.
+The Redis backend enables horizontal scaling: multiple router replicas share conversation state, and Redis persistence ensures that conversation chains survive pod restarts.
+
+\subsection{Integration with Signal-Decision Architecture}
+
+Both memory and RAG operate as per-decision plugins.
+Different decisions can activate different RAG configurations (different vector stores, different $k$ values, different chunk strategies, different search modes) or disable retrieval entirely.
+This enables, for example, a ``research assistant'' decision that activates RAG with hybrid search over a technical knowledge base while a ``casual chat'' decision disables retrieval.

@@ -228,15 +228,6 @@ func (r *OpenAIRouter) createLooperResponse(resp *looper.Response, reqCtx *Reque
 		})
 	}
 
-	if len(reqCtx.VSRMatchedLatency) > 0 {
-		setHeaders = append(setHeaders, &core.HeaderValueOption{
-			Header: &core.HeaderValue{
-				Key:      headers.VSRMatchedLatency,
-				RawValue: []byte(strings.Join(reqCtx.VSRMatchedLatency, ",")),
-			},
-		})
-	}
-
 	if len(reqCtx.VSRMatchedContext) > 0 {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{

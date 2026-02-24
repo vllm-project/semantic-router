@@ -18,7 +18,7 @@ start-milvus: ## Start Milvus container for testing
 		-e CLUSTER_ENABLED=false \
 		-p 19530:19530 \
 		-p 9091:9091 \
-		-v /tmp/milvus-data:/var/lib/milvus \
+		-v /tmp/milvus-data:/var/lib/milvus:z \
 		milvusdb/milvus:v2.3.3 \
 		milvus run standalone
 	@echo "Waiting for Milvus to be ready..."
@@ -54,7 +54,7 @@ clean-milvus: stop-milvus ## Clean up Milvus data
 test-milvus-cache: start-milvus rust
 	@$(LOG_TARGET)
 	@echo "Testing semantic cache with Milvus backend..."
-	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release && \
+	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release:$${PWD}/nlp-binding/target/release && \
 	export SR_TEST_MODE=true && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -tags=milvus -v ./pkg/cache/
 	@echo "Consider running 'make stop-milvus' when done testing"
@@ -63,7 +63,7 @@ test-milvus-cache: start-milvus rust
 test-semantic-router-milvus: build-router start-milvus
 	@$(LOG_TARGET)
 	@echo "Testing semantic-router with Milvus cache backend..."
-	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release && \
+	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release:$${PWD}/nlp-binding/target/release && \
 	export SR_TEST_MODE=true && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -tags=milvus -v ./...
 	@echo "Consider running 'make stop-milvus' when done testing"
@@ -153,7 +153,7 @@ benchmark-hybrid-quick: rust ## Run quick Hybrid vs Milvus benchmark (smaller sc
 	@echo "  • Both caches: make benchmark-hybrid-quick (default)"
 	@echo ""
 	@mkdir -p benchmark_results/hybrid_vs_milvus
-	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release && \
+	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release:$${PWD}/nlp-binding/target/release && \
 		export USE_CPU=$${USE_CPU:-false} && \
 		export SKIP_MILVUS=$${SKIP_MILVUS:-false} && \
 		export SR_BENCHMARK_MODE=true && \
@@ -186,7 +186,7 @@ benchmark-hybrid-only: rust ## Run ONLY Hybrid cache benchmark (skip Milvus for 
 	@echo "  • Select GPUs: CUDA_VISIBLE_DEVICES=2,3 USE_CPU=false make benchmark-hybrid-only"
 	@echo ""
 	@mkdir -p benchmark_results/hybrid_vs_milvus
-	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release && \
+	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release:$${PWD}/nlp-binding/target/release && \
 		export USE_CPU=$${USE_CPU:-false} && \
 		export SKIP_MILVUS=true && \
 		export SR_BENCHMARK_MODE=true && \

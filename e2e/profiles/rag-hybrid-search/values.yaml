@@ -1,0 +1,78 @@
+# Semantic Router Configuration for RAG Hybrid Search E2E Tests
+# Exercises: multi-store management, hybrid search (BM25 + n-gram + vector)
+config:
+  bert_model:
+    model_id: models/mom-embedding-light
+    threshold: 0.6
+    use_cpu: true
+
+  # Embedding models for vector store ingestion
+  embedding_models:
+    mmbert_model_path: "models/mom-embedding-ultra"
+    use_cpu: true
+
+  # Vector Store with Llama Stack backend
+  vector_store:
+    enabled: true
+    backend_type: "llama_stack"
+    file_storage_dir: "/tmp/vsr-data"
+    max_file_size_mb: 50
+    embedding_model: "mmbert"
+    embedding_dimension: 384
+    ingestion_workers: 2
+    supported_formats:
+      - ".txt"
+      - ".md"
+    llama_stack:
+      endpoint: "http://llama-stack.llama-stack-system.svc.cluster.local:8321"
+      embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
+      request_timeout_seconds: 120
+
+  # Minimal decision config for E2E
+  model_config:
+    "base-model":
+      reasoning_family: "qwen3"
+      loras:
+        - name: "general-expert"
+          description: "General-purpose adapter"
+
+  categories:
+    - name: other
+      description: "General knowledge and miscellaneous topics"
+
+  decisions:
+    - name: other_decision
+      description: "General knowledge and miscellaneous topics"
+      priority: 1
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "domain"
+            name: "other"
+      modelRefs:
+        - model: base-model
+          lora_name: general-expert
+          use_reasoning: false
+
+  strategy: "priority"
+  default_model: general-expert
+
+  semantic_cache:
+    enabled: false
+
+  classifier:
+    category_model:
+      model_id: "models/mom-domain-classifier"
+      use_modernbert: true
+      threshold: 0.6
+      use_cpu: true
+      category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
+    pii_model:
+      model_id: "models/mom-pii-classifier"
+      use_modernbert: false
+      threshold: 0.9
+      use_cpu: true
+      pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
+
+  prompt_guard:
+    enabled: false

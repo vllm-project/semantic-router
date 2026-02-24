@@ -1,0 +1,135 @@
+# Example configuration for omni model routing with image_generation tool support
+#
+# An omni model (e.g., Qwen2.5-Omni served by vllm-omni) can handle both text
+# and image generation in a single request, eliminating the need for separate
+# AR + diffusion model pairs.
+#
+# Key concepts:
+#   - modality: "omni" in model_config marks a model that handles all modalities
+#   - image_generation tool in Responses API triggers modality routing automatically
+#   - A single omni model satisfies BOTH the AR and diffusion requirements for BOTH modality
+
+# ── Endpoints ──────────────────────────────────────────────────
+vllm_endpoints:
+  - name: "vllm-omni"
+    address: "localhost"
+    port: 8001
+    weight: 100
+
+# ── Model Configuration ───────────────────────────────────────
+model_config:
+  # Omni model: handles text generation AND image generation natively
+  "Qwen/Qwen2.5-Omni":
+    preferred_endpoints: ["vllm-omni"]
+    modality: "omni"
+    # image_gen_backend is optional for omni models — only needed if you also
+    # want to use the diffusion backend path (generateImage) as a fallback.
+    # For the omni path (executeOmni), the request goes directly to the model endpoint.
+    image_gen_backend: "vllm_omni_local"
+    description: "Multimodal omni model for text and image generation"
+
+  # Traditional AR model (text only)
+  "Qwen/Qwen2.5-14B-Instruct":
+    preferred_endpoints: ["vllm-omni"]
+    modality: "ar"
+    description: "Text-only autoregressive model"
+
+# ── Image Generation Backends (optional, for non-omni diffusion path) ──
+image_gen_backends:
+  vllm_omni_local:
+    type: "vllm_omni"
+    base_url: "http://localhost:8001"
+    model: "Qwen/Qwen2.5-Omni"
+    default_width: 1024
+    default_height: 1024
+
+# ── Modality Detection ─────────────────────────────────────────
+modality_detector:
+  enabled: true
+  method: "hybrid"        # classifier + keyword for best accuracy
+  prompt_prefixes:        # stripped before sending to diffusion backend
+    - "generate an image of"
+    - "create a picture of"
+    - "draw"
+
+# ── Signals ────────────────────────────────────────────────────
+signals:
+  modality_rules:
+    - name: "AR"
+    - name: "DIFFUSION"
+    - name: "BOTH"
+
+# ── Decisions ──────────────────────────────────────────────────
+decisions:
+  # BOTH modality with omni model — single call handles text+image
+  - name: "multimodal_omni"
+    description: "Text + image generation via omni model"
+    priority: 10
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "modality"
+          name: "BOTH"
+    model_refs:
+      - model: "Qwen/Qwen2.5-Omni"   # One omni model satisfies BOTH requirement
+
+  # DIFFUSION with omni model — image generation only
+  - name: "image_gen_omni"
+    description: "Image generation via omni model"
+    priority: 9
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "modality"
+          name: "DIFFUSION"
+    model_refs:
+      - model: "Qwen/Qwen2.5-Omni"
+
+  # AR-only — standard text routing
+  - name: "text_only"
+    description: "Text generation via AR model"
+    priority: 5
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "modality"
+          name: "AR"
+    model_refs:
+      - model: "Qwen/Qwen2.5-14B-Instruct"
+
+# ── Usage Examples ─────────────────────────────────────────────
+#
+# 1. Responses API with image_generation tool (explicit):
+#    curl http://localhost:8080/v1/responses \
+#      -H "Content-Type: application/json" \
+#      -d '{
+#        "model": "auto",
+#        "input": "Draw a cat wearing a space helmet",
+#        "tools": [{"type": "image_generation", "size": "1024x1024", "quality": "high"}]
+#      }'
+#
+#    Response includes image_generation_call output items:
+#    {
+#      "id": "resp_...",
+#      "output": [
+#        {"type": "image_generation_call", "id": "ig_...", "status": "completed", "result": "<base64>"},
+#        {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "..."}]}
+#      ]
+#    }
+#
+# 2. Responses API with both text and image (BOTH modality, auto-detected):
+#    curl http://localhost:8080/v1/responses \
+#      -H "Content-Type: application/json" \
+#      -d '{
+#        "model": "auto",
+#        "input": "Explain black holes and generate an illustration",
+#        "tools": [{"type": "image_generation"}]
+#      }'
+#
+# 3. Chat Completions API (modality detected by classifier):
+#    curl http://localhost:8080/v1/chat/completions \
+#      -H "Content-Type: application/json" \
+#      -d '{
+#        "model": "auto",
+#        "messages": [{"role": "user", "content": "Generate an image of a sunset"}]
+#      }'

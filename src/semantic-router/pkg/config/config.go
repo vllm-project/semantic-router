@@ -21,10 +21,12 @@ const (
 
 // Model role constants for external models
 const (
-	ModelRoleGuardrail      = "guardrail"
-	ModelRoleClassification = "classification"
-	ModelRoleScoring        = "scoring"
-	ModelRolePreference     = "preference" // For route preference matching via external LLM
+	ModelRoleGuardrail        = "guardrail"
+	ModelRoleClassification   = "classification"
+	ModelRoleScoring          = "scoring"
+	ModelRolePreference       = "preference"        // For route preference matching via external LLM
+	ModelRoleMemoryRewrite    = "memory_rewrite"    // For memory query rewriting
+	ModelRoleMemoryExtraction = "memory_extraction" // For memory fact extraction
 )
 
 // Signal type constants for rule conditions
@@ -36,9 +38,10 @@ const (
 	SignalTypeUserFeedback = "user_feedback"
 	SignalTypePreference   = "preference"
 	SignalTypeLanguage     = "language"
-	SignalTypeLatency      = "latency"
 	SignalTypeContext      = "context"
 	SignalTypeComplexity   = "complexity"
+	SignalTypeModality     = "modality"
+	SignalTypeAuthz        = "authz"
 )
 
 // API format constants for model backends
@@ -75,6 +78,10 @@ type RouterConfig struct {
 
 	// Semantic cache configuration
 	SemanticCache `yaml:"semantic_cache"`
+	// Memory configuration for agentic memory (cross-session context)
+	Memory MemoryConfig `yaml:"memory"`
+	// Vector store configuration for document ingestion and search
+	VectorStore *VectorStoreConfig `yaml:"vector_store,omitempty"`
 	// Response API configuration for stateful conversations
 	ResponseAPI ResponseAPIConfig `yaml:"response_api"`
 	// Router Replay configuration for recording routing decisions
@@ -97,6 +104,210 @@ type RouterConfig struct {
 	BackendModels `yaml:",inline"`
 	// ToolSelection for automatic tool selection
 	ToolSelection `yaml:",inline"`
+
+	// Authz configures the credential resolution chain for per-user LLM API keys.
+	// If omitted, defaults to: header-injection (standard headers) → static-config.
+	Authz AuthzConfig `yaml:"authz,omitempty"`
+
+	// RateLimit configures the rate limiting chain.
+	// If omitted, no rate limiting is applied.
+	RateLimit RateLimitConfig `yaml:"ratelimit,omitempty"`
+}
+
+// AuthzConfig configures how the router resolves per-user LLM API keys.
+// The provider chain is tried in order; the first provider that returns a
+// non-empty key wins.
+//
+// If Providers is empty, the router uses a default chain:
+//
+//  1. header-injection (reads x-user-openai-key, x-user-anthropic-key)
+//  2. static-config    (reads model_config.*.access_key from this YAML)
+//
+// Security: By default, the resolver operates in fail-closed mode — if no
+// provider can resolve a key, the request is rejected. Set fail_open: true
+// only if you intentionally want to allow requests without API keys (e.g.,
+// routing to local vLLM backends that don't require auth).
+//
+// Example (Authorino — uses defaults, identity section optional):
+//
+//	authz:
+//	  fail_open: false
+//	  providers:
+//	    - type: header-injection
+//	    - type: static-config
+//
+// Example (Envoy Gateway JWT — custom identity headers):
+//
+//	authz:
+//	  fail_open: false
+//	  identity:
+//	    user_id_header: "x-jwt-sub"
+//	    user_groups_header: "x-jwt-groups"
+//	  providers:
+//	    - type: header-injection
+//	      headers:
+//	        openai: "x-user-openai-key"
+//	    - type: static-config
+type AuthzConfig struct {
+	// FailOpen controls behavior when no provider can resolve an API key.
+	//   false (default): reject the request with a clear error — prevents
+	//                    silent bypass from misconfig or ext_authz failures.
+	//   true:            allow the request through without a key — use only
+	//                    for local/vLLM backends that don't require auth.
+	FailOpen bool `yaml:"fail_open,omitempty"`
+
+	// Identity configures which request headers carry the authenticated user's
+	// identity (user ID and group memberships). These headers are injected by
+	// the auth backend before the request reaches the router.
+	//
+	// Defaults (when omitted) match Authorino conventions:
+	//   user_id_header:     "x-authz-user-id"
+	//   user_groups_header: "x-authz-user-groups"
+	//
+	// Override these when using a different auth backend:
+	//   Envoy Gateway JWT (claim_to_headers): "x-jwt-sub", "x-jwt-groups"
+	//   oauth2-proxy:                         "x-forwarded-user", "x-forwarded-groups"
+	//   Istio RequestAuthentication:           "x-jwt-claim-sub", "x-jwt-claim-groups"
+	Identity IdentityConfig `yaml:"identity,omitempty"`
+
+	Providers []AuthzProviderConfig `yaml:"providers,omitempty"`
+}
+
+// IdentityConfig controls how the router reads user identity from request headers.
+// These headers are set by the auth backend (Authorino, Envoy Gateway JWT,
+// oauth2-proxy, etc.) after successful authentication. The AuthzClassifier uses
+// them to match role_bindings subjects.
+//
+// When omitted, defaults match the Authorino convention (x-authz-user-id,
+// x-authz-user-groups). Override when using a different backend.
+type IdentityConfig struct {
+	// UserIDHeader is the request header carrying the authenticated user's ID.
+	// Default: "x-authz-user-id" (Authorino: Secret metadata.name)
+	UserIDHeader string `yaml:"user_id_header,omitempty"`
+
+	// UserGroupsHeader is the request header carrying comma-separated group names.
+	// Default: "x-authz-user-groups" (Authorino: Secret annotation authz-groups)
+	UserGroupsHeader string `yaml:"user_groups_header,omitempty"`
+}
+
+// GetUserIDHeader returns the configured user ID header, or the default if empty.
+func (ic IdentityConfig) GetUserIDHeader() string {
+	if ic.UserIDHeader == "" {
+		return "x-authz-user-id"
+	}
+	return ic.UserIDHeader
+}
+
+// GetUserGroupsHeader returns the configured user groups header, or the default if empty.
+func (ic IdentityConfig) GetUserGroupsHeader() string {
+	if ic.UserGroupsHeader == "" {
+		return "x-authz-user-groups"
+	}
+	return ic.UserGroupsHeader
+}
+
+// AuthzProviderConfig describes a single credential provider in the chain.
+type AuthzProviderConfig struct {
+	// Type is the provider type: "header-injection" or "static-config".
+	Type string `yaml:"type"`
+
+	// Headers maps LLM provider name → request header name.
+	// Only used when Type is "header-injection".
+	// Example: {"openai": "x-user-openai-key", "anthropic": "x-user-anthropic-key"}
+	Headers map[string]string `yaml:"headers,omitempty"`
+}
+
+// RateLimitConfig configures the rate limiting chain for request throttling.
+// The provider chain uses first-deny semantics: if any provider denies a
+// request, it is rejected with 429 Too Many Requests.
+//
+// If Providers is empty, no rate limiting is applied.
+//
+// Example (Envoy Rate Limit Service):
+//
+//	ratelimit:
+//	  fail_open: false
+//	  providers:
+//	    - type: envoy-ratelimit
+//	      address: "127.0.0.1:8081"
+//	      domain: "semantic-router"
+//
+// Example (local limiter with per-group RPM and TPM):
+//
+//	ratelimit:
+//	  fail_open: false
+//	  providers:
+//	    - type: local-limiter
+//	      rules:
+//	        - name: "free-rpm"
+//	          match: { group: "free-tier" }
+//	          requests_per_unit: 10
+//	          unit: minute
+//	        - name: "free-tpm"
+//	          match: { group: "free-tier" }
+//	          tokens_per_unit: 10000
+//	          unit: minute
+type RateLimitConfig struct {
+	// FailOpen controls behavior when a rate limit provider encounters an error.
+	//   false (default): reject the request — prevents bypass during outages.
+	//   true:            allow the request through — prioritizes availability.
+	FailOpen bool `yaml:"fail_open,omitempty"`
+
+	// Providers lists the rate limit providers in the chain.
+	// All providers are checked; the first denial wins.
+	Providers []RateLimitProviderConfig `yaml:"providers,omitempty"`
+}
+
+// RateLimitProviderConfig describes a single rate limit provider in the chain.
+type RateLimitProviderConfig struct {
+	// Type is the provider type: "envoy-ratelimit" or "local-limiter".
+	Type string `yaml:"type"`
+
+	// Address is the gRPC address of the Envoy Rate Limit Service.
+	// Only used when Type is "envoy-ratelimit".
+	Address string `yaml:"address,omitempty"`
+
+	// Domain is the RLS domain for grouping rate limit rules.
+	// Only used when Type is "envoy-ratelimit".
+	Domain string `yaml:"domain,omitempty"`
+
+	// Rules defines rate limit rules for the local-limiter provider.
+	// Only used when Type is "local-limiter".
+	Rules []RateLimitRule `yaml:"rules,omitempty"`
+}
+
+// RateLimitRule defines a single rate limit rule for the local-limiter.
+type RateLimitRule struct {
+	// Name is a human-readable name for the rule (used in logging and metrics).
+	Name string `yaml:"name"`
+
+	// Match specifies which requests this rule applies to.
+	Match RateLimitMatch `yaml:"match"`
+
+	// RequestsPerUnit is the maximum number of requests allowed per time unit.
+	// Set to 0 to disable request counting for this rule.
+	RequestsPerUnit int `yaml:"requests_per_unit,omitempty"`
+
+	// TokensPerUnit is the maximum number of tokens allowed per time unit.
+	// Inspired by AI Gateway's llmRequestCosts / usage-based rate limiting.
+	// Set to 0 to disable token counting for this rule.
+	TokensPerUnit int `yaml:"tokens_per_unit,omitempty"`
+
+	// Unit is the time window: "second", "minute", "hour", or "day".
+	Unit string `yaml:"unit"`
+}
+
+// RateLimitMatch specifies which requests a rule applies to.
+// Empty fields match everything; "*" is an explicit wildcard.
+type RateLimitMatch struct {
+	// User matches a specific user ID, or "*" for all users.
+	User string `yaml:"user,omitempty"`
+
+	// Group matches a specific group name.
+	Group string `yaml:"group,omitempty"`
+
+	// Model matches a specific model name.
+	Model string `yaml:"model,omitempty"`
 }
 
 // ToolSelection represents the configuration for automatic tool selection
@@ -151,6 +362,11 @@ type InlineModels struct {
 
 	// Feedback detector configuration for user satisfaction detection
 	FeedbackDetector FeedbackDetectorConfig `yaml:"feedback_detector"`
+
+	// Modality detector configuration for AR/DIFFUSION/BOTH classification
+	// Follows the same pattern as hallucination_mitigation and feedback_detector:
+	// signal rules in modality_rules (Signals), detector config here (InlineModels)
+	ModalityDetector ModalityDetectorConfig `yaml:"modality_detector"`
 }
 
 // IntelligentRouting represents the configuration for intelligent routing
@@ -167,7 +383,7 @@ type IntelligentRouting struct {
 	Strategy string `yaml:"strategy,omitempty"`
 
 	// ModelSelection configures the algorithm used for model selection
-	// Supported methods: "static", "elo", "router_dc", "automix", "hybrid"
+	// Supported methods: "static", "elo", "router_dc", "automix", "hybrid", "knn", "kmeans", "svm", "rl_driven", "gmtrouter"
 	ModelSelection ModelSelectionConfig `yaml:"model_selection,omitempty"`
 
 	// Reasoning mode configuration
@@ -182,7 +398,7 @@ type IntelligentRouting struct {
 //   - Hybrid: Cost-Efficient Quality-Aware Query Routing (arXiv:2404.14618)
 type ModelSelectionConfig struct {
 	// Method specifies the selection algorithm to use
-	// Options: "static", "elo", "router_dc", "automix", "hybrid"
+	// Options: "static", "elo", "router_dc", "automix", "hybrid", "knn", "kmeans", "svm", "rl_driven", "gmtrouter"
 	// Default: "static" (uses static scores from configuration)
 	Method string `yaml:"method,omitempty"`
 
@@ -221,6 +437,10 @@ type MLSelectionConfig struct {
 
 	// SVM configuration
 	SVM MLSVMConfig `yaml:"svm,omitempty"`
+
+	// MLP configuration (GPU-accelerated via Candle)
+	// Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via MLP routers
+	MLP MLMLPConfig `yaml:"mlp,omitempty"`
 }
 
 // MLKNNConfig holds KNN-specific configuration
@@ -241,6 +461,15 @@ type MLSVMConfig struct {
 	Kernel         string  `yaml:"kernel,omitempty"`
 	Gamma          float64 `yaml:"gamma,omitempty"`
 	PretrainedPath string  `yaml:"pretrained_path,omitempty"`
+}
+
+// MLMLPConfig holds MLP-specific configuration
+// Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via MLP routers
+type MLMLPConfig struct {
+	// Device specifies compute device: "cpu", "cuda", or "metal"
+	Device string `yaml:"device,omitempty"`
+	// PretrainedPath is the path to the pretrained MLP model file
+	PretrainedPath string `yaml:"pretrained_path,omitempty"`
 }
 
 // EloSelectionConfig configures Elo rating-based model selection
@@ -340,6 +569,72 @@ type HybridSelectionConfig struct {
 	NormalizeScores bool `yaml:"normalize_scores,omitempty"`
 }
 
+// RLDrivenSelectionConfig configures RL-based model selection
+// Reference: Router-R1 (arXiv:2506.09033)
+type RLDrivenSelectionConfig struct {
+	// ExplorationRate controls initial exploration (0-1, default: 0.3)
+	ExplorationRate float64 `yaml:"exploration_rate,omitempty"`
+
+	// UseThompsonSampling enables Thompson Sampling (default: true)
+	UseThompsonSampling bool `yaml:"use_thompson_sampling,omitempty"`
+
+	// EnablePersonalization enables per-user preference tracking
+	EnablePersonalization bool `yaml:"enable_personalization,omitempty"`
+
+	// PersonalizationBlend controls global vs user-specific blend (0-1, default: 0.3)
+	PersonalizationBlend float64 `yaml:"personalization_blend,omitempty"`
+
+	// CostAwareness enables cost-aware exploration
+	CostAwareness bool `yaml:"cost_awareness,omitempty"`
+
+	// CostWeight controls cost influence when CostAwareness is enabled (0-1)
+	CostWeight float64 `yaml:"cost_weight,omitempty"`
+
+	// UseRouterR1Rewards enables Router-R1 style reward computation
+	UseRouterR1Rewards bool `yaml:"use_router_r1_rewards,omitempty"`
+
+	// EnableLLMRouting enables LLM-based routing using Router-R1 approach
+	EnableLLMRouting bool `yaml:"enable_llm_routing,omitempty"`
+
+	// RouterR1ServerURL is the URL of the Router-R1 LLM server
+	RouterR1ServerURL string `yaml:"router_r1_server_url,omitempty"`
+}
+
+// GMTRouterSelectionConfig configures graph-based personalized routing
+// Reference: GMTRouter (arXiv:2511.08590)
+type GMTRouterSelectionConfig struct {
+	// EnablePersonalization enables user-specific preference learning
+	EnablePersonalization bool `yaml:"enable_personalization,omitempty"`
+
+	// HistorySampleSize is the number of interaction histories to sample (default: 5)
+	HistorySampleSize int `yaml:"history_sample_size,omitempty"`
+
+	// MinInteractionsForPersonalization is minimum interactions before personalization
+	MinInteractionsForPersonalization int `yaml:"min_interactions_for_personalization,omitempty"`
+
+	// MaxInteractionsPerUser limits stored interactions per user (default: 100)
+	MaxInteractionsPerUser int `yaml:"max_interactions_per_user,omitempty"`
+
+	// ModelPath is the path to trained GMTRouter model weights
+	ModelPath string `yaml:"model_path,omitempty"`
+
+	// StoragePath is where to persist interaction graph
+	StoragePath string `yaml:"storage_path,omitempty"`
+}
+
+// LatencyAwareAlgorithmConfig configures latency-aware model selection using TPOT/TTFT percentiles.
+// At least one of TPOTPercentile or TTFTPercentile must be set.
+type LatencyAwareAlgorithmConfig struct {
+	// TPOTPercentile is the percentile bucket to use for TPOT (Time Per Output Token) evaluation (1-100).
+	TPOTPercentile int `yaml:"tpot_percentile,omitempty"`
+
+	// TTFTPercentile is the percentile bucket to use for TTFT (Time To First Token) evaluation (1-100).
+	TTFTPercentile int `yaml:"ttft_percentile,omitempty"`
+
+	// Description provides human-readable explanation of the latency-aware policy.
+	Description string `yaml:"description,omitempty"`
+}
+
 type Signals struct {
 	// Keyword-based classification rules
 	KeywordRules []KeywordRule `yaml:"keyword_rules,omitempty"`
@@ -366,10 +661,6 @@ type Signals struct {
 	// When matched, outputs the detected language code (e.g., "en", "es", "zh", "fr")
 	LanguageRules []LanguageRule `yaml:"language_rules,omitempty"`
 
-	// Latency rules for latency-based signal classification
-	// When matched, outputs the latency rule name if available models meet TPOT requirements
-	LatencyRules []LatencyRule `yaml:"latency_rules,omitempty"`
-
 	// Context rules for token count-based classification
 	// When matched, outputs the rule name (e.g., "low_token_count", "high_token_count")
 	ContextRules []ContextRule `yaml:"context_rules,omitempty"`
@@ -377,6 +668,18 @@ type Signals struct {
 	// Complexity rules for complexity-based classification using embedding similarity
 	// When matched, outputs the rule name with difficulty level (e.g., "code_complexity:hard", "math_complexity:easy")
 	ComplexityRules []ComplexityRule `yaml:"complexity_rules,omitempty"`
+
+	// Modality rules for modality-based signal classification
+	// When matched, outputs "AR", "DIFFUSION", or "BOTH" based on the modality classifier/keyword detection
+	// Detection configuration is read from modality_detector (InlineModels)
+	ModalityRules []ModalityRule `yaml:"modality_rules,omitempty"`
+	// RoleBindings defines RBAC role assignments for user-level authorization.
+	// Each binding maps subjects (users/groups) to a named role (K8s RoleBinding pattern).
+	// The role name is emitted as a signal in the decision engine (type: "authz").
+	// Model access is controlled by decisions via modelRefs, NOT by the role binding.
+	// User identity and groups are read from x-authz-user-id and x-authz-user-groups headers
+	// (injected by Authorino / ext_authz). Subject names MUST match Authorino output.
+	RoleBindings []RoleBinding `yaml:"role_bindings,omitempty"`
 }
 
 // BackendModels represents the configuration for backend models
@@ -389,6 +692,19 @@ type BackendModels struct {
 
 	// vLLM endpoints configuration for multiple backend support
 	VLLMEndpoints []VLLMEndpoint `yaml:"vllm_endpoints"`
+
+	// Image generation backend configurations (like reasoning_families)
+	// Named map of provider-specific configs referenced by model_config entries.
+	// vllm_omni and openai use completely different APIs — each entry's Type
+	// determines which fields are relevant.
+	ImageGenBackends map[string]ImageGenBackendEntry `yaml:"image_gen_backends,omitempty"`
+
+	// Provider profiles define cloud provider connection and protocol details
+	// (like reasoning_families defines reasoning syntax per model family).
+	// Each entry describes how to talk to a provider: URL, auth header format, path.
+	// Endpoints reference a profile by name via provider_profile field.
+	// The actual API key comes from the authz CredentialResolver chain, not from here.
+	ProviderProfiles map[string]ProviderProfile `yaml:"provider_profiles,omitempty"`
 }
 
 type ReasoningConfig struct {
@@ -445,6 +761,9 @@ type EmbeddingModels struct {
 	// Path to mmBERT 2D Matryoshka embedding model directory
 	// Supports layer early exit (3/6/11/22 layers) and dimension reduction (64-768)
 	MmBertModelPath string `yaml:"mmbert_model_path"`
+	// Path to BERT/MiniLM embedding model directory (e.g., all-MiniLM-L6-v2, all-MiniLM-L12-v2)
+	// Produces 384-dim embeddings, recommended for memory retrieval due to forgiving semantic matching
+	BertModelPath string `yaml:"bert_model_path"`
 	// Use CPU for inference (default: true, auto-detect GPU if available)
 	UseCPU bool `yaml:"use_cpu"`
 
@@ -712,6 +1031,74 @@ type SemanticCache struct {
 	EmbeddingModel string `yaml:"embedding_model,omitempty"`
 }
 
+// MemoryConfig represents the configuration for agentic memory
+type MemoryConfig struct {
+	// Enable memory features globally.
+	// Auto-enabled if any decision uses memory plugin.
+	Enabled bool `yaml:"enabled,omitempty"`
+
+	// AutoStore enables automatic memory extraction from conversations
+	AutoStore bool `yaml:"auto_store,omitempty"`
+
+	// Milvus configuration for memory storage
+	Milvus MemoryMilvusConfig `yaml:"milvus,omitempty"`
+
+	// EmbeddingModel specifies which embedding model to use
+	// If not set, auto-detected from embedding_models section
+	// Options: "bert", "mmbert", "qwen3", "gemma"
+	EmbeddingModel string `yaml:"embedding_model,omitempty"`
+
+	// ExtractionBatchSize is the number of turns between extraction runs (default: 10)
+	ExtractionBatchSize int `yaml:"extraction_batch_size,omitempty"`
+
+	// Default retrieval limit (max number of results to return)
+	// Default: 5
+	DefaultRetrievalLimit int `yaml:"default_retrieval_limit,omitempty"`
+
+	// Default similarity threshold for memory retrieval (0.0-1.0)
+	// Default: 0.6
+	DefaultSimilarityThreshold float32 `yaml:"default_similarity_threshold,omitempty"`
+
+	// QualityScoring configures retention scoring and pruning parameters (MemoryBank-style).
+	// Access tracking (LastAccessed, AccessCount) is always active; pruning runs only when PruneUser is called.
+	QualityScoring MemoryQualityScoringConfig `yaml:"quality_scoring,omitempty"`
+
+	// Note: Query rewriting and fact extraction are enabled by defining
+	// external_models with model_role="memory_rewrite" or "memory_extraction".
+	// Use FindExternalModelByRole() to check if enabled and get config.
+}
+
+// MemoryQualityScoringConfig configures retention scoring and pruning (MemoryBank-style).
+// Access tracking (LastAccessed, AccessCount) is always active when memory is enabled.
+// R = exp(-t_days/S), S = InitialStrengthDays + AccessCount; delete when R < PruneThreshold.
+type MemoryQualityScoringConfig struct {
+	// InitialStrengthDays is S0: initial strength in days (default: 30). Higher = slower decay for new memories.
+	InitialStrengthDays int `yaml:"initial_strength_days,omitempty"`
+
+	// PruneThreshold is delta: delete memories with R < PruneThreshold (default: 0.1).
+	PruneThreshold float64 `yaml:"prune_threshold,omitempty"`
+
+	// MaxMemoriesPerUser caps memories per user; if over, lowest-R memories are deleted first (0 = no cap).
+	MaxMemoriesPerUser int `yaml:"max_memories_per_user,omitempty"`
+}
+
+// MemoryMilvusConfig contains Milvus-specific configuration for memory storage.
+type MemoryMilvusConfig struct {
+	// Milvus server address (e.g., "localhost:19530")
+	Address string `yaml:"address"`
+
+	// Collection name for memory storage (default: "agentic_memory")
+	Collection string `yaml:"collection,omitempty"`
+
+	// Embedding dimension (default: 384 for all-MiniLM-L6-v2)
+	Dimension int `yaml:"dimension,omitempty"`
+
+	// NumPartitions for partition key distribution (default: 16, max: 1024)
+	// Higher values improve per-user query performance at scale.
+	// Recommendation: 64 for <100K users, 256 for 100K-1M users.
+	NumPartitions int `yaml:"num_partitions,omitempty"`
+}
+
 // ResponseAPIConfig configures the Response API for stateful conversations.
 // The Response API provides OpenAI-compatible /v1/responses endpoints
 // that support conversation chaining via previous_response_id.
@@ -795,16 +1182,41 @@ type KeywordRule struct {
 	Keywords      []string `yaml:"keywords"`
 	CaseSensitive bool     `yaml:"case_sensitive"`
 
+	// Method selects the matching engine for this rule.
+	// Options: "regex" (default), "bm25", "ngram"
+	//   - "regex": Compiled regexp with word boundaries (current behavior)
+	//   - "bm25":  BM25 (Okapi) scoring via Rust nlp-binding; natural TF-IDF confidence
+	//   - "ngram": N-gram similarity via Rust nlp-binding; inherent typo tolerance
+	// Default: "regex"
+	Method string `yaml:"method,omitempty"`
+
 	// FuzzyMatch enables approximate string matching using Levenshtein distance.
 	// When enabled, keywords will match even with typos (e.g., "urgnt" matches "urgent").
+	// Only applies to method: "regex". For typo tolerance with "ngram", use NgramThreshold instead.
 	// Default: false (exact matching only)
 	FuzzyMatch bool `yaml:"fuzzy_match,omitempty"`
 
 	// FuzzyThreshold sets the maximum Levenshtein distance for fuzzy matching.
 	// Lower values = stricter matching (1-2 recommended for short words, 2-3 for longer).
-	// Only used when FuzzyMatch is true.
+	// Only used when FuzzyMatch is true and method is "regex".
 	// Default: 2
 	FuzzyThreshold int `yaml:"fuzzy_threshold,omitempty"`
+
+	// BM25Threshold sets the minimum BM25 score for a keyword to count as matched.
+	// Only used when method is "bm25".
+	// Default: 0.1
+	BM25Threshold float32 `yaml:"bm25_threshold,omitempty"`
+
+	// NgramThreshold sets the minimum n-gram similarity (0.0-1.0) for a keyword to match.
+	// Lower values = more fuzzy (0.3-0.4 recommended for typo tolerance).
+	// Only used when method is "ngram".
+	// Default: 0.4
+	NgramThreshold float32 `yaml:"ngram_threshold,omitempty"`
+
+	// NgramArity sets the n-gram size (2=bigram, 3=trigram, etc.).
+	// Only used when method is "ngram".
+	// Default: 3
+	NgramArity int `yaml:"ngram_arity,omitempty"`
 }
 
 // Aggregation method used in keyword embedding rule
@@ -1038,10 +1450,9 @@ type PreferenceModelConfig struct {
 type ExternalModelConfig struct {
 	// Provider (e.g., "vllm")
 	Provider string `yaml:"llm_provider"`
-	// Classifier type (e.g., "guardrail", "classification", "scoring")
+	// Classifier type (e.g., "guardrail", "classification", "scoring", "memory_rewrite", "memory_extraction")
 	ModelRole string `yaml:"model_role"`
-	// Dedicated LLM endpoint configuration for PromptGuard
-	// This is separate from vllm_endpoints (which are for backend inference)
+	// Dedicated LLM endpoint configuration
 	ModelEndpoint ClassifierVLLMEndpoint `yaml:"llm_endpoint,omitempty"`
 	// Model name on LLM server (e.g., "Qwen/Qwen3Guard-Gen-0.6B")
 	ModelName string `yaml:"llm_model_name,omitempty"`
@@ -1058,6 +1469,10 @@ type ExternalModelConfig struct {
 	// Optional access key for Authorization header
 	// If provided, will be sent as "Authorization: Bearer <access_key>"
 	AccessKey string `yaml:"access_key,omitempty"`
+	// Maximum tokens for LLM generation (used by memory_rewrite, memory_extraction)
+	MaxTokens int `yaml:"max_tokens,omitempty"`
+	// Temperature for LLM generation (used by memory_rewrite, memory_extraction)
+	Temperature float64 `yaml:"temperature,omitempty"`
 }
 
 // ToolFilteringWeights defines per-signal weights for advanced tool filtering.
@@ -1264,6 +1679,59 @@ type VLLMEndpoint struct {
 	// Can also be set via environment variables: HF_API_KEY, OPENROUTER_API_KEY
 	// +optional
 	APIKey string `yaml:"api_key,omitempty"`
+
+	// ProviderProfileName references a named entry in provider_profiles
+	// (like reasoning_family references reasoning_families).
+	// When set, the profile's base_url, auth header format, and chat path
+	// are used instead of address:port. The API key comes from authz.
+	// +optional
+	ProviderProfileName string `yaml:"provider_profile,omitempty"`
+}
+
+// ProviderProfile defines cloud provider connection and protocol details.
+// The type field drives sensible defaults for auth header, chat path, and
+// LLMProvider mapping. Explicit fields override the defaults.
+//
+// Keys are NOT stored here — they come from the authz CredentialResolver chain
+// (header-injection from Authorino/ext_authz, or static-config from model_config.access_key).
+//
+// Example:
+//
+//	provider_profiles:
+//	  openai-prod:
+//	    type: "openai"
+//	    base_url: "https://api.openai.com/v1"
+//	  azure-east:
+//	    type: "azure-openai"
+//	    base_url: "https://myresource.openai.azure.com/openai/deployments/gpt-4o"
+//	    api_version: "2024-10-21"
+type ProviderProfile struct {
+	// Type drives defaults for auth header, path, and LLMProvider mapping.
+	// Values: "openai", "anthropic", "azure-openai", "bedrock", "gemini", "vertex-ai"
+	Type string `yaml:"type"`
+
+	// BaseURL is the provider's base URL (e.g., "https://api.openai.com/v1").
+	// host:port is extracted for x-vsr-destination-endpoint; path is used for :path header.
+	BaseURL string `yaml:"base_url,omitempty"`
+
+	// AuthHeader overrides the default auth header name for the type
+	// (e.g., "Authorization" for openai, "api-key" for azure-openai, "x-api-key" for anthropic).
+	AuthHeader string `yaml:"auth_header,omitempty"`
+
+	// AuthPrefix overrides the default auth value prefix
+	// (e.g., "Bearer" for openai, "" for azure-openai).
+	AuthPrefix string `yaml:"auth_prefix,omitempty"`
+
+	// ExtraHeaders are added to every request to this provider
+	// (e.g., {"anthropic-version": "2023-06-01"}).
+	ExtraHeaders map[string]string `yaml:"extra_headers,omitempty"`
+
+	// APIVersion for Azure OpenAI — appended as ?api-version= to the chat path.
+	APIVersion string `yaml:"api_version,omitempty"`
+
+	// ChatPath overrides the default chat completion path suffix for the type.
+	// When empty, the type-specific default is used (e.g., "/chat/completions" for openai).
+	ChatPath string `yaml:"chat_path,omitempty"`
 }
 
 // ModelPricing represents configuration for model-specific parameters
@@ -1326,6 +1794,17 @@ type ModelParams struct {
 	// Example: {"huggingface": "meta-llama/Llama-3.1-8B-Instruct", "ollama": "llama3.1:8b"}
 	// +optional
 	ExternalModelIDs map[string]string `yaml:"external_model_ids,omitempty"`
+
+	// Modality role for this model: "ar" (text/autoregressive), "diffusion" (image generation),
+	// or "omni" (can handle both text and image generation in a single request, e.g. vllm-omni
+	// serving Qwen2.5-Omni or similar multimodal models).
+	// Used by modality routing to identify which model handles which modality.
+	// When empty, the model has no modality role.
+	Modality string `yaml:"modality,omitempty"`
+
+	// ImageGenBackend references a named entry in image_gen_backends (like reasoning_family references reasoning_families)
+	// Required when modality is "diffusion" — tells the router which provider config to use for image generation.
+	ImageGenBackend string `yaml:"image_gen_backend,omitempty"`
 }
 
 // LoRAAdapter represents a LoRA adapter configuration for a model
@@ -1432,6 +1911,12 @@ type AlgorithmConfig struct {
 	// - "router_dc": Use dual-contrastive learning for query-model matching
 	// - "automix": Use POMDP-based cost-quality optimization
 	// - "hybrid": Combine multiple selection methods with configurable weights
+	// - "rl_driven": Use reinforcement learning with Thompson Sampling (arXiv:2506.09033)
+	// - "gmtrouter": Use heterogeneous graph learning for personalized routing (arXiv:2511.08590)
+	// - "latency_aware": Use TPOT/TTFT percentile thresholds for latency-aware model selection
+	// - "knn": Use K-Nearest Neighbors for query-based model selection
+	// - "kmeans": Use KMeans clustering for model selection
+	// - "svm": Use Support Vector Machine for model classification
 	Type string `yaml:"type"`
 
 	// Looper algorithm configurations (for multi-model execution)
@@ -1441,10 +1926,13 @@ type AlgorithmConfig struct {
 
 	// Selection algorithm configurations (for single model selection)
 	// These align with the global ModelSelectionConfig but can be overridden per-decision
-	Elo      *EloSelectionConfig      `yaml:"elo,omitempty"`
-	RouterDC *RouterDCSelectionConfig `yaml:"router_dc,omitempty"`
-	AutoMix  *AutoMixSelectionConfig  `yaml:"automix,omitempty"`
-	Hybrid   *HybridSelectionConfig   `yaml:"hybrid,omitempty"`
+	Elo          *EloSelectionConfig          `yaml:"elo,omitempty"`
+	RouterDC     *RouterDCSelectionConfig     `yaml:"router_dc,omitempty"`
+	AutoMix      *AutoMixSelectionConfig      `yaml:"automix,omitempty"`
+	Hybrid       *HybridSelectionConfig       `yaml:"hybrid,omitempty"`
+	RLDriven     *RLDrivenSelectionConfig     `yaml:"rl_driven,omitempty"`
+	GMTRouter    *GMTRouterSelectionConfig    `yaml:"gmtrouter,omitempty"`
+	LatencyAware *LatencyAwareAlgorithmConfig `yaml:"latency_aware,omitempty"`
 
 	// OnError defines behavior when algorithm fails: "skip" or "fail"
 	// - "skip": Skip and use fallback (default)
@@ -1578,9 +2066,10 @@ type ReMoMAlgorithmConfig struct {
 }
 
 // MLModelSelectionConfig configures the ML-based model selection algorithm
-// Supported types: knn, kmeans, svm
+// Supported types: knn, kmeans, svm, mlp
+// Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
 type MLModelSelectionConfig struct {
-	// Type specifies the algorithm: "knn", "kmeans", "svm"
+	// Type specifies the algorithm: "knn", "kmeans", "svm", "mlp"
 	Type string `yaml:"type"`
 
 	// ModelsPath is the path to pre-trained model files (e.g., "trained_models/")
@@ -1605,6 +2094,11 @@ type MLModelSelectionConfig struct {
 	// Use pointer to distinguish "not set" (nil, uses default 0.3) from "explicitly 0"
 	EfficiencyWeight *float64 `yaml:"efficiency_weight,omitempty"`
 
+	// Device specifies the compute device for MLP inference: "cpu", "cuda", "metal"
+	// Default: "cpu". Use "cuda" for NVIDIA GPU or "metal" for Apple Silicon.
+	// Reference: FusionFactory (arXiv:2507.10540) query-level fusion via MLP routers
+	Device string `yaml:"device,omitempty"`
+
 	// FeatureWeights allows custom weighting of features for selection
 	FeatureWeights map[string]float64 `yaml:"feature_weights,omitempty"`
 }
@@ -1621,7 +2115,7 @@ type ModelRef struct {
 
 // DecisionPlugin represents a plugin configuration for a decision
 type DecisionPlugin struct {
-	// Type specifies the plugin type. Permitted values: "semantic-cache", "jailbreak", "pii", "system_prompt", "header_mutation", "hallucination", "router_replay".
+	// Type specifies the plugin type. Permitted values: "semantic-cache", "jailbreak", "pii", "system_prompt", "header_mutation", "hallucination", "router_replay", "memory".
 	Type string `yaml:"type" json:"type"`
 
 	// Configuration is the raw configuration for this plugin
@@ -1638,6 +2132,14 @@ type SemanticCachePluginConfig struct {
 	Enabled             bool     `json:"enabled" yaml:"enabled"`
 	SimilarityThreshold *float32 `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"`
 	TTLSeconds          *int     `json:"ttl_seconds,omitempty" yaml:"ttl_seconds,omitempty"` // Per-entry TTL (0 = do not cache, nil = use global default)
+}
+
+// MemoryPluginConfig is per-decision memory config (overrides global MemoryConfig).
+type MemoryPluginConfig struct {
+	Enabled             bool     `json:"enabled" yaml:"enabled"`                                               // If false, memory is skipped even if globally enabled
+	RetrievalLimit      *int     `json:"retrieval_limit,omitempty" yaml:"retrieval_limit,omitempty"`           // Max memories to retrieve (nil = use global)
+	SimilarityThreshold *float32 `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"` // Min similarity score (nil = use global)
+	AutoStore           *bool    `json:"auto_store,omitempty" yaml:"auto_store,omitempty"`                     // Auto-extract memories (nil = use request config)
 }
 
 // JailbreakPluginConfig represents configuration for jailbreak plugin
@@ -1810,6 +2312,12 @@ func (d *Decision) GetPluginConfig(pluginType string) interface{} {
 
 // unmarshalPluginConfig unmarshals plugin configuration to a target struct
 // Handles both map[string]interface{} (from YAML) and []byte (from Kubernetes RawExtension)
+// UnmarshalPluginConfig converts a plugin configuration (typically from YAML)
+// into the given target struct.
+func UnmarshalPluginConfig(config interface{}, target interface{}) error {
+	return unmarshalPluginConfig(config, target)
+}
+
 func unmarshalPluginConfig(config interface{}, target interface{}) error {
 	if config == nil {
 		return fmt.Errorf("plugin configuration is nil")
@@ -1983,24 +2491,68 @@ func (d *Decision) GetRouterReplayConfig() *RouterReplayPluginConfig {
 	return result
 }
 
-// RuleCombination defines how to combine multiple rule conditions with AND/OR operators
-type RuleCombination struct {
-	// Operator specifies how to combine conditions: "AND" or "OR"
-	Operator string `yaml:"operator"`
+// GetMemoryConfig returns the memory plugin config, or nil to use global config.
+func (d *Decision) GetMemoryConfig() *MemoryPluginConfig {
+	config := d.GetPluginConfig("memory")
+	if config == nil {
+		return nil
+	}
 
-	// Conditions is the list of rule references to evaluate
-	Conditions []RuleCondition `yaml:"conditions"`
+	result := &MemoryPluginConfig{}
+	if err := unmarshalPluginConfig(config, result); err != nil {
+		logging.Errorf("Failed to unmarshal memory config: %v", err)
+		return nil
+	}
+	return result
 }
 
-// RuleCondition references a specific rule by type and name
-type RuleCondition struct {
-	// Type specifies the rule type: "keyword", "embedding", "domain", or "fact_check"
-	Type string `yaml:"type"`
+// RuleNode is a recursive union type that represents a node in a boolean expression tree.
+// It can act as either a leaf node (a signal reference) or a composite node (an operator
+// with child nodes), enabling arbitrarily nested boolean logic such as:
+//
+//	NOT ((A OR B) AND C AND (NOT D))
+//
+// Discriminator rules:
+//   - If Type != "" → leaf node: references a signal by type and name.
+//   - If Operator != "" → composite node: applies the operator to its children.
+//
+// Supported operators:
+//   - "AND": all children must match.
+//   - "OR":  at least one child must match.
+//   - "NOT": strictly unary — exactly one child; result is negated.
+type RuleNode struct {
+	// Leaf node fields (signal reference). Mutually exclusive with composite fields.
 
-	// Name is the name of the rule to reference
-	// For fact_check type, use "needs_fact_check" to match queries that need fact verification
-	Name string `yaml:"name"`
+	// Type specifies the signal type: "keyword", "embedding", "domain", "fact_check",
+	// "user_feedback", "preference", "language", "latency", "context", "complexity",
+	// "modality", or "authz".
+	Type string `yaml:"type,omitempty" json:"type,omitempty"`
+
+	// Name is the name of the signal rule to reference.
+	Name string `yaml:"name,omitempty" json:"name,omitempty"`
+
+	// Composite node fields (boolean operator). Mutually exclusive with leaf fields.
+
+	// Operator specifies the logical operator: "AND", "OR", or "NOT".
+	// NOT is strictly unary — it must have exactly one child in Conditions.
+	Operator string `yaml:"operator,omitempty" json:"operator,omitempty"`
+
+	// Conditions holds the child nodes for a composite node.
+	Conditions []RuleNode `yaml:"conditions,omitempty" json:"conditions,omitempty"`
 }
+
+// IsLeaf returns true when this node is a leaf (signal reference).
+func (n *RuleNode) IsLeaf() bool {
+	return n.Type != ""
+}
+
+// RuleCombination is an alias for RuleNode kept for backward compatibility.
+// New code should use RuleNode directly.
+type RuleCombination = RuleNode
+
+// RuleCondition is an alias for RuleNode kept for backward compatibility.
+// New code should use RuleNode directly.
+type RuleCondition = RuleNode
 
 // FactCheckRule defines a rule for fact-check signal classification
 // Similar to KeywordRule and EmbeddingRule, but based on ML model classification
@@ -2030,6 +2582,19 @@ type UserFeedbackRule struct {
 	Description string `yaml:"description,omitempty"`
 }
 
+// ModalityRule defines a rule for modality-based signal classification.
+// The modality classifier determines whether a prompt requires AR (text), DIFFUSION (image),
+// or BOTH (text + image) and outputs one of these signal names.
+// Detection configuration is read from modality_detector (InlineModels).
+type ModalityRule struct {
+	// Name is the signal name that can be referenced in decision rules
+	// e.g., "AR", "DIFFUSION", or "BOTH"
+	Name string `yaml:"name"`
+
+	// Description provides human-readable explanation of when this signal is triggered
+	Description string `yaml:"description,omitempty"`
+}
+
 // PreferenceRule defines a rule for route preference matching via external LLM
 // The external LLM analyzes the conversation and route descriptions to determine
 // the best matching route preference using prompt engineering
@@ -2053,31 +2618,6 @@ type LanguageRule struct {
 	Name string `yaml:"name"`
 
 	// Description provides human-readable explanation of the language
-	Description string `yaml:"description,omitempty"`
-}
-
-// LatencyRule defines a rule for latency-based signal classification
-// The latency classifier evaluates if available models meet TPOT (Time Per Output Token) requirements
-type LatencyRule struct {
-	// Name is the latency rule name that can be referenced in decision rules
-	Name string `yaml:"name"`
-
-	// TPOTPercentile is the percentile bucket to use for TPOT (Time Per Output Token) evaluation (1-100)
-	// Models with current TPOT <= the calculated TPOT percentile threshold will match this rule
-	// Example: 10 means 10th percentile (top 10% fastest TPOT)
-	// Example: 50 means median (top 50% fastest TPOT)
-	// Works with any number of observations (1+), adapts to model's actual performance
-	TPOTPercentile int `yaml:"tpot_percentile,omitempty"`
-
-	// TTFTPercentile is the percentile bucket to use for TTFT (Time To First Token) evaluation (1-100)
-	// Models with current TTFT <= the calculated TTFT percentile threshold will match this rule
-	// Example: 10 means 10th percentile (top 10% fastest TTFT)
-	// Example: 50 means median (top 50% fastest TTFT)
-	// Works with any number of observations (1+), adapts to model's actual performance
-	// At least one of TPOTPercentile or TTFTPercentile must be set
-	TTFTPercentile int `yaml:"ttft_percentile,omitempty"`
-
-	// Description provides human-readable explanation of the latency requirement
 	Description string `yaml:"description,omitempty"`
 }
 
@@ -2115,6 +2655,77 @@ type ContextRule struct {
 	MinTokens   TokenCount `yaml:"min_tokens"`
 	MaxTokens   TokenCount `yaml:"max_tokens"`
 	Description string     `yaml:"description,omitempty"`
+}
+
+// Subject identifies a user or group for RBAC role binding.
+// Modeled after Kubernetes RoleBinding subjects:
+//
+//	subjects:
+//	  - kind: User
+//	    name: "admin"
+//	  - kind: Group
+//	    name: "engineering"
+//
+// The Kind field must be "User" or "Group" (case-insensitive, validated at startup).
+// The Name must match exactly what Authorino injects in x-authz-user-id (for User)
+// or x-authz-user-groups (for Group).
+type Subject struct {
+	// Kind is "User" or "Group" (case-insensitive)
+	Kind string `yaml:"kind"`
+
+	// Name is the user ID or group name — must match the value from Authorino headers
+	Name string `yaml:"name"`
+}
+
+// RoleBinding maps subjects (users/groups) to a named role, following the Kubernetes
+// RBAC RoleBinding pattern. The role name is emitted as a signal in the decision engine
+// (type: "authz"), and decisions define which models each role can access via modelRefs.
+//
+// Kubernetes RBAC analog:
+//
+//	kind: RoleBinding
+//	metadata:
+//	  name: "premium-users"          → RoleBinding.Name
+//	subjects:
+//	  - kind: Group
+//	    name: "premium"              → RoleBinding.Subjects
+//	roleRef:
+//	  name: "premium_tier"           → RoleBinding.Role
+//
+// The RoleBinding does NOT define permissions (model access, pricing, latency).
+// Those are the decision engine's responsibility via modelRefs.
+//
+// RBAC mapping:
+//   - Subject    → users / groups (from Authorino x-authz-user-id / x-authz-user-groups)
+//   - Role       → RoleBinding.Role (the role name used in decision conditions)
+//   - Permission → Decision modelRefs (which models the role can use)
+//
+// Sync contract: the Subject names MUST match the values Authorino injects.
+// User names come from the K8s Secret metadata.name.
+// Group names come from the K8s Secret "authz-groups" annotation.
+type RoleBinding struct {
+	// Name is the binding name (for audit logs and error messages)
+	// This is NOT the role name — it identifies this specific binding.
+	Name string `yaml:"name"`
+
+	// Description provides human-readable explanation of this binding
+	Description string `yaml:"description,omitempty"`
+
+	// Subjects lists the users and groups assigned to this role.
+	// At least one subject must be specified (validated at startup).
+	// A request matches if the user ID matches a User subject OR
+	// any of the user's groups matches a Group subject (OR logic).
+	Subjects []Subject `yaml:"subjects"`
+
+	// Role is the role name that this binding grants.
+	// Referenced in decision conditions as type: "authz", name: "<Role>".
+	// Multiple bindings can grant the same role to different subjects.
+	Role string `yaml:"role"`
+}
+
+// GetRoleBindings returns the configured role bindings.
+func (s *Signals) GetRoleBindings() []RoleBinding {
+	return s.RoleBindings
 }
 
 // ComplexityCandidates defines hard and easy candidates for complexity classification

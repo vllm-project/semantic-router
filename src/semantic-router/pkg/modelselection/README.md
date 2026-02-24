@@ -26,13 +26,14 @@ This module implements machine learning-based model selection algorithms that in
 
 ### Implemented Algorithms
 
-| Algorithm | Implementation | Linfa Crate | Best For | Key Parameters |
-|-----------|----------------|-------------|----------|----------------|
-| **KNN** (K-Nearest Neighbors) | Rust (`ml-binding/`) | `linfa-nn` | Quality-weighted voting among similar queries | `k` (neighbors) |
-| **KMeans** | Rust (`ml-binding/`) | `linfa-clustering` | Cluster-based routing with quality-weighted assignment | `num_clusters` |
-| **SVM** (Support Vector Machine) | Rust (`ml-binding/`) | `linfa-svm` | Decision boundaries with RBF kernel (gamma=1.0) | `kernel`, `gamma` |
+| Algorithm | Implementation | Backend | Best For | Key Parameters |
+|-----------|----------------|---------|----------|----------------|
+| **KNN** (K-Nearest Neighbors) | Rust (`ml-binding/`) | Linfa (`linfa-nn`) | Quality-weighted voting among similar queries | `k` (neighbors) |
+| **KMeans** | Rust (`ml-binding/`) | Linfa (`linfa-clustering`) | Cluster-based routing with quality-weighted assignment | `num_clusters` |
+| **SVM** (Support Vector Machine) | Rust (`ml-binding/`) | Linfa (`linfa-svm`) | Decision boundaries with RBF kernel (gamma=1.0) | `kernel`, `gamma` |
+| **MLP** (Multi-Layer Perceptron) | Rust (`candle-binding/`) | Candle (GPU) | GPU-accelerated neural network routing | `hidden_sizes`, `device` |
 
-> **Note:** All algorithms use [Linfa](https://github.com/rust-ml/linfa) via `ml-binding/`.
+> **Note:** KNN, KMeans, and SVM use [Linfa](https://github.com/rust-ml/linfa) via `ml-binding/`. MLP uses [Candle](https://github.com/huggingface/candle) via `candle-binding/` for GPU acceleration (CUDA/Metal).
 >
 > **Reference:** Implementation aligned with [FusionFactory (arXiv:2507.10540)](https://arxiv.org/abs/2507.10540) query-level fusion approach.
 
@@ -49,7 +50,7 @@ This module implements machine learning-based model selection algorithms that in
 │                                                                     │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────────────┐  │
 │  │ Benchmark    │───▶│  Python      │───▶│ Trained Model Files  │  │
-│  │ Data (JSONL) │    │  train.py    │    │ (knn/kmeans/svm.json)│  │
+│  │ Data (JSONL) │    │  train.py    │    │ knn/kmeans/svm/mlp   │  │
 │  └──────────────┘    └──────────────┘    └──────────────────────┘  │
 │                             │                       │               │
 │                             ▼                       ▼               │
@@ -125,7 +126,7 @@ Enable ML-based selection in your config YAML:
 decisions:
   - name: "math_decision"
     algorithm:
-      type: "knn"  # Options: knn, kmeans, svm
+      type: "knn"  # Options: knn, kmeans, svm, mlp
       knn:
         k: 5
     modelRefs:
@@ -152,6 +153,9 @@ model_selection:
       kernel: "rbf"
       gamma: 1.0
       pretrained_path: "path/to/svm_model.json"
+    mlp:
+      device: "cuda"  # Options: cpu, cuda, metal
+      pretrained_path: "path/to/mlp_model.json"
 ```
 
 ### Key Files
@@ -189,7 +193,8 @@ HuggingFace Repositories (downloaded at runtime, NOT in repo):
 ├── abdallah1008/semantic-router-ml-models     # Trained models
 │   ├── knn_model.json
 │   ├── kmeans_model.json
-│   └── svm_model.json
+│   ├── svm_model.json
+│   └── mlp_model.json
 └── abdallah1008/ml-selection-benchmark-data   # Benchmark datasets
     └── validation_benchmark_with_gt.jsonl
 ```
@@ -316,6 +321,59 @@ Selected: mistral-7b (despite llama-3b having same vote count)
 }
 ```
 
+### 4. MLP (Multi-Layer Perceptron)
+
+**How it works:**
+
+- Feedforward neural network with configurable hidden layers (default: 256→128)
+- Uses ReLU activation, BatchNorm, and Dropout for regularization
+- **GPU-accelerated inference** via Candle (CUDA/Metal support)
+- Trained with quality+latency weighted CrossEntropyLoss
+- Early stopping based on validation loss
+
+**Network Architecture:**
+
+```text
+Input (1038-dim)
+    ↓
+Linear(1038, 256) → ReLU → BatchNorm → Dropout(0.1)
+    ↓
+Linear(256, 128) → ReLU → BatchNorm → Dropout(0.1)
+    ↓
+Linear(128, num_models)
+    ↓
+Softmax → Selected Model
+```
+
+**GPU Device Options:**
+
+| Device | Flag | Description |
+|--------|------|-------------|
+| **CPU** | `cpu` | Default, works everywhere |
+| **CUDA** | `cuda` | NVIDIA GPU acceleration |
+| **Metal** | `metal` | Apple Silicon GPU acceleration |
+
+**JSON Structure (`mlp_model.json`):**
+
+```json
+{
+  "algorithm": "mlp",
+  "trained": true,
+  "model_names": ["llama-3.2-1b", "llama-3.2-3b", "mistral-7b"],
+  "input_dim": 1038,
+  "hidden_sizes": [256, 128],
+  "layers": [
+    {"type": "Linear", "weight": [[...]], "bias": [...]},
+    {"type": "ReLU"},
+    {"type": "BatchNorm", "weight": [...], "bias": [...], "running_mean": [...], "running_var": [...], "eps": 1e-5},
+    {"type": "Dropout", "p": 0.1},
+    {"type": "Linear", "weight": [[...]], "bias": [...]}
+  ]
+}
+```
+
+> **Reference:** MLP architecture inspired by [FusionFactory (arXiv:2507.10540)](https://arxiv.org/abs/2507.10540).
+
 ---
 
 ## Quality-Based Training Approach
@@ -329,6 +387,7 @@ All algorithms now use **response quality** and **latency** from benchmark data 
 | **KNN** | Quality-weighted voting: neighbors with higher quality scores have more influence |
 | **KMeans** | Quality-weighted cluster assignment: models with best quality×efficiency assigned to clusters |
 | **SVM** | Quality filtering: only trains on records with quality ≥ 0.5 (high-quality responses) |
+| **MLP** | Quality+latency weighted loss: CrossEntropyLoss with quality×efficiency sample weights |
 
 ### Training Record Structure
 
@@ -955,10 +1014,15 @@ python train.py \
 | `--data-file` | (required) | Path to JSONL benchmark data |
 | `--output-dir` | `models/` | Where to save trained model JSON files |
 | `--embedding-model` | `qwen3` | Embedding model: qwen3, gte, mpnet, e5, bge |
+| `--algorithm` | `all` | Train specific algorithm: all, knn, kmeans, svm, mlp |
 | `--knn-k` | 5 | KNN: Number of neighbors |
 | `--kmeans-clusters` | 8 | KMeans: Number of clusters |
 | `--svm-kernel` | `rbf` | SVM kernel: rbf, linear |
 | `--svm-gamma` | 1.0 | SVM gamma for RBF kernel |
+| `--mlp-hidden-sizes` | `256,128` | MLP: Hidden layer sizes |
+| `--mlp-epochs` | 100 | MLP: Training epochs |
+| `--mlp-learning-rate` | 0.001 | MLP: Learning rate |
+| `--mlp-dropout` | 0.1 | MLP: Dropout rate |
 | `--quality-weight` | 0.9 | Quality vs speed weight (0=speed, 1=quality) |
 | `--batch-size` | 32 | Batch size for embedding generation |
 | `--device` | `cpu` | Device: cpu, cuda, mps |
@@ -1249,16 +1313,18 @@ Validation using 109 test queries with 4 models (codellama-7b, llama-3.2-1b, lla
 | Strategy | Avg Quality | Improvement over Random |
 |----------|-------------|------------------------|
 | **Oracle (best)** | 0.495 | - |
-| **KMEANS Selection** | 0.252 | **+44.4%** |
-| **SVM Selection** | 0.233 | **+33.3%** |
-| **KNN Selection** | 0.196 | **+12.2%** |
-| Random Selection | 0.175 | baseline |
+| **MLP Selection** | 0.286 | **+47.1%** |
+| **KMEANS Selection** | 0.252 | **+29.9%** |
+| **SVM Selection** | 0.233 | **+20.0%** |
+| **KNN Selection** | 0.196 | **+1.0%** |
+| Random Selection | 0.194 | baseline |
 
 **Algorithm Performance Summary:**
 
 | Algorithm | Quality | Best Model % | Notes |
 |-----------|---------|--------------|-------|
-| **KMEANS** | 0.252 | 23.9% | Best overall, 1.7x better than random |
+| **MLP** | 0.286 | 20.2% | Best overall, 1.5x better than random (GPU-accelerated) |
+| **KMEANS** | 0.252 | 23.9% | Strong performer, 1.7x better than random |
 | **SVM** | 0.233 | 14.7% | Good quality, 1.1x better than random |
 | **KNN** | 0.196 | 13.8% | Moderate improvement, 1.0x vs random |
 

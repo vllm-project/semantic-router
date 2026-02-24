@@ -1,0 +1,139 @@
+# Authz RBAC Demo — User/Group-Based Model Routing (JWT)
+#
+# Routes purely by WHO the user is, not what they ask.
+# Same model on two endpoints; the router picks the endpoint based on
+# JWT identity (group claim).
+#
+# Architecture:
+#   Client (JWT) → Envoy :8802 → jwt_authn → ext_proc (router :50053) → vLLM
+#
+# JWT claims extracted by Envoy's jwt_authn filter:
+#   "sub"    → x-jwt-sub header
+#   "groups" → x-jwt-groups header
+#
+# Routing:
+#   alice / platform-admins  → admin        → qwen14b-admin (:8100)
+#   bob   / premium-tier     → premium_user → qwen14b-admin (:8100)
+#   carol / free-tier        → free_user    → qwen14b-free  (:8200)
+#   unknown / (no groups)    → no match     → default_model  (:8200)
+
+# --------------------------------------------------------------------------
+# Authz — identity from Envoy JWT claim_to_headers
+# --------------------------------------------------------------------------
+authz:
+  fail_open: true
+  identity:
+    user_id_header: "x-jwt-sub"
+    user_groups_header: "x-jwt-groups"
+
+# --------------------------------------------------------------------------
+# Endpoints
+# --------------------------------------------------------------------------
+vllm_endpoints:
+  - name: "vllm-14b-admin"
+    address: "127.0.0.1"
+    port: 8100
+    weight: 1
+    type: "vllm"
+
+  - name: "vllm-14b-free"
+    address: "127.0.0.1"
+    port: 8200
+    weight: 1
+    type: "vllm"
+
+# --------------------------------------------------------------------------
+# Model Config — two aliases, same physical model, different endpoints
+# --------------------------------------------------------------------------
+model_config:
+  "qwen14b-admin":
+    preferred_endpoints: ["vllm-14b-admin"]
+    param_size: "14b"
+    quality_score: 0.90
+    description: "Qwen2.5 14B — admin/premium tier (port 8100)"
+    capabilities: ["chat", "code", "reasoning", "math"]
+    external_model_ids:
+      vllm: "Qwen/Qwen2.5-14B-Instruct"
+
+  "qwen14b-free":
+    preferred_endpoints: ["vllm-14b-free"]
+    param_size: "14b"
+    quality_score: 0.70
+    description: "Qwen2.5 14B — free tier (port 8200)"
+    capabilities: ["chat", "code"]
+    external_model_ids:
+      vllm: "Qwen/Qwen2.5-14B-Instruct"
+
+default_model: "qwen14b-free"
+
+# --------------------------------------------------------------------------
+# Role Bindings — JWT group claim → role
+# --------------------------------------------------------------------------
+role_bindings:
+  - name: "admin-binding"
+    subjects:
+      - kind: Group
+        name: "platform-admins"
+    role: "admin"
+
+  - name: "premium-binding"
+    subjects:
+      - kind: Group
+        name: "premium-tier"
+    role: "premium_user"
+
+  - name: "free-binding"
+    subjects:
+      - kind: Group
+        name: "free-tier"
+    role: "free_user"
+
+# --------------------------------------------------------------------------
+# Decisions — pure authz, no keyword conditions
+# --------------------------------------------------------------------------
+strategy: "priority"
+
+decisions:
+  - name: "admin_to_admin_tier"
+    description: "Admin → admin tier (:8100)"
+    priority: 300
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "authz"
+          name: "admin"
+    modelRefs:
+      - model: "qwen14b-admin"
+        use_reasoning: true
+
+  - name: "premium_to_admin_tier"
+    description: "Premium → admin tier (:8100)"
+    priority: 200
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "authz"
+          name: "premium_user"
+    modelRefs:
+      - model: "qwen14b-admin"
+        use_reasoning: false
+
+  - name: "free_to_free_tier"
+    description: "Free → free tier (:8200)"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "authz"
+          name: "free_user"
+    modelRefs:
+      - model: "qwen14b-free"
+        use_reasoning: false
+
+# --------------------------------------------------------------------------
+# Other
+# --------------------------------------------------------------------------
+semantic_cache:
+  enabled: false
+
+clear_route_cache: true

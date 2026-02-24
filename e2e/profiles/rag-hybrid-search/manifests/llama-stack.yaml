@@ -1,0 +1,74 @@
+---
+# Llama Stack Namespace (must be created before Deployment and Service)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: llama-stack-system
+---
+# Llama Stack Deployment for E2E testing
+# Provides vector store backend via OpenAI-compatible REST API
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llama-stack
+  namespace: llama-stack-system
+  labels:
+    app: llama-stack
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llama-stack
+  template:
+    metadata:
+      labels:
+        app: llama-stack
+    spec:
+      # Disable Kubernetes service-link env vars to prevent collision:
+      # K8s auto-injects LLAMA_STACK_PORT=tcp://... for the Service,
+      # but the Llama Stack CLI expects LLAMA_STACK_PORT to be an integer.
+      enableServiceLinks: false
+      containers:
+        - name: llama-stack
+          image: llamastack/distribution-starter:0.5.0
+          args: ["--port", "8321"]
+          ports:
+            - containerPort: 8321
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /v1/health
+              port: 8321
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /v1/health
+              port: 8321
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 2000m
+              memory: 4Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llama-stack
+  namespace: llama-stack-system
+  labels:
+    app: llama-stack
+spec:
+  type: ClusterIP
+  selector:
+    app: llama-stack
+  ports:
+    - port: 8321
+      targetPort: 8321
+      protocol: TCP
+      name: http

@@ -1,0 +1,221 @@
+# Modality Routing Config - Auto-route between AR (text) and Diffusion (image) models
+#
+# Uses modality as a SIGNAL in the decision engine, composable with all other signals
+# (keyword, domain, language, context, latency, etc.).
+#
+# Architecture:
+#   User Prompt → Signal Evaluation (modality + other signals) → Decision Engine → Execution
+#     - AR:        Normal LLM routing (passthrough)
+#     - DIFFUSION: Image generation via diffusion endpoint
+#     - BOTH:      AR text + image generation in parallel
+#
+# Config structure follows established patterns:
+#   - modality_detector:   detection config (like hallucination_mitigation, feedback_detector)
+#   - image_gen_backends:  provider-specific configs (like reasoning_families)
+#   - model_config:        references backends by name (like reasoning_family: "qwen3")
+#   - modality_rules:      signal definitions (like fact_check_rules, user_feedback_rules)
+#   - decisions:           reference modality signals via type: "modality" conditions
+#
+# Run with: CONFIG_FILE=config/testing/config.modality-routing.yaml make run-router
+
+# Disable features not needed for this demo
+semantic_cache:
+  enabled: false
+
+tools:
+  enabled: false
+
+prompt_guard:
+  enabled: false
+
+# Response API for testing
+response_api:
+  enabled: true
+  store_backend: "memory"
+  ttl_seconds: 3600
+  max_responses: 100
+
+# ── vLLM Endpoints ───────────────────────────────────────────────────────
+vllm_endpoints:
+  - name: "vllm-ar"
+    address: "127.0.0.1"
+    port: 8000
+    weight: 1
+    health_check_path: "/health"
+  - name: "vllm-omni"
+    address: "127.0.0.1"
+    port: 8001
+    weight: 1
+    health_check_path: "/health"
+
+# ── Model Config ─────────────────────────────────────────────────────────
+# Models declare their modality role and image_gen_backend reference.
+# The router derives endpoints from preferred_endpoints + vllm_endpoints.
+model_config:
+  "Qwen/Qwen2.5-14B-Instruct":
+    reasoning_family: "none"
+    preferred_endpoints: ["vllm-ar"]
+    modality: "ar"
+  "Qwen/Qwen-Image":
+    reasoning_family: "none"
+    preferred_endpoints: ["vllm-omni"]
+    modality: "diffusion"
+    image_gen_backend: "vllm_omni_local"
+
+# ── Image Gen Backends (like reasoning_families) ─────────────────────────
+# Provider-specific image generation configs. Models reference these by name.
+# vllm_omni and openai use completely different APIs:
+#   vllm_omni: /v1/chat/completions + extra_body (steps, cfg_scale, seed)
+#   openai:    /v1/images/generations (api_key, quality, style)
+image_gen_backends:
+  vllm_omni_local:
+    type: "vllm_omni"
+    base_url: "http://localhost:8001"
+    model: "Qwen/Qwen-Image"
+    num_inference_steps: 4
+    cfg_scale: 0.0
+    default_width: 1024
+    default_height: 1024
+    timeout_seconds: 120
+
+# ── Modality Detector (like hallucination_mitigation, feedback_detector) ──
+# Detection config for the modality signal evaluator.
+# Supports three methods:
+#   - "classifier":  ML-based (mmBERT-32K) — 3-class: AR / DIFFUSION / BOTH
+#   - "keyword":     Keyword pattern matching — configurable keywords + both_keywords
+#   - "hybrid":      Classifier + keyword fallback/confirmation
+modality_detector:
+  enabled: true
+  method: "hybrid"
+
+  classifier:
+    model_path: "./models/mmbert32k-modality-router-merged"
+    use_cpu: false
+
+  confidence_threshold: 0.6
+  lower_threshold_ratio: 0.7
+
+  # Prompt prefixes stripped before sending to diffusion model
+  # (e.g. "generate an image of a cat" → "a cat")
+  prompt_prefixes:
+    - "generate an image of "
+    - "create an image of "
+    - "draw an image of "
+    - "make an image of "
+    - "generate a picture of "
+    - "create a picture of "
+    - "draw a picture of "
+    - "generate "
+    - "create "
+    - "draw "
+
+  keywords:
+    - "generate an image"
+    - "generate image"
+    - "create an image"
+    - "create image"
+    - "draw"
+    - "make a picture"
+    - "generate a picture"
+    - "create a picture"
+    - "make an image"
+    - "paint"
+    - "sketch"
+    - "render an image"
+    - "produce an image"
+
+  both_keywords:
+    - "and illustrate"
+    - "with a picture"
+    - "with an image"
+    - "with an illustration"
+    - "with a diagram"
+    - "include a picture"
+    - "include an image"
+    - "and generate an image"
+    - "and draw"
+    - "also generate"
+    - "with a photo"
+
+# ── Modality Signal Rules ────────────────────────────────────────────────
+# Signal names for modality classification (like fact_check_rules, user_feedback_rules).
+# The detector produces one of these signal names; decisions reference via type: "modality".
+modality_rules:
+  - name: "AR"
+    description: "Text-only response via autoregressive LLM"
+  - name: "DIFFUSION"
+    description: "Image generation via diffusion model"
+  - name: "BOTH"
+    description: "Hybrid response requiring both text and image"
+
+# Minimal categories (required by schema)
+categories:
+  - name: text_generation
+    description: "Text generation and general queries"
+    mmlu_categories: ["other"]
+
+strategy: "priority"
+
+# ── Decisions ─────────────────────────────────────────────────────────────
+# Modality is a signal, composed with other signals in the decision engine.
+# Router resolves image gen config from: model -> model_config -> image_gen_backends.
+decisions:
+  - name: "image_generation"
+    description: "Route image generation requests to diffusion model"
+    priority: 200
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "modality"
+          name: "DIFFUSION"
+    modelRefs:
+      - model: "Qwen/Qwen-Image"
+        use_reasoning: false
+
+  - name: "text_and_image"
+    description: "Route hybrid text+image requests to both models in parallel"
+    priority: 190
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "modality"
+          name: "BOTH"
+    modelRefs:
+      - model: "Qwen/Qwen2.5-14B-Instruct"
+        use_reasoning: false
+      - model: "Qwen/Qwen-Image"
+        use_reasoning: false
+
+  - name: "text_generation"
+    description: "Default text routing for AR (text-only) requests"
+    priority: 1
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "modality"
+          name: "AR"
+        - type: "domain"
+          name: "text_generation"
+    modelRefs:
+      - model: "Qwen/Qwen2.5-14B-Instruct"
+        use_reasoning: false
+
+# Default model - AR text model handles unmatched requests (fallback)
+default_model: "Qwen/Qwen2.5-14B-Instruct"
+
+# Disable reasoning
+reasoning_families: {}
+
+# Minimal API config
+api:
+  batch_classification:
+    max_batch_size: 10
+    concurrency_threshold: 2
+    max_concurrency: 4
+
+# Observability - metrics only
+observability:
+  metrics:
+    enabled: true
+  tracing:
+    enabled: false

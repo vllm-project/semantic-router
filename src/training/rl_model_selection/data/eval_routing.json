@@ -1,0 +1,47 @@
+[
+  {
+    "query": "Who wrote Romeo and Juliet?",
+    "query_type": "factual",
+    "complexity": "simple",
+    "candidate_models": ["gpt-4", "phi-2"],
+    "optimal_model": "phi-2",
+    "ground_truth": "William Shakespeare",
+    "reasoning": "Simple factual recall"
+  },
+  {
+    "query": "Prove that there are infinitely many prime numbers",
+    "query_type": "math",
+    "complexity": "complex",
+    "candidate_models": ["gpt-4", "claude-3-opus"],
+    "optimal_model": "gpt-4",
+    "ground_truth": "Euclid's proof by contradiction: Assume finite primes p1...pn. Then p1*p2*...*pn + 1 is either prime or divisible by a prime not in our list.",
+    "reasoning": "Mathematical proof, gpt-4 is cost-effective"
+  },
+  {
+    "query": "Implement quicksort in JavaScript",
+    "query_type": "coding",
+    "complexity": "medium",
+    "candidate_models": ["gpt-4", "deepseek-coder"],
+    "optimal_model": "deepseek-coder",
+    "ground_truth": "function quicksort(arr) { if (arr.length <= 1) return arr; ... }",
+    "reasoning": "Standard algorithm implementation, code specialist optimal"
+  },
+  {
+    "query": "What is 1000 / 4?",
+    "query_type": "math",
+    "complexity": "simple",
+    "candidate_models": ["gpt-4", "phi-2"],
+    "optimal_model": "phi-2",
+    "ground_truth": "250",
+    "reasoning": "Simple arithmetic"
+  },
+  {
+    "query": "Compare and contrast REST and GraphQL architectures",
+    "query_type": "technical",
+    "complexity": "complex",
+    "candidate_models": ["gpt-4", "mistral-7b"],
+    "optimal_model": "gpt-4",
+    "ground_truth": "REST uses resource-based URLs while GraphQL uses a single endpoint with typed queries.",
+    "reasoning": "Comparative analysis needs strong reasoning"
+  }
+]

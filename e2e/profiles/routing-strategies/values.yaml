@@ -53,12 +53,34 @@ config:
       pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
 
   keyword_rules:
+    # --- BM25 method: topic detection with natural TF-IDF scoring ---
+    - name: "code_keywords"
+      operator: "OR"
+      method: "bm25"
+      keywords:
+        - "code"
+        - "function"
+        - "implement"
+        - "debug"
+        - "algorithm"
+        - "compile"
+        - "syntax"
+        - "variable"
+        - "loop"
+        - "refactor"
+      bm25_threshold: 0.1
+      case_sensitive: false
+
+    # --- N-gram method: typo-tolerant fuzzy matching ---
     - name: "urgent_request"
       operator: "OR"
+      method: "ngram"
       keywords: ["urgent", "immediate", "asap", "emergency"]
+      ngram_threshold: 0.4
+      ngram_arity: 3
       case_sensitive: false
-      fuzzy_match: true
-      fuzzy_threshold: 2
+
+    # --- Regex method (default): exact / pattern matching ---
     - name: "sensitive_data"
       operator: "AND"
       keywords: ["SSN", "credit card"]
@@ -70,6 +92,9 @@ config:
 
   # Categories define domain metadata only (no routing logic)
   categories:
+    - name: code_keywords
+      description: "Programming and software development queries"
+      mmlu_categories: ["computer_science"]
     - name: urgent_request
       description: "Urgent and time-sensitive requests"
       mmlu_categories: ["urgent_request"]
@@ -128,8 +153,24 @@ config:
   model_config: {}
 
   decisions:
+    - name: "code_keywords_decision"
+      description: "Code and programming queries (BM25 classified)"
+      priority: 150
+      rules:
+        operator: "AND"
+        conditions:
+          - type: "keyword"
+            name: "code_keywords"
+      modelRefs:
+        - model: "base-model"
+          use_reasoning: true
+      plugins:
+        - type: "system_prompt"
+          configuration:
+            system_prompt: "You are an expert software engineer. Provide clear, well-structured code examples with explanations. Follow best practices and consider edge cases."
+
     - name: "urgent_request_decision"
-      description: "Urgent and time-sensitive requests"
+      description: "Urgent and time-sensitive requests (N-gram classified with typo tolerance)"
       priority: 150
       rules:
         operator: "AND"
