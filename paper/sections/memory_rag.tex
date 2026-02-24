@@ -110,7 +110,7 @@ Documents are chunked (configurable size and overlap), embedded using the shared
 
 \textbf{Hybrid retrieval.}
 Pure vector search can miss lexically relevant results when the embedding model underweights rare terms.
-We implement a three-signal hybrid retrieval pipeline that scores each candidate chunk along three axes:
+We implement a three-signal hybrid retrieval pipeline (\Cref{fig:hybrid_search}) that scores each candidate chunk along three axes:
 \begin{enumerate}[nosep,leftmargin=*]
   \item \emph{Vector similarity}: cosine similarity from the embedding index (already in $[0,1]$).
   \item \emph{BM25}: an Okapi BM25 inverted index built over chunk contents provides keyword-level relevance, with configurable $k_1$ (term-frequency saturation, default~1.2) and $b$ (length normalization, default~0.75) parameters.
@@ -121,6 +121,85 @@ We implement a three-signal hybrid retrieval pipeline that scores each candidate
 Two fusion modes combine the three retriever scores into a single ranking:
 (1)~\emph{Weighted}: BM25 scores are min-max normalized to $[0,1]$, then the final score is $w_v \cdot s_{\text{vec}} + w_b \cdot s_{\text{bm25}} + w_n \cdot s_{\text{ngram}}$ with configurable weights (defaults: 0.7, 0.2, 0.1).
 (2)~\emph{Reciprocal Rank Fusion (RRF)}: $\text{score}(d) = \sum_r 1/(k + \text{rank}_r(d))$, which is parameter-free beyond the constant $k$ (default~60).
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    node distance=0.5cm and 0.8cm,
+    box/.style={draw, rounded corners=2pt, fill=blue!6,
+                minimum height=0.7cm, minimum width=1.6cm,
+                align=center, font=\scriptsize},
+    idx/.style={draw, rounded corners=2pt, fill=green!8,
+                minimum height=0.7cm, minimum width=1.6cm,
+                align=center, font=\scriptsize},
+    fuse/.style={draw, rounded corners=3pt, fill=orange!10,
+                 minimum height=0.9cm, minimum width=1.8cm,
+                 align=center, font=\scriptsize\bfseries},
+    score/.style={font=\tiny, text=gray!70},
+    arr/.style={->, >=stealth, thick},
+    arrs/.style={->, >=stealth, semithick, gray!60},
+    lbl/.style={font=\tiny, text=gray},
+  ]
+
+  % === Query ===
+  \node[box, minimum width=1.4cm] (query) {Query};
+
+  % === Three retrieval paths ===
+  % Path 1: Vector
+  \node[box] (embed) at (2.8, 1.2) {Embed};
+  \node[idx] (vecidx) at (5.0, 1.2) {Vector\\Index};
+
+  % Path 2: BM25
+  \node[box] (tok) at (2.8, 0.0) {Tokenize};
+  \node[idx] (bm25idx) at (5.0, 0.0) {BM25\\Index};
+
+  % Path 3: N-gram
+  \node[box] (ngram) at (2.8, -1.2) {Char\\$n$-grams};
+  \node[idx] (ngramidx) at (5.0, -1.2) {N-gram\\Index};
+
+  % Query fan-out
+  \draw[arr] (query.east) -- ++(0.35,0) |- (embed.west);
+  \draw[arr] (query.east) -- ++(0.35,0) |- (tok.west);
+  \draw[arr] (query.east) -- ++(0.35,0) |- (ngram.west);
+
+  % Processing arrows
+  \draw[arr] (embed) -- (vecidx);
+  \draw[arr] (tok) -- (bm25idx);
+  \draw[arr] (ngram) -- (ngramidx);
+
+  % Score labels
+  \node[score, above=0.01cm of vecidx.east, anchor=south west] {cosine $\in [0,1]$};
+  \node[score, above=0.01cm of bm25idx.east, anchor=south west] {min-max $\to [0,1]$};
+  \node[score, above=0.01cm of ngramidx.east, anchor=south west] {Jaccard $\in [0,1]$};
+
+  % === Score Fusion ===
+  \node[fuse] (fusion) at (8.0, 0.0) {Score\\Fusion};
+
+  % Index → Fusion
+  \draw[arrs] (vecidx.east) -- ++(0.3,0) |- (fusion.west);
+  \draw[arrs] (bm25idx.east) -- (fusion.west);
+  \draw[arrs] (ngramidx.east) -- ++(0.3,0) |- (fusion.west);
+
+  % Fusion modes annotation
+  \node[lbl, below=0.15cm of fusion] {Weighted / RRF};
+
+  % === Output ===
+  \node[box, minimum width=1.5cm, fill=green!8, font=\scriptsize\bfseries] (out) at (10.5, 0.0) {Ranked\\Results};
+  \draw[arr] (fusion.east) -- (out.west);
+
+  % === Fallback annotation ===
+  \draw[densely dotted, gray!40] (5.0, -2.0) -- (vecidx.south);
+  \node[lbl, anchor=north] at (5.0, -2.05)
+    {non-native backends: $4{\times}$ top-$k$ expansion};
+
+  % === Weight defaults ===
+  \node[lbl, anchor=north] at (8.0, -0.85)
+    {$w_v{=}0.7,\; w_b{=}0.2,\; w_n{=}0.1$};
+
+\end{tikzpicture}
+\caption{Hybrid search pipeline. Each candidate chunk is scored along three axes---vector cosine similarity, BM25 keyword relevance, and character $n$-gram Jaccard overlap---then combined via weighted fusion or Reciprocal Rank Fusion (RRF). Backends without native hybrid support fall back to a generic rerank path that fetches $4{\times}$ top-$k$ candidates from vector search before applying BM25 and $n$-gram scoring.}
+\label{fig:hybrid_search}
+\end{figure}
 
 \textbf{Backend abstraction.}
 The RAG plugin accesses vector stores through a common \texttt{VectorStoreBackend} interface, decoupling retrieval logic from storage implementation.
