@@ -197,16 +197,135 @@ This enables adaptive routing that responds to real-time backend performance deg
 
 \subsection{Multi-Round Reasoning (ReMoM)}
 
-The ReMoM (Reasoning for Mixture of Models) strategy extends single-shot selection to iterative refinement:
+The ReMoM (Reasoning for Mixture of Models) strategy extends single-shot selection to multi-round parallel reasoning with LLM-driven synthesis.
+Inspired by PaCoRe~\cite{pacore2025} but generalized to heterogeneous model pools, ReMoM executes a \emph{breadth schedule} of decreasing parallelism across rounds, where each subsequent round synthesizes the outputs of the previous round via prompted LLM calls (\Cref{fig:remom_flow}).
 
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    node distance=0.3cm,
+    call/.style={rectangle, draw, rounded corners=2pt,
+                 minimum height=0.48cm, minimum width=1.35cm,
+                 align=center, font=\scriptsize, inner sep=2pt},
+    synth/.style={trapezium, draw, trapezium angle=75, rounded corners=1pt,
+                  fill=orange!8, minimum height=0.5cm,
+                  align=center, font=\scriptsize, inner sep=3pt},
+    query/.style={rectangle, draw, rounded corners=2pt, fill=black!4,
+                  font=\scriptsize, inner sep=3pt, align=center},
+    outbox/.style={rectangle, draw, rounded corners=3pt, fill=green!8,
+                   font=\scriptsize\bfseries, inner sep=4pt, align=center},
+    roundlbl/.style={font=\scriptsize\bfseries, text=gray!70},
+    arr/.style={->, >=stealth, thick},
+    arrs/.style={->, >=stealth, semithick, gray!60},
+  ]
+
+  % === Query ===
+  \node[query] (q) at (0, 0) {Query $q$};
+
+  % === Round 1: b_1 = 4 ===
+  \node[roundlbl] at (2.5, 1.55) {Round 1 ($b_1{=}4$)};
+  \node[call, fill=blue!10]   (r1c1) at (2.5, 1.0)  {\footnotesize $m_A$};
+  \node[call, fill=blue!10]   (r1c2) at (2.5, 0.4)  {\footnotesize $m_B$};
+  \node[call, fill=blue!10]   (r1c3) at (2.5, -0.2) {\footnotesize $m_A$};
+  \node[call, fill=yellow!15] (r1c4) at (2.5, -0.8) {\footnotesize $m_C$};
+
+  % Parallel bracket
+  \draw[decorate, decoration={brace, amplitude=4pt, mirror}, thick, gray!50]
+    (1.7, 1.25) -- (1.7, -1.05) node[midway, left=5pt, font=\tiny, text=gray] {parallel};
+
+  % Query → Round 1
+  \draw[arr] (q.east) -- ++(0.4,0) |- (r1c1.west);
+  \draw[arr] (q.east) -- ++(0.4,0) |- (r1c2.west);
+  \draw[arr] (q.east) -- ++(0.4,0) |- (r1c3.west);
+  \draw[arr] (q.east) -- ++(0.4,0) |- (r1c4.west);
+
+  % === Synthesis 1 ===
+  \node[synth] (s1) at (4.7, 0.1) {Synthesis\\[-1pt]Prompt};
+
+  % Round 1 → Synthesis 1
+  \draw[arrs] (r1c1.east) -- ++(0.3,0) |- (s1.west);
+  \draw[arrs] (r1c2.east) -- (s1.west);
+  \draw[arrs] (r1c3.east) -- ++(0.3,0) |- (s1.west);
+  \draw[arrs] (r1c4.east) -- ++(0.3,0) |- (s1.west);
+
+  % === Round 2: b_2 = 2 ===
+  \node[roundlbl] at (6.8, 0.95) {Round 2 ($b_2{=}2$)};
+  \node[call, fill=blue!10]   (r2c1) at (6.8, 0.4)  {\footnotesize $m_B$};
+  \node[call, fill=yellow!15] (r2c2) at (6.8, -0.2) {\footnotesize $m_C$};
+
+  % Synthesis 1 → Round 2
+  \draw[arr] (s1.east) -- ++(0.2,0) |- (r2c1.west);
+  \draw[arr] (s1.east) -- ++(0.2,0) |- (r2c2.west);
+
+  % === Synthesis 2 ===
+  \node[synth] (s2) at (8.8, 0.1) {Synthesis\\[-1pt]Prompt};
+
+  % Round 2 → Synthesis 2
+  \draw[arrs] (r2c1.east) -- ++(0.15,0) |- (s2.west);
+  \draw[arrs] (r2c2.east) -- ++(0.15,0) |- (s2.west);
+
+  % === Round 3: b_3 = 1 (final) ===
+  \node[roundlbl] at (10.7, 0.55) {Final ($b_3{=}1$)};
+  \node[call, fill=blue!10] (r3c1) at (10.7, 0.1) {\footnotesize $m_A$};
+
+  % Synthesis 2 → Round 3
+  \draw[arr] (s2.east) -- (r3c1.west);
+
+  % === Output ===
+  \node[outbox] (out) at (12.6, 0.1) {Output};
+  \draw[arr] (r3c1.east) -- (out.west);
+
+  % === Compaction annotation ===
+  \node[font=\tiny, text=gray, anchor=north] at (4.7, -1.25)
+    {optionally compact responses};
+  \draw[densely dotted, gray!40] (4.7, -1.15) -- (s1.south);
+  \draw[densely dotted, gray!40] (8.8, -1.15) -- (s2.south);
+  \node[font=\tiny, text=gray, anchor=north] at (8.8, -1.25)
+    {before prompt construction};
+
+\end{tikzpicture}
+\caption{ReMoM execution flow with breadth schedule $\mathbf{b} = [4, 2]$.
+Round~1 distributes 4~parallel calls across models ($m_A$, $m_B$, $m_C$); responses are (optionally compacted and) assembled into a synthesis prompt.
+Round~2 sends 2~parallel synthesis calls.
+A final round ($b_3 = 1$, auto-appended) produces the single output.
+Each synthesis prompt includes the original query and all previous-round responses as numbered references, delegating quality judgment to the synthesizing LLM.}
+\label{fig:remom_flow}
+\end{figure}
+
+\paragraph{Breadth schedule.}
+The operator specifies a breadth schedule $\mathbf{b} = [b_1, b_2, \ldots, b_R]$ defining the number of parallel model calls per round.
+A final synthesis round with $b_{R+1} = 1$ is automatically appended, yielding a total of $R+1$ rounds.
+For example, $\mathbf{b} = [32, 4]$ produces three rounds: 32 parallel calls, then 4 parallel calls each synthesizing the 32 responses, then a single final call synthesizing the 4 responses.
+
+\paragraph{Model distribution.}
+At each round, $b_r$ calls are distributed among the candidate models $\mathcal{M}_{d^*}$ according to one of three strategies:
+(1)~\emph{equal}: calls are distributed evenly across all candidates with round-robin remainder allocation;
+(2)~\emph{weighted}: calls are distributed proportionally to model weights (currently equivalent to equal distribution);
+(3)~\emph{first\_only}: all $b_r$ calls target a single model with different random seeds, providing PaCoRe-compatible single-model diversity.
+Calls within each round execute concurrently with configurable concurrency limits.
+
+\paragraph{LLM-driven synthesis.}
+After collecting responses from round $r$, the system constructs a synthesis prompt for round $r+1$ using a configurable Go \texttt{text/template}.
+The default template presents the original query alongside all previous-round responses as numbered references, instructing the next-round model(s) to \emph{``analyze these references and provide your own comprehensive solution.''}
+When reasoning content is available (e.g., from models supporting extended thinking), the template additionally includes each reference's chain-of-thought reasoning.
+This approach delegates quality judgment entirely to the synthesizing LLM rather than relying on explicit scoring or weighted aggregation.
+
+\paragraph{Response compaction.}
+To manage prompt length across rounds, responses can be compacted before inclusion in synthesis prompts.
+Two strategies are supported: \emph{full} (no compaction, the default) and \emph{last\_n\_tokens} (retaining only the final $N$ tokens, estimated at $\sim$4 characters per token).
+This is particularly important for high-breadth schedules where concatenating all responses would exceed context limits.
+
+\paragraph{Execution flow.}
+The complete algorithm proceeds as:
 \begin{enumerate}
-  \item \textbf{Parallel generation}: Distribute the query to $k$ selected models simultaneously.
-  \item \textbf{Quality assessment}: Score each response using an evaluator.
-  \item \textbf{Synthesis}: Combine responses using quality-weighted aggregation.
-  \item \textbf{Iteration}: Optionally refine with additional rounds using updated model selection.
+  \item \textbf{Schedule construction}: Append $[1]$ to the user-specified breadth schedule $\mathbf{b}$.
+  \item \textbf{Round~1 (parallel generation)}: Distribute $b_1$ calls across candidate models; execute concurrently with temperature $T$ (default 1.0) for response diversity.
+  \item \textbf{Rounds~$2 \ldots R{+}1$ (synthesis)}: For each subsequent round, build a synthesis prompt from the previous round's (optionally compacted) responses, distribute $b_r$ calls, and execute concurrently.
+  \item \textbf{Final output}: Return the single response from the final round ($b_{R+1} = 1$).
 \end{enumerate}
 
 ReMoM is particularly effective when model capabilities are uncertain or when the task benefits from diverse perspectives (e.g., complex reasoning, multi-faceted analysis).
+The breadth schedule provides fine-grained control over the cost--quality tradeoff: higher initial breadth increases diversity at the cost of additional LLM calls, while the funneling structure ensures convergence to a single synthesized answer.
 
 \subsection{Unified Selection Interface}
 
