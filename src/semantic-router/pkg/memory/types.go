@@ -141,6 +141,21 @@ type ListResult struct {
 	Limit int `json:"limit"`
 }
 
+// MemoryFilter is the interface for post-retrieval, pre-injection memory
+// validation. Implementations score, trim, and filter retrieved memories
+// before they are injected into the LLM request context.
+//
+// Returning nil or an empty slice signals that no memories should be injected.
+// Implementations must be safe for concurrent use.
+type MemoryFilter interface {
+	Filter(memories []*RetrieveResult) []*RetrieveResult
+}
+
+// MemoryFilterFactory constructs a MemoryFilter from global and optional
+// per-decision configuration. Returning nil means filtering is disabled
+// (equivalent to NoopFilter).
+type MemoryFilterFactory func(global config.MemoryReflectionConfig, perDecision *config.MemoryReflectionConfig) MemoryFilter
+
 // MemoryScope defines the scope for bulk operations (e.g., ForgetByScope)
 type MemoryScope struct {
 	// UserID is required - all operations are user-scoped

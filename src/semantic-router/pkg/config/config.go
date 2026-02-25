@@ -1063,6 +1063,10 @@ type MemoryConfig struct {
 	// Access tracking (LastAccessed, AccessCount) is always active; pruning runs only when PruneUser is called.
 	QualityScoring MemoryQualityScoringConfig `yaml:"quality_scoring,omitempty"`
 
+	// Reflection configures the pre-injection validation gate (inspired by RMM, ACL 2025).
+	// Filters retrieved memories before injection to improve accuracy and block adversarial content.
+	Reflection MemoryReflectionConfig `yaml:"reflection,omitempty"`
+
 	// Note: Query rewriting and fact extraction are enabled by defining
 	// external_models with model_role="memory_rewrite" or "memory_extraction".
 	// Use FindExternalModelByRole() to check if enabled and get config.
@@ -1080,6 +1084,48 @@ type MemoryQualityScoringConfig struct {
 
 	// MaxMemoriesPerUser caps memories per user; if over, lowest-R memories are deleted first (0 = no cap).
 	MaxMemoriesPerUser int `yaml:"max_memories_per_user,omitempty"`
+}
+
+// MemoryReflectionConfig configures the pre-injection validation gate.
+// Retrieved memories pass through heuristic filters before being injected
+// into the LLM request. This improves accuracy by removing stale/redundant
+// context and hardens against MINJA-style memory poisoning attacks.
+type MemoryReflectionConfig struct {
+	// Enabled turns the reflection gate on/off (default: true when memory is enabled)
+	Enabled *bool `yaml:"enabled,omitempty"`
+
+	// Algorithm selects the filter implementation from the registry.
+	// Built-in algorithms: "heuristic" (default), "noop".
+	// Third-party algorithms can be added via memory.RegisterFilter().
+	Algorithm string `yaml:"algorithm,omitempty"`
+
+	// MaxInjectTokens caps the total injected memory context.
+	// Memories are kept in descending score order until the budget is exhausted.
+	// Default: 2048
+	MaxInjectTokens int `yaml:"max_inject_tokens,omitempty"`
+
+	// RecencyDecayDays is the half-life for recency weighting.
+	// A memory's score is multiplied by exp(-0.693 * age_days / RecencyDecayDays).
+	// Default: 30 (score halves every 30 days)
+	RecencyDecayDays int `yaml:"recency_decay_days,omitempty"`
+
+	// DedupThreshold is the cosine similarity above which two retrieved memories
+	// are considered duplicates; only the higher-scored one is kept.
+	// Default: 0.90
+	DedupThreshold float32 `yaml:"dedup_threshold,omitempty"`
+
+	// BlockPatterns are regex patterns matched against memory content.
+	// Any memory matching a pattern is rejected before injection.
+	// Defaults include prompt-injection patterns (e.g., "ignore.*instructions").
+	BlockPatterns []string `yaml:"block_patterns,omitempty"`
+}
+
+// ReflectionEnabled returns whether the reflection gate is active.
+func (c MemoryReflectionConfig) ReflectionEnabled() bool {
+	if c.Enabled != nil {
+		return *c.Enabled
+	}
+	return true // on by default
 }
 
 // MemoryMilvusConfig contains Milvus-specific configuration for memory storage.
@@ -2136,12 +2182,13 @@ type SemanticCachePluginConfig struct {
 
 // MemoryPluginConfig is per-decision memory config (overrides global MemoryConfig).
 type MemoryPluginConfig struct {
-	Enabled             bool     `json:"enabled" yaml:"enabled"`                                               // If false, memory is skipped even if globally enabled
-	RetrievalLimit      *int     `json:"retrieval_limit,omitempty" yaml:"retrieval_limit,omitempty"`           // Max memories to retrieve (nil = use global)
-	SimilarityThreshold *float32 `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"` // Min similarity score (nil = use global)
-	AutoStore           *bool    `json:"auto_store,omitempty" yaml:"auto_store,omitempty"`                     // Auto-extract memories (nil = use request config)
-	HybridSearch        bool     `json:"hybrid_search,omitempty" yaml:"hybrid_search,omitempty"`               // Enable BM25 + n-gram re-ranking
-	HybridMode          string   `json:"hybrid_mode,omitempty" yaml:"hybrid_mode,omitempty"`                   // "weighted" (default) or "rrf"
+	Enabled             bool                    `json:"enabled" yaml:"enabled"`                                               // If false, memory is skipped even if globally enabled
+	RetrievalLimit      *int                    `json:"retrieval_limit,omitempty" yaml:"retrieval_limit,omitempty"`           // Max memories to retrieve (nil = use global)
+	SimilarityThreshold *float32                `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"` // Min similarity score (nil = use global)
+	AutoStore           *bool                   `json:"auto_store,omitempty" yaml:"auto_store,omitempty"`                     // Auto-extract memories (nil = use request config)
+	HybridSearch        bool                    `json:"hybrid_search,omitempty" yaml:"hybrid_search,omitempty"`               // Enable BM25 + n-gram re-ranking
+	HybridMode          string                  `json:"hybrid_mode,omitempty" yaml:"hybrid_mode,omitempty"`                   // "weighted" (default) or "rrf"
+	Reflection          *MemoryReflectionConfig `json:"reflection,omitempty" yaml:"reflection,omitempty"`                     // Per-decision reflection override
 }
 
 // JailbreakPluginConfig represents configuration for jailbreak plugin

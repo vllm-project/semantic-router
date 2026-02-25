@@ -1055,10 +1055,23 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 	}
 	logging.Infof("Memory: found %d memories for user=%s", len(memories), userID)
 
-	// Step 6: Format memory context and inject into request body
+	// Step 6: Memory filter -- validate memories before injection
+	var perDecisionReflection *config.MemoryReflectionConfig
+	if memoryPluginConfig != nil && memoryPluginConfig.Reflection != nil {
+		perDecisionReflection = memoryPluginConfig.Reflection
+	}
+	filter := memory.NewMemoryFilter(r.Config.Memory.Reflection, perDecisionReflection)
+	memories = filter.Filter(memories)
+
+	if len(memories) == 0 {
+		logging.Debugf("Memory: all memories filtered by memory filter for user=%s", userID)
+		return requestBody, nil
+	}
+
+	// Step 7: Format memory context and inject into request body
 	ctx.MemoryContext = FormatMemoriesAsContext(memories)
 
-	// Step 7: Inject memory as a separate conversation message
+	// Step 8: Inject memory as a separate conversation message
 	if ctx.MemoryContext != "" {
 		injectedBody, err := injectMemoryMessages(requestBody, ctx.MemoryContext)
 		if err != nil {

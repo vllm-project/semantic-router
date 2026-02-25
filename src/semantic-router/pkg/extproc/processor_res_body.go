@@ -233,22 +233,23 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		logging.Infof("extractAutoStore: Falling back to global config, AutoStore=%v", r.Config.Memory.AutoStore)
 		autoStoreEnabled = true
 	}
-	logging.Infof("Memory store check: MemoryExtractor=%v, autoStore=%v", r.MemoryExtractor != nil, autoStoreEnabled)
-	if r.MemoryExtractor != nil && autoStoreEnabled {
+	logging.Infof("Memory store check: MemoryExtractor=%v, autoStore=%v, jailbreakPassed=%v",
+		r.MemoryExtractor != nil, autoStoreEnabled, !ctx.JailbreakDetected)
+	if r.MemoryExtractor != nil && autoStoreEnabled && !ctx.JailbreakDetected {
 		currentUserMessage := extractCurrentUserMessage(ctx)
 		currentAssistantResponse := extractAssistantResponseText(responseBody)
 		go func() {
 			bgCtx := context.Background()
-			sessionID, userID, _, err := extractMemoryInfo(ctx)
+			sessionID, userID, history, err := extractMemoryInfo(ctx)
 			if err != nil {
 				logging.Errorf("Memory store failed: %v", err)
 				return
 			}
 
-			logging.Infof("Memory store: sessionID=%s, userID=%s, userMsg=%d chars, assistantMsg=%d chars",
-				sessionID, userID, len(currentUserMessage), len(currentAssistantResponse))
+			logging.Infof("Memory store: sessionID=%s, userID=%s, userMsg=%d chars, assistantMsg=%d chars, history=%d msgs",
+				sessionID, userID, len(currentUserMessage), len(currentAssistantResponse), len(history))
 
-			if err := r.MemoryExtractor.ProcessResponse(bgCtx, sessionID, userID, currentUserMessage, currentAssistantResponse); err != nil {
+			if err := r.MemoryExtractor.ProcessResponseWithHistory(bgCtx, sessionID, userID, currentUserMessage, currentAssistantResponse, history); err != nil {
 				logging.Warnf("Memory store failed: %v", err)
 			}
 		}()
