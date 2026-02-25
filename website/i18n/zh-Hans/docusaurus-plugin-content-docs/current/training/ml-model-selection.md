@@ -210,7 +210,7 @@ algorithm:
 ### 前置条件
 
 ```bash
-cd src/training/ml_model_selection
+cd src/training/model_selection/ml_model_selection
 pip install -r requirements.txt
 ```
 
@@ -509,7 +509,7 @@ health, history, law, math, other, philosophy, physics, psychology
 运行 Go 验证脚本以确认 ML 路由的收益：
 
 ```bash
-cd src/training/ml_model_selection
+cd src/training/model_selection/ml_model_selection
 
 # 设置库路径（WSL/Linux）
 export LD_LIBRARY_PATH=$PWD/../../../candle-binding/target/release:$PWD/../../../ml-binding/target/release:$LD_LIBRARY_PATH
@@ -572,7 +572,7 @@ Error: pretrained model not found
 从 HuggingFace 下载模型：
 
 ```bash
-cd src/training/ml_model_selection
+cd src/training/model_selection/ml_model_selection
 python download_model.py --output-dir ../../../.cache/ml-models
 ```
 

@@ -41,7 +41,7 @@ type Config struct {
 	// ML Pipeline configuration
 	MLPipelineEnabled bool
 	MLPipelineDataDir string
-	MLTrainingDir     string // path to src/training/ml_model_selection
+	MLTrainingDir     string // path to src/training/model_selection/ml_model_selection
 	MLServiceURL      string // URL of the Python ML service sidecar (empty = subprocess mode)
 }
 
@@ -92,7 +92,7 @@ func LoadConfig() (*Config, error) {
 	// ML Onboarding configuration
 	mlPipelineEnabled := flag.Bool("ml-pipeline", env("ML_PIPELINE_ENABLED", "true") == "true", "enable ML pipeline (benchmark, train, config)")
 	mlPipelineDataDir := flag.String("ml-pipeline-data", env("ML_PIPELINE_DATA_DIR", "./data/ml-pipeline"), "ML pipeline data directory")
-	mlTrainingDir := flag.String("ml-training-dir", env("ML_TRAINING_DIR", ""), "path to src/training/ml_model_selection")
+	mlTrainingDir := flag.String("ml-training-dir", env("ML_TRAINING_DIR", ""), "path to src/training/model_selection/ml_model_selection")
 	mlServiceURL := flag.String("ml-service-url", env("ML_SERVICE_URL", ""), "URL of Python ML service sidecar (empty = subprocess mode)")
 
 	flag.Parse()

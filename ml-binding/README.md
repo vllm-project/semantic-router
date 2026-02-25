@@ -2,7 +2,7 @@
 
 This directory contains Rust-based traditional ML algorithm implementations using [Linfa](https://github.com/rust-ml/linfa) for CPU-based inference.
 
-> **Note:** This package provides **inference only**. Training is done in Python. See `src/training/ml_model_selection/`.
+> **Note:** This package provides **inference only**. Training is done in Python. See `src/training/model_selection/ml_model_selection/`.
 
 ## Algorithms
 
@@ -20,7 +20,7 @@ This directory contains Rust-based traditional ML algorithm implementations usin
 ┌─────────────────────────────────────────────────────────────────┐
 │                    TRAINING (Python)                             │
 ├─────────────────────────────────────────────────────────────────┤
-│  src/training/ml_model_selection/                               │
+│  src/training/model_selection/ml_model_selection/                               │
 │  ├── train.py          # Train models (scikit-learn, PyTorch)   │
 │  ├── upload_model.py   # Upload to HuggingFace                  │
 │  └── download_model.py # Download from HuggingFace              │
@@ -143,11 +143,11 @@ func main() {
 
 ## Training Models
 
-Training is done in Python using scikit-learn. See `src/training/ml_model_selection/`:
+Training is done in Python using scikit-learn. See `src/training/model_selection/ml_model_selection/`:
 
 ```bash
 # Install dependencies
-cd src/training/ml_model_selection
+cd src/training/model_selection/ml_model_selection
 pip install -r requirements.txt
 
 # Train all models

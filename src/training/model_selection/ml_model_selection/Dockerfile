@@ -4,7 +4,7 @@
 # The dashboard calls this service's HTTP API instead of spawning Python subprocesses.
 #
 # Build:
-#   docker build -t ml-training-service -f src/training/ml_model_selection/Dockerfile .
+#   docker build -t ml-training-service -f src/training/model_selection/ml_model_selection/Dockerfile .
 #
 # Run:
 #   docker run -p 8686:8686 -v /data:/app/data ml-training-service
@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc g++ && \
     rm -rf /var/lib/apt/lists/*
 
-COPY src/training/ml_model_selection/requirements.txt .
+COPY src/training/model_selection/ml_model_selection/requirements.txt .
 
 # Install CPU-only PyTorch first (much smaller than GPU version)
 RUN pip install --no-cache-dir --target=/build/deps \
@@ -43,8 +43,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /build/deps /usr/local/lib/python3.11/site-packages/
 
 # Copy the ML training scripts
-COPY src/training/ml_model_selection/*.py /app/
-COPY src/training/ml_model_selection/requirements.txt /app/
+COPY src/training/model_selection/ml_model_selection/*.py /app/
+COPY src/training/model_selection/ml_model_selection/requirements.txt /app/
 
 # Create non-root user
 RUN useradd -m -u 65532 nonroot && \

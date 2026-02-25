@@ -11,7 +11,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # Linfa ML framework - inference only (training done in Python)
-# Training: src/training/ml_model_selection/
+# Training: src/training/model_selection/ml_model_selection/
 linfa-nn = "0.7"           # Ball Tree for KNN/KMeans inference
 
 # Linear algebra (must match Linfa's ndarray version)

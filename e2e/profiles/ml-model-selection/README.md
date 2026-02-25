@@ -144,7 +144,7 @@ If you want to download models manually before running tests:
 ```bash
 pip install huggingface-hub
 
-cd src/training/ml_model_selection
+cd src/training/model_selection/ml_model_selection
 
 # Download trained models to .cache/ml-models/ (repo root)
 python download_model.py \
@@ -171,7 +171,7 @@ To validate that ML routing provides benefit over baselines, use the `validate.g
 
 ```bash
 # Run from the training directory
-cd src/training/ml_model_selection
+cd src/training/model_selection/ml_model_selection
 
 # Set library paths for Rust bindings (WSL/Linux)
 export LD_LIBRARY_PATH=$PWD/../../../candle-binding/target/release:$PWD/../../../ml-binding/target/release:$LD_LIBRARY_PATH
@@ -381,7 +381,7 @@ The E2E test automatically downloads models from HuggingFace. If download fails:
 
 ```bash
 pip install huggingface-hub
-cd src/training/ml_model_selection
+cd src/training/model_selection/ml_model_selection
 python download_model.py --output-dir ../../../.cache/ml-models
 ```
 

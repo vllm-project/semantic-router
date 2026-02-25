@@ -3,7 +3,7 @@
 //! Inference-only library for ML-based model selection using traditional ML algorithms.
 //!
 //! ## Architecture
-//! - **Training**: Done in Python (src/training/ml_model_selection/) using scikit-learn
+//! - **Training**: Done in Python (src/training/model_selection/ml_model_selection/) using scikit-learn
 //! - **Inference**: Done in Rust via FFI to Go, using linfa-nn for efficient inference
 //!
 //! ## Algorithms

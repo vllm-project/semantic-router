@@ -45,7 +45,7 @@ except ImportError:
     sys.exit(1)
 
 # --- Local imports (benchmark + train modules) ---
-# These are the existing modules in src/training/ml_model_selection/
+# These are the existing modules in src/training/model_selection/ml_model_selection/
 from benchmark import run_benchmark_pipeline
 from train import run_training_pipeline
 from models import TORCH_AVAILABLE

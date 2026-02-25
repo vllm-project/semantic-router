@@ -35,7 +35,7 @@ This module trains machine learning models for query-based LLM routing, implemen
 ## Installation
 
 ```bash
-cd src/training/ml_model_selection
+cd src/training/model_selection/ml_model_selection
 pip install -r requirements.txt
 ```
 
@@ -361,7 +361,7 @@ This uses the same inference path as production:
 
 ```bash
 # Run from the training directory
-cd src/training/ml_model_selection
+cd src/training/model_selection/ml_model_selection
 
 # Set library paths for Rust bindings (WSL/Linux)
 export LD_LIBRARY_PATH=$PWD/../../../candle-binding/target/release:$PWD/../../../ml-binding/target/release:$LD_LIBRARY_PATH

@@ -156,7 +156,7 @@ jobs:
             e2e_ml_model_selection:
               - 'e2e/profiles/ml-model-selection/**'
               - 'src/semantic-router/pkg/modelselection/**'
-              - 'src/training/ml_model_selection/**'
+              - 'src/training/model_selection/ml_model_selection/**'
               - 'ml-binding/**'
             e2e_multi_endpoint:
               - 'e2e/profiles/multi-endpoint/**'

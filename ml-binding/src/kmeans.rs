@@ -1,6 +1,6 @@
 //! KMeans clustering implementation using linfa-nn
 //!
-//! Inference-only implementation. Training is done in Python (src/training/ml_model_selection/).
+//! Inference-only implementation. Training is done in Python (src/training/model_selection/ml_model_selection/).
 //! Models are loaded from JSON files trained by the Python scripts.
 //!
 //! Uses linfa-nn for efficient centroid lookup during inference.
