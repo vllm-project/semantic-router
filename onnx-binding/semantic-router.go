@@ -874,3 +874,84 @@ func InitQwen3PreferenceClassifier(modelPath string, useCPU bool) error {
 func ClassifyQwen3Preference(text string, labels []string) (ClassResult, error) {
 	return ClassResult{}, errors.New("Qwen3 preference classifier is not supported in ONNX binding; use Candle binding or disable preference routing")
 }
+
+// ============================================================================
+// Modality Classification (stub — Candle-only)
+// ============================================================================
+
+// ModalityResult represents the output of modality routing classification.
+type ModalityResult struct {
+	Modality   string
+	ClassID    int
+	Confidence float32
+}
+
+// InitMmBert32KModalityClassifier is not supported in ONNX binding (Candle-only).
+func InitMmBert32KModalityClassifier(modelPath string, useCPU bool) error {
+	return errors.New("modality classifier is not supported in ONNX binding; use Candle binding or disable modality routing")
+}
+
+// ClassifyMmBert32KModality is not supported in ONNX binding (Candle-only).
+func ClassifyMmBert32KModality(text string) (ModalityResult, error) {
+	return ModalityResult{}, errors.New("modality classification is not supported in ONNX binding; use Candle binding or disable modality routing")
+}
+
+// ============================================================================
+// MLP Selector for Model Selection (stub — Candle-only, GPU-accelerated)
+// ============================================================================
+
+// MLPDeviceType defines the device type for MLP inference.
+type MLPDeviceType int
+
+const (
+	MLPDeviceCPU   MLPDeviceType = 0
+	MLPDeviceCUDA  MLPDeviceType = 1
+	MLPDeviceMetal MLPDeviceType = 2
+)
+
+// MLPDType defines the data type for mixed precision inference.
+type MLPDType int
+
+const (
+	MLPF32  MLPDType = 0
+	MLPF16  MLPDType = 1
+	MLPBF16 MLPDType = 2
+)
+
+// MLPSelector is a stub for the Candle MLP implementation.
+type MLPSelector struct{}
+
+// NewMLPSelector is not supported in ONNX binding (Candle-only).
+func NewMLPSelector() *MLPSelector { return &MLPSelector{} }
+
+// NewMLPSelectorWithDevice is not supported in ONNX binding (Candle-only).
+func NewMLPSelectorWithDevice(deviceType MLPDeviceType) *MLPSelector { return &MLPSelector{} }
+
+// NewMLPSelectorWithDeviceAndDType is not supported in ONNX binding (Candle-only).
+func NewMLPSelectorWithDeviceAndDType(deviceType MLPDeviceType, dtype MLPDType) *MLPSelector {
+	return &MLPSelector{}
+}
+
+func (s *MLPSelector) Close()          {}
+func (s *MLPSelector) IsTrained() bool { return false }
+func (s *MLPSelector) ToJSON() (string, error) {
+	return "", errors.New("MLP not supported in ONNX binding")
+}
+func (s *MLPSelector) Select(query []float64) (string, error) {
+	return "", errors.New("MLP selector is not supported in ONNX binding; use Candle binding")
+}
+
+// MLPFromJSON is not supported in ONNX binding (Candle-only).
+func MLPFromJSON(jsonStr string) (*MLPSelector, error) {
+	return nil, errors.New("MLP selector is not supported in ONNX binding; use Candle binding")
+}
+
+// MLPFromJSONWithDevice is not supported in ONNX binding (Candle-only).
+func MLPFromJSONWithDevice(jsonStr string, deviceType MLPDeviceType) (*MLPSelector, error) {
+	return nil, errors.New("MLP selector is not supported in ONNX binding; use Candle binding")
+}
+
+// MLPFromJSONWithDeviceAndDType is not supported in ONNX binding (Candle-only).
+func MLPFromJSONWithDeviceAndDType(jsonStr string, deviceType MLPDeviceType, dtype MLPDType) (*MLPSelector, error) {
+	return nil, errors.New("MLP selector is not supported in ONNX binding; use Candle binding")
+}

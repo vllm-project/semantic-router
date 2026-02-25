@@ -75,6 +75,7 @@ fn create_error_message(msg: &str) -> *mut c_char {
     CString::new(msg).unwrap().into_raw()
 }
 
+#[cfg(test)]
 fn create_default_intent() -> CIntentResult {
     CIntentResult {
         category: ptr::null_mut(),
@@ -84,6 +85,7 @@ fn create_default_intent() -> CIntentResult {
     }
 }
 
+#[cfg(test)]
 fn create_default_pii() -> CPIIResult {
     CPIIResult {
         has_pii: false,
@@ -93,6 +95,7 @@ fn create_default_pii() -> CPIIResult {
     }
 }
 
+#[cfg(test)]
 fn create_default_security() -> CSecurityResult {
     CSecurityResult {
         is_jailbreak: false,

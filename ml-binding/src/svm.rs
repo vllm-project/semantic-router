@@ -104,14 +104,14 @@ pub struct SVMSelector {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct LinearClassifierData {
+pub struct LinearClassifierData {
     model_name: String,
     weights: Vec<f64>,
     rho: f64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct RbfClassifierData {
+pub struct RbfClassifierData {
     model_name: String,
     alpha: Vec<f64>,
     support_vectors: Vec<Vec<f64>>,
