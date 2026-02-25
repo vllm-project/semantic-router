@@ -114,8 +114,6 @@ jobs:
             e2e:
               - 'e2e/testing/**'
               - 'e2e/**'
-              - 'scripts/quickstart.sh'
-              - 'deploy/docker-compose/**'
               - 'deploy/kubernetes/**'
               - 'deploy/kserve/**'
               - 'deploy/openshift/**'
@@ -124,8 +122,6 @@ jobs:
             docker:
               - 'tools/docker/Dockerfile*'
               - 'docker/**'
-              - 'docker-compose*'
-              - 'deploy/docker-compose/**'
             make:
               - 'Makefile'
               - 'tools/make/**'
