@@ -72,7 +72,7 @@ run-redis-example: start-redis rust ## Run the Redis cache example
 	@echo "Running Redis cache example..."
 	@cd src/semantic-router && \
 		export LD_LIBRARY_PATH=$${PWD}/../../candle-binding/target/release:$${PWD}/../../nlp-binding/target/release && \
-		go run ../../deploy/examples/redis-cache-example.go
+		go run ../../deploy/addons/redis/redis-cache.go
 	@echo ""
 	@echo "Example complete! Check Redis using:"
 	@echo "  • redis-cli (command line)"

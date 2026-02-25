@@ -192,12 +192,24 @@ Return JSON array. Empty array [] if nothing worth remembering about the USER.`
 //	facts, err := extractor.ExtractFacts(ctx, messages)
 //	// facts = [{Type: "semantic", Content: "User's budget for Hawaii vacation is $10,000"}]
 func (e *MemoryExtractor) ExtractFacts(ctx context.Context, messages []Message) ([]ExtractedFact, error) {
+	startTime := time.Now()
+	status := "success"
+	factsCount := 0
+
+	// Defer metrics recording
+	defer func() {
+		duration := time.Since(startTime).Seconds()
+		RecordMemoryExtraction(status, duration, factsCount, "all")
+	}()
+
 	if e == nil || e.endpoint == "" {
 		logging.Debugf("Memory: Fact extraction not configured")
+		status = "skipped"
 		return nil, nil
 	}
 
 	if len(messages) == 0 {
+		status = "skipped"
 		return nil, nil
 	}
 
@@ -221,6 +233,7 @@ func (e *MemoryExtractor) ExtractFacts(ctx context.Context, messages []Message) 
 	facts, err := e.callLLMForExtraction(ctx, userPrompt)
 	if err != nil {
 		logging.Warnf("Memory: Fact extraction failed: %v", err)
+		status = "error"
 		return nil, nil // Graceful degradation
 	}
 
@@ -231,6 +244,18 @@ func (e *MemoryExtractor) ExtractFacts(ctx context.Context, messages []Message) 
 		logging.Infof("║   %d. [%s] %s", i+1, fact.Type, fact.Content) // Full content for demo
 	}
 	logging.Infof("╚══════════════════════════════════════════════════════════════════╝")
+
+	// Update metrics: total facts for defer (already records count + latency once)
+	factsCount = len(facts)
+
+	// Record per-type fact counts only (no extra operation count or latency)
+	typeCounts := make(map[MemoryType]int)
+	for _, fact := range facts {
+		typeCounts[fact.Type]++
+	}
+	for memType, count := range typeCounts {
+		MemoryExtractionFactsCount.WithLabelValues(string(memType)).Observe(float64(count))
+	}
 
 	return facts, nil
 }

@@ -232,7 +232,7 @@ jobs:
           # for images that have them (extproc, vllm-sr). This avoids slow QEMU emulation.
           if [ "${{ matrix.image }}" = "extproc" ]; then
             echo "context=." >> $GITHUB_OUTPUT
-            echo "dockerfile=./tools/docker/Dockerfile.extproc.cross" >> $GITHUB_OUTPUT
+            echo "dockerfile=./tools/docker/Dockerfile.extproc" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.image }}" = "llm-katan" ]; then
             echo "context=./e2e/testing/llm-katan" >> $GITHUB_OUTPUT
             echo "dockerfile=./e2e/testing/llm-katan/Dockerfile" >> $GITHUB_OUTPUT

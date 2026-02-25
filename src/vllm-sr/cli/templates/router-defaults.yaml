@@ -220,7 +220,7 @@ observability:
   metrics:
     enabled: true  # Enable Prometheus /metrics endpoint for vllm-sr serve
   tracing:
-    enabled: true  # Enable distributed tracing for vllm-sr serve
+    enabled: true  # Enable distributed tracingfor vllm-sr serve
     provider: "opentelemetry"  # Provider: opentelemetry, openinference, openllmetry
     exporter:
       type: "otlp"  # Export spans to Jaeger (via OTLP gRPC)

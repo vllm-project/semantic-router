@@ -632,7 +632,7 @@ config:
   # Observability Configuration
   observability:
     tracing:
-      enabled: false  # Enable distributed tracing for docker-compose stack
+      enabled: false  # Enable distributed tracing
       provider: "opentelemetry"  # Provider: opentelemetry, openinference, openllmetry
       exporter:
         type: "otlp"  # Export spans to Jaeger (via OTLP gRPC)

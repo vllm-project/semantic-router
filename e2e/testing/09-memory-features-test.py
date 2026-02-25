@@ -12,7 +12,7 @@ Comprehensive tests for memory functionality:
 - User Isolation: User A cannot see User B's memories (security)
 
 Prerequisites:
-- Milvus running (docker-compose with milvus)
+- Milvus running
 - Semantic Router running with memory enabled
 - LLM backend with ECHO mode for reliable verification
 

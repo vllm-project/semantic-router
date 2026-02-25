@@ -221,7 +221,20 @@ func (m *MilvusStore) ensureCollection(ctx context.Context) error {
 
 // Retrieve searches for memories in Milvus with similarity threshold filtering
 func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*RetrieveResult, error) {
+	startTime := time.Now()
+	backend := "milvus"
+	operation := "retrieve"
+	status := "success"
+	resultCount := 0
+
+	// Defer metrics recording
+	defer func() {
+		duration := time.Since(startTime).Seconds()
+		RecordMemoryRetrieval(backend, operation, status, opts.UserID, duration, resultCount)
+	}()
+
 	if !m.enabled {
+		status = "error"
 		return nil, fmt.Errorf("milvus store is not enabled")
 	}
 
@@ -237,10 +250,12 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 	}
 
 	if opts.Query == "" {
+		status = "error"
 		return nil, fmt.Errorf("query is required")
 	}
 
 	if opts.UserID == "" {
+		status = "error"
 		return nil, fmt.Errorf("user id is required")
 	}
 
@@ -259,6 +274,7 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 	// Generate embedding for the query
 	embedding, err := GenerateEmbedding(opts.Query, m.embeddingConfig)
 	if err != nil {
+		status = "error"
 		return nil, fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
@@ -287,6 +303,7 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 	// Using HNSW index with ef parameter (adjust based on your index configuration)
 	searchParam, err := entity.NewIndexHNSWSearchParam(64)
 	if err != nil {
+		status = "error"
 		return nil, fmt.Errorf("failed to create search parameters: %w", err)
 	}
 
@@ -315,11 +332,14 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		return retryErr
 	})
 	if err != nil {
+		status = "error"
 		return nil, fmt.Errorf("milvus search failed after retries: %w", err)
 	}
 
 	if len(searchResult) == 0 || searchResult[0].ResultCount == 0 {
 		logging.Debugf("MilvusStore.Retrieve: no results found")
+		status = "miss"
+		resultCount = 0
 		return []*RetrieveResult{}, nil
 	}
 
@@ -487,6 +507,14 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		logging.Infof("  %d. [%.3f] %s: %s", i+1, r.Score, r.Memory.Type, r.Memory.Content) // Full content for demo
 	}
 
+	// Update metrics with result count
+	resultCount = len(results)
+	if resultCount > 0 {
+		status = "hit"
+	} else {
+		status = "miss"
+	}
+
 	return results, nil
 }
 
@@ -528,17 +556,32 @@ func (m *MilvusStore) Close() error {
 // Store saves a new memory to Milvus.
 // Generates embedding for the content and inserts into the collection.
 func (m *MilvusStore) Store(ctx context.Context, memory *Memory) error {
+	startTime := time.Now()
+	backend := "milvus"
+	operation := "store"
+	status := "success"
+
+	// Defer metrics recording
+	defer func() {
+		duration := time.Since(startTime).Seconds()
+		RecordMemoryStoreOperation(backend, operation, status, duration)
+	}()
+
 	if !m.enabled {
+		status = "error"
 		return fmt.Errorf("milvus store is not enabled")
 	}
 
 	if memory.ID == "" {
+		status = "error"
 		return fmt.Errorf("memory ID is required")
 	}
 	if memory.Content == "" {
+		status = "error"
 		return fmt.Errorf("memory content is required")
 	}
 	if memory.UserID == "" {
+		status = "error"
 		return fmt.Errorf("user ID is required")
 	}
 
@@ -560,6 +603,7 @@ func (m *MilvusStore) Store(ctx context.Context, memory *Memory) error {
 		var err error
 		embedding, err = GenerateEmbedding(memory.Content, m.embeddingConfig)
 		if err != nil {
+			status = "error"
 			return fmt.Errorf("failed to generate embedding: %w", err)
 		}
 	}
@@ -585,6 +629,7 @@ func (m *MilvusStore) Store(ctx context.Context, memory *Memory) error {
 	}
 	metadataJSON, err := json.Marshal(metadata)
 	if err != nil {
+		status = "error"
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
@@ -634,6 +679,7 @@ func (m *MilvusStore) Store(ctx context.Context, memory *Memory) error {
 		return insertErr
 	})
 	if err != nil {
+		status = "error"
 		return fmt.Errorf("milvus insert failed: %w", err)
 	}
 
@@ -1027,11 +1073,24 @@ func (m *MilvusStore) parseListResults(queryResult []entity.Column, projectIDFil
 // The caller must provide a fully populated Memory (including Embedding); Update preserves CreatedAt
 // from the existing row and sets UpdatedAt to now.
 func (m *MilvusStore) Update(ctx context.Context, id string, memory *Memory) error {
+	startTime := time.Now()
+	backend := "milvus"
+	operation := "update"
+	status := "success"
+
+	// Defer metrics recording
+	defer func() {
+		duration := time.Since(startTime).Seconds()
+		RecordMemoryStoreOperation(backend, operation, status, duration)
+	}()
+
 	if !m.enabled {
+		status = "error"
 		return fmt.Errorf("milvus store is not enabled")
 	}
 
 	if id == "" {
+		status = "error"
 		return fmt.Errorf("memory ID is required")
 	}
 
@@ -1044,6 +1103,7 @@ func (m *MilvusStore) Update(ctx context.Context, id string, memory *Memory) err
 	if memory.CreatedAt.IsZero() || len(memory.Embedding) == 0 {
 		existing, err := m.Get(ctx, id)
 		if err != nil {
+			status = "error"
 			return fmt.Errorf("memory not found: %s", id)
 		}
 		if memory.CreatedAt.IsZero() {
@@ -1054,7 +1114,12 @@ func (m *MilvusStore) Update(ctx context.Context, id string, memory *Memory) err
 		}
 	}
 
-	return m.upsert(ctx, memory)
+	err := m.upsert(ctx, memory)
+	if err != nil {
+		status = "error"
+		return err
+	}
+	return nil
 }
 
 // recordRetrievalBatch updates LastAccessed and AccessCount for each retrieved memory in the background.
@@ -1083,11 +1148,24 @@ func (m *MilvusStore) recordRetrieval(ctx context.Context, id string) error {
 
 // Forget deletes a memory by ID from Milvus.
 func (m *MilvusStore) Forget(ctx context.Context, id string) error {
+	startTime := time.Now()
+	backend := "milvus"
+	operation := "forget"
+	status := "success"
+
+	// Defer metrics recording
+	defer func() {
+		duration := time.Since(startTime).Seconds()
+		RecordMemoryStoreOperation(backend, operation, status, duration)
+	}()
+
 	if !m.enabled {
+		status = "error"
 		return fmt.Errorf("milvus store is not enabled")
 	}
 
 	if id == "" {
+		status = "error"
 		return fmt.Errorf("memory ID is required")
 	}
 
@@ -1107,6 +1185,7 @@ func (m *MilvusStore) Forget(ctx context.Context, id string) error {
 		)
 	})
 	if err != nil {
+		status = "error"
 		return fmt.Errorf("milvus delete failed: %w", err)
 	}
 
@@ -1117,11 +1196,24 @@ func (m *MilvusStore) Forget(ctx context.Context, id string) error {
 // ForgetByScope deletes all memories matching the scope from Milvus.
 // Scope includes UserID (required), ProjectID (optional), Types (optional).
 func (m *MilvusStore) ForgetByScope(ctx context.Context, scope MemoryScope) error {
+	startTime := time.Now()
+	backend := "milvus"
+	operation := "forget_by_scope"
+	status := "success"
+
+	// Defer metrics recording
+	defer func() {
+		duration := time.Since(startTime).Seconds()
+		RecordMemoryStoreOperation(backend, operation, status, duration)
+	}()
+
 	if !m.enabled {
+		status = "error"
 		return fmt.Errorf("milvus store is not enabled")
 	}
 
 	if scope.UserID == "" {
+		status = "error"
 		return fmt.Errorf("user ID is required for scope deletion")
 	}
 
@@ -1135,7 +1227,11 @@ func (m *MilvusStore) ForgetByScope(ctx context.Context, scope MemoryScope) erro
 	if scope.ProjectID != "" {
 		// Note: project_id is in metadata JSON, so we need to query first then delete by ID
 		// For simplicity, we'll query matching IDs first, then delete them
-		return m.forgetByScopeWithQuery(ctx, scope)
+		err := m.forgetByScopeWithQuery(ctx, scope)
+		if err != nil {
+			status = "error"
+		}
+		return err
 	}
 
 	// Add type filter if specified
@@ -1162,6 +1258,7 @@ func (m *MilvusStore) ForgetByScope(ctx context.Context, scope MemoryScope) erro
 		)
 	})
 	if err != nil {
+		status = "error"
 		return fmt.Errorf("milvus delete by scope failed: %w", err)
 	}
 
