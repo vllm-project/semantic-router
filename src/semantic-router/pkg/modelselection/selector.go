@@ -28,7 +28,7 @@ limitations under the License.
 //
 // Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
 //
-// Training is done in Python (src/training/ml_model_selection/).
+// Training is done in Python (src/training/model_selection/ml_model_selection/).
 // This package provides inference-only functionality, loading models from JSON.
 package modelselection
 
@@ -575,7 +575,7 @@ func (s *KNNSelector) LoadFromJSON(data []byte) error {
 }
 
 // trainMLBinding is deprecated - training should now be done in Python
-// See: src/training/ml_model_selection/train.py
+// See: src/training/model_selection/ml_model_selection/train.py
 // This method logs a warning and does nothing. Use LoadPretrainedModel() instead.
 func (s *KNNSelector) trainMLBinding() {
 	training := s.getTrainingData()
@@ -583,9 +583,9 @@ func (s *KNNSelector) trainMLBinding() {
 		return
 	}
 
-	// Training is now done in Python (src/training/ml_model_selection/)
+	// Training is now done in Python (src/training/model_selection/ml_model_selection/)
 	// The Go/Rust code only loads pretrained models via LoadFromJSON()
-	logging.Warnf("KNN training in Go is deprecated. Use Python training: python src/training/ml_model_selection/train.py")
+	logging.Warnf("KNN training in Go is deprecated. Use Python training: python src/training/model_selection/ml_model_selection/train.py")
 	logging.Infof("To load pretrained models, use LoadPretrainedSelector() with JSON files")
 
 	// Initialize empty selector if needed (for compatibility)
@@ -699,7 +699,7 @@ func (s *KMeansSelector) LoadFromJSON(data []byte) error {
 }
 
 // trainMLBinding is deprecated - training should now be done in Python
-// See: src/training/ml_model_selection/train.py
+// See: src/training/model_selection/ml_model_selection/train.py
 // This method logs a warning and does nothing. Use LoadPretrainedModel() instead.
 func (s *KMeansSelector) trainMLBinding() {
 	training := s.getTrainingData()
@@ -707,9 +707,9 @@ func (s *KMeansSelector) trainMLBinding() {
 		return
 	}
 
-	// Training is now done in Python (src/training/ml_model_selection/)
+	// Training is now done in Python (src/training/model_selection/ml_model_selection/)
 	// The Go/Rust code only loads pretrained models via LoadFromJSON()
-	logging.Warnf("KMeans training in Go is deprecated. Use Python training: python src/training/ml_model_selection/train.py")
+	logging.Warnf("KMeans training in Go is deprecated. Use Python training: python src/training/model_selection/ml_model_selection/train.py")
 	logging.Infof("To load pretrained models, use LoadPretrainedSelector() with JSON files")
 
 	// Initialize empty selector if needed (for compatibility)
@@ -820,7 +820,7 @@ func (s *SVMSelector) LoadFromJSON(data []byte) error {
 }
 
 // trainMLBinding is deprecated - training should now be done in Python
-// See: src/training/ml_model_selection/train.py
+// See: src/training/model_selection/ml_model_selection/train.py
 // This method logs a warning and does nothing. Use LoadPretrainedModel() instead.
 func (s *SVMSelector) trainMLBinding() {
 	training := s.getTrainingData()
@@ -828,9 +828,9 @@ func (s *SVMSelector) trainMLBinding() {
 		return
 	}
 
-	// Training is now done in Python (src/training/ml_model_selection/)
+	// Training is now done in Python (src/training/model_selection/ml_model_selection/)
 	// The Go/Rust code only loads pretrained models via LoadFromJSON()
-	logging.Warnf("SVM training in Go is deprecated. Use Python training: python src/training/ml_model_selection/train.py")
+	logging.Warnf("SVM training in Go is deprecated. Use Python training: python src/training/model_selection/ml_model_selection/train.py")
 	logging.Infof("To load pretrained models, use LoadPretrainedSelector() with JSON files")
 
 	// Initialize empty selector if needed (for compatibility)
@@ -947,8 +947,8 @@ func (s *MLPSelector) Load(path string) error {
 
 func (s *MLPSelector) Train(data []TrainingRecord) error {
 	s.addTrainingData(data)
-	// Training is done in Python (src/training/ml_model_selection/)
-	logging.Warnf("MLP training in Go is not supported. Use Python training: python src/training/ml_model_selection/train.py")
+	// Training is done in Python (src/training/model_selection/ml_model_selection/)
+	logging.Warnf("MLP training in Go is not supported. Use Python training: python src/training/model_selection/ml_model_selection/train.py")
 	return nil
 }
 

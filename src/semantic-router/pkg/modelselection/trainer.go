@@ -27,7 +27,7 @@ import (
 )
 
 // VSR's 14 categories for one-hot encoding
-// IMPORTANT: This order MUST match Python training: src/training/ml_model_selection/data_loader.py
+// IMPORTANT: This order MUST match Python training: src/training/model_selection/ml_model_selection/data_loader.py
 var VSRCategories = []string{
 	"math",
 	"physics",
