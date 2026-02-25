@@ -1,7 +1,7 @@
 //! FFI exports for Go bindings
 //!
 //! This module provides inference-only functions for KNN, KMeans, and SVM.
-//! Training is done in Python (src/training/ml_model_selection/).
+//! Training is done in Python (src/training/model_selection/ml_model_selection/).
 //! Models are loaded from JSON files trained by the Python scripts.
 //!
 //! Reference: FusionFactory (arXiv:2507.10540) - Query-level fusion via tailored LLM routers
