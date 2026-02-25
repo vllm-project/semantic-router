@@ -78,20 +78,22 @@ def start_vllm_sr(
         docker_remove_container(VLLM_SR_DOCKER_NAME)
 
     shared_network_name = "vllm-sr-network"
-    network_name = None
     config_dir = os.path.dirname(os.path.abspath(config_file))
 
     # OpenClaw containers and the dashboard need a stable shared bridge network
-    # even when observability is disabled.
+    # even when observability is disabled. Always start the main container on
+    # this bridge so docker_network_connect (called below) is idempotent and
+    # does not fail due to incompatible rootless-Podman network modes (e.g. pasta).
     return_code, stdout, stderr = docker_create_network(shared_network_name)
     if return_code != 0:
         log.error(f"Failed to create shared OpenClaw network: {stderr}")
         sys.exit(1)
 
+    network_name = shared_network_name
+
     # Start observability stack if enabled
     if enable_observability:
         log.info("Starting observability stack (Jaeger + Prometheus + Grafana)...")
-        network_name = shared_network_name
 
         # Start Jaeger
         return_code, stdout, stderr = docker_start_jaeger(network_name)
