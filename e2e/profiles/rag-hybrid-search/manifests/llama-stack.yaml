@@ -7,6 +7,12 @@ metadata:
 ---
 # Llama Stack Deployment for E2E testing
 # Provides vector store backend via OpenAI-compatible REST API
+# Uses the Milvus (inline::milvus / Milvus Lite) vector_io provider to
+# support hybrid search (vector + BM25 keyword search with RRF ranking).
+#
+# Workaround: setuptools >=78 ships a broken pkg_resources in the 0.5.0 image.
+# The startup script downgrades setuptools to restore milvus-lite compatibility,
+# then patches the Llama Stack config to use Milvus instead of the default Faiss.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -31,7 +37,20 @@ spec:
       containers:
         - name: llama-stack
           image: llamastack/distribution-starter:0.5.0
-          args: ["--port", "8321"]
+          command: ["sh", "-c"]
+          args:
+            - |
+              pip install 'setuptools<78' --quiet 2>/dev/null
+              python3 -c "
+              import pathlib
+              src = pathlib.Path('/usr/local/lib/python3.12/site-packages/llama_stack/distributions/starter/config.yaml')
+              cfg = src.read_text().replace('default_provider_id: faiss', 'default_provider_id: milvus')
+              pathlib.Path('/tmp/config.yaml').write_text(cfg)
+              "
+              exec llama stack run /tmp/config.yaml --port 8321
+          env:
+            - name: MILVUS_URL
+              value: "enabled"
           ports:
             - containerPort: 8321
               name: http
@@ -39,15 +58,16 @@ spec:
             httpGet:
               path: /v1/health
               port: 8321
-            initialDelaySeconds: 10
+            initialDelaySeconds: 30
             periodSeconds: 5
-            failureThreshold: 30
+            failureThreshold: 60
           livenessProbe:
             httpGet:
               path: /v1/health
               port: 8321
+            initialDelaySeconds: 60
             periodSeconds: 10
-            failureThreshold: 3
+            failureThreshold: 6
           resources:
             requests:
               cpu: 500m

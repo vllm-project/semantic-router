@@ -349,6 +349,7 @@ func main() {
 				EmbeddingModel:        lsCfg.EmbeddingModel,
 				EmbeddingDimension:    cfg.VectorStore.EmbeddingDimension,
 				RequestTimeoutSeconds: lsCfg.RequestTimeoutSeconds,
+				SearchType:            lsCfg.SearchType,
 			}
 		}
 		vsBackend, vsErr := vectorstore.NewBackend(cfg.VectorStore.BackendType, backendCfgs)

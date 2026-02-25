@@ -71,6 +71,34 @@ var _ = Describe("VectorStoreConfig", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("must be 'memory', 'milvus', or 'llama_stack'"))
 		})
+
+		It("should pass with llama_stack backend and valid search_type", func() {
+			for _, st := range []string{"", "vector", "hybrid"} {
+				cfg := &config.VectorStoreConfig{
+					Enabled:     true,
+					BackendType: "llama_stack",
+					LlamaStack: &config.LlamaStackVectorStoreConfig{
+						Endpoint:   "http://localhost:8321",
+						SearchType: st,
+					},
+				}
+				Expect(cfg.Validate()).NotTo(HaveOccurred(), "search_type=%q should be valid", st)
+			}
+		})
+
+		It("should fail with llama_stack backend and invalid search_type", func() {
+			cfg := &config.VectorStoreConfig{
+				Enabled:     true,
+				BackendType: "llama_stack",
+				LlamaStack: &config.LlamaStackVectorStoreConfig{
+					Endpoint:   "http://localhost:8321",
+					SearchType: "invalid_type",
+				},
+			}
+			err := cfg.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("search_type must be 'vector' or 'hybrid'"))
+		})
 	})
 
 	Context("ApplyDefaults", func() {

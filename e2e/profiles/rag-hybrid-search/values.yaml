@@ -27,6 +27,7 @@ config:
       endpoint: "http://llama-stack.llama-stack-system.svc.cluster.local:8321"
       embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
       request_timeout_seconds: 120
+      search_type: "hybrid"
 
   # Minimal decision config for E2E
   model_config:
