@@ -47,6 +47,11 @@ vector_store:
   # llama_stack:
   #   endpoint: "http://localhost:8321"
   #   embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
+  #   search_type: "hybrid"  # Options: "vector" (default), "hybrid"
+  #
+  # Score ranges by search_type:
+  #   "vector" → cosine similarity 0.0–1.0 (similarity_threshold ~0.7 is typical)
+  #   "hybrid" → RRF scores 0.001–0.05 (threshold is skipped automatically)
 
 # Tool auto-selection
 tools:
