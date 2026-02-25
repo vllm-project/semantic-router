@@ -952,3 +952,86 @@ func TestMilvusStore_Schema_UserIDPartitionKey(t *testing.T) {
 	require.NotNil(t, userIDField, "user_id field should exist in schema")
 	assert.True(t, userIDField.IsPartitionKey, "user_id field should have IsPartitionKey=true for efficient per-user queries")
 }
+
+// ============================================================================
+// Hybrid Search Tests
+// ============================================================================
+
+func TestMilvusStore_Retrieve_HybridRerank(t *testing.T) {
+	store, mockClient := setupTestStore()
+	ctx := context.Background()
+
+	// Candidate A: high vector score but content doesn't contain query terms.
+	// Candidate B: slightly lower vector score but content contains exact query terms.
+	// With hybrid search, B should be boosted above A.
+	mockResults := []client.SearchResult{
+		{
+			ResultCount: 2,
+			Scores:      []float32{0.90, 0.85},
+			Fields: []entity.Column{
+				entity.NewColumnVarChar("id", []string{"id_generic", "id_keyword"}),
+				entity.NewColumnVarChar("content", []string{
+					"The project timeline was discussed in the last meeting and deadlines were set",
+					"Portland charity race is scheduled for March 15th with a $5000 budget",
+				}),
+				entity.NewColumnVarChar("memory_type", []string{"episodic", "episodic"}),
+				entity.NewColumnVarChar("metadata", []string{"{}", "{}"}),
+			},
+		},
+	}
+
+	mockClient.SearchFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
+		return mockResults, nil
+	}
+
+	// Vector-only retrieval: id_generic should rank first (0.90 > 0.85).
+	vectorResults, err := store.Retrieve(ctx, RetrieveOptions{
+		Query:        "Portland charity race",
+		UserID:       "u1",
+		Limit:        10,
+		Threshold:    0.5,
+		HybridSearch: false,
+	})
+	require.NoError(t, err)
+	require.Len(t, vectorResults, 2)
+	assert.Equal(t, "id_generic", vectorResults[0].Memory.ID,
+		"Without hybrid, higher vector score should rank first")
+
+	// Hybrid retrieval: id_keyword should rank first because BM25 + n-gram
+	// boost exact "Portland", "charity", "race" terms.
+	hybridResults, err := store.Retrieve(ctx, RetrieveOptions{
+		Query:        "Portland charity race",
+		UserID:       "u1",
+		Limit:        10,
+		Threshold:    0.1,
+		HybridSearch: true,
+		HybridMode:   "weighted",
+	})
+	require.NoError(t, err)
+	require.Len(t, hybridResults, 2)
+	assert.Equal(t, "id_keyword", hybridResults[0].Memory.ID,
+		"With hybrid, exact keyword match should rank first")
+}
+
+func TestMilvusStore_Retrieve_HybridExpandsTopK(t *testing.T) {
+	store, mockClient := setupTestStore()
+	ctx := context.Background()
+
+	var capturedTopK int
+	mockClient.SearchFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
+		capturedTopK = topK
+		return []client.SearchResult{{ResultCount: 0}}, nil
+	}
+
+	// With hybrid off: limit=5 -> topK = max(5*4, 20) = 20
+	_, _ = store.Retrieve(ctx, RetrieveOptions{
+		Query: "test", UserID: "u1", Limit: 5, HybridSearch: false,
+	})
+	assert.Equal(t, 20, capturedTopK, "Non-hybrid should use 4x multiplier (min 20)")
+
+	// With hybrid on: limit=5 -> topK = max(5*8, 20) = 40
+	_, _ = store.Retrieve(ctx, RetrieveOptions{
+		Query: "test", UserID: "u1", Limit: 5, HybridSearch: true,
+	})
+	assert.Equal(t, 40, capturedTopK, "Hybrid should use 8x multiplier for broader candidate pool")
+}

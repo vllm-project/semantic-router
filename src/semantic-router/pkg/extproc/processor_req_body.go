@@ -511,13 +511,13 @@ func (r *OpenAIRouter) modifyRequestBodyForAutoRouting(openAIRequest *openai.Cha
 		}
 	}
 
-	// Inject memory context AFTER system prompt (so it appends, not gets overwritten)
-	// NOTE: Memory injection must happen regardless of whether a decision was matched
+	// Inject memory as a separate conversation message (not in system prompt).
+	// Following the openai-agents-python pattern: context is injected as
+	// conversation items, keeping instructions and memory clearly separated.
 	if ctx.MemoryContext != "" {
-		modifiedBody, err = injectSystemMessage(modifiedBody, ctx.MemoryContext)
+		modifiedBody, err = injectMemoryMessages(modifiedBody, ctx.MemoryContext)
 		if err != nil {
 			logging.Warnf("Memory: Failed to inject memory context: %v", err)
-			// Graceful degradation: continue without memory injection
 		}
 	}
 
@@ -970,24 +970,13 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 		return requestBody, nil
 	}
 
-	// TODO: Remove demo logs after POC
-	logging.Infof("╔══════════════════════════════════════════════════════════════════╗")
-	logging.Infof("║                    MEMORY RETRIEVAL FLOW                         ║")
-	logging.Infof("╠══════════════════════════════════════════════════════════════════╣")
-	logging.Infof("║ User Query: %s", truncateForLog(userContent, 50))
-	if memoryPluginConfig != nil {
-		logging.Infof("║ Config Source: per-decision plugin (decision: %s)", ctx.VSRSelectedDecisionName)
-	} else {
-		logging.Infof("║ Config Source: global config")
-	}
+	logging.Debugf("Memory: retrieval flow query=%q", truncateForLog(userContent, 80))
 
 	// Step 1: Memory decision - should we search?
 	if !ShouldSearchMemory(ctx, userContent) {
-		logging.Infof("║ Decision: ❌ SKIP (query type not suitable for memory search)")
-		logging.Infof("╚══════════════════════════════════════════════════════════════════╝")
+		logging.Debugf("Memory: skipping search (query type not suitable)")
 		return requestBody, nil
 	}
-	logging.Infof("║ Decision: ✅ SEARCH (query may benefit from memory)")
 
 	// Step 2: Extract conversation history from request body
 	// Use the existing ExtractConversationHistory function which works with raw JSON
@@ -1018,11 +1007,9 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 	// Step 4: Get user ID from Response API context or request
 	userID := r.getUserIDFromContext(ctx)
 	if userID == "" {
-		logging.Infof("║ User ID: ❌ NOT FOUND (skipping memory search)")
-		logging.Infof("╚══════════════════════════════════════════════════════════════════╝")
+		logging.Debugf("Memory: no user ID, skipping search")
 		return requestBody, nil
 	}
-	logging.Infof("║ User ID: %s", userID)
 
 	// Step 5: Search Milvus (per-decision settings override global defaults)
 	retrieveLimit := r.Config.Memory.DefaultRetrievalLimit
@@ -1044,6 +1031,11 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 		Threshold: retrieveThreshold,
 	}
 
+	if memoryPluginConfig != nil && memoryPluginConfig.HybridSearch {
+		retrieveOpts.HybridSearch = true
+		retrieveOpts.HybridMode = memoryPluginConfig.HybridMode
+	}
+
 	// Apply defaults if not configured
 	if retrieveOpts.Limit <= 0 {
 		retrieveOpts.Limit = 5
@@ -1058,29 +1050,19 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 	}
 
 	if len(memories) == 0 {
-		logging.Infof("║ Search Result: 📭 No memories found above threshold")
-		logging.Infof("╚══════════════════════════════════════════════════════════════════╝")
+		logging.Debugf("Memory: no memories found above threshold for user=%s", userID)
 		return requestBody, nil
 	}
-
-	logging.Infof("║ Search Result: 📬 Found %d memories!", len(memories))
-	for i, mem := range memories {
-		if mem.Memory != nil {
-			logging.Infof("║   %d. [%s] (score: %.2f) %s", i+1, mem.Memory.Type, mem.Score, mem.Memory.Content) // Full content for demo
-		}
-	}
-	logging.Infof("╚══════════════════════════════════════════════════════════════════╝")
+	logging.Infof("Memory: found %d memories for user=%s", len(memories), userID)
 
 	// Step 6: Format memory context and inject into request body
 	ctx.MemoryContext = FormatMemoriesAsContext(memories)
 
-	// Step 7: Inject memory into request body as system message
-	// This happens here (before routing diverges) so it works for BOTH auto and specified models
+	// Step 7: Inject memory as a separate conversation message
 	if ctx.MemoryContext != "" {
-		injectedBody, err := injectSystemMessage(requestBody, ctx.MemoryContext)
+		injectedBody, err := injectMemoryMessages(requestBody, ctx.MemoryContext)
 		if err != nil {
 			logging.Warnf("Memory: Failed to inject memory context: %v", err)
-			// Graceful degradation: continue without injection
 			return requestBody, nil
 		}
 		logging.Infof("Memory: Injected %d memories into request", len(memories))

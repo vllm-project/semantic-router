@@ -13,6 +13,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
 
 // DefaultMaxRetries is the default number of retry attempts for transient errors
@@ -259,17 +260,8 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		return nil, fmt.Errorf("user id is required")
 	}
 
-	// TODO: Remove demo logging after POC
-	logging.Infof("╔══════════════════════════════════════════════════════════════════╗")
-	logging.Infof("║                 MEMORY RETRIEVE (MILVUS)                         ║")
-	logging.Infof("╠══════════════════════════════════════════════════════════════════╣")
-	logging.Infof("║ Query:     %s", truncateForLog(opts.Query, 100))
-	logging.Infof("║ UserID:    %s", opts.UserID)
-	logging.Infof("║ Limit:     %d", limit)
-	logging.Infof("║ Threshold: %.4f", threshold)
-	logging.Infof("╚══════════════════════════════════════════════════════════════════╝")
-	logging.Debugf("MilvusStore.Retrieve: query='%s', user_id='%s', limit=%d, threshold=%.4f",
-		opts.Query, opts.UserID, limit, threshold)
+	logging.Debugf("MilvusStore.Retrieve: query='%s', user_id='%s', limit=%d, threshold=%.4f, hybrid=%v (mode=%s)",
+		opts.Query, opts.UserID, limit, threshold, opts.HybridSearch, opts.HybridMode)
 
 	// Generate embedding for the query
 	embedding, err := GenerateEmbedding(opts.Query, m.embeddingConfig)
@@ -307,11 +299,14 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		return nil, fmt.Errorf("failed to create search parameters: %w", err)
 	}
 
-	// Perform vector search in Milvus with retry logic
-	// We search for top-k results, then filter by threshold
-	searchTopK := limit * 4 // Search for more results to account for threshold filtering
+	// When hybrid search is enabled, expand the candidate pool so text-based
+	// re-ranking has a richer set to work with.
+	searchTopK := limit * 4
+	if opts.HybridSearch {
+		searchTopK = limit * 8
+	}
 	if searchTopK < 20 {
-		searchTopK = 20 // Minimum search size
+		searchTopK = 20
 	}
 
 	var searchResult []client.SearchResult
@@ -320,12 +315,12 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		searchResult, retryErr = m.client.Search(
 			ctx,
 			m.collectionName,
-			[]string{}, // Empty partitions means search all
+			[]string{},
 			filterExpr,
 			[]string{"id", "content", "memory_type", "metadata"},
 			[]entity.Vector{entity.FloatVector(embedding)},
-			"embedding",   // Vector field name
-			entity.COSINE, // Metric type
+			"embedding",
+			entity.COSINE,
 			searchTopK,
 			searchParam,
 		)
@@ -343,16 +338,61 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		return []*RetrieveResult{}, nil
 	}
 
-	// Extract results and filter by threshold
-	results := make([]*RetrieveResult, 0, limit)
-	scores := searchResult[0].Scores
-	fields := searchResult[0].Fields
+	// Parse Milvus columns into candidate structs.
+	candidates := m.parseCandidates(searchResult[0], opts.UserID)
 
-	// Find field indices
+	logging.Debugf("MilvusStore.Retrieve: parsed %d candidates from Milvus", len(candidates))
+
+	// Apply hybrid re-ranking when enabled.
+	if opts.HybridSearch && len(candidates) > 1 {
+		candidates = m.hybridRerank(candidates, opts)
+		logging.Debugf("MilvusStore.Retrieve: hybrid re-ranked %d candidates (mode=%s)", len(candidates), opts.HybridMode)
+	}
+
+	// Apply threshold + limit.
+	results := make([]*RetrieveResult, 0, limit)
+	for _, c := range candidates {
+		if c.Score < threshold {
+			continue
+		}
+		results = append(results, c)
+		if len(results) >= limit {
+			break
+		}
+	}
+
+	logging.Debugf("MilvusStore.Retrieve: returning %d results (filtered from %d candidates)",
+		len(results), len(candidates))
+
+	// Update access tracking in background (reinforcement: S += 1, t = 0).
+	if len(results) > 0 {
+		ids := make([]string, len(results))
+		for i, r := range results {
+			ids[i] = r.Memory.ID
+		}
+		go m.recordRetrievalBatch(ids)
+	}
+
+	logging.Debugf("MilvusStore.Retrieve: %d results found", len(results))
+
+	resultCount = len(results)
+	if resultCount > 0 {
+		status = "hit"
+	} else {
+		status = "miss"
+	}
+
+	return results, nil
+}
+
+// parseCandidates extracts RetrieveResult entries from a Milvus SearchResult.
+func (m *MilvusStore) parseCandidates(sr client.SearchResult, defaultUserID string) []*RetrieveResult {
+	scores := sr.Scores
+	fields := sr.Fields
+
 	idIdx, contentIdx, typeIdx, metadataIdx := -1, -1, -1, -1
 	for i, field := range fields {
-		fieldName := field.Name()
-		switch fieldName {
+		switch field.Name() {
 		case "id":
 			idIdx = i
 		case "content":
@@ -362,26 +402,13 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		case "metadata":
 			metadataIdx = i
 		}
-		logging.Debugf("MilvusStore.Retrieve: field[%d] name='%s'", i, fieldName)
 	}
-	logging.Debugf("MilvusStore.Retrieve: field indices - id=%d, content=%d, type=%d, metadata=%d",
-		idIdx, contentIdx, typeIdx, metadataIdx)
 
-	// Process results and filter by threshold
-	for i := 0; i < len(scores) && len(results) < limit; i++ {
-		// Filter by similarity threshold
-		score := scores[i]
-		if score < threshold {
-			logging.Debugf("MilvusStore.Retrieve: skipping result %d with score %.4f < threshold %.4f",
-				i, score, threshold)
-			continue
-		}
-
-		// Extract fields to build MemoryHit
+	results := make([]*RetrieveResult, 0, len(scores))
+	for i := 0; i < len(scores); i++ {
 		var id, content, memType string
 		metadata := make(map[string]interface{})
 
-		// Extract ID
 		if idIdx >= 0 && idIdx < len(fields) {
 			if col, ok := fields[idIdx].(*entity.ColumnVarChar); ok && col.Len() > i {
 				if val, err := col.ValueByIdx(i); err == nil {
@@ -389,8 +416,6 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 				}
 			}
 		}
-
-		// Extract content
 		if contentIdx >= 0 && contentIdx < len(fields) {
 			if col, ok := fields[contentIdx].(*entity.ColumnVarChar); ok && col.Len() > i {
 				if val, err := col.ValueByIdx(i); err == nil {
@@ -398,8 +423,6 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 				}
 			}
 		}
-
-		// Extract memory type
 		if typeIdx >= 0 && typeIdx < len(fields) {
 			if col, ok := fields[typeIdx].(*entity.ColumnVarChar); ok && col.Len() > i {
 				if val, err := col.ValueByIdx(i); err == nil {
@@ -407,115 +430,102 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 				}
 			}
 		}
-
-		// Extract metadata (if available as JSON string)
 		if metadataIdx >= 0 && metadataIdx < len(fields) {
 			if col, ok := fields[metadataIdx].(*entity.ColumnVarChar); ok && col.Len() > i {
 				if metadataVal, err := col.ValueByIdx(i); err == nil && metadataVal != "" {
-					// Inflate JSON string into the map for downstream code accessibility
 					if err := json.Unmarshal([]byte(metadataVal), &metadata); err != nil {
-						// Fallback if JSON is malformed
 						metadata["raw"] = metadataVal
 					} else {
-						// Reference for debugging/audit
 						metadata["_raw_source"] = metadataVal
 					}
 				}
 			}
 		}
 
-		// Only add if we have at least ID and content
 		if id == "" || content == "" {
 			continue
 		}
 
-		// Build MemoryHit as intermediate structure
-		hit := MemoryHit{
-			ID:         id,
-			Content:    content,
-			Type:       MemoryType(memType),
-			Similarity: score,
-			Metadata:   metadata,
+		mem := &Memory{
+			ID:      id,
+			Content: content,
+			Type:    MemoryType(memType),
+		}
+		if userID, ok := metadata["user_id"].(string); ok {
+			mem.UserID = userID
+		} else if defaultUserID != "" {
+			mem.UserID = defaultUserID
+		}
+		if projectID, ok := metadata["project_id"].(string); ok {
+			mem.ProjectID = projectID
+		}
+		if source, ok := metadata["source"].(string); ok {
+			mem.Source = source
+		}
+		if importance, ok := metadata["importance"].(float64); ok {
+			mem.Importance = float32(importance)
+		} else if importance, ok := metadata["importance"].(float32); ok {
+			mem.Importance = importance
+		}
+		if accessCount, ok := metadata["access_count"].(float64); ok {
+			mem.AccessCount = int(accessCount)
+		}
+		if lastAccessed, ok := metadata["last_accessed"].(float64); ok {
+			mem.LastAccessed = time.Unix(int64(lastAccessed), 0)
 		}
 
-		// Convert MemoryHit to Memory object
-		memory := &Memory{
-			ID:      hit.ID,
-			Content: hit.Content,
-			Type:    hit.Type,
-		}
+		results = append(results, &RetrieveResult{Memory: mem, Score: scores[i]})
+	}
+	return results
+}
 
-		// Extract user_id from metadata if available
-		if userID, ok := hit.Metadata["user_id"].(string); ok {
-			memory.UserID = userID
-		} else if opts.UserID != "" {
-			memory.UserID = opts.UserID
-		}
+// hybridRerank applies BM25 + n-gram scoring on top of vector results
+// using the shared scoring infrastructure from pkg/vectorstore.
+func (m *MilvusStore) hybridRerank(candidates []*RetrieveResult, opts RetrieveOptions) []*RetrieveResult {
+	pseudoChunks := make(map[string]vectorstore.EmbeddedChunk, len(candidates))
+	vectorScores := make(map[string]float64, len(candidates))
+	keyToCandidate := make(map[string]*RetrieveResult, len(candidates))
 
-		// Extract project_id from metadata if available
-		if projectID, ok := hit.Metadata["project_id"].(string); ok {
-			memory.ProjectID = projectID
-		}
-
-		// Extract source from metadata if available
-		if source, ok := hit.Metadata["source"].(string); ok {
-			memory.Source = source
-		}
-
-		// Extract importance from metadata if available
-		// Handle both float64 (from JSON) and string (like "high" - skip non-numeric)
-		if importance, ok := hit.Metadata["importance"].(float64); ok {
-			memory.Importance = float32(importance)
-		} else if importance, ok := hit.Metadata["importance"].(float32); ok {
-			memory.Importance = importance
-		}
-		// Access tracking for retention scoring
-		if accessCount, ok := hit.Metadata["access_count"].(float64); ok {
-			memory.AccessCount = int(accessCount)
-		}
-		if lastAccessed, ok := hit.Metadata["last_accessed"].(float64); ok {
-			memory.LastAccessed = time.Unix(int64(lastAccessed), 0)
-		}
-
-		// Create RetrieveResult with Memory and Score
-		result := &RetrieveResult{
-			Memory: memory,
-			Score:  hit.Similarity,
-		}
-
-		results = append(results, result)
+	for i, c := range candidates {
+		key := fmt.Sprintf("_mem_%d", i)
+		pseudoChunks[key] = vectorstore.EmbeddedChunk{ID: key, Content: c.Memory.Content}
+		vectorScores[key] = float64(c.Score)
+		keyToCandidate[key] = c
 	}
 
-	logging.Debugf("MilvusStore.Retrieve: returning %d results (filtered from %d candidates)",
-		len(results), len(scores))
+	hybridCfg := &vectorstore.HybridSearchConfig{Mode: opts.HybridMode}
 
-	// Update access tracking in background (reinforcement: S += 1, t = 0).
-	// Always active when memory is enabled; runs async so Retrieve latency is unaffected.
-	if len(results) > 0 {
-		ids := make([]string, len(results))
-		for i, r := range results {
-			ids[i] = r.Memory.ID
+	bm25K1 := hybridCfg.BM25K1
+	if bm25K1 == 0 {
+		bm25K1 = 1.2
+	}
+	bm25B := hybridCfg.BM25B
+	if bm25B == 0 {
+		bm25B = 0.75
+	}
+	ngramSize := hybridCfg.NgramSize
+	if ngramSize <= 0 {
+		ngramSize = 3
+	}
+
+	bm25Idx := vectorstore.NewBM25Index(pseudoChunks)
+	bm25Scores := bm25Idx.Score(opts.Query, bm25K1, bm25B)
+
+	ngramIdx := vectorstore.NewNgramIndex(pseudoChunks, ngramSize)
+	ngramScores := ngramIdx.Score(opts.Query)
+
+	fused := vectorstore.FuseScores(vectorScores, bm25Scores, ngramScores, hybridCfg)
+
+	reranked := make([]*RetrieveResult, 0, len(fused))
+	for _, fc := range fused {
+		c, ok := keyToCandidate[fc.ChunkID]
+		if !ok {
+			continue
 		}
-		go m.recordRetrievalBatch(ids)
+		c.Score = float32(fc.FinalScore)
+		reranked = append(reranked, c)
 	}
-
-	// TODO: Remove demo logging after POC
-	logging.Infof("╔══════════════════════════════════════════════════════════════════╗")
-	logging.Infof("║ MEMORY RETRIEVE RESULTS: %d memories found                       ║", len(results))
-	logging.Infof("╚══════════════════════════════════════════════════════════════════╝")
-	for i, r := range results {
-		logging.Infof("  %d. [%.3f] %s: %s", i+1, r.Score, r.Memory.Type, r.Memory.Content) // Full content for demo
-	}
-
-	// Update metrics with result count
-	resultCount = len(results)
-	if resultCount > 0 {
-		status = "hit"
-	} else {
-		status = "miss"
-	}
-
-	return results, nil
+	return reranked
 }
 
 // IsEnabled returns whether the store is enabled
@@ -585,15 +595,8 @@ func (m *MilvusStore) Store(ctx context.Context, memory *Memory) error {
 		return fmt.Errorf("user ID is required")
 	}
 
-	// TODO: Remove demo logs after POC
-	logging.Infof("╔══════════════════════════════════════════════════════════════════╗")
-	logging.Infof("║                    MEMORY STORE (MILVUS)                         ║")
-	logging.Infof("╠══════════════════════════════════════════════════════════════════╣")
-	logging.Infof("║ ID:      %s", memory.ID)
-	logging.Infof("║ User:    %s", memory.UserID)
-	logging.Infof("║ Type:    %s", memory.Type)
-	logging.Infof("║ Content: %s", memory.Content) // Full content for demo
-	logging.Infof("╚══════════════════════════════════════════════════════════════════╝")
+	logging.Debugf("MilvusStore.Store: id=%s, user=%s, type=%s, content_len=%d",
+		memory.ID, memory.UserID, memory.Type, len(memory.Content))
 
 	// Generate embedding for content if not already set
 	var embedding []float32
@@ -1356,133 +1359,6 @@ func (m *MilvusStore) forgetByScopeWithQuery(ctx context.Context, scope MemorySc
 
 	logging.Debugf("MilvusStore.ForgetByScope: deleted %d memories", len(idsToDelete))
 	return nil
-}
-
-// MemoryPruneEntry holds minimal fields needed to compute retention score for pruning.
-type MemoryPruneEntry struct {
-	ID           string
-	LastAccessed time.Time
-	AccessCount  int
-}
-
-// ListForPrune returns all memories for a user with id, last_accessed, access_count for pruning.
-func (m *MilvusStore) ListForPrune(ctx context.Context, userID string) ([]MemoryPruneEntry, error) {
-	if !m.enabled {
-		return nil, fmt.Errorf("milvus store is not enabled")
-	}
-	if userID == "" {
-		return nil, fmt.Errorf("user ID is required")
-	}
-	filterExpr := fmt.Sprintf("user_id == \"%s\"", userID)
-	outputFields := []string{"id", "metadata", "created_at"}
-
-	var queryResult []entity.Column
-	err := m.retryWithBackoff(ctx, func() error {
-		var retryErr error
-		queryResult, retryErr = m.client.Query(
-			ctx,
-			m.collectionName,
-			[]string{},
-			filterExpr,
-			outputFields,
-		)
-		return retryErr
-	})
-	if err != nil {
-		return nil, fmt.Errorf("milvus query failed: %w", err)
-	}
-
-	var idCol, metadataCol *entity.ColumnVarChar
-	var createdAtCol *entity.ColumnInt64
-	for _, col := range queryResult {
-		switch col.Name() {
-		case "id":
-			if c, ok := col.(*entity.ColumnVarChar); ok {
-				idCol = c
-			}
-		case "metadata":
-			if c, ok := col.(*entity.ColumnVarChar); ok {
-				metadataCol = c
-			}
-		case "created_at":
-			if c, ok := col.(*entity.ColumnInt64); ok {
-				createdAtCol = c
-			}
-		}
-	}
-	if idCol == nil {
-		return []MemoryPruneEntry{}, nil
-	}
-
-	now := time.Now()
-	var entries []MemoryPruneEntry
-	for i := 0; i < idCol.Len(); i++ {
-		id, _ := idCol.ValueByIdx(i)
-		entry := MemoryPruneEntry{ID: id}
-		if metadataCol != nil && metadataCol.Len() > i {
-			metadataStr, _ := metadataCol.ValueByIdx(i)
-			var meta map[string]interface{}
-			if json.Unmarshal([]byte(metadataStr), &meta) == nil {
-				if la, ok := meta["last_accessed"].(float64); ok {
-					entry.LastAccessed = time.Unix(int64(la), 0)
-				}
-				if ac, ok := meta["access_count"].(float64); ok {
-					entry.AccessCount = int(ac)
-				}
-			}
-		}
-		// Pre-existing memories stored before access tracking may have zero LastAccessed.
-		// Fall back to created_at so they don't get R ≈ 0 and get pruned immediately.
-		if entry.LastAccessed.IsZero() {
-			if createdAtCol != nil && createdAtCol.Len() > i {
-				val, _ := createdAtCol.ValueByIdx(i)
-				if val > 0 {
-					entry.LastAccessed = time.Unix(val, 0)
-				}
-			}
-			// If still zero (no created_at either), treat as "just now" to protect the memory
-			if entry.LastAccessed.IsZero() {
-				entry.LastAccessed = now
-			}
-		}
-		entries = append(entries, entry)
-	}
-	return entries, nil
-}
-
-// PruneUser deletes memories for userID that have R < PruneThreshold, then if over MaxMemoriesPerUser
-// deletes lowest-R memories until at cap. No-op if the store is disabled.
-func (m *MilvusStore) PruneUser(ctx context.Context, userID string) (deleted int, err error) {
-	if !m.enabled {
-		return 0, nil
-	}
-	cfg := m.config.QualityScoring
-
-	initialStrength := cfg.InitialStrengthDays
-	if initialStrength <= 0 {
-		initialStrength = DefaultInitialStrengthDays
-	}
-	delta := cfg.PruneThreshold
-	if delta <= 0 {
-		delta = DefaultPruneThreshold
-	}
-	maxPerUser := cfg.MaxMemoriesPerUser
-
-	entries, err := m.ListForPrune(ctx, userID)
-	if err != nil {
-		return 0, err
-	}
-
-	toDelete := PruneCandidates(entries, time.Now(), initialStrength, delta, maxPerUser)
-	for _, id := range toDelete {
-		if err := m.Forget(ctx, id); err != nil {
-			logging.Warnf("MilvusStore.PruneUser: Forget id=%s: %v", id, err)
-			continue
-		}
-		deleted++
-	}
-	logging.Debugf("MilvusStore.PruneUser: user_id=%s deleted %d memories", userID, deleted)
-	return deleted, nil
 }
 
 // isTransientError checks if an error is transient and should be retried

@@ -5,10 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
@@ -176,6 +179,8 @@ Given conversation history and a user query, rewrite the query to be self-contai
 for searching memories. Include relevant context from history if the query references
 previous conversation.
 
+Do NOT use <think> tags or show your reasoning. Output ONLY the rewritten query.
+
 CRITICAL RULES:
 - PRESERVE THE QUERY TYPE: If the user is stating a fact, keep it as a statement. If asking a question, keep it as a question. NEVER convert statements to questions!
 - Use ONLY facts explicitly stated in the history. NEVER invent or hallucinate values!
@@ -235,17 +240,7 @@ func BuildSearchQuery(ctx context.Context, history []ConversationMessage, query 
 	// Build user prompt
 	userPrompt := fmt.Sprintf("History:\n%s\n\nQuery: %s\n\nRewritten query:", historyText, query)
 
-	// TODO: Remove debug logs after POC demo
-	logging.Infof("╔══════════════════════════════════════════════════════════════════╗")
-	logging.Infof("║                    MEMORY QUERY REWRITING                        ║")
-	logging.Infof("╠══════════════════════════════════════════════════════════════════╣")
-	logging.Infof("║ HISTORY:                                                         ║")
-	for _, msg := range history {
-		logging.Infof("║   [%s]: %s", msg.Role, truncateForLog(msg.Content, 50))
-	}
-	logging.Infof("╠══════════════════════════════════════════════════════════════════╣")
-	logging.Infof("║ ORIGINAL QUERY: %s", query)
-	logging.Infof("╚══════════════════════════════════════════════════════════════════╝")
+	logging.Debugf("Memory: query rewrite: original=%q, history_len=%d", truncateForLog(query, 80), len(history))
 
 	// Call LLM for rewriting
 	rewrittenQuery, err := callLLMForQueryRewrite(ctx, resolved, userPrompt)
@@ -259,10 +254,7 @@ func BuildSearchQuery(ctx context.Context, history []ConversationMessage, query 
 	rewrittenQuery = strings.TrimSpace(rewrittenQuery)
 	rewrittenQuery = strings.Trim(rewrittenQuery, "\"'")
 
-	// TODO: Remove debug logs after POC demo
-	logging.Infof("╔══════════════════════════════════════════════════════════════════╗")
-	logging.Infof("║ REWRITTEN QUERY: %s", rewrittenQuery)
-	logging.Infof("╚══════════════════════════════════════════════════════════════════╝")
+	logging.Debugf("Memory: query rewrite: result=%q", truncateForLog(rewrittenQuery, 80))
 
 	return rewrittenQuery, nil
 }
@@ -296,36 +288,14 @@ func truncateForLog(s string, maxLen int) string {
 }
 
 // =============================================================================
-// LLM Client for Query Rewriting
+// LLM Client for Query Rewriting (uses openai-go typed params)
 // =============================================================================
-
-// llmChatRequest represents an OpenAI-compatible chat request
-type llmChatRequest struct {
-	Model       string           `json:"model"`
-	Messages    []llmChatMessage `json:"messages"`
-	MaxTokens   int              `json:"max_tokens,omitempty"`
-	Temperature float64          `json:"temperature,omitempty"`
-	Stream      bool             `json:"stream"`
-}
-
-type llmChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-// llmChatResponse represents an OpenAI-compatible chat response
-type llmChatResponse struct {
-	Choices []struct {
-		Message struct {
-			Content string `json:"content"`
-		} `json:"message"`
-	} `json:"choices"`
-}
 
 // ResolvedLLMConfig holds resolved LLM endpoint configuration from external_models.
 type ResolvedLLMConfig struct {
 	Endpoint       string
 	Model          string
+	AccessKey      string
 	TimeoutSeconds int
 	MaxTokens      int
 	Temperature    float64
@@ -347,62 +317,55 @@ func ResolveQueryRewriteConfig(routerCfg *config.RouterConfig) *ResolvedLLMConfi
 	return &ResolvedLLMConfig{
 		Endpoint:       endpoint,
 		Model:          externalCfg.ModelName,
+		AccessKey:      externalCfg.AccessKey,
 		TimeoutSeconds: externalCfg.TimeoutSeconds,
 		MaxTokens:      externalCfg.MaxTokens,
 		Temperature:    externalCfg.Temperature,
 	}
 }
 
-// ResolveExtractionConfig resolves the LLM endpoint configuration for memory extraction.
-func ResolveExtractionConfig(routerCfg *config.RouterConfig) *ResolvedLLMConfig {
-	if routerCfg == nil {
-		return nil
-	}
-
-	externalCfg := routerCfg.FindExternalModelByRole(config.ModelRoleMemoryExtraction)
-	if externalCfg == nil || externalCfg.ModelEndpoint.Address == "" {
-		return nil
-	}
-
-	endpoint := fmt.Sprintf("http://%s:%d", externalCfg.ModelEndpoint.Address, externalCfg.ModelEndpoint.Port)
-	return &ResolvedLLMConfig{
-		Endpoint:       endpoint,
-		Model:          externalCfg.ModelName,
-		TimeoutSeconds: externalCfg.TimeoutSeconds,
-		MaxTokens:      externalCfg.MaxTokens,
-		Temperature:    externalCfg.Temperature,
-	}
-}
-
-// callLLMForQueryRewrite calls the LLM endpoint for query rewriting
+// callLLMForQueryRewrite calls the LLM endpoint for query rewriting.
+// Uses openai-go typed params. No response_format since rewrite returns plain text.
 func callLLMForQueryRewrite(ctx context.Context, resolved *ResolvedLLMConfig, userPrompt string) (string, error) {
-	// Build request with defaults: max_tokens=50, temperature=0.1 for query rewriting
-	reqBody := llmChatRequest{
+	params := openai.ChatCompletionNewParams{
 		Model: resolved.Model,
-		Messages: []llmChatMessage{
-			{Role: "system", Content: queryRewriteSystemPrompt},
-			{Role: "user", Content: userPrompt},
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			{OfSystem: &openai.ChatCompletionSystemMessageParam{
+				Content: openai.ChatCompletionSystemMessageParamContentUnion{
+					OfString: openai.String(queryRewriteSystemPrompt),
+				},
+			}},
+			{OfUser: &openai.ChatCompletionUserMessageParam{
+				Content: openai.ChatCompletionUserMessageParamContentUnion{
+					OfString: openai.String(userPrompt),
+				},
+			}},
 		},
-		MaxTokens:   getMaxTokens(resolved, 50),
-		Temperature: getTemperature(resolved, 0.1),
-		Stream:      false,
+		MaxTokens:   openai.Int(int64(getMaxTokens(resolved, 512))),
+		Temperature: openai.Float(getTemperature(resolved, 0.1)),
 	}
 
-	jsonData, err := json.Marshal(reqBody)
+	jsonData, err := json.Marshal(params)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Create HTTP request - endpoint should be OpenAI-compatible base URL
+	// Explicitly set stream=false (SDK omits it)
+	jsonData, err = setJSONField(jsonData, "stream", false)
+	if err != nil {
+		return "", fmt.Errorf("failed to set stream param: %w", err)
+	}
+
 	url := fmt.Sprintf("%s/v1/chat/completions", strings.TrimSuffix(resolved.Endpoint, "/"))
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonData))
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
-
 	httpReq.Header.Set("Content-Type", "application/json")
+	if resolved.AccessKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+resolved.AccessKey)
+	}
 
-	// Send request with timeout from external_models config
 	timeout := getTimeout(resolved)
 	client := &http.Client{Timeout: timeout}
 	resp, err := client.Do(httpReq)
@@ -412,21 +375,41 @@ func callLLMForQueryRewrite(ctx context.Context, resolved *ResolvedLLMConfig, us
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("LLM returned status %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("LLM returned status %d: %s", resp.StatusCode, truncateForLog(string(body), 200))
 	}
 
-	// Parse response
-	var llmResp llmChatResponse
-	if err := json.NewDecoder(resp.Body).Decode(&llmResp); err != nil {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	// Parse with openai-go typed response — vLLM separates reasoning
+	// into reasoning_content field, so message.content is clean.
+	var completion openai.ChatCompletion
+	if err := json.Unmarshal(body, &completion); err != nil {
 		return "", fmt.Errorf("failed to parse response: %w", err)
 	}
 
-	if len(llmResp.Choices) == 0 {
+	if len(completion.Choices) == 0 {
 		return "", fmt.Errorf("no choices in LLM response")
 	}
 
-	return llmResp.Choices[0].Message.Content, nil
+	// Safety net for non-vLLM backends
+	content := memory.StripThinkTags(completion.Choices[0].Message.Content)
+	return content, nil
 }
+
+// setJSONField sets a field on a marshalled JSON object.
+func setJSONField(data []byte, key string, value interface{}) ([]byte, error) {
+	var m map[string]interface{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil, err
+	}
+	m[key] = value
+	return json.Marshal(m)
+}
+
 
 // =============================================================================
 // Helper: Extract History from OpenAI Messages
@@ -467,40 +450,6 @@ func ExtractConversationHistory(messagesJSON []byte) ([]ConversationMessage, err
 // Memory Injection into LLM Request
 // =============================================================================
 
-// InjectMemories adds retrieved memories to the LLM request as system context.
-// The memories are formatted as a system message and prepended to the messages array.
-//
-// Format:
-//
-//	## User's Relevant Context
-//
-//	- Hawaii trip budget is $10,000
-//	- User prefers direct flights
-//
-// Graceful handling:
-//   - If no memories found → returns original request unchanged
-//   - If injection fails → logs warning and returns original request
-func InjectMemories(requestBody []byte, memories []*memory.RetrieveResult) ([]byte, error) {
-	// No memories to inject
-	if len(memories) == 0 {
-		logging.Debugf("Memory: No memories to inject, returning original request")
-		return requestBody, nil
-	}
-
-	// Format memories as context
-	contextContent := FormatMemoriesAsContext(memories)
-
-	// Inject as system message
-	modifiedBody, err := injectSystemMessage(requestBody, contextContent)
-	if err != nil {
-		logging.Warnf("Memory: Failed to inject memories: %v, returning original request", err)
-		return requestBody, nil // Graceful fallback
-	}
-
-	logging.Infof("Memory: Injected %d memories into request", len(memories))
-	return modifiedBody, nil
-}
-
 // FormatMemoriesAsContext formats retrieved memories as a context block
 // for injection into the LLM request.
 //
@@ -516,7 +465,7 @@ func FormatMemoriesAsContext(memories []*memory.RetrieveResult) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString("## User's Relevant Context\n\n")
+	sb.WriteString("The following is relevant context from previous conversations with the user:\n\n")
 
 	for _, result := range memories {
 		if result.Memory != nil && result.Memory.Content != "" {
@@ -524,64 +473,58 @@ func FormatMemoriesAsContext(memories []*memory.RetrieveResult) string {
 		}
 	}
 
+	sb.WriteString("\nUse this context to personalize your response when relevant. Do not repeat it verbatim unless asked.")
+
 	return sb.String()
 }
 
-// injectSystemMessage adds a system message with the given content to the request.
-// It parses the request body as JSON, finds or creates the messages array,
-// and prepends a new system message.
-func injectSystemMessage(requestBody []byte, content string) ([]byte, error) {
-	// Parse request body
+// injectMemoryMessages inserts memory context as a separate message in the
+// conversation, following the openai-agents-python pattern where context is
+// injected as conversation items rather than appended to the system prompt.
+//
+// The memory message is inserted right after any system/developer messages
+// but before user messages, keeping it clearly separated from instructions.
+func injectMemoryMessages(requestBody []byte, content string) ([]byte, error) {
 	var request map[string]interface{}
 	if err := json.Unmarshal(requestBody, &request); err != nil {
 		return nil, fmt.Errorf("failed to parse request body: %w", err)
 	}
 
-	// Get or create messages array
 	messages, ok := request["messages"].([]interface{})
 	if !ok {
-		// No messages array - create one with just the system message
 		messages = []interface{}{}
 	}
 
-	// Create system message for memory context
-	memorySystemMessage := map[string]interface{}{
-		"role":    "system",
+	memoryMessage := map[string]interface{}{
+		"role":    "user",
 		"content": content,
 	}
 
-	// Find existing system message to append to, or prepend new one
-	injected := false
+	// Find insertion point: after the last system/developer message
+	insertIdx := 0
 	for i, msg := range messages {
 		msgMap, ok := msg.(map[string]interface{})
 		if !ok {
 			continue
 		}
-
-		if role, ok := msgMap["role"].(string); ok && role == "system" {
-			// Append memory context to existing system message
-			existingContent, _ := msgMap["content"].(string)
-			msgMap["content"] = existingContent + "\n\n" + content
-			messages[i] = msgMap
-			injected = true
-			logging.Debugf("Memory: Appended context to existing system message")
-			break
+		if role, ok := msgMap["role"].(string); ok && (role == "system" || role == "developer") {
+			insertIdx = i + 1
 		}
 	}
 
-	if !injected {
-		// No system message found - prepend new one
-		messages = append([]interface{}{memorySystemMessage}, messages...)
-		logging.Debugf("Memory: Prepended new system message with context")
-	}
+	// Insert memory message at the computed position
+	newMessages := make([]interface{}, 0, len(messages)+1)
+	newMessages = append(newMessages, messages[:insertIdx]...)
+	newMessages = append(newMessages, memoryMessage)
+	newMessages = append(newMessages, messages[insertIdx:]...)
 
-	// Update request and marshal back to JSON
-	request["messages"] = messages
+	request["messages"] = newMessages
 
 	modifiedBody, err := json.Marshal(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal modified request: %w", err)
 	}
 
+	logging.Debugf("Memory: Injected memory as separate message at position %d", insertIdx)
 	return modifiedBody, nil
 }

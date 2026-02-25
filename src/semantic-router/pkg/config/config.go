@@ -2140,6 +2140,8 @@ type MemoryPluginConfig struct {
 	RetrievalLimit      *int     `json:"retrieval_limit,omitempty" yaml:"retrieval_limit,omitempty"`           // Max memories to retrieve (nil = use global)
 	SimilarityThreshold *float32 `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"` // Min similarity score (nil = use global)
 	AutoStore           *bool    `json:"auto_store,omitempty" yaml:"auto_store,omitempty"`                     // Auto-extract memories (nil = use request config)
+	HybridSearch        bool     `json:"hybrid_search,omitempty" yaml:"hybrid_search,omitempty"`               // Enable BM25 + n-gram re-ranking
+	HybridMode          string   `json:"hybrid_mode,omitempty" yaml:"hybrid_mode,omitempty"`                   // "weighted" (default) or "rrf"
 }
 
 // JailbreakPluginConfig represents configuration for jailbreak plugin

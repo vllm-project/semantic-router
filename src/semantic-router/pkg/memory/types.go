@@ -23,18 +23,7 @@ const (
 	MemoryTypeEpisodic MemoryType = "episodic"
 )
 
-// ExtractedFact represents a fact extracted by the LLM from conversation.
-// This is the output of ExtractFacts().
-type ExtractedFact struct {
-	// Type is the category (semantic, procedural, episodic)
-	Type MemoryType `json:"type"`
-
-	// Content is the extracted fact with context.
-	// Should be self-contained: "budget for Hawaii is $10K" not just "$10K"
-	Content string `json:"content"`
-}
-
-// Message represents a conversation message used for fact extraction.
+// Message represents a conversation message.
 type Message struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
@@ -89,21 +78,6 @@ type RetrieveResult struct {
 	Score float32 `json:"score"`
 }
 
-// MemoryHit represents a single memory retrieval result in flat structure
-//
-// ID is the unique identifier of the memory entry
-// Content is the content of the memory entry
-// Type is the type of memory
-// Similarity is the similarity score (0.0 to 1.0)
-// Metadata contains additional metadata
-type MemoryHit struct {
-	ID         string
-	Content    string
-	Type       MemoryType
-	Similarity float32
-	Metadata   map[string]interface{}
-}
-
 // RetrieveOptions configures memory retrieval
 type RetrieveOptions struct {
 	// Query is the search query (will be embedded for vector search)
@@ -123,6 +97,12 @@ type RetrieveOptions struct {
 
 	// Threshold is the minimum similarity score (range 0.0 to 1.0, default: 0.70)
 	Threshold float32
+
+	// HybridSearch enables BM25 + n-gram re-ranking on top of vector search
+	HybridSearch bool
+
+	// HybridMode selects the score fusion method: "weighted" (default) or "rrf"
+	HybridMode string
 }
 
 // DefaultMemoryConfig returns a default memory configuration.
