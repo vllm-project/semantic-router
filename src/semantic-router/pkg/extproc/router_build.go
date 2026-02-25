@@ -31,7 +31,7 @@ type routerComponents struct {
 	replayRecorder       *routerreplay.Recorder
 	replayRecorders      map[string]*routerreplay.Recorder
 	modelSelector        *selection.Registry
-	memoryStore          *memory.MilvusStore
+	memoryStore          memory.Store
 	memoryExtractor      *memory.MemoryExtractor
 	credentialResolver   *authz.CredentialResolver
 	rateLimiter          *ratelimit.RateLimitResolver

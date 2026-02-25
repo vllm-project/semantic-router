@@ -678,6 +678,17 @@ class MemoryMilvusConfig(BaseModel):
     dimension: int = 384
 
 
+class MemoryRedisCacheConfig(BaseModel):
+    """Redis hot-cache configuration for memory retrieval."""
+
+    enabled: bool = False
+    address: str = "localhost:6379"
+    ttl_seconds: int = 300
+    db: int = 0
+    key_prefix: str = "memory_cache:"
+    password: Optional[str] = ""
+
+
 class MemoryConfig(BaseModel):
     """Agentic Memory configuration for cross-session memory.
 
@@ -692,6 +703,7 @@ class MemoryConfig(BaseModel):
     enabled: bool = True
     auto_store: bool = False  # Auto-store extracted facts after each response
     milvus: Optional[MemoryMilvusConfig] = None
+    redis_cache: Optional[MemoryRedisCacheConfig] = None
     # Embedding model to use for memory vectors
     # Options: "bert", "mmbert", "multimodal", "qwen3", "gemma"
     # If not set, auto-detected from global.model_catalog.embeddings.semantic (mmbert preferred)
