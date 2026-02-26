@@ -313,7 +313,7 @@ PII_LORA_ALPHA ?= 96
 
 # Training script paths
 TRAINING_DIR := src/training
-LORA_DIR := $(TRAINING_DIR)/training_lora
+LORA_DIR := $(TRAINING_DIR)/model_classifier
 
 # Output directories for 32K models
 MMBERT32K_MODELS_DIR := models/mmbert32k
@@ -339,7 +339,7 @@ train-mmbert32k-feedback: ## Train Feedback Detector (4-class satisfaction)
 	@echo "   Epochs: $(FEEDBACK_EPOCHS), LR: $(FEEDBACK_LR)"
 	@echo "   (Higher rank needed for 4-class classification)"
 	@mkdir -p models
-	python $(TRAINING_DIR)/modernbert_dissat_pipeline/train_feedback_detector.py \
+	python $(TRAINING_DIR)/model_classifier/user_feedback_classifier/train_feedback_detector.py \
 		--model_name llm-semantic-router/mmbert-32k-yarn \
 		--output_dir models/mmbert32k-feedback-detector \
 		--epochs $(FEEDBACK_EPOCHS) \
@@ -476,7 +476,7 @@ merge-mmbert32k-all: ## Merge all LoRA adapters into full models for Rust infere
 merge-mmbert32k-intent: ## Merge Intent Classifier LoRA adapter
 	@echo "🔗 Merging Intent Classifier..."
 	@if [ -d "$(MMBERT32K_MODELS_DIR)/intent-classifier-lora" ]; then \
-		python -c "from src.training.training_lora.classifier_model_fine_tuning_lora.ft_linear_lora import merge_lora_adapter_to_full_model; \
+		python -c "from src.training.model_classifier.classifier_model_fine_tuning_lora.ft_linear_lora import merge_lora_adapter_to_full_model; \
 			merge_lora_adapter_to_full_model('$(MMBERT32K_MODELS_DIR)/intent-classifier-lora', \
 				'$(MMBERT32K_MODELS_DIR)/intent-classifier-merged', \
 				'llm-semantic-router/mmbert-32k-yarn')"; \
@@ -487,7 +487,7 @@ merge-mmbert32k-intent: ## Merge Intent Classifier LoRA adapter
 merge-mmbert32k-pii: ## Merge PII Detector LoRA adapter
 	@echo "🔗 Merging PII Detector..."
 	@if [ -d "$(MMBERT32K_MODELS_DIR)/pii-detector-lora" ]; then \
-		python -c "from src.training.training_lora.pii_model_fine_tuning_lora.pii_bert_finetuning_lora import merge_lora_adapter_to_full_model; \
+		python -c "from src.training.model_classifier.pii_model_fine_tuning_lora.pii_bert_finetuning_lora import merge_lora_adapter_to_full_model; \
 			merge_lora_adapter_to_full_model('$(MMBERT32K_MODELS_DIR)/pii-detector-lora', \
 				'$(MMBERT32K_MODELS_DIR)/pii-detector-merged', \
 				'llm-semantic-router/mmbert-32k-yarn')"; \
@@ -498,7 +498,7 @@ merge-mmbert32k-pii: ## Merge PII Detector LoRA adapter
 merge-mmbert32k-jailbreak: ## Merge Jailbreak Detector LoRA adapter
 	@echo "🔗 Merging Jailbreak Detector..."
 	@if [ -d "$(MMBERT32K_MODELS_DIR)/jailbreak-detector-lora" ]; then \
-		python -c "from src.training.training_lora.prompt_guard_fine_tuning_lora.jailbreak_bert_finetuning_lora import merge_lora_adapter_to_full_model; \
+		python -c "from src.training.model_classifier.prompt_guard_fine_tuning_lora.jailbreak_bert_finetuning_lora import merge_lora_adapter_to_full_model; \
 			merge_lora_adapter_to_full_model('$(MMBERT32K_MODELS_DIR)/jailbreak-detector-lora', \
 				'$(MMBERT32K_MODELS_DIR)/jailbreak-detector-merged', \
 				'llm-semantic-router/mmbert-32k-yarn')"; \
@@ -509,7 +509,7 @@ merge-mmbert32k-jailbreak: ## Merge Jailbreak Detector LoRA adapter
 merge-mmbert32k-factcheck: ## Merge Fact Check Classifier LoRA adapter
 	@echo "🔗 Merging Fact Check Classifier..."
 	@if [ -d "$(MMBERT32K_MODELS_DIR)/fact-check-lora" ]; then \
-		python -c "from src.training.training_lora.fact_check_fine_tuning_lora.fact_check_bert_finetuning_lora import merge_lora_adapter_to_full_model; \
+		python -c "from src.training.model_classifier.fact_check_fine_tuning_lora.fact_check_bert_finetuning_lora import merge_lora_adapter_to_full_model; \
 			merge_lora_adapter_to_full_model('$(MMBERT32K_MODELS_DIR)/fact-check-lora', \
 				'$(MMBERT32K_MODELS_DIR)/fact-check-merged', \
 				'llm-semantic-router/mmbert-32k-yarn')"; \
