@@ -42,6 +42,8 @@ const (
 	SignalTypeComplexity   = "complexity"
 	SignalTypeModality     = "modality"
 	SignalTypeAuthz        = "authz"
+	SignalTypeJailbreak    = "jailbreak"
+	SignalTypePII          = "pii"
 )
 
 // API format constants for model backends
@@ -680,6 +682,18 @@ type Signals struct {
 	// User identity and groups are read from x-authz-user-id and x-authz-user-groups headers
 	// (injected by Authorino / ext_authz). Subject names MUST match Authorino output.
 	RoleBindings []RoleBinding `yaml:"role_bindings,omitempty"`
+
+	// Jailbreak rules for ML-based jailbreak detection signal classification
+	// Each rule defines a named threshold; the signal fires when jailbreak confidence >= threshold.
+	// Multiple rules with different thresholds allow decisions to reference different sensitivity levels.
+	// Inference uses the existing PromptGuard / candle_binding pipeline (parallelised in signal evaluation).
+	JailbreakRules []JailbreakRule `yaml:"jailbreak,omitempty"`
+
+	// PII rules for ML-based PII detection signal classification
+	// Each rule defines a named threshold and an allow-list of PII types.
+	// The signal fires when denied PII types are detected above the threshold.
+	// Inference uses the existing PII / candle_binding pipeline (parallelised in signal evaluation).
+	PIIRules []PIIRule `yaml:"pii,omitempty"`
 }
 
 // BackendModels represents the configuration for backend models
@@ -2115,7 +2129,7 @@ type ModelRef struct {
 
 // DecisionPlugin represents a plugin configuration for a decision
 type DecisionPlugin struct {
-	// Type specifies the plugin type. Permitted values: "semantic-cache", "jailbreak", "pii", "system_prompt", "header_mutation", "hallucination", "router_replay", "memory".
+	// Type specifies the plugin type. Permitted values: "semantic-cache", "jailbreak", "pii", "system_prompt", "header_mutation", "hallucination", "router_replay", "memory", "fast_response".
 	Type string `yaml:"type" json:"type"`
 
 	// Configuration is the raw configuration for this plugin
@@ -2159,6 +2173,17 @@ type PIIPluginConfig struct {
 	// When Enabled is true, all PII types are blocked by default unless listed in PIITypesAllowed
 	// When Enabled is false, PII detection is skipped entirely
 	PIITypesAllowed []string `json:"pii_types_allowed,omitempty" yaml:"pii_types_allowed,omitempty"`
+}
+
+// FastResponsePluginConfig represents configuration for fast_response plugin.
+// When a decision matches and has this plugin, the router short-circuits and returns
+// an OpenAI-compatible response directly (no upstream model call).
+// Supports both streaming (SSE) and non-streaming (JSON) formats based on the
+// original request's "stream" flag.
+type FastResponsePluginConfig struct {
+	// Message is the text content returned in the OpenAI-compatible response body.
+	// This becomes the assistant message content in the chat completion response.
+	Message string `json:"message" yaml:"message"`
 }
 
 // SystemPromptPluginConfig represents configuration for system_prompt plugin
@@ -2506,6 +2531,21 @@ func (d *Decision) GetMemoryConfig() *MemoryPluginConfig {
 	return result
 }
 
+// GetFastResponseConfig returns the fast_response plugin configuration
+func (d *Decision) GetFastResponseConfig() *FastResponsePluginConfig {
+	config := d.GetPluginConfig("fast_response")
+	if config == nil {
+		return nil
+	}
+
+	result := &FastResponsePluginConfig{}
+	if err := unmarshalPluginConfig(config, result); err != nil {
+		logging.Errorf("Failed to unmarshal fast_response config: %v", err)
+		return nil
+	}
+	return result
+}
+
 // RuleNode is a recursive union type that represents a node in a boolean expression tree.
 // It can act as either a leaf node (a signal reference) or a composite node (an operator
 // with child nodes), enabling arbitrarily nested boolean logic such as:
@@ -2525,7 +2565,7 @@ type RuleNode struct {
 
 	// Type specifies the signal type: "keyword", "embedding", "domain", "fact_check",
 	// "user_feedback", "preference", "language", "latency", "context", "complexity",
-	// "modality", or "authz".
+	// "modality", "authz", "jailbreak", or "pii".
 	Type string `yaml:"type,omitempty" json:"type,omitempty"`
 
 	// Name is the name of the signal rule to reference.
@@ -2592,6 +2632,50 @@ type ModalityRule struct {
 	Name string `yaml:"name"`
 
 	// Description provides human-readable explanation of when this signal is triggered
+	Description string `yaml:"description,omitempty"`
+}
+
+// JailbreakRule defines a named jailbreak detection signal rule.
+// Each rule specifies a confidence threshold; the signal fires when jailbreak
+// confidence from the PromptGuard / candle_binding pipeline meets or exceeds the threshold.
+// Multiple rules at different thresholds allow decisions to reference different
+// sensitivity levels (e.g., "strict_jailbreak" at 0.9 vs "jailbreak_detected" at 0.65).
+type JailbreakRule struct {
+	// Name is the signal name referenced in decision rules (type: "jailbreak")
+	// e.g., "jailbreak_detected", "strict_jailbreak"
+	Name string `yaml:"name"`
+
+	// Threshold is the minimum confidence score (0.0-1.0) to trigger this signal
+	Threshold float32 `yaml:"threshold"`
+
+	// IncludeHistory controls whether conversation history is included in detection
+	// When true, all messages (not just the latest user message) are analysed
+	IncludeHistory bool `yaml:"include_history,omitempty"`
+
+	// Description provides human-readable explanation of this rule
+	Description string `yaml:"description,omitempty"`
+}
+
+// PIIRule defines a named PII detection signal rule.
+// Each rule specifies a confidence threshold and an optional allow-list of PII types.
+// The signal fires when PII types NOT in the allow-list are detected above the threshold.
+type PIIRule struct {
+	// Name is the signal name referenced in decision rules (type: "pii")
+	// e.g., "pii_deny_all", "pii_allow_email"
+	Name string `yaml:"name"`
+
+	// Threshold is the minimum confidence score (0.0-1.0) for PII entity detection
+	Threshold float32 `yaml:"threshold"`
+
+	// PIITypesAllowed lists PII types that are permitted (not blocked).
+	// When empty, ALL detected PII types trigger the signal.
+	// Values match pii_type_mapping.json labels (e.g., "EMAIL_ADDRESS", "PERSON").
+	PIITypesAllowed []string `yaml:"pii_types_allowed,omitempty"`
+
+	// IncludeHistory controls whether conversation history is included in detection
+	IncludeHistory bool `yaml:"include_history,omitempty"`
+
+	// Description provides human-readable explanation of this rule
 	Description string `yaml:"description,omitempty"`
 }
 

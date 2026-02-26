@@ -266,12 +266,6 @@ config:
   semantic_cache:
     enabled: false
 
-  # --- Router Configuration ---
-  router:
-    high_confidence_threshold: 0.99
-    low_latency_threshold_ms: 2000
-    default_confidence_threshold: 0.95
-    default_max_latency_ms: 5000
 
   # --- Observability ---
   observability:

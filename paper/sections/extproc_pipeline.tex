@@ -60,7 +60,7 @@ The request body phase implements the core routing logic as a sequential pipelin
   % Layer 3: Plugins (Pre) + Select + Route
   \node[phase, fill=orange!5, minimum width=3.6cm] (plug) at (9.8, 1.4) {%
     \textbf{Plugins (Pre)}\\[-1pt]
-    {\scriptsize jailbreak, PII, cache,}\\[-2pt]
+    {\scriptsize fast response, cache,}\\[-2pt]
     {\scriptsize RAG, modality, memory,}\\[-2pt]
     {\scriptsize select $m^*$, route $e^*$}};
 
@@ -72,10 +72,10 @@ The request body phase implements the core routing logic as a sequential pipelin
   \draw[arr] (dec) -- node[above, font=\scriptsize]{$d^*$} (plug);
   \draw[arr] (plug) -- (ep);
 
-  % Cache hit short-circuit
+  % Fast response / cache hit short-circuit
   \node[io, minimum width=0.8cm, font=\scriptsize] (hit) at (9.8, 3.1) {resp};
   \draw[darr] (plug.north) -- (hit.south);
-  \node[font=\tiny, text=gray, anchor=west] at (10.1, 2.65) {cache hit};
+  \node[font=\tiny, text=gray, anchor=west] at (10.1, 2.65) {fast resp / cache};
 
   % ===== Response path (bottom, right → left) =====
   \node[pathlbl, anchor=east] at (-0.1, -1.4) {Response};
@@ -113,7 +113,7 @@ The request body phase implements the core routing logic as a sequential pipelin
   \draw[thin, densely dotted, gray!40] (ep.south) -- ++(0, -0.15) -| (ep2.north);
 
 \end{tikzpicture}
-\caption{Bidirectional request processing pipeline aligned with the three-layer architecture.  \textbf{Request path} (top, left$\to$right): the signal layer parses and extracts $S(r)$; the decision layer evaluates Boolean formulas to select $d^*$; the plugin chain executes pre-processing (safety, caching, RAG, memory), model selection, and endpoint routing.  A cache hit short-circuits the pipeline (dashed).  \textbf{Response path} (bottom, right$\to$left): the same three layers operate in the same order---the signal layer extracts response-side signals (token usage, HaluGate hallucination scores, streaming latency metrics); the decision layer evaluates quality gating and cache eligibility; plugins perform format translation, cache writes, and API translation.}
+\caption{Bidirectional request processing pipeline aligned with the three-layer architecture.  \textbf{Request path} (top, left$\to$right): the signal layer parses and extracts $S(r)$, including safety signals (jailbreak, PII); the decision layer evaluates Boolean formulas to select $d^*$; the plugin chain executes pre-processing (fast response for safety enforcement, caching, RAG, memory), model selection, and endpoint routing.  A cache hit or fast response short-circuits the pipeline (dashed).  \textbf{Response path} (bottom, right$\to$left): the same three layers operate in the same order---the signal layer extracts response-side signals (token usage, HaluGate hallucination scores, streaming latency metrics); the decision layer evaluates quality gating and cache eligibility; plugins perform format translation, cache writes, and API translation.}
 \label{fig:extproc_pipeline}
 \end{figure}
 
@@ -121,14 +121,13 @@ The stages execute in strict order:
 (1)~API translation (Responses API $\to$ Chat Completions if applicable, see \Cref{subsec:responses_api});
 (2)~request parsing and provider detection;
 (3)~signal extraction and decision evaluation (\Cref{sec:signal_engine,sec:decision_engine});
-(4)~jailbreak detection (\Cref{sec:safety});
-(5)~PII detection (\Cref{sec:safety});
-(6)~semantic cache lookup (\Cref{sec:plugins})---cache hits terminate the pipeline with an immediate response;
-(7)~RAG context injection (\Cref{sec:memory_rag});
-(8)~modality routing (text vs.\ diffusion);
-(9)~memory retrieval (\Cref{sec:memory_rag});
-(10)~model selection (\Cref{sec:model_selection}), system prompt injection, and header mutation;
-(11)~multi-endpoint resolution and provider-specific auth injection (\Cref{subsec:multi_endpoint,subsec:authz_factory}).
+(4)~fast response check (\Cref{sec:plugins})---if the matched decision activates the \texttt{fast\_response} plugin (e.g., for safety enforcement), the pipeline terminates with an immediate OpenAI-compatible response;
+(5)~semantic cache lookup (\Cref{sec:plugins})---cache hits terminate the pipeline with an immediate response;
+(6)~RAG context injection (\Cref{sec:memory_rag});
+(7)~modality routing (text vs.\ diffusion);
+(8)~memory retrieval (\Cref{sec:memory_rag});
+(9)~model selection (\Cref{sec:model_selection}), system prompt injection, and header mutation;
+(10)~multi-endpoint resolution and provider-specific auth injection (\Cref{subsec:multi_endpoint,subsec:authz_factory}).
 
 \subsection{Multi-Endpoint and Multi-Provider Routing}
 \label{subsec:multi_endpoint}

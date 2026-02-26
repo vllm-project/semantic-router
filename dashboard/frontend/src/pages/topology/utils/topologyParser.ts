@@ -327,6 +327,64 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
 
+  // 10. Jailbreak Rules
+  // From jailbreak (Go/Router format - top-level due to yaml:",inline")
+  config.jailbreak?.forEach(rule => {
+    addSignal({
+      type: 'jailbreak',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.jailbreak,
+      config: {
+        threshold: rule.threshold,
+        include_history: rule.include_history,
+      },
+    })
+  })
+  // From signals.jailbreak (Python CLI format)
+  config.signals?.jailbreak?.forEach(rule => {
+    addSignal({
+      type: 'jailbreak',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.jailbreak,
+      config: {
+        threshold: rule.threshold,
+        include_history: rule.include_history,
+      },
+    })
+  })
+
+  // 11. PII Rules
+  // From pii (Go/Router format - top-level due to yaml:",inline")
+  config.pii?.forEach(rule => {
+    addSignal({
+      type: 'pii',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.pii,
+      config: {
+        threshold: rule.threshold,
+        pii_types_allowed: rule.pii_types_allowed,
+        include_history: rule.include_history,
+      },
+    })
+  })
+  // From signals.pii (Python CLI format)
+  config.signals?.pii?.forEach(rule => {
+    addSignal({
+      type: 'pii',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.pii,
+      config: {
+        threshold: rule.threshold,
+        pii_types_allowed: rule.pii_types_allowed,
+        include_history: rule.include_history,
+      },
+    })
+  })
+
   return signals
 }
 
@@ -488,6 +546,8 @@ export function groupSignalsByType(signals: SignalConfig[]): Record<SignalType, 
     language: [],
     context: [],
     complexity: [],
+    jailbreak: [],
+    pii: [],
   }
 
   signals.forEach(signal => {

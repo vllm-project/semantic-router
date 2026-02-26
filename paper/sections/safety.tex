@@ -1,22 +1,31 @@
 % sections/safety.tex
 
-\section{Request-Time Safety: Jailbreak and PII Detection}
+\section{Request-Time Safety: Jailbreak and PII Signals}
 \label{sec:safety}
 
-Request-time safety plugins detect adversarial inputs and sensitive information before queries reach model backends.
-Both operate as gating plugins that can terminate request processing with an immediate rejection.
+Request-time safety in our architecture is implemented as \emph{first-class signals}, not as serial plugins.
+Jailbreak and PII detection run in the signal extraction layer (\Cref{sec:signal_engine}), evaluated in parallel alongside all other signal types (keyword, embedding, domain, etc.).
+When a safety signal fires, the decision engine matches it to a decision that activates the \texttt{fast\_response} plugin (\Cref{sec:plugins}), returning an immediate OpenAI-compatible response without contacting any upstream LLM.
+
+This signal-driven design has three key advantages:
+\begin{enumerate}[nosep,leftmargin=1.5em]
+  \item \textbf{Zero added latency}: safety classifiers run concurrently with intent signals, so the wall-clock cost is max(safety, intent) rather than safety + intent.
+  \item \textbf{Composability}: safety signals can be combined with domain, keyword, or embedding signals in decision rules using AND/OR logic---e.g., strict jailbreak detection only for financial queries.
+  \item \textbf{Uniform observability}: safety results appear as standard signal matches in headers (\texttt{x-vsr-matched-jailbreak}, \texttt{x-vsr-matched-pii}), traces, and the dashboard topology view.
+\end{enumerate}
 
 \subsection{Jailbreak Detection}
 
 Jailbreak attacks attempt to override model safety instructions through adversarial prompt construction.
-Our detection pipeline addresses this as a binary classification problem with per-decision sensitivity control.
+Our detection pipeline addresses this as a classification problem with per-rule sensitivity control.
 
 \textbf{Formulation.}
-Given a text input $x$ (the user's latest message, or the full conversation history when context-aware detection is enabled), a classifier $g_\text{jb}$ produces:
+Given a text input $x$ (the user's latest message, or the full conversation history when \texttt{include\_history} is enabled), a classifier $g_\text{jb}$ produces:
 \begin{equation}
   g_\text{jb}(x) = (y, c) \in \{\textsc{benign}, \textsc{injection}, \textsc{jailbreak}\} \times [0, 1]
 \end{equation}
-The request is blocked iff $y \neq \textsc{benign}$ and $c \geq \theta_d$, where $\theta_d$ is the per-decision threshold.
+A jailbreak signal rule with threshold $\theta$ fires iff $y \neq \textsc{benign}$ and $c \geq \theta$.
+Multiple rules at different thresholds can coexist, enabling decisions to reference different sensitivity levels.
 
 \textbf{Classifier architecture.}
 We support four inference backends with varying context-length and deployment characteristics:
@@ -26,9 +35,9 @@ We support four inference backends with varying context-length and deployment ch
 (4)~external vLLM-served guardrail models for decoupled scaling.
 All local backends use the LoRA adapter architecture (\Cref{sec:lora_mom}), reducing model memory footprint.
 
-\textbf{Per-decision sensitivity.}
-Different decisions configure different thresholds: a public-facing endpoint might use $\theta = 0.7$ for aggressive detection, while an internal developer tool uses $\theta = 0.95$ to minimize false positives.
-History inclusion is also per-decision: some decisions analyze only the latest message (low latency), while others analyze the full conversation (higher recall for multi-turn attacks).
+\textbf{Per-rule sensitivity.}
+Different signal rules configure different thresholds: a \texttt{jailbreak\_strict} rule might use $\theta = 0.4$ with full history analysis for financial endpoints, while a \texttt{jailbreak\_standard} rule uses $\theta = 0.65$ on the latest message only.
+Decisions then reference the appropriate rule by name, enabling context-aware security policies (e.g., strict detection only when the domain signal also matches ``economics'').
 
 \subsection{PII Detection}
 
@@ -42,19 +51,117 @@ A token classifier $g_\text{pii}$ operates on the input sequence $x = (x_1, \ldo
 where $\ell \in \{\textsc{person}, \textsc{email}, \textsc{phone}, \textsc{ssn}, \textsc{credit\_card}, \ldots\}$.
 
 \textbf{Policy model.}
-Detected PII entities are evaluated against a per-decision policy:
-\begin{equation}
-  \text{allowed}(\ell) =
-  \begin{cases}
-    \ell \notin \mathcal{L}_\text{deny} & \text{if allow-by-default} \\
-    \ell \in \mathcal{L}_\text{allow} & \text{otherwise}
-  \end{cases}
-\end{equation}
-If any entity $(\cdot, \cdot, \ell, c)$ satisfies $c \geq \theta_d$ and $\neg\text{allowed}(\ell)$, the request is blocked.
+Each PII signal rule specifies a threshold $\theta$ and an optional allow-list $\mathcal{L}_\text{allow}$.
+The rule fires when any detected entity $(\cdot, \cdot, \ell, c)$ satisfies $c \geq \theta$ and $\ell \notin \mathcal{L}_\text{allow}$.
+This per-rule policy enables differentiated enforcement: a \texttt{pii\_deny\_all} rule blocks all entity types, while a \texttt{pii\_allow\_email} rule permits email addresses for appointment booking in medical contexts.
 
-This two-mode policy (allow-by-default with deny list, or deny-by-default with allow list) provides flexible control: a medical application might allow \textsc{person} while blocking \textsc{ssn}, whereas a general chatbot might block all PII types.
+\subsection{Parallel Safety Evaluation}
 
-\subsection{Safety Pipeline Ordering}
+Both jailbreak and PII classifiers launch as concurrent goroutines within the signal extraction layer, alongside all other signal evaluators.
+The wall-clock time is dominated by the slowest signal evaluator rather than the sum of safety and intent classifiers.
+Both use the LoRA adapter architecture (\Cref{sec:lora_mom}), and their results merge into the standard signal result $S(r)$ consumed by the decision engine.
 
-Jailbreak detection executes before PII detection, ensuring that adversarial inputs designed to bypass PII detection are caught first.
-Both use the LoRA adapter architecture (\Cref{sec:lora_mom}), and when run concurrently via parallel goroutines, the wall-clock time is dominated by the slower of the two classifiers rather than their sum.
+When a safety signal fires, the matched decision activates its \texttt{fast\_response} plugin, which short-circuits the pipeline and returns an OpenAI-compatible 200 OK response (supporting both streaming SSE and non-streaming JSON) without forwarding to any upstream model.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    node distance=0.3cm,
+    sig/.style={rectangle, draw, rounded corners=2pt,
+                minimum height=0.45cm, minimum width=1.4cm,
+                align=center, font=\scriptsize, inner sep=2pt},
+    dec/.style={rectangle, draw, thick, rounded corners=3pt,
+                minimum height=0.5cm, minimum width=2.0cm,
+                align=center, font=\scriptsize, inner sep=3pt,
+                fill=green!6},
+    act/.style={rectangle, draw, rounded corners=2pt,
+                minimum height=0.45cm, minimum width=1.8cm,
+                align=center, font=\scriptsize, inner sep=2pt,
+                fill=orange!8},
+    arr/.style={->, >=stealth, thick},
+    darr/.style={->, >=stealth, densely dashed, gray!50},
+    grp/.style={rectangle, draw, dashed, rounded corners=4pt,
+                inner sep=5pt, gray!40},
+  ]
+
+  % Request
+  \node[sig, fill=black!4, minimum width=1.0cm] (req) at (0, 0) {Request $r$};
+
+  % Signal layer — all parallel
+  \node[sig, fill=blue!6] (kw) at (2.8, 1.5) {$\tau_{\text{kw}}$};
+  \node[sig, fill=green!6] (dom) at (4.2, 1.5) {$\tau_{\text{dom}}$};
+  \node[sig, fill=green!6] (emb) at (5.6, 1.5) {$\tau_{\text{emb}}$};
+  \node[sig, fill=red!8] (jb) at (2.8, 0.7) {$\tau_{\text{jb}}$};
+  \node[sig, fill=red!8] (pii) at (4.2, 0.7) {$\tau_{\text{pii}}$};
+  \node[font=\scriptsize, text=gray] (dots) at (5.6, 0.7) {$\cdots$};
+
+  % Parallel bounding box
+  \begin{scope}[on background layer]
+  \node[grp, fill=blue!2, fit=(kw)(dom)(emb)(jb)(pii)(dots),
+        label={[font=\scriptsize\bfseries, text=blue!50, anchor=south]above:Parallel Signal Extraction}] (sbox) {};
+  \end{scope}
+
+  \draw[arr] (req.east) -- (sbox.west);
+
+  % S(r)
+  \node[sig, fill=black!4, minimum width=0.8cm] (sr) at (7.0, 1.1) {$S(r)$};
+  \draw[arr] (sbox.east) -- (sr.west);
+
+  % Decision layer
+  \node[dec] (d1) at (3.2, -1.2) {\texttt{block\_jb\_finance}};
+  \node[dec] (d2) at (6.0, -1.2) {\texttt{block\_jb}};
+  \node[dec] (d3) at (9.0, -1.2) {\texttt{block\_pii\_health}};
+
+  % Decision conditions
+  \node[font=\tiny, text=gray, anchor=north] at (3.2, -1.55) {$\tau_{\text{jb}}$\,{\tiny(strict)} AND $\tau_{\text{dom}}$\,{\tiny(finance)}};
+  \node[font=\tiny, text=gray, anchor=north] at (6.0, -1.55) {$\tau_{\text{jb}}$\,{\tiny(standard)}};
+  \node[font=\tiny, text=gray, anchor=north] at (9.0, -1.55) {$\tau_{\text{pii}}$\,{\tiny(allow email)} AND $\tau_{\text{dom}}$\,{\tiny(health)}};
+
+  \draw[arr] (sr.south) -- ++(0, -0.5) -| (d1.north);
+  \draw[arr] (sr.south) -- ++(0, -0.5) -| (d2.north);
+  \draw[arr] (sr.south) -- ++(0, -0.5) -| (d3.north);
+
+  % fast_response actions
+  \node[act] (fr1) at (3.2, -2.6) {fast\_response};
+  \node[act] (fr2) at (6.0, -2.6) {fast\_response};
+  \node[act] (fr3) at (9.0, -2.6) {fast\_response};
+
+  \draw[arr] (d1.south) -- (fr1.north);
+  \draw[arr] (d2.south) -- (fr2.north);
+  \draw[arr] (d3.south) -- (fr3.north);
+
+  % 200 OK
+  \node[sig, fill=black!4, minimum width=1.2cm] (ok) at (6.0, -3.6) {200 OK};
+  \draw[darr] (fr1.south) |- (ok.west);
+  \draw[darr] (fr2.south) -- (ok.north);
+  \draw[darr] (fr3.south) |- (ok.east);
+
+  % Priority labels
+  \node[font=\tiny, text=red!60, anchor=south] at (3.2, -0.85) {P:1001};
+  \node[font=\tiny, text=red!60, anchor=south] at (6.0, -0.85) {P:1000};
+  \node[font=\tiny, text=red!60, anchor=south] at (9.0, -0.85) {P:998};
+
+\end{tikzpicture}
+\caption{Signal-driven safety architecture.  Safety classifiers ($\tau_{\text{jb}}, \tau_{\text{pii}}$) run in the signal layer in parallel with intent signals, adding zero marginal latency.  Decision rules compose safety signals with domain signals using AND/OR logic, enabling context-aware policies (e.g., strict jailbreak detection only for finance, relaxed PII policy for healthcare).  High-priority safety decisions activate the \texttt{fast\_response} plugin to return an immediate 200 OK without contacting any upstream model.}
+\label{fig:safety_architecture}
+\end{figure}
+
+\subsection{Composable Safety Design}
+
+Placing safety detection in the signal layer enables a class of flexible security policies that are difficult to express in a serial plugin architecture.
+We highlight three patterns enabled by this design:
+
+\textbf{Context-aware thresholds.}
+A single deployment can define multiple jailbreak rules at different sensitivity levels (e.g., $\theta = 0.4$ for strict, $\theta = 0.65$ for standard).
+Decisions compose these with domain signals: a \texttt{block\_jb\_finance} decision uses the strict rule AND the ``economics'' domain signal, while a \texttt{block\_jb\_general} decision uses the standard rule alone.
+This provides differentiated security posture without separate deployments.
+
+\textbf{Per-domain PII policies.}
+Different domains require different PII handling: a healthcare endpoint may allow email and phone number for appointment booking while blocking SSN, whereas a public chatbot blocks all PII types.
+Each PII signal rule carries its own allow-list, and decisions combine the appropriate rule with the relevant domain signal.
+This replaces a monolithic PII policy with a set of composable, domain-scoped rules.
+
+\textbf{Graduated response.}
+By defining multiple safety decisions at different priorities, the system can implement graduated responses: a high-confidence jailbreak ($c \geq 0.9$) triggers an immediate block (priority 1001), while a moderate-confidence detection ($0.4 \leq c < 0.9$) triggers a warning header without blocking (priority 500).
+The \texttt{fast\_response} plugin handles blocking; a header-only decision allows the request to proceed with an observability annotation.
+This graduated model reduces false-positive impact while maintaining security coverage.

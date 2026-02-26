@@ -72,6 +72,15 @@ config:
       external_model_ids:
         vllm: "Qwen/Qwen2.5-14B-Instruct"
 
+  # --- Prompt Guard (global defaults) ---
+  prompt_guard:
+    enabled: true
+    use_modernbert: false
+    model_id: "models/mom-jailbreak-classifier"
+    jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
+    threshold: 0.7
+    use_cpu: true
+
   # --- Classifier ---
   classifier:
     category_model:
@@ -87,14 +96,31 @@ config:
       use_cpu: true
       pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
 
-  # --- Prompt Guard (global defaults) ---
-  prompt_guard:
-    enabled: true
-    use_modernbert: false
-    model_id: "models/mom-jailbreak-classifier"
-    jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
-    threshold: 0.7
-    use_cpu: true
+  # Jailbreak and PII detection (signal layer, inline into IntelligentRouting)
+  jailbreak:
+    - name: "jailbreak_dev"
+      threshold: 0.5  # Relaxed — reduce false positives on code/technical prompts
+      include_history: false
+      description: "Relaxed jailbreak detection for dev environment"
+    - name: "jailbreak_prod"
+      threshold: 0.9  # Strict — user-facing endpoint must block adversarial prompts
+      include_history: false
+      description: "Strict jailbreak detection for prod environment"
+
+  pii:
+    - name: "pii_dev"
+      threshold: 0.6
+      pii_types_allowed:
+        - "GPE"
+        - "ORGANIZATION"
+        - "DATE_TIME"
+      include_history: false
+      description: "Relaxed PII policy for dev (allow GPE/ORG/DATE)"
+    - name: "pii_prod"
+      threshold: 0.9
+      pii_types_allowed: []  # Block ALL PII types (data minimization)
+      include_history: false
+      description: "Strict PII policy for prod (block all)"
 
   # --- BERT Model for embeddings ---
   bert_model:
@@ -149,6 +175,59 @@ config:
 
   # --- Routing Decisions ---
   decisions:
+    # ── Security Layer (priority 1000+) ───────────────────────
+    - name: "block_jailbreak_prod"
+      description: "Block jailbreak attempts on prod (strict)"
+      priority: 1001
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "jailbreak"
+            name: "jailbreak_prod"
+      plugins:
+        - type: "fast_response"
+          configuration:
+            message: "Your request has been declined due to a policy violation."
+
+    - name: "block_jailbreak_dev"
+      description: "Block jailbreak attempts on dev (relaxed)"
+      priority: 1000
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "jailbreak"
+            name: "jailbreak_dev"
+      plugins:
+        - type: "fast_response"
+          configuration:
+            message: "Your request has been declined due to a policy violation."
+
+    - name: "block_pii_prod"
+      description: "Block PII on prod (strict, deny all)"
+      priority: 999
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "pii"
+            name: "pii_prod"
+      plugins:
+        - type: "fast_response"
+          configuration:
+            message: "For your security, please do not share personal information."
+
+    - name: "block_pii_dev"
+      description: "Block PII on dev (relaxed, allow GPE/ORG/DATE)"
+      priority: 998
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "pii"
+            name: "pii_dev"
+      plugins:
+        - type: "fast_response"
+          configuration:
+            message: "For your security, please do not share personal information."
+
     # ── Dev: Code / Internal Workloads ────────────────────────
     - name: "code_to_dev"
       description: "Route code/tech queries to Dev (internal developer env)"
@@ -165,15 +244,6 @@ config:
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a senior software engineer. Provide clear, production-quality code with best practices."
-        - type: "jailbreak"
-          configuration:
-            enabled: true
-            threshold: 0.5  # Relaxed — reduce false positives on code/technical prompts
-        - type: "pii"
-          configuration:
-            enabled: true
-            threshold: 0.6
-            pii_types_allowed: ["GPE", "ORGANIZATION", "DATE_TIME"]
 
     # ── Prod: General / User-Facing Workloads ─────────────────
     - name: "general_to_prod"
@@ -191,26 +261,10 @@ config:
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a helpful assistant operating under strict data protection policies. Never store, log, or repeat any personal information shared by the user."
-        - type: "jailbreak"
-          configuration:
-            enabled: true
-            threshold: 0.9  # Strict — user-facing endpoint must block adversarial prompts
-        - type: "pii"
-          configuration:
-            enabled: true
-            threshold: 0.9
-            pii_types_allowed: []  # Block ALL PII types (data minimization)
 
   # --- Semantic Cache ---
   semantic_cache:
     enabled: false
-
-  # --- Router Configuration ---
-  router:
-    high_confidence_threshold: 0.99
-    low_latency_threshold_ms: 2000
-    default_confidence_threshold: 0.95
-    default_max_latency_ms: 5000
 
   # --- Observability ---
   observability:

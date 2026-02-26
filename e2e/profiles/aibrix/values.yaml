@@ -36,8 +36,48 @@ config:
     - name: philosophy
     - name: engineering
 
+  # Jailbreak and PII detection (signal layer, inline into IntelligentRouting)
+  jailbreak:
+    - name: "jailbreak_standard"
+      threshold: 0.7
+      include_history: false
+      description: "Standard jailbreak detection"
+
+  pii:
+    - name: "pii_deny_all"
+      threshold: 0.7
+      include_history: false
+      description: "Block all PII"
+
   # Decisions - define routing logic with rules, model selection, and plugins
   decisions:
+    # ── Security layer (highest priority) ──
+    - name: "block_jailbreak"
+      description: "Block jailbreak attempts"
+      priority: 1000
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "jailbreak"
+            name: "jailbreak_standard"
+      plugins:
+        - type: "fast_response"
+          configuration:
+            message: "I'm sorry, but I cannot process this request as it appears to violate our usage policies."
+
+    - name: "block_pii"
+      description: "Block requests containing PII"
+      priority: 999
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "pii"
+            name: "pii_deny_all"
+      plugins:
+        - type: "fast_response"
+          configuration:
+            message: "I'm sorry, but I cannot process this request as it appears to contain personal identifiable information."
+
     - name: business_decision
       description: "Business and management related queries"
       priority: 10
@@ -50,7 +90,6 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: false
       plugins:
-
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -69,7 +108,6 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: false
       plugins:
-
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -88,7 +126,6 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: false
       plugins:
-
         - type: "semantic-cache"
           configuration:
             enabled: true
@@ -111,7 +148,6 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: false
       plugins:
-
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -130,7 +166,6 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: true
       plugins:
-
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -149,7 +184,6 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: false
       plugins:
-
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -168,7 +202,6 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: false
       plugins:
-
         - type: "semantic-cache"
           configuration:
             enabled: true
@@ -191,7 +224,6 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: false
       plugins:
-
         - type: "semantic-cache"
           configuration:
             enabled: true
@@ -214,7 +246,6 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: false
       plugins:
-
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -233,7 +264,6 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: true
       plugins:
-
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -252,7 +282,6 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: true
       plugins:
-
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -271,7 +300,6 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: false
       plugins:
-
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -290,7 +318,6 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: false
       plugins:
-
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -309,7 +336,6 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: false
       plugins:
-
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -328,7 +354,6 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: true
       plugins:
-
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -375,13 +400,14 @@ config:
     tools_db_path: "config/tools_db.json"
     fallback_to_empty: true
 
+  # --- Prompt Guard (global defaults) ---
   prompt_guard:
-    enabled: true  # Global default - can be overridden per category with jailbreak_enabled
+    enabled: true
     use_modernbert: false
     model_id: "models/mom-jailbreak-classifier"
+    jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
     threshold: 0.7
     use_cpu: true
-    jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
 
   # Classifier configuration
   classifier:
@@ -392,14 +418,11 @@ config:
       use_cpu: true
       category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
     pii_model:
-      # Support both traditional (modernbert) and LoRA-based PII detection
-      # When model_type is "auto", the system will auto-detect LoRA configuration
       model_id: "models/mom-pii-classifier"
       use_modernbert: false  # Use LoRA PII model with auto-detection
-      threshold: 0.7
+      threshold: 0.9
       use_cpu: true
       pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
-
   keyword_rules:
     - name: "thinking"
       operator: "OR"

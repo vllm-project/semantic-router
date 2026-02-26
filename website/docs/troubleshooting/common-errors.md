@@ -119,27 +119,30 @@ semantic_cache:
 **Log Pattern:**
 
 ```
-PII policy violation for decision <name>: denied PII types [<types>]
+PII signal fired: rule=<name>, detected_types=[<types>], threshold=<score>
 ```
 
 **Fixes:**
 
-1. **Allow the PII type** if it should be permitted:
+1. **Allow the PII type** if it should be permitted — add it to `pii_types_allowed` in the signal rule:
 
 ```yaml
-plugins:
-  - type: "pii"
-    configuration:
+signals:
+  pii:
+    - name: "pii_allow_location"
+      threshold: 0.5
       pii_types_allowed:
-        - "LOCATION" # Add denied type here
+        - "GPE"          # Add the denied type here
+        - "ORGANIZATION"
 ```
 
 2. **Raise threshold** if false positives:
 
 ```yaml
-classifier:
-  pii_model:
-    threshold: 0.95 # Increase from default 0.9
+signals:
+  pii:
+    - name: "pii_deny_all"
+      threshold: 0.95   # Increase from default 0.5
 ```
 
 ---
@@ -154,19 +157,29 @@ Jailbreak detected: type=<type>, confidence=<score>
 
 **Fixes:**
 
-1. **Raise threshold** to reduce false positives:
+1. **Raise threshold** to reduce false positives — update the signal rule:
 
 ```yaml
-prompt_guard:
-  threshold: 0.8 # Increase from default 0.7
+signals:
+  jailbreak:
+    - name: "jailbreak_standard"
+      threshold: 0.85   # Increase from default 0.65
 ```
 
-2. **Disable for specific decision**:
+2. **Exclude specific decisions** from jailbreak blocking by not referencing the jailbreak signal in that decision's conditions:
 
 ```yaml
 decisions:
+  # This decision does NOT reference any jailbreak signal → no jailbreak check
   - name: "internal_decision"
-    jailbreak_enabled: false
+    priority: 100
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "internal_keywords"
+    modelRefs:
+      - model: "internal-model"
 ```
 
 > See code: [pii/policy.go](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/utils/pii/policy.go) AND [req_filter_jailbreak.go](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/extproc/req_filter_jailbreak.go).

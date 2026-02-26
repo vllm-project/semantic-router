@@ -26,7 +26,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/pii"
 )
 
 // OpenAIRouter is an Envoy ExtProc server that routes OpenAI API requests
@@ -34,7 +33,6 @@ type OpenAIRouter struct {
 	Config               *config.RouterConfig
 	CategoryDescriptions []string
 	Classifier           *classification.Classifier
-	PIIChecker           *pii.PolicyChecker
 	Cache                cache.CacheBackend
 	ToolsDatabase        *tools.ToolsDatabase
 	ResponseAPIFilter    *ResponseAPIFilter
@@ -191,9 +189,6 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	} else {
 		logging.Infof("Tools database is disabled")
 	}
-
-	// Create utility components
-	piiChecker := pii.NewPolicyChecker(cfg)
 
 	classifier, err := classification.NewClassifier(cfg, categoryMapping, piiMapping, jailbreakMapping)
 	if err != nil {
@@ -424,7 +419,6 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		Config:               cfg,
 		CategoryDescriptions: categoryDescriptions,
 		Classifier:           classifier,
-		PIIChecker:           piiChecker,
 		Cache:                semanticCache,
 		ToolsDatabase:        toolsDatabase,
 		ResponseAPIFilter:    responseAPIFilter,

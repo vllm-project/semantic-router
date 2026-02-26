@@ -174,15 +174,30 @@ func testSinglePluginChain(ctx context.Context, testCase PluginChainCase, localP
 
 	result.StatusCode = resp.StatusCode
 
-	// Extract plugin execution headers
+	// Extract plugin execution headers (signal-driven architecture)
+	// When PII is detected and blocked, fast_response returns ImmediateResponse with:
+	//   x-vsr-fast-response: true
+	//   x-vsr-selected-decision: <decision-name>
+	// Note: x-vsr-matched-pii is only set in the response header phase (non-blocking path),
+	// it is NOT present in fast_response ImmediateResponse.
+	fastResponseHeader := resp.Header.Get("x-vsr-fast-response")
+	matchedPIIHeader := resp.Header.Get("x-vsr-matched-pii") // only in non-blocking path
+	// Legacy header fallback for backward compatibility
 	piiViolationHeader := resp.Header.Get("x-vsr-pii-violation")
 	piiTypesHeader := resp.Header.Get("x-vsr-pii-types")
-	if piiTypesHeader != "" {
-		result.PIIDetected = piiTypesHeader // Store detected PII types for display
+
+	if matchedPIIHeader != "" {
+		result.PIIDetected = matchedPIIHeader // Non-blocking path header
+	} else if piiTypesHeader != "" {
+		result.PIIDetected = piiTypesHeader // Legacy fallback
 	} else {
-		result.PIIDetected = piiViolationHeader // Fallback to boolean
+		result.PIIDetected = piiViolationHeader // Legacy boolean fallback
 	}
-	result.PIIBlocked = (resp.StatusCode == http.StatusForbidden || piiViolationHeader == "true")
+	// PII is blocked when: fast_response was triggered (ImmediateResponse),
+	// or legacy headers present
+	result.PIIBlocked = fastResponseHeader == "true" ||
+		resp.StatusCode == http.StatusForbidden ||
+		piiViolationHeader == "true"
 
 	// Check cache headers (x-vsr-cache-hit or similar)
 	cacheHeader := resp.Header.Get("x-vsr-cache-hit")

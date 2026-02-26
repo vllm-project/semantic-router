@@ -182,6 +182,8 @@ type MatchedSignals struct {
 	Language     []string `json:"language,omitempty"`
 	Context      []string `json:"context,omitempty"`
 	Complexity   []string `json:"complexity,omitempty"`
+	Jailbreak    []string `json:"jailbreak,omitempty"`
+	PII          []string `json:"pii,omitempty"`
 }
 
 // DecisionResult represents the result of decision evaluation
@@ -283,6 +285,8 @@ func (s *ClassificationService) buildIntentResponseFromSignals(
 			Language:     signals.MatchedLanguageRules,
 			Context:      signals.MatchedContextRules,
 			Complexity:   signals.MatchedComplexityRules,
+			Jailbreak:    signals.MatchedJailbreakRules,
+			PII:          signals.MatchedPIIRules,
 		}
 	}
 
@@ -894,6 +898,8 @@ func (s *ClassificationService) buildEvalResponse(
 		Language:     signals.MatchedLanguageRules,
 		Context:      signals.MatchedContextRules,
 		Complexity:   signals.MatchedComplexityRules,
+		Jailbreak:    signals.MatchedJailbreakRules,
+		PII:          signals.MatchedPIIRules,
 	}
 
 	// Build unmatched signals by comparing all configured signals with matched signals
@@ -989,6 +995,14 @@ func (s *ClassificationService) extractSignalsFromRuleCombination(rules config.R
 			if !contains(usedSignals.Complexity, signalName) {
 				usedSignals.Complexity = append(usedSignals.Complexity, signalName)
 			}
+		case "jailbreak":
+			if !contains(usedSignals.Jailbreak, signalName) {
+				usedSignals.Jailbreak = append(usedSignals.Jailbreak, signalName)
+			}
+		case "pii":
+			if !contains(usedSignals.PII, signalName) {
+				usedSignals.PII = append(usedSignals.PII, signalName)
+			}
 		}
 	}
 }
@@ -1081,6 +1095,20 @@ func (s *ClassificationService) getUnmatchedSignals(signals *classification.Sign
 	for _, rule := range s.classifier.Config.ComplexityRules {
 		if !isMatched(rule.Name, signals.MatchedComplexityRules) {
 			unmatched.Complexity = append(unmatched.Complexity, rule.Name)
+		}
+	}
+
+	// Check jailbreak rules
+	for _, rule := range s.classifier.Config.JailbreakRules {
+		if !isMatched(rule.Name, signals.MatchedJailbreakRules) {
+			unmatched.Jailbreak = append(unmatched.Jailbreak, rule.Name)
+		}
+	}
+
+	// Check PII rules
+	for _, rule := range s.classifier.Config.PIIRules {
+		if !isMatched(rule.Name, signals.MatchedPIIRules) {
+			unmatched.PII = append(unmatched.PII, rule.Name)
 		}
 	}
 

@@ -29,13 +29,14 @@ config:
     tools_db_path: "config/tools_db.json"
     fallback_to_empty: true
 
+  # --- Prompt Guard (global defaults) ---
   prompt_guard:
-    enabled: true  # Global default - can be overridden per category with jailbreak_enabled
+    enabled: true
     use_modernbert: false
     model_id: "models/mom-jailbreak-classifier"
+    jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
     threshold: 0.7
     use_cpu: true
-    jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
 
   # Classifier configuration
   classifier:
@@ -51,6 +52,19 @@ config:
       threshold: 0.7
       use_cpu: true
       pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
+
+  # Jailbreak and PII detection (signal layer, inline into IntelligentRouting)
+  jailbreak:
+    - name: "jailbreak_standard"
+      threshold: 0.6
+      include_history: false
+      description: "Standard jailbreak detection for routing-strategies tests"
+
+  pii:
+    - name: "pii_deny_all"
+      threshold: 0.7
+      include_history: false
+      description: "Block all PII"
 
   keyword_rules:
     # --- BM25 method: topic detection with natural TF-IDF scoring ---
@@ -184,10 +198,7 @@ config:
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a highly responsive assistant specialized in handling urgent requests. Prioritize speed and efficiency while maintaining accuracy. Provide concise, actionable responses and focus on immediate solutions."
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: "sensitive_data_decision"
       description: "Requests involving sensitive personal data"
@@ -204,14 +215,7 @@ config:
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a security-conscious assistant specialized in handling sensitive data. Exercise extreme caution with personal information, follow data protection best practices, and remind users about privacy considerations."
-        - type: "jailbreak"
-          configuration:
-            enabled: true
-            threshold: 0.6
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: "regex_pattern_match_decision"
       description: "Structured data and pattern-based requests"
@@ -241,10 +245,7 @@ config:
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices."
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: "general_decision"
       description: "General knowledge and miscellaneous topics"
@@ -265,30 +266,7 @@ config:
           configuration:
             enabled: true
             similarity_threshold: 0.75
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
 
-  # Router Configuration for Dual-Path Selection
-  router:
-    high_confidence_threshold: 0.99
-    low_latency_threshold_ms: 2000
-    lora_baseline_score: 0.8
-    traditional_baseline_score: 0.7
-    embedding_baseline_score: 0.75
-    success_confidence_threshold: 0.8
-    large_batch_threshold: 4
-    lora_default_execution_time_ms: 1345
-    traditional_default_execution_time_ms: 4567
-    default_confidence_threshold: 0.95
-    default_max_latency_ms: 5000
-    default_batch_size: 4
-    default_avg_execution_time_ms: 3000
-    lora_default_confidence: 0.99
-    traditional_default_confidence: 0.95
-    lora_default_success_rate: 0.98
-    traditional_default_success_rate: 0.95
 
   default_model: base-model
 

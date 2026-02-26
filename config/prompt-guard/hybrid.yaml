@@ -1,0 +1,192 @@
+# Hybrid Security Configuration
+#
+# Combines jailbreak + PII signals with domain, embedding, and keyword signals
+# to demonstrate the power of signal-driven security:
+#   • Security signals run IN PARALLEL with intent signals — zero added latency
+#   • Different sensitivity per domain (finance = strict, general = standard)
+#   • Combine security + domain for context-aware policies
+#
+# Usage:
+#   vllm-sr start --config config/prompt-guard/hybrid.yaml
+
+version: v0.1
+
+listeners:
+  - name: "http-8888"
+    address: "0.0.0.0"
+    port: 8888
+    timeout: "300s"
+
+# ── Signals ──────────────────────────────────────────────────────────────
+signals:
+  jailbreak:
+    - name: "jailbreak_standard"
+      threshold: 0.65
+      include_history: false
+      description: "Standard jailbreak detection"
+    - name: "jailbreak_strict"
+      threshold: 0.40
+      include_history: true
+      description: "Strict jailbreak detection with full history"
+
+  pii:
+    - name: "pii_deny_all"
+      threshold: 0.5
+      include_history: false
+      description: "Block all PII"
+    - name: "pii_allow_email_phone"
+      threshold: 0.5
+      pii_types_allowed:
+        - "EMAIL_ADDRESS"
+        - "PHONE_NUMBER"
+      include_history: false
+      description: "Allow email and phone, block SSN/credit card etc."
+
+  domains:
+    - name: "economics"
+      description: "Finance and economics"
+      mmlu_categories: ["economics"]
+    - name: "computer_science"
+      description: "Programming and CS"
+      mmlu_categories: ["computer_science"]
+    - name: "health"
+      description: "Health and medical"
+      mmlu_categories: ["health"]
+    - name: "general"
+      description: "Everything else"
+      mmlu_categories: ["other"]
+
+  embeddings:
+    - name: "financial_advice"
+      threshold: 0.75
+      candidates:
+        - "investment advice"
+        - "stock recommendation"
+        - "portfolio allocation"
+        - "retirement planning"
+      aggregationMethod: "max"
+
+  keywords:
+    - name: "code_keywords"
+      operator: "OR"
+      keywords: ["function", "class", "implement", "debug"]
+      case_sensitive: false
+
+# ── Decisions (highest priority first) ───────────────────────────────────
+decisions:
+  # ── SECURITY LAYER (priority 1000+) ──
+  # Finance + jailbreak → strict detection with full history
+  - name: "block_jailbreak_finance"
+    description: "Strict jailbreak block for financial queries"
+    priority: 1001
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "jailbreak"
+          name: "jailbreak_strict"
+        - type: "domain"
+          name: "economics"
+    plugins:
+      - type: "fast_response"
+        configuration:
+          message: "Your request to our financial services has been declined due to a policy violation."
+
+  # General jailbreak block (all domains)
+  - name: "block_jailbreak"
+    description: "Block jailbreak attempts"
+    priority: 1000
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "jailbreak"
+          name: "jailbreak_standard"
+    plugins:
+      - type: "fast_response"
+        configuration:
+          message: "I'm sorry, but I cannot process this request as it appears to violate our usage policies."
+
+  # Finance + PII → strict (deny all)
+  - name: "block_pii_finance"
+    description: "Block all PII in financial queries"
+    priority: 999
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "pii"
+          name: "pii_deny_all"
+        - type: "domain"
+          name: "economics"
+    plugins:
+      - type: "fast_response"
+        configuration:
+          message: "For your security, please do not share personal information in financial queries."
+
+  # Health + PII → relaxed (allow email/phone for appointment)
+  - name: "block_pii_health"
+    description: "Block PII except email/phone in health queries"
+    priority: 998
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "pii"
+          name: "pii_allow_email_phone"
+        - type: "domain"
+          name: "health"
+    plugins:
+      - type: "fast_response"
+        configuration:
+          message: "Please only share your email or phone number. Do not include other personal details."
+
+  # ── INTENT LAYER (priority < 1000) ──
+  - name: "financial_advice_route"
+    description: "Route financial queries to reasoning model"
+    priority: 200
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "embedding"
+          name: "financial_advice"
+        - type: "domain"
+          name: "economics"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: true
+        reasoning_effort: "high"
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a financial information assistant. Provide general financial education. This is not professional financial advice."
+      - type: "semantic-cache"
+        configuration:
+          enabled: true
+          similarity_threshold: 0.92
+
+  - name: "code_route"
+    description: "Route programming queries"
+    priority: 100
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "code_keywords"
+        - type: "domain"
+          name: "computer_science"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a programming expert. Provide clear code examples."
+
+  - name: "general_route"
+    description: "Fallback for all other queries"
+    priority: 50
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "general"
+    modelRefs:
+      - model: "openai/gpt-oss-120b"
+        use_reasoning: false

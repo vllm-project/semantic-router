@@ -20,7 +20,7 @@ func TestHeaderConstants(t *testing.T) {
 		{"VSRSelectedModel", VSRSelectedModel, "x-vsr-selected-model"},
 		{"VSRInjectedSystemPrompt", VSRInjectedSystemPrompt, "x-vsr-injected-system-prompt"},
 		{"VSRCacheHit", VSRCacheHit, "x-vsr-cache-hit"},
-		// Security headers
+		// Legacy security headers (kept for backward compatibility)
 		{"VSRPIIViolation", VSRPIIViolation, "x-vsr-pii-violation"},
 		{"VSRJailbreakBlocked", VSRJailbreakBlocked, "x-vsr-jailbreak-blocked"},
 		{"VSRJailbreakType", VSRJailbreakType, "x-vsr-jailbreak-type"},

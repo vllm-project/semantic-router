@@ -72,7 +72,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	// EvaluateAllSignalsWithHeaders also evaluates the authz signal using request headers
 	// (x-authz-user-id, x-authz-user-groups injected by Authorino / ext_authz).
 	// In extproc, we always use normal mode (only evaluate signals used in decisions)
-	signals, authzErr := r.Classifier.EvaluateAllSignalsWithHeaders(evaluationText, allMessagesText, ctx.Headers, false)
+	signals, authzErr := r.Classifier.EvaluateAllSignalsWithHeaders(evaluationText, allMessagesText, nonUserMessages, ctx.Headers, false)
 	if authzErr != nil {
 		signalSpan.End()
 		// Authz failure is a hard error — do not silently bypass.
@@ -96,6 +96,19 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	ctx.VSRMatchedComplexity = signals.MatchedComplexityRules
 	ctx.VSRMatchedModality = signals.MatchedModalityRules
 	ctx.VSRMatchedAuthz = signals.MatchedAuthzRules
+	ctx.VSRMatchedJailbreak = signals.MatchedJailbreakRules
+	ctx.VSRMatchedPII = signals.MatchedPIIRules
+
+	// Store jailbreak/PII detection metadata from signal results
+	if signals.JailbreakDetected {
+		ctx.JailbreakDetected = signals.JailbreakDetected
+		ctx.JailbreakType = signals.JailbreakType
+		ctx.JailbreakConfidence = signals.JailbreakConfidence
+	}
+	if signals.PIIDetected {
+		ctx.PIIDetected = signals.PIIDetected
+		ctx.PIIEntities = signals.PIIEntities
+	}
 
 	// Set fact-check context fields from signal results
 	// This replaces the old performFactCheckClassification call to avoid duplicate computation
@@ -105,10 +118,10 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	r.setModalityFromSignals(ctx, signals.MatchedModalityRules)
 
 	// Log signal evaluation results
-	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, modality=%v",
+	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, modality=%v, jailbreak=%v, pii=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
 		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules,
-		signals.MatchedLanguageRules, signals.MatchedModalityRules)
+		signals.MatchedLanguageRules, signals.MatchedModalityRules, signals.MatchedJailbreakRules, signals.MatchedPIIRules)
 
 	// Set signal span attributes
 	allMatchedRules := []string{}
@@ -120,6 +133,8 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	allMatchedRules = append(allMatchedRules, signals.MatchedPreferenceRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedLanguageRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedModalityRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedJailbreakRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedPIIRules...)
 
 	// End signal evaluation span
 	tracing.EndSignalSpan(signalSpan, allMatchedRules, 1.0, signalLatency)

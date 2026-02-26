@@ -10,7 +10,7 @@ The jailbreak protection system:
 - **Blocks** malicious requests before they reach LLMs
 - **Identifies** prompt injection and manipulation techniques
 - **Provides** detailed reasoning for security decisions
-- **Integrates** with routing decisions for enhanced security
+- **Integrates** with signal-driven decisions for enhanced security
 
 ## Jailbreak Detection Types
 
@@ -36,98 +36,214 @@ The system can identify various attack patterns:
 
 ## Configuration
 
+Jailbreak detection is now a **first-class signal** in the signal layer. You define named `jailbreak` rules under `signals.jailbreak`, then reference them in `decisions` using `type: "jailbreak"`.
+
 ### Basic Jailbreak Protection
 
-Enable jailbreak detection in your configuration:
-
 ```yaml
-# router-defaults.yaml
+# router-config.yaml
+
+# ── Prompt Guard Model ────────────────────────────────────────────────────
 prompt_guard:
-  enabled: true  # Global default - can be overridden per category with jailbreak_enabled
+  enabled: true
   use_modernbert: false
   model_id: "models/mom-jailbreak-classifier"
+  jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
   threshold: 0.7
   use_cpu: true
+
+# ── Signals ───────────────────────────────────────────────────────────────
+signals:
+  jailbreak:
+    - name: "jailbreak_detected"
+      threshold: 0.7
+      description: "Standard jailbreak detection"
+
+# ── Decisions ─────────────────────────────────────────────────────────────
+decisions:
+  - name: "block_jailbreak"
+    priority: 1000
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "jailbreak"
+          name: "jailbreak_detected"
+    plugins:
+      - type: "fast_response"
+        configuration:
+          message: "I'm sorry, but I cannot process this request as it appears to violate our usage policies."
 ```
 
-### Category-Level Jailbreak Protection
+### Multi-Tier Sensitivity
 
-You can configure jailbreak detection at the category level for fine-grained security control, including both enabling/disabling and threshold customization:
+Define multiple jailbreak rules at different thresholds to apply different sensitivity levels per decision:
 
 ```yaml
-# Global default settings
-prompt_guard:
-  enabled: true  # Default for all categories
-  threshold: 0.7  # Default threshold for all categories
+signals:
+  jailbreak:
+    # Standard sensitivity — catches obvious jailbreak attempts
+    - name: "jailbreak_standard"
+      threshold: 0.65
+      include_history: false
+      description: "Standard sensitivity — catches obvious jailbreak attempts"
 
-categories:
-  # High-security category - strict protection with high threshold
-  - name: customer_support
-    jailbreak_enabled: true  # Strict protection for public-facing
-    jailbreak_threshold: 0.9  # Higher threshold for stricter detection
-    model_scores:
-      - model: qwen3
-        score: 0.8
+    # High sensitivity — inspects full conversation history for multi-turn attacks
+    - name: "jailbreak_strict"
+      threshold: 0.40
+      include_history: true
+      description: "High sensitivity — inspects full conversation history"
 
-  # Internal tool - relaxed threshold for code/technical content
-  - name: code_generation
-    jailbreak_enabled: true  # Keep enabled but with relaxed threshold
-    jailbreak_threshold: 0.5  # Lower threshold to reduce false positives
-    model_scores:
-      - model: qwen3
-        score: 0.9
-
-  # General category - inherits global settings
-  - name: general
-    # No jailbreak_enabled or jailbreak_threshold specified
-    # Uses global prompt_guard.enabled (true) and threshold (0.7)
-    model_scores:
-      - model: qwen3
-        score: 0.5
+decisions:
+  # Block immediately on any jailbreak signal
+  - name: "block_jailbreak"
+    priority: 1000
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "jailbreak"
+          name: "jailbreak_standard"
+        - type: "jailbreak"
+          name: "jailbreak_strict"
+    plugins:
+      - type: "fast_response"
+        configuration:
+          message: "I'm sorry, but I cannot process this request as it appears to violate our usage policies."
 ```
 
-**Category-Level Behavior**:
+### Domain-Aware Jailbreak Protection
 
-- **When `jailbreak_enabled` is not specified**: Category inherits from global `prompt_guard.enabled`
-- **When `jailbreak_enabled: true`**: Jailbreak detection is explicitly enabled for this category
-- **When `jailbreak_enabled: false`**: Jailbreak detection is explicitly disabled for this category
-- **When `jailbreak_threshold` is not specified**: Category inherits from global `prompt_guard.threshold`
-- **When `jailbreak_threshold: 0.X`**: Uses category-specific threshold (0.0-1.0)
-- **Category-specific settings always override global settings** when explicitly configured
+Combine jailbreak signals with domain signals for context-aware security policies:
+
+```yaml
+signals:
+  jailbreak:
+    - name: "jailbreak_standard"
+      threshold: 0.65
+      description: "Standard jailbreak detection"
+    - name: "jailbreak_strict"
+      threshold: 0.40
+      include_history: true
+      description: "Strict jailbreak detection with full history"
+
+  domains:
+    - name: "economics"
+      description: "Finance and economics"
+      mmlu_categories: ["economics"]
+    - name: "general"
+      description: "General queries"
+      mmlu_categories: ["other"]
+
+decisions:
+  # Finance domain: strict jailbreak detection with full history
+  - name: "block_jailbreak_finance"
+    priority: 1001
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "jailbreak"
+          name: "jailbreak_strict"
+        - type: "domain"
+          name: "economics"
+    plugins:
+      - type: "fast_response"
+        configuration:
+          message: "Your request to our financial services has been declined due to a policy violation."
+
+  # All domains: standard jailbreak detection
+  - name: "block_jailbreak"
+    priority: 1000
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "jailbreak"
+          name: "jailbreak_standard"
+    plugins:
+      - type: "fast_response"
+        configuration:
+          message: "I'm sorry, but I cannot process this request as it appears to violate our usage policies."
+```
+
+### Environment-Based Policies (Dev vs Prod)
+
+Apply different jailbreak thresholds per environment using separate decisions:
+
+```yaml
+signals:
+  jailbreak:
+    - name: "jailbreak_relaxed"
+      threshold: 0.5
+      description: "Relaxed — reduce false positives on code/technical prompts"
+    - name: "jailbreak_strict"
+      threshold: 0.9
+      description: "Strict — user-facing endpoint, maximum protection"
+
+decisions:
+  # Dev: code queries with relaxed jailbreak threshold
+  - name: "code_to_dev"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "keyword"
+          name: "code_keywords"
+        - operator: "NOT"
+          conditions:
+            - type: "jailbreak"
+              name: "jailbreak_relaxed"
+    modelRefs:
+      - model: "qwen14b-dev"
+
+  # Prod: general queries with strict jailbreak threshold
+  - name: "block_jailbreak_prod"
+    priority: 1000
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "jailbreak"
+          name: "jailbreak_strict"
+    plugins:
+      - type: "fast_response"
+        configuration:
+          message: "Request blocked due to policy violation."
+```
+
+## Signal Configuration Reference
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | ✅ | Signal name referenced in decision conditions (`type: "jailbreak"`) |
+| `threshold` | float (0.0–1.0) | ✅ | Minimum confidence score to trigger this signal |
+| `include_history` | bool | ❌ | When `true`, all conversation messages are analysed (default: `false`) |
+| `description` | string | ❌ | Human-readable description of this rule |
 
 **Threshold Tuning Guide**:
 
-- **High threshold (0.8-0.95)**: Stricter detection, fewer false positives, may miss subtle attacks
-- **Medium threshold (0.6-0.8)**: Balanced detection, good for most use cases
-- **Low threshold (0.4-0.6)**: More sensitive, catches more attacks, higher false positive rate
-- **Recommended**: Start with 0.7 globally, adjust per category based on risk profile and false positive tolerance
+- **High threshold (0.8–0.95)**: Stricter detection, fewer false positives, may miss subtle attacks
+- **Medium threshold (0.6–0.8)**: Balanced detection, good for most use cases
+- **Low threshold (0.4–0.6)**: More sensitive, catches more attacks, higher false positive rate
+- **Recommended**: Start with `0.65` for standard, `0.40` for strict (with `include_history: true`)
 
-**Use Cases**:
+## Prompt Guard Model Configuration
 
-- **High-security categories (0.8-0.9 threshold)**: Customer support, business advice, public-facing APIs
-- **Technical categories (0.5-0.6 threshold)**: Code generation, developer tools (reduce false positives on technical jargon)
-- **Internal tools (0.5 threshold or disabled)**: Testing environments, trusted internal applications
-- **General categories (inherit global)**: Use global default for most categories
+The `prompt_guard` section configures the underlying ML model used by all jailbreak signals:
+
+```yaml
+prompt_guard:
+  enabled: true
+  use_modernbert: false
+  model_id: "models/mom-jailbreak-classifier"
+  jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
+  threshold: 0.7   # Global fallback threshold (overridden per signal rule)
+  use_cpu: true
+```
 
 ## How Jailbreak Protection Works
 
-The jailbreak protection system works as follows:
-
-1. **Detection**: The prompt guard model analyzes incoming text for jailbreak patterns
-2. **Classification**: Identifies the type of jailbreak attempt (if any)
-3. **Action**: Blocks malicious requests before they reach the LLM models
-4. **Logging**: Records all jailbreak attempts for security monitoring
-
-## API Integration
-
-Jailbreak protection is automatically integrated into the routing process. When a request is made to the router, the system:
-
-1. Analyzes the input text for jailbreak patterns using the prompt guard model
-2. Blocks requests that are identified as jailbreak attempts
-3. Logs all security decisions for monitoring and analysis
-4. Only allows safe requests to proceed to the LLM models
-
-The protection happens transparently - malicious requests are blocked before reaching any LLM endpoints.
+1. **Signal Evaluation**: All `jailbreak` signal rules run **in parallel** with other signals (keyword, domain, embedding, etc.) — zero added latency to the routing pipeline
+2. **Threshold Check**: Each rule fires independently when jailbreak confidence ≥ its threshold
+3. **Decision Matching**: Decisions reference fired signals via `type: "jailbreak"` conditions
+4. **Action**: Matching decisions execute their plugins (e.g., `fast_response` to block the request)
+5. **Logging**: All jailbreak detections are recorded for security monitoring
 
 ## Common Jailbreak Patterns
 
@@ -164,85 +280,94 @@ Track jailbreak protection effectiveness:
 jailbreak_attempts_total{type="dan_attack"} 15
 jailbreak_attempts_total{type="instruction_override"} 23
 jailbreak_attempts_blocked_total 35
-jailbreak_attempts_warned_total 8
 prompt_injection_detections_total 12
 security_policy_violations_total 45
 ```
 
 ## Best Practices
 
-### 1. Threshold Configuration
+### 1. Use Priority to Order Security Decisions
 
-- Start with `threshold: 0.7` for balanced detection
-- Increase to `0.8-0.9` for high-security environments
-- Monitor false positive rates and adjust accordingly
-
-### 2. Custom Rules
-
-- Add domain-specific jailbreak patterns
-- Use regex patterns for known attack vectors
-- Regularly update rules based on new threats
-
-### 3. Action Strategy
-
-- Use `block` for production environments
-- Use `warn` during testing and tuning
-- Consider `sanitize` for user-facing applications
-
-### 4. Integration with Routing
-
-- Apply stricter protection to sensitive models
-- Use category-level jailbreak settings for different domains
-- Combine with PII detection for comprehensive security
-
-**Example**: Configure different jailbreak policies per category:
+Set jailbreak-blocking decisions at high priority (e.g., `1000+`) so they are evaluated before routing decisions:
 
 ```yaml
-prompt_guard:
-  enabled: true  # Global default
+decisions:
+  - name: "block_jailbreak"
+    priority: 1000   # Evaluated before routing decisions (priority < 1000)
+    rules:
+      ...
+```
 
-categories:
-  # Strict protection for customer-facing categories
-  - name: customer_support
-    jailbreak_enabled: true
-    model_scores:
-      - model: safe-model
-        score: 0.9
+### 2. Combine with PII Detection
 
-  # Relaxed protection for internal development
-  - name: code_generation
-    jailbreak_enabled: false  # Allow broader input
-    model_scores:
-      - model: code-model
-        score: 0.9
+Use both `jailbreak` and `pii` signals together for comprehensive security:
 
-  # Use global default for general queries
-  - name: general
-    # Inherits from prompt_guard.enabled
-    model_scores:
-      - model: general-model
-        score: 0.7
+```yaml
+signals:
+  jailbreak:
+    - name: "jailbreak_standard"
+      threshold: 0.65
+  pii:
+    - name: "pii_deny_all"
+      threshold: 0.5
+
+decisions:
+  - name: "block_jailbreak"
+    priority: 1000
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "jailbreak"
+          name: "jailbreak_standard"
+    plugins:
+      - type: "fast_response"
+        configuration:
+          message: "Request blocked: policy violation."
+
+  - name: "block_pii"
+    priority: 999
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "pii"
+          name: "pii_deny_all"
+    plugins:
+      - type: "fast_response"
+        configuration:
+          message: "Request blocked: personal information detected."
+```
+
+### 3. Enable History for Multi-Turn Attack Detection
+
+For conversational applications, enable `include_history: true` to detect multi-turn jailbreak attempts:
+
+```yaml
+signals:
+  jailbreak:
+    - name: "jailbreak_multi_turn"
+      threshold: 0.40
+      include_history: true
+      description: "Detects jailbreak attempts spread across multiple messages"
 ```
 
 ## Troubleshooting
 
 ### High False Positives
 
-- Lower the detection threshold
-- Review and refine custom rules
-- Add benign examples to training data
+- Increase the signal `threshold` (e.g., from `0.65` to `0.80`)
+- Use separate rules with different thresholds for different domains
+- For code/technical content, use a higher threshold to avoid flagging SQL injection examples or shell escape sequences
 
 ### Missed Jailbreaks
 
-- Increase detection sensitivity
-- Add new attack patterns to custom rules
-- Retrain model with recent jailbreak examples
+- Lower the signal `threshold`
+- Enable `include_history: true` to catch multi-turn attacks
+- Add a stricter rule alongside the standard one
 
 ### Performance Issues
 
-- Ensure CPU optimization is enabled
-- Consider model quantization for faster inference
-- Monitor memory usage during processing
+- Ensure `use_cpu: true` is set in `prompt_guard` if no GPU is available
+- Jailbreak signals run in parallel with other signals — no sequential overhead
 
 ### Debug Mode
 
@@ -255,4 +380,4 @@ logging:
   include_request_content: false  # Be careful with sensitive data
 ```
 
-This provides detailed information about detection decisions and rule matching.
+This provides detailed information about detection decisions and signal matching.

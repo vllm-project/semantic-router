@@ -123,27 +123,30 @@ semantic_cache:
 **Log 模式：**
 
 ```
-PII policy violation for decision <name>: denied PII types [<types>]
+PII signal fired: rule=<name>, detected_types=[<types>], threshold=<score>
 ```
 
 **修复方法：**
 
-1. **允许该 PII 类型**（如果应该被允许）：
+1. **允许该 PII 类型**（如果应该被允许）— 将其添加到信号规则的 `pii_types_allowed` 中：
 
 ```yaml
-plugins:
-  - type: "pii"
-    configuration:
+signals:
+  pii:
+    - name: "pii_allow_location"
+      threshold: 0.5
       pii_types_allowed:
-        - "LOCATION" # 在此添加被拒绝的类型
+        - "GPE"          # 在此添加被拒绝的类型
+        - "ORGANIZATION"
 ```
 
-1. **提高阈值**（如果是误报）：
+2. **提高阈值**（如果是误报）：
 
 ```yaml
-classifier:
-  pii_model:
-    threshold: 0.95 # 从默认的 0.9 提高
+signals:
+  pii:
+    - name: "pii_deny_all"
+      threshold: 0.95   # 从默认的 0.5 提高
 ```
 
 ---
@@ -158,19 +161,29 @@ Jailbreak detected: type=<type>, confidence=<score>
 
 **修复方法：**
 
-1. **提高阈值** 以减少误报：
+1. **提高阈值** 以减少误报 — 更新信号规则：
 
 ```yaml
-prompt_guard:
-  threshold: 0.8 # 从默认的 0.7 提高
+signals:
+  jailbreak:
+    - name: "jailbreak_standard"
+      threshold: 0.85   # 从默认的 0.65 提高
 ```
 
-1. **为特定 decision 禁用**：
+2. **为特定决策排除 jailbreak 检查** — 在该决策的条件中不引用任何 jailbreak 信号：
 
 ```yaml
 decisions:
+  # 该决策不引用任何 jailbreak 信号 → 无 jailbreak 检查
   - name: "internal_decision"
-    jailbreak_enabled: false
+    priority: 100
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "internal_keywords"
+    modelRefs:
+      - model: "internal-model"
 ```
 
 > 参见代码：[pii/policy.go](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/utils/pii/policy.go) 和 [req_filter_jailbreak.go](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/extproc/req_filter_jailbreak.go)。

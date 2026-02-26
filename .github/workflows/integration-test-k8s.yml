@@ -144,6 +144,29 @@ jobs:
           exit ${TEST_EXIT_CODE}
 
 
+      - name: Collect logs via kubectl (fallback)
+        if: always()
+        run: |
+          if [ ! -f "semantic-router-logs.txt" ]; then
+            echo "⚠️ semantic-router-logs.txt not found, collecting logs via kubectl as fallback..."
+            echo "========================================" > semantic-router-logs.txt
+            echo "Semantic Router Logs (collected via kubectl fallback)" >> semantic-router-logs.txt
+            echo "========================================" >> semantic-router-logs.txt
+            echo "" >> semantic-router-logs.txt
+
+            for pod in $(kubectl get pods -n vllm-semantic-router-system -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+              echo "=== Pod: $pod ===" >> semantic-router-logs.txt
+              kubectl describe pod "$pod" -n vllm-semantic-router-system >> semantic-router-logs.txt 2>&1 || true
+              echo "--- Logs ---" >> semantic-router-logs.txt
+              kubectl logs "$pod" -n vllm-semantic-router-system --all-containers=true >> semantic-router-logs.txt 2>&1 || true
+              echo "" >> semantic-router-logs.txt
+            done
+
+            echo "✅ Fallback log collection complete"
+          else
+            echo "✅ semantic-router-logs.txt already exists (collected by Go framework)"
+          fi
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4

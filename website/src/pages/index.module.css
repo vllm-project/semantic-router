@@ -22,6 +22,17 @@
   border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 
+.threadsBackground {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
 .heroBanner::before {
   content: '';
   position: absolute;
@@ -33,6 +44,7 @@
     radial-gradient(circle at 30% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
     radial-gradient(circle at 70% 80%, rgba(168, 85, 247, 0.06) 0%, transparent 50%);
   pointer-events: none;
+  z-index: 1;
   transition: all 0.3s ease;
 }
 
@@ -49,7 +61,7 @@
   justify-content: space-between;
   gap: 6rem;
   position: relative;
-  z-index: 1;
+  z-index: 2;
 }
 
 .heroLeft {

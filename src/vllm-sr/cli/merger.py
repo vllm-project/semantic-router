@@ -199,6 +199,56 @@ def translate_complexity_signals(complexity_rules: list) -> list:
     return rules
 
 
+def translate_jailbreak_signals(jailbreak_rules: list) -> list:
+    """
+    Translate jailbreak signals to router format.
+
+    Args:
+        jailbreak_rules: List of JailbreakRule objects
+
+    Returns:
+        list: Router jailbreak rules
+    """
+    rules = []
+    for signal in jailbreak_rules:
+        rule = {
+            "name": signal.name,
+            "threshold": signal.threshold,
+        }
+        if signal.include_history:
+            rule["include_history"] = signal.include_history
+        if signal.description:
+            rule["description"] = signal.description
+        rules.append(rule)
+    return rules
+
+
+def translate_pii_signals(pii_rules: list) -> list:
+    """
+    Translate PII signals to router format.
+
+    Args:
+        pii_rules: List of PIIRule objects
+
+    Returns:
+        list: Router PII rules
+    """
+    rules = []
+    for signal in pii_rules:
+        rule = {
+            "name": signal.name,
+            "threshold": signal.threshold,
+        }
+        if signal.pii_types_allowed:
+            rule["pii_types_allowed"] = signal.pii_types_allowed
+        if signal.include_history:
+            rule["include_history"] = signal.include_history
+        if signal.description:
+            rule["description"] = signal.description
+        rules.append(rule)
+    return rules
+
+
 def translate_external_models(external_models: list) -> list:
     """
     Translate external models to router format.
@@ -462,6 +512,16 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
             log.info(
                 f"  Added {len(user_config.signals.complexity)} complexity signals"
             )
+
+        if user_config.signals.jailbreak and len(user_config.signals.jailbreak) > 0:
+            merged["jailbreak"] = translate_jailbreak_signals(
+                user_config.signals.jailbreak
+            )
+            log.info(f"  Added {len(user_config.signals.jailbreak)} jailbreak signals")
+
+        if user_config.signals.pii and len(user_config.signals.pii) > 0:
+            merged["pii"] = translate_pii_signals(user_config.signals.pii)
+            log.info(f"  Added {len(user_config.signals.pii)} PII signals")
 
         # Translate domains to categories
         if user_config.signals.domains:

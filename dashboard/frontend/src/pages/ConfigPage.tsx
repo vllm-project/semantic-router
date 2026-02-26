@@ -177,6 +177,19 @@ interface ConfigData {
         conditions: Array<{ type: string; name: string }>
       }
     }>
+    jailbreak?: Array<{
+      name: string
+      threshold?: number
+      include_history?: boolean
+      description?: string
+    }>
+    pii?: Array<{
+      name: string
+      threshold?: number
+      pii_types_allowed?: string[]
+      include_history?: boolean
+      description?: string
+    }>
   }
   decisions?: Array<{
     name: string
@@ -250,7 +263,7 @@ interface ConfigPageProps {
   activeSection?: ConfigSection
 }
 
-type SignalType = 'Keywords' | 'Embeddings' | 'Domain' | 'Preference' | 'Fact Check' | 'User Feedback' | 'Language' | 'Context' | 'Complexity'
+type SignalType = 'Keywords' | 'Embeddings' | 'Domain' | 'Preference' | 'Fact Check' | 'User Feedback' | 'Language' | 'Context' | 'Complexity' | 'Jailbreak' | 'PII'
 type DecisionConfig = NonNullable<ConfigData['decisions']>[number]
 
 interface DecisionFormState {
@@ -281,6 +294,11 @@ interface AddSignalFormState {
   easy_candidates?: string
   composer_operator?: 'AND' | 'OR' | 'NOT'
   composer_conditions?: string
+  jailbreak_threshold?: number
+  include_history?: boolean
+  pii_threshold?: number
+  pii_types_allowed?: string
+  pii_include_history?: boolean
 }
 
 // Helper function to format threshold as percentage
@@ -505,6 +523,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         break
       case 'Complexity':
         cfg.signals.complexity = (cfg.signals.complexity || []).filter(s => s.name !== targetName)
+        break
+      case 'Jailbreak':
+        cfg.signals.jailbreak = (cfg.signals.jailbreak || []).filter(s => s.name !== targetName)
+        break
+      case 'PII':
+        cfg.signals.pii = (cfg.signals.pii || []).filter(s => s.name !== targetName)
         break
       default:
         break
@@ -2352,6 +2376,27 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       })
     })
 
+    // Jailbreak
+    signals?.jailbreak?.forEach(jb => {
+      allSignals.push({
+        name: jb.name,
+        type: 'Jailbreak',
+        summary: `Threshold: ${jb.threshold}${jb.include_history ? ', includes history' : ''}`,
+        rawData: jb
+      })
+    })
+
+    // PII
+    signals?.pii?.forEach(p => {
+      const allowed = p.pii_types_allowed?.length || 0
+      allSignals.push({
+        name: p.name,
+        type: 'PII',
+        summary: `Threshold: ${p.threshold}${allowed > 0 ? `, ${allowed} types allowed` : ', deny all'}`,
+        rawData: p
+      })
+    })
+
     // Filter signals based on search
     const filteredSignals = allSignals.filter(signal =>
       signal.name.toLowerCase().includes(signalsSearch.toLowerCase()) ||
@@ -2382,7 +2427,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             'User Feedback': 'rgba(236, 72, 153, 0.15)',
             'Language': 'rgba(59, 130, 246, 0.15)',
             'Context': 'rgba(251, 146, 60, 0.15)',
-            'Complexity': 'rgba(66, 153, 225, 0.15)'
+            'Complexity': 'rgba(66, 153, 225, 0.15)',
+            'Jailbreak': 'rgba(239, 68, 68, 0.15)',
+            'PII': 'rgba(245, 158, 11, 0.15)'
           }
           return (
             <span className={styles.badge} style={{ background: typeColors[row.type] }}>
@@ -2581,6 +2628,25 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           title: 'Complexity Signal',
           fields
         })
+      } else if (signal.type === 'Jailbreak') {
+        sections.push({
+          title: 'Jailbreak Signal',
+          fields: [
+            { label: 'Threshold', value: signal.rawData.threshold?.toString() || 'N/A', fullWidth: true },
+            { label: 'Include History', value: signal.rawData.include_history ? 'Yes' : 'No', fullWidth: true },
+            { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
+          ]
+        })
+      } else if (signal.type === 'PII') {
+        sections.push({
+          title: 'PII Signal',
+          fields: [
+            { label: 'Threshold', value: signal.rawData.threshold?.toString() || 'N/A', fullWidth: true },
+            { label: 'Allowed PII Types', value: signal.rawData.pii_types_allowed?.join(', ') || 'None (deny all)', fullWidth: true },
+            { label: 'Include History', value: signal.rawData.include_history ? 'Yes' : 'No', fullWidth: true },
+            { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
+          ]
+        })
       } else {
         // Preference, Fact Check, User Feedback
         sections.push({
@@ -2616,7 +2682,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         hard_candidates: '',
         easy_candidates: '',
         composer_operator: 'AND',
-        composer_conditions: ''
+        composer_conditions: '',
+        jailbreak_threshold: 0.65,
+        include_history: false,
+        pii_threshold: 0.5,
+        pii_types_allowed: '',
+        pii_include_history: false
       }
 
       const initialData: AddSignalFormState = mode === 'edit' && signal ? {
@@ -2636,7 +2707,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         hard_candidates: (signal.rawData.hard?.candidates || []).join('\n'),
         easy_candidates: (signal.rawData.easy?.candidates || []).join('\n'),
         composer_operator: signal.rawData.composer?.operator || 'AND',
-        composer_conditions: signal.rawData.composer?.conditions?.map((c: { type: string; name: string }) => `${c.type}:${c.name}`).join('\n') || ''
+        composer_conditions: signal.rawData.composer?.conditions?.map((c: { type: string; name: string }) => `${c.type}:${c.name}`).join('\n') || '',
+        jailbreak_threshold: signal.rawData.threshold ?? 0.65,
+        include_history: !!signal.rawData.include_history,
+        pii_threshold: signal.rawData.threshold ?? 0.5,
+        pii_types_allowed: (signal.rawData.pii_types_allowed || []).join('\n'),
+        pii_include_history: !!signal.rawData.include_history
       } : defaultForm
 
 
@@ -2767,12 +2843,56 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         }
       ]
 
+      const jailbreakFields: FieldConfig[] = [
+        {
+          name: 'jailbreak_threshold',
+          label: 'Threshold (jailbreak only)',
+          type: 'number',
+          placeholder: 'e.g., 0.65',
+          description: 'Confidence threshold for jailbreak detection (0.0 - 1.0)',
+          shouldHide: conditionallyHideFieldExceptType('Jailbreak')
+        },
+        {
+          name: 'include_history',
+          label: 'Include History (jailbreak only)',
+          type: 'boolean',
+          description: 'Whether to include conversation history in jailbreak detection',
+          shouldHide: conditionallyHideFieldExceptType('Jailbreak')
+        }
+      ]
+
+      const piiFields: FieldConfig[] = [
+        {
+          name: 'pii_threshold',
+          label: 'Threshold (PII only)',
+          type: 'number',
+          placeholder: 'e.g., 0.5',
+          description: 'Confidence threshold for PII detection (0.0 - 1.0)',
+          shouldHide: conditionallyHideFieldExceptType('PII')
+        },
+        {
+          name: 'pii_types_allowed',
+          label: 'Allowed PII Types (PII only)',
+          type: 'textarea',
+          placeholder: 'One PII type per line, e.g.:\nEMAIL_ADDRESS\nPHONE_NUMBER',
+          description: 'PII types to allow (not blocked). Leave empty to deny all.',
+          shouldHide: conditionallyHideFieldExceptType('PII')
+        },
+        {
+          name: 'pii_include_history',
+          label: 'Include History (PII only)',
+          type: 'boolean',
+          description: 'Whether to include conversation history in PII detection',
+          shouldHide: conditionallyHideFieldExceptType('PII')
+        }
+      ]
+
       const fields: FieldConfig[] = [
         {
           name: 'type',
           label: 'Type',
           type: 'select',
-          options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Language', 'Context', 'Complexity'],
+          options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Language', 'Context', 'Complexity', 'Jailbreak', 'PII'],
           required: true,
           description: 'Fields are validated based on the selected type.'
         },
@@ -2794,6 +2914,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         ...domainFields,
         ...contextFields,
         ...complexityFields,
+        ...jailbreakFields,
+        ...piiFields,
       ]
 
       const saveSignal = async (formData: AddSignalFormState) => {
@@ -2983,6 +3105,43 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                 },
                 description: formData.description || undefined,
                 ...(composer && { composer })
+              }
+            ]
+            break
+          }
+          case 'Jailbreak': {
+            const jailbreak_threshold = formData.jailbreak_threshold ?? 0.65
+            if (jailbreak_threshold < 0 || jailbreak_threshold > 1) {
+              throw new Error('Jailbreak threshold must be between 0.0 and 1.0.')
+            }
+            newConfig.signals.jailbreak = [
+              ...(newConfig.signals.jailbreak || []),
+              {
+                name,
+                threshold: jailbreak_threshold,
+                include_history: formData.include_history || false,
+                description: formData.description || undefined
+              }
+            ]
+            break
+          }
+          case 'PII': {
+            const pii_threshold = formData.pii_threshold ?? 0.5
+            if (pii_threshold < 0 || pii_threshold > 1) {
+              throw new Error('PII threshold must be between 0.0 and 1.0.')
+            }
+            const pii_types_allowed = (formData.pii_types_allowed || '').trim()
+            const allowedList = pii_types_allowed
+              ? pii_types_allowed.split('\n').map(t => t.trim()).filter(t => t.length > 0)
+              : undefined
+            newConfig.signals.pii = [
+              ...(newConfig.signals.pii || []),
+              {
+                name,
+                threshold: pii_threshold,
+                pii_types_allowed: allowedList,
+                include_history: formData.pii_include_history || false,
+                description: formData.description || undefined
               }
             ]
             break

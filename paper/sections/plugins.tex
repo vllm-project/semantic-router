@@ -4,7 +4,7 @@
 \label{sec:plugins}
 
 The plugin layer provides a composable middleware architecture where each matched decision activates an independent chain of typed transformations.
-We describe the plugin model and three core infrastructure plugins; safety plugins are covered in \Cref{sec:safety,sec:halugate}, and memory retrieval and RAG injection are covered in \Cref{sec:memory_rag}.
+We describe the plugin model and four core infrastructure plugins; safety signal classifiers are covered in \Cref{sec:safety}, hallucination detection in \Cref{sec:halugate}, and memory retrieval and RAG injection in \Cref{sec:memory_rag}.
 
 \subsection{Plugin Execution Model}
 
@@ -12,12 +12,15 @@ Formally, a plugin $\pi$ is a typed transformation on the request-response pair:
 \begin{equation}
   \pi: (\text{Request}, \text{Context}, \text{Config}_\pi) \to (\text{Request}', \text{Response}') \cup \{\bot\}
 \end{equation}
-where $\bot$ denotes early termination (e.g., a cache hit returning immediately or a safety violation blocking the request).
+where $\bot$ denotes early termination (e.g., a cache hit returning immediately or a fast response short-circuiting the pipeline).
 
 Plugins execute in a fixed pipeline order within each decision's chain.
-On the \emph{request path}: jailbreak $\to$ PII $\to$ cache $\to$ RAG $\to$ modality $\to$ memory $\to$ system prompt $\to$ header mutation.
+On the \emph{request path}: fast response $\to$ cache $\to$ RAG $\to$ modality $\to$ memory $\to$ system prompt $\to$ header mutation.
 On the \emph{response path}: hallucination detection $\to$ cache write.
 Each plugin is independently enabled per decision, and its configuration (thresholds, modes, policies) is scoped to that decision.
+
+Jailbreak and PII detection are first-class \emph{signals} (\Cref{sec:signal_engine,sec:safety}) evaluated in parallel with all other signal types, not serial plugins in the request path.
+Decisions that match safety signals activate the \texttt{fast\_response} plugin to return an immediate rejection.
 
 This per-decision scoping is a key architectural distinction from systems that apply safety and caching globally: it allows differentiated policies for different routing outcomes within the same deployment.
 
@@ -63,3 +66,21 @@ This supports use cases including:
 backend-specific authentication injection,
 routing decision metadata propagation for downstream observability,
 and custom signaling to model-serving frameworks (e.g., LoRA adapter selection via headers).
+
+\subsection{Fast Response}
+
+The fast response plugin enables a decision to short-circuit the entire pipeline and return an immediate OpenAI-compatible response without forwarding the request to any upstream model.
+This is the primary mechanism for acting on safety signals.
+
+\textbf{Execution model.}
+When a decision's \texttt{fast\_response} plugin is configured, the pipeline checks for it before any other plugin in the chain.
+If present, the configured message is returned as a standard \texttt{chat.completion} response with \texttt{finish\_reason: "stop"}, and no further processing occurs.
+
+\textbf{Streaming compatibility.}
+The plugin inspects the original request's \texttt{stream} parameter.
+For non-streaming requests, it returns a single JSON object.
+For streaming requests (\texttt{stream: true}), it generates a Server-Sent Events (SSE) sequence: an initial chunk with the assistant role, word-by-word content chunks, a final chunk with \texttt{finish\_reason: "stop"}, and the \texttt{[DONE]} sentinel---matching the exact format that OpenAI-compatible clients expect.
+
+\textbf{Use cases.}
+The canonical use case is safety enforcement: a decision matching a jailbreak or PII signal activates \texttt{fast\_response} to return a policy-compliant refusal message.
+However, the plugin is general-purpose---it can also serve canned responses for FAQ-like queries, maintenance windows, or rate-limited fallback messages without consuming model compute.

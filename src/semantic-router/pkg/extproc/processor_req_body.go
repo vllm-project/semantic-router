@@ -25,6 +25,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
+	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
 // handleRequestBody processes the request body
@@ -108,22 +109,14 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	// Record the initial request to this model (count all requests)
 	metrics.RecordModelRequest(selectedModel)
 
-	// Perform security checks with decision-specific settings
-	if response, shouldReturn := r.performJailbreaks(ctx, userContent, nonUserMessages, decisionName); shouldReturn {
-		// Record blocked request to replay before returning
+	// Fast response plugin: if the matched decision has a fast_response plugin,
+	// short-circuit and return an OpenAI-compatible response immediately without
+	// hitting any upstream model. This is the "Action" side of the Signal→Decision→Action
+	// pipeline, commonly used with jailbreak/PII signals.
+	if resp := r.handleFastResponse(ctx, decisionName); resp != nil {
 		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
-		r.updateRouterReplayStatus(ctx, 403, false) // 403 Forbidden for jailbreak block
-		return response, nil
-	}
-
-	// Perform PII detection and policy check (if PII policy is enabled for the decision)
-	piiResponse := r.performPIIDetection(ctx, userContent, nonUserMessages, decisionName)
-	if piiResponse != nil {
-		// Record blocked request to replay before returning
-		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
-		r.updateRouterReplayStatus(ctx, 403, false) // 403 Forbidden for PII block
-		// PII policy violation - return error response
-		return piiResponse, nil
+		r.updateRouterReplayStatus(ctx, 200, false)
+		return resp, nil
 	}
 
 	// Rate limit check — after security checks, before cache/RAG/routing.
@@ -411,7 +404,7 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCom
 	// Track VSR decision information for non-auto models
 	ctx.VSRSelectedModel = originalModel
 	ctx.VSRReasoningMode = "off" // Non-auto models don't use reasoning mode by default
-	// PII policy check already done in performPIIDetection
+	// Security checks (jailbreak/PII) are handled at the signal level via fast_response plugin
 	// Memory injection already happened in handleMemoryRetrieval (before routing diverged)
 
 	// Select endpoint for the specified model
@@ -1167,4 +1160,23 @@ func (r *OpenAIRouter) createRateLimitResponse(decision *ratelimit.Decision) *ex
 			},
 		},
 	}
+}
+
+// handleFastResponse checks if the matched decision has a fast_response plugin
+// and returns an OpenAI-compatible immediate response if so.
+// Returns nil if no fast_response plugin is configured for the decision.
+func (r *OpenAIRouter) handleFastResponse(ctx *RequestContext, decisionName string) *ext_proc.ProcessingResponse {
+	if ctx.VSRSelectedDecision == nil {
+		return nil
+	}
+
+	fastCfg := ctx.VSRSelectedDecision.GetFastResponseConfig()
+	if fastCfg == nil {
+		return nil
+	}
+
+	logging.Infof("[FastResponse] Decision '%s' has fast_response plugin, returning immediate response", decisionName)
+	metrics.RecordPluginExecution("fast_response", decisionName, "executed", 0)
+
+	return httputil.CreateFastResponse(fastCfg.Message, ctx.ExpectStreamingResponse, decisionName)
 }
