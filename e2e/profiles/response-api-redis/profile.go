@@ -1,6 +1,6 @@
 package responseapiredis
 
-import "github.com/vllm-project/semantic-router/e2e/pkg/profiles/responseapi"
+import "github.com/vllm-project/semantic-router/e2e/profiles/responseapi"
 
 const (
 	valuesFile    = "e2e/profiles/response-api-redis/values.yaml"

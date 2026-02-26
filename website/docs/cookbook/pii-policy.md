@@ -5,103 +5,118 @@ sidebar_label: PII Policy
 
 # PII Policy Configuration
 
-This guide provides quick configuration recipes for PII (Personally Identifiable Information) detection and policy enforcement. Use these patterns to protect sensitive data based on your compliance requirements.
+This guide provides quick configuration recipes for PII (Personally Identifiable Information) detection and policy enforcement. PII detection is a **first-class signal** — define named `pii` rules under `signals.pii`, then reference them in `decisions` using `type: "pii"`.
 
-## Enable PII Detection per Decision
+## Enable PII Detection for a Decision
 
-Add PII plugin to specific decision rules:
+Define a PII signal and reference it in a decision rule:
 
 ```yaml
+signals:
+  pii:
+    - name: "pii_deny_all"
+      threshold: 0.9
+      description: "Block all PII types"
+
 decisions:
-  - name: "health_decision"
+  - name: "block_pii"
+    priority: 999
     rules:
-      operator: "AND"
+      operator: "OR"
       conditions:
-        - type: "domain"
-          name: "health"
-    modelRefs:
-      - model: "qwen3"
+        - type: "pii"
+          name: "pii_deny_all"
     plugins:
-      - type: "pii"
+      - type: "fast_response"
         configuration:
-          enabled: true
-          pii_types_allowed: [] # Block all PII
+          message: "Request blocked: personal information detected."
 ```
 
-> See: [config.yaml#pii plugin](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml#L136-L139).
+> See: [config/prompt-guard/hybrid.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/prompt-guard/hybrid.yaml).
 
 ## Allow Specific PII Types
 
-Permit certain PII types while blocking others:
+Permit certain PII types while blocking all others using `pii_types_allowed`:
 
 ```yaml
-plugins:
-  - type: "pii"
-    configuration:
-      enabled: true
+signals:
+  pii:
+    - name: "pii_allow_location_org"
+      threshold: 0.5
       pii_types_allowed:
-        - "LOCATION" # Allow location mentions
-        - "DATE_TIME" # Allow dates and times
+        - "GPE"          # Allow geographic locations
+        - "DATE_TIME"    # Allow dates and times
         - "ORGANIZATION" # Allow company names
-      # All other types (PERSON, EMAIL, PHONE, etc.) will be blocked
+      description: "Allow location, dates, org names — block all other PII"
 ```
 
-> See: [config.yaml#pii plugin](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml#L136-L139) AND [config.go pii_types_allowed](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/config/config.go#L742).
+The signal fires only when PII types **not** in `pii_types_allowed` are detected above the threshold.
+
+> See: [pkg/config/config.go — PIIRule](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/config/config.go).
 
 ## Supported PII Types
 
 | PII Type       | Description             | Example               |
 | -------------- | ----------------------- | --------------------- |
 | `PERSON`       | Names of people         | "John Smith"          |
-| `EMAIL`        | Email addresses         | "user@example.com"    |
-| `PHONE`        | Phone numbers           | "+1-555-0123"         |
-| `LOCATION`     | Geographic locations    | "New York"            |
+| `EMAIL_ADDRESS`| Email addresses         | "user@example.com"    |
+| `PHONE_NUMBER` | Phone numbers           | "+1-555-0123"         |
+| `GPE`          | Geographic locations    | "New York"            |
 | `DATE_TIME`    | Dates and times         | "January 15, 2024"    |
 | `ORGANIZATION` | Company/org names       | "Acme Corp"           |
 | `CREDIT_CARD`  | Credit card numbers     | "4111-1111-1111-1111" |
-| `SSN`          | Social security numbers | "123-45-6789"         |
+| `US_SSN`       | Social security numbers | "123-45-6789"         |
 | `IP_ADDRESS`   | IP addresses            | "192.168.1.1"         |
+| `STREET_ADDRESS`| Physical addresses     | "123 Main St, NY"     |
+| `US_DRIVER_LICENSE` | US Driver's License | "D123456789"        |
+| `IBAN_CODE`    | Bank account numbers    | "GB82 WEST 1234..."   |
+| `DOMAIN_NAME`  | Domain/website names    | "example.com"         |
+| `ZIP_CODE`     | ZIP/postal codes        | "10001"               |
 
 ## Strict PII Policy (Block All)
 
-For maximum privacy protection:
+For maximum privacy protection — block every detected PII type:
 
 ```yaml
-plugins:
-  - type: "pii"
-    configuration:
-      enabled: true
-      pii_types_allowed: [] # Empty list = block all PII
-```
-
-> See: [config.yaml#pii plugin](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml#L136-L139).
-
-## Permissive PII Policy (Warn Only)
-
-Log PII without blocking:
-
-```yaml
-classifier:
-  pii_model:
-    threshold: 0.95 # Very high threshold
-    # ...
+signals:
+  pii:
+    - name: "pii_deny_all"
+      threshold: 0.5
+      # pii_types_allowed omitted → ALL detected PII types trigger the signal
+      description: "Block all PII"
 
 decisions:
-  - name: "internal_decision"
+  - name: "block_pii"
+    priority: 999
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "pii"
+          name: "pii_deny_all"
     plugins:
-      - type: "pii"
+      - type: "fast_response"
         configuration:
-          enabled: true
-          pii_types_allowed:
-            - "PERSON"
-            - "EMAIL"
-            - "PHONE"
-            - "LOCATION"
-            - "DATE_TIME"
-            - "ORGANIZATION"
+          message: "Request blocked: personal information detected."
 ```
 
-> See: [config.yaml#classifier.pii_model](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml#L65-L70) AND [config.yaml#pii plugin](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml#L136-L139).
+## Permissive PII Policy (Allow Most Types)
+
+Log PII without blocking by allowing all common types:
+
+```yaml
+signals:
+  pii:
+    - name: "pii_block_sensitive_only"
+      threshold: 0.95   # Very high threshold
+      pii_types_allowed:
+        - "PERSON"
+        - "EMAIL_ADDRESS"
+        - "PHONE_NUMBER"
+        - "GPE"
+        - "DATE_TIME"
+        - "ORGANIZATION"
+      description: "Only block highly sensitive PII (SSN, credit card, etc.)"
+```
 
 ## PII Model Configuration
 
@@ -110,59 +125,92 @@ Configure the underlying PII detection model:
 ```yaml
 classifier:
   pii_model:
-    model_id: "models/lora_pii_detector_bert-base-uncased_model"
+    model_id: "models/mom-pii-classifier"
     use_modernbert: false
-    threshold: 0.9 # High threshold for fewer false positives
+    threshold: 0.9   # Global fallback threshold (overridden per signal rule)
     use_cpu: true
-    pii_mapping_path: "models/pii_classifier_modernbert-base_presidio_token_model/pii_type_mapping.json"
+  pii_mapping_path: "models/mom-pii-classifier/label_mapping.json"
 ```
 
-> See: [config.yaml#classifier.pii_model](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml#L65-L70) AND [pkg/utils/pii](https://github.com/vllm-project/semantic-router/tree/main/src/semantic-router/pkg/utils/pii).
+> See: [pkg/utils/pii](https://github.com/vllm-project/semantic-router/tree/main/src/semantic-router/pkg/utils/pii).
 
 ## Domain-Specific PII Policies
 
-Different domains may require different PII handling:
+Different domains may require different PII handling — combine `pii` + `domain` signals:
 
 ```yaml
+signals:
+  pii:
+    - name: "pii_deny_all"
+      threshold: 0.5
+      description: "Block all PII"
+    - name: "pii_allow_email_phone"
+      threshold: 0.5
+      pii_types_allowed:
+        - "EMAIL_ADDRESS"
+        - "PHONE_NUMBER"
+      description: "Allow email/phone for appointment booking"
+    - name: "pii_allow_org_location"
+      threshold: 0.6
+      pii_types_allowed:
+        - "GPE"
+        - "ORGANIZATION"
+        - "DATE_TIME"
+      description: "Allow org/location names common in code"
+
+  domains:
+    - name: "health"
+      mmlu_categories: ["health"]
+    - name: "economics"
+      mmlu_categories: ["economics"]
+    - name: "computer_science"
+      mmlu_categories: ["computer_science"]
+
 decisions:
-  # Health: Very strict PII handling
-  - name: "health_decision"
+  # Health: block all PII except email/phone (for appointment booking)
+  - name: "block_pii_health"
+    priority: 998
     rules:
       operator: "AND"
       conditions:
+        - type: "pii"
+          name: "pii_allow_email_phone"
         - type: "domain"
           name: "health"
     plugins:
-      - type: "pii"
+      - type: "fast_response"
         configuration:
-          enabled: true
-          pii_types_allowed: [] # No PII allowed
+          message: "Please only share your email or phone number."
 
-  # Business: Allow organization names
-  - name: "business_decision"
+  # Finance: block all PII
+  - name: "block_pii_finance"
+    priority: 999
     rules:
       operator: "AND"
       conditions:
+        - type: "pii"
+          name: "pii_deny_all"
         - type: "domain"
-          name: "business"
+          name: "economics"
     plugins:
-      - type: "pii"
+      - type: "fast_response"
         configuration:
-          enabled: true
-          pii_types_allowed:
-            - "ORGANIZATION"
-            - "LOCATION"
+          message: "For your security, please do not share personal information in financial queries."
 
-  # General: More permissive
-  - name: "general_decision"
+  # Code: allow org/location names common in code
+  - name: "block_pii_code"
+    priority: 997
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "pii"
+          name: "pii_allow_org_location"
+        - type: "domain"
+          name: "computer_science"
     plugins:
-      - type: "pii"
+      - type: "fast_response"
         configuration:
-          enabled: true
-          pii_types_allowed:
-            - "LOCATION"
-            - "DATE_TIME"
-            - "ORGANIZATION"
+          message: "Request blocked: sensitive personal information detected in code."
 ```
 
 ## Debugging PII Detection
@@ -170,12 +218,19 @@ decisions:
 When PII is incorrectly blocked, check logs for:
 
 ```
-PII policy violation for decision health_decision: denied PII types [PERSON, EMAIL]
+PII signal fired: rule=pii_deny_all, detected_types=[PERSON, EMAIL_ADDRESS], threshold=0.5
 ```
 
 To fix:
 
 1. Add the PII type to `pii_types_allowed` if it should be permitted
-2. Raise `classifier.pii_model.threshold` if false positives are occurring
+2. Raise the signal `threshold` if false positives are occurring
+3. Enable debug logging for detailed signal evaluation:
+
+```yaml
+logging:
+  level: debug
+  pii_detection: true
+```
 
 > See code: [pii/policy.go](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/utils/pii/policy.go).

@@ -29,13 +29,14 @@ config:
     tools_db_path: "config/tools_db.json"
     fallback_to_empty: true
 
+  # --- Prompt Guard (global defaults) ---
   prompt_guard:
-    enabled: true  # Global default - can be overridden per category with jailbreak_enabled
+    enabled: true
     use_modernbert: false
     model_id: "models/mom-jailbreak-classifier"
+    jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
     threshold: 0.7
     use_cpu: true
-    jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
 
   # Classifier configuration
   classifier:
@@ -51,6 +52,19 @@ config:
       threshold: 0.7
       use_cpu: true
       pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
+
+  # Jailbreak and PII detection (signal layer, inline into IntelligentRouting)
+  jailbreak:
+    - name: "jailbreak_standard"
+      threshold: 0.6
+      include_history: false
+      description: "Standard jailbreak detection for routing-strategies tests"
+
+  pii:
+    - name: "pii_deny_all"
+      threshold: 0.7
+      include_history: false
+      description: "Block all PII"
 
   keyword_rules:
     # --- BM25 method: topic detection with natural TF-IDF scoring ---
@@ -204,10 +218,6 @@ config:
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a security-conscious assistant specialized in handling sensitive data. Exercise extreme caution with personal information, follow data protection best practices, and remind users about privacy considerations."
-        - type: "jailbreak"
-          configuration:
-            enabled: true
-            threshold: 0.6
         - type: "pii"
           configuration:
             enabled: true

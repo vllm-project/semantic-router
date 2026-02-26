@@ -23,6 +23,28 @@ config:
         - name: "general-expert"
           description: "General-purpose adapter"
 
+  # Jailbreak and PII detection (signal layer, inline into IntelligentRouting)
+  jailbreak:
+    - name: "jailbreak_standard"
+      threshold: 0.7
+      include_history: false
+      description: "Standard jailbreak detection"
+
+  pii:
+    - name: "pii_deny_all"
+      threshold: 0.9
+      include_history: false
+      description: "Block all PII"
+
+  # --- Prompt Guard (global defaults) ---
+  prompt_guard:
+    enabled: true
+    use_modernbert: false
+    model_id: "models/mom-jailbreak-classifier"
+    jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
+    threshold: 0.7
+    use_cpu: true
+
   # Classifier configuration - required for domain-classify test
   # Using LoRA models for better performance with auto-detection
   classifier:
@@ -73,6 +95,34 @@ config:
 
   # Decisions for routing requests based on classified domain
   decisions:
+    # ── Security layer (priority 1000+) ──
+    - name: block_jailbreak
+      description: "Block jailbreak attempts"
+      priority: 1000
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "jailbreak"
+            name: "jailbreak_standard"
+      plugins:
+        - type: "fast_response"
+          configuration:
+            message: "I'm sorry, but I cannot process this request as it appears to violate our usage policies."
+
+    - name: block_pii
+      description: "Block requests containing PII"
+      priority: 999
+      rules:
+        operator: "OR"
+        conditions:
+          - type: "pii"
+            name: "pii_deny_all"
+      plugins:
+        - type: "fast_response"
+          configuration:
+            message: "Your request contains personal information that cannot be processed."
+
+    # ── Domain routing (priority 100) ──
     - name: business_decision
       description: "Business domain queries"
       priority: 100
@@ -354,17 +404,7 @@ config:
   tools:
     enabled: false
 
-  # Prompt guard - required for jailbreak-detection test
-  prompt_guard:
-    enabled: true
-    use_modernbert: false  # MoM uses LoRA-based model
-    model_id: "models/mom-jailbreak-classifier"
-    threshold: 0.7
-    use_cpu: true
-    jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
-
-  # Router configuration - minimal settings
-  router:
+  # Router configuration  router:
     high_confidence_threshold: 0.99
     low_latency_threshold_ms: 2000
     default_confidence_threshold: 0.95
