@@ -2140,6 +2140,32 @@ type MemoryPluginConfig struct {
 	RetrievalLimit      *int     `json:"retrieval_limit,omitempty" yaml:"retrieval_limit,omitempty"`           // Max memories to retrieve (nil = use global)
 	SimilarityThreshold *float32 `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"` // Min similarity score (nil = use global)
 	AutoStore           *bool    `json:"auto_store,omitempty" yaml:"auto_store,omitempty"`                     // Auto-extract memories (nil = use request config)
+
+	// Group memory sharing: retrieve group-visible memories alongside user's own.
+	IncludeGroupMemories bool   `json:"include_group_memories,omitempty" yaml:"include_group_memories,omitempty"`
+	GroupVisibility      string `json:"group_visibility,omitempty" yaml:"group_visibility,omitempty"` // "read" (default) or "read-write"
+
+	// Hierarchical retrieval: two-phase category-then-drilldown search.
+	HierarchicalSearch bool     `json:"hierarchical_search,omitempty" yaml:"hierarchical_search,omitempty"`
+	MaxDepth           int      `json:"max_depth,omitempty" yaml:"max_depth,omitempty"`
+	ScorePropAlpha     *float32 `json:"score_prop_alpha,omitempty" yaml:"score_prop_alpha,omitempty"`
+
+	// Cross-memory relations: surface linked memories alongside results.
+	EnableRelations    bool `json:"enable_relations,omitempty" yaml:"enable_relations,omitempty"`
+	MaxRelationsPerHit int  `json:"max_relations_per_hit,omitempty" yaml:"max_relations_per_hit,omitempty"`
+
+	// Link expansion: follow RelatedIDs on retrieved memories to discover
+	// cross-category results that hierarchical drill-down alone would miss.
+	FollowLinks  bool `json:"follow_links,omitempty" yaml:"follow_links,omitempty"`
+	MaxLinkDepth int  `json:"max_link_depth,omitempty" yaml:"max_link_depth,omitempty"` // default 1
+
+	// Hybrid scoring: fuse BM25 + n-gram + vector at every level of hierarchical search.
+	// Only takes effect when hierarchical_search is also true.
+	HybridSearch      bool    `json:"hybrid_search,omitempty" yaml:"hybrid_search,omitempty"`
+	HybridMode        string  `json:"hybrid_mode,omitempty" yaml:"hybrid_mode,omitempty"`                 // "weighted" (default) or "rrf"
+	HybridVectorWeight *float64 `json:"hybrid_vector_weight,omitempty" yaml:"hybrid_vector_weight,omitempty"` // default 0.7
+	HybridBM25Weight   *float64 `json:"hybrid_bm25_weight,omitempty" yaml:"hybrid_bm25_weight,omitempty"`     // default 0.2
+	HybridNgramWeight  *float64 `json:"hybrid_ngram_weight,omitempty" yaml:"hybrid_ngram_weight,omitempty"`   // default 0.1
 }
 
 // JailbreakPluginConfig represents configuration for jailbreak plugin

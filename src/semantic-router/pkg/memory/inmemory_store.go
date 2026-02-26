@@ -15,7 +15,8 @@ import (
 // It stores memories in memory with embedding-based similarity search.
 type InMemoryStore struct {
 	mu              sync.RWMutex
-	memories        map[string]*Memory // ID -> Memory
+	memories        map[string]*Memory          // ID -> Memory
+	relations       map[string][]MemoryRelation // memoryID -> outgoing relations
 	enabled         bool
 	embeddingConfig EmbeddingConfig
 }
