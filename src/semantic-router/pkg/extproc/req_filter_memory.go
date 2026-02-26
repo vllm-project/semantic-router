@@ -410,7 +410,6 @@ func setJSONField(data []byte, key string, value interface{}) ([]byte, error) {
 	return json.Marshal(m)
 }
 
-
 // =============================================================================
 // Helper: Extract History from OpenAI Messages
 // =============================================================================
