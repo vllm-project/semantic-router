@@ -112,6 +112,21 @@ export interface ComplexitySignal {
   composer?: RuleComposer
 }
 
+export interface JailbreakSignal {
+  name: string
+  threshold: number
+  include_history?: boolean
+  description?: string
+}
+
+export interface PIISignal {
+  name: string
+  threshold: number
+  pii_types_allowed?: string[]
+  include_history?: boolean
+  description?: string
+}
+
 export interface Signals {
   keywords?: KeywordSignal[]
   embeddings?: EmbeddingSignal[]
@@ -122,6 +137,8 @@ export interface Signals {
   language?: LanguageSignal[]
   context?: ContextSignal[]
   complexity?: ComplexitySignal[]
+  jailbreak?: JailbreakSignal[]
+  pii?: PIISignal[]
 }
 
 // =============================================================================
@@ -129,7 +146,7 @@ export interface Signals {
 // =============================================================================
 
 
-export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'context' | 'complexity'
+export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'context' | 'complexity' | 'jailbreak' | 'pii'
 export interface DecisionCondition {
   type: DecisionConditionType
   name: string
@@ -146,7 +163,7 @@ export interface ModelRef {
 }
 
 export interface PluginConfig {
-  type: 'system_prompt' | 'semantic-cache' | 'pii' | 'hallucination' | 'jailbreak' | 'header_mutation' | 'router_replay'
+  type: 'system_prompt' | 'semantic-cache' | 'hallucination' | 'header_mutation' | 'router_replay' | 'fast_response'
   configuration: Record<string, any>
 }
 

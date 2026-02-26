@@ -3,7 +3,7 @@
 \section{Signal Extraction Layer}
 \label{sec:signal_engine}
 
-The signal extraction layer maps an incoming request $r$ to a structured signal result that characterizes the request along eleven orthogonal dimensions.
+The signal extraction layer maps an incoming request $r$ to a structured signal result that characterizes the request along thirteen orthogonal dimensions.
 We formalize the signal model and describe the extraction algorithms.
 
 \subsection{Signal Model}
@@ -20,7 +20,7 @@ Given a rule set $\mathcal{R} = \{\rho_1, \ldots, \rho_N\}$, the signal result f
 where $\mathbf{1}[f_i(r)]$ is the match indicator and $c_i(r) \in [0,1]$ is the confidence.
 \end{definition}
 
-The eleven signal types partition into \emph{heuristic} and \emph{learned} categories based on whether they require neural inference.
+The thirteen signal types partition into \emph{heuristic} and \emph{learned} categories based on whether they require neural inference.
 
 \begin{figure}[t]
 \centering
@@ -55,11 +55,12 @@ The eleven signal types partition into \emph{heuristic} and \emph{learned} categ
   \node[sig, fill=green!6] (fb) at (2.4, -1.5) {$\tau_{\text{fb}}$\;Feedback};
   \node[sig, fill=green!6] (mod) at (4.3, -1.5) {$\tau_{\text{mod}}$\;Modality};
   \node[sig, fill=green!6] (cpx) at (6.2, -1.5) {$\tau_{\text{cpx}}$\;Complex.};
-  \node[sig, fill=green!6] (pref) at (4.3, -2.3) {$\tau_{\text{pref}}$\;Prefer.};
-  \node[font=\scriptsize, text=gray] (ldots) at (6.2, -2.3) {$\cdots$};
+  \node[sig, fill=red!6] (jb) at (2.4, -2.3) {$\tau_{\text{jb}}$\;Jailbreak};
+  \node[sig, fill=red!6] (pii) at (4.3, -2.3) {$\tau_{\text{pii}}$\;PII};
+  \node[sig, fill=green!6] (pref) at (6.2, -2.3) {$\tau_{\text{pref}}$\;Prefer.};
   % Learned bounding box (on background so it doesn't cover signal nodes)
   \begin{scope}[on background layer]
-  \node[grp, fill=green!3, fit=(emb)(dom)(fact)(fb)(mod)(cpx)(pref)(ldots),
+  \node[grp, fill=green!3, fit=(emb)(dom)(fact)(fb)(mod)(cpx)(jb)(pii)(pref),
         label={[font=\scriptsize\bfseries, text=green!50, anchor=north]below:Learned {\normalfont\scriptsize(10--100\,ms)}}] (lbox) {};
   \end{scope}
 
@@ -149,6 +150,20 @@ The difficulty level is then $\text{hard}$ if $\delta > \theta$, $\text{easy}$ i
 Multiple complexity rules can coexist (e.g., \texttt{code\_complexity}, \texttt{math\_complexity}), each with its own candidate sets and threshold.
 Composer conditions can restrict when a rule fires---for instance, evaluating \texttt{code\_complexity} only when the domain signal indicates computer science.
 
+\textbf{Jailbreak Detection} ($\tau_\text{jb}$).
+A binary/ternary classifier detects adversarial prompt injection and jailbreak attempts.
+Each rule defines a confidence threshold $\theta$; the signal fires when jailbreak confidence $c \geq \theta$.
+An optional \texttt{include\_history} flag controls whether only the latest user message or the full conversation history is analyzed, trading latency for recall against multi-turn attacks.
+Multiple rules at different thresholds enable per-decision sensitivity---a public chatbot may use $\theta = 0.65$, while an internal tool uses $\theta = 0.9$ to minimize false positives.
+Classifier details are described in \Cref{sec:safety}.
+
+\textbf{PII Detection} ($\tau_\text{pii}$).
+A token-level NER classifier identifies personally identifiable information (person names, emails, phone numbers, SSNs, credit cards, etc.).
+Each rule specifies a confidence threshold and an optional allow-list of PII entity types.
+The signal fires when any PII type \emph{not} in the allow-list is detected above threshold.
+This per-rule policy model enables differentiated enforcement: a medical application may allow \textsc{person} while blocking \textsc{ssn}, whereas a public chatbot blocks all PII types.
+Classifier details are described in \Cref{sec:safety}.
+
 \textbf{Preference} ($\tau_\text{pref}$).
 Personalized routing based on user interaction history.
 
@@ -159,11 +174,11 @@ Let $\mathcal{T}_\text{used} = \bigcup_{d \in \mathcal{D}} \{\tau \mid \exists\,
 Signal evaluators for types in $\mathcal{T}_\text{used}$ are launched as concurrent coroutines, with heuristic signals completing before learned signals due to their sub-millisecond latency.
 
 This demand-driven approach avoids the cost of unused signal types.
-In typical configurations with 3--5 active signal types out of eleven, this reduces total signal extraction latency by 50--70\% compared to exhaustive evaluation.
+In typical configurations with 3--5 active signal types out of thirteen, this reduces total signal extraction latency by 50--70\% compared to exhaustive evaluation.
 
 \subsection{Extensibility}
 
-The eleven signal types described above represent the current built-in set; the framework is not limited to these.
+The thirteen signal types described above represent the current built-in set; the framework is not limited to these.
 The signal extraction layer defines a uniform interface---each signal type implements an evaluation function $f: \mathcal{R} \to \{0,1\} \times [0,1]$---and the decision engine references signals solely by type and rule name.
 Adding a new signal type requires only implementing this interface and registering the type; no changes to the decision engine, plugin chain, or deployment infrastructure are needed.
 This open architecture allows operators to introduce domain-specific signals (e.g., regulatory compliance classifiers, custom toxicity detectors) alongside the built-in types.

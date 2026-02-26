@@ -291,6 +291,26 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 			})
 		}
 
+		// Add x-vsr-matched-jailbreak header (from jailbreak signal classification)
+		if len(ctx.VSRMatchedJailbreak) > 0 {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.VSRMatchedJailbreak,
+					RawValue: []byte(strings.Join(ctx.VSRMatchedJailbreak, ",")),
+				},
+			})
+		}
+
+		// Add x-vsr-matched-pii header (from PII signal classification)
+		if len(ctx.VSRMatchedPII) > 0 {
+			setHeaders = append(setHeaders, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.VSRMatchedPII,
+					RawValue: []byte(strings.Join(ctx.VSRMatchedPII, ",")),
+				},
+			})
+		}
+
 		// Attach router replay identifier when available
 		if ctx.RouterReplayID != "" {
 			setHeaders = append(setHeaders, &core.HeaderValueOption{

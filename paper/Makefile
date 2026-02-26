@@ -19,7 +19,7 @@ SOURCES  = $(MAIN).tex $(SECTIONS) references.bib
 # Generated files to clean
 AUX_EXTS = aux bbl blg log out toc lof lot fls fdb_latexmk synctex.gz nav snm vrb run.xml bcf
 
-.PHONY: all quick clean watch wc check
+.PHONY: all quick clean watch wc check deploy
 
 # Full build: pdflatex -> bibtex -> pdflatex -> pdflatex
 all: $(OUTNAME).pdf
@@ -37,6 +37,12 @@ quick:
 	$(TEX) $(TEXFLAGS) $(MAIN)
 	@echo ""
 	@echo "=== Quick build complete: $(OUTNAME).pdf ==="
+
+# Deploy PDF to website static directory for online viewing
+deploy: $(OUTNAME).pdf
+	cp $(OUTNAME).pdf ../website/static/$(OUTNAME).pdf
+	@echo ""
+	@echo "=== Deployed: ../website/static/$(OUTNAME).pdf ==="
 
 # Remove all generated files
 clean:
