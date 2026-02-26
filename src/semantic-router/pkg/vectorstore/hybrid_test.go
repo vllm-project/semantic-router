@@ -206,11 +206,11 @@ func TestFuseScores_Weighted(t *testing.T) {
 		t.Errorf("expected 4 fused results, got %d", len(results))
 	}
 
-	// Results should be sorted by finalScore descending.
+	// Results should be sorted by FinalScore descending.
 	for i := 1; i < len(results); i++ {
-		if results[i].finalScore > results[i-1].finalScore {
+		if results[i].FinalScore > results[i-1].FinalScore {
 			t.Errorf("results not sorted: [%d]=%f > [%d]=%f",
-				i, results[i].finalScore, i-1, results[i-1].finalScore)
+				i, results[i].FinalScore, i-1, results[i-1].FinalScore)
 		}
 	}
 }
@@ -235,11 +235,11 @@ func TestFuseScores_RRF(t *testing.T) {
 	// "a" should have higher fused score due to appearing in all 3 retrievers
 	aScore, bScore := 0.0, 0.0
 	for _, r := range results {
-		if r.chunkID == "a" {
-			aScore = r.finalScore
+		if r.ChunkID == "a" {
+			aScore = r.FinalScore
 		}
-		if r.chunkID == "b" {
-			bScore = r.finalScore
+		if r.ChunkID == "b" {
+			bScore = r.FinalScore
 		}
 	}
 	if aScore <= bScore {

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/openai/openai-go"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
@@ -202,39 +204,26 @@ func extractCurrentUserMessage(ctx *RequestContext) string {
 	return string(input)
 }
 
-// extractAssistantResponseText extracts the assistant's response text from the LLM response body.
-// Supports OpenAI Chat Completions format.
+// extractAssistantResponseText extracts the assistant's response text from the
+// LLM response body using openai-go typed parsing. vLLM separates reasoning
+// into the reasoning_content field, so ChatCompletion.Choices[0].Message.Content
+// is already clean. StripThinkTags is applied as a safety net for backends that
+// may still embed <think> blocks in the content field.
 func extractAssistantResponseText(responseBody []byte) string {
 	if len(responseBody) == 0 {
 		return ""
 	}
 
-	// Try to parse as OpenAI Chat Completions response
-	var chatResp struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-			Delta struct {
-				Content string `json:"content"`
-			} `json:"delta"`
-		} `json:"choices"`
-	}
-
-	if err := json.Unmarshal(responseBody, &chatResp); err != nil {
+	var completion openai.ChatCompletion
+	if err := json.Unmarshal(responseBody, &completion); err != nil {
 		logging.Debugf("extractAssistantResponseText: failed to parse response: %v", err)
 		return ""
 	}
 
-	if len(chatResp.Choices) == 0 {
+	if len(completion.Choices) == 0 {
 		return ""
 	}
 
-	// Try message.content first, then delta.content (for streaming)
-	content := chatResp.Choices[0].Message.Content
-	if content == "" {
-		content = chatResp.Choices[0].Delta.Content
-	}
-
-	return content
+	// Content is clean when vLLM separates reasoning; safety-net strip for others
+	return memory.StripThinkTags(completion.Choices[0].Message.Content)
 }

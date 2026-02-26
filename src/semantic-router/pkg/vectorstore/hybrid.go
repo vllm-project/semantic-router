@@ -311,13 +311,13 @@ func jaccardSimilarity(a, b map[string]struct{}) float64 {
 // Score Fusion
 // ---------------------------------------------------------------------------
 
-// fusedChunk holds per-retriever scores for a single chunk.
-type fusedChunk struct {
-	chunkID     string
-	vectorScore float64
-	bm25Score   float64
-	ngramScore  float64
-	finalScore  float64
+// FusedChunk holds per-retriever scores for a single chunk.
+type FusedChunk struct {
+	ChunkID     string
+	VectorScore float64
+	BM25Score   float64
+	NgramScore  float64
+	FinalScore  float64
 }
 
 // FuseScores combines scores from vector, BM25, and n-gram retrievers
@@ -326,25 +326,25 @@ type fusedChunk struct {
 func FuseScores(
 	vectorScores, bm25Scores, ngramScores map[string]float64,
 	config *HybridSearchConfig,
-) []fusedChunk {
+) []FusedChunk {
 	config.applyDefaults()
 
-	all := make(map[string]*fusedChunk)
+	all := make(map[string]*FusedChunk)
 	for id, s := range vectorScores {
-		all[id] = &fusedChunk{chunkID: id, vectorScore: s}
+		all[id] = &FusedChunk{ChunkID: id, VectorScore: s}
 	}
 	for id, s := range bm25Scores {
 		if fc, ok := all[id]; ok {
-			fc.bm25Score = s
+			fc.BM25Score = s
 		} else {
-			all[id] = &fusedChunk{chunkID: id, bm25Score: s}
+			all[id] = &FusedChunk{ChunkID: id, BM25Score: s}
 		}
 	}
 	for id, s := range ngramScores {
 		if fc, ok := all[id]; ok {
-			fc.ngramScore = s
+			fc.NgramScore = s
 		} else {
-			all[id] = &fusedChunk{chunkID: id, ngramScore: s}
+			all[id] = &FusedChunk{ChunkID: id, NgramScore: s}
 		}
 	}
 
@@ -354,37 +354,37 @@ func FuseScores(
 		fuseWeighted(all, config)
 	}
 
-	results := make([]fusedChunk, 0, len(all))
+	results := make([]FusedChunk, 0, len(all))
 	for _, fc := range all {
 		results = append(results, *fc)
 	}
 	sort.Slice(results, func(i, j int) bool {
-		return results[i].finalScore > results[j].finalScore
+		return results[i].FinalScore > results[j].FinalScore
 	})
 	return results
 }
 
 // fuseWeighted computes weighted sum with min-max normalization for BM25.
 // Vector scores (cosine) and n-gram scores (Jaccard) are already in [0,1].
-func fuseWeighted(all map[string]*fusedChunk, config *HybridSearchConfig) {
+func fuseWeighted(all map[string]*FusedChunk, config *HybridSearchConfig) {
 	wV, wB, wN := config.normalizedWeights()
 
 	// Min-max normalize BM25 scores (they are unbounded).
 	var bm25Min, bm25Max float64
 	first := true
 	for _, fc := range all {
-		if fc.bm25Score == 0 {
+		if fc.BM25Score == 0 {
 			continue
 		}
 		if first {
-			bm25Min, bm25Max = fc.bm25Score, fc.bm25Score
+			bm25Min, bm25Max = fc.BM25Score, fc.BM25Score
 			first = false
 		} else {
-			if fc.bm25Score < bm25Min {
-				bm25Min = fc.bm25Score
+			if fc.BM25Score < bm25Min {
+				bm25Min = fc.BM25Score
 			}
-			if fc.bm25Score > bm25Max {
-				bm25Max = fc.bm25Score
+			if fc.BM25Score > bm25Max {
+				bm25Max = fc.BM25Score
 			}
 		}
 	}
@@ -393,17 +393,17 @@ func fuseWeighted(all map[string]*fusedChunk, config *HybridSearchConfig) {
 	for _, fc := range all {
 		normBM25 := 0.0
 		if bm25Range > 0 {
-			normBM25 = (fc.bm25Score - bm25Min) / bm25Range
-		} else if fc.bm25Score > 0 {
+			normBM25 = (fc.BM25Score - bm25Min) / bm25Range
+		} else if fc.BM25Score > 0 {
 			normBM25 = 1.0
 		}
-		fc.finalScore = wV*fc.vectorScore + wB*normBM25 + wN*fc.ngramScore
+		fc.FinalScore = wV*fc.VectorScore + wB*normBM25 + wN*fc.NgramScore
 	}
 }
 
 // fuseRRF applies Reciprocal Rank Fusion: score(d) = Σ_r 1/(k + rank_r(d)).
 func fuseRRF(
-	all map[string]*fusedChunk,
+	all map[string]*FusedChunk,
 	vectorScores, bm25Scores, ngramScores map[string]float64,
 	k int,
 ) {
@@ -426,7 +426,7 @@ func fuseRRF(
 		})
 		for rank, e := range sorted {
 			if fc, ok := all[e.id]; ok {
-				fc.finalScore += 1.0 / (kf + float64(rank+1))
+				fc.FinalScore += 1.0 / (kf + float64(rank+1))
 			}
 		}
 	}
@@ -519,22 +519,22 @@ func GenericHybridRerank(
 
 	results := make([]SearchResult, 0, topK)
 	for _, fc := range fused {
-		if fc.finalScore < float64(threshold) {
+		if fc.FinalScore < float64(threshold) {
 			continue
 		}
-		origIdx, ok := keyToIdx[fc.chunkID]
+		origIdx, ok := keyToIdx[fc.ChunkID]
 		if !ok {
 			continue
 		}
 		orig := vectorResults[origIdx]
-		vs := fc.vectorScore
-		bs := fc.bm25Score
-		ns := fc.ngramScore
+		vs := fc.VectorScore
+		bs := fc.BM25Score
+		ns := fc.NgramScore
 		results = append(results, SearchResult{
 			FileID:      orig.FileID,
 			Filename:    orig.Filename,
 			Content:     orig.Content,
-			Score:       fc.finalScore,
+			Score:       fc.FinalScore,
 			ChunkIndex:  orig.ChunkIndex,
 			VectorScore: &vs,
 			BM25Score:   &bs,

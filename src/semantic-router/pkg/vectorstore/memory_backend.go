@@ -297,21 +297,21 @@ func (m *MemoryBackend) HybridSearch(
 	// 5. Apply threshold and topK, build results.
 	results := make([]SearchResult, 0, topK)
 	for _, fc := range fused {
-		if fc.finalScore < float64(threshold) {
+		if fc.FinalScore < float64(threshold) {
 			continue
 		}
-		chunk, ok := col.chunks[fc.chunkID]
+		chunk, ok := col.chunks[fc.ChunkID]
 		if !ok {
 			continue
 		}
-		vs := fc.vectorScore
-		bs := fc.bm25Score
-		ns := fc.ngramScore
+		vs := fc.VectorScore
+		bs := fc.BM25Score
+		ns := fc.NgramScore
 		results = append(results, SearchResult{
 			FileID:      chunk.FileID,
 			Filename:    chunk.Filename,
 			Content:     chunk.Content,
-			Score:       fc.finalScore,
+			Score:       fc.FinalScore,
 			ChunkIndex:  chunk.ChunkIndex,
 			VectorScore: &vs,
 			BM25Score:   &bs,
