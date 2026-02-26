@@ -57,7 +57,7 @@ func TestProcessResponse_StripsThinkTags(t *testing.T) {
 
 	err := extractor.ProcessResponse(
 		context.Background(), "session1", "user1",
-		"What is 2+2?",
+		"What is the sum of two plus two?",
 		"<think>Let me calculate... 2+2=4</think>The answer is 4.",
 	)
 	require.NoError(t, err)
@@ -76,7 +76,7 @@ func TestProcessResponse_StripsUnclosedThinkTags(t *testing.T) {
 
 	err := extractor.ProcessResponse(
 		context.Background(), "session1", "user1",
-		"Tell me a fact",
+		"Tell me an interesting fact about geography",
 		"<think>Reasoning about this...",
 	)
 	require.NoError(t, err)
@@ -87,7 +87,7 @@ func TestProcessResponse_StripsUnclosedThinkTags(t *testing.T) {
 	// Unclosed think tag strips everything after <think>, leaving empty assistant response.
 	// Only user message should remain.
 	require.Len(t, results.Memories, 1)
-	assert.Contains(t, results.Memories[0].Content, "Q: Tell me a fact")
+	assert.Contains(t, results.Memories[0].Content, "Q: Tell me an interesting fact about geography")
 	assert.NotContains(t, results.Memories[0].Content, "<think>")
 }
 
@@ -112,14 +112,14 @@ func TestProcessResponse_OnlyUserMessage(t *testing.T) {
 
 	err := extractor.ProcessResponse(
 		context.Background(), "session1", "user1",
-		"Hello world", "",
+		"What is the capital city of France and why is it famous?", "",
 	)
 	require.NoError(t, err)
 
 	results, err := store.List(context.Background(), ListOptions{UserID: "user1", Limit: 10})
 	require.NoError(t, err)
 	require.Len(t, results.Memories, 1)
-	assert.Equal(t, "Q: Hello world", results.Memories[0].Content)
+	assert.Equal(t, "Q: What is the capital city of France and why is it famous?", results.Memories[0].Content)
 }
 
 func TestProcessResponse_OnlyAssistantResponse(t *testing.T) {
@@ -128,14 +128,14 @@ func TestProcessResponse_OnlyAssistantResponse(t *testing.T) {
 
 	err := extractor.ProcessResponse(
 		context.Background(), "session1", "user1",
-		"", "Here is the answer.",
+		"", "Here is the detailed answer to your question about geography.",
 	)
 	require.NoError(t, err)
 
 	results, err := store.List(context.Background(), ListOptions{UserID: "user1", Limit: 10})
 	require.NoError(t, err)
 	require.Len(t, results.Memories, 1)
-	assert.Equal(t, "A: Here is the answer.", results.Memories[0].Content)
+	assert.Equal(t, "A: Here is the detailed answer to your question about geography.", results.Memories[0].Content)
 }
 
 func TestProcessResponse_StoreDisabled(t *testing.T) {
@@ -168,7 +168,8 @@ func TestProcessResponse_MultipleTurns(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		err := extractor.ProcessResponse(ctx, "session1", "user1",
-			"question", "answer",
+			"What is the weather forecast for tomorrow?",
+			"Tomorrow will be sunny with a high of 75 degrees.",
 		)
 		require.NoError(t, err)
 	}
