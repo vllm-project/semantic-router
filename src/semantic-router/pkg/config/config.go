@@ -2637,23 +2637,52 @@ type ModalityRule struct {
 
 // JailbreakRule defines a named jailbreak detection signal rule.
 // Each rule specifies a confidence threshold; the signal fires when jailbreak
-// confidence from the PromptGuard / candle_binding pipeline meets or exceeds the threshold.
-// Multiple rules at different thresholds allow decisions to reference different
-// sensitivity levels (e.g., "strict_jailbreak" at 0.9 vs "jailbreak_detected" at 0.65).
+// confidence meets or exceeds the threshold.
+//
+// Two detection methods are supported (selected via the Method field):
+//
+//   - "classifier" (default): Uses the PromptGuard / candle_binding BERT/LoRA pipeline.
+//     The threshold is a confidence score (0.0–1.0).
+//
+//   - "contrastive": Uses contrastive embedding similarity against jailbreak and benign
+//     knowledge-base patterns (similar to the complexity signal). The contrastive score is
+//     max_sim(msg, jailbreak_kb) − max_sim(msg, benign_kb). When include_history is true,
+//     the maximum contrastive score across all conversation turns is used (multi-turn chain),
+//     which detects gradual escalation attacks that evade per-message classifiers.
+//
+// Multiple rules at different thresholds / methods allow decisions to reference different
+// sensitivity levels (e.g., "strict_jailbreak" at 0.9 vs "jailbreak_multiturn" contrastive).
 type JailbreakRule struct {
 	// Name is the signal name referenced in decision rules (type: "jailbreak")
-	// e.g., "jailbreak_detected", "strict_jailbreak"
+	// e.g., "jailbreak_detected", "strict_jailbreak", "jailbreak_multiturn"
 	Name string `yaml:"name"`
 
-	// Threshold is the minimum confidence score (0.0-1.0) to trigger this signal
+	// Method selects the detection algorithm: "classifier" (default) or "contrastive"
+	Method string `yaml:"method,omitempty"`
+
+	// Threshold is the minimum score to trigger this signal.
+	// For method "classifier": confidence score 0.0–1.0
+	// For method "contrastive": contrastive score (typically 0.05–0.20)
 	Threshold float32 `yaml:"threshold"`
 
-	// IncludeHistory controls whether conversation history is included in detection
-	// When true, all messages (not just the latest user message) are analysed
+	// IncludeHistory controls whether conversation history is included in detection.
+	// For method "classifier": when true, all messages are analysed individually.
+	// For method "contrastive": when true, computes max contrastive score across all turns
+	//   (multi-turn chain); when false, only the latest user message is scored.
 	IncludeHistory bool `yaml:"include_history,omitempty"`
 
 	// Description provides human-readable explanation of this rule
 	Description string `yaml:"description,omitempty"`
+
+	// --- Contrastive-only fields (ignored when Method != "contrastive") ---
+
+	// JailbreakPatterns are example jailbreak prompts for the knowledge base.
+	// Messages similar to these patterns receive a higher contrastive score.
+	JailbreakPatterns []string `yaml:"jailbreak_patterns,omitempty"`
+
+	// BenignPatterns are example benign prompts for the knowledge base.
+	// Messages similar to these patterns receive a lower contrastive score, reducing false positives.
+	BenignPatterns []string `yaml:"benign_patterns,omitempty"`
 }
 
 // PIIRule defines a named PII detection signal rule.

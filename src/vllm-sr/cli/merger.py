@@ -215,8 +215,14 @@ def translate_jailbreak_signals(jailbreak_rules: list) -> list:
             "name": signal.name,
             "threshold": signal.threshold,
         }
+        if signal.method:
+            rule["method"] = signal.method
         if signal.include_history:
             rule["include_history"] = signal.include_history
+        if signal.jailbreak_patterns:
+            rule["jailbreak_patterns"] = signal.jailbreak_patterns
+        if signal.benign_patterns:
+            rule["benign_patterns"] = signal.benign_patterns
         if signal.description:
             rule["description"] = signal.description
         rules.append(rule)

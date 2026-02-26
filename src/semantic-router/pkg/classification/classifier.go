@@ -397,6 +397,10 @@ type Classifier struct {
 	// Complexity classifier for complexity-based routing using embedding similarity
 	complexityClassifier *ComplexityClassifier
 
+	// Contrastive jailbreak classifiers keyed by rule name.
+	// Only populated for JailbreakRules with Method == "contrastive".
+	contrastiveJailbreakClassifiers map[string]*ContrastiveJailbreakClassifier
+
 	// Authz classifier for user-level authorization signal classification
 	authzClassifier *AuthzClassifier
 
@@ -465,6 +469,12 @@ func withContextClassifier(contextClassifier *ContextClassifier) option {
 func withComplexityClassifier(complexityClassifier *ComplexityClassifier) option {
 	return func(c *Classifier) {
 		c.complexityClassifier = complexityClassifier
+	}
+}
+
+func withContrastiveJailbreakClassifiers(classifiers map[string]*ContrastiveJailbreakClassifier) option {
+	return func(c *Classifier) {
+		c.contrastiveJailbreakClassifiers = classifiers
 	}
 }
 
@@ -654,6 +664,27 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 			return nil, err
 		}
 		options = append(options, withComplexityClassifier(complexityClassifier))
+	}
+
+	// Add contrastive jailbreak classifiers for rules with method == "contrastive"
+	{
+		contrastiveClassifiers := make(map[string]*ContrastiveJailbreakClassifier)
+		defaultModelType := cfg.EmbeddingModels.HNSWConfig.ModelType
+		for _, rule := range cfg.JailbreakRules {
+			if rule.Method != "contrastive" {
+				continue
+			}
+			cjc, err := NewContrastiveJailbreakClassifier(rule, defaultModelType)
+			if err != nil {
+				logging.Errorf("Failed to create contrastive jailbreak classifier for rule %q: %v", rule.Name, err)
+				return nil, err
+			}
+			contrastiveClassifiers[rule.Name] = cjc
+		}
+		if len(contrastiveClassifiers) > 0 {
+			options = append(options, withContrastiveJailbreakClassifiers(contrastiveClassifiers))
+			logging.Infof("Initialized %d contrastive jailbreak classifiers", len(contrastiveClassifiers))
+		}
 	}
 
 	// Add authz classifier if authz rules are configured
@@ -1609,7 +1640,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 			defer wg.Done()
 			start := time.Now()
 
-			// For each jailbreak rule, build content list and check with the rule's threshold
+			// For each jailbreak rule, build content list and dispatch by method
 			for _, rule := range c.Config.JailbreakRules {
 				contentToAnalyze := []string{}
 				if text != "" {
@@ -1622,39 +1653,77 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 					continue
 				}
 
-				hasJailbreak, detections, err := c.AnalyzeContentForJailbreakWithThreshold(contentToAnalyze, rule.Threshold)
-				if err != nil {
-					logging.Errorf("[Signal Computation] Jailbreak rule %q evaluation failed: %v", rule.Name, err)
-					continue
-				}
+				switch rule.Method {
+				case "contrastive":
+					// Contrastive embedding method
+					cjc, ok := c.contrastiveJailbreakClassifiers[rule.Name]
+					if !ok {
+						logging.Errorf("[Signal Computation] Contrastive jailbreak classifier not found for rule %q", rule.Name)
+						continue
+					}
+					analysisResult := cjc.AnalyzeMessages(contentToAnalyze)
+					threshold := rule.Threshold
+					if threshold <= 0 {
+						threshold = 0.10 // default contrastive threshold
+					}
+					if analysisResult.MaxScore >= threshold {
+						metrics.RecordSignalExtraction(config.SignalTypeJailbreak, rule.Name, time.Since(start).Seconds())
+						metrics.RecordSignalMatch(config.SignalTypeJailbreak, rule.Name)
 
-				if hasJailbreak {
-					metrics.RecordSignalExtraction(config.SignalTypeJailbreak, rule.Name, time.Since(start).Seconds())
-					metrics.RecordSignalMatch(config.SignalTypeJailbreak, rule.Name)
-
-					// Find highest-confidence detection for metadata
-					var bestType string
-					var bestConf float32
-					for _, d := range detections {
-						if d.IsJailbreak && d.Confidence > bestConf {
-							bestConf = d.Confidence
-							bestType = d.JailbreakType
+						confidence := analysisResult.MaxScore
+						mu.Lock()
+						results.MatchedJailbreakRules = append(results.MatchedJailbreakRules, rule.Name)
+						if confidence > results.JailbreakConfidence {
+							results.JailbreakDetected = true
+							results.JailbreakType = "contrastive"
+							results.JailbreakConfidence = confidence
 						}
+						if results.SignalConfidences == nil {
+							results.SignalConfidences = make(map[string]float64)
+						}
+						results.SignalConfidences["jailbreak:"+rule.Name] = float64(confidence)
+						mu.Unlock()
+
+						logging.Infof("[Signal Computation] Contrastive jailbreak rule %q matched: score=%.4f threshold=%.4f worst_msg_idx=%d time=%v",
+							rule.Name, analysisResult.MaxScore, threshold, analysisResult.WorstMsgIndex, analysisResult.ProcessingTime)
 					}
 
-					mu.Lock()
-					results.MatchedJailbreakRules = append(results.MatchedJailbreakRules, rule.Name)
-					// Keep highest-confidence metadata across all rules
-					if bestConf > results.JailbreakConfidence {
-						results.JailbreakDetected = true
-						results.JailbreakType = bestType
-						results.JailbreakConfidence = bestConf
+				default:
+					// BERT classifier method (default)
+					hasJailbreak, detections, err := c.AnalyzeContentForJailbreakWithThreshold(contentToAnalyze, rule.Threshold)
+					if err != nil {
+						logging.Errorf("[Signal Computation] Jailbreak rule %q evaluation failed: %v", rule.Name, err)
+						continue
 					}
-					if results.SignalConfidences == nil {
-						results.SignalConfidences = make(map[string]float64)
+
+					if hasJailbreak {
+						metrics.RecordSignalExtraction(config.SignalTypeJailbreak, rule.Name, time.Since(start).Seconds())
+						metrics.RecordSignalMatch(config.SignalTypeJailbreak, rule.Name)
+
+						// Find highest-confidence detection for metadata
+						var bestType string
+						var bestConf float32
+						for _, d := range detections {
+							if d.IsJailbreak && d.Confidence > bestConf {
+								bestConf = d.Confidence
+								bestType = d.JailbreakType
+							}
+						}
+
+						mu.Lock()
+						results.MatchedJailbreakRules = append(results.MatchedJailbreakRules, rule.Name)
+						// Keep highest-confidence metadata across all rules
+						if bestConf > results.JailbreakConfidence {
+							results.JailbreakDetected = true
+							results.JailbreakType = bestType
+							results.JailbreakConfidence = bestConf
+						}
+						if results.SignalConfidences == nil {
+							results.SignalConfidences = make(map[string]float64)
+						}
+						results.SignalConfidences["jailbreak:"+rule.Name] = float64(bestConf)
+						mu.Unlock()
 					}
-					results.SignalConfidences["jailbreak:"+rule.Name] = float64(bestConf)
-					mu.Unlock()
 				}
 			}
 
