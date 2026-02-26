@@ -54,6 +54,9 @@ type OpenAIRouter struct {
 	// RateLimiter enforces per-user/model rate limits from multiple sources
 	// (Envoy RLS → local limiter). Initialized in NewOpenAIRouter.
 	RateLimiter *ratelimit.RateLimitResolver
+
+	// StopPruneSweep stops the background memory prune sweep goroutine (nil if not started).
+	StopPruneSweep func()
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls
@@ -397,6 +400,13 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		}
 	}
 
+	// Start background prune sweep if memory store is available and configured
+	var stopPruneSweep func()
+	if memoryStore != nil && cfg.Memory.QualityScoring.PruneSweepEnabled && cfg.Memory.QualityScoring.PruneInterval != "" {
+		stopPruneSweep = memory.StartPruneSweep(cfg.Memory.QualityScoring, memoryStore)
+		logging.Infof("Memory prune sweep enabled (interval=%s)", cfg.Memory.QualityScoring.PruneInterval)
+	}
+
 	// Create memory extractor if memory_extraction external model is configured
 	var memoryExtractor *memory.MemoryExtractor
 	if memoryEnabled && cfg.FindExternalModelByRole(config.ModelRoleMemoryExtraction) != nil {
@@ -435,6 +445,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		MemoryExtractor:      memoryExtractor,
 		CredentialResolver:   credResolver,
 		RateLimiter:          rateLimiter,
+		StopPruneSweep:       stopPruneSweep,
 	}
 
 	return router, nil

@@ -1241,22 +1241,22 @@ Context sent to LLM:
 
 ### Advanced Features
 
-| Feature | Description | Priority |
-|---------|-------------|----------|
-| **Self-correcting memory** | Track usage, score by access/age, auto-prune low-score memories | High |
-| **Contradiction detection** | Detect conflicting facts, auto-merge or flag | High |
-| **Memory type routing** | Search specific types (semantic/procedural/episodic) | Medium |
-| **Per-user quotas** | Limit storage per user | Medium |
-| **Graph store** | Memory relationships for multi-hop queries | If needed |
-| **Time-series index** | Temporal queries and decay scoring | If needed |
-| **Concurrency handling** | Locking for concurrent sessions same user | Medium |
+| Feature | Description | Priority | Status |
+|---------|-------------|----------|--------|
+| **Self-correcting memory** | Track usage, score by access/age, auto-prune low-score memories | High | **Implemented** — MemoryBank-style retention scoring R = exp(-t/S), where R is the retention score, t is time since last access, and S is memory strength, with two-path pruning (event-driven cap + background sweep) |
+| **Contradiction detection** | Detect conflicting facts, auto-merge or flag | High | Planned |
+| **Memory type routing** | Search specific types (semantic/procedural/episodic) | Medium | Planned |
+| **Per-user quotas** | Limit storage per user | Medium | **Implemented** — `max_memories_per_user` config with async enforcement on Store() |
+| **Graph store** | Memory relationships for multi-hop queries | If needed | Planned |
+| **Time-series index** | Temporal queries and decay scoring | If needed | Planned |
+| **Concurrency handling** | Locking for concurrent sessions same user | Medium | Planned |
 
 ### Known POC Limitations (Explicitly Deferred)
 
 | Limitation | Impact | Why Acceptable |
 |------------|--------|----------------|
 | **No concurrency control** | Race condition if same user has 2+ concurrent sessions | Rare in POC testing; fix in production |
-| **No memory limits** | Power user could accumulate unlimited memories | Quotas added in Phase 3 |
+| **No memory limits** | Power user could accumulate unlimited memories | **Resolved** — `max_memories_per_user` + background sweep pruning |
 | **No backup/restore tested** | Milvus disk failure = potential data loss | Basic persistence works; backup/HA validated in production |
 | **No smart updates** | Corrections create duplicates | Newest wins; Forget API available |
 | **No adversarial defense** | Prompt injection could poison memories | Trust user input in POC; add filtering later |

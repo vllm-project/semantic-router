@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
@@ -22,6 +23,9 @@ const (
 	DefaultRetryBaseDelay = 100
 )
 
+// DefaultMaxConcurrentPrunes is the default limit for concurrent pruneIfOverCap goroutines.
+const DefaultMaxConcurrentPrunes = 10
+
 // MilvusStore provides memory retrieval from Milvus with similarity threshold filtering
 type MilvusStore struct {
 	client          client.Client
@@ -31,6 +35,8 @@ type MilvusStore struct {
 	maxRetries      int
 	retryBaseDelay  time.Duration
 	embeddingConfig EmbeddingConfig // Unified embedding configuration
+	pruneSem        chan struct{}   // bounds concurrent prune goroutines
+	pruneInFlight   sync.Map        // tracks userIDs with an active prune goroutine (dedup)
 }
 
 // MilvusStoreOptions contains configuration for creating a MilvusStore
@@ -79,6 +85,11 @@ func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 		embeddingCfg = EmbeddingConfig{Model: EmbeddingModelBERT}
 	}
 
+	maxPrunes := cfg.QualityScoring.MaxConcurrentPrunes
+	if maxPrunes <= 0 {
+		maxPrunes = DefaultMaxConcurrentPrunes
+	}
+
 	store := &MilvusStore{
 		client:          options.Client,
 		collectionName:  options.CollectionName,
@@ -87,6 +98,7 @@ func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 		maxRetries:      DefaultMaxRetries,
 		retryBaseDelay:  DefaultRetryBaseDelay * time.Millisecond,
 		embeddingConfig: embeddingCfg,
+		pruneSem:        make(chan struct{}, maxPrunes),
 	}
 
 	// Auto-create collection if it doesn't exist
@@ -684,7 +696,91 @@ func (m *MilvusStore) Store(ctx context.Context, memory *Memory) error {
 	}
 
 	logging.Debugf("MilvusStore.Store: successfully stored memory id=%s", memory.ID)
+
+	// Path 1: event-driven cap enforcement — async prune if user exceeds max_memories_per_user.
+	// Uses context.Background() intentionally: the goroutine must outlive the request ctx.
+	// Two layers of protection against Milvus pressure:
+	//   1. pruneInFlight (sync.Map): dedup — at most one goroutine per user at any time
+	//   2. pruneSem (channel): semaphore — at most maxConcurrentPrunes goroutines globally
+	if m.config.QualityScoring.MaxMemoriesPerUser > 0 {
+		if _, alreadyRunning := m.pruneInFlight.LoadOrStore(memory.UserID, struct{}{}); !alreadyRunning {
+			select {
+			case m.pruneSem <- struct{}{}:
+				go func(userID string) {
+					defer func() {
+						<-m.pruneSem
+						m.pruneInFlight.Delete(userID)
+					}()
+					m.pruneIfOverCap(context.Background(), userID)
+				}(memory.UserID)
+			default:
+				m.pruneInFlight.Delete(memory.UserID)
+				logging.Debugf("MilvusStore.Store: prune semaphore full, skipping cap check for user_id=%s", memory.UserID)
+			}
+		}
+	}
+
 	return nil
+}
+
+// pruneIfOverCap counts the user's memories and calls PruneUser if over MaxMemoriesPerUser.
+// Designed to run in a goroutine triggered by Store().
+func (m *MilvusStore) pruneIfOverCap(ctx context.Context, userID string) {
+	cap := m.config.QualityScoring.MaxMemoriesPerUser
+	if cap <= 0 {
+		return
+	}
+
+	count, err := m.countUserMemories(ctx, userID)
+	if err != nil {
+		logging.Warnf("MilvusStore.pruneIfOverCap: count failed for user_id=%s: %v", userID, err)
+		return
+	}
+
+	if count <= cap {
+		return
+	}
+
+	PruneCapTriggeredTotal.Inc()
+	logging.Infof("MilvusStore.pruneIfOverCap: user_id=%s has %d memories (cap=%d), pruning", userID, count, cap)
+
+	deleted, err := m.PruneUser(ctx, userID)
+	if err != nil {
+		logging.Warnf("MilvusStore.pruneIfOverCap: PruneUser failed for user_id=%s: %v", userID, err)
+		return
+	}
+	if deleted > 0 {
+		PruneDeletedTotal.WithLabelValues("cap").Add(float64(deleted))
+		logging.Infof("MilvusStore.pruneIfOverCap: user_id=%s pruned %d memories", userID, deleted)
+	}
+}
+
+// countUserMemories returns the number of memories stored for a given user.
+func (m *MilvusStore) countUserMemories(ctx context.Context, userID string) (int, error) {
+	filterExpr := fmt.Sprintf("user_id == \"%s\"", userID)
+
+	var queryResult []entity.Column
+	err := m.retryWithBackoff(ctx, func() error {
+		var retryErr error
+		queryResult, retryErr = m.client.Query(
+			ctx,
+			m.collectionName,
+			[]string{},
+			filterExpr,
+			[]string{"id"},
+		)
+		return retryErr
+	})
+	if err != nil {
+		return 0, fmt.Errorf("milvus query failed: %w", err)
+	}
+
+	for _, col := range queryResult {
+		if col.Name() == "id" {
+			return col.Len(), nil
+		}
+	}
+	return 0, nil
 }
 
 // upsert atomically replaces a row in Milvus by primary key.
@@ -1483,6 +1579,57 @@ func (m *MilvusStore) PruneUser(ctx context.Context, userID string) (deleted int
 	}
 	logging.Debugf("MilvusStore.PruneUser: user_id=%s deleted %d memories", userID, deleted)
 	return deleted, nil
+}
+
+// ListStaleUserIDs queries Milvus for memories with created_at older than cutoffUnix
+// and returns the deduplicated set of user_id values. This targets users whose oldest
+// memories may have decayed below the prune threshold, without iterating all users.
+func (m *MilvusStore) ListStaleUserIDs(ctx context.Context, cutoffUnix int64) ([]string, error) {
+	if !m.enabled {
+		return nil, fmt.Errorf("milvus store is not enabled")
+	}
+
+	filterExpr := fmt.Sprintf("created_at < %d", cutoffUnix)
+	outputFields := []string{"user_id"}
+
+	var queryResult []entity.Column
+	err := m.retryWithBackoff(ctx, func() error {
+		var retryErr error
+		queryResult, retryErr = m.client.Query(
+			ctx,
+			m.collectionName,
+			[]string{},
+			filterExpr,
+			outputFields,
+		)
+		return retryErr
+	})
+	if err != nil {
+		return nil, fmt.Errorf("milvus query for stale users failed: %w", err)
+	}
+
+	seen := make(map[string]struct{})
+	for _, col := range queryResult {
+		if col.Name() == "user_id" {
+			vc, ok := col.(*entity.ColumnVarChar)
+			if !ok {
+				continue
+			}
+			for i := 0; i < vc.Len(); i++ {
+				uid, _ := vc.ValueByIdx(i)
+				if uid != "" {
+					seen[uid] = struct{}{}
+				}
+			}
+		}
+	}
+
+	userIDs := make([]string, 0, len(seen))
+	for uid := range seen {
+		userIDs = append(userIDs, uid)
+	}
+	logging.Debugf("MilvusStore.ListStaleUserIDs: found %d users with memories older than %d", len(userIDs), cutoffUnix)
+	return userIDs, nil
 }
 
 // isTransientError checks if an error is transient and should be retried

@@ -134,8 +134,13 @@ func (s *Server) Start() error {
 	return nil
 }
 
-// Stop stops the gRPC server
+// Stop stops the gRPC server and background goroutines
 func (s *Server) Stop() {
+	if s.service != nil {
+		if r := s.service.current.Load(); r != nil && r.StopPruneSweep != nil {
+			r.StopPruneSweep()
+		}
+	}
 	if s.server != nil {
 		s.server.GracefulStop()
 		logging.Infof("Server stopped")
