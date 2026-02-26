@@ -129,7 +129,7 @@ func TestReflectionGate_PerDecisionOverride(t *testing.T) {
 func TestWordJaccard(t *testing.T) {
 	assert.InDelta(t, 1.0, wordJaccard("hello world", "hello world"), 0.01)
 	assert.InDelta(t, 0.0, wordJaccard("hello world", "foo bar"), 0.01)
-	assert.InDelta(t, 0.5, wordJaccard("hello world", "hello foo"), 0.01)
+	assert.InDelta(t, 1.0/3.0, wordJaccard("hello world", "hello foo"), 0.01)
 	assert.InDelta(t, 1.0, wordJaccard("", ""), 0.01)
 }
 
