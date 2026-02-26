@@ -374,6 +374,41 @@ class MemoryFeaturesTest(SemanticRouterTestBase):
         print(f"\n⏳ Waiting {wait_time}s for memory extraction...")
         time.sleep(wait_time)
 
+    def flush_and_wait(self, wait_seconds: int = 5):
+        """Flush Milvus and wait for vectors to become searchable.
+
+        After flush, sealed segments need to be indexed before vector search
+        finds them. CI environments with slower I/O need more time than local.
+        """
+        if self.milvus.is_available():
+            self.milvus.flush()
+            time.sleep(wait_seconds)
+
+    def query_with_retry(
+        self, message: str, keywords: list, max_attempts: int = 3, wait_between: int = 5
+    ) -> tuple:
+        """Query the router and check for keywords, retrying on miss.
+
+        Returns (output_text, found_keywords). Retries with flush between
+        attempts to handle Milvus segment visibility delays in CI.
+        """
+        for attempt in range(max_attempts):
+            result = self.send_memory_request(
+                message=message, auto_store=False, verbose=(attempt == 0)
+            )
+            if not result:
+                continue
+            output = result.get("_output_text", "").lower()
+            found = [kw for kw in keywords if kw in output]
+            if found:
+                return output, found
+            if attempt < max_attempts - 1:
+                print(
+                    f"   ⏳ Retry {attempt + 1}/{max_attempts}: keywords {keywords} not in response, flushing..."
+                )
+                self.flush_and_wait(wait_between)
+        return output if result else "", []
+
 
 class MemoryInjectionPipelineTest(MemoryFeaturesTest):
     """Test the fundamental memory contract: store -> extract -> inject into prompt.
@@ -422,24 +457,16 @@ class MemoryInjectionPipelineTest(MemoryFeaturesTest):
                     f"Extraction failed: {count} memories in Milvus but none contain 'tesla'"
                 )
 
-            self.milvus.flush()
-            time.sleep(3)
+        self.flush_and_wait(8)
 
-        result = self.send_memory_request(
-            message="What car do I drive?",
-            auto_store=False,
+        output, found = self.query_with_retry(
+            "What car do I drive?", ["tesla", "model 3", "model3"]
         )
 
-        self.assertIsNotNone(result, "Failed to retrieve fact")
-        output = result.get("_output_text", "").lower()
-
-        has_tesla = "tesla" in output
-        has_model_3 = "model 3" in output or "model3" in output
-
-        if has_tesla or has_model_3:
+        if found:
             self.print_test_result(
                 True,
-                f"Memory injected into prompt: tesla={has_tesla}, model3={has_model_3}",
+                f"Memory injected into prompt: found {found}",
             )
         else:
             self.print_test_result(
@@ -611,22 +638,15 @@ class SimilarityThresholdTest(MemoryFeaturesTest):
         )
 
         self.wait_for_extraction()
+        self.flush_and_wait(8)
 
-        if self.milvus.is_available():
-            self.milvus.flush()
-            time.sleep(3)
-
-        result = self.send_memory_request(
-            message="What car do I drive?",
-            auto_store=False,
+        output, found = self.query_with_retry(
+            "What car do I drive?", ["toyota", "camry", "2022"]
         )
 
-        self.assertIsNotNone(result, "Failed to query")
-        output = result.get("_output_text", "").lower()
-
-        if "toyota" in output or "camry" in output or "2022" in output:
+        if found:
             self.print_test_result(
-                True, "Related query correctly retrieved memory from Milvus"
+                True, f"Related query correctly retrieved memory: {found}"
             )
         else:
             self.print_test_result(
@@ -1003,14 +1023,12 @@ class MemoryExtractionTest(MemoryFeaturesTest):
         )
         print("   ✓ Follow-up sent (triggers extraction)")
 
-        self.wait_for_extraction(3)  # Wait longer for extraction
+        self.wait_for_extraction()
 
-        # Verify facts were extracted and stored in Milvus
         if self.milvus.is_available():
             count = self.milvus.count_memories(self.test_user)
             if count > 0:
                 print(f"   ✓ Extraction stored {count} memories in Milvus")
-                # Check for specific extracted facts
                 for keyword in ["tom", "anna", "macbook"]:
                     memories = self.milvus.search_memories(self.test_user, keyword)
                     if memories:
@@ -1021,8 +1039,8 @@ class MemoryExtractionTest(MemoryFeaturesTest):
         else:
             print("   ⚠️  Milvus verification skipped (not available)")
 
-        # Query for extracted facts in NEW SESSIONS (no previous_response_id)
-        # This tests that facts were extracted and stored in Milvus
+        self.flush_and_wait(8)
+
         queries = [
             ("Who is my brother?", ["tom"]),
             ("What laptop did I buy?", ["macbook", "m3"]),
@@ -1032,21 +1050,14 @@ class MemoryExtractionTest(MemoryFeaturesTest):
         successful_queries = 0
         for query, expected_keywords in queries:
             print(f"\n   Querying (NEW SESSION): {query}")
-            result = self.send_memory_request(
-                message=query,
-                auto_store=False,
-                verbose=False,
-                # NO previous_response_id - this is a new session!
+            output, found = self.query_with_retry(
+                query, expected_keywords, max_attempts=2, wait_between=5
             )
-
-            if result:
-                output = result.get("_output_text", "").lower()
-                found = [kw for kw in expected_keywords if kw in output]
-                if found:
-                    print(f"   ✓ Found from Milvus: {found}")
-                    successful_queries += 1
-                else:
-                    print(f"   ✗ Keywords not found: {expected_keywords}")
+            if found:
+                print(f"   ✓ Found from Milvus: {found}")
+                successful_queries += 1
+            else:
+                print(f"   ✗ Keywords not found: {expected_keywords}")
 
         if successful_queries >= 1:
             self.print_test_result(
