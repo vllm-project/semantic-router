@@ -39,6 +39,45 @@ All local backends use the LoRA adapter architecture (\Cref{sec:lora_mom}), redu
 Different signal rules configure different thresholds: a \texttt{jailbreak\_strict} rule might use $\theta = 0.4$ with full history analysis for financial endpoints, while a \texttt{jailbreak\_standard} rule uses $\theta = 0.65$ on the latest message only.
 Decisions then reference the appropriate rule by name, enabling context-aware security policies (e.g., strict detection only when the domain signal also matches ``economics'').
 
+\subsection{Contrastive Jailbreak Detection}
+\label{subsec:contrastive_jailbreak}
+
+While the BERT classifier excels at detecting single-turn jailbreak attempts, it can be evaded by \emph{multi-turn escalation} (``boiling frog'') attacks in which each individual message appears benign but the conversation progressively steers the model toward unsafe behavior.
+We introduce a contrastive embedding method that operates alongside the BERT classifier within the same jailbreak signal type.
+
+\textbf{Knowledge base construction.}
+Each contrastive rule defines two exemplar sets: a \emph{jailbreak knowledge base} $\mathcal{K}_\text{jb}$ containing known adversarial patterns (e.g., ``Ignore all previous instructions'', ``You are now DAN'') and a \emph{benign knowledge base} $\mathcal{K}_\text{ben}$ containing representative normal queries (e.g., ``What is the weather today'', ``Help me write an email'').
+All KB embeddings are precomputed at initialization using a concurrent worker pool (identical to the complexity signal's preloading strategy), so runtime cost is limited to embedding the incoming message and computing cosine similarities.
+
+\textbf{Contrastive scoring.}
+For each user message $m$, the contrastive score measures relative proximity to the jailbreak vs.\ benign exemplars:
+\begin{equation}
+  \delta(m) = \max_{j \in \mathcal{K}_\text{jb}} \cos(\mathbf{m}, \mathbf{j}) \;-\; \max_{b \in \mathcal{K}_\text{ben}} \cos(\mathbf{m}, \mathbf{b})
+  \label{eq:contrastive_score}
+\end{equation}
+A positive $\delta$ indicates the message is semantically closer to jailbreak patterns; a negative $\delta$ indicates it is closer to benign patterns.
+The subtraction normalizes for the overall embedding similarity scale, making the threshold robust across different embedding models.
+
+\textbf{Max-contrastive chain (multi-turn detection).}
+When \texttt{include\_history} is enabled, the system exploits the stateless nature of the OpenAI chat API---each request carries the full conversation history in the \texttt{messages} array---to evaluate every user message:
+\begin{equation}
+  \Delta = \max_{m \in \mathcal{M}_\text{user}} \delta(m)
+\end{equation}
+The rule fires when $\Delta \geq \theta$ (default $\theta = 0.10$).
+This max-pooling aggregation ensures that even if the current message is innocuous, the presence of any high-scoring turn in the history triggers detection.
+The approach is effective against gradual escalation because the attacker must include at least one semantically adversarial turn to steer the model, and that turn will produce a high contrastive score regardless of its position in the conversation.
+
+\textbf{Integration with signal architecture.}
+The contrastive method is selected via the \texttt{method: contrastive} field on a jailbreak rule, keeping the same signal type $\tau_\text{jb}$ and rule-name addressing used by the BERT classifier.
+This means contrastive rules participate fully in the decision engine's Boolean logic.
+A typical deployment combines both methods:
+\begin{itemize}[nosep,leftmargin=1.5em]
+  \item A BERT rule (\texttt{jailbreak\_standard}, $\theta = 0.65$) for fast, high-precision single-turn detection.
+  \item A contrastive rule (\texttt{jailbreak\_multiturn}, $\theta = 0.10$, \texttt{include\_history: true}) for multi-turn chain detection.
+  \item A decision with OR logic fires if \emph{either} method detects an attack, providing defense in depth.
+\end{itemize}
+The embedding model is inherited from the global \texttt{embedding\_models} configuration (consistent with the complexity signal), avoiding per-rule model specification.
+
 \subsection{PII Detection}
 
 PII detection identifies personally identifiable information at the token level and enforces configurable allow/deny policies.

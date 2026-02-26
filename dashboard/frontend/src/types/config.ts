@@ -115,7 +115,10 @@ export interface ComplexitySignal {
 export interface JailbreakSignal {
   name: string
   threshold: number
+  method?: string // "classifier" (default) or "contrastive"
   include_history?: boolean
+  jailbreak_patterns?: string[] // Known jailbreak prompts (contrastive KB)
+  benign_patterns?: string[] // Known benign prompts (contrastive KB)
   description?: string
 }
 

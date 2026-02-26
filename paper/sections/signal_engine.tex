@@ -151,10 +151,26 @@ Multiple complexity rules can coexist (e.g., \texttt{code\_complexity}, \texttt{
 Composer conditions can restrict when a rule fires---for instance, evaluating \texttt{code\_complexity} only when the domain signal indicates computer science.
 
 \textbf{Jailbreak Detection} ($\tau_\text{jb}$).
+Each jailbreak rule selects one of two detection methods via a \texttt{method} field (default: \texttt{classifier}).
+
+\emph{BERT classifier method.}
 A binary/ternary classifier detects adversarial prompt injection and jailbreak attempts.
 Each rule defines a confidence threshold $\theta$; the signal fires when jailbreak confidence $c \geq \theta$.
 An optional \texttt{include\_history} flag controls whether only the latest user message or the full conversation history is analyzed, trading latency for recall against multi-turn attacks.
 Multiple rules at different thresholds enable per-decision sensitivity---a public chatbot may use $\theta = 0.65$, while an internal tool uses $\theta = 0.9$ to minimize false positives.
+
+\emph{Contrastive embedding method.}
+Analogous to the complexity signal, each rule defines two sets of exemplar patterns---\emph{jailbreak} ($\mathcal{K}_\text{jb}$, e.g., ``Ignore all previous instructions'') and \emph{benign} ($\mathcal{K}_\text{ben}$, e.g., ``What is the weather today'')---whose embeddings are precomputed at initialization.
+At request time the contrastive score for a message $m$ is:
+\begin{equation}
+  \delta(m) = \max_{j \in \mathcal{K}_\text{jb}} \text{sim}(\mathbf{m}, \mathbf{j}) - \max_{b \in \mathcal{K}_\text{ben}} \text{sim}(\mathbf{m}, \mathbf{b})
+\end{equation}
+When \texttt{include\_history} is enabled, the system evaluates every user message in the conversation and takes the maximum score across all turns:
+$\Delta = \max_{m \in \mathcal{M}_\text{user}} \delta(m)$.
+The rule fires when $\Delta \geq \theta$ (default $\theta = 0.10$).
+This \emph{max-contrastive-chain} aggregation is specifically designed to catch ``boiling frog'' multi-turn attacks where each individual message may score below threshold but the conversation contains at least one escalation turn.
+
+Both methods coexist within the same signal type; a single deployment can define BERT and contrastive rules simultaneously and combine them in decision logic using OR (fire if either detects) or use them at different priority levels for graduated response.
 Classifier details are described in \Cref{sec:safety}.
 
 \textbf{PII Detection} ($\tau_\text{pii}$).

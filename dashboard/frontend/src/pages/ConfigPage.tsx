@@ -180,7 +180,10 @@ interface ConfigData {
     jailbreak?: Array<{
       name: string
       threshold?: number
+      method?: string
       include_history?: boolean
+      jailbreak_patterns?: string[]
+      benign_patterns?: string[]
       description?: string
     }>
     pii?: Array<{
@@ -295,7 +298,10 @@ interface AddSignalFormState {
   composer_operator?: 'AND' | 'OR' | 'NOT'
   composer_conditions?: string
   jailbreak_threshold?: number
+  jailbreak_method?: string
   include_history?: boolean
+  jailbreak_patterns?: string
+  benign_patterns?: string
   pii_threshold?: number
   pii_types_allowed?: string
   pii_include_history?: boolean
@@ -2378,10 +2384,11 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
     // Jailbreak
     signals?.jailbreak?.forEach(jb => {
+      const method = jb.method || 'classifier'
       allSignals.push({
         name: jb.name,
         type: 'Jailbreak',
-        summary: `Threshold: ${jb.threshold}${jb.include_history ? ', includes history' : ''}`,
+        summary: `Method: ${method}, Threshold: ${jb.threshold}${jb.include_history ? ', includes history' : ''}`,
         rawData: jb
       })
     })
@@ -2629,14 +2636,19 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           fields
         })
       } else if (signal.type === 'Jailbreak') {
-        sections.push({
-          title: 'Jailbreak Signal',
-          fields: [
-            { label: 'Threshold', value: signal.rawData.threshold?.toString() || 'N/A', fullWidth: true },
-            { label: 'Include History', value: signal.rawData.include_history ? 'Yes' : 'No', fullWidth: true },
-            { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
-          ]
-        })
+        const fields = [
+          { label: 'Method', value: signal.rawData.method || 'classifier', fullWidth: true },
+          { label: 'Threshold', value: signal.rawData.threshold?.toString() || 'N/A', fullWidth: true },
+          { label: 'Include History', value: signal.rawData.include_history ? 'Yes' : 'No', fullWidth: true },
+        ]
+        if (signal.rawData.method === 'contrastive') {
+          fields.push(
+            { label: 'Jailbreak Patterns', value: (signal.rawData.jailbreak_patterns || []).length + ' patterns', fullWidth: true },
+            { label: 'Benign Patterns', value: (signal.rawData.benign_patterns || []).length + ' patterns', fullWidth: true },
+          )
+        }
+        fields.push({ label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true })
+        sections.push({ title: 'Jailbreak Signal', fields })
       } else if (signal.type === 'PII') {
         sections.push({
           title: 'PII Signal',
@@ -2684,7 +2696,10 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         composer_operator: 'AND',
         composer_conditions: '',
         jailbreak_threshold: 0.65,
+        jailbreak_method: 'classifier',
         include_history: false,
+        jailbreak_patterns: '',
+        benign_patterns: '',
         pii_threshold: 0.5,
         pii_types_allowed: '',
         pii_include_history: false
@@ -2709,7 +2724,10 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         composer_operator: signal.rawData.composer?.operator || 'AND',
         composer_conditions: signal.rawData.composer?.conditions?.map((c: { type: string; name: string }) => `${c.type}:${c.name}`).join('\n') || '',
         jailbreak_threshold: signal.rawData.threshold ?? 0.65,
+        jailbreak_method: signal.rawData.method || 'classifier',
         include_history: !!signal.rawData.include_history,
+        jailbreak_patterns: (signal.rawData.jailbreak_patterns || []).join('\n'),
+        benign_patterns: (signal.rawData.benign_patterns || []).join('\n'),
         pii_threshold: signal.rawData.threshold ?? 0.5,
         pii_types_allowed: (signal.rawData.pii_types_allowed || []).join('\n'),
         pii_include_history: !!signal.rawData.include_history
@@ -2845,10 +2863,18 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
       const jailbreakFields: FieldConfig[] = [
         {
+          name: 'jailbreak_method',
+          label: 'Method (jailbreak only)',
+          type: 'select',
+          options: ['classifier', 'contrastive'],
+          description: 'Detection method: "classifier" (BERT-based) or "contrastive" (embedding KB similarity)',
+          shouldHide: conditionallyHideFieldExceptType('Jailbreak')
+        },
+        {
           name: 'jailbreak_threshold',
           label: 'Threshold (jailbreak only)',
           type: 'number',
-          placeholder: 'e.g., 0.65',
+          placeholder: 'e.g., 0.65 for classifier, 0.10 for contrastive',
           description: 'Confidence threshold for jailbreak detection (0.0 - 1.0)',
           shouldHide: conditionallyHideFieldExceptType('Jailbreak')
         },
@@ -2857,6 +2883,23 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           label: 'Include History (jailbreak only)',
           type: 'boolean',
           description: 'Whether to include conversation history in jailbreak detection',
+          shouldHide: conditionallyHideFieldExceptType('Jailbreak')
+        },
+
+        {
+          name: 'jailbreak_patterns',
+          label: 'Jailbreak Patterns (contrastive only)',
+          type: 'textarea',
+          placeholder: 'One pattern per line, e.g.:\nIgnore all previous instructions\nYou are now DAN',
+          description: 'Known jailbreak prompts for the contrastive KB',
+          shouldHide: conditionallyHideFieldExceptType('Jailbreak')
+        },
+        {
+          name: 'benign_patterns',
+          label: 'Benign Patterns (contrastive only)',
+          type: 'textarea',
+          placeholder: 'One pattern per line, e.g.:\nWhat is the weather today\nHelp me write an email',
+          description: 'Known benign prompts for the contrastive KB',
           shouldHide: conditionallyHideFieldExceptType('Jailbreak')
         }
       ]
@@ -3114,14 +3157,30 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             if (jailbreak_threshold < 0 || jailbreak_threshold > 1) {
               throw new Error('Jailbreak threshold must be between 0.0 and 1.0.')
             }
+            const method = formData.jailbreak_method || 'classifier'
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const jailbreakEntry: any = {
+              name,
+              threshold: jailbreak_threshold,
+              include_history: formData.include_history || false,
+              description: formData.description || undefined
+            }
+            if (method !== 'classifier') {
+              jailbreakEntry.method = method
+            }
+            if (method === 'contrastive') {
+              const jailbreakPatterns = (formData.jailbreak_patterns || '').trim()
+              const benignPatternsStr = (formData.benign_patterns || '').trim()
+              if (jailbreakPatterns) {
+                jailbreakEntry.jailbreak_patterns = jailbreakPatterns.split('\n').map((p: string) => p.trim()).filter((p: string) => p.length > 0)
+              }
+              if (benignPatternsStr) {
+                jailbreakEntry.benign_patterns = benignPatternsStr.split('\n').map((p: string) => p.trim()).filter((p: string) => p.length > 0)
+              }
+            }
             newConfig.signals.jailbreak = [
               ...(newConfig.signals.jailbreak || []),
-              {
-                name,
-                threshold: jailbreak_threshold,
-                include_history: formData.include_history || false,
-                description: formData.description || undefined
-              }
+              jailbreakEntry
             ]
             break
           }
