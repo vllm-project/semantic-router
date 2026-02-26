@@ -398,7 +398,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		}
 	}
 
-	// Create memory chunk store (direct conversation storage, no LLM extraction)
+	// Create memory chunk store (direct conversation storage, no LLM extraction).
 	var memoryExtractor *memory.MemoryExtractor
 	if memoryEnabled && memoryStore != nil {
 		memoryExtractor = memory.NewMemoryChunkStore(memoryStore)

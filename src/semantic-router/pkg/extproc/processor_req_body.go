@@ -1065,7 +1065,8 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 	}
 	logging.Infof("Memory: found %d memories for user=%s", len(memories), userID)
 
-	// Step 6: Memory filter -- validate memories before injection
+	// Step 6: Memory filter -- validate memories before injection.
+	// ReflectionGate applies recency decay, dedup, and token budget.
 	var perDecisionReflection *config.MemoryReflectionConfig
 	if memoryPluginConfig != nil && memoryPluginConfig.Reflection != nil {
 		perDecisionReflection = memoryPluginConfig.Reflection

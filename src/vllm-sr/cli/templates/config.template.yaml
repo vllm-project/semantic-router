@@ -730,6 +730,12 @@ memory:
     prune_threshold: 0.1        # δ: delete memories with R < threshold
     max_memories_per_user: 1000 # 0 = no cap
 
+  # Content jailbreak detection on write path (arXiv:2503.03704)
+  # Runs the jailbreak classifier on response content before storing as memory.
+  content_validation:
+    enabled: true               # on by default when memory is enabled
+    threshold: 0.5              # jailbreak classifier confidence threshold
+
   # Security: auth header for trusted user_id (optional)
   # auth_user_id_header: "x-authenticated-user-id"
   # require_auth_header: false

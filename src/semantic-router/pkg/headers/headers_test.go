@@ -31,6 +31,10 @@ func TestHeaderConstants(t *testing.T) {
 		{"FactCheckNeeded", FactCheckNeeded, "x-vsr-fact-check-needed"},
 		{"UnverifiedFactualResponse", UnverifiedFactualResponse, "x-vsr-unverified-factual-response"},
 		{"VerificationContextMissing", VerificationContextMissing, "x-vsr-verification-context-missing"},
+		// Response jailbreak detection headers
+		{"ResponseJailbreakDetected", ResponseJailbreakDetected, "x-vsr-response-jailbreak-detected"},
+		{"ResponseJailbreakType", ResponseJailbreakType, "x-vsr-response-jailbreak-type"},
+		{"ResponseJailbreakConfidence", ResponseJailbreakConfidence, "x-vsr-response-jailbreak-confidence"},
 	}
 
 	for _, tt := range tests {
