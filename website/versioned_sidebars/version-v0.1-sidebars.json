@@ -124,15 +124,6 @@
     },
     {
       "type": "category",
-      "label": "Cookbook",
-      "items": [
-        "cookbook/classifier-tuning",
-        "cookbook/pii-policy",
-        "cookbook/vllm-endpoints"
-      ]
-    },
-    {
-      "type": "category",
       "label": "API Reference",
       "items": [
         "api/router",

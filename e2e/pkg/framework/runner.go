@@ -53,6 +53,8 @@ func (r *Runner) Run(ctx context.Context) error {
 
 	exitCode := 0
 
+	var kubeClient *kubernetes.Clientset
+
 	// Defer report generation
 	defer func() {
 		r.reporter.Finalize(exitCode)
@@ -79,7 +81,17 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 
 		if !r.opts.KeepCluster {
-			defer r.cleanupCluster(ctx)
+			defer func() {
+				if kubeClient != nil {
+					r.log("📝 Collecting semantic-router logs before cluster cleanup...")
+					logCtx, logCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+					defer logCancel()
+					if err := r.collectSemanticRouterLogs(logCtx, kubeClient); err != nil {
+						r.log("Warning: failed to collect semantic-router logs before cleanup: %v", err)
+					}
+				}
+				r.cleanupCluster(context.Background())
+			}()
 		}
 	}
 
@@ -105,7 +117,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	// Store rest config for test cases
 	r.restConfig = config
 
-	kubeClient, err := kubernetes.NewForConfig(config)
+	kubeClient, err = kubernetes.NewForConfig(config)
 	if err != nil {
 		exitCode = 1
 		return fmt.Errorf("failed to create Kubernetes client: %w", err)
@@ -192,12 +204,6 @@ func (r *Runner) Run(ctx context.Context) error {
 			hasFailures = true
 			break
 		}
-	}
-
-	// Step 7: Collect semantic-router logs (always, regardless of test result)
-	r.log("📝 Collecting semantic-router logs...")
-	if err := r.collectSemanticRouterLogs(ctx, kubeClient); err != nil {
-		r.log("Warning: failed to collect semantic-router logs: %v", err)
 	}
 
 	if hasFailures {

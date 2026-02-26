@@ -521,23 +521,18 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	}
 
 	// 6. Get user content for plugin processing
-	userContent, nonUserMessages := extractUserAndNonUserContent(openAIRequest)
+	userContent, _ := extractUserAndNonUserContent(openAIRequest)
 	ctx.UserContent = userContent
 
 	// 7. Execute plugins according to decision configuration
 	// Note: Plugins will check ctx.LooperRequest internally for special handling
 
-	// 7.1 Jailbreak detection
-	if response, shouldReturn := r.performJailbreaks(ctx, userContent, nonUserMessages, decisionName); shouldReturn {
-		return response, nil
+	// 7.1 Fast response plugin (handles jailbreak/PII blocks via signal-driven decisions)
+	if resp := r.handleFastResponse(ctx, decisionName); resp != nil {
+		return resp, nil
 	}
 
-	// 7.2 PII detection
-	if piiResponse := r.performPIIDetection(ctx, userContent, nonUserMessages, decisionName); piiResponse != nil {
-		return piiResponse, nil
-	}
-
-	// 7.3 Semantic Cache (plugin will skip read for looper requests)
+	// 7.2 Semantic Cache (plugin will skip read for looper requests)
 	if response, shouldReturn := r.handleCaching(ctx, decisionName); shouldReturn {
 		return response, nil
 	}

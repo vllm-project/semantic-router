@@ -206,7 +206,7 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deplo
 		ReleaseName: deploymentSemanticRouter,
 		Chart:       "deploy/helm/semantic-router",
 		Namespace:   namespaceSemanticRouter,
-		ValuesFiles: []string{"deploy/kubernetes/aibrix/semantic-router-values/values.yaml"},
+		ValuesFiles: []string{"e2e/profiles/aibrix/values.yaml"},
 		Set: map[string]string{
 			"image.repository": "ghcr.io/vllm-project/semantic-router/extproc",
 			"image.tag":        opts.ImageTag,
