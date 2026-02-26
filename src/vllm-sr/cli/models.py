@@ -111,7 +111,9 @@ class JailbreakRule(BaseModel):
     threshold: float
     method: Optional[str] = None  # "classifier" (default) or "contrastive"
     include_history: bool = False
-    jailbreak_patterns: Optional[list[str]] = None  # Known jailbreak prompts (contrastive KB)
+    jailbreak_patterns: Optional[list[str]] = (
+        None  # Known jailbreak prompts (contrastive KB)
+    )
     benign_patterns: Optional[list[str]] = None  # Known benign prompts (contrastive KB)
     description: Optional[str] = None
 
