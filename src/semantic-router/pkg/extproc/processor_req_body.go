@@ -198,6 +198,21 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		ctx.ResponseAPICtx.TranslatedBody = requestBody
 	}
 
+	// Re-parse openAIRequest from memory-augmented body so the looper
+	// (which uses openAIRequest directly) includes injected memories.
+	if ctx.MemoryContext != "" {
+		if updatedReq, parseErr := parseOpenAIRequest(requestBody); parseErr == nil {
+			openAIRequest = updatedReq
+			// Verify the reparsed request has messages
+			marshaledCheck, _ := json.Marshal(updatedReq)
+			logging.Infof("[MemoryPatch] Re-parsed request with memory, body_len=%d, reparsed_len=%d", len(requestBody), len(marshaledCheck))
+			logging.Infof("[MemoryPatch] Original body snippet: %.300s", string(requestBody))
+			logging.Infof("[MemoryPatch] Reparsed body snippet: %.300s", string(marshaledCheck))
+		} else {
+			logging.Errorf("[MemoryPatch] Failed to re-parse memory-augmented body: %v", parseErr)
+		}
+	}
+
 	// Handle model selection and routing with pre-computed classification results and selected model
 	return r.handleModelRouting(openAIRequest, originalModel, decisionName, reasoningDecision, selectedModel, ctx)
 }
