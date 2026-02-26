@@ -87,6 +87,42 @@ var (
 		},
 		[]string{"backend", "user_id"},
 	)
+
+	// --- MINJA defense metrics (arXiv:2503.03704) ---
+
+	// MemoryMinjaFilterTotal tracks MINJA filter outcomes on the read path.
+	MemoryMinjaFilterTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_memory_minja_filter_total",
+			Help: "MINJA defense filter outcomes (result=passed|filtered)",
+		},
+		[]string{"result"},
+	)
+
+	// MemorySharedFilteredTotal tracks non-owner memories filtered by the MINJA filter.
+	MemorySharedFilteredTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_memory_shared_filtered_total",
+			Help: "Non-owner memories filtered by MINJA defense (reason=low_similarity|shared_cap|creator_cap)",
+		},
+		[]string{"reason"},
+	)
+
+	// MemorySharedAcceptedTotal tracks non-owner memories that passed the MINJA filter.
+	MemorySharedAcceptedTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "llm_memory_shared_accepted_total",
+			Help: "Non-owner memories that passed the MINJA defense filter",
+		},
+	)
+
+	// MemoryRateLimitBlockedTotal tracks memory creation attempts blocked by the rate limiter.
+	MemoryRateLimitBlockedTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "llm_memory_rate_limit_blocked_total",
+			Help: "Memory creation attempts blocked by per-user rate limiter (anti-PSS defense)",
+		},
+	)
 )
 
 // =============================================================================
@@ -148,6 +184,30 @@ func RecordMemoryStoreOperation(backend, operation, status string, duration floa
 	if duration >= 0 {
 		MemoryRetrievalLatency.WithLabelValues(backend, operation).Observe(duration)
 	}
+}
+
+// RecordMinjaFilter records a MINJA filter outcome on the read path.
+func RecordMinjaFilter(passed bool) {
+	if passed {
+		MemoryMinjaFilterTotal.WithLabelValues("passed").Inc()
+	} else {
+		MemoryMinjaFilterTotal.WithLabelValues("filtered").Inc()
+	}
+}
+
+// RecordSharedMemoryFiltered records a non-owner memory being filtered, with a reason.
+func RecordSharedMemoryFiltered(reason string) {
+	MemorySharedFilteredTotal.WithLabelValues(reason).Inc()
+}
+
+// RecordSharedMemoryAccepted records a non-owner memory passing the gate.
+func RecordSharedMemoryAccepted() {
+	MemorySharedAcceptedTotal.Inc()
+}
+
+// RecordRateLimitBlocked records a memory creation blocked by the per-user rate limiter.
+func RecordRateLimitBlocked() {
+	MemoryRateLimitBlockedTotal.Inc()
 }
 
 // UpdateMemoryStoreSize updates the total number of memories stored

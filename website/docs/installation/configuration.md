@@ -2044,6 +2044,66 @@ This workflow ensures your configuration is:
 - Version controlled for tracking changes
 - Optimized for your specific use case
 
+## MINJA Defense (Memory Injection Attack Protection)
+
+The router includes built-in defenses against Memory Injection Attacks (MINJA, [arXiv:2503.03704](https://arxiv.org/abs/2503.03704)), which can poison an LLM agent's memory through crafted conversational inputs.
+
+### Defense Architecture
+
+The MINJA defense uses a layered approach aligned with the paper's recommendations:
+
+1. **Prompt-level detection (write path)**: The jailbreak classifier (`mmbert32k-jailbreak-detector-merged`) gates the write path -- only requests that pass the classifier reach the LLM and produce memories. The model is being retrained with MINJA-specific attack data for improved coverage.
+2. **System-level defense (read path)**: The `MinjaFilter` implements shared-memory isolation, per-creator diversity caps, and similarity thresholds as a `MemoryFilter` plugin chained with the `ReflectionGate`.
+3. **Rate limiting (write path)**: Per-user rate limiting counters the Progressive Shortening Strategy (PSS) by capping memory creation frequency.
+
+### Configuration
+
+```yaml
+memory:
+  minja_defense:
+    enabled: true                       # Enable MINJA system-level defenses (default: true)
+    # Shared memory isolation (read path)
+    shared_memory_min_similarity: 0.85  # Higher similarity threshold for non-owner memories (default: 0.85)
+    max_shared_memories_per_request: 3  # Max non-owner memories injected per request (default: 3)
+    max_shared_per_creator: 2           # Max non-owner memories from a single creator per request (default: 2)
+    # Anti-PSS rate limiting (write path)
+    user_store_rate_limit: 5            # Max memory creations per user per window (default: 5)
+    user_store_rate_window_seconds: 60  # Rate limit window in seconds (default: 60)
+```
+
+### Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `enabled` | `true` | Activates MINJA system-level defenses |
+| `shared_memory_min_similarity` | `0.85` | Minimum similarity score for non-owner (shared/group) memories |
+| `max_shared_memories_per_request` | `3` | Maximum non-owner memories injected per request |
+| `max_shared_per_creator` | `2` | Maximum non-owner memories from a single creator per request |
+| `user_store_rate_limit` | `5` | Maximum memory creations per user per time window (anti-PSS) |
+| `user_store_rate_window_seconds` | `60` | Rate limit window in seconds |
+
+### Prometheus Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `llm_memory_minja_filter_total` | Counter | MINJA filter outcomes (`result=passed\|filtered`) |
+| `llm_memory_shared_filtered_total` | Counter | Non-owner memories filtered (`reason=low_similarity\|shared_cap\|creator_cap`) |
+| `llm_memory_shared_accepted_total` | Counter | Non-owner memories that passed the MINJA filter |
+| `llm_memory_rate_limit_blocked_total` | Counter | Memory creation attempts blocked by per-user rate limiter (anti-PSS) |
+
+### Shared Memory Defense (Cross-User Isolation)
+
+When shared or group memory is enabled, memories created by one user can be retrieved by another. The `MinjaFilter` automatically applies stricter filtering to non-owner memories (where `UserID` differs from the requesting user):
+
+- **Higher similarity threshold**: Non-owner memories must meet `shared_memory_min_similarity` (default: 0.85), ensuring only highly relevant shared memories are injected.
+- **Shared memory cap**: Non-owner memories are capped at `max_shared_memories_per_request` (default: 3), limiting cross-user influence per request.
+- **Per-creator diversity**: No single creator can contribute more than `max_shared_per_creator` (default: 2) memories per request, preventing one attacker from dominating all shared memory slots.
+- **Backward compatibility**: Memories without a user ID are treated as owned and not subjected to shared memory restrictions.
+
+### Anti-PSS Rate Limiting (Write Path)
+
+The MINJA paper (Section 4.2) describes the Progressive Shortening Strategy (PSS), where an attacker submits many sequential queries to create multiple malicious memory records. The rate limiter counters PSS by capping how many memories a single user can create per time window. When a user exceeds the limit, subsequent memory creations are silently dropped.
+
 ## Next Steps
 
 - **[Installation Guide](installation.md)** - Setup instructions

@@ -393,11 +393,12 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	}
 
 	// Create memory chunk store (direct conversation storage, no LLM extraction)
+	// with MINJA write-path defense (per-user rate limiting against PSS attacks)
 	var memoryExtractor *memory.MemoryExtractor
 	if memoryEnabled && memoryStore != nil {
-		memoryExtractor = memory.NewMemoryChunkStore(memoryStore)
+		memoryExtractor = memory.NewMemoryChunkStoreWithDefense(memoryStore, cfg.Memory.MinjaDefense)
 		if memoryExtractor != nil {
-			logging.Infof("Memory chunk store enabled (direct conversation storage)")
+			logging.Infof("Memory chunk store enabled (direct conversation storage, MINJA defense active)")
 		}
 	}
 

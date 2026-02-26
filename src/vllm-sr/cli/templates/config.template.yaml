@@ -730,6 +730,19 @@ memory:
     prune_threshold: 0.1        # δ: delete memories with R < threshold
     max_memories_per_user: 1000 # 0 = no cap
 
+  # MINJA defense - system-level defenses against Memory Injection Attacks (arXiv:2503.03704)
+  # Prompt-level detection is handled by the jailbreak classifier (mmbert32k).
+  # These controls add shared-memory isolation, per-creator caps, and write-path rate limiting.
+  minja_defense:
+    enabled: true                       # Enable MINJA system-level defenses (default: true)
+    # --- Shared memory isolation (read path) ---
+    shared_memory_min_similarity: 0.85  # Higher similarity threshold for non-owner memories (default: 0.85)
+    max_shared_memories_per_request: 3  # Max non-owner memories injected per request (default: 3)
+    max_shared_per_creator: 2           # Max non-owner memories from a single creator per request (default: 2)
+    # --- Anti-PSS rate limiting (write path, arXiv:2503.03704 Section 4.2) ---
+    user_store_rate_limit: 5            # Max memory creations per user per window (default: 5)
+    user_store_rate_window_seconds: 60  # Rate limit window in seconds (default: 60)
+
   # Security: auth header for trusted user_id (optional)
   # auth_user_id_header: "x-authenticated-user-id"
   # require_auth_header: false

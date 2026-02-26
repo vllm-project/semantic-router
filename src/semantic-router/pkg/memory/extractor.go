@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -40,6 +41,7 @@ type MemoryExtractor struct {
 	store             Store
 	sessionWindowSize int
 	sessionStride     int
+	rateLimiter       *StoreRateLimiter
 }
 
 // NewMemoryChunkStore creates a MemoryExtractor backed by the given Store.
@@ -54,6 +56,22 @@ func NewMemoryChunkStore(store Store) *MemoryExtractor {
 		sessionWindowSize: DefaultSessionWindowSize,
 		sessionStride:     DefaultSessionStride,
 	}
+}
+
+// NewMemoryChunkStoreWithDefense creates a MemoryExtractor with MINJA
+// write-path defense (per-user rate limiting against PSS attacks).
+func NewMemoryChunkStoreWithDefense(store Store, cfg config.MinjaDefenseConfig) *MemoryExtractor {
+	e := NewMemoryChunkStore(store)
+	if e == nil {
+		return nil
+	}
+	if cfg.IsEnabled() {
+		e.rateLimiter = NewStoreRateLimiter(
+			cfg.GetUserStoreRateLimit(),
+			cfg.GetUserStoreRateWindowSeconds(),
+		)
+	}
+	return e
 }
 
 // =============================================================================
@@ -111,6 +129,12 @@ func (e *MemoryExtractor) ProcessResponseWithHistory(
 ) error {
 	if e == nil || e.store == nil || !e.store.IsEnabled() {
 		logging.Infof("Memory chunk store: SKIPPED - store not enabled (store=%v)", e != nil && e.store != nil)
+		return nil
+	}
+
+	// MINJA defense: per-user rate limiting (anti-PSS, arXiv:2503.03704 Section 4.2)
+	if e.rateLimiter != nil && !e.rateLimiter.Allow(userID) {
+		logging.Warnf("Memory MINJA defense: RATE LIMITED user=%s, blocking memory storage", userID)
 		return nil
 	}
 
