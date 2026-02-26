@@ -366,7 +366,7 @@ func (p *Profile) prepareMLModels(ctx context.Context) error {
 		os.MkdirAll(sourceDir, 0755)
 
 		downloadCmd := exec.CommandContext(ctx, "python3", "download_model.py",
-			"--output-dir", "../../../.cache/ml-models",
+			"--output-dir", "../../../../.cache/ml-models",
 			"--repo-id", "abdallah1008/semantic-router-ml-models",
 		)
 		downloadCmd.Dir = trainingDir
@@ -376,7 +376,7 @@ func (p *Profile) prepareMLModels(ctx context.Context) error {
 		if err := downloadCmd.Run(); err != nil {
 			// Try with python if python3 fails
 			downloadCmd = exec.CommandContext(ctx, "python", "download_model.py",
-				"--output-dir", "../../../.cache/ml-models",
+				"--output-dir", "../../../../.cache/ml-models",
 				"--repo-id", "abdallah1008/semantic-router-ml-models",
 			)
 			downloadCmd.Dir = trainingDir
