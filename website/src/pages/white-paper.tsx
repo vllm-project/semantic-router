@@ -1,16 +1,20 @@
 import React, { useState, useCallback, useEffect } from 'react'
 import Layout from '@theme/Layout'
-import { Document, Page, pdfjs } from 'react-pdf'
-import 'react-pdf/dist/Page/AnnotationLayer.css'
-import 'react-pdf/dist/Page/TextLayer.css'
+import BrowserOnly from '@docusaurus/BrowserOnly'
 import styles from './white-paper.module.css'
-
-// Configure PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
 
 const PDF_URL = '/vllm-semantic-router.pdf'
 
-export default function WhitePaper(): JSX.Element {
+// Inner component: only rendered in the browser, avoids SSG DOMMatrix errors
+function WhitePaperContent(): JSX.Element {
+  // Dynamically import react-pdf only on the client side
+  const { Document, Page, pdfjs } = require('react-pdf')
+  require('react-pdf/dist/Page/AnnotationLayer.css')
+  require('react-pdf/dist/Page/TextLayer.css')
+
+  // Configure PDF.js worker
+  pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
+
   const [numPages, setNumPages] = useState<number>(0)
   const [pageNumber, setPageNumber] = useState<number>(1)
   const [pageWidth, setPageWidth] = useState<number>(600)
@@ -74,105 +78,116 @@ export default function WhitePaper(): JSX.Element {
   const hasRight = !isMobile && rightPage <= numPages
 
   return (
-    <Layout
-      title="vLLM Semantic Router"
-      description="Signal Driven Decision Routing for Mixture-of-Modality Models — Official White Paper"
-    >
-      <div className={styles.page}>
-        {/* PDF viewer area */}
-        <div className={styles.viewerArea}>
-          {error ? (
-            <div className={styles.fallback}>
-              <p>Unable to load PDF preview.</p>
-              <a href={PDF_URL} target="_blank" rel="noopener noreferrer">
-                Click here to open the PDF in a new tab
-              </a>
-            </div>
-          ) : (
-            <Document
-              file={PDF_URL}
-              onLoadSuccess={onDocumentLoadSuccess}
-              onLoadError={onDocumentLoadError}
-              loading={<div className={styles.loadingText}>Loading PDF…</div>}
-              className={styles.document}
-            >
-              {/* Two-page spread */}
-              <div className={styles.pagesRow}>
-                <div className={styles.pageWrapper}>
-                  <Page
-                    pageNumber={pageNumber}
-                    width={pageWidth}
-                    renderTextLayer={true}
-                    renderAnnotationLayer={true}
-                  />
-                </div>
-                {hasRight && (
+    <div className={styles.page}>
+      {/* PDF viewer area */}
+      <div className={styles.viewerArea}>
+        {error
+          ? (
+              <div className={styles.fallback}>
+                <p>Unable to load PDF preview.</p>
+                <a href={PDF_URL} target="_blank" rel="noopener noreferrer">
+                  Click here to open the PDF in a new tab
+                </a>
+              </div>
+            )
+          : (
+              <Document
+                file={PDF_URL}
+                onLoadSuccess={onDocumentLoadSuccess}
+                onLoadError={onDocumentLoadError}
+                loading={<div className={styles.loadingText}>Loading PDF…</div>}
+                className={styles.document}
+              >
+                {/* Two-page spread */}
+                <div className={styles.pagesRow}>
                   <div className={styles.pageWrapper}>
                     <Page
-                      pageNumber={rightPage}
+                      pageNumber={pageNumber}
                       width={pageWidth}
                       renderTextLayer={true}
                       renderAnnotationLayer={true}
                     />
                   </div>
-                )}
-              </div>
-            </Document>
-          )}
-        </div>
-
-        {/* Bottom control bar: three-column layout */}
-        {!error && !loading && (
-          <div className={styles.pagination}>
-            {/* Left spacer */}
-            <div />
-            {/* Center: page navigation */}
-            <div className={styles.paginationCenter}>
-              <button
-                className={styles.pageBtn}
-                onClick={goToPrev}
-                disabled={pageNumber <= 1}
-                aria-label="Previous page"
-              >
-                ← Prev
-              </button>
-              <span className={styles.pageInfo}>
-                {pageNumber}
-                {hasRight ? `–${rightPage}` : ''}
-                {' '}
-                /
-                {numPages}
-              </span>
-              <button
-                className={styles.pageBtn}
-                onClick={goToNext}
-                disabled={pageNumber + 1 >= numPages}
-                aria-label="Next page"
-              >
-                Next →
-              </button>
-            </div>
-            {/* Right: action buttons */}
-            <div className={styles.paginationRight}>
-              <a
-                href={PDF_URL}
-                download="vllm-semantic-router.pdf"
-                className={`${styles.toolbarBtn} ${styles.toolbarBtnPrimary}`}
-              >
-                ⬇ Download
-              </a>
-              <a
-                href={PDF_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`${styles.toolbarBtn} ${styles.toolbarBtnOutline}`}
-              >
-                ↗ New Tab
-              </a>
-            </div>
-          </div>
-        )}
+                  {hasRight && (
+                    <div className={styles.pageWrapper}>
+                      <Page
+                        pageNumber={rightPage}
+                        width={pageWidth}
+                        renderTextLayer={true}
+                        renderAnnotationLayer={true}
+                      />
+                    </div>
+                  )}
+                </div>
+              </Document>
+            )}
       </div>
+
+      {/* Bottom control bar: three-column layout */}
+      {!error && !loading && (
+        <div className={styles.pagination}>
+          {/* Left spacer */}
+          <div />
+          {/* Center: page navigation */}
+          <div className={styles.paginationCenter}>
+            <button
+              className={styles.pageBtn}
+              onClick={goToPrev}
+              disabled={pageNumber <= 1}
+              aria-label="Previous page"
+            >
+              ← Prev
+            </button>
+            <span className={styles.pageInfo}>
+              {pageNumber}
+              {hasRight ? `–${rightPage}` : ''}
+              {' '}
+              /
+              {numPages}
+            </span>
+            <button
+              className={styles.pageBtn}
+              onClick={goToNext}
+              disabled={pageNumber + 1 >= numPages}
+              aria-label="Next page"
+            >
+              Next →
+            </button>
+          </div>
+          {/* Right: action buttons */}
+          <div className={styles.paginationRight}>
+            <a
+              href={PDF_URL}
+              download="vllm-semantic-router.pdf"
+              className={`${styles.toolbarBtn} ${styles.toolbarBtnPrimary}`}
+            >
+              ⬇ Download
+            </a>
+            <a
+              href={PDF_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${styles.toolbarBtn} ${styles.toolbarBtnOutline}`}
+            >
+              ↗ New Tab
+            </a>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function WhitePaper(): JSX.Element {
+  return (
+    <Layout
+      title="vLLM Semantic Router"
+      description="Signal Driven Decision Routing for Mixture-of-Modality Models — Official White Paper"
+    >
+      {/* BrowserOnly prevents SSG from executing browser-only APIs (e.g. DOMMatrix) */}
+      <BrowserOnly fallback={<div className={styles.loadingText}>Loading PDF…</div>}>
+        {() => <WhitePaperContent />}
+      </BrowserOnly>
     </Layout>
   )
 }
