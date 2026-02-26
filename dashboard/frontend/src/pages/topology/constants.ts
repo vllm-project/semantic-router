@@ -13,6 +13,8 @@ export const SIGNAL_ICONS: Record<SignalType, string> = {
   language: '🌐',
   context: '📏',
   complexity: '🧠',
+  jailbreak: '🛡️',
+  pii: '🔒',
 }
 
 // ============== Signal Colors (Gray Nodes, Green Paths) ==============
@@ -26,6 +28,8 @@ export const SIGNAL_COLORS: Record<SignalType, { background: string; border: str
   language: { background: '#4a5568', border: '#2d3748' },     // Dark Gray
   context: { background: '#4a5568', border: '#2d3748' },      // Dark Gray
   complexity: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
+  jailbreak: { background: '#4a5568', border: '#2d3748' },    // Dark Gray
+  pii: { background: '#4a5568', border: '#2d3748' },          // Dark Gray
 }
 
 // ============== Signal Latency ==============
@@ -39,6 +43,8 @@ export const SIGNAL_LATENCY: Record<SignalType, string> = {
   language: '<1ms',
   context: '<1ms',
   complexity: '50-100ms',
+  jailbreak: '10-50ms',
+  pii: '10-50ms',
 }
 
 // ============== Plugin Icons ==============
@@ -50,6 +56,7 @@ export const PLUGIN_ICONS: Record<PluginType, string> = {
   'header_mutation': '🔧',
   'hallucination': '🔍',
   'router_replay': '🔄',
+  'fast_response': '⚡',
 }
 
 // ============== Plugin Colors (NVIDIA Dark Theme) ==============
@@ -61,6 +68,7 @@ export const PLUGIN_COLORS: Record<PluginType, { background: string; border: str
   'header_mutation': { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
   'hallucination': { background: '#556b7d', border: '#3d4a59' },   // Cool Gray
   'router_replay': { background: '#6ba300', border: '#5a8f00' },   // Green (consistent with other plugins)
+  'fast_response': { background: '#4a5568', border: '#2d3748' },   // Dark Gray
 }
 
 // ============== Algorithm Icons ==============
@@ -167,6 +175,8 @@ export const SIGNAL_TYPES: SignalType[] = [
   'language',
   'context',
   'complexity',
+  'jailbreak',
+  'pii',
 ]
 
 // ============== Plugin Types Array ==============
@@ -178,4 +188,5 @@ export const PLUGIN_TYPES: PluginType[] = [
   'header_mutation',
   'hallucination',
   'router_replay',
+  'fast_response',
 ]

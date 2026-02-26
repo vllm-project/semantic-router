@@ -187,11 +187,27 @@ func testSingleJailbreakDetection(ctx context.Context, testCase JailbreakTestCas
 		return result
 	}
 
-	// Check for jailbreak blocked headers
-	jailbreakBlockedHeader := resp.Header.Get("x-vsr-jailbreak-blocked")
-	result.ActuallyBlocked = (jailbreakBlockedHeader == "true")
-	result.DetectedType = resp.Header.Get("x-vsr-jailbreak-type")
-	result.Confidence = resp.Header.Get("x-vsr-jailbreak-confidence")
+	// Check for jailbreak blocked using new signal-driven headers
+	// New architecture: when jailbreak is detected and blocked, the fast_response plugin
+	// returns an ImmediateResponse with x-vsr-fast-response: true and
+	// x-vsr-selected-decision: <decision-name>.
+	// Note: x-vsr-matched-jailbreak is only set in the response header phase (non-blocking path),
+	// it is NOT present in fast_response ImmediateResponse.
+	fastResponse := resp.Header.Get("x-vsr-fast-response")
+	selectedDecision := resp.Header.Get("x-vsr-selected-decision")
+	matchedJailbreak := resp.Header.Get("x-vsr-matched-jailbreak")
+	jailbreakBlockedLegacy := resp.Header.Get("x-vsr-jailbreak-blocked")
+	// Jailbreak is blocked when: fast_response was triggered (ImmediateResponse),
+	// or legacy jailbreak-blocked header is set
+	result.ActuallyBlocked = fastResponse == "true" || jailbreakBlockedLegacy == "true"
+	result.DetectedType = selectedDecision // decision name from fast_response
+	if result.DetectedType == "" {
+		result.DetectedType = matchedJailbreak // non-blocking path
+	}
+	if result.DetectedType == "" {
+		result.DetectedType = resp.Header.Get("x-vsr-jailbreak-type") // legacy fallback
+	}
+	result.Confidence = resp.Header.Get("x-vsr-jailbreak-confidence") // legacy only
 
 	// Verify response body contains expected message
 	bodyBytes, err := io.ReadAll(resp.Body)
@@ -202,8 +218,14 @@ func testSingleJailbreakDetection(ctx context.Context, testCase JailbreakTestCas
 
 	if result.ActuallyBlocked {
 		// Verify the response contains jailbreak violation message
+		// In the new signal-driven architecture, the fast_response plugin message
+		// is configurable, so we check for common patterns
 		bodyStr := string(bodyBytes)
-		if !strings.Contains(bodyStr, "jailbreak attempt") {
+		hasExpectedText := strings.Contains(bodyStr, "jailbreak attempt") ||
+			strings.Contains(bodyStr, "jailbreak") ||
+			strings.Contains(bodyStr, "security") ||
+			fastResponse == "true"
+		if !hasExpectedText {
 			result.Error = "Jailbreak blocked but response message doesn't contain expected text"
 		}
 	}

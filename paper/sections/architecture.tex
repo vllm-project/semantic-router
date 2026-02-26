@@ -99,7 +99,7 @@ The architecture decomposes routing into three layers, each with a well-defined 
     \textbf{ML-based} (10--120\,ms):\\
     embedding, domain, complexity,\\
     modality, factual, preference,\\
-    feedback};
+    feedback, jailbreak, PII};
 
   \node[detail, anchor=north] (d2) at (5.8, -0.4) {%
     Boolean $\varphi$ over signal\\
@@ -110,7 +110,7 @@ The architecture decomposes routing into three layers, each with a well-defined 
     $\mathcal{M}_{d^*} \subseteq \mathcal{M}$};
 
   \node[detail, anchor=north] (d3) at (9.6, -0.4) {%
-    \textbf{Pre:} jailbreak, PII, cache,\\
+    \textbf{Pre:} fast response, cache,\\
     RAG, modality, memory,\\
     system prompt, header auth\\[2pt]
     \textbf{Select:} model from $\mathcal{M}_{d^*}$\\[2pt]
@@ -123,9 +123,9 @@ The architecture decomposes routing into three layers, each with a well-defined 
 
   % Feedback loop
   \draw[darr, rounded corners=6pt]
-    (out.south) -- ++(0,-3.8) -| (L1.south west);
+    (out.south) -- ++(0,-4.6) -| (L1.south west);
   \node[font=\scriptsize, fill=white, inner sep=2pt]
-    at (5.6, -3.5)
+    at (5.6, -4.3)
     {Response signals: hallucination, feedback, latency};
 
   \end{tikzpicture}
@@ -134,9 +134,9 @@ The architecture decomposes routing into three layers, each with a well-defined 
 \end{figure*}
 
 \textbf{Layer 1: Signal Extraction.}
-The signal layer maps a request $r$ to a structured signal result $\mathbf{s}$, consisting of binary match indicators and real-valued confidences for each configured rule across eleven signal types.
+The signal layer maps a request $r$ to a structured signal result $\mathbf{s}$, consisting of binary match indicators and real-valued confidences for each configured rule across thirteen signal types.
 Heuristic signals (keyword, language, context length, authorization) complete in sub-millisecond time.
-ML-based signals (embedding similarity, domain classification, factual grounding, modality detection, complexity, preference, user feedback) require neural inference at 10--120\,ms.
+ML-based signals (embedding similarity, domain classification, factual grounding, modality detection, complexity, preference, user feedback, jailbreak detection, PII detection) require neural inference at 10--120\,ms.
 Signals are evaluated in parallel, and only signal types referenced by at least one active decision are computed---a critical optimization for deployment configurations that use a subset of available signals.
 
 \textbf{Layer 2: Decision Evaluation.}
@@ -146,7 +146,7 @@ Each decision carries its own model candidate set $\mathcal{M}_{d^*} \subseteq \
 
 \textbf{Layer 3: Plugin Chain.}
 Each decision $d^*$ carries a per-decision plugin configuration that defines:
-(a)~\emph{pre-routing plugins} (jailbreak detection, PII filtering, semantic caching, RAG context injection, modality routing, memory retrieval, system prompt augmentation, header mutation for provider auth), executed before model invocation;
+(a)~\emph{pre-routing plugins} (fast response for safety enforcement, semantic caching, RAG context injection, modality routing, memory retrieval, system prompt augmentation, header mutation for provider auth), executed before model invocation;
 (b)~a \emph{semantic model selection algorithm} applied to $d^*$'s candidate model set $\mathcal{M}_{d^*}$ to find the best model cost-effectively;
 (c)~\emph{post-routing plugins} (hallucination detection, cache updates), executed on the model response.
 
@@ -162,7 +162,7 @@ This avoids monolithic routing logic and enables the same system to serve fundam
 Signals, decisions, and plugins are independent modules with a uniform interface boundary.
 New signal types can be added by implementing a single evaluation function---the decision engine references signals solely by type and rule name, requiring no modification.
 Likewise, new plugins and providers are registered independently.
-The current eleven signal types are the built-in set; the framework is designed to be extended with domain-specific signals as deployment requirements evolve.
+The current thirteen signal types are the built-in set; the framework is designed to be extended with domain-specific signals as deployment requirements evolve.
 
 \textbf{Closed-loop adaptivity.}
 The bidirectional signal flow described in \Cref{sec:signal_engine} enables the architecture to operate as a \emph{closed-loop control system}~\cite{astrom2008feedback}.
@@ -176,7 +176,7 @@ Standard regret bounds from online learning theory~\cite{shalev2012online} guara
 
 \textbf{Per-decision scoping.}
 Safety thresholds, caching policies, model candidates, and auth mechanisms are scoped to individual decisions rather than applied globally.
-A coding-focused decision can disable PII detection while a customer-support decision enforces strict filtering---using the same system configuration.
+A coding-focused decision can omit PII signal conditions while a customer-support decision enforces strict PII filtering via signal-matched fast response---using the same system configuration.
 
 \textbf{Provider abstraction.}
 The architecture abstracts over provider-specific protocols, authentication, and endpoint topologies.

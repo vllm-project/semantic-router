@@ -70,6 +70,8 @@ type SignalMatches struct {
 	ComplexityRules   []string // Complexity rules with difficulty level (e.g. "code_complexity:hard")
 	ModalityRules     []string // Modality classification: "AR", "DIFFUSION", or "BOTH"
 	AuthzRules        []string // Authz rule names matched for user-level routing (e.g. "premium_tier")
+	JailbreakRules    []string // Jailbreak rule names matched (confidence >= threshold)
+	PIIRules          []string // PII rule names matched (denied PII types detected)
 
 	SignalConfidences map[string]float64 // "signalType:ruleName" → real score (0.0-1.0), e.g. {"embedding:ai": 0.88}. Defaults to 1.0 if missing
 }
@@ -201,6 +203,10 @@ func (e *DecisionEngine) evalLeaf(
 		matched = slices.Contains(signals.ModalityRules, name)
 	case "authz":
 		matched = slices.Contains(signals.AuthzRules, name)
+	case "jailbreak":
+		matched = slices.Contains(signals.JailbreakRules, name)
+	case "pii":
+		matched = slices.Contains(signals.PIIRules, name)
 	default:
 		return false, 0, nil
 	}

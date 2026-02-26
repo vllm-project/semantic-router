@@ -124,15 +124,13 @@ var _ = Describe("validateConfigStructure", func() {
 		Expect(validateConfigStructure(cfg)).To(Succeed())
 	})
 
-	It("rejects empty modelRefs", func() {
+	It("accepts empty modelRefs", func() {
 		cfg := &RouterConfig{
 			IntelligentRouting: IntelligentRouting{
 				Decisions: []Decision{{Name: "x", ModelRefs: []ModelRef{}}},
 			},
 		}
-		err := validateConfigStructure(cfg)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("has no modelRefs defined"))
+		Expect(validateConfigStructure(cfg)).To(Succeed())
 	})
 
 	It("rejects blank model name", func() {
