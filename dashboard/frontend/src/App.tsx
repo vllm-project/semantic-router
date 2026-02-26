@@ -14,6 +14,7 @@ import ReplayPage from './pages/ReplayPage'
 import EvaluationPage from './pages/EvaluationPage'
 import MLSetupPage from './pages/MLSetupPage'
 import RatingsPage from './pages/RatingsPage'
+import MemoryPage from './pages/MemoryPage'
 import { ConfigSection } from './components/ConfigNav'
 import { ReadonlyProvider } from './contexts/ReadonlyContext'
 
@@ -209,6 +210,17 @@ const App: React.FC = () => {
                 onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
               >
                 <RatingsPage />
+              </Layout>
+            }
+          />
+          <Route
+            path="/memory"
+            element={
+              <Layout
+                configSection={configSection}
+                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+              >
+                <MemoryPage />
               </Layout>
             }
           />
