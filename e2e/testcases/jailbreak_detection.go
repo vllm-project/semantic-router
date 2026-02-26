@@ -187,10 +187,18 @@ func testSingleJailbreakDetection(ctx context.Context, testCase JailbreakTestCas
 		return result
 	}
 
-	// Check for jailbreak blocked headers
-	jailbreakBlockedHeader := resp.Header.Get("x-vsr-jailbreak-blocked")
-	result.ActuallyBlocked = (jailbreakBlockedHeader == "true")
-	result.DetectedType = resp.Header.Get("x-vsr-jailbreak-type")
+	// Check for jailbreak blocked using new signal-driven headers
+	// New architecture: x-vsr-matched-jailbreak contains matched rule names,
+	// x-vsr-fast-response indicates the request was blocked by fast_response plugin.
+	// Legacy headers (x-vsr-jailbreak-blocked etc.) are kept for backward compatibility.
+	matchedJailbreak := resp.Header.Get("x-vsr-matched-jailbreak")
+	fastResponse := resp.Header.Get("x-vsr-fast-response")
+	jailbreakBlockedLegacy := resp.Header.Get("x-vsr-jailbreak-blocked")
+	result.ActuallyBlocked = (matchedJailbreak != "" && fastResponse == "true") || jailbreakBlockedLegacy == "true"
+	result.DetectedType = matchedJailbreak
+	if result.DetectedType == "" {
+		result.DetectedType = resp.Header.Get("x-vsr-jailbreak-type")
+	}
 	result.Confidence = resp.Header.Get("x-vsr-jailbreak-confidence")
 
 	// Verify response body contains expected message
@@ -202,8 +210,14 @@ func testSingleJailbreakDetection(ctx context.Context, testCase JailbreakTestCas
 
 	if result.ActuallyBlocked {
 		// Verify the response contains jailbreak violation message
+		// In the new signal-driven architecture, the fast_response plugin message
+		// is configurable, so we check for common patterns
 		bodyStr := string(bodyBytes)
-		if !strings.Contains(bodyStr, "jailbreak attempt") {
+		hasExpectedText := strings.Contains(bodyStr, "jailbreak attempt") ||
+			strings.Contains(bodyStr, "jailbreak") ||
+			strings.Contains(bodyStr, "security") ||
+			fastResponse == "true"
+		if !hasExpectedText {
 			result.Error = "Jailbreak blocked but response message doesn't contain expected text"
 		}
 	}

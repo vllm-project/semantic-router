@@ -52,7 +52,8 @@ const HomepageHeader: React.FC = () => {
           enableMouseInteraction={false}
           color={threadsColor}
         />
-      </div>      <div className="container">
+      </div>
+      <div className="container">
         <div className={styles.heroContent}>
           <div className={styles.heroLeft}>
             {/* Logo Badge */}

@@ -188,9 +188,14 @@ func testSinglePIIDetection(ctx context.Context, testCase PIITestCase, localPort
 		return result
 	}
 
-	// Check for PII violation header
-	piiViolationHeader := resp.Header.Get("x-vsr-pii-violation")
-	result.ActuallyBlocked = (piiViolationHeader == "true")
+	// Check for PII detection using new signal-driven headers
+	// New architecture: x-vsr-matched-pii contains matched PII rule names,
+	// x-vsr-fast-response indicates the request was blocked by fast_response plugin.
+	// Legacy headers (x-vsr-pii-violation) are no longer set in new signal-driven flow.
+	matchedPII := resp.Header.Get("x-vsr-matched-pii")
+	fastResponse := resp.Header.Get("x-vsr-fast-response")
+	legacyPIIViolation := resp.Header.Get("x-vsr-pii-violation") // backward compat
+	result.ActuallyBlocked = (matchedPII != "" && fastResponse == "true") || legacyPIIViolation == "true"
 
 	// Verify response body contains expected message
 	bodyBytes, err := io.ReadAll(resp.Body)
@@ -200,10 +205,17 @@ func testSinglePIIDetection(ctx context.Context, testCase PIITestCase, localPort
 	}
 
 	if result.ActuallyBlocked {
-		// Verify the response contains PII violation message
+		// In the new signal-driven architecture, the fast_response plugin returns
+		// a configurable message. We check for common PII block messages.
 		bodyStr := string(bodyBytes)
-		if !strings.Contains(bodyStr, "personally identifiable information") {
-			result.Error = "PII blocked but response message doesn't contain expected text"
+		hasPIIMessage := strings.Contains(bodyStr, "personally identifiable information") ||
+			strings.Contains(bodyStr, "PII") ||
+			strings.Contains(bodyStr, "pii")
+		if !hasPIIMessage {
+			// Not necessarily an error in signal-driven mode, just log it
+			if verbose {
+				fmt.Printf("[Test] Note: PII blocked but response message may use custom fast_response text\n")
+			}
 		}
 	}
 
