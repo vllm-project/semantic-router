@@ -49,6 +49,10 @@ type LlamaStackBackendConfig struct {
 
 	// RequestTimeoutSeconds is the HTTP timeout. Default: 30.
 	RequestTimeoutSeconds int
+
+	// SearchType controls the search strategy: "vector" (default) or
+	// "hybrid" (vector + BM25 with RRF). Requires Milvus vector_io provider.
+	SearchType string
 }
 
 // LlamaStackBackend implements VectorStoreBackend by delegating to a
@@ -69,6 +73,7 @@ type LlamaStackBackend struct {
 	authToken      string
 	embeddingModel string
 	embeddingDim   int
+	searchType     string
 	httpClient     *http.Client
 
 	// storeIDs maps our vectorStoreID (name) to Llama Stack's generated ID.
@@ -90,11 +95,17 @@ func NewLlamaStackBackend(cfg LlamaStackBackendConfig) (*LlamaStackBackend, erro
 		timeout = 30
 	}
 
+	searchType := cfg.SearchType
+	if searchType == "" {
+		searchType = "vector"
+	}
+
 	return &LlamaStackBackend{
 		endpoint:       endpoint,
 		authToken:      cfg.AuthToken,
 		embeddingModel: cfg.EmbeddingModel,
 		embeddingDim:   cfg.EmbeddingDimension,
+		searchType:     searchType,
 		httpClient: &http.Client{
 			Timeout: time.Duration(timeout) * time.Second,
 			Transport: &http.Transport{
@@ -290,6 +301,10 @@ func (l *LlamaStackBackend) DeleteByFileID(ctx context.Context, vectorStoreID st
 //
 // Llama Stack searches by text query, not by embedding vector. The query text
 // must be passed via filter["_query_text"]; the queryEmbedding param is ignored.
+//
+// When searchType is "hybrid", the request includes ranking_options that tell
+// Llama Stack to combine vector similarity and BM25 keyword search using
+// Reciprocal Rank Fusion. This requires the Milvus vector_io provider.
 func (l *LlamaStackBackend) Search(
 	ctx context.Context, vectorStoreID string, queryEmbedding []float32,
 	topK int, threshold float32, filter map[string]interface{},
@@ -309,6 +324,12 @@ func (l *LlamaStackBackend) Search(
 	body := map[string]interface{}{
 		"query":           queryText,
 		"max_num_results": topK,
+	}
+
+	if l.searchType == "hybrid" {
+		body["ranking_options"] = map[string]interface{}{
+			"ranker": "rrf",
+		}
 	}
 
 	if fid, ok := filter["file_id"].(string); ok && fid != "" {
@@ -337,9 +358,17 @@ func (l *LlamaStackBackend) Search(
 		return nil, fmt.Errorf("failed to parse Llama Stack search response: %w", jsonErr)
 	}
 
+	// RRF scores (hybrid search) live on a fundamentally different scale than
+	// cosine similarity (vector search):
+	//   vector  → cosine similarity  → 0.0 – 1.0  (threshold ~0.7 is reasonable)
+	//   hybrid  → RRF = Σ 1/(k+rank) → 0.001 – 0.05 (threshold 0.7 would drop everything)
+	// When hybrid search is active the results are already ranked by the RRF
+	// combiner, so we skip score-based filtering and rely on topK to limit volume.
+	applyThreshold := l.searchType != "hybrid"
+
 	var results []SearchResult
 	for _, hit := range searchResp.Data {
-		if float32(hit.Score) < threshold {
+		if applyThreshold && float32(hit.Score) < threshold {
 			continue
 		}
 
