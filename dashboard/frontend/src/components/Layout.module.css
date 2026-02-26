@@ -74,6 +74,7 @@
   font-size: var(--text-sm);
   font-weight: 500;
   line-height: 1;
+  letter-spacing: 0.03em;
   transition: all var(--transition-fast);
   text-decoration: none;
   border: none;
@@ -103,6 +104,24 @@
   display: none;
 }
 
+/* Playground enhanced active state */
+.playgroundActive {
+  color: var(--color-text);
+  background: rgba(118, 185, 0, 0.1);
+  box-shadow: var(--glow-primary);
+  border-bottom: 2px solid var(--color-primary);
+  text-shadow: none;
+}
+
+/* Vertical divider between primary items and dropdowns */
+.navDivider {
+  width: 1px;
+  height: 20px;
+  background-color: var(--color-border);
+  margin: 0 0.5rem;
+  flex-shrink: 0;
+}
+
 /* Reset any inherited styles from global a tags */
 a.navLink {
   text-shadow: none !important;
@@ -126,15 +145,8 @@ button.navLink {
   padding: 0 1rem;
 }
 
-/* Config Dropdown */
-.configDropdown {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-}
-
-/* System Dropdown */
-.systemDropdown {
+/* Nav Dropdown (shared by Analysis and Operations) */
+.navDropdown {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -176,6 +188,34 @@ button.navLink {
   to {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Right-aligned dropdown to prevent viewport overflow */
+.dropdownMenuRight {
+  position: absolute;
+  top: calc(100% + 0.75rem);
+  right: 0;
+  left: auto;
+  transform: none;
+  min-width: 200px;
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.375rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 200;
+  animation: dropdownFadeInRight 0.15s ease;
+}
+
+@keyframes dropdownFadeInRight {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -357,8 +397,8 @@ button.navLink {
     font-size: var(--text-xs);
   }
 
-  .dropdownArrow {
-    display: none;
+  .navDivider {
+    margin: 0 0.25rem;
   }
 }
 
