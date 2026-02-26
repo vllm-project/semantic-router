@@ -177,6 +177,19 @@ interface ConfigData {
         conditions: Array<{ type: string; name: string }>
       }
     }>
+    jailbreak?: Array<{
+      name: string
+      threshold?: number
+      include_history?: boolean
+      description?: string
+    }>
+    pii?: Array<{
+      name: string
+      threshold?: number
+      pii_types_allowed?: string[]
+      include_history?: boolean
+      description?: string
+    }>
   }
   decisions?: Array<{
     name: string
@@ -2842,7 +2855,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         {
           name: 'include_history',
           label: 'Include History (jailbreak only)',
-          type: 'checkbox',
+          type: 'boolean',
           description: 'Whether to include conversation history in jailbreak detection',
           shouldHide: conditionallyHideFieldExceptType('Jailbreak')
         }
@@ -2868,7 +2881,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         {
           name: 'pii_include_history',
           label: 'Include History (PII only)',
-          type: 'checkbox',
+          type: 'boolean',
           description: 'Whether to include conversation history in PII detection',
           shouldHide: conditionallyHideFieldExceptType('PII')
         }
