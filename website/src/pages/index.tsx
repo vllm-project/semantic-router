@@ -134,7 +134,7 @@ const HomepageHeader: React.FC = () => {
                 rel="noopener noreferrer"
               >
                 <span className={styles.buttonText}>
-                  <Translate id="homepage.hero.publicBeta">Try Demo</Translate>
+                  <Translate id="homepage.hero.publicBeta">Public Beta</Translate>
                 </span>
                 <span className={styles.buttonIcon}>↗</span>
               </a>

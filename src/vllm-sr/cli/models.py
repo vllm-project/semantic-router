@@ -100,11 +100,21 @@ class ComplexityRule(BaseModel):
 
 
 class JailbreakRule(BaseModel):
-    """Jailbreak detection signal configuration."""
+    """Jailbreak detection signal configuration.
+
+    Supports two methods:
+    - "classifier" (default): BERT/LoRA-based jailbreak classifier
+    - "contrastive": Embedding-based contrastive scoring against jailbreak/benign KBs
+    """
 
     name: str
     threshold: float
+    method: Optional[str] = None  # "classifier" (default) or "contrastive"
     include_history: bool = False
+    jailbreak_patterns: Optional[list[str]] = (
+        None  # Known jailbreak prompts (contrastive KB)
+    )
+    benign_patterns: Optional[list[str]] = None  # Known benign prompts (contrastive KB)
     description: Optional[str] = None
 
 

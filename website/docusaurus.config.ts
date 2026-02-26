@@ -47,6 +47,7 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
+          lastVersion: 'current',
           versions: {
             'current': {
               label: 'Latest',
@@ -161,16 +162,16 @@ const config: Config = {
           type: 'docSidebar',
           sidebarId: 'tutorialSidebar',
           position: 'left',
-          label: 'Documentation',
+          label: 'Docs',
         },
         {
           to: '/white-paper',
-          label: 'White Paper',
+          label: 'Paper',
           position: 'left',
         },
         {
           to: '/publications',
-          label: 'Publications',
+          label: 'Research',
           position: 'left',
         },
         {
