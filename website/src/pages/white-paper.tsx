@@ -7,9 +7,12 @@ const PDF_URL = '/vllm-semantic-router.pdf'
 
 // Inner component: only rendered in the browser, avoids SSG DOMMatrix errors
 function WhitePaperContent(): JSX.Element {
-  // Dynamically import react-pdf only on the client side
-  const { Document, Page, pdfjs } = require('react-pdf')
+  // Lazily load react-pdf only in the browser to avoid SSG DOMMatrix errors
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { Document, Page, pdfjs } = require('react-pdf') as typeof import('react-pdf')
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   require('react-pdf/dist/Page/AnnotationLayer.css')
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   require('react-pdf/dist/Page/TextLayer.css')
 
   // Configure PDF.js worker
