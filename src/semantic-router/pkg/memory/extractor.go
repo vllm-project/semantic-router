@@ -60,8 +60,10 @@ func NewMemoryChunkStore(store Store) *MemoryExtractor {
 // Think-Tag Stripping
 // =============================================================================
 
-var thinkClosedPattern = regexp.MustCompile(`(?s)<think>.*?</think>\s*`)
-var thinkUnclosedPattern = regexp.MustCompile(`(?s)<think>.*`)
+var (
+	thinkClosedPattern   = regexp.MustCompile(`(?s)<think>.*?</think>\s*`)
+	thinkUnclosedPattern = regexp.MustCompile(`(?s)<think>.*`)
+)
 
 // StripThinkTags removes <think>...</think> blocks (and unclosed <think> tails)
 // from LLM output. This is a safety net for backends that embed reasoning in

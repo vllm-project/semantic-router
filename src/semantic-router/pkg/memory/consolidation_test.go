@@ -22,7 +22,7 @@ func TestGroupBySimilarity(t *testing.T) {
 	// m1 and m2 share many words -> group
 	// m3 and m4 share many words -> group
 	// m5 is distinct -> singleton
-	assert.True(t, len(groups) >= 2, "should have at least 2 groups (distinct topics)")
+	assert.GreaterOrEqual(t, len(groups), 2, "should have at least 2 groups (distinct topics)")
 
 	foundBudgetGroup := false
 	foundFlightGroup := false
@@ -64,13 +64,6 @@ func TestMergeGroup(t *testing.T) {
 }
 
 func splitLines(s string) []string {
-	var lines []string
-	for _, l := range []byte(s) {
-		if l == '\n' {
-			lines = append(lines, "")
-		}
-	}
-	// Simple split for test
 	result := make([]string, 0)
 	current := ""
 	for _, c := range s {

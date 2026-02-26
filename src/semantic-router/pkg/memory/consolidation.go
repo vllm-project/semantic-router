@@ -11,7 +11,7 @@ import (
 
 const (
 	consolidationGroupThreshold float32 = 0.60
-	consolidationMaxListLimit           = 100
+	consolidationMaxListLimit   int     = 100
 )
 
 // ConsolidateUser scans a user's memories and merges semantically related ones.

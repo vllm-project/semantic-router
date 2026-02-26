@@ -107,7 +107,7 @@ func TestReflectionGate_TokenBudget(t *testing.T) {
 	}
 
 	result := g.Filter(memories)
-	assert.True(t, len(result) < len(memories), "token budget should trim some memories")
+	assert.Less(t, len(result), len(memories), "token budget should trim some memories")
 	assert.Equal(t, "m1", result[0].Memory.ID, "highest-scored should be first")
 }
 

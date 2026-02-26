@@ -103,7 +103,7 @@ func TestProcessResponse_EmptyTurnSkipped(t *testing.T) {
 
 	results, err := store.List(context.Background(), ListOptions{UserID: "user1", Limit: 10})
 	require.NoError(t, err)
-	assert.Len(t, results.Memories, 0, "empty turns should not be stored")
+	assert.Empty(t, results.Memories, "empty turns should not be stored")
 }
 
 func TestProcessResponse_OnlyUserMessage(t *testing.T) {
@@ -312,7 +312,7 @@ func TestProcessResponseWithHistory_SessionChunkAtStride(t *testing.T) {
 	results, err := store.List(ctx, ListOptions{UserID: "user1", Limit: 100})
 	require.NoError(t, err)
 
-	assert.Equal(t, 2, len(results.Memories), "should store per-turn + session chunk at stride boundary")
+	assert.Len(t, results.Memories, 2, "should store per-turn + session chunk at stride boundary")
 
 	var sources []string
 	for _, m := range results.Memories {
@@ -385,7 +385,7 @@ func TestProcessResponseWithHistory_NoSessionChunkBeforeStride(t *testing.T) {
 	results, err := store.List(ctx, ListOptions{UserID: "user1", Limit: 100})
 	require.NoError(t, err)
 
-	assert.Equal(t, 1, len(results.Memories), "should only store per-turn chunk before stride")
+	assert.Len(t, results.Memories, 1, "should only store per-turn chunk before stride")
 	assert.Equal(t, "conversation", results.Memories[0].Source)
 }
 
@@ -404,7 +404,7 @@ func TestProcessResponseWithHistory_NilHistory(t *testing.T) {
 
 	results, err := store.List(ctx, ListOptions{UserID: "user1", Limit: 100})
 	require.NoError(t, err)
-	assert.Equal(t, 1, len(results.Memories), "nil history should still store per-turn chunk")
+	assert.Len(t, results.Memories, 1, "nil history should still store per-turn chunk")
 }
 
 // =============================================================================

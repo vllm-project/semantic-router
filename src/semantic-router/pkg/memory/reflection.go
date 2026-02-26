@@ -259,7 +259,9 @@ func resolveReflectionConfig(global config.MemoryReflectionConfig, perDecision *
 }
 
 func buildBlockPatterns(userPatterns []string) []*regexp.Regexp {
-	all := append(defaultBlockPatterns, userPatterns...)
+	all := make([]string, 0, len(defaultBlockPatterns)+len(userPatterns))
+	all = append(all, defaultBlockPatterns...)
+	all = append(all, userPatterns...)
 	compiled := make([]*regexp.Regexp, 0, len(all))
 	for _, p := range all {
 		re, err := regexp.Compile(p)

@@ -105,7 +105,7 @@ func TestNoopFilter_PassesAllThrough(t *testing.T) {
 	f := &NoopFilter{}
 	mem := sampleMemories()
 	result := f.Filter(mem)
-	assert.Equal(t, len(mem), len(result))
+	assert.Len(t, result, len(mem))
 	assert.Equal(t, mem, result)
 }
 
