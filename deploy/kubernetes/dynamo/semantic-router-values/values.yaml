@@ -438,11 +438,6 @@ config:
     use_cpu: true
     jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
 
-  # Router configuration
-  router:
-    high_confidence_threshold: 0.99
-    low_latency_threshold_ms: 2000
-
   # Embedding models
   # NOTE: mom-embedding-flash (google/embeddinggemma-300m) is gated and requires HF token
   # Using mom-embedding-pro for qwen3 path (public, high quality)

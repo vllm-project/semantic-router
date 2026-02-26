@@ -404,12 +404,6 @@ config:
   tools:
     enabled: false
 
-  # Router configuration  router:
-    high_confidence_threshold: 0.99
-    low_latency_threshold_ms: 2000
-    default_confidence_threshold: 0.95
-    default_max_latency_ms: 5000
-
   # Reasoning family configurations
   reasoning_families:
     qwen3:

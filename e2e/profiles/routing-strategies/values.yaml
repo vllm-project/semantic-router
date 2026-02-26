@@ -280,26 +280,6 @@ config:
             enabled: true
             pii_types_allowed: []
 
-  # Router Configuration for Dual-Path Selection
-  router:
-    high_confidence_threshold: 0.99
-    low_latency_threshold_ms: 2000
-    lora_baseline_score: 0.8
-    traditional_baseline_score: 0.7
-    embedding_baseline_score: 0.75
-    success_confidence_threshold: 0.8
-    large_batch_threshold: 4
-    lora_default_execution_time_ms: 1345
-    traditional_default_execution_time_ms: 4567
-    default_confidence_threshold: 0.95
-    default_max_latency_ms: 5000
-    default_batch_size: 4
-    default_avg_execution_time_ms: 3000
-    lora_default_confidence: 0.99
-    traditional_default_confidence: 0.95
-    lora_default_success_rate: 0.98
-    traditional_default_success_rate: 0.95
-
   default_model: base-model
 
   # Reasoning family configurations

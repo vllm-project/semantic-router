@@ -49,13 +49,13 @@ const config: Config = {
           sidebarPath: './sidebars.ts',
           versions: {
             'current': {
-              label: '🚧 Next',
-              path: 'next',
+              label: 'Latest',
+              path: '',
               badge: true,
             },
             'v0.1': {
               label: 'v0.1',
-              path: '',
+              path: 'v0.1',
               badge: true,
             },
           },
