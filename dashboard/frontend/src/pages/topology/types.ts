@@ -13,13 +13,15 @@ export type SignalType =
   | 'language'
   | 'context'
   | 'complexity'
+  | 'jailbreak'
+  | 'pii'
 
 export interface SignalConfig {
   type: SignalType
   name: string
   description?: string
   latency: string
-  config: KeywordSignalConfig | EmbeddingSignalConfig | DomainSignalConfig | ContextSignalConfig | ComplexitySignalConfig | GenericSignalConfig
+  config: KeywordSignalConfig | EmbeddingSignalConfig | DomainSignalConfig | ContextSignalConfig | ComplexitySignalConfig | JailbreakSignalConfig | PIISignalConfig | GenericSignalConfig
 }
 
 export interface KeywordSignalConfig {
@@ -47,6 +49,17 @@ export interface ComplexitySignalConfig {
   threshold?: number
   hard_candidates?: string[]
   easy_candidates?: string[]
+}
+
+export interface JailbreakSignalConfig {
+  threshold?: number
+  include_history?: boolean
+}
+
+export interface PIISignalConfig {
+  threshold?: number
+  pii_types_allowed?: string[]
+  include_history?: boolean
 }
 
 export interface GenericSignalConfig {
@@ -123,12 +136,11 @@ export interface AutoMixConfig {
 // ============== Plugin Types ==============
 export type PluginType =
   | 'semantic-cache'
-  | 'jailbreak'
-  | 'pii'
   | 'system_prompt'
   | 'header_mutation'
   | 'hallucination'
   | 'router_replay'
+  | 'fast_response'
 
 export interface PluginConfig {
   type: PluginType
@@ -343,6 +355,20 @@ export interface ConfigData {
     }
     description?: string
   }>
+  // Jailbreak/PII signal rules (top-level due to yaml:",inline")
+  jailbreak?: Array<{
+    name: string
+    threshold?: number
+    include_history?: boolean
+    description?: string
+  }>
+  pii?: Array<{
+    name: string
+    threshold?: number
+    pii_types_allowed?: string[]
+    include_history?: boolean
+    description?: string
+  }>
   // Legacy format
   categories?: Array<{
     name: string
@@ -409,6 +435,19 @@ export interface ConfigData {
       easy?: {
         candidates?: string[]
       }
+      description?: string
+    }>
+    jailbreak?: Array<{
+      name: string
+      threshold?: number
+      include_history?: boolean
+      description?: string
+    }>
+    pii?: Array<{
+      name: string
+      threshold?: number
+      pii_types_allowed?: string[]
+      include_history?: boolean
       description?: string
     }>
   }

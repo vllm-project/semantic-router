@@ -99,6 +99,25 @@ class ComplexityRule(BaseModel):
     composer: Optional["Rules"] = None  # Forward reference, defined below
 
 
+class JailbreakRule(BaseModel):
+    """Jailbreak detection signal configuration."""
+
+    name: str
+    threshold: float
+    include_history: bool = False
+    description: Optional[str] = None
+
+
+class PIIRule(BaseModel):
+    """PII detection signal configuration."""
+
+    name: str
+    threshold: float
+    pii_types_allowed: Optional[List[str]] = None
+    include_history: bool = False
+    description: Optional[str] = None
+
+
 class Signals(BaseModel):
     """All signal configurations."""
 
@@ -111,6 +130,8 @@ class Signals(BaseModel):
     language: Optional[List[Language]] = []
     context: Optional[List[ContextRule]] = []
     complexity: Optional[List[ComplexityRule]] = []
+    jailbreak: Optional[List[JailbreakRule]] = []
+    pii: Optional[List[PIIRule]] = []
 
 
 class Condition(BaseModel):

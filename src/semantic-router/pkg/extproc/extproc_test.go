@@ -32,7 +32,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responsestore"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/pii"
 )
 
 var _ = Describe("Process Stream Handling", func() {
@@ -635,9 +634,6 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 		return nil, err
 	}
 
-	// Create PII checker
-	piiChecker := pii.NewPolicyChecker(cfg)
-
 	// Create Response API filter if enabled
 	var responseAPIFilter *ResponseAPIFilter
 	if cfg.ResponseAPI.Enabled {
@@ -658,7 +654,6 @@ func CreateTestRouter(cfg *config.RouterConfig) (*OpenAIRouter, error) {
 		Config:               cfg,
 		CategoryDescriptions: cfg.GetCategoryDescriptions(),
 		Classifier:           classifier,
-		PIIChecker:           piiChecker,
 		Cache:                semanticCache,
 		ToolsDatabase:        toolsDatabase,
 		ResponseAPIFilter:    responseAPIFilter,
