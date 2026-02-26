@@ -188,18 +188,26 @@ func testSingleJailbreakDetection(ctx context.Context, testCase JailbreakTestCas
 	}
 
 	// Check for jailbreak blocked using new signal-driven headers
-	// New architecture: x-vsr-matched-jailbreak contains matched rule names,
-	// x-vsr-fast-response indicates the request was blocked by fast_response plugin.
-	// Legacy headers (x-vsr-jailbreak-blocked etc.) are kept for backward compatibility.
-	matchedJailbreak := resp.Header.Get("x-vsr-matched-jailbreak")
+	// New architecture: when jailbreak is detected and blocked, the fast_response plugin
+	// returns an ImmediateResponse with x-vsr-fast-response: true and
+	// x-vsr-selected-decision: <decision-name>.
+	// Note: x-vsr-matched-jailbreak is only set in the response header phase (non-blocking path),
+	// it is NOT present in fast_response ImmediateResponse.
 	fastResponse := resp.Header.Get("x-vsr-fast-response")
+	selectedDecision := resp.Header.Get("x-vsr-selected-decision")
+	matchedJailbreak := resp.Header.Get("x-vsr-matched-jailbreak")
 	jailbreakBlockedLegacy := resp.Header.Get("x-vsr-jailbreak-blocked")
-	result.ActuallyBlocked = (matchedJailbreak != "" && fastResponse == "true") || jailbreakBlockedLegacy == "true"
-	result.DetectedType = matchedJailbreak
+	// Jailbreak is blocked when: fast_response was triggered (ImmediateResponse),
+	// or legacy jailbreak-blocked header is set
+	result.ActuallyBlocked = fastResponse == "true" || jailbreakBlockedLegacy == "true"
+	result.DetectedType = selectedDecision // decision name from fast_response
 	if result.DetectedType == "" {
-		result.DetectedType = resp.Header.Get("x-vsr-jailbreak-type")
+		result.DetectedType = matchedJailbreak // non-blocking path
 	}
-	result.Confidence = resp.Header.Get("x-vsr-jailbreak-confidence")
+	if result.DetectedType == "" {
+		result.DetectedType = resp.Header.Get("x-vsr-jailbreak-type") // legacy fallback
+	}
+	result.Confidence = resp.Header.Get("x-vsr-jailbreak-confidence") // legacy only
 
 	// Verify response body contains expected message
 	bodyBytes, err := io.ReadAll(resp.Body)

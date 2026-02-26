@@ -189,13 +189,20 @@ func testSinglePIIDetection(ctx context.Context, testCase PIITestCase, localPort
 	}
 
 	// Check for PII detection using new signal-driven headers
-	// New architecture: x-vsr-matched-pii contains matched PII rule names,
-	// x-vsr-fast-response indicates the request was blocked by fast_response plugin.
-	// Legacy headers (x-vsr-pii-violation) are no longer set in new signal-driven flow.
-	matchedPII := resp.Header.Get("x-vsr-matched-pii")
+	// New architecture: when PII is detected and blocked, the fast_response plugin
+	// returns an ImmediateResponse with x-vsr-fast-response: true and
+	// x-vsr-selected-decision: <decision-name>.
+	// Note: x-vsr-matched-pii is only set in the response header phase (non-blocking path),
+	// it is NOT present in fast_response ImmediateResponse.
 	fastResponse := resp.Header.Get("x-vsr-fast-response")
+	selectedDecision := resp.Header.Get("x-vsr-selected-decision")
+	matchedPII := resp.Header.Get("x-vsr-matched-pii")
 	legacyPIIViolation := resp.Header.Get("x-vsr-pii-violation") // backward compat
-	result.ActuallyBlocked = (matchedPII != "" && fastResponse == "true") || legacyPIIViolation == "true"
+	// PII is blocked when: fast_response was triggered (ImmediateResponse),
+	// or legacy PII violation header is set, or matched-pii is present (non-blocking detection)
+	result.ActuallyBlocked = fastResponse == "true" || legacyPIIViolation == "true"
+	_ = selectedDecision // available for future decision-name based filtering
+	_ = matchedPII       // only present in non-blocking (pass-through) responses
 
 	// Verify response body contains expected message
 	bodyBytes, err := io.ReadAll(resp.Body)
