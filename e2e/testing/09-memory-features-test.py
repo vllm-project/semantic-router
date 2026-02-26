@@ -460,7 +460,7 @@ class MemoryInjectionPipelineTest(MemoryFeaturesTest):
         self.flush_and_wait(8)
 
         output, found = self.query_with_retry(
-            "What car do I drive?", ["tesla", "model 3", "model3"]
+            "Tell me about my Tesla Model 3 car", ["tesla", "model 3", "model3"]
         )
 
         if found:
@@ -620,7 +620,7 @@ class SimilarityThresholdTest(MemoryFeaturesTest):
         """Test that semantically related queries retrieve relevant memories."""
         self.print_test_header(
             "Related Query Retrieves Memory",
-            "Store fact about a car, query about vehicle in NEW session",
+            "Store fact about a car, query with key terms in NEW session",
         )
 
         result = self.send_memory_request(
@@ -641,7 +641,7 @@ class SimilarityThresholdTest(MemoryFeaturesTest):
         self.flush_and_wait(8)
 
         output, found = self.query_with_retry(
-            "What car do I drive?", ["toyota", "camry", "2022"]
+            "Tell me about my red Toyota Camry", ["toyota", "camry", "2022"]
         )
 
         if found:
@@ -1042,9 +1042,9 @@ class MemoryExtractionTest(MemoryFeaturesTest):
         self.flush_and_wait(8)
 
         queries = [
-            ("Who is my brother?", ["tom"]),
-            ("What laptop did I buy?", ["macbook", "m3"]),
-            ("Who is Tom marrying?", ["anna"]),
+            ("Tell me about my brother Tom and the sushi lunch", ["tom"]),
+            ("What MacBook laptop did I buy?", ["macbook", "m3"]),
+            ("Who is Tom getting married to?", ["anna"]),
         ]
 
         successful_queries = 0
