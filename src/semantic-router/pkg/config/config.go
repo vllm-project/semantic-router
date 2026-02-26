@@ -1059,6 +1059,12 @@ type MemoryConfig struct {
 	// Default: 0.6
 	DefaultSimilarityThreshold float32 `yaml:"default_similarity_threshold,omitempty"`
 
+	// AdaptiveThreshold enables elbow-based adaptive thresholding.
+	// When enabled, the retriever finds the largest score gap between
+	// consecutive candidates and discards everything below the gap,
+	// subject to DefaultSimilarityThreshold as a hard floor.
+	AdaptiveThreshold bool `yaml:"adaptive_threshold,omitempty"`
+
 	// QualityScoring configures retention scoring and pruning parameters (MemoryBank-style).
 	// Access tracking (LastAccessed, AccessCount) is always active; pruning runs only when PruneUser is called.
 	QualityScoring MemoryQualityScoringConfig `yaml:"quality_scoring,omitempty"`

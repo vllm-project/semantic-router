@@ -1036,6 +1036,8 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 		retrieveOpts.HybridMode = memoryPluginConfig.HybridMode
 	}
 
+	retrieveOpts.AdaptiveThreshold = r.Config.Memory.AdaptiveThreshold
+
 	// Apply defaults if not configured
 	if retrieveOpts.Limit <= 0 {
 		retrieveOpts.Limit = 5

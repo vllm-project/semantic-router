@@ -601,6 +601,71 @@ func TestMilvusStore_Retrieve_ThresholdVeryHigh(t *testing.T) {
 	}
 }
 
+func TestAdaptiveThresholdElbow(t *testing.T) {
+	mkCandidates := func(scores ...float32) []*RetrieveResult {
+		out := make([]*RetrieveResult, len(scores))
+		for i, s := range scores {
+			out[i] = &RetrieveResult{Score: s}
+		}
+		return out
+	}
+
+	t.Run("single candidate returns floor", func(t *testing.T) {
+		result := adaptiveThresholdElbow(mkCandidates(0.8), 0.3)
+		assert.Equal(t, float32(0.3), result)
+	})
+
+	t.Run("empty candidates returns floor", func(t *testing.T) {
+		result := adaptiveThresholdElbow([]*RetrieveResult{}, 0.3)
+		assert.Equal(t, float32(0.3), result)
+	})
+
+	t.Run("clear elbow raises threshold", func(t *testing.T) {
+		// Scores: 0.85, 0.80, 0.75, 0.40, 0.35
+		// Largest gap: 0.75 - 0.40 = 0.35 (between idx 2 and 3)
+		// Adaptive = 0.75 - 0.35/2 = 0.575
+		result := adaptiveThresholdElbow(mkCandidates(0.85, 0.80, 0.75, 0.40, 0.35), 0.3)
+		assert.InDelta(t, 0.575, float64(result), 0.01)
+	})
+
+	t.Run("no significant gap returns floor", func(t *testing.T) {
+		// All scores within 0.04 of each other — no gap > 0.05
+		result := adaptiveThresholdElbow(mkCandidates(0.50, 0.48, 0.46, 0.44), 0.3)
+		assert.Equal(t, float32(0.3), result)
+	})
+
+	t.Run("adaptive never goes below floor", func(t *testing.T) {
+		// Gap at low scores: 0.30, 0.28, 0.10, 0.05
+		// Largest gap: 0.28 - 0.10 = 0.18 (between idx 1 and 2)
+		// Adaptive = 0.28 - 0.18/2 = 0.19 — below floor of 0.3
+		result := adaptiveThresholdElbow(mkCandidates(0.30, 0.28, 0.10, 0.05), 0.3)
+		assert.Equal(t, float32(0.3), result)
+	})
+
+	t.Run("gap at the beginning", func(t *testing.T) {
+		// Scores: 0.90, 0.50, 0.48, 0.46
+		// Largest gap: 0.90 - 0.50 = 0.40 (between idx 0 and 1)
+		// Adaptive = 0.90 - 0.40/2 = 0.70
+		result := adaptiveThresholdElbow(mkCandidates(0.90, 0.50, 0.48, 0.46), 0.3)
+		assert.InDelta(t, 0.70, float64(result), 0.01)
+	})
+
+	t.Run("two candidates with gap", func(t *testing.T) {
+		// Scores: 0.80, 0.30
+		// Gap: 0.50 → adaptive = 0.80 - 0.50/2 = 0.55
+		result := adaptiveThresholdElbow(mkCandidates(0.80, 0.30), 0.3)
+		assert.InDelta(t, 0.55, float64(result), 0.01)
+	})
+
+	t.Run("multiple gaps picks largest", func(t *testing.T) {
+		// Scores: 0.90, 0.60, 0.55, 0.50
+		// Gaps: 0.30, 0.05, 0.05 — clear winner at idx 1
+		// Adaptive = 0.90 - 0.30/2 = 0.75
+		result := adaptiveThresholdElbow(mkCandidates(0.90, 0.60, 0.55, 0.50), 0.3)
+		assert.InDelta(t, 0.75, float64(result), 0.01)
+	})
+}
+
 func TestMilvusStore_Retrieve_EmptyResults(t *testing.T) {
 	store, mockClient := setupTestStore()
 	ctx := context.Background()

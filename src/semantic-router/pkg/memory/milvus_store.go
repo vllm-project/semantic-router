@@ -349,6 +349,13 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		logging.Debugf("MilvusStore.Retrieve: hybrid re-ranked %d candidates (mode=%s)", len(candidates), opts.HybridMode)
 	}
 
+	// Adaptive threshold: find the largest score gap ("elbow") among candidates
+	// and raise the effective threshold to that gap, keeping the config value as floor.
+	if opts.AdaptiveThreshold && len(candidates) > 1 {
+		threshold = adaptiveThresholdElbow(candidates, threshold)
+		logging.Debugf("MilvusStore.Retrieve: adaptive threshold = %.4f", threshold)
+	}
+
 	// Apply threshold + limit.
 	results := make([]*RetrieveResult, 0, limit)
 	for _, c := range candidates {
@@ -383,6 +390,41 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 	}
 
 	return results, nil
+}
+
+// adaptiveThresholdElbow finds the largest score gap between consecutive
+// candidates (assumed sorted descending by score) and returns the score of
+// the candidate just above that gap as the adaptive threshold. The provided
+// floor is used as a minimum — the returned threshold is always >= floor.
+// This keeps tightly-clustered high-quality results and discards a trailing
+// tail of weakly-relevant memories.
+func adaptiveThresholdElbow(candidates []*RetrieveResult, floor float32) float32 {
+	if len(candidates) < 2 {
+		return floor
+	}
+
+	maxGap := float32(0)
+	elbowIdx := 0
+	for i := 1; i < len(candidates); i++ {
+		gap := candidates[i-1].Score - candidates[i].Score
+		if gap > maxGap {
+			maxGap = gap
+			elbowIdx = i
+		}
+	}
+
+	// Only apply if the gap is meaningful (> 5% absolute)
+	if maxGap < 0.05 {
+		return floor
+	}
+
+	// Use midpoint of the gap as threshold so borderline items are excluded
+	adaptive := candidates[elbowIdx-1].Score - maxGap/2
+
+	if adaptive > floor {
+		return adaptive
+	}
+	return floor
 }
 
 // parseCandidates extracts RetrieveResult entries from a Milvus SearchResult.

@@ -103,6 +103,12 @@ type RetrieveOptions struct {
 
 	// HybridMode selects the score fusion method: "weighted" (default) or "rrf"
 	HybridMode string
+
+	// AdaptiveThreshold enables cluster-based adaptive thresholding.
+	// When true, the retriever detects the largest score gap among candidates
+	// and only returns those above the gap, subject to the base Threshold
+	// as a floor. This avoids injecting weakly-relevant memories.
+	AdaptiveThreshold bool
 }
 
 // DefaultMemoryConfig returns a default memory configuration.
