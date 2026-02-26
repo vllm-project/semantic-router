@@ -50,10 +50,7 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -72,10 +69,7 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -94,10 +88,7 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "semantic-cache"
           configuration:
             enabled: true
@@ -120,10 +111,7 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -142,10 +130,7 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: true
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -164,10 +149,7 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -186,10 +168,7 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "semantic-cache"
           configuration:
             enabled: true
@@ -212,10 +191,7 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "semantic-cache"
           configuration:
             enabled: true
@@ -238,10 +214,7 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -260,10 +233,7 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: true
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -282,10 +252,7 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: true
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -304,10 +271,7 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -326,10 +290,7 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -348,10 +309,7 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -370,10 +328,7 @@ config:
         - model: vllm-llama3-8b-instruct
           use_reasoning: true
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true

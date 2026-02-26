@@ -417,6 +417,12 @@ config:
       threshold: 0.6
       use_cpu: true
       category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
+    pii_model:
+      model_id: "models/mom-pii-classifier"
+      use_modernbert: false  # Use LoRA PII model with auto-detection
+      threshold: 0.9
+      use_cpu: true
+      pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
   keyword_rules:
     - name: "thinking"
       operator: "OR"

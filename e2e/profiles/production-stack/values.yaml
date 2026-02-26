@@ -136,10 +136,7 @@ config:
           lora_name: general-expert
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: philosophy_decision
       description: "Philosophy domain queries"
@@ -154,10 +151,7 @@ config:
           lora_name: general-expert
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: biology_decision
       description: "Biology domain queries"
@@ -172,10 +166,7 @@ config:
           lora_name: general-expert
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: health_decision
       description: "Health domain queries"
@@ -190,10 +181,7 @@ config:
           lora_name: general-expert
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: computer_science_decision
       description: "Computer science domain queries"
@@ -208,10 +196,7 @@ config:
           lora_name: general-expert
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: engineering_decision
       description: "Engineering domain queries"
@@ -226,10 +211,7 @@ config:
           lora_name: general-expert
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: psychology_decision
       description: "Psychology domain queries"
@@ -244,10 +226,7 @@ config:
           lora_name: general-expert
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: math_decision
       description: "Math domain queries"
@@ -262,10 +241,7 @@ config:
           lora_name: general-expert
           use_reasoning: true
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: chemistry_decision
       description: "Chemistry domain queries"
@@ -280,10 +256,7 @@ config:
           lora_name: general-expert
           use_reasoning: true
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: physics_decision
       description: "Physics domain queries"
@@ -298,10 +271,7 @@ config:
           lora_name: general-expert
           use_reasoning: true
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: history_decision
       description: "History domain queries"
@@ -316,10 +286,7 @@ config:
           lora_name: general-expert
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: law_decision
       description: "Law domain queries"
@@ -334,10 +301,7 @@ config:
           lora_name: general-expert
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: economics_decision
       description: "Economics domain queries"
@@ -352,10 +316,7 @@ config:
           lora_name: general-expert
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: default_decision
       description: "Default route for all requests"
@@ -370,10 +331,7 @@ config:
           lora_name: general-expert
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "semantic-cache"
           configuration:
             enabled: true

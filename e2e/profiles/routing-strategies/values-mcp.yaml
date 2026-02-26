@@ -115,10 +115,7 @@ config:
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a mathematics expert. Provide step-by-step solutions with clear explanations. Show your work and verify calculations."
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: "science_decision"
       description: "Science and natural sciences"
@@ -135,10 +132,7 @@ config:
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a science expert. Explain scientific concepts clearly and accurately. Use examples and analogies when helpful."
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: "technology_decision"
       description: "Technology and computer science"
@@ -155,10 +149,7 @@ config:
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a technology and programming expert. Provide practical solutions with code examples when appropriate."
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: "history_decision"
       description: "History and cultural topics"
@@ -175,10 +166,7 @@ config:
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a history expert. Provide accurate historical information with context and relevant details."
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: "general_decision"
       description: "General knowledge and miscellaneous topics"
@@ -199,10 +187,7 @@ config:
           configuration:
             enabled: true
             similarity_threshold: 0.75
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
   default_model: openai/gpt-oss-20b
 

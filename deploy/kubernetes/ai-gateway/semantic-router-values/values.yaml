@@ -82,10 +82,7 @@ config:
           lora_name: social-expert
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -105,10 +102,7 @@ config:
           lora_name: law-expert
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -128,10 +122,7 @@ config:
           lora_name: humanities-expert
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "semantic-cache"
           configuration:
             enabled: true
@@ -155,10 +146,7 @@ config:
           lora_name: science-expert
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -178,10 +166,7 @@ config:
           lora_name: science-expert
           use_reasoning: true
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -201,10 +186,7 @@ config:
           lora_name: humanities-expert
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -224,10 +206,7 @@ config:
           lora_name: science-expert
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "semantic-cache"
           configuration:
             enabled: true
@@ -251,10 +230,7 @@ config:
           lora_name: social-expert
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -274,10 +250,7 @@ config:
           lora_name: math-expert
           use_reasoning: true
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -297,10 +270,7 @@ config:
           lora_name: science-expert
           use_reasoning: true
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -320,10 +290,7 @@ config:
           lora_name: science-expert
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -343,10 +310,7 @@ config:
           lora_name: humanities-expert
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -366,10 +330,7 @@ config:
           lora_name: science-expert
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -389,10 +350,7 @@ config:
           lora_name: general-expert
           use_reasoning: true
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -412,10 +370,7 @@ config:
           lora_name: general-expert
           use_reasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "semantic-cache"
           configuration:
             enabled: true

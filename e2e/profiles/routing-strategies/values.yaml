@@ -198,10 +198,7 @@ config:
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a highly responsive assistant specialized in handling urgent requests. Prioritize speed and efficiency while maintaining accuracy. Provide concise, actionable responses and focus on immediate solutions."
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: "sensitive_data_decision"
       description: "Requests involving sensitive personal data"
@@ -218,10 +215,7 @@ config:
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a security-conscious assistant specialized in handling sensitive data. Exercise extreme caution with personal information, follow data protection best practices, and remind users about privacy considerations."
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: "regex_pattern_match_decision"
       description: "Structured data and pattern-based requests"
@@ -251,10 +245,7 @@ config:
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices."
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
     - name: "general_decision"
       description: "General knowledge and miscellaneous topics"
@@ -275,10 +266,7 @@ config:
           configuration:
             enabled: true
             similarity_threshold: 0.75
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
 
   default_model: base-model
 
