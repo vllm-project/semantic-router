@@ -571,10 +571,9 @@ default_model: "fallback-model"
 			})
 
 			It("should return the default model", func() {
-				// This should fail validation since decisions must have at least one model
+				// Empty modelRefs is now allowed - decisions without models are valid
 				_, err := Load(configFile)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("has no modelRefs defined"))
+				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 	})
