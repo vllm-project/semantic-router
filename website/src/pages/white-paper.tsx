@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react'
 import Layout from '@theme/Layout'
 import Head from '@docusaurus/Head'
 import BrowserOnly from '@docusaurus/BrowserOnly'
+import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import styles from './white-paper.module.css'
 
 const PDF_URL = '/white-paper.pdf'
@@ -174,20 +175,21 @@ function WhitePaperContent(): JSX.Element {
 }
 
 export default function WhitePaper(): JSX.Element {
-  const ogImage = 'https://vllm-semantic-router.com/img/vllm.png'
+  const { siteConfig } = useDocusaurusContext()
+  const ogImage = `${siteConfig.url}/img/vllm-logo-text-light.png`
   return (
     <Layout
       title="White Paper"
-      description="Signal Driven Decision Routing for Mixture-of-Modality Models — Official White Paper"
+      description="Signal Driven Decision Routing for Mixture-of-Modality Models"
     >
       <Head>
         <meta property="og:title" content="White Paper — vLLM Semantic Router" />
-        <meta property="og:description" content="Signal Driven Decision Routing for Mixture-of-Modality Models — Official White Paper" />
+        <meta property="og:description" content="Signal Driven Decision Routing for Mixture-of-Modality Models" />
         <meta property="og:image" content={ogImage} />
         <meta property="og:type" content="article" />
         <meta name="twitter:card" content="summary" />
         <meta name="twitter:title" content="White Paper — vLLM Semantic Router" />
-        <meta name="twitter:description" content="Signal Driven Decision Routing for Mixture-of-Modality Models — Official White Paper" />
+        <meta name="twitter:description" content="Signal Driven Decision Routing for Mixture-of-Modality Models" />
         <meta name="twitter:image" content={ogImage} />
       </Head>
       {/* BrowserOnly prevents SSG from executing browser-only APIs (e.g. DOMMatrix) */}
