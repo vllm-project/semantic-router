@@ -86,11 +86,11 @@ We categorize algorithms into families based on their selection mechanism (\Cref
 
 \subsection{Rating-Based Selection}
 
-\textbf{Static.}
+\noindent\textbf{Static.}
 Each model carries a pre-configured quality score $s_k$; selection is $m^* = \arg\max_k s_k$.
 Serves as a deterministic baseline.
 
-\textbf{Elo Rating} (adapted from RouteLLM~\cite{ong2024routellm}).
+\noindent\textbf{Elo Rating} (adapted from RouteLLM~\cite{ong2024routellm}).
 Models maintain Elo ratings $R_k$ updated from pairwise user preference feedback.
 Selection probability follows the Bradley-Terry model:
 \begin{equation}
@@ -101,7 +101,7 @@ Ratings are updated online as user feedback arrives.
 
 \subsection{Embedding-Based Selection}
 
-\textbf{RouterDC}~\cite{chen2024routerdc}.
+\noindent\textbf{RouterDC}~\cite{chen2024routerdc}.
 Dual contrastive learning trains query and model encoders to produce embeddings in a shared space.
 Selection maximizes cosine similarity:
 \begin{equation}
@@ -109,7 +109,7 @@ Selection maximizes cosine similarity:
 \end{equation}
 The contrastive training objective encourages queries to be close to their best-performing model's embedding and distant from poorly-performing models.
 
-\textbf{Hybrid}~\cite{hu2024routerbench}.
+\noindent\textbf{Hybrid}~\cite{hu2024routerbench}.
 Combines Elo ratings, embedding similarity, and cost in a weighted score:
 \begin{equation}
   \text{score}(m_k) = \alpha \cdot \tilde{R}_k + \beta \cdot \cos(\mathbf{e}_q, \mathbf{e}_{m_k}) + \gamma \cdot (1 - \tilde{c}_k)
@@ -118,7 +118,7 @@ where $\tilde{R}_k$ and $\tilde{c}_k$ are normalized ratings and costs, and $\al
 
 \subsection{Cascading Selection}
 
-\textbf{AutoMix}~\cite{aggarwal2023automix}.
+\noindent\textbf{AutoMix}~\cite{aggarwal2023automix}.
 Formulated as a Partially Observable Markov Decision Process (POMDP).
 Models are ordered by capability $m_1 \prec m_2 \prec \cdots \prec m_K$.
 The cascade:
@@ -142,23 +142,23 @@ Feature vectors combine embeddings and domain information:
   \mathbf{f} = [\mathbf{e}_q \in \mathbb{R}^d; \; \text{onehot}(z) \in \{0,1\}^C]
 \end{equation}
 
-\textbf{KNN.}
+\noindent\textbf{KNN.}
 $k$-nearest neighbor search with Ball Tree indexing.
 Quality-weighted majority voting:
 \begin{equation}
   m^* = \arg\max_m \sum_{i \in \text{kNN}(\mathbf{f})} \mathbf{1}[m^{*(i)} = m] \cdot q^{(i)}
 \end{equation}
 
-\textbf{KMeans.}
+\noindent\textbf{KMeans.}
 Assigns queries to pre-computed clusters; selects the best model for the assigned cluster based on a combined quality-latency score:
 \begin{equation}
   m^* = \arg\max_m \bigl(\alpha \cdot \text{quality}(m, z_\text{cluster}) - (1-\alpha) \cdot \text{latency}(m)\bigr)
 \end{equation}
 
-\textbf{SVM.}
+\noindent\textbf{SVM.}
 Multi-class SVM with RBF or linear kernel, trained to classify feature vectors directly into model selections.
 
-\textbf{MLP.}
+\noindent\textbf{MLP.}
 A feed-forward neural network (two hidden layers with ReLU activation) mapping $\mathbf{f}$ to a softmax distribution over candidate models:
 \begin{equation}
   P(m_k \mid \mathbf{f}) = \text{softmax}\bigl(W_2 \cdot \text{ReLU}(W_1 \mathbf{f} + b_1) + b_2\bigr)_k
@@ -167,7 +167,7 @@ The MLP is implemented in the GPU-accelerated Candle runtime for low-latency inf
 
 \subsection{Reinforcement Learning Selection}
 
-\textbf{Thompson Sampling}~\cite{thompson1933likelihood}.
+\noindent\textbf{Thompson Sampling}~\cite{thompson1933likelihood}.
 Each model maintains a Beta prior:
 \begin{equation}
   \theta_k \sim \text{Beta}(\alpha_k, \beta_k)
@@ -175,7 +175,7 @@ Each model maintains a Beta prior:
 Selection samples from each posterior and picks the maximum: $m^* = \arg\max_k \theta_k$.
 Parameters $(\alpha_k, \beta_k)$ are updated from user preference feedback, naturally balancing exploration and exploitation.
 
-\textbf{GMTRouter}~\cite{xie2025gmtrouter}.
+\noindent\textbf{GMTRouter}~\cite{xie2025gmtrouter}.
 Models multi-turn user-query-model interactions as a heterogeneous graph.
 Graph neural network message passing captures complex interaction patterns:
 \begin{equation}
@@ -185,7 +185,7 @@ where nodes represent users, queries, and models, and edges encode historical ro
 
 \subsection{Latency-Aware Selection}
 
-\textbf{Latency-Aware.}
+\noindent\textbf{Latency-Aware.}
 Selects the model with the best observed latency using percentile-based Time-per-Output-Token (TPOT) and Time-to-First-Token (TTFT) statistics collected at runtime.
 For each candidate model $m_k$, the selector computes a normalized latency score:
 \begin{equation}
@@ -292,30 +292,30 @@ Each synthesis prompt includes the original query and all previous-round respons
 \label{fig:remom_flow}
 \end{figure}
 
-\paragraph{Breadth schedule.}
+\noindent\textbf{Breadth schedule.}
 The operator specifies a breadth schedule $\mathbf{b} = [b_1, b_2, \ldots, b_R]$ defining the number of parallel model calls per round.
 A final synthesis round with $b_{R+1} = 1$ is automatically appended, yielding a total of $R+1$ rounds.
 For example, $\mathbf{b} = [32, 4]$ produces three rounds: 32 parallel calls, then 4 parallel calls each synthesizing the 32 responses, then a single final call synthesizing the 4 responses.
 
-\paragraph{Model distribution.}
+\noindent\textbf{Model distribution.}
 At each round, $b_r$ calls are distributed among the candidate models $\mathcal{M}_{d^*}$ according to one of three strategies:
 (1)~\emph{equal}: calls are distributed evenly across all candidates with round-robin remainder allocation;
 (2)~\emph{weighted}: calls are distributed proportionally to model weights (currently equivalent to equal distribution);
 (3)~\emph{first\_only}: all $b_r$ calls target a single model with different random seeds, providing PaCoRe-compatible single-model diversity.
 Calls within each round execute concurrently with configurable concurrency limits.
 
-\paragraph{LLM-driven synthesis.}
+\noindent\textbf{LLM-driven synthesis.}
 After collecting responses from round $r$, the system constructs a synthesis prompt for round $r+1$ using a configurable Go \texttt{text/template}.
 The default template presents the original query alongside all previous-round responses as numbered references, instructing the next-round model(s) to \emph{``analyze these references and provide your own comprehensive solution.''}
 When reasoning content is available (e.g., from models supporting extended thinking), the template additionally includes each reference's chain-of-thought reasoning.
 This approach delegates quality judgment entirely to the synthesizing LLM rather than relying on explicit scoring or weighted aggregation.
 
-\paragraph{Response compaction.}
+\noindent\textbf{Response compaction.}
 To manage prompt length across rounds, responses can be compacted before inclusion in synthesis prompts.
 Two strategies are supported: \emph{full} (no compaction, the default) and \emph{last\_n\_tokens} (retaining only the final $N$ tokens, estimated at $\sim$4 characters per token).
 This is particularly important for high-breadth schedules where concatenating all responses would exceed context limits.
 
-\paragraph{Execution flow.}
+\noindent\textbf{Execution flow.}
 The complete algorithm proceeds as:
 \begin{enumerate}
   \item \textbf{Schedule construction}: Append $[1]$ to the user-specified breadth schedule $\mathbf{b}$.

@@ -11,22 +11,22 @@ We describe the memory and RAG subsystems that operate as plugins within the rou
 The memory system maintains user-scoped knowledge across conversation sessions, enabling personalized routing and context-aware responses.
 \Cref{fig:memory_lifecycle} illustrates the full memory lifecycle.
 
-\textbf{Memory storage.}
+\noindent\textbf{Memory storage.}
 Each conversation turn is stored directly as an \emph{episodic chunk}---no external LLM is required.
 The user message and assistant response are concatenated into a \texttt{Q:/A:} block, sanitized (UTF-8 validation, 16\,KB cap per entry), and embedded.
 A lightweight \emph{entropy gate} discards turns that carry no retrievable signal---greetings, acknowledgments, and short one-word replies---before embedding, reducing index pollution.
 Every $s$ turns a session-level sliding-window chunk spanning the last $w$ turns is additionally stored (defaults: $s{=}3$, $w{=}5$), creating overlapping windows so facts near turn boundaries co-occur in at least one chunk---improving multi-hop retrieval coverage.
 
-\textbf{Retrieval gating.}
+\noindent\textbf{Retrieval gating.}
 Not every query benefits from memory retrieval.
 A lightweight heuristic determines whether memory search is warranted by filtering out general fact-check queries, tool-augmented requests, and simple greetings, avoiding unnecessary embedding lookups and reducing latency for queries where personal context is irrelevant.
 
-\textbf{Retrieval.}
+\noindent\textbf{Retrieval.}
 At query time, relevant memories are retrieved via the hybrid search pipeline (vector similarity, BM25, and n-gram matching) over the user's memory store.
 An optional query-rewriting step reformulates the user's query for improved retrieval recall.
 Adaptive thresholding adjusts the similarity cutoff based on retrieval mode, preventing cosine-calibrated thresholds from silently discarding all RRF-scored results.
 
-\textbf{Post-retrieval filtering.}
+\noindent\textbf{Post-retrieval filtering.}
 Retrieved memories pass through a composable \textsc{ReflectionGate} before context injection:
 \begin{enumerate}[nosep,leftmargin=*]
   \item \emph{Safety}: a regex block-list prevents prompt-injection payloads from being surfaced.
@@ -36,11 +36,11 @@ Retrieved memories pass through a composable \textsc{ReflectionGate} before cont
 \end{enumerate}
 Filtered context is injected as a separate conversation message positioned after system instructions but before user turns, following the context-injection pattern of the OpenAI Agents SDK.
 
-\textbf{Background consolidation.}
+\noindent\textbf{Background consolidation.}
 A scheduled background job merges semantically related memories using greedy single-linkage clustering over word-level Jaccard similarity.
 Memories within each cluster are replaced by a single deduplicated summary entry, reducing store redundancy and improving retrieval precision over time.
 
-\begin{figure}[H]
+\begin{figure}[ht]
 \centering
 \begin{tikzpicture}[
     node distance=0.55cm and 0.7cm,
@@ -101,10 +101,10 @@ Memories within each cluster are replaced by a single deduplicated summary entry
 
 The RAG plugin retrieves relevant documents from vector stores and injects them as context before model invocation.
 
-\textbf{Indexing pipeline.}
+\noindent\textbf{Indexing pipeline.}
 Documents are chunked (configurable size and overlap), embedded using the shared embedding model (\Cref{sec:ml_inference}), and indexed in a vector store.
 
-\textbf{Hybrid retrieval.}
+\noindent\textbf{Hybrid retrieval.}
 Pure vector search can miss lexically relevant results when the embedding model underweights rare terms.
 We implement a three-signal hybrid retrieval pipeline (\Cref{fig:hybrid_search}) that scores each candidate chunk along three axes:
 \begin{enumerate}[nosep,leftmargin=*]
@@ -113,7 +113,7 @@ We implement a three-signal hybrid retrieval pipeline (\Cref{fig:hybrid_search})
   \item \emph{N-gram Jaccard}: character $n$-gram sets (default $n{=}3$) capture fuzzy lexical overlap, producing Jaccard similarity in $[0,1]$.
 \end{enumerate}
 
-\textbf{Score fusion.}
+\noindent\textbf{Score fusion.}
 Two fusion modes combine the three retriever scores into a single ranking:
 (1)~\emph{Weighted}: BM25 scores are min-max normalized to $[0,1]$, then the final score is $w_v \cdot s_{\text{vec}} + w_b \cdot s_{\text{bm25}} + w_n \cdot s_{\text{ngram}}$ with configurable weights (defaults: 0.7, 0.2, 0.1).
 (2)~\emph{Reciprocal Rank Fusion (RRF)}: $\text{score}(d) = \sum_r 1/(k + \text{rank}_r(d))$, which is parameter-free beyond the constant $k$ (default~60).
@@ -197,7 +197,7 @@ Two fusion modes combine the three retriever scores into a single ranking:
 \label{fig:hybrid_search}
 \end{figure}
 
-\textbf{Backend abstraction.}
+\noindent\textbf{Backend abstraction.}
 The RAG plugin accesses vector stores through a common \texttt{VectorStoreBackend} interface, decoupling retrieval logic from storage implementation.
 Six backend types are supported (\Cref{fig:rag_backends}):
 \begin{itemize}[nosep,leftmargin=*]
@@ -210,7 +210,7 @@ Six backend types are supported (\Cref{fig:rag_backends}):
 \end{itemize}
 Backends that implement native hybrid search (Milvus, Llama Stack with Milvus provider) use their own BM25 and keyword indexes; all other backends fall back to a generic rerank path that fetches an expanded candidate set ($4{\times}$ top-$k$) from vector search and applies BM25 and n-gram scoring as a post-retrieval reranking step.
 
-\textbf{Score-range awareness.}
+\noindent\textbf{Score-range awareness.}
 Different retrieval modes produce scores on fundamentally different scales: cosine similarity yields values in $[0, 1]$ where a threshold of $\sim$0.7 is typical, while RRF scores follow $\sum 1/(k + \text{rank})$ and typically range from 0.001 to 0.05.
 Applying a cosine-calibrated threshold to RRF scores would silently discard all results.
 The backend interface handles this transparently: when hybrid search is active, score-based filtering is bypassed and result volume is controlled solely by the top-$k$ parameter.
@@ -261,15 +261,15 @@ The backend interface handles this transparently: when hybrid search is active, 
 
 The system supports the OpenAI Responses API for stateful multi-turn conversations:
 
-\textbf{Conversation chaining.}
+\noindent\textbf{Conversation chaining.}
 Each response is stored with a unique ID.
 Subsequent requests reference \texttt{previous\_response\_id} to reconstruct the full conversation history without retransmitting the full message sequence.
 A bidirectional translator converts between the Response API format and Chat Completions format for backend model invocation, enabling all routing, safety, and caching features to operate identically on both API surfaces.
 
-\textbf{Routing continuity.}
+\noindent\textbf{Routing continuity.}
 Stored responses include routing metadata (decision, model selection, signal results), enabling consistent routing across conversation turns and providing context for feedback-driven model selection.
 
-\textbf{State backends.}
+\noindent\textbf{State backends.}
 Conversation state is persisted via three backends:
 (1)~\emph{in-memory} for development;
 (2)~\emph{Redis} for production deployments requiring distributed state with high availability---supporting both standalone and cluster modes;

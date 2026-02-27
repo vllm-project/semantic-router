@@ -28,7 +28,7 @@ This per-decision scoping is a key architectural distinction from systems that a
 
 The semantic cache exploits the observation that semantically similar queries often produce equivalent responses, avoiding redundant model invocations.
 
-\textbf{Similarity model.}
+\noindent\textbf{Similarity model.}
 Given a query $q$ extracted from request $r$, the cache searches for an entry $e$ such that:
 \begin{equation}
   \cos(\mathbf{e}_q, \mathbf{e}_e) \geq \theta_d
@@ -36,12 +36,12 @@ Given a query $q$ extracted from request $r$, the cache searches for an entry $e
 where $\mathbf{e}_q, \mathbf{e}_e$ are embeddings computed by the shared embedding model and $\theta_d$ is the per-decision similarity threshold.
 On hit, the cached response is returned immediately, bypassing model invocation entirely.
 
-\textbf{Write-through protocol.}
+\noindent\textbf{Write-through protocol.}
 On cache miss, a pending entry is registered before forwarding to the model.
 Upon receiving the response, the entry is completed with the response content.
 This ensures that concurrent identical queries observe the pending state rather than triggering redundant model calls.
 
-\textbf{Backend abstraction.}
+\noindent\textbf{Backend abstraction.}
 Four backends provide different latency-persistence tradeoffs:
 (1)~in-memory HNSW for single-node low-latency deployments;
 (2)~Redis for distributed persistent caching;
@@ -72,15 +72,15 @@ and custom signaling to model-serving frameworks (e.g., LoRA adapter selection v
 The fast response plugin enables a decision to short-circuit the entire pipeline and return an immediate OpenAI-compatible response without forwarding the request to any upstream model.
 This is the primary mechanism for acting on safety signals.
 
-\textbf{Execution model.}
+\noindent\textbf{Execution model.}
 When a decision's \texttt{fast\_response} plugin is configured, the pipeline checks for it before any other plugin in the chain.
 If present, the configured message is returned as a standard \texttt{chat.completion} response with \texttt{finish\_reason: "stop"}, and no further processing occurs.
 
-\textbf{Streaming compatibility.}
+\noindent\textbf{Streaming compatibility.}
 The plugin inspects the original request's \texttt{stream} parameter.
 For non-streaming requests, it returns a single JSON object.
 For streaming requests (\texttt{stream: true}), it generates a Server-Sent Events (SSE) sequence: an initial chunk with the assistant role, word-by-word content chunks, a final chunk with \texttt{finish\_reason: "stop"}, and the \texttt{[DONE]} sentinel---matching the exact format that OpenAI-compatible clients expect.
 
-\textbf{Use cases.}
+\noindent\textbf{Use cases.}
 The canonical use case is safety enforcement: a decision matching a jailbreak or PII signal activates \texttt{fast\_response} to return a policy-compliant refusal message.
 However, the plugin is general-purpose---it can also serve canned responses for FAQ-like queries, maintenance windows, or rate-limited fallback messages without consuming model compute.

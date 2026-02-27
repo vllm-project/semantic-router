@@ -4,6 +4,7 @@
 \label{sec:extproc}
 
 We implement the routing system as an Envoy~\cite{envoyproxy2024} External Processor (ExtProc)~\cite{envoyextproc2024}, enabling transparent interception of LLM API traffic without client-side modifications.
+\Cref{fig:extproc_pipeline} illustrates the bidirectional request processing pipeline.
 This section describes the pipeline architecture, multi-provider routing, the Responses API integration, and the pluggable authorization factory.
 
 \subsection{Transparent Interception via ExtProc}

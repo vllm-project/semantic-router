@@ -4,6 +4,8 @@
 \label{sec:decision_engine}
 
 The decision engine evaluates a set of routing decisions against the signal result and selects the best match.
+In Shannon's 1938 master's thesis~\cite{shannon1938symbolic}, arbitrary switching-circuit behavior was shown to be representable and minimizable through Boolean algebra---any desired input--output relation over binary signals could be systematically synthesized from $\{\wedge, \vee, \neg\}$.
+The decision engine applies this same principle to routing: each routing policy is expressed as a Boolean formula over binary signal conditions, and the functionally complete operator set guarantees that \emph{any} routing policy expressible as a function of the extracted signals can be realized---without modifying the signal layer or the execution layer.
 We formalize the decision model, present the evaluation algorithm, and analyze the selection strategies.
 
 \subsection{Decision Model}
@@ -13,7 +15,7 @@ A \emph{decision} $d = (n, \phi, \mathcal{M}_d, \Pi_d, p)$ consists of a name $n
 \end{definition}
 
 \begin{definition}[Rule Node --- Boolean Expression Tree]
-A \emph{rule node} $\phi$ is defined recursively as one of two forms:
+A \emph{rule node} $\phi$ is defined recursively as one of two forms (\Cref{fig:rule_node_tree} illustrates example expression trees):
 \begin{itemize}[nosep,leftmargin=1.5em]
   \item \textbf{Leaf} (signal reference): $\phi = \textsc{leaf}(\tau, n)$, referencing a signal type $\tau$ and rule name $n$.
   \item \textbf{Composite} (Boolean operator): $\phi = (\textsc{op}, [\phi_1, \ldots, \phi_k])$, where $\textsc{op} \in \{\textsc{and}, \textsc{or}, \textsc{not}\}$ and $\phi_1, \ldots, \phi_k$ are child rule nodes. $\textsc{not}$ is strictly unary ($k = 1$).
@@ -121,14 +123,14 @@ For embedding signals, $c_j$ is the cosine similarity; for heuristic and binary 
 
 Given the set of matched decisions $\mathcal{D}_\text{match} = \{d \in \mathcal{D} \mid \text{eval}(\phi_d, S(r)) = 1\}$, two strategies select $d^*$:
 
-\textbf{Priority Strategy.}
+\noindent\textbf{Priority Strategy.}
 \begin{equation}
   d^* = \arg\max_{d \in \mathcal{D}_\text{match}} p_d
 \end{equation}
 This provides deterministic, administrator-controlled routing.
 Ties are broken by insertion order.
 
-\textbf{Confidence Strategy.}
+\noindent\textbf{Confidence Strategy.}
 \begin{equation}
   d^* = \arg\max_{d \in \mathcal{D}_\text{match}} \text{conf}(d, S(r))
 \end{equation}
@@ -180,7 +182,7 @@ The recursive rule-node model can express common routing patterns with depth-1 t
   \item \textbf{Nested multi-signal}: $\textsc{and}(\textsc{or}(\text{cs}, \text{math\_kw}),\; \text{en},\; \textsc{not}(\text{long\_ctx}))$ combines disjunctive, conjunctive, and negated sub-trees in a single decision for fine-grained routing.
 \end{itemize}
 
-\paragraph{Functional completeness.}
+\noindent\textbf{Functional completeness.}
 The expressiveness of the recursive rule-node model rests on a classical result from Boolean algebra~\cite{huntington1904sets}: the operator set $\{\wedge, \vee, \neg\}$ is \emph{functionally complete}---any Boolean function $f: \{0,1\}^N \to \{0,1\}$ can be expressed as a formula over these operators.
 Because each rule node may nest AND, OR, and NOT to arbitrary depth, a \emph{single} decision formula $\phi$ can already represent any Boolean function over the $N$ signal match indicators---no multi-decision composition is required for completeness.
 
@@ -207,7 +209,7 @@ Assign priorities to resolve overlaps deterministically.
 This two-level universality guarantee---completeness within a single decision \emph{and} across a decision set---means the decision engine imposes \emph{no inherent limitation} on what routing policies can be configured.
 Priority ordering across decisions is no longer required for expressiveness; it serves as an organizational and conflict-resolution mechanism, equivalent to a decision list~\cite{rivest1987learning} over Boolean features.
 
-\paragraph{Structural analogy to combinational logic circuits.}
+\noindent\textbf{Structural analogy to combinational logic circuits.}
 The recursive rule-node model maps naturally onto the hierarchy of combinational logic circuits studied in digital design~\cite{brayton1984logic}.
 The following table summarizes the correspondence at three levels of generality:
 
@@ -353,7 +355,7 @@ At the third level, the priority-ordered decision set acts as an array of such c
 In a PLA, logic is ``programmed'' by setting fuse connections; in a general circuit, by wiring gates; in our system, by YAML configuration whose indentation directly mirrors the gate-level nesting.
 This correspondence provides a well-understood theoretical foundation: decades of results on logic minimization, hazard-free design, and testability~\cite{brayton1984logic} apply directly to reasoning about decision optimization and coverage analysis.
 
-\paragraph{Decision set verification and minimization.}
+\noindent\textbf{Decision set verification and minimization.}
 The combinational-logic correspondence makes formal analysis tools from logic synthesis directly applicable to routing configurations.
 \emph{Coverage analysis} checks whether every reachable point in the signal space $\{0,1\}^N$ is matched by at least one decision, identifying dead zones where requests would receive no routing directive.
 \emph{Conflict detection} identifies signal combinations where multiple decisions match but route to incompatible model pools, flagging ambiguities that priority ordering must resolve.
