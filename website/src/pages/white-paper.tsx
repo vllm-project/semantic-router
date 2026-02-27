@@ -23,13 +23,9 @@ function WhitePaperContent(): JSX.Element {
   const [numPages, setNumPages] = useState<number>(0)
   const [pageNumber, setPageNumber] = useState<number>(1)
   const [pageWidth, setPageWidth] = useState<number>(600)
-  // Mobile: render by height so the page fills the screen exactly (no gray gap below)
-  const [pageHeight, setPageHeight] = useState<number | undefined>(undefined)
   const [isMobile, setIsMobile] = useState<boolean>(false)
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<boolean>(false)
-  // Bottom bar height (px) used when computing available height on mobile
-  const BOTTOM_BAR_H = 52
 
   // Hide the built-in Docusaurus navbar and footer for a full-screen viewer
   useEffect(() => {
@@ -50,14 +46,12 @@ function WhitePaperContent(): JSX.Element {
       const mobile = vw <= 768
       setIsMobile(mobile)
       if (mobile) {
-        // Mobile: height-driven rendering — fill screen minus the bottom bar,
-        // so there is zero gray gap between the PDF page and the nav bar.
-        setPageHeight(window.innerHeight - BOTTOM_BAR_H)
-        setPageWidth(0) // unused on mobile
+        // Mobile: width-driven rendering — full screen width, page-internal scroll.
+        // Text stays readable; no height squishing.
+        setPageWidth(vw)
       }
       else {
         // Desktop: two-page spread, each half of available width
-        setPageHeight(undefined)
         const available = Math.min(vw - 120, 1400)
         setPageWidth(Math.floor(available / 2) - 16)
       }
@@ -65,7 +59,7 @@ function WhitePaperContent(): JSX.Element {
     updateSize()
     window.addEventListener('resize', updateSize)
     return () => window.removeEventListener('resize', updateSize)
-  }, [BOTTOM_BAR_H])
+  }, [])
 
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
     setNumPages(numPages)
@@ -109,34 +103,51 @@ function WhitePaperContent(): JSX.Element {
                 loading={<div className={styles.loadingText}>Loading PDF…</div>}
                 className={styles.document}
               >
-                {/* Two-page spread */}
-                <div className={styles.pagesRow}>
-                  <div className={styles.pageWrapper}>
-                    <Page
-                      pageNumber={pageNumber}
-                      width={isMobile ? undefined : pageWidth}
-                      height={isMobile ? pageHeight : undefined}
-                      renderTextLayer={true}
-                      renderAnnotationLayer={true}
-                    />
-                  </div>
-                  {hasRight && (
-                    <div className={styles.pageWrapper}>
-                      <Page
-                        pageNumber={rightPage}
-                        width={pageWidth}
-                        renderTextLayer={true}
-                        renderAnnotationLayer={true}
-                      />
-                    </div>
-                  )}
-                </div>
+                {isMobile
+                  ? (
+                  /* Mobile: all pages stacked — continuous scroll, no pagination bar */
+                      <div className={styles.mobileStack}>
+                        {Array.from({ length: numPages }, (_, i) => (
+                          <div key={i + 1} className={styles.pageWrapper}>
+                            <Page
+                              pageNumber={i + 1}
+                              width={pageWidth}
+                              renderTextLayer={true}
+                              renderAnnotationLayer={true}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  : (
+                  /* Desktop: two-page spread */
+                      <div className={styles.pagesRow}>
+                        <div className={styles.pageWrapper}>
+                          <Page
+                            pageNumber={pageNumber}
+                            width={pageWidth}
+                            renderTextLayer={true}
+                            renderAnnotationLayer={true}
+                          />
+                        </div>
+                        {hasRight && (
+                          <div className={styles.pageWrapper}>
+                            <Page
+                              pageNumber={rightPage}
+                              width={pageWidth}
+                              renderTextLayer={true}
+                              renderAnnotationLayer={true}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
               </Document>
             )}
       </div>
 
-      {/* Bottom control bar: three-column layout */}
-      {!error && !loading && (
+      {/* Bottom control bar: desktop only */}
+      {!error && !loading && !isMobile && (
         <div className={styles.pagination}>
           {/* Left spacer */}
           <div />
