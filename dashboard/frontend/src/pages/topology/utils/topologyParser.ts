@@ -546,6 +546,8 @@ export function groupSignalsByType(signals: SignalConfig[]): Record<SignalType, 
     language: [],
     context: [],
     complexity: [],
+    modality: [],
+    authz: [],
     jailbreak: [],
     pii: [],
   }
