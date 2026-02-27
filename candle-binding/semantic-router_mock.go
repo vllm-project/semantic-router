@@ -6,10 +6,12 @@ import (
 	"log"
 	"runtime"
 	"strings"
+	"sync"
 )
 
 // Mock implementation variables
 var (
+	initOnce         sync.Once
 	modelInitialized bool
 )
 
@@ -194,7 +196,7 @@ func GetEmbeddingBatched(text string, modelType string, targetDim int) (*Embeddi
 }
 
 // InitEmbeddingModels initializes Qwen3 and/or Gemma embedding models
-func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath string, useCPU bool) error {
+func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath string, mmBertModelPath string, useCPU bool) error {
 	log.Printf("[MOCK] Initializing Embedding Models")
 	return nil
 }
@@ -226,6 +228,36 @@ func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority floa
 // GetEmbeddingWithModelType generates an embedding with a manually specified model type
 func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
 	emb, _ := GetEmbeddingWithDim(text, 0, 0, targetDim)
+	return &EmbeddingOutput{
+		Embedding:        emb,
+		ModelType:        modelType,
+		SequenceLength:   10,
+		ProcessingTimeMs: 1.0,
+	}, nil
+}
+
+// InitMmBertEmbeddingModel initializes mmBERT embedding model
+func InitMmBertEmbeddingModel(modelPath string, useCPU bool) error {
+	log.Printf("[MOCK] Initializing mmBERT Embedding Model: %s", modelPath)
+	_ = useCPU
+	return nil
+}
+
+// GetEmbedding2DMatryoshka generates an embedding using mock 2D Matryoshka API
+func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, targetDim int) (*EmbeddingOutput, error) {
+	_ = text
+	_ = targetLayer
+	dim := targetDim
+	if dim <= 0 {
+		dim = 768
+	}
+	emb := make([]float32, dim)
+	for i := range emb {
+		emb[i] = 0.1
+	}
+	if modelType == "" {
+		modelType = "mock"
+	}
 	return &EmbeddingOutput{
 		Embedding:        emb,
 		ModelType:        modelType,
@@ -576,6 +608,78 @@ func IsQwen3GuardInitialized() bool {
 // IsQwen3MultiLoRAInitialized checks initialization
 func IsQwen3MultiLoRAInitialized() bool {
 	return true
+}
+
+// IsMmBert32KModel checks if a model is mmBERT-32K
+func IsMmBert32KModel(configPath string) bool {
+	_ = configPath
+	return false
+}
+
+// InitMmBert32KIntentClassifier initializes mmBERT-32K intent classifier
+func InitMmBert32KIntentClassifier(modelPath string, useCPU bool) error {
+	log.Printf("[MOCK] Initializing mmBERT-32K Intent Classifier: %s", modelPath)
+	_ = useCPU
+	return nil
+}
+
+// ClassifyMmBert32KIntent classifies text with mmBERT-32K intent classifier
+func ClassifyMmBert32KIntent(text string) (ClassResult, error) {
+	_ = text
+	return ClassResult{Class: 0, Confidence: 0.95}, nil
+}
+
+// InitMmBert32KFactcheckClassifier initializes mmBERT-32K fact-check classifier
+func InitMmBert32KFactcheckClassifier(modelPath string, useCPU bool) error {
+	log.Printf("[MOCK] Initializing mmBERT-32K Factcheck Classifier: %s", modelPath)
+	_ = useCPU
+	return nil
+}
+
+// ClassifyMmBert32KFactcheck classifies text with mmBERT-32K fact-check classifier
+func ClassifyMmBert32KFactcheck(text string) (ClassResult, error) {
+	_ = text
+	return ClassResult{Class: 1, Confidence: 0.90}, nil
+}
+
+// InitMmBert32KJailbreakClassifier initializes mmBERT-32K jailbreak classifier
+func InitMmBert32KJailbreakClassifier(modelPath string, useCPU bool) error {
+	log.Printf("[MOCK] Initializing mmBERT-32K Jailbreak Classifier: %s", modelPath)
+	_ = useCPU
+	return nil
+}
+
+// ClassifyMmBert32KJailbreak classifies text with mmBERT-32K jailbreak classifier
+func ClassifyMmBert32KJailbreak(text string) (ClassResult, error) {
+	_ = text
+	return ClassResult{Class: 0, Confidence: 0.95}, nil
+}
+
+// InitMmBert32KFeedbackClassifier initializes mmBERT-32K feedback classifier
+func InitMmBert32KFeedbackClassifier(modelPath string, useCPU bool) error {
+	log.Printf("[MOCK] Initializing mmBERT-32K Feedback Classifier: %s", modelPath)
+	_ = useCPU
+	return nil
+}
+
+// ClassifyMmBert32KFeedback classifies text with mmBERT-32K feedback classifier
+func ClassifyMmBert32KFeedback(text string) (ClassResult, error) {
+	_ = text
+	return ClassResult{Class: 0, Confidence: 0.92}, nil
+}
+
+// InitMmBert32KPIIClassifier initializes mmBERT-32K PII classifier
+func InitMmBert32KPIIClassifier(modelPath string, useCPU bool) error {
+	log.Printf("[MOCK] Initializing mmBERT-32K PII Classifier: %s", modelPath)
+	_ = useCPU
+	return nil
+}
+
+// ClassifyMmBert32KPII classifies text with mmBERT-32K PII classifier
+func ClassifyMmBert32KPII(text string, modelConfigPath string) ([]TokenEntity, error) {
+	_ = text
+	_ = modelConfigPath
+	return []TokenEntity{}, nil
 }
 
 // NLI constants and types
