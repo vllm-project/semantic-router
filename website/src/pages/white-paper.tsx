@@ -1,9 +1,11 @@
 import React, { useState, useCallback, useEffect } from 'react'
 import Layout from '@theme/Layout'
+import Head from '@docusaurus/Head'
 import BrowserOnly from '@docusaurus/BrowserOnly'
+import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import styles from './white-paper.module.css'
 
-const PDF_URL = '/vllm-semantic-router.pdf'
+const PDF_URL = '/white-paper.pdf'
 
 // Inner component: only rendered in the browser, avoids SSG DOMMatrix errors
 function WhitePaperContent(): JSX.Element {
@@ -25,28 +27,28 @@ function WhitePaperContent(): JSX.Element {
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<boolean>(false)
 
-  // Hide the built-in Docusaurus footer
+  // Hide the built-in Docusaurus navbar and footer for a full-screen viewer
   useEffect(() => {
-    const footer = document.querySelector('footer')
-    if (footer) {
-      footer.style.display = 'none'
-    }
+    const navbar = document.querySelector('.navbar') as HTMLElement | null
+    const footer = document.querySelector('footer') as HTMLElement | null
+    if (navbar) navbar.style.display = 'none'
+    if (footer) footer.style.display = 'none'
     return () => {
-      if (footer) {
-        footer.style.display = ''
-      }
+      if (navbar) navbar.style.display = ''
+      if (footer) footer.style.display = ''
     }
   }, [])
 
-  // Dynamically calculate page width based on viewport; single-page on mobile
+  // Dynamically calculate page dimensions based on viewport
   useEffect(() => {
-    const updateWidth = () => {
+    const updateSize = () => {
       const vw = window.innerWidth
       const mobile = vw <= 768
       setIsMobile(mobile)
       if (mobile) {
-        // Mobile: single-page, full width minus padding
-        setPageWidth(vw - 32)
+        // Mobile: width-driven rendering — full screen width, page-internal scroll.
+        // Text stays readable; no height squishing.
+        setPageWidth(vw)
       }
       else {
         // Desktop: two-page spread, each half of available width
@@ -54,9 +56,9 @@ function WhitePaperContent(): JSX.Element {
         setPageWidth(Math.floor(available / 2) - 16)
       }
     }
-    updateWidth()
-    window.addEventListener('resize', updateWidth)
-    return () => window.removeEventListener('resize', updateWidth)
+    updateSize()
+    window.addEventListener('resize', updateSize)
+    return () => window.removeEventListener('resize', updateSize)
   }, [])
 
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
@@ -101,33 +103,51 @@ function WhitePaperContent(): JSX.Element {
                 loading={<div className={styles.loadingText}>Loading PDF…</div>}
                 className={styles.document}
               >
-                {/* Two-page spread */}
-                <div className={styles.pagesRow}>
-                  <div className={styles.pageWrapper}>
-                    <Page
-                      pageNumber={pageNumber}
-                      width={pageWidth}
-                      renderTextLayer={true}
-                      renderAnnotationLayer={true}
-                    />
-                  </div>
-                  {hasRight && (
-                    <div className={styles.pageWrapper}>
-                      <Page
-                        pageNumber={rightPage}
-                        width={pageWidth}
-                        renderTextLayer={true}
-                        renderAnnotationLayer={true}
-                      />
-                    </div>
-                  )}
-                </div>
+                {isMobile
+                  ? (
+                    /* Mobile: all pages stacked — continuous scroll, no pagination bar */
+                      <div className={styles.mobileStack}>
+                        {Array.from({ length: numPages }, (_, i) => (
+                          <div key={i + 1} className={styles.pageWrapper}>
+                            <Page
+                              pageNumber={i + 1}
+                              width={pageWidth}
+                              renderTextLayer={true}
+                              renderAnnotationLayer={true}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  : (
+                    /* Desktop: two-page spread */
+                      <div className={styles.pagesRow}>
+                        <div className={styles.pageWrapper}>
+                          <Page
+                            pageNumber={pageNumber}
+                            width={pageWidth}
+                            renderTextLayer={true}
+                            renderAnnotationLayer={true}
+                          />
+                        </div>
+                        {hasRight && (
+                          <div className={styles.pageWrapper}>
+                            <Page
+                              pageNumber={rightPage}
+                              width={pageWidth}
+                              renderTextLayer={true}
+                              renderAnnotationLayer={true}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
               </Document>
             )}
       </div>
 
-      {/* Bottom control bar: three-column layout */}
-      {!error && !loading && (
+      {/* Bottom control bar: desktop only */}
+      {!error && !loading && !isMobile && (
         <div className={styles.pagination}>
           {/* Left spacer */}
           <div />
@@ -157,24 +177,8 @@ function WhitePaperContent(): JSX.Element {
               Next →
             </button>
           </div>
-          {/* Right: action buttons */}
-          <div className={styles.paginationRight}>
-            <a
-              href={PDF_URL}
-              download="vllm-semantic-router.pdf"
-              className={`${styles.toolbarBtn} ${styles.toolbarBtnPrimary}`}
-            >
-              ⬇ Download
-            </a>
-            <a
-              href={PDF_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`${styles.toolbarBtn} ${styles.toolbarBtnOutline}`}
-            >
-              ↗ New Tab
-            </a>
-          </div>
+          {/* Right spacer */}
+          <div />
         </div>
       )}
     </div>
@@ -182,11 +186,23 @@ function WhitePaperContent(): JSX.Element {
 }
 
 export default function WhitePaper(): JSX.Element {
+  const { siteConfig } = useDocusaurusContext()
+  const ogImage = `${siteConfig.url}/img/vllm-logo-text-light.png`
   return (
     <Layout
-      title="vLLM Semantic Router"
-      description="Signal Driven Decision Routing for Mixture-of-Modality Models — Official White Paper"
+      title="White Paper"
+      description="Signal Driven Decision Routing for Mixture-of-Modality Models"
     >
+      <Head>
+        <meta property="og:title" content="White Paper — vLLM Semantic Router" />
+        <meta property="og:description" content="Signal Driven Decision Routing for Mixture-of-Modality Models" />
+        <meta property="og:image" content={ogImage} />
+        <meta property="og:type" content="article" />
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content="White Paper — vLLM Semantic Router" />
+        <meta name="twitter:description" content="Signal Driven Decision Routing for Mixture-of-Modality Models" />
+        <meta name="twitter:image" content={ogImage} />
+      </Head>
       {/* BrowserOnly prevents SSG from executing browser-only APIs (e.g. DOMMatrix) */}
       <BrowserOnly fallback={<div className={styles.loadingText}>Loading PDF…</div>}>
         {() => <WhitePaperContent />}

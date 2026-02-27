@@ -2,17 +2,17 @@
 title: 常见错误
 sidebar_label: 常见错误
 translation:
-  source_commit: "1d1439a"
+  source_commit: "9ed8acf"
   source_file: "docs/troubleshooting/common-errors.md"
   outdated: false
 ---
 
 # 常见错误及解决方法
 
-本指南提供了运行 vLLM Semantic Router 时可能遇到的常见 log 消息和错误的快速参考。每个部分都将错误模式映射到其根本原因和配置修复方法。
+本文整理了运行 vLLM Semantic Router 时常见的系统日志报错、原因分析及配置修复方案。
 
 :::tip
-使用本页末尾的[快速诊断命令](#快速诊断命令)可以快速识别问题。
+可先尝试本页末尾的[快速诊断命令](#快速诊断命令)。
 :::
 
 ## 配置加载错误
@@ -118,13 +118,21 @@ semantic_cache:
 
 ## PII 和安全错误
 
-### PII 策略违规
+### 请求被 PII 过滤器阻断
 
-**Log 模式：**
+当请求因包含敏感信息（个人身份信息 PII）而被阻断时，您将看到类似以下的 403 Forbidden 响应：
 
+```json
+{
+  "object": "error",
+  "message": "PII signal fired: rule=<name>, detected_types=[<types>], threshold=<score>",
+  "type": "pii_violation",
+  "param": null,
+  "code": 403
+}
 ```
-PII signal fired: rule=<name>, detected_types=[<types>], threshold=<score>
-```
+
+**原因**：路由器的 PII 模型在这个决策阶段检测到敏感信息（邮件、电话或身份证），且当前策略未将其加入白名单。
 
 **修复方法：**
 
@@ -161,7 +169,7 @@ Jailbreak detected: type=<type>, confidence=<score>
 
 **修复方法：**
 
-1. **提高阈值** 以减少误报 — 更新信号规则：
+1. **提高分数阈值**（降低误报） — 更新信号规则：
 
 ```yaml
 signals:
@@ -170,7 +178,7 @@ signals:
       threshold: 0.85   # 从默认的 0.65 提高
 ```
 
-2. **为特定决策排除 jailbreak 检查** — 在该决策的条件中不引用任何 jailbreak 信号：
+2. **为特定决策旁路检查**（例如内部工具通道） — 在该决策的条件中不引用验证特征：
 
 ```yaml
 decisions:
@@ -296,7 +304,7 @@ bert_model:
 
 ### Cache 命中率低
 
-**症状：** Cache 很少返回 hit，后端延迟高
+**症状：** Cache hit 极低，请求直接穿透到后端产生高延迟
 
 **修复方法：** 降低 similarity threshold：
 

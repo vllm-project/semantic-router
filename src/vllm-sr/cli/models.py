@@ -100,11 +100,21 @@ class ComplexityRule(BaseModel):
 
 
 class JailbreakRule(BaseModel):
-    """Jailbreak detection signal configuration."""
+    """Jailbreak detection signal configuration.
+
+    Supports two methods:
+    - "classifier" (default): BERT/LoRA-based jailbreak classifier
+    - "contrastive": Embedding-based contrastive scoring against jailbreak/benign KBs
+    """
 
     name: str
     threshold: float
+    method: Optional[str] = None  # "classifier" (default) or "contrastive"
     include_history: bool = False
+    jailbreak_patterns: Optional[list[str]] = (
+        None  # Known jailbreak prompts (contrastive KB)
+    )
+    benign_patterns: Optional[list[str]] = None  # Known benign prompts (contrastive KB)
     description: Optional[str] = None
 
 
@@ -115,6 +125,38 @@ class PIIRule(BaseModel):
     threshold: float
     pii_types_allowed: Optional[List[str]] = None
     include_history: bool = False
+    description: Optional[str] = None
+
+
+class ModalityRule(BaseModel):
+    """Modality detection signal configuration.
+
+    Classifies whether a prompt requires text (AR), image (DIFFUSION), or both (BOTH).
+    Detection configuration is read from modality_detector (InlineModels).
+    """
+
+    name: str
+    description: Optional[str] = None
+
+
+class Subject(BaseModel):
+    """RBAC subject (user or group) for role binding."""
+
+    kind: str  # "User" or "Group"
+    name: str
+
+
+class RoleBindingRule(BaseModel):
+    """RBAC role binding signal configuration.
+
+    Maps subjects (users/groups) to a named role following the Kubernetes RBAC pattern.
+    The role name is emitted as a signal of type "authz" in the decision engine.
+    User identity is read from x-authz-user-id and x-authz-user-groups headers.
+    """
+
+    name: str
+    role: str
+    subjects: List[Subject]
     description: Optional[str] = None
 
 
@@ -130,6 +172,8 @@ class Signals(BaseModel):
     language: Optional[List[Language]] = []
     context: Optional[List[ContextRule]] = []
     complexity: Optional[List[ComplexityRule]] = []
+    modality: Optional[List[ModalityRule]] = []
+    role_bindings: Optional[List[RoleBindingRule]] = []
     jailbreak: Optional[List[JailbreakRule]] = []
     pii: Optional[List[PIIRule]] = []
 

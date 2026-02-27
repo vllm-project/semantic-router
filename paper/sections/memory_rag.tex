@@ -11,93 +11,89 @@ We describe the memory and RAG subsystems that operate as plugins within the rou
 The memory system maintains user-scoped knowledge across conversation sessions, enabling personalized routing and context-aware responses.
 \Cref{fig:memory_lifecycle} illustrates the full memory lifecycle.
 
-\textbf{Memory extraction.}
-An LLM-based extractor analyzes conversation turns to identify user-specific facts, classified into three types:
-\emph{semantic} (factual knowledge: preferences, background),
-\emph{procedural} (workflows, how-to knowledge), and
-\emph{episodic} (specific events and interactions).
+\noindent\textbf{Memory storage.}
+Each conversation turn is stored directly as an \emph{episodic chunk}---no external LLM is required.
+The user message and assistant response are concatenated into a \texttt{Q:/A:} block, sanitized (UTF-8 validation, 16\,KB cap per entry), and embedded.
+A lightweight \emph{entropy gate} discards turns that carry no retrievable signal---greetings, acknowledgments, and short one-word replies---before embedding, reducing index pollution.
+Every $s$ turns a session-level sliding-window chunk spanning the last $w$ turns is additionally stored (defaults: $s{=}3$, $w{=}5$), creating overlapping windows so facts near turn boundaries co-occur in at least one chunk---improving multi-hop retrieval coverage.
 
-\textbf{Deduplication.}
-Before storage, extracted facts undergo similarity-based deduplication against existing memories, preventing redundant entries that would degrade retrieval precision.
-
-\textbf{Retrieval gating.}
+\noindent\textbf{Retrieval gating.}
 Not every query benefits from memory retrieval.
 A lightweight heuristic determines whether memory search is warranted by filtering out general fact-check queries, tool-augmented requests, and simple greetings, avoiding unnecessary embedding lookups and reducing latency for queries where personal context is irrelevant.
 
-\textbf{Retrieval.}
-At query time, relevant memories are retrieved via the hybrid search pipeline (vector similarity, BM25, and n-gram matching) over the user's memory store, formatted as context, and injected into the system message.
+\noindent\textbf{Retrieval.}
+At query time, relevant memories are retrieved via the hybrid search pipeline (vector similarity, BM25, and n-gram matching) over the user's memory store.
 An optional query-rewriting step reformulates the user's query for improved retrieval recall.
+Adaptive thresholding adjusts the similarity cutoff based on retrieval mode, preventing cosine-calibrated thresholds from silently discarding all RRF-scored results.
 
-\textbf{Retention scoring and pruning.}
-Memory stores grow unbounded without lifecycle management.
-We adopt an exponential decay model inspired by the Ebbinghaus forgetting curve~\cite{zhong2023memorybank}:
-\begin{equation}
-  R = e^{-t/S}, \quad S = S_0 + n_{\text{access}}
-\end{equation}
-where $t$ is the time in days since last retrieval, $S_0$ is the initial strength (default 30 days), and $n_{\text{access}}$ is the cumulative access count.
-Each retrieval reinforces the memory by incrementing $n_{\text{access}}$, slowing future decay.
-Memories falling below a retention threshold $R < \delta$ become pruning candidates.
-An optional per-user capacity limit evicts the lowest-scoring entries when the store exceeds a configurable maximum.
+\noindent\textbf{Post-retrieval filtering.}
+Retrieved memories pass through a composable \textsc{ReflectionGate} before context injection:
+\begin{enumerate}[nosep,leftmargin=*]
+  \item \emph{Safety}: a regex block-list prevents prompt-injection payloads from being surfaced.
+  \item \emph{Recency decay}: memories are weighted by recency, prioritizing recent context.
+  \item \emph{Deduplication}: near-duplicate entries (high Jaccard similarity) are collapsed to a single representative.
+  \item \emph{Budget}: the final set is capped at a configurable count to bound injected context length.
+\end{enumerate}
+Filtered context is injected as a separate conversation message positioned after system instructions but before user turns, following the context-injection pattern of the OpenAI Agents SDK.
 
-\begin{figure}[H]
+\noindent\textbf{Background consolidation.}
+A scheduled background job merges semantically related memories using greedy single-linkage clustering over word-level Jaccard similarity.
+Memories within each cluster are replaced by a single deduplicated summary entry, reducing store redundancy and improving retrieval precision over time.
+
+\begin{figure}[ht]
 \centering
 \begin{tikzpicture}[
-    node distance=0.6cm and 0.8cm,
-    box/.style={draw, rounded corners, fill=blue!6, minimum width=2.2cm,
+    node distance=0.55cm and 0.7cm,
+    box/.style={draw, rounded corners, fill=blue!6, minimum width=2.0cm,
                 minimum height=0.8cm, align=center, font=\small},
-    storebox/.style={draw, rounded corners, fill=green!6, minimum width=2.2cm,
+    storebox/.style={draw, rounded corners, fill=green!6, minimum width=2.0cm,
                 minimum height=0.8cm, align=center, font=\small},
-    typebox/.style={draw, rounded corners, fill=orange!5,
-                minimum height=0.55cm, align=center, font=\scriptsize},
+    gatebox/.style={draw, rounded corners, fill=orange!8, minimum width=2.0cm,
+                minimum height=0.8cm, align=center, font=\small},
     arr/.style={->, >=stealth, thick},
     darr/.style={->, >=stealth, thick, dashed},
     lbl/.style={font=\scriptsize, text=gray}
 ]
 
 % --- Write path (top row) ---
-\node[box] (conv) {Conversation\\Turns};
-\node[box, right=of conv] (extract) {LLM\\Extraction};
-\node[box, right=of extract] (dedup) {Dedup\\Check};
-\node[storebox, right=of dedup] (store) {Memory\\Store};
+\node[box] (conv) {Conv\\Turn};
+\node[gatebox, right=of conv] (entropy) {Entropy\\Gate};
+\node[box, right=of entropy] (sanitize) {Sanitize\\+ Embed};
+\node[storebox, right=of sanitize] (store) {Memory\\Store};
 
-\draw[arr] (conv) -- (extract);
-\draw[arr] (extract) -- (dedup);
-\draw[arr] (dedup) -- node[above, lbl] {new} (store);
+\draw[arr] (conv) -- (entropy);
+\draw[arr] (entropy) -- node[above, lbl] {pass} (sanitize);
+\draw[arr] (sanitize) -- (store);
 
-% Memory types below extraction
-\node[typebox, below=0.4cm of extract, xshift=-1.2cm] (sem) {semantic};
-\node[typebox, right=0.2cm of sem] (proc) {procedural};
-\node[typebox, right=0.2cm of proc] (epis) {episodic};
-\draw[darr] (extract) -- (proc);
+% Entropy gate discards low-signal turns
+\draw[darr] (entropy.south) -- ++(0,-0.45) node[below, lbl] {discard};
 
-% Dedup "update existing" loops back above store
-\draw[darr] (dedup.north) -- ++(0,0.45) -| node[above, lbl, pos=0.25] {update existing} (store.north);
+% Session window annotation above store
+\draw[darr] (sanitize.north) -- ++(0,0.45) -| node[above, lbl, pos=0.25] {session window (every $s$ turns)} (store.north);
 
 % --- Read path (bottom row) ---
-\node[box, below=2.8cm of conv] (query) {User\\Query};
-\node[box, right=of query] (gate) {Retrieval\\Gating};
-\node[box, right=of gate] (retrieve) {Similarity\\Search};
-\node[box, right=of retrieve] (inject) {Inject into\\System Msg};
+\node[box, below=2.6cm of conv] (query) {User\\Query};
+\node[gatebox, right=of query] (rgate) {Retrieval\\Gating};
+\node[box, right=of rgate] (hybrid) {Hybrid\\Search};
+\node[gatebox, right=of hybrid] (reflect) {Reflection\\Gate};
 
-\draw[arr] (query) -- (gate);
-\draw[arr] (gate) -- node[above, lbl] {pass} (retrieve);
-\draw[arr] (retrieve) -- (inject);
+\draw[arr] (query) -- (rgate);
+\draw[arr] (rgate) -- node[above, lbl] {pass} (hybrid);
+\draw[arr] (hybrid) -- (reflect);
+\draw[arr] (reflect.east) -- ++(0.5,0) node[right, lbl, align=left] {Inject\\Context Msg};
 
-% Store feeds into retrieval
-\draw[arr] (store.south) -- ++(0,-1.15) -| (retrieve.north);
+% Store feeds into hybrid search
+\draw[arr] (store.south) -- ++(0,-1.05) -| (hybrid.north);
 
 % Skip arrow from gate
-\draw[darr] (gate.south) -- ++(0,-0.5) node[below, lbl] {skip};
-
-% Retrieval reinforces memory (feedback arrow on the right)
-\draw[darr] (inject.north) -- ++(0,0.6) node[right, lbl] {$n_{\text{access}}$\,+\,1} |- (store.east);
+\draw[darr] (rgate.south) -- ++(0,-0.45) node[below, lbl] {skip};
 
 % --- Path labels ---
-\node[lbl, above=0.08cm of conv, xshift=1.2cm] {\textit{Write path}};
-\node[lbl, above=0.08cm of query, xshift=1.2cm] {\textit{Read path}};
+\node[lbl, above=0.08cm of conv, xshift=1.0cm] {\textit{Write path}};
+\node[lbl, above=0.08cm of query, xshift=1.0cm] {\textit{Read path}};
 
 \end{tikzpicture}
-\caption{Memory lifecycle. The write path extracts facts from conversations, deduplicates against existing entries, and stores new memories. The read path gates retrieval, searches by embedding similarity, and injects context. Each retrieval increments $n_{\text{access}}$, reinforcing the memory's retention score.}
+\caption{Memory lifecycle. \textit{Write path}: each conversation turn passes an entropy gate (discarding low-signal turns such as greetings), is sanitized and embedded as an episodic \texttt{Q:/A:} chunk, and stored directly---no LLM inference required. Every $s$ turns an additional sliding-window chunk is stored. \textit{Read path}: a heuristic gate skips retrieval for irrelevant queries; qualifying queries run hybrid search (vector + BM25 + n-gram) over the user's store; retrieved memories pass through a \textsc{ReflectionGate} (safety blocklist, recency decay, deduplication, budget cap) before injection as a separate conversation message.}
 \label{fig:memory_lifecycle}
 \end{figure}
 
@@ -105,10 +101,10 @@ An optional per-user capacity limit evicts the lowest-scoring entries when the s
 
 The RAG plugin retrieves relevant documents from vector stores and injects them as context before model invocation.
 
-\textbf{Indexing pipeline.}
+\noindent\textbf{Indexing pipeline.}
 Documents are chunked (configurable size and overlap), embedded using the shared embedding model (\Cref{sec:ml_inference}), and indexed in a vector store.
 
-\textbf{Hybrid retrieval.}
+\noindent\textbf{Hybrid retrieval.}
 Pure vector search can miss lexically relevant results when the embedding model underweights rare terms.
 We implement a three-signal hybrid retrieval pipeline (\Cref{fig:hybrid_search}) that scores each candidate chunk along three axes:
 \begin{enumerate}[nosep,leftmargin=*]
@@ -117,7 +113,7 @@ We implement a three-signal hybrid retrieval pipeline (\Cref{fig:hybrid_search})
   \item \emph{N-gram Jaccard}: character $n$-gram sets (default $n{=}3$) capture fuzzy lexical overlap, producing Jaccard similarity in $[0,1]$.
 \end{enumerate}
 
-\textbf{Score fusion.}
+\noindent\textbf{Score fusion.}
 Two fusion modes combine the three retriever scores into a single ranking:
 (1)~\emph{Weighted}: BM25 scores are min-max normalized to $[0,1]$, then the final score is $w_v \cdot s_{\text{vec}} + w_b \cdot s_{\text{bm25}} + w_n \cdot s_{\text{ngram}}$ with configurable weights (defaults: 0.7, 0.2, 0.1).
 (2)~\emph{Reciprocal Rank Fusion (RRF)}: $\text{score}(d) = \sum_r 1/(k + \text{rank}_r(d))$, which is parameter-free beyond the constant $k$ (default~60).
@@ -201,7 +197,7 @@ Two fusion modes combine the three retriever scores into a single ranking:
 \label{fig:hybrid_search}
 \end{figure}
 
-\textbf{Backend abstraction.}
+\noindent\textbf{Backend abstraction.}
 The RAG plugin accesses vector stores through a common \texttt{VectorStoreBackend} interface, decoupling retrieval logic from storage implementation.
 Six backend types are supported (\Cref{fig:rag_backends}):
 \begin{itemize}[nosep,leftmargin=*]
@@ -214,7 +210,7 @@ Six backend types are supported (\Cref{fig:rag_backends}):
 \end{itemize}
 Backends that implement native hybrid search (Milvus, Llama Stack with Milvus provider) use their own BM25 and keyword indexes; all other backends fall back to a generic rerank path that fetches an expanded candidate set ($4{\times}$ top-$k$) from vector search and applies BM25 and n-gram scoring as a post-retrieval reranking step.
 
-\textbf{Score-range awareness.}
+\noindent\textbf{Score-range awareness.}
 Different retrieval modes produce scores on fundamentally different scales: cosine similarity yields values in $[0, 1]$ where a threshold of $\sim$0.7 is typical, while RRF scores follow $\sum 1/(k + \text{rank})$ and typically range from 0.001 to 0.05.
 Applying a cosine-calibrated threshold to RRF scores would silently discard all results.
 The backend interface handles this transparently: when hybrid search is active, score-based filtering is bypassed and result volume is controlled solely by the top-$k$ parameter.
@@ -265,15 +261,15 @@ The backend interface handles this transparently: when hybrid search is active, 
 
 The system supports the OpenAI Responses API for stateful multi-turn conversations:
 
-\textbf{Conversation chaining.}
+\noindent\textbf{Conversation chaining.}
 Each response is stored with a unique ID.
 Subsequent requests reference \texttt{previous\_response\_id} to reconstruct the full conversation history without retransmitting the full message sequence.
 A bidirectional translator converts between the Response API format and Chat Completions format for backend model invocation, enabling all routing, safety, and caching features to operate identically on both API surfaces.
 
-\textbf{Routing continuity.}
+\noindent\textbf{Routing continuity.}
 Stored responses include routing metadata (decision, model selection, signal results), enabling consistent routing across conversation turns and providing context for feedback-driven model selection.
 
-\textbf{State backends.}
+\noindent\textbf{State backends.}
 Conversation state is persisted via three backends:
 (1)~\emph{in-memory} for development;
 (2)~\emph{Redis} for production deployments requiring distributed state with high availability---supporting both standalone and cluster modes;

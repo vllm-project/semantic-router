@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "b5ce25d"
+  source_commit: "90101fc"
   source_file: "docs/overview/goals.md"
   outdated: false
 is_mtpe: true
