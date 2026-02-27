@@ -29,6 +29,11 @@
   justify-content: center;
 }
 
+.documentSinglePage {
+  min-height: 100%;
+  align-items: center;
+}
+
 /* Two-page horizontal layout */
 .pagesRow {
   display: flex;
