@@ -13,6 +13,8 @@ export const SIGNAL_ICONS: Record<SignalType, string> = {
   language: '🌐',
   context: '📏',
   complexity: '🧠',
+  modality: '🖼️',
+  authz: '🔐',
   jailbreak: '🛡️',
   pii: '🔒',
 }
@@ -28,6 +30,8 @@ export const SIGNAL_COLORS: Record<SignalType, { background: string; border: str
   language: { background: '#4a5568', border: '#2d3748' },     // Dark Gray
   context: { background: '#4a5568', border: '#2d3748' },      // Dark Gray
   complexity: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
+  modality: { background: '#4a5568', border: '#2d3748' },     // Dark Gray
+  authz: { background: '#4a5568', border: '#2d3748' },        // Dark Gray
   jailbreak: { background: '#4a5568', border: '#2d3748' },    // Dark Gray
   pii: { background: '#4a5568', border: '#2d3748' },          // Dark Gray
 }
@@ -43,6 +47,8 @@ export const SIGNAL_LATENCY: Record<SignalType, string> = {
   language: '<1ms',
   context: '<1ms',
   complexity: '50-100ms',
+  modality: '50-100ms',
+  authz: '<1ms',
   jailbreak: '10-50ms',
   pii: '10-50ms',
 }
@@ -175,6 +181,8 @@ export const SIGNAL_TYPES: SignalType[] = [
   'language',
   'context',
   'complexity',
+  'modality',
+  'authz',
   'jailbreak',
   'pii',
 ]

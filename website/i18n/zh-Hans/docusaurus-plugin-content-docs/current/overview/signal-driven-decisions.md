@@ -33,7 +33,7 @@ if (keyword_match AND domain_match) OR high_embedding_similarity:
 
 **核心优势**：通过多维度的信号交叉验证，有效避免了单一模型经常发生的判定盲区，提升了路由的鲁棒性。
 
-## 11 种 Signal 类型
+## 13 种 Signal 类型
 
 ### 1. Keyword Signal
 
@@ -214,7 +214,62 @@ signals:
 4. 难度信号 = max_hard_similarity - max_easy_similarity
 5. 如果信号 > 阈值："hard"，如果信号 < -阈值："easy"，否则："medium"
 
-### 10. Jailbreak Signal
+### 10. Modality Signal
+
+- **内容**：将提示词分类为纯文本（AR）、图像生成（DIFFUSION）或两者兼有（BOTH）
+- **延迟**：50-100ms（内联模型推理）
+- **用例**：将多模态或创意提示词路由到专用生成模型
+
+```yaml
+signals:
+  modality:
+    - name: "image_generation"
+      description: "需要图像合成的请求"
+    - name: "text_only"
+      description: "无需图像输出的纯文本响应"
+```
+
+**示例**："画一幅海洋上的日落" → DIFFUSION 模态 → 路由到图像生成模型
+
+**工作原理**：Modality 检测器（在 `inline_models` 的 `modality_detector` 中配置）使用小型分类器判断查询需要文本、图像还是两种输出模式。结果作为信号发出，并在决策中通过规则 `name` 引用。
+
+### 11. Authz Signal（RBAC）
+
+- **内容**：Kubernetes 风格的 RoleBinding 模式——将用户/用户组映射到命名角色，这些角色充当信号
+- **延迟**：&lt;1ms（从请求头读取，无需模型推理）
+- **用例**：基于等级的访问控制——将高级用户路由到更好的模型，限制访客访问
+
+```yaml
+signals:
+  role_bindings:
+    - name: "premium-users"
+      role: "premium_tier"
+      subjects:
+        - kind: Group
+          name: "premium"
+        - kind: User
+          name: "alice"
+      description: "可访问 GPT-4 级别模型的高级用户"
+    - name: "guest-users"
+      role: "guest_tier"
+      subjects:
+        - kind: Group
+          name: "guests"
+      description: "仅限使用小模型的访客用户"
+```
+
+**示例**：请求携带请求头 `x-authz-user-groups: premium` → 匹配 `premium-users` 绑定 → 发出信号 `authz:premium_tier` → 决策路由到 `gpt-4o`
+
+**工作原理**：
+
+1. 用户身份（`x-authz-user-id`）和用户组成员关系（`x-authz-user-groups`）由 Authorino / ext_authz 注入
+2. 每个 `RoleBinding` 检查用户 ID 是否匹配任意 `User` subject，**或**用户的任意用户组是否匹配 `Group` subject（subject 内部为 OR 逻辑）
+3. 匹配时，`role` 值作为类型为 `authz` 的信号发出
+4. 决策通过 `type: "authz", name: "<role>"` 引用
+
+> Subject 名称**必须**与 Authorino 注入的值匹配。用户名来自 K8s Secret 的 `metadata.name`；用户组名来自 `authz-groups` 注解。
+
+### 12. Jailbreak Signal
 
 - **内容**：通过两种互补的方法（BERT 分类器和对比嵌入）进行对抗性提示词和 Jailbreak 尝试检测
 - **延迟**：50–100ms（BERT 分类器）；50–100ms（对比法，初始化后）
@@ -278,7 +333,7 @@ signals:
 
 > BERT 方法需要配置 `prompt_guard`。对比法复用全局嵌入模型。参见 [Jailbreak 防护教程](../tutorials/content-safety/jailbreak-protection.md)。
 
-### 11. PII Signal
+### 13. PII Signal
 
 - **内容**：使用机器学习检测用户查询中的个人身份信息（PII）
 - **延迟**：50–100ms（模型推理，与其他信号并行运行）

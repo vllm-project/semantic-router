@@ -128,6 +128,38 @@ class PIIRule(BaseModel):
     description: Optional[str] = None
 
 
+class ModalityRule(BaseModel):
+    """Modality detection signal configuration.
+
+    Classifies whether a prompt requires text (AR), image (DIFFUSION), or both (BOTH).
+    Detection configuration is read from modality_detector (InlineModels).
+    """
+
+    name: str
+    description: Optional[str] = None
+
+
+class Subject(BaseModel):
+    """RBAC subject (user or group) for role binding."""
+
+    kind: str  # "User" or "Group"
+    name: str
+
+
+class RoleBindingRule(BaseModel):
+    """RBAC role binding signal configuration.
+
+    Maps subjects (users/groups) to a named role following the Kubernetes RBAC pattern.
+    The role name is emitted as a signal of type "authz" in the decision engine.
+    User identity is read from x-authz-user-id and x-authz-user-groups headers.
+    """
+
+    name: str
+    role: str
+    subjects: List[Subject]
+    description: Optional[str] = None
+
+
 class Signals(BaseModel):
     """All signal configurations."""
 
@@ -140,6 +172,8 @@ class Signals(BaseModel):
     language: Optional[List[Language]] = []
     context: Optional[List[ContextRule]] = []
     complexity: Optional[List[ComplexityRule]] = []
+    modality: Optional[List[ModalityRule]] = []
+    role_bindings: Optional[List[RoleBindingRule]] = []
     jailbreak: Optional[List[JailbreakRule]] = []
     pii: Optional[List[PIIRule]] = []
 

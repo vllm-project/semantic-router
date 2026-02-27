@@ -112,6 +112,23 @@ export interface ComplexitySignal {
   composer?: RuleComposer
 }
 
+export interface ModalitySignal {
+  name: string
+  description?: string
+}
+
+export interface Subject {
+  kind: 'User' | 'Group'
+  name: string
+}
+
+export interface RoleBindingSignal {
+  name: string
+  role: string
+  subjects: Subject[]
+  description?: string
+}
+
 export interface JailbreakSignal {
   name: string
   threshold: number
@@ -140,6 +157,8 @@ export interface Signals {
   language?: LanguageSignal[]
   context?: ContextSignal[]
   complexity?: ComplexitySignal[]
+  modality?: ModalitySignal[]
+  role_bindings?: RoleBindingSignal[]
   jailbreak?: JailbreakSignal[]
   pii?: PIISignal[]
 }
@@ -149,7 +168,7 @@ export interface Signals {
 // =============================================================================
 
 
-export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'context' | 'complexity' | 'jailbreak' | 'pii'
+export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'context' | 'complexity' | 'modality' | 'authz' | 'jailbreak' | 'pii'
 export interface DecisionCondition {
   type: DecisionConditionType
   name: string
