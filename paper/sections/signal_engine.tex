@@ -4,6 +4,7 @@
 \label{sec:signal_engine}
 
 The signal extraction layer maps an incoming request $r$ to a structured signal result that characterizes the request along thirteen orthogonal dimensions.
+\Cref{fig:signal_taxonomy} provides an overview of the signal taxonomy and evaluation flow.
 We formalize the signal model and describe the extraction algorithms.
 
 \subsection{Signal Model}
@@ -86,7 +87,7 @@ The thirteen signal types partition into \emph{heuristic} and \emph{learned} cat
 
 Heuristic signals use deterministic or statistical algorithms with sub-millisecond latency:
 
-\textbf{Keyword} ($\tau_\text{kw}$).
+\noindent\textbf{Keyword} ($\tau_\text{kw}$).
 Rules are defined as pattern sets with Boolean combinators.
 Each rule specifies a set of patterns $P = \{p_1, \ldots, p_k\}$ with a combinator $\in \{\textsc{and}, \textsc{or}, \textsc{nor}\}$ and one of three matching methods:
 \begin{itemize}[nosep,leftmargin=1.5em]
@@ -97,16 +98,16 @@ Each rule specifies a set of patterns $P = \{p_1, \ldots, p_k\}$ with a combinat
 For \textsc{and}: $f(r) = \bigwedge_{i} \text{match}(p_i, r)$; for \textsc{or}: $f(r) = \bigvee_{i} \text{match}(p_i, r)$.
 The combinators apply uniformly across all three methods.
 
-\textbf{Context Length} ($\tau_\text{ctx}$).
+\noindent\textbf{Context Length} ($\tau_\text{ctx}$).
 Rules define token-count intervals $[l, u]$.
 Given estimated token count $t(r)$, the rule matches iff $l \leq t(r) \leq u$.
 This enables complexity-aware routing (e.g., short queries to fast models, long contexts to extended-context models).
 
-\textbf{Language} ($\tau_\text{lang}$).
+\noindent\textbf{Language} ($\tau_\text{lang}$).
 Rules bind detected language codes to named signals using statistical n-gram detection over 100+ languages.
 Enables language-specific routing (e.g., CJK queries to multilingual-specialized models).
 
-\textbf{Authorization} ($\tau_\text{authz}$).
+\noindent\textbf{Authorization} ($\tau_\text{authz}$).
 Role-based access control signals extracted from request headers, supporting a pluggable authentication factory.
 The authz signal layer abstracts over multiple identity providers (API key, OAuth2/OIDC, cloud IAM, custom JWT, LDAP) through provider-specific extractors that resolve user identities and group memberships from credentials.
 Role bindings then map resolved identities to named signals, enabling per-role routing policies (e.g., premium users routed to higher-quality models, free-tier users restricted to cost-effective models).
@@ -114,9 +115,23 @@ This \emph{inbound} authorization (who is the user and what can they access?) is
 
 \subsection{Learned Signals}
 
-Learned signals require neural inference, typically 10--100\,ms, using the LoRA-based classifiers described in \Cref{sec:lora_mom}:
+Learned signals require neural inference, typically 10--100\,ms, using the LoRA-based classifiers described in \Cref{sec:lora_mom}.
 
-\textbf{Embedding Similarity} ($\tau_\text{emb}$).
+\noindent\textbf{Why encoder-based models.}
+The choice of bidirectional encoders (ModernBERT~\cite{warner2024modernbert}, mmBERT-32K for long-context tasks) rather than unidirectional decoders for signal extraction is not merely an efficiency decision---it reflects a fundamental information-theoretic principle.
+Routing requires \emph{understanding} the query: determining its domain, complexity, intent, modality, and the precise location of sensitive content.
+Understanding, in Shannon's framework~\cite{shannon1948mathematical}, corresponds to building representations that maximize the mutual information $I(\mathbf{H};\, Y)$ between the hidden states~$\mathbf{H}$ and the task label~$Y$.
+A bidirectional encoder conditions every token on the full context in both directions, producing hidden states that capture the complete information structure of the input; a causal decoder, by contrast, conditions each token only on its left context---its representations are optimized for next-token prediction $I(\mathbf{h}_t;\, x_{t+1})$, which captures \emph{generative} continuation rather than \emph{discriminative} understanding.
+
+This bidirectional ``understanding'' is exploited at three distinct granularities across the signal types:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Sequence-level} (CLS pooling): For domain classification, jailbreak detection, fact-check gating, modality classification, and user feedback, the pooled CLS representation acts as an approximate \emph{sufficient statistic}---a fixed-dimensional vector that compresses the query's global semantics while discarding positional detail irrelevant to the label.
+  \item \textbf{Token-level} (per-token hidden states): For PII detection and hallucination span identification, the \emph{position} of information matters---which tokens are names, which spans are unsupported claims. Here the full sequence of hidden states $(\mathbf{h}_1, \ldots, \mathbf{h}_T)$ is retained, preserving the positional mutual information $I(\mathbf{h}_t;\, y_t)$ that CLS pooling would discard.
+  \item \textbf{Cross-sequence} (cross-encoder): For NLI-based hallucination explanation (\Cref{sec:halugate}), the encoder jointly attends over a (claim, evidence) pair, maximizing the \emph{inter-sequence} mutual information $I(\text{claim};\, \text{evidence})$ through full cross-attention---a capacity unavailable to architectures that encode each sequence independently.
+\end{itemize}
+In each case, the encoder's unrestricted attention pattern---the absence of a causal mask---is what enables maximal information extraction at the granularity the task demands.
+
+\noindent\textbf{Embedding Similarity} ($\tau_\text{emb}$).
 Each rule defines reference texts $\{t_1, \ldots, t_k\}$ and a similarity threshold $\theta$.
 The request embedding $\mathbf{e}_r$ is computed via a shared embedding model, and the rule matches iff:
 \begin{equation}
@@ -125,20 +140,20 @@ The request embedding $\mathbf{e}_r$ is computed via a shared embedding model, a
 The confidence equals the maximum cosine similarity.
 This provides scalable semantic matching without per-rule model training.
 
-\textbf{Domain Classification} ($\tau_\text{dom}$).
+\noindent\textbf{Domain Classification} ($\tau_\text{dom}$).
 A LoRA-adapted classifier trained on MMLU categories maps requests to domain labels (STEM, humanities, code, creative writing, etc.).
 The classification confidence serves as the signal confidence.
 
-\textbf{Factual Grounding} ($\tau_\text{fact}$).
+\noindent\textbf{Factual Grounding} ($\tau_\text{fact}$).
 A binary classifier (the HaluGate Sentinel, \Cref{sec:halugate}) determines whether the query requires factual verification, distinguishing factual questions from creative or code-generation tasks.
 
-\textbf{User Feedback} ($\tau_\text{fb}$).
+\noindent\textbf{User Feedback} ($\tau_\text{fb}$).
 A multi-class classifier detects satisfaction, dissatisfaction, clarification requests, and preference for alternatives, enabling feedback-driven routing adjustments.
 
-\textbf{Modality} ($\tau_\text{mod}$).
+\noindent\textbf{Modality} ($\tau_\text{mod}$).
 A three-class classifier (autoregressive, diffusion, both) determines the appropriate model modality for the request, trained on mixed text-generation and image-generation datasets.
 
-\textbf{Complexity} ($\tau_\text{cpx}$).
+\noindent\textbf{Complexity} ($\tau_\text{cpx}$).
 A contrastive embedding classifier estimates query difficulty.
 Each complexity rule defines two sets of candidate exemplars---\emph{hard} (e.g., multi-step reasoning problems) and \emph{easy} (e.g., simple factual lookups)---whose embeddings are precomputed at initialization.
 At query time, the query embedding is compared against both sets via cosine similarity:
@@ -150,7 +165,7 @@ The difficulty level is then $\text{hard}$ if $\delta > \theta$, $\text{easy}$ i
 Multiple complexity rules can coexist (e.g., \texttt{code\_complexity}, \texttt{math\_complexity}), each with its own candidate sets and threshold.
 Composer conditions can restrict when a rule fires---for instance, evaluating \texttt{code\_complexity} only when the domain signal indicates computer science.
 
-\textbf{Jailbreak Detection} ($\tau_\text{jb}$).
+\noindent\textbf{Jailbreak Detection} ($\tau_\text{jb}$).
 Each jailbreak rule selects one of two detection methods via a \texttt{method} field (default: \texttt{classifier}).
 
 \emph{BERT classifier method.}
@@ -173,14 +188,14 @@ This \emph{max-contrastive-chain} aggregation is specifically designed to catch 
 Both methods coexist within the same signal type; a single deployment can define BERT and contrastive rules simultaneously and combine them in decision logic using OR (fire if either detects) or use them at different priority levels for graduated response.
 Classifier details are described in \Cref{sec:safety}.
 
-\textbf{PII Detection} ($\tau_\text{pii}$).
+\noindent\textbf{PII Detection} ($\tau_\text{pii}$).
 A token-level NER classifier identifies personally identifiable information (person names, emails, phone numbers, SSNs, credit cards, etc.).
 Each rule specifies a confidence threshold and an optional allow-list of PII entity types.
 The signal fires when any PII type \emph{not} in the allow-list is detected above threshold.
 This per-rule policy model enables differentiated enforcement: a medical application may allow \textsc{person} while blocking \textsc{ssn}, whereas a public chatbot blocks all PII types.
 Classifier details are described in \Cref{sec:safety}.
 
-\textbf{Preference} ($\tau_\text{pref}$).
+\noindent\textbf{Preference} ($\tau_\text{pref}$).
 Personalized routing based on user interaction history.
 
 \subsection{Parallel Evaluation with Lazy Computation}
@@ -191,6 +206,9 @@ Signal evaluators for types in $\mathcal{T}_\text{used}$ are launched as concurr
 
 This demand-driven approach avoids the cost of unused signal types.
 In typical configurations with 3--5 active signal types out of thirteen, this reduces total signal extraction latency by 50--70\% compared to exhaustive evaluation.
+The strategy has a natural information-theoretic interpretation.
+Shannon's source coding theorem~\cite{shannon1948mathematical} establishes that optimal codes assign shorter codewords to more probable symbols; analogously, demand-driven evaluation assigns \emph{zero computational cost} to signals that carry no routing information in the current configuration, and full cost only to those that do.
+If we view each signal type's evaluation cost $c_i$ as a ``codeword length'' and its relevance indicator $\mathbf{1}[\tau_i \in \mathcal{T}_\text{used}]$ as the probability of being needed, then demand-driven evaluation minimizes the expected evaluation cost $\sum_i c_i \cdot \mathbf{1}[\tau_i \in \mathcal{T}_\text{used}]$---the computational analogue of minimizing expected code length.
 
 \subsection{Extensibility}
 

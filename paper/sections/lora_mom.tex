@@ -35,7 +35,7 @@ The aggregate model memory becomes:
 With rank $r = 32$ and hidden dimension $d = 768$, each adapter adds $2 \times 32 \times 768 = 49{,}152$ parameters ($\sim$0.02\% of the base model).
 For $n = 6$, total adapter overhead is $\sim$295K parameters---negligible compared to the 150M-parameter base.
 
-\textbf{Memory reduction.}
+\noindent\textbf{Memory reduction.}
 \begin{equation}
   \frac{M_\text{LoRA}}{M_\text{indep}} = \frac{|\theta_\text{base}| + n \cdot 2rd}{n \cdot |\theta_\text{base}|} \approx \frac{1}{n} \quad \text{for } 2nrd \ll |\theta_\text{base}|
 \end{equation}

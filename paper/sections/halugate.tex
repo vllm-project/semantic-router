@@ -4,7 +4,7 @@
 \label{sec:halugate}
 
 Hallucination---generating plausible but unsupported content---is a fundamental limitation of autoregressive language models~\cite{manakul2023selfcheckgpt,min2023factscore}.
-We introduce \halugate{}, a three-stage pipeline that addresses a key efficiency challenge: most queries (creative writing, code generation, brainstorming) do not require factual verification, yet na\"ive hallucination detection incurs overhead on every response.
+We introduce \halugate{}, a three-stage pipeline (\Cref{fig:halugate_pipeline}) that addresses a key efficiency challenge: most queries (creative writing, code generation, brainstorming) do not require factual verification, yet na\"ive hallucination detection incurs overhead on every response.
 
 \subsection{Design Rationale}
 
@@ -59,7 +59,7 @@ Existing approaches apply hallucination detection uniformly to all responses~\ci
 \label{fig:halugate_pipeline}
 \end{figure}
 
-\textbf{Stage 1: Sentinel (Gating).}
+\noindent\textbf{Stage 1: Sentinel (Gating).}
 A lightweight binary classifier $g_\text{sent}$ determines whether the query warrants factual verification:
 \begin{equation}
   g_\text{sent}(q) \in \{\textsc{needs\_fact\_check}, \textsc{no\_fact\_check}\}
@@ -70,7 +70,7 @@ In practice, 40--60\% of queries are classified as non-factual, proportionally r
 
 The Sentinel also serves dual duty as the \texttt{fact\_check} signal in the signal extraction layer (\Cref{sec:signal_engine}), enabling decisions to incorporate factual grounding into routing logic.
 
-\textbf{Stage 2: Detector (Span Identification).}
+\noindent\textbf{Stage 2: Detector (Span Identification).}
 A token-level classifier $g_\text{det}$ identifies hallucinated spans in the model response:
 \begin{equation}
   g_\text{det}(q, \mathbf{c}, a) = \bigl\{(i, j, c_{ij}) \mid a_i \ldots a_j \text{ is unsupported by context } \mathbf{c}\bigr\}
@@ -79,7 +79,7 @@ where $q$ is the user query, $\mathbf{c}$ is the grounding context (user-provide
 
 When tool-calling is present, tool execution results provide high-quality ground truth: database query results, API responses, and calculations serve as authoritative context $\mathbf{c}$, substantially improving detection precision.
 
-\textbf{Stage 3: Explainer (NLI Classification).}
+\noindent\textbf{Stage 3: Explainer (NLI Classification).}
 For each flagged span $(i, j)$, a Natural Language Inference (NLI) model~\cite{williams2018mnli} classifies the relationship between the span and the grounding context:
 \begin{equation}
   g_\text{nli}(a_{i:j}, \mathbf{c}) \in \{\textsc{entailment}, \textsc{contradiction}, \textsc{neutral}\}
