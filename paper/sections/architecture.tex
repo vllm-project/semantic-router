@@ -133,18 +133,18 @@ The architecture decomposes routing into three layers, each with a well-defined 
   \label{fig:architecture}
 \end{figure*}
 
-\textbf{Layer 1: Signal Extraction.}
+\noindent\textbf{Layer 1: Signal Extraction.}
 The signal layer maps a request $r$ to a structured signal result $\mathbf{s}$, consisting of binary match indicators and real-valued confidences for each configured rule across thirteen signal types.
 Heuristic signals (keyword, language, context length, authorization) complete in sub-millisecond time.
 ML-based signals (embedding similarity, domain classification, factual grounding, modality detection, complexity, preference, user feedback, jailbreak detection, PII detection) require neural inference at 10--120\,ms.
 Signals are evaluated in parallel, and only signal types referenced by at least one active decision are computed---a critical optimization for deployment configurations that use a subset of available signals.
 
-\textbf{Layer 2: Decision Evaluation.}
+\noindent\textbf{Layer 2: Decision Evaluation.}
 The decision layer takes the signal result $\mathbf{s}$ and evaluates a set of decisions $\mathcal{D} = \{d_1, \ldots, d_M\}$, each defined as a Boolean formula over signal conditions.
 The engine selects the best-matching decision $d^*$ using either priority-based or confidence-weighted ranking.
 Each decision carries its own model candidate set $\mathcal{M}_{d^*} \subseteq \mathcal{M}$, enabling deployment-specific model pools (e.g., a privacy decision restricts candidates to on-premise models).
 
-\textbf{Layer 3: Plugin Chain.}
+\noindent\textbf{Layer 3: Plugin Chain.}
 Each decision $d^*$ carries a per-decision plugin configuration that defines:
 (a)~\emph{pre-routing plugins} (fast response for safety enforcement, semantic caching, RAG context injection, modality routing, memory retrieval, system prompt augmentation, header mutation for provider auth), executed before model invocation;
 (b)~a \emph{semantic model selection algorithm} applied to $d^*$'s candidate model set $\mathcal{M}_{d^*}$ to find the best model cost-effectively;
@@ -154,17 +154,19 @@ Each decision $d^*$ carries a per-decision plugin configuration that defines:
 
 Four principles guide the architecture:
 
-\textbf{Composability.}
+\noindent\textbf{Composability.}
 Complex routing policies are expressed as compositions of simple primitives: Boolean combinations of signal conditions form decisions; sequences of typed plugins form execution chains; deployment scenarios are expressed as configuration profiles.
 This avoids monolithic routing logic and enables the same system to serve fundamentally different deployment requirements.
 
-\textbf{Orthogonality.}
+\noindent\textbf{Orthogonality.}
 Signals, decisions, and plugins are independent modules with a uniform interface boundary.
 New signal types can be added by implementing a single evaluation function---the decision engine references signals solely by type and rule name, requiring no modification.
 Likewise, new plugins and providers are registered independently.
 The current thirteen signal types are the built-in set; the framework is designed to be extended with domain-specific signals as deployment requirements evolve.
+This strict decoupling has a theoretical antecedent in Shannon's \emph{source-channel separation theorem}~\cite{shannon1948mathematical}: just as a communication system can be decomposed into a source encoder (which compresses the message to its informational essence) and a channel encoder (which adds structure for reliable transmission)---each optimized independently without loss of optimality---the routing system decomposes into a \emph{signal extraction layer} (which distills routing-relevant information from the raw request) and a \emph{decision layer} (which synthesizes a routing policy from the extracted signals).
+The signal vector~$\mathbf{s}$ is the interface between these independently optimizable stages, analogous to the compressed source representation at the encoder--channel boundary.
 
-\textbf{Closed-loop adaptivity.}
+\noindent\textbf{Closed-loop adaptivity.}
 The bidirectional signal flow described in \Cref{sec:signal_engine} enables the architecture to operate as a \emph{closed-loop control system}~\cite{astrom2008feedback}.
 In control-theoretic terms, the signal--decision--plugin pipeline is the \emph{plant}, response-side signals (hallucination detection, user feedback, latency measurements) are the \emph{sensors}, and a policy adjustment mechanism is the \emph{controller} that updates decision parameters $\theta^{(t)}$ (priorities, model weights) based on observed response quality:
 \begin{equation}
@@ -174,10 +176,10 @@ where $Q(r, m^*)$ is a response quality metric and $\eta$ is a learning rate.
 This formulation connects to the \emph{contextual bandit} framework~\cite{li2010contextual}: the signal vector $S(r)$ serves as the context, model selection is the action, and response quality is the reward.
 Standard regret bounds from online learning theory~\cite{shalev2012online} guarantee that the cumulative routing quality of such an adaptive policy converges to that of the best fixed policy in hindsight at a rate of $O(\sqrt{T})$, providing formal performance guarantees for self-improving routing.
 
-\textbf{Per-decision scoping.}
+\noindent\textbf{Per-decision scoping.}
 Safety thresholds, caching policies, model candidates, and auth mechanisms are scoped to individual decisions rather than applied globally.
 A coding-focused decision can omit PII signal conditions while a customer-support decision enforces strict PII filtering via signal-matched fast response---using the same system configuration.
 
-\textbf{Provider abstraction.}
+\noindent\textbf{Provider abstraction.}
 The architecture abstracts over provider-specific protocols, authentication, and endpoint topologies.
 Multi-endpoint routing with weighted distribution and failover is handled at the infrastructure layer, enabling decisions to reference models by capability rather than by provider-specific endpoint.

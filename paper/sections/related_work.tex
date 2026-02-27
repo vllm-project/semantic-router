@@ -5,23 +5,23 @@
 
 \subsection{LLM Routing and Model Selection}
 
-\textbf{Binary routing.}
+\noindent\textbf{Binary routing.}
 RouteLLM~\cite{ong2024routellm} pioneered preference-data-driven routing between a strong and weak model, training BERT, MLP, and causal LLM classifiers to estimate query difficulty.
 Our work extends this to multi-model, multi-signal routing with per-decision plugin chains.
 
-\textbf{Contrastive selection.}
+\noindent\textbf{Contrastive selection.}
 RouterDC~\cite{chen2024routerdc} learns shared query-model embeddings via dual contrastive learning.
 We integrate RouterDC as one of thirteen selection algorithms and extend it with signal-conditioned features (domain category, complexity).
 
-\textbf{Cascading.}
+\noindent\textbf{Cascading.}
 AutoMix~\cite{aggarwal2023automix} formulates model cascading as a POMDP with self-verification.
 We integrate AutoMix within our plugin-aware framework, where safety checks and caching can prevent unnecessary escalation.
 
-\textbf{Benchmarking.}
+\noindent\textbf{Benchmarking.}
 RouterBench~\cite{hu2024routerbench} proposed a benchmark for multi-LLM routing with hybrid scoring.
 Our Hybrid selector builds on this approach.
 
-\textbf{RL-based routing.}
+\noindent\textbf{RL-based routing.}
 Router-R1~\cite{zhang2025routerr1} formulates multi-LLM routing as a sequential decision process, using rule-based reward RL for multi-round routing and aggregation.
 GMTRouter~\cite{xie2025gmtrouter} uses graph-based learning for personalized multi-turn interactions.
 We integrate both within the unified selection interface and extend them with the ReMoM multi-round reasoning strategy.

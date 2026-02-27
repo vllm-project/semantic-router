@@ -7,6 +7,114 @@ The landscape of large language models has fragmented along multiple axes: modal
 Organizations increasingly operate \emph{heterogeneous model fleets}---local vLLM instances alongside cloud endpoints from OpenAI, Anthropic, Azure, Bedrock, Gemini, and Vertex AI---each with different capabilities, pricing, and compliance characteristics.
 This heterogeneity creates a fundamental inference-time optimization problem: \emph{given a user query, a fleet of diverse models, and deployment-specific constraints, which model should serve it, and what safety and privacy policies should apply?}
 
+Viewed through the lens of information theory~\cite{shannon1948mathematical}, routing is an \emph{uncertainty-reduction} problem.
+Before any analysis, the routing entropy is maximal: $H(M \mid r_\text{raw}) \approx \log_2 K$ bits for $K$ candidate models---every model is equally plausible.
+Each signal extracted from the request reduces this uncertainty; the goal is to collapse $H(M \mid S(r))$ to near zero so that the decision engine can make a deterministic, high-confidence routing choice (\Cref{fig:entropy_collapse}).
+This perspective reveals a natural two-layer decomposition (\Cref{fig:shannon_mapping}): signal extraction operates in the probabilistic regime of Shannon's \emph{Mathematical Theory of Communication}---maximizing the mutual information between observed signals and the routing outcome---while decision evaluation operates in the algebraic regime of Shannon's \emph{switching-circuit algebra}~\cite{shannon1938symbolic}, synthesizing routing policies as Boolean functions over the extracted signal indicators.
+The signal vector~$\mathbf{s}$ is the precise interface between these two regimes: continuous probabilistic inference below, discrete symbolic logic above.
+
+\begin{figure*}[!ht]
+  \centering
+  \begin{tikzpicture}[
+    sbox/.style={rectangle, draw, thick, rounded corners=2pt,
+                 minimum height=0.75cm, align=center, inner sep=4pt, font=\small},
+    lbl/.style={font=\scriptsize, text=gray},
+    arr/.style={->, >=stealth, thick},
+    darr/.style={<->, >=stealth, densely dashed, gray!60, thin},
+  ]
+
+  % --- Shannon row (top) ---
+  \node[lbl, anchor=east] at (-0.6, 1.8) {\textbf{Shannon (1948)}};
+  \node[sbox, fill=black!5]  (src)  at (1.2, 1.8) {Source};
+  \node[sbox, fill=blue!8]   (senc) at (3.6, 1.8) {Source\\[-2pt]Encoder};
+  \node[sbox, fill=yellow!12] (ch)  at (6.0, 1.8) {Channel};
+  \node[sbox, fill=red!8]    (sdec) at (8.4, 1.8) {Decoder};
+  \node[sbox, fill=black!5]  (dst)  at (10.8, 1.8) {Destination};
+
+  \draw[arr] (src) -- (senc);
+  \draw[arr] (senc) -- (ch);
+  \draw[arr] (ch) -- (sdec);
+  \draw[arr] (sdec) -- (dst);
+
+  % --- VSR row (bottom) ---
+  \node[lbl, anchor=east] at (-0.6, 0) {\textbf{VSR Router}};
+  \node[sbox, fill=black!5]  (qry) at (1.2, 0) {Query $r$};
+  \node[sbox, fill=blue!8]   (sig) at (3.6, 0) {Signal\\[-2pt]Extraction};
+  \node[sbox, fill=yellow!12] (sv)  at (6.0, 0) {Signal\\[-2pt]Vector $\mathbf{s}$};
+  \node[sbox, fill=red!8]    (dec) at (8.4, 0) {Decision\\[-2pt]Engine};
+  \node[sbox, fill=black!5]  (mdl) at (10.8, 0) {Model $m^*$};
+
+  \draw[arr] (qry) -- (sig);
+  \draw[arr] (sig) -- (sv);
+  \draw[arr] (sv) -- (dec);
+  \draw[arr] (dec) -- (mdl);
+
+  % --- Correspondence arrows ---
+  \draw[darr] (src.south)  -- (qry.north);
+  \draw[darr] (senc.south) -- (sig.north);
+  \draw[darr] (ch.south)   -- (sv.north);
+  \draw[darr] (sdec.south) -- (dec.north);
+  \draw[darr] (dst.south)  -- (mdl.north);
+
+  % --- Regime labels ---
+  \draw[densely dotted, gray!50, thick] (6.0, 2.6) -- (6.0, -0.8);
+  \node[font=\scriptsize, fill=blue!5, rounded corners=2pt, inner sep=2pt]
+    at (2.4, -1.1) {Information Theory regime};
+  \node[font=\scriptsize, fill=red!5, rounded corners=2pt, inner sep=2pt]
+    at (9.6, -1.1) {Boolean Algebra regime};
+
+  \end{tikzpicture}
+  \caption{Structural correspondence between Shannon's communication system~\cite{shannon1948mathematical} and VSR's routing pipeline.
+  The dotted line marks the boundary between the information-theoretic regime (signal extraction maximizes mutual information with the routing outcome) and the Boolean-algebraic regime (the decision engine synthesizes routing policies from signal conditions via $\{\wedge, \vee, \neg\}$~\cite{shannon1938symbolic}).}
+  \label{fig:shannon_mapping}
+\end{figure*}
+
+\begin{figure*}[!ht]
+  \centering
+  \begin{tikzpicture}[
+    bar/.style={draw, thick, rounded corners=1pt, fill=#1, minimum width=0.9cm, anchor=south},
+    lbl/.style={font=\scriptsize},
+    arr/.style={->, >=stealth, thick, gray!70},
+  ]
+
+  % Bars (heights represent entropy)
+  \node[bar=gray!20,   minimum height=3.2cm] (b0) at (0.8, 0) {};
+  \node[bar=blue!15,   minimum height=2.4cm] (b1) at (2.4, 0) {};
+  \node[bar=blue!20,   minimum height=1.6cm] (b2) at (4.0, 0) {};
+  \node[bar=blue!25,   minimum height=0.9cm] (b3) at (5.6, 0) {};
+  \node[bar=green!20,  minimum height=0.2cm] (b4) at (7.2, 0) {};
+
+  % Bar labels (top)
+  \node[lbl, above=1pt of b0] {$\log_2 K$};
+  \node[lbl, above=1pt of b1] {};
+  \node[lbl, above=1pt of b2] {};
+  \node[lbl, above=1pt of b3] {};
+  \node[lbl, above=1pt of b4] {$\approx 0$};
+
+  % Bar labels (bottom)
+  \node[lbl, below=2pt of b0, align=center] {Raw\\[-1pt]query};
+  \node[lbl, below=2pt of b1, align=center] {+keyword\\[-1pt]+language};
+  \node[lbl, below=2pt of b2, align=center] {+domain};
+  \node[lbl, below=2pt of b3, align=center] {+complexity\\[-1pt]+embedding};
+  \node[lbl, below=2pt of b4, align=center] {Decision\\[-1pt]$\phi(\mathbf{s})$};
+
+  % Arrows between bars
+  \draw[arr] (b0.east) -- (b1.west);
+  \draw[arr] (b1.east) -- (b2.west);
+  \draw[arr] (b2.east) -- (b3.west);
+  \draw[arr] (b3.east) -- (b4.west);
+
+  % Y-axis label
+  \node[font=\scriptsize, rotate=90, anchor=south] at (-0.2, 1.6) {$H(M \mid \text{signals observed})$};
+
+  % Baseline
+  \draw[gray!40] (-0.1, 0) -- (8.0, 0);
+
+  \end{tikzpicture}
+  \caption{Entropy collapse during signal extraction. Each additional signal reduces the routing uncertainty $H(M \mid \cdot\,)$ from the uniform prior $\log_2 K$ bits until the decision formula $\phi(\mathbf{s})$ yields a near-deterministic model selection.}
+  \label{fig:entropy_collapse}
+\end{figure*}
+
 This problem is more nuanced than binary difficulty routing.
 A production routing system must simultaneously consider:
 \begin{itemize}[leftmargin=*]

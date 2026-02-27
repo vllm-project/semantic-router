@@ -105,42 +105,42 @@ function WhitePaperContent(): JSX.Element {
               >
                 {isMobile
                   ? (
-                  /* Mobile: all pages stacked — continuous scroll, no pagination bar */
-                      <div className={styles.mobileStack}>
-                        {Array.from({ length: numPages }, (_, i) => (
-                          <div key={i + 1} className={styles.pageWrapper}>
-                            <Page
-                              pageNumber={i + 1}
-                              width={pageWidth}
-                              renderTextLayer={true}
-                              renderAnnotationLayer={true}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    )
-                  : (
-                  /* Desktop: two-page spread */
-                      <div className={styles.pagesRow}>
-                        <div className={styles.pageWrapper}>
+                    /* Mobile: all pages stacked — continuous scroll, no pagination bar */
+                    <div className={styles.mobileStack}>
+                      {Array.from({ length: numPages }, (_, i) => (
+                        <div key={i + 1} className={styles.pageWrapper}>
                           <Page
-                            pageNumber={pageNumber}
+                            pageNumber={i + 1}
                             width={pageWidth}
                             renderTextLayer={true}
                             renderAnnotationLayer={true}
                           />
                         </div>
-                        {hasRight && (
-                          <div className={styles.pageWrapper}>
-                            <Page
-                              pageNumber={rightPage}
-                              width={pageWidth}
-                              renderTextLayer={true}
-                              renderAnnotationLayer={true}
-                            />
-                          </div>
-                        )}
+                      ))}
+                    </div>
+                    )
+                  : (
+                    /* Desktop: two-page spread */
+                    <div className={styles.pagesRow}>
+                      <div className={styles.pageWrapper}>
+                        <Page
+                          pageNumber={pageNumber}
+                          width={pageWidth}
+                          renderTextLayer={true}
+                          renderAnnotationLayer={true}
+                        />
                       </div>
+                      {hasRight && (
+                        <div className={styles.pageWrapper}>
+                          <Page
+                            pageNumber={rightPage}
+                            width={pageWidth}
+                            renderTextLayer={true}
+                            renderAnnotationLayer={true}
+                          />
+                        </div>
+                      )}
+                    </div>
                     )}
               </Document>
             )}
