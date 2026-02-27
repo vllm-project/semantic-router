@@ -1,47 +1,13 @@
 /* ===== Page layout ===== */
+/* navbar and footer are hidden programmatically, so we take 100vh */
 .page {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - var(--ifm-navbar-height));
+  height: 100vh;
   background: var(--ifm-background-color);
   overflow: hidden;
 }
 
-/* ===== Button styles (used in bottom bar) ===== */
-.toolbarBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.38rem 0.9rem;
-  border-radius: 5px;
-  font-size: 0.82rem;
-  font-weight: 500;
-  text-decoration: none !important;
-  transition: background 0.15s, color 0.15s;
-  white-space: nowrap;
-}
-
-.toolbarBtnPrimary {
-  background: var(--ifm-color-primary);
-  color: #fff !important;
-}
-
-.toolbarBtnPrimary:hover {
-  background: var(--ifm-color-primary-dark);
-  color: #fff !important;
-}
-
-.toolbarBtnOutline {
-  background: transparent;
-  color: var(--ifm-font-color-base) !important;
-  border: 1px solid var(--ifm-toc-border-color, #d0d0d0);
-}
-
-.toolbarBtnOutline:hover {
-  background: var(--ifm-hover-overlay);
-  color: var(--ifm-color-primary) !important;
-  border-color: var(--ifm-color-primary);
-}
 
 /* ===== PDF viewer area ===== */
 .viewerArea {
@@ -101,13 +67,6 @@
   gap: 1.2rem;
 }
 
-/* Right: action buttons */
-.paginationRight {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.6rem;
-}
 
 .pageBtn {
   padding: 0.35rem 1.1rem;
@@ -139,13 +98,6 @@
   text-align: center;
 }
 
-/* divider — reserved for future use */
-.paginationDivider {
-  width: 1px;
-  height: 1.2rem;
-  background: var(--ifm-toc-border-color, #d0d0d0);
-  margin: 0 0.2rem;
-}
 
 /* ===== Loading state ===== */
 .loadingText {
@@ -171,58 +123,30 @@
   font-weight: 500;
 }
 
-/* ===== Mobile: single-page mode ===== */
+/* Mobile continuous-scroll stack */
+.mobileStack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+/* ===== Mobile: continuous-scroll mode ===== */
 @media (max-width: 768px) {
+  /* Allow the page to grow beyond the viewport for natural scroll */
   .page {
     height: auto;
-    min-height: calc(100vh - var(--ifm-navbar-height));
+    min-height: 100vh;
+    overflow: visible;
   }
 
   .viewerArea {
-    padding: 0.75rem 0.5rem;
+    /* Expand to fit all stacked pages; white bg matches PDF pages */
+    flex: unset;
+    overflow: visible;
+    background: #fff;
+    padding: 0;
     align-items: flex-start;
-  }
-
-  .pagesRow {
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .pageWrapper {
-    box-shadow:
-      0 1px 6px rgba(0, 0, 0, 0.1),
-      0 1px 2px rgba(0, 0, 0, 0.06);
-  }
-
-  /* Bottom bar: two-row layout */
-  .pagination {
-    grid-template-columns: 1fr;
-    gap: 0.5rem;
-    padding: 0.6rem 1rem;
-  }
-
-  /* Hide left spacer */
-  .pagination > div:first-child {
-    display: none;
-  }
-
-  .paginationCenter {
-    justify-content: center;
-    gap: 0.8rem;
-  }
-
-  .paginationRight {
-    justify-content: center;
-    gap: 0.5rem;
-  }
-
-  .pageBtn {
-    padding: 0.4rem 1rem;
-    font-size: 0.82rem;
-  }
-
-  .toolbarBtn {
-    padding: 0.38rem 0.75rem;
-    font-size: 0.8rem;
   }
 }
