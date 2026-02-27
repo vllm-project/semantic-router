@@ -22,6 +22,10 @@
   background: var(--ifm-background-surface-color, #f5f6f7);
 }
 
+.viewerAreaCentered {
+  align-items: center;
+}
+
 /* react-pdf Document container */
 .document {
   width: 100%;
