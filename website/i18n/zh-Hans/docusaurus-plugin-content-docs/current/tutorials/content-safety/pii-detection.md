@@ -1,13 +1,13 @@
 ---
 translation:
-  source_commit: "bac2743"
+  source_commit: "9ed8acf"
   source_file: "docs/tutorials/content-safety/pii-detection.md"
   outdated: false
 ---
 
 # PII 检测
 
-Semantic Router 内置了个人身份信息（PII）检测功能，用于保护用户查询中的敏感数据。系统使用经过微调的 BERT 模型来识别各种 PII 类型，并根据可配置的策略进行处理。
+Semantic Router 默认支持个人身份信息（PII）检测。通过微调的 BERT 模型识别敏感数据，并基于可配置的策略拦截请求。
 
 ## 概述
 
@@ -114,7 +114,7 @@ signals:
 
 ### 领域感知的 PII 策略
 
-将 PII 信号与领域信号结合，实现上下文感知的数据保护：
+结合 PII 和领域信号，为不同领域配置差异化的白名单：
 
 ```yaml
 signals:
@@ -237,7 +237,7 @@ classifier:
   pii_mapping_path: "models/mom-pii-classifier/label_mapping.json"
 ```
 
-## PII 检测工作原理
+## 执行链路
 
 1. **信号评估**：所有 `pii` 信号规则与其他信号（关键词、领域、jailbreak 等）**并行运行** — 对路由管道零额外延迟
 2. **实体检测**：PII 分类器识别请求文本中的 PII 实体
@@ -335,13 +335,13 @@ decisions:
           message: "请求被拦截：检测到个人信息。"
 ```
 
-### 3. 使用领域上下文实现更智能的策略
+### 3. 按领域精细控制
 
-不同领域有不同的 PII 敏感度要求。结合 `pii` + `domain` 信号实现上下文感知策略，而非应用单一全局规则。
+不同领域的隐私容忍度不同。请结合 `pii` + `domain` 分别设定阈值与允许类型，取代粗放的全局一刀切策略。
 
 ### 4. 为对话应用启用历史记录
 
-对于多轮对话，启用 `include_history: true` 以检测跨多条消息分享的 PII：
+在会话场景中启用 `include_history: true`，防止攻击者跨消息拆分 PII 进行绕过：
 
 ```yaml
 signals:
