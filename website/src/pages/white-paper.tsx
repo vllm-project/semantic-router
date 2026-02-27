@@ -1,9 +1,10 @@
 import React, { useState, useCallback, useEffect } from 'react'
 import Layout from '@theme/Layout'
+import Head from '@docusaurus/Head'
 import BrowserOnly from '@docusaurus/BrowserOnly'
 import styles from './white-paper.module.css'
 
-const PDF_URL = '/vllm-semantic-router.pdf'
+const PDF_URL = '/white-paper.pdf'
 
 // Inner component: only rendered in the browser, avoids SSG DOMMatrix errors
 function WhitePaperContent(): JSX.Element {
@@ -21,43 +22,49 @@ function WhitePaperContent(): JSX.Element {
   const [numPages, setNumPages] = useState<number>(0)
   const [pageNumber, setPageNumber] = useState<number>(1)
   const [pageWidth, setPageWidth] = useState<number>(600)
+  // Mobile: render by height so the page fills the screen exactly (no gray gap below)
+  const [pageHeight, setPageHeight] = useState<number | undefined>(undefined)
   const [isMobile, setIsMobile] = useState<boolean>(false)
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<boolean>(false)
+  // Bottom bar height (px) used when computing available height on mobile
+  const BOTTOM_BAR_H = 52
 
-  // Hide the built-in Docusaurus footer
+  // Hide the built-in Docusaurus navbar and footer for a full-screen viewer
   useEffect(() => {
-    const footer = document.querySelector('footer')
-    if (footer) {
-      footer.style.display = 'none'
-    }
+    const navbar = document.querySelector('.navbar') as HTMLElement | null
+    const footer = document.querySelector('footer') as HTMLElement | null
+    if (navbar) navbar.style.display = 'none'
+    if (footer) footer.style.display = 'none'
     return () => {
-      if (footer) {
-        footer.style.display = ''
-      }
+      if (navbar) navbar.style.display = ''
+      if (footer) footer.style.display = ''
     }
   }, [])
 
-  // Dynamically calculate page width based on viewport; single-page on mobile
+  // Dynamically calculate page dimensions based on viewport
   useEffect(() => {
-    const updateWidth = () => {
+    const updateSize = () => {
       const vw = window.innerWidth
       const mobile = vw <= 768
       setIsMobile(mobile)
       if (mobile) {
-        // Mobile: single-page, full width minus padding
-        setPageWidth(vw - 32)
+        // Mobile: height-driven rendering — fill screen minus the bottom bar,
+        // so there is zero gray gap between the PDF page and the nav bar.
+        setPageHeight(window.innerHeight - BOTTOM_BAR_H)
+        setPageWidth(0) // unused on mobile
       }
       else {
         // Desktop: two-page spread, each half of available width
+        setPageHeight(undefined)
         const available = Math.min(vw - 120, 1400)
         setPageWidth(Math.floor(available / 2) - 16)
       }
     }
-    updateWidth()
-    window.addEventListener('resize', updateWidth)
-    return () => window.removeEventListener('resize', updateWidth)
-  }, [])
+    updateSize()
+    window.addEventListener('resize', updateSize)
+    return () => window.removeEventListener('resize', updateSize)
+  }, [BOTTOM_BAR_H])
 
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
     setNumPages(numPages)
@@ -106,7 +113,8 @@ function WhitePaperContent(): JSX.Element {
                   <div className={styles.pageWrapper}>
                     <Page
                       pageNumber={pageNumber}
-                      width={pageWidth}
+                      width={isMobile ? undefined : pageWidth}
+                      height={isMobile ? pageHeight : undefined}
                       renderTextLayer={true}
                       renderAnnotationLayer={true}
                     />
@@ -157,24 +165,8 @@ function WhitePaperContent(): JSX.Element {
               Next →
             </button>
           </div>
-          {/* Right: action buttons */}
-          <div className={styles.paginationRight}>
-            <a
-              href={PDF_URL}
-              download="vllm-semantic-router.pdf"
-              className={`${styles.toolbarBtn} ${styles.toolbarBtnPrimary}`}
-            >
-              ⬇ Download
-            </a>
-            <a
-              href={PDF_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`${styles.toolbarBtn} ${styles.toolbarBtnOutline}`}
-            >
-              ↗ New Tab
-            </a>
-          </div>
+          {/* Right spacer */}
+          <div />
         </div>
       )}
     </div>
@@ -182,11 +174,22 @@ function WhitePaperContent(): JSX.Element {
 }
 
 export default function WhitePaper(): JSX.Element {
+  const ogImage = 'https://vllm-semantic-router.com/img/vllm.png'
   return (
     <Layout
-      title="vLLM Semantic Router"
+      title="White Paper"
       description="Signal Driven Decision Routing for Mixture-of-Modality Models — Official White Paper"
     >
+      <Head>
+        <meta property="og:title" content="White Paper — vLLM Semantic Router" />
+        <meta property="og:description" content="Signal Driven Decision Routing for Mixture-of-Modality Models — Official White Paper" />
+        <meta property="og:image" content={ogImage} />
+        <meta property="og:type" content="article" />
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content="White Paper — vLLM Semantic Router" />
+        <meta name="twitter:description" content="Signal Driven Decision Routing for Mixture-of-Modality Models — Official White Paper" />
+        <meta name="twitter:image" content={ogImage} />
+      </Head>
       {/* BrowserOnly prevents SSG from executing browser-only APIs (e.g. DOMMatrix) */}
       <BrowserOnly fallback={<div className={styles.loadingText}>Loading PDF…</div>}>
         {() => <WhitePaperContent />}
