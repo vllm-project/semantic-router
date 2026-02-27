@@ -31,7 +31,7 @@ Our contributions are:
 
 \begin{enumerate}[leftmargin=*]
   \item \textbf{Composable Signal-Decision-Plugin Architecture} (\Cref{sec:architecture,sec:signal_engine,sec:decision_engine,sec:plugins}):
-    A three-layer architecture where eleven signal types are composed through Boolean decision rules into deployment-specific routing policies, with per-decision plugin chains for safety, caching, and augmentation. Different deployment scenarios (privacy-regulated, cost-optimized, multi-cloud) are expressed as different configurations over the same architecture.
+    A three-layer architecture where thirteen signal types are composed through Boolean decision rules into deployment-specific routing policies, with per-decision plugin chains for safety, caching, and augmentation. Different deployment scenarios (privacy-regulated, cost-optimized, multi-cloud) are expressed as different configurations over the same architecture.
 
   \item \textbf{Semantic Model Routing with Cost-Aware Selection} (\Cref{sec:model_selection}):
     A unified framework integrating thirteen model selection algorithms---rating-based, contrastive, cascading, classical ML, reinforcement learning, and latency-aware---that analyze request semantics to select the most cost-effective model while respecting per-decision privacy and safety constraints.
@@ -44,6 +44,10 @@ Our contributions are:
 
   \item \textbf{LoRA-Based Multi-Task Classification} (\Cref{sec:lora_mom,sec:ml_inference}):
     A memory-efficient architecture using Low-Rank Adaptation that serves $n$ classification tasks from a single base model with lightweight adapter heads, reducing aggregate model memory from $n$ full copies to one base plus negligible adapter overhead.
+
+  \item \textbf{Episodic Conversation Memory with ReflectionGate} (\Cref{sec:memory_rag}):
+    A lightweight memory system that stores raw conversational turns as episodic chunks (filtered by an entropy gate and capped at 16\,KB) rather than relying on LLM-based fact extraction, eliminating inference overhead at write time.
+    At retrieval time, a multi-stage \emph{ReflectionGate} pipeline---safety block-pattern filtering, recency decay, Jaccard deduplication, and budget capping---refines retrieved chunks before injection as a separate context message, enabling personalized multi-turn routing without coupling memory quality to an external model.
 \end{enumerate}
 
 \subsection{Paper Organization}

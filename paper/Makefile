@@ -8,7 +8,7 @@
 #   make check    - Check for common LaTeX issues
 
 MAIN     = main
-OUTNAME  = vllm-semantic-router
+OUTNAME  = white-paper
 TEX      = pdflatex
 BIB      = bibtex
 TEXFLAGS = -interaction=nonstopmode -halt-on-error -file-line-error -jobname=$(OUTNAME)
@@ -40,7 +40,7 @@ quick:
 
 # Deploy PDF to website static directory for online viewing
 deploy: $(OUTNAME).pdf
-	cp $(OUTNAME).pdf ../website/static/$(OUTNAME).pdf
+	mv $(OUTNAME).pdf ../website/static/$(OUTNAME).pdf
 	@echo ""
 	@echo "=== Deployed: ../website/static/$(OUTNAME).pdf ==="
 

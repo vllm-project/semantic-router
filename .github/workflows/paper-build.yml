@@ -59,7 +59,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: vllm-semantic-router-paper
-          path: paper/vllm-semantic-router.pdf
+          path: paper/white-paper.pdf
           retention-days: 30
 
       - name: Comment PDF link on PR
@@ -79,7 +79,7 @@ jobs:
               `|---|---|`,
               `| **Commit** | \`${sha}\` |`,
               `| **Built at** | ${now} |`,
-              `| **Download** | **[vllm-semantic-router.pdf](${runUrl}#artifacts)** |`,
+              `| **Download** | **[white-paper.pdf](${runUrl}#artifacts)** |`,
             ].join('\n');
 
             await github.rest.issues.createComment({
