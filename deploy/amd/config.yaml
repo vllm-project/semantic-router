@@ -1167,52 +1167,148 @@ decisions:
 
   # Priority 134: Multi-level boolean expression demo (OR + AND + NOT)
   # Expression:
-  # ((computer_science OR thinking_en) AND (en OR zh) AND NOT(jailbreak_standard OR jailbreak_contrastive OR pii_deny_all))
-  # OR
-  # (math AND long_context AND NOT(jailbreak_strict))
+  # Top-level expression:
+  #   Branch A OR Branch B OR Branch C
+  #
+  # Branch A (deep tech analysis):
+  #   (((tech-intent OR preference) AND (deep-thinking signal)) AND ((en|zh) AND (medium|long)))
+  #   AND ((needs_fact_check OR cs-hard) AND NOT(security_risk OR creative))
+  #
+  # Branch B (math-heavy analysis):
+  #   ((math-domain AND (math-hard OR zh-deep-thinking)) AND ((long-context OR needs_fact_check) AND NOT(strict-security-risk)))
+  #
+  # Branch C (iterative refinement):
+  #   ((dissatisfied feedback OR bug-fixing preference) AND (tech/math domain) AND NOT(security_risk))
   - name: "multi_level_expression"
-    description: "Complex nested routing with layered safety guards"
+    description: "Deep multi-signal routing for complex analysis with strict safety gating"
     priority: 134
     rules:
       operator: "OR"
       conditions:
-        # Branch A: Safe tech-oriented queries in EN/ZH
+        # Branch A: Deep technical analysis path
+        - operator: "AND"
+          conditions:
+            # A1: intent fusion (domain/keyword/preference) + deep-thinking hint
+            - operator: "AND"
+              conditions:
+                - operator: "OR"
+                  conditions:
+                    - type: "domain"
+                      name: "computer science"
+                    - type: "domain"
+                      name: "engineering"
+                    - type: "keyword"
+                      name: "thinking_en"
+                    - type: "preference"
+                      name: "code_generation"
+                    - type: "preference"
+                      name: "code_review"
+                - operator: "OR"
+                  conditions:
+                    - type: "embedding"
+                      name: "deep_thinking_en"
+                    - type: "keyword"
+                      name: "remom_high"
+
+            # A2: language/context gate
+            - operator: "AND"
+              conditions:
+                - operator: "OR"
+                  conditions:
+                    - type: "language"
+                      name: "en"
+                    - type: "language"
+                      name: "zh"
+                - operator: "OR"
+                  conditions:
+                    - type: "context"
+                      name: "medium_context"
+                    - type: "context"
+                      name: "long_context"
+
+            # A3: verification/complexity requirement + strict safety exclusion
+            - operator: "AND"
+              conditions:
+                - operator: "OR"
+                  conditions:
+                    - type: "fact_check"
+                      name: "needs_fact_check"
+                    - type: "complexity"
+                      name: "computer_science:hard"
+                - operator: "NOT"
+                  conditions:
+                    - operator: "OR"
+                      conditions:
+                        - type: "jailbreak"
+                          name: "jailbreak_standard"
+                        - type: "jailbreak"
+                          name: "jailbreak_contrastive"
+                        - type: "pii"
+                          name: "pii_deny_all"
+                        - type: "keyword"
+                          name: "creative_keywords"
+
+        # Branch B: Math-heavy deep analysis path
+        - operator: "AND"
+          conditions:
+            - operator: "AND"
+              conditions:
+                - type: "domain"
+                  name: "math"
+                - operator: "OR"
+                  conditions:
+                    - type: "complexity"
+                      name: "math_problem:hard"
+                    - type: "embedding"
+                      name: "deep_thinking_zh"
+                    - type: "keyword"
+                      name: "thinking_zh"
+            - operator: "AND"
+              conditions:
+                - operator: "OR"
+                  conditions:
+                    - type: "context"
+                      name: "long_context"
+                    - type: "fact_check"
+                      name: "needs_fact_check"
+                - operator: "NOT"
+                  conditions:
+                    - operator: "OR"
+                      conditions:
+                        - type: "jailbreak"
+                          name: "jailbreak_strict"
+                        - type: "jailbreak"
+                          name: "jailbreak_contrastive_strict"
+                        - type: "pii"
+                          name: "pii_deny_all"
+
+        # Branch C: Iterative refinement path (follow-up repair / clarification)
         - operator: "AND"
           conditions:
             - operator: "OR"
               conditions:
-                - type: "domain"
-                  name: "computer science"
-                - type: "keyword"
-                  name: "thinking_en"
+                - type: "user_feedback"
+                  name: "need_clarification"
+                - type: "user_feedback"
+                  name: "wrong_answer"
+                - type: "preference"
+                  name: "bug_fixing"
             - operator: "OR"
               conditions:
-                - type: "language"
-                  name: "en"
-                - type: "language"
-                  name: "zh"
+                - type: "domain"
+                  name: "computer science"
+                - type: "domain"
+                  name: "engineering"
+                - type: "domain"
+                  name: "math"
             - operator: "NOT"
               conditions:
                 - operator: "OR"
                   conditions:
                     - type: "jailbreak"
                       name: "jailbreak_standard"
-                    - type: "jailbreak"
-                      name: "jailbreak_contrastive"
                     - type: "pii"
                       name: "pii_deny_all"
-
-        # Branch B: Long-context math queries but still guarded
-        - operator: "AND"
-          conditions:
-            - type: "domain"
-              name: "math"
-            - type: "context"
-              name: "long_context"
-            - operator: "NOT"
-              conditions:
-                - type: "jailbreak"
-                  name: "jailbreak_strict"
     modelRefs:
       - model: "DeepSeek-V3.2"
         use_reasoning: true
