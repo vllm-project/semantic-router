@@ -26,7 +26,7 @@ if (keyword_match AND domain_match) OR high_embedding_similarity:
 
 **Why this matters**: Multiple signals voting together make more accurate decisions than any single signal.
 
-## The 11 Signal Types
+## The 13 Signal Types
 
 ### 1. Keyword Signals
 
@@ -207,7 +207,62 @@ signals:
 4. Difficulty signal = max_hard_similarity - max_easy_similarity
 5. If signal > threshold: "hard", if signal < -threshold: "easy", else: "medium"
 
-### 10. Jailbreak Signals
+### 10. Modality Signals
+
+- **What**: Classifies whether a prompt is text-only (AR), image-generation (DIFFUSION), or both (BOTH)
+- **Latency**: 50-100ms (inline model inference)
+- **Use Case**: Route creative/multimodal prompts to specialized generation models
+
+```yaml
+signals:
+  modality:
+    - name: "image_generation"
+      description: "Requests that require image synthesis"
+    - name: "text_only"
+      description: "Pure text responses with no image output"
+```
+
+**Example**: "Draw a sunset over the ocean" → DIFFUSION modality → Routes to image-generation model
+
+**How it works**: The modality detector (configured under `modality_detector` in `inline_models`) uses a small classifier to decide whether the query calls for text, image, or both output modes. The result is emitted as a signal and referenced in decisions by the rule `name`.
+
+### 11. Authz Signals (RBAC)
+
+- **What**: Kubernetes-style RoleBinding pattern — maps users/groups to named roles that act as signals
+- **Latency**: &lt;1ms (reads from request headers, no model inference)
+- **Use Case**: Tier-based access control — route premium users to better models, restrict guest access
+
+```yaml
+signals:
+  role_bindings:
+    - name: "premium-users"
+      role: "premium_tier"
+      subjects:
+        - kind: Group
+          name: "premium"
+        - kind: User
+          name: "alice"
+      description: "Premium tier users with access to GPT-4 class models"
+    - name: "guest-users"
+      role: "guest_tier"
+      subjects:
+        - kind: Group
+          name: "guests"
+      description: "Guest users limited to smaller models"
+```
+
+**Example**: Request arrives with header `x-authz-user-groups: premium` → Matches `premium-users` binding → Emits signal `authz:premium_tier` → Decision routes to `gpt-4o`
+
+**How it works**:
+
+1. User identity (`x-authz-user-id`) and group membership (`x-authz-user-groups`) are injected by Authorino / ext_authz
+2. Each `RoleBinding` checks if the user ID matches any `User` subject **or** any of the user's groups matches a `Group` subject (OR logic within subjects)
+3. On match, the `role` value is emitted as a signal of type `authz`
+4. Decisions reference it as `type: "authz", name: "<role>"`
+
+> Subject names **must** match the values Authorino injects. User names come from the K8s Secret `metadata.name`; group names from the `authz-groups` annotation.
+
+### 12. Jailbreak Signals
 
 - **What**: Adversarial prompt and jailbreak detection via two complementary methods: BERT classifier and contrastive embedding
 - **Latency**: 50–100ms (BERT classifier); 50–100ms (contrastive, after initialization)
@@ -271,7 +326,7 @@ signals:
 
 > Requires `prompt_guard` for BERT method. Contrastive uses the global embedding model. See [Jailbreak Protection Tutorial](../tutorials/content-safety/jailbreak-protection.md).
 
-### 11. PII Signals
+### 13. PII Signals
 
 - **What**: ML-based detection of Personally Identifiable Information (PII) in user queries
 - **Latency**: 50–100ms (model inference, runs in parallel with other signals)
