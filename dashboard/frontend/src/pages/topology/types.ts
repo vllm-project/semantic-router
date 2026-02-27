@@ -58,9 +58,8 @@ export interface JailbreakSignalConfig {
   include_history?: boolean
 }
 
-export interface ModalitySignalConfig {
-  // No extra params — modality is detected by the modality_detector inline model
-}
+// Modality is detected by the modality_detector inline model; no extra params needed.
+export type ModalitySignalConfig = Record<string, never>
 
 export interface AuthzSignalConfig {
   role?: string
