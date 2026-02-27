@@ -35,7 +35,6 @@ function WhitePaperContent(): JSX.Element {
   const [pageWidth, setPageWidth] = useState<number>(600)
   const [isMobile, setIsMobile] = useState<boolean>(false)
   const [isSpread, setIsSpread] = useState<boolean>(true)
-  const [centerSinglePage, setCenterSinglePage] = useState<boolean>(false)
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<boolean>(false)
 
@@ -63,7 +62,6 @@ function WhitePaperContent(): JSX.Element {
         // Mobile: width-driven rendering — full screen width, page-internal scroll.
         // Text stays readable; no height squishing.
         setIsSpread(false)
-        setCenterSinglePage(false)
         setPageWidth(vw)
         return
       }
@@ -79,7 +77,6 @@ function WhitePaperContent(): JSX.Element {
       setIsSpread(canUseSpread)
 
       if (canUseSpread) {
-        setCenterSinglePage(false)
         setPageWidth(spreadPageWidth)
         return
       }
@@ -87,9 +84,7 @@ function WhitePaperContent(): JSX.Element {
       // Desktop fallback: single-page mode for narrow or tall viewports.
       const widthByViewport = Math.min(vw - 96, MAX_SINGLE_PAGE_WIDTH)
       const widthByHeight = Math.floor(viewerHeight / PDF_PAGE_RATIO)
-      const singlePageWidth = Math.max(320, Math.min(widthByViewport, widthByHeight))
-      setCenterSinglePage(singlePageWidth * PDF_PAGE_RATIO < viewerHeight)
-      setPageWidth(singlePageWidth)
+      setPageWidth(Math.max(320, Math.min(widthByViewport, widthByHeight)))
     }
     updateSize()
     window.addEventListener('resize', updateSize)
@@ -130,14 +125,15 @@ function WhitePaperContent(): JSX.Element {
   const rightPage = pageNumber + 1
   const hasRight = isSpread && rightPage <= numPages
   const isNextDisabled = pageNumber >= numPages - (step - 1)
-  const viewerAreaClassName = centerSinglePage
-    ? `${styles.viewerArea} ${styles.viewerAreaCentered}`
-    : styles.viewerArea
+  const isDesktopSinglePage = !isMobile && !isSpread
+  const documentClassName = isDesktopSinglePage
+    ? `${styles.document} ${styles.documentSinglePage}`
+    : styles.document
 
   return (
     <div className={styles.page}>
       {/* PDF viewer area */}
-      <div className={viewerAreaClassName}>
+      <div className={styles.viewerArea}>
         {error
           ? (
               <div className={styles.fallback}>
@@ -153,7 +149,7 @@ function WhitePaperContent(): JSX.Element {
                 onLoadSuccess={onDocumentLoadSuccess}
                 onLoadError={onDocumentLoadError}
                 loading={<div className={styles.loadingText}>Loading PDF…</div>}
-                className={styles.document}
+                className={documentClassName}
               >
                 {isMobile
                   ? (
