@@ -6,6 +6,16 @@ import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import styles from './white-paper.module.css'
 
 const PDF_URL = '/white-paper.pdf'
+const MOBILE_BREAKPOINT = 768
+const MAX_SPREAD_VIEWPORT_WIDTH = 1400
+const VIEWPORT_SIDE_PADDING = 120
+const SPREAD_GAP = 16
+const PDF_PAGE_RATIO = Math.SQRT2
+const PAGINATION_HEIGHT = 56
+const VIEWER_VERTICAL_PADDING = 40
+const MIN_SPREAD_PAGE_WIDTH = 620
+const SPREAD_FILL_THRESHOLD = 0.82
+const MAX_SINGLE_PAGE_WIDTH = 980
 
 // Inner component: only rendered in the browser, avoids SSG DOMMatrix errors
 function WhitePaperContent(): JSX.Element {
@@ -24,6 +34,7 @@ function WhitePaperContent(): JSX.Element {
   const [pageNumber, setPageNumber] = useState<number>(1)
   const [pageWidth, setPageWidth] = useState<number>(600)
   const [isMobile, setIsMobile] = useState<boolean>(false)
+  const [isSpread, setIsSpread] = useState<boolean>(true)
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<boolean>(false)
 
@@ -43,23 +54,55 @@ function WhitePaperContent(): JSX.Element {
   useEffect(() => {
     const updateSize = () => {
       const vw = window.innerWidth
-      const mobile = vw <= 768
+      const vh = window.innerHeight
+      const mobile = vw <= MOBILE_BREAKPOINT
       setIsMobile(mobile)
+
       if (mobile) {
         // Mobile: width-driven rendering — full screen width, page-internal scroll.
         // Text stays readable; no height squishing.
+        setIsSpread(false)
         setPageWidth(vw)
+        return
       }
-      else {
-        // Desktop: two-page spread, each half of available width
-        const available = Math.min(vw - 120, 1400)
-        setPageWidth(Math.floor(available / 2) - 16)
+
+      // Desktop: choose spread only if it can use enough vertical space.
+      const available = Math.min(vw - VIEWPORT_SIDE_PADDING, MAX_SPREAD_VIEWPORT_WIDTH)
+      const spreadPageWidth = Math.floor(available / 2) - SPREAD_GAP
+      const viewerHeight = Math.max(vh - PAGINATION_HEIGHT - VIEWER_VERTICAL_PADDING, 1)
+      const spreadPageHeight = spreadPageWidth * PDF_PAGE_RATIO
+      const spreadFillsViewport = spreadPageHeight >= viewerHeight * SPREAD_FILL_THRESHOLD
+      const canUseSpread = spreadPageWidth >= MIN_SPREAD_PAGE_WIDTH && spreadFillsViewport
+
+      setIsSpread(canUseSpread)
+
+      if (canUseSpread) {
+        setPageWidth(spreadPageWidth)
+        return
       }
+
+      // Desktop fallback: single-page mode for narrow or tall viewports.
+      const widthByViewport = Math.min(vw - 96, MAX_SINGLE_PAGE_WIDTH)
+      const widthByHeight = Math.floor(viewerHeight / PDF_PAGE_RATIO)
+      setPageWidth(Math.max(320, Math.min(widthByViewport, widthByHeight)))
     }
     updateSize()
     window.addEventListener('resize', updateSize)
     return () => window.removeEventListener('resize', updateSize)
   }, [])
+
+  // Keep page index valid across mode and document changes.
+  useEffect(() => {
+    setPageNumber((current) => {
+      const maxPage = numPages > 0
+        ? numPages
+        : 1
+      let next = Math.min(Math.max(current, 1), maxPage)
+      if (isSpread && next % 2 === 0)
+        next = Math.max(1, next - 1)
+      return next
+    })
+  }, [isSpread, numPages])
 
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
     setNumPages(numPages)
@@ -71,16 +114,21 @@ function WhitePaperContent(): JSX.Element {
     setLoading(false)
   }, [])
 
-  // Pagination: advance 1 page on mobile, 2 pages on desktop
-  const step = isMobile
+  // Pagination: spread mode advances 2 pages; other modes advance 1 page
+  const step = isMobile || !isSpread
     ? 1
     : 2
   const goToPrev = () => setPageNumber(p => Math.max(1, p - step))
   const goToNext = () => setPageNumber(p => Math.min(numPages, p + step))
 
-  // Right-page number (desktop two-page mode only)
+  // Right-page number (two-page spread mode only)
   const rightPage = pageNumber + 1
-  const hasRight = !isMobile && rightPage <= numPages
+  const hasRight = isSpread && rightPage <= numPages
+  const isNextDisabled = pageNumber >= numPages - (step - 1)
+  const isDesktopSinglePage = !isMobile && !isSpread
+  const documentClassName = isDesktopSinglePage
+    ? `${styles.document} ${styles.documentSinglePage}`
+    : styles.document
 
   return (
     <div className={styles.page}>
@@ -101,7 +149,7 @@ function WhitePaperContent(): JSX.Element {
                 onLoadSuccess={onDocumentLoadSuccess}
                 onLoadError={onDocumentLoadError}
                 loading={<div className={styles.loadingText}>Loading PDF…</div>}
-                className={styles.document}
+                className={documentClassName}
               >
                 {isMobile
                   ? (
@@ -119,9 +167,32 @@ function WhitePaperContent(): JSX.Element {
                         ))}
                       </div>
                     )
-                  : (
-                    /* Desktop: two-page spread */
-                      <div className={styles.pagesRow}>
+                  : isSpread
+                    ? (
+                      /* Desktop wide: two-page spread */
+                        <div className={styles.pagesRow}>
+                          <div className={styles.pageWrapper}>
+                            <Page
+                              pageNumber={pageNumber}
+                              width={pageWidth}
+                              renderTextLayer={true}
+                              renderAnnotationLayer={true}
+                            />
+                          </div>
+                          {hasRight && (
+                            <div className={styles.pageWrapper}>
+                              <Page
+                                pageNumber={rightPage}
+                                width={pageWidth}
+                                renderTextLayer={true}
+                                renderAnnotationLayer={true}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )
+                    : (
+                      /* Desktop medium/tall: single-page mode */
                         <div className={styles.pageWrapper}>
                           <Page
                             pageNumber={pageNumber}
@@ -130,18 +201,7 @@ function WhitePaperContent(): JSX.Element {
                             renderAnnotationLayer={true}
                           />
                         </div>
-                        {hasRight && (
-                          <div className={styles.pageWrapper}>
-                            <Page
-                              pageNumber={rightPage}
-                              width={pageWidth}
-                              renderTextLayer={true}
-                              renderAnnotationLayer={true}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )}
+                      )}
               </Document>
             )}
       </div>
@@ -171,7 +231,7 @@ function WhitePaperContent(): JSX.Element {
             <button
               className={styles.pageBtn}
               onClick={goToNext}
-              disabled={pageNumber + 1 >= numPages}
+              disabled={isNextDisabled}
               aria-label="Next page"
             >
               Next →
