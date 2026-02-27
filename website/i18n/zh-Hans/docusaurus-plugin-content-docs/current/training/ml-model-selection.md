@@ -1,17 +1,17 @@
 ---
 translation:
-  source_commit: "cdd0ca1"
+  source_commit: "a2b965a"
   source_file: "docs/training/ml-model-selection.md"
   outdated: false
 ---
 
 # 基于 ML 的模型选择
 
-本文档介绍 Semantic Router 中基于机器学习的模型选择技术的配置方式和实验结果。
+本文说明 Semantic Router 中基于 ML 的模型选择配置与实验数据。
 
 ## 概述
 
-基于 ML 的模型选择通过机器学习算法，根据查询特征和历史性能数据，将请求路由到最合适的 LLM。在基准测试中，ML 路由的质量分数比随机选择高出 13%-45%。
+基于 ML 的路由模型通过算法分析查询特征和历史性能数据，匹配最佳 LLM。基准测试显示，其质量分数比随机选择高出 13%-45%。
 
 ### 支持的算法
 
@@ -20,11 +20,71 @@ translation:
 | **KNN**（K-Nearest Neighbors，K 近邻） | 基于相似查询的质量加权投票 | 高精度，多样化查询类型 |
 | **KMeans** | 基于聚类的路由，优化效率 | 快速推理，均衡负载 |
 | **SVM**（Support Vector Machine，支持向量机） | RBF 核决策边界 | 领域边界清晰的场景 |
+| **MLP**（Multi-Layer Perceptron，多层感知机） | GPU 加速神经网络 | 高吞吐量、GPU 可用环境 |
 
 ### 参考论文
 
 - [FusionFactory (arXiv:2507.10540)](https://arxiv.org/abs/2507.10540) — 基于 LLM 路由器的查询级融合
 - [Avengers-Pro (arXiv:2508.12631)](https://arxiv.org/abs/2508.12631) — 性能-效率优化路由
+
+## Dashboard GUI 设置
+
+**Semantic Router Dashboard** 提供图形化的三步配置向导。这是推荐的入门方式，完全免除 CLI 操作。
+
+### 打开向导
+
+访问 `http://localhost:8700/ml-setup`（或您的 Dashboard 地址）。
+
+### 第一步：基准测试
+
+上传您的 **models YAML**（列出 LLM 端点）和 **queries JSONL** 文件（含 ground truth 的测试查询）。配置并发数和最大 token 数，点击 **Run Benchmark**。进度实时流式显示，精确到每条查询。
+
+### 第二步：训练
+
+选择一个或多个算法：
+
+| 算法 | 是否需要 GPU | 说明 |
+|------|:-----------:|------|
+| KNN | 否 | 仅 CPU（scikit-learn） |
+| K-Means | 否 | 仅 CPU（scikit-learn） |
+| SVM | 否 | 仅 CPU（scikit-learn） |
+| MLP | 可选 | PyTorch — 选中后出现 Device 选择器（CPU/CUDA） |
+
+通过 **高级设置** 面板调整超参数，点击 **Train Models**。训练好的模型文件（`knn_model.json`、`kmeans_model.json` 等）保存到固定目录 `ml-train/`。
+
+### 第三步：生成配置
+
+定义路由决策——每个决策包含名称、优先级、算法、领域条件和目标模型名称。点击 **Generate Config** 即可生成可直接部署的 `ml-model-selection-values.yaml`。
+
+生成的 YAML 遵循 semantic-router 配置 schema。将 `model_selection` 和 `decisions` 部分合并到主 `config.yaml`，或直接作为独立配置文件供路由器使用。
+
+### 示例生成配置
+
+```yaml
+config:
+  model_selection:
+    enabled: true
+    ml:
+      models_path: /data/ml-pipeline/ml-train
+      embedding_dim: 1024
+      knn:
+        k: 5
+        pretrained_path: /data/ml-pipeline/ml-train/knn_model.json
+  strategy: priority
+  decisions:
+    - name: math-decision
+      priority: 100
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: math
+      algorithm:
+        type: knn
+      modelRefs:
+        - model: llama3.2:3b
+          use_reasoning: false
+```
 
 ## 配置
 
@@ -104,6 +164,25 @@ decisions:
       - model: "llama-3.2-1b"
       - model: "llama-3.2-3b"
       - model: "mistral-7b"
+
+  # 高吞吐量查询 - 使用 MLP GPU 加速
+  - name: "gpu_accelerated_decision"
+    description: "High-volume inference with GPU"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "engineering"
+    algorithm:
+      type: "mlp"
+      mlp:
+        device: "cuda"  # 或 "cpu", "metal"
+    modelRefs:
+      - model: "llama-3.2-1b"
+      - model: "llama-3.2-3b"
+      - model: "mistral-7b"
+      - model: "codellama-7b"
 ```
 
 ### 算法参数
@@ -135,6 +214,25 @@ algorithm:
     kernel: "rbf"   # 核函数类型：rbf、linear（默认：rbf）
     gamma: 1.0      # RBF 核的 gamma 值（默认：1.0）
 ```
+
+#### MLP 参数
+
+```yaml
+algorithm:
+  type: "mlp"
+  mlp:
+    device: "cuda"  # 设备：cpu、cuda、metal（默认：cpu）
+```
+
+MLP（多层感知机）通过 [Candle](https://github.com/huggingface/candle) Rust 框架实现 GPU 加速推理。专为具备 GPU 资源的生产环境设计，提供极高的吞吐量。
+
+**设备选项：**
+
+| 设备 | 描述 | 要求 |
+|------|------|------|
+| `cpu` | CPU 推理（默认） | 无特殊硬件要求 |
+| `cuda` | NVIDIA GPU 加速 | 支持 CUDA 的 GPU + CUDA 工具包 |
+| `metal` | Apple Silicon GPU | 搭载 M1/M2/M3 芯片的 macOS |
 
 ## 实验结果
 
@@ -169,10 +267,27 @@ algorithm:
 
 ### 关键发现
 
-1. **所有 ML 方法均优于随机选择**，质量分数全面领先
-2. **KMEANS 质量最优**，比随机选择提升 45%，延迟也可控
-3. **SVM 性能均衡**，提升 34%，决策边界清晰
-4. **KNN 模型选择多样化**，根据查询相似度调用不同模型
+1. **所有 ML 方法均优于随机挑选**
+2. **KMEANS 提升最显著**（+45%）
+3. **SVM 决策边界清晰**
+4. **KNN 提供多样化的高质量匹配**
+5. **MLP 独占 GPU 加速能力**
+
+### MLP GPU 加速
+
+MLP 算法利用 [Candle](https://github.com/huggingface/candle) Rust 框架进行 GPU 加速推理：
+
+| 设备 | 推理延迟 | 吞吐量 |
+|------|---------|--------|
+| CPU | ~5-10ms | ~100-200 QPS |
+| CUDA（NVIDIA） | ~0.5-1ms | ~1000+ QPS |
+| Metal（Apple） | ~1-2ms | ~500+ QPS |
+
+**适用场景：**
+
+- 拥有 GPU 资源的高吞吐量生产环境
+- 对延迟敏感、需要亚毫秒推理的应用
+- 需要最小化模型选择开销的场景
 
 ## 架构
 
@@ -189,7 +304,7 @@ algorithm:
 │       ↓                                                             │
 │  决策引擎 → 按领域匹配决策                                             │
 │       ↓                                                             │
-│  加载 ML 选择器 (从 JSON 加载 KNN/KMeans/SVM)                         │
+│  加载 ML 选择器 (从 JSON 加载 KNN/KMeans/SVM/MLP)                      │
 │       ↓                                                             │
 │  执行推理 → 选择最佳模型                                               │
 │       ↓                                                             │
@@ -202,10 +317,10 @@ algorithm:
 
 **离线训练与在线推理：**
 
-- **离线训练**：使用 **Python** + scikit-learn 完成 KNN、KMeans 和 SVM 的训练
-- **在线推理**：使用 **Rust** 中的 [Linfa](https://github.com/rust-ml/linfa)（通过 `ml-binding`）完成
+- **离线训练**：使用 **Python** + scikit-learn 完成 KNN、KMeans 和 SVM 的训练，使用 PyTorch 完成 MLP 的训练
+- **在线推理**：KNN/KMeans/SVM 使用 **Rust** 中的 [Linfa](https://github.com/rust-ml/linfa)（通过 `ml-binding`），MLP 使用 [Candle](https://github.com/huggingface/candle)（通过 `candle-binding`）
 
-训练阶段用 Python 和 scikit-learn，方便实验迭代。生产推理用 Rust 和 Linfa，保证低延迟。
+离线训练使用 Python (繁荣生态)；在线推理使用 Rust (低延迟核心)。
 
 ### 前置条件
 
@@ -320,7 +435,7 @@ python train.py \
 
 **训练必须包含 Ground Truth**
 
-训练 ML 模型选择必须有 `ground_truth` 字段。没有它，系统无法判断哪个模型在每条查询上表现更好。训练过程会将每个 LLM 的响应与 `ground_truth` 比对，算出性能分数。
+训练数据必须提供 `ground_truth` 字段。系统依靠比对模型给出的响应与 `ground_truth` 来计算性能得分。
 
 #### 步骤 2：配置 LLM 端点（models.yaml）
 
@@ -457,6 +572,10 @@ python train.py \
 | `--kmeans-clusters` | `8` | KMeans 聚类数 |
 | `--svm-kernel` | `rbf` | SVM 核函数：`rbf`、`linear` |
 | `--svm-gamma` | `1.0` | RBF 核的 gamma 值 |
+| `--mlp-hidden-dims` | `512,256` | MLP 隐藏层维度 |
+| `--mlp-dropout` | `0.1` | MLP dropout 比率 |
+| `--mlp-epochs` | `100` | MLP 训练轮数 |
+| `--mlp-lr` | `0.001` | MLP 学习率 |
 | `--quality-weight` | `0.9` | 质量与速度权重（0=速度优先，1=质量优先） |
 | `--batch-size` | `32` | 嵌入生成的批大小 |
 | `--device` | `cpu` | 设备：`cpu`、`cuda`、`mps` |
@@ -483,6 +602,16 @@ python train.py \
   --output-dir models/ \
   --device cuda \
   --batch-size 64
+
+# 使用自定义 MLP 架构训练
+python train.py \
+  --data-file benchmark.jsonl \
+  --output-dir models/ \
+  --mlp-hidden-dims 1024,512,256 \
+  --mlp-dropout 0.2 \
+  --mlp-epochs 150 \
+  --mlp-lr 0.0005 \
+  --device cuda
 
 # 使用自定义算法参数训练
 python train.py \
@@ -527,6 +656,7 @@ go run validate.go --qwen3-model /path/to/Qwen3-Embedding-0.6B
 | `knn_model.json` | K 近邻 | ~2-10 MB |
 | `kmeans_model.json` | KMeans 聚类 | ~50 KB |
 | `svm_model.json` | 支持向量机 | ~1-5 MB |
+| `mlp_model.json` | 多层感知机 | ~1-10 MB |
 
 这些文件从 HuggingFace 下载或在训练过程中生成：
 
@@ -542,6 +672,7 @@ go run validate.go --qwen3-model /path/to/Qwen3-Embedding-0.6B
 | **质量优先任务** | KNN (k=5) | 质量加权投票能提供最高精度 |
 | **高吞吐系统** | KMeans | 聚类查找速度快，延迟低 |
 | **领域特定路由** | SVM | 领域之间的决策边界清晰 |
+| **GPU 可用环境** | MLP | 通过 CUDA/Metal 加速的神经网络推理 |
 | **通用场景** | KMEANS | 质量和速度的最佳平衡 |
 
 ### 超参数调优
@@ -549,6 +680,7 @@ go run validate.go --qwen3-model /path/to/Qwen3-Embedding-0.6B
 1. **KNN k 值**：从 k=5 开始，增大可使决策更平滑
 2. **KMeans 聚类数**：匹配不同查询模式的数量（通常 8-16）
 3. **SVM gamma**：对归一化嵌入使用 1.0，根据数据分布调整
+4. **MLP 架构**：从 512,256 隐藏层维度开始，复杂数据集可适当增大
 
 ### 特征向量组成
 
