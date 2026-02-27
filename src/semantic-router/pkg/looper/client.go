@@ -368,6 +368,9 @@ func setStreamParam(body []byte, streaming bool) ([]byte, error) {
 		return nil, err
 	}
 	reqMap["stream"] = streaming
+	if !streaming {
+		delete(reqMap, "stream_options")
+	}
 	return json.Marshal(reqMap)
 }
 
