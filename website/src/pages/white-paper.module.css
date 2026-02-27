@@ -132,51 +132,21 @@
   width: 100%;
 }
 
-/* ===== Mobile: single-page mode ===== */
+/* ===== Mobile: continuous-scroll mode ===== */
 @media (max-width: 768px) {
+  /* Allow the page to grow beyond the viewport for natural scroll */
   .page {
-    height: 100vh; /* navbar hidden, take full viewport */
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
   }
 
   .viewerArea {
-    /* White background matches the PDF page — no visible gap when page is shorter than area */
+    /* Expand to fit all stacked pages; white bg matches PDF pages */
+    flex: unset;
+    overflow: visible;
     background: #fff;
-    overflow-y: auto;
     padding: 0;
     align-items: flex-start;
-  }
-
-  .pagesRow {
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .pageWrapper {
-    box-shadow:
-      0 1px 6px rgba(0, 0, 0, 0.1),
-      0 1px 2px rgba(0, 0, 0, 0.06);
-  }
-
-  /* Bottom bar: centered single-column */
-  .pagination {
-    grid-template-columns: 1fr;
-    gap: 0;
-    padding: 0.5rem 1rem;
-  }
-
-  /* Hide left and right spacers */
-  .pagination > div:first-child,
-  .pagination > div:last-child {
-    display: none;
-  }
-
-  .paginationCenter {
-    justify-content: center;
-    gap: 0.8rem;
-  }
-
-  .pageBtn {
-    padding: 0.4rem 1rem;
-    font-size: 0.82rem;
   }
 }
