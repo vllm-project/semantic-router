@@ -2046,6 +2046,13 @@ type ConfidenceAlgorithmConfig struct {
 	// 0.0 = pure quality (ignore cost), 1.0 = pure cost (ignore quality)
 	// Default: 0.3 (favor quality but consider cost)
 	CostQualityTradeoff float64 `yaml:"cost_quality_tradeoff,omitempty"`
+
+	// TokenFilter controls which tokens are used for confidence calculation.
+	// - "all" (default): use every generated token
+	// - "tool_call_args": only use tokens inside tool-call argument VALUES,
+	//   filtering out JSON structural boilerplate (braces, colons, field names)
+	//   that inflates average logprob for structured outputs
+	TokenFilter string `yaml:"token_filter,omitempty"`
 }
 
 // HybridWeightsConfig configures weights for hybrid confidence method
