@@ -82,6 +82,10 @@ type Response struct {
 type Looper interface {
 	// Execute runs the looper algorithm and returns an aggregated response
 	Execute(ctx context.Context, req *Request) (*Response, error)
+
+	// SetEndpointOverrides sets per-model endpoint URL overrides so
+	// each model can be reached at its own backend address.
+	SetEndpointOverrides(overrides map[string]string)
 }
 
 // Factory creates a Looper instance based on the algorithm type

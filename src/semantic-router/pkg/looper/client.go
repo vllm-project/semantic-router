@@ -34,26 +34,49 @@ import (
 
 // Client handles HTTP requests to OpenAI-compatible endpoints
 type Client struct {
-	httpClient   *http.Client
-	endpoint     string
-	headers      map[string]string
-	decisionName string // Decision name to pass in looper requests
+	httpClient         *http.Client
+	endpoint           string
+	headers            map[string]string
+	decisionName       string            // Decision name to pass in looper requests
+	endpointOverrides  map[string]string  // Per-model endpoint URL overrides
 }
 
 // NewClient creates a new looper HTTP client
 func NewClient(cfg *config.LooperConfig) *Client {
-	return &Client{
+	c := &Client{
 		httpClient: &http.Client{
 			Timeout: time.Duration(cfg.GetTimeout()) * time.Second,
 		},
 		endpoint: cfg.Endpoint,
 		headers:  cfg.Headers,
 	}
+	if len(cfg.ModelEndpoints) > 0 {
+		c.endpointOverrides = cfg.ModelEndpoints
+		logging.Infof("[Looper] Loaded %d per-model endpoint overrides from config", len(cfg.ModelEndpoints))
+	}
+	return c
 }
 
 // SetDecisionName sets the decision name for this client
 func (c *Client) SetDecisionName(name string) {
 	c.decisionName = name
+}
+
+// SetEndpointOverrides sets per-model endpoint URL overrides.
+// When calling a model, the client checks this map first; if found,
+// the override URL is used instead of the default looper endpoint.
+func (c *Client) SetEndpointOverrides(overrides map[string]string) {
+	c.endpointOverrides = overrides
+}
+
+// resolveEndpoint returns the endpoint URL for the given model name.
+func (c *Client) resolveEndpoint(modelName string) string {
+	if c.endpointOverrides != nil {
+		if ep, ok := c.endpointOverrides[modelName]; ok {
+			return ep
+		}
+	}
+	return c.endpoint
 }
 
 // ModelResponse contains the parsed response from a model call
@@ -150,11 +173,12 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 	}
 
 	logprobsEnabled := logprobsCfg != nil && logprobsCfg.Enabled
+	endpoint := c.resolveEndpoint(modelName)
 	logging.Infof("[Looper] Calling model %s at %s (streaming=%v, iteration=%d, logprobs=%v)",
-		modelName, c.endpoint, streaming, iteration, logprobsEnabled)
+		modelName, endpoint, streaming, iteration, logprobsEnabled)
 
 	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.endpoint, bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
