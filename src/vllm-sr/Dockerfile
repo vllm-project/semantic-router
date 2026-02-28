@@ -191,6 +191,30 @@ RUN mkdir -p /build/out && \
     echo "=== Built nlp-binding library ===" && \
     ls -la /build/out/
 
+# Stage 1c-wasm: Build DSL compiler to WebAssembly for the dashboard
+# The WASM target only uses pkg/dsl (pure Go), but go.mod has replace directives
+# pointing to ../../candle-binding etc. We create stub go.mod files so go mod
+# download succeeds without copying the full binding source trees.
+FROM --platform=$BUILDPLATFORM golang:1.24 AS wasm-builder
+WORKDIR /build
+COPY src/semantic-router/ ./
+# Create stub modules for local replace directives (not needed by WASM build)
+RUN mkdir -p /candle-binding /ml-binding /nlp-binding && \
+    echo 'module github.com/vllm-project/semantic-router/candle-binding' > /candle-binding/go.mod && \
+    echo 'module github.com/vllm-project/semantic-router/ml-binding'    > /ml-binding/go.mod && \
+    echo 'module github.com/vllm-project/semantic-router/nlp-binding'   > /nlp-binding/go.mod
+RUN go mod download
+RUN CGO_ENABLED=0 GOOS=js GOARCH=wasm go build \
+      -ldflags="-s -w" \
+      -o /build/signal-compiler.wasm \
+      ./cmd/wasm/ && \
+    # Go 1.24+ moved wasm_exec.js from misc/wasm/ to lib/wasm/
+    if [ -f "$(go env GOROOT)/lib/wasm/wasm_exec.js" ]; then \
+      cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" /build/wasm_exec.js; \
+    else \
+      cp "$(go env GOROOT)/misc/wasm/wasm_exec.js" /build/wasm_exec.js; \
+    fi
+
 # Stage 1c: Build dashboard frontend with Node.js
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
@@ -199,6 +223,8 @@ COPY dashboard/frontend/package.json dashboard/frontend/package-lock.json ./
 RUN npm config set registry https://registry.npmjs.org/ && \
     npm ci --include=dev
 COPY dashboard/frontend/ ./
+# Copy WASM artifacts into public/ before building
+COPY --from=wasm-builder /build/signal-compiler.wasm /build/wasm_exec.js ./public/
 RUN npm run build
 
 # Stage 1c: Build dashboard backend with Go

@@ -160,7 +160,7 @@ const LandingPage: React.FC = () => {
 
           <button
             className={styles.launchButton}
-            onClick={() => navigate('/playground')}
+            onClick={() => navigate('/dashboard')}
           >
             <span className={styles.launchText}>Launch</span>
             <div className={styles.launchGlow}></div>

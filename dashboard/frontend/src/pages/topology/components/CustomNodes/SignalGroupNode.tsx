@@ -56,7 +56,7 @@ export const SignalGroupNode = memo<NodeProps<SignalGroupNodeData>>(({ data }) =
             {signals.slice(0, 5).map(signal => (
               <div key={signal.name} className={styles.signalItem}>
                 {signal.name}
-                {(signal as any).isDynamic && <span className={styles.mlTag}>🤖</span>}
+                {(signal as SignalConfig & { isDynamic?: boolean }).isDynamic && <span className={styles.mlTag}>🤖</span>}
               </div>
             ))}
             {signals.length > 5 && (

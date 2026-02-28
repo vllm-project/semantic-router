@@ -1153,6 +1153,144 @@ decisions:
           capture_response_body: true  # Capture response payloads (default: false)
           max_body_bytes: 4096          # Max bytes per body, truncates if exceeded (default: 4096)
 
+  # Priority 105: Ultra-complex logic gate combination
+  # Demonstrates every boolean gate: AND, OR, NOT, NOR, NAND, XOR-like patterns
+  #
+  # Logic (DSL):
+  #   (domain("computer science") AND embedding("deep_thinking_en") AND NOT complexity("computer_science:easy"))
+  #   OR
+  #   (NOT(domain("math") OR domain("physics")) AND (language("zh") OR language("en") OR language("kor")) AND NOT preference("other"))
+  #   OR
+  #   (keyword("thinking_en") AND NOT keyword("creative_keywords") AND (context("long_context") OR (embedding("deep_thinking_zh") AND NOT context("short_context"))))
+  #   OR
+  #   (NOT(keyword("jailbreak_attempt") OR fact_check("no_fact_check_needed")) AND NOT domain("other") AND (complexity("math_problem:hard") OR (embedding("fast_qa_en") AND NOT language("zh"))))
+  - name: "complex_logic_gates"
+    description: "Ultra-complex routing combining AND/OR/NOT/NOR/NAND/XOR-like patterns across all signal types"
+    priority: 105
+    rules:
+      # Top-level OR: 4 major branches
+      operator: "OR"
+      conditions:
+        # ── Branch 1: CS deep thinking, exclude easy tasks ──
+        # AND gate with NOT sub-gate
+        - operator: "AND"
+          conditions:
+            - type: "domain"
+              name: "computer science"
+            - type: "embedding"
+              name: "deep_thinking_en"
+            - operator: "NOT"
+              conditions:
+                - type: "complexity"
+                  name: "computer_science:easy"
+
+        # ── Branch 2: NOR(math, physics) AND any-of-3-languages AND NOT(other preference) ──
+        # NOR gate = NOT(A OR B): neither math nor physics domain
+        - operator: "AND"
+          conditions:
+            - operator: "NOT"
+              conditions:
+                - operator: "OR"
+                  conditions:
+                    - type: "domain"
+                      name: "math"
+                    - type: "domain"
+                      name: "physics"
+            - operator: "OR"
+              conditions:
+                - type: "language"
+                  name: "zh"
+                - type: "language"
+                  name: "en"
+                - type: "language"
+                  name: "kor"
+            - operator: "NOT"
+              conditions:
+                - type: "preference"
+                  name: "other"
+
+        # ── Branch 3: XOR-like (thinking_en BUT NOT creative) with nested OR/AND/NOT ──
+        - operator: "AND"
+          conditions:
+            - type: "keyword"
+              name: "thinking_en"
+            - operator: "NOT"
+              conditions:
+                - type: "keyword"
+                  name: "creative_keywords"
+            - operator: "OR"
+              conditions:
+                - type: "context"
+                  name: "long_context"
+                - operator: "AND"
+                  conditions:
+                    - type: "embedding"
+                      name: "deep_thinking_zh"
+                    - operator: "NOT"
+                      conditions:
+                        - type: "context"
+                          name: "short_context"
+
+        # ── Branch 4: NAND-like (neither jailbreak nor skip-fact-check) with complex sub-tree ──
+        # NAND = NOT(A OR B) ≡ (NOT A) AND (NOT B) via De Morgan's
+        - operator: "AND"
+          conditions:
+            - operator: "NOT"
+              conditions:
+                - operator: "OR"
+                  conditions:
+                    - type: "keyword"
+                      name: "jailbreak_attempt"
+                    - type: "fact_check"
+                      name: "no_fact_check_needed"
+            - operator: "NOT"
+              conditions:
+                - type: "domain"
+                  name: "other"
+            - operator: "OR"
+              conditions:
+                - type: "complexity"
+                  name: "math_problem:hard"
+                - operator: "AND"
+                  conditions:
+                    - type: "embedding"
+                      name: "fast_qa_en"
+                    - operator: "NOT"
+                      conditions:
+                        - type: "language"
+                          name: "zh"
+    modelRefs:
+      - model: "Kimi-K2-Thinking"
+        use_reasoning: true
+        reasoning_effort: "high"
+        weight: 0.4
+      - model: "DeepSeek-V3.2"
+        use_reasoning: true
+        reasoning_effort: "high"
+        weight: 0.35
+      - model: "Qwen/Qwen3-235B"
+        use_reasoning: true
+        reasoning_effort: "medium"
+        weight: 0.25
+    algorithm:
+      type: "confidence"
+      confidence:
+        threshold: 0.7
+    plugins:
+      - type: "system_prompt"
+        configuration:
+          system_prompt: "You are a highly capable reasoning model selected by an advanced multi-gate routing system. Provide thorough, well-structured responses."
+      - type: "semantic-cache"
+        configuration:
+          enabled: false
+      - type: "router_replay"
+        configuration:
+          enabled: true
+          max_records: 5000
+          capture_request_body: true
+          capture_response_body: true
+          max_body_bytes: 4096
+
   # Priority 100: Default fallback
   - name: "casual_chat"
     description: "Default routing for general queries"

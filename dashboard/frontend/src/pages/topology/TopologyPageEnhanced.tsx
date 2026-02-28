@@ -73,7 +73,7 @@ const TopologyFlow: React.FC = () => {
   }, [nodes.length, fitView])
 
   const getNodeColor = useCallback((node: Node) => {
-    const style = node.style as any
+    const style = node.style as Record<string, string> | undefined
     return style?.background || '#ccc'
   }, [])
 
