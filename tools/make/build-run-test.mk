@@ -64,9 +64,9 @@ build-router-onnx: build-onnx-binding build-ml-binding
 run-router-onnx: ## Run the router with ONNX binding (mmBERT embedding model)
 run-router-onnx: build-router-onnx
 	@echo "Running router with ONNX binding..."
-	@echo "Config: $${ONNX_CONFIG_FILE:-config/config.onnx-binding-test.yaml}"
+	@echo "Config: $${ONNX_CONFIG_FILE:-config/onnx-binding/config.onnx-binding-test.yaml}"
 	@export LD_LIBRARY_PATH=${PWD}/onnx-binding/target/release:${PWD}/ml-binding/target/release && \
-		./bin/router-onnx -config=$${ONNX_CONFIG_FILE:-config/config.onnx-binding-test.yaml} --enable-system-prompt-api=true
+		./bin/router-onnx -config=$${ONNX_CONFIG_FILE:-config/onnx-binding/config.onnx-binding-test.yaml} --enable-system-prompt-api=true
 
 # Unit test semantic-router
 # By default, Milvus, Redis, and Llama Stack tests are skipped. To enable them, set the relevant env var to false.
