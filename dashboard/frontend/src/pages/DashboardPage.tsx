@@ -79,29 +79,8 @@ function countRoutes(cfg: RouterConfig): number {
 
 function countModels(cfg: RouterConfig): number {
   const models = cfg.providers?.models
-  if (Array.isArray(models) && models.length > 0) {
-    const endpointSet = new Set<string>()
-
-    models.forEach((model, modelIndex) => {
-      if (Array.isArray(model.endpoints)) {
-        model.endpoints.forEach((ep, epIndex) => {
-          const key = typeof ep?.name === 'string' && ep.name.trim().length > 0
-            ? ep.name
-            : `${model.name || `model-${modelIndex}`}-${epIndex}`
-          endpointSet.add(key)
-        })
-      }
-
-      if (Array.isArray(model.preferred_endpoints)) {
-        model.preferred_endpoints.forEach((name) => {
-          if (typeof name === 'string' && name.trim().length > 0) {
-            endpointSet.add(name)
-          }
-        })
-      }
-    })
-
-    return endpointSet.size
+  if (Array.isArray(models)) {
+    return models.length
   }
 
   const legacyRootEndpoints = cfg.vllm_endpoints
@@ -201,7 +180,7 @@ const MiniFlowDiagram: React.FC<FlowProps> = ({ signals, routes, models, plugins
       {/* Model box */}
       <rect x={colModel - 50} y={midY - 28} width={100} height={56} rx={8} fill="var(--color-accent-cyan)" fillOpacity={0.12} stroke="var(--color-accent-cyan)" strokeWidth={1.5} />
       <text x={colModel} y={midY - 6} textAnchor="middle" fill="var(--color-accent-cyan)" fontSize={11} fontWeight="bold">Models</text>
-      <text x={colModel} y={midY + 12} textAnchor="middle" fill="var(--color-accent-cyan)" fontSize={11}>{models} endpoints</text>
+      <text x={colModel} y={midY + 12} textAnchor="middle" fill="var(--color-accent-cyan)" fontSize={11}>{models} models</text>
 
       {/* Plugins badge (bottom-right) */}
       {plugins > 0 && (
