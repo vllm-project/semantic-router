@@ -300,6 +300,7 @@ type ConfidenceEvaluator struct {
 	Threshold     float64 // Threshold for the chosen method
 	LogprobWeight float64 // Weight for logprob in hybrid mode
 	MarginWeight  float64 // Weight for margin in hybrid mode
+	TokenFilter   string  // "all", "tool_call_args" — selects which tokens feed confidence
 }
 
 // NewConfidenceEvaluator creates a confidence evaluator from algorithm config
@@ -347,6 +348,10 @@ func NewConfidenceEvaluator(cfg *config.ConfidenceAlgorithmConfig) *ConfidenceEv
 		}
 	}
 
+	if cfg.TokenFilter != "" {
+		eval.TokenFilter = cfg.TokenFilter
+	}
+
 	return eval
 }
 
@@ -382,28 +387,38 @@ func normalizeMargin(margin float64) float64 {
 	return normalized
 }
 
-// Evaluate checks if the response meets the confidence threshold
-// All methods return normalized confidence in 0-1 range (1 = most confident)
-// Returns (confidence_score, meets_threshold)
+// Evaluate checks if the response meets the confidence threshold.
+// When a TokenFilter is active and filtered metrics are available, those are
+// used instead of the all-token averages.
+// All methods return normalized confidence in 0-1 range (1 = most confident).
+// Returns (confidence_score, meets_threshold).
 func (e *ConfidenceEvaluator) Evaluate(resp *ModelResponse) (float64, bool) {
+	avgLP := resp.AverageLogprob
+	avgM := resp.AverageMargin
+
+	useFiltered := e.TokenFilter != "" && e.TokenFilter != "all"
+	if useFiltered {
+		if resp.FilteredAverageLogprob != 0 {
+			avgLP = resp.FilteredAverageLogprob
+		}
+		if resp.FilteredAverageMargin != 0 {
+			avgM = resp.FilteredAverageMargin
+		}
+	}
+
 	switch e.Method {
 	case "margin":
-		// Use average margin between top-1 and top-2 logprobs
-		// Normalized to 0-1 range
-		confidence := normalizeMargin(resp.AverageMargin)
+		confidence := normalizeMargin(avgM)
 		return confidence, confidence >= e.Threshold
 
 	case "hybrid":
-		// Combine both methods with weights
-		normalizedLogprob := normalizeLogprob(resp.AverageLogprob)
-		normalizedMargin := normalizeMargin(resp.AverageMargin)
+		normalizedLogprob := normalizeLogprob(avgLP)
+		normalizedMargin := normalizeMargin(avgM)
 		confidence := e.LogprobWeight*normalizedLogprob + e.MarginWeight*normalizedMargin
 		return confidence, confidence >= e.Threshold
 
 	default: // "avg_logprob"
-		// Use average logprob across all tokens
-		// Normalized to 0-1 range
-		confidence := normalizeLogprob(resp.AverageLogprob)
+		confidence := normalizeLogprob(avgLP)
 		return confidence, confidence >= e.Threshold
 	}
 }
@@ -484,8 +499,12 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 		logging.Infof("[ConfidenceLooper] Using size-based escalation order (smallest first)")
 	}
 
-	logging.Infof("[ConfidenceLooper] Starting with %d models, method=%s, threshold=%.4f, on_error=%s, streaming=%v, escalation=%s",
-		len(sortedRefs), evaluator.Method, evaluator.Threshold, onError, req.IsStreaming, escalationOrder)
+	tokenFilterLabel := "all"
+	if evaluator.TokenFilter != "" {
+		tokenFilterLabel = evaluator.TokenFilter
+	}
+	logging.Infof("[ConfidenceLooper] Starting with %d models, method=%s, threshold=%.4f, token_filter=%s, on_error=%s, streaming=%v, escalation=%s",
+		len(sortedRefs), evaluator.Method, evaluator.Threshold, tokenFilterLabel, onError, req.IsStreaming, escalationOrder)
 
 	// Helper to get param_size for logging
 	getParamSize := func(modelName string) string {
@@ -536,6 +555,9 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 			continue
 		}
 
+		// Apply token filter before confidence evaluation (e.g., exclude JSON boilerplate)
+		ApplyTokenFilter(resp, evaluator.TokenFilter)
+
 		lastResponse = resp
 		modelsUsed = append(modelsUsed, modelName)
 
@@ -549,10 +571,14 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 			logging.Infof("[ConfidenceLooper] Model %s: self-verification confidence=%.4f, threshold=%.4f, meets=%v",
 				modelName, confidence, evaluator.Threshold, meetsThreshold)
 		} else {
-			// Standard logprob-based confidence evaluation
 			confidence, meetsThreshold = evaluator.Evaluate(resp)
-			logging.Infof("[ConfidenceLooper] Model %s: confidence=%.4f (method=%s), threshold=%.4f, meets=%v",
-				modelName, confidence, evaluator.Method, evaluator.Threshold, meetsThreshold)
+			if evaluator.TokenFilter != "" && evaluator.TokenFilter != "all" && resp.FilteredAverageLogprob != 0 {
+				logging.Infof("[ConfidenceLooper] Model %s: confidence=%.4f (method=%s, filter=%s), threshold=%.4f, meets=%v (unfiltered_logprob=%.4f)",
+					modelName, confidence, evaluator.Method, evaluator.TokenFilter, evaluator.Threshold, meetsThreshold, resp.AverageLogprob)
+			} else {
+				logging.Infof("[ConfidenceLooper] Model %s: confidence=%.4f (method=%s), threshold=%.4f, meets=%v",
+					modelName, confidence, evaluator.Method, evaluator.Threshold, meetsThreshold)
+			}
 		}
 
 		if meetsThreshold {
