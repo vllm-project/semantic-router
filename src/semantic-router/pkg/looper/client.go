@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/openai/openai-go"
@@ -88,6 +89,17 @@ type ModelResponse struct {
 	// AverageMargin is the average margin across all tokens
 	// Range: positive values, higher = more confident
 	AverageMargin float64
+
+	// Tokens contains the text of each generated token (for token filtering)
+	Tokens []string
+
+	// FilteredAverageLogprob is the average logprob computed only over semantic tokens
+	// (e.g., argument values in tool calls, excluding JSON boilerplate)
+	// Zero means no filtering was applied.
+	FilteredAverageLogprob float64
+
+	// FilteredAverageMargin is the average margin computed only over semantic tokens
+	FilteredAverageMargin float64
 
 	// IsStreaming indicates if this was a streaming response
 	IsStreaming bool
@@ -210,8 +222,8 @@ func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*Mode
 	if len(completion.Choices) > 0 {
 		result.Content = completion.Choices[0].Message.Content
 
-		// Extract logprobs and margin analysis
 		analysis := extractLogprobs(&completion)
+		result.Tokens = analysis.Tokens
 		result.Logprobs = analysis.Logprobs
 		result.AverageLogprob = analysis.AverageLogprob
 		result.TopLogprobMargins = analysis.Margins
@@ -283,6 +295,8 @@ func parseSSEContent(body []byte) (string, []string) {
 
 // LogprobAnalysis contains analyzed logprob data from a response
 type LogprobAnalysis struct {
+	// Tokens contains the text of each generated token
+	Tokens []string
 	// Logprobs contains the logprob for each token (the chosen token's logprob)
 	Logprobs []float64
 	// AverageLogprob is the average logprob across all tokens
@@ -316,12 +330,10 @@ func extractLogprobs(completion *openai.ChatCompletion) *LogprobAnalysis {
 	var marginSum float64
 
 	for _, tokenLogprob := range choice.Logprobs.Content {
-		// Extract the chosen token's logprob
+		result.Tokens = append(result.Tokens, tokenLogprob.Token)
 		result.Logprobs = append(result.Logprobs, tokenLogprob.Logprob)
 		logprobSum += tokenLogprob.Logprob
 
-		// Calculate margin from top_logprobs (top1 - top2)
-		// TopLogprobs contains alternative tokens with their logprobs
 		margin := calculateMargin(tokenLogprob.Logprob, tokenLogprob.TopLogprobs)
 		result.Margins = append(result.Margins, margin)
 		marginSum += margin
@@ -359,6 +371,232 @@ func calculateMargin(chosenLogprob float64, topLogprobs []openai.ChatCompletionT
 	// Example: top1=-0.1, top2=-2.0 => margin=1.9 (high confidence)
 	// Example: top1=-0.5, top2=-0.6 => margin=0.1 (low confidence, model is uncertain)
 	return top1 - top2
+}
+
+// ApplyTokenFilter computes filtered logprob/margin averages on a ModelResponse
+// using only "semantic" tokens identified by the given filter strategy.
+// If the filter finds no semantic tokens or doesn't apply, the response is unchanged.
+func ApplyTokenFilter(resp *ModelResponse, filter string) {
+	if resp == nil || len(resp.Tokens) == 0 || filter == "" || filter == "all" {
+		return
+	}
+	if filter == "tool_call_args" {
+		filterToolCallArgTokens(resp)
+	}
+}
+
+// filterToolCallArgTokens identifies tokens that represent argument VALUES in
+// a JSON tool call and computes filtered averages excluding structural
+// boilerplate (braces, colons, field names, quotes).
+//
+// Supports optional <tool_call> XML wrapper around the JSON object.
+func filterToolCallArgTokens(resp *ModelResponse) {
+	fullText := strings.Join(resp.Tokens, "")
+	semantic := classifyToolCallChars(fullText)
+	if semantic == nil {
+		return
+	}
+
+	var filteredLP, filteredM []float64
+	charPos := 0
+	for i, tok := range resp.Tokens {
+		tokenLen := len(tok)
+		isSemantic := false
+		for j := 0; j < tokenLen && charPos+j < len(semantic); j++ {
+			if semantic[charPos+j] {
+				isSemantic = true
+				break
+			}
+		}
+		if isSemantic {
+			filteredLP = append(filteredLP, resp.Logprobs[i])
+			if i < len(resp.TopLogprobMargins) {
+				filteredM = append(filteredM, resp.TopLogprobMargins[i])
+			}
+		}
+		charPos += tokenLen
+	}
+
+	if len(filteredLP) == 0 {
+		return
+	}
+
+	var lpSum float64
+	for _, v := range filteredLP {
+		lpSum += v
+	}
+	resp.FilteredAverageLogprob = lpSum / float64(len(filteredLP))
+
+	if len(filteredM) > 0 {
+		var mSum float64
+		for _, v := range filteredM {
+			mSum += v
+		}
+		resp.FilteredAverageMargin = mSum / float64(len(filteredM))
+	}
+
+	logging.Infof("[TokenFilter] tool_call_args: %d/%d tokens semantic, filtered_avg_logprob=%.4f, filtered_avg_margin=%.4f",
+		len(filteredLP), len(resp.Tokens), resp.FilteredAverageLogprob, resp.FilteredAverageMargin)
+}
+
+// classifyToolCallChars returns a per-byte boolean slice indicating which
+// characters are part of argument VALUES inside a tool-call JSON object.
+//
+// The function walks the text with a minimal JSON state machine, looking for
+// the top-level "arguments" key.  All values (strings, numbers, booleans)
+// directly inside the arguments object — including array elements — are
+// marked as semantic.
+//
+// Returns nil when the text is not a recognisable tool call.
+func classifyToolCallChars(text string) []bool {
+	jsonStart := strings.Index(text, "{")
+	if jsonStart < 0 {
+		return nil
+	}
+
+	semantic := make([]bool, len(text))
+
+	depth := 0
+	argsDepth := -1 // depth of the "arguments" object; -1 = not inside
+	inString := false
+	escaped := false
+	expectingValue := false
+	buildingKey := false
+	inArgValue := false
+
+	// Track whether each depth level is an array (true) or object (false)
+	// so commas inside arrays keep expecting values.
+	depthIsArray := make(map[int]bool)
+
+	var keyBuf strings.Builder
+	lastKey := ""
+
+	for i := jsonStart; i < len(text); i++ {
+		c := text[i]
+
+		// Handle escape sequences inside strings
+		if escaped {
+			escaped = false
+			if inArgValue {
+				semantic[i] = true
+			}
+			continue
+		}
+		if c == '\\' && inString {
+			escaped = true
+			if inArgValue {
+				semantic[i] = true
+			}
+			continue
+		}
+
+		if inString {
+			if c == '"' {
+				inString = false
+				if buildingKey {
+					lastKey = keyBuf.String()
+					keyBuf.Reset()
+					buildingKey = false
+				}
+				if inArgValue {
+					inArgValue = false // closing quote is structural
+				}
+			} else {
+				if buildingKey {
+					keyBuf.WriteByte(c)
+				}
+				if inArgValue {
+					semantic[i] = true
+				}
+			}
+			continue
+		}
+
+		// Not inside a string
+		switch c {
+		case '"':
+			inString = true
+			if expectingValue {
+				expectingValue = false
+				if argsDepth > 0 && depth >= argsDepth {
+					inArgValue = true
+				}
+			} else if !depthIsArray[depth] {
+				buildingKey = true
+			} else if argsDepth > 0 && depth >= argsDepth {
+				// String element inside an array that is an arg value
+				inArgValue = true
+			}
+
+		case ':':
+			expectingValue = true
+			if lastKey == "arguments" && argsDepth < 0 {
+				argsDepth = depth
+			}
+
+		case '{':
+			depth++
+			depthIsArray[depth] = false
+			if expectingValue {
+				if lastKey == "arguments" && argsDepth < 0 {
+					argsDepth = depth
+				}
+				expectingValue = false
+			}
+
+		case '[':
+			depth++
+			depthIsArray[depth] = true
+			// Don't clear expectingValue — first array element is a value
+
+		case '}':
+			if inArgValue {
+				inArgValue = false
+			}
+			if argsDepth > 0 && depth == argsDepth {
+				argsDepth = -1
+			}
+			delete(depthIsArray, depth)
+			depth--
+
+		case ']':
+			if inArgValue {
+				inArgValue = false
+			}
+			delete(depthIsArray, depth)
+			depth--
+
+		case ',':
+			if inArgValue {
+				inArgValue = false
+			}
+			// In arrays within arguments, next element is still a value
+			if depthIsArray[depth] && argsDepth > 0 && depth >= argsDepth {
+				expectingValue = true
+			} else {
+				expectingValue = false
+			}
+
+		default:
+			if c == ' ' || c == '\t' || c == '\n' || c == '\r' {
+				continue
+			}
+			if expectingValue && argsDepth > 0 && depth >= argsDepth {
+				inArgValue = true
+				semantic[i] = true
+				expectingValue = false
+			} else if inArgValue {
+				semantic[i] = true
+			}
+		}
+	}
+
+	for _, s := range semantic {
+		if s {
+			return semantic
+		}
+	}
+	return nil
 }
 
 // setStreamParam adds or updates the stream parameter in a JSON request body
