@@ -60,6 +60,16 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
 
           {/* Center: Navigation - Big Three + Dropdowns */}
           <nav className={styles.nav}>
+            {/* Primary: Dashboard */}
+            <NavLink
+              to="/dashboard"
+              className={({ isActive }) =>
+                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+              }
+            >
+              Dashboard
+            </NavLink>
+
             {/* Primary: Playground */}
             <NavLink
               to="/playground"
@@ -78,6 +88,15 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
               }
             >
               Brain
+            </NavLink>
+
+            <NavLink
+              to="/builder"
+              className={({ isActive }) =>
+                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+              }
+            >
+              Builder
             </NavLink>
 
             {/* Primary: Models */}
@@ -115,15 +134,6 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
 
             {/* Divider */}
             <div className={styles.navDivider} />
-
-            <NavLink
-              to="/builder"
-              className={({ isActive }) =>
-                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
-              }
-            >
-              Builder
-            </NavLink>
 
             {/* Analysis Dropdown */}
             <div className={styles.navDropdown}>
@@ -319,6 +329,9 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
         {mobileMenuOpen && (
           <div className={styles.mobileNav}>
             {/* Primary items */}
+            <NavLink to="/dashboard" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+              Dashboard
+            </NavLink>
             <NavLink to="/playground" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
               Playground
             </NavLink>
