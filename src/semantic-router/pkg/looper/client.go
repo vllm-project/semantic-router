@@ -34,11 +34,11 @@ import (
 
 // Client handles HTTP requests to OpenAI-compatible endpoints
 type Client struct {
-	httpClient         *http.Client
-	endpoint           string
-	headers            map[string]string
-	decisionName       string            // Decision name to pass in looper requests
-	endpointOverrides  map[string]string  // Per-model endpoint URL overrides
+	httpClient        *http.Client
+	endpoint          string
+	headers           map[string]string
+	decisionName      string            // Decision name to pass in looper requests
+	endpointOverrides map[string]string // Per-model endpoint URL overrides
 }
 
 // NewClient creates a new looper HTTP client
