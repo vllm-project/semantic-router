@@ -40,9 +40,16 @@ interface RouterConfig {
   decisions?: DecisionRule[]
   providers?: {
     default_model?: string
+    models?: Array<{
+      name?: string
+      endpoints?: Array<{ name?: string }>
+      preferred_endpoints?: string[]
+      [key: string]: unknown
+    }>
     vllm_endpoints?: unknown[]
     [key: string]: unknown
   }
+  vllm_endpoints?: Array<{ name?: string }>
   plugins?: Record<string, unknown>
   global?: Record<string, unknown>
   [key: string]: unknown
@@ -71,8 +78,37 @@ function countRoutes(cfg: RouterConfig): number {
 }
 
 function countModels(cfg: RouterConfig): number {
-  const endpoints = cfg.providers?.vllm_endpoints
-  return Array.isArray(endpoints) ? endpoints.length : 0
+  const models = cfg.providers?.models
+  if (Array.isArray(models) && models.length > 0) {
+    const endpointSet = new Set<string>()
+
+    models.forEach((model, modelIndex) => {
+      if (Array.isArray(model.endpoints)) {
+        model.endpoints.forEach((ep, epIndex) => {
+          const key = typeof ep?.name === 'string' && ep.name.trim().length > 0
+            ? ep.name
+            : `${model.name || `model-${modelIndex}`}-${epIndex}`
+          endpointSet.add(key)
+        })
+      }
+
+      if (Array.isArray(model.preferred_endpoints)) {
+        model.preferred_endpoints.forEach((name) => {
+          if (typeof name === 'string' && name.trim().length > 0) {
+            endpointSet.add(name)
+          }
+        })
+      }
+    })
+
+    return endpointSet.size
+  }
+
+  const legacyRootEndpoints = cfg.vllm_endpoints
+  if (Array.isArray(legacyRootEndpoints)) return legacyRootEndpoints.length
+
+  const legacyProviderEndpoints = cfg.providers?.vllm_endpoints
+  return Array.isArray(legacyProviderEndpoints) ? legacyProviderEndpoints.length : 0
 }
 
 function countPlugins(cfg: RouterConfig): number {
@@ -111,14 +147,14 @@ const MiniFlowDiagram: React.FC<FlowProps> = ({ signals, routes, models, plugins
   const height = Math.max(sH, 200)
 
   // Column x positions
-  const colSignal = 60
-  const colDecision = 220
-  const colModel = 380
+  const colSignal = 90
+  const colDecision = 310
+  const colModel = 530
   const midY = height / 2
 
   return (
     <svg
-      viewBox={`0 0 460 ${height}`}
+      viewBox={`0 0 620 ${height}`}
       className={styles.flowSvg}
       preserveAspectRatio="xMidYMid meet"
     >
@@ -232,6 +268,8 @@ const DashboardPage: React.FC = () => {
   const healthyServices = useMemo(() => status?.services.filter(s => s.healthy).length ?? 0, [status])
   const totalServices = useMemo(() => status?.services.length ?? 0, [status])
 
+  const goToRoutesConfig = () => navigate('/config/decisions')
+
   if (loading && !config && !status) {
     return (
       <div className={styles.page}>
@@ -276,7 +314,7 @@ const DashboardPage: React.FC = () => {
 
       {/* Stats Cards */}
       <div className={styles.statsGrid}>
-        <button className={styles.statCard} onClick={() => navigate('/config')}>
+        <button className={styles.statCard} onClick={() => navigate('/config/signals')}>
           <div className={styles.statIcon} style={{ background: 'var(--color-primary)', boxShadow: 'var(--glow-primary)' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
               <circle cx="12" cy="12" r="3" />
@@ -290,7 +328,7 @@ const DashboardPage: React.FC = () => {
           <span className={styles.statArrow}>&rsaquo;</span>
         </button>
 
-        <button className={styles.statCard} onClick={() => navigate('/config')}>
+        <button className={styles.statCard} onClick={goToRoutesConfig}>
           <div className={styles.statIcon} style={{ background: 'var(--color-accent-cyan)', boxShadow: 'var(--glow-cyan)' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
               <path d="M4 6h16M4 12h8M4 18h12" />
@@ -303,7 +341,7 @@ const DashboardPage: React.FC = () => {
           <span className={styles.statArrow}>&rsaquo;</span>
         </button>
 
-        <button className={styles.statCard} onClick={() => navigate('/config')}>
+        <button className={styles.statCard} onClick={() => navigate('/config/models')}>
           <div className={styles.statIcon} style={{ background: 'var(--color-accent-purple)', boxShadow: 'var(--glow-purple)' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
               <rect x="2" y="3" width="20" height="18" rx="3" />
@@ -475,7 +513,7 @@ const DashboardPage: React.FC = () => {
         <div className={styles.card}>
           <div className={styles.cardHeader}>
             <h2 className={styles.cardTitle}>Routes Overview</h2>
-            <button className={styles.cardAction} onClick={() => navigate('/config')}>
+            <button className={styles.cardAction} onClick={() => navigate('/config/decisions')}>
               Manage &rsaquo;
             </button>
           </div>

@@ -2,7 +2,7 @@
 
 .page {
   padding: var(--spacing-lg) var(--spacing-xl);
-  max-width: 1280px;
+  max-width: 1440px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -198,7 +198,7 @@
 
 .mainGrid {
   display: grid;
-  grid-template-columns: 1.4fr 1fr;
+  grid-template-columns: 1.7fr 1fr;
   gap: var(--spacing-lg);
   align-items: start;
 }
@@ -267,11 +267,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  min-height: 340px;
 }
 
 .flowSvg {
   width: 100%;
-  max-height: 280px;
+  max-height: 340px;
 }
 
 /* ------------------------------------------------------------------ */

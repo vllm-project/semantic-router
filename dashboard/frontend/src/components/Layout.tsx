@@ -80,6 +80,15 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
               Brain
             </NavLink>
 
+            <NavLink
+              to="/builder"
+              className={({ isActive }) =>
+                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+              }
+            >
+              Builder
+            </NavLink>
+
             {/* Primary: Models */}
             <button
               className={`${styles.navLink} ${isModelsActive ? styles.navLinkActive : ''}`}
@@ -115,15 +124,6 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
 
             {/* Divider */}
             <div className={styles.navDivider} />
-
-            <NavLink
-              to="/builder"
-              className={({ isActive }) =>
-                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
-              }
-            >
-              Builder
-            </NavLink>
 
             {/* Analysis Dropdown */}
             <div className={styles.navDropdown}>
