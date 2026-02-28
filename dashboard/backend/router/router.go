@@ -213,6 +213,10 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	mux.HandleFunc("/api/tools/open-web", handlers.OpenWebHandler())
 	log.Printf("Open Web API endpoint registered: /api/tools/open-web")
 
+	// Fetch Raw endpoint for importing YAML/JSON from remote URLs (no HTML cleaning)
+	mux.HandleFunc("/api/tools/fetch-raw", handlers.FetchRawHandler())
+	log.Printf("Fetch Raw API endpoint registered: /api/tools/fetch-raw")
+
 	// Status endpoint - shows service health status (aligns with vllm-sr status)
 	mux.HandleFunc("/api/status", handlers.StatusHandler(cfg.RouterAPIURL))
 	log.Printf("Status API endpoint registered: /api/status")

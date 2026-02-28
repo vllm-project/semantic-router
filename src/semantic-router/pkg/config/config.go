@@ -1752,6 +1752,17 @@ type VLLMEndpoint struct {
 	// are used instead of address:port. The API key comes from authz.
 	// +optional
 	ProviderProfileName string `yaml:"provider_profile,omitempty"`
+
+	// Model is the logical model name this endpoint serves.
+	// Set during normalizeYAML to preserve the model→endpoint mapping
+	// through marshal/unmarshal round-trips.
+	// +optional
+	Model string `yaml:"model,omitempty"`
+
+	// Protocol is the endpoint protocol ("http" or "https").
+	// Preserved for accurate round-trip between nested and flat YAML formats.
+	// +optional
+	Protocol string `yaml:"protocol,omitempty"`
 }
 
 // ProviderProfile defines cloud provider connection and protocol details.
@@ -2175,6 +2186,9 @@ type ModelRef struct {
 	// Optional LoRA adapter name - when specified, this LoRA adapter name will be used
 	// as the final model name in requests instead of the base model name.
 	LoRAName string `yaml:"lora_name,omitempty"`
+	// Weight for model distribution in algorithms like ReMoM (0.0-1.0).
+	// When specified, calls are distributed proportionally based on weights.
+	Weight float64 `yaml:"weight,omitempty"`
 	// Reasoning mode control on Model Level
 	ModelReasoningControl `yaml:",inline"`
 }

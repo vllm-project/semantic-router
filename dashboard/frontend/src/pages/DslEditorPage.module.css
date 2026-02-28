@@ -1,0 +1,648 @@
+/* DSL Editor Page — split-pane layout */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 56px); /* subtract header height */
+  overflow: hidden;
+}
+
+/* ===== Toolbar ===== */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.toolbarTitle {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  margin-right: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.toolbarTitle svg {
+  color: var(--color-primary);
+}
+
+.toolbarBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.toolbarBtn:hover {
+  color: var(--color-text);
+  border-color: var(--color-border-hover);
+  background: var(--color-bg-elevated);
+}
+
+.toolbarBtnPrimary {
+  composes: toolbarBtn;
+  background: var(--color-primary);
+  color: #000;
+  border-color: var(--color-primary);
+}
+
+.toolbarBtnPrimary:hover {
+  background: var(--color-primary-light);
+  border-color: var(--color-primary-light);
+  color: #000;
+  box-shadow: var(--glow-primary);
+}
+
+.toolbarBtnDanger {
+  composes: toolbarBtn;
+}
+
+.toolbarBtnDanger:hover {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.divider {
+  width: 1px;
+  height: 1.25rem;
+  background: var(--color-border);
+  margin: 0 var(--spacing-xs);
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+.statusReady {
+  composes: statusBadge;
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--color-success);
+}
+
+.statusLoading {
+  composes: statusBadge;
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--color-warning);
+}
+
+.statusError {
+  composes: statusBadge;
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--color-danger);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.dotPulse {
+  composes: dot;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ===== Split Panes ===== */
+
+.splitContainer {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.editorPane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--color-border);
+}
+
+.outputPane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ===== Pane Headers ===== */
+
+.paneHeader {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: var(--color-bg-tertiary);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.paneTitle {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.paneActions {
+  margin-left: auto;
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+/* ===== Output Tabs ===== */
+
+.outputTabs {
+  display: flex;
+  gap: 0;
+  background: var(--color-bg-tertiary);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.outputTab {
+  padding: 0.5rem 1rem;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.outputTab:hover {
+  color: var(--color-text);
+  background: var(--color-bg-elevated);
+}
+
+.outputTabActive {
+  composes: outputTab;
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+.outputContent {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+}
+
+.outputCode {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-break: break-all;
+  padding: var(--spacing-md);
+  margin: 0;
+  min-height: 100%;
+}
+
+/* ===== Diagnostics Panel ===== */
+
+.diagnosticsPanel {
+  border-top: 1px solid var(--color-border);
+  overflow: auto;
+  flex-shrink: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.diagResizeHandle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  cursor: ns-resize;
+  z-index: 2;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.diagResizeHandle:hover,
+.diagResizeHandle:active {
+  background: var(--color-primary, #3b82f6);
+}
+
+.diagnosticsHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: var(--color-bg-tertiary);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.diagnosticsTitle {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.diagCount {
+  font-size: 0.6875rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+
+.diagCountError {
+  composes: diagCount;
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--color-danger);
+}
+
+.diagCountWarn {
+  composes: diagCount;
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--color-warning);
+}
+
+.diagCountOk {
+  composes: diagCount;
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--color-success);
+}
+
+.diagCountConstraint {
+  composes: diagCount;
+  background: rgba(249, 115, 22, 0.15);
+  color: #f97316;
+}
+
+.diagnosticsList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.diagnosticItem {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  padding: 0.375rem var(--spacing-md);
+  font-size: var(--text-xs);
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.diagnosticItem:hover {
+  background: var(--color-bg-elevated);
+}
+
+.diagnosticItem:last-child {
+  border-bottom: none;
+}
+
+.diagIcon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+}
+
+.diagIconError {
+  composes: diagIcon;
+  color: var(--color-danger);
+}
+
+.diagIconWarn {
+  composes: diagIcon;
+  color: var(--color-warning);
+}
+
+.diagIconConstraint {
+  composes: diagIcon;
+  color: #f97316;
+}
+
+.diagMessage {
+  color: var(--color-text);
+  line-height: 1.4;
+}
+
+.diagLocation {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+}
+
+.diagFixBtn {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.5rem;
+  padding: 0.0625rem 0.375rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  background: rgba(118, 185, 0, 0.12);
+  border: 1px solid rgba(118, 185, 0, 0.3);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  vertical-align: middle;
+}
+
+.diagFixBtn:hover {
+  background: rgba(118, 185, 0, 0.25);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+/* ===== Empty / Loading States ===== */
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xl);
+  text-align: center;
+}
+
+.emptyIcon {
+  font-size: 2rem;
+  opacity: 0.5;
+}
+
+.wasmOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 10;
+  gap: var(--spacing-md);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ===== Status Bar (bottom) ===== */
+
+.statusBar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 var(--spacing-md);
+  height: 26px;
+  background: var(--color-bg-tertiary);
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+  font-size: 0.6875rem;
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+}
+
+.statusItem {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0 0.75rem;
+  height: 100%;
+  border-right: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.statusItem:first-child {
+  padding-left: 0;
+}
+
+.statusItem:last-child {
+  border-right: none;
+}
+
+.statusValid {
+  color: var(--color-success);
+}
+
+.statusInvalid {
+  color: var(--color-danger);
+}
+
+.statusCheckmark {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+/* ===== Responsive ===== */
+
+@media (max-width: 768px) {
+  .splitContainer {
+    flex-direction: column;
+  }
+
+  .editorPane {
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+    height: 50%;
+  }
+
+  .outputPane {
+    height: 50%;
+  }
+
+  .modal {
+    width: 95vw;
+    max-height: 80vh;
+  }
+}
+
+/* ===== Import YAML Modal ===== */
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(2px);
+}
+
+.modal {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  width: min(600px, 90vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.modalTitle {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.modalClose {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.modalClose:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+}
+
+.modalBody {
+  padding: var(--spacing-md) var(--spacing-lg);
+  flex: 1;
+  overflow: auto;
+}
+
+.modalHint {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--spacing-sm);
+  line-height: 1.5;
+}
+
+.importUrlRow {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+}
+
+.importUrlInput {
+  flex: 1;
+  padding: 0.375rem 0.625rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.importUrlInput:focus {
+  border-color: var(--color-primary);
+}
+
+.importUrlInput::placeholder {
+  color: var(--color-text-muted);
+}
+
+.importTextarea {
+  width: 100%;
+  height: 280px;
+  padding: var(--spacing-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  resize: vertical;
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.importTextarea:focus {
+  border-color: var(--color-primary);
+}
+
+.importTextarea::placeholder {
+  color: var(--color-text-muted);
+}
+
+.importError {
+  margin-top: var(--spacing-sm);
+  font-size: var(--text-xs);
+  color: var(--color-danger);
+}
+
+.modalFooter {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+}

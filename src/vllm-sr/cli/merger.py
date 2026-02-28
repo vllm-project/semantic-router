@@ -360,6 +360,10 @@ def translate_providers_to_router_format(providers) -> Dict[str, Any]:
             "access_key": model.access_key,
         }
 
+        # Add param_size if provided
+        if model.param_size:
+            model_config[model.name]["param_size"] = model.param_size
+
         # Add api_format if provided
         if model.api_format:
             model_config[model.name]["api_format"] = model.api_format

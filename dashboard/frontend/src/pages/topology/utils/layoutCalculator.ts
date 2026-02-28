@@ -63,7 +63,7 @@ function getDecisionNodeHeight(decision: DecisionConfig, collapsed: boolean): nu
 }
 
 // Calculate signal group node height
-function getSignalGroupHeight(signals: any[], collapsed: boolean): number {
+function getSignalGroupHeight(signals: { name: string }[], collapsed: boolean): number {
   const { signalGroupBaseHeight, signalItemHeight } = LAYOUT_CONFIG
   if (collapsed) return 70
   const itemCount = Math.min(signals.length, 5)
@@ -71,7 +71,7 @@ function getSignalGroupHeight(signals: any[], collapsed: boolean): number {
 }
 
 // Calculate plugin chain node height
-function getPluginChainHeight(plugins: any[], collapsed: boolean): number {
+function getPluginChainHeight(plugins: { type: string }[], collapsed: boolean): number {
   const { pluginChainBaseHeight, pluginItemHeight } = LAYOUT_CONFIG
   if (collapsed) return 55
   const itemCount = Math.min(plugins.length, 4)

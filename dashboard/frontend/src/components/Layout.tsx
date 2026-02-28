@@ -116,6 +116,15 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
             {/* Divider */}
             <div className={styles.navDivider} />
 
+            <NavLink
+              to="/builder"
+              className={({ isActive }) =>
+                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+              }
+            >
+              Builder
+            </NavLink>
+
             {/* Analysis Dropdown */}
             <div className={styles.navDropdown}>
               <button
@@ -346,6 +355,9 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
             >
               Decisions
             </button>
+            <NavLink to="/builder" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+              Builder
+            </NavLink>
 
             {/* Analysis section */}
             <div className={styles.mobileNavSection}>

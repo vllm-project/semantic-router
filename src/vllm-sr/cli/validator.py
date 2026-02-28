@@ -190,6 +190,9 @@ def validate_signal_references(config: UserConfig) -> List[ValidationError]:
             signal_names.add(signal.name)
         for signal in config.signals.embeddings:
             signal_names.add(signal.name)
+        if config.signals.domains:
+            for signal in config.signals.domains:
+                signal_names.add(signal.name)
         if config.signals.fact_check:
             for signal in config.signals.fact_check:
                 signal_names.add(signal.name)
@@ -205,6 +208,21 @@ def validate_signal_references(config: UserConfig) -> List[ValidationError]:
         if config.signals.context:
             for signal in config.signals.context:
                 signal_names.add(signal.name)
+        if config.signals.complexity:
+            for signal in config.signals.complexity:
+                signal_names.add(signal.name)
+        if config.signals.modality:
+            for signal in config.signals.modality:
+                signal_names.add(signal.name)
+        if config.signals.role_bindings:
+            for signal in config.signals.role_bindings:
+                signal_names.add(signal.name)
+        if config.signals.jailbreak:
+            for signal in config.signals.jailbreak:
+                signal_names.add(signal.name)
+        if config.signals.pii:
+            for signal in config.signals.pii:
+                signal_names.add(signal.name)
 
     # Check decision conditions
     for decision in config.decisions:
@@ -212,14 +230,24 @@ def validate_signal_references(config: UserConfig) -> List[ValidationError]:
             if condition.type in [
                 "keyword",
                 "embedding",
+                "domain",
                 "fact_check",
                 "user_feedback",
                 "preference",
                 "language",
                 "context",
                 "complexity",
+                "modality",
+                "authz",
+                "jailbreak",
+                "pii",
             ]:
-                if condition.name not in signal_names:
+                # Support sub-level references like "math_problem:hard"
+                # where "math_problem" is the defined signal and "hard" is a sub-level.
+                ref_name = condition.name
+                if ":" in ref_name:
+                    ref_name = ref_name.split(":")[0]
+                if ref_name not in signal_names:
                     errors.append(
                         ValidationError(
                             f"Decision '{decision.name}' references unknown signal '{condition.name}'",

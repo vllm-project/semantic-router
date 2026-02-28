@@ -217,6 +217,11 @@ interface ConfigData {
         protocol: 'http' | 'https'
       }>
       access_key?: string
+      pricing?: {
+        currency?: string
+        prompt_per_1m?: number
+        completion_per_1m?: number
+      }
     }>
     default_model: string
     reasoning_families?: Record<string, ReasoningFamily>
@@ -345,7 +350,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   const [viewModalOpen, setViewModalOpen] = useState(false)
   const [viewModalTitle, setViewModalTitle] = useState('')
   const [viewModalSections, setViewModalSections] = useState<ViewSection[]>([])
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [viewModalEditCallback, setViewModalEditCallback] = useState<(() => void) | null>(null)
 
   // Search state
@@ -1982,7 +1986,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                     {tool.tool.function.parameters.properties && (
                       <div className={styles.toolParameters}>
                         <div className={styles.toolParametersHeader}>Parameters:</div>
-                        {Object.entries(tool.tool.function.parameters.properties).map(([paramName, paramInfo]: [string, any]) => (
+                        {Object.entries(tool.tool.function.parameters.properties).map(([paramName, paramInfo]: [string, { type?: string; description?: string }]) => (
                           <div key={paramName} className={styles.toolParameter}>
                             <div>
                               <span className={styles.parameterName}>
@@ -4167,7 +4171,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     }
 
     // Handle add model
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const handleAddModel = () => {
       const reasoningFamiliesObj = getReasoningFamilies()
       const reasoningFamilyNames = Object.keys(reasoningFamiliesObj)
@@ -4253,7 +4256,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             if (!newConfig.providers.models) {
               newConfig.providers.models = []
             }
-            const newModel: any = {
+            newConfig.providers.models.push({
               name: data.model_name,
               reasoning_family: data.reasoning_family,
               access_key: data.access_key,
@@ -4263,8 +4266,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                 prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
                 completion_per_1m: parseFloat(data.completion_per_1m) || 0
               }
-            }
-            newConfig.providers.models.push(newModel)
+            })
           } else {
             // Legacy format
             if (!newConfig.model_config) {
@@ -4272,7 +4274,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             }
             newConfig.model_config[data.model_name] = {
               reasoning_family: data.reasoning_family,
-              preferred_endpoints: endpoints.map((ep: any) => ep.name),
+              preferred_endpoints: endpoints.map((ep: { name: string }) => ep.name),
               pricing: {
                 currency: data.currency,
                 prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
@@ -4378,7 +4380,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             newConfig.model_config[model.name] = {
               ...newConfig.model_config[model.name],
               reasoning_family: data.reasoning_family,
-              preferred_endpoints: endpoints.map((ep: any) => ep.name),
+              preferred_endpoints: endpoints.map((ep: { name: string }) => ep.name),
               pricing: {
                 currency: data.currency,
                 prompt_per_1m: parseFloat(data.prompt_per_1m) || 0,
@@ -4393,7 +4395,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     }
 
     // Handle delete model
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const handleDeleteModel = (model: ModelRow) => {
       if (confirm(`Are you sure you want to delete model "${model.name}"?`)) {
         handleDeleteModelAction(model.name)
