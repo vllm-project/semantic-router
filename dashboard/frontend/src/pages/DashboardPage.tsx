@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react'
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import styles from './DashboardPage.module.css'
 
@@ -29,6 +29,7 @@ interface SignalConfig {
 
 interface DecisionRule {
   name?: string
+  description?: string
   priority?: number
   rules?: unknown[]
   modelRefs?: unknown[]
@@ -73,7 +74,7 @@ function countSignals(cfg: RouterConfig): { total: number; byType: Record<string
   return { total, byType }
 }
 
-function countRoutes(cfg: RouterConfig): number {
+function countDecisions(cfg: RouterConfig): number {
   return Array.isArray(cfg.decisions) ? cfg.decisions.length : 0
 }
 
@@ -95,37 +96,49 @@ function countPlugins(cfg: RouterConfig): number {
   return Object.keys(cfg.plugins).length
 }
 
+/** Classify decision by priority range */
+function getDecisionCategory(priority?: number): 'guardrail' | 'routing' | 'fallback' {
+  if (priority == null) return 'routing'
+  if (priority >= 999) return 'guardrail'
+  if (priority <= 100) return 'fallback'
+  return 'routing'
+}
+
 /* ------------------------------------------------------------------ */
 /*  Mini Flow Diagram (pure SVG, no dependency)                        */
 /* ------------------------------------------------------------------ */
 
 interface FlowProps {
   signals: { total: number; byType: Record<string, number> }
-  routes: number
+  decisions: number
   models: number
   plugins: number
 }
 
 const SIGNAL_COLORS: Record<string, string> = {
-  keyword: '#4EC9B0',
-  embedding: '#9CDCFE',
-  domain: '#DCDCAA',
+  keywords: '#4EC9B0',
+  embeddings: '#9CDCFE',
+  domains: '#DCDCAA',
   fact_check: '#CE9178',
-  user_feedback: '#C586C0',
-  preference: '#4FC1FF',
+  user_feedbacks: '#C586C0',
+  preferences: '#4FC1FF',
   language: '#B5CEA8',
   context: '#D7BA7D',
   complexity: '#569CD6',
   modality: '#D4D4D4',
   authz: '#F48771',
+  jailbreak: '#F48771',
+  pii: '#FF6B6B',
 }
 
-const MiniFlowDiagram: React.FC<FlowProps> = ({ signals, routes, models, plugins }) => {
-  const signalTypes = Object.entries(signals.byType).sort((a, b) => b[1] - a[1]).slice(0, 6)
-  const sH = Math.max(signalTypes.length * 36 + 20, 160)
-  const height = Math.max(sH, 200)
+const MiniFlowDiagram: React.FC<FlowProps> = React.memo(({ signals, decisions, models, plugins }) => {
+  const signalTypes = Object.entries(signals.byType).sort((a, b) => b[1] - a[1])
+  const visibleSignals = signalTypes.slice(0, 7)
+  const hiddenCount = signalTypes.length - visibleSignals.length
+  const rowH = 34
+  const sH = Math.max(visibleSignals.length * rowH + (hiddenCount > 0 ? 28 : 0) + 30, 180)
+  const height = Math.max(sH, 220)
 
-  // Column x positions
   const colSignal = 90
   const colDecision = 310
   const colModel = 530
@@ -144,59 +157,76 @@ const MiniFlowDiagram: React.FC<FlowProps> = ({ signals, routes, models, plugins
       </defs>
 
       {/* Signal nodes */}
-      {signalTypes.map(([type, count], i) => {
-        const y = 20 + i * 36
+      {visibleSignals.map(([type, count], i) => {
+        const y = 16 + i * rowH
         const color = SIGNAL_COLORS[type] || '#999'
+        const endY = y + 14
+        // bezier curve from signal to decision
+        const cx1 = colSignal + 52 + 40
+        const cx2 = colDecision - 50 - 40
         return (
-          <g key={type}>
-            <rect x={colSignal - 50} y={y} width={100} height={28} rx={6} fill={color + '22'} stroke={color} strokeWidth={1} />
-            <text x={colSignal} y={y + 18} textAnchor="middle" fill={color} fontSize={11} fontFamily="var(--font-mono)">
+          <g key={type} className={styles.flowNode}>
+            <rect x={colSignal - 55} y={y} width={110} height={26} rx={6} fill={color + '18'} stroke={color} strokeWidth={1} />
+            <text x={colSignal} y={y + 17} textAnchor="middle" fill={color} fontSize={10.5} fontFamily="var(--font-mono)">
               {type} ({count})
             </text>
-            {/* connector */}
-            <line
-              x1={colSignal + 52} y1={y + 14}
-              x2={colDecision - 50} y2={midY}
-              stroke="var(--color-border-hover)" strokeWidth={1} opacity={0.4}
+            <path
+              d={`M ${colSignal + 55} ${endY} C ${cx1} ${endY}, ${cx2} ${midY}, ${colDecision - 52} ${midY}`}
+              fill="none" stroke="var(--color-border-hover)" strokeWidth={1} opacity={0.35}
               markerEnd="url(#arrow)"
             />
           </g>
         )
       })}
 
+      {/* Truncation hint */}
+      {hiddenCount > 0 && (
+        <text
+          x={colSignal} y={16 + visibleSignals.length * rowH + 14}
+          textAnchor="middle" fill="var(--color-text-muted)" fontSize={10} fontStyle="italic"
+        >
+          +{hiddenCount} more
+        </text>
+      )}
+
       {/* Decision Engine box */}
-      <rect x={colDecision - 50} y={midY - 28} width={100} height={56} rx={8} fill="var(--color-primary)" fillOpacity={0.15} stroke="var(--color-primary)" strokeWidth={1.5} />
+      <rect x={colDecision - 52} y={midY - 30} width={104} height={60} rx={10}
+        fill="var(--color-primary)" fillOpacity={0.12} stroke="var(--color-primary)" strokeWidth={1.5} />
       <text x={colDecision} y={midY - 6} textAnchor="middle" fill="var(--color-primary)" fontSize={11} fontWeight="bold">Decision</text>
-      <text x={colDecision} y={midY + 12} textAnchor="middle" fill="var(--color-primary)" fontSize={11}>{routes} routes</text>
+      <text x={colDecision} y={midY + 12} textAnchor="middle" fill="var(--color-primary)" fontSize={10.5} opacity={0.85}>{decisions} rules</text>
 
       {/* Connector Decision → Models */}
       <line
-        x1={colDecision + 52} y1={midY}
-        x2={colModel - 50} y2={midY}
+        x1={colDecision + 54} y1={midY}
+        x2={colModel - 54} y2={midY}
         stroke="var(--color-border-hover)" strokeWidth={1.5}
         markerEnd="url(#arrow)"
       />
 
       {/* Model box */}
-      <rect x={colModel - 50} y={midY - 28} width={100} height={56} rx={8} fill="var(--color-accent-cyan)" fillOpacity={0.12} stroke="var(--color-accent-cyan)" strokeWidth={1.5} />
+      <rect x={colModel - 52} y={midY - 30} width={104} height={60} rx={10}
+        fill="var(--color-accent-cyan)" fillOpacity={0.10} stroke="var(--color-accent-cyan)" strokeWidth={1.5} />
       <text x={colModel} y={midY - 6} textAnchor="middle" fill="var(--color-accent-cyan)" fontSize={11} fontWeight="bold">Models</text>
-      <text x={colModel} y={midY + 12} textAnchor="middle" fill="var(--color-accent-cyan)" fontSize={11}>{models} models</text>
+      <text x={colModel} y={midY + 12} textAnchor="middle" fill="var(--color-accent-cyan)" fontSize={10.5} opacity={0.85}>{models} models</text>
 
-      {/* Plugins badge (bottom-right) */}
+      {/* Plugins badge */}
       {plugins > 0 && (
         <g>
-          <rect x={colDecision - 30} y={midY + 38} width={60} height={22} rx={11} fill="var(--color-accent-purple)" fillOpacity={0.18} stroke="var(--color-accent-purple)" strokeWidth={1} />
-          <text x={colDecision} y={midY + 53} textAnchor="middle" fill="var(--color-accent-purple)" fontSize={10}>{plugins} plugins</text>
+          <rect x={colDecision - 30} y={midY + 40} width={60} height={22} rx={11}
+            fill="var(--color-accent-purple)" fillOpacity={0.15} stroke="var(--color-accent-purple)" strokeWidth={1} />
+          <text x={colDecision} y={midY + 55} textAnchor="middle" fill="var(--color-accent-purple)" fontSize={10}>{plugins} plugins</text>
         </g>
       )}
 
       {/* Column labels */}
-      <text x={colSignal} y={height - 4} textAnchor="middle" fill="var(--color-text-muted)" fontSize={9}>SIGNALS</text>
-      <text x={colDecision} y={height - 4} textAnchor="middle" fill="var(--color-text-muted)" fontSize={9}>DECISIONS</text>
-      <text x={colModel} y={height - 4} textAnchor="middle" fill="var(--color-text-muted)" fontSize={9}>MODELS</text>
+      <text x={colSignal} y={height - 4} textAnchor="middle" fill="var(--color-text-muted)" fontSize={9} letterSpacing="0.05em">SIGNALS</text>
+      <text x={colDecision} y={height - 4} textAnchor="middle" fill="var(--color-text-muted)" fontSize={9} letterSpacing="0.05em">DECISIONS</text>
+      <text x={colModel} y={height - 4} textAnchor="middle" fill="var(--color-text-muted)" fontSize={9} letterSpacing="0.05em">MODELS</text>
     </svg>
   )
-}
+})
+
+MiniFlowDiagram.displayName = 'MiniFlowDiagram'
 
 /* ------------------------------------------------------------------ */
 /*  Main Component                                                     */
@@ -208,22 +238,32 @@ const DashboardPage: React.FC = () => {
   const [config, setConfig] = useState<RouterConfig | null>(null)
   const [status, setStatus] = useState<SystemStatus | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const configTickRef = useRef(0)
 
-  const fetchAll = useCallback(async () => {
+  const fetchStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/status')
+      if (res.ok) {
+        setStatus(await res.json())
+      }
+    } catch { /* silent */ }
+  }, [])
+
+  const fetchAll = useCallback(async (manual = false) => {
+    if (manual) setRefreshing(true)
     try {
       const [cfgRes, statusRes] = await Promise.all([
         fetch('/api/router/config/all'),
         fetch('/api/status'),
       ])
       if (cfgRes.ok) {
-        const cfgData = await cfgRes.json()
-        setConfig(cfgData)
+        setConfig(await cfgRes.json())
       }
       if (statusRes.ok) {
-        const statusData = await statusRes.json()
-        setStatus(statusData)
+        setStatus(await statusRes.json())
       }
       setLastUpdated(new Date())
       setError(null)
@@ -231,23 +271,49 @@ const DashboardPage: React.FC = () => {
       setError(err instanceof Error ? err.message : 'Failed to load dashboard data')
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }, [])
 
   useEffect(() => {
     fetchAll()
-    const interval = setInterval(fetchAll, 15000)
-    return () => clearInterval(interval)
-  }, [fetchAll])
+    // Config changes rarely — poll every 30s; status every 10s
+    const statusInterval = setInterval(fetchStatus, 10000)
+    const configInterval = setInterval(() => {
+      configTickRef.current += 1
+      if (configTickRef.current % 3 === 0) {
+        fetchAll()
+      } else {
+        fetchStatus()
+      }
+    }, 10000)
+    return () => {
+      clearInterval(statusInterval)
+      clearInterval(configInterval)
+    }
+  }, [fetchAll, fetchStatus])
 
   const signalStats = useMemo(() => config ? countSignals(config) : { total: 0, byType: {} }, [config])
-  const routeCount = useMemo(() => config ? countRoutes(config) : 0, [config])
+  const decisionCount = useMemo(() => config ? countDecisions(config) : 0, [config])
   const modelCount = useMemo(() => config ? countModels(config) : 0, [config])
   const pluginCount = useMemo(() => config ? countPlugins(config) : 0, [config])
   const healthyServices = useMemo(() => status?.services.filter(s => s.healthy).length ?? 0, [status])
   const totalServices = useMemo(() => status?.services.length ?? 0, [status])
 
-  const goToRoutesConfig = () => navigate('/config/decisions')
+  // Categorize decisions for the table
+  const categorizedDecisions = useMemo(() => {
+    if (!config?.decisions) return { guardrails: [], routing: [], fallbacks: [] }
+    const guardrails: DecisionRule[] = []
+    const routing: DecisionRule[] = []
+    const fallbacks: DecisionRule[] = []
+    for (const d of config.decisions) {
+      const cat = getDecisionCategory(d.priority)
+      if (cat === 'guardrail') guardrails.push(d)
+      else if (cat === 'fallback') fallbacks.push(d)
+      else routing.push(d)
+    }
+    return { guardrails, routing, fallbacks }
+  }, [config])
 
   if (loading && !config && !status) {
     return (
@@ -266,7 +332,7 @@ const DashboardPage: React.FC = () => {
       <div className={styles.header}>
         <div>
           <h1 className={styles.title}>Dashboard</h1>
-          <p className={styles.subtitle}>Configuration overview & system health</p>
+          <p className={styles.subtitle}>Configuration overview &amp; system health</p>
         </div>
         <div className={styles.headerActions}>
           {lastUpdated && (
@@ -274,12 +340,16 @@ const DashboardPage: React.FC = () => {
               Updated {lastUpdated.toLocaleTimeString()}
             </span>
           )}
-          <button className={styles.refreshBtn} onClick={fetchAll}>
+          <button
+            className={`${styles.refreshBtn} ${refreshing ? styles.refreshBtnSpin : ''}`}
+            onClick={() => fetchAll(true)}
+            disabled={refreshing}
+          >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M14 8A6 6 0 1 1 8 2" strokeLinecap="round" />
               <path d="M14 2v6h-6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Refresh
+            {refreshing ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
       </div>
@@ -287,7 +357,7 @@ const DashboardPage: React.FC = () => {
       {error && (
         <div className={styles.errorBanner}>
           <span>Failed to load data: {error}</span>
-          <button onClick={fetchAll}>Retry</button>
+          <button onClick={() => fetchAll(true)}>Retry</button>
         </div>
       )}
 
@@ -307,15 +377,15 @@ const DashboardPage: React.FC = () => {
           <span className={styles.statArrow}>&rsaquo;</span>
         </button>
 
-        <button className={styles.statCard} onClick={goToRoutesConfig}>
+        <button className={styles.statCard} onClick={() => navigate('/config/decisions')}>
           <div className={styles.statIcon} style={{ background: 'var(--color-accent-cyan)', boxShadow: 'var(--glow-cyan)' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
               <path d="M4 6h16M4 12h8M4 18h12" />
             </svg>
           </div>
           <div className={styles.statContent}>
-            <span className={styles.statValue}>{routeCount}</span>
-            <span className={styles.statLabel}>Routes</span>
+            <span className={styles.statValue}>{decisionCount}</span>
+            <span className={styles.statLabel}>Decisions</span>
           </div>
           <span className={styles.statArrow}>&rsaquo;</span>
         </button>
@@ -329,7 +399,7 @@ const DashboardPage: React.FC = () => {
           </div>
           <div className={styles.statContent}>
             <span className={styles.statValue}>{modelCount}</span>
-            <span className={styles.statLabel}>Endpoints</span>
+            <span className={styles.statLabel}>Models</span>
           </div>
           <span className={styles.statArrow}>&rsaquo;</span>
         </button>
@@ -366,7 +436,7 @@ const DashboardPage: React.FC = () => {
             {config ? (
               <MiniFlowDiagram
                 signals={signalStats}
-                routes={routeCount}
+                decisions={decisionCount}
                 models={modelCount}
                 plugins={pluginCount}
               />
@@ -455,74 +525,105 @@ const DashboardPage: React.FC = () => {
                 </svg>
                 Run Evaluation
               </button>
+              <button className={styles.quickLink} onClick={() => navigate('/config/signals')}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M12 20V10M18 20V4M6 20v-4" />
+                </svg>
+                Manage Signals
+              </button>
+              <button className={styles.quickLink} onClick={() => navigate('/config/models')}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <rect x="2" y="3" width="20" height="18" rx="3" /><path d="M8 7v10M16 7v10" />
+                </svg>
+                Manage Models
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Signal Breakdown */}
-      {signalStats.total > 0 && (
-        <div className={styles.card}>
-          <div className={styles.cardHeader}>
-            <h2 className={styles.cardTitle}>Signal Breakdown</h2>
-          </div>
-          <div className={styles.signalBreakdown}>
-            {Object.entries(signalStats.byType).sort((a, b) => b[1] - a[1]).map(([type, count]) => {
-              const pct = Math.round((count / signalStats.total) * 100)
-              const color = SIGNAL_COLORS[type] || '#999'
-              return (
-                <div key={type} className={styles.breakdownRow}>
-                  <span className={styles.breakdownLabel}>
-                    <span className={styles.breakdownDot} style={{ background: color }} />
-                    {type}
-                  </span>
-                  <div className={styles.breakdownBar}>
-                    <div className={styles.breakdownFill} style={{ width: `${pct}%`, background: color }} />
-                  </div>
-                  <span className={styles.breakdownCount}>{count}</span>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Route Overview Table */}
-      {config?.decisions && config.decisions.length > 0 && (
-        <div className={styles.card}>
-          <div className={styles.cardHeader}>
-            <h2 className={styles.cardTitle}>Routes Overview</h2>
-            <button className={styles.cardAction} onClick={() => navigate('/config/decisions')}>
-              Manage &rsaquo;
-            </button>
-          </div>
-          <div className={styles.routeTable}>
-            <div className={styles.routeTableHead}>
-              <span>Name</span>
-              <span>Priority</span>
-              <span>Models</span>
+      {/* Signal Breakdown + Decisions Overview — 2 column layout */}
+      <div className={styles.bottomGrid}>
+        {/* Signal Breakdown */}
+        {signalStats.total > 0 && (
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <h2 className={styles.cardTitle}>Signal Breakdown</h2>
+              <span className={styles.cardSubtitle}>{signalStats.total} total</span>
             </div>
-            {config.decisions.slice(0, 8).map((d, i) => {
-              const modelNames = Array.isArray(d.modelRefs)
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                ? d.modelRefs.map((m: any) => m?.model || '').filter(Boolean).join(', ')
-                : '—'
-              return (
-                <div key={i} className={styles.routeTableRow}>
-                  <span className={styles.routeName}>{d.name || `Route ${i + 1}`}</span>
-                  <span className={styles.routePriority}>{d.priority ?? '—'}</span>
-                  <span className={styles.routeModels}>{modelNames}</span>
-                </div>
-              )
-            })}
-            {config.decisions.length > 8 && (
-              <div className={styles.routeTableMore}>
-                +{config.decisions.length - 8} more routes
-              </div>
-            )}
+            <div className={styles.signalBreakdown}>
+              {Object.entries(signalStats.byType).sort((a, b) => b[1] - a[1]).map(([type, count]) => {
+                const maxCount = Math.max(...Object.values(signalStats.byType))
+                const pct = Math.round((count / maxCount) * 100)
+                const color = SIGNAL_COLORS[type] || '#999'
+                return (
+                  <div key={type} className={styles.breakdownRow} title={`${type}: ${count} signal(s)`}>
+                    <span className={styles.breakdownLabel}>
+                      <span className={styles.breakdownDot} style={{ background: color }} />
+                      {type}
+                    </span>
+                    <div className={styles.breakdownBar}>
+                      <div className={styles.breakdownFill} style={{ width: `${pct}%`, background: color }} />
+                    </div>
+                    <span className={styles.breakdownCount}>{count}</span>
+                  </div>
+                )
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Decisions Overview Table */}
+        {config?.decisions && config.decisions.length > 0 && (
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <h2 className={styles.cardTitle}>Decisions Overview</h2>
+              <button className={styles.cardAction} onClick={() => navigate('/config/decisions')}>
+                Manage &rsaquo;
+              </button>
+            </div>
+            <div className={styles.decisionTable}>
+              <div className={styles.decisionTableHead}>
+                <span>Name</span>
+                <span>Priority</span>
+                <span>Type</span>
+                <span>Models</span>
+              </div>
+              {/* Guardrails first, then routing, then fallbacks — show top 10 */}
+              {[...categorizedDecisions.guardrails, ...categorizedDecisions.routing, ...categorizedDecisions.fallbacks]
+                .slice(0, 10)
+                .map((d, i) => {
+                  const modelNames = Array.isArray(d.modelRefs)
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    ? d.modelRefs.map((m: any) => m?.model || '').filter(Boolean).join(', ')
+                    : '—'
+                  const cat = getDecisionCategory(d.priority)
+                  return (
+                    <div key={i} className={styles.decisionTableRow}>
+                      <span className={styles.decisionName} title={d.description || d.name || ''}>
+                        {d.name || `Decision ${i + 1}`}
+                      </span>
+                      <span className={styles.decisionPriority}>{d.priority ?? '—'}</span>
+                      <span className={`${styles.decisionBadge} ${
+                        cat === 'guardrail' ? styles.badgeGuardrail :
+                        cat === 'fallback' ? styles.badgeFallback :
+                        styles.badgeRouting
+                      }`}>
+                        {cat === 'guardrail' ? 'Guard' : cat === 'fallback' ? 'Default' : 'Route'}
+                      </span>
+                      <span className={styles.decisionModels} title={modelNames}>{modelNames}</span>
+                    </div>
+                  )
+                })}
+              {config.decisions.length > 10 && (
+                <button className={styles.decisionTableMore} onClick={() => navigate('/config/decisions')}>
+                  +{config.decisions.length - 10} more decisions &rsaquo;
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

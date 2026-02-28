@@ -111,6 +111,15 @@
   color: var(--color-primary);
 }
 
+.refreshBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.refreshBtnSpin svg {
+  animation: spin 0.8s linear infinite;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Stats Grid                                                         */
 /* ------------------------------------------------------------------ */
@@ -139,6 +148,8 @@
 .statCard:hover {
   border-color: var(--color-border-hover);
   background: var(--color-bg-elevated);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .statIcon {
@@ -190,6 +201,12 @@
   font-size: 1.25rem;
   color: var(--color-text-muted);
   flex-shrink: 0;
+  transition: var(--transition-fast);
+}
+
+.statCard:hover .statArrow {
+  color: var(--color-primary);
+  transform: translateX(2px);
 }
 
 /* ------------------------------------------------------------------ */
@@ -200,13 +217,28 @@
   display: grid;
   grid-template-columns: 1.7fr 1fr;
   gap: var(--spacing-lg);
-  align-items: start;
+  align-items: stretch;
 }
 
 .rightCol {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-lg);
+}
+
+.rightCol > .card:last-child {
+  flex: 1;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Bottom Grid (2-col: signal breakdown + decisions)                  */
+/* ------------------------------------------------------------------ */
+
+.bottomGrid {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: var(--spacing-lg);
+  align-items: start;
 }
 
 /* ------------------------------------------------------------------ */
@@ -233,6 +265,12 @@
   font-weight: 600;
   color: var(--color-text);
   margin: 0;
+}
+
+.cardSubtitle {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
 }
 
 .cardAction {
@@ -272,7 +310,15 @@
 
 .flowSvg {
   width: 100%;
-  max-height: 340px;
+  max-height: 360px;
+}
+
+.flowNode rect {
+  transition: fill-opacity 0.2s ease;
+}
+
+.flowNode:hover rect {
+  fill-opacity: 0.35;
 }
 
 /* ------------------------------------------------------------------ */
@@ -406,6 +452,16 @@
   color: var(--color-primary);
 }
 
+.quickLink svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: var(--transition-fast);
+}
+
+.quickLink:hover svg {
+  opacity: 1;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Signal Breakdown                                                   */
 /* ------------------------------------------------------------------ */
@@ -421,13 +477,21 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-md);
+  cursor: default;
+  border-radius: var(--radius-sm);
+  padding: 3px 0;
+  transition: background 0.15s ease;
+}
+
+.breakdownRow:hover {
+  background: var(--color-bg-elevated);
 }
 
 .breakdownLabel {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 120px;
+  width: 130px;
   flex-shrink: 0;
   font-size: var(--text-xs);
   color: var(--color-text-secondary);
@@ -443,15 +507,15 @@
 
 .breakdownBar {
   flex: 1;
-  height: 6px;
+  height: 8px;
   background: var(--color-bg-elevated);
-  border-radius: 3px;
+  border-radius: 4px;
   overflow: hidden;
 }
 
 .breakdownFill {
   height: 100%;
-  border-radius: 3px;
+  border-radius: 4px;
   min-width: 4px;
   transition: width 0.4s ease;
 }
@@ -466,17 +530,17 @@
 }
 
 /* ------------------------------------------------------------------ */
-/*  Route Table                                                        */
+/*  Decision Table                                                     */
 /* ------------------------------------------------------------------ */
 
-.routeTable {
+.decisionTable {
   font-size: var(--text-xs);
 }
 
-.routeTableHead {
+.decisionTableHead {
   display: grid;
-  grid-template-columns: 2fr 0.8fr 2fr;
-  gap: var(--spacing-md);
+  grid-template-columns: 2.2fr 0.7fr 0.6fr 2fr;
+  gap: var(--spacing-sm);
   padding: 8px var(--spacing-lg);
   background: var(--color-bg-secondary);
   color: var(--color-text-muted);
@@ -486,20 +550,21 @@
   letter-spacing: 0.05em;
 }
 
-.routeTableRow {
+.decisionTableRow {
   display: grid;
-  grid-template-columns: 2fr 0.8fr 2fr;
-  gap: var(--spacing-md);
+  grid-template-columns: 2.2fr 0.7fr 0.6fr 2fr;
+  gap: var(--spacing-sm);
   padding: 10px var(--spacing-lg);
   border-top: 1px solid var(--color-border);
   align-items: center;
+  transition: background 0.15s ease;
 }
 
-.routeTableRow:hover {
+.decisionTableRow:hover {
   background: var(--color-bg-elevated);
 }
 
-.routeName {
+.decisionName {
   color: var(--color-text);
   font-family: var(--font-mono);
   overflow: hidden;
@@ -507,13 +572,43 @@
   white-space: nowrap;
 }
 
-.routePriority {
+.decisionPriority {
   color: var(--color-primary);
   font-family: var(--font-mono);
   font-weight: 600;
 }
 
-.routeModels {
+.decisionBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.badgeGuardrail {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.badgeRouting {
+  background: rgba(59, 130, 246, 0.12);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.badgeFallback {
+  background: rgba(156, 163, 175, 0.12);
+  color: #9ca3af;
+  border: 1px solid rgba(156, 163, 175, 0.25);
+}
+
+.decisionModels {
   color: var(--color-text-secondary);
   font-family: var(--font-mono);
   overflow: hidden;
@@ -521,12 +616,24 @@
   white-space: nowrap;
 }
 
-.routeTableMore {
+.decisionTableMore {
+  display: block;
+  width: 100%;
   text-align: center;
-  padding: 8px;
+  padding: 10px;
   color: var(--color-text-muted);
   font-size: var(--text-xs);
+  border: none;
   border-top: 1px solid var(--color-border);
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: var(--transition-fast);
+}
+
+.decisionTableMore:hover {
+  background: var(--color-bg-elevated);
+  color: var(--color-primary);
 }
 
 /* ------------------------------------------------------------------ */
@@ -539,6 +646,10 @@
   }
 
   .mainGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .bottomGrid {
     grid-template-columns: 1fr;
   }
 }
@@ -559,5 +670,14 @@
 
   .quickLinks {
     grid-template-columns: 1fr;
+  }
+
+  .decisionTableHead,
+  .decisionTableRow {
+    grid-template-columns: 1.5fr 0.5fr 1fr;
+  }
+
+  .decisionModels {
+    display: none;
   }
 }
