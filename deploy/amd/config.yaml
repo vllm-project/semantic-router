@@ -512,6 +512,19 @@ signals:
       include_history: true
       description: "Block all detected PII types"
 
+    - name: "pii_relaxed"
+      threshold: 0.75
+      pii_types_allowed:
+        - "EMAIL_ADDRESS"
+        - "PHONE_NUMBER"
+        - "PERSON"
+        - "LOCATION"
+        - "DATE_TIME"
+        - "URL"
+        - "ORG"
+      include_history: true
+      description: "Block high-sensitivity PII (SSN, credit card, password, etc.) but allow common types like email, phone, name, location"
+
 # Decisions - Intelligent routing rules
 decisions:
   # Priority 203: ReMoM Algorithm with high effort
@@ -643,84 +656,31 @@ decisions:
         # Behavior on model call failure: "skip" or "fail"
         on_error: "skip"
 
-  # Priority 1004: Strict jailbreak policy for health domain (classifier)
+  # Priority 1004: Strict jailbreak policy for health domain (classifier + contrastive)
   - name: "guardrails_health_strict"
-    description: "Block strict jailbreak detections in health domain"
+    description: "Block strict jailbreak detections in health domain (classifier or contrastive)"
     priority: 1004
     rules:
       operator: "AND"
       conditions:
         - type: "domain"
           name: "health"
-        - type: "jailbreak"
-          name: "jailbreak_strict"
+        - operator: "OR"
+          conditions:
+            - type: "jailbreak"
+              name: "jailbreak_strict"
+            - type: "jailbreak"
+              name: "jailbreak_contrastive_strict"
     modelRefs:
       - model: "openai/gpt-oss-20b"
         use_reasoning: false
     plugins:
       - type: "fast_response"
         configuration:
-          message: "Your request has been declined. Attempts to bypass safety guidelines in sensitive domains are not permitted."
-
-  # Priority 1003: Strict jailbreak policy for health domain (contrastive)
-  - name: "guardrails_health_contrastive"
-    description: "Block contrastive strict jailbreak detections in health domain"
-    priority: 1003
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "domain"
-          name: "health"
-        - type: "jailbreak"
-          name: "jailbreak_contrastive_strict"
-    modelRefs:
-      - model: "openai/gpt-oss-20b"
-        use_reasoning: false
-    plugins:
-      - type: "fast_response"
-        configuration:
-          message: "Your request has been declined. Attempts to bypass safety guidelines in sensitive domains are not permitted."
-
-  # Priority 1002: Strict jailbreak policy for law domain (classifier)
-  - name: "guardrails_law_strict"
-    description: "Block strict jailbreak detections in law domain"
-    priority: 1002
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "domain"
-          name: "law"
-        - type: "jailbreak"
-          name: "jailbreak_strict"
-    modelRefs:
-      - model: "openai/gpt-oss-20b"
-        use_reasoning: false
-    plugins:
-      - type: "fast_response"
-        configuration:
-          message: "Your request has been declined. Attempts to bypass safety guidelines in sensitive domains are not permitted."
-
-  # Priority 1001: Strict jailbreak policy for law domain (contrastive)
-  - name: "guardrails_law_contrastive"
-    description: "Block contrastive strict jailbreak detections in law domain"
-    priority: 1001
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "domain"
-          name: "law"
-        - type: "jailbreak"
-          name: "jailbreak_contrastive_strict"
-    modelRefs:
-      - model: "openai/gpt-oss-20b"
-        use_reasoning: false
-    plugins:
-      - type: "fast_response"
-        configuration:
-          message: "Your request has been declined. Attempts to bypass safety guidelines in sensitive domains are not permitted."
+          message: "I am vLLM-SR, Your request has been declined. Attempts to bypass safety guidelines in sensitive domains are not permitted."
 
   # Priority 1000: General jailbreak detection (keyword + classifier + contrastive)
-  - name: "guardrails"
+  - name: "general_guardrails"
     description: "Block jailbreak attempts with signal-driven security checks"
     priority: 1000
     rules:
@@ -740,17 +700,17 @@ decisions:
     plugins:
       - type: "fast_response"
         configuration:
-          message: "I'm sorry, but I cannot process this request as it appears to violate our usage policies."
+          message: "I am vLLM-SR, I'm sorry, but I cannot process this request as it appears to violate our usage policies."
 
   # Priority 999: PII detection guardrail
   - name: "guardrails_pii"
     description: "Block requests containing disallowed PII"
     priority: 999
     rules:
-      operator: "OR"
+      operator: "AND"
       conditions:
         - type: "pii"
-          name: "pii_deny_all"
+          name: "pii_relaxed"
     modelRefs:
       - model: "openai/gpt-oss-20b"
         use_reasoning: false
@@ -1244,7 +1204,7 @@ decisions:
                         - type: "jailbreak"
                           name: "jailbreak_contrastive"
                         - type: "pii"
-                          name: "pii_deny_all"
+                          name: "pii_relaxed"
                         - type: "keyword"
                           name: "creative_keywords"
 
@@ -1280,7 +1240,7 @@ decisions:
                         - type: "jailbreak"
                           name: "jailbreak_contrastive_strict"
                         - type: "pii"
-                          name: "pii_deny_all"
+                          name: "pii_relaxed"
 
         # Branch C: Iterative refinement path (follow-up repair / clarification)
         - operator: "AND"
@@ -1308,7 +1268,7 @@ decisions:
                     - type: "jailbreak"
                       name: "jailbreak_standard"
                     - type: "pii"
-                      name: "pii_deny_all"
+                      name: "pii_relaxed"
     modelRefs:
       - model: "DeepSeek-V3.2"
         use_reasoning: true

@@ -193,7 +193,7 @@ const MiniFlowDiagram: React.FC<FlowProps> = React.memo(({ signals, decisions, m
       <rect x={colDecision - 52} y={midY - 30} width={104} height={60} rx={10}
         fill="var(--color-primary)" fillOpacity={0.12} stroke="var(--color-primary)" strokeWidth={1.5} />
       <text x={colDecision} y={midY - 6} textAnchor="middle" fill="var(--color-primary)" fontSize={11} fontWeight="bold">Decision</text>
-      <text x={colDecision} y={midY + 12} textAnchor="middle" fill="var(--color-primary)" fontSize={10.5} opacity={0.85}>{decisions} rules</text>
+      <text x={colDecision} y={midY + 12} textAnchor="middle" fill="var(--color-primary)" fontSize={10.5} opacity={0.85}>{decisions} layers</text>
 
       {/* Connector Decision → Models */}
       <line
@@ -332,7 +332,7 @@ const DashboardPage: React.FC = () => {
       <div className={styles.header}>
         <div>
           <h1 className={styles.title}>Dashboard</h1>
-          <p className={styles.subtitle}>Configuration overview &amp; system health</p>
+          <p className={styles.subtitle}>Building the System Intelligence</p>
         </div>
         <div className={styles.headerActions}>
           {lastUpdated && (
@@ -427,9 +427,9 @@ const DashboardPage: React.FC = () => {
         {/* Left: Flow Diagram */}
         <div className={styles.card}>
           <div className={styles.cardHeader}>
-            <h2 className={styles.cardTitle}>Routing Pipeline</h2>
+            <h2 className={styles.cardTitle}>Intelligence Layers</h2>
             <button className={styles.cardAction} onClick={() => navigate('/topology')}>
-              View Full Topology &rsaquo;
+              View Full Layers &rsaquo;
             </button>
           </div>
           <div className={styles.flowContainer}>
