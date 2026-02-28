@@ -256,9 +256,21 @@ def validate_signal_references(config: UserConfig) -> List[ValidationError]:
                 "jailbreak",
                 "pii",
             ]:
-                # Support sub-level references like "math_problem:hard"
-                # where "math_problem" is the defined signal and "hard" is a sub-level.
                 ref_name = condition.name
+
+                if condition.type == "complexity":
+                    # Complexity conditions are referenced as "<name>:<level>".
+                    # Validate the full reference to avoid false negatives.
+                    if ref_name not in signal_names:
+                        errors.append(
+                            ValidationError(
+                                f"Decision '{decision.name}' references unknown signal '{condition.name}'",
+                                field=f"decisions.{decision.name}.rules.conditions",
+                            )
+                        )
+                    continue
+
+                # Backward-compatible handling for other signal types.
                 if ":" in ref_name:
                     ref_name = ref_name.split(":")[0]
                 if ref_name not in signal_names:
