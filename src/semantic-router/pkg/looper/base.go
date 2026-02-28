@@ -41,6 +41,11 @@ func NewBaseLooper(cfg *config.LooperConfig) *BaseLooper {
 	}
 }
 
+// SetEndpointOverrides sets per-model endpoint URL overrides on the underlying client.
+func (l *BaseLooper) SetEndpointOverrides(overrides map[string]string) {
+	l.client.SetEndpointOverrides(overrides)
+}
+
 // Execute calls all models sequentially and aggregates the responses
 func (l *BaseLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
 	if len(req.ModelRefs) == 0 {
