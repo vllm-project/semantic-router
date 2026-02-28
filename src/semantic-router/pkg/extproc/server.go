@@ -96,6 +96,12 @@ func (s *Server) Start() error {
 		logging.Infof("Starting insecure LLM Router ExtProc server on port %d...", s.port)
 	}
 
+	maxMsgSize := config.Get().Looper.GetGRPCMaxMsgSize()
+	serverOpts = append(serverOpts,
+		grpc.MaxRecvMsgSize(maxMsgSize),
+		grpc.MaxSendMsgSize(maxMsgSize),
+	)
+	logging.Infof("gRPC max message size: %d MB", maxMsgSize/(1024*1024))
 	s.server = grpc.NewServer(serverOpts...)
 	ext_proc.RegisterExternalProcessorServer(s.server, s.service)
 

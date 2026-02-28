@@ -863,6 +863,18 @@ type LooperConfig struct {
 	// Example: "http://localhost:8080/v1/chat/completions"
 	Endpoint string `yaml:"endpoint"`
 
+	// ModelEndpoints maps model names to their dedicated API endpoints.
+	// When a model has an entry here, the looper will use it instead of the
+	// default Endpoint. This is required when different models are served by
+	// different backends (e.g., separate vLLM instances on different ports).
+	// Example: {"Qwen3-VL-32B": "http://127.0.0.1:8090/v1/chat/completions"}
+	ModelEndpoints map[string]string `yaml:"model_endpoints,omitempty"`
+
+	// GRPCMaxMsgSizeMB sets the maximum gRPC message size in megabytes for
+	// the ExtProc stream. Increase this when routing requests with large
+	// payloads such as base64-encoded screenshots. Default: 4 (gRPC default).
+	GRPCMaxMsgSizeMB int `yaml:"grpc_max_msg_size_mb,omitempty"`
+
 	// Timeout is the maximum duration for each model call (default: 30s)
 	TimeoutSeconds int `yaml:"timeout_seconds,omitempty"`
 
@@ -884,6 +896,15 @@ func (l *LooperConfig) GetTimeout() int {
 		return 30
 	}
 	return l.TimeoutSeconds
+}
+
+// GetGRPCMaxMsgSize returns the max gRPC message size in bytes.
+// Defaults to 4 MB (the standard gRPC default) when not configured.
+func (l *LooperConfig) GetGRPCMaxMsgSize() int {
+	if l.GRPCMaxMsgSizeMB <= 0 {
+		return 4 * 1024 * 1024
+	}
+	return l.GRPCMaxMsgSizeMB * 1024 * 1024
 }
 
 // RedisConfig defines the complete configuration structure for Redis cache backend.
