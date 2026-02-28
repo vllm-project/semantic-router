@@ -15,6 +15,35 @@ from cli.utils import getLogger
 log = getLogger(__name__)
 
 
+def _condition_to_dict(condition) -> Dict[str, Any]:
+    """Serialize recursive condition node to router rule dict."""
+    node: Dict[str, Any] = {}
+    ctype = getattr(condition, "type", None)
+    cname = getattr(condition, "name", None)
+    cop = getattr(condition, "operator", None)
+    cchildren = getattr(condition, "conditions", None)
+
+    if ctype is not None:
+        node["type"] = ctype
+    if cname is not None:
+        node["name"] = cname
+    if cop is not None:
+        node["operator"] = cop
+    if cchildren:
+        node["conditions"] = [_condition_to_dict(c) for c in cchildren]
+    return node
+
+
+def _iter_condition_nodes(conditions):
+    """Depth-first traversal over recursive condition trees."""
+    if not conditions:
+        return
+    for condition in conditions:
+        yield condition
+        if getattr(condition, "conditions", None):
+            yield from _iter_condition_nodes(condition.conditions)
+
+
 def translate_keyword_signals(keywords: list) -> list:
     """
     Translate keyword signals to router format.
@@ -189,12 +218,7 @@ def translate_complexity_signals(complexity_rules: list) -> list:
         if signal.description:
             rule["description"] = signal.description
         if signal.composer:
-            rule["composer"] = {
-                "operator": signal.composer.operator,
-                "conditions": [
-                    {"type": c.type, "name": c.name} for c in signal.composer.conditions
-                ],
-            }
+            rule["composer"] = _condition_to_dict(signal.composer)
         rules.append(rule)
     return rules
 
@@ -327,7 +351,7 @@ def extract_categories_from_decisions(decisions: list) -> list:
     categories = {}
 
     for decision in decisions:
-        for condition in decision.rules.conditions:
+        for condition in _iter_condition_nodes(decision.rules.conditions):
             if condition.type == "domain":
                 if condition.name not in categories:
                     categories[condition.name] = {

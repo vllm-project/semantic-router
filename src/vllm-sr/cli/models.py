@@ -2,7 +2,7 @@
 
 from typing import List, Dict, Any, Optional, Literal
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class Listener(BaseModel):
@@ -179,10 +179,41 @@ class Signals(BaseModel):
 
 
 class Condition(BaseModel):
-    """Routing condition."""
+    """Routing condition node (leaf or composite boolean expression)."""
 
-    type: str
-    name: str
+    type: Optional[str] = None
+    name: Optional[str] = None
+    operator: Optional[str] = None
+    conditions: Optional[List["Condition"]] = None
+
+    @model_validator(mode="after")
+    def validate_node_shape(self):
+        has_leaf_fields = self.type is not None or self.name is not None
+        has_operator = self.operator is not None
+
+        if has_leaf_fields and has_operator:
+            raise ValueError(
+                "condition node must be either leaf (type/name) or composite (operator/conditions), not both"
+            )
+
+        if has_operator:
+            if not self.conditions:
+                raise ValueError(
+                    "composite condition node requires non-empty conditions"
+                )
+            op = self.operator.strip().upper()
+            if op not in {"AND", "OR", "NOT"}:
+                raise ValueError("operator must be one of: AND, OR, NOT")
+            if op == "NOT" and len(self.conditions) != 1:
+                raise ValueError("NOT operator must have exactly one child condition")
+            return self
+
+        # Leaf node validation
+        if self.type is None or self.name is None:
+            raise ValueError("leaf condition node requires both type and name")
+        if self.conditions:
+            raise ValueError("leaf condition node cannot define child conditions")
+        return self
 
 
 class Rules(BaseModel):
@@ -550,14 +581,13 @@ class PluginType(str, Enum):
     """Supported plugin types."""
 
     SEMANTIC_CACHE = "semantic-cache"
-    JAILBREAK = "jailbreak"
-    PII = "pii"
     SYSTEM_PROMPT = "system_prompt"
     HEADER_MUTATION = "header_mutation"
     HALLUCINATION = "hallucination"
     ROUTER_REPLAY = "router_replay"
     MEMORY = "memory"
     RAG = "rag"
+    FAST_RESPONSE = "fast_response"
 
 
 class SemanticCachePluginConfig(BaseModel):
@@ -575,23 +605,10 @@ class SemanticCachePluginConfig(BaseModel):
     )
 
 
-class JailbreakPluginConfig(BaseModel):
-    """Configuration for jailbreak plugin."""
+class FastResponsePluginConfig(BaseModel):
+    """Configuration for fast_response plugin."""
 
-    enabled: bool
-    threshold: Optional[float] = Field(
-        default=None, ge=0.0, le=1.0, description="Threshold (0.0-1.0, default: None)"
-    )
-
-
-class PIIPluginConfig(BaseModel):
-    """Configuration for pii plugin."""
-
-    enabled: bool
-    threshold: Optional[float] = Field(
-        default=None, ge=0.0, le=1.0, description="Threshold (0.0-1.0, default: None)"
-    )
-    pii_types_allowed: Optional[List[str]] = None
+    message: str
 
 
 class SystemPromptPluginConfig(BaseModel):
@@ -937,3 +954,7 @@ class UserConfig(BaseModel):
 
     class Config:
         populate_by_name = True
+
+
+# Resolve forward references for recursive condition trees.
+Condition.model_rebuild()

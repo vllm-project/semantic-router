@@ -5,8 +5,7 @@ from cli.models import (
     UserConfig,
     PluginType,
     SemanticCachePluginConfig,
-    JailbreakPluginConfig,
-    PIIPluginConfig,
+    FastResponsePluginConfig,
     SystemPromptPluginConfig,
     HeaderMutationPluginConfig,
     HallucinationPluginConfig,
@@ -35,7 +34,19 @@ class ValidationError:
 
 
 def _is_latency_condition(condition_type: str) -> bool:
+    if not condition_type:
+        return False
     return condition_type.strip().lower() == "latency"
+
+
+def _iter_condition_nodes(conditions):
+    """Depth-first traversal over recursive condition trees."""
+    if not conditions:
+        return
+    for condition in conditions:
+        yield condition
+        if getattr(condition, "conditions", None):
+            yield from _iter_condition_nodes(condition.conditions)
 
 
 def _is_latency_aware_algorithm(decision) -> bool:
@@ -49,7 +60,7 @@ def validate_latency_compatibility(config: UserConfig) -> List[ValidationError]:
     has_legacy_conditions = any(
         _is_latency_condition(condition.type)
         for decision in config.decisions
-        for condition in decision.rules.conditions
+        for condition in _iter_condition_nodes(decision.rules.conditions)
     )
 
     if has_legacy_conditions:
@@ -210,6 +221,15 @@ def validate_signal_references(config: UserConfig) -> List[ValidationError]:
                 signal_names.add(signal.name)
         if config.signals.complexity:
             for signal in config.signals.complexity:
+                # Complexity outputs are referenced as "<name>:<level>" in decisions.
+                signal_names.add(f"{signal.name}:easy")
+                signal_names.add(f"{signal.name}:medium")
+                signal_names.add(f"{signal.name}:hard")
+        if config.signals.jailbreak:
+            for signal in config.signals.jailbreak:
+                signal_names.add(signal.name)
+        if config.signals.pii:
+            for signal in config.signals.pii:
                 signal_names.add(signal.name)
         if config.signals.modality:
             for signal in config.signals.modality:
@@ -217,16 +237,10 @@ def validate_signal_references(config: UserConfig) -> List[ValidationError]:
         if config.signals.role_bindings:
             for signal in config.signals.role_bindings:
                 signal_names.add(signal.name)
-        if config.signals.jailbreak:
-            for signal in config.signals.jailbreak:
-                signal_names.add(signal.name)
-        if config.signals.pii:
-            for signal in config.signals.pii:
-                signal_names.add(signal.name)
 
     # Check decision conditions
     for decision in config.decisions:
-        for condition in decision.rules.conditions:
+        for condition in _iter_condition_nodes(decision.rules.conditions):
             if condition.type in [
                 "keyword",
                 "embedding",
@@ -279,13 +293,13 @@ def validate_domain_references(config: UserConfig) -> List[ValidationError]:
     # If no domains defined, collect from decisions (will be auto-generated)
     if not domain_names:
         for decision in config.decisions:
-            for condition in decision.rules.conditions:
+            for condition in _iter_condition_nodes(decision.rules.conditions):
                 if condition.type == "domain":
                     domain_names.add(condition.name)
 
     # Check decision conditions
     for decision in config.decisions:
-        for condition in decision.rules.conditions:
+        for condition in _iter_condition_nodes(decision.rules.conditions):
             if condition.type == "domain":
                 if not domain_names:
                     errors.append(
@@ -420,8 +434,7 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
     # Map plugin types to their configuration models
     config_models = {
         PluginType.SEMANTIC_CACHE.value: SemanticCachePluginConfig,
-        PluginType.JAILBREAK.value: JailbreakPluginConfig,
-        PluginType.PII.value: PIIPluginConfig,
+        PluginType.FAST_RESPONSE.value: FastResponsePluginConfig,
         PluginType.SYSTEM_PROMPT.value: SystemPromptPluginConfig,
         PluginType.HEADER_MUTATION.value: HeaderMutationPluginConfig,
         PluginType.HALLUCINATION.value: HallucinationPluginConfig,
