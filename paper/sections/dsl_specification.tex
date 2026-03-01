@@ -25,30 +25,19 @@ The DSL defines five top-level block types: \texttt{SIGNAL}, \texttt{ROUTE}, \te
 
 \begin{figure}[!htbp]
 \centering
-\small
+\footnotesize
 \begin{verbatim}
-SIGNAL domain math {
-  description: "Mathematics"
-  mmlu_categories: ["math"]
-}
-SIGNAL keyword urgent {
-  operator: "any"
-  keywords: ["urgent", "asap"]
-}
+SIGNAL domain math { mmlu_categories: ["math"] }
+SIGNAL keyword urgent { operator: "any", keywords: ["urgent","asap"] }
 
-PLUGIN safe_pii pii {        # reusable template
-  enabled: true
-  pii_types_allowed: []
-}
+PLUGIN safe_pii pii { enabled: true, pii_types_allowed: [] }
 
 ROUTE math_route (description = "Math") {
   PRIORITY 100
   WHEN domain("math")
-  MODEL "qwen2.5:3b" (reasoning = true,
-                       effort = "high")
-  PLUGIN safe_pii             # reference template
+  MODEL "qwen2.5:3b" (reasoning = true, effort = "high")
+  PLUGIN safe_pii
 }
-
 ROUTE urgent_ai {
   PRIORITY 200
   WHEN keyword("urgent") AND NOT domain("math")
@@ -57,12 +46,8 @@ ROUTE urgent_ai {
   ALGORITHM confidence { threshold: 0.5 }
 }
 
-BACKEND vllm_endpoint ollama {
-  address: "127.0.0.1"
-  port: 11434
-}
-GLOBAL { default_model: "qwen2.5:3b"
-         strategy: "priority" }
+BACKEND vllm_endpoint ollama { address: "127.0.0.1", port: 11434 }
+GLOBAL { default_model: "qwen2.5:3b", strategy: "priority" }
 \end{verbatim}
 \caption{A representative DSL configuration defining two signals, a reusable plugin template, two routes with Boolean decision logic, a backend endpoint, and global settings.}
 \label{fig:dsl_example}
