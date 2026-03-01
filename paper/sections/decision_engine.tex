@@ -416,10 +416,9 @@ In our system:
 \end{itemize}
 
 \Cref{fig:moe_analogy} formalizes this correspondence.
-The key distinction from standard MoE is that our gating functions are \emph{symbolic} (Boolean formulas over interpretable signals) rather than \emph{neural} (learned linear projections followed by softmax).
-This yields two properties that neural gating lacks: (1)~\emph{formal verifiability}---the coverage and conflict analysis of the preceding subsections can prove properties about the gating behavior that are intractable for neural gates; and (2)~\emph{compositional editability}---operators can add, remove, or reorder expert gates without retraining, by editing the DSL configuration.
+Unlike standard MoE, the gates here are symbolic (Boolean formulas over interpretable signals) rather than learned softmax projections, which enables formal verifiability and compositional editability.
 
-\begin{figure*}[!ht]
+\begin{figure}[H]
   \centering
   \begin{tikzpicture}[
     box/.style={rectangle, draw, thick, rounded corners=3pt,
@@ -487,9 +486,113 @@ This yields two properties that neural gating lacks: (1)~\emph{formal verifiabil
   \draw[darr] (msel.east) -- (vsel.west);
 
   \end{tikzpicture}
-  \caption{Structural analogy between Mixture-of-Experts gating and the VSR decision engine. \textbf{Left}: In a sparse MoE layer, a learned gating network selects top-$k$ experts via softmax. \textbf{Right}: In VSR, Boolean formulas over the signal vector act as symbolic expert gates, with priority ordering implementing deterministic early-exit selection. Dashed arrows mark the structural correspondence. The key difference: MoE gates are learned and opaque; VSR gates are symbolic, verifiable, and editable.}
+  \caption{Structural analogy between Mixture-of-Experts gating and the VSR decision engine. \textbf{Left}: In a sparse MoE layer, a learned gating network selects top-$k$ experts via softmax. \textbf{Right}: In VSR, Boolean formulas over the signal vector act as symbolic expert gates, with priority ordering implementing deterministic early-exit selection. Dashed arrows mark the structural correspondence.}
   \label{fig:moe_analogy}
-\end{figure*}
+\end{figure}
+
+\subsection{Layered Entropy-Folding Interpretation}
+\label{sec:disc_entropy_folding}
+
+The priority-ordered gate stack also admits an information-theoretic interpretation as a layered uncertainty-collapse process.
+Let $g_\ell(\mathbf{s}) \in \{0,1\}$ denote the match outcome of the $\ell$-th gate under priority order, and let $Z_\ell = g_\ell(\mathbf{s})$.
+Define routing uncertainty after $\ell$ evaluated gates as:
+\begin{equation}
+  U_\ell = H(M \mid \mathbf{s}, Z_{1:\ell})
+\end{equation}
+where $M$ is the final selected model random variable.
+By the chain rule of mutual information:
+\begin{equation}
+  U_{\ell+1}
+  = U_\ell - I\!\left(M;\, Z_{\ell+1}\mid \mathbf{s}, Z_{1:\ell}\right)
+  \le U_\ell
+\end{equation}
+so each additional gate can only maintain or reduce uncertainty.
+In this sense, priority depth is \emph{control depth}: a sequence of policy constraints that folds entropy toward a deterministic choice.
+
+\begin{figure}[!ht]
+  \centering
+  \begin{tikzpicture}[
+    box/.style={rectangle, draw, thick, rounded corners=3pt,
+                minimum height=0.65cm, minimum width=3.3cm,
+                align=center, inner sep=4pt, font=\scriptsize},
+    dlayer/.style={rectangle, draw, thick, rounded corners=3pt, fill=yellow!10,
+                   minimum height=0.9cm, minimum width=3.6cm,
+                   align=center, inner sep=4pt, font=\scriptsize},
+    head/.style={rectangle, draw, thick, rounded corners=3pt, fill=green!10,
+                 minimum height=0.7cm, minimum width=3.4cm,
+                 align=center, inner sep=4pt, font=\scriptsize\bfseries},
+    proj/.style={rectangle, draw, thick, rounded corners=3pt, fill=orange!10,
+                 minimum height=0.7cm, minimum width=3.4cm,
+                 align=center, inner sep=4pt, font=\scriptsize\bfseries},
+    arr/.style={->, >=stealth, thick},
+    darr/.style={->, >=stealth, densely dashed, gray!60},
+    bar/.style={rectangle, draw, rounded corners=1pt, fill=#1, minimum height=0.28cm, anchor=west},
+    lbl/.style={font=\scriptsize, text=gray!70},
+    note/.style={rectangle, draw, rounded corners=2pt, fill=black!3,
+                 text width=4.1cm, align=left, font=\scriptsize, inner sep=4pt}
+  ]
+
+  % Title
+  \node[font=\small\bfseries] at (3.1, 9.75) {Transformer-Style Entropy Folding (Control Depth)};
+
+  % Main vertical stack
+  \node[box, fill=black!5] (inp) at (3.1, 0.6) {Input Query $r$};
+  \node[box, fill=blue!10] (emb) at (3.1, 1.7) {Hybrid Signal Embedding\\$S(r)=\mathbf{s}$};
+
+  \node[dlayer] (d1) at (3.1, 3.05) {Decision Layer 1\\$\phi_1(\mathbf{s}) \rightarrow z_1$};
+  \node[dlayer] (d2) at (3.1, 4.35) {Decision Layer 2\\$\phi_2(\mathbf{s}) \rightarrow z_2$};
+  \node[dlayer] (dL) at (3.1, 5.65) {Decision Layer $L$\\$\phi_L(\mathbf{s}) \rightarrow z_L$};
+  \node[font=\scriptsize] at (3.1, 5.0) {$\cdots$};
+
+  \node[head] (sel) at (3.1, 6.95) {Selection Head\\priority early-exit $\Rightarrow (d^*, m^*)$};
+  \node[proj] (ph) at (3.1, 7.95) {Plugin Projection Head\\$\Psi_{d^*} = \pi_n \circ \cdots \circ \pi_1$};
+  \node[box, fill=black!5] (out) at (3.1, 8.95) {Output Response};
+
+  \draw[arr] (inp) -- (emb);
+  \draw[arr] (emb) -- (d1);
+  \draw[arr] (d1) -- (d2);
+  \draw[arr] (d2) -- (dL);
+  \draw[arr] (dL) -- (sel);
+  \draw[arr] (sel) -- (ph);
+  \draw[arr] (ph) -- (out);
+
+  % Early-exit side path
+  \node[box, fill=green!5, minimum width=2.6cm, minimum height=0.6cm] (exit) at (6.9, 6.95) {early-exit capture};
+  \draw[darr] (d1.east) -- ++(0.7,0) |- (exit.west);
+  \draw[darr] (d2.east) -- ++(0.7,0) |- (exit.west);
+  \draw[darr] (dL.east) -- ++(0.7,0) |- (exit.west);
+  \draw[arr] (exit.west) -- (sel.east);
+
+  % Entropy folding track
+  \node[lbl, font=\scriptsize\bfseries] at (9.6, 7.95) {Entropy Folding};
+  \node[bar=gray!25, minimum width=2.5cm] (u0) at (8.4, 1.7) {};
+  \node[bar=blue!18, minimum width=1.9cm] (u1) at (8.4, 3.05) {};
+  \node[bar=blue!24, minimum width=1.3cm] (u2) at (8.4, 4.35) {};
+  \node[bar=blue!30, minimum width=0.75cm] (u3) at (8.4, 5.65) {};
+  \node[bar=green!22, minimum width=0.18cm] (uf) at (8.4, 6.95) {};
+  \node[lbl, anchor=west] at (11.1, 1.7) {$U_0$};
+  \node[lbl, anchor=west] at (10.5, 3.05) {$U_1$};
+  \node[lbl, anchor=west] at (9.9, 4.35) {$U_2$};
+  \node[lbl, anchor=west] at (9.35, 5.65) {$U_L$};
+  \node[lbl, anchor=west] at (8.8, 6.95) {$\approx 0$};
+  \draw[darr] (emb.east) -- ++(0.55,0) -| (u0.west);
+  \draw[darr] (d1.east) -- ++(0.55,0) -| (u1.west);
+  \draw[darr] (d2.east) -- ++(0.55,0) -| (u2.west);
+  \draw[darr] (dL.east) -- ++(0.55,0) -| (u3.west);
+  \draw[darr] (sel.east) -- ++(0.55,0) -| (uf.west);
+
+  % Boundary note
+  \node[note] at (9.9, 8.85)
+    {Structural analogy only.\\
+     This stack folds uncertainty over a shared $\mathbf{s}$\\
+     (control depth), not hidden-state updates\\
+     $h_\ell = f_\ell(h_{\ell-1})$ (representational depth).};
+
+  \end{tikzpicture}
+  \caption{Transformer-style visualization of layered control depth in VSR.
+  Signal extraction constructs a shared embedding $\mathbf{s}$; stacked decision layers apply Boolean gates $\phi_\ell(\mathbf{s})$ that progressively reduce routing uncertainty $U_\ell$; selection resolves $(d^*,m^*)$ via priority early-exit; plugin composition $\Psi_{d^*}$ acts as an output-side projection head over request/response behavior.}
+  \label{fig:entropy_folding_layers}
+\end{figure}
 
 The MoE analogy also clarifies what the system is \emph{not}: it is not a Transformer in the sequential sense.
 Transformer blocks transform the representation layer by layer---each block's output is the next block's input.
