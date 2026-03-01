@@ -29,7 +29,6 @@ interface ModelConfig {
   use_modernbert?: boolean
   threshold: number
   use_cpu: boolean
-  use_qwen3?: boolean
   use_contrastive?: boolean
   embedding_model?: string
   category_mapping_path?: string
@@ -1395,7 +1394,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   }
 
   // ============================================================================
-  // 4b. PREFERENCE MODEL SECTION (LOCAL CANDLE)
+  // 4b. PREFERENCE MODEL SECTION (CONTRASTIVE)
   // ============================================================================
 
   const renderPreferenceModel = () => {
@@ -1413,11 +1412,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
               openEditModal(
                 preferenceModel ? 'Edit Preference Model' : 'Add Preference Model',
                 preferenceModel || {
-                  model_id: '',
-                  threshold: 0,
-                  use_cpu: false,
-                  use_qwen3: true,
-                  use_contrastive: false,
+                  use_contrastive: true,
                   embedding_model: '',
                 },
                 [
@@ -1425,7 +1420,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                     name: 'use_contrastive',
                     label: 'Use Contrastive Preference',
                     type: 'boolean',
-                    description: 'Enable embedding-based contrastive routing instead of local classifier',
+                    description: 'Enable embedding-based contrastive routing instead of external LLM routing',
                   },
                   {
                     name: 'embedding_model',
@@ -1435,37 +1430,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                     placeholder: 'Select embedding model',
                     description: 'Embedding backbone for contrastive preference routing (requires embedding_models path)',
                     shouldHide: data => !data.use_contrastive,
-                  },
-                  {
-                    name: 'model_id',
-                    label: 'Model ID or Path',
-                    type: 'text',
-                    required: true,
-                    placeholder: '',
-                    description: 'Local Candle model path or HuggingFace ID for preference routing',
-                    shouldHide: data => data.use_contrastive,
-                  },
-                  {
-                    name: 'threshold',
-                    label: 'Confidence Threshold',
-                    type: 'percentage',
-                    placeholder: '0',
-                    description: 'Minimum confidence to accept a preference (0-100%, optional)',
-                    step: 1,
-                  },
-                  {
-                    name: 'use_cpu',
-                    label: 'Use CPU',
-                    type: 'boolean',
-                    description: 'Force CPU inference instead of GPU/Metal when available',
-                    shouldHide: data => data.use_contrastive,
-                  },
-                  {
-                    name: 'use_qwen3',
-                    label: 'Use Qwen3 Model',
-                    type: 'boolean',
-                    description: 'Enable Qwen3 zero-shot/fine-tuned preference classifier. Currently only Qwen3 is supported, so make sure to turn this on.',
-                    shouldHide: data => data.use_contrastive,
                   },
                 ],
                 async (data) => {
@@ -1486,10 +1450,10 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             <div className={styles.modelCard}>
               <div className={styles.modelCardHeader}>
                 <span className={styles.modelCardTitle}>
-                  {isContrastive ? 'Contrastive Preference Classifier' : 'Local Preference Classifier'}
+                  {isContrastive ? 'Contrastive Preference Classifier' : 'External Preference Classifier'}
                 </span>
                 <span className={`${styles.statusBadge} ${styles.statusActive}`}>
-                  {isContrastive ? 'Contrastive' : preferenceModel.use_cpu ? 'CPU' : 'GPU'}
+                  {isContrastive ? 'Contrastive' : 'External'}
                 </span>
               </div>
               <div className={styles.modelCardBody}>
@@ -1503,18 +1467,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
                 ) : (
                   <>
                     <div className={styles.configRow}>
-                      <span className={styles.configLabel}>Model ID</span>
-                      <span className={styles.configValue}>{preferenceModel.model_id}</span>
-                    </div>
-                    <div className={styles.configRow}>
-                      <span className={styles.configLabel}>Threshold</span>
-                      <span className={styles.configValue}>{formatThreshold(preferenceModel.threshold || 0)}</span>
-                    </div>
-                    <div className={styles.configRow}>
-                      <span className={styles.configLabel}>Qwen3</span>
-                      <span className={`${styles.statusBadge} ${preferenceModel.use_qwen3 ? styles.statusActive : styles.statusInactive}`}>
-                        {preferenceModel.use_qwen3 ? '✓ Enabled' : '✗ Disabled'}
-                      </span>
+                      <span className={styles.configLabel}>Mode</span>
+                      <span className={styles.configValue}>Uses external LLM preference classifier</span>
                     </div>
                   </>
                 )}

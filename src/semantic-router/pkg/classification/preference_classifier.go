@@ -5,10 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
-	candle "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -29,13 +27,6 @@ type PreferenceClassifier struct {
 	userPromptTemplate string
 	contrastive        *ContrastivePreferenceClassifier
 
-	useLocal       bool
-	localModelID   string
-	localUseCPU    bool
-	localThresh    float32
-	localInitOnce  sync.Once
-	localInitErr   error
-	useQwen        bool
 	useContrastive bool
 }
 
@@ -57,20 +48,8 @@ func NewPreferenceClassifier(externalCfg *config.ExternalModelConfig, rules []co
 		}, nil
 	}
 
-	// Prefer local (Candle) when configured
-	if localCfg != nil && localCfg.ModelID != "" {
-		return &PreferenceClassifier{
-			preferenceRules: rules,
-			useLocal:        true,
-			useQwen:         localCfg.UseQwen3,
-			localModelID:    localCfg.ModelID,
-			localUseCPU:     localCfg.UseCPU,
-			localThresh:     localCfg.Threshold,
-		}, nil
-	}
-
 	if externalCfg == nil {
-		return nil, fmt.Errorf("external model config is required when local preference model is not set")
+		return nil, fmt.Errorf("external model config is required when contrastive preference classifier is not enabled")
 	}
 
 	if externalCfg.ModelEndpoint.Address == "" {
@@ -140,16 +119,6 @@ func (p *PreferenceClassifier) Classify(conversationJSON string) (*PreferenceRes
 		return result, nil
 	}
 
-	if p.useLocal {
-		result, err := p.classifyLocal(conversationJSON)
-		if err != nil {
-			return nil, err
-		}
-		logging.Infof("Preference classification: preference=%s, latency=%.3fs",
-			result.Preference, time.Since(start).Seconds())
-		return result, nil
-	}
-
 	// Build routes JSON
 	routesJSON, err := p.buildRoutesJSON()
 	if err != nil {
@@ -185,49 +154,6 @@ func (p *PreferenceClassifier) Classify(conversationJSON string) (*PreferenceRes
 		result.Preference, time.Since(start).Seconds())
 
 	return result, nil
-}
-
-// classifyLocal runs preference classification using local Candle Qwen3
-func (p *PreferenceClassifier) classifyLocal(conversationJSON string) (*PreferenceResult, error) {
-	// Initialize model once
-	p.localInitOnce.Do(func() {
-		if p.useQwen {
-			p.localInitErr = candle.InitQwen3PreferenceClassifier(p.localModelID, p.localUseCPU)
-		} else {
-			p.localInitErr = fmt.Errorf("qwen3 preference required but useQwen flag is false")
-		}
-	})
-
-	if p.localInitErr != nil {
-		return nil, fmt.Errorf("failed to initialize local preference model: %w", p.localInitErr)
-	}
-
-	labels := make([]string, 0, len(p.preferenceRules))
-	for _, rule := range p.preferenceRules {
-		labels = append(labels, rule.Name)
-	}
-
-	result, err := candle.ClassifyQwen3Preference(conversationJSON, labels)
-	if err != nil {
-		return nil, fmt.Errorf("local preference classification failed: %w", err)
-	}
-
-	if result.Class < 0 || result.Class >= len(p.preferenceRules) {
-		return nil, fmt.Errorf("predicted class %d out of range for %d preference rules", result.Class, len(p.preferenceRules))
-	}
-
-	// Apply optional confidence threshold
-	conf := result.Confidence
-	if p.localThresh > 0 && conf < p.localThresh {
-		return nil, fmt.Errorf("preference confidence %.3f below threshold %.3f", conf, p.localThresh)
-	}
-
-	matchedRule := p.preferenceRules[result.Class]
-
-	return &PreferenceResult{
-		Preference: matchedRule.Name,
-		Confidence: conf,
-	}, nil
 }
 
 // buildRoutesJSON builds the routes JSON array from preference rules
@@ -291,11 +217,6 @@ func (p *PreferenceClassifier) IsInitialized() bool {
 
 	if p.useContrastive {
 		return p.contrastive != nil
-	}
-
-	if p.useLocal {
-		// Initialization occurs lazily; presence of struct is enough
-		return p.localModelID != ""
 	}
 
 	return p.client != nil
