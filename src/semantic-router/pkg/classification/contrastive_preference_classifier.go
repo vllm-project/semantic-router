@@ -35,7 +35,7 @@ func NewContrastivePreferenceClassifier(rules []config.PreferenceRule, modelType
 	}
 
 	if modelType == "" {
-		modelType = "qwen3"
+		modelType = "mmbert"
 	}
 
 	ruleThresholds := make(map[string]float32, len(rules))
