@@ -1,5 +1,6 @@
 # vLLM Semantic Router Configuration for AMD ROCm
 # Demonstrates intelligent routing with keyword, domain, embedding, language, fact_check, jailbreak, and pii signals
+# Domain-specific PII guardrails: economics domain uses pii_relaxed to block high-sensitivity PII (SSN, credit card, etc.)
 # Simulates model selection with multiple model names pointing to the same vLLM endpoint
 
 version: v0.1

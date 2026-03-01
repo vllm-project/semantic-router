@@ -1877,7 +1877,8 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 						}
 						for _, entity := range cached.result.Entities {
 							if entity.Confidence >= rule.Threshold {
-								entityTypes[entity.EntityType] = true
+								translatedType := c.PIIMapping.TranslatePIIType(entity.EntityType)
+								entityTypes[translatedType] = true
 							}
 						}
 					}
