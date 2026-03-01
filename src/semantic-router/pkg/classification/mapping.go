@@ -105,44 +105,47 @@ func (pm *PIIMapping) GetPIITypeFromIndex(classIndex int) (string, bool) {
 
 // TranslatePIIType translates a PII type from Rust binding format to named type.
 // Handles formats like "class_6" → "DATE_TIME" and passes through already-named types.
-// Also strips BIO prefixes (B-PERSON → PERSON).
+// Also strips BIO prefixes (B-PERSON → PERSON, I-DATE_TIME → DATE_TIME).
 func (pm *PIIMapping) TranslatePIIType(rawType string) string {
 	if pm == nil {
 		return rawType
 	}
 
-	// Check if it's already a known label (exact match or in IdxToLabel values)
+	// Strip BIO prefix first, before any label lookup.
+	// Models using BIO tagging emit labels like "B-PERSON" / "I-PERSON"; the
+	// allow-list (and the rest of the system) uses the bare form "PERSON".
+	normalized := rawType
+	if len(rawType) > 2 && rawType[1] == '-' {
+		prefix := rawType[0]
+		if prefix == 'B' || prefix == 'I' || prefix == 'E' {
+			normalized = rawType[2:]
+		}
+	}
+
+	// Check if it's already a known label (exact match in IdxToLabel values)
 	for _, label := range pm.IdxToLabel {
-		if rawType == label {
-			return rawType // Already a proper label name
+		if normalized == label {
+			return normalized
 		}
 	}
 
 	// Check if it's in class_X format
-	if len(rawType) > 6 && rawType[:6] == "class_" {
-		indexStr := rawType[6:]
+	if len(normalized) > 6 && normalized[:6] == "class_" {
+		indexStr := normalized[6:]
 		if label, ok := pm.IdxToLabel[indexStr]; ok {
 			return label
 		}
 	}
 
 	// Check if it's in LABEL_X format (from Rust binding)
-	if len(rawType) > 6 && rawType[:6] == "LABEL_" {
-		indexStr := rawType[6:]
+	if len(normalized) > 6 && normalized[:6] == "LABEL_" {
+		indexStr := normalized[6:]
 		if label, ok := pm.IdxToLabel[indexStr]; ok {
 			return label
 		}
 	}
 
-	// Strip BIO prefix if present (B-PERSON → PERSON, I-DATE_TIME → DATE_TIME)
-	if len(rawType) > 2 && rawType[1] == '-' {
-		prefix := rawType[0]
-		if prefix == 'B' || prefix == 'I' || prefix == 'O' || prefix == 'E' {
-			return rawType[2:]
-		}
-	}
-
-	return rawType
+	return normalized
 }
 
 // GetJailbreakTypeFromIndex converts a class index to jailbreak type name using the mapping
