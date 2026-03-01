@@ -582,6 +582,94 @@ var _ = Describe("PII detection", func() {
 	})
 })
 
+// TestTranslatePIIType verifies that TranslatePIIType correctly strips BIO prefixes
+// from both the raw input and from labels returned by the mapping lookup.
+// Regression test for: mapping files that store BIO-tagged values (e.g. "I-PERSON")
+// caused LABEL_X / class_X lookups to return the raw BIO label, bypassing the
+// allow-list check and producing spurious pii_types_allowed violations.
+func TestTranslatePIIType(t *testing.T) {
+	// Mapping that stores BIO-tagged labels, as produced by some real model configs.
+	bioTaggedMapping := &PIIMapping{
+		LabelToIdx: map[string]int{"B-PERSON": 1, "I-PERSON": 2, "B-EMAIL_ADDRESS": 3, "I-EMAIL_ADDRESS": 4},
+		IdxToLabel: map[string]string{"1": "B-PERSON", "2": "I-PERSON", "3": "B-EMAIL_ADDRESS", "4": "I-EMAIL_ADDRESS"},
+	}
+	// Mapping that stores plain labels (no BIO prefix).
+	plainMapping := &PIIMapping{
+		LabelToIdx: map[string]int{"PERSON": 1, "EMAIL_ADDRESS": 2},
+		IdxToLabel: map[string]string{"1": "PERSON", "2": "EMAIL_ADDRESS"},
+	}
+
+	tests := []struct {
+		name    string
+		mapping *PIIMapping
+		input   string
+		want    string
+	}{
+		// --- BIO-tagged mapping, LABEL_X format (the real-world bug case) ---
+		{
+			name:    "LABEL_2 with BIO mapping returns bare PERSON",
+			mapping: bioTaggedMapping,
+			input:   "LABEL_2",
+			want:    "PERSON",
+		},
+		{
+			name:    "LABEL_1 with BIO mapping returns bare PERSON",
+			mapping: bioTaggedMapping,
+			input:   "LABEL_1",
+			want:    "PERSON",
+		},
+		{
+			name:    "LABEL_4 with BIO mapping returns bare EMAIL_ADDRESS",
+			mapping: bioTaggedMapping,
+			input:   "LABEL_4",
+			want:    "EMAIL_ADDRESS",
+		},
+		// --- BIO-tagged mapping, class_X format ---
+		{
+			name:    "class_2 with BIO mapping returns bare PERSON",
+			mapping: bioTaggedMapping,
+			input:   "class_2",
+			want:    "PERSON",
+		},
+		// --- BIO input stripped before mapping lookup ---
+		{
+			name:    "I-PERSON raw input stripped to PERSON",
+			mapping: plainMapping,
+			input:   "I-PERSON",
+			want:    "PERSON",
+		},
+		{
+			name:    "B-EMAIL_ADDRESS raw input stripped to EMAIL_ADDRESS",
+			mapping: plainMapping,
+			input:   "B-EMAIL_ADDRESS",
+			want:    "EMAIL_ADDRESS",
+		},
+		// --- Plain mapping, already-named type ---
+		{
+			name:    "PERSON passes through plain mapping unchanged",
+			mapping: plainMapping,
+			input:   "PERSON",
+			want:    "PERSON",
+		},
+		// --- nil mapping still strips BIO ---
+		{
+			name:    "nil mapping strips I-PERSON",
+			mapping: nil,
+			input:   "I-PERSON",
+			want:    "PERSON",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.mapping.TranslatePIIType(tt.input)
+			if got != tt.want {
+				t.Errorf("TranslatePIIType(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestUpdateBestModel(t *testing.T) {
 	classifier := &Classifier{}
 
