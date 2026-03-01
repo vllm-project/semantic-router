@@ -91,11 +91,7 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     }
 }
 
-fn encode_text(
-    model: &MultiModalEmbeddingModel,
-    tokenizer: &Tokenizer,
-    text: &str,
-) -> Vec<f32> {
+fn encode_text(model: &MultiModalEmbeddingModel, tokenizer: &Tokenizer, text: &str) -> Vec<f32> {
     let encoding = tokenizer.encode(text, true).unwrap();
     let ids: Vec<u32> = encoding.get_ids().to_vec();
     let mask: Vec<u32> = encoding
@@ -132,8 +128,8 @@ fn main() -> anyhow::Result<()> {
     println!("  Embedding dim: {}", model.config().embedding_dim);
 
     let tokenizer_path = format!("{}/tokenizer.json", model_path);
-    let tokenizer = Tokenizer::from_file(&tokenizer_path)
-        .map_err(|e| anyhow::anyhow!("tokenizer: {:?}", e))?;
+    let tokenizer =
+        Tokenizer::from_file(&tokenizer_path).map_err(|e| anyhow::anyhow!("tokenizer: {:?}", e))?;
 
     // ── Download real images ──
     println!("\n[2/6] Downloading copyright-free images from Wikimedia Commons...");
@@ -218,7 +214,11 @@ fn main() -> anyhow::Result<()> {
         sims.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
 
         let best = sims[0].0;
-        let marker = if best == *expected_match { "OK" } else { "MISS" };
+        let marker = if best == *expected_match {
+            "OK"
+        } else {
+            "MISS"
+        };
         println!(
             "  [{}] \"{}\": best={} ({:.4})  | {}",
             marker,
@@ -242,7 +242,10 @@ fn main() -> anyhow::Result<()> {
         let shape = emb.dims().to_vec();
         let emb_vec: Vec<f32> = emb.squeeze(0)?.to_vec1()?;
         let norm: f32 = emb_vec.iter().map(|x| x * x).sum::<f32>().sqrt();
-        println!("  cat (base64) dim={}: shape={:?}, norm={:.4}", dim, shape, norm);
+        println!(
+            "  cat (base64) dim={}: shape={:?}, norm={:.4}",
+            dim, shape, norm
+        );
     }
 
     println!("\n=== All tests passed ===");

@@ -635,10 +635,9 @@ impl std::fmt::Debug for DualPathModel {
             DualPathModel::MmBertEmbedding => {
                 f.debug_struct("DualPathModel::MmBertEmbedding").finish()
             }
-            DualPathModel::MultiModalEmbedding => {
-                f.debug_struct("DualPathModel::MultiModalEmbedding")
-                    .finish()
-            }
+            DualPathModel::MultiModalEmbedding => f
+                .debug_struct("DualPathModel::MultiModalEmbedding")
+                .finish(),
         }
     }
 }

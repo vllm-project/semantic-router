@@ -502,7 +502,10 @@ impl DualPathUnifiedClassifier {
             ModelType::Traditional => {
                 self.classify_with_traditional_path_optimized(texts, tasks, start_time)
             }
-            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding | ModelType::MmBertEmbedding | ModelType::MultiModalEmbedding => {
+            ModelType::Qwen3Embedding
+            | ModelType::GemmaEmbedding
+            | ModelType::MmBertEmbedding
+            | ModelType::MultiModalEmbedding => {
                 return Err(UnifiedClassifierError::ProcessingError(
                     format!(
                         "Embedding model {:?} does not support classification tasks. \
@@ -755,8 +758,10 @@ impl DualPathUnifiedClassifier {
                 stats.traditional_total_time += result.total_processing_time_ms;
                 stats.traditional_request_count += 1;
             }
-            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding | ModelType::MmBertEmbedding | ModelType::MultiModalEmbedding => {
-            }
+            ModelType::Qwen3Embedding
+            | ModelType::GemmaEmbedding
+            | ModelType::MmBertEmbedding
+            | ModelType::MultiModalEmbedding => {}
         }
     }
 
@@ -1097,9 +1102,10 @@ impl DualPathUnifiedClassifier {
                 // Traditional is the baseline
                 0.0
             }
-            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding | ModelType::MmBertEmbedding | ModelType::MultiModalEmbedding => {
-                0.0
-            }
+            ModelType::Qwen3Embedding
+            | ModelType::GemmaEmbedding
+            | ModelType::MmBertEmbedding
+            | ModelType::MultiModalEmbedding => 0.0,
         }
     }
 

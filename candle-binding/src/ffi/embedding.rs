@@ -41,17 +41,15 @@ static STANDALONE_MULTIMODAL: OnceLock<(MultiModalEmbeddingModel, MmTokenizer, S
 
 /// Get a reference to the multimodal model + tokenizer, checking standalone first
 /// then falling back to the factory.
-fn get_multimodal_refs() -> Option<(
-    &'static MultiModalEmbeddingModel,
-    &'static MmTokenizer,
-)> {
+fn get_multimodal_refs() -> Option<(&'static MultiModalEmbeddingModel, &'static MmTokenizer)> {
     if let Some((model, tokenizer, _)) = STANDALONE_MULTIMODAL.get() {
         return Some((model, tokenizer));
     }
     if let Some(factory) = GLOBAL_MODEL_FACTORY.get() {
-        if let (Some(model), Some(tokenizer)) =
-            (factory.get_multimodal_model(), factory.get_multimodal_tokenizer())
-        {
+        if let (Some(model), Some(tokenizer)) = (
+            factory.get_multimodal_model(),
+            factory.get_multimodal_tokenizer(),
+        ) {
             return Some((model, tokenizer));
         }
     }
@@ -794,8 +792,8 @@ fn generate_multimodal_text_embedding(
 ) -> Result<Vec<f32>, String> {
     use candle_core::Tensor;
 
-    let (model, tokenizer) = get_multimodal_refs()
-        .ok_or_else(|| "Multi-modal model not available".to_string())?;
+    let (model, tokenizer) =
+        get_multimodal_refs().ok_or_else(|| "Multi-modal model not available".to_string())?;
 
     let encoding = tokenizer
         .encode(text, true)
@@ -838,8 +836,8 @@ fn generate_multimodal_text_embeddings_batch(
     target_layer: Option<usize>,
     target_dim: Option<usize>,
 ) -> Result<Vec<Vec<f32>>, String> {
-    let (model, tokenizer) = get_multimodal_refs()
-        .ok_or_else(|| "Multi-modal model not available".to_string())?;
+    let (model, tokenizer) =
+        get_multimodal_refs().ok_or_else(|| "Multi-modal model not available".to_string())?;
 
     let embeddings = model
         .encode_text_batch_with_matryoshka(tokenizer, texts, 512, target_layer, target_dim)
@@ -2227,7 +2225,9 @@ pub extern "C" fn init_multimodal_embedding_model(
     }
 
     // Factory already exists — load the multimodal model into the standalone global.
-    println!("INFO: ModelFactory already initialized, loading multimodal model into standalone storage");
+    println!(
+        "INFO: ModelFactory already initialized, loading multimodal model into standalone storage"
+    );
     let model = match MultiModalEmbeddingModel::load(&path, &device) {
         Ok(m) => m,
         Err(e) => {
@@ -2239,7 +2239,10 @@ pub extern "C" fn init_multimodal_embedding_model(
     let tokenizer = match Tokenizer::from_file(&tokenizer_path) {
         Ok(t) => t,
         Err(e) => {
-            eprintln!("ERROR: Failed to load multi-modal tokenizer from {}: {:?}", tokenizer_path, e);
+            eprintln!(
+                "ERROR: Failed to load multi-modal tokenizer from {}: {:?}",
+                tokenizer_path, e
+            );
             return false;
         }
     };
@@ -2320,7 +2323,11 @@ pub extern "C" fn multimodal_encode_text(
     };
 
     let ids: Vec<u32> = encoding.get_ids().to_vec();
-    let mask: Vec<u32> = encoding.get_attention_mask().iter().map(|&x| x as u32).collect();
+    let mask: Vec<u32> = encoding
+        .get_attention_mask()
+        .iter()
+        .map(|&x| x as u32)
+        .collect();
     let seq_len = ids.len();
 
     let device = model.device();
@@ -2361,10 +2368,7 @@ pub extern "C" fn multimodal_encode_text(
         }
     };
 
-    let embedding_vec = match embedding
-        .squeeze(0)
-        .and_then(|t| t.to_vec1::<f32>())
-    {
+    let embedding_vec = match embedding.squeeze(0).and_then(|t| t.to_vec1::<f32>()) {
         Ok(v) => v,
         Err(e) => {
             eprintln!("Error: embedding conversion failed: {:?}", e);
@@ -2466,10 +2470,7 @@ pub extern "C" fn multimodal_encode_image(
         }
     };
 
-    let embedding_vec = match embedding
-        .squeeze(0)
-        .and_then(|t| t.to_vec1::<f32>())
-    {
+    let embedding_vec = match embedding.squeeze(0).and_then(|t| t.to_vec1::<f32>()) {
         Ok(v) => v,
         Err(e) => {
             eprintln!("Error: embedding conversion failed: {:?}", e);
@@ -2571,10 +2572,7 @@ pub extern "C" fn multimodal_encode_audio(
         }
     };
 
-    let embedding_vec = match embedding
-        .squeeze(0)
-        .and_then(|t| t.to_vec1::<f32>())
-    {
+    let embedding_vec = match embedding.squeeze(0).and_then(|t| t.to_vec1::<f32>()) {
         Ok(v) => v,
         Err(e) => {
             eprintln!("Error: embedding conversion failed: {:?}", e);

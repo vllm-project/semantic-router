@@ -225,7 +225,10 @@ impl DualPathConfig {
             ModelType::LoRA => {
                 config.global.path_selection = PathSelectionStrategy::AlwaysLoRA;
             }
-            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding | ModelType::MmBertEmbedding | ModelType::MultiModalEmbedding => {
+            ModelType::Qwen3Embedding
+            | ModelType::GemmaEmbedding
+            | ModelType::MmBertEmbedding
+            | ModelType::MultiModalEmbedding => {
                 config.global.path_selection = PathSelectionStrategy::Automatic;
             }
         }
@@ -291,9 +294,10 @@ impl DualPathConfig {
         match model_type {
             ModelType::Traditional => self.traditional.confidence_threshold,
             ModelType::LoRA => self.lora.confidence_threshold,
-            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding | ModelType::MmBertEmbedding | ModelType::MultiModalEmbedding => {
-                0.0
-            }
+            ModelType::Qwen3Embedding
+            | ModelType::GemmaEmbedding
+            | ModelType::MmBertEmbedding
+            | ModelType::MultiModalEmbedding => 0.0,
         }
     }
 }

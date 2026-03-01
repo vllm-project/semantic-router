@@ -200,11 +200,7 @@ impl BertEmbeddings {
         })
     }
 
-    fn forward(
-        &self,
-        input_ids: &Tensor,
-        token_type_ids: &Tensor,
-    ) -> candle_core::Result<Tensor> {
+    fn forward(&self, input_ids: &Tensor, token_type_ids: &Tensor) -> candle_core::Result<Tensor> {
         let seq_len = input_ids.dim(1)?;
         let position_ids =
             Tensor::arange(0u32, seq_len as u32, input_ids.device())?.unsqueeze(0)?;
@@ -264,7 +260,10 @@ impl BertSelfAttention {
             .transpose(1, 2)?;
 
         let scale = (self.head_dim as f64).powf(-0.5);
-        let scores = (q.contiguous()?.matmul(&k.transpose(D::Minus2, D::Minus1)?.contiguous()?)? * scale)?;
+        let scores = (q
+            .contiguous()?
+            .matmul(&k.transpose(D::Minus2, D::Minus1)?.contiguous()?)?
+            * scale)?;
         let scores = scores.broadcast_add(attention_mask)?;
         let attn = candle_nn::ops::softmax(&scores, D::Minus1)?;
         let out = attn.matmul(&v.contiguous()?)?;
@@ -393,11 +392,7 @@ impl MiniLMEncoder {
         Ok(Self { embeddings, layers })
     }
 
-    fn forward(
-        &self,
-        input_ids: &Tensor,
-        attention_mask: &Tensor,
-    ) -> candle_core::Result<Tensor> {
+    fn forward(&self, input_ids: &Tensor, attention_mask: &Tensor) -> candle_core::Result<Tensor> {
         self.forward_to_layer(input_ids, attention_mask, self.layers.len())
     }
 
@@ -456,8 +451,11 @@ impl SigLIPPatchEmbedding {
             },
             vb.pp("patch_embedding"),
         )?;
-        let position_embedding =
-            embedding(num_patches, config.image_hidden_size, vb.pp("position_embedding"))?;
+        let position_embedding = embedding(
+            num_patches,
+            config.image_hidden_size,
+            vb.pp("position_embedding"),
+        )?;
 
         Ok(Self {
             projection,
@@ -517,7 +515,10 @@ impl SigLIPSelfAttention {
             .transpose(1, 2)?;
 
         let scale = (self.head_dim as f64).powf(-0.5);
-        let attn = (q.contiguous()?.matmul(&k.transpose(D::Minus2, D::Minus1)?.contiguous()?)? * scale)?;
+        let attn = (q
+            .contiguous()?
+            .matmul(&k.transpose(D::Minus2, D::Minus1)?.contiguous()?)?
+            * scale)?;
         let attn = candle_nn::ops::softmax(&attn, D::Minus1)?;
         let out = attn.matmul(&v.contiguous()?)?;
         out.transpose(1, 2)?
@@ -604,8 +605,7 @@ impl SigLIPVisionEncoder {
                 config,
             )?);
         }
-        let post_layernorm =
-            layer_norm(config.image_hidden_size, 1e-6, vb.pp("post_layernorm"))?;
+        let post_layernorm = layer_norm(config.image_hidden_size, 1e-6, vb.pp("post_layernorm"))?;
         let head = linear(
             config.image_hidden_size,
             config.image_hidden_size,
@@ -725,7 +725,10 @@ impl WhisperSelfAttention {
             .transpose(1, 2)?;
 
         let scale = (self.head_dim as f64).powf(-0.5);
-        let attn = (q.contiguous()?.matmul(&k.transpose(D::Minus2, D::Minus1)?.contiguous()?)? * scale)?;
+        let attn = (q
+            .contiguous()?
+            .matmul(&k.transpose(D::Minus2, D::Minus1)?.contiguous()?)?
+            * scale)?;
         let attn = candle_nn::ops::softmax(&attn, D::Minus1)?;
         let out = attn.matmul(&v.contiguous()?)?;
         out.transpose(1, 2)?
@@ -872,16 +875,13 @@ impl MultiModalEmbeddingModel {
         device: &Device,
     ) -> UnifiedResult<Self> {
         // Text encoder: weights under text_encoder.encoder.*
-        let text_encoder =
-            MiniLMEncoder::load(vb.pp("text_encoder.encoder"), config).map_err(|e| {
-                from_candle_error(e, "failed to load MiniLM text encoder", None)
-            })?;
+        let text_encoder = MiniLMEncoder::load(vb.pp("text_encoder.encoder"), config)
+            .map_err(|e| from_candle_error(e, "failed to load MiniLM text encoder", None))?;
 
         // Image encoder: weights under image_encoder.vision_encoder.*
         let image_encoder =
-            SigLIPVisionEncoder::load(vb.pp("image_encoder.vision_encoder"), config).map_err(
-                |e| from_candle_error(e, "failed to load SigLIP image encoder", None),
-            )?;
+            SigLIPVisionEncoder::load(vb.pp("image_encoder.vision_encoder"), config)
+                .map_err(|e| from_candle_error(e, "failed to load SigLIP image encoder", None))?;
 
         // Image projection: 768 → 384
         let image_projection = linear(
@@ -892,8 +892,7 @@ impl MultiModalEmbeddingModel {
         .map_err(|e| from_candle_error(e, "failed to load image projection", None))?;
 
         // Audio encoder: weights under audio_encoder.encoder.* (optional)
-        let audio_encoder =
-            WhisperEncoder::load(vb.pp("audio_encoder.encoder"), config).ok();
+        let audio_encoder = WhisperEncoder::load(vb.pp("audio_encoder.encoder"), config).ok();
 
         Ok(Self {
             text_encoder,
@@ -970,9 +969,8 @@ impl MultiModalEmbeddingModel {
         let mask = match attention_mask {
             Some(m) => m.clone(),
             None => {
-                default_mask =
-                    Tensor::ones((batch_size, seq_len), DType::U32, &self.device)
-                        .map_err(|e| from_candle_error(e, "create default mask", None))?;
+                default_mask = Tensor::ones((batch_size, seq_len), DType::U32, &self.device)
+                    .map_err(|e| from_candle_error(e, "create default mask", None))?;
                 default_mask
             }
         };
@@ -1326,8 +1324,7 @@ mod integration_tests {
         let model =
             MultiModalEmbeddingModel::load(&model_path, &device).expect("Failed to load model");
         let tokenizer_path = format!("{}/tokenizer.json", model_path);
-        let tokenizer =
-            Tokenizer::from_file(&tokenizer_path).expect("Failed to load tokenizer");
+        let tokenizer = Tokenizer::from_file(&tokenizer_path).expect("Failed to load tokenizer");
         (model, tokenizer)
     }
 
@@ -1412,7 +1409,11 @@ mod integration_tests {
         let (model, tokenizer) = load_model_and_tokenizer();
 
         let cat = to_vec(&encode_text_str(&model, &tokenizer, "A fluffy orange cat"));
-        let dog = to_vec(&encode_text_str(&model, &tokenizer, "A golden retriever dog"));
+        let dog = to_vec(&encode_text_str(
+            &model,
+            &tokenizer,
+            "A golden retriever dog",
+        ));
         let car = to_vec(&encode_text_str(&model, &tokenizer, "A red sports car"));
 
         let cat_dog = cosine_sim(&cat, &dog);
@@ -1445,12 +1446,7 @@ mod integration_tests {
 
         for dim in [32, 64, 128, 256, 384] {
             let emb = model
-                .encode_text_with_matryoshka(
-                    &input_ids,
-                    Some(&attention_mask),
-                    None,
-                    Some(dim),
-                )
+                .encode_text_with_matryoshka(&input_ids, Some(&attention_mask), None, Some(dim))
                 .unwrap_or_else(|e| panic!("Failed at dim {}: {:?}", dim, e));
             assert_eq!(emb.dims(), &[1, dim], "dim mismatch for target {}", dim);
             assert_unit_norm(&emb, &format!("text MRL dim={}", dim));
@@ -1475,12 +1471,7 @@ mod integration_tests {
 
         for layer in 1..=6 {
             let emb = model
-                .encode_text_with_matryoshka(
-                    &input_ids,
-                    Some(&attention_mask),
-                    Some(layer),
-                    None,
-                )
+                .encode_text_with_matryoshka(&input_ids, Some(&attention_mask), Some(layer), None)
                 .unwrap_or_else(|e| panic!("Failed at layer {}: {:?}", layer, e));
             assert_eq!(emb.dims(), &[1, 384]);
             assert_unit_norm(&emb, &format!("text layer={}", layer));
@@ -1688,7 +1679,9 @@ mod integration_tests {
         let bytes = download_bytes(WIKI_CAT_URL);
         let tensor = image_bytes_to_tensor(&bytes, model.device());
 
-        let emb = model.encode_image(&tensor).expect("encode cat image failed");
+        let emb = model
+            .encode_image(&tensor)
+            .expect("encode cat image failed");
         assert_eq!(emb.dims(), &[1, 384]);
         assert_unit_norm(&emb, "real cat image");
     }
@@ -1700,7 +1693,9 @@ mod integration_tests {
         let bytes = download_bytes(WIKI_DOG_URL);
         let tensor = image_bytes_to_tensor(&bytes, model.device());
 
-        let emb = model.encode_image(&tensor).expect("encode dog image failed");
+        let emb = model
+            .encode_image(&tensor)
+            .expect("encode dog image failed");
         assert_eq!(emb.dims(), &[1, 384]);
         assert_unit_norm(&emb, "real dog image");
     }
@@ -1712,7 +1707,9 @@ mod integration_tests {
         let bytes = download_bytes(WIKI_CAR_URL);
         let tensor = image_bytes_to_tensor(&bytes, model.device());
 
-        let emb = model.encode_image(&tensor).expect("encode car image failed");
+        let emb = model
+            .encode_image(&tensor)
+            .expect("encode car image failed");
         assert_eq!(emb.dims(), &[1, 384]);
         assert_unit_norm(&emb, "real car image");
     }
@@ -1725,17 +1722,26 @@ mod integration_tests {
 
         let cat_emb = to_vec(
             &model
-                .encode_image(&image_bytes_to_tensor(&download_bytes(WIKI_CAT_URL), device))
+                .encode_image(&image_bytes_to_tensor(
+                    &download_bytes(WIKI_CAT_URL),
+                    device,
+                ))
                 .unwrap(),
         );
         let dog_emb = to_vec(
             &model
-                .encode_image(&image_bytes_to_tensor(&download_bytes(WIKI_DOG_URL), device))
+                .encode_image(&image_bytes_to_tensor(
+                    &download_bytes(WIKI_DOG_URL),
+                    device,
+                ))
                 .unwrap(),
         );
         let car_emb = to_vec(
             &model
-                .encode_image(&image_bytes_to_tensor(&download_bytes(WIKI_CAR_URL), device))
+                .encode_image(&image_bytes_to_tensor(
+                    &download_bytes(WIKI_CAR_URL),
+                    device,
+                ))
                 .unwrap(),
         );
 
@@ -1780,7 +1786,9 @@ mod integration_tests {
         let bytes = download_bytes(WIKI_CAT_URL);
         let tensor = base64_roundtrip_to_tensor(&bytes, model.device());
 
-        let emb = model.encode_image(&tensor).expect("base64 image encode failed");
+        let emb = model
+            .encode_image(&tensor)
+            .expect("base64 image encode failed");
         assert_eq!(emb.dims(), &[1, 384]);
         assert_unit_norm(&emb, "base64 cat image");
     }
@@ -1812,7 +1820,11 @@ mod integration_tests {
         let (model, _tokenizer) = load_model_and_tokenizer();
         let device = model.device();
 
-        for (name, url) in [("cat", WIKI_CAT_URL), ("dog", WIKI_DOG_URL), ("car", WIKI_CAR_URL)] {
+        for (name, url) in [
+            ("cat", WIKI_CAT_URL),
+            ("dog", WIKI_DOG_URL),
+            ("car", WIKI_CAR_URL),
+        ] {
             let bytes = download_bytes(url);
             let raw_emb = to_vec(
                 &model
@@ -1951,11 +1963,7 @@ mod integration_tests {
                 .unwrap(),
         );
 
-        let queries = [
-            "a photo of a cat",
-            "a photo of a dog",
-            "a photo of a car",
-        ];
+        let queries = ["a photo of a cat", "a photo of a dog", "a photo of a car"];
         let image_embs = [("cat", &cat_emb), ("dog", &dog_emb), ("car", &car_emb)];
 
         for query in &queries {
@@ -2008,12 +2016,7 @@ mod integration_tests {
 
         for dim in [64, 128, 256, 384] {
             let text_emb = model
-                .encode_text_with_matryoshka(
-                    &input_ids,
-                    Some(&attention_mask),
-                    None,
-                    Some(dim),
-                )
+                .encode_text_with_matryoshka(&input_ids, Some(&attention_mask), None, Some(dim))
                 .unwrap();
             let img_emb = model.encode_image_with_dim(&img_tensor, Some(dim)).unwrap();
 
@@ -2133,7 +2136,10 @@ mod integration_tests {
         let ta = cosine_sim(&text_emb, &audio_emb);
         let ia = cosine_sim(&img_emb, &audio_emb);
 
-        println!("real: text-image={:.4}, text-audio={:.4}, image-audio={:.4}", ti, ta, ia);
+        println!(
+            "real: text-image={:.4}, text-audio={:.4}, image-audio={:.4}",
+            ti, ta, ia
+        );
 
         assert!(ti.is_finite());
         assert!(ta.is_finite());
@@ -2167,7 +2173,10 @@ mod integration_tests {
         let ta = cosine_sim(&text_emb, &audio_emb);
         let ia = cosine_sim(&img_emb, &audio_emb);
 
-        println!("base64: text-image={:.4}, text-audio={:.4}, image-audio={:.4}", ti, ta, ia);
+        println!(
+            "base64: text-image={:.4}, text-audio={:.4}, image-audio={:.4}",
+            ti, ta, ia
+        );
 
         assert!(ti.is_finite());
         assert!(ta.is_finite());

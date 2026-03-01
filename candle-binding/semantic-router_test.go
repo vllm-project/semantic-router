@@ -4353,8 +4353,8 @@ func TestMultiModalCrossModalRetrieval(t *testing.T) {
 
 	t.Run("RetrievalRanking", func(t *testing.T) {
 		queries := []struct {
-			text          string
-			expectedBest  string
+			text         string
+			expectedBest string
 		}{
 			{"a photo of a cat", "cat"},
 			{"a photo of a dog", "dog"},

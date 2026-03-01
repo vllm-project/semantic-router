@@ -1981,9 +1981,9 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 			request := cache.OpenAIRequest{
 				Model: "model-a",
 				Messages: []cache.ChatMessage{
-				{Role: "user", Content: json.RawMessage(`""`)},      // Empty content
-				{Role: "assistant", Content: json.RawMessage(`""`)}, // Empty content
-				{Role: "user", Content: json.RawMessage(`"Now respond to this"`)},
+					{Role: "user", Content: json.RawMessage(`""`)},      // Empty content
+					{Role: "assistant", Content: json.RawMessage(`""`)}, // Empty content
+					{Role: "user", Content: json.RawMessage(`"Now respond to this"`)},
 				},
 			}
 
@@ -2011,8 +2011,8 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 			request := cache.OpenAIRequest{
 				Model: "model-a",
 				Messages: []cache.ChatMessage{
-				{Role: "user", Content: json.RawMessage(`"   \n\t  "`)}, // Only whitespace
-				{Role: "user", Content: json.RawMessage(`"What is AI?"`)},
+					{Role: "user", Content: json.RawMessage(`"   \n\t  "`)}, // Only whitespace
+					{Role: "user", Content: json.RawMessage(`"What is AI?"`)},
 				},
 			}
 
@@ -4232,11 +4232,11 @@ var _ = Describe("Response API Translation", func() {
 				validRequest := &cache.OpenAIRequest{
 					Model: "gpt-4",
 					Messages: []cache.ChatMessage{
-					{Role: "user", Content: json.RawMessage(`"What is AI?"`)},
-				},
-			}
+						{Role: "user", Content: json.RawMessage(`"What is AI?"`)},
+					},
+				}
 
-			requestBody, err := json.Marshal(validRequest)
+				requestBody, err := json.Marshal(validRequest)
 				Expect(err).NotTo(HaveOccurred())
 
 				bodyReq := &ext_proc.ProcessingRequest{
@@ -4286,12 +4286,12 @@ var _ = Describe("Response API Translation", func() {
 
 			It("should handle request with temperature parameter", func() {
 				parameterizedRequest := &cache.OpenAIRequest{
-				Model:       "gpt-4",
-				Temperature: 0.7,
-				MaxTokens:   100,
-				Messages: []cache.ChatMessage{
-					{Role: "user", Content: json.RawMessage(`"Test"`)},
-				},
+					Model:       "gpt-4",
+					Temperature: 0.7,
+					MaxTokens:   100,
+					Messages: []cache.ChatMessage{
+						{Role: "user", Content: json.RawMessage(`"Test"`)},
+					},
 				}
 
 				requestBody, err := json.Marshal(parameterizedRequest)
@@ -4315,9 +4315,9 @@ var _ = Describe("Response API Translation", func() {
 				toolRequest := &cache.OpenAIRequest{
 					Model: "gpt-4",
 					Messages: []cache.ChatMessage{
-					{Role: "user", Content: json.RawMessage(`"Call my calculator"`)},
-				},
-				Tools: []any{
+						{Role: "user", Content: json.RawMessage(`"Call my calculator"`)},
+					},
+					Tools: []any{
 						map[string]interface{}{
 							"type": "function",
 							"function": map[string]interface{}{
@@ -4349,8 +4349,8 @@ var _ = Describe("Response API Translation", func() {
 				systemPromptRequest := &cache.OpenAIRequest{
 					Model: "gpt-4",
 					Messages: []cache.ChatMessage{
-					{Role: "system", Content: json.RawMessage(`"You are a helpful assistant"`)},
-					{Role: "user", Content: json.RawMessage(`"Hello"`)},
+						{Role: "system", Content: json.RawMessage(`"You are a helpful assistant"`)},
+						{Role: "user", Content: json.RawMessage(`"Hello"`)},
 					},
 				}
 
@@ -4646,11 +4646,11 @@ var _ = Describe("Response API Translation", func() {
 						Temperature: 0.5,
 						TopP:        0.9,
 						Messages: []cache.ChatMessage{
-						{Role: "user", Content: json.RawMessage(`"Test"`)},
-					},
-				}
+							{Role: "user", Content: json.RawMessage(`"Test"`)},
+						},
+					}
 
-				requestBody, err := json.Marshal(gptOSSRequest)
+					requestBody, err := json.Marshal(gptOSSRequest)
 					Expect(err).NotTo(HaveOccurred())
 
 					bodyReq := &ext_proc.ProcessingRequest{
@@ -4694,14 +4694,14 @@ var _ = Describe("Response API Translation", func() {
 				})
 
 				It("should handle Qwen3 long context requests", func() {
-				longContext := strings.Repeat("This is context. ", 1000) // Large context window
-				longContextJSON, _ := json.Marshal(longContext + "Summarize the above.")
+					longContext := strings.Repeat("This is context. ", 1000) // Large context window
+					longContextJSON, _ := json.Marshal(longContext + "Summarize the above.")
 
-				qwen3Request := &cache.OpenAIRequest{
-					Model: "qwen3",
-					Messages: []cache.ChatMessage{
-						{Role: "user", Content: json.RawMessage(longContextJSON)},
-					},
+					qwen3Request := &cache.OpenAIRequest{
+						Model: "qwen3",
+						Messages: []cache.ChatMessage{
+							{Role: "user", Content: json.RawMessage(longContextJSON)},
+						},
 					}
 
 					requestBody, err := json.Marshal(qwen3Request)
@@ -5104,8 +5104,8 @@ var _ = Describe("Response API Translation", func() {
 				request := &cache.OpenAIRequest{
 					Model: "auto",
 					Messages: []cache.ChatMessage{
-					{Role: "system", Content: json.RawMessage(`"You are helpful"`)},
-					{Role: "user", Content: json.RawMessage(`"Write code for factorial"`)},
+						{Role: "system", Content: json.RawMessage(`"You are helpful"`)},
+						{Role: "user", Content: json.RawMessage(`"Write code for factorial"`)},
 					},
 				}
 
@@ -5160,10 +5160,10 @@ var _ = Describe("Response API Translation", func() {
 			It("should validate configuration during request processing", func() {
 				// Request that should validate config
 				request := &cache.OpenAIRequest{
-				Model: "model-a", // Explicitly specify configured model
-				Messages: []cache.ChatMessage{
-					{Role: "user", Content: json.RawMessage(`"Test"`)},
-				},
+					Model: "model-a", // Explicitly specify configured model
+					Messages: []cache.ChatMessage{
+						{Role: "user", Content: json.RawMessage(`"Test"`)},
+					},
 				}
 
 				requestBody, err := json.Marshal(request)
@@ -5209,10 +5209,10 @@ var _ = Describe("Response API Translation", func() {
 							// Process request
 							msgJSON, _ := json.Marshal(fmt.Sprintf("Request %d-%d", id, j))
 							request := &cache.OpenAIRequest{
-							Model: "model-a",
-							Messages: []cache.ChatMessage{
-								{Role: "user", Content: json.RawMessage(msgJSON)},
-							},
+								Model: "model-a",
+								Messages: []cache.ChatMessage{
+									{Role: "user", Content: json.RawMessage(msgJSON)},
+								},
 							}
 
 							requestBody, _ := json.Marshal(request)
