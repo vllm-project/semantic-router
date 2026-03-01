@@ -107,19 +107,18 @@ func (pm *PIIMapping) GetPIITypeFromIndex(classIndex int) (string, bool) {
 // Handles formats like "class_6" → "DATE_TIME" and passes through already-named types.
 // Also strips BIO prefixes (B-PERSON → PERSON, I-DATE_TIME → DATE_TIME).
 func (pm *PIIMapping) TranslatePIIType(rawType string) string {
-	if pm == nil {
-		return rawType
-	}
-
-	// Strip BIO prefix first, before any label lookup.
-	// Models using BIO tagging emit labels like "B-PERSON" / "I-PERSON"; the
-	// allow-list (and the rest of the system) uses the bare form "PERSON".
+	// Strip BIO prefix unconditionally — must happen BEFORE the nil guard so
+	// that "B-PERSON" → "PERSON" even when no mapping file is loaded.
 	normalized := rawType
 	if len(rawType) > 2 && rawType[1] == '-' {
 		prefix := rawType[0]
 		if prefix == 'B' || prefix == 'I' || prefix == 'E' {
 			normalized = rawType[2:]
 		}
+	}
+
+	if pm == nil {
+		return normalized
 	}
 
 	// Check if it's already a known label (exact match in IdxToLabel values)
