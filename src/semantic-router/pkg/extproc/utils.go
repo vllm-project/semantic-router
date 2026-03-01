@@ -174,20 +174,35 @@ func statusCodeToEnum(statusCode int) typev3.StatusCode {
 	}
 }
 
-// extractFirstImageURL returns the first image_url from user messages.
-// Used by the complexity classifier to embed the request screenshot for Tier 1 pre-routing.
+// extractFirstImageURL returns the first safe inline image data-URI from user messages.
+// Only base64-encoded data URIs are accepted to prevent SSRF and local file reads.
 func extractFirstImageURL(req *openai.ChatCompletionNewParams) string {
 	for _, msg := range req.Messages {
 		if msg.OfUser == nil {
 			continue
 		}
 		for _, part := range msg.OfUser.Content.OfArrayOfContentParts {
-			if part.OfImageURL != nil && part.OfImageURL.ImageURL.URL != "" {
-				return part.OfImageURL.ImageURL.URL
+			if part.OfImageURL == nil {
+				continue
+			}
+			url := part.OfImageURL.ImageURL.URL
+			if isSafeImageDataURL(url) {
+				return url
 			}
 		}
 	}
 	return ""
+}
+
+// isSafeImageDataURL returns true only for inline base64-encoded data URIs
+// (e.g. "data:image/png;base64,..."). HTTP(S) URLs and file paths are rejected
+// to prevent SSRF and local file access from attacker-controlled input.
+func isSafeImageDataURL(url string) bool {
+	if url == "" {
+		return false
+	}
+	lower := strings.ToLower(url)
+	return strings.HasPrefix(lower, "data:") && strings.Contains(lower, ";base64,")
 }
 
 // rewriteRequestModel rewrites the model field in the request body JSON

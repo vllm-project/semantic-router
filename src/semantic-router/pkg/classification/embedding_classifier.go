@@ -1,7 +1,6 @@
 package classification
 
 import (
-	"encoding/base64"
 	"fmt"
 	"os"
 	"runtime"
@@ -28,30 +27,22 @@ var getMultiModalTextEmbedding = func(text string, targetDim int) ([]float32, er
 	return output.Embedding, nil
 }
 
-// getMultiModalImageEmbedding computes an image embedding from a URL, base64 string,
-// or local file path via the multimodal model. Package-level var so tests can override it.
+// getMultiModalImageEmbedding computes an image embedding from a base64-encoded
+// image (raw base64 or data-URI) via the multimodal model.
+// HTTP URLs and local file paths are rejected to prevent SSRF and arbitrary file reads.
+// Package-level var so tests can override it.
 var getMultiModalImageEmbedding = func(imageRef string, targetDim int) ([]float32, error) {
-	if strings.HasPrefix(imageRef, "http://") || strings.HasPrefix(imageRef, "https://") {
-		output, err := candle_binding.MultiModalEncodeImageFromURL(imageRef, targetDim)
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
+	if imageRef == "" {
+		return nil, fmt.Errorf("imageRef cannot be empty")
 	}
-	// Local file path: read + base64-encode
-	if strings.HasPrefix(imageRef, "/") || strings.HasPrefix(imageRef, "./") {
-		data, err := os.ReadFile(imageRef)
-		if err != nil {
-			return nil, fmt.Errorf("read image file %s: %w", imageRef, err)
-		}
-		b64 := base64.StdEncoding.EncodeToString(data)
-		output, err := candle_binding.MultiModalEncodeImageFromBase64(b64, targetDim)
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
+
+	payload := imageRef
+	// Strip data-URI prefix if present (e.g. "data:image/png;base64,...")
+	if idx := strings.Index(imageRef, ";base64,"); idx >= 0 {
+		payload = imageRef[idx+len(";base64,"):]
 	}
-	output, err := candle_binding.MultiModalEncodeImageFromBase64(imageRef, targetDim)
+
+	output, err := candle_binding.MultiModalEncodeImageFromBase64(payload, targetDim)
 	if err != nil {
 		return nil, err
 	}

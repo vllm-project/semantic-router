@@ -314,7 +314,7 @@ func (c *ComplexityClassifier) ClassifyWithImage(query string, imageURL string) 
 					imgMaxEasy = sim
 				}
 			}
-			if imgMaxHard > -1.0 || imgMaxEasy > -1.0 {
+			if imgMaxHard > -1.0 && imgMaxEasy > -1.0 {
 				imageSignal = imgMaxHard - imgMaxEasy
 				hasImage = true
 			}

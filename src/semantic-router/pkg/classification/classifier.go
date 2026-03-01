@@ -662,15 +662,13 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 		// Initialize multimodal model if any complexity rule uses image candidates
 		if config.HasImageCandidatesInRules(cfg.ComplexityRules) {
 			mmPath := cfg.EmbeddingModels.MultiModalModelPath
-			if mmPath != "" {
-				if err := initMultiModalModel(mmPath, cfg.EmbeddingModels.UseCPU); err != nil {
-					logging.Warnf("Failed to initialize multimodal model for complexity image candidates: %v", err)
-				} else {
-					logging.Infof("Initialized multimodal embedding model for complexity image candidates: %s", mmPath)
-				}
-			} else {
-				logging.Warnf("Complexity rules have image_candidates but multimodal_model_path is not set in embedding_models config")
+			if mmPath == "" {
+				return nil, fmt.Errorf("complexity rules have image_candidates but embedding_models.multimodal_model_path is not set")
 			}
+			if err := initMultiModalModel(mmPath, cfg.EmbeddingModels.UseCPU); err != nil {
+				return nil, fmt.Errorf("failed to initialize multimodal model for complexity image candidates: %w", err)
+			}
+			logging.Infof("Initialized multimodal embedding model for complexity image candidates: %s", mmPath)
 		}
 
 		complexityClassifier, err := NewComplexityClassifier(cfg.ComplexityRules, modelType)

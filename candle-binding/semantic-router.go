@@ -21,6 +21,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 	"unsafe"
 )
 
@@ -1211,7 +1212,13 @@ func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddi
 		return nil, fmt.Errorf("url cannot be empty")
 	}
 
-	resp, err := http.Get(url)
+	const (
+		maxImageSize = 20 * 1024 * 1024 // 20 MB
+		httpTimeout  = 30                // seconds
+	)
+
+	client := &http.Client{Timeout: time.Duration(httpTimeout) * time.Second}
+	resp, err := client.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP GET failed: %w", err)
 	}
@@ -1221,9 +1228,12 @@ func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddi
 		return nil, fmt.Errorf("HTTP %d from %s", resp.StatusCode, url)
 	}
 
-	imageBytes, err := io.ReadAll(resp.Body)
+	imageBytes, err := io.ReadAll(io.LimitReader(resp.Body, maxImageSize+1))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+	if len(imageBytes) > maxImageSize {
+		return nil, fmt.Errorf("image from %s exceeds maximum size of %d bytes", url, maxImageSize)
 	}
 
 	return MultiModalEncodeImageFromBytes(imageBytes, targetDim)
