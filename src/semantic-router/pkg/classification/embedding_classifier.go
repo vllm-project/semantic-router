@@ -1,9 +1,11 @@
 package classification
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,6 +17,49 @@ import (
 // getEmbeddingWithModelType is a package-level variable for computing single embeddings.
 // It exists so tests can override it.
 var getEmbeddingWithModelType = candle_binding.GetEmbeddingWithModelType
+
+// getMultiModalTextEmbedding computes a text embedding via the multimodal model.
+// Package-level var so tests can override it.
+var getMultiModalTextEmbedding = func(text string, targetDim int) ([]float32, error) {
+	output, err := candle_binding.MultiModalEncodeText(text, targetDim)
+	if err != nil {
+		return nil, err
+	}
+	return output.Embedding, nil
+}
+
+// getMultiModalImageEmbedding computes an image embedding from a URL, base64 string,
+// or local file path via the multimodal model. Package-level var so tests can override it.
+var getMultiModalImageEmbedding = func(imageRef string, targetDim int) ([]float32, error) {
+	if strings.HasPrefix(imageRef, "http://") || strings.HasPrefix(imageRef, "https://") {
+		output, err := candle_binding.MultiModalEncodeImageFromURL(imageRef, targetDim)
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
+	}
+	// Local file path: read + base64-encode
+	if strings.HasPrefix(imageRef, "/") || strings.HasPrefix(imageRef, "./") {
+		data, err := os.ReadFile(imageRef)
+		if err != nil {
+			return nil, fmt.Errorf("read image file %s: %w", imageRef, err)
+		}
+		b64 := base64.StdEncoding.EncodeToString(data)
+		output, err := candle_binding.MultiModalEncodeImageFromBase64(b64, targetDim)
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
+	}
+	output, err := candle_binding.MultiModalEncodeImageFromBase64(imageRef, targetDim)
+	if err != nil {
+		return nil, err
+	}
+	return output.Embedding, nil
+}
+
+// initMultiModalModel is a package-level var for initializing the multimodal model.
+var initMultiModalModel = candle_binding.InitMultiModalEmbeddingModel
 
 // EmbeddingClassifierInitializer initializes KeywordEmbeddingClassifier for embedding based classification
 type EmbeddingClassifierInitializer interface {

@@ -1592,6 +1592,7 @@ fn test_load_with_custom_base_model_parameter_validation() {
             ModernBertVariant::Standard => assert_eq!(variant.max_length(), 512),
             ModernBertVariant::Multilingual => assert_eq!(variant.max_length(), 8192),
             ModernBertVariant::Extended32K => assert_eq!(variant.max_length(), 32768),
+            ModernBertVariant::Multilingual32K => assert_eq!(variant.max_length(), 32768),
         }
     }
 

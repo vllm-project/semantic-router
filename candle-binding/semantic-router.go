@@ -6,11 +6,20 @@
 package candle_binding
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
+	"io"
 	"log"
+	"math"
+	"net/http"
 	"regexp"
 	"runtime"
+	"strings"
 	"sync"
 	"unsafe"
 )
@@ -231,6 +240,7 @@ extern int get_embedding_batched(const char* text, const char* model_type, int t
 extern bool init_embedding_models(const char* qwen3_model_path, const char* gemma_model_path, bool use_cpu);
 extern bool init_embedding_models_with_mmbert(const char* qwen3_model_path, const char* gemma_model_path, const char* mmbert_model_path, bool use_cpu);
 extern bool init_mmbert_embedding_model(const char* model_path, bool use_cpu);
+extern bool init_multimodal_embedding_model(const char* model_path, bool use_cpu);
 extern bool init_embedding_models_batched(const char* qwen3_model_path, int max_batch_size, unsigned long long max_wait_ms, bool use_cpu);
 extern int calculate_embedding_similarity(const char* text1, const char* text2, const char* model_type, int target_dim, EmbeddingSimilarityResult* result);
 extern int calculate_similarity_batch(const char* query, const char** candidates, int num_candidates, int top_k, const char* model_type, int target_dim, BatchSimilarityResult* result);
@@ -240,6 +250,20 @@ extern void free_embedding_models_info(EmbeddingModelsInfoResult* result);
 extern TokenizationResult tokenize_text(const char* text, int max_length);
 extern void free_cstring(char* s);
 extern void free_embedding(float* data, int length);
+
+// Multi-modal embedding structures and functions
+typedef struct {
+    float* data;
+    int length;
+    bool error;
+    int modality;              // 0=text, 1=image, 2=audio
+    float processing_time_ms;
+} MultiModalEmbeddingResult;
+
+extern int multimodal_encode_text(const char* text, int target_dim, MultiModalEmbeddingResult* result);
+extern int multimodal_encode_image(const float* pixel_data, int height, int width, int target_dim, MultiModalEmbeddingResult* result);
+extern int multimodal_encode_audio(const float* mel_data, int n_mels, int time_frames, int target_dim, MultiModalEmbeddingResult* result);
+extern void free_multimodal_embedding(float* data, int length);
 extern void free_tokenization_result(TokenizationResult result);
 extern ClassificationResult classify_text(const char* text);
 extern ClassificationResultWithProbs classify_text_with_probabilities(const char* text);
@@ -935,6 +959,335 @@ func InitMmBertEmbeddingModel(modelPath string, useCPU bool) error {
 	return nil
 }
 
+// MultiModalEmbeddingOutput represents the result of a multi-modal embedding.
+type MultiModalEmbeddingOutput struct {
+	Embedding        []float32 // The embedding vector (384-dim by default)
+	Modality         string    // "text", "image", or "audio"
+	ProcessingTimeMs float32   // Processing time in milliseconds
+}
+
+// InitMultiModalEmbeddingModel initializes the multi-modal embedding model.
+//
+// Model: llm-semantic-router/multi-modal-embed-small (~120M params)
+//   - Text: MiniLM-L6-v2 (22M params, 384-dim)
+//   - Image: SigLIP-base-patch16-512 (86M params, 768→384 projection)
+//   - Audio: Whisper-tiny encoder (8M params, 384-dim)
+//
+// After initialization, use MultiModalEncodeText, MultiModalEncodeImage,
+// or MultiModalEncodeAudio to generate embeddings.
+//
+// Parameters:
+//   - modelPath: Path to the multi-modal model directory
+//   - useCPU: If true, use CPU for inference; if false, use GPU if available
+//
+// Example:
+//
+//	err := InitMultiModalEmbeddingModel("/path/to/multi-modal-embed-small", false)
+//	if err != nil { log.Fatal(err) }
+//	output, err := MultiModalEncodeText("A photo of a cat", 0)
+func InitMultiModalEmbeddingModel(modelPath string, useCPU bool) error {
+	if modelPath == "" {
+		return fmt.Errorf("modelPath cannot be empty")
+	}
+
+	cModelPath := C.CString(modelPath)
+	defer C.free(unsafe.Pointer(cModelPath))
+
+	success := C.init_multimodal_embedding_model(cModelPath, C.bool(useCPU))
+
+	if !bool(success) {
+		return fmt.Errorf("failed to initialize multi-modal embedding model")
+	}
+
+	log.Printf("INFO: Multi-modal embedding model initialized (text+image+audio, 384-dim)")
+	return nil
+}
+
+// MultiModalEncodeText encodes text into a 384-dimensional embedding using the multi-modal model.
+//
+// Parameters:
+//   - text: Input text to encode
+//   - targetDim: Target embedding dimension (0 for default 384, or 32/64/128/256)
+//
+// Returns:
+//   - MultiModalEmbeddingOutput with the embedding and metadata
+//   - error if encoding fails
+func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if text == "" {
+		return nil, fmt.Errorf("text cannot be empty")
+	}
+
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	var result C.MultiModalEmbeddingResult
+	status := C.multimodal_encode_text(cText, C.int(targetDim), &result)
+
+	if int(status) != 0 || bool(result.error) {
+		return nil, fmt.Errorf("multi-modal text encoding failed")
+	}
+
+	length := int(result.length)
+	if length <= 0 || result.data == nil {
+		return nil, fmt.Errorf("empty embedding returned")
+	}
+
+	embedding := make([]float32, length)
+	cSlice := unsafe.Slice((*float32)(unsafe.Pointer(result.data)), length)
+	copy(embedding, cSlice)
+	C.free_multimodal_embedding(result.data, result.length)
+
+	return &MultiModalEmbeddingOutput{
+		Embedding:        embedding,
+		Modality:         "text",
+		ProcessingTimeMs: float32(result.processing_time_ms),
+	}, nil
+}
+
+// MultiModalEncodeImage encodes image pixel data into a 384-dimensional embedding.
+//
+// Parameters:
+//   - pixelData: Raw pixel data as float32 slice (RGB, normalized 0-1), flattened [3*H*W]
+//   - height: Image height (512 for SigLIP-base-patch16-512)
+//   - width: Image width (512)
+//   - targetDim: Target dimension (0 for default 384)
+//
+// Returns:
+//   - MultiModalEmbeddingOutput with the embedding and metadata
+//   - error if encoding fails
+func MultiModalEncodeImage(pixelData []float32, height, width, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if len(pixelData) == 0 {
+		return nil, fmt.Errorf("pixelData cannot be empty")
+	}
+	expected := 3 * height * width
+	if len(pixelData) != expected {
+		return nil, fmt.Errorf("pixelData length %d != expected %d (3*%d*%d)", len(pixelData), expected, height, width)
+	}
+
+	var result C.MultiModalEmbeddingResult
+	status := C.multimodal_encode_image(
+		(*C.float)(unsafe.Pointer(&pixelData[0])),
+		C.int(height),
+		C.int(width),
+		C.int(targetDim),
+		&result,
+	)
+
+	if int(status) != 0 || bool(result.error) {
+		return nil, fmt.Errorf("multi-modal image encoding failed")
+	}
+
+	length := int(result.length)
+	if length <= 0 || result.data == nil {
+		return nil, fmt.Errorf("empty embedding returned")
+	}
+
+	embedding := make([]float32, length)
+	cSlice := unsafe.Slice((*float32)(unsafe.Pointer(result.data)), length)
+	copy(embedding, cSlice)
+	C.free_multimodal_embedding(result.data, result.length)
+
+	return &MultiModalEmbeddingOutput{
+		Embedding:        embedding,
+		Modality:         "image",
+		ProcessingTimeMs: float32(result.processing_time_ms),
+	}, nil
+}
+
+// MultiModalEncodeAudio encodes a Mel spectrogram into a 384-dimensional embedding.
+//
+// Parameters:
+//   - melData: Mel spectrogram as float32 slice, flattened [nMels * timeFrames]
+//   - nMels: Number of Mel bins (typically 80)
+//   - timeFrames: Number of time frames
+//   - targetDim: Target dimension (0 for default 384)
+//
+// Returns:
+//   - MultiModalEmbeddingOutput with the embedding and metadata
+//   - error if encoding fails
+func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if len(melData) == 0 {
+		return nil, fmt.Errorf("melData cannot be empty")
+	}
+	expected := nMels * timeFrames
+	if len(melData) != expected {
+		return nil, fmt.Errorf("melData length %d != expected %d (%d*%d)", len(melData), expected, nMels, timeFrames)
+	}
+
+	var result C.MultiModalEmbeddingResult
+	status := C.multimodal_encode_audio(
+		(*C.float)(unsafe.Pointer(&melData[0])),
+		C.int(nMels),
+		C.int(timeFrames),
+		C.int(targetDim),
+		&result,
+	)
+
+	if int(status) != 0 || bool(result.error) {
+		return nil, fmt.Errorf("multi-modal audio encoding failed")
+	}
+
+	length := int(result.length)
+	if length <= 0 || result.data == nil {
+		return nil, fmt.Errorf("empty embedding returned")
+	}
+
+	embedding := make([]float32, length)
+	cSlice := unsafe.Slice((*float32)(unsafe.Pointer(result.data)), length)
+	copy(embedding, cSlice)
+	C.free_multimodal_embedding(result.data, result.length)
+
+	return &MultiModalEmbeddingOutput{
+		Embedding:        embedding,
+		Modality:         "audio",
+		ProcessingTimeMs: float32(result.processing_time_ms),
+	}, nil
+}
+
+// MultiModalEncodeImageFromBytes decodes JPEG/PNG image bytes, resizes to 512x512,
+// and encodes into an embedding using the multi-modal model.
+//
+// Parameters:
+//   - imageBytes: Raw JPEG or PNG image data
+//   - targetDim: Target embedding dimension (0 for default 384)
+//
+// Returns:
+//   - MultiModalEmbeddingOutput with the embedding and metadata
+//   - error if decoding or encoding fails
+func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if len(imageBytes) == 0 {
+		return nil, fmt.Errorf("imageBytes cannot be empty")
+	}
+
+	pixelData, err := decodeAndResizeImage(imageBytes, 512, 512)
+	if err != nil {
+		return nil, fmt.Errorf("image decode/resize failed: %w", err)
+	}
+
+	return MultiModalEncodeImage(pixelData, 512, 512, targetDim)
+}
+
+// MultiModalEncodeImageFromBase64 decodes a base64-encoded image and encodes it
+// into an embedding. Handles both raw base64 and data-URI prefixed strings
+// (e.g. "data:image/jpeg;base64,...") as used by the OpenAI API.
+//
+// Parameters:
+//   - base64Str: Base64-encoded image (with or without data URI prefix)
+//   - targetDim: Target embedding dimension (0 for default 384)
+//
+// Returns:
+//   - MultiModalEmbeddingOutput with the embedding and metadata
+//   - error if decoding or encoding fails
+func MultiModalEncodeImageFromBase64(base64Str string, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if base64Str == "" {
+		return nil, fmt.Errorf("base64Str cannot be empty")
+	}
+
+	payload := base64Str
+	if idx := strings.Index(base64Str, ";base64,"); idx >= 0 {
+		payload = base64Str[idx+len(";base64,"):]
+	}
+
+	imageBytes, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil {
+		return nil, fmt.Errorf("base64 decode failed: %w", err)
+	}
+
+	return MultiModalEncodeImageFromBytes(imageBytes, targetDim)
+}
+
+// MultiModalEncodeImageFromURL downloads an image from a URL and encodes it
+// into an embedding using the multi-modal model.
+//
+// Parameters:
+//   - url: HTTP(S) URL pointing to a JPEG or PNG image
+//   - targetDim: Target embedding dimension (0 for default 384)
+//
+// Returns:
+//   - MultiModalEmbeddingOutput with the embedding and metadata
+//   - error if download, decoding, or encoding fails
+func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	if url == "" {
+		return nil, fmt.Errorf("url cannot be empty")
+	}
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("HTTP GET failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d from %s", resp.StatusCode, url)
+	}
+
+	imageBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	return MultiModalEncodeImageFromBytes(imageBytes, targetDim)
+}
+
+// decodeAndResizeImage decodes a JPEG/PNG image, resizes it to targetW x targetH
+// using bilinear interpolation, and returns CHW float32 pixel data in [0, 1].
+func decodeAndResizeImage(data []byte, targetW, targetH int) ([]float32, error) {
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("image decode: %w", err)
+	}
+
+	bounds := img.Bounds()
+	srcW := bounds.Dx()
+	srcH := bounds.Dy()
+
+	pixels := make([]float32, 3*targetH*targetW)
+	xRatio := float64(srcW) / float64(targetW)
+	yRatio := float64(srcH) / float64(targetH)
+
+	for y := 0; y < targetH; y++ {
+		srcY := float64(y)*yRatio + float64(bounds.Min.Y)
+		y0 := int(math.Floor(srcY))
+		y1 := y0 + 1
+		fy := srcY - float64(y0)
+		if y1 >= bounds.Max.Y {
+			y1 = bounds.Max.Y - 1
+		}
+
+		for x := 0; x < targetW; x++ {
+			srcX := float64(x)*xRatio + float64(bounds.Min.X)
+			x0 := int(math.Floor(srcX))
+			x1 := x0 + 1
+			fx := srcX - float64(x0)
+			if x1 >= bounds.Max.X {
+				x1 = bounds.Max.X - 1
+			}
+
+			r00, g00, b00, _ := img.At(x0, y0).RGBA()
+			r10, g10, b10, _ := img.At(x1, y0).RGBA()
+			r01, g01, b01, _ := img.At(x0, y1).RGBA()
+			r11, g11, b11, _ := img.At(x1, y1).RGBA()
+
+			bilerp := func(v00, v10, v01, v11 uint32) float32 {
+				f00 := float64(v00) / 65535.0
+				f10 := float64(v10) / 65535.0
+				f01 := float64(v01) / 65535.0
+				f11 := float64(v11) / 65535.0
+				top := f00*(1-fx) + f10*fx
+				bot := f01*(1-fx) + f11*fx
+				return float32(top*(1-fy) + bot*fy)
+			}
+
+			idx := y*targetW + x
+			pixels[idx] = bilerp(r00, r10, r01, r11)
+			pixels[targetH*targetW+idx] = bilerp(g00, g10, g01, g11)
+			pixels[2*targetH*targetW+idx] = bilerp(b00, b10, b01, b11)
+		}
+	}
+
+	return pixels, nil
+}
+
 // InitEmbeddingModelsWithMmBert initializes all embedding models including mmBERT.
 //
 // This is a convenience function to initialize qwen3, gemma, and mmbert models together.
@@ -1149,9 +1502,9 @@ func GetEmbeddingWithMetadata(text string, qualityPriority, latencyPriority floa
 //	}
 //	fmt.Printf("Used model: %s\n", output.ModelType)
 func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
-	// Validate model type (accept "qwen3", "gemma", or "mmbert")
-	if modelType != "qwen3" && modelType != "gemma" && modelType != "mmbert" {
-		return nil, fmt.Errorf("invalid model type: %s (must be 'qwen3', 'gemma', or 'mmbert')", modelType)
+	// Validate model type
+	if modelType != "qwen3" && modelType != "gemma" && modelType != "mmbert" && modelType != "multimodal" {
+		return nil, fmt.Errorf("invalid model type: %s (must be 'qwen3', 'gemma', 'mmbert', or 'multimodal')", modelType)
 	}
 
 	// For mmbert, delegate to 2D Matryoshka function with default layer (full model)
@@ -1181,8 +1534,8 @@ func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*E
 //	output, err := GetEmbedding2DMatryoshka("Hello world", "mmbert", 3, 256)
 func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, targetDim int) (*EmbeddingOutput, error) {
 	// Validate model type
-	if modelType != "qwen3" && modelType != "gemma" && modelType != "mmbert" {
-		return nil, fmt.Errorf("invalid model type: %s (must be 'qwen3', 'gemma', or 'mmbert')", modelType)
+	if modelType != "qwen3" && modelType != "gemma" && modelType != "mmbert" && modelType != "multimodal" {
+		return nil, fmt.Errorf("invalid model type: %s (must be 'qwen3', 'gemma', 'mmbert', or 'multimodal')", modelType)
 	}
 
 	cText := C.CString(text)
@@ -1218,7 +1571,7 @@ func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, ta
 
 	embedding := cFloatArrayToGoSlice(result.data, result.length)
 
-	// Convert model_type to string (0=qwen3, 1=gemma, 2=mmbert)
+	// Convert model_type to string (0=qwen3, 1=gemma, 2=mmbert, 3=multimodal)
 	var actualModelType string
 	switch int(result.model_type) {
 	case 0:
@@ -1227,6 +1580,8 @@ func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, ta
 		actualModelType = "gemma"
 	case 2:
 		actualModelType = "mmbert"
+	case 3:
+		actualModelType = "multimodal"
 	default:
 		actualModelType = "unknown"
 	}

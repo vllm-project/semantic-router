@@ -72,7 +72,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	// EvaluateAllSignalsWithHeaders also evaluates the authz signal using request headers
 	// (x-authz-user-id, x-authz-user-groups injected by Authorino / ext_authz).
 	// In extproc, we always use normal mode (only evaluate signals used in decisions)
-	signals, authzErr := r.Classifier.EvaluateAllSignalsWithHeaders(evaluationText, allMessagesText, nonUserMessages, ctx.Headers, false)
+	signals, authzErr := r.Classifier.EvaluateAllSignalsWithHeaders(evaluationText, allMessagesText, nonUserMessages, ctx.Headers, false, ctx.RequestImageURL)
 	if authzErr != nil {
 		signalSpan.End()
 		// Authz failure is a hard error — do not silently bypass.

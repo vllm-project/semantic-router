@@ -174,6 +174,22 @@ func statusCodeToEnum(statusCode int) typev3.StatusCode {
 	}
 }
 
+// extractFirstImageURL returns the first image_url from user messages.
+// Used by the complexity classifier to embed the request screenshot for Tier 1 pre-routing.
+func extractFirstImageURL(req *openai.ChatCompletionNewParams) string {
+	for _, msg := range req.Messages {
+		if msg.OfUser == nil {
+			continue
+		}
+		for _, part := range msg.OfUser.Content.OfArrayOfContentParts {
+			if part.OfImageURL != nil && part.OfImageURL.ImageURL.URL != "" {
+				return part.OfImageURL.ImageURL.URL
+			}
+		}
+	}
+	return ""
+}
+
 // rewriteRequestModel rewrites the model field in the request body JSON
 // Used by looper internal requests to route to specific models
 func rewriteRequestModel(originalBody []byte, newModel string) ([]byte, error) {
