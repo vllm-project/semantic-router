@@ -1214,7 +1214,7 @@ func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddi
 
 	const (
 		maxImageSize = 20 * 1024 * 1024 // 20 MB
-		httpTimeout  = 30                // seconds
+		httpTimeout  = 30               // seconds
 	)
 
 	client := &http.Client{Timeout: time.Duration(httpTimeout) * time.Second}
