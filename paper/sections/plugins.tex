@@ -24,6 +24,16 @@ Decisions that match safety signals activate the \texttt{fast\_response} plugin 
 
 This per-decision scoping is a key architectural distinction from systems that apply safety and caching globally: it allows differentiated policies for different routing outcomes within the same deployment.
 
+\subsection{Output-Space Projection Perspective}
+
+For a matched decision $d^*$, the plugin chain can be interpreted as a policy-scoped projection from routing state to deployment-compliant output behavior:
+\begin{equation}
+  \Psi_{d^*} = \pi_n \circ \pi_{n-1} \circ \cdots \circ \pi_1
+\end{equation}
+where each $\pi_i$ is a typed transformation in the configured chain.
+Functionally, this is analogous to an output projection stage after gating: once the decision fixes the active policy path, plugins realize that policy as concrete transformations on request/response state (e.g., context injection, auth header mutation, hallucination annotation, cache write-through).
+This analogy is operational rather than architectural: unlike a Transformer projection head, $\Psi_{d^*}$ is a configurable symbolic composition, not a learned linear map.
+
 \subsection{Semantic Cache}
 
 The semantic cache exploits the observation that semantically similar queries often produce equivalent responses, avoiding redundant model invocations.
