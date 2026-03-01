@@ -42,6 +42,11 @@ Preliminary work applies the contrastive embedding approach---already used for c
 \noindent\textbf{Federated signal orchestration.}
 Extending composable signal orchestration to federated deployments where signals from multiple routing instances are aggregated for global optimization.
 
+\noindent\textbf{Agent-based policy synthesis.}
+The DSL configuration that specifies routing policies can be viewed as a program in a domain-specific language with a formally complete instruction set (\Cref{sec:disc_agent}).
+This reframes router configuration as a \emph{program synthesis} problem: coding agents (LLMs fine-tuned for code generation) can translate natural-language routing specifications into valid DSL configurations, with routing quality feedback enabling RL-based optimization of the synthesis policy.
+Preliminary experiments suggest that this meta-learning approach---learning to \emph{write} routing policies rather than to \emph{make} individual routing decisions---can significantly reduce configuration effort while maintaining the interpretability and verifiability of symbolic decision rules.
+
 \noindent\textbf{Multi-protocol adapter abstraction.}
 The current system is tightly coupled to Envoy's External Processor protocol. A multi-protocol adapter architecture would abstract the routing engine from protocol-specific code, enabling support for HTTP REST, native gRPC, Nginx/OpenResty, and custom protocols through thin translation layers.
 This would also enable abstraction of backend proxying (currently Envoy-specific), external authorization mechanisms, and traffic management policies, making the routing engine truly protocol-agnostic and deployable in serverless, edge, and non-Envoy environments.
