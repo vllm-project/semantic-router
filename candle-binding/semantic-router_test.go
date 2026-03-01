@@ -3954,7 +3954,8 @@ func getMultiModalModelPath() string {
 
 func downloadImageBytes(t *testing.T, url string) []byte {
 	t.Helper()
-	resp, err := http.Get(url)
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(url)
 	if err != nil {
 		t.Fatalf("Failed to download %s: %v", url, err)
 	}
@@ -3962,7 +3963,8 @@ func downloadImageBytes(t *testing.T, url string) []byte {
 	if resp.StatusCode != 200 {
 		t.Fatalf("HTTP %d from %s", resp.StatusCode, url)
 	}
-	data, err := io.ReadAll(resp.Body)
+	const maxSize = 20 * 1024 * 1024
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxSize))
 	if err != nil {
 		t.Fatalf("Failed to read body from %s: %v", url, err)
 	}

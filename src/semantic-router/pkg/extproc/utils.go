@@ -194,15 +194,31 @@ func extractFirstImageURL(req *openai.ChatCompletionNewParams) string {
 	return ""
 }
 
-// isSafeImageDataURL returns true only for inline base64-encoded data URIs
-// (e.g. "data:image/png;base64,..."). HTTP(S) URLs and file paths are rejected
-// to prevent SSRF and local file access from attacker-controlled input.
+// isSafeImageDataURL returns true only for inline base64-encoded image data URIs
+// with an allowlisted MIME type (e.g. "data:image/png;base64,...").
+// HTTP(S) URLs, non-image data URIs, and file paths are rejected to prevent
+// SSRF, local file access, and decode errors on non-image payloads.
 func isSafeImageDataURL(url string) bool {
 	if url == "" {
 		return false
 	}
 	lower := strings.ToLower(url)
-	return strings.HasPrefix(lower, "data:") && strings.Contains(lower, ";base64,")
+	if !strings.HasPrefix(lower, "data:image/") {
+		return false
+	}
+	const base64Sep = ";base64,"
+	sepIdx := strings.Index(lower, base64Sep)
+	if sepIdx == -1 {
+		return false
+	}
+	mime := lower[len("data:"):sepIdx]
+	switch mime {
+	case "image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp":
+	default:
+		return false
+	}
+	payload := strings.TrimSpace(url[sepIdx+len(base64Sep):])
+	return payload != ""
 }
 
 // rewriteRequestModel rewrites the model field in the request body JSON

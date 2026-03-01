@@ -650,12 +650,12 @@ func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, endp
 			},
 		})
 		logging.Infof("Added %s header for model %s (provider=%s)", authHeader, model, llmProvider)
-		// Only strip injected auth headers when we have a resolved credential to replace them
-		removeHeaders = append(removeHeaders, r.CredentialResolver.HeadersToStrip()...)
 	} else {
 		// fail_open=true: preserve the original auth header from the client request
 		logging.Warnf("No API key for %s model %q (fail_open=true) — preserving original auth header", llmProvider, model)
 	}
+	// Always strip ext_authz-injected per-user key headers to prevent credential leakage upstream
+	removeHeaders = append(removeHeaders, r.CredentialResolver.HeadersToStrip()...)
 
 	// Add explicit extra headers from provider profile config
 	if profile != nil {
@@ -779,10 +779,11 @@ func (r *OpenAIRouter) createSpecifiedModelResponse(model string, upstreamModel 
 			},
 		})
 		logging.Infof("Added %s header for model %s (provider=%s)", authHeader, model, llmProvider)
-		removeHeaders = append(removeHeaders, r.CredentialResolver.HeadersToStrip()...)
 	} else {
 		logging.Warnf("No API key for %s model %q (fail_open=true) — preserving original auth header", llmProvider, model)
 	}
+	// Always strip ext_authz-injected per-user key headers to prevent credential leakage upstream
+	removeHeaders = append(removeHeaders, r.CredentialResolver.HeadersToStrip()...)
 
 	// Add explicit extra headers from provider profile config
 	if profile != nil {

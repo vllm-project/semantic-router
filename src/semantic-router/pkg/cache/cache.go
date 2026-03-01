@@ -29,11 +29,13 @@ func extractTextContent(raw json.RawMessage) string {
 		Text string `json:"text,omitempty"`
 	}
 	if err := json.Unmarshal(raw, &parts); err == nil {
+		var result string
 		for _, p := range parts {
 			if p.Type == "text" && p.Text != "" {
-				return p.Text
+				result += p.Text
 			}
 		}
+		return result
 	}
 	return ""
 }

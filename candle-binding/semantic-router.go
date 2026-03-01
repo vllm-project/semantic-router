@@ -1200,8 +1200,14 @@ func MultiModalEncodeImageFromBase64(base64Str string, targetDim int) (*MultiMod
 // MultiModalEncodeImageFromURL downloads an image from a URL and encodes it
 // into an embedding using the multi-modal model.
 //
+// SECURITY: This function performs an outbound HTTP GET to the provided URL.
+// It must NOT be called with untrusted/user-supplied URLs (SSRF risk).
+// The router-side code restricts image inputs to inline data URIs via
+// isSafeImageDataURL; this helper is intended only for trusted, operator-
+// configured URLs (e.g. preloading image_candidates from config).
+//
 // Parameters:
-//   - url: HTTP(S) URL pointing to a JPEG or PNG image
+//   - url: HTTP(S) URL pointing to a JPEG or PNG image (trusted source only)
 //   - targetDim: Target embedding dimension (0 for default 384)
 //
 // Returns:
