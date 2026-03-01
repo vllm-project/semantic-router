@@ -28,7 +28,7 @@ We develop this \emph{programmable neural-symbolic inference engine} perspective
   % --- Shannon row (top) ---
   \node[lbl, anchor=east] at (-0.6, 1.8) {\textbf{Shannon (1948)}};
   \node[sbox, fill=black!5]  (src)  at (1.2, 1.8) {Source};
-  \node[sbox, fill=blue!8]   (senc) at (3.6, 1.8) {Source\\[-2pt]Encoder};
+  \node[sbox, fill=blue!8]   (senc) at (3.6, 1.8) {Encoder};
   \node[sbox, fill=yellow!12] (ch)  at (6.0, 1.8) {Channel};
   \node[sbox, fill=red!8]    (sdec) at (8.4, 1.8) {Decoder};
   \node[sbox, fill=black!5]  (dst)  at (10.8, 1.8) {Destination};
@@ -39,7 +39,7 @@ We develop this \emph{programmable neural-symbolic inference engine} perspective
   \draw[arr] (sdec) -- (dst);
 
   % --- VSR row (bottom) ---
-  \node[lbl, anchor=east] at (-0.6, 0) {\textbf{VSR Router}};
+  \node[lbl, anchor=east] at (-0.6, 0) {\textbf{vLLM-SR (2025)}};
   \node[sbox, fill=black!5]  (qry) at (1.2, 0) {Query $r$};
   \node[sbox, fill=blue!8]   (sig) at (3.6, 0) {Signal\\[-2pt]Extraction};
   \node[sbox, fill=yellow!12] (sv)  at (6.0, 0) {Signal\\[-2pt]Vector $\mathbf{s}$};
