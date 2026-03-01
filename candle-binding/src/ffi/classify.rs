@@ -2252,7 +2252,6 @@ pub extern "C" fn classify_mmbert_32k_feedback(
 #[no_mangle]
 pub extern "C" fn classify_mmbert_32k_pii_tokens(
     text: *const c_char,
-    model_config_path: *const c_char,
 ) -> ModernBertTokenClassificationResult {
     let default_result = ModernBertTokenClassificationResult {
         entities: std::ptr::null_mut(),
@@ -2265,17 +2264,6 @@ pub extern "C" fn classify_mmbert_32k_pii_tokens(
             Err(_) => {
                 eprintln!("Failed to convert text from C string");
                 return default_result;
-            }
-        }
-    };
-
-    let config_path = if model_config_path.is_null() {
-        None
-    } else {
-        unsafe {
-            match CStr::from_ptr(model_config_path).to_str() {
-                Ok(s) => Some(s),
-                Err(_) => None,
             }
         }
     };
@@ -2294,26 +2282,11 @@ pub extern "C" fn classify_mmbert_32k_pii_tokens(
                         .unwrap();
                 let ptr = unsafe { std::alloc::alloc(layout) as *mut ModernBertTokenEntity };
 
-                // Load label mapping if config path provided
-                let label_map: Option<std::collections::HashMap<usize, String>> = config_path
-                    .and_then(|path| {
-                        let label_path = std::path::Path::new(path)
-                            .parent()
-                            .map(|p| p.join("label_mapping.json"))
-                            .unwrap_or_else(|| std::path::PathBuf::from("label_mapping.json"));
-                        std::fs::read_to_string(&label_path)
-                            .ok()
-                            .and_then(|s| serde_json::from_str(&s).ok())
-                    });
-
+                // Always use LABEL_{class_id} format — Go side translates via PIIMapping (pii_type_mapping.json)
                 for (i, (_label, class_id, confidence, start, end)) in
                     entities.into_iter().enumerate()
                 {
-                    let entity_type = label_map
-                        .as_ref()
-                        .and_then(|m| m.get(&class_id))
-                        .cloned()
-                        .unwrap_or_else(|| format!("LABEL_{}", class_id));
+                    let entity_type = format!("LABEL_{}", class_id);
 
                     let entity_text = if start < text.len() && end <= text.len() {
                         &text[start..end]

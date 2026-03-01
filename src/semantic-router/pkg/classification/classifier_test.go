@@ -308,7 +308,7 @@ func (m *MockPIIInference) setMockResponse(text string, entities []candle_bindin
 	}
 }
 
-func (m *MockPIIInference) ClassifyTokens(text string, _ string) (candle_binding.TokenClassificationResult, error) {
+func (m *MockPIIInference) ClassifyTokens(text string) (candle_binding.TokenClassificationResult, error) {
 	if response, exists := m.responseMap[text]; exists {
 		return response.classifyTokensResult, response.classifyTokensError
 	}

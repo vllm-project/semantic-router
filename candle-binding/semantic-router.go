@@ -263,7 +263,7 @@ extern ModernBertClassificationResult classify_mmbert_32k_intent(const char* tex
 extern ModernBertClassificationResult classify_mmbert_32k_factcheck(const char* text);
 extern ModernBertClassificationResult classify_mmbert_32k_jailbreak(const char* text);
 extern ModernBertClassificationResult classify_mmbert_32k_feedback(const char* text);
-extern ModernBertTokenClassificationResult classify_mmbert_32k_pii_tokens(const char* text, const char* model_config_path);
+extern ModernBertTokenClassificationResult classify_mmbert_32k_pii_tokens(const char* text);
 extern ModernBertClassificationResult classify_mmbert_32k_modality(const char* text);
 
 // New official Candle BERT functions
@@ -2223,18 +2223,13 @@ func InitMmBert32KPIIClassifier(modelPath string, useCPU bool) error {
 }
 
 // ClassifyMmBert32KPII detects PII entities in text using mmBERT-32K
-// Returns a list of detected PII entities with their types and positions
-func ClassifyMmBert32KPII(text string, modelConfigPath string) ([]TokenEntity, error) {
+// Returns a list of detected PII entities with their types and positions.
+// Entity types are returned as "LABEL_{class_id}" and translated by the Go-side PIIMapping.
+func ClassifyMmBert32KPII(text string) ([]TokenEntity, error) {
 	cText := C.CString(text)
 	defer C.free(unsafe.Pointer(cText))
 
-	var cConfigPath *C.char
-	if modelConfigPath != "" {
-		cConfigPath = C.CString(modelConfigPath)
-		defer C.free(unsafe.Pointer(cConfigPath))
-	}
-
-	result := C.classify_mmbert_32k_pii_tokens(cText, cConfigPath)
+	result := C.classify_mmbert_32k_pii_tokens(cText)
 	defer C.free_modernbert_token_result(C.ModernBertTokenClassificationResult{
 		entities:     (*C.ModernBertTokenEntity)(unsafe.Pointer(result.entities)),
 		num_entities: result.num_entities,

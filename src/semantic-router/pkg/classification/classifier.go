@@ -306,12 +306,12 @@ func createMmBERT32KPIIInitializer() PIIInitializer {
 }
 
 type PIIInference interface {
-	ClassifyTokens(text string, configPath string) (candle_binding.TokenClassificationResult, error)
+	ClassifyTokens(text string) (candle_binding.TokenClassificationResult, error)
 }
 
 type PIIInferenceImpl struct{}
 
-func (c *PIIInferenceImpl) ClassifyTokens(text string, configPath string) (candle_binding.TokenClassificationResult, error) {
+func (c *PIIInferenceImpl) ClassifyTokens(text string) (candle_binding.TokenClassificationResult, error) {
 	// Auto-detecting inference - uses whichever classifier was initialized (LoRA or Traditional)
 	return candle_binding.ClassifyCandleBertTokens(text)
 }
@@ -321,11 +321,12 @@ func createPIIInference() PIIInference {
 	return &PIIInferenceImpl{}
 }
 
-// MmBERT32KPIIInferenceImpl uses mmBERT-32K for PII token classification
+// MmBERT32KPIIInferenceImpl uses mmBERT-32K for PII token classification.
+// Entity types are returned as "LABEL_{class_id}" by Rust and translated Go-side via PIIMapping.
 type MmBERT32KPIIInferenceImpl struct{}
 
-func (c *MmBERT32KPIIInferenceImpl) ClassifyTokens(text string, configPath string) (candle_binding.TokenClassificationResult, error) {
-	entities, err := candle_binding.ClassifyMmBert32KPII(text, configPath)
+func (c *MmBERT32KPIIInferenceImpl) ClassifyTokens(text string) (candle_binding.TokenClassificationResult, error) {
+	entities, err := candle_binding.ClassifyMmBert32KPII(text)
 	if err != nil {
 		return candle_binding.TokenClassificationResult{}, err
 	}
@@ -1828,10 +1829,10 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 			}
 
 			// Step 2: Run PII token classification exactly once per unique content piece.
-			configPath := fmt.Sprintf("%s/config.json", c.Config.PIIModel.ModelID)
+			// Entity types are returned as "LABEL_{class_id}" and translated by PIIMapping.
 			piiCache := make(map[string]cachedPIIResult, len(uniqueContents))
 			for _, content := range uniqueContents {
-				tokenResult, err := c.piiInference.ClassifyTokens(content, configPath)
+				tokenResult, err := c.piiInference.ClassifyTokens(content)
 				piiCache[content] = cachedPIIResult{tokenResult, err}
 			}
 
@@ -2367,8 +2368,7 @@ func (c *Classifier) ClassifyPIIWithThreshold(text string, threshold float32) ([
 	}
 
 	// Use ModernBERT PII token classifier for entity detection
-	configPath := fmt.Sprintf("%s/config.json", c.Config.PIIModel.ModelID)
-	tokenResult, err := c.piiInference.ClassifyTokens(text, configPath)
+	tokenResult, err := c.piiInference.ClassifyTokens(text)
 	if err != nil {
 		return nil, fmt.Errorf("PII token classification error: %w", err)
 	}
@@ -2419,8 +2419,7 @@ func (c *Classifier) ClassifyPIIWithDetailsAndThreshold(text string, threshold f
 	}
 
 	// Use PII token classifier for entity detection
-	configPath := fmt.Sprintf("%s/config.json", c.Config.PIIModel.ModelID)
-	tokenResult, err := c.piiInference.ClassifyTokens(text, configPath)
+	tokenResult, err := c.piiInference.ClassifyTokens(text)
 	if err != nil {
 		return nil, fmt.Errorf("PII token classification error: %w", err)
 	}
@@ -2517,8 +2516,7 @@ func (c *Classifier) AnalyzeContentForPIIWithThreshold(contentList []string, thr
 		result.ContentIndex = i
 
 		// Use ModernBERT PII token classifier for detailed analysis
-		configPath := fmt.Sprintf("%s/config.json", c.Config.PIIModel.ModelID)
-		tokenResult, err := c.piiInference.ClassifyTokens(content, configPath)
+		tokenResult, err := c.piiInference.ClassifyTokens(content)
 		if err != nil {
 			logging.Errorf("Error analyzing content %d: %v", i, err)
 			continue
