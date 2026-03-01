@@ -25,7 +25,7 @@ We argue that production routing requires reasoning over \emph{multiple orthogon
 
 The key architectural innovation is that the same signal extraction, decision evaluation, and plugin execution machinery can be \emph{composed differently} for different deployment scenarios:
 
-\begin{definition}[Deployment Configuration]
+\begin{definition}[Programmable Neural-Symbolic Configuration Language]
 A deployment configuration $\Gamma = (\mathcal{S}_\Gamma, \mathcal{D}_\Gamma, \Pi_\Gamma, \mathcal{E}_\Gamma)$ specifies which signal types $\mathcal{S}_\Gamma \subseteq \mathcal{S}$ are active, what decisions $\mathcal{D}_\Gamma$ are evaluated, which plugin chains $\Pi_\Gamma$ are attached, and which endpoints $\mathcal{E}_\Gamma$ are available.
 \end{definition}
 
@@ -63,7 +63,7 @@ The architecture decomposes routing into three layers, each with a well-defined 
   \node[rectangle, draw, thick, rounded corners=3pt, fill=yellow!6,
         minimum width=14.4cm, inner sep=5pt, font=\small]
     (cfg) at (5.6, 3.0)
-    {\textbf{Deployment Configuration}\;
+    {\textbf{Programmable Neural-Symbolic Configuration Language}\;
      $\Gamma = (\mathcal{S}_\Gamma,\;
      \mathcal{D}_\Gamma,\;
      \Pi_\Gamma,\;
@@ -73,12 +73,12 @@ The architecture decomposes routing into three layers, each with a well-defined 
   \node[io] (req) at (-1.2, 0.8) {Request\\$r$};
 
   % Layer boxes
-  \node[layer, fill=blue!6]   (L1) at (2.0,  0.8) {\textbf{Layer 1}\\Signal Extraction};
-  \node[layer, fill=green!6]  (L2) at (5.8,  0.8) {\textbf{Layer 2}\\Decision Engine};
-  \node[layer, fill=orange!5] (L3) at (9.6, 0.8) {\textbf{Layer 3}\\Plugin Chain};
+  \node[layer, fill=blue!6]   (L1) at (2.0,  0.8) {\textbf{Input Layer}\\Signal Extraction};
+  \node[layer, fill=green!6]  (L2) at (5.8,  0.8) {\textbf{Hidden Layers}\\Decision Blocks};
+  \node[layer, fill=orange!5] (L3) at (9.6, 0.8) {\textbf{Projection Layer}\\Plugin Chain};
 
   % Output
-  \node[io] (out) at (12.8, 0.8) {Provider\\Endpoint};
+  \node[io] (out) at (12.8, 0.8) {Mixture-Of\\Models};
 
   % Main flow arrows
   \draw[arr] (req)  -- (L1);
@@ -133,18 +133,18 @@ The architecture decomposes routing into three layers, each with a well-defined 
   \label{fig:architecture}
 \end{figure*}
 
-\noindent\textbf{Layer 1: Signal Extraction.}
+\noindent\textbf{Input Layer: Signal Extraction.}
 The signal layer maps a request $r$ to a structured signal result $\mathbf{s}$, consisting of binary match indicators and real-valued confidences for each configured rule across thirteen signal types.
 Heuristic signals (keyword, language, context length, authorization) complete in sub-millisecond time.
 ML-based signals (embedding similarity, domain classification, factual grounding, modality detection, complexity, preference, user feedback, jailbreak detection, PII detection) require neural inference at 10--120\,ms.
 Signals are evaluated in parallel, and only signal types referenced by at least one active decision are computed---a critical optimization for deployment configurations that use a subset of available signals.
 
-\noindent\textbf{Layer 2: Decision Evaluation.}
+\noindent\textbf{Hidden Layers: Decision Blocks.}
 The decision layer takes the signal result $\mathbf{s}$ and evaluates a set of decisions $\mathcal{D} = \{d_1, \ldots, d_M\}$, each defined as a Boolean formula over signal conditions.
 The engine selects the best-matching decision $d^*$ using either priority-based or confidence-weighted ranking.
 Each decision carries its own model candidate set $\mathcal{M}_{d^*} \subseteq \mathcal{M}$, enabling deployment-specific model pools (e.g., a privacy decision restricts candidates to on-premise models).
 
-\noindent\textbf{Layer 3: Plugin Chain.}
+\noindent\textbf{Projection Layer: Plugin Chain.}
 Each decision $d^*$ carries a per-decision plugin configuration that defines:
 (a)~\emph{pre-routing plugins} (fast response for safety enforcement, semantic caching, RAG context injection, modality routing, memory retrieval, system prompt augmentation, header mutation for provider auth), executed before model invocation;
 (b)~a \emph{semantic model selection algorithm} applied to $d^*$'s candidate model set $\mathcal{M}_{d^*}$ to find the best model cost-effectively;

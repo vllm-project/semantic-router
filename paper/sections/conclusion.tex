@@ -26,6 +26,9 @@ Several research directions emerge from this work:
 \noindent\textbf{Learned decision policies.}
 Replacing hand-crafted Boolean rules with learned routing policies (e.g., neural routing networks trained on production traffic) could improve routing quality while maintaining interpretability through attention-based explanation.
 
+\noindent\textbf{Differentiable entropy-folding policies.}
+A natural extension of the layered entropy-folding view is to relax symbolic priority gates into trainable soft gates while preserving explicit policy constraints, enabling gradient-based optimization of control depth with auditable safety boundaries.
+
 \noindent\textbf{Adaptive cost optimization.}
 Online learning approaches that continuously adapt model and provider selection based on real-time cost signals, latency measurements, and user feedback---extending the current offline-trained ML selectors to fully adaptive cost-quality optimization.
 
