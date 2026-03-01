@@ -544,25 +544,7 @@ I'm applying for a margin trading account. Here is my personal information: John
 
 ---
 
-### Example 7f: PII Detection — Password + IP Address in Economics Domain
-
-**Query to test in Playground:**
-
-```text
-Our trading system at 192.168.1.105 uses root password kj3$mP9!xL2q, please help me analyze today's bond yield curve.
-```
-
-**Expected Routing:**
-
-- **Signals Matched:** `domain: economics` (bond yield analysis) + `pii: pii_relaxed` (PASSWORD and IP_ADDRESS are NOT in the allow list)
-- **Decision:** `guardrails_pii_economics` (Priority 999)
-- **Model Selected:** `openai/gpt-oss-20b`
-- **Plugins Applied:** `fast_response` — "I'm sorry, but I cannot process this request because it contains personally identifiable information that our policy does not allow."
-- **Reasoning:** Economics domain detected AND high-sensitivity PII (password, IP address) present → domain-specific PII guardrail blocks the request
-
----
-
-### Example 7g: PII Detection — Allowed PII in Economics Domain (Should NOT Block)
+### Example 7f: PII Detection — Allowed PII in Economics Domain (Should NOT Block)
 
 **Query to test in Playground:**
 
