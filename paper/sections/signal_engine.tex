@@ -62,7 +62,7 @@ The thirteen signal types partition into \emph{heuristic} and \emph{learned} cat
   % Learned bounding box (on background so it doesn't cover signal nodes)
   \begin{scope}[on background layer]
   \node[grp, fill=green!3, fit=(emb)(dom)(fact)(fb)(mod)(cpx)(jb)(pii)(pref),
-        label={[font=\scriptsize\bfseries, text=green!50, anchor=north]below:Learned {\normalfont\scriptsize(10--100\,ms)}}] (lbox) {};
+        label={[font=\scriptsize\bfseries, text=green!70!black, anchor=north]below:Learned {\normalfont\scriptsize(10--100\,ms)}}] (lbox) {};
   \end{scope}
 
   % Output
@@ -237,3 +237,74 @@ This analysis enables two optimizations.
 First, \emph{adaptive signal pruning}: in a given deployment configuration, signals with near-zero mutual information with the routing outcome can be disabled without affecting routing quality, reducing extraction latency beyond the demand-driven approach of \Cref{sec:signal_engine}.
 Second, \emph{information-ordered evaluation}: evaluating high-$I(\tau_i; Y)$ signals first and short-circuiting when the decision outcome is already determined---analogous to early termination in decision trees---can reduce average per-request evaluation cost.
 The minimum description length (MDL) principle~\cite{rissanen1978modeling} provides a complementary perspective: the optimal signal subset is the one that describes the routing policy with minimum total code length, balancing signal extraction cost against routing precision.
+
+
+\subsection{Interpretation as Hybrid Embedding}
+\label{sec:disc_embedding}
+
+The signal extraction layer maps a raw request~$r$ to a structured signal vector $\mathbf{s} = S(r) \in \{0,1\}^N \times [0,1]^N$, where each dimension corresponds to a named signal condition and its associated confidence.
+This operation is functionally analogous to the \emph{embedding layer} of a Transformer~\cite{vaswani2017attention}: both convert unstructured input (token sequences or natural-language queries) into a high-dimensional representation suitable for downstream computation.
+
+However, the analogy is not merely structural---it reveals a key design distinction.
+Transformer embeddings produce dense, opaque vectors optimized end-to-end for a downstream task.
+The signal vector~$\mathbf{s}$, by contrast, is \emph{interpretable by construction}: each dimension has a human-readable name (e.g., \texttt{domain:mathematics}, \texttt{complexity:high}), a defined semantic type, and an independently auditable extraction pipeline.
+This interpretability is not incidental but architecturally enforced: the decision engine references signals by type and name, so the signal vector must be a \emph{structured, symbolic representation} rather than a latent embedding.
+
+We characterize this as a \emph{hybrid embedding}: the extraction methods span a spectrum from sub-millisecond heuristics (keyword matching, regex patterns) to learned neural classifiers (LoRA-based domain and complexity models, embedding similarity), yet all project onto the same interpretable coordinate system.
+\Cref{fig:embedding_comparison} illustrates this comparison.
+
+\begin{figure*}[!ht]
+  \centering
+  \begin{tikzpicture}[
+    box/.style={rectangle, draw, thick, rounded corners=3pt,
+                minimum height=0.7cm, align=center, inner sep=4pt, font=\small},
+    lbl/.style={font=\scriptsize, text=gray},
+    arr/.style={->, >=stealth, thick},
+    brace/.style={decorate, decoration={brace, amplitude=5pt, mirror}},
+  ]
+
+  % === Transformer Embedding (top) ===
+  \node[font=\small\bfseries] at (5.5, 4.2) {Transformer Embedding Layer};
+
+  \node[box, fill=black!5] (tin) at (0.5, 3.2) {Tokens\\$[t_1, \ldots, t_n]$};
+  \node[box, fill=blue!8, minimum width=2.8cm] (temb) at (3.8, 3.2) {Token Embed\\+ Position Embed};
+  \node[box, fill=purple!8, minimum width=2.2cm] (tvec) at (7.5, 3.2) {Dense Vector\\$\mathbf{h} \in \mathbb{R}^{d}$};
+  \node[box, fill=red!8] (tblk) at (10.5, 3.2) {Transformer\\Blocks};
+
+  \draw[arr] (tin) -- (temb);
+  \draw[arr] (temb) -- (tvec);
+  \draw[arr] (tvec) -- (tblk);
+
+  \node[lbl, anchor=north] at (7.5, 2.65) {opaque, dense, end-to-end};
+
+  % === VSR Signal Embedding (bottom) ===
+  \node[font=\small\bfseries] at (5.5, 1.2) {VSR Signal Extraction Layer};
+
+  \node[box, fill=black!5] (vin) at (0.5, -0.2) {Query $r$};
+
+  % Multiple extractors — spread vertically
+  \node[box, fill=green!8, font=\scriptsize, minimum width=1.3cm] (e1) at (2.6, 0.5) {Keyword\\(heuristic)};
+  \node[box, fill=blue!8, font=\scriptsize, minimum width=1.3cm] (e2) at (2.6, -0.2) {Embedding\\(learned)};
+  \node[box, fill=orange!8, font=\scriptsize, minimum width=1.3cm] (e3) at (2.6, -0.9) {Domain\\(LoRA)};
+
+  % Signal vector shifted right to give clearance from extractors
+  \node[box, fill=purple!8, minimum width=2.6cm] (svec) at (6.8, -0.2) {Signal Vector\\$\mathbf{s} \in \{0,1\}^N \!\times\! [0,1]^N$};
+  \node[box, fill=red!8] (deng) at (10.5, -0.2) {Decision\\Engine};
+
+  \draw[arr] (vin) -- (e1.west);
+  \draw[arr] (vin) -- (e2.west);
+  \draw[arr] (vin) -- (e3.west);
+  \draw[arr] (e1.east) -- (svec.west);
+  \draw[arr] (e2.east) -- (svec.west);
+  \draw[arr] (e3.east) -- (svec.west);
+  \draw[arr] (svec) -- (deng);
+
+  \node[lbl, anchor=north] at (6.8, -1.25) {interpretable, structured, hybrid};
+
+  % Correspondence arrow
+  \draw[<->, densely dashed, gray!50, thin] (tvec.south) -- (svec.north);
+
+  \end{tikzpicture}
+  \caption{Comparison of embedding strategies. \textbf{Top}: A Transformer embedding layer produces dense, opaque vectors optimized end-to-end. \textbf{Bottom}: The VSR signal extraction layer produces structured, interpretable signal vectors from heterogeneous extractors (heuristic, learned, LoRA-based), where each dimension has a human-readable semantic name. The dashed arrow marks the functional correspondence: both convert unstructured input into a representation for downstream computation, but the signal vector is interpretable by construction.}
+  \label{fig:embedding_comparison}
+\end{figure*}

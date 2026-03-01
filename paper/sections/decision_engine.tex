@@ -400,3 +400,99 @@ A healthcare deployment defines decisions with authz and domain conditions routi
 
 Formally, switching deployment scenarios corresponds to loading a different decision profile $\mathcal{D}_\Gamma$, while the signal extraction layer $\mathcal{S}$ and plugin implementations $\Pi$ remain unchanged.
 This separation of \emph{policy} (what decisions to evaluate) from \emph{mechanism} (how signals are computed and plugins execute) is the architectural basis for the composability claimed in \Cref{sec:architecture}.
+
+
+\subsection{Interpretation as Mixture-of-Experts Gating}
+\label{sec:disc_moe}
+
+The priority-ordered decision evaluation admits a precise structural analogy to the \emph{Mixture-of-Experts} (MoE) gating mechanism~\cite{shazeer2017moe}.
+In a standard MoE layer, a gating network $G(\mathbf{x})$ computes a sparse distribution over $K$ expert sub-networks, and the output is a weighted combination of the selected experts' outputs.
+In our system:
+
+\begin{itemize}
+  \item The \textbf{signal vector} $\mathbf{s}$ plays the role of the shared representation that the gating network operates on.
+  \item Each \textbf{decision block} $d_i$ with its Boolean formula $\phi_i(\mathbf{s})$ acts as an \emph{expert gate}---a binary function that determines whether expert~$i$ (a model pool with associated plugins) is activated.
+  \item \textbf{Priority ordering} implements \emph{hard routing with early exit}: the first decision whose gate evaluates to true captures the request, analogous to top-1 expert selection in sparse MoE but with a deterministic, priority-based selection rule rather than a learned softmax.
+\end{itemize}
+
+\Cref{fig:moe_analogy} formalizes this correspondence.
+The key distinction from standard MoE is that our gating functions are \emph{symbolic} (Boolean formulas over interpretable signals) rather than \emph{neural} (learned linear projections followed by softmax).
+This yields two properties that neural gating lacks: (1)~\emph{formal verifiability}---the coverage and conflict analysis of the preceding subsections can prove properties about the gating behavior that are intractable for neural gates; and (2)~\emph{compositional editability}---operators can add, remove, or reorder expert gates without retraining, by editing the DSL configuration.
+
+\begin{figure*}[!ht]
+  \centering
+  \begin{tikzpicture}[
+    box/.style={rectangle, draw, thick, rounded corners=3pt,
+                minimum height=0.65cm, align=center, inner sep=3pt, font=\small},
+    gate/.style={rectangle, draw, thick, rounded corners=3pt,
+                 minimum height=0.55cm, align=center, inner sep=2pt, font=\scriptsize\bfseries},
+    arr/.style={->, >=stealth, thick},
+    darr/.style={<->, >=stealth, densely dashed, gray!50, thin},
+    lbl/.style={font=\scriptsize, text=gray},
+  ]
+
+  % === MoE (left) ===
+  \node[font=\small\bfseries] at (3.0, 4.0) {Sparse MoE Layer};
+
+  \node[box, fill=black!5] (mx) at (3.0, 3.1) {Input $\mathbf{x}$};
+  \node[gate, fill=yellow!10, minimum width=2.4cm] (mg) at (3.0, 2.1) {Gating Network $G(\mathbf{x})$};
+
+  \node[box, fill=blue!6, font=\scriptsize] (me1) at (1.2, 0.8) {Expert 1};
+  \node[box, fill=blue!6, font=\scriptsize] (me2) at (3.0, 0.8) {Expert 2};
+  \node[box, fill=blue!6, font=\scriptsize] (me3) at (4.8, 0.8) {Expert $K$};
+  \node[font=\scriptsize] at (3.9, 0.8) {$\cdots$};
+
+  \node[gate, fill=green!8, minimum width=2.4cm] (msel) at (3.0, -0.2) {Top-$k$ Selection};
+  \node[box, fill=black!5, font=\scriptsize] (mout) at (3.0, -1.1) {Output};
+
+  \draw[arr] (mx) -- (mg);
+  \draw[arr] (mg) -- (me1);
+  \draw[arr] (mg) -- (me2);
+  \draw[arr] (mg) -- (me3);
+  \draw[arr] (me1) -- (msel);
+  \draw[arr] (me2) -- (msel);
+  \draw[arr] (me3) -- (msel);
+  \draw[arr] (msel) -- (mout);
+
+  \node[lbl, anchor=north] at (3.0, -1.6) {learned softmax gating};
+
+  % === VSR Decision Engine (right) ===
+  \node[font=\small\bfseries] at (10.0, 4.0) {VSR Decision Engine};
+
+  \node[box, fill=black!5] (vs) at (10.0, 3.1) {Signal Vector $\mathbf{s}$};
+  \node[gate, fill=yellow!10, minimum width=2.4cm] (vg) at (10.0, 2.1) {Boolean Gates $\phi_i(\mathbf{s})$};
+
+  \node[box, fill=blue!6, font=\scriptsize] (vd1) at (8.2, 0.8) {$d_1$: Model\\Pool $A$};
+  \node[box, fill=blue!6, font=\scriptsize] (vd2) at (10.0, 0.8) {$d_2$: Model\\Pool $B$};
+  \node[box, fill=blue!6, font=\scriptsize] (vd3) at (11.8, 0.8) {$d_K$: Model\\Pool $Z$};
+  \node[font=\scriptsize] at (10.9, 0.8) {$\cdots$};
+
+  \node[gate, fill=green!8, minimum width=2.4cm] (vsel) at (10.0, -0.2) {Priority Early-Exit};
+  \node[box, fill=black!5, font=\scriptsize] (vout) at (10.0, -1.1) {Model $m^*$};
+
+  \draw[arr] (vs) -- (vg);
+  \draw[arr] (vg) -- (vd1);
+  \draw[arr] (vg) -- (vd2);
+  \draw[arr] (vg) -- (vd3);
+  \draw[arr] (vd1) -- (vsel);
+  \draw[arr] (vd2) -- (vsel);
+  \draw[arr] (vd3) -- (vsel);
+  \draw[arr] (vsel) -- (vout);
+
+  \node[lbl, anchor=north] at (10.0, -1.6) {symbolic Boolean gating};
+
+  % Correspondence arrows
+  \draw[darr] (mx.east) -- (vs.west);
+  \draw[darr] (mg.east) -- (vg.west);
+  \draw[darr] (msel.east) -- (vsel.west);
+
+  \end{tikzpicture}
+  \caption{Structural analogy between Mixture-of-Experts gating and the VSR decision engine. \textbf{Left}: In a sparse MoE layer, a learned gating network selects top-$k$ experts via softmax. \textbf{Right}: In VSR, Boolean formulas over the signal vector act as symbolic expert gates, with priority ordering implementing deterministic early-exit selection. Dashed arrows mark the structural correspondence. The key difference: MoE gates are learned and opaque; VSR gates are symbolic, verifiable, and editable.}
+  \label{fig:moe_analogy}
+\end{figure*}
+
+The MoE analogy also clarifies what the system is \emph{not}: it is not a Transformer in the sequential sense.
+Transformer blocks transform the representation layer by layer---each block's output is the next block's input.
+In our architecture, all decision blocks operate on the \emph{same} shared signal vector~$\mathbf{s}$; there is no inter-decision information flow.
+The priority ordering is an \emph{early-exit mechanism} over parallel evaluations, not a sequential transformation pipeline.
+This distinction is important: it means that adding or removing decisions does not affect the behavior of other decisions (modulo priority reordering), a composability property that sequential architectures lack.

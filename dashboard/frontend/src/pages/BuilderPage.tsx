@@ -932,7 +932,20 @@ const VisualMode: React.FC<VisualModeProps> = ({
   onModeSwitch,
 }) => {
   // Collect available signal names for expression builder
-  const availableSignals = useMemo(() => ast?.signals?.map(s => ({ signalType: s.signalType, name: s.name })) ?? [], [ast?.signals])
+  // Complexity signals are referenced as "<name>:easy", "<name>:medium", "<name>:hard" in route conditions
+  const availableSignals = useMemo(() => {
+    const result: { signalType: string; name: string }[] = []
+    for (const s of ast?.signals ?? []) {
+      if (s.signalType === 'complexity') {
+        result.push({ signalType: s.signalType, name: `${s.name}:easy` })
+        result.push({ signalType: s.signalType, name: `${s.name}:medium` })
+        result.push({ signalType: s.signalType, name: `${s.name}:hard` })
+      } else {
+        result.push({ signalType: s.signalType, name: s.name })
+      }
+    }
+    return result
+  }, [ast?.signals])
   // Collect available plugin names for toggle panel
   const availablePlugins = useMemo(() => ast?.plugins?.map(p => ({ name: p.name, pluginType: p.pluginType })) ?? [], [ast?.plugins])
   // Collect available model names from all routes for selection
