@@ -711,7 +711,7 @@ decisions:
       operator: "AND"
       conditions:
         - type: "domain"
-          name: "economics"
+          name: "business"
         - type: "pii"
           name: "pii_relaxed"
     modelRefs:
