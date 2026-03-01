@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"runtime"
@@ -29,7 +30,7 @@ var getMultiModalTextEmbedding = func(text string, targetDim int) ([]float32, er
 
 // getMultiModalImageEmbedding computes an image embedding from a base64-encoded
 // image (raw base64 or data-URI) via the multimodal model.
-// HTTP URLs and local file paths are rejected to prevent SSRF and arbitrary file reads.
+// Also supports local file paths for preloading knowledge-base image candidates.
 // Package-level var so tests can override it.
 var getMultiModalImageEmbedding = func(imageRef string, targetDim int) ([]float32, error) {
 	if imageRef == "" {
@@ -37,8 +38,16 @@ var getMultiModalImageEmbedding = func(imageRef string, targetDim int) ([]float3
 	}
 
 	payload := imageRef
-	// Strip data-URI prefix if present (e.g. "data:image/png;base64,...")
-	if idx := strings.Index(imageRef, ";base64,"); idx >= 0 {
+
+	// If imageRef is a local file path, read and base64-encode it
+	if strings.HasPrefix(imageRef, "/") || strings.HasPrefix(imageRef, "./") {
+		data, err := os.ReadFile(imageRef)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read image file %q: %w", imageRef, err)
+		}
+		payload = base64.StdEncoding.EncodeToString(data)
+	} else if idx := strings.Index(imageRef, ";base64,"); idx >= 0 {
+		// Strip data-URI prefix if present (e.g. "data:image/png;base64,...")
 		payload = imageRef[idx+len(";base64,"):]
 	}
 
