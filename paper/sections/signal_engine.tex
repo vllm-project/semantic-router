@@ -1,0 +1,310 @@
+% sections/signal_engine.tex
+
+\section{Signal Extraction Layer}
+\label{sec:signal_engine}
+
+The signal extraction layer maps an incoming request $r$ to a structured signal result that characterizes the request along thirteen orthogonal dimensions.
+\Cref{fig:signal_taxonomy} provides an overview of the signal taxonomy and evaluation flow.
+We formalize the signal model and describe the extraction algorithms.
+
+\subsection{Signal Model}
+
+\begin{definition}[Signal Rule]
+A \emph{signal rule} $\rho = (\tau, n, f)$ consists of a signal type $\tau \in \mathcal{T}$, a rule name $n$, and an evaluation function $f: \mathcal{R} \to \{0, 1\} \times [0, 1]$ that maps a request to a binary match indicator and a confidence score.
+\end{definition}
+
+\begin{definition}[Signal Result]
+Given a rule set $\mathcal{R} = \{\rho_1, \ldots, \rho_N\}$, the signal result for request $r$ is:
+\begin{equation}
+  S(r) = \bigl\{ \bigl(\rho_i, \; \mathbf{1}[f_i(r)], \; c_i(r)\bigr) \mid \rho_i \in \mathcal{R} \bigr\}
+\end{equation}
+where $\mathbf{1}[f_i(r)]$ is the match indicator and $c_i(r) \in [0,1]$ is the confidence.
+\end{definition}
+
+The thirteen signal types partition into \emph{heuristic} and \emph{learned} categories based on whether they require neural inference.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    node distance=0.4cm,
+    sig/.style={rectangle, draw, rounded corners=2pt,
+                minimum height=0.5cm, minimum width=1.55cm,
+                align=center, font=\scriptsize, inner sep=2pt},
+    arr/.style={->, >=stealth, thick},
+    grp/.style={rectangle, draw, dashed, rounded corners=4pt,
+                inner sep=6pt, gray!40},
+  ]
+  % Input request
+  \node[sig, fill=black!4, minimum width=1.2cm] (req) at (0, 0) {Request $r$};
+
+  % --- Heuristic group (top) ---
+  \node[sig, fill=blue!6] (kw) at (3.0, 1.8) {$\tau_{\text{kw}}$\;Keyword};
+  \node[sig, fill=blue!6] (ctx) at (5.6, 1.8) {$\tau_{\text{ctx}}$\;Context};
+  \node[sig, fill=blue!6] (lang) at (3.0, 1.0) {$\tau_{\text{lang}}$\;Language};
+  \node[sig, fill=blue!6] (authz) at (5.6, 1.0) {$\tau_{\text{authz}}$\;Authz};
+  \node[font=\scriptsize, text=gray] (hdots) at (7.2, 1.4) {$\cdots$};
+  % Heuristic bounding box (on background so it doesn't cover signal nodes)
+  \begin{scope}[on background layer]
+  \node[grp, fill=blue!3, fit=(kw)(ctx)(lang)(authz)(hdots),
+        label={[font=\scriptsize\bfseries, text=blue!50, anchor=south]above:Heuristic {\normalfont\scriptsize($<$1\,ms)}}] (hbox) {};
+  \end{scope}
+
+  % --- Learned group (bottom) ---
+  \node[sig, fill=green!6] (emb) at (2.4, -0.7) {$\tau_{\text{emb}}$\;Embed};
+  \node[sig, fill=green!6] (dom) at (4.3, -0.7) {$\tau_{\text{dom}}$\;Domain};
+  \node[sig, fill=green!6] (fact) at (6.2, -0.7) {$\tau_{\text{fact}}$\;Factual};
+  \node[sig, fill=green!6] (fb) at (2.4, -1.5) {$\tau_{\text{fb}}$\;Feedback};
+  \node[sig, fill=green!6] (mod) at (4.3, -1.5) {$\tau_{\text{mod}}$\;Modality};
+  \node[sig, fill=green!6] (cpx) at (6.2, -1.5) {$\tau_{\text{cpx}}$\;Complex.};
+  \node[sig, fill=red!6] (jb) at (2.4, -2.3) {$\tau_{\text{jb}}$\;Jailbreak};
+  \node[sig, fill=red!6] (pii) at (4.3, -2.3) {$\tau_{\text{pii}}$\;PII};
+  \node[sig, fill=green!6] (pref) at (6.2, -2.3) {$\tau_{\text{pref}}$\;Prefer.};
+  % Learned bounding box (on background so it doesn't cover signal nodes)
+  \begin{scope}[on background layer]
+  \node[grp, fill=green!3, fit=(emb)(dom)(fact)(fb)(mod)(cpx)(jb)(pii)(pref),
+        label={[font=\scriptsize\bfseries, text=green!70!black, anchor=north]below:Learned {\normalfont\scriptsize(10--100\,ms)}}] (lbox) {};
+  \end{scope}
+
+  % Output
+  \node[sig, fill=orange!5, minimum width=1.4cm] (sr) at (8.6, 0) {$S(r)$};
+
+  % Arrows: request → groups
+  \draw[arr] (req.east) -- ++(0.4,0) |- (hbox.west);
+  \draw[arr] (req.east) -- ++(0.4,0) |- (lbox.west);
+
+  % Arrows: groups → S(r)
+  \draw[arr] (hbox.east) -| ++(0.6, -0.55) -- (sr.north west);
+  \draw[arr] (lbox.east) -| ++(0.6, 0.55) -- (sr.south west);
+
+  % Parallel annotation
+  \node[font=\scriptsize, text=gray, rotate=90, anchor=south] at (1.3, 0.2) {parallel};
+\end{tikzpicture}
+\caption{Signal extraction taxonomy and evaluation flow.  An incoming request is evaluated in parallel against heuristic signals (sub-millisecond, deterministic) and learned signals (neural inference via LoRA classifiers).  Only signal types referenced by configured decisions are computed (demand-driven evaluation).  Results merge into the structured signal result $S(r)$.}
+\label{fig:signal_taxonomy}
+\end{figure}
+
+\subsection{Heuristic Signals}
+
+Heuristic signals use deterministic or statistical algorithms with sub-millisecond latency:
+
+\noindent\textbf{Keyword} ($\tau_\text{kw}$).
+Rules are defined as pattern sets with Boolean combinators.
+Each rule specifies a set of patterns $P = \{p_1, \ldots, p_k\}$ with a combinator $\in \{\textsc{and}, \textsc{or}, \textsc{nor}\}$ and one of three matching methods:
+\begin{itemize}[nosep,leftmargin=1.5em]
+  \item \emph{Regex} (default): compiled regular expressions with word boundaries; confidence is 1.0 on match.
+  \item \emph{BM25}: BM25 scoring dispatched to a Rust-backed classifier via FFI. Each keyword is scored against the request using TF-IDF term weighting, and the rule matches when the score exceeds a configurable threshold (default 0.1). Confidence is derived from the BM25 score, providing a graded relevance signal rather than a binary match.
+  \item \emph{N-gram}: character $n$-gram similarity (default trigram) dispatched to the same Rust binding. The rule matches when the Jaccard similarity between the keyword and request $n$-gram sets exceeds a threshold (default 0.4), providing inherent tolerance to typos and morphological variation without a dedicated fuzzy-matching pass.
+\end{itemize}
+For \textsc{and}: $f(r) = \bigwedge_{i} \text{match}(p_i, r)$; for \textsc{or}: $f(r) = \bigvee_{i} \text{match}(p_i, r)$.
+The combinators apply uniformly across all three methods.
+
+\noindent\textbf{Context Length} ($\tau_\text{ctx}$).
+Rules define token-count intervals $[l, u]$.
+Given estimated token count $t(r)$, the rule matches iff $l \leq t(r) \leq u$.
+This enables complexity-aware routing (e.g., short queries to fast models, long contexts to extended-context models).
+
+\noindent\textbf{Language} ($\tau_\text{lang}$).
+Rules bind detected language codes to named signals using statistical n-gram detection over 100+ languages.
+Enables language-specific routing (e.g., CJK queries to multilingual-specialized models).
+
+\noindent\textbf{Authorization} ($\tau_\text{authz}$).
+Role-based access control signals extracted from request headers, supporting a pluggable authentication factory.
+The authz signal layer abstracts over multiple identity providers (API key, OAuth2/OIDC, cloud IAM, custom JWT, LDAP) through provider-specific extractors that resolve user identities and group memberships from credentials.
+Role bindings then map resolved identities to named signals, enabling per-role routing policies (e.g., premium users routed to higher-quality models, free-tier users restricted to cost-effective models).
+This \emph{inbound} authorization (who is the user and what can they access?) is complementary to the \emph{outbound} authorization factory (\Cref{subsec:authz_factory}) that injects provider-specific credentials when forwarding to backends.
+
+\subsection{Learned Signals}
+
+Learned signals require neural inference, typically 10--100\,ms, using the LoRA-based classifiers described in \Cref{sec:lora_mom}.
+
+\noindent\textbf{Why encoder-based models.}
+The choice of bidirectional encoders (ModernBERT~\cite{warner2024modernbert}, mmBERT-32K for long-context tasks) rather than unidirectional decoders for signal extraction is not merely an efficiency decision---it reflects a fundamental information-theoretic principle.
+Routing requires \emph{understanding} the query: determining its domain, complexity, intent, modality, and the precise location of sensitive content.
+Understanding, in Shannon's framework~\cite{shannon1948mathematical}, corresponds to building representations that maximize the mutual information $I(\mathbf{H};\, Y)$ between the hidden states~$\mathbf{H}$ and the task label~$Y$.
+A bidirectional encoder conditions every token on the full context in both directions, producing hidden states that capture the complete information structure of the input; a causal decoder, by contrast, conditions each token only on its left context---its representations are optimized for next-token prediction $I(\mathbf{h}_t;\, x_{t+1})$, which captures \emph{generative} continuation rather than \emph{discriminative} understanding.
+
+This bidirectional ``understanding'' is exploited at three distinct granularities across the signal types:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Sequence-level} (CLS pooling): For domain classification, jailbreak detection, fact-check gating, modality classification, and user feedback, the pooled CLS representation acts as an approximate \emph{sufficient statistic}---a fixed-dimensional vector that compresses the query's global semantics while discarding positional detail irrelevant to the label.
+  \item \textbf{Token-level} (per-token hidden states): For PII detection and hallucination span identification, the \emph{position} of information matters---which tokens are names, which spans are unsupported claims. Here the full sequence of hidden states $(\mathbf{h}_1, \ldots, \mathbf{h}_T)$ is retained, preserving the positional mutual information $I(\mathbf{h}_t;\, y_t)$ that CLS pooling would discard.
+  \item \textbf{Cross-sequence} (cross-encoder): For NLI-based hallucination explanation (\Cref{sec:halugate}), the encoder jointly attends over a (claim, evidence) pair, maximizing the \emph{inter-sequence} mutual information $I(\text{claim};\, \text{evidence})$ through full cross-attention---a capacity unavailable to architectures that encode each sequence independently.
+\end{itemize}
+In each case, the encoder's unrestricted attention pattern---the absence of a causal mask---is what enables maximal information extraction at the granularity the task demands.
+
+\noindent\textbf{Embedding Similarity} ($\tau_\text{emb}$).
+Each rule defines reference texts $\{t_1, \ldots, t_k\}$ and a similarity threshold $\theta$.
+The request embedding $\mathbf{e}_r$ is computed via a shared embedding model, and the rule matches iff:
+\begin{equation}
+  \max_i \cos(\mathbf{e}_r, \mathbf{e}_{t_i}) \geq \theta
+\end{equation}
+The confidence equals the maximum cosine similarity.
+This provides scalable semantic matching without per-rule model training.
+
+\noindent\textbf{Domain Classification} ($\tau_\text{dom}$).
+A LoRA-adapted classifier trained on MMLU categories maps requests to domain labels (STEM, humanities, code, creative writing, etc.).
+The classification confidence serves as the signal confidence.
+
+\noindent\textbf{Factual Grounding} ($\tau_\text{fact}$).
+A binary classifier (the HaluGate Sentinel, \Cref{sec:halugate}) determines whether the query requires factual verification, distinguishing factual questions from creative or code-generation tasks.
+
+\noindent\textbf{User Feedback} ($\tau_\text{fb}$).
+A multi-class classifier detects satisfaction, dissatisfaction, clarification requests, and preference for alternatives, enabling feedback-driven routing adjustments.
+
+\noindent\textbf{Modality} ($\tau_\text{mod}$).
+A three-class classifier (autoregressive, diffusion, both) determines the appropriate model modality for the request, trained on mixed text-generation and image-generation datasets.
+
+\noindent\textbf{Complexity} ($\tau_\text{cpx}$).
+A contrastive embedding classifier estimates query difficulty.
+Each complexity rule defines two sets of candidate exemplars---\emph{hard} (e.g., multi-step reasoning problems) and \emph{easy} (e.g., simple factual lookups)---whose embeddings are precomputed at initialization.
+At query time, the query embedding is compared against both sets via cosine similarity:
+\begin{equation}
+  \delta = \max_{h \in \mathcal{H}} \text{sim}(\mathbf{q}, \mathbf{h}) - \max_{e \in \mathcal{E}} \text{sim}(\mathbf{q}, \mathbf{e})
+\end{equation}
+where $\mathcal{H}$ and $\mathcal{E}$ are the hard and easy candidate sets.
+The difficulty level is then $\text{hard}$ if $\delta > \theta$, $\text{easy}$ if $\delta < -\theta$, and $\text{medium}$ otherwise, for a per-rule threshold $\theta$.
+Multiple complexity rules can coexist (e.g., \texttt{code\_complexity}, \texttt{math\_complexity}), each with its own candidate sets and threshold.
+Composer conditions can restrict when a rule fires---for instance, evaluating \texttt{code\_complexity} only when the domain signal indicates computer science.
+
+\noindent\textbf{Jailbreak Detection} ($\tau_\text{jb}$).
+Each jailbreak rule selects one of two detection methods via a \texttt{method} field (default: \texttt{classifier}).
+
+\emph{BERT classifier method.}
+A binary/ternary classifier detects adversarial prompt injection and jailbreak attempts.
+Each rule defines a confidence threshold $\theta$; the signal fires when jailbreak confidence $c \geq \theta$.
+An optional \texttt{include\_history} flag controls whether only the latest user message or the full conversation history is analyzed, trading latency for recall against multi-turn attacks.
+Multiple rules at different thresholds enable per-decision sensitivity---a public chatbot may use $\theta = 0.65$, while an internal tool uses $\theta = 0.9$ to minimize false positives.
+
+\emph{Contrastive embedding method.}
+Analogous to the complexity signal, each rule defines two sets of exemplar patterns---\emph{jailbreak} ($\mathcal{K}_\text{jb}$, e.g., ``Ignore all previous instructions'') and \emph{benign} ($\mathcal{K}_\text{ben}$, e.g., ``What is the weather today'')---whose embeddings are precomputed at initialization.
+At request time the contrastive score for a message $m$ is:
+\begin{equation}
+  \delta(m) = \max_{j \in \mathcal{K}_\text{jb}} \text{sim}(\mathbf{m}, \mathbf{j}) - \max_{b \in \mathcal{K}_\text{ben}} \text{sim}(\mathbf{m}, \mathbf{b})
+\end{equation}
+When \texttt{include\_history} is enabled, the system evaluates every user message in the conversation and takes the maximum score across all turns:
+$\Delta = \max_{m \in \mathcal{M}_\text{user}} \delta(m)$.
+The rule fires when $\Delta \geq \theta$ (default $\theta = 0.10$).
+This \emph{max-contrastive-chain} aggregation is specifically designed to catch ``boiling frog'' multi-turn attacks where each individual message may score below threshold but the conversation contains at least one escalation turn.
+
+Both methods coexist within the same signal type; a single deployment can define BERT and contrastive rules simultaneously and combine them in decision logic using OR (fire if either detects) or use them at different priority levels for graduated response.
+Classifier details are described in \Cref{sec:safety}.
+
+\noindent\textbf{PII Detection} ($\tau_\text{pii}$).
+A token-level NER classifier identifies personally identifiable information (person names, emails, phone numbers, SSNs, credit cards, etc.).
+Each rule specifies a confidence threshold and an optional allow-list of PII entity types.
+The signal fires when any PII type \emph{not} in the allow-list is detected above threshold.
+This per-rule policy model enables differentiated enforcement: a medical application may allow \textsc{person} while blocking \textsc{ssn}, whereas a public chatbot blocks all PII types.
+Classifier details are described in \Cref{sec:safety}.
+
+\noindent\textbf{Preference} ($\tau_\text{pref}$).
+Personalized routing based on user interaction history.
+
+\subsection{Parallel Evaluation with Lazy Computation}
+
+A key optimization is \emph{demand-driven evaluation}: the engine computes only signal types referenced by at least one configured decision.
+Let $\mathcal{T}_\text{used} = \bigcup_{d \in \mathcal{D}} \{\tau \mid \exists\, \text{condition in } d \text{ of type } \tau\}$.
+Signal evaluators for types in $\mathcal{T}_\text{used}$ are launched as concurrent coroutines, with heuristic signals completing before learned signals due to their sub-millisecond latency.
+
+This demand-driven approach avoids the cost of unused signal types.
+In typical configurations with 3--5 active signal types out of thirteen, this reduces total signal extraction latency by 50--70\% compared to exhaustive evaluation.
+The strategy has a natural information-theoretic interpretation.
+Shannon's source coding theorem~\cite{shannon1948mathematical} establishes that optimal codes assign shorter codewords to more probable symbols; analogously, demand-driven evaluation assigns \emph{zero computational cost} to signals that carry no routing information in the current configuration, and full cost only to those that do.
+If we view each signal type's evaluation cost $c_i$ as a ``codeword length'' and its relevance indicator $\mathbf{1}[\tau_i \in \mathcal{T}_\text{used}]$ as the probability of being needed, then demand-driven evaluation minimizes the expected evaluation cost $\sum_i c_i \cdot \mathbf{1}[\tau_i \in \mathcal{T}_\text{used}]$---the computational analogue of minimizing expected code length.
+
+\subsection{Extensibility}
+
+The thirteen signal types described above represent the current built-in set; the framework is not limited to these.
+The signal extraction layer defines a uniform interface---each signal type implements an evaluation function $f: \mathcal{R} \to \{0,1\} \times [0,1]$---and the decision engine references signals solely by type and rule name.
+Adding a new signal type requires only implementing this interface and registering the type; no changes to the decision engine, plugin chain, or deployment infrastructure are needed.
+This open architecture allows operators to introduce domain-specific signals (e.g., regulatory compliance classifiers, custom toxicity detectors) alongside the built-in types.
+
+\subsection{Bidirectional Signal Flow}
+
+Signals are not limited to the inbound request path.
+The system also extracts signals from model \emph{responses}, enabling closed-loop routing policies that adapt based on output characteristics.
+The primary example is \halugate{} (\Cref{sec:halugate}): the Sentinel classifier on the request path determines whether a query requires factual verification (the $\tau_\text{fact}$ signal), and if so, the Detector and Explainer stages analyze the model's response for unsupported claims---producing response-side detection results (confidence scores, hallucinated spans, NLI explanations) that are propagated via HTTP headers or body annotations.
+This bidirectional flow---request signals gating which response analyses to perform, and response signals feeding back into observability and policy enforcement---enables adaptive quality assurance without imposing uniform overhead on all requests.
+
+\subsection{Information-Theoretic Signal Analysis}
+
+With $N$ signal types evaluated per request, a natural question is whether all signals contribute independently to routing quality or whether some carry redundant information.
+Information theory provides the formal framework for this analysis.
+
+For a signal type $\tau_i$ and the routing outcome variable $Y$ (the selected model), the \emph{mutual information} $I(\tau_i; Y)$ quantifies the reduction in uncertainty about the routing decision provided by observing signal $\tau_i$.
+The \emph{conditional mutual information} $I(\tau_i; Y \mid \tau_j)$ measures the additional information from $\tau_i$ given that $\tau_j$ is already observed.
+When $I(\tau_i; Y \mid \tau_j) \approx 0$, signals $\tau_i$ and $\tau_j$ are redundant with respect to routing---observing both provides no more discriminative power than observing one.
+
+This analysis enables two optimizations.
+First, \emph{adaptive signal pruning}: in a given deployment configuration, signals with near-zero mutual information with the routing outcome can be disabled without affecting routing quality, reducing extraction latency beyond the demand-driven approach of \Cref{sec:signal_engine}.
+Second, \emph{information-ordered evaluation}: evaluating high-$I(\tau_i; Y)$ signals first and short-circuiting when the decision outcome is already determined---analogous to early termination in decision trees---can reduce average per-request evaluation cost.
+The minimum description length (MDL) principle~\cite{rissanen1978modeling} provides a complementary perspective: the optimal signal subset is the one that describes the routing policy with minimum total code length, balancing signal extraction cost against routing precision.
+
+
+\subsection{Interpretation as Hybrid Embedding}
+\label{sec:disc_embedding}
+
+The signal extraction layer maps a raw request~$r$ to a structured signal vector $\mathbf{s} = S(r) \in \{0,1\}^N \times [0,1]^N$, where each dimension corresponds to a named signal condition and its associated confidence.
+This operation is functionally analogous to the \emph{embedding layer} of a Transformer~\cite{vaswani2017attention}: both convert unstructured input (token sequences or natural-language queries) into a high-dimensional representation suitable for downstream computation.
+
+However, the analogy is not merely structural---it reveals a key design distinction.
+Transformer embeddings produce dense, opaque vectors optimized end-to-end for a downstream task.
+The signal vector~$\mathbf{s}$, by contrast, is \emph{interpretable by construction}: each dimension has a human-readable name (e.g., \texttt{domain:mathematics}, \texttt{complexity:high}), a defined semantic type, and an independently auditable extraction pipeline.
+This interpretability is not incidental but architecturally enforced: the decision engine references signals by type and name, so the signal vector must be a \emph{structured, symbolic representation} rather than a latent embedding.
+
+We characterize this as a \emph{hybrid embedding}: the extraction methods span a spectrum from sub-millisecond heuristics (keyword matching, regex patterns) to learned neural classifiers (LoRA-based domain and complexity models, embedding similarity), yet all project onto the same interpretable coordinate system.
+\Cref{fig:embedding_comparison} illustrates this comparison.
+
+\begin{figure*}[!ht]
+  \centering
+  \begin{tikzpicture}[
+    box/.style={rectangle, draw, thick, rounded corners=3pt,
+                minimum height=0.7cm, align=center, inner sep=4pt, font=\small},
+    lbl/.style={font=\scriptsize, text=gray},
+    arr/.style={->, >=stealth, thick},
+    brace/.style={decorate, decoration={brace, amplitude=5pt, mirror}},
+  ]
+
+  % === Transformer Embedding (top) ===
+  \node[font=\small\bfseries] at (5.5, 4.2) {Transformer Embedding Layer};
+
+  \node[box, fill=black!5] (tin) at (0.5, 3.2) {Tokens\\$[t_1, \ldots, t_n]$};
+  \node[box, fill=blue!8, minimum width=2.8cm] (temb) at (3.8, 3.2) {Token Embed\\+ Position Embed};
+  \node[box, fill=purple!8, minimum width=2.2cm] (tvec) at (7.5, 3.2) {Dense Vector\\$\mathbf{h} \in \mathbb{R}^{d}$};
+  \node[box, fill=red!8] (tblk) at (10.5, 3.2) {Transformer\\Blocks};
+
+  \draw[arr] (tin) -- (temb);
+  \draw[arr] (temb) -- (tvec);
+  \draw[arr] (tvec) -- (tblk);
+
+  \node[lbl, anchor=north] at (7.5, 2.65) {opaque, dense, end-to-end};
+
+  % === VSR Signal Embedding (bottom) ===
+  \node[font=\small\bfseries] at (5.5, 1.2) {VSR Signal Extraction Layer};
+
+  \node[box, fill=black!5] (vin) at (0.5, -0.2) {Query $r$};
+
+  % Multiple extractors — spread vertically
+  \node[box, fill=green!8, font=\scriptsize, minimum width=1.3cm] (e1) at (2.6, 0.5) {Keyword\\(heuristic)};
+  \node[box, fill=blue!8, font=\scriptsize, minimum width=1.3cm] (e2) at (2.6, -0.2) {Embedding\\(learned)};
+  \node[box, fill=orange!8, font=\scriptsize, minimum width=1.3cm] (e3) at (2.6, -0.9) {Domain\\(LoRA)};
+
+  % Signal vector shifted right to give clearance from extractors
+  \node[box, fill=purple!8, minimum width=2.6cm] (svec) at (6.8, -0.2) {Signal Vector\\$\mathbf{s} \in \{0,1\}^N \!\times\! [0,1]^N$};
+  \node[box, fill=red!8] (deng) at (10.5, -0.2) {Decision\\Engine};
+
+  \draw[arr] (vin) -- (e1.west);
+  \draw[arr] (vin) -- (e2.west);
+  \draw[arr] (vin) -- (e3.west);
+  \draw[arr] (e1.east) -- (svec.west);
+  \draw[arr] (e2.east) -- (svec.west);
+  \draw[arr] (e3.east) -- (svec.west);
+  \draw[arr] (svec) -- (deng);
+
+  \node[lbl, anchor=north] at (6.8, -1.25) {interpretable, structured, hybrid};
+
+  % Correspondence arrow
+  \draw[<->, densely dashed, gray!50, thin] (tvec.south) -- (svec.north);
+
+  \end{tikzpicture}
+  \caption{Comparison of embedding strategies. \textbf{Top}: A Transformer embedding layer produces dense, opaque vectors optimized end-to-end. \textbf{Bottom}: The VSR signal extraction layer produces structured, interpretable signal vectors from heterogeneous extractors (heuristic, learned, LoRA-based), where each dimension has a human-readable semantic name. The dashed arrow marks the functional correspondence: both convert unstructured input into a representation for downstream computation, but the signal vector is interpretable by construction.}
+  \label{fig:embedding_comparison}
+\end{figure*}

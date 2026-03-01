@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import clsx from 'clsx'
 import Link from '@docusaurus/Link'
 import Translate, { translate } from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
+import { useColorMode } from '@docusaurus/theme-common'
 import Layout from '@theme/Layout'
 import HomepageFeatures from '@site/src/components/HomepageFeatures'
 import ChainOfThoughtTerminal from '@site/src/components/ChainOfThoughtTerminal'
@@ -10,6 +11,7 @@ import ChainOfThoughtTerminal from '@site/src/components/ChainOfThoughtTerminal'
 import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection'
 import TeamCarousel from '@site/src/components/TeamCarousel'
 import TransformerPipelineAnimation from '@site/src/components/TransformerPipelineAnimation'
+import Threads from '@site/src/components/Threads'
 
 import styles from './index.module.css'
 
@@ -23,6 +25,12 @@ const ROTATING_WORDS = [
 const HomepageHeader: React.FC = () => {
   const [wordIndex, setWordIndex] = useState(0)
   const [isAnimating, setIsAnimating] = useState(false)
+  const { colorMode } = useColorMode()
+
+  const threadsColor: [number, number, number] = useMemo(
+    () => (colorMode === 'dark' ? [0.39, 0.4, 0.95] : [0.25, 0.25, 0.65]),
+    [colorMode],
+  )
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -37,6 +45,14 @@ const HomepageHeader: React.FC = () => {
 
   return (
     <header className={clsx('hero hero--primary', styles.heroBanner)}>
+      <div className={styles.threadsBackground}>
+        <Threads
+          amplitude={1.8}
+          distance={0.2}
+          enableMouseInteraction={false}
+          color={threadsColor}
+        />
+      </div>
       <div className="container">
         <div className={styles.heroContent}>
           <div className={styles.heroLeft}>
@@ -118,7 +134,7 @@ const HomepageHeader: React.FC = () => {
                 rel="noopener noreferrer"
               >
                 <span className={styles.buttonText}>
-                  <Translate id="homepage.hero.publicBeta">Try Demo</Translate>
+                  <Translate id="homepage.hero.publicBeta">Public Beta</Translate>
                 </span>
                 <span className={styles.buttonIcon}>↗</span>
               </a>

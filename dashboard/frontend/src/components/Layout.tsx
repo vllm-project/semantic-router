@@ -11,20 +11,36 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectionChange, hideHeaderOnMobile }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [systemDropdownOpen, setSystemDropdownOpen] = useState(false)
+  const [openDropdown, setOpenDropdown] = useState<'analysis' | 'operations' | null>(null)
   const location = useLocation()
   const navigate = useNavigate()
-  const isConfigPage = location.pathname === '/config'
-  const isSystemPage = isConfigPage && configSection === 'router-config'
-  const isObservabilityPage = ['/status', '/logs', '/monitoring', '/tracing'].includes(location.pathname)
-  const isMCPPage = isConfigPage && configSection === 'mcp'
 
-  // Close system dropdown when clicking outside
+  const isConfigPage = location.pathname === '/config'
+
+  // Active state detection
+  const isModelsActive = isConfigPage && configSection === 'models'
+  const isSignalsActive = isConfigPage && configSection === 'signals'
+  const isDecisionsActive = isConfigPage && configSection === 'decisions'
+  const isAnalysisChildActive =
+    location.pathname === '/evaluation' ||
+    location.pathname === '/replay' ||
+    location.pathname === '/ratings'
+  const isOperationsChildActive =
+    location.pathname === '/ml-setup' ||
+    (isConfigPage && configSection === 'router-config') ||
+    (isConfigPage && configSection === 'mcp') ||
+    ['/status', '/logs', '/monitoring', '/tracing'].includes(location.pathname)
+
+  const toggleDropdown = (dropdown: 'analysis' | 'operations') => {
+    setOpenDropdown(prev => prev === dropdown ? null : dropdown)
+  }
+
+  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement
-      if (!target.closest(`.${styles.systemDropdown}`)) {
-        setSystemDropdownOpen(false)
+      if (!target.closest(`.${styles.navDropdown}`)) {
+        setOpenDropdown(null)
       }
     }
     document.addEventListener('click', handleClickOutside)
@@ -42,47 +58,29 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
             <span className={styles.brandText}></span>
           </NavLink>
 
-          {/* Center: Navigation - Flat structure */}
+          {/* Center: Navigation - Big Three + Dropdowns */}
           <nav className={styles.nav}>
+            {/* Primary: Dashboard */}
+            <NavLink
+              to="/dashboard"
+              className={({ isActive }) =>
+                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+              }
+            >
+              Dashboard
+            </NavLink>
+
+            {/* Primary: Playground */}
             <NavLink
               to="/playground"
               className={({ isActive }) =>
-                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+                isActive ? `${styles.navLink} ${styles.navLinkActive} ${styles.playgroundActive}` : styles.navLink
               }
             >
               Playground
             </NavLink>
 
-            <button
-              className={`${styles.navLink} ${isConfigPage && configSection === 'models' ? styles.navLinkActive : ''}`}
-              onClick={() => {
-                onConfigSectionChange?.('models')
-                navigate('/config')
-              }}
-            >
-              Models
-            </button>
-
-            <button
-              className={`${styles.navLink} ${isConfigPage && configSection === 'signals' ? styles.navLinkActive : ''}`}
-              onClick={() => {
-                onConfigSectionChange?.('signals')
-                navigate('/config')
-              }}
-            >
-              Signals
-            </button>
-
-            <button
-              className={`${styles.navLink} ${isConfigPage && configSection === 'decisions' ? styles.navLinkActive : ''}`}
-              onClick={() => {
-                onConfigSectionChange?.('decisions')
-                navigate('/config')
-              }}
-            >
-              Decisions
-            </button>
-
+            {/* Primary: Brain */}
             <NavLink
               to="/topology"
               className={({ isActive }) =>
@@ -93,51 +91,60 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
             </NavLink>
 
             <NavLink
-              to="/replay"
+              to="/builder"
               className={({ isActive }) =>
                 isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
               }
             >
-              Replay
+              Builder
             </NavLink>
 
-            <NavLink
-              to="/evaluation"
-              className={({ isActive }) =>
-                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
-              }
+            {/* Primary: Models */}
+            <button
+              className={`${styles.navLink} ${isModelsActive ? styles.navLinkActive : ''}`}
+              onClick={() => {
+                onConfigSectionChange?.('models')
+                navigate('/config')
+              }}
             >
-              Evaluation
-            </NavLink>
+              Models
+            </button>
 
-            <NavLink
-              to="/ml-setup"
-              className={({ isActive }) =>
-                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
-              }
+            {/* Primary: Signals */}
+            <button
+              className={`${styles.navLink} ${isSignalsActive ? styles.navLinkActive : ''}`}
+              onClick={() => {
+                onConfigSectionChange?.('signals')
+                navigate('/config')
+              }}
             >
-              ML Setup
-            </NavLink>
+              Signals
+            </button>
 
-            <NavLink
-              to="/ratings"
-              className={({ isActive }) =>
-                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
-              }
+            {/* Primary: Decisions */}
+            <button
+              className={`${styles.navLink} ${isDecisionsActive ? styles.navLinkActive : ''}`}
+              onClick={() => {
+                onConfigSectionChange?.('decisions')
+                navigate('/config')
+              }}
             >
-              Ratings
-            </NavLink>
+              Decisions
+            </button>
 
-            {/* System Dropdown (includes router-config and observability) */}
-            <div className={styles.systemDropdown}>
+            {/* Divider */}
+            <div className={styles.navDivider} />
+
+            {/* Analysis Dropdown */}
+            <div className={styles.navDropdown}>
               <button
-                className={`${styles.navLink} ${styles.dropdownTrigger} ${(isSystemPage || isMCPPage || isObservabilityPage) ? styles.navLinkActive : ''}`}
+                className={`${styles.navLink} ${styles.dropdownTrigger} ${isAnalysisChildActive ? styles.navLinkActive : ''}`}
                 onClick={(e) => {
                   e.stopPropagation()
-                  setSystemDropdownOpen(!systemDropdownOpen)
+                  toggleDropdown('analysis')
                 }}
               >
-                System
+                Analysis
                 <svg
                   width="12"
                   height="12"
@@ -145,59 +152,119 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="1.5"
-                  className={`${styles.dropdownArrow} ${systemDropdownOpen ? styles.dropdownArrowOpen : ''}`}
+                  className={`${styles.dropdownArrow} ${openDropdown === 'analysis' ? styles.dropdownArrowOpen : ''}`}
                 >
                   <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
-              {systemDropdownOpen && (
+              {openDropdown === 'analysis' && (
                 <div className={styles.dropdownMenu}>
+                  <NavLink
+                    to="/evaluation"
+                    className={`${styles.dropdownItem} ${location.pathname === '/evaluation' ? styles.dropdownItemActive : ''}`}
+                    onClick={() => setOpenDropdown(null)}
+                  >
+                    Evaluation
+                  </NavLink>
+                  <NavLink
+                    to="/replay"
+                    className={`${styles.dropdownItem} ${location.pathname === '/replay' ? styles.dropdownItemActive : ''}`}
+                    onClick={() => setOpenDropdown(null)}
+                  >
+                    Replay
+                  </NavLink>
+                  <NavLink
+                    to="/ratings"
+                    className={`${styles.dropdownItem} ${location.pathname === '/ratings' ? styles.dropdownItemActive : ''}`}
+                    onClick={() => setOpenDropdown(null)}
+                  >
+                    Ratings
+                  </NavLink>
+                </div>
+              )}
+            </div>
+
+            {/* Operations Dropdown */}
+            <div className={styles.navDropdown}>
+              <button
+                className={`${styles.navLink} ${styles.dropdownTrigger} ${isOperationsChildActive ? styles.navLinkActive : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  toggleDropdown('operations')
+                }}
+              >
+                Operations
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 12 12"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  className={`${styles.dropdownArrow} ${openDropdown === 'operations' ? styles.dropdownArrowOpen : ''}`}
+                >
+                  <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              {openDropdown === 'operations' && (
+                <div className={styles.dropdownMenuRight}>
+                  {/* ML Tools */}
+                  <NavLink
+                    to="/ml-setup"
+                    className={`${styles.dropdownItem} ${location.pathname === '/ml-setup' ? styles.dropdownItemActive : ''}`}
+                    onClick={() => setOpenDropdown(null)}
+                  >
+                    ML Setup
+                  </NavLink>
+                  <div className={styles.dropdownDivider}></div>
+                  {/* Config */}
                   <button
-                    className={`${styles.dropdownItem} ${isSystemPage ? styles.dropdownItemActive : ''}`}
+                    className={`${styles.dropdownItem} ${isConfigPage && configSection === 'router-config' ? styles.dropdownItemActive : ''}`}
                     onClick={() => {
                       onConfigSectionChange?.('router-config')
                       navigate('/config')
-                      setSystemDropdownOpen(false)
+                      setOpenDropdown(null)
                     }}
                   >
                     Router Config
                   </button>
                   <button
-                    className={`${styles.dropdownItem} ${isMCPPage ? styles.dropdownItemActive : ''}`}
+                    className={`${styles.dropdownItem} ${isConfigPage && configSection === 'mcp' ? styles.dropdownItemActive : ''}`}
                     onClick={() => {
                       onConfigSectionChange?.('mcp')
                       navigate('/config')
-                      setSystemDropdownOpen(false)
+                      setOpenDropdown(null)
                     }}
                   >
-                    MCP Servers & Tools
+                    MCP Servers
                   </button>
                   <div className={styles.dropdownDivider}></div>
+                  {/* Observability */}
                   <NavLink
                     to="/status"
                     className={`${styles.dropdownItem} ${location.pathname === '/status' ? styles.dropdownItemActive : ''}`}
-                    onClick={() => setSystemDropdownOpen(false)}
+                    onClick={() => setOpenDropdown(null)}
                   >
                     Status
                   </NavLink>
                   <NavLink
                     to="/logs"
                     className={`${styles.dropdownItem} ${location.pathname === '/logs' ? styles.dropdownItemActive : ''}`}
-                    onClick={() => setSystemDropdownOpen(false)}
+                    onClick={() => setOpenDropdown(null)}
                   >
                     Logs
                   </NavLink>
                   <NavLink
                     to="/monitoring"
                     className={`${styles.dropdownItem} ${location.pathname === '/monitoring' ? styles.dropdownItemActive : ''}`}
-                    onClick={() => setSystemDropdownOpen(false)}
+                    onClick={() => setOpenDropdown(null)}
                   >
                     Grafana
                   </NavLink>
                   <NavLink
                     to="/tracing"
                     className={`${styles.dropdownItem} ${location.pathname === '/tracing' ? styles.dropdownItemActive : ''}`}
-                    onClick={() => setSystemDropdownOpen(false)}
+                    onClick={() => setOpenDropdown(null)}
                   >
                     Tracing
                   </NavLink>
@@ -261,8 +328,15 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
         {/* Mobile Navigation */}
         {mobileMenuOpen && (
           <div className={styles.mobileNav}>
+            {/* Primary items */}
+            <NavLink to="/dashboard" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+              Dashboard
+            </NavLink>
             <NavLink to="/playground" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
               Playground
+            </NavLink>
+            <NavLink to="/topology" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+              Brain
             </NavLink>
             <button
               className={styles.mobileNavLink}
@@ -294,23 +368,30 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
             >
               Decisions
             </button>
-            <NavLink to="/topology" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
-              Brain
+            <NavLink to="/builder" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+              Builder
             </NavLink>
-            <NavLink to="/replay" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
-              Replay
-            </NavLink>
-            <NavLink to="/evaluation" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
-              Evaluation
-            </NavLink>
-            <NavLink to="/ml-setup" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
-              ML Setup
-            </NavLink>
-            <NavLink to="/ratings" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
-              Ratings
-            </NavLink>
+
+            {/* Analysis section */}
             <div className={styles.mobileNavSection}>
-              <div className={styles.mobileNavSectionTitle}>System</div>
+              <div className={styles.mobileNavSectionTitle}>Analysis</div>
+              <NavLink to="/evaluation" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+                Evaluation
+              </NavLink>
+              <NavLink to="/replay" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+                Replay
+              </NavLink>
+              <NavLink to="/ratings" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+                Ratings
+              </NavLink>
+            </div>
+
+            {/* Operations section */}
+            <div className={styles.mobileNavSection}>
+              <div className={styles.mobileNavSectionTitle}>Operations</div>
+              <NavLink to="/ml-setup" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+                ML Setup
+              </NavLink>
               <button
                 className={styles.mobileNavLink}
                 onClick={() => {
@@ -329,7 +410,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
                   setMobileMenuOpen(false)
                 }}
               >
-                MCP Servers & Tools
+                MCP Servers
               </button>
               <NavLink to="/status" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
                 Status

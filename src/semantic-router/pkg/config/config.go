@@ -42,6 +42,8 @@ const (
 	SignalTypeComplexity   = "complexity"
 	SignalTypeModality     = "modality"
 	SignalTypeAuthz        = "authz"
+	SignalTypeJailbreak    = "jailbreak"
+	SignalTypePII          = "pii"
 )
 
 // API format constants for model backends
@@ -680,6 +682,18 @@ type Signals struct {
 	// User identity and groups are read from x-authz-user-id and x-authz-user-groups headers
 	// (injected by Authorino / ext_authz). Subject names MUST match Authorino output.
 	RoleBindings []RoleBinding `yaml:"role_bindings,omitempty"`
+
+	// Jailbreak rules for ML-based jailbreak detection signal classification
+	// Each rule defines a named threshold; the signal fires when jailbreak confidence >= threshold.
+	// Multiple rules with different thresholds allow decisions to reference different sensitivity levels.
+	// Inference uses the existing PromptGuard / candle_binding pipeline (parallelised in signal evaluation).
+	JailbreakRules []JailbreakRule `yaml:"jailbreak,omitempty"`
+
+	// PII rules for ML-based PII detection signal classification
+	// Each rule defines a named threshold and an allow-list of PII types.
+	// The signal fires when denied PII types are detected above the threshold.
+	// Inference uses the existing PII / candle_binding pipeline (parallelised in signal evaluation).
+	PIIRules []PIIRule `yaml:"pii,omitempty"`
 }
 
 // BackendModels represents the configuration for backend models
@@ -849,6 +863,18 @@ type LooperConfig struct {
 	// Example: "http://localhost:8080/v1/chat/completions"
 	Endpoint string `yaml:"endpoint"`
 
+	// ModelEndpoints maps model names to their dedicated API endpoints.
+	// When a model has an entry here, the looper will use it instead of the
+	// default Endpoint. This is required when different models are served by
+	// different backends (e.g., separate vLLM instances on different ports).
+	// Example: {"Qwen3-VL-32B": "http://127.0.0.1:8090/v1/chat/completions"}
+	ModelEndpoints map[string]string `yaml:"model_endpoints,omitempty"`
+
+	// GRPCMaxMsgSizeMB sets the maximum gRPC message size in megabytes for
+	// the ExtProc stream. Increase this when routing requests with large
+	// payloads such as base64-encoded screenshots. Default: 4 (gRPC default).
+	GRPCMaxMsgSizeMB int `yaml:"grpc_max_msg_size_mb,omitempty"`
+
 	// Timeout is the maximum duration for each model call (default: 30s)
 	TimeoutSeconds int `yaml:"timeout_seconds,omitempty"`
 
@@ -870,6 +896,15 @@ func (l *LooperConfig) GetTimeout() int {
 		return 30
 	}
 	return l.TimeoutSeconds
+}
+
+// GetGRPCMaxMsgSize returns the max gRPC message size in bytes.
+// Defaults to 4 MB (the standard gRPC default) when not configured.
+func (l *LooperConfig) GetGRPCMaxMsgSize() int {
+	if l.GRPCMaxMsgSizeMB <= 0 {
+		return 4 * 1024 * 1024
+	}
+	return l.GRPCMaxMsgSizeMB * 1024 * 1024
 }
 
 // RedisConfig defines the complete configuration structure for Redis cache backend.
@@ -1059,9 +1094,19 @@ type MemoryConfig struct {
 	// Default: 0.6
 	DefaultSimilarityThreshold float32 `yaml:"default_similarity_threshold,omitempty"`
 
+	// AdaptiveThreshold enables elbow-based adaptive thresholding.
+	// When enabled, the retriever finds the largest score gap between
+	// consecutive candidates and discards everything below the gap,
+	// subject to DefaultSimilarityThreshold as a hard floor.
+	AdaptiveThreshold bool `yaml:"adaptive_threshold,omitempty"`
+
 	// QualityScoring configures retention scoring and pruning parameters (MemoryBank-style).
 	// Access tracking (LastAccessed, AccessCount) is always active; pruning runs only when PruneUser is called.
 	QualityScoring MemoryQualityScoringConfig `yaml:"quality_scoring,omitempty"`
+
+	// Reflection configures the pre-injection validation gate (inspired by RMM, ACL 2025).
+	// Filters retrieved memories before injection to improve accuracy and block adversarial content.
+	Reflection MemoryReflectionConfig `yaml:"reflection,omitempty"`
 
 	// Note: Query rewriting and fact extraction are enabled by defining
 	// external_models with model_role="memory_rewrite" or "memory_extraction".
@@ -1080,6 +1125,48 @@ type MemoryQualityScoringConfig struct {
 
 	// MaxMemoriesPerUser caps memories per user; if over, lowest-R memories are deleted first (0 = no cap).
 	MaxMemoriesPerUser int `yaml:"max_memories_per_user,omitempty"`
+}
+
+// MemoryReflectionConfig configures the pre-injection validation gate.
+// Retrieved memories pass through heuristic filters before being injected
+// into the LLM request. This improves accuracy by removing stale/redundant
+// context and hardens against MINJA-style memory poisoning attacks.
+type MemoryReflectionConfig struct {
+	// Enabled turns the reflection gate on/off (default: true when memory is enabled)
+	Enabled *bool `yaml:"enabled,omitempty"`
+
+	// Algorithm selects the filter implementation from the registry.
+	// Built-in algorithms: "heuristic" (default), "noop".
+	// Third-party algorithms can be added via memory.RegisterFilter().
+	Algorithm string `yaml:"algorithm,omitempty"`
+
+	// MaxInjectTokens caps the total injected memory context.
+	// Memories are kept in descending score order until the budget is exhausted.
+	// Default: 2048
+	MaxInjectTokens int `yaml:"max_inject_tokens,omitempty"`
+
+	// RecencyDecayDays is the half-life for recency weighting.
+	// A memory's score is multiplied by exp(-0.693 * age_days / RecencyDecayDays).
+	// Default: 30 (score halves every 30 days)
+	RecencyDecayDays int `yaml:"recency_decay_days,omitempty"`
+
+	// DedupThreshold is the cosine similarity above which two retrieved memories
+	// are considered duplicates; only the higher-scored one is kept.
+	// Default: 0.90
+	DedupThreshold float32 `yaml:"dedup_threshold,omitempty"`
+
+	// BlockPatterns are regex patterns matched against memory content.
+	// Any memory matching a pattern is rejected before injection.
+	// Defaults include prompt-injection patterns (e.g., "ignore.*instructions").
+	BlockPatterns []string `yaml:"block_patterns,omitempty"`
+}
+
+// ReflectionEnabled returns whether the reflection gate is active.
+func (c MemoryReflectionConfig) ReflectionEnabled() bool {
+	if c.Enabled != nil {
+		return *c.Enabled
+	}
+	return true // on by default
 }
 
 // MemoryMilvusConfig contains Milvus-specific configuration for memory storage.
@@ -1695,6 +1782,17 @@ type VLLMEndpoint struct {
 	// are used instead of address:port. The API key comes from authz.
 	// +optional
 	ProviderProfileName string `yaml:"provider_profile,omitempty"`
+
+	// Model is the logical model name this endpoint serves.
+	// Set during normalizeYAML to preserve the model→endpoint mapping
+	// through marshal/unmarshal round-trips.
+	// +optional
+	Model string `yaml:"model,omitempty"`
+
+	// Protocol is the endpoint protocol ("http" or "https").
+	// Preserved for accurate round-trip between nested and flat YAML formats.
+	// +optional
+	Protocol string `yaml:"protocol,omitempty"`
 }
 
 // ProviderProfile defines cloud provider connection and protocol details.
@@ -1989,6 +2087,13 @@ type ConfidenceAlgorithmConfig struct {
 	// 0.0 = pure quality (ignore cost), 1.0 = pure cost (ignore quality)
 	// Default: 0.3 (favor quality but consider cost)
 	CostQualityTradeoff float64 `yaml:"cost_quality_tradeoff,omitempty"`
+
+	// TokenFilter controls which tokens are used for confidence calculation.
+	// - "all" (default): use every generated token
+	// - "tool_call_args": only use tokens inside tool-call argument VALUES,
+	//   filtering out JSON structural boilerplate (braces, colons, field names)
+	//   that inflates average logprob for structured outputs
+	TokenFilter string `yaml:"token_filter,omitempty"`
 }
 
 // HybridWeightsConfig configures weights for hybrid confidence method
@@ -2118,13 +2223,16 @@ type ModelRef struct {
 	// Optional LoRA adapter name - when specified, this LoRA adapter name will be used
 	// as the final model name in requests instead of the base model name.
 	LoRAName string `yaml:"lora_name,omitempty"`
+	// Weight for model distribution in algorithms like ReMoM (0.0-1.0).
+	// When specified, calls are distributed proportionally based on weights.
+	Weight float64 `yaml:"weight,omitempty"`
 	// Reasoning mode control on Model Level
 	ModelReasoningControl `yaml:",inline"`
 }
 
 // DecisionPlugin represents a plugin configuration for a decision
 type DecisionPlugin struct {
-	// Type specifies the plugin type. Permitted values: "semantic-cache", "jailbreak", "pii", "system_prompt", "header_mutation", "hallucination", "router_replay", "memory".
+	// Type specifies the plugin type. Permitted values: "semantic-cache", "jailbreak", "pii", "system_prompt", "header_mutation", "hallucination", "router_replay", "memory", "fast_response".
 	Type string `yaml:"type" json:"type"`
 
 	// Configuration is the raw configuration for this plugin
@@ -2145,10 +2253,13 @@ type SemanticCachePluginConfig struct {
 
 // MemoryPluginConfig is per-decision memory config (overrides global MemoryConfig).
 type MemoryPluginConfig struct {
-	Enabled             bool     `json:"enabled" yaml:"enabled"`                                               // If false, memory is skipped even if globally enabled
-	RetrievalLimit      *int     `json:"retrieval_limit,omitempty" yaml:"retrieval_limit,omitempty"`           // Max memories to retrieve (nil = use global)
-	SimilarityThreshold *float32 `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"` // Min similarity score (nil = use global)
-	AutoStore           *bool    `json:"auto_store,omitempty" yaml:"auto_store,omitempty"`                     // Auto-extract memories (nil = use request config)
+	Enabled             bool                    `json:"enabled" yaml:"enabled"`                                               // If false, memory is skipped even if globally enabled
+	RetrievalLimit      *int                    `json:"retrieval_limit,omitempty" yaml:"retrieval_limit,omitempty"`           // Max memories to retrieve (nil = use global)
+	SimilarityThreshold *float32                `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"` // Min similarity score (nil = use global)
+	AutoStore           *bool                   `json:"auto_store,omitempty" yaml:"auto_store,omitempty"`                     // Auto-extract memories (nil = use request config)
+	HybridSearch        bool                    `json:"hybrid_search,omitempty" yaml:"hybrid_search,omitempty"`               // Enable BM25 + n-gram re-ranking
+	HybridMode          string                  `json:"hybrid_mode,omitempty" yaml:"hybrid_mode,omitempty"`                   // "weighted" (default) or "rrf"
+	Reflection          *MemoryReflectionConfig `json:"reflection,omitempty" yaml:"reflection,omitempty"`                     // Per-decision reflection override
 }
 
 // JailbreakPluginConfig represents configuration for jailbreak plugin
@@ -2168,6 +2279,17 @@ type PIIPluginConfig struct {
 	// When Enabled is true, all PII types are blocked by default unless listed in PIITypesAllowed
 	// When Enabled is false, PII detection is skipped entirely
 	PIITypesAllowed []string `json:"pii_types_allowed,omitempty" yaml:"pii_types_allowed,omitempty"`
+}
+
+// FastResponsePluginConfig represents configuration for fast_response plugin.
+// When a decision matches and has this plugin, the router short-circuits and returns
+// an OpenAI-compatible response directly (no upstream model call).
+// Supports both streaming (SSE) and non-streaming (JSON) formats based on the
+// original request's "stream" flag.
+type FastResponsePluginConfig struct {
+	// Message is the text content returned in the OpenAI-compatible response body.
+	// This becomes the assistant message content in the chat completion response.
+	Message string `json:"message" yaml:"message"`
 }
 
 // SystemPromptPluginConfig represents configuration for system_prompt plugin
@@ -2515,6 +2637,21 @@ func (d *Decision) GetMemoryConfig() *MemoryPluginConfig {
 	return result
 }
 
+// GetFastResponseConfig returns the fast_response plugin configuration
+func (d *Decision) GetFastResponseConfig() *FastResponsePluginConfig {
+	config := d.GetPluginConfig("fast_response")
+	if config == nil {
+		return nil
+	}
+
+	result := &FastResponsePluginConfig{}
+	if err := unmarshalPluginConfig(config, result); err != nil {
+		logging.Errorf("Failed to unmarshal fast_response config: %v", err)
+		return nil
+	}
+	return result
+}
+
 // RuleNode is a recursive union type that represents a node in a boolean expression tree.
 // It can act as either a leaf node (a signal reference) or a composite node (an operator
 // with child nodes), enabling arbitrarily nested boolean logic such as:
@@ -2534,7 +2671,7 @@ type RuleNode struct {
 
 	// Type specifies the signal type: "keyword", "embedding", "domain", "fact_check",
 	// "user_feedback", "preference", "language", "latency", "context", "complexity",
-	// "modality", or "authz".
+	// "modality", "authz", "jailbreak", or "pii".
 	Type string `yaml:"type,omitempty" json:"type,omitempty"`
 
 	// Name is the name of the signal rule to reference.
@@ -2601,6 +2738,79 @@ type ModalityRule struct {
 	Name string `yaml:"name"`
 
 	// Description provides human-readable explanation of when this signal is triggered
+	Description string `yaml:"description,omitempty"`
+}
+
+// JailbreakRule defines a named jailbreak detection signal rule.
+// Each rule specifies a confidence threshold; the signal fires when jailbreak
+// confidence meets or exceeds the threshold.
+//
+// Two detection methods are supported (selected via the Method field):
+//
+//   - "classifier" (default): Uses the PromptGuard / candle_binding BERT/LoRA pipeline.
+//     The threshold is a confidence score (0.0–1.0).
+//
+//   - "contrastive": Uses contrastive embedding similarity against jailbreak and benign
+//     knowledge-base patterns (similar to the complexity signal). The contrastive score is
+//     max_sim(msg, jailbreak_kb) − max_sim(msg, benign_kb). When include_history is true,
+//     the maximum contrastive score across all conversation turns is used (multi-turn chain),
+//     which detects gradual escalation attacks that evade per-message classifiers.
+//
+// Multiple rules at different thresholds / methods allow decisions to reference different
+// sensitivity levels (e.g., "strict_jailbreak" at 0.9 vs "jailbreak_multiturn" contrastive).
+type JailbreakRule struct {
+	// Name is the signal name referenced in decision rules (type: "jailbreak")
+	// e.g., "jailbreak_detected", "strict_jailbreak", "jailbreak_multiturn"
+	Name string `yaml:"name"`
+
+	// Method selects the detection algorithm: "classifier" (default) or "contrastive"
+	Method string `yaml:"method,omitempty"`
+
+	// Threshold is the minimum score to trigger this signal.
+	// For method "classifier": confidence score 0.0–1.0
+	// For method "contrastive": contrastive score (typically 0.05–0.20)
+	Threshold float32 `yaml:"threshold"`
+
+	// IncludeHistory controls whether conversation history is included in detection.
+	// For method "classifier": when true, all messages are analysed individually.
+	// For method "contrastive": when true, computes max contrastive score across all turns
+	//   (multi-turn chain); when false, only the latest user message is scored.
+	IncludeHistory bool `yaml:"include_history,omitempty"`
+
+	// Description provides human-readable explanation of this rule
+	Description string `yaml:"description,omitempty"`
+
+	// --- Contrastive-only fields (ignored when Method != "contrastive") ---
+
+	// JailbreakPatterns are example jailbreak prompts for the knowledge base.
+	// Messages similar to these patterns receive a higher contrastive score.
+	JailbreakPatterns []string `yaml:"jailbreak_patterns,omitempty"`
+
+	// BenignPatterns are example benign prompts for the knowledge base.
+	// Messages similar to these patterns receive a lower contrastive score, reducing false positives.
+	BenignPatterns []string `yaml:"benign_patterns,omitempty"`
+}
+
+// PIIRule defines a named PII detection signal rule.
+// Each rule specifies a confidence threshold and an optional allow-list of PII types.
+// The signal fires when PII types NOT in the allow-list are detected above the threshold.
+type PIIRule struct {
+	// Name is the signal name referenced in decision rules (type: "pii")
+	// e.g., "pii_deny_all", "pii_allow_email"
+	Name string `yaml:"name"`
+
+	// Threshold is the minimum confidence score (0.0-1.0) for PII entity detection
+	Threshold float32 `yaml:"threshold"`
+
+	// PIITypesAllowed lists PII types that are permitted (not blocked).
+	// When empty, ALL detected PII types trigger the signal.
+	// Values match pii_type_mapping.json labels (e.g., "EMAIL_ADDRESS", "PERSON").
+	PIITypesAllowed []string `yaml:"pii_types_allowed,omitempty"`
+
+	// IncludeHistory controls whether conversation history is included in detection
+	IncludeHistory bool `yaml:"include_history,omitempty"`
+
+	// Description provides human-readable explanation of this rule
 	Description string `yaml:"description,omitempty"`
 }
 

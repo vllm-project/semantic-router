@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, useParams } from 'react-router-dom'
 import Layout from './components/Layout'
 import LandingPage from './pages/LandingPage'
 import MonitoringPage from './pages/MonitoringPage'
@@ -14,8 +14,44 @@ import ReplayPage from './pages/ReplayPage'
 import EvaluationPage from './pages/EvaluationPage'
 import MLSetupPage from './pages/MLSetupPage'
 import RatingsPage from './pages/RatingsPage'
+import BuilderPage from './pages/BuilderPage'
+import DashboardPage from './pages/DashboardPage'
 import { ConfigSection } from './components/ConfigNav'
 import { ReadonlyProvider } from './contexts/ReadonlyContext'
+
+const ConfigSectionRoute: React.FC<{
+  configSection: ConfigSection
+  setConfigSection: (section: ConfigSection) => void
+}> = ({ configSection, setConfigSection }) => {
+  const { section } = useParams<{ section: string }>()
+
+  useEffect(() => {
+    if (!section) return
+
+    const normalized = section.toLowerCase()
+    const sectionMap: Record<string, ConfigSection> = {
+      signals: 'signals',
+      routes: 'decisions',
+      decisions: 'decisions',
+      endpoints: 'models',
+      models: 'models',
+    }
+
+    const mapped = sectionMap[normalized]
+    if (mapped && mapped !== configSection) {
+      setConfigSection(mapped)
+    }
+  }, [section, configSection, setConfigSection])
+
+  return (
+    <Layout
+      configSection={configSection}
+      onConfigSectionChange={(nextSection) => setConfigSection(nextSection as ConfigSection)}
+    >
+      <ConfigPage activeSection={configSection} />
+    </Layout>
+  )
+}
 
 const App: React.FC = () => {
   const [isInIframe, setIsInIframe] = useState(false)
@@ -87,6 +123,17 @@ const App: React.FC = () => {
             element={<LandingPage />}
           />
           <Route
+            path="/dashboard"
+            element={
+              <Layout
+                configSection={configSection}
+                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+              >
+                <DashboardPage />
+              </Layout>
+            }
+          />
+          <Route
             path="/monitoring"
             element={
               <Layout
@@ -100,12 +147,19 @@ const App: React.FC = () => {
           <Route
             path="/config"
             element={
-              <Layout
+              <ConfigSectionRoute
                 configSection={configSection}
-                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-              >
-                <ConfigPage activeSection={configSection} />
-              </Layout>
+                setConfigSection={setConfigSection}
+              />
+            }
+          />
+          <Route
+            path="/config/:section"
+            element={
+              <ConfigSectionRoute
+                configSection={configSection}
+                setConfigSection={setConfigSection}
+              />
             }
           />
           <Route
@@ -209,6 +263,17 @@ const App: React.FC = () => {
                 onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
               >
                 <RatingsPage />
+              </Layout>
+            }
+          />
+          <Route
+            path="/builder"
+            element={
+              <Layout
+                configSection={configSection}
+                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+              >
+                <BuilderPage />
               </Layout>
             }
           />

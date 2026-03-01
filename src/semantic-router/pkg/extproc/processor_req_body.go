@@ -25,6 +25,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
+	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
 // handleRequestBody processes the request body
@@ -108,22 +109,14 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	// Record the initial request to this model (count all requests)
 	metrics.RecordModelRequest(selectedModel)
 
-	// Perform security checks with decision-specific settings
-	if response, shouldReturn := r.performJailbreaks(ctx, userContent, nonUserMessages, decisionName); shouldReturn {
-		// Record blocked request to replay before returning
+	// Fast response plugin: if the matched decision has a fast_response plugin,
+	// short-circuit and return an OpenAI-compatible response immediately without
+	// hitting any upstream model. This is the "Action" side of the Signal→Decision→Action
+	// pipeline, commonly used with jailbreak/PII signals.
+	if resp := r.handleFastResponse(ctx, decisionName); resp != nil {
 		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
-		r.updateRouterReplayStatus(ctx, 403, false) // 403 Forbidden for jailbreak block
-		return response, nil
-	}
-
-	// Perform PII detection and policy check (if PII policy is enabled for the decision)
-	piiResponse := r.performPIIDetection(ctx, userContent, nonUserMessages, decisionName)
-	if piiResponse != nil {
-		// Record blocked request to replay before returning
-		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
-		r.updateRouterReplayStatus(ctx, 403, false) // 403 Forbidden for PII block
-		// PII policy violation - return error response
-		return piiResponse, nil
+		r.updateRouterReplayStatus(ctx, 200, false)
+		return resp, nil
 	}
 
 	// Rate limit check — after security checks, before cache/RAG/routing.
@@ -196,6 +189,21 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	// Update the translated body with injected memories for Response API
 	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest && len(requestBody) > 0 {
 		ctx.ResponseAPICtx.TranslatedBody = requestBody
+	}
+
+	// Re-parse openAIRequest from memory-augmented body so the looper
+	// (which uses openAIRequest directly) includes injected memories.
+	if ctx.MemoryContext != "" {
+		if updatedReq, parseErr := parseOpenAIRequest(requestBody); parseErr == nil {
+			openAIRequest = updatedReq
+			// Verify the reparsed request has messages
+			marshaledCheck, _ := json.Marshal(updatedReq)
+			logging.Infof("[MemoryPatch] Re-parsed request with memory, body_len=%d, reparsed_len=%d", len(requestBody), len(marshaledCheck))
+			logging.Infof("[MemoryPatch] Original body snippet: %.300s", string(requestBody))
+			logging.Infof("[MemoryPatch] Reparsed body snippet: %.300s", string(marshaledCheck))
+		} else {
+			logging.Errorf("[MemoryPatch] Failed to re-parse memory-augmented body: %v", parseErr)
+		}
 	}
 
 	// Handle model selection and routing with pre-computed classification results and selected model
@@ -411,7 +419,7 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCom
 	// Track VSR decision information for non-auto models
 	ctx.VSRSelectedModel = originalModel
 	ctx.VSRReasoningMode = "off" // Non-auto models don't use reasoning mode by default
-	// PII policy check already done in performPIIDetection
+	// Security checks (jailbreak/PII) are handled at the signal level via fast_response plugin
 	// Memory injection already happened in handleMemoryRetrieval (before routing diverged)
 
 	// Select endpoint for the specified model
@@ -511,13 +519,13 @@ func (r *OpenAIRouter) modifyRequestBodyForAutoRouting(openAIRequest *openai.Cha
 		}
 	}
 
-	// Inject memory context AFTER system prompt (so it appends, not gets overwritten)
-	// NOTE: Memory injection must happen regardless of whether a decision was matched
+	// Inject memory as a separate conversation message (not in system prompt).
+	// Following the openai-agents-python pattern: context is injected as
+	// conversation items, keeping instructions and memory clearly separated.
 	if ctx.MemoryContext != "" {
-		modifiedBody, err = injectSystemMessage(modifiedBody, ctx.MemoryContext)
+		modifiedBody, err = injectMemoryMessages(modifiedBody, ctx.MemoryContext)
 		if err != nil {
 			logging.Warnf("Memory: Failed to inject memory context: %v", err)
-			// Graceful degradation: continue without memory injection
 		}
 	}
 
@@ -970,24 +978,13 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 		return requestBody, nil
 	}
 
-	// TODO: Remove demo logs after POC
-	logging.Infof("╔══════════════════════════════════════════════════════════════════╗")
-	logging.Infof("║                    MEMORY RETRIEVAL FLOW                         ║")
-	logging.Infof("╠══════════════════════════════════════════════════════════════════╣")
-	logging.Infof("║ User Query: %s", truncateForLog(userContent, 50))
-	if memoryPluginConfig != nil {
-		logging.Infof("║ Config Source: per-decision plugin (decision: %s)", ctx.VSRSelectedDecisionName)
-	} else {
-		logging.Infof("║ Config Source: global config")
-	}
+	logging.Debugf("Memory: retrieval flow query=%q", truncateForLog(userContent, 80))
 
 	// Step 1: Memory decision - should we search?
 	if !ShouldSearchMemory(ctx, userContent) {
-		logging.Infof("║ Decision: ❌ SKIP (query type not suitable for memory search)")
-		logging.Infof("╚══════════════════════════════════════════════════════════════════╝")
+		logging.Debugf("Memory: skipping search (query type not suitable)")
 		return requestBody, nil
 	}
-	logging.Infof("║ Decision: ✅ SEARCH (query may benefit from memory)")
 
 	// Step 2: Extract conversation history from request body
 	// Use the existing ExtractConversationHistory function which works with raw JSON
@@ -1018,11 +1015,9 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 	// Step 4: Get user ID from Response API context or request
 	userID := r.getUserIDFromContext(ctx)
 	if userID == "" {
-		logging.Infof("║ User ID: ❌ NOT FOUND (skipping memory search)")
-		logging.Infof("╚══════════════════════════════════════════════════════════════════╝")
+		logging.Debugf("Memory: no user ID, skipping search")
 		return requestBody, nil
 	}
-	logging.Infof("║ User ID: %s", userID)
 
 	// Step 5: Search Milvus (per-decision settings override global defaults)
 	retrieveLimit := r.Config.Memory.DefaultRetrievalLimit
@@ -1044,6 +1039,13 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 		Threshold: retrieveThreshold,
 	}
 
+	if memoryPluginConfig != nil && memoryPluginConfig.HybridSearch {
+		retrieveOpts.HybridSearch = true
+		retrieveOpts.HybridMode = memoryPluginConfig.HybridMode
+	}
+
+	retrieveOpts.AdaptiveThreshold = r.Config.Memory.AdaptiveThreshold
+
 	// Apply defaults if not configured
 	if retrieveOpts.Limit <= 0 {
 		retrieveOpts.Limit = 5
@@ -1058,29 +1060,32 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 	}
 
 	if len(memories) == 0 {
-		logging.Infof("║ Search Result: 📭 No memories found above threshold")
-		logging.Infof("╚══════════════════════════════════════════════════════════════════╝")
+		logging.Debugf("Memory: no memories found above threshold for user=%s", userID)
+		return requestBody, nil
+	}
+	logging.Infof("Memory: found %d memories for user=%s", len(memories), userID)
+
+	// Step 6: Memory filter -- validate memories before injection
+	var perDecisionReflection *config.MemoryReflectionConfig
+	if memoryPluginConfig != nil && memoryPluginConfig.Reflection != nil {
+		perDecisionReflection = memoryPluginConfig.Reflection
+	}
+	filter := memory.NewMemoryFilter(r.Config.Memory.Reflection, perDecisionReflection)
+	memories = filter.Filter(memories)
+
+	if len(memories) == 0 {
+		logging.Debugf("Memory: all memories filtered by memory filter for user=%s", userID)
 		return requestBody, nil
 	}
 
-	logging.Infof("║ Search Result: 📬 Found %d memories!", len(memories))
-	for i, mem := range memories {
-		if mem.Memory != nil {
-			logging.Infof("║   %d. [%s] (score: %.2f) %s", i+1, mem.Memory.Type, mem.Score, mem.Memory.Content) // Full content for demo
-		}
-	}
-	logging.Infof("╚══════════════════════════════════════════════════════════════════╝")
-
-	// Step 6: Format memory context and inject into request body
+	// Step 7: Format memory context and inject into request body
 	ctx.MemoryContext = FormatMemoriesAsContext(memories)
 
-	// Step 7: Inject memory into request body as system message
-	// This happens here (before routing diverges) so it works for BOTH auto and specified models
+	// Step 8: Inject memory as a separate conversation message
 	if ctx.MemoryContext != "" {
-		injectedBody, err := injectSystemMessage(requestBody, ctx.MemoryContext)
+		injectedBody, err := injectMemoryMessages(requestBody, ctx.MemoryContext)
 		if err != nil {
 			logging.Warnf("Memory: Failed to inject memory context: %v", err)
-			// Graceful degradation: continue without injection
 			return requestBody, nil
 		}
 		logging.Infof("Memory: Injected %d memories into request", len(memories))
@@ -1167,4 +1172,23 @@ func (r *OpenAIRouter) createRateLimitResponse(decision *ratelimit.Decision) *ex
 			},
 		},
 	}
+}
+
+// handleFastResponse checks if the matched decision has a fast_response plugin
+// and returns an OpenAI-compatible immediate response if so.
+// Returns nil if no fast_response plugin is configured for the decision.
+func (r *OpenAIRouter) handleFastResponse(ctx *RequestContext, decisionName string) *ext_proc.ProcessingResponse {
+	if ctx.VSRSelectedDecision == nil {
+		return nil
+	}
+
+	fastCfg := ctx.VSRSelectedDecision.GetFastResponseConfig()
+	if fastCfg == nil {
+		return nil
+	}
+
+	logging.Infof("[FastResponse] Decision '%s' has fast_response plugin, returning immediate response", decisionName)
+	metrics.RecordPluginExecution("fast_response", decisionName, "executed", 0)
+
+	return httputil.CreateFastResponse(fastCfg.Message, ctx.ExpectStreamingResponse, decisionName)
 }

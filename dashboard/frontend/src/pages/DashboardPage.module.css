@@ -1,0 +1,683 @@
+/* DashboardPage.module.css */
+
+.page {
+  padding: var(--spacing-lg) var(--spacing-xl);
+  max-width: 1440px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Loading / Error                                                    */
+/* ------------------------------------------------------------------ */
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  color: var(--color-text-muted);
+  gap: var(--spacing-md);
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.errorBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+}
+
+.errorBanner button {
+  background: var(--color-danger);
+  color: #fff;
+  border: none;
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--text-xs);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Header                                                             */
+/* ------------------------------------------------------------------ */
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.title {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.subtitle {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  margin: 4px 0 0;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.lastUpdated {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.refreshBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: var(--color-bg-elevated);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.refreshBtn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.refreshBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.refreshBtnSpin svg {
+  animation: spin 0.8s linear infinite;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Stats Grid                                                         */
+/* ------------------------------------------------------------------ */
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--spacing-md);
+}
+
+.statCard {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+}
+
+.statCard:hover {
+  border-color: var(--color-border-hover);
+  background: var(--color-bg-elevated);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.statIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+}
+
+.statIconHealthy {
+  background: var(--color-success) !important;
+  box-shadow: 0 0 16px rgba(34, 197, 94, 0.3);
+}
+
+.statIconDegraded {
+  background: var(--color-warning) !important;
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.3);
+}
+
+.statIconDown {
+  background: var(--color-danger) !important;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.3);
+}
+
+.statContent {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.statValue {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1.2;
+}
+
+.statLabel {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.statArrow {
+  font-size: 1.25rem;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  transition: var(--transition-fast);
+}
+
+.statCard:hover .statArrow {
+  color: var(--color-primary);
+  transform: translateX(2px);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Main Grid (2-col)                                                  */
+/* ------------------------------------------------------------------ */
+
+.mainGrid {
+  display: grid;
+  grid-template-columns: 1.7fr 1fr;
+  gap: var(--spacing-lg);
+  align-items: stretch;
+}
+
+.rightCol {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.rightCol > .card:last-child {
+  flex: 1;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Bottom Grid (2-col: signal breakdown + decisions)                  */
+/* ------------------------------------------------------------------ */
+
+.bottomGrid {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: var(--spacing-lg);
+  align-items: start;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Cards                                                              */
+/* ------------------------------------------------------------------ */
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.cardTitle {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.cardSubtitle {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}
+
+.cardAction {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  padding: 0;
+  transition: var(--transition-fast);
+}
+
+.cardAction:hover {
+  color: var(--color-primary-light);
+}
+
+.emptyState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-2xl);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Flow Diagram                                                       */
+/* ------------------------------------------------------------------ */
+
+.flowContainer {
+  padding: var(--spacing-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 340px;
+}
+
+.flowSvg {
+  width: 100%;
+  max-height: 360px;
+}
+
+.flowNode rect {
+  transition: fill-opacity 0.2s ease;
+}
+
+.flowNode:hover rect {
+  fill-opacity: 0.35;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Health Card                                                        */
+/* ------------------------------------------------------------------ */
+
+.healthContent {
+  padding: var(--spacing-md) var(--spacing-lg);
+}
+
+.healthOverall {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.healthDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.healthDotGreen {
+  background: var(--color-success);
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+}
+
+.healthDotYellow {
+  background: var(--color-warning);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+}
+
+.healthDotRed {
+  background: var(--color-danger);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+}
+
+.healthLabel {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.versionBadge,
+.deployBadge {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+.servicesList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.serviceRow {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 6px 0;
+}
+
+.svcDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.svcDotOk { background: var(--color-success); }
+.svcDotFail { background: var(--color-danger); }
+
+.svcName {
+  flex: 1;
+  font-size: var(--text-xs);
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.svcStatus {
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+}
+
+.svcStatusOk { color: var(--color-success); }
+.svcStatusFail { color: var(--color-danger); }
+
+.moreServices {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  text-align: center;
+  padding: 4px 0;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Quick Links                                                        */
+/* ------------------------------------------------------------------ */
+
+.quickLinks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--color-border);
+}
+
+.quickLink {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: var(--color-surface);
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  font-family: inherit;
+  text-align: left;
+}
+
+.quickLink:hover {
+  background: var(--color-bg-elevated);
+  color: var(--color-primary);
+}
+
+.quickLink svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: var(--transition-fast);
+}
+
+.quickLink:hover svg {
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Signal Breakdown                                                   */
+/* ------------------------------------------------------------------ */
+
+.signalBreakdown {
+  padding: var(--spacing-md) var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.breakdownRow {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  cursor: default;
+  border-radius: var(--radius-sm);
+  padding: 3px 0;
+  transition: background 0.15s ease;
+}
+
+.breakdownRow:hover {
+  background: var(--color-bg-elevated);
+}
+
+.breakdownLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 130px;
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+}
+
+.breakdownDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.breakdownBar {
+  flex: 1;
+  height: 8px;
+  background: var(--color-bg-elevated);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.breakdownFill {
+  height: 100%;
+  border-radius: 4px;
+  min-width: 4px;
+  transition: width 0.4s ease;
+}
+
+.breakdownCount {
+  width: 32px;
+  text-align: right;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Decision Table                                                     */
+/* ------------------------------------------------------------------ */
+
+.decisionTable {
+  font-size: var(--text-xs);
+}
+
+.decisionTableHead {
+  display: grid;
+  grid-template-columns: 2.2fr 0.7fr 0.6fr 2fr;
+  gap: var(--spacing-sm);
+  padding: 8px var(--spacing-lg);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+}
+
+.decisionTableRow {
+  display: grid;
+  grid-template-columns: 2.2fr 0.7fr 0.6fr 2fr;
+  gap: var(--spacing-sm);
+  padding: 10px var(--spacing-lg);
+  border-top: 1px solid var(--color-border);
+  align-items: center;
+  transition: background 0.15s ease;
+}
+
+.decisionTableRow:hover {
+  background: var(--color-bg-elevated);
+}
+
+.decisionName {
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.decisionPriority {
+  color: var(--color-primary);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.decisionBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.badgeGuardrail {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.badgeRouting {
+  background: rgba(59, 130, 246, 0.12);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.badgeFallback {
+  background: rgba(156, 163, 175, 0.12);
+  color: #9ca3af;
+  border: 1px solid rgba(156, 163, 175, 0.25);
+}
+
+.decisionModels {
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.decisionTableMore {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 10px;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  border: none;
+  border-top: 1px solid var(--color-border);
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: var(--transition-fast);
+}
+
+.decisionTableMore:hover {
+  background: var(--color-bg-elevated);
+  color: var(--color-primary);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Responsive                                                         */
+/* ------------------------------------------------------------------ */
+
+@media (max-width: 1024px) {
+  .statsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .mainGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .bottomGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: var(--spacing-md);
+  }
+
+  .statsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .header {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  .quickLinks {
+    grid-template-columns: 1fr;
+  }
+
+  .decisionTableHead,
+  .decisionTableRow {
+    grid-template-columns: 1.5fr 0.5fr 1fr;
+  }
+
+  .decisionModels {
+    display: none;
+  }
+}

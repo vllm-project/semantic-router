@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^1.1.8",
+    "@monaco-editor/react": "^4.7.0",
+    "ogl": "^1.0.11",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
@@ -18,7 +20,8 @@
     "reactflow": "^11.11.4",
     "recharts": "^2.15.4",
     "rehype-highlight": "^7.0.2",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "zustand": "^5.0.11"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",

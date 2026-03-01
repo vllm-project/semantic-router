@@ -183,6 +183,10 @@ export function getSignalIcon(type: SignalType): string {
     language: '🌐',
     context: '📏',
     complexity: '🧠',
+    modality: '🖼️',
+    authz: '🔐',
+    jailbreak: '🛡️',
+    pii: '🔒',
   }
   return icons[type] || '❓'
 }
@@ -201,6 +205,10 @@ export function getSignalColor(type: SignalType): string {
     language: '#795548',
     context: '#607D8B', // Blue Grey
     complexity: '#4299e1', // Blue
+    modality: '#8B5CF6', // Violet
+    authz: '#059669', // Emerald
+    jailbreak: '#EF4444', // Red
+    pii: '#F59E0B', // Amber
   }
   return colors[type] || '#607D8B'
 }

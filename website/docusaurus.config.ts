@@ -47,15 +47,16 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
+          lastVersion: 'current',
           versions: {
             'current': {
-              label: '🚧 Next',
-              path: 'next',
+              label: 'Latest',
+              path: '',
               badge: true,
             },
             'v0.1': {
               label: 'v0.1',
-              path: '',
+              path: 'v0.1',
               badge: true,
             },
           },
@@ -141,7 +142,7 @@ const config: Config = {
       { name: 'ICBM', content: '37.7749, -122.4194' },
     ],
     navbar: {
-      title: 'vLLM Semantic Router',
+      title: 'vLLM-SR',
       logo: {
         alt: 'vLLM Semantic Router Logo',
         src: 'img/vllm.png',
@@ -161,11 +162,16 @@ const config: Config = {
           type: 'docSidebar',
           sidebarId: 'tutorialSidebar',
           position: 'left',
-          label: 'Documentation',
+          label: 'Docs',
+        },
+        {
+          to: '/white-paper',
+          label: 'Paper',
+          position: 'left',
         },
         {
           to: '/publications',
-          label: 'Publications',
+          label: 'Research',
           position: 'left',
         },
         {
@@ -180,16 +186,12 @@ const config: Config = {
           position: 'left',
           items: [
             {
-              label: 'vLLM-SR Team',
+              label: 'Governance',
               to: '/community/team',
             },
             {
-              label: 'Work Groups',
+              label: 'Working Group',
               to: '/community/work-groups',
-            },
-            {
-              label: 'Membership Promotion',
-              to: '/community/promotion',
             },
             {
               label: 'Contributing Guide',
@@ -237,20 +239,12 @@ const config: Config = {
               to: '/docs/installation',
             },
             {
-              label: 'Tutorials',
-              to: '/docs/tutorials/intelligent-route/embedding-routing',
+              label: 'Governance',
+              to: '/community/team',
             },
             {
-              label: 'API Reference',
-              to: '/docs/api/router',
-            },
-            {
-              label: 'CRD Reference',
-              to: '/docs/api/crd-reference',
-            },
-            {
-              label: 'Troubleshooting',
-              to: '/docs/troubleshooting/common-errors',
+              label: 'Contributing',
+              to: '/community/contributing',
             },
           ],
         },
@@ -269,14 +263,6 @@ const config: Config = {
               label: 'GitHub Discussions',
               href: 'https://github.com/vllm-project/semantic-router/discussions',
             },
-            {
-              label: 'Team',
-              to: '/community/team',
-            },
-            {
-              label: 'Contributing',
-              to: '/community/contributing',
-            },
           ],
         },
         {
@@ -289,6 +275,10 @@ const config: Config = {
             {
               label: 'Publications',
               to: '/publications',
+            },
+            {
+              label: 'White Paper',
+              to: '/white-paper',
             },
 
             {

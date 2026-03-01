@@ -14,6 +14,25 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 )
 
+// Test-local mock types for constructing OpenAI-compatible JSON in mock servers.
+type mockChatRequest struct {
+	Model    string            `json:"model"`
+	Messages []mockChatMessage `json:"messages"`
+}
+
+type mockChatMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type mockChatResponse struct {
+	Choices []mockChatChoice `json:"choices"`
+}
+
+type mockChatChoice struct {
+	Message mockChatMessage `json:"message"`
+}
+
 // =============================================================================
 // ShouldSearchMemory Tests
 // =============================================================================
@@ -568,7 +587,7 @@ func TestBuildSearchQuery_WithMockLLM(t *testing.T) {
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
 		// Parse request body
-		var req llmChatRequest
+		var req mockChatRequest
 		err := json.NewDecoder(r.Body).Decode(&req)
 		require.NoError(t, err)
 
@@ -580,15 +599,9 @@ func TestBuildSearchQuery_WithMockLLM(t *testing.T) {
 		assert.Contains(t, req.Messages[1].Content, "Hawaii")
 
 		// Return mock response
-		resp := llmChatResponse{
-			Choices: []struct {
-				Message struct {
-					Content string `json:"content"`
-				} `json:"message"`
-			}{
-				{Message: struct {
-					Content string `json:"content"`
-				}{Content: "What is the budget for the Hawaii vacation?"}},
+		resp := mockChatResponse{
+			Choices: []mockChatChoice{
+				{Message: mockChatMessage{Content: "What is the budget for the Hawaii vacation?"}},
 			},
 		}
 
@@ -612,15 +625,9 @@ func TestBuildSearchQuery_WithMockLLM(t *testing.T) {
 func TestBuildSearchQuery_SelfContainedQuery(t *testing.T) {
 	// Create mock LLM server that returns the query unchanged
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := llmChatResponse{
-			Choices: []struct {
-				Message struct {
-					Content string `json:"content"`
-				} `json:"message"`
-			}{
-				{Message: struct {
-					Content string `json:"content"`
-				}{Content: "What is the capital of France?"}}, // Unchanged
+		resp := mockChatResponse{
+			Choices: []mockChatChoice{
+				{Message: mockChatMessage{Content: "What is the capital of France?"}},
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -651,15 +658,9 @@ func TestBuildSearchQuery_LLMError_FallbackToOriginal(t *testing.T) {
 func TestBuildSearchQuery_CleanupQuotes(t *testing.T) {
 	// Create mock LLM server that returns quoted response
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := llmChatResponse{
-			Choices: []struct {
-				Message struct {
-					Content string `json:"content"`
-				} `json:"message"`
-			}{
-				{Message: struct {
-					Content string `json:"content"`
-				}{Content: `"What is my budget for Hawaii?"`}}, // With quotes
+		resp := mockChatResponse{
+			Choices: []mockChatChoice{
+				{Message: mockChatMessage{Content: `"What is my budget for Hawaii?"`}},
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -676,15 +677,9 @@ func TestBuildSearchQuery_CleanupQuotes(t *testing.T) {
 func TestBuildSearchQuery_CleanupWhitespace(t *testing.T) {
 	// Create mock LLM server that returns response with whitespace
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := llmChatResponse{
-			Choices: []struct {
-				Message struct {
-					Content string `json:"content"`
-				} `json:"message"`
-			}{
-				{Message: struct {
-					Content string `json:"content"`
-				}{Content: "  What is the budget?  \n"}}, // With whitespace
+		resp := mockChatResponse{
+			Choices: []mockChatChoice{
+				{Message: mockChatMessage{Content: "  What is the budget?  \n"}},
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -702,12 +697,8 @@ func TestBuildSearchQuery_CleanupWhitespace(t *testing.T) {
 func TestBuildSearchQuery_EmptyChoices(t *testing.T) {
 	// Create mock LLM server that returns empty choices
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := llmChatResponse{
-			Choices: []struct {
-				Message struct {
-					Content string `json:"content"`
-				} `json:"message"`
-			}{}, // Empty
+		resp := mockChatResponse{
+			Choices: []mockChatChoice{},
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
@@ -859,181 +850,8 @@ func TestTruncateForLog(t *testing.T) {
 }
 
 // =============================================================================
-// InjectMemories Tests
+// injectMemoryMessages Tests
 // =============================================================================
-
-func TestInjectMemories_NoMemories(t *testing.T) {
-	originalRequest := []byte(`{"model":"test","messages":[{"role":"user","content":"Hello"}]}`)
-
-	result, err := InjectMemories(originalRequest, nil)
-	require.NoError(t, err)
-	assert.Equal(t, originalRequest, result, "should return original when no memories")
-
-	result, err = InjectMemories(originalRequest, []*memory.RetrieveResult{})
-	require.NoError(t, err)
-	assert.Equal(t, originalRequest, result, "should return original when empty memories")
-}
-
-func TestInjectMemories_SingleMemory(t *testing.T) {
-	originalRequest := []byte(`{"model":"test","messages":[{"role":"user","content":"What's my budget?"}]}`)
-
-	memories := []*memory.RetrieveResult{
-		{
-			Memory: &memory.Memory{Content: "Hawaii trip budget is $10,000"},
-			Score:  0.85,
-		},
-	}
-
-	result, err := InjectMemories(originalRequest, memories)
-	require.NoError(t, err)
-
-	// Parse result to verify
-	var parsed map[string]interface{}
-	err = json.Unmarshal(result, &parsed)
-	require.NoError(t, err)
-
-	messages, ok := parsed["messages"].([]interface{})
-	require.True(t, ok)
-	require.Len(t, messages, 2, "should have system + user message")
-
-	// First message should be system with memory context
-	firstMsg := messages[0].(map[string]interface{})
-	assert.Equal(t, "system", firstMsg["role"])
-	assert.Contains(t, firstMsg["content"], "User's Relevant Context")
-	assert.Contains(t, firstMsg["content"], "Hawaii trip budget is $10,000")
-}
-
-func TestInjectMemories_MultipleMemories(t *testing.T) {
-	originalRequest := []byte(`{"model":"test","messages":[{"role":"user","content":"Tell me about my trip"}]}`)
-
-	memories := []*memory.RetrieveResult{
-		{
-			Memory: &memory.Memory{Content: "Hawaii trip budget is $10,000"},
-			Score:  0.85,
-		},
-		{
-			Memory: &memory.Memory{Content: "User prefers direct flights"},
-			Score:  0.72,
-		},
-		{
-			Memory: &memory.Memory{Content: "Trip planned for December 2025"},
-			Score:  0.68,
-		},
-	}
-
-	result, err := InjectMemories(originalRequest, memories)
-	require.NoError(t, err)
-
-	// Parse result to verify
-	var parsed map[string]interface{}
-	err = json.Unmarshal(result, &parsed)
-	require.NoError(t, err)
-
-	messages := parsed["messages"].([]interface{})
-	firstMsg := messages[0].(map[string]interface{})
-	content := firstMsg["content"].(string)
-
-	assert.Contains(t, content, "Hawaii trip budget is $10,000")
-	assert.Contains(t, content, "User prefers direct flights")
-	assert.Contains(t, content, "Trip planned for December 2025")
-}
-
-func TestInjectMemories_ExistingSystemMessage(t *testing.T) {
-	// Request already has a system message
-	originalRequest := []byte(`{
-		"model":"test",
-		"messages":[
-			{"role":"system","content":"You are a helpful assistant."},
-			{"role":"user","content":"What's my budget?"}
-		]
-	}`)
-
-	memories := []*memory.RetrieveResult{
-		{
-			Memory: &memory.Memory{Content: "Hawaii trip budget is $10,000"},
-			Score:  0.85,
-		},
-	}
-
-	result, err := InjectMemories(originalRequest, memories)
-	require.NoError(t, err)
-
-	// Parse result
-	var parsed map[string]interface{}
-	err = json.Unmarshal(result, &parsed)
-	require.NoError(t, err)
-
-	messages := parsed["messages"].([]interface{})
-	require.Len(t, messages, 2, "should still have 2 messages (context appended)")
-
-	// System message should have both original content and memory
-	systemMsg := messages[0].(map[string]interface{})
-	content := systemMsg["content"].(string)
-	assert.Contains(t, content, "You are a helpful assistant.")
-	assert.Contains(t, content, "User's Relevant Context")
-	assert.Contains(t, content, "Hawaii trip budget is $10,000")
-}
-
-func TestInjectMemories_InvalidJSON(t *testing.T) {
-	invalidRequest := []byte(`not valid json`)
-
-	memories := []*memory.RetrieveResult{
-		{Memory: &memory.Memory{Content: "test memory"}, Score: 0.8},
-	}
-
-	// Should return original on error (graceful fallback)
-	result, err := InjectMemories(invalidRequest, memories)
-	require.NoError(t, err, "should not return error, just fallback")
-	assert.Equal(t, invalidRequest, result, "should return original on parse error")
-}
-
-func TestInjectMemories_EmptyMessages(t *testing.T) {
-	// Request with empty messages array
-	originalRequest := []byte(`{"model":"test","messages":[]}`)
-
-	memories := []*memory.RetrieveResult{
-		{Memory: &memory.Memory{Content: "test memory"}, Score: 0.8},
-	}
-
-	result, err := InjectMemories(originalRequest, memories)
-	require.NoError(t, err)
-
-	var parsed map[string]interface{}
-	err = json.Unmarshal(result, &parsed)
-	require.NoError(t, err)
-
-	messages := parsed["messages"].([]interface{})
-	require.Len(t, messages, 1, "should have system message added")
-
-	systemMsg := messages[0].(map[string]interface{})
-	assert.Equal(t, "system", systemMsg["role"])
-	assert.Contains(t, systemMsg["content"], "test memory")
-}
-
-func TestInjectMemories_NilMemoryContent(t *testing.T) {
-	originalRequest := []byte(`{"model":"test","messages":[{"role":"user","content":"test"}]}`)
-
-	memories := []*memory.RetrieveResult{
-		{Memory: nil, Score: 0.8},                         // nil memory
-		{Memory: &memory.Memory{Content: ""}, Score: 0.7}, // empty content
-		{Memory: &memory.Memory{Content: "valid memory"}, Score: 0.6},
-	}
-
-	result, err := InjectMemories(originalRequest, memories)
-	require.NoError(t, err)
-
-	var parsed map[string]interface{}
-	err = json.Unmarshal(result, &parsed)
-	require.NoError(t, err)
-
-	messages := parsed["messages"].([]interface{})
-	systemMsg := messages[0].(map[string]interface{})
-	content := systemMsg["content"].(string)
-
-	// Should only contain the valid memory
-	assert.Contains(t, content, "valid memory")
-	assert.NotContains(t, content, "nil") // No nil memory content
-}
 
 // =============================================================================
 // FormatMemoriesAsContext Tests
@@ -1054,7 +872,7 @@ func TestFormatMemoriesAsContext_SingleMemory(t *testing.T) {
 
 	result := FormatMemoriesAsContext(memories)
 
-	assert.Contains(t, result, "## User's Relevant Context")
+	assert.Contains(t, result, "relevant context from previous conversations")
 	assert.Contains(t, result, "- Budget is $10,000")
 }
 
@@ -1066,7 +884,6 @@ func TestFormatMemoriesAsContext_MultipleMemories(t *testing.T) {
 
 	result := FormatMemoriesAsContext(memories)
 
-	assert.Contains(t, result, "## User's Relevant Context")
 	assert.Contains(t, result, "- Budget is $10,000")
 	assert.Contains(t, result, "- Prefers direct flights")
 }
@@ -1081,105 +898,7 @@ func TestFormatMemoriesAsContext_SkipsNilAndEmpty(t *testing.T) {
 	result := FormatMemoriesAsContext(memories)
 
 	assert.Contains(t, result, "- Valid content")
-	// Should only have one bullet point
 	assert.Equal(t, 1, countOccurrences(result, "- "))
-}
-
-// =============================================================================
-// Integration-like Tests
-// =============================================================================
-
-func TestInjectMemories_RealisticScenario(t *testing.T) {
-	// Simulate a realistic request with system prompt, history, and user query
-	originalRequest := []byte(`{
-		"model": "qwen3-7b",
-		"messages": [
-			{"role": "system", "content": "You are a helpful travel assistant."},
-			{"role": "user", "content": "I want to plan a trip to Hawaii"},
-			{"role": "assistant", "content": "Great choice! Hawaii is beautiful. What's your budget?"},
-			{"role": "user", "content": "How much did I say my budget was?"}
-		],
-		"temperature": 0.7,
-		"max_tokens": 1024
-	}`)
-
-	memories := []*memory.RetrieveResult{
-		{
-			Memory: &memory.Memory{
-				Content: "User's budget for Hawaii trip is $10,000",
-				Type:    memory.MemoryTypeSemantic,
-			},
-			Score: 0.92,
-		},
-		{
-			Memory: &memory.Memory{
-				Content: "User prefers direct flights over connections",
-				Type:    memory.MemoryTypeSemantic,
-			},
-			Score: 0.78,
-		},
-	}
-
-	result, err := InjectMemories(originalRequest, memories)
-	require.NoError(t, err)
-
-	// Parse and validate
-	var parsed map[string]interface{}
-	err = json.Unmarshal(result, &parsed)
-	require.NoError(t, err)
-
-	// Verify model and other fields preserved
-	assert.Equal(t, "qwen3-7b", parsed["model"])
-	assert.Equal(t, float64(0.7), parsed["temperature"])
-	assert.Equal(t, float64(1024), parsed["max_tokens"])
-
-	// Verify messages
-	messages := parsed["messages"].([]interface{})
-	require.Len(t, messages, 4, "should have same number of messages")
-
-	// System message should be enhanced
-	systemMsg := messages[0].(map[string]interface{})
-	content := systemMsg["content"].(string)
-	assert.Contains(t, content, "You are a helpful travel assistant")
-	assert.Contains(t, content, "User's Relevant Context")
-	assert.Contains(t, content, "budget for Hawaii trip is $10,000")
-	assert.Contains(t, content, "prefers direct flights")
-}
-
-func TestInjectMemories_PreservesMessageOrder(t *testing.T) {
-	originalRequest := []byte(`{
-		"model": "test",
-		"messages": [
-			{"role": "user", "content": "First message"},
-			{"role": "assistant", "content": "Response"},
-			{"role": "user", "content": "Second message"}
-		]
-	}`)
-
-	memories := []*memory.RetrieveResult{
-		{Memory: &memory.Memory{Content: "Memory content"}, Score: 0.8},
-	}
-
-	result, err := InjectMemories(originalRequest, memories)
-	require.NoError(t, err)
-
-	var parsed map[string]interface{}
-	err = json.Unmarshal(result, &parsed)
-	require.NoError(t, err)
-
-	messages := parsed["messages"].([]interface{})
-	require.Len(t, messages, 4, "should have system + 3 original messages")
-
-	// Verify order: system, user, assistant, user
-	assert.Equal(t, "system", messages[0].(map[string]interface{})["role"])
-	assert.Equal(t, "user", messages[1].(map[string]interface{})["role"])
-	assert.Equal(t, "assistant", messages[2].(map[string]interface{})["role"])
-	assert.Equal(t, "user", messages[3].(map[string]interface{})["role"])
-
-	// Verify content preserved
-	assert.Equal(t, "First message", messages[1].(map[string]interface{})["content"])
-	assert.Equal(t, "Response", messages[2].(map[string]interface{})["content"])
-	assert.Equal(t, "Second message", messages[3].(map[string]interface{})["content"])
 }
 
 // Helper function

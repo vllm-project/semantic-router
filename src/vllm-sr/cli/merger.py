@@ -15,6 +15,35 @@ from cli.utils import getLogger
 log = getLogger(__name__)
 
 
+def _condition_to_dict(condition) -> Dict[str, Any]:
+    """Serialize recursive condition node to router rule dict."""
+    node: Dict[str, Any] = {}
+    ctype = getattr(condition, "type", None)
+    cname = getattr(condition, "name", None)
+    cop = getattr(condition, "operator", None)
+    cchildren = getattr(condition, "conditions", None)
+
+    if ctype is not None:
+        node["type"] = ctype
+    if cname is not None:
+        node["name"] = cname
+    if cop is not None:
+        node["operator"] = cop
+    if cchildren:
+        node["conditions"] = [_condition_to_dict(c) for c in cchildren]
+    return node
+
+
+def _iter_condition_nodes(conditions):
+    """Depth-first traversal over recursive condition trees."""
+    if not conditions:
+        return
+    for condition in conditions:
+        yield condition
+        if getattr(condition, "conditions", None):
+            yield from _iter_condition_nodes(condition.conditions)
+
+
 def translate_keyword_signals(keywords: list) -> list:
     """
     Translate keyword signals to router format.
@@ -193,12 +222,63 @@ def translate_complexity_signals(complexity_rules: list) -> list:
         if signal.description:
             rule["description"] = signal.description
         if signal.composer:
-            rule["composer"] = {
-                "operator": signal.composer.operator,
-                "conditions": [
-                    {"type": c.type, "name": c.name} for c in signal.composer.conditions
-                ],
-            }
+            rule["composer"] = _condition_to_dict(signal.composer)
+        rules.append(rule)
+    return rules
+
+
+def translate_jailbreak_signals(jailbreak_rules: list) -> list:
+    """
+    Translate jailbreak signals to router format.
+
+    Args:
+        jailbreak_rules: List of JailbreakRule objects
+
+    Returns:
+        list: Router jailbreak rules
+    """
+    rules = []
+    for signal in jailbreak_rules:
+        rule = {
+            "name": signal.name,
+            "threshold": signal.threshold,
+        }
+        if signal.method:
+            rule["method"] = signal.method
+        if signal.include_history:
+            rule["include_history"] = signal.include_history
+        if signal.jailbreak_patterns:
+            rule["jailbreak_patterns"] = signal.jailbreak_patterns
+        if signal.benign_patterns:
+            rule["benign_patterns"] = signal.benign_patterns
+        if signal.description:
+            rule["description"] = signal.description
+        rules.append(rule)
+    return rules
+
+
+def translate_pii_signals(pii_rules: list) -> list:
+    """
+    Translate PII signals to router format.
+
+    Args:
+        pii_rules: List of PIIRule objects
+
+    Returns:
+        list: Router PII rules
+    """
+    rules = []
+    for signal in pii_rules:
+        rule = {
+            "name": signal.name,
+            "threshold": signal.threshold,
+        }
+        if signal.pii_types_allowed:
+            rule["pii_types_allowed"] = signal.pii_types_allowed
+        if signal.include_history:
+            rule["include_history"] = signal.include_history
+        if signal.description:
+            rule["description"] = signal.description
         rules.append(rule)
     return rules
 
@@ -275,7 +355,7 @@ def extract_categories_from_decisions(decisions: list) -> list:
     categories = {}
 
     for decision in decisions:
-        for condition in decision.rules.conditions:
+        for condition in _iter_condition_nodes(decision.rules.conditions):
             if condition.type == "domain":
                 if condition.name not in categories:
                     categories[condition.name] = {
@@ -307,6 +387,10 @@ def translate_providers_to_router_format(providers) -> Dict[str, Any]:
             "reasoning_family": model.reasoning_family,
             "access_key": model.access_key,
         }
+
+        # Add param_size if provided
+        if model.param_size:
+            model_config[model.name]["param_size"] = model.param_size
 
         # Add api_format if provided
         if model.api_format:
@@ -466,6 +550,16 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
             log.info(
                 f"  Added {len(user_config.signals.complexity)} complexity signals"
             )
+
+        if user_config.signals.jailbreak and len(user_config.signals.jailbreak) > 0:
+            merged["jailbreak"] = translate_jailbreak_signals(
+                user_config.signals.jailbreak
+            )
+            log.info(f"  Added {len(user_config.signals.jailbreak)} jailbreak signals")
+
+        if user_config.signals.pii and len(user_config.signals.pii) > 0:
+            merged["pii"] = translate_pii_signals(user_config.signals.pii)
+            log.info(f"  Added {len(user_config.signals.pii)} PII signals")
 
         # Translate domains to categories
         if user_config.signals.domains:

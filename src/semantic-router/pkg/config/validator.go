@@ -102,12 +102,8 @@ func validateConfigStructure(cfg *RouterConfig) error {
 		return fmt.Errorf("legacy latency config is no longer supported; use decision.algorithm.type=latency_aware and remove signals.latency_rules / conditions.type=latency")
 	}
 
-	// File mode: validate decisions have at least one model ref
+	// File mode: validate decisions model refs
 	for _, decision := range cfg.Decisions {
-		if len(decision.ModelRefs) == 0 {
-			return fmt.Errorf("decision '%s' has no modelRefs defined - each decision must have at least one model", decision.Name)
-		}
-
 		// Validate each model ref has the required fields
 		for i, modelRef := range decision.ModelRefs {
 			if modelRef.Model == "" {

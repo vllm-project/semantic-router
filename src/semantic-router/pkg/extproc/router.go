@@ -26,7 +26,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/pii"
 )
 
 // OpenAIRouter is an Envoy ExtProc server that routes OpenAI API requests
@@ -34,7 +33,6 @@ type OpenAIRouter struct {
 	Config               *config.RouterConfig
 	CategoryDescriptions []string
 	Classifier           *classification.Classifier
-	PIIChecker           *pii.PolicyChecker
 	Cache                cache.CacheBackend
 	ToolsDatabase        *tools.ToolsDatabase
 	ResponseAPIFilter    *ResponseAPIFilter
@@ -191,9 +189,6 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	} else {
 		logging.Infof("Tools database is disabled")
 	}
-
-	// Create utility components
-	piiChecker := pii.NewPolicyChecker(cfg)
 
 	classifier, err := classification.NewClassifier(cfg, categoryMapping, piiMapping, jailbreakMapping)
 	if err != nil {
@@ -397,16 +392,12 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		}
 	}
 
-	// Create memory extractor if memory_extraction external model is configured
+	// Create memory chunk store (direct conversation storage, no LLM extraction)
 	var memoryExtractor *memory.MemoryExtractor
-	if memoryEnabled && cfg.FindExternalModelByRole(config.ModelRoleMemoryExtraction) != nil {
-		if memoryStore != nil {
-			memoryExtractor = memory.NewMemoryExtractorWithStore(cfg, cfg.Memory.ExtractionBatchSize, memoryStore)
-			if memoryExtractor != nil {
-				logging.Infof("Memory extractor enabled with model_role: %s", config.ModelRoleMemoryExtraction)
-			}
-		} else {
-			logging.Warnf("Memory extraction enabled but memory store not available, extraction will be disabled")
+	if memoryEnabled && memoryStore != nil {
+		memoryExtractor = memory.NewMemoryChunkStore(memoryStore)
+		if memoryExtractor != nil {
+			logging.Infof("Memory chunk store enabled (direct conversation storage)")
 		}
 	}
 
@@ -424,7 +415,6 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		Config:               cfg,
 		CategoryDescriptions: categoryDescriptions,
 		Classifier:           classifier,
-		PIIChecker:           piiChecker,
 		Cache:                semanticCache,
 		ToolsDatabase:        toolsDatabase,
 		ResponseAPIFilter:    responseAPIFilter,

@@ -3895,7 +3895,7 @@ func TestMmBert32KPIIClassifier(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			entities, err := ClassifyMmBert32KPII(tc.text, modelPath+"/config.json")
+			entities, err := ClassifyMmBert32KPII(tc.text)
 			if err != nil {
 				t.Errorf("Classification failed: %v", err)
 				return

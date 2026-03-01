@@ -1,0 +1,157 @@
+/* ===== Page layout ===== */
+/* navbar and footer are hidden programmatically, so we take 100vh */
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--ifm-background-color);
+  overflow: hidden;
+}
+
+
+/* ===== PDF viewer area ===== */
+.viewerArea {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 1.5rem 2rem 1rem;
+  box-sizing: border-box;
+  background: var(--ifm-background-surface-color, #f5f6f7);
+}
+
+/* react-pdf Document container */
+.document {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.documentSinglePage {
+  min-height: 100%;
+  align-items: center;
+}
+
+/* Two-page horizontal layout */
+.pagesRow {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+/* Single page wrapper with shadow */
+.pageWrapper {
+  box-shadow:
+    0 2px 12px rgba(0, 0, 0, 0.12),
+    0 1px 3px rgba(0, 0, 0, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+/* ===== Bottom pagination bar ===== */
+.pagination {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 0.7rem 2rem;
+  background: var(--ifm-navbar-background-color, #fff);
+  border-top: 1px solid var(--ifm-toc-border-color, #e8e8e8);
+  flex-shrink: 0;
+}
+
+/* Center: page navigation */
+.paginationCenter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.2rem;
+}
+
+
+.pageBtn {
+  padding: 0.35rem 1.1rem;
+  border-radius: 5px;
+  border: 1px solid var(--ifm-toc-border-color, #d0d0d0);
+  background: transparent;
+  color: var(--ifm-font-color-base);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.pageBtn:hover:not(:disabled) {
+  background: var(--ifm-color-primary);
+  color: #fff;
+  border-color: var(--ifm-color-primary);
+}
+
+.pageBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.pageInfo {
+  font-size: 0.85rem;
+  color: var(--ifm-font-color-base);
+  min-width: 80px;
+  text-align: center;
+}
+
+
+/* ===== Loading state ===== */
+.loadingText {
+  padding: 4rem;
+  color: var(--ifm-color-secondary-darkest, #666);
+  font-size: 0.95rem;
+}
+
+/* ===== Fallback ===== */
+.fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 1rem;
+  color: var(--ifm-color-secondary-darkest, #666);
+  font-size: 0.95rem;
+}
+
+.fallback a {
+  color: var(--ifm-color-primary);
+  font-weight: 500;
+}
+
+/* Mobile continuous-scroll stack */
+.mobileStack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+/* ===== Mobile: continuous-scroll mode ===== */
+@media (max-width: 768px) {
+  /* Allow the page to grow beyond the viewport for natural scroll */
+  .page {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  .viewerArea {
+    /* Expand to fit all stacked pages; white bg matches PDF pages */
+    flex: unset;
+    overflow: visible;
+    background: #fff;
+    padding: 0;
+    align-items: flex-start;
+  }
+}

@@ -86,6 +86,11 @@ type LlamaStackVectorStoreConfig struct {
 
 	// RequestTimeoutSeconds is the HTTP request timeout in seconds. Default: 30.
 	RequestTimeoutSeconds int `json:"request_timeout_seconds,omitempty" yaml:"request_timeout_seconds,omitempty"`
+
+	// SearchType controls the search strategy used by Llama Stack.
+	// Options: "vector" (default, semantic only) or "hybrid" (vector + keyword
+	// with Reciprocal Rank Fusion). Hybrid requires the Milvus vector_io provider.
+	SearchType string `json:"search_type,omitempty" yaml:"search_type,omitempty"`
 }
 
 // Validate checks the vector store configuration for errors.
@@ -113,6 +118,9 @@ func (c *VectorStoreConfig) Validate() error {
 		}
 		if c.LlamaStack.Endpoint == "" {
 			return fmt.Errorf("vector_store.llama_stack.endpoint is required")
+		}
+		if st := c.LlamaStack.SearchType; st != "" && st != "vector" && st != "hybrid" {
+			return fmt.Errorf("vector_store.llama_stack.search_type must be 'vector' or 'hybrid', got '%s'", st)
 		}
 	}
 

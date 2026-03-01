@@ -114,6 +114,41 @@ export interface ComplexitySignal {
   composer?: RuleComposer
 }
 
+export interface ModalitySignal {
+  name: string
+  description?: string
+}
+
+export interface Subject {
+  kind: 'User' | 'Group'
+  name: string
+}
+
+export interface RoleBindingSignal {
+  name: string
+  role: string
+  subjects: Subject[]
+  description?: string
+}
+
+export interface JailbreakSignal {
+  name: string
+  threshold: number
+  method?: string // "classifier" (default) or "contrastive"
+  include_history?: boolean
+  jailbreak_patterns?: string[] // Known jailbreak prompts (contrastive KB)
+  benign_patterns?: string[] // Known benign prompts (contrastive KB)
+  description?: string
+}
+
+export interface PIISignal {
+  name: string
+  threshold: number
+  pii_types_allowed?: string[]
+  include_history?: boolean
+  description?: string
+}
+
 export interface Signals {
   keywords?: KeywordSignal[]
   embeddings?: EmbeddingSignal[]
@@ -124,6 +159,10 @@ export interface Signals {
   language?: LanguageSignal[]
   context?: ContextSignal[]
   complexity?: ComplexitySignal[]
+  modality?: ModalitySignal[]
+  role_bindings?: RoleBindingSignal[]
+  jailbreak?: JailbreakSignal[]
+  pii?: PIISignal[]
 }
 
 // =============================================================================
@@ -131,7 +170,7 @@ export interface Signals {
 // =============================================================================
 
 
-export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'context' | 'complexity'
+export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'embedding' | 'context' | 'complexity' | 'modality' | 'authz' | 'jailbreak' | 'pii'
 export interface DecisionCondition {
   type: DecisionConditionType
   name: string
@@ -148,8 +187,8 @@ export interface ModelRef {
 }
 
 export interface PluginConfig {
-  type: 'system_prompt' | 'semantic-cache' | 'pii' | 'hallucination' | 'jailbreak' | 'header_mutation' | 'router_replay'
-  configuration: Record<string, any>
+  type: 'system_prompt' | 'semantic-cache' | 'hallucination' | 'header_mutation' | 'router_replay' | 'fast_response'
+  configuration: Record<string, unknown>
 }
 
 export interface Decision {
@@ -215,7 +254,7 @@ export interface LegacyCategory {
 
 export interface LegacyConfig {
   vllm_endpoints?: LegacyVLLMEndpoint[]
-  model_config?: Record<string, any>
+  model_config?: Record<string, unknown>
   categories?: LegacyCategory[]
   classifier?: {
     category_model?: LegacyModelConfig
@@ -313,6 +352,7 @@ export interface UnifiedConfig extends Partial<PythonCLIConfig>, Partial<LegacyC
 /**
  * Detect the config format based on key indicators
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function detectConfigFormat(config: any): ConfigFormat {
   // Python CLI format has providers.models
   if (config?.providers?.models) {
@@ -329,6 +369,7 @@ export function detectConfigFormat(config: any): ConfigFormat {
 /**
  * Check if config is in Python CLI format
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function isPythonCLIFormat(config: any): config is PythonCLIConfig {
   return detectConfigFormat(config) === 'python-cli'
 }
@@ -336,6 +377,7 @@ export function isPythonCLIFormat(config: any): config is PythonCLIConfig {
 /**
  * Check if config is in legacy format
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function isLegacyFormat(config: any): config is LegacyConfig {
   return detectConfigFormat(config) === 'legacy'
 }

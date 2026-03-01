@@ -1,0 +1,13 @@
+% sections/abstract.tex
+
+\begin{abstract}
+As large language models (LLMs) diversify across modalities, capabilities, and cost profiles, the problem of \emph{intelligent request routing}---selecting the right model for each query at inference time---has become a critical systems challenge.
+We present \textbf{\sysname{}}, a signal-driven decision routing framework for Mixture-of-Modality (MoM) model deployments.
+
+The architecture rests on a theoretical foundation that mirrors two pillars of Shannon's work: the signal extraction layer operates in the probabilistic regime of information theory---reducing the entropy of ``which model?'' by extracting routing-relevant information from raw queries---while the decision engine operates in the algebraic regime of Boolean logic synthesis, composing functionally complete routing policies from signal conditions exactly as Shannon's switching algebra composes circuit behavior from relay states.
+
+The central innovation is \emph{composable signal orchestration}: thirteen heterogeneous signal types---spanning sub-millisecond heuristics and neural classifiers for semantics, safety, and modality---are composed through configurable Boolean decision rules into deployment-specific routing policies, so that fundamentally different scenarios (multi-cloud enterprise, privacy-regulated, cost-optimized) are expressed as different configurations over the same architecture.
+
+Matched decisions drive \emph{semantic model routing} via thirteen selection algorithms, while per-decision plugin chains enforce safety constraints including a three-stage \emph{HaluGate} hallucination detection pipeline and a lightweight episodic memory system with \emph{ReflectionGate} for personalized multi-turn context.
+Deployed in production as an Envoy external processor with multi-provider routing across heterogeneous backends, the architecture demonstrates that composable signal orchestration enables a single framework to serve diverse deployment scenarios with differentiated cost, privacy, and safety policies.
+\end{abstract}

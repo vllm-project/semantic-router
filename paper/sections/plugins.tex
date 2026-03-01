@@ -1,0 +1,96 @@
+% sections/plugins.tex
+
+\section{Plugin Framework}
+\label{sec:plugins}
+
+The plugin layer provides a composable middleware architecture where each matched decision activates an independent chain of typed transformations.
+We describe the plugin model and four core infrastructure plugins; safety signal classifiers are covered in \Cref{sec:safety}, hallucination detection in \Cref{sec:halugate}, and memory retrieval and RAG injection in \Cref{sec:memory_rag}.
+
+\subsection{Plugin Execution Model}
+
+Formally, a plugin $\pi$ is a typed transformation on the request-response pair:
+\begin{equation}
+  \pi: (\text{Request}, \text{Context}, \text{Config}_\pi) \to (\text{Request}', \text{Response}') \cup \{\bot\}
+\end{equation}
+where $\bot$ denotes early termination (e.g., a cache hit returning immediately or a fast response short-circuiting the pipeline).
+
+Plugins execute in a fixed pipeline order within each decision's chain.
+On the \emph{request path}: fast response $\to$ cache $\to$ RAG $\to$ modality $\to$ memory $\to$ system prompt $\to$ header mutation.
+On the \emph{response path}: hallucination detection $\to$ cache write.
+Each plugin is independently enabled per decision, and its configuration (thresholds, modes, policies) is scoped to that decision.
+
+Jailbreak and PII detection are first-class \emph{signals} (\Cref{sec:signal_engine,sec:safety}) evaluated in parallel with all other signal types, not serial plugins in the request path.
+Decisions that match safety signals activate the \texttt{fast\_response} plugin to return an immediate rejection.
+
+This per-decision scoping is a key architectural distinction from systems that apply safety and caching globally: it allows differentiated policies for different routing outcomes within the same deployment.
+
+\subsection{Output-Space Projection Perspective}
+
+For a matched decision $d^*$, the plugin chain can be interpreted as a policy-scoped projection from routing state to deployment-compliant output behavior:
+\begin{equation}
+  \Psi_{d^*} = \pi_n \circ \pi_{n-1} \circ \cdots \circ \pi_1
+\end{equation}
+where each $\pi_i$ is a typed transformation in the configured chain.
+Functionally, this is analogous to an output projection stage after gating: once the decision fixes the active policy path, plugins realize that policy as concrete transformations on request/response state (e.g., context injection, auth header mutation, hallucination annotation, cache write-through).
+This analogy is operational rather than architectural: unlike a Transformer projection head, $\Psi_{d^*}$ is a configurable symbolic composition, not a learned linear map.
+
+\subsection{Semantic Cache}
+
+The semantic cache exploits the observation that semantically similar queries often produce equivalent responses, avoiding redundant model invocations.
+
+\noindent\textbf{Similarity model.}
+Given a query $q$ extracted from request $r$, the cache searches for an entry $e$ such that:
+\begin{equation}
+  \cos(\mathbf{e}_q, \mathbf{e}_e) \geq \theta_d
+\end{equation}
+where $\mathbf{e}_q, \mathbf{e}_e$ are embeddings computed by the shared embedding model and $\theta_d$ is the per-decision similarity threshold.
+On hit, the cached response is returned immediately, bypassing model invocation entirely.
+
+\noindent\textbf{Write-through protocol.}
+On cache miss, a pending entry is registered before forwarding to the model.
+Upon receiving the response, the entry is completed with the response content.
+This ensures that concurrent identical queries observe the pending state rather than triggering redundant model calls.
+
+\noindent\textbf{Backend abstraction.}
+Four backends provide different latency-persistence tradeoffs:
+(1)~in-memory HNSW for single-node low-latency deployments;
+(2)~Redis for distributed persistent caching;
+(3)~Milvus for large-scale approximate nearest neighbor search;
+(4)~a hybrid two-tier design combining in-memory HNSW (fast path) with Milvus (persistent store).
+
+\subsection{System Prompt Injection}
+
+Per-decision system prompt injection enables different routing paths to carry different instructions.
+Two composition modes are defined:
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Replace}: Substitutes the entire system message, providing complete control over the model's behavioral context.
+  \item \textbf{Insert}: Prepends the decision's prompt to the existing system message, augmenting without overriding user-provided instructions.
+\end{itemize}
+
+This enables patterns such as injecting domain-specific instructions for expert routing or safety preambles for sensitive query categories.
+
+\subsection{Header Mutation}
+
+Header mutation enables metadata propagation to downstream model backends via HTTP header modifications (add, update, delete).
+This supports use cases including:
+backend-specific authentication injection,
+routing decision metadata propagation for downstream observability,
+and custom signaling to model-serving frameworks (e.g., LoRA adapter selection via headers).
+
+\subsection{Fast Response}
+
+The fast response plugin enables a decision to short-circuit the entire pipeline and return an immediate OpenAI-compatible response without forwarding the request to any upstream model.
+This is the primary mechanism for acting on safety signals.
+
+\noindent\textbf{Execution model.}
+When a decision's \texttt{fast\_response} plugin is configured, the pipeline checks for it before any other plugin in the chain.
+If present, the configured message is returned as a standard \texttt{chat.completion} response with \texttt{finish\_reason: "stop"}, and no further processing occurs.
+
+\noindent\textbf{Streaming compatibility.}
+The plugin inspects the original request's \texttt{stream} parameter.
+For non-streaming requests, it returns a single JSON object.
+For streaming requests (\texttt{stream: true}), it generates a Server-Sent Events (SSE) sequence: an initial chunk with the assistant role, word-by-word content chunks, a final chunk with \texttt{finish\_reason: "stop"}, and the \texttt{[DONE]} sentinel---matching the exact format that OpenAI-compatible clients expect.
+
+\noindent\textbf{Use cases.}
+The canonical use case is safety enforcement: a decision matching a jailbreak or PII signal activates \texttt{fast\_response} to return a policy-compliant refusal message.
+However, the plugin is general-purpose---it can also serve canned responses for FAQ-like queries, maintenance windows, or rate-limited fallback messages without consuming model compute.

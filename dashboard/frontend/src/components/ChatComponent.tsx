@@ -1654,7 +1654,7 @@ const ChatComponent = ({
                 type="button"
                 className={styles.sidebarToggleButton}
                 onClick={() => setIsSidebarOpen(prev => !prev)}
-                title={isSidebarOpen ? 'Hide conversations' : 'Show conversations'}
+                title={isSidebarOpen ? 'Close' : 'Open'}
               >
                 {isSidebarOpen ? (
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1665,7 +1665,7 @@ const ChatComponent = ({
                     <path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 )}
-                <span className={styles.sidebarToggleLabel}>{isSidebarOpen ? 'Hide' : 'Show'} conversations</span>
+                <span className={styles.sidebarToggleLabel}>{isSidebarOpen ? 'Close' : 'Open'}</span>
               </button>
             </div>
             {error && (

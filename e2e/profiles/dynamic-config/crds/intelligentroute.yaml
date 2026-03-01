@@ -100,10 +100,7 @@ spec:
           loraName: "general-expert"
           useReasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "header_mutation"
           configuration:
             add:
@@ -174,10 +171,7 @@ spec:
           loraName: "math-expert"
           useReasoning: true
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -197,10 +191,7 @@ spec:
           loraName: "social-expert"
           useReasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -220,10 +211,7 @@ spec:
           loraName: "law-expert"
           useReasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -243,10 +231,7 @@ spec:
           loraName: "humanities-expert"
           useReasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "semantic-cache"
           configuration:
             enabled: true
@@ -294,10 +279,7 @@ spec:
           loraName: "science-expert"
           useReasoning: true
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -317,10 +299,7 @@ spec:
           loraName: "humanities-expert"
           useReasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -340,10 +319,7 @@ spec:
           loraName: "science-expert"
           useReasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "semantic-cache"
           configuration:
             enabled: true
@@ -367,10 +343,7 @@ spec:
           loraName: "social-expert"
           useReasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -390,10 +363,7 @@ spec:
           loraName: "math-expert"
           useReasoning: true
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -413,10 +383,7 @@ spec:
           loraName: "science-expert"
           useReasoning: true
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -436,10 +403,7 @@ spec:
           loraName: "science-expert"
           useReasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -459,10 +423,7 @@ spec:
           loraName: "humanities-expert"
           useReasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -482,10 +443,7 @@ spec:
           loraName: "science-expert"
           useReasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed: []
+
         - type: "system_prompt"
           configuration:
             enabled: true
