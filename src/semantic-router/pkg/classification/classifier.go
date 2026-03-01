@@ -1640,92 +1640,150 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 			defer wg.Done()
 			start := time.Now()
 
-			// For each jailbreak rule, build content list and dispatch by method
+			// Step 1: Collect the union of unique content pieces needed by classifier rules.
+			// Contrastive rules use a separate embedding model and are skipped here.
+			type cachedJailbreakResult struct {
+				result candle_binding.ClassResult
+				err    error
+			}
+			classifierContentSeen := make(map[string]struct{})
+			var classifierContents []string
 			for _, rule := range c.Config.JailbreakRules {
-				contentToAnalyze := []string{}
-				if text != "" {
-					contentToAnalyze = append(contentToAnalyze, text)
-				}
-				if rule.IncludeHistory && len(nonUserMessages) > 0 {
-					contentToAnalyze = append(contentToAnalyze, nonUserMessages...)
-				}
-				if len(contentToAnalyze) == 0 {
+				if rule.Method == "contrastive" {
 					continue
 				}
-
-				switch rule.Method {
-				case "contrastive":
-					// Contrastive embedding method
-					cjc, ok := c.contrastiveJailbreakClassifiers[rule.Name]
-					if !ok {
-						logging.Errorf("[Signal Computation] Contrastive jailbreak classifier not found for rule %q", rule.Name)
-						continue
+				if text != "" {
+					if _, ok := classifierContentSeen[text]; !ok {
+						classifierContentSeen[text] = struct{}{}
+						classifierContents = append(classifierContents, text)
 					}
-					analysisResult := cjc.AnalyzeMessages(contentToAnalyze)
-					threshold := rule.Threshold
-					if threshold <= 0 {
-						threshold = 0.10 // default contrastive threshold
-					}
-					if analysisResult.MaxScore >= threshold {
-						metrics.RecordSignalExtraction(config.SignalTypeJailbreak, rule.Name, time.Since(start).Seconds())
-						metrics.RecordSignalMatch(config.SignalTypeJailbreak, rule.Name)
-
-						confidence := analysisResult.MaxScore
-						mu.Lock()
-						results.MatchedJailbreakRules = append(results.MatchedJailbreakRules, rule.Name)
-						if confidence > results.JailbreakConfidence {
-							results.JailbreakDetected = true
-							results.JailbreakType = "contrastive"
-							results.JailbreakConfidence = confidence
-						}
-						if results.SignalConfidences == nil {
-							results.SignalConfidences = make(map[string]float64)
-						}
-						results.SignalConfidences["jailbreak:"+rule.Name] = float64(confidence)
-						mu.Unlock()
-
-						logging.Infof("[Signal Computation] Contrastive jailbreak rule %q matched: score=%.4f threshold=%.4f worst_msg_idx=%d time=%v",
-							rule.Name, analysisResult.MaxScore, threshold, analysisResult.WorstMsgIndex, analysisResult.ProcessingTime)
-					}
-
-				default:
-					// BERT classifier method (default)
-					hasJailbreak, detections, err := c.AnalyzeContentForJailbreakWithThreshold(contentToAnalyze, rule.Threshold)
-					if err != nil {
-						logging.Errorf("[Signal Computation] Jailbreak rule %q evaluation failed: %v", rule.Name, err)
-						continue
-					}
-
-					if hasJailbreak {
-						metrics.RecordSignalExtraction(config.SignalTypeJailbreak, rule.Name, time.Since(start).Seconds())
-						metrics.RecordSignalMatch(config.SignalTypeJailbreak, rule.Name)
-
-						// Find highest-confidence detection for metadata
-						var bestType string
-						var bestConf float32
-						for _, d := range detections {
-							if d.IsJailbreak && d.Confidence > bestConf {
-								bestConf = d.Confidence
-								bestType = d.JailbreakType
+				}
+				if rule.IncludeHistory {
+					for _, msg := range nonUserMessages {
+						if msg != "" {
+							if _, ok := classifierContentSeen[msg]; !ok {
+								classifierContentSeen[msg] = struct{}{}
+								classifierContents = append(classifierContents, msg)
 							}
 						}
-
-						mu.Lock()
-						results.MatchedJailbreakRules = append(results.MatchedJailbreakRules, rule.Name)
-						// Keep highest-confidence metadata across all rules
-						if bestConf > results.JailbreakConfidence {
-							results.JailbreakDetected = true
-							results.JailbreakType = bestType
-							results.JailbreakConfidence = bestConf
-						}
-						if results.SignalConfidences == nil {
-							results.SignalConfidences = make(map[string]float64)
-						}
-						results.SignalConfidences["jailbreak:"+rule.Name] = float64(bestConf)
-						mu.Unlock()
 					}
 				}
 			}
+
+			// Step 2: Run classifier inference exactly once per unique content piece.
+			jailbreakCache := make(map[string]cachedJailbreakResult, len(classifierContents))
+			for _, content := range classifierContents {
+				result, err := c.jailbreakInference.Classify(content)
+				jailbreakCache[content] = cachedJailbreakResult{result, err}
+			}
+
+			// Step 3: Evaluate all rules concurrently.
+			// Classifier rules read from the pre-computed cache (no inference).
+			// Contrastive rules run their own embedding inference independently
+			// (KB embeddings are already preloaded at initialisation time).
+			var ruleWg sync.WaitGroup
+			for _, rule := range c.Config.JailbreakRules {
+				ruleWg.Add(1)
+				go func() {
+					defer ruleWg.Done()
+
+					contentToAnalyze := []string{}
+					if text != "" {
+						contentToAnalyze = append(contentToAnalyze, text)
+					}
+					if rule.IncludeHistory && len(nonUserMessages) > 0 {
+						contentToAnalyze = append(contentToAnalyze, nonUserMessages...)
+					}
+					if len(contentToAnalyze) == 0 {
+						return
+					}
+
+					switch rule.Method {
+					case "contrastive":
+						cjc, ok := c.contrastiveJailbreakClassifiers[rule.Name]
+						if !ok {
+							logging.Errorf("[Signal Computation] Contrastive jailbreak classifier not found for rule %q", rule.Name)
+							return
+						}
+						analysisResult := cjc.AnalyzeMessages(contentToAnalyze)
+						threshold := rule.Threshold
+						if threshold <= 0 {
+							threshold = 0.10
+						}
+						if analysisResult.MaxScore >= threshold {
+							metrics.RecordSignalExtraction(config.SignalTypeJailbreak, rule.Name, time.Since(start).Seconds())
+							metrics.RecordSignalMatch(config.SignalTypeJailbreak, rule.Name)
+
+							confidence := analysisResult.MaxScore
+							mu.Lock()
+							results.MatchedJailbreakRules = append(results.MatchedJailbreakRules, rule.Name)
+							if confidence > results.JailbreakConfidence {
+								results.JailbreakDetected = true
+								results.JailbreakType = "contrastive"
+								results.JailbreakConfidence = confidence
+							}
+							if results.SignalConfidences == nil {
+								results.SignalConfidences = make(map[string]float64)
+							}
+							results.SignalConfidences["jailbreak:"+rule.Name] = float64(confidence)
+							mu.Unlock()
+
+							logging.Infof("[Signal Computation] Contrastive jailbreak rule %q matched: score=%.4f threshold=%.4f worst_msg_idx=%d time=%v",
+								rule.Name, analysisResult.MaxScore, threshold, analysisResult.WorstMsgIndex, analysisResult.ProcessingTime)
+						}
+
+					default:
+						// BERT classifier: apply threshold to cached inference results.
+						var bestType string
+						var bestConf float32
+						hasJailbreak := false
+						for _, content := range contentToAnalyze {
+							if content == "" {
+								continue
+							}
+							cached, ok := jailbreakCache[content]
+							if !ok {
+								continue
+							}
+							if cached.err != nil {
+								logging.Errorf("[Signal Computation] Jailbreak rule %q: inference error: %v", rule.Name, cached.err)
+								continue
+							}
+							jailbreakType, ok := c.JailbreakMapping.GetJailbreakTypeFromIndex(cached.result.Class)
+							if !ok {
+								logging.Errorf("[Signal Computation] Jailbreak rule %q: unknown class index %d", rule.Name, cached.result.Class)
+								continue
+							}
+							if cached.result.Confidence >= rule.Threshold && jailbreakType == "jailbreak" {
+								hasJailbreak = true
+								if cached.result.Confidence > bestConf {
+									bestConf = cached.result.Confidence
+									bestType = jailbreakType
+								}
+							}
+						}
+
+						if hasJailbreak {
+							metrics.RecordSignalExtraction(config.SignalTypeJailbreak, rule.Name, time.Since(start).Seconds())
+							metrics.RecordSignalMatch(config.SignalTypeJailbreak, rule.Name)
+
+							mu.Lock()
+							results.MatchedJailbreakRules = append(results.MatchedJailbreakRules, rule.Name)
+							if bestConf > results.JailbreakConfidence {
+								results.JailbreakDetected = true
+								results.JailbreakType = bestType
+								results.JailbreakConfidence = bestConf
+							}
+							if results.SignalConfidences == nil {
+								results.SignalConfidences = make(map[string]float64)
+							}
+							results.SignalConfidences["jailbreak:"+rule.Name] = float64(bestConf)
+							mu.Unlock()
+						}
+					}
+				}()
+			}
+			ruleWg.Wait()
 
 			elapsed := time.Since(start)
 			results.Metrics.Jailbreak.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
@@ -1745,40 +1803,86 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 			defer wg.Done()
 			start := time.Now()
 
+			// Step 1: Collect the union of unique content pieces across all PII rules.
+			type cachedPIIResult struct {
+				result candle_binding.TokenClassificationResult
+				err    error
+			}
+			contentSeen := make(map[string]struct{})
+			var uniqueContents []string
+			if text != "" {
+				contentSeen[text] = struct{}{}
+				uniqueContents = append(uniqueContents, text)
+			}
 			for _, rule := range c.Config.PIIRules {
-				contentToAnalyze := []string{}
-				if text != "" {
-					contentToAnalyze = append(contentToAnalyze, text)
-				}
-				if rule.IncludeHistory && len(nonUserMessages) > 0 {
-					contentToAnalyze = append(contentToAnalyze, nonUserMessages...)
-				}
-				if len(contentToAnalyze) == 0 {
-					continue
-				}
-
-				hasPII, analysisResults, err := c.AnalyzeContentForPIIWithThreshold(contentToAnalyze, rule.Threshold)
-				if err != nil {
-					logging.Errorf("[Signal Computation] PII rule %q evaluation failed: %v", rule.Name, err)
-					continue
-				}
-
-				if hasPII {
-					// Collect all detected entity types
-					entityTypes := make(map[string]bool)
-					for _, ar := range analysisResults {
-						for _, entity := range ar.Entities {
-							entityTypes[entity.EntityType] = true
+				if rule.IncludeHistory {
+					for _, msg := range nonUserMessages {
+						if msg != "" {
+							if _, ok := contentSeen[msg]; !ok {
+								contentSeen[msg] = struct{}{}
+								uniqueContents = append(uniqueContents, msg)
+							}
 						}
 					}
+				}
+			}
 
-					// Build allow-list set for fast lookup
+			// Step 2: Run PII token classification exactly once per unique content piece.
+			configPath := fmt.Sprintf("%s/config.json", c.Config.PIIModel.ModelID)
+			piiCache := make(map[string]cachedPIIResult, len(uniqueContents))
+			for _, content := range uniqueContents {
+				tokenResult, err := c.piiInference.ClassifyTokens(content, configPath)
+				piiCache[content] = cachedPIIResult{tokenResult, err}
+			}
+
+			// Step 3: Evaluate each rule concurrently using the cached token results.
+			// Each goroutine applies its own threshold and allow-list without re-running the model.
+			var ruleWg sync.WaitGroup
+			for _, rule := range c.Config.PIIRules {
+				ruleWg.Add(1)
+				go func() {
+					defer ruleWg.Done()
+
+					ruleContents := []string{}
+					if text != "" {
+						ruleContents = append(ruleContents, text)
+					}
+					if rule.IncludeHistory {
+						for _, msg := range nonUserMessages {
+							if msg != "" {
+								ruleContents = append(ruleContents, msg)
+							}
+						}
+					}
+					if len(ruleContents) == 0 {
+						return
+					}
+
+					// Build allow-list set for fast lookup.
 					allowSet := make(map[string]bool, len(rule.PIITypesAllowed))
 					for _, allowed := range rule.PIITypesAllowed {
 						allowSet[strings.ToUpper(allowed)] = true
 					}
 
-					// Check if any detected entity type is NOT in the allow-list
+					// Apply this rule's threshold to cached token results and collect entity types.
+					entityTypes := make(map[string]bool)
+					for _, content := range ruleContents {
+						cached, ok := piiCache[content]
+						if !ok {
+							continue
+						}
+						if cached.err != nil {
+							logging.Errorf("[Signal Computation] PII rule %q: inference error: %v", rule.Name, cached.err)
+							continue
+						}
+						for _, entity := range cached.result.Entities {
+							if entity.Confidence >= rule.Threshold {
+								entityTypes[entity.EntityType] = true
+							}
+						}
+					}
+
+					// Check for entity types not covered by the allow-list.
 					var deniedEntities []string
 					for entityType := range entityTypes {
 						if !allowSet[strings.ToUpper(entityType)] {
@@ -1787,14 +1891,14 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 					}
 
 					if len(deniedEntities) > 0 {
-						// Signal fires: denied PII types detected
 						metrics.RecordSignalExtraction(config.SignalTypePII, rule.Name, time.Since(start).Seconds())
 						metrics.RecordSignalMatch(config.SignalTypePII, rule.Name)
+
+						logging.Infof("[Signal Computation] PII rule %q matched: denied_entities=%v", rule.Name, deniedEntities)
 
 						mu.Lock()
 						results.MatchedPIIRules = append(results.MatchedPIIRules, rule.Name)
 						results.PIIDetected = true
-						// Merge entity types across rules (deduplicate)
 						for _, e := range deniedEntities {
 							if !slices.Contains(results.PIIEntities, e) {
 								results.PIIEntities = append(results.PIIEntities, e)
@@ -1802,8 +1906,9 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 						}
 						mu.Unlock()
 					}
-				}
+				}()
 			}
+			ruleWg.Wait()
 
 			elapsed := time.Since(start)
 			results.Metrics.PII.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
