@@ -8,18 +8,16 @@ Organizations increasingly operate \emph{heterogeneous model fleets}---local vLL
 This heterogeneity creates a fundamental inference-time optimization problem: \emph{given a user query, a fleet of diverse models, and deployment-specific constraints, which model should serve it, and what safety and privacy policies should apply?}
 
 Viewed through the lens of information theory~\cite{shannon1948mathematical}, routing is an \emph{uncertainty-reduction} problem.
-Before any analysis, the routing entropy is maximal: $H(M \mid r_\text{raw}) \approx \log_2 K$ bits for $K$ candidate models---every model is equally plausible.
-Each signal extracted from the request reduces this uncertainty; the goal is to collapse $H(M \mid S(r))$ to near zero so that the decision engine can make a deterministic, high-confidence routing choice (\Cref{fig:entropy_collapse}).
-This perspective reveals a natural two-layer decomposition (\Cref{fig:shannon_mapping}): signal extraction operates in the probabilistic regime of Shannon's \emph{Mathematical Theory of Communication}---maximizing the mutual information between observed signals and the routing outcome---while decision evaluation operates in the algebraic regime of Shannon's \emph{switching-circuit algebra}~\cite{shannon1938symbolic}, synthesizing routing policies as Boolean functions over the extracted signal indicators.
-The signal vector~$\mathbf{s}$ is the precise interface between these two regimes: continuous probabilistic inference below, discrete symbolic logic above.
-This decomposition also admits a modern machine-learning interpretation: the signal extraction layer functions as a \emph{hybrid embedding stage}---mapping raw text into a structured, interpretable signal vector via both heuristic and learned extractors (\Cref{sec:disc_embedding})---while the priority-ordered decision engine functions as a \emph{symbolic Mixture-of-Experts gating mechanism}, where each decision block is an expert gate and priority ordering implements deterministic early-exit selection (\Cref{sec:disc_moe}).
-Complementing this view, we interpret the priority blocks as a \emph{layered entropy-folding} process (\Cref{sec:disc_entropy_folding}): each gate conditions the routing hypothesis space and further reduces uncertainty over the final model choice.
-At the systems level this yields a Transformer-like layered control structure (embedding-like signal construction, layered gating, output-side transformations), while remaining non-equivalent to Transformer hidden-state dynamics.
-We develop this \emph{programmable neural-symbolic inference engine} perspective throughout the paper, showing how it connects to agent-based policy synthesis (\Cref{sec:disc_agent}).
+Before any analysis, routing entropy is maximal: $H(M \mid r_\text{raw}) \approx \log_2 K$ bits for $K$ candidate models---every model is equally plausible.
+Each signal extracted from the request reduces this uncertainty.
+
+This viewpoint suggests a natural two-layer decomposition (\Cref{fig:shannon_mapping}).
+Under this decomposition, the objective is to collapse $H(M \mid S(r))$ to near zero so the decision engine can make a deterministic, high-confidence routing choice (\Cref{fig:entropy_collapse}).
 
 \begin{figure*}[!ht]
   \centering
-  \begin{tikzpicture}[
+  \resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[
     sbox/.style={rectangle, draw, thick, rounded corners=2pt,
                  minimum height=0.75cm, align=center, inner sep=4pt, font=\small},
     lbl/.style={font=\scriptsize, text=gray},
@@ -67,15 +65,23 @@ We develop this \emph{programmable neural-symbolic inference engine} perspective
   \node[font=\scriptsize, fill=red!5, rounded corners=2pt, inner sep=2pt]
     at (9.6, -1.1) {Boolean Algebra regime};
 
-  \end{tikzpicture}
+  \end{tikzpicture}%
+}
   \caption{Structural correspondence between Shannon's communication system~\cite{shannon1948mathematical} and VSR's routing pipeline.
   The dotted line marks the boundary between the information-theoretic regime (signal extraction maximizes mutual information with the routing outcome) and the Boolean-algebraic regime (the decision engine synthesizes routing policies from signal conditions via $\{\wedge, \vee, \neg\}$~\cite{shannon1938symbolic}).}
   \label{fig:shannon_mapping}
 \end{figure*}
 
+In the first layer, signal extraction operates in the probabilistic regime of Shannon's \emph{Mathematical Theory of Communication}; in the second, decision evaluation operates in the algebraic regime of Shannon's \emph{switching-circuit algebra}~\cite{shannon1938symbolic}.
+The signal vector~$\mathbf{s}$ is the interface between these regimes: continuous probabilistic inference below, discrete symbolic logic above.
+In modern ML terms, the extraction layer behaves like a \emph{hybrid embedding stage} (\Cref{sec:disc_embedding}), while the priority-ordered decision engine behaves like a \emph{symbolic Mixture-of-Experts gate} with deterministic early exit (\Cref{sec:disc_moe}).
+We also interpret priority blocks as \emph{layered entropy folding} (\Cref{sec:disc_entropy_folding}).
+Together these components form a programmable neural-symbolic inference engine (Transformer-like control structure, but not equivalent hidden-state dynamics), which we connect to agent-based policy synthesis (\Cref{sec:disc_agent}).
+
 \begin{figure*}[!ht]
   \centering
-  \begin{tikzpicture}[
+  \resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[
     bar/.style={draw, thick, rounded corners=1pt, fill=#1, minimum width=0.9cm, anchor=south},
     lbl/.style={font=\scriptsize},
     arr/.style={->, >=stealth, thick, gray!70},
@@ -114,8 +120,9 @@ We develop this \emph{programmable neural-symbolic inference engine} perspective
   % Baseline
   \draw[gray!40] (-0.1, 0) -- (8.0, 0);
 
-  \end{tikzpicture}
-  \caption{Entropy collapse during signal extraction. Each additional signal reduces the routing uncertainty $H(M \mid \cdot\,)$ from the uniform prior $\log_2 K$ bits until the decision formula $\phi(\mathbf{s})$ yields a near-deterministic model selection.}
+  \end{tikzpicture}%
+}
+  \caption{Entropy collapse during signal extraction (illustrative). Each additional signal reduces the routing uncertainty $H(M \mid \cdot\,)$ from the uniform prior $\log_2 K$ bits until the decision formula $\phi(\mathbf{s})$ yields a near-deterministic model selection. Bar heights are schematic rather than empirical measurements.}
   \label{fig:entropy_collapse}
 \end{figure*}
 

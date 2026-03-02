@@ -1,21 +1,17 @@
 % vLLM Semantic Router: Signal Driven Decision Routing for Mixture-of-Modality Models
 % Main document -- compile with: pdflatex main && bibtex main && pdflatex main && pdflatex main
 
-\documentclass[11pt,a4paper]{article}
+\documentclass{article}
+
+\usepackage{iclr2026_conference}
 
 % ---------- packages ----------
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
-\usepackage{lmodern}
-\usepackage[margin=1in]{geometry}
 \usepackage{graphicx}
 \usepackage{amsmath,amssymb,amsthm}
+\usepackage{amsfonts}
 \usepackage{booktabs}
-
-% ---------- theorem environments ----------
-\newtheorem{definition}{Definition}
-\newtheorem{theorem}{Theorem}
-\newtheorem{proposition}{Proposition}
 \usepackage{multirow}
 \usepackage{enumitem}
 \usepackage{algorithm}
@@ -30,6 +26,11 @@
 \usepackage{url}
 \usepackage{tikz}
 \usetikzlibrary{shapes,shapes.geometric,arrows,positioning,fit,calc,backgrounds,decorations.pathreplacing}
+
+% ---------- theorem environments ----------
+\newtheorem{definition}{Definition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}{Proposition}
 
 % ---------- listing style ----------
 \lstset{
@@ -63,52 +64,37 @@
 \newcommand{\lora}{LoRA}
 \newcommand{\vsr}{\texttt{vllm-sr}}
 
+\setlength{\emergencystretch}{2em}
+\iclrfinalcopy
+
+\title{%
+\textbf{vLLM Semantic Router:}\\[-1pt]
+{\fontsize{11}{12.5}\selectfont\mbox{Signal Driven Decision Routing for Mixture-of-Modality Models}}%
+}
+
+\author{%
+\parbox[t]{0.965\textwidth}{\centering\small\normalfont
+Xunzhuo Liu, Huamin Chen, Samzong Lu, Yossi Ovadia, Guohong Wen, Hao Wu, \\
+Zhengda Tan, Jintao Zhang, Senan Zedan, Yehudit Kerido, Liav Weiss,
+Haichen Zhang, Bishen Yu, Asaad Balum, Noa Limoy,
+Abdallah Samara, Baofa Fan, Brent Salisbury, Ryan Cook, Zhijie Wang,
+Qiping Pan, Rehan Khan, Avishek Goswami, Houston H.\ Zhang, Shuyi Wang,
+Ziang Tang, Fang Han, Zohaib Hassan, Jianqiao Zheng, Avinash Changrani%
+}%
+}
+
+\date{February 2026}
+
 % =====================================================================
 %  DOCUMENT
 % =====================================================================
 \begin{document}
 
-\begin{center}
-  \vspace*{0.1in}
-  \noindent\rule{\textwidth}{3pt}\\[0.6cm]
-  {\LARGE \textbf{vLLM Semantic Router: Signal Driven Decision\\[0.15cm]
-  Routing for Mixture-of-Modality Models}}\\[0.6cm]
-  \noindent\rule{\textwidth}{1pt}\\[0.5cm]
-  {\large
-  Xunzhuo Liu,
-  Huamin Chen,
-  Samzong Lu,
-  Yossi Ovadia,
-  Guohong Wen,\\
-  Zhengda Tan,
-  Jintao Zhang,
-  Senan Zedan,
-  Yehudit Kerido,
-  Liav Weiss,\\
-  Haichen Zhang,
-  Bishen Yu,
-  Hao Wu,
-  Asaad Balum,
-  Noa Limoy,
-  Abdallah Samara,\\
-  Baofa Fan,
-  Brent Salisbury,
-  Ryan Cook,
-  Zhijie Wang,
-  Qiping Pan,
-  Rehan Khan,\\
-  Avishek Goswami,
-  Houston H.\ Zhang,
-  Shuyi Wang,
-  Ziang Tang,\\
-  Fang Han,
-  Zohaib Hassan,
-  Jianqiao Zheng,
-  Avinash Changrani}%
-  \footnote{Corresponding repository: \url{https://github.com/vllm-project/semantic-router}}\\[0.15cm]
-  {\normalsize February 2026}
-\end{center}
-\vspace{0.3cm}
+\maketitle
+\begingroup
+\renewcommand{\thefootnote}{}
+\footnotetext{Corresponding repository: \href{https://github.com/vllm-project/semantic-router}{GitHub repository}}
+\endgroup
 
 % --- Abstract ---
 \input{sections/abstract}
@@ -170,7 +156,7 @@
 \input{sections/conclusion}
 
 % --- Bibliography ---
-\bibliographystyle{plain}
+\bibliographystyle{iclr2026_conference}
 \bibliography{references}
 
 \end{document}

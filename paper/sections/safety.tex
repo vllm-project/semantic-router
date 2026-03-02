@@ -105,6 +105,7 @@ When a safety signal fires, the matched decision activates its \texttt{fast\_res
 
 \begin{figure}[t]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tikzpicture}[
     node distance=0.3cm,
     sig/.style={rectangle, draw, rounded corners=2pt,
@@ -182,6 +183,7 @@ When a safety signal fires, the matched decision activates its \texttt{fast\_res
   \node[font=\tiny, text=red!60, anchor=south] at (9.0, -0.85) {P:998};
 
 \end{tikzpicture}
+}
 \caption{Signal-driven safety architecture.  Safety classifiers ($\tau_{\text{jb}}, \tau_{\text{pii}}$) run in the signal layer in parallel with intent signals, adding zero marginal latency.  Decision rules compose safety signals with domain signals using AND/OR logic, enabling context-aware policies (e.g., strict jailbreak detection only for finance, relaxed PII policy for healthcare).  High-priority safety decisions activate the \texttt{fast\_response} plugin to return an immediate 200 OK without contacting any upstream model.}
 \label{fig:safety_architecture}
 \end{figure}

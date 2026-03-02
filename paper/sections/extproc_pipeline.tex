@@ -26,6 +26,7 @@ The request body phase implements the core routing logic as a sequential pipelin
 
 \begin{figure}[t]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tikzpicture}[
     node distance=0.3cm,
     phase/.style={rectangle, draw, thick, rounded corners=3pt,
@@ -113,7 +114,8 @@ The request body phase implements the core routing logic as a sequential pipelin
   % Vertical connection: provider endpoint shared
   \draw[thin, densely dotted, gray!40] (ep.south) -- ++(0, -0.15) -| (ep2.north);
 
-\end{tikzpicture}
+\end{tikzpicture}%
+}
 \caption{Bidirectional request processing pipeline aligned with the three-layer architecture.  \textbf{Request path} (top, left$\to$right): the signal layer parses and extracts $S(r)$, including safety signals (jailbreak, PII); the decision layer evaluates Boolean formulas to select $d^*$; the plugin chain executes pre-processing (fast response for safety enforcement, caching, RAG, memory), model selection, and endpoint routing.  A cache hit or fast response short-circuits the pipeline (dashed).  \textbf{Response path} (bottom, right$\to$left): the same three layers operate in the same order---the signal layer extracts response-side signals (token usage, HaluGate hallucination scores, streaming latency metrics); the decision layer evaluates quality gating and cache eligibility; plugins perform format translation, cache writes, and API translation.}
 \label{fig:extproc_pipeline}
 \end{figure}

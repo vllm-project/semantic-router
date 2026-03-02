@@ -53,6 +53,7 @@ Each classification task proceeds as a full forward pass through the base model 
 
 \begin{figure}[ht]
     \centering
+    \resizebox{\linewidth}{!}{%
     \begin{tikzpicture}[
       box/.style={rectangle, draw, thick, rounded corners=3pt,
                   minimum height=1cm, align=center, inner sep=5pt, font=\small},
@@ -119,6 +120,7 @@ Each classification task proceeds as a full forward pass through the base model 
     \draw[arr] (sn) -- node[lbl, right] {\scriptsize $W\mathbf{x} + B_N A_N \mathbf{x}$} (on);
 
     \end{tikzpicture}
+    }
     \caption{LoRA-based MoM inference architecture. The input query~$\mathbf{x}$ is processed by a single frozen base model~($W$). Each task-specific LoRA adapter pair ($A_i$, $B_i$) computes a low-rank perturbation $B_i A_i \mathbf{x}$. The base output and adapter perturbation are summed to produce task-specific classifications, enabling multi-task support with minimal memory overhead.}
     \label{fig:lora_arch}
 \end{figure}
@@ -130,7 +132,7 @@ The primary benefit is \textbf{memory efficiency}: deploying six classifiers req
 
 We train a family of purpose-built models (MoM: Mixture-of-Models) optimized for routing classification tasks:
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
 \caption{MoM model family.
 All models share a common base (ModernBERT~\cite{warner2024modernbert} or mmBERT-32K) and are distributed as LoRA adapters.}

@@ -44,7 +44,8 @@ The architecture decomposes routing into three layers, each with a well-defined 
 
 \begin{figure*}[t]
   \centering
-  \begin{tikzpicture}[
+  \resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[
     layer/.style={rectangle, draw, thick, rounded corners=3pt,
                   minimum height=1.3cm, minimum width=3.4cm, align=center,
                   inner sep=5pt, font=\small},
@@ -128,7 +129,8 @@ The architecture decomposes routing into three layers, each with a well-defined 
     at (5.6, -4.3)
     {Response signals: hallucination, feedback, latency};
 
-  \end{tikzpicture}
+  \end{tikzpicture}%
+}
   \caption{Three-layer architecture with closed-loop feedback. A deployment configuration~$\Gamma$ selects which signals, decisions, and plugins are active. Layer~1 extracts a signal vector~$\mathbf{s}$ from the request. Layer~2 evaluates Boolean decision formulas to select~$d^*$. Layer~3 executes the per-decision plugin chain, selects a model from~$d^*$'s candidate set, and routes to the provider endpoint. Response-side signals feed back to enable adaptive routing.}
   \label{fig:architecture}
 \end{figure*}
