@@ -10,6 +10,8 @@ import { useReadonly } from '../contexts/ReadonlyContext'
 import {
   ConfigFormat,
   detectConfigFormat,
+  hasDecisions,
+  hasFlatSignals,
   DecisionConditionType
 } from '../types/config'
 import { MCPConfigPanel } from '../components/MCPConfigPanel'
@@ -57,6 +59,7 @@ interface Category {
   name: string
   system_prompt?: string
   description?: string
+  mmlu_categories?: string[]
   // model_scores can be array (Python CLI) or object (Legacy: {"gpt-4": 0.9})
   model_scores?: ModelScore[] | Record<string, number>
 }
@@ -254,7 +257,7 @@ interface ConfigData {
     pii_model?: ModelConfig
     preference_model?: ModelConfig
   }
-  categories?: Category[]
+  categories?: (Category & { mmlu_categories?: string[] })[]
   default_reasoning_effort?: string
   default_model?: string
   model_config?: Record<string, ModelConfigEntry>
@@ -264,6 +267,29 @@ interface ConfigData {
     tracing?: TracingConfig
     metrics?: { enabled: boolean }
   }
+
+  // Flat signal fields - produced by Router after deploy flattening
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  keyword_rules?: Array<any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  embedding_rules?: Array<any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  fact_check_rules?: Array<any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  user_feedback_rules?: Array<any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  preference_rules?: Array<any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  language_rules?: Array<any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  context_rules?: Array<any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  complexity_rules?: Array<any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  jailbreak?: Array<any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  pii?: Array<any>
+
   [key: string]: unknown
 }
 
@@ -664,12 +690,15 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     })) || []
   }
 
-  // Get decisions/routes - from decisions (Python CLI) or categories with model_scores (legacy)
+  // Get decisions/routes - from decisions (Python CLI) or flattened config (legacy after deploy)
   const getDecisions = () => {
     if (isPythonCLI && config?.decisions) {
       return config.decisions
     }
-    // Legacy format doesn't have decisions in the same way
+    // Legacy/flattened format may still have decisions (deploy preserves this field)
+    if (config?.decisions) {
+      return config.decisions
+    }
     return []
   }
 
@@ -2280,7 +2309,23 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
   // Signals Section - Keywords, Embeddings, Domains, Preferences (config.yaml)
   const renderSignalsSection = () => {
+    // Support both nested (signals.*) and flat (keyword_rules, etc.) formats.
+    // After deploy, Router flattens signals.keywords → keyword_rules, etc.
     const signals = config?.signals
+    const flatSignals = !signals && hasFlatSignals(config) ? {
+      keywords: config?.keyword_rules,
+      embeddings: config?.embedding_rules,
+      domains: config?.categories,
+      fact_check: config?.fact_check_rules,
+      user_feedbacks: config?.user_feedback_rules,
+      preferences: config?.preference_rules,
+      language: config?.language_rules,
+      context: config?.context_rules,
+      complexity: config?.complexity_rules,
+      jailbreak: config?.jailbreak,
+      pii: config?.pii,
+    } : null
+    const effectiveSignals = signals || flatSignals
 
     interface UnifiedSignal {
       name: string
@@ -2294,7 +2339,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     const allSignals: UnifiedSignal[] = []
 
     // Keywords
-    signals?.keywords?.forEach(kw => {
+    effectiveSignals?.keywords?.forEach(kw => {
       allSignals.push({
         name: kw.name,
         type: 'Keywords',
@@ -2304,7 +2349,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     })
 
     // Embeddings
-    signals?.embeddings?.forEach(emb => {
+    effectiveSignals?.embeddings?.forEach(emb => {
       allSignals.push({
         name: emb.name,
         type: 'Embeddings',
@@ -2314,7 +2359,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     })
 
     // Domains
-    signals?.domains?.forEach(domain => {
+    effectiveSignals?.domains?.forEach(domain => {
       const categoryCount = domain.mmlu_categories?.length || 0
       allSignals.push({
         name: domain.name,
@@ -2325,7 +2370,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     })
 
     // Preferences
-    signals?.preferences?.forEach(pref => {
+    effectiveSignals?.preferences?.forEach(pref => {
       allSignals.push({
         name: pref.name,
         type: 'Preference',
@@ -2335,7 +2380,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     })
 
     // Fact Check
-    signals?.fact_check?.forEach(fc => {
+    effectiveSignals?.fact_check?.forEach(fc => {
       allSignals.push({
         name: fc.name,
         type: 'Fact Check',
@@ -2345,7 +2390,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     })
 
     // User Feedbacks
-    signals?.user_feedbacks?.forEach(uf => {
+    effectiveSignals?.user_feedbacks?.forEach(uf => {
       allSignals.push({
         name: uf.name,
         type: 'User Feedback',
@@ -2355,7 +2400,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     })
 
     // Language
-    signals?.language?.forEach(lang => {
+    effectiveSignals?.language?.forEach(lang => {
       allSignals.push({
         name: lang.name,
         type: 'Language',
@@ -2365,7 +2410,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     })
 
     // Context
-    signals?.context?.forEach(ctx => {
+    effectiveSignals?.context?.forEach(ctx => {
       allSignals.push({
         name: ctx.name,
         type: 'Context',
@@ -2375,7 +2420,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     })
 
     // Complexity
-    signals?.complexity?.forEach(comp => {
+    effectiveSignals?.complexity?.forEach(comp => {
       const hardCount = comp.hard?.candidates?.length || 0
       const easyCount = comp.easy?.candidates?.length || 0
       allSignals.push({
@@ -2387,7 +2432,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     })
 
     // Jailbreak
-    signals?.jailbreak?.forEach(jb => {
+    effectiveSignals?.jailbreak?.forEach(jb => {
       const method = jb.method || 'classifier'
       allSignals.push({
         name: jb.name,
@@ -2398,7 +2443,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     })
 
     // PII
-    signals?.pii?.forEach(p => {
+    effectiveSignals?.pii?.forEach(p => {
       const allowed = p.pii_types_allowed?.length || 0
       allSignals.push({
         name: p.name,
@@ -3257,7 +3302,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           disabled={isReadonly}
         />
 
-        {isPythonCLI ? (
+        {(isPythonCLI || hasFlatSignals(config)) ? (
           <DataTable
             columns={signalsColumns}
             data={filteredSignals}
@@ -3913,7 +3958,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
           disabled={isReadonly}
         />
 
-        {isPythonCLI ? (
+        {(isPythonCLI || hasDecisions(config)) ? (
           <DataTable
             columns={decisionsColumns}
             data={filteredDecisions}

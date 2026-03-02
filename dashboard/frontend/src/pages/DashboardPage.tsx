@@ -287,9 +287,13 @@ const DashboardPage: React.FC = () => {
         fetchStatus()
       }
     }, 10000)
+    // Immediately refresh when config is deployed from DSL Builder
+    const onConfigDeployed = () => fetchAll()
+    window.addEventListener('config-deployed', onConfigDeployed)
     return () => {
       clearInterval(statusInterval)
       clearInterval(configInterval)
+      window.removeEventListener('config-deployed', onConfigDeployed)
     }
   }, [fetchAll, fetchStatus])
 
