@@ -600,6 +600,12 @@ type RLDrivenSelectionConfig struct {
 
 	// RouterR1ServerURL is the URL of the Router-R1 LLM server
 	RouterR1ServerURL string `yaml:"router_r1_server_url,omitempty"`
+
+	// EnableSessionAffinity enables user-based backend affinity for KV cache optimization.
+	// When enabled, requests from the same user are routed to the same backend to maximize
+	// vLLM prefix caching benefits. This prevents KV cache cross-contamination between users.
+	// conversations with the same user. (default: false)
+	EnableSessionAffinity bool `yaml:"enable_session_affinity,omitempty"`
 }
 
 // GMTRouterSelectionConfig configures graph-based personalized routing
