@@ -76,7 +76,10 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		}
 		// Update global config reference for packages that rely on config.GetConfig()
 		config.Replace(cfg)
-		logging.Debugf("Parsed configuration from file: %s", configPath)
+		logging.Infof("[NewOpenAIRouter] Parsed config from file: %s, decisions=%d", configPath, len(cfg.Decisions))
+		for i, d := range cfg.Decisions {
+			logging.Infof("[NewOpenAIRouter]   decision[%d]: name=%q, modelRefs=%d, priority=%d", i, d.Name, len(d.ModelRefs), d.Priority)
+		}
 	}
 
 	// Load category mapping if classifier is enabled

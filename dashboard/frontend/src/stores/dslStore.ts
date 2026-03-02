@@ -36,6 +36,9 @@ import type {
   ValidateResult,
   SymbolTable,
   ASTProgram,
+  DeployStep,
+  DeployResult,
+  ConfigVersion,
 } from '@/types/dsl'
 
 // ---------- Store State ----------
@@ -60,6 +63,19 @@ interface DSLState {
   mode: EditorMode
   dirty: boolean
   lastCompileAt: number | null
+
+  // --- Deploy ---
+  deploying: boolean
+  deployStep: DeployStep | null
+  deployResult: DeployResult | null
+  showDeployConfirm: boolean
+  configVersions: ConfigVersion[]
+
+  // --- Deploy Preview (diff) ---
+  deployPreviewCurrent: string
+  deployPreviewMerged: string
+  deployPreviewLoading: boolean
+  deployPreviewError: string | null
 }
 
 // ---------- Store Actions ----------
@@ -97,6 +113,9 @@ interface DSLActions {
 
   /** Load YAML and decompile to DSL. */
   importYaml(yaml: string): void
+
+  /** Fetch current router config YAML and decompile to DSL. */
+  loadFromRouter(): Promise<void>
 
   // --- Visual Builder mutations (Phase 2) ---
 
@@ -138,6 +157,23 @@ interface DSLActions {
 
   /** Update the GLOBAL block's fields, then re-parse AST. */
   mutateGlobal(fields: Record<string, unknown>): void
+
+  // --- Deploy actions ---
+
+  /** Show deploy confirmation dialog. Compiles first if needed. Fetches preview diff. */
+  requestDeploy(): void
+
+  /** Execute the deploy (called after user confirms). */
+  executeDeploy(): Promise<void>
+
+  /** Cancel/dismiss deploy dialog. */
+  dismissDeploy(): void
+
+  /** Rollback to a specific version. */
+  rollback(version: string): Promise<void>
+
+  /** Fetch available config versions. */
+  fetchVersions(): Promise<void>
 }
 
 export type DSLStore = DSLState & DSLActions
@@ -163,6 +199,15 @@ const initialState: DSLState = {
   mode: 'dsl',
   dirty: false,
   lastCompileAt: null,
+  deploying: false,
+  deployStep: null,
+  deployResult: null,
+  showDeployConfirm: false,
+  configVersions: [],
+  deployPreviewCurrent: '',
+  deployPreviewMerged: '',
+  deployPreviewLoading: false,
+  deployPreviewError: null,
 }
 
 // ---------- Store ----------
@@ -204,9 +249,28 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
       return
     }
 
+    console.log('[dslStore.compile] Compiling DSL: source size=%d', dslSource.length)
+    // Check if DSL source contains test_route
+    const routeNames = dslSource.match(/ROUTE\s+(\w+)/g)
+    console.log('[dslStore.compile] ROUTE declarations in DSL source:', routeNames)
     set({ loading: true })
     try {
       const result: CompileResult = wasmBridge.compile(dslSource)
+
+      // Log compile result summary
+      console.log('[dslStore.compile] Compile result: yaml size=%d, crd size=%d, diagnostics=%d, error=%s',
+        result.yaml?.length ?? 0, result.crd?.length ?? 0,
+        result.diagnostics?.length ?? 0, result.error ?? 'none')
+      if (result.diagnostics?.length) {
+        console.log('[dslStore.compile] Diagnostics:', result.diagnostics)
+      }
+
+      // Quick count of decisions in YAML output
+      if (result.yaml) {
+        const decMatch = result.yaml.match(/^\s*- name:/gm)
+        console.log('[dslStore.compile] YAML "- name:" lines count=%d', decMatch?.length ?? 0)
+      }
+
       set({
         yamlOutput: result.yaml || '',
         crdOutput: result.crd || '',
@@ -219,6 +283,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
+      console.error('[dslStore.compile] Compile threw error:', msg)
       set({ compileError: msg, loading: false })
     }
   },
@@ -315,6 +380,21 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     if (dsl) {
       get().loadDsl(dsl)
     }
+  },
+
+  async loadFromRouter() {
+    const { wasmReady } = get()
+    if (!wasmReady) throw new Error('WASM not ready')
+
+    const resp = await fetch('/api/router/config/yaml')
+    if (!resp.ok) {
+      throw new Error(`Failed to fetch config: HTTP ${resp.status}`)
+    }
+    const yaml = await resp.text()
+    if (!yaml.trim()) {
+      throw new Error('Router config is empty')
+    }
+    get().importYaml(yaml)
   },
 
   // --- Visual Builder mutations (Phase 2) ---
@@ -417,6 +497,223 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     if (newSrc === dslSource) return
     set({ dslSource: newSrc, dirty: true })
     if (wasmReady) get().parseAST()
+  },
+
+  // --- Deploy actions ---
+
+  requestDeploy() {
+    const { yamlOutput, dslSource, wasmReady, dirty } = get()
+    if (!wasmReady || !dslSource.trim()) return
+
+    // Re-compile if DSL was modified since last compile, or never compiled
+    if (!yamlOutput || dirty) {
+      get().compile()
+    }
+
+    // Check for compile errors
+    const { diagnostics: diags, yamlOutput: yaml } = get()
+    const hasErrors = diags.some(d => d.level === 'error')
+    if (hasErrors || !yaml) {
+      set({
+        deployResult: {
+          status: 'error',
+          message: 'Cannot deploy: DSL has compilation errors. Fix errors and compile first.',
+        },
+        showDeployConfirm: false,
+      })
+      return
+    }
+
+    // Show modal and fetch preview diff
+    set({
+      showDeployConfirm: true,
+      deployResult: null,
+      deployPreviewCurrent: '',
+      deployPreviewMerged: '',
+      deployPreviewLoading: true,
+      deployPreviewError: null,
+    })
+
+    // Fetch preview asynchronously
+    fetch('/api/router/config/deploy/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ yaml }),
+    })
+      .then(async (resp) => {
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}))
+          throw new Error(data.message || data.error || 'Failed to fetch preview')
+        }
+        return resp.json()
+      })
+      .then((data: { current: string; preview: string }) => {
+        set({
+          deployPreviewCurrent: data.current,
+          deployPreviewMerged: data.preview,
+          deployPreviewLoading: false,
+        })
+      })
+      .catch((err) => {
+        set({
+          deployPreviewLoading: false,
+          deployPreviewError: err instanceof Error ? err.message : String(err),
+        })
+      })
+  },
+
+  async executeDeploy() {
+    const { yamlOutput, dslSource } = get()
+    if (!yamlOutput) return
+
+    console.log('[dslStore.executeDeploy] Sending deploy: YAML size=%d, DSL size=%d', yamlOutput.length, dslSource.length)
+
+    set({ deploying: true, deployStep: 'validating', showDeployConfirm: false, deployResult: null })
+
+    try {
+      // Step: validating → backing_up → writing → reloading → done
+      set({ deployStep: 'backing_up' })
+      await new Promise(r => setTimeout(r, 200)) // Small delay for UX
+
+      set({ deployStep: 'writing' })
+      const resp = await fetch('/api/router/config/deploy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ yaml: yamlOutput, dsl: dslSource }),
+      })
+
+      const data = await resp.json()
+
+      if (!resp.ok) {
+        set({
+          deploying: false,
+          deployStep: 'error',
+          deployResult: {
+            status: 'error',
+            message: data.message || data.error || 'Deploy failed',
+          },
+        })
+        return
+      }
+
+      // Wait for router reload (poll status)
+      set({ deployStep: 'reloading' })
+      let healthy = false
+      for (let i = 0; i < 10; i++) {
+        await new Promise(r => setTimeout(r, 500))
+        try {
+          const statusResp = await fetch('/api/status')
+          if (statusResp.ok) {
+            healthy = true
+            break
+          }
+        } catch {
+          // continue polling
+        }
+      }
+
+      set({
+        deploying: false,
+        deployStep: 'done',
+        deployResult: {
+          status: 'success',
+          version: data.version,
+          message: healthy
+            ? `Deployed v${data.version} — Router reloaded successfully.`
+            : `Deployed v${data.version} — Router reload status unknown (check logs).`,
+        },
+        dirty: false,
+      })
+
+      // Refresh versions list
+      get().fetchVersions()
+
+      // Notify other components (e.g. DashboardPage) to refresh config
+      window.dispatchEvent(new CustomEvent('config-deployed'))
+    } catch (err) {
+      set({
+        deploying: false,
+        deployStep: 'error',
+        deployResult: {
+          status: 'error',
+          message: `Deploy failed: ${err instanceof Error ? err.message : String(err)}`,
+        },
+      })
+    }
+  },
+
+  dismissDeploy() {
+    set({
+      showDeployConfirm: false,
+      deployResult: null,
+      deployStep: null,
+      deployPreviewCurrent: '',
+      deployPreviewMerged: '',
+      deployPreviewLoading: false,
+      deployPreviewError: null,
+    })
+  },
+
+  async rollback(version: string) {
+    set({ deploying: true, deployStep: 'writing', deployResult: null })
+
+    try {
+      const resp = await fetch('/api/router/config/rollback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version }),
+      })
+
+      const data = await resp.json()
+
+      if (!resp.ok) {
+        set({
+          deploying: false,
+          deployStep: 'error',
+          deployResult: {
+            status: 'error',
+            message: data.message || 'Rollback failed',
+          },
+        })
+        return
+      }
+
+      set({ deployStep: 'reloading' })
+      await new Promise(r => setTimeout(r, 2000))
+
+      set({
+        deploying: false,
+        deployStep: 'done',
+        deployResult: {
+          status: 'success',
+          version: data.version,
+          message: `Rolled back to v${data.version}. Router will reload automatically.`,
+        },
+      })
+
+      get().fetchVersions()
+    } catch (err) {
+      set({
+        deploying: false,
+        deployStep: 'error',
+        deployResult: {
+          status: 'error',
+          message: `Rollback failed: ${err instanceof Error ? err.message : String(err)}`,
+        },
+      })
+    }
+  },
+
+  async fetchVersions() {
+    try {
+      const resp = await fetch('/api/router/config/versions')
+      if (resp.ok) {
+        const versions = await resp.json()
+        set({ configVersions: versions || [] })
+      }
+    } catch {
+      // silently fail
+    }
   },
 }))
 

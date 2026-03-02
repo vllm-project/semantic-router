@@ -185,8 +185,13 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	// Config endpoints - MUST be registered BEFORE proxy to take precedence
 	// In Go's ServeMux, exact path matches registered first take precedence over prefix handlers
 	mux.HandleFunc("/api/router/config/all", handlers.ConfigHandler(cfg.AbsConfigPath))
-	mux.HandleFunc("/api/router/config/update", handlers.UpdateConfigHandler(cfg.AbsConfigPath, cfg.ReadonlyMode))
-	log.Printf("Config API endpoints registered: /api/router/config/all, /api/router/config/update")
+	mux.HandleFunc("/api/router/config/yaml", handlers.ConfigYAMLHandler(cfg.AbsConfigPath))
+	mux.HandleFunc("/api/router/config/update", handlers.UpdateConfigHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir))
+	mux.HandleFunc("/api/router/config/deploy/preview", handlers.DeployPreviewHandler(cfg.AbsConfigPath))
+	mux.HandleFunc("/api/router/config/deploy", handlers.DeployHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir))
+	mux.HandleFunc("/api/router/config/rollback", handlers.RollbackHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir))
+	mux.HandleFunc("/api/router/config/versions", handlers.ConfigVersionsHandler(cfg.AbsConfigPath))
+	log.Printf("Config API endpoints registered: /api/router/config/all, /api/router/config/yaml, /api/router/config/update, /api/router/config/deploy, /api/router/config/deploy/preview, /api/router/config/rollback, /api/router/config/versions")
 
 	// Router defaults endpoints (for .vllm-sr/router-defaults.yaml)
 	mux.HandleFunc("/api/router/config/defaults", handlers.RouterDefaultsHandler(cfg.ConfigDir))
