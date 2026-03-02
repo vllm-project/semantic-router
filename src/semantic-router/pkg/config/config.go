@@ -1111,6 +1111,11 @@ type MemoryConfig struct {
 	// Filters retrieved memories before injection to improve accuracy and block adversarial content.
 	Reflection MemoryReflectionConfig `yaml:"reflection,omitempty"`
 
+	// MinjaDefense configures system-level defenses against Memory Injection Attacks
+	// (arXiv:2503.03704). Prompt-level detection is handled by the jailbreak classifier;
+	// these controls add shared-memory isolation, per-creator caps, and rate limiting.
+	MinjaDefense MinjaDefenseConfig `yaml:"minja_defense,omitempty"`
+
 	// Note: Query rewriting and fact extraction are enabled by defining
 	// external_models with model_role="memory_rewrite" or "memory_extraction".
 	// Use FindExternalModelByRole() to check if enabled and get config.
@@ -1170,6 +1175,84 @@ func (c MemoryReflectionConfig) ReflectionEnabled() bool {
 		return *c.Enabled
 	}
 	return true // on by default
+}
+
+// MinjaDefenseConfig configures system-level defenses against Memory Injection
+// Attacks (arXiv:2503.03704). These are structural controls that complement the
+// jailbreak classifier's prompt-level detection.
+type MinjaDefenseConfig struct {
+	// Enabled activates MINJA system-level defenses (default: true when memory is enabled).
+	Enabled *bool `yaml:"enabled,omitempty"`
+
+	// SharedMemoryMinSimilarity is the minimum similarity score for non-owner memories.
+	// Higher than the global threshold to reduce cross-user injection risk. Default: 0.85.
+	SharedMemoryMinSimilarity float32 `yaml:"shared_memory_min_similarity,omitempty"`
+
+	// MaxSharedMemoriesPerRequest caps how many non-owner memories can be injected per request.
+	// Limits cross-user attack surface. Default: 3.
+	MaxSharedMemoriesPerRequest int `yaml:"max_shared_memories_per_request,omitempty"`
+
+	// MaxSharedPerCreator limits how many non-owner memories from a single creator can be
+	// injected per request. Prevents one attacker from dominating all shared memory slots.
+	// Default: 2.
+	MaxSharedPerCreator int `yaml:"max_shared_per_creator,omitempty"`
+
+	// UserStoreRateLimit caps how many memories a single user can create per time window.
+	// Counters the Progressive Shortening Strategy which requires many sequential writes.
+	// Default: 5.
+	UserStoreRateLimit int `yaml:"user_store_rate_limit,omitempty"`
+
+	// UserStoreRateWindowSeconds is the time window for the rate limit in seconds.
+	// Default: 60 (5 memories per minute per user).
+	UserStoreRateWindowSeconds int `yaml:"user_store_rate_window_seconds,omitempty"`
+}
+
+// IsEnabled returns whether MINJA defense is active (defaults to true).
+func (c MinjaDefenseConfig) IsEnabled() bool {
+	if c.Enabled == nil {
+		return true
+	}
+	return *c.Enabled
+}
+
+// GetSharedMemoryMinSimilarity returns the minimum similarity for non-owner memories (default: 0.85).
+func (c MinjaDefenseConfig) GetSharedMemoryMinSimilarity() float32 {
+	if c.SharedMemoryMinSimilarity <= 0 {
+		return 0.85
+	}
+	return c.SharedMemoryMinSimilarity
+}
+
+// GetMaxSharedMemoriesPerRequest returns the max non-owner memories per request (default: 3).
+func (c MinjaDefenseConfig) GetMaxSharedMemoriesPerRequest() int {
+	if c.MaxSharedMemoriesPerRequest <= 0 {
+		return 3
+	}
+	return c.MaxSharedMemoriesPerRequest
+}
+
+// GetMaxSharedPerCreator returns the max non-owner memories from a single creator (default: 2).
+func (c MinjaDefenseConfig) GetMaxSharedPerCreator() int {
+	if c.MaxSharedPerCreator <= 0 {
+		return 2
+	}
+	return c.MaxSharedPerCreator
+}
+
+// GetUserStoreRateLimit returns the max memory creations per user per window (default: 5).
+func (c MinjaDefenseConfig) GetUserStoreRateLimit() int {
+	if c.UserStoreRateLimit <= 0 {
+		return 5
+	}
+	return c.UserStoreRateLimit
+}
+
+// GetUserStoreRateWindowSeconds returns the rate limit window in seconds (default: 60).
+func (c MinjaDefenseConfig) GetUserStoreRateWindowSeconds() int {
+	if c.UserStoreRateWindowSeconds <= 0 {
+		return 60
+	}
+	return c.UserStoreRateWindowSeconds
 }
 
 // MemoryMilvusConfig contains Milvus-specific configuration for memory storage.

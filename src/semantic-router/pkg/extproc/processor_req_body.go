@@ -1065,12 +1065,16 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 	}
 	logging.Infof("Memory: found %d memories for user=%s", len(memories), userID)
 
-	// Step 6: Memory filter -- validate memories before injection
+	// Step 6: Memory filter -- validate memories before injection.
+	// Chain the MINJA defense filter (shared memory isolation) with the
+	// ReflectionGate (recency decay, dedup, token budget, block patterns).
 	var perDecisionReflection *config.MemoryReflectionConfig
 	if memoryPluginConfig != nil && memoryPluginConfig.Reflection != nil {
 		perDecisionReflection = memoryPluginConfig.Reflection
 	}
-	filter := memory.NewMemoryFilter(r.Config.Memory.Reflection, perDecisionReflection)
+	reflectionFilter := memory.NewMemoryFilter(r.Config.Memory.Reflection, perDecisionReflection)
+	minjaFilter := memory.NewMinjaFilter(r.Config.Memory.MinjaDefense, userID)
+	filter := memory.NewChainFilter(minjaFilter, reflectionFilter)
 	memories = filter.Filter(memories)
 
 	if len(memories) == 0 {
