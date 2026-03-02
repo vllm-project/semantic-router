@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 var (
@@ -18,6 +20,10 @@ var (
 
 	adapterOnce sync.Once
 	adapterErr  error
+
+	contrastiveOnce sync.Once
+	contrastiveErr  error
+	contrastivePath string
 )
 
 // set these environment variables to customize paths
@@ -25,6 +31,7 @@ var (
 const QWEN3_PREF_MODEL_DIR = "QWEN3_PREF_MODEL_DIR"
 const QWEN3_BASE_MODEL_PATH = "QWEN3_BASE_MODEL_PATH"
 const QWEN3_CATEGORY_ADAPTER_PATH = "QWEN3_CATEGORY_ADAPTER_PATH"
+const QWEN3_EMBED_MODEL_PATH = "QWEN3_MODEL_PATH"
 
 func resolvePrefModelPath() (string, bool) {
 	path := os.Getenv(QWEN3_PREF_MODEL_DIR)
@@ -35,6 +42,25 @@ func resolvePrefModelPath() (string, bool) {
 		return "", false
 	}
 	return path, true
+}
+
+func resolveContrastiveModelPath() (string, bool) {
+	candidates := []string{
+		os.Getenv(QWEN3_EMBED_MODEL_PATH),
+		"../../models/mom-embedding-ultra",
+	}
+
+	for _, candidate := range candidates {
+		if candidate == "" {
+			continue
+		}
+		resolved := config.ResolveModelPath(candidate)
+		if _, err := os.Stat(resolved); err == nil {
+			return resolved, true
+		}
+	}
+
+	return "", false
 }
 
 func initPreference(b *testing.B) {
@@ -103,6 +129,61 @@ func BenchmarkPreference_VeryLongQuery(b *testing.B) {
 	labels := []string{"code_generation", "bug_fixing", "code_review", "weather_inquiry"}
 	text := strings.Repeat("Generate some python code for me.", 200)
 	benchmarkPreference(b, text, labels, "code_generation")
+}
+
+// Contrastive few-shot preference benchmark (uses mocked embeddings, no model weights needed).
+func BenchmarkPreference_ContrastiveFewShot(b *testing.B) {
+	initContrastivePreference(b)
+
+	rules := []config.PreferenceRule{
+		{Name: "code_generation", Description: "Writes code", Examples: []string{"Write this function in python", "Can you generate some code to solve this problem?"}},
+		{Name: "bug_fixing", Description: "Fixes bugs", Examples: []string{"Fix the bug in this code snippet", "This code doesn't work, can you help?"}},
+		{Name: "code_review", Description: "Reviews code for potential issues", Examples: []string{"Can you review this code?", "Is there anything wrong with this code?"}},
+		{Name: "weather_inquiry", Description: "Answers questions about the weather", Examples: []string{"What's the weather like today?", "Will it rain tomorrow?"}},
+		{Name: "financial_inquiry", Description: "Answers questions about financial matters", Examples: []string{"What's the stock price of AAPL?", "How is the market performing today?"}},
+	}
+
+	cfg := &config.PreferenceModelConfig{UseContrastive: true, EmbeddingModel: "mmbert"}
+
+	classifier, err := classification.NewPreferenceClassifier(nil, rules, cfg)
+	if err != nil {
+		b.Fatalf("failed to create contrastive preference classifier: %v", err)
+	}
+
+	conv := `[{"role":"user","content":"Can you help me fix this bug in my code?"}]`
+	// warmup
+	if _, err := classifier.Classify(conv); err != nil {
+		b.Fatalf("warmup failed: %v", err)
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		result, err := classifier.Classify(conv)
+		if err != nil {
+			b.Fatalf("classification failed: %v", err)
+		}
+		b.Logf("predicted preference: %s (confidence: %.4f)\n", result.Preference, result.Confidence)
+	}
+
+	b.StopTimer()
+}
+
+func initContrastivePreference(b *testing.B) {
+	contrastiveOnce.Do(func() {
+		var ok bool
+		contrastivePath, ok = resolveContrastiveModelPath()
+		if !ok {
+			contrastiveErr = os.ErrNotExist
+			return
+		}
+		contrastiveErr = binding.InitEmbeddingModels("", "", contrastivePath, true)
+	})
+
+	if contrastiveErr != nil {
+		b.Skipf("contrastive preference classifier not ready (%v); set QWEN3_MODEL_PATH or place weights at ../../models/mom-embedding-pro", contrastiveErr)
+	}
 }
 
 // =============================================================================================

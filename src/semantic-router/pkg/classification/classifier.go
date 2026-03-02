@@ -2844,6 +2844,10 @@ func (c *Classifier) IsPreferenceClassifierEnabled() bool {
 		return false
 	}
 
+	if c.Config.Classifier.PreferenceModel.UseContrastive {
+		return true
+	}
+
 	if c.Config.Classifier.PreferenceModel.ModelID != "" {
 		return true
 	}
