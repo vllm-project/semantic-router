@@ -48,6 +48,10 @@ func (m *MockCategoryInitializer) Init(_ string, useCPU bool, numClasses ...int)
 	return m.InitError
 }
 
+func (m *MockCategoryInitializer) InitWithModernBERT(_ string, useCPU bool, useModernBERT bool, numClasses ...int) error {
+	return m.InitError
+}
+
 type MockJailbreakInferenceResponse struct {
 	classifyResult candle_binding.ClassResult
 	classifyError  error
@@ -80,6 +84,10 @@ type MockJailbreakInitializer struct {
 }
 
 func (m *MockJailbreakInitializer) Init(_ string, useCPU bool, numClasses ...int) error {
+	return m.InitError
+}
+
+func (m *MockJailbreakInitializer) InitWithModernBERT(_ string, useCPU bool, useModernBERT bool, numClasses ...int) error {
 	return m.InitError
 }
 
@@ -288,6 +296,10 @@ var _ = Describe("jailbreak detection", func() {
 type MockPIIInitializer struct{ InitError error }
 
 func (m *MockPIIInitializer) Init(_ string, useCPU bool, numClasses int) error { return m.InitError }
+
+func (m *MockPIIInitializer) InitWithModernBERT(_ string, useCPU bool, useModernBERT bool, numClasses int) error {
+	return m.InitError
+}
 
 type MockPIIInferenceResponse struct {
 	classifyTokensResult candle_binding.TokenClassificationResult

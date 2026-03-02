@@ -104,10 +104,14 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 		return nil, fmt.Errorf("mom_registry is empty in configuration")
 	}
 
-	// Build specs
+	// Build specs; fall back to default registry for paths not in config (e.g. mom-embedding-ultra)
+	defaultRegistry := config.ToLegacyRegistry()
 	var specs []ModelSpec
 	for _, path := range paths {
 		repoID, ok := registry[path]
+		if !ok {
+			repoID, ok = defaultRegistry[path]
+		}
 		if !ok {
 			return nil, fmt.Errorf("model path %s not found in mom_registry", path)
 		}
