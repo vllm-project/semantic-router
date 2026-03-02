@@ -1,0 +1,98 @@
+name: "Public Beta: Manual Teardown (Emergency)"
+
+# Emergency manual teardown for orphaned instances
+# Normally instances are auto-deleted when PR is closed/merged
+# Use this only if automatic deletion failed
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number of the public beta'
+        required: true
+        type: string
+      droplet_id:
+        description: 'DigitalOcean Droplet ID (optional, will auto-detect from PR tag)'
+        required: false
+        type: string
+      confirm:
+        description: 'Type "DELETE" to confirm teardown'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  teardown:
+    name: Emergency Teardown
+    runs-on: ubuntu-latest
+    if: inputs.confirm == 'DELETE'
+    
+    steps:
+      - name: Find droplet by PR tag
+        id: find
+        env:
+          DO_TOKEN: ${{ secrets.DO_PERSONAL_ACCESS_TOKEN }}
+        run: |
+          pr_number="${{ inputs.pr_number }}"
+          droplet_id="${{ inputs.droplet_id }}"
+          
+          if [ -z "$droplet_id" ]; then
+            echo "Finding droplet for PR #$pr_number..."
+            
+            droplet_id=$(curl -s \
+              -H "Authorization: Bearer $DO_TOKEN" \
+              "https://api.digitalocean.com/v2/droplets?tag_name=pr-$pr_number" | \
+              jq -r '.droplets[0].id // empty')
+          fi
+          
+          if [ -z "$droplet_id" ] || [ "$droplet_id" = "null" ]; then
+            echo "::error::No droplet found for PR #$pr_number"
+            exit 1
+          fi
+          
+          echo "Found droplet: $droplet_id"
+          echo "droplet_id=$droplet_id" >> $GITHUB_OUTPUT
+
+      - name: Delete droplet
+        env:
+          DO_TOKEN: ${{ secrets.DO_PERSONAL_ACCESS_TOKEN }}
+        run: |
+          droplet_id="${{ steps.find.outputs.droplet_id }}"
+          
+          echo "Deleting droplet $droplet_id..."
+          
+          http_code=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+            -H "Authorization: Bearer $DO_TOKEN" \
+            "https://api.digitalocean.com/v2/droplets/$droplet_id")
+          
+          if [ "$http_code" = "204" ]; then
+            echo "✅ Droplet deleted successfully"
+          else
+            echo "::error::Failed to delete droplet (HTTP $http_code)"
+            exit 1
+          fi
+
+      - name: Create summary
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          # 🗑️ Emergency Teardown Complete
+          
+          | Field | Value |
+          |-------|-------|
+          | **PR Number** | #${{ inputs.pr_number }} |
+          | **Droplet ID** | \`${{ steps.find.outputs.droplet_id }}\` |
+          | **Deleted By** | @${{ github.actor }} |
+          | **Timestamp** | $(date -u +%Y-%m-%dT%H:%M:%SZ) |
+          EOF
+
+  validation-failed:
+    name: Confirmation Required
+    runs-on: ubuntu-latest
+    if: inputs.confirm != 'DELETE'
+    steps:
+      - name: Fail with instructions
+        run: |
+          echo "::error::Confirmation required. Enter 'DELETE' in the confirm field to proceed."
+          exit 1

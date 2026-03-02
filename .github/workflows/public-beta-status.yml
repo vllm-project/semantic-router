@@ -1,0 +1,185 @@
+name: "Public Beta: Instance Status"
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run daily to report status and check for orphans
+    - cron: '0 8 * * *'
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  status-report:
+    name: Generate Status Report
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: List active droplets
+        id: droplets
+        env:
+          DO_TOKEN: ${{ secrets.DO_PERSONAL_ACCESS_TOKEN }}
+        run: |
+          echo "Fetching public-beta droplets..."
+          
+          droplets=$(curl -s \
+            -H "Authorization: Bearer $DO_TOKEN" \
+            "https://api.digitalocean.com/v2/droplets?tag_name=public-beta" | \
+            jq -r '.droplets // []')
+          
+          count=$(echo "$droplets" | jq 'length')
+          
+          echo "count=$count" >> $GITHUB_OUTPUT
+          
+          # Generate markdown table
+          if [ "$count" -gt 0 ]; then
+            echo "table<<EOF" >> $GITHUB_OUTPUT
+            echo "| Name | PR | IP | Region | Status | Age |" >> $GITHUB_OUTPUT
+            echo "|------|----|----|--------|--------|-----|" >> $GITHUB_OUTPUT
+            
+            echo "$droplets" | jq -r '.[] | @json' | while read -r droplet; do
+              name=$(echo "$droplet" | jq -r '.name')
+              id=$(echo "$droplet" | jq -r '.id')
+              ip=$(echo "$droplet" | jq -r '.networks.v4[] | select(.type == "public") | .ip_address' | head -1)
+              region=$(echo "$droplet" | jq -r '.region.slug')
+              status=$(echo "$droplet" | jq -r '.status')
+              created=$(echo "$droplet" | jq -r '.created_at')
+              
+              # Extract PR number from name or tags
+              pr_num=$(echo "$name" | grep -oP 'pr-\K\d+' || echo "N/A")
+              
+              # Calculate age
+              created_ts=$(date -d "$created" +%s 2>/dev/null || echo 0)
+              now_ts=$(date +%s)
+              age_hours=$(( (now_ts - created_ts) / 3600 ))
+              
+              echo "| $name | #$pr_num | $ip | $region | $status | ${age_hours}h |"
+            done >> $GITHUB_OUTPUT
+            
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+
+      - name: List configured betas
+        id: configs
+        run: |
+          echo "Scanning public-betas/ directory..."
+          
+          configs=""
+          for dir in public-betas/*/; do
+            beta_name=$(basename "$dir")
+            [ "$beta_name" = "_template" ] && continue
+            
+            config_file="$dir/config.yaml"
+            [ ! -f "$config_file" ] && continue
+            
+            owners=$(yq eval '.owners | join(", ")' "$config_file" 2>/dev/null || echo "N/A")
+            model=$(yq eval '.vllm.model // "default"' "$config_file" 2>/dev/null || echo "N/A")
+            region=$(yq eval '.instance.region // "N/A"' "$config_file" 2>/dev/null)
+            
+            configs="$configs| \`$beta_name\` | $owners | $model | $region |\n"
+          done
+          
+          echo "configs<<EOF" >> $GITHUB_OUTPUT
+          if [ -n "$configs" ]; then
+            echo -e "$configs"
+          else
+            echo "No configured betas found."
+          fi >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Check for orphaned instances
+        id: orphans
+        env:
+          DO_TOKEN: ${{ secrets.DO_PERSONAL_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          orphans=""
+          
+          # Get all public-beta droplets
+          droplets=$(curl -s \
+            -H "Authorization: Bearer $DO_TOKEN" \
+            "https://api.digitalocean.com/v2/droplets?tag_name=public-beta")
+          
+          echo "$droplets" | jq -r '.droplets[] | @json' | while read -r droplet; do
+            name=$(echo "$droplet" | jq -r '.name')
+            id=$(echo "$droplet" | jq -r '.id')
+            
+            # Extract PR number
+            pr_num=$(echo "$name" | grep -oP 'pr-\K\d+' || continue)
+            
+            # Check if PR is still open
+            pr_state=$(gh pr view "$pr_num" --json state --jq '.state' 2>/dev/null || echo "UNKNOWN")
+            
+            if [ "$pr_state" != "OPEN" ]; then
+              orphans="$orphans\n- **$name** (Droplet $id): PR #$pr_num is $pr_state"
+            fi
+          done
+          
+          echo "orphans<<EOF" >> $GITHUB_OUTPUT
+          if [ -n "$orphans" ]; then
+            echo -e "$orphans"
+          else
+            echo "None found."
+          fi >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create summary
+        run: |
+          count="${{ steps.droplets.outputs.count }}"
+          
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          # 📊 Public Beta Status Report
+          
+          **Generated:** $(date -u +%Y-%m-%dT%H:%M:%SZ)
+          
+          ## Active Instances
+          
+          EOF
+          
+          if [ "$count" = "0" ]; then
+            echo "No active public-beta instances." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Total:** $count instance(s)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ${{ steps.droplets.outputs.table }}
+          EOF
+          fi
+          
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          
+          ## Configured Betas
+          
+          | Name | Owners | Model | Region |
+          |------|--------|-------|--------|
+          ${{ steps.configs.outputs.configs }}
+          
+          ## Orphaned Instances
+          
+          Instances whose PR is no longer open:
+          
+          ${{ steps.orphans.outputs.orphans }}
+          
+          ---
+          
+          ### Actions
+          
+          - **Create new beta**: Submit a PR adding a directory under `public-betas/`
+          - **Manual teardown**: Run the "Public Beta: Manual Teardown" workflow
+          - **View PR**: Check the linked PR for instance details
+          EOF
+
+      - name: Alert on orphans
+        if: steps.orphans.outputs.orphans != 'None found.'
+        run: |
+          echo "::warning::Orphaned instances detected! These should have been deleted when their PR closed."
+          echo "Run the 'Public Beta: Manual Teardown' workflow to clean up."
