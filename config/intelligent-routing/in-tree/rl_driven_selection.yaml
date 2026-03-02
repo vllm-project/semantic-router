@@ -89,6 +89,14 @@ decisions:
         cost_awareness: true
         cost_weight: 0.2
 
+        # Enable session affinity for KV cache optimization (default: false)
+        # When enabled, requests from the same user route to the same backend
+        # to maximize vLLM prefix caching benefits. Only enable this when:
+        # 1. You trust user IDs from your auth system (X-Authz-User-ID header)
+        # 2. You want to optimize multi-turn conversations
+        # 3. Users should NOT share KV cache (privacy/isolation requirement)
+        enable_session_affinity: true
+
         # Persist learned preferences to disk
         storage_path: "/var/lib/vsr/rl_preferences.json"
         auto_save_interval: "5m"
