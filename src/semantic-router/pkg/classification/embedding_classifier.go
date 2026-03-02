@@ -1,9 +1,11 @@
 package classification
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,6 +17,49 @@ import (
 // getEmbeddingWithModelType is a package-level variable for computing single embeddings.
 // It exists so tests can override it.
 var getEmbeddingWithModelType = candle_binding.GetEmbeddingWithModelType
+
+// getMultiModalTextEmbedding computes a text embedding via the multimodal model.
+// Package-level var so tests can override it.
+var getMultiModalTextEmbedding = func(text string, targetDim int) ([]float32, error) {
+	output, err := candle_binding.MultiModalEncodeText(text, targetDim)
+	if err != nil {
+		return nil, err
+	}
+	return output.Embedding, nil
+}
+
+// getMultiModalImageEmbedding computes an image embedding from a base64-encoded
+// image (raw base64 or data-URI) via the multimodal model.
+// Also supports local file paths for preloading knowledge-base image candidates.
+// Package-level var so tests can override it.
+var getMultiModalImageEmbedding = func(imageRef string, targetDim int) ([]float32, error) {
+	if imageRef == "" {
+		return nil, fmt.Errorf("imageRef cannot be empty")
+	}
+
+	payload := imageRef
+
+	// If imageRef is a local file path, read and base64-encode it
+	if strings.HasPrefix(imageRef, "/") || strings.HasPrefix(imageRef, "./") {
+		data, err := os.ReadFile(imageRef)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read image file %q: %w", imageRef, err)
+		}
+		payload = base64.StdEncoding.EncodeToString(data)
+	} else if idx := strings.Index(imageRef, ";base64,"); idx >= 0 {
+		// Strip data-URI prefix if present (e.g. "data:image/png;base64,...")
+		payload = imageRef[idx+len(";base64,"):]
+	}
+
+	output, err := candle_binding.MultiModalEncodeImageFromBase64(payload, targetDim)
+	if err != nil {
+		return nil, err
+	}
+	return output.Embedding, nil
+}
+
+// initMultiModalModel is a package-level var for initializing the multimodal model.
+var initMultiModalModel = candle_binding.InitMultiModalEmbeddingModel
 
 // EmbeddingClassifierInitializer initializes KeywordEmbeddingClassifier for embedding based classification
 type EmbeddingClassifierInitializer interface {

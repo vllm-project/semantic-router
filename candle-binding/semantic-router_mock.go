@@ -243,6 +243,91 @@ func InitMmBertEmbeddingModel(modelPath string, useCPU bool) error {
 	return nil
 }
 
+// InitMultiModalEmbeddingModel initializes multi-modal embedding model
+func InitMultiModalEmbeddingModel(modelPath string, useCPU bool) error {
+	log.Printf("[MOCK] Initializing Multi-Modal Embedding Model: %s", modelPath)
+	_ = useCPU
+	return nil
+}
+
+// MultiModalEncodeText encodes text using multi-modal model (mock)
+func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	dim := 384
+	if targetDim > 0 {
+		dim = targetDim
+	}
+	return &MultiModalEmbeddingOutput{
+		Embedding:        make([]float32, dim),
+		Modality:         "text",
+		ProcessingTimeMs: 1.0,
+	}, nil
+}
+
+// MultiModalEncodeImage encodes image using multi-modal model (mock)
+func MultiModalEncodeImage(pixelData []float32, height, width, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	dim := 384
+	if targetDim > 0 {
+		dim = targetDim
+	}
+	return &MultiModalEmbeddingOutput{
+		Embedding:        make([]float32, dim),
+		Modality:         "image",
+		ProcessingTimeMs: 1.0,
+	}, nil
+}
+
+// MultiModalEncodeAudio encodes audio using multi-modal model (mock)
+func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	dim := 384
+	if targetDim > 0 {
+		dim = targetDim
+	}
+	return &MultiModalEmbeddingOutput{
+		Embedding:        make([]float32, dim),
+		Modality:         "audio",
+		ProcessingTimeMs: 1.0,
+	}, nil
+}
+
+// MultiModalEncodeImageFromBytes decodes image bytes and encodes to embedding (mock)
+func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	dim := 384
+	if targetDim > 0 {
+		dim = targetDim
+	}
+	return &MultiModalEmbeddingOutput{
+		Embedding:        make([]float32, dim),
+		Modality:         "image",
+		ProcessingTimeMs: 1.0,
+	}, nil
+}
+
+// MultiModalEncodeImageFromBase64 decodes a base64-encoded image and encodes to embedding (mock)
+func MultiModalEncodeImageFromBase64(base64Str string, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	dim := 384
+	if targetDim > 0 {
+		dim = targetDim
+	}
+	return &MultiModalEmbeddingOutput{
+		Embedding:        make([]float32, dim),
+		Modality:         "image",
+		ProcessingTimeMs: 1.0,
+	}, nil
+}
+
+// MultiModalEncodeImageFromURL downloads and encodes an image from URL (mock)
+func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddingOutput, error) {
+	dim := 384
+	if targetDim > 0 {
+		dim = targetDim
+	}
+	return &MultiModalEmbeddingOutput{
+		Embedding:        make([]float32, dim),
+		Modality:         "image",
+		ProcessingTimeMs: 1.0,
+	}, nil
+}
+
 // GetEmbedding2DMatryoshka generates an embedding using mock 2D Matryoshka API
 func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, targetDim int) (*EmbeddingOutput, error) {
 	_ = text

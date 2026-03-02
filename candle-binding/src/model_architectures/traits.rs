@@ -45,6 +45,17 @@ pub enum ModelType {
     /// - Latency: 1.6-3.1× faster than BGE-M3 (FA2 advantage)
     /// - Best for: Multilingual RAG, long-document retrieval, edge deployment
     MmBertEmbedding,
+    /// Multi-modal embedding model (text + image + audio)
+    ///
+    /// Characteristics:
+    /// - Parameters: ~120M
+    /// - Text: MiniLM-L6-v2 (22M, 6 layers, 384-dim)
+    /// - Image: SigLIP-base-patch16-512 (86M, 768→384 projection)
+    /// - Audio: Whisper-tiny encoder (8M, 4 layers, 384-dim)
+    /// - Embedding Dimension: 384 (supports MRL truncation to 32, 64, 128, 256)
+    /// - 2DMSE: Early exit at any text encoder layer
+    /// - Best for: Cross-modal retrieval, multimodal routing
+    MultiModalEmbedding,
 }
 
 /// Task type enumeration for multi-task processing

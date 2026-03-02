@@ -124,10 +124,11 @@ func (l *BaseLooper) aggregateResponses(responses []*ModelResponse, models []str
 	}
 	result.CombinedContent = combinedContent
 
-	// Use the last response's logprobs for confidence
+	// Use the last response's logprobs and tool_calls flag for confidence
 	if len(responses) > 0 {
 		lastResp := responses[len(responses)-1]
 		result.AverageLogprob = lastResp.AverageLogprob
+		result.HasToolCalls = lastResp.HasToolCalls
 	}
 
 	logging.Infof("[BaseLooper] Aggregated %d responses, total content length=%d",
@@ -143,10 +144,37 @@ type AggregatedResponse struct {
 	CombinedContent string
 	FinalModel      string
 	AverageLogprob  float64
+	HasToolCalls    bool
 }
 
-// formatJSONResponse creates a JSON ChatCompletion response
+// formatJSONResponse creates a JSON ChatCompletion response.
+// When the final response contains tool_calls, the original raw response
+// is preserved (with metadata patched) to avoid dropping tool_calls.
 func (l *BaseLooper) formatJSONResponse(agg *AggregatedResponse, modelsUsed []string, iterations int) (*Response, error) {
+	// If the final response has tool_calls, use the original raw response
+	// but patch the model name and id to reflect the looper wrapper.
+	if agg.HasToolCalls && len(agg.Responses) > 0 {
+		last := agg.Responses[len(agg.Responses)-1]
+		if last.Raw != nil {
+			var raw map[string]interface{}
+			if err := json.Unmarshal(last.Raw, &raw); err == nil {
+				raw["id"] = fmt.Sprintf("chatcmpl-looper-%d", time.Now().UnixNano())
+				raw["model"] = agg.FinalModel
+				body, err := json.Marshal(raw)
+				if err == nil {
+					return &Response{
+						Body:          body,
+						ContentType:   "application/json",
+						Model:         agg.FinalModel,
+						ModelsUsed:    modelsUsed,
+						Iterations:    iterations,
+						AlgorithmType: "simple",
+					}, nil
+				}
+			}
+		}
+	}
+
 	completion := map[string]interface{}{
 		"id":      fmt.Sprintf("chatcmpl-looper-%d", time.Now().UnixNano()),
 		"object":  "chat.completion",

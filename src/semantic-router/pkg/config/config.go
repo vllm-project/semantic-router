@@ -775,6 +775,9 @@ type EmbeddingModels struct {
 	// Path to mmBERT 2D Matryoshka embedding model directory
 	// Supports layer early exit (3/6/11/22 layers) and dimension reduction (64-768)
 	MmBertModelPath string `yaml:"mmbert_model_path"`
+	// Path to multi-modal embedding model directory (text + image + audio, 384-dim)
+	// Required when complexity rules use image_candidates
+	MultiModalModelPath string `yaml:"multimodal_model_path,omitempty"`
 	// Path to BERT/MiniLM embedding model directory (e.g., all-MiniLM-L6-v2, all-MiniLM-L12-v2)
 	// Produces 384-dim embeddings, recommended for memory retrieval due to forgiving semantic matching
 	BertModelPath string `yaml:"bert_model_path"`
@@ -2956,9 +2959,22 @@ func (s *Signals) GetRoleBindings() []RoleBinding {
 	return s.RoleBindings
 }
 
-// ComplexityCandidates defines hard and easy candidates for complexity classification
+// ComplexityCandidates defines hard and easy candidates for complexity classification.
+// Text candidates are compared using the configured text embedding model.
+// Image candidates (URLs or base64 strings) are compared using the multimodal model.
 type ComplexityCandidates struct {
-	Candidates []string `yaml:"candidates"`
+	Candidates      []string `yaml:"candidates"`
+	ImageCandidates []string `yaml:"image_candidates,omitempty"`
+}
+
+// HasImageCandidates returns true if any complexity rules use image candidates.
+func HasImageCandidatesInRules(rules []ComplexityRule) bool {
+	for _, r := range rules {
+		if len(r.Hard.ImageCandidates) > 0 || len(r.Easy.ImageCandidates) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // ComplexityRule defines a rule for complexity-based classification using embedding similarity

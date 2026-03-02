@@ -124,6 +124,9 @@ type ModelResponse struct {
 	// FilteredAverageMargin is the average margin computed only over semantic tokens
 	FilteredAverageMargin float64
 
+	// HasToolCalls indicates the response contained tool_calls (not just content)
+	HasToolCalls bool
+
 	// IsStreaming indicates if this was a streaming response
 	IsStreaming bool
 
@@ -242,9 +245,12 @@ func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*Mode
 		IsStreaming: false,
 	}
 
-	// Extract content and logprobs
+	// Extract content, tool_calls, and logprobs
 	if len(completion.Choices) > 0 {
 		result.Content = completion.Choices[0].Message.Content
+		if len(completion.Choices[0].Message.ToolCalls) > 0 {
+			result.HasToolCalls = true
+		}
 
 		analysis := extractLogprobs(&completion)
 		result.Tokens = analysis.Tokens

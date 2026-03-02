@@ -219,9 +219,10 @@ impl DualPathRouter {
         let base_score = match model_type {
             ModelType::LoRA => self.router_config.lora_baseline_score,
             ModelType::Traditional => self.router_config.traditional_baseline_score,
-            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding | ModelType::MmBertEmbedding => {
-                self.router_config.embedding_baseline_score
-            }
+            ModelType::Qwen3Embedding
+            | ModelType::GemmaEmbedding
+            | ModelType::MmBertEmbedding
+            | ModelType::MultiModalEmbedding => self.router_config.embedding_baseline_score,
         };
 
         let mut score = base_score;
@@ -295,18 +296,23 @@ impl DualPathRouter {
                 }
             }
             ModelType::MmBertEmbedding => {
-                // mmBERT excels at multilingual and long context (up to 32K)
                 let estimated_seq_len = requirements.batch_size * 128;
                 if estimated_seq_len > 2048 {
-                    score += 0.25; // Strong advantage for long context
+                    score += 0.25;
                 } else if estimated_seq_len > 512 {
-                    score += 0.15; // Moderate advantage
+                    score += 0.15;
                 }
-                // mmBERT is faster than BGE-M3 (1.6-3.1× due to FA2)
                 if requirements.priority == ProcessingPriority::Latency {
                     score += 0.2;
                 }
-                // 2D Matryoshka provides flexibility
+                score += 0.1;
+            }
+            ModelType::MultiModalEmbedding => {
+                // Compact model (~120M), very fast for short texts
+                if requirements.priority == ProcessingPriority::Latency {
+                    score += 0.3;
+                }
+                // MRL support gives flexibility
                 score += 0.1;
             }
         }
@@ -349,9 +355,15 @@ impl DualPathRouter {
                     total_executions: 0,
                 },
                 ModelType::MmBertEmbedding => PathMetrics {
-                    avg_execution_time: Duration::from_millis(25), // ~25ms (1.6-3.1× faster than BGE-M3)
+                    avg_execution_time: Duration::from_millis(25),
                     avg_confidence: 0.80,
                     success_rate: 0.96,
+                    total_executions: 0,
+                },
+                ModelType::MultiModalEmbedding => PathMetrics {
+                    avg_execution_time: Duration::from_millis(15), // ~15ms for text (compact model)
+                    avg_confidence: 0.78,
+                    success_rate: 0.95,
                     total_executions: 0,
                 },
             })
@@ -366,10 +378,11 @@ impl DualPathRouter {
             ModelType::Traditional => {
                 self.strategy = PathSelectionStrategy::AlwaysTraditional;
             }
-            ModelType::Qwen3Embedding | ModelType::GemmaEmbedding | ModelType::MmBertEmbedding => {
-                // FUTURE ENHANCEMENT: Optional support for manual embedding model preference
-                // Current implementation: Intelligent automatic selection via UnifiedClassifier
-                // This provides optimal quality-latency balance based on user priorities
+            ModelType::Qwen3Embedding
+            | ModelType::GemmaEmbedding
+            | ModelType::MmBertEmbedding
+            | ModelType::MultiModalEmbedding => {
+                // Embedding model preference is handled via automatic selection
             }
         }
     }
