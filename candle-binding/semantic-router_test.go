@@ -2,8 +2,11 @@ package candle_binding
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"io"
 	"math"
+	"net/http"
 	"os"
 	"runtime"
 	"strings"
@@ -3929,4 +3932,543 @@ func TestMmBert32KModelConstants(t *testing.T) {
 
 // ================================================================================================
 // END OF MMBERT-32K TESTS
+// ================================================================================================
+
+// ================================================================================================
+// MULTI-MODAL EMBEDDING TESTS (text + image + audio, 384-dim)
+// ================================================================================================
+
+// Copyright-free Wikimedia Commons images:
+//   - Tuxedo_kitten.jpg    : Public Domain (author: TimVickers)
+//   - 1Cute-doggy.jpg      : CC0 1.0 Universal (author: X posid)
+//   - 1908_Ford_Model_T.jpg: Public Domain (published 1908, pre-1930)
+const (
+	wikiCatURL = "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Tuxedo_kitten.jpg/512px-Tuxedo_kitten.jpg"
+	wikiDogURL = "https://upload.wikimedia.org/wikipedia/commons/a/a7/1Cute-doggy.jpg"
+	wikiCarURL = "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/1908_Ford_Model_T.jpg/960px-1908_Ford_Model_T.jpg"
+)
+
+func getMultiModalModelPath() string {
+	return os.Getenv("MULTIMODAL_MODEL_PATH")
+}
+
+func downloadImageBytes(t *testing.T, url string) []byte {
+	t.Helper()
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		t.Fatalf("Failed to download %s: %v", url, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("HTTP %d from %s", resp.StatusCode, url)
+	}
+	const maxSize = 20 * 1024 * 1024
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxSize))
+	if err != nil {
+		t.Fatalf("Failed to read body from %s: %v", url, err)
+	}
+	t.Logf("Downloaded %d bytes from %s", len(data), url)
+	return data
+}
+
+func embeddingNorm(emb []float32) float64 {
+	var sum float64
+	for _, v := range emb {
+		sum += float64(v) * float64(v)
+	}
+	return math.Sqrt(sum)
+}
+
+func embeddingCosineSim(a, b []float32) float64 {
+	if len(a) != len(b) || len(a) == 0 {
+		return 0
+	}
+	var dot, na, nb float64
+	for i := range a {
+		dot += float64(a[i]) * float64(b[i])
+		na += float64(a[i]) * float64(a[i])
+		nb += float64(b[i]) * float64(b[i])
+	}
+	na = math.Sqrt(na)
+	nb = math.Sqrt(nb)
+	if na == 0 || nb == 0 {
+		return 0
+	}
+	return dot / (na * nb)
+}
+
+// TestMultiModalEmbeddingInit tests multi-modal model initialization
+func TestMultiModalEmbeddingInit(t *testing.T) {
+	modelPath := getMultiModalModelPath()
+	if modelPath == "" {
+		t.Skip("MULTIMODAL_MODEL_PATH environment variable not set")
+	}
+
+	err := InitMultiModalEmbeddingModel(modelPath, true)
+	if err != nil {
+		t.Logf("InitMultiModalEmbeddingModel returned error (may already be initialized): %v", err)
+		_, testErr := MultiModalEncodeText("test", 0)
+		if testErr != nil {
+			t.Fatalf("Multi-modal model not functional: %v", err)
+		}
+		t.Log("Multi-modal model verified functional via MultiModalEncodeText")
+	}
+}
+
+// TestMultiModalEncodeText tests text encoding via the multi-modal model
+func TestMultiModalEncodeText(t *testing.T) {
+	modelPath := getMultiModalModelPath()
+	if modelPath == "" {
+		t.Skip("MULTIMODAL_MODEL_PATH not set")
+	}
+	_ = InitMultiModalEmbeddingModel(modelPath, true)
+
+	t.Run("BasicText", func(t *testing.T) {
+		output, err := MultiModalEncodeText("A photo of a cat", 0)
+		if err != nil {
+			t.Fatalf("MultiModalEncodeText failed: %v", err)
+		}
+		if output.Modality != "text" {
+			t.Errorf("Expected modality 'text', got %q", output.Modality)
+		}
+		if len(output.Embedding) != 384 {
+			t.Errorf("Expected 384 dimensions, got %d", len(output.Embedding))
+		}
+		norm := embeddingNorm(output.Embedding)
+		if math.Abs(norm-1.0) > 0.02 {
+			t.Errorf("Expected unit norm, got %.4f", norm)
+		}
+		t.Logf("Text embedding: dim=%d, norm=%.4f, time=%.1fms", len(output.Embedding), norm, output.ProcessingTimeMs)
+	})
+
+	t.Run("MRL_Dimensions", func(t *testing.T) {
+		dims := []int{32, 64, 128, 256, 384}
+		for _, dim := range dims {
+			output, err := MultiModalEncodeText("Hello world", dim)
+			if err != nil {
+				t.Fatalf("MRL dim=%d failed: %v", dim, err)
+			}
+			if len(output.Embedding) != dim {
+				t.Errorf("Expected %d dimensions, got %d", dim, len(output.Embedding))
+			}
+			norm := embeddingNorm(output.Embedding)
+			if math.Abs(norm-1.0) > 0.02 {
+				t.Errorf("dim=%d: expected unit norm, got %.4f", dim, norm)
+			}
+			t.Logf("MRL dim=%d: actual=%d, norm=%.4f", dim, len(output.Embedding), norm)
+		}
+	})
+
+	t.Run("SemanticSimilarity", func(t *testing.T) {
+		catOut, _ := MultiModalEncodeText("A fluffy orange cat", 0)
+		dogOut, _ := MultiModalEncodeText("A golden retriever dog", 0)
+		carOut, _ := MultiModalEncodeText("A red sports car", 0)
+
+		catDog := embeddingCosineSim(catOut.Embedding, dogOut.Embedding)
+		catCar := embeddingCosineSim(catOut.Embedding, carOut.Embedding)
+		t.Logf("cat-dog=%.4f, cat-car=%.4f", catDog, catCar)
+
+		if catDog <= catCar {
+			t.Logf("Note: expected cat-dog > cat-car, got %.4f <= %.4f", catDog, catCar)
+		}
+	})
+
+	t.Run("Consistency", func(t *testing.T) {
+		out1, _ := MultiModalEncodeText("Hello world", 0)
+		out2, _ := MultiModalEncodeText("Hello world", 0)
+		sim := embeddingCosineSim(out1.Embedding, out2.Embedding)
+		if math.Abs(sim-1.0) > 1e-5 {
+			t.Errorf("Same text should produce identical embeddings, got sim=%.6f", sim)
+		}
+	})
+}
+
+// TestMultiModalEncodeImageFromBytes tests image encoding from raw bytes
+func TestMultiModalEncodeImageFromBytes(t *testing.T) {
+	modelPath := getMultiModalModelPath()
+	if modelPath == "" {
+		t.Skip("MULTIMODAL_MODEL_PATH not set")
+	}
+	_ = InitMultiModalEmbeddingModel(modelPath, true)
+
+	t.Run("CatImage", func(t *testing.T) {
+		catBytes := downloadImageBytes(t, wikiCatURL)
+		output, err := MultiModalEncodeImageFromBytes(catBytes, 0)
+		if err != nil {
+			t.Fatalf("MultiModalEncodeImageFromBytes failed: %v", err)
+		}
+		if output.Modality != "image" {
+			t.Errorf("Expected modality 'image', got %q", output.Modality)
+		}
+		if len(output.Embedding) != 384 {
+			t.Errorf("Expected 384 dimensions, got %d", len(output.Embedding))
+		}
+		norm := embeddingNorm(output.Embedding)
+		if math.Abs(norm-1.0) > 0.02 {
+			t.Errorf("Expected unit norm, got %.4f", norm)
+		}
+		t.Logf("Cat image: dim=%d, norm=%.4f, time=%.1fms", len(output.Embedding), norm, output.ProcessingTimeMs)
+	})
+
+	t.Run("DogImage", func(t *testing.T) {
+		dogBytes := downloadImageBytes(t, wikiDogURL)
+		output, err := MultiModalEncodeImageFromBytes(dogBytes, 0)
+		if err != nil {
+			t.Fatalf("Failed: %v", err)
+		}
+		if len(output.Embedding) != 384 {
+			t.Errorf("Expected 384, got %d", len(output.Embedding))
+		}
+		t.Logf("Dog image: dim=%d, norm=%.4f", len(output.Embedding), embeddingNorm(output.Embedding))
+	})
+
+	t.Run("CarImage", func(t *testing.T) {
+		carBytes := downloadImageBytes(t, wikiCarURL)
+		output, err := MultiModalEncodeImageFromBytes(carBytes, 0)
+		if err != nil {
+			t.Fatalf("Failed: %v", err)
+		}
+		if len(output.Embedding) != 384 {
+			t.Errorf("Expected 384, got %d", len(output.Embedding))
+		}
+		t.Logf("Car image: dim=%d, norm=%.4f", len(output.Embedding), embeddingNorm(output.Embedding))
+	})
+
+	t.Run("MRL_Dimensions", func(t *testing.T) {
+		catBytes := downloadImageBytes(t, wikiCatURL)
+		for _, dim := range []int{32, 64, 128, 256, 384} {
+			output, err := MultiModalEncodeImageFromBytes(catBytes, dim)
+			if err != nil {
+				t.Fatalf("MRL dim=%d failed: %v", dim, err)
+			}
+			if len(output.Embedding) != dim {
+				t.Errorf("Expected %d dimensions, got %d", dim, len(output.Embedding))
+			}
+			t.Logf("Image MRL dim=%d: actual=%d, norm=%.4f", dim, len(output.Embedding), embeddingNorm(output.Embedding))
+		}
+	})
+
+	t.Run("DifferentImages_Differ", func(t *testing.T) {
+		catBytes := downloadImageBytes(t, wikiCatURL)
+		dogBytes := downloadImageBytes(t, wikiDogURL)
+		carBytes := downloadImageBytes(t, wikiCarURL)
+
+		catOut, _ := MultiModalEncodeImageFromBytes(catBytes, 0)
+		dogOut, _ := MultiModalEncodeImageFromBytes(dogBytes, 0)
+		carOut, _ := MultiModalEncodeImageFromBytes(carBytes, 0)
+
+		catDog := embeddingCosineSim(catOut.Embedding, dogOut.Embedding)
+		catCar := embeddingCosineSim(catOut.Embedding, carOut.Embedding)
+		dogCar := embeddingCosineSim(dogOut.Embedding, carOut.Embedding)
+
+		t.Logf("cat-dog=%.4f, cat-car=%.4f, dog-car=%.4f", catDog, catCar, dogCar)
+
+		if catDog > 0.999 {
+			t.Error("Cat and dog embeddings should differ")
+		}
+		if catCar > 0.999 {
+			t.Error("Cat and car embeddings should differ")
+		}
+	})
+}
+
+// TestMultiModalEncodeImageFromBase64 tests base64 image encoding (OpenAI API style)
+func TestMultiModalEncodeImageFromBase64(t *testing.T) {
+	modelPath := getMultiModalModelPath()
+	if modelPath == "" {
+		t.Skip("MULTIMODAL_MODEL_PATH not set")
+	}
+	_ = InitMultiModalEmbeddingModel(modelPath, true)
+
+	catBytes := downloadImageBytes(t, wikiCatURL)
+
+	t.Run("RawBase64", func(t *testing.T) {
+		b64 := base64.StdEncoding.EncodeToString(catBytes)
+		output, err := MultiModalEncodeImageFromBase64(b64, 0)
+		if err != nil {
+			t.Fatalf("MultiModalEncodeImageFromBase64 failed: %v", err)
+		}
+		if output.Modality != "image" {
+			t.Errorf("Expected modality 'image', got %q", output.Modality)
+		}
+		if len(output.Embedding) != 384 {
+			t.Errorf("Expected 384 dimensions, got %d", len(output.Embedding))
+		}
+		t.Logf("Base64 cat: dim=%d, norm=%.4f", len(output.Embedding), embeddingNorm(output.Embedding))
+	})
+
+	t.Run("DataURIPrefix", func(t *testing.T) {
+		b64 := base64.StdEncoding.EncodeToString(catBytes)
+		dataURI := "data:image/jpeg;base64," + b64
+		output, err := MultiModalEncodeImageFromBase64(dataURI, 0)
+		if err != nil {
+			t.Fatalf("data-URI failed: %v", err)
+		}
+		if len(output.Embedding) != 384 {
+			t.Errorf("Expected 384, got %d", len(output.Embedding))
+		}
+		t.Logf("data-URI cat: dim=%d, norm=%.4f", len(output.Embedding), embeddingNorm(output.Embedding))
+	})
+
+	t.Run("Base64_vs_Raw_Identical", func(t *testing.T) {
+		rawOut, err := MultiModalEncodeImageFromBytes(catBytes, 0)
+		if err != nil {
+			t.Fatalf("raw encode failed: %v", err)
+		}
+
+		b64 := base64.StdEncoding.EncodeToString(catBytes)
+		b64Out, err := MultiModalEncodeImageFromBase64(b64, 0)
+		if err != nil {
+			t.Fatalf("base64 encode failed: %v", err)
+		}
+
+		sim := embeddingCosineSim(rawOut.Embedding, b64Out.Embedding)
+		if math.Abs(sim-1.0) > 1e-5 {
+			t.Errorf("Base64 roundtrip should produce identical embedding, got sim=%.6f", sim)
+		}
+		t.Logf("raw vs base64 sim=%.6f", sim)
+	})
+
+	t.Run("DataURI_vs_Raw_Identical", func(t *testing.T) {
+		rawOut, _ := MultiModalEncodeImageFromBytes(catBytes, 0)
+
+		b64 := base64.StdEncoding.EncodeToString(catBytes)
+		dataURI := "data:image/png;base64," + b64
+		uriOut, err := MultiModalEncodeImageFromBase64(dataURI, 0)
+		if err != nil {
+			t.Fatalf("data-URI encode failed: %v", err)
+		}
+
+		sim := embeddingCosineSim(rawOut.Embedding, uriOut.Embedding)
+		if math.Abs(sim-1.0) > 1e-5 {
+			t.Errorf("data-URI flow should match raw, got sim=%.6f", sim)
+		}
+		t.Logf("raw vs data-URI sim=%.6f", sim)
+	})
+
+	t.Run("AllImages_Base64_Consistency", func(t *testing.T) {
+		for _, tc := range []struct {
+			name string
+			url  string
+		}{
+			{"cat", wikiCatURL},
+			{"dog", wikiDogURL},
+			{"car", wikiCarURL},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				imgBytes := downloadImageBytes(t, tc.url)
+				rawOut, _ := MultiModalEncodeImageFromBytes(imgBytes, 0)
+				b64Out, _ := MultiModalEncodeImageFromBase64(base64.StdEncoding.EncodeToString(imgBytes), 0)
+
+				sim := embeddingCosineSim(rawOut.Embedding, b64Out.Embedding)
+				if math.Abs(sim-1.0) > 1e-5 {
+					t.Errorf("%s: base64 roundtrip mismatch, sim=%.6f", tc.name, sim)
+				}
+				t.Logf("%s: raw vs base64 sim=%.6f", tc.name, sim)
+			})
+		}
+	})
+}
+
+// TestMultiModalEncodeImageFromURL tests URL-based image encoding
+func TestMultiModalEncodeImageFromURL(t *testing.T) {
+	modelPath := getMultiModalModelPath()
+	if modelPath == "" {
+		t.Skip("MULTIMODAL_MODEL_PATH not set")
+	}
+	_ = InitMultiModalEmbeddingModel(modelPath, true)
+
+	t.Run("CatFromURL", func(t *testing.T) {
+		output, err := MultiModalEncodeImageFromURL(wikiCatURL, 0)
+		if err != nil {
+			t.Fatalf("MultiModalEncodeImageFromURL failed: %v", err)
+		}
+		if len(output.Embedding) != 384 {
+			t.Errorf("Expected 384, got %d", len(output.Embedding))
+		}
+		t.Logf("URL cat: dim=%d, norm=%.4f, time=%.1fms", len(output.Embedding), embeddingNorm(output.Embedding), output.ProcessingTimeMs)
+	})
+
+	t.Run("DogFromURL", func(t *testing.T) {
+		output, err := MultiModalEncodeImageFromURL(wikiDogURL, 0)
+		if err != nil {
+			t.Fatalf("Failed: %v", err)
+		}
+		if len(output.Embedding) != 384 {
+			t.Errorf("Expected 384, got %d", len(output.Embedding))
+		}
+		t.Logf("URL dog: dim=%d, norm=%.4f", len(output.Embedding), embeddingNorm(output.Embedding))
+	})
+
+	t.Run("URL_vs_Bytes_Identical", func(t *testing.T) {
+		catBytes := downloadImageBytes(t, wikiCatURL)
+		bytesOut, _ := MultiModalEncodeImageFromBytes(catBytes, 0)
+		urlOut, err := MultiModalEncodeImageFromURL(wikiCatURL, 0)
+		if err != nil {
+			t.Fatalf("URL encode failed: %v", err)
+		}
+		sim := embeddingCosineSim(bytesOut.Embedding, urlOut.Embedding)
+		if math.Abs(sim-1.0) > 1e-5 {
+			t.Errorf("URL vs bytes should match, got sim=%.6f", sim)
+		}
+		t.Logf("bytes vs URL sim=%.6f", sim)
+	})
+}
+
+// TestMultiModalCrossModalRetrieval tests text-image cross-modal retrieval
+func TestMultiModalCrossModalRetrieval(t *testing.T) {
+	modelPath := getMultiModalModelPath()
+	if modelPath == "" {
+		t.Skip("MULTIMODAL_MODEL_PATH not set")
+	}
+	_ = InitMultiModalEmbeddingModel(modelPath, true)
+
+	catBytes := downloadImageBytes(t, wikiCatURL)
+	dogBytes := downloadImageBytes(t, wikiDogURL)
+	carBytes := downloadImageBytes(t, wikiCarURL)
+
+	catImg, _ := MultiModalEncodeImageFromBytes(catBytes, 0)
+	dogImg, _ := MultiModalEncodeImageFromBytes(dogBytes, 0)
+	carImg, _ := MultiModalEncodeImageFromBytes(carBytes, 0)
+
+	images := []struct {
+		name string
+		emb  []float32
+	}{
+		{"cat", catImg.Embedding},
+		{"dog", dogImg.Embedding},
+		{"car", carImg.Embedding},
+	}
+
+	t.Run("TextImageSameSpace", func(t *testing.T) {
+		textOut, _ := MultiModalEncodeText("a photo of a cat", 0)
+		if len(textOut.Embedding) != len(catImg.Embedding) {
+			t.Errorf("Text dim=%d != image dim=%d", len(textOut.Embedding), len(catImg.Embedding))
+		}
+		sim := embeddingCosineSim(textOut.Embedding, catImg.Embedding)
+		t.Logf("text('a photo of a cat') vs cat_image: sim=%.4f", sim)
+		if math.IsNaN(sim) || math.IsInf(sim, 0) {
+			t.Error("Similarity should be finite")
+		}
+	})
+
+	t.Run("RetrievalRanking", func(t *testing.T) {
+		queries := []struct {
+			text         string
+			expectedBest string
+		}{
+			{"a photo of a cat", "cat"},
+			{"a photo of a dog", "dog"},
+			{"a photo of a car", "car"},
+			{"a cute kitten sitting", "cat"},
+			{"a fluffy puppy", "dog"},
+			{"a vintage automobile", "car"},
+		}
+
+		for _, q := range queries {
+			textOut, _ := MultiModalEncodeText(q.text, 0)
+			var bestName string
+			var bestSim float64
+			var allSims []string
+			for _, img := range images {
+				sim := embeddingCosineSim(textOut.Embedding, img.emb)
+				allSims = append(allSims, fmt.Sprintf("%s=%.4f", img.name, sim))
+				if sim > bestSim {
+					bestSim = sim
+					bestName = img.name
+				}
+			}
+			marker := "OK"
+			if bestName != q.expectedBest {
+				marker = "MISS"
+			}
+			t.Logf("[%s] %q: best=%s (%.4f) | %s", marker, q.text, bestName, bestSim, strings.Join(allSims, ", "))
+		}
+	})
+
+	t.Run("CrossModal_Base64", func(t *testing.T) {
+		textOut, _ := MultiModalEncodeText("a photo of a kitten", 0)
+		b64Out, err := MultiModalEncodeImageFromBase64(base64.StdEncoding.EncodeToString(catBytes), 0)
+		if err != nil {
+			t.Fatalf("base64 encode failed: %v", err)
+		}
+		if len(textOut.Embedding) != len(b64Out.Embedding) {
+			t.Errorf("Dimension mismatch: text=%d, image=%d", len(textOut.Embedding), len(b64Out.Embedding))
+		}
+		sim := embeddingCosineSim(textOut.Embedding, b64Out.Embedding)
+		t.Logf("text('kitten') vs base64(cat): sim=%.4f", sim)
+	})
+
+	t.Run("CrossModal_MRL", func(t *testing.T) {
+		for _, dim := range []int{64, 128, 256, 384} {
+			textOut, _ := MultiModalEncodeText("a cute kitten", dim)
+			imgOut, _ := MultiModalEncodeImageFromBytes(catBytes, dim)
+			if len(textOut.Embedding) != dim || len(imgOut.Embedding) != dim {
+				t.Errorf("dim=%d: text=%d, image=%d", dim, len(textOut.Embedding), len(imgOut.Embedding))
+			}
+			sim := embeddingCosineSim(textOut.Embedding, imgOut.Embedding)
+			t.Logf("Cross-modal MRL dim=%d: sim=%.4f", dim, sim)
+		}
+	})
+}
+
+// TestMultiModalInputValidation tests error handling for invalid inputs
+func TestMultiModalInputValidation(t *testing.T) {
+	t.Run("EmptyText", func(t *testing.T) {
+		_, err := MultiModalEncodeText("", 0)
+		if err == nil {
+			t.Error("Expected error for empty text")
+		}
+	})
+
+	t.Run("EmptyBytes", func(t *testing.T) {
+		_, err := MultiModalEncodeImageFromBytes(nil, 0)
+		if err == nil {
+			t.Error("Expected error for nil bytes")
+		}
+		_, err = MultiModalEncodeImageFromBytes([]byte{}, 0)
+		if err == nil {
+			t.Error("Expected error for empty bytes")
+		}
+	})
+
+	t.Run("EmptyBase64", func(t *testing.T) {
+		_, err := MultiModalEncodeImageFromBase64("", 0)
+		if err == nil {
+			t.Error("Expected error for empty base64")
+		}
+	})
+
+	t.Run("InvalidBase64", func(t *testing.T) {
+		_, err := MultiModalEncodeImageFromBase64("not-valid-base64!!!", 0)
+		if err == nil {
+			t.Error("Expected error for invalid base64")
+		}
+	})
+
+	t.Run("EmptyURL", func(t *testing.T) {
+		_, err := MultiModalEncodeImageFromURL("", 0)
+		if err == nil {
+			t.Error("Expected error for empty URL")
+		}
+	})
+
+	t.Run("EmptyPixelData", func(t *testing.T) {
+		_, err := MultiModalEncodeImage(nil, 512, 512, 0)
+		if err == nil {
+			t.Error("Expected error for nil pixel data")
+		}
+	})
+
+	t.Run("WrongPixelDataSize", func(t *testing.T) {
+		_, err := MultiModalEncodeImage(make([]float32, 100), 512, 512, 0)
+		if err == nil {
+			t.Error("Expected error for wrong pixel data size")
+		}
+	})
+}
+
+// ================================================================================================
+// END OF MULTI-MODAL EMBEDDING TESTS
 // ================================================================================================

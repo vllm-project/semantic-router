@@ -174,6 +174,53 @@ func statusCodeToEnum(statusCode int) typev3.StatusCode {
 	}
 }
 
+// extractFirstImageURL returns the first safe inline image data-URI from user messages.
+// Only base64-encoded data URIs are accepted to prevent SSRF and local file reads.
+func extractFirstImageURL(req *openai.ChatCompletionNewParams) string {
+	for _, msg := range req.Messages {
+		if msg.OfUser == nil {
+			continue
+		}
+		for _, part := range msg.OfUser.Content.OfArrayOfContentParts {
+			if part.OfImageURL == nil {
+				continue
+			}
+			url := part.OfImageURL.ImageURL.URL
+			if isSafeImageDataURL(url) {
+				return url
+			}
+		}
+	}
+	return ""
+}
+
+// isSafeImageDataURL returns true only for inline base64-encoded image data URIs
+// with an allowlisted MIME type (e.g. "data:image/png;base64,...").
+// HTTP(S) URLs, non-image data URIs, and file paths are rejected to prevent
+// SSRF, local file access, and decode errors on non-image payloads.
+func isSafeImageDataURL(url string) bool {
+	if url == "" {
+		return false
+	}
+	lower := strings.ToLower(url)
+	if !strings.HasPrefix(lower, "data:image/") {
+		return false
+	}
+	const base64Sep = ";base64,"
+	sepIdx := strings.Index(lower, base64Sep)
+	if sepIdx == -1 {
+		return false
+	}
+	mime := lower[len("data:"):sepIdx]
+	switch mime {
+	case "image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp":
+	default:
+		return false
+	}
+	payload := strings.TrimSpace(url[sepIdx+len(base64Sep):])
+	return payload != ""
+}
+
 // rewriteRequestModel rewrites the model field in the request body JSON
 // Used by looper internal requests to route to specific models
 func rewriteRequestModel(originalBody []byte, newModel string) ([]byte, error) {

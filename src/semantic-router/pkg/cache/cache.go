@@ -5,10 +5,39 @@ import (
 	"fmt"
 )
 
-// ChatMessage represents a message in the OpenAI chat format with role and content
+// ChatMessage represents a message in the OpenAI chat format with role and content.
+// Content is json.RawMessage to support both plain strings and multimodal arrays.
 type ChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role    string          `json:"role"`
+	Content json.RawMessage `json:"content"`
+}
+
+// extractTextContent returns the text portion of a message's content field.
+// Handles both plain strings and OpenAI multimodal content arrays.
+func extractTextContent(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	// Try plain string first
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return s
+	}
+	// Try array of content parts (multimodal)
+	var parts []struct {
+		Type string `json:"type"`
+		Text string `json:"text,omitempty"`
+	}
+	if err := json.Unmarshal(raw, &parts); err == nil {
+		var result string
+		for _, p := range parts {
+			if p.Type == "text" && p.Text != "" {
+				result += p.Text
+			}
+		}
+		return result
+	}
+	return ""
 }
 
 // OpenAIRequest represents the structure of an OpenAI API request
@@ -29,15 +58,16 @@ func ExtractQueryFromOpenAIRequest(requestBody []byte) (string, string, error) {
 		return "", "", fmt.Errorf("invalid request body: %w", err)
 	}
 
-	// Find user messages in the conversation
 	var userMessages []string
 	for _, msg := range req.Messages {
 		if msg.Role == "user" {
-			userMessages = append(userMessages, msg.Content)
+			text := extractTextContent(msg.Content)
+			if text != "" {
+				userMessages = append(userMessages, text)
+			}
 		}
 	}
 
-	// Use the most recent user message as the query
 	query := ""
 	if len(userMessages) > 0 {
 		query = userMessages[len(userMessages)-1]

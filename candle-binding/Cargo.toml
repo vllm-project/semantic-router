@@ -55,6 +55,9 @@ tempfile = "3.8"
 serial_test = "3.0"
 criterion = "0.5"
 async-std = { version = "1.12", features = ["attributes"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+ureq = "2.9"
+base64 = "0.22"
 
 # Example testing LoRA adapter compatibility with ModernBERT-base-32k
 [[example]]
@@ -125,6 +128,11 @@ path = "examples/test_mmbert_real.rs"
 [[example]]
 name = "test_mmbert_variant"
 path = "examples/test_mmbert_variant.rs"
+
+# Example testing multi-modal embedding model (text + image + audio)
+[[example]]
+name = "test_multimodal_embed"
+path = "examples/test_multimodal_embed.rs"
 
 # Note: Benchmark binaries are located in ../bench/scripts/rust/candle-binding/
 # They are not included in the library build to keep it self-contained.

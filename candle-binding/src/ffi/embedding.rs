@@ -31,6 +31,31 @@ enum PaddingSide {
 /// Global singleton for ModelFactory
 pub(crate) static GLOBAL_MODEL_FACTORY: OnceLock<ModelFactory> = OnceLock::new();
 
+use crate::model_architectures::embedding::MultiModalEmbeddingModel;
+use tokenizers::Tokenizer as MmTokenizer;
+
+/// Standalone multimodal model storage — allows initialization independent of the
+/// main ModelFactory (which uses OnceLock and can only be set once).
+static STANDALONE_MULTIMODAL: OnceLock<(MultiModalEmbeddingModel, MmTokenizer, String)> =
+    OnceLock::new();
+
+/// Get a reference to the multimodal model + tokenizer, checking standalone first
+/// then falling back to the factory.
+fn get_multimodal_refs() -> Option<(&'static MultiModalEmbeddingModel, &'static MmTokenizer)> {
+    if let Some((model, tokenizer, _)) = STANDALONE_MULTIMODAL.get() {
+        return Some((model, tokenizer));
+    }
+    if let Some(factory) = GLOBAL_MODEL_FACTORY.get() {
+        if let (Some(model), Some(tokenizer)) = (
+            factory.get_multimodal_model(),
+            factory.get_multimodal_tokenizer(),
+        ) {
+            return Some((model, tokenizer));
+        }
+    }
+    None
+}
+
 /// Generic internal helper for single text embedding generation
 ///
 /// This function extracts common logic for both Qwen3 and Gemma models.
@@ -758,6 +783,71 @@ fn generate_mmbert_embeddings_batch(
         .map_err(|e| format!("Failed to convert embeddings: {:?}", e))
 }
 
+/// Internal helper to generate text embedding via the multi-modal model
+fn generate_multimodal_text_embedding(
+    _factory: &ModelFactory,
+    text: &str,
+    target_layer: Option<usize>,
+    target_dim: Option<usize>,
+) -> Result<Vec<f32>, String> {
+    use candle_core::Tensor;
+
+    let (model, tokenizer) =
+        get_multimodal_refs().ok_or_else(|| "Multi-modal model not available".to_string())?;
+
+    let encoding = tokenizer
+        .encode(text, true)
+        .map_err(|e| format!("Tokenization failed: {:?}", e))?;
+
+    let token_ids: Vec<u32> = encoding.get_ids().to_vec();
+    let attention_mask: Vec<u32> = encoding
+        .get_attention_mask()
+        .iter()
+        .map(|&x| x as u32)
+        .collect();
+    let seq_len = token_ids.len();
+
+    let device = model.device();
+    let input_ids = Tensor::from_vec(token_ids, (1, seq_len), device)
+        .map_err(|e| format!("Failed to create input_ids tensor: {:?}", e))?;
+    let attention_mask_tensor = Tensor::from_vec(attention_mask, (1, seq_len), device)
+        .map_err(|e| format!("Failed to create attention_mask tensor: {:?}", e))?;
+
+    let embedding = model
+        .encode_text_with_matryoshka(
+            &input_ids,
+            Some(&attention_mask_tensor),
+            target_layer,
+            target_dim,
+        )
+        .map_err(|e| format!("Multi-modal text encoding failed: {:?}", e))?;
+
+    embedding
+        .squeeze(0)
+        .map_err(|e| format!("Failed to squeeze: {:?}", e))?
+        .to_vec1::<f32>()
+        .map_err(|e| format!("Failed to convert to vec: {:?}", e))
+}
+
+/// Generate text embeddings for multiple texts in a single batch (multi-modal)
+fn generate_multimodal_text_embeddings_batch(
+    _factory: &ModelFactory,
+    texts: &[&str],
+    target_layer: Option<usize>,
+    target_dim: Option<usize>,
+) -> Result<Vec<Vec<f32>>, String> {
+    let (model, tokenizer) =
+        get_multimodal_refs().ok_or_else(|| "Multi-modal model not available".to_string())?;
+
+    let embeddings = model
+        .encode_text_batch_with_matryoshka(tokenizer, texts, 512, target_layer, target_dim)
+        .map_err(|e| format!("Multi-modal batch encoding failed: {:?}", e))?;
+
+    embeddings
+        .to_vec2::<f32>()
+        .map_err(|e| format!("Failed to convert embeddings: {:?}", e))
+}
+
 /// Get embedding with automatic model selection (smart routing)
 ///
 /// This function automatically selects the best embedding model based on:
@@ -908,6 +998,17 @@ pub extern "C" fn get_embedding_with_dim(
                 return -1;
             }
         }
+        ModelType::MultiModalEmbedding => {
+            if get_multimodal_refs().is_some() {
+                "multimodal"
+            } else {
+                eprintln!("Error: MultiModalEmbedding selected but not available");
+                unsafe {
+                    (*result) = create_error_result();
+                }
+                return -1;
+            }
+        }
         _ => {
             eprintln!("Error: unsupported model type: {:?}", model_type);
             unsafe {
@@ -1003,9 +1104,10 @@ pub extern "C" fn get_embedding_2d_matryoshka(
         "qwen3" => ModelType::Qwen3Embedding,
         "gemma" => ModelType::GemmaEmbedding,
         "mmbert" => ModelType::MmBertEmbedding,
+        "multimodal" => ModelType::MultiModalEmbedding,
         _ => {
             eprintln!(
-                "Error: invalid model type '{}' (must be 'qwen3', 'gemma', or 'mmbert')",
+                "Error: invalid model type '{}' (must be 'qwen3', 'gemma', 'mmbert', or 'multimodal')",
                 model_type_str
             );
             unsafe {
@@ -1048,6 +1150,9 @@ pub extern "C" fn get_embedding_2d_matryoshka(
         ModelType::MmBertEmbedding => {
             generate_mmbert_embedding(factory, text_str, layer, target_dimension)
         }
+        ModelType::MultiModalEmbedding => {
+            generate_multimodal_text_embedding(factory, text_str, layer, target_dimension)
+        }
         _ => {
             eprintln!("Error: unsupported model type: {:?}", model_type);
             unsafe {
@@ -1063,11 +1168,12 @@ pub extern "C" fn get_embedding_2d_matryoshka(
             let data = Box::into_raw(embedding_vec.into_boxed_slice()) as *mut f32;
             let processing_time_ms = start_time.elapsed().as_secs_f32() * 1000.0;
 
-            // Map ModelType enum to FFI integer values (0=qwen3, 1=gemma, 2=mmbert)
+            // Map ModelType enum to FFI integer values (0=qwen3, 1=gemma, 2=mmbert, 3=multimodal)
             let model_type_id = match model_type {
                 ModelType::Qwen3Embedding => 0,
                 ModelType::GemmaEmbedding => 1,
                 ModelType::MmBertEmbedding => 2,
+                ModelType::MultiModalEmbedding => 3,
                 _ => -1,
             };
 
@@ -2044,6 +2150,465 @@ pub extern "C" fn get_embedding_batched(
     }
 
     0
+}
+
+// ============================================================================
+// Multi-Modal Embedding FFI Functions
+// ============================================================================
+
+/// Initialize multi-modal embedding model (text + image + audio)
+///
+/// Model: llm-semantic-router/multi-modal-embed-small
+/// - Text: MiniLM-L6-v2 (22M params, 384-dim)
+/// - Image: SigLIP-base-patch16-512 (86M params, 768→384 projection)
+/// - Audio: Whisper-tiny encoder (8M params, 384-dim)
+///
+/// # Safety
+/// - `model_path` must be a valid null-terminated C string
+///
+/// # Returns
+/// - `true` if initialization succeeded
+/// - `false` if initialization failed
+#[no_mangle]
+pub extern "C" fn init_multimodal_embedding_model(
+    model_path: *const c_char,
+    use_cpu: bool,
+) -> bool {
+    use candle_core::Device;
+
+    if model_path.is_null() {
+        eprintln!("Error: model_path is null");
+        return false;
+    }
+
+    let path = unsafe {
+        match CStr::from_ptr(model_path).to_str() {
+            Ok(s) if !s.is_empty() => s.to_string(),
+            _ => {
+                eprintln!("Error: invalid model_path");
+                return false;
+            }
+        }
+    };
+
+    // Already available via either factory or standalone?
+    if get_multimodal_refs().is_some() {
+        eprintln!("WARNING: Multi-modal model already initialized");
+        return true;
+    }
+
+    let device = if use_cpu {
+        Device::Cpu
+    } else {
+        Device::cuda_if_available(0).unwrap_or(Device::Cpu)
+    };
+
+    // If the main factory is NOT yet set, create a new one with the multimodal model.
+    if GLOBAL_MODEL_FACTORY.get().is_none() {
+        let mut factory = ModelFactory::new(device.clone());
+        match factory.register_multimodal_embedding_model(&path) {
+            Ok(_) => {
+                println!("INFO: Multi-modal embedding model registered in ModelFactory");
+            }
+            Err(e) => {
+                eprintln!("ERROR: Failed to register multi-modal model: {:?}", e);
+                return false;
+            }
+        }
+        return match GLOBAL_MODEL_FACTORY.set(factory) {
+            Ok(_) => true,
+            Err(_) => {
+                eprintln!("Error: Failed to set global model factory");
+                false
+            }
+        };
+    }
+
+    // Factory already exists — load the multimodal model into the standalone global.
+    println!(
+        "INFO: ModelFactory already initialized, loading multimodal model into standalone storage"
+    );
+    let model = match MultiModalEmbeddingModel::load(&path, &device) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("ERROR: Failed to load multi-modal model: {:?}", e);
+            return false;
+        }
+    };
+    let tokenizer_path = format!("{}/tokenizer.json", path);
+    let tokenizer = match Tokenizer::from_file(&tokenizer_path) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!(
+                "ERROR: Failed to load multi-modal tokenizer from {}: {:?}",
+                tokenizer_path, e
+            );
+            return false;
+        }
+    };
+    match STANDALONE_MULTIMODAL.set((model, tokenizer, path)) {
+        Ok(_) => {
+            println!("INFO: Multi-modal model registered in standalone storage");
+            true
+        }
+        Err(_) => {
+            eprintln!("Error: Standalone multimodal storage already set");
+            false
+        }
+    }
+}
+
+/// Encode text using the multi-modal embedding model
+///
+/// # Parameters
+/// - `text`: Input text (C string)
+/// - `target_dim`: Target dimension (0 for default 384, or 32/64/128/256)
+/// - `result`: Output pointer for embedding result
+///
+/// # Returns
+/// 0 on success, -1 on error
+#[no_mangle]
+pub extern "C" fn multimodal_encode_text(
+    text: *const c_char,
+    target_dim: i32,
+    result: *mut crate::ffi::types::MultiModalEmbeddingResult,
+) -> i32 {
+    use crate::ffi::types::MultiModalEmbeddingResult;
+
+    if text.is_null() || result.is_null() {
+        eprintln!("Error: null pointer passed to multimodal_encode_text");
+        return -1;
+    }
+
+    let text_str = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("Error: invalid UTF-8 in text: {}", e);
+                (*result) = MultiModalEmbeddingResult::default();
+                return -1;
+            }
+        }
+    };
+
+    let (model, tokenizer) = match get_multimodal_refs() {
+        Some(refs) => refs,
+        None => {
+            eprintln!("Error: Multi-modal model not loaded");
+            unsafe {
+                (*result) = MultiModalEmbeddingResult::default();
+            }
+            return -1;
+        }
+    };
+
+    let start_time = std::time::Instant::now();
+
+    let target_dimension = if target_dim > 0 {
+        Some(target_dim as usize)
+    } else {
+        None
+    };
+
+    // Tokenize
+    let encoding = match tokenizer.encode(text_str, true) {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!("Error: tokenization failed: {:?}", e);
+            unsafe {
+                (*result) = MultiModalEmbeddingResult::default();
+            }
+            return -1;
+        }
+    };
+
+    let ids: Vec<u32> = encoding.get_ids().to_vec();
+    let mask: Vec<u32> = encoding
+        .get_attention_mask()
+        .iter()
+        .map(|&x| x as u32)
+        .collect();
+    let seq_len = ids.len();
+
+    let device = model.device();
+    let input_ids = match candle_core::Tensor::from_vec(ids, (1, seq_len), device) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("Error: tensor creation failed: {:?}", e);
+            unsafe {
+                (*result) = MultiModalEmbeddingResult::default();
+            }
+            return -1;
+        }
+    };
+    let attention_mask = match candle_core::Tensor::from_vec(mask, (1, seq_len), device) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("Error: tensor creation failed: {:?}", e);
+            unsafe {
+                (*result) = MultiModalEmbeddingResult::default();
+            }
+            return -1;
+        }
+    };
+
+    let embedding = match model.encode_text_with_matryoshka(
+        &input_ids,
+        Some(&attention_mask),
+        None,
+        target_dimension,
+    ) {
+        Ok(emb) => emb,
+        Err(e) => {
+            eprintln!("Error: text encoding failed: {:?}", e);
+            unsafe {
+                (*result) = MultiModalEmbeddingResult::default();
+            }
+            return -1;
+        }
+    };
+
+    let embedding_vec = match embedding.squeeze(0).and_then(|t| t.to_vec1::<f32>()) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Error: embedding conversion failed: {:?}", e);
+            unsafe {
+                (*result) = MultiModalEmbeddingResult::default();
+            }
+            return -1;
+        }
+    };
+
+    let length = embedding_vec.len() as i32;
+    let data = Box::into_raw(embedding_vec.into_boxed_slice()) as *mut f32;
+    let processing_time_ms = start_time.elapsed().as_secs_f32() * 1000.0;
+
+    unsafe {
+        (*result) = MultiModalEmbeddingResult {
+            data,
+            length,
+            error: false,
+            modality: 0, // text
+            processing_time_ms,
+        };
+    }
+
+    0
+}
+
+/// Encode image pixel data using the multi-modal embedding model
+///
+/// # Parameters
+/// - `pixel_data`: Raw pixel data as float array (RGB, normalized 0-1), shape [3 * H * W]
+/// - `height`: Image height (must be 512 for SigLIP-base-patch16-512)
+/// - `width`: Image width (must be 512)
+/// - `target_dim`: Target dimension (0 for default 384)
+/// - `result`: Output pointer for embedding result
+///
+/// # Returns
+/// 0 on success, -1 on error
+#[no_mangle]
+pub extern "C" fn multimodal_encode_image(
+    pixel_data: *const f32,
+    height: i32,
+    width: i32,
+    target_dim: i32,
+    result: *mut crate::ffi::types::MultiModalEmbeddingResult,
+) -> i32 {
+    use crate::ffi::types::MultiModalEmbeddingResult;
+
+    if pixel_data.is_null() || result.is_null() {
+        eprintln!("Error: null pointer passed to multimodal_encode_image");
+        return -1;
+    }
+
+    let (model, _tokenizer) = match get_multimodal_refs() {
+        Some(refs) => refs,
+        None => {
+            eprintln!("Error: Multi-modal model not loaded");
+            unsafe {
+                (*result) = MultiModalEmbeddingResult::default();
+            }
+            return -1;
+        }
+    };
+
+    let start_time = std::time::Instant::now();
+
+    let h = height as usize;
+    let w = width as usize;
+    let pixel_count = 3 * h * w;
+
+    let pixels = unsafe { std::slice::from_raw_parts(pixel_data, pixel_count) };
+    let device = model.device();
+
+    let pixel_tensor = match candle_core::Tensor::from_slice(pixels, (1, 3, h, w), device) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("Error: pixel tensor creation failed: {:?}", e);
+            unsafe {
+                (*result) = MultiModalEmbeddingResult::default();
+            }
+            return -1;
+        }
+    };
+
+    let target_dimension = if target_dim > 0 {
+        Some(target_dim as usize)
+    } else {
+        None
+    };
+
+    let embedding = match model.encode_image_with_dim(&pixel_tensor, target_dimension) {
+        Ok(emb) => emb,
+        Err(e) => {
+            eprintln!("Error: image encoding failed: {:?}", e);
+            unsafe {
+                (*result) = MultiModalEmbeddingResult::default();
+            }
+            return -1;
+        }
+    };
+
+    let embedding_vec = match embedding.squeeze(0).and_then(|t| t.to_vec1::<f32>()) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Error: embedding conversion failed: {:?}", e);
+            unsafe {
+                (*result) = MultiModalEmbeddingResult::default();
+            }
+            return -1;
+        }
+    };
+
+    let length = embedding_vec.len() as i32;
+    let data = Box::into_raw(embedding_vec.into_boxed_slice()) as *mut f32;
+    let processing_time_ms = start_time.elapsed().as_secs_f32() * 1000.0;
+
+    unsafe {
+        (*result) = MultiModalEmbeddingResult {
+            data,
+            length,
+            error: false,
+            modality: 1, // image
+            processing_time_ms,
+        };
+    }
+
+    0
+}
+
+/// Encode audio mel-spectrogram using the multi-modal embedding model
+///
+/// # Parameters
+/// - `mel_data`: Mel spectrogram float array, shape [n_mels * time_frames]
+/// - `n_mels`: Number of mel bins (typically 80)
+/// - `time_frames`: Number of time frames
+/// - `target_dim`: Target dimension (0 for default 384)
+/// - `result`: Output pointer for embedding result
+///
+/// # Returns
+/// 0 on success, -1 on error
+#[no_mangle]
+pub extern "C" fn multimodal_encode_audio(
+    mel_data: *const f32,
+    n_mels: i32,
+    time_frames: i32,
+    target_dim: i32,
+    result: *mut crate::ffi::types::MultiModalEmbeddingResult,
+) -> i32 {
+    use crate::ffi::types::MultiModalEmbeddingResult;
+
+    if mel_data.is_null() || result.is_null() {
+        eprintln!("Error: null pointer passed to multimodal_encode_audio");
+        return -1;
+    }
+
+    let (model, _tokenizer) = match get_multimodal_refs() {
+        Some(refs) => refs,
+        None => {
+            eprintln!("Error: Multi-modal model not loaded");
+            unsafe {
+                (*result) = MultiModalEmbeddingResult::default();
+            }
+            return -1;
+        }
+    };
+
+    let start_time = std::time::Instant::now();
+
+    let mels = n_mels as usize;
+    let frames = time_frames as usize;
+    let total = mels * frames;
+
+    let mel_slice = unsafe { std::slice::from_raw_parts(mel_data, total) };
+    let device = model.device();
+
+    let mel_tensor = match candle_core::Tensor::from_slice(mel_slice, (1, mels, frames), device) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("Error: mel tensor creation failed: {:?}", e);
+            unsafe {
+                (*result) = MultiModalEmbeddingResult::default();
+            }
+            return -1;
+        }
+    };
+
+    let target_dimension = if target_dim > 0 {
+        Some(target_dim as usize)
+    } else {
+        None
+    };
+
+    let embedding = match model.encode_audio_with_dim(&mel_tensor, target_dimension) {
+        Ok(emb) => emb,
+        Err(e) => {
+            eprintln!("Error: audio encoding failed: {:?}", e);
+            unsafe {
+                (*result) = MultiModalEmbeddingResult::default();
+            }
+            return -1;
+        }
+    };
+
+    let embedding_vec = match embedding.squeeze(0).and_then(|t| t.to_vec1::<f32>()) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Error: embedding conversion failed: {:?}", e);
+            unsafe {
+                (*result) = MultiModalEmbeddingResult::default();
+            }
+            return -1;
+        }
+    };
+
+    let length = embedding_vec.len() as i32;
+    let data = Box::into_raw(embedding_vec.into_boxed_slice()) as *mut f32;
+    let processing_time_ms = start_time.elapsed().as_secs_f32() * 1000.0;
+
+    unsafe {
+        (*result) = MultiModalEmbeddingResult {
+            data,
+            length,
+            error: false,
+            modality: 2, // audio
+            processing_time_ms,
+        };
+    }
+
+    0
+}
+
+/// Free multi-modal embedding result data
+#[no_mangle]
+pub extern "C" fn free_multimodal_embedding(data: *mut f32, length: i32) {
+    if data.is_null() || length <= 0 {
+        return;
+    }
+    unsafe {
+        let _ = Box::from_raw(std::slice::from_raw_parts_mut(data, length as usize));
+    }
 }
 
 /// Shutdown the continuous batching scheduler

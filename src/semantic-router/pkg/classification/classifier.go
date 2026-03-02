@@ -659,6 +659,19 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 		if modelType == "" {
 			modelType = "qwen3" // Default to qwen3
 		}
+
+		// Initialize multimodal model if any complexity rule uses image candidates
+		if config.HasImageCandidatesInRules(cfg.ComplexityRules) {
+			mmPath := cfg.EmbeddingModels.MultiModalModelPath
+			if mmPath == "" {
+				return nil, fmt.Errorf("complexity rules have image_candidates but embedding_models.multimodal_model_path is not set")
+			}
+			if err := initMultiModalModel(mmPath, cfg.EmbeddingModels.UseCPU); err != nil {
+				return nil, fmt.Errorf("failed to initialize multimodal model for complexity image candidates: %w", err)
+			}
+			logging.Infof("Initialized multimodal embedding model for complexity image candidates: %s", mmPath)
+		}
+
 		complexityClassifier, err := NewComplexityClassifier(cfg.ComplexityRules, modelType)
 		if err != nil {
 			logging.Errorf("Failed to create complexity classifier: %v", err)
@@ -1127,8 +1140,12 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 // This prevents silent bypass of authz policies.
 //
 // headers: request headers from ext_proc (includes Authorino-injected authz headers)
-func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText string, nonUserMessages []string, headers map[string]string, forceEvaluateAll bool) (*SignalResults, error) {
-	results := c.EvaluateAllSignalsWithContext(text, contextText, nonUserMessages, forceEvaluateAll)
+func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText string, nonUserMessages []string, headers map[string]string, forceEvaluateAll bool, imageURL ...string) (*SignalResults, error) {
+	img := ""
+	if len(imageURL) > 0 {
+		img = imageURL[0]
+	}
+	results := c.EvaluateAllSignalsWithContext(text, contextText, nonUserMessages, forceEvaluateAll, img)
 
 	// Evaluate authz signal if role bindings are configured and the signal type is used
 	usedSignals := c.getUsedSignals()
@@ -1183,7 +1200,7 @@ func (c *Classifier) EvaluateAllSignalsWithForceOption(text string, forceEvaluat
 // contextText: text to use for context token counting (usually all messages combined)
 // nonUserMessages: conversation history (non-user messages) for jailbreak/PII with include_history
 // forceEvaluateAll: if true, evaluates all configured signals regardless of decision usage (for eval scenarios)
-func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string, nonUserMessages []string, forceEvaluateAll bool) *SignalResults {
+func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string, nonUserMessages []string, forceEvaluateAll bool, imageURL ...string) *SignalResults {
 	// Determine which signals (type:name) should be evaluated
 	var usedSignals map[string]bool
 	if forceEvaluateAll {
@@ -1566,10 +1583,14 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 	// Evaluate complexity rules in parallel (only if used in decisions)
 	if isSignalTypeUsed(usedSignals, config.SignalTypeComplexity) && c.complexityClassifier != nil {
 		wg.Add(1)
+		imgArg := ""
+		if len(imageURL) > 0 {
+			imgArg = imageURL[0]
+		}
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			matchedRules, err := c.complexityClassifier.Classify(text)
+			matchedRules, err := c.complexityClassifier.ClassifyWithImage(text, imgArg)
 			elapsed := time.Since(start)
 			latencySeconds := elapsed.Seconds()
 

@@ -95,6 +95,9 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	// Store user content for later use in hallucination detection
 	ctx.UserContent = userContent
 
+	// Extract the first image URL for Tier 1 complexity pre-routing
+	ctx.RequestImageURL = extractFirstImageURL(openAIRequest)
+
 	// Perform decision evaluation and model selection once at the beginning
 	// Use decision-based routing if decisions are configured, otherwise fall back to category-based
 	// This also evaluates fact-check signal as part of the signal evaluation
@@ -648,9 +651,11 @@ func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, endp
 		})
 		logging.Infof("Added %s header for model %s (provider=%s)", authHeader, model, llmProvider)
 	} else {
-		// fail_open=true path: no key but allowed through
-		logging.Warnf("No API key for %s model %q (fail_open=true) — forwarding without auth header", llmProvider, model)
+		// fail_open=true: preserve the original auth header from the client request
+		logging.Warnf("No API key for %s model %q (fail_open=true) — preserving original auth header", llmProvider, model)
 	}
+	// Always strip ext_authz-injected per-user key headers to prevent credential leakage upstream
+	removeHeaders = append(removeHeaders, r.CredentialResolver.HeadersToStrip()...)
 
 	// Add explicit extra headers from provider profile config
 	if profile != nil {
@@ -660,9 +665,6 @@ func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, endp
 			})
 		}
 	}
-
-	// Strip ext_authz injected headers before forwarding upstream (prevent key leakage)
-	removeHeaders = append(removeHeaders, r.CredentialResolver.HeadersToStrip()...)
 
 	// Add standard routing headers
 	if endpoint != "" {
@@ -778,9 +780,10 @@ func (r *OpenAIRouter) createSpecifiedModelResponse(model string, upstreamModel 
 		})
 		logging.Infof("Added %s header for model %s (provider=%s)", authHeader, model, llmProvider)
 	} else {
-		// fail_open=true path: no key but allowed through
-		logging.Warnf("No API key for %s model %q (fail_open=true) — forwarding without auth header", llmProvider, model)
+		logging.Warnf("No API key for %s model %q (fail_open=true) — preserving original auth header", llmProvider, model)
 	}
+	// Always strip ext_authz-injected per-user key headers to prevent credential leakage upstream
+	removeHeaders = append(removeHeaders, r.CredentialResolver.HeadersToStrip()...)
 
 	// Add explicit extra headers from provider profile config
 	if profile != nil {
@@ -790,9 +793,6 @@ func (r *OpenAIRouter) createSpecifiedModelResponse(model string, upstreamModel 
 			})
 		}
 	}
-
-	// Strip ext_authz injected headers before forwarding upstream (prevent key leakage)
-	removeHeaders = append(removeHeaders, r.CredentialResolver.HeadersToStrip()...)
 
 	if endpoint != "" {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{

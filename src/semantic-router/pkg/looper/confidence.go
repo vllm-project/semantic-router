@@ -600,6 +600,7 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 		CombinedContent: lastResponse.Content,
 		FinalModel:      lastResponse.Model,
 		AverageLogprob:  lastResponse.AverageLogprob,
+		HasToolCalls:    lastResponse.HasToolCalls,
 	}
 
 	if req.IsStreaming {
