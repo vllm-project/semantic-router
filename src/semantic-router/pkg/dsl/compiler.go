@@ -315,9 +315,27 @@ func (c *Compiler) compileRoutes() {
 			Priority:    r.Priority,
 		}
 
-		// Compile WHEN expression → RuleNode tree
+		// Compile WHEN expression → RuleNode tree.
+		// Python CLI requires rules.operator + rules.conditions at top level,
+		// so we always ensure the top-level node is a combination (AND/OR/NOT),
+		// never a bare leaf or empty struct.
 		if r.When != nil {
-			decision.Rules = c.compileBoolExpr(r.When)
+			rules := c.compileBoolExpr(r.When)
+			// If compileBoolExpr returned a leaf node (single signal ref),
+			// wrap it in AND([leaf]) so Python validation passes.
+			if rules.Operator == "" && rules.Type != "" {
+				rules = config.RuleCombination{
+					Operator:   "AND",
+					Conditions: []config.RuleNode{rules},
+				}
+			}
+			decision.Rules = rules
+		} else {
+			// No WHEN clause → match-all. Use AND with empty conditions.
+			decision.Rules = config.RuleCombination{
+				Operator:   "AND",
+				Conditions: []config.RuleNode{},
+			}
 		}
 
 		// Compile MODEL list
@@ -711,26 +729,6 @@ func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Valu
 		}
 		if v, ok := getStringField(fields, "mode"); ok {
 			cfg.Mode = v
-		}
-		dp.Configuration = cfg
-
-	case "pii":
-		cfg := config.PIIPluginConfig{}
-		if v, ok := getBoolField(fields, "enabled"); ok {
-			cfg.Enabled = v
-		}
-		if v, ok := getStringArrayField(fields, "pii_types_allowed"); ok {
-			cfg.PIITypesAllowed = v
-		}
-		dp.Configuration = cfg
-
-	case "jailbreak":
-		cfg := config.JailbreakPluginConfig{}
-		if v, ok := getBoolField(fields, "enabled"); ok {
-			cfg.Enabled = v
-		}
-		if v, ok := getFloat32Field(fields, "threshold"); ok {
-			cfg.Threshold = &v
 		}
 		dp.Configuration = cfg
 

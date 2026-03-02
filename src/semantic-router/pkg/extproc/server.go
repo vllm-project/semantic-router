@@ -215,6 +215,15 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 	)
 
 	reload := func() {
+		logging.Infof("[ConfigReload] Triggered reload for config file: %s", cfgFile)
+
+		// Log file info before parsing
+		if info, err := os.Stat(cfgFile); err == nil {
+			logging.Infof("[ConfigReload] Config file stat: size=%d, modTime=%s", info.Size(), info.ModTime().Format("2006-01-02 15:04:05"))
+		} else {
+			logging.Errorf("[ConfigReload] Cannot stat config file: %v", err)
+		}
+
 		// Parse and build a new router
 		newRouter, err := NewOpenAIRouter(cfgFile)
 		if err != nil {
@@ -222,12 +231,23 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 				"file":  cfgFile,
 				"error": err.Error(),
 			})
+			logging.Errorf("[ConfigReload] FAILED to build new router: %v", err)
 			return
 		}
+
+		// Log decisions in the newly loaded config
+		if newRouter.Config != nil {
+			logging.Infof("[ConfigReload] New router built successfully: decisions=%d", len(newRouter.Config.Decisions))
+			for i, d := range newRouter.Config.Decisions {
+				logging.Infof("[ConfigReload]   decision[%d]: name=%q, modelRefs=%d, priority=%d", i, d.Name, len(d.ModelRefs), d.Priority)
+			}
+		}
+
 		s.service.Swap(newRouter)
 		logging.LogEvent("config_reloaded", map[string]interface{}{
 			"file": cfgFile,
 		})
+		logging.Infof("[ConfigReload] Router swapped successfully with new config")
 	}
 
 	for {
@@ -238,14 +258,18 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 			if !ok {
 				return
 			}
+			logging.Debugf("[ConfigWatcher] fsnotify event: name=%s, op=%s", ev.Name, ev.Op.String())
 			if ev.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename|fsnotify.Remove|fsnotify.Chmod) != 0 {
 				// If the event pertains to the config file or directory, trigger debounce
 				if filepath.Base(ev.Name) == filepath.Base(cfgFile) || filepath.Dir(ev.Name) == cfgDir {
 					if !pending || time.Since(last) > 250*time.Millisecond {
 						pending = true
 						last = time.Now()
+						logging.Infof("[ConfigWatcher] Config change detected, scheduling reload in 300ms: event=%s, file=%s", ev.Op.String(), ev.Name)
 						// Slight delay to let file settle
 						go func() { time.Sleep(300 * time.Millisecond); reload() }()
+					} else {
+						logging.Debugf("[ConfigWatcher] Debounced event (too soon): %s", ev.Name)
 					}
 				}
 			}

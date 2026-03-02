@@ -67,6 +67,7 @@ func Init(configPath string, port int, enableSystemPromptAPI bool) error {
 	apiServer := &ClassificationAPIServer{
 		classificationSvc:     classificationSvc,
 		config:                cfg,
+		configPath:            configPath,
 		memoryStore:           memoryStore,
 		enableSystemPromptAPI: enableSystemPromptAPI,
 	}
@@ -170,6 +171,12 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	// Configuration endpoints
 	mux.HandleFunc("GET /config/classification", s.handleGetConfig)
 	mux.HandleFunc("PUT /config/classification", s.handleUpdateConfig)
+
+	// Config deploy/rollback endpoints (Router writes its own config file)
+	mux.HandleFunc("GET /config/router", s.handleConfigGet)
+	mux.HandleFunc("POST /config/deploy", s.handleConfigDeploy)
+	mux.HandleFunc("POST /config/rollback", s.handleConfigRollback)
+	mux.HandleFunc("GET /config/versions", s.handleConfigVersions)
 
 	// Memory management endpoints
 	mux.HandleFunc("GET /v1/memory/{id}", s.handleGetMemory)

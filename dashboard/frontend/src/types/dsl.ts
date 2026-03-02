@@ -153,6 +153,28 @@ export interface FormatResult {
   error?: string
 }
 
+// ---------- Deploy Types ----------
+
+export type DeployStep = 'compiling' | 'validating' | 'backing_up' | 'writing' | 'reloading' | 'done' | 'error'
+
+export interface DeployProgress {
+  step: DeployStep
+  message: string
+}
+
+export interface DeployResult {
+  status: 'success' | 'error'
+  version?: string
+  message: string
+}
+
+export interface ConfigVersion {
+  version: string
+  timestamp: string
+  source: string
+  filename: string
+}
+
 // ---------- Editor State ----------
 
 export type EditorMode = 'dsl' | 'visual' | 'nl'

@@ -1,27 +1,33 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// ConfigHandler reads and serves the config.yaml file as JSON
+// ConfigHandler reads and serves the config as JSON from the local config file.
 func ConfigHandler(configPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 
 		data, err := os.ReadFile(configPath)
 		if err != nil {
@@ -35,15 +41,39 @@ func ConfigHandler(configPath string) http.HandlerFunc {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(config); err != nil {
 			log.Printf("Error encoding config to JSON: %v", err)
 		}
 	}
 }
 
-// UpdateConfigHandler updates the config.yaml file with validation
-func UpdateConfigHandler(configPath string, readonlyMode bool) http.HandlerFunc {
+// ConfigYAMLHandler reads and serves the config as raw YAML text.
+// This is used by the DSL Builder to load the current router config
+// and decompile it into DSL via WASM.
+func ConfigYAMLHandler(configPath string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to read config: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		w.Write(data)
+	}
+}
+
+// UpdateConfigHandler updates the config.yaml file with validation.
+// After writing, it triggers regeneration of the Router's flattened config
+// (router-config.yaml) so the Router picks up changes via fsnotify.
+func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost && r.Method != http.MethodPut {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -85,30 +115,8 @@ func UpdateConfigHandler(configPath string, readonlyMode bool) http.HandlerFunc 
 		// Store original key count for validation
 		originalKeyCount := len(existingMap)
 
-		// Merge updates into existing config (deep merge for nested maps)
-		for key, value := range configData {
-			if existingValue, exists := existingMap[key]; exists {
-				// If both are maps, merge them recursively
-				if existingMapValue, ok := existingValue.(map[string]interface{}); ok {
-					if newMapValue, ok := value.(map[string]interface{}); ok {
-						// Deep merge nested maps
-						mergedMap := make(map[string]interface{})
-						// Copy existing values
-						for k, v := range existingMapValue {
-							mergedMap[k] = v
-						}
-						// Override with new values
-						for k, v := range newMapValue {
-							mergedMap[k] = v
-						}
-						existingMap[key] = mergedMap
-						continue
-					}
-				}
-			}
-			// For non-map values or new keys, just set the value
-			existingMap[key] = value
-		}
+		// Merge updates into existing config (recursive deep merge for nested maps)
+		existingMap = deepMerge(existingMap, configData)
 
 		// Safety check: merged config should have at least as many keys as original
 		// (it might have more if new keys were added, but should never have fewer)
@@ -156,6 +164,13 @@ func UpdateConfigHandler(configPath string, readonlyMode bool) http.HandlerFunc 
 			http.Error(w, fmt.Sprintf("Failed to write config: %v", err), http.StatusInternalServerError)
 			return
 		}
+
+		// Trigger async regeneration of router-config.yaml so the Router
+		// picks up the change via fsnotify. This calls the Python CLI's
+		// generate_router_config() which converts nested user format
+		// (providers.models, signals.keywords) to flat Router format
+		// (vllm_endpoints, keyword_rules) and writes to .vllm-sr/router-config.yaml.
+		go regenerateRouterConfig(configPath, configDir)
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]string{"status": "success"}); err != nil {
@@ -360,4 +375,51 @@ func validateEndpointAddress(address string) error {
 	}
 
 	return nil
+}
+
+// regenerateRouterConfig calls the Python CLI to regenerate .vllm-sr/router-config.yaml
+// from the user-facing config.yaml. This bridges the gap between the Dashboard
+// (which edits the nested Python CLI format) and the Router (which reads the flat format).
+// The Router's fsnotify watcher will detect the change and hot-reload automatically.
+//
+// The function is designed to be called asynchronously (via goroutine) so it does
+// not block the HTTP response. Errors are logged but not propagated to the caller.
+func regenerateRouterConfig(configPath string, configDir string) {
+	outputDir := filepath.Join(configDir, ".vllm-sr")
+
+	// Check if output directory exists; if not, this is likely a dev environment
+	// without the Python CLI setup, so skip silently.
+	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
+		log.Printf("Config propagation: .vllm-sr directory not found at %s, skipping router config regeneration (dev mode?)", outputDir)
+		return
+	}
+
+	// Python script that calls generate_router_config from the CLI
+	pythonScript := fmt.Sprintf(`
+import sys
+sys.path.insert(0, '/app')
+try:
+    from cli.commands.serve import generate_router_config
+    result = generate_router_config(%q, %q, force=True)
+    print(f"Regenerated router config: {result}")
+except ImportError:
+    # Python CLI not available (e.g. dev environment without vllm-sr)
+    print("SKIP: Python CLI not available, skipping router config regeneration")
+except Exception as e:
+    print(f"ERROR: Failed to regenerate router config: {e}", file=sys.stderr)
+    sys.exit(1)
+`, configPath, outputDir)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "python3", "-c", pythonScript)
+	cmd.Dir = configDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("Config propagation: failed to regenerate router config: %v\nOutput: %s", err, string(output))
+		return
+	}
+
+	log.Printf("Config propagation: %s", strings.TrimSpace(string(output)))
 }
