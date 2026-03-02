@@ -14,11 +14,6 @@ Each signal extracted from the request reduces this uncertainty.
 The objective is to collapse $H(M \mid S(r))$ to near zero so the decision engine can make a deterministic, high-confidence routing choice (\Cref{fig:entropy_collapse}).
 This viewpoint suggests a natural two-layer decomposition (\Cref{fig:shannon_mapping}).
 
-In the first layer, signal extraction operates in the probabilistic regime of Shannon's \emph{Mathematical Theory of Communication}; in the second, decision evaluation operates in the algebraic regime of Shannon's \emph{switching-circuit algebra}~\cite{shannon1938symbolic}.
-The signal vector~$\mathbf{s}$ is the interface between these regimes: continuous probabilistic inference below, discrete symbolic logic above.
-In modern ML terms, the extraction layer behaves like a \emph{hybrid embedding stage} (\Cref{sec:disc_embedding}), while the priority-ordered decision engine behaves like a \emph{symbolic Mixture-of-Experts gate} with deterministic early exit (\Cref{sec:disc_moe}).
-We further view priority blocks as \emph{layered entropy folding} (\Cref{sec:disc_entropy_folding}), yielding a programmable neural-symbolic inference engine (Transformer-like control structure but not equivalent hidden-state dynamics) that we connect to agent-based policy synthesis (\Cref{sec:disc_agent}).
-
 \begin{figure*}[!ht]
   \centering
   \resizebox{\linewidth}{!}{%
@@ -76,6 +71,11 @@ We further view priority blocks as \emph{layered entropy folding} (\Cref{sec:dis
   The dotted line marks the boundary between the information-theoretic regime (signal extraction maximizes mutual information with the routing outcome) and the Boolean-algebraic regime (the decision engine synthesizes routing policies from signal conditions via $\{\wedge, \vee, \neg\}$~\cite{shannon1938symbolic}).}
   \label{fig:shannon_mapping}
 \end{figure*}
+
+In the first layer, signal extraction operates in the probabilistic regime of Shannon's \emph{Mathematical Theory of Communication}; in the second, decision evaluation operates in the algebraic regime of Shannon's \emph{switching-circuit algebra}~\cite{shannon1938symbolic}.
+The signal vector~$\mathbf{s}$ is the interface between these regimes: continuous probabilistic inference below, discrete symbolic logic above.
+In modern ML terms, the extraction layer behaves like a \emph{hybrid embedding stage} (\Cref{sec:disc_embedding}), while the priority-ordered decision engine behaves like a \emph{symbolic Mixture-of-Experts gate} with deterministic early exit (\Cref{sec:disc_moe}).
+We further view priority blocks as \emph{layered entropy folding} (\Cref{sec:disc_entropy_folding}), yielding a programmable neural-symbolic inference engine (Transformer-like control structure but not equivalent hidden-state dynamics) that we connect to agent-based policy synthesis (\Cref{sec:disc_agent}).
 
 \begin{figure*}[!ht]
   \centering
