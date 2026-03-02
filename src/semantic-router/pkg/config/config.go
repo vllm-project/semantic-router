@@ -343,6 +343,17 @@ type RouterOptions struct {
 
 	// Gateway route cache clearing
 	ClearRouteCache bool `yaml:"clear_route_cache"`
+
+	// GatewayType selects the upstream gateway protocol behavior.
+	// "envoy" (default): immediate header/body responses, standard Envoy ext_proc.
+	// "agentgateway": defers header response until body is analyzed,
+	//   suppresses intermediate body chunk responses, ignores ClearRouteCache.
+	GatewayType string `yaml:"gateway_type,omitempty"`
+}
+
+// IsAgentGateway returns true when the router is configured for agentgateway protocol.
+func (ro RouterOptions) IsAgentGateway() bool {
+	return ro.GatewayType == "agentgateway"
 }
 
 // InlineModels represents the configuration for models that are built into the binary

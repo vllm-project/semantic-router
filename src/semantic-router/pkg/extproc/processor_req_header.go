@@ -136,6 +136,14 @@ type RequestContext struct {
 	// Empty string means standard OpenAI-compatible backend (no transformation needed)
 	APIFormat string
 
+	// AgentGateway deferred header pattern fields
+	// When gateway_type is "agentgateway", the header response is deferred until
+	// the body is fully analyzed and the routing decision is made.
+	DeferredHeaderResponse  *ext_proc.ProcessingResponse // Stored until body EndOfStream
+	HeaderResponseSent      bool                         // Guards against double-send
+	AccumulatedBody         []byte                       // Request body chunks accumulated before EndOfStream (AgentGateway)
+	AccumulatedResponseBody []byte                       // Response body chunks accumulated before EndOfStream (AgentGateway)
+
 	// RAG (Retrieval-Augmented Generation) tracking
 	RAGRetrievedContext string  // Retrieved context from RAG plugin
 	RAGBackend          string  // Backend used for retrieval ("milvus", "external_api", "mcp", "hybrid")

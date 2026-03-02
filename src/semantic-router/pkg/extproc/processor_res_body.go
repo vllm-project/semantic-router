@@ -272,12 +272,28 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	var bodyMutation *ext_proc.BodyMutation
 	var headerMutation *ext_proc.HeaderMutation
 
-	// Set body mutation if response was transformed (Anthropic or Response API)
-	if anthropicTransformed || (ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest) {
-		bodyMutation = &ext_proc.BodyMutation{
-			Mutation: &ext_proc.BodyMutation_Body{
-				Body: finalBody,
-			},
+	// Set body mutation if body was transformed or buffered.
+	// AgentGateway requires StreamedResponse for all body mutations.
+	// Standard Envoy uses the regular BodyMutation_Body.
+	needsBodyMutation := anthropicTransformed ||
+		(ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest) ||
+		(!ctx.IsStreamingResponse && r.Config.IsAgentGateway())
+	if needsBodyMutation {
+		if r.Config.IsAgentGateway() {
+			bodyMutation = &ext_proc.BodyMutation{
+				Mutation: &ext_proc.BodyMutation_StreamedResponse{
+					StreamedResponse: &ext_proc.StreamedBodyResponse{
+						Body:        finalBody,
+						EndOfStream: true,
+					},
+				},
+			}
+		} else {
+			bodyMutation = &ext_proc.BodyMutation{
+				Mutation: &ext_proc.BodyMutation_Body{
+					Body: finalBody,
+				},
+			}
 		}
 		// Remove content-length so Envoy recalculates it for the modified body
 		headerMutation = &ext_proc.HeaderMutation{
@@ -298,10 +314,9 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 			r.checkUnverifiedFactualResponse(ctx)
 		}
 	}
-
-	// Track if body needs to be modified
+	// modifiedBody and hallucinationBodyModified are used by the hallucination warning handlers below.
 	modifiedBody := responseBody
-	needsBodyMutation := false
+	hallucinationBodyModified := false
 
 	// Apply hallucination warning (may modify body or headers)
 	response := &ext_proc.ProcessingResponse{
@@ -320,7 +335,7 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	if ctx.HallucinationDetected {
 		modifiedBody, response = r.applyHallucinationWarning(response, ctx, modifiedBody)
 		if string(modifiedBody) != string(responseBody) {
-			needsBodyMutation = true
+			hallucinationBodyModified = true
 		}
 	}
 
@@ -328,12 +343,12 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	if ctx.UnverifiedFactualResponse {
 		modifiedBody, response = r.applyUnverifiedFactualWarning(response, ctx, modifiedBody)
 		if string(modifiedBody) != string(responseBody) {
-			needsBodyMutation = true
+			hallucinationBodyModified = true
 		}
 	}
 
-	// If body was modified, update the response with body mutation
-	if needsBodyMutation {
+	// If body was modified by hallucination warning, update the response with body mutation
+	if hallucinationBodyModified {
 		bodyResponse := response.Response.(*ext_proc.ProcessingResponse_ResponseBody)
 		bodyResponse.ResponseBody.Response.BodyMutation = &ext_proc.BodyMutation{
 			Mutation: &ext_proc.BodyMutation_Body{
