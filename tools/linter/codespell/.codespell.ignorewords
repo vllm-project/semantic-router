@@ -53,3 +53,5 @@ pasword
 critcal
 # Intentional partial name for exact-match test (authz_classifier_test.go)
 admi
+# Variable names in memory user isolation test (memory_user_isolation.go)
+userA
