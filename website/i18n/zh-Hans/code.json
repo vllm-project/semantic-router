@@ -422,6 +422,357 @@
   "homepage.aiTech.cap.mrl.desc": {
     "message": "无需重训即可截断嵌入向量到任意维度 — 按请求平衡精度与速度。"
   },
+  "homepage.paperFigures.label": {
+    "message": "路由蓝图"
+  },
+  "homepage.paperFigures.title": {
+    "message": "系统如何工作"
+  },
+  "homepage.paperFigures.description": {
+    "message": "通过交互式演示理解信号提取、决策逻辑与模型路由行为。"
+  },
+  "homepage.paperFigures.figure1.title": {
+    "message": "香农映射"
+  },
+  "homepage.paperFigures.figure1.summary": {
+    "message": "从通信理论到路由流水线的结构映射。"
+  },
+  "homepage.paperFigures.figure2.title": {
+    "message": "熵坍缩"
+  },
+  "homepage.paperFigures.figure2.summary": {
+    "message": "每增加一个信号都会降低不确定性，直到模型选择趋于确定。"
+  },
+  "homepage.paperFigures.figure3.title": {
+    "message": "三层架构"
+  },
+  "homepage.paperFigures.figure3.summary": {
+    "message": "信号提取、决策引擎与插件投影在单一路由前向中协同工作。"
+  },
+  "homepage.paperFigures.figure4.title": {
+    "message": "信号分类体系"
+  },
+  "homepage.paperFigures.figure4.summary": {
+    "message": "完整信号集合由启发式与学习式两类组成，用于路由决策。"
+  },
+  "homepage.paperFigures.figure14.title": {
+    "message": "智能体策略合成"
+  },
+  "homepage.paperFigures.figure14.summary": {
+    "message": "自然语言规范可由编码智能体编译为可执行的路由策略闭环。"
+  },
+  "homepage.paperFigures.figure9.title": {
+    "message": "分层熵折叠"
+  },
+  "homepage.paperFigures.figure9.summary": {
+    "message": "类 Transformer 的隐藏控制层会逐步折叠路由熵，收敛到确定性出口。"
+  },
+  "homepage.paperFigures.figure1.mapping.source.shannon": {
+    "message": "源"
+  },
+  "homepage.paperFigures.figure1.mapping.source.vsr": {
+    "message": "查询 r"
+  },
+  "homepage.paperFigures.figure1.mapping.source.note": {
+    "message": "用户请求是在编码前的原始源消息。"
+  },
+  "homepage.paperFigures.figure1.mapping.encoder.shannon": {
+    "message": "编码器"
+  },
+  "homepage.paperFigures.figure1.mapping.encoder.vsr": {
+    "message": "信号提取"
+  },
+  "homepage.paperFigures.figure1.mapping.encoder.note": {
+    "message": "启发式与编码器模型将文本转换为结构化信号。"
+  },
+  "homepage.paperFigures.figure1.mapping.channel.shannon": {
+    "message": "信道"
+  },
+  "homepage.paperFigures.figure1.mapping.channel.vsr": {
+    "message": "信号向量 s"
+  },
+  "homepage.paperFigures.figure1.mapping.channel.note": {
+    "message": "信号向量是连接提取层与策略逻辑的传输层。"
+  },
+  "homepage.paperFigures.figure1.mapping.decoder.shannon": {
+    "message": "解码器"
+  },
+  "homepage.paperFigures.figure1.mapping.decoder.vsr": {
+    "message": "决策引擎"
+  },
+  "homepage.paperFigures.figure1.mapping.decoder.note": {
+    "message": "布尔规则对信号模式进行解码，得到确定性的路由决策。"
+  },
+  "homepage.paperFigures.figure1.mapping.destination.shannon": {
+    "message": "目的地"
+  },
+  "homepage.paperFigures.figure1.mapping.destination.vsr": {
+    "message": "已选模型"
+  },
+  "homepage.paperFigures.figure1.mapping.destination.note": {
+    "message": "最终会选出具体模型端点并接收请求。"
+  },
+  "homepage.paperFigures.figure1.mappingSide.shannon": {
+    "message": "香农"
+  },
+  "homepage.paperFigures.figure1.mappingSide.vsr": {
+    "message": "VSR"
+  },
+  "homepage.paperFigures.figure2.stage.raw.short": {
+    "message": "原始"
+  },
+  "homepage.paperFigures.figure2.stage.raw.label": {
+    "message": "原始请求"
+  },
+  "homepage.paperFigures.figure2.stage.raw.note": {
+    "message": "尚无信号：路由熵接近最大值。"
+  },
+  "homepage.paperFigures.figure2.stage.keyword.short": {
+    "message": "+关键词"
+  },
+  "homepage.paperFigures.figure2.stage.keyword.label": {
+    "message": "+关键词"
+  },
+  "homepage.paperFigures.figure2.stage.keyword.note": {
+    "message": "关键词会快速剔除不兼容的模型族。"
+  },
+  "homepage.paperFigures.figure2.stage.domain.short": {
+    "message": "+领域"
+  },
+  "homepage.paperFigures.figure2.stage.domain.label": {
+    "message": "+领域"
+  },
+  "homepage.paperFigures.figure2.stage.domain.note": {
+    "message": "领域分类器以更高精度收窄候选池。"
+  },
+  "homepage.paperFigures.figure2.stage.signals.short": {
+    "message": "+复杂度"
+  },
+  "homepage.paperFigures.figure2.stage.signals.label": {
+    "message": "+ N 个信号..."
+  },
+  "homepage.paperFigures.figure2.stage.signals.note": {
+    "message": "复杂度、嵌入等信号会进一步压缩不确定性。"
+  },
+  "homepage.paperFigures.figure2.stage.decision.short": {
+    "message": "决策"
+  },
+  "homepage.paperFigures.figure2.stage.decision.label": {
+    "message": "决策"
+  },
+  "homepage.paperFigures.figure2.stage.decision.note": {
+    "message": "决策规则将熵坍缩到近似确定的模型选择。"
+  },
+  "homepage.paperFigures.figure3.layer.input.tag": {
+    "message": "输入"
+  },
+  "homepage.paperFigures.figure3.layer.input.title": {
+    "message": "信号提取"
+  },
+  "homepage.paperFigures.figure3.layer.input.description": {
+    "message": "启发式 + 编码器信号共同生成结构化特征。"
+  },
+  "homepage.paperFigures.figure3.layer.input.focus": {
+    "message": "并行采集请求特征并输出类型化信号值。"
+  },
+  "homepage.paperFigures.figure3.layer.hidden.tag": {
+    "message": "隐层"
+  },
+  "homepage.paperFigures.figure3.layer.hidden.title": {
+    "message": "决策模块"
+  },
+  "homepage.paperFigures.figure3.layer.hidden.description": {
+    "message": "布尔策略会选出一个作用域明确的路由决策。"
+  },
+  "homepage.paperFigures.figure3.layer.hidden.focus": {
+    "message": "评估规则树并将候选集合坍缩为单一路径。"
+  },
+  "homepage.paperFigures.figure3.layer.projection.tag": {
+    "message": "投影"
+  },
+  "homepage.paperFigures.figure3.layer.projection.title": {
+    "message": "插件链"
+  },
+  "homepage.paperFigures.figure3.layer.projection.description": {
+    "message": "前/后置插件与模型选择按决策执行。"
+  },
+  "homepage.paperFigures.figure3.layer.projection.focus": {
+    "message": "按策略应用插件后，将请求分发到目标端点。"
+  },
+  "homepage.paperFigures.figure3.layerFocus": {
+    "message": "层焦点"
+  },
+  "homepage.paperFigures.figure4.group.heuristic.title": {
+    "message": "启发式（<1ms）"
+  },
+  "homepage.paperFigures.figure4.group.heuristic.note": {
+    "message": "低成本确定性过滤先执行，用于早期剪枝。"
+  },
+  "homepage.paperFigures.figure4.group.learned.title": {
+    "message": "学习式（10-100ms）"
+  },
+  "homepage.paperFigures.figure4.group.learned.note": {
+    "message": "模型信号会补充语义精度，提升最终路由置信度。"
+  },
+  "homepage.paperFigures.figure4.signal.keyword": {
+    "message": "关键词"
+  },
+  "homepage.paperFigures.figure4.signal.language": {
+    "message": "语言"
+  },
+  "homepage.paperFigures.figure4.signal.context": {
+    "message": "上下文"
+  },
+  "homepage.paperFigures.figure4.signal.authz": {
+    "message": "鉴权"
+  },
+  "homepage.paperFigures.figure4.signal.embedding": {
+    "message": "嵌入"
+  },
+  "homepage.paperFigures.figure4.signal.domain": {
+    "message": "领域"
+  },
+  "homepage.paperFigures.figure4.signal.factual": {
+    "message": "事实核查"
+  },
+  "homepage.paperFigures.figure4.signal.feedback": {
+    "message": "反馈"
+  },
+  "homepage.paperFigures.figure4.signal.modality": {
+    "message": "模态"
+  },
+  "homepage.paperFigures.figure4.signal.complexity": {
+    "message": "复杂度"
+  },
+  "homepage.paperFigures.figure4.signal.jailbreak": {
+    "message": "越狱"
+  },
+  "homepage.paperFigures.figure4.signal.pii": {
+    "message": "PII"
+  },
+  "homepage.paperFigures.figure4.signal.preference": {
+    "message": "偏好"
+  },
+  "homepage.paperFigures.figure4.summaryText": {
+    "message": "共 13 个信号。当前激活信号：{signal}。{groupNote}"
+  },
+  "homepage.paperFigures.figure14.flow.spec.label": {
+    "message": "自然语言规范"
+  },
+  "homepage.paperFigures.figure14.flow.spec.detail": {
+    "message": "\"将数学请求路由并强制执行 PII 策略\""
+  },
+  "homepage.paperFigures.figure14.flow.spec.edge": {
+    "message": "合成"
+  },
+  "homepage.paperFigures.figure14.flow.agent.label": {
+    "message": "编码智能体（LLM）"
+  },
+  "homepage.paperFigures.figure14.flow.agent.detail": {
+    "message": "在受限 DSL 上进行策略编译"
+  },
+  "homepage.paperFigures.figure14.flow.agent.edge": {
+    "message": "生成"
+  },
+  "homepage.paperFigures.figure14.flow.dsl.label": {
+    "message": "神经符号 DSL"
+  },
+  "homepage.paperFigures.figure14.flow.dsl.detail": {
+    "message": "类型化路由程序"
+  },
+  "homepage.paperFigures.figure14.flow.dsl.edge": {
+    "message": "实例化"
+  },
+  "homepage.paperFigures.figure14.flow.engine.label": {
+    "message": "推理引擎"
+  },
+  "homepage.paperFigures.figure14.flow.engine.detail": {
+    "message": "信号-决策-插件执行"
+  },
+  "homepage.paperFigures.figure14.feedback.label": {
+    "message": "路由质量反馈 Q(r, m*)"
+  },
+  "homepage.paperFigures.figure14.feedback.detail": {
+    "message": "基于运行结果优化策略合成"
+  },
+  "homepage.paperFigures.figure14.note.spec": {
+    "message": "自然语言需求在策略合成开始前定义路由意图。"
+  },
+  "homepage.paperFigures.figure14.note.agent": {
+    "message": "编码智能体将意图转换为可执行的受限 DSL 策略。"
+  },
+  "homepage.paperFigures.figure14.note.dsl": {
+    "message": "生成的 DSL 配置可审计，并可编译为确定性路由行为。"
+  },
+  "homepage.paperFigures.figure14.note.engine": {
+    "message": "推理阶段在信号提取、决策评估与插件投影上执行策略。"
+  },
+  "homepage.paperFigures.figure14.note.feedback": {
+    "message": "运行质量反馈形成闭环，并用于下一轮策略优化。"
+  },
+  "homepage.paperFigures.figure14.engineOutput": {
+    "message": "引擎输出 m*"
+  },
+  "homepage.paperFigures.figure14.loop.engineOutput": {
+    "message": "引擎输出"
+  },
+  "homepage.paperFigures.figure14.loop.optimize": {
+    "message": "优化 → 编码智能体"
+  },
+  "homepage.paperFigures.figure9.layer.input.tag": {
+    "message": "输入"
+  },
+  "homepage.paperFigures.figure9.layer.input.title": {
+    "message": "输入查询 r"
+  },
+  "homepage.paperFigures.figure9.layer.input.formula": {
+    "message": "原始请求"
+  },
+  "homepage.paperFigures.figure9.layer.input.note": {
+    "message": "在提取任何控制信号前，路由从最大不确定性开始。"
+  },
+  "homepage.paperFigures.figure9.layer.embed.tag": {
+    "message": "嵌入"
+  },
+  "homepage.paperFigures.figure9.layer.embed.title": {
+    "message": "混合信号嵌入"
+  },
+  "homepage.paperFigures.figure9.layer.embed.note": {
+    "message": "信号提取会建立共享控制状态，供后续层共同读取。"
+  },
+  "homepage.paperFigures.figure9.layer.hidden.tag": {
+    "message": "隐层"
+  },
+  "homepage.paperFigures.figure9.layer.hidden.title": {
+    "message": "决策隐藏层（x N）"
+  },
+  "homepage.paperFigures.figure9.layer.hidden.note": {
+    "message": "堆叠隐藏控制深度被表示为单个模块，在 N 个决策层中持续折叠熵。"
+  },
+  "homepage.paperFigures.figure9.layer.select.tag": {
+    "message": "头部"
+  },
+  "homepage.paperFigures.figure9.layer.select.title": {
+    "message": "选择头"
+  },
+  "homepage.paperFigures.figure9.layer.select.note": {
+    "message": "选择头通过确定性的早退机制输出最终决策。"
+  },
+  "homepage.paperFigures.figure9.layer.plugins.tag": {
+    "message": "投影"
+  },
+  "homepage.paperFigures.figure9.layer.plugins.title": {
+    "message": "插件投影"
+  },
+  "homepage.paperFigures.figure9.layer.plugins.note": {
+    "message": "路由选择完成后，投影头会应用与策略绑定的插件链。"
+  },
+  "homepage.paperFigures.figure9.busLabel": {
+    "message": "共享控制状态 s 会输入到每一个决策层"
+  },
+  "homepage.paperFigures.figure9.exitLabel": {
+    "message": "来自控制层的优先早退分支"
+  },
   "homepage.architecture.title": {
     "message": "架构"
   },
