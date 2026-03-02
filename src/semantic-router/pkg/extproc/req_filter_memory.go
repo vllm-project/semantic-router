@@ -313,7 +313,11 @@ func ResolveQueryRewriteConfig(routerCfg *config.RouterConfig) *ResolvedLLMConfi
 		return nil
 	}
 
-	endpoint := fmt.Sprintf("http://%s:%d", externalCfg.ModelEndpoint.Address, externalCfg.ModelEndpoint.Port)
+	scheme := externalCfg.ModelEndpoint.Protocol
+	if scheme == "" {
+		scheme = "http"
+	}
+	endpoint := fmt.Sprintf("%s://%s:%d", scheme, externalCfg.ModelEndpoint.Address, externalCfg.ModelEndpoint.Port)
 	return &ResolvedLLMConfig{
 		Endpoint:       endpoint,
 		Model:          externalCfg.ModelName,

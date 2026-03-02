@@ -1734,6 +1734,10 @@ type ClassifierVLLMEndpoint struct {
 	// Port of the vLLM endpoint
 	Port int `yaml:"port"`
 
+	// Protocol for the endpoint ("http" or "https"). Defaults to "http".
+	// +optional
+	Protocol string `yaml:"protocol,omitempty"`
+
 	// Optional name identifier for the endpoint (for logging and debugging)
 	Name string `yaml:"name,omitempty"`
 
