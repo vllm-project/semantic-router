@@ -30,6 +30,7 @@ import (
 
 // handleRequestBody processes the request body
 func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBody, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+	logging.Infof("Processing request body: %s", string(v.RequestBody.GetBody()))
 	// Record start time for model routing
 	ctx.ProcessingStartTime = time.Now()
 	// Save the original request body
@@ -97,6 +98,16 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 
 	// Extract the first image URL for Tier 1 complexity pre-routing
 	ctx.RequestImageURL = extractFirstImageURL(openAIRequest)
+
+	// Store Chat Completion messages for memory extraction (if not Response API)
+	// Response API has its own conversation history via previous_response_id chain
+	if ctx.ResponseAPICtx == nil || !ctx.ResponseAPICtx.IsResponseAPIRequest {
+		ctx.ChatCompletionMessages = extractChatCompletionMessages(openAIRequest)
+		// Note: ChatCompletionUserID extraction is handled in user_id_dev.go for dev builds only.
+		// In production, user ID comes ONLY from the trusted auth header (x-authz-user-id).
+		// We store the raw request body to allow dev builds to extract it later.
+		ctx.ChatCompletionRequestBody = requestBody
+	}
 
 	// Perform decision evaluation and model selection once at the beginning
 	// Use decision-based routing if decisions are configured, otherwise fall back to category-based
@@ -971,6 +982,25 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 		return requestBody, nil
 	}
 
+	// Check opt-out header (x-disable-router-memory: true)
+	if ctx.Headers[headers.DisableRouterMemory] == "true" {
+		logging.Debugf("Memory: Disabled via %s header (SDK-managed memory opt-out)", headers.DisableRouterMemory)
+		return requestBody, nil
+	}
+
+	// Check config-based per-route disable
+	requestPath := ctx.Headers[headers.PseudoHeaderPath]
+	if r.isMemoryDisabledForRoute(requestPath) {
+		logging.Debugf("Memory: Disabled for route %s via config (SDK-managed memory opt-out)", requestPath)
+		return requestBody, nil
+	}
+
+	// Check config-based per-model disable
+	if openAIRequest.Model != "" && r.isMemoryDisabledForModel(openAIRequest.Model) {
+		logging.Debugf("Memory: Disabled for model %s via config (SDK-managed memory opt-out)", openAIRequest.Model)
+		return requestBody, nil
+	}
+
 	// Get memory store from router
 	store := r.getMemoryStore()
 	if store == nil || !store.IsEnabled() {
@@ -1191,4 +1221,36 @@ func (r *OpenAIRouter) handleFastResponse(ctx *RequestContext, decisionName stri
 	metrics.RecordPluginExecution("fast_response", decisionName, "executed", 0)
 
 	return httputil.CreateFastResponse(fastCfg.Message, ctx.ExpectStreamingResponse, decisionName)
+}
+
+// isMemoryDisabledForRoute checks if memory is disabled for the given route path.
+// Returns true if the route is in the Config.Memory.DisabledRoutes list.
+func (r *OpenAIRouter) isMemoryDisabledForRoute(requestPath string) bool {
+	if len(r.Config.Memory.DisabledRoutes) == 0 {
+		return false
+	}
+
+	for _, disabledRoute := range r.Config.Memory.DisabledRoutes {
+		if requestPath == disabledRoute {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isMemoryDisabledForModel checks if memory is disabled for the given model name.
+// Returns true if the model is in the Config.Memory.DisabledModels list.
+func (r *OpenAIRouter) isMemoryDisabledForModel(modelName string) bool {
+	if len(r.Config.Memory.DisabledModels) == 0 {
+		return false
+	}
+
+	for _, disabledModel := range r.Config.Memory.DisabledModels {
+		if modelName == disabledModel {
+			return true
+		}
+	}
+
+	return false
 }

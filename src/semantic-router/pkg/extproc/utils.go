@@ -233,3 +233,64 @@ func rewriteRequestModel(originalBody []byte, newModel string) ([]byte, error) {
 
 	return json.Marshal(requestMap)
 }
+
+// extractChatCompletionMessages extracts all messages from a Chat Completions request
+// for memory extraction. Returns messages in order (system, user, assistant, etc.)
+func extractChatCompletionMessages(req *openai.ChatCompletionNewParams) []ChatCompletionMessage {
+	var messages []ChatCompletionMessage
+
+	for _, msg := range req.Messages {
+		var textContent string
+		var role string
+
+		if msg.OfUser != nil {
+			role = "user"
+			if msg.OfUser.Content.OfString.Value != "" {
+				textContent = msg.OfUser.Content.OfString.Value
+			} else if len(msg.OfUser.Content.OfArrayOfContentParts) > 0 {
+				var parts []string
+				for _, part := range msg.OfUser.Content.OfArrayOfContentParts {
+					if part.OfText != nil {
+						parts = append(parts, part.OfText.Text)
+					}
+				}
+				textContent = strings.Join(parts, " ")
+			}
+		} else if msg.OfSystem != nil {
+			role = "system"
+			if msg.OfSystem.Content.OfString.Value != "" {
+				textContent = msg.OfSystem.Content.OfString.Value
+			} else if len(msg.OfSystem.Content.OfArrayOfContentParts) > 0 {
+				var parts []string
+				for _, part := range msg.OfSystem.Content.OfArrayOfContentParts {
+					if part.Text != "" {
+						parts = append(parts, part.Text)
+					}
+				}
+				textContent = strings.Join(parts, " ")
+			}
+		} else if msg.OfAssistant != nil {
+			role = "assistant"
+			if msg.OfAssistant.Content.OfString.Value != "" {
+				textContent = msg.OfAssistant.Content.OfString.Value
+			} else if len(msg.OfAssistant.Content.OfArrayOfContentParts) > 0 {
+				var parts []string
+				for _, part := range msg.OfAssistant.Content.OfArrayOfContentParts {
+					if part.OfText != nil {
+						parts = append(parts, part.OfText.Text)
+					}
+				}
+				textContent = strings.Join(parts, " ")
+			}
+		}
+
+		if role != "" && textContent != "" {
+			messages = append(messages, ChatCompletionMessage{
+				Role:    role,
+				Content: textContent,
+			})
+		}
+	}
+
+	return messages
+}
