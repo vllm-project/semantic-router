@@ -497,13 +497,6 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 		if cfg.Mode != "" {
 			fmt.Fprintf(&sb, "    mode: %q\n", cfg.Mode)
 		}
-	case config.JailbreakPluginConfig:
-		if cfg.Enabled {
-			fmt.Fprintf(&sb, "    enabled: true\n")
-		}
-		if cfg.Threshold != nil {
-			fmt.Fprintf(&sb, "    threshold: %v\n", *cfg.Threshold)
-		}
 	case config.SemanticCachePluginConfig:
 		if cfg.Enabled {
 			fmt.Fprintf(&sb, "    enabled: true\n")
@@ -560,13 +553,6 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 	case config.FastResponsePluginConfig:
 		if cfg.Message != "" {
 			fmt.Fprintf(&sb, "    message: %q\n", cfg.Message)
-		}
-	case config.PIIPluginConfig:
-		if cfg.Enabled {
-			fmt.Fprintf(&sb, "    enabled: true\n")
-		}
-		if len(cfg.PIITypesAllowed) > 0 {
-			fmt.Fprintf(&sb, "    pii_types_allowed: %s\n", formatStringArray(cfg.PIITypesAllowed))
 		}
 	case config.RAGPluginConfig:
 		if cfg.Enabled {
@@ -1622,13 +1608,6 @@ func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
 		if cfg.Mode != "" {
 			fields["mode"] = StringValue{V: cfg.Mode}
 		}
-	case config.JailbreakPluginConfig:
-		if cfg.Enabled {
-			fields["enabled"] = BoolValue{V: true}
-		}
-		if cfg.Threshold != nil {
-			fields["threshold"] = FloatValue{V: float64(*cfg.Threshold)}
-		}
 	case config.SemanticCachePluginConfig:
 		if cfg.Enabled {
 			fields["enabled"] = BoolValue{V: true}
@@ -1679,10 +1658,6 @@ func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
 	case config.FastResponsePluginConfig:
 		if cfg.Message != "" {
 			fields["message"] = StringValue{V: cfg.Message}
-		}
-	case config.PIIPluginConfig:
-		if cfg.Enabled {
-			fields["enabled"] = BoolValue{V: true}
 		}
 	case config.RAGPluginConfig:
 		if cfg.Enabled {

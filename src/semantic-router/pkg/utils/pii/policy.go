@@ -13,6 +13,7 @@ type PolicyChecker struct {
 }
 
 // IsPIIEnabled checks if PII detection is enabled for a given decision
+// by checking whether the decision's rules reference any PII signals
 func (c *PolicyChecker) IsPIIEnabled(decisionName string) bool {
 	if decisionName == "" {
 		logging.Infof("No decision specified, PII detection disabled")
@@ -25,14 +26,9 @@ func (c *PolicyChecker) IsPIIEnabled(decisionName string) bool {
 		return false
 	}
 
-	piiConfig := decision.GetPIIConfig()
-	if piiConfig == nil {
-		logging.Infof("No PII config found for decision %s, PII detection disabled", decisionName)
-		return false
-	}
-
-	// PII detection is enabled if the plugin is enabled
-	return piiConfig.Enabled
+	// PII detection is enabled if the decision references any PII signals
+	policy := decision.GetDecisionPIIPolicy(c.Config.PIIRules)
+	return !policy.AllowByDefault
 }
 
 // NewPolicyChecker creates a new PII policy checker
@@ -55,7 +51,7 @@ func (pc *PolicyChecker) CheckPolicy(decisionName string, detectedPII []string) 
 		return true, nil, nil
 	}
 
-	policy := decision.GetDecisionPIIPolicy()
+	policy := decision.GetDecisionPIIPolicy(pc.Config.PIIRules)
 	var deniedPII []string
 
 	for _, piiType := range detectedPII {
