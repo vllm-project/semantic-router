@@ -17,21 +17,21 @@ A \emph{decision} $d = (n, \phi, \mathcal{M}_d, \Pi_d, p)$ consists of a name $n
 \begin{definition}[Rule Node --- Boolean Expression Tree]
 A \emph{rule node} $\phi$ is defined recursively as one of two forms (\Cref{fig:rule_node_tree} illustrates example expression trees):
 \begin{itemize}[nosep,leftmargin=1.5em]
-  \item \textbf{Leaf} (signal reference): $\phi = \textsc{leaf}(\tau, n)$, referencing a signal type $\tau$ and rule name $n$.
-  \item \textbf{Composite} (Boolean operator): $\phi = (\textsc{op}, [\phi_1, \ldots, \phi_k])$, where $\textsc{op} \in \{\textsc{and}, \textsc{or}, \textsc{not}\}$ and $\phi_1, \ldots, \phi_k$ are child rule nodes. $\textsc{not}$ is strictly unary ($k = 1$).
+  \item \textbf{Leaf} (signal reference): $\phi = \operatorname{leaf}(\tau, n)$, referencing a signal type $\tau$ and rule name $n$.
+  \item \textbf{Composite} (Boolean operator): $\phi = (\mathsf{op}, [\phi_1, \ldots, \phi_k])$, where $\mathsf{op} \in \{\operatorname{and}, \operatorname{or}, \operatorname{not}\}$ and $\phi_1, \ldots, \phi_k$ are child rule nodes. $\operatorname{not}$ is strictly unary ($k = 1$).
 \end{itemize}
 Evaluation proceeds by structural recursion:
 \begin{equation}
   \text{eval}(\phi, S(r)) =
   \begin{cases}
     \mathbf{1}\bigl[\exists\, (\rho, 1, c) \in S(r) : \rho.\tau = \tau \wedge \rho.n = n\bigr]
-      & \text{if } \phi = \textsc{leaf}(\tau, n) \\[4pt]
+      & \text{if } \phi = \operatorname{leaf}(\tau, n) \\[4pt]
     \bigwedge_{i=1}^{k} \text{eval}(\phi_i, S(r))
-      & \text{if } \textsc{op} = \textsc{and} \\[4pt]
+      & \text{if } \mathsf{op} = \operatorname{and} \\[4pt]
     \bigvee_{i=1}^{k} \text{eval}(\phi_i, S(r))
-      & \text{if } \textsc{op} = \textsc{or} \\[4pt]
+      & \text{if } \mathsf{op} = \operatorname{or} \\[4pt]
     \neg\, \text{eval}(\phi_1, S(r))
-      & \text{if } \textsc{op} = \textsc{not}
+      & \text{if } \mathsf{op} = \operatorname{not}
   \end{cases}
 \end{equation}
 \end{definition}
@@ -39,15 +39,16 @@ Evaluation proceeds by structural recursion:
 The recursive structure enables arbitrarily nested Boolean expressions.
 Classical flat formulas---a single AND or OR over leaf conditions---are the depth-1 special case and remain the recommended form for simple routing policies.
 When richer logic is needed, nesting expresses compound operators directly within a single decision:
-$\textsc{nor}(A,B) = \textsc{not}(\textsc{or}(A,B))$;
-$\textsc{nand}(A,B) = \textsc{not}(\textsc{and}(A,B))$;
-$\textsc{xor}(A,B) = \textsc{or}(\textsc{and}(A, \textsc{not}(B)),\; \textsc{and}(\textsc{not}(A), B))$.
+$\operatorname{nor}(A,B) = \operatorname{not}(\operatorname{or}(A,B))$;
+$\operatorname{nand}(A,B) = \operatorname{not}(\operatorname{and}(A,B))$;
+$\operatorname{xor}(A,B) = \operatorname{or}(\operatorname{and}(A, \operatorname{not}(B)),\; \operatorname{and}(\operatorname{not}(A), B))$.
 YAML's natural indentation mirrors the logical nesting, preserving readability and auditability even for complex formulas.
 Priority-ordered decisions compose multiple such formulas into an ordered evaluation, providing conflict resolution and organizational structure for deployment-scale routing policies.
 
 \begin{figure}[ht]
   \centering
-  \begin{tikzpicture}[
+  \resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[
     gate/.style={rectangle, draw, thick, rounded corners=3pt,
                  minimum height=0.75cm, minimum width=1.2cm,
                  align=center, inner sep=3pt, font=\small\bfseries},
@@ -102,7 +103,8 @@ Priority-ordered decisions compose multiple such formulas into an ordered evalua
   \draw[arr] (and3r) -- (b3r);
   \draw[arr] (not3r) -- (a3r);
 
-  \end{tikzpicture}
+  \end{tikzpicture}%
+}
   \caption{Rule-node expression trees at increasing depth. (a)~A flat depth-1 tree: AND over three leaf conditions. (b)~A NOR expression: $\textsc{not}(\textsc{or}(\text{cs},\text{math}))$, matching all non-STEM queries. (c)~An XOR expression composed from AND, OR, and NOT primitives, routing requests that match exactly one of two signals. Leaf nodes (gray) reference signal conditions; composite nodes use AND (\textcolor{blue!50}{blue}), OR (\textcolor{green!50}{green}), and NOT (\textcolor{orange!45}{orange}).}
   \label{fig:rule_node_tree}
 \end{figure}
@@ -214,7 +216,11 @@ The recursive rule-node model maps naturally onto the hierarchy of combinational
 The following table summarizes the correspondence at three levels of generality:
 
 \begin{center}
-\begin{tabular}{llp{4.2cm}}
+\begin{tabularx}{\linewidth}{
+  >{\raggedright\arraybackslash}p{3.0cm}
+  >{\raggedright\arraybackslash}p{3.0cm}
+  >{\raggedright\arraybackslash}X
+}
 \toprule
 \textbf{Circuit Model} & \textbf{Routing System} & \textbf{Expressiveness} \\
 \midrule
@@ -228,7 +234,7 @@ Circuit array + priority encoder
   & Decision set + priority ordering
   & Any routing policy $\pi: \{0,1\}^N \!\to\! \mathcal{M}$ \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{center}
 
 At the first level, a depth-1 rule node---a single AND or OR over leaf conditions---is structurally isomorphic to a \emph{Programmable Logic Array} (PLA)~\cite{fleisher1975introduction}: signal extractors correspond to input lines, leaf conditions to the AND-plane, and the top-level operator to the OR-plane.
@@ -238,7 +244,8 @@ At the third level, the priority-ordered decision set acts as an array of such c
 
 \begin{figure*}[ht]
   \centering
-  \begin{tikzpicture}[
+  \resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[
     gate/.style={rectangle, draw, thick, rounded corners=3pt,
                  minimum height=0.6cm, minimum width=0.9cm,
                  align=center, inner sep=2pt, font=\scriptsize\bfseries},
@@ -347,7 +354,8 @@ At the third level, the priority-ordered decision set acts as an array of such c
 
   \node[font=\scriptsize, text=gray, anchor=north] at (13.0, -1.3) {routing policy};
 
-  \end{tikzpicture}
+  \end{tikzpicture}%
+}
   \caption{Three-level correspondence between combinational logic circuits and the decision engine. \textbf{Level~1}: A PLA with AND-plane and OR-plane corresponds to a flat (depth-1) decision formula. \textbf{Level~2}: A general combinational circuit with arbitrarily nested AND, OR, and NOT gates corresponds to a recursive rule-node tree within a single decision. \textbf{Level~3}: An array of circuits with a priority encoder corresponds to the full decision set with priority-ordered evaluation, realizing any routing policy.}
   \label{fig:circuit_analogy}
 \end{figure*}
@@ -373,13 +381,13 @@ Given continuous signal confidences $c(r) \in [0,1]$ for each leaf condition, th
   \widetilde{\text{eval}}(\phi, S(r)) =
   \begin{cases}
     c_\phi(r)
-      & \text{if } \phi = \textsc{leaf}(\tau, n) \\[6pt]
+      & \text{if } \phi = \operatorname{leaf}(\tau, n) \\[6pt]
     \displaystyle\min_{i=1}^{k}\, \widetilde{\text{eval}}(\phi_i, S(r))
-      & \text{if } \textsc{op} = \textsc{and} \\[6pt]
+      & \text{if } \mathsf{op} = \operatorname{and} \\[6pt]
     \displaystyle\max_{i=1}^{k}\, \widetilde{\text{eval}}(\phi_i, S(r))
-      & \text{if } \textsc{op} = \textsc{or} \\[6pt]
+      & \text{if } \mathsf{op} = \operatorname{or} \\[6pt]
     1 - \widetilde{\text{eval}}(\phi_1, S(r))
-      & \text{if } \textsc{op} = \textsc{not}
+      & \text{if } \mathsf{op} = \operatorname{not}
   \end{cases}
 \end{equation}
 where $c_\phi(r)$ is the confidence score of the signal matching leaf $\phi$.
@@ -420,7 +428,8 @@ Unlike standard MoE, the gates here are symbolic (Boolean formulas over interpre
 
 \begin{figure}[H]
   \centering
-  \begin{tikzpicture}[
+  \resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[
     box/.style={rectangle, draw, thick, rounded corners=3pt,
                 minimum height=0.65cm, align=center, inner sep=3pt, font=\small},
     gate/.style={rectangle, draw, thick, rounded corners=3pt,
@@ -485,7 +494,8 @@ Unlike standard MoE, the gates here are symbolic (Boolean formulas over interpre
   \draw[darr] (mg.east) -- (vg.west);
   \draw[darr] (msel.east) -- (vsel.west);
 
-  \end{tikzpicture}
+  \end{tikzpicture}%
+}
   \caption{Structural analogy between Mixture-of-Experts gating and the VSR decision engine. \textbf{Left}: In a sparse MoE layer, a learned gating network selects top-$k$ experts via softmax. \textbf{Right}: In VSR, Boolean formulas over the signal vector act as symbolic expert gates, with priority ordering implementing deterministic early-exit selection. Dashed arrows mark the structural correspondence.}
   \label{fig:moe_analogy}
 \end{figure}
@@ -511,7 +521,8 @@ In this sense, priority depth is \emph{control depth}: a sequence of policy cons
 
 \begin{figure}[!ht]
   \centering
-  \begin{tikzpicture}[
+  \resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[
     box/.style={rectangle, draw, thick, rounded corners=3pt,
                 minimum height=0.65cm, minimum width=3.3cm,
                 align=center, inner sep=4pt, font=\scriptsize},
@@ -588,7 +599,8 @@ In this sense, priority depth is \emph{control depth}: a sequence of policy cons
      (control depth), not hidden-state updates\\
      $h_\ell = f_\ell(h_{\ell-1})$ (representational depth).};
 
-  \end{tikzpicture}
+  \end{tikzpicture}%
+}
   \caption{Transformer-style visualization of layered control depth in VSR.
   Signal extraction constructs a shared embedding $\mathbf{s}$; stacked decision layers apply Boolean gates $\phi_\ell(\mathbf{s})$ that progressively reduce routing uncertainty $U_\ell$; selection resolves $(d^*,m^*)$ via priority early-exit; plugin composition $\Psi_{d^*}$ acts as an output-side projection head over request/response behavior.}
   \label{fig:entropy_folding_layers}

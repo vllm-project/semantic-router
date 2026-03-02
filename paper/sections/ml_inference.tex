@@ -19,11 +19,16 @@ Three constraints shape the inference architecture:
 
 We implement four inference runtimes, each optimized for different hardware and task profiles, all exposed to the Go routing process via C FFI and CGo (\Cref{fig:ml_runtimes}):
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
 \caption{Inference runtime characteristics}
 \label{tab:runtimes}
-\begin{tabular}{llll}
+\begin{tabularx}{\linewidth}{@{}
+  >{\raggedright\arraybackslash}p{1.6cm}
+  >{\raggedright\arraybackslash}p{1.85cm}
+  >{\raggedright\arraybackslash}X
+  >{\raggedright\arraybackslash}p{2.9cm}
+@{}}
 \toprule
 \textbf{Runtime} & \textbf{Target Hardware} & \textbf{Tasks} & \textbf{Framework} \\
 \midrule
@@ -32,7 +37,7 @@ Linfa        & CPU only        & KNN, KMeans, SVM         & Linfa~\cite{linfa202
 ONNX RT      & CPU, GPU        & Embeddings               & ONNX Runtime~\cite{onnxruntime2024} \\
 NLP Binding  & CPU only        & BM25, N-gram matching    & bm25 + ngrammatic (Rust) \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
 
 All runtimes are compiled as Rust shared libraries (\texttt{.so}/\texttt{.a}) and linked to the Go routing process via CGo.
@@ -40,6 +45,7 @@ This eliminates Python runtime overhead, GIL contention, and inter-process commu
 
 \begin{figure*}[ht]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tikzpicture}[
   gobox/.style={rectangle, draw, thick, rounded corners=3pt, fill=cyan!8,
                 minimum width=16.4cm, minimum height=0.9cm, align=center,
@@ -93,7 +99,8 @@ This eliminates Python runtime overhead, GIL contention, and inter-process commu
 \draw[arr] (go.south -| onnx)   -- node[ffi] {CGo / C FFI} (onnx.north);
 \draw[arr] (go.south -| nlp)    -- node[ffi] {CGo / C FFI} (nlp.north);
 
-\end{tikzpicture}
+\end{tikzpicture}%
+}
 \caption{Four-runtime ML inference architecture. The Go routing process links to four Rust shared libraries via CGo/C~FFI. Each runtime is specialized for a different class of ML workload, avoiding Python overhead on the critical path.}
 \label{fig:ml_runtimes}
 \end{figure*}

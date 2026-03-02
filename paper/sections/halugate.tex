@@ -17,6 +17,7 @@ Existing approaches apply hallucination detection uniformly to all responses~\ci
 
 \begin{figure}[t]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tikzpicture}[
     node distance=0.3cm,
     box/.style={rectangle, draw, rounded corners=2pt,
@@ -54,7 +55,8 @@ Existing approaches apply hallucination detection uniformly to all responses~\ci
   \node[font=\tiny, text=gray, anchor=north] at (1.1, -0.55) {request path};
   \node[font=\tiny, text=gray, anchor=north] at (9.8, -0.55) {response path};
   \draw[densely dotted, gray!30] (5.45, -0.7) -- (5.45, 1.5);
-\end{tikzpicture}
+\end{tikzpicture}%
+}
 \caption{\halugate{} three-stage gated pipeline.  The Sentinel classifies queries on the request path; non-factual queries (40--60\%) skip verification entirely (dashed).  For factual queries, the Detector identifies hallucinated spans in the model response, and the Explainer provides NLI-based diagnostics per span.}
 \label{fig:halugate_pipeline}
 \end{figure}
@@ -101,7 +103,7 @@ For a workload with $p_\text{factual} = 0.5$, the gating stage reduces the expec
 
 \halugate{} supports four configurable response actions:
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
 \caption{\halugate{} action policies upon hallucination detection}
 \label{tab:halugate_actions}

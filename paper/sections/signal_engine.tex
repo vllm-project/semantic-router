@@ -25,6 +25,7 @@ The thirteen signal types partition into \emph{heuristic} and \emph{learned} cat
 
 \begin{figure}[t]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tikzpicture}[
     node distance=0.4cm,
     sig/.style={rectangle, draw, rounded corners=2pt,
@@ -79,6 +80,7 @@ The thirteen signal types partition into \emph{heuristic} and \emph{learned} cat
   % Parallel annotation
   \node[font=\scriptsize, text=gray, rotate=90, anchor=south] at (1.3, 0.2) {parallel};
 \end{tikzpicture}
+}
 \caption{Signal extraction taxonomy and evaluation flow.  An incoming request is evaluated in parallel against heuristic signals (sub-millisecond, deterministic) and learned signals (neural inference via LoRA classifiers).  Only signal types referenced by configured decisions are computed (demand-driven evaluation).  Results merge into the structured signal result $S(r)$.}
 \label{fig:signal_taxonomy}
 \end{figure}
@@ -255,6 +257,7 @@ We characterize this as a \emph{hybrid embedding}: the extraction methods span a
 
 \begin{figure*}[!ht]
   \centering
+  \resizebox{\linewidth}{!}{%
   \begin{tikzpicture}[
     box/.style={rectangle, draw, thick, rounded corners=3pt,
                 minimum height=0.7cm, align=center, inner sep=4pt, font=\small},
@@ -305,6 +308,7 @@ We characterize this as a \emph{hybrid embedding}: the extraction methods span a
   \draw[<->, densely dashed, gray!50, thin] (tvec.south) -- (svec.north);
 
   \end{tikzpicture}
+  }
   \caption{Comparison of embedding strategies. \textbf{Top}: A Transformer embedding layer produces dense, opaque vectors optimized end-to-end. \textbf{Bottom}: The VSR signal extraction layer produces structured, interpretable signal vectors from heterogeneous extractors (heuristic, learned, LoRA-based), where each dimension has a human-readable semantic name. The dashed arrow marks the functional correspondence: both convert unstructured input into a representation for downstream computation, but the signal vector is interpretable by construction.}
   \label{fig:embedding_comparison}
 \end{figure*}

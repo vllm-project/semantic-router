@@ -20,6 +20,7 @@ We categorize algorithms into families based on their selection mechanism (\Cref
 
 \begin{figure}[t]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tikzpicture}[
     node distance=0.2cm,
     fam/.style={rectangle, draw, rounded corners=2pt, fill=blue!6,
@@ -80,6 +81,7 @@ We categorize algorithms into families based on their selection mechanism (\Cref
   \draw[thick, ->, >=stealth] (f6.east) -- (a12.west);
   \draw[thick, ->, >=stealth] (f7.east) -- (a13.west);
 \end{tikzpicture}
+}
 \caption{Taxonomy of thirteen semantic model selection algorithms organized by selection mechanism.  Families span from lightweight rating-based methods (Static, Elo) to learned approaches (RouterDC, Classical ML, RL), adaptive cascading (AutoMix), real-time latency tracking, and multi-round synthesis (ReMoM).}
 \label{fig:selection_taxonomy}
 \end{figure}
@@ -202,6 +204,7 @@ Inspired by PaCoRe~\cite{pacore2025} but generalized to heterogeneous model pool
 
 \begin{figure}[t]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tikzpicture}[
     node distance=0.3cm,
     call/.style={rectangle, draw, rounded corners=2pt,
@@ -284,6 +287,7 @@ Inspired by PaCoRe~\cite{pacore2025} but generalized to heterogeneous model pool
     {before prompt construction};
 
 \end{tikzpicture}
+}
 \caption{ReMoM execution flow with breadth schedule $\mathbf{b} = [4, 2]$.
 Round~1 distributes 4~parallel calls across models ($m_A$, $m_B$, $m_C$); responses are (optionally compacted and) assembled into a synthesis prompt.
 Round~2 sends 2~parallel synthesis calls.
