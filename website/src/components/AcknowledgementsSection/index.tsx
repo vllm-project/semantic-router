@@ -27,9 +27,7 @@ const AcknowledgementsSection: React.FC = () => {
             <Translate id="acknowledgements.title">Acknowledgements</Translate>
           </h2>
           <p className={styles.acknowledgementsSubtitle}>
-            <Translate id="acknowledgements.subtitle">vLLM Semantic Router is born in open source and built on open source</Translate>
-            {' '}
-            ❤️
+            <Translate id="acknowledgements.subtitle">vLLM Semantic Router is made possible by the open-source ecosystem.</Translate>
           </p>
           <div className={styles.projectsGrid}>
             {projects.map(project => (
@@ -40,6 +38,7 @@ const AcknowledgementsSection: React.FC = () => {
                 rel="noopener noreferrer"
                 className={styles.projectCard}
                 title={project.name}
+                data-project-id={project.id}
               >
                 <div className={styles.projectLogoWrapper}>
                   <img

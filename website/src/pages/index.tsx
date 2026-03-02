@@ -5,10 +5,10 @@ import Translate, { translate } from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import { useColorMode } from '@docusaurus/theme-common'
 import Layout from '@theme/Layout'
-import HomepageFeatures from '@site/src/components/HomepageFeatures'
 import ChainOfThoughtTerminal from '@site/src/components/ChainOfThoughtTerminal'
 
 import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection'
+import PaperFigureShowcase from '@site/src/components/PaperFigureShowcase'
 import TeamCarousel from '@site/src/components/TeamCarousel'
 import TransformerPipelineAnimation from '@site/src/components/TransformerPipelineAnimation'
 import Threads from '@site/src/components/Threads'
@@ -279,53 +279,6 @@ const AITechShowcase: React.FC = () => {
   )
 }
 
-const FlowDiagram: React.FC = () => {
-  return (
-    <section className={styles.flowSection}>
-      <div className="container">
-        <div className={styles.architectureContainer}>
-          <h2 className={styles.architectureTitle}>
-            🏗️
-            {' '}
-            <Translate id="homepage.architecture.title">Architecture</Translate>
-          </h2>
-          <div className={styles.architectureImageWrapper}>
-            <img
-              src="/img/architecture.png"
-              alt="Architecture"
-              className={styles.architectureImage}
-            />
-          </div>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-const WhereItLives: React.FC = () => {
-  return (
-    <section className={styles.whereItLivesSection}>
-      <div className="container">
-        <h2 className={styles.whereItLivesTitle}>
-          📍
-          {' '}
-          <Translate id="homepage.whereItLives.title">Where it lives</Translate>
-        </h2>
-        <p className={styles.whereItLivesSubtitle}>
-          <Translate id="homepage.whereItLives.subtitle">It lives between the real world and models</Translate>
-        </p>
-        <div className={styles.whereItLivesImageWrapper}>
-          <img
-            src="/img/level.png"
-            alt="Where vLLM Semantic Router Lives"
-            className={styles.whereItLivesImage}
-          />
-        </div>
-      </div>
-    </section>
-  )
-}
-
 const Home: React.FC = () => {
   const { siteConfig } = useDocusaurusContext()
   return (
@@ -335,42 +288,9 @@ const Home: React.FC = () => {
     >
       <HomepageHeader />
       <main>
+        <PaperFigureShowcase />
         <AITechShowcase />
-        <div className={styles.connectionSection}>
-          <div className={styles.connectionLines}>
-            <div className={`${styles.connectionLine} ${styles.connectionLine1}`}></div>
-            <div className={`${styles.connectionLine} ${styles.connectionLine2}`}></div>
-            <div className={`${styles.connectionLine} ${styles.connectionLine3}`}></div>
-          </div>
-        </div>
-        <FlowDiagram />
-        <div className={styles.connectionSection}>
-          <div className={styles.connectionLines}>
-            <div className={`${styles.connectionLine} ${styles.connectionLine4}`}></div>
-            <div className={`${styles.connectionLine} ${styles.connectionLine5}`}></div>
-          </div>
-        </div>
-        <HomepageFeatures />
-        <div className={styles.connectionSection}>
-          <div className={styles.connectionLines}>
-            <div className={`${styles.connectionLine} ${styles.connectionLine1}`}></div>
-            <div className={`${styles.connectionLine} ${styles.connectionLine2}`}></div>
-          </div>
-        </div>
-        <WhereItLives />
-        <div className={styles.connectionSection}>
-          <div className={styles.connectionLines}>
-            <div className={`${styles.connectionLine} ${styles.connectionLine1}`}></div>
-            <div className={`${styles.connectionLine} ${styles.connectionLine2}`}></div>
-          </div>
-        </div>
         <TeamCarousel />
-        <div className={styles.connectionSection}>
-          <div className={styles.connectionLines}>
-            <div className={`${styles.connectionLine} ${styles.connectionLine1}`}></div>
-            <div className={`${styles.connectionLine} ${styles.connectionLine2}`}></div>
-          </div>
-        </div>
         <AcknowledgementsSection />
       </main>
     </Layout>
