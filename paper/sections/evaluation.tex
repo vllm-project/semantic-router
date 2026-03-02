@@ -9,7 +9,7 @@ We evaluate the routing system across three dimensions: signal extraction effici
 
 \Cref{tab:signal_latency} reports median and p99 latencies for each signal type on an NVIDIA A100 GPU with ModernBERT base model.
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
 \caption{Signal extraction latency by type}
 \label{tab:signal_latency}
@@ -40,7 +40,7 @@ With parallel evaluation, the wall-clock time is dominated by the slowest active
 
 \Cref{tab:lora_memory} shows the memory advantage of serving classifiers via LoRA adapters versus independent fine-tuned models.
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
 \caption{Model memory: independent fine-tuned models vs.\ LoRA adapters (ModernBERT base, 150M params)}
 \label{tab:lora_memory}
@@ -70,11 +70,16 @@ This confirms that the $O(M \cdot L_\text{max})$ complexity is dominated by sign
 A key claim of this work is that the same architecture serves diverse deployment scenarios through configuration.
 \Cref{tab:deployment_scenarios} demonstrates how different signal-decision-plugin compositions address different requirements:
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
 \caption{Composable signal orchestration across deployment scenarios. Each scenario activates a different subset of the thirteen signal types, selection algorithms, and plugin chains---using the same system binary and architecture.}
 \label{tab:deployment_scenarios}
-\begin{tabular}{p{2.5cm}p{3cm}p{2.5cm}p{3.5cm}}
+\begin{tabularx}{\linewidth}{
+  >{\raggedright\arraybackslash}p{2.0cm}
+  >{\raggedright\arraybackslash}X
+  >{\raggedright\arraybackslash}p{1.9cm}
+  >{\raggedright\arraybackslash}X
+}
 \toprule
 \textbf{Scenario} & \textbf{Active Signals} & \textbf{Selection} & \textbf{Key Plugins} \\
 \midrule
@@ -83,18 +88,21 @@ Cost-optimized (developer tool) & complexity, embedding, keyword & AutoMix casca
 Multi-cloud enterprise & domain, modality, authz & Latency-aware & Multi-endpoint failover, provider auth factory, system prompt injection \\
 Multi-turn assistant & embedding, feedback, preference & Elo with session pin & Responses API state, memory retrieval, RAG injection \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
 
 \subsection{End-to-End Routing Correctness}
 
 The end-to-end test framework validates routing behavior across eight scenario profiles:
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
 \caption{End-to-end test profiles}
 \label{tab:e2e_profiles}
-\begin{tabular}{lp{8cm}}
+\begin{tabularx}{\linewidth}{
+  >{\raggedright\arraybackslash}p{2.4cm}
+  >{\raggedright\arraybackslash}X
+}
 \toprule
 \textbf{Profile} & \textbf{Validated Behavior} \\
 \midrule
@@ -107,7 +115,7 @@ Embedding routing   & Embedding similarity thresholds and confidence-based decis
 RAG + Responses API & Context retrieval, injection, and stateful multi-turn via Responses API \\
 Routing strategies  & Static, Elo, RouterDC, AutoMix, Hybrid algorithm comparison \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
 
 Each profile validates correct model selection, safety enforcement (jailbreak blocked, PII detected), cache behavior (hits after similar queries), multi-provider routing (correct endpoint resolution and auth injection), and header propagation.
@@ -135,6 +143,7 @@ Results include p50 and p99 latency profiling to confirm that model orchestratio
 
 \begin{figure}[ht]
     \centering
+    \resizebox{\linewidth}{!}{%
     \begin{tikzpicture}[
       box/.style={rectangle, draw, thick, rounded corners=3pt,
                   minimum height=0.9cm, minimum width=2.3cm,
@@ -192,6 +201,7 @@ Results include p50 and p99 latency profiling to confirm that model orchestratio
     \draw[arr] (agg) -- (json);
 
     \end{tikzpicture}
+    }
     \caption{Unified MoM evaluation pipeline. Configuration and dataset sources feed into the data and model loaders, which populate the model registry. A process pool executor parallelizes inference across model variants, producing confusion matrices and aggregated metrics (weighted F1, per-class precision/recall) for both merged and LoRA models.}
     \label{fig:eval_pipeline}
 \end{figure}

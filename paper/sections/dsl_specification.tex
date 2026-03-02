@@ -78,7 +78,8 @@ This grammar is parsed into a recursive AST (\texttt{BoolAnd}, \texttt{BoolOr}, 
 
 \begin{figure}[!ht]
   \centering
-  \begin{tikzpicture}[
+  \resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[
     tnode/.style={rectangle, draw, thick, rounded corners=2pt,
                   minimum height=0.6cm, align=center, inner sep=4pt, font=\scriptsize},
     arr/.style={->, >=stealth, thick},
@@ -106,7 +107,8 @@ This grammar is parsed into a recursive AST (\texttt{BoolAnd}, \texttt{BoolOr}, 
   \draw[arr] (and) -- (not);
   \draw[arr] (not) -- (dom);
 
-  \end{tikzpicture}
+  \end{tikzpicture}%
+}
   \caption{Boolean expression AST for \texttt{WHEN keyword("urgent") AND NOT domain("math")}. Each leaf is a \texttt{SignalRefExpr} referencing a named signal; internal nodes are Boolean operators (\texttt{BoolAnd}, \texttt{BoolNot}). The compiler flattens this tree into a \texttt{RuleCombination} structure for the decision engine.}
   \label{fig:bool_ast}
 \end{figure}
@@ -128,7 +130,8 @@ The compilation pipeline (\Cref{fig:dsl_pipeline}) transforms DSL source through
 
 \begin{figure*}[!ht]
   \centering
-  \begin{tikzpicture}[
+  \resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[
     box/.style={rectangle, draw, thick, rounded corners=3pt,
                 minimum height=0.8cm, align=center, inner sep=4pt, font=\small},
     arr/.style={->, >=stealth, thick},
@@ -190,7 +193,8 @@ The compilation pipeline (\Cref{fig:dsl_pipeline}) transforms DSL source through
   \node[lbl, anchor=west] at (11.5, 1.1) {decompile};
   \node[lbl, anchor=east] at (6.2, 1.1) {validate};
 
-  \end{tikzpicture}
+  \end{tikzpicture}%
+}
   \caption{The DSL compilation pipeline. Source text is lexed, parsed into a resolved AST, and compiled to the internal \texttt{RouterConfig}. From this representation, three emitters produce deployment-specific formats (flat YAML, Kubernetes CRD, Helm values). The decompiler reverses the pipeline, reconstructing DSL source from an existing \texttt{RouterConfig}, enabling round-trip editing. The validator operates on the AST directly, producing three-level diagnostics.}
   \label{fig:dsl_pipeline}
 \end{figure*}
@@ -238,7 +242,8 @@ This scheme provides IDE-like progressive feedback, enabling both batch validati
 
 \begin{figure}[!ht]
   \centering
-  \begin{tikzpicture}[
+  \resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[
     box/.style={rectangle, draw, thick, rounded corners=3pt,
                 minimum height=0.6cm, minimum width=7.5cm, align=left, inner sep=5pt, font=\scriptsize},
     arr/.style={->, >=stealth, thick},
@@ -270,7 +275,8 @@ This scheme provides IDE-like progressive feedback, enabling both batch validati
         minimum height=0.6cm, align=center, inner sep=4pt, font=\small] (out) at (0, -1.2) {Diagnostic Report};
   \draw[arr] (l3) -- (out);
 
-  \end{tikzpicture}
+  \end{tikzpicture}%
+}
   \caption{Three-level validation architecture. The validator processes the resolved AST through progressively deeper analysis: syntactic errors (Level~1), reference resolution with fuzzy-matched QuickFix suggestions (Level~2), and semantic constraint checking (Level~3). Diagnostics at all levels are accumulated into a unified report.}
   \label{fig:validation_levels}
 \end{figure}
@@ -290,7 +296,8 @@ The three-level validator provides immediate, machine-readable feedback that a c
 
 \begin{figure*}[!ht]
   \centering
-  \begin{tikzpicture}[
+  \resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[
     box/.style={rectangle, draw, thick, rounded corners=3pt,
                 minimum height=0.8cm, align=center, inner sep=4pt, font=\small},
     arr/.style={->, >=stealth, thick},
@@ -324,7 +331,8 @@ The three-level validator provides immediate, machine-readable feedback that a c
   \node[lbl, anchor=north] at (3.8, -0.6) {program synthesis};
   \node[lbl, anchor=north] at (11.4, -0.6) {signal-decision-plugin};
 
-  \end{tikzpicture}
+  \end{tikzpicture}%
+}
   \caption{Agent-based policy synthesis pipeline. A coding agent (LLM) translates natural-language routing specifications into DSL configurations, which are instantiated on the inference engine. Routing quality feedback closes the loop, enabling iterative policy refinement. The DSL's functional completeness guarantees that any expressible routing policy is reachable by the synthesis process.}
   \label{fig:agent_synthesis}
 \end{figure*}
