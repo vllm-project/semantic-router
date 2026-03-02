@@ -11,8 +11,8 @@ Viewed through the lens of information theory~\cite{shannon1948mathematical}, ro
 Before any analysis, routing entropy is maximal: $H(M \mid r_\text{raw}) \approx \log_2 K$ bits for $K$ candidate models---every model is equally plausible.
 Each signal extracted from the request reduces this uncertainty.
 
-The objective is to collapse $H(M \mid S(r))$ to near zero so the decision engine can make a deterministic, high-confidence routing choice (\Cref{fig:entropy_collapse}).
 This viewpoint suggests a natural two-layer decomposition (\Cref{fig:shannon_mapping}).
+Under this decomposition, the objective is to collapse $H(M \mid S(r))$ to near zero so the decision engine can make a deterministic, high-confidence routing choice (\Cref{fig:entropy_collapse}).
 
 \begin{figure*}[!ht]
   \centering
@@ -75,7 +75,8 @@ This viewpoint suggests a natural two-layer decomposition (\Cref{fig:shannon_map
 In the first layer, signal extraction operates in the probabilistic regime of Shannon's \emph{Mathematical Theory of Communication}; in the second, decision evaluation operates in the algebraic regime of Shannon's \emph{switching-circuit algebra}~\cite{shannon1938symbolic}.
 The signal vector~$\mathbf{s}$ is the interface between these regimes: continuous probabilistic inference below, discrete symbolic logic above.
 In modern ML terms, the extraction layer behaves like a \emph{hybrid embedding stage} (\Cref{sec:disc_embedding}), while the priority-ordered decision engine behaves like a \emph{symbolic Mixture-of-Experts gate} with deterministic early exit (\Cref{sec:disc_moe}).
-We further view priority blocks as \emph{layered entropy folding} (\Cref{sec:disc_entropy_folding}), yielding a programmable neural-symbolic inference engine (Transformer-like control structure but not equivalent hidden-state dynamics) that we connect to agent-based policy synthesis (\Cref{sec:disc_agent}).
+We also interpret priority blocks as \emph{layered entropy folding} (\Cref{sec:disc_entropy_folding}).
+Together these components form a programmable neural-symbolic inference engine (Transformer-like control structure, but not equivalent hidden-state dynamics), which we connect to agent-based policy synthesis (\Cref{sec:disc_agent}).
 
 \begin{figure*}[!ht]
   \centering
@@ -121,7 +122,7 @@ We further view priority blocks as \emph{layered entropy folding} (\Cref{sec:dis
 
   \end{tikzpicture}%
 }
-  \caption{Entropy collapse during signal extraction. Each additional signal reduces the routing uncertainty $H(M \mid \cdot\,)$ from the uniform prior $\log_2 K$ bits until the decision formula $\phi(\mathbf{s})$ yields a near-deterministic model selection.}
+  \caption{Entropy collapse during signal extraction (illustrative). Each additional signal reduces the routing uncertainty $H(M \mid \cdot\,)$ from the uniform prior $\log_2 K$ bits until the decision formula $\phi(\mathbf{s})$ yields a near-deterministic model selection. Bar heights are schematic rather than empirical measurements.}
   \label{fig:entropy_collapse}
 \end{figure*}
 
