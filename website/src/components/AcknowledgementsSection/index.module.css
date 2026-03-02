@@ -46,23 +46,18 @@
 }
 
 .acknowledgementsTitle {
-  font-size: 2.5rem;
+  font-size: 2.75rem;
   font-weight: 700;
-  margin-bottom: 1rem;
-  background: linear-gradient(135deg, #0969DA, #FDB516, #8250DF);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  animation: acknowledgementsTitleGlow 4s ease-in-out infinite;
-  transition: all 0.3s ease;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  margin: 0 0 1rem;
+  color: #0A0A0A;
+  transition: color 0.3s ease;
 }
 
 /* Dark theme title */
 [data-theme='dark'] .acknowledgementsTitle {
-  background: linear-gradient(135deg, #58A6FF, #FDB516, #A855F7);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #FFFFFF;
 }
 
 .acknowledgementsSubtitle {
@@ -139,10 +134,28 @@
   transition: all 0.3s ease;
 }
 
+.projectCard[data-project-id='amd'] .projectLogoWrapper {
+  background: #111827;
+  box-shadow: 0 2px 10px rgba(17, 24, 39, 0.28);
+}
+
+.projectCard[data-project-id='pytorch'] .projectLogoWrapper {
+  background: #FFFFFF;
+}
+
 /* Dark theme logo wrapper */
 [data-theme='dark'] .projectLogoWrapper {
   background: rgba(48, 54, 61, 0.9);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme='dark'] .projectCard[data-project-id='amd'] .projectLogoWrapper {
+  background: #0B1220;
+}
+
+[data-theme='dark'] .projectCard[data-project-id='pytorch'] .projectLogoWrapper {
+  background: #F8FAFC;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.35);
 }
 
 .projectLogo {
@@ -185,19 +198,13 @@
   }
 }
 
-@keyframes acknowledgementsTitleGlow {
-  0%, 100% {
-    filter: drop-shadow(0 0 12px rgba(253, 181, 22, 0.4));
-  }
-  33% {
-    filter: drop-shadow(0 0 16px rgba(48, 162, 255, 0.6));
-  }
-  66% {
-    filter: drop-shadow(0 0 14px rgba(168, 85, 247, 0.5));
+/* Responsive Design */
+@media screen and (max-width: 996px) {
+  .acknowledgementsTitle {
+    font-size: 2.25rem;
   }
 }
 
-/* Responsive Design */
 @media screen and (max-width: 768px) {
   .acknowledgementsSection {
     padding: 3rem 0;
@@ -208,7 +215,7 @@
   }
 
   .acknowledgementsTitle {
-    font-size: 2rem;
+    font-size: 1.75rem;
     margin-bottom: 0.8rem;
   }
 

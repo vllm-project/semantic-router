@@ -201,12 +201,10 @@ const TeamCarousel: React.FC = () => {
     <section className={styles.teamCarousel}>
       <div className="container">
         <h2 className={styles.title}>
-          👥
-          {' '}
           <Translate id="teamCarousel.title">Meet Our Team</Translate>
         </h2>
         <p className={styles.subtitle}>
-          <Translate id="teamCarousel.subtitle">The amazing people behind vLLM Semantic Router</Translate>
+          <Translate id="teamCarousel.subtitle">Innovation thrives when great minds come together</Translate>
         </p>
 
         <div className={styles.carouselContainer}>
