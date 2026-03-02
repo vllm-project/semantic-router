@@ -1,7 +1,8 @@
 """Configuration merger for vLLM Semantic Router."""
 
 import copy
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
+from urllib.parse import urlparse
 
 from cli.models import (
     UserConfig,
@@ -279,6 +280,28 @@ def translate_pii_signals(pii_rules: list) -> list:
     return rules
 
 
+def _parse_endpoint(endpoint_str: str) -> Tuple[str, int, str]:
+    """Parse an endpoint string into (address, port, protocol).
+
+    Supports formats: "host:port", "http://host:port", "https://host:port",
+    and bare "host" (defaults to port 8000, protocol http).
+    """
+    if "://" in endpoint_str:
+        parsed = urlparse(endpoint_str)
+        address = parsed.hostname or ""
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        protocol = parsed.scheme
+    elif ":" in endpoint_str:
+        address, port_str = endpoint_str.rsplit(":", 1)
+        port = int(port_str)
+        protocol = "https" if port == 443 else "http"
+    else:
+        address = endpoint_str
+        port = 8000
+        protocol = "http"
+    return address, port, protocol
+
+
 def translate_external_models(external_models: list) -> list:
     """
     Translate external models to router format.
@@ -291,10 +314,7 @@ def translate_external_models(external_models: list) -> list:
     """
     models = []
     for model in external_models:
-        # Parse endpoint
-        parts = model.endpoint.split(":")
-        address = parts[0]
-        port = int(parts[1]) if len(parts) > 1 else 8000
+        address, port, protocol = _parse_endpoint(model.endpoint)
 
         config = {
             "llm_provider": model.provider,
@@ -302,13 +322,13 @@ def translate_external_models(external_models: list) -> list:
             "llm_endpoint": {
                 "address": address,
                 "port": port,
+                "protocol": protocol,
             },
             "llm_model_name": model.model_name,
             "llm_timeout_seconds": model.timeout_seconds,
             "parser_type": model.parser_type,
         }
 
-        # Add access_key if provided
         if model.access_key:
             config["access_key"] = model.access_key
 
@@ -598,6 +618,8 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
 
     # Translate providers
     provider_config = translate_providers_to_router_format(user_config.providers)
+    if not provider_config.get("external_models"):
+        provider_config.pop("external_models", None)
     merged.update(provider_config)
     log.info(f"  Added {len(user_config.providers.models)} models")
     log.info(f"  Added {len(provider_config['vllm_endpoints'])} endpoints")
