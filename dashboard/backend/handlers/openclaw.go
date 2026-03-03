@@ -23,12 +23,17 @@ var containerNameInvalidChars = regexp.MustCompile(`[^a-z0-9_.-]+`)
 // --- Registry ---
 
 type ContainerEntry struct {
-	Name      string `json:"name"`
-	Port      int    `json:"port"`
-	Image     string `json:"image"`
-	Token     string `json:"token"`
-	DataDir   string `json:"dataDir"`
-	CreatedAt string `json:"createdAt"`
+	Name            string `json:"name"`
+	Port            int    `json:"port"`
+	Image           string `json:"image"`
+	Token           string `json:"token"`
+	DataDir         string `json:"dataDir"`
+	CreatedAt       string `json:"createdAt"`
+	AgentName       string `json:"agentName,omitempty"`
+	AgentEmoji      string `json:"agentEmoji,omitempty"`
+	AgentRole       string `json:"agentRole,omitempty"`
+	AgentVibe       string `json:"agentVibe,omitempty"`
+	AgentPrinciples string `json:"agentPrinciples,omitempty"`
 }
 
 type OpenClawHandler struct {
@@ -366,12 +371,27 @@ type ProvisionResponse struct {
 }
 
 type OpenClawStatus struct {
-	Running       bool   `json:"running"`
-	ContainerName string `json:"containerName,omitempty"`
-	GatewayURL    string `json:"gatewayUrl,omitempty"`
-	Port          int    `json:"port,omitempty"`
-	Healthy       bool   `json:"healthy"`
-	Error         string `json:"error,omitempty"`
+	Running         bool   `json:"running"`
+	ContainerName   string `json:"containerName,omitempty"`
+	GatewayURL      string `json:"gatewayUrl,omitempty"`
+	Port            int    `json:"port,omitempty"`
+	Healthy         bool   `json:"healthy"`
+	Error           string `json:"error,omitempty"`
+	Image           string `json:"image,omitempty"`
+	CreatedAt       string `json:"createdAt,omitempty"`
+	AgentName       string `json:"agentName,omitempty"`
+	AgentEmoji      string `json:"agentEmoji,omitempty"`
+	AgentRole       string `json:"agentRole,omitempty"`
+	AgentVibe       string `json:"agentVibe,omitempty"`
+	AgentPrinciples string `json:"agentPrinciples,omitempty"`
+}
+
+type identitySnapshot struct {
+	Name       string
+	Emoji      string
+	Role       string
+	Vibe       string
+	Principles string
 }
 
 // --- Token ---
@@ -489,10 +509,43 @@ func (h *OpenClawHandler) gatewayReachable(port int) bool {
 }
 
 func (h *OpenClawHandler) checkContainerHealth(entry ContainerEntry) OpenClawStatus {
+	snapshot := identitySnapshot{
+		Name:       entry.AgentName,
+		Emoji:      entry.AgentEmoji,
+		Role:       entry.AgentRole,
+		Vibe:       entry.AgentVibe,
+		Principles: entry.AgentPrinciples,
+	}
+	if (snapshot.Name == "" || snapshot.Role == "" || snapshot.Vibe == "" || snapshot.Principles == "") && entry.DataDir != "" {
+		fileSnapshot := readIdentitySnapshot(entry.DataDir)
+		if snapshot.Name == "" {
+			snapshot.Name = fileSnapshot.Name
+		}
+		if snapshot.Emoji == "" {
+			snapshot.Emoji = fileSnapshot.Emoji
+		}
+		if snapshot.Role == "" {
+			snapshot.Role = fileSnapshot.Role
+		}
+		if snapshot.Vibe == "" {
+			snapshot.Vibe = fileSnapshot.Vibe
+		}
+		if snapshot.Principles == "" {
+			snapshot.Principles = fileSnapshot.Principles
+		}
+	}
+
 	status := OpenClawStatus{
-		ContainerName: entry.Name,
-		GatewayURL:    h.gatewayBaseURL(entry.Port),
-		Port:          entry.Port,
+		ContainerName:   entry.Name,
+		GatewayURL:      h.gatewayBaseURL(entry.Port),
+		Port:            entry.Port,
+		Image:           entry.Image,
+		CreatedAt:       entry.CreatedAt,
+		AgentName:       snapshot.Name,
+		AgentEmoji:      snapshot.Emoji,
+		AgentRole:       snapshot.Role,
+		AgentVibe:       snapshot.Vibe,
+		AgentPrinciples: snapshot.Principles,
 	}
 
 	out, err := h.containerOutput("inspect", "-f", "{{.State.Running}}", entry.Name)
@@ -861,18 +914,28 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 				entries[i].Image = req.Container.BaseImage
 				entries[i].Token = req.Container.AuthToken
 				entries[i].DataDir = absCDir
+				entries[i].AgentName = strings.TrimSpace(req.Identity.Name)
+				entries[i].AgentEmoji = strings.TrimSpace(req.Identity.Emoji)
+				entries[i].AgentRole = strings.TrimSpace(req.Identity.Role)
+				entries[i].AgentVibe = strings.TrimSpace(req.Identity.Vibe)
+				entries[i].AgentPrinciples = strings.TrimSpace(req.Identity.Principles)
 				found = true
 				break
 			}
 		}
 		if !found {
 			entries = append(entries, ContainerEntry{
-				Name:      req.Container.ContainerName,
-				Port:      req.Container.GatewayPort,
-				Image:     req.Container.BaseImage,
-				Token:     req.Container.AuthToken,
-				DataDir:   absCDir,
-				CreatedAt: time.Now().UTC().Format(time.RFC3339),
+				Name:            req.Container.ContainerName,
+				Port:            req.Container.GatewayPort,
+				Image:           req.Container.BaseImage,
+				Token:           req.Container.AuthToken,
+				DataDir:         absCDir,
+				CreatedAt:       time.Now().UTC().Format(time.RFC3339),
+				AgentName:       strings.TrimSpace(req.Identity.Name),
+				AgentEmoji:      strings.TrimSpace(req.Identity.Emoji),
+				AgentRole:       strings.TrimSpace(req.Identity.Role),
+				AgentVibe:       strings.TrimSpace(req.Identity.Vibe),
+				AgentPrinciples: strings.TrimSpace(req.Identity.Principles),
 			})
 		}
 		sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
@@ -1090,6 +1153,55 @@ func deriveContainerName(requested, identityName string) string {
 		return name
 	}
 	return "openclaw-vllm-sr"
+}
+
+func readIdentitySnapshot(dataDir string) identitySnapshot {
+	wsDir := filepath.Join(dataDir, "workspace")
+	snapshot := identitySnapshot{}
+
+	identityContent, err := os.ReadFile(filepath.Join(wsDir, "IDENTITY.md"))
+	if err == nil {
+		for _, raw := range strings.Split(string(identityContent), "\n") {
+			line := strings.TrimSpace(raw)
+			switch {
+			case strings.HasPrefix(line, "- **Name:**"):
+				snapshot.Name = strings.TrimSpace(strings.TrimPrefix(line, "- **Name:**"))
+			case strings.HasPrefix(line, "- **Creature:**"):
+				snapshot.Role = strings.TrimSpace(strings.TrimPrefix(line, "- **Creature:**"))
+			case strings.HasPrefix(line, "- **Vibe:**"):
+				snapshot.Vibe = strings.TrimSpace(strings.TrimPrefix(line, "- **Vibe:**"))
+			case strings.HasPrefix(line, "- **Emoji:**"):
+				snapshot.Emoji = strings.TrimSpace(strings.TrimPrefix(line, "- **Emoji:**"))
+			}
+		}
+	}
+
+	soulContent, err := os.ReadFile(filepath.Join(wsDir, "SOUL.md"))
+	if err == nil {
+		lines := strings.Split(string(soulContent), "\n")
+		capture := false
+		var truths []string
+		for _, raw := range lines {
+			line := strings.TrimSpace(raw)
+			if strings.HasPrefix(line, "## ") {
+				if line == "## Core Truths" {
+					capture = true
+					continue
+				}
+				if capture {
+					break
+				}
+			}
+			if capture && line != "" {
+				truths = append(truths, line)
+			}
+		}
+		if len(truths) > 0 {
+			snapshot.Principles = strings.Join(truths, " ")
+		}
+	}
+
+	return snapshot
 }
 
 func writeJSONError(w http.ResponseWriter, msg string, code int) {

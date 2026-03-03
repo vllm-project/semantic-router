@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import styles from './OpenClawPage.module.css'
 
 // --- Types ---
@@ -28,7 +28,6 @@ interface ContainerConfig {
   gatewayPort: number
   authToken: string
   modelBaseUrl: string
-  modelApiKey: string
   modelName: string
   memoryBackend: string
   memoryBaseUrl: string
@@ -45,6 +44,13 @@ interface OpenClawStatus {
   port: number
   healthy: boolean
   error: string
+  image?: string
+  createdAt?: string
+  agentName?: string
+  agentEmoji?: string
+  agentRole?: string
+  agentVibe?: string
+  agentPrinciples?: string
 }
 
 interface ProvisionResponse {
@@ -66,10 +72,19 @@ const PROVISION_STEPS = [
   { key: 'deploy', label: 'Deploy' },
 ]
 
+const FALLBACK_MODEL_BASE_URL = 'http://127.0.0.1:8801/v1'
+
+const getDynamicModelBaseUrl = (): string => {
+  if (typeof window === 'undefined' || !window.location?.origin) {
+    return FALLBACK_MODEL_BASE_URL
+  }
+  return `${window.location.origin.replace(/\/+$/, '')}/api/router/v1`
+}
+
 // --- Component ---
 
 const OpenClawPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'provision' | 'status'>('provision')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'provision' | 'status'>('dashboard')
   const [containers, setContainers] = useState<OpenClawStatus[]>([])
   const [statusLoading, setStatusLoading] = useState(true)
 
@@ -99,28 +114,44 @@ const OpenClawPage: React.FC = () => {
     <div className={styles.container}>
       {/* Header */}
       <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <h1 className={styles.title}>
-            OpenClaw Agent
-            {runningCount > 0 && (
-              <span className={`${styles.titleBadge} ${styles.badgeRunning}`}>
-                {runningCount} Running
-              </span>
-            )}
-          </h1>
-          <p className={styles.subtitle}>
-            Provision, configure, and manage your OpenClaw Agents Powered by intelligent model routing, memory, and knowledge management.
-          </p>
+        <img className={styles.logo} src="/openclaw.png" alt="OpenClaw logo" />
+        <div className={styles.titleRow}>
+          <h1 className={styles.title}>OpenClaw Team</h1>
+          {runningCount > 0 && (
+            <span className={`${styles.titleBadge} ${styles.badgeRunning}`}>
+              {runningCount} Running
+            </span>
+          )}
         </div>
-        <div className={styles.headerRight}>
+        <p className={styles.subtitle}>
+          Build, compose, and operate your OpenClaw team with unified identity, routing, and runtime control.
+        </p>
+        <div className={styles.headerActions}>
           <button className={styles.btnSecondary} onClick={fetchStatus}>
-            Refresh
+            Refresh Team
           </button>
         </div>
       </div>
 
       {/* Tabs */}
       <div className={styles.tabs}>
+        <button
+          className={`${styles.tab} ${activeTab === 'dashboard' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('dashboard')}
+        >
+          <span className={styles.tabIcon}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+              <polyline points="7.5 4.21 12 6.81 16.5 4.21" />
+              <polyline points="7.5 19.79 7.5 14.6 3 12" />
+              <polyline points="21 12 16.5 14.6 16.5 19.79" />
+              <polyline points="12 22.08 12 16.89 16.5 14.3" />
+              <polyline points="12 16.89 7.5 14.3" />
+              <polyline points="12 6.81 12 12" />
+            </svg>
+          </span>
+          Claw Dashboard ({containers.length})
+        </button>
         <button
           className={`${styles.tab} ${activeTab === 'provision' ? styles.tabActive : ''}`}
           onClick={() => setActiveTab('provision')}
@@ -130,7 +161,7 @@ const OpenClawPage: React.FC = () => {
               <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
             </svg>
           </span>
-          Provision
+          Claw Provision
         </button>
         <button
           className={`${styles.tab} ${activeTab === 'status' ? styles.tabActive : ''}`}
@@ -141,11 +172,17 @@ const OpenClawPage: React.FC = () => {
               <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
             </svg>
           </span>
-          Status ({containers.length})
+          Claw Status ({containers.length})
         </button>
       </div>
 
       {/* Tab Content */}
+      {activeTab === 'dashboard' && (
+        <ClawDashboardTab
+          containers={containers}
+          onSwitchToStatus={() => setActiveTab('status')}
+        />
+      )}
       {activeTab === 'provision' && (
         <ProvisionTab
           containers={containers}
@@ -160,6 +197,228 @@ const OpenClawPage: React.FC = () => {
           onRefresh={fetchStatus}
         />
       )}
+    </div>
+  )
+}
+
+const truncateText = (value?: string, maxLength = 180): string => {
+  const text = (value || '').trim()
+  if (text.length <= maxLength) return text
+  return `${text.slice(0, maxLength).trim()}...`
+}
+
+const ClawDashboardTab: React.FC<{
+  containers: OpenClawStatus[]
+  onSwitchToStatus: () => void
+}> = ({ containers, onSwitchToStatus }) => {
+  const totalAgents = containers.length
+  const healthyAgents = containers.filter(c => c.healthy).length
+  const runningAgents = containers.filter(c => c.running).length
+  const startingAgents = containers.filter(c => c.running && !c.healthy).length
+  const stoppedAgents = containers.filter(c => !c.running).length
+
+  const roleRows = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const c of containers) {
+      const role = (c.agentRole || '').trim() || 'Unspecified'
+      counts.set(role, (counts.get(role) || 0) + 1)
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+  }, [containers])
+
+  const vibeRows = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const c of containers) {
+      const vibe = (c.agentVibe || '').trim() || 'Unspecified'
+      counts.set(vibe, (counts.get(vibe) || 0) + 1)
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+  }, [containers])
+
+  const roleMax = Math.max(...roleRows.map(([, value]) => value), 1)
+  const vibeMax = Math.max(...vibeRows.map(([, value]) => value), 1)
+
+  if (containers.length === 0) {
+    return (
+      <div className={styles.emptyState}>
+        <div className={styles.emptyStateIcon}>{'\u{1F4DD}'}</div>
+        <div className={styles.emptyStateText}>
+          No agent profile available yet.<br />
+          Create one in <strong>Claw Provision</strong> and it will appear here.
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className={styles.teamDashboard}>
+      <div className={styles.teamStatsGrid}>
+        <div className={styles.teamStatCard}>
+          <div className={styles.teamStatValue}>{totalAgents}</div>
+          <div className={styles.teamStatLabel}>Total Agents</div>
+        </div>
+        <div className={styles.teamStatCard}>
+          <div className={styles.teamStatValue}>{healthyAgents}</div>
+          <div className={styles.teamStatLabel}>Healthy</div>
+        </div>
+        <div className={styles.teamStatCard}>
+          <div className={styles.teamStatValue}>{runningAgents}</div>
+          <div className={styles.teamStatLabel}>Running</div>
+        </div>
+        <div className={styles.teamStatCard}>
+          <div className={styles.teamStatValue}>{roleRows.length}</div>
+          <div className={styles.teamStatLabel}>Unique Roles</div>
+        </div>
+      </div>
+
+      <div className={styles.teamChartsGrid}>
+        <div className={styles.teamPanel}>
+          <div className={styles.teamPanelHeader}>
+            <h3 className={styles.teamPanelTitle}>Health Distribution</h3>
+            <span className={styles.teamPanelSubtitle}>Realtime</span>
+          </div>
+          <div className={styles.breakdownList}>
+            {[
+              ['Healthy', healthyAgents, '#22c55e'],
+              ['Starting', startingAgents, '#eab308'],
+              ['Stopped', stoppedAgents, '#ef4444'],
+            ].map(([label, value, color]) => {
+              const numericValue = Number(value)
+              const pct = totalAgents > 0 ? Math.round((numericValue / totalAgents) * 100) : 0
+              return (
+                <div key={String(label)} className={styles.breakdownRow}>
+                  <div className={styles.breakdownLabel}>{label}</div>
+                  <div className={styles.breakdownTrack}>
+                    <div
+                      className={styles.breakdownBar}
+                      style={{ width: `${Math.max(8, pct)}%`, backgroundColor: String(color) }}
+                    />
+                  </div>
+                  <div className={styles.breakdownValue}>{numericValue} ({pct}%)</div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+        <div className={styles.teamPanel}>
+          <div className={styles.teamPanelHeader}>
+            <h3 className={styles.teamPanelTitle}>Role Distribution</h3>
+            <span className={styles.teamPanelSubtitle}>Top 5</span>
+          </div>
+          <div className={styles.breakdownList}>
+            {roleRows.map(([role, value]) => (
+              <div key={role} className={styles.breakdownRow}>
+                <div className={styles.breakdownLabel}>{role}</div>
+                <div className={styles.breakdownTrack}>
+                  <div className={styles.breakdownBar} style={{ width: `${Math.max(10, Math.round((value / roleMax) * 100))}%` }} />
+                </div>
+                <div className={styles.breakdownValue}>{value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className={styles.teamPanelsRow}>
+        <div className={styles.teamPanel}>
+          <div className={styles.teamPanelHeader}>
+            <h3 className={styles.teamPanelTitle}>Vibe Mix</h3>
+            <span className={styles.teamPanelSubtitle}>Top 5</span>
+          </div>
+          <div className={styles.breakdownList}>
+            {vibeRows.map(([vibe, value]) => (
+              <div key={vibe} className={styles.breakdownRow}>
+                <div className={styles.breakdownLabel}>{vibe}</div>
+                <div className={styles.breakdownTrack}>
+                  <div className={styles.breakdownBar} style={{ width: `${Math.max(10, Math.round((value / vibeMax) * 100))}%` }} />
+                </div>
+                <div className={styles.breakdownValue}>{value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className={styles.teamPanel}>
+          <div className={styles.teamPanelHeader}>
+            <h3 className={styles.teamPanelTitle}>Quick Action</h3>
+            <span className={styles.teamPanelSubtitle}>Control Plane</span>
+          </div>
+          <p className={styles.panelText}>
+            Use Claw Status for lifecycle actions, logs, and embedded control UI.
+          </p>
+          <button className={styles.btnPrimary} onClick={onSwitchToStatus}>
+            Open Claw Status
+          </button>
+        </div>
+      </div>
+
+      <div className={styles.teamPanel}>
+        <div className={styles.teamPanelHeader}>
+          <h3 className={styles.teamPanelTitle}>Team Roster</h3>
+          <span className={styles.teamPanelSubtitle}>{totalAgents} agents</span>
+        </div>
+        <div className={styles.agentGrid}>
+          {containers.map((agent) => {
+            const name = agent.agentName?.trim() || agent.containerName
+            const emoji = agent.agentEmoji?.trim() || '\u{1F9E0}'
+            const role = agent.agentRole?.trim() || 'Not set'
+            const vibe = agent.agentVibe?.trim() || 'Not set'
+            const principles = truncateText(agent.agentPrinciples, 160) || 'Not set'
+
+            return (
+              <div key={agent.containerName} className={styles.agentCard}>
+                <div className={styles.agentCardHeader}>
+                  <div className={styles.agentAvatar}>{emoji}</div>
+                  <div className={styles.agentHeaderMeta}>
+                    <div className={styles.agentName}>{name}</div>
+                    <div className={styles.agentContainerRef}>{agent.containerName}</div>
+                  </div>
+                  <span
+                    className={`${styles.healthBadge} ${
+                      agent.healthy
+                        ? styles.healthBadgeHealthy
+                        : agent.running
+                          ? styles.healthBadgeRunning
+                          : styles.healthBadgeStopped
+                    }`}
+                  >
+                    {agent.healthy ? 'Healthy' : agent.running ? 'Starting' : 'Stopped'}
+                  </span>
+                </div>
+
+                <div className={styles.agentBody}>
+                  <div className={styles.agentMetaRow}>
+                    <span className={styles.agentMetaLabel}>Role</span>
+                    <span className={styles.agentMetaValue}>{role}</span>
+                  </div>
+                  <div className={styles.agentMetaRow}>
+                    <span className={styles.agentMetaLabel}>Vibe</span>
+                    <span className={styles.agentMetaValue}>{vibe}</span>
+                  </div>
+                  <div className={styles.agentMetaRow}>
+                    <span className={styles.agentMetaLabel}>Principal</span>
+                    <span className={styles.agentMetaValue}>{principles}</span>
+                  </div>
+                </div>
+
+                <div className={styles.agentFooter}>
+                  <button className={styles.btnSmall} onClick={onSwitchToStatus}>
+                    Manage in Claw Status
+                  </button>
+                  {agent.createdAt && (
+                    <span className={styles.agentTimestamp}>
+                      Created {new Date(agent.createdAt).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }
@@ -290,7 +549,7 @@ const StatusTab: React.FC<{
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6" />
               </svg>
-              Back to Status
+              Back to Claw Status
             </button>
             <span style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
               {selected.containerName} &mdash; port {selected.port}
@@ -335,7 +594,7 @@ const StatusTab: React.FC<{
           <div className={styles.emptyStateIcon}>{'\u{1F433}'}</div>
           <div className={styles.emptyStateText}>
             No OpenClaw containers provisioned yet.<br />
-            Use the <strong>Provision</strong> tab to create one.
+            Use the <strong>Claw Provision</strong> tab to create one.
           </div>
         </div>
       ) : (
@@ -443,8 +702,7 @@ const ProvisionTab: React.FC<{
     containerName: '',
     gatewayPort: 0,
     authToken: '',
-    modelBaseUrl: 'http://127.0.0.1:8801/v1',
-    modelApiKey: '',
+    modelBaseUrl: getDynamicModelBaseUrl(),
     modelName: 'auto',
     memoryBackend: 'local',
     memoryBaseUrl: '',
@@ -760,18 +1018,13 @@ const ConfigStep: React.FC<{
         <div className={styles.formGroup}>
           <label className={styles.formLabel}>Model Base URL</label>
           <input className={styles.textInput} value={container.modelBaseUrl} onChange={e => update('modelBaseUrl', e.target.value)} />
-          <div className={styles.formHint}>Envoy/SR endpoint for confidence-routed inference</div>
+          <div className={styles.formHint}>Auto-discovered from playground routing; editable if needed</div>
         </div>
         <div className={styles.formGroup}>
           <label className={styles.formLabel}>Model Name</label>
           <input className={styles.textInput} value={container.modelName} onChange={e => update('modelName', e.target.value)} />
           <div className={styles.formHint}>&quot;auto&quot; for SR confidence routing</div>
         </div>
-      </div>
-
-      <div className={styles.formGroup}>
-        <label className={styles.formLabel}>API Key</label>
-        <input className={styles.textInput} type="password" value={container.modelApiKey} onChange={e => update('modelApiKey', e.target.value)} placeholder="vLLM API key" />
       </div>
 
       <div className={styles.sectionTitle}>Memory Mode</div>
@@ -917,7 +1170,7 @@ const DeployStep: React.FC<{
           </div>
 
           <button className={styles.btnPrimary} onClick={onSwitchToStatus} style={{ marginBottom: '1rem' }}>
-            Go to Status
+            Go to Claw Status
           </button>
 
           {/* Collapsible reference commands */}

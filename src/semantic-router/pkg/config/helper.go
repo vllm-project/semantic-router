@@ -394,7 +394,7 @@ func (d *Decision) IsSystemPromptEnabled() bool {
 func (d *Decision) GetSystemPromptMode() string {
 	config := d.GetSystemPromptConfig()
 	if config == nil || config.Mode == "" {
-		return "replace" // Default mode
+		return "insert" // Default mode
 	}
 	return config.Mode
 }
