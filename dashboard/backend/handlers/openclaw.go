@@ -1127,6 +1127,10 @@ func writeIdentityFiles(wsDir string, id IdentityConfig) error {
 		soulParts = append(soulParts, "## Boundaries\n")
 		soulParts = append(soulParts, id.Boundaries+"\n")
 	}
+	if id.Vibe != "" {
+		soulParts = append(soulParts, "## Vibe\n")
+		soulParts = append(soulParts, id.Vibe+"\n")
+	}
 	if err := os.WriteFile(filepath.Join(wsDir, "SOUL.md"), []byte(strings.Join(soulParts, "\n")), 0o644); err != nil {
 		return err
 	}
@@ -1311,8 +1315,9 @@ This folder is home. Treat it that way.
 Before doing anything else:
 
 1. Read ` + "`SOUL.md`" + ` — this is who you are
-2. Read ` + "`USER.md`" + ` — this is who you're helping
-3. Read ` + "`memory/`" + ` for recent context
+2. Read ` + "`IDENTITY.md`" + ` — your profile, vibe, and persona details
+3. Read ` + "`USER.md`" + ` — this is who you're helping
+4. Read ` + "`memory/`" + ` for recent context
 
 ## Memory
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -182,5 +183,43 @@ func TestDeriveContainerName(t *testing.T) {
 				t.Fatalf("deriveContainerName(%q, %q) = %q, expected %q", tc.requested, tc.identityName, got, tc.expected)
 			}
 		})
+	}
+}
+
+func TestWriteIdentityFiles_VibeIsIncludedInSoulAndIdentity(t *testing.T) {
+	tempDir := t.TempDir()
+	id := IdentityConfig{
+		Name:       "Atlas",
+		Role:       "ops agent",
+		Vibe:       "calm and precise",
+		Principles: "be rigorous",
+		UserName:   "Platform Team",
+	}
+
+	if err := writeIdentityFiles(tempDir, id); err != nil {
+		t.Fatalf("writeIdentityFiles failed: %v", err)
+	}
+
+	soulData, err := os.ReadFile(filepath.Join(tempDir, "SOUL.md"))
+	if err != nil {
+		t.Fatalf("failed to read SOUL.md: %v", err)
+	}
+	identityData, err := os.ReadFile(filepath.Join(tempDir, "IDENTITY.md"))
+	if err != nil {
+		t.Fatalf("failed to read IDENTITY.md: %v", err)
+	}
+
+	if !strings.Contains(string(soulData), "## Vibe") || !strings.Contains(string(soulData), id.Vibe) {
+		t.Fatalf("SOUL.md should include vibe section with value %q", id.Vibe)
+	}
+	if !strings.Contains(string(identityData), "- **Vibe:** "+id.Vibe) {
+		t.Fatalf("IDENTITY.md should include vibe line")
+	}
+}
+
+func TestAgentsMdContent_IncludesIdentityReadStep(t *testing.T) {
+	content := agentsMdContent()
+	if !strings.Contains(content, "`IDENTITY.md`") {
+		t.Fatalf("AGENTS.md content should instruct reading IDENTITY.md")
 	}
 }
