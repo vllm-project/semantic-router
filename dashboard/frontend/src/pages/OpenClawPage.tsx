@@ -1028,6 +1028,12 @@ const ProvisionTab: React.FC<{
     }
   }, [teams, selectedTeamId])
 
+  useEffect(() => {
+    if (selectedTeamId && !teams.some(team => team.id === selectedTeamId)) {
+      setSelectedTeamId(teams[0]?.id || '')
+    }
+  }, [teams, selectedTeamId])
+
   const toggleSkill = (id: string) => {
     setSelectedSkills(prev =>
       prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
@@ -1035,7 +1041,7 @@ const ProvisionTab: React.FC<{
   }
 
   const handleProvision = async () => {
-    if (!selectedTeamId) {
+    if (!selectedTeamId || !selectedTeam) {
       setProvisionError('Team selection is required before provisioning.')
       return
     }
