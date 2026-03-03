@@ -1076,7 +1076,7 @@ func sanitizeContainerName(raw string) string {
 	}
 
 	first := cleaned[0]
-	if !((first >= 'a' && first <= 'z') || (first >= '0' && first <= '9')) {
+	if (first < 'a' || first > 'z') && (first < '0' || first > '9') {
 		cleaned = "oc-" + cleaned
 	}
 	return cleaned
@@ -1168,8 +1168,8 @@ func writeOpenClawConfig(path string, req ProvisionRequest) error {
 	// Recover from stale state where a previous bad bind mount caused
 	// openclaw.json to be created as a directory on host.
 	if info, err := os.Stat(path); err == nil && info.IsDir() {
-		if err := os.RemoveAll(path); err != nil {
-			return fmt.Errorf("failed to replace config directory %s with file: %w", path, err)
+		if removeErr := os.RemoveAll(path); removeErr != nil {
+			return fmt.Errorf("failed to replace config directory %s with file: %w", path, removeErr)
 		}
 	} else if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to stat config path %s: %w", path, err)
