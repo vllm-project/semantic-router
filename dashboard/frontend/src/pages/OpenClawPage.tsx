@@ -449,13 +449,6 @@ const ClawDashboardTab: React.FC<{
       <div className={styles.teamDashboard}>
         {productSpotlight}
         {teamComposition}
-        <div className={styles.emptyState}>
-          <div className={styles.emptyStateIcon}>{'\u{1F4DD}'}</div>
-          <div className={styles.emptyStateText}>
-            No agent profile available yet.<br />
-            Create one in <strong>Claw Provision</strong> and it will appear here.
-          </div>
-        </div>
       </div>
     )
   }
@@ -812,12 +805,7 @@ const TeamTab: React.FC<{
           <p>Loading teams...</p>
         </div>
       ) : teams.length === 0 ? (
-        <div className={styles.emptyState}>
-          <div className={styles.emptyStateIcon}>{'\u{1F465}'}</div>
-          <div className={styles.emptyStateText}>
-            No teams yet. Create one above before provisioning OpenClaw agents.
-          </div>
-        </div>
+        null
       ) : (
         <div className={styles.teamCardGrid}>
           {teams.map(team => {

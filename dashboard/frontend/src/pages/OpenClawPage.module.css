@@ -23,8 +23,8 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background:
-    radial-gradient(120% 160% at 0% 0%, rgba(34, 211, 238, 0.16), transparent 50%),
-    radial-gradient(120% 130% at 100% 100%, rgba(34, 197, 94, 0.13), transparent 52%),
+    radial-gradient(120% 160% at 0% 0%, rgba(143, 212, 0, 0.18), transparent 50%),
+    radial-gradient(120% 130% at 100% 100%, rgba(118, 185, 0, 0.15), transparent 52%),
     linear-gradient(145deg, rgba(15, 23, 42, 0.35), rgba(2, 6, 23, 0.1)),
     var(--color-bg-secondary);
 }
@@ -66,7 +66,7 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
-  filter: drop-shadow(0 12px 24px rgba(34, 211, 238, 0.28));
+  filter: drop-shadow(0 12px 24px rgba(118, 185, 0, 0.3));
 }
 
 .title {
@@ -80,8 +80,9 @@
 .titleLead {
   font-size: 1.18em;
   font-weight: 800;
-  color: #67e8f9;
+  color: #8fd400;
   letter-spacing: 0.01em;
+  text-shadow: 0 0 14px rgba(118, 185, 0, 0.22);
 }
 
 .titleBadge {
@@ -94,9 +95,9 @@
 }
 
 .badgePowered {
-  background: rgba(34, 211, 238, 0.16);
-  color: #22d3ee;
-  border: 1px solid rgba(34, 211, 238, 0.35);
+  background: rgba(118, 185, 0, 0.16);
+  color: #8fd400;
+  border: 1px solid rgba(118, 185, 0, 0.4);
 }
 
 .badgeRunning {
