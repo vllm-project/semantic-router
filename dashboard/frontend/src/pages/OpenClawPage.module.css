@@ -109,6 +109,22 @@
 }
 
 /* Dashboard Tab - iframe */
+.embeddedHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.embeddedHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
 .iframeContainer {
   flex: 1;
   min-height: 600px;
@@ -123,6 +139,20 @@
   height: 100%;
   min-height: 600px;
   border: none;
+}
+
+.iframeContainer:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
+  border: none;
+  border-radius: 0;
+  background: #000;
+}
+
+.iframeContainer:fullscreen .iframe {
+  height: 100vh;
+  min-height: 100vh;
 }
 
 .iframePlaceholder {

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import styles from './OpenClawPage.module.css'
 
 // --- Types ---
@@ -178,6 +178,8 @@ const StatusTab: React.FC<{
   const [actionError, setActionError] = useState('')
   const [selectedContainer, setSelectedContainer] = useState<string | null>(null)
   const [gatewayToken, setGatewayToken] = useState('')
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const iframeContainerRef = useRef<HTMLDivElement | null>(null)
 
   const selected = containers.find(c => c.containerName === selectedContainer)
 
@@ -190,6 +192,14 @@ const StatusTab: React.FC<{
         .catch(() => {})
     }
   }, [selected?.healthy, selectedContainer])
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement))
+    }
+    document.addEventListener('fullscreenchange', onFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
+  }, [])
 
   const handleAction = async (action: 'start' | 'stop', name: string) => {
     setActionLoading(name)
@@ -253,20 +263,51 @@ const StatusTab: React.FC<{
     const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws'
     const proxyBase = `/embedded/openclaw/${encodeURIComponent(selectedContainer)}/`
     const iframeSrc = `${proxyBase}#token=${encodeURIComponent(gatewayToken)}&gatewayUrl=${encodeURIComponent(`${wsProto}://${window.location.host}${proxyBase}`)}`
+    const openInNewTab = () => {
+      window.open(iframeSrc, '_blank', 'noopener,noreferrer')
+    }
+    const toggleFullscreen = async () => {
+      try {
+        if (!document.fullscreenElement) {
+          if (iframeContainerRef.current?.requestFullscreen) {
+            await iframeContainerRef.current.requestFullscreen()
+            return
+          }
+        } else {
+          await document.exitFullscreen()
+          return
+        }
+      } catch {
+        // fall through to new tab
+      }
+      openInNewTab()
+    }
+
     return (
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-          <button className={styles.btnSecondary} onClick={() => setSelectedContainer(null)} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        <div className={styles.embeddedHeader}>
+          <div className={styles.embeddedHeaderLeft}>
+            <button className={styles.btnSecondary} onClick={() => setSelectedContainer(null)} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              Back to Status
+            </button>
+            <span style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
+              {selected.containerName} &mdash; port {selected.port}
+            </span>
+          </div>
+          <button className={styles.btnSecondary} onClick={toggleFullscreen} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 18 9 12 15 6" />
+              <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+              <path d="M16 3h3a2 2 0 0 1 2 2v3" />
+              <path d="M8 21H5a2 2 0 0 1-2-2v-3" />
+              <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
             </svg>
-            Back to Status
+            {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
           </button>
-          <span style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
-            {selected.containerName} &mdash; port {selected.port}
-          </span>
         </div>
-        <div className={styles.iframeContainer}>
+        <div ref={iframeContainerRef} className={styles.iframeContainer}>
           <iframe
             key={gatewayToken}
             className={styles.iframe}
