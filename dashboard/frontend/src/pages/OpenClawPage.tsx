@@ -847,9 +847,6 @@ const DashboardTab: React.FC<{
             return (
               <div key={agent.containerName} className={styles.agentCard}>
                 <div className={styles.agentCardHeader}>
-                  <div className={styles.agentIdentityMarks}>
-                    <img className={styles.clawLogoMark} src="/openclaw.svg" alt="" aria-hidden="true" />
-                  </div>
                   <div className={styles.agentAvatar}>{emoji}</div>
                   <div className={styles.agentHeaderMeta}>
                     <div className={styles.agentName}>{name}</div>
