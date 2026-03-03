@@ -294,6 +294,18 @@ func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, de
 		return &modelRefs[0], "single"
 	}
 
+	// PRISM coarse filter: pre-qualify candidates before selection
+	candidates := modelRefs
+	if prismCfg := r.getPRISMConfig(algorithm); prismCfg != nil && prismCfg.Enabled {
+		validator := r.buildPRISMValidator(prismCfg)
+		if prismCfg.Mode == "coarse_filter" || prismCfg.Mode == "hybrid" {
+			candidates = validator.FilterCandidates(context.Background(), candidates, query)
+			if len(candidates) == 1 {
+				return &candidates[0], "prism_coarse"
+			}
+		}
+	}
+
 	// Determine selection method: per-decision algorithm takes precedence over global config
 	method := r.getSelectionMethod(algorithm)
 
@@ -306,7 +318,7 @@ func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, de
 	// Fallback to first model if no selector available
 	if selector == nil {
 		logging.Warnf("[ModelSelection] No selector available for method %s, using first model", method)
-		return &modelRefs[0], string(method)
+		return &candidates[0], string(method)
 	}
 
 	// Build selection context with cost/quality weights
@@ -317,7 +329,7 @@ func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, de
 		Query:                      query,
 		DecisionName:               decisionName,
 		CategoryName:               categoryName,
-		CandidateModels:            modelRefs,
+		CandidateModels:            candidates,
 		CostWeight:                 costWeight,
 		QualityWeight:              qualityWeight,
 		LatencyAwareTPOTPercentile: latencyAwareTPOTPercentile,
@@ -328,24 +340,37 @@ func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, de
 	result, err := selector.Select(context.Background(), selCtx)
 	if err != nil {
 		logging.Warnf("[ModelSelection] Selection failed: %v, using first model", err)
-		return &modelRefs[0], string(method)
+		return &candidates[0], string(method)
+	}
+
+	// PRISM fine filter: validate the selected model after selection
+	if prismCfg := r.getPRISMConfig(algorithm); prismCfg != nil && prismCfg.Enabled {
+		if prismCfg.Mode == "fine_filter" || prismCfg.Mode == "hybrid" {
+			validator := r.buildPRISMValidator(prismCfg)
+			result, _ = validator.ValidateSelection(context.Background(), result, candidates, query, selector, selCtx)
+			if result == nil {
+				// PRISM rejected and refusal_policy is "reject"
+				logging.Warnf("[ModelSelection] PRISM rejected all candidates, using first model")
+				return &candidates[0], "prism_rejected"
+			}
+		}
 	}
 
 	// Find the selected model in the candidates
-	for i := range modelRefs {
-		if modelRefs[i].Model == result.SelectedModel ||
-			modelRefs[i].LoRAName == result.SelectedModel {
+	for i := range candidates {
+		if candidates[i].Model == result.SelectedModel ||
+			candidates[i].LoRAName == result.SelectedModel {
 			logging.Infof("[ModelSelection] Selected %s (method=%s, score=%.4f, confidence=%.2f): %s",
 				result.SelectedModel, method, result.Score, result.Confidence, result.Reasoning)
 			// Record selection metrics
 			selection.RecordSelection(string(method), decisionName, result.SelectedModel, result.Score)
-			return &modelRefs[i], string(method)
+			return &candidates[i], string(method)
 		}
 	}
 
 	// Fallback if selected model not found in candidates (shouldn't happen)
 	logging.Warnf("[ModelSelection] Selected model %s not found in candidates, using first model", result.SelectedModel)
-	return &modelRefs[0], string(method)
+	return &candidates[0], string(method)
 }
 
 // getSelectionMethod determines which selection algorithm to use.
@@ -413,6 +438,49 @@ func (r *OpenAIRouter) getLatencyAwarePercentiles(algorithm *config.AlgorithmCon
 		return 0, 0
 	}
 	return algorithm.LatencyAware.TPOTPercentile, algorithm.LatencyAware.TTFTPercentile
+}
+
+// getPRISMConfig extracts the PRISM configuration from the per-decision algorithm config.
+// Returns nil if PRISM is not configured.
+func (r *OpenAIRouter) getPRISMConfig(algorithm *config.AlgorithmConfig) *config.PRISMAlgorithmConfig {
+	if algorithm == nil || algorithm.PRISM == nil {
+		return nil
+	}
+	return algorithm.PRISM
+}
+
+// buildPRISMValidator creates a PRISMValidator from the per-decision PRISM config
+// and the global model configuration for domain boundaries.
+func (r *OpenAIRouter) buildPRISMValidator(prismCfg *config.PRISMAlgorithmConfig) *selection.PRISMValidator {
+	cfg := &selection.PRISMConfig{
+		Enabled:            prismCfg.Enabled,
+		Mode:               prismCfg.Mode,
+		DomainThreshold:    prismCfg.DomainThreshold,
+		RefusalPolicy:      prismCfg.RefusalPolicy,
+		MaxRerouteAttempts: prismCfg.MaxRerouteAttempts,
+	}
+	// Apply defaults
+	if cfg.Mode == "" {
+		cfg.Mode = selection.PRISMModeFineFilter
+	}
+	if cfg.DomainThreshold == 0 {
+		cfg.DomainThreshold = 0.3
+	}
+	if cfg.RefusalPolicy == "" {
+		cfg.RefusalPolicy = selection.PRISMRefusalReroute
+	}
+	if cfg.MaxRerouteAttempts == 0 {
+		cfg.MaxRerouteAttempts = 3
+	}
+
+	validator := selection.NewPRISMValidator(cfg)
+
+	// Initialize domain boundaries from model config
+	if r.Config != nil && r.Config.BackendModels.ModelConfig != nil {
+		validator.InitializeFromConfig(r.Config.BackendModels.ModelConfig)
+	}
+
+	return validator
 }
 
 // processUserFeedbackForElo automatically updates Elo ratings based on detected user feedback signals.
