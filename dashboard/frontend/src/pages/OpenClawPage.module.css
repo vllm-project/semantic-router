@@ -221,7 +221,10 @@
 
 .iframeContainer {
   flex: 1;
-  min-height: 600px;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  min-height: 680px;
+  max-height: 78vh;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   overflow: hidden;
@@ -231,7 +234,7 @@
 .iframe {
   width: 100%;
   height: 100%;
-  min-height: 600px;
+  min-height: 0;
   border: none;
 }
 
@@ -1849,6 +1852,11 @@
   .tabs {
     flex-wrap: nowrap;
     overflow-x: auto;
+  }
+
+  .iframeContainer {
+    min-height: 560px;
+    max-height: 74vh;
   }
 
   .productFeatureGrid {
