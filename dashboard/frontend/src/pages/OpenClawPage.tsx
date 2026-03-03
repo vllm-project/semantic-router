@@ -113,11 +113,62 @@ const OPENCLAW_FEATURES = [
 
 const FALLBACK_MODEL_BASE_URL = 'http://127.0.0.1:8801/v1'
 
-const getDynamicModelBaseUrl = (): string => {
-  if (typeof window === 'undefined' || !window.location?.origin) {
-    return FALLBACK_MODEL_BASE_URL
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object'
+
+const toPort = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const normalized = Math.trunc(value)
+    if (normalized >= 1 && normalized <= 65535) return normalized
+    return null
   }
-  return `${window.location.origin.replace(/\/+$/, '')}/api/router/v1`
+  if (typeof value === 'string') {
+    const normalized = Number.parseInt(value.trim(), 10)
+    if (Number.isFinite(normalized) && normalized >= 1 && normalized <= 65535) {
+      return normalized
+    }
+  }
+  return null
+}
+
+const normalizeListenerHost = (value: unknown): string => {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  if (!raw || raw === '0.0.0.0' || raw === '::' || raw === '[::]') {
+    return '127.0.0.1'
+  }
+  return raw
+}
+
+const formatHostForUrl = (host: string): string => {
+  if (host.includes(':') && !host.startsWith('[') && !host.endsWith(']')) {
+    return `[${host}]`
+  }
+  return host
+}
+
+const extractListenerCandidates = (config: unknown): Record<string, unknown>[] => {
+  if (!isRecord(config)) return []
+
+  const listeners = Array.isArray(config.listeners) ? config.listeners : []
+  const apiServer = isRecord(config.api_server) ? config.api_server : null
+  const apiServerListeners = apiServer && Array.isArray(apiServer.listeners) ? apiServer.listeners : []
+
+  return [...listeners, ...apiServerListeners].filter(isRecord)
+}
+
+const deriveModelBaseUrlFromRouterConfig = (config: unknown): string | null => {
+  const listeners = extractListenerCandidates(config)
+  for (const listener of listeners) {
+    const port = toPort(listener.port)
+    if (!port) continue
+    const host = formatHostForUrl(normalizeListenerHost(listener.address))
+    return `http://${host}:${port}/v1`
+  }
+  return null
+}
+
+const getInitialModelBaseUrl = (): string => {
+  return FALLBACK_MODEL_BASE_URL
 }
 
 // --- Component ---
@@ -272,13 +323,12 @@ const OpenClawPage: React.FC = () => {
             teamsLoading={teamsLoading}
             containers={containers}
             onTeamsUpdated={fetchTeams}
-            onSwitchToProvision={() => setActiveTab('provision')}
           />
         </div>
       )}
       {activeTab === 'provision' && (
         <div className={styles.tabContentShell}>
-          <ProvisionTab
+          <WorkerTab
             containers={containers}
             teams={teams}
             onProvisioned={refreshAll}
@@ -612,7 +662,7 @@ const ClawDashboardTab: React.FC<{
 
                 <div className={styles.agentFooter}>
                   <button className={styles.btnSmall} onClick={onSwitchToStatus}>
-                    Manage in Claw Status
+                    Manage
                   </button>
                   {agent.createdAt && (
                     <span className={styles.agentTimestamp}>
@@ -634,8 +684,9 @@ const TeamTab: React.FC<{
   teamsLoading: boolean
   containers: OpenClawStatus[]
   onTeamsUpdated: () => void
-  onSwitchToProvision: () => void
-}> = ({ teams, teamsLoading, containers, onTeamsUpdated, onSwitchToProvision }) => {
+}> = ({ teams, teamsLoading, containers, onTeamsUpdated }) => {
+  const [searchQuery, setSearchQuery] = useState('')
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -675,6 +726,12 @@ const TeamTab: React.FC<{
     })
   }
 
+  const openCreateModal = () => {
+    resetForm()
+    setError('')
+    setIsModalOpen(true)
+  }
+
   const handleSave = async () => {
     const name = form.name.trim()
     if (!name) {
@@ -706,6 +763,7 @@ const TeamTab: React.FC<{
         setError(data.error || 'Failed to save team')
       } else {
         resetForm()
+        setIsModalOpen(false)
         onTeamsUpdated()
       }
     } catch (e) {
@@ -726,6 +784,7 @@ const TeamTab: React.FC<{
       description: team.description || '',
     })
     setError('')
+    setIsModalOpen(true)
   }
 
   const handleDelete = async (team: TeamProfile) => {
@@ -738,7 +797,10 @@ const TeamTab: React.FC<{
       if (!res.ok) {
         setError(data.error || 'Failed to delete team')
       } else {
-        if (editingTeamId === team.id) resetForm()
+        if (editingTeamId === team.id) {
+          resetForm()
+          setIsModalOpen(false)
+        }
         onTeamsUpdated()
       }
     } catch (e) {
@@ -748,67 +810,56 @@ const TeamTab: React.FC<{
     }
   }
 
+  const filteredTeams = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    if (!query) {
+      return teams
+    }
+    return teams.filter(team => {
+      return [
+        team.id,
+        team.name,
+        team.role || '',
+        team.vibe || '',
+        team.principal || '',
+        team.description || '',
+      ].some(value => value.toLowerCase().includes(query))
+    })
+  }, [teams, searchQuery])
+
   return (
     <div className={styles.teamManager}>
-      <div className={styles.teamPanel}>
-        <div className={styles.teamPanelHeader}>
-          <h3 className={styles.teamPanelTitle}>{editingTeamId ? 'Edit Team' : 'Create Team'}</h3>
-          <span className={styles.teamPanelSubtitle}>{teams.length} teams</span>
+      <div className={styles.entityToolbar}>
+        <div className={styles.entitySearch}>
+          <input
+            className={styles.entitySearchInput}
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search team by name, id, role, vibe..."
+          />
         </div>
-        {error && <div className={styles.errorAlert}><span>{error}</span></div>}
-        <div className={styles.formRow}>
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Team Name</label>
-            <input className={styles.textInput} value={form.name} onChange={e => updateForm('name', e.target.value)} placeholder="Routing Core" />
-          </div>
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Team ID (Optional)</label>
-            <input className={styles.textInput} value={form.id} onChange={e => updateForm('id', e.target.value)} placeholder="routing-core" disabled={Boolean(editingTeamId)} />
-          </div>
-        </div>
-        <div className={styles.formRowThree}>
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Vibe</label>
-            <input className={styles.textInput} value={form.vibe} onChange={e => updateForm('vibe', e.target.value)} placeholder="Calm, decisive" />
-          </div>
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Role</label>
-            <input className={styles.textInput} value={form.role} onChange={e => updateForm('role', e.target.value)} placeholder="Research pod" />
-          </div>
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Principal</label>
-            <input className={styles.textInput} value={form.principal} onChange={e => updateForm('principal', e.target.value)} placeholder="Safety first" />
-          </div>
-        </div>
-        <div className={styles.formGroup}>
-          <label className={styles.formLabel}>Description</label>
-          <textarea className={styles.textArea} value={form.description} onChange={e => updateForm('description', e.target.value)} rows={3} placeholder="What this team is responsible for..." />
-        </div>
-        <div className={styles.actions}>
-          <div className={styles.actionsLeft}>
-            {editingTeamId && <button className={styles.btnSecondary} onClick={resetForm}>Cancel Edit</button>}
-          </div>
-          <div className={styles.actionsRight}>
-            <button className={styles.btnPrimary} onClick={handleSave} disabled={saving}>
-              {saving ? 'Saving...' : editingTeamId ? 'Update Team' : 'Create Team'}
-            </button>
-            <button className={styles.btnSecondary} onClick={onSwitchToProvision}>
-              Create Agent
-            </button>
-          </div>
+        <div className={styles.entityToolbarActions}>
+          <button className={styles.btnPrimary} onClick={openCreateModal}>
+            New Team
+          </button>
         </div>
       </div>
+      {error && <div className={styles.errorAlert}><span>{error}</span></div>}
 
       {teamsLoading ? (
         <div className={styles.loading}>
           <div className={styles.spinner} />
           <p>Loading teams...</p>
         </div>
-      ) : teams.length === 0 ? (
-        null
+      ) : filteredTeams.length === 0 ? (
+        <div className={styles.emptyState}>
+          <div className={styles.emptyStateText}>
+            {teams.length === 0 ? 'No teams yet.' : 'No teams match your search.'}
+          </div>
+        </div>
       ) : (
         <div className={styles.teamCardGrid}>
-          {teams.map(team => {
+          {filteredTeams.map(team => {
             const stats = teamStats.get(team.id) || { total: 0, running: 0 }
             return (
               <article key={team.id} className={styles.teamEntityCard}>
@@ -835,6 +886,66 @@ const TeamTab: React.FC<{
               </article>
             )
           })}
+        </div>
+      )}
+
+      {isModalOpen && (
+        <div className={styles.ocModalOverlay} onClick={() => !saving && setIsModalOpen(false)}>
+          <div className={styles.ocModal} onClick={e => e.stopPropagation()}>
+            <div className={styles.ocModalHeader}>
+              <h3 className={styles.ocModalTitle}>{editingTeamId ? 'Edit Team' : 'New Team'}</h3>
+              <button
+                className={styles.ocModalClose}
+                onClick={() => !saving && setIsModalOpen(false)}
+                disabled={saving}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <div className={styles.ocModalBody}>
+              <div className={styles.formRow}>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Team Name</label>
+                  <input className={styles.textInput} value={form.name} onChange={e => updateForm('name', e.target.value)} placeholder="Routing Core" />
+                </div>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Team ID (Optional)</label>
+                  <input className={styles.textInput} value={form.id} onChange={e => updateForm('id', e.target.value)} placeholder="routing-core" disabled={Boolean(editingTeamId)} />
+                </div>
+              </div>
+              <div className={styles.formRowThree}>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Vibe</label>
+                  <input className={styles.textInput} value={form.vibe} onChange={e => updateForm('vibe', e.target.value)} placeholder="Calm, decisive" />
+                </div>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Role</label>
+                  <input className={styles.textInput} value={form.role} onChange={e => updateForm('role', e.target.value)} placeholder="Research pod" />
+                </div>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Principal</label>
+                  <input className={styles.textInput} value={form.principal} onChange={e => updateForm('principal', e.target.value)} placeholder="Safety first" />
+                </div>
+              </div>
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Description</label>
+                <textarea className={styles.textArea} value={form.description} onChange={e => updateForm('description', e.target.value)} rows={4} placeholder="What this team is responsible for..." />
+              </div>
+            </div>
+            <div className={styles.ocModalFooter}>
+              <button
+                className={styles.btnSecondary}
+                onClick={() => setIsModalOpen(false)}
+                disabled={saving}
+              >
+                Cancel
+              </button>
+              <button className={styles.btnPrimary} onClick={handleSave} disabled={saving}>
+                {saving ? 'Saving...' : editingTeamId ? 'Update Team' : 'Create Team'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -1106,16 +1217,323 @@ const StatusTab: React.FC<{
 }
 
 // =============================================================
-//  Provision Tab — 4-Step Wizard
+//  Worker Tab — CRUD + Provision Wizard Modal
 // =============================================================
 
-const ProvisionTab: React.FC<{
+const WorkerTab: React.FC<{
   containers: OpenClawStatus[]
   teams: TeamProfile[]
   onProvisioned: () => void
   onSwitchToTeam: () => void
   onSwitchToStatus: () => void
 }> = ({ containers, teams, onProvisioned, onSwitchToTeam, onSwitchToStatus }) => {
+  const [searchQuery, setSearchQuery] = useState('')
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [editingWorker, setEditingWorker] = useState<OpenClawStatus | null>(null)
+  const [editForm, setEditForm] = useState({
+    teamId: '',
+    name: '',
+    emoji: '',
+    role: '',
+    vibe: '',
+    principles: '',
+  })
+
+  const filteredWorkers = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    const sorted = [...containers].sort((a, b) => {
+      const left = (a.agentName || a.containerName || '').toLowerCase()
+      const right = (b.agentName || b.containerName || '').toLowerCase()
+      return left.localeCompare(right)
+    })
+    if (!query) return sorted
+    return sorted.filter(worker => (
+      [
+        worker.containerName,
+        worker.agentName || '',
+        worker.teamName || '',
+        worker.teamId || '',
+        worker.agentRole || '',
+        worker.agentVibe || '',
+        worker.agentPrinciples || '',
+      ].some(value => value.toLowerCase().includes(query))
+    ))
+  }, [containers, searchQuery])
+
+  const openEditModal = (worker: OpenClawStatus) => {
+    setEditingWorker(worker)
+    setEditForm({
+      teamId: worker.teamId || '',
+      name: worker.agentName || '',
+      emoji: worker.agentEmoji || '',
+      role: worker.agentRole || '',
+      vibe: worker.agentVibe || '',
+      principles: worker.agentPrinciples || '',
+    })
+    setError('')
+    setIsEditModalOpen(true)
+  }
+
+  const updateEditForm = (field: keyof typeof editForm, value: string) => {
+    setEditForm(prev => ({ ...prev, [field]: value }))
+  }
+
+  const handleUpdateWorker = async () => {
+    if (!editingWorker) return
+    if (!editForm.teamId.trim()) {
+      setError('Worker team is required')
+      return
+    }
+    setSaving(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/openclaw/workers/${encodeURIComponent(editingWorker.containerName)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teamId: editForm.teamId.trim(),
+          identity: {
+            name: editForm.name.trim(),
+            emoji: editForm.emoji.trim(),
+            role: editForm.role.trim(),
+            vibe: editForm.vibe.trim(),
+            principles: editForm.principles.trim(),
+          },
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.error || 'Failed to update worker')
+      } else {
+        setIsEditModalOpen(false)
+        setEditingWorker(null)
+        onProvisioned()
+      }
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteWorker = async (worker: OpenClawStatus) => {
+    if (!confirm(`Delete worker "${worker.agentName || worker.containerName}"?`)) return
+    setSaving(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/openclaw/workers/${encodeURIComponent(worker.containerName)}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.error || 'Failed to delete worker')
+      } else {
+        onProvisioned()
+      }
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className={styles.teamManager}>
+      <div className={styles.entityToolbar}>
+        <div className={styles.entitySearch}>
+          <input
+            className={styles.entitySearchInput}
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search worker by name, team, role, vibe..."
+          />
+        </div>
+        <div className={styles.entityToolbarActions}>
+          <button className={styles.btnPrimary} onClick={() => setIsCreateModalOpen(true)}>
+            New Worker
+          </button>
+        </div>
+      </div>
+      {error && <div className={styles.errorAlert}><span>{error}</span></div>}
+
+      {filteredWorkers.length === 0 ? (
+        <div className={styles.emptyState}>
+          <div className={styles.emptyStateText}>
+            {containers.length === 0 ? 'No workers created yet.' : 'No workers match your search.'}
+          </div>
+        </div>
+      ) : (
+        <div className={styles.agentGrid}>
+          {filteredWorkers.map(worker => {
+            const name = worker.agentName?.trim() || worker.containerName
+            const emoji = worker.agentEmoji?.trim() || '\u{1F916}'
+            const role = worker.agentRole?.trim() || 'Not set'
+            const vibe = worker.agentVibe?.trim() || 'Not set'
+            const principles = truncateText(worker.agentPrinciples, 160) || 'Not set'
+
+            return (
+              <article key={worker.containerName} className={styles.agentCard}>
+                <div className={styles.agentCardHeader}>
+                  <div className={styles.agentAvatar}>{emoji}</div>
+                  <div className={styles.agentHeaderMeta}>
+                    <div className={styles.agentName}>{name}</div>
+                    <div className={styles.agentContainerRef}>{worker.containerName}</div>
+                    <div className={styles.teamTag}>{worker.teamName?.trim() || 'Unassigned'}</div>
+                  </div>
+                  <span className={`${styles.healthBadge} ${
+                    worker.healthy
+                      ? styles.healthBadgeHealthy
+                      : worker.running
+                        ? styles.healthBadgeRunning
+                        : styles.healthBadgeStopped
+                  }`}>
+                    {worker.healthy ? 'Healthy' : worker.running ? 'Starting' : 'Stopped'}
+                  </span>
+                </div>
+
+                <div className={styles.agentBody}>
+                  <div className={styles.agentMetaRow}>
+                    <span className={styles.agentMetaLabel}>Role</span>
+                    <span className={styles.agentMetaValue}>{role}</span>
+                  </div>
+                  <div className={styles.agentMetaRow}>
+                    <span className={styles.agentMetaLabel}>Vibe</span>
+                    <span className={styles.agentMetaValue}>{vibe}</span>
+                  </div>
+                  <div className={styles.agentMetaRow}>
+                    <span className={styles.agentMetaLabel}>Team</span>
+                    <span className={styles.agentMetaValue}>{worker.teamName?.trim() || 'Unassigned'}</span>
+                  </div>
+                  <div className={styles.agentMetaRow}>
+                    <span className={styles.agentMetaLabel}>Principal</span>
+                    <span className={styles.agentMetaValue}>{principles}</span>
+                  </div>
+                </div>
+
+                <div className={styles.agentFooter}>
+                  <div className={styles.entityRowActions}>
+                    <button className={styles.btnSmall} onClick={() => openEditModal(worker)}>Edit</button>
+                    <button className={styles.btnSmall} onClick={onSwitchToStatus}>Status</button>
+                    <button className={`${styles.btnSmall} ${styles.btnSmallDanger}`} onClick={() => handleDeleteWorker(worker)} disabled={saving}>
+                      Delete
+                    </button>
+                  </div>
+                  {worker.createdAt && (
+                    <span className={styles.agentTimestamp}>
+                      Created {new Date(worker.createdAt).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      )}
+
+      {isCreateModalOpen && (
+        <div className={styles.ocModalOverlay} onClick={() => setIsCreateModalOpen(false)}>
+          <div className={`${styles.ocModal} ${styles.ocModalWide}`} onClick={e => e.stopPropagation()}>
+            <div className={styles.ocModalHeader}>
+              <h3 className={styles.ocModalTitle}>New Worker</h3>
+              <button className={styles.ocModalClose} onClick={() => setIsCreateModalOpen(false)} aria-label="Close">
+                ×
+              </button>
+            </div>
+            <div className={styles.ocModalBody}>
+              <WorkerProvisionWizard
+                containers={containers}
+                teams={teams}
+                onProvisioned={onProvisioned}
+                onSwitchToTeam={onSwitchToTeam}
+                onSwitchToStatus={onSwitchToStatus}
+                onCreated={() => setIsCreateModalOpen(false)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isEditModalOpen && editingWorker && (
+        <div className={styles.ocModalOverlay} onClick={() => !saving && setIsEditModalOpen(false)}>
+          <div className={styles.ocModal} onClick={e => e.stopPropagation()}>
+            <div className={styles.ocModalHeader}>
+              <h3 className={styles.ocModalTitle}>Edit Worker</h3>
+              <button className={styles.ocModalClose} onClick={() => !saving && setIsEditModalOpen(false)} disabled={saving} aria-label="Close">
+                ×
+              </button>
+            </div>
+            <div className={styles.ocModalBody}>
+              <div className={styles.formRow}>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Team</label>
+                  <select
+                    className={styles.selectInput}
+                    value={editForm.teamId}
+                    onChange={e => updateEditForm('teamId', e.target.value)}
+                  >
+                    <option value="">Select a team...</option>
+                    {teams.map(team => (
+                      <option key={team.id} value={team.id}>{team.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Emoji</label>
+                  <input
+                    className={styles.textInput}
+                    value={editForm.emoji}
+                    onChange={e => updateEditForm('emoji', e.target.value)}
+                    placeholder={'\u{1F916}'}
+                  />
+                </div>
+              </div>
+              <div className={styles.formRow}>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Worker Name</label>
+                  <input className={styles.textInput} value={editForm.name} onChange={e => updateEditForm('name', e.target.value)} placeholder="Atlas" />
+                </div>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Role</label>
+                  <input className={styles.textInput} value={editForm.role} onChange={e => updateEditForm('role', e.target.value)} placeholder="AI operations engineer" />
+                </div>
+              </div>
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Vibe</label>
+                <input className={styles.textInput} value={editForm.vibe} onChange={e => updateEditForm('vibe', e.target.value)} placeholder="Calm, precise, opinionated" />
+              </div>
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Principal</label>
+                <textarea className={styles.textArea} value={editForm.principles} onChange={e => updateEditForm('principles', e.target.value)} rows={5} placeholder="Core truths and operating principles..." />
+              </div>
+            </div>
+            <div className={styles.ocModalFooter}>
+              <button className={styles.btnSecondary} onClick={() => setIsEditModalOpen(false)} disabled={saving}>
+                Cancel
+              </button>
+              <button className={styles.btnPrimary} onClick={handleUpdateWorker} disabled={saving}>
+                {saving ? 'Saving...' : 'Update Worker'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// =============================================================
+//  Provision Wizard — 4-Step Wizard
+// =============================================================
+
+const WorkerProvisionWizard: React.FC<{
+  containers: OpenClawStatus[]
+  teams: TeamProfile[]
+  onProvisioned: () => void
+  onSwitchToTeam: () => void
+  onSwitchToStatus: () => void
+  onCreated?: () => void
+}> = ({ containers, teams, onProvisioned, onSwitchToTeam, onSwitchToStatus, onCreated }) => {
   const [currentStep, setCurrentStep] = useState(0)
   const [skills, setSkills] = useState<SkillTemplate[]>([])
   const [selectedSkills, setSelectedSkills] = useState<string[]>([])
@@ -1132,7 +1550,7 @@ const ProvisionTab: React.FC<{
     containerName: '',
     gatewayPort: 0,
     authToken: '',
-    modelBaseUrl: getDynamicModelBaseUrl(),
+    modelBaseUrl: getInitialModelBaseUrl(),
     modelName: 'auto',
     memoryBackend: 'local',
     memoryBaseUrl: '',
@@ -1147,6 +1565,20 @@ const ProvisionTab: React.FC<{
 
   // Fetch available skills and next port on mount
   useEffect(() => {
+    fetch('/api/router/config/all')
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        const discoveredModelBaseUrl = deriveModelBaseUrlFromRouterConfig(data)
+        if (!discoveredModelBaseUrl) return
+        setContainer(prev => {
+          if (prev.modelBaseUrl.trim() && prev.modelBaseUrl !== FALLBACK_MODEL_BASE_URL) {
+            return prev
+          }
+          return { ...prev, modelBaseUrl: discoveredModelBaseUrl }
+        })
+      })
+      .catch(() => {})
+
     fetch('/api/openclaw/skills')
       .then(r => r.json())
       .then(data => setSkills(data))
@@ -1189,7 +1621,7 @@ const ProvisionTab: React.FC<{
     setProvisionError('')
     setProvisionResult(null)
     try {
-      const res = await fetch('/api/openclaw/provision', {
+      const res = await fetch('/api/openclaw/workers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ teamId: selectedTeamId, identity, skills: selectedSkills, container }),
@@ -1200,6 +1632,7 @@ const ProvisionTab: React.FC<{
       } else {
         setProvisionResult(data)
         onProvisioned()
+        onCreated?.()
       }
     } catch (e) {
       setProvisionError(String(e))
@@ -1506,7 +1939,7 @@ const ConfigStep: React.FC<{
         <div className={styles.formGroup}>
           <label className={styles.formLabel}>Model Base URL</label>
           <input className={styles.textInput} value={container.modelBaseUrl} onChange={e => update('modelBaseUrl', e.target.value)} />
-          <div className={styles.formHint}>Auto-discovered from playground routing; editable if needed</div>
+          <div className={styles.formHint}>Auto-discovered from router listeners in current config; editable if needed</div>
         </div>
         <div className={styles.formGroup}>
           <label className={styles.formLabel}>Model Name</label>

@@ -368,6 +368,8 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		mux.HandleFunc("/api/openclaw/skills", ocHandler.SkillsHandler())
 		mux.HandleFunc("/api/openclaw/teams", ocHandler.TeamsHandler())
 		mux.HandleFunc("/api/openclaw/teams/", ocHandler.TeamByIDHandler())
+		mux.HandleFunc("/api/openclaw/workers", ocHandler.WorkersHandler())
+		mux.HandleFunc("/api/openclaw/workers/", ocHandler.WorkerByIDHandler())
 		mux.HandleFunc("/api/openclaw/provision", ocHandler.ProvisionHandler())
 		mux.HandleFunc("/api/openclaw/start", ocHandler.StartHandler())
 		mux.HandleFunc("/api/openclaw/stop", ocHandler.StopHandler())
@@ -419,6 +421,10 @@ func Setup(cfg *config.Config) *http.ServeMux {
 			_, _ = w.Write([]byte(`[]`))
 		})
 		mux.HandleFunc("/api/openclaw/teams", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[]`))
+		})
+		mux.HandleFunc("/api/openclaw/workers", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`[]`))
 		})

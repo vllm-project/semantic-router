@@ -1312,6 +1312,51 @@
   gap: 1rem;
 }
 
+.entityToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.9rem;
+}
+
+.entitySearch {
+  flex: 1 1 auto;
+  max-width: 580px;
+}
+
+.entitySearchInput {
+  width: 100%;
+  padding: 0.6rem 0.78rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+  font-size: 0.86rem;
+}
+
+.entitySearchInput:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(118, 185, 0, 0.18);
+}
+
+.entityToolbarActions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.entityRowActions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.entityRowActions .btnSmall {
+  min-width: 72px;
+  justify-content: center;
+}
+
 .teamStatsGrid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1436,6 +1481,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 1rem;
+  align-items: stretch;
 }
 
 .agentCard {
@@ -1448,6 +1494,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
+  height: 100%;
 }
 
 .agentCardHeader {
@@ -1511,6 +1558,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
+  flex: 1 1 auto;
 }
 
 .agentMetaRow {
@@ -1539,6 +1587,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  margin-top: auto;
 }
 
 .agentTimestamp {
@@ -1617,6 +1666,81 @@
   color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.ocModalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.7);
+  backdrop-filter: blur(3px);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+}
+
+.ocModal {
+  width: min(960px, 100%);
+  max-height: min(92vh, 980px);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ocModalWide {
+  width: min(1180px, 100%);
+}
+
+.ocModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+}
+
+.ocModalTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--color-text);
+}
+
+.ocModalClose {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.ocModalClose:hover:not(:disabled) {
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.ocModalBody {
+  padding: 1rem;
+  overflow: auto;
+}
+
+.ocModalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  padding: 0.9rem 1rem;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
 }
 
 /* Responsive */
@@ -1742,6 +1866,19 @@
 
   .teamEntityActions {
     width: 100%;
+  }
+
+  .entityToolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .entitySearch {
+    max-width: none;
+  }
+
+  .entityToolbarActions {
+    justify-content: flex-end;
   }
 
   .actions {

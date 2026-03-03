@@ -348,3 +348,143 @@ func TestTeamByIDHandler_DeleteRejectsAssignedTeam(t *testing.T) {
 		t.Fatalf("expected 409 when team is assigned, got %d", deleteResp.Code)
 	}
 }
+
+func TestWorkersHandler_List(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewOpenClawHandler(tempDir, false)
+
+	if err := h.saveRegistry([]ContainerEntry{
+		{
+			Name:      "atlas",
+			Port:      18788,
+			Image:     "ghcr.io/openclaw/openclaw:latest",
+			Token:     "token",
+			DataDir:   tempDir,
+			TeamID:    "research",
+			TeamName:  "Research",
+			AgentName: "Atlas",
+		},
+		{
+			Name:      "claude",
+			Port:      18789,
+			Image:     "ghcr.io/openclaw/openclaw:latest",
+			Token:     "token",
+			DataDir:   tempDir,
+			TeamID:    "infra",
+			TeamName:  "Infra",
+			AgentName: "Claude",
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed workers: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/openclaw/workers", nil)
+	resp := httptest.NewRecorder()
+	h.WorkersHandler().ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+
+	var workers []ContainerEntry
+	if err := json.Unmarshal(resp.Body.Bytes(), &workers); err != nil {
+		t.Fatalf("failed to parse workers list: %v", err)
+	}
+	if len(workers) != 2 {
+		t.Fatalf("expected 2 workers, got %d", len(workers))
+	}
+	if workers[0].Name != "atlas" {
+		t.Fatalf("expected sorted worker list by name, got first=%q", workers[0].Name)
+	}
+}
+
+func TestWorkerByIDHandler_Update(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewOpenClawHandler(tempDir, false)
+
+	if err := h.saveTeams([]TeamEntry{
+		{ID: "research", Name: "Research", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z"},
+		{ID: "infra", Name: "Infrastructure", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z"},
+	}); err != nil {
+		t.Fatalf("failed to seed teams: %v", err)
+	}
+	if err := h.saveRegistry([]ContainerEntry{
+		{
+			Name:            "atlas",
+			Port:            18788,
+			Image:           "ghcr.io/openclaw/openclaw:latest",
+			Token:           "token",
+			DataDir:         tempDir,
+			TeamID:          "research",
+			TeamName:        "Research",
+			AgentName:       "Atlas",
+			AgentEmoji:      "🦀",
+			AgentRole:       "Researcher",
+			AgentVibe:       "Calm",
+			AgentPrinciples: "Safety first",
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed workers: %v", err)
+	}
+
+	updateReq := httptest.NewRequest(http.MethodPut, "/api/openclaw/workers/atlas", strings.NewReader(`{
+		"teamId":"infra",
+		"identity":{
+			"name":"Atlas Prime",
+			"emoji":"🧠",
+			"role":"AI Infra",
+			"vibe":"Focused",
+			"principles":"Reliability first"
+		}
+	}`))
+	updateResp := httptest.NewRecorder()
+	h.WorkerByIDHandler().ServeHTTP(updateResp, updateReq)
+	if updateResp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", updateResp.Code, updateResp.Body.String())
+	}
+
+	entries, err := h.loadRegistry()
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 worker in registry, got %d", len(entries))
+	}
+	if entries[0].TeamID != "infra" || entries[0].TeamName != "Infrastructure" {
+		t.Fatalf("expected updated team mapping, got id=%q name=%q", entries[0].TeamID, entries[0].TeamName)
+	}
+	if entries[0].AgentName != "Atlas Prime" || entries[0].AgentRole != "AI Infra" || entries[0].AgentVibe != "Focused" {
+		t.Fatalf("identity fields were not updated: %+v", entries[0])
+	}
+}
+
+func TestWorkerByIDHandler_Delete(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewOpenClawHandler(tempDir, false)
+
+	if err := h.saveRegistry([]ContainerEntry{
+		{
+			Name:    "atlas",
+			Port:    18788,
+			Image:   "ghcr.io/openclaw/openclaw:latest",
+			Token:   "token",
+			DataDir: tempDir,
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed workers: %v", err)
+	}
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/openclaw/workers/atlas", nil)
+	deleteResp := httptest.NewRecorder()
+	h.WorkerByIDHandler().ServeHTTP(deleteResp, deleteReq)
+	if deleteResp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", deleteResp.Code, deleteResp.Body.String())
+	}
+
+	entries, err := h.loadRegistry()
+	if err != nil {
+		t.Fatalf("failed to load registry after delete: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("expected registry to be empty after delete, got %d entries", len(entries))
+	}
+}

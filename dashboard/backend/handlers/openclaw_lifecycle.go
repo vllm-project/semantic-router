@@ -10,6 +10,25 @@ import (
 
 // --- Start / Stop / Delete ---
 
+func (h *OpenClawHandler) deleteContainerByName(name string) error {
+	_ = h.containerRun("rm", "-f", name)
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	entries, err := h.loadRegistry()
+	if err != nil {
+		return err
+	}
+	filtered := entries[:0]
+	for _, e := range entries {
+		if e.Name != name {
+			filtered = append(filtered, e)
+		}
+	}
+	return h.saveRegistry(filtered)
+}
+
 func (h *OpenClawHandler) StartHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -98,20 +117,9 @@ func (h *OpenClawHandler) DeleteHandler() http.HandlerFunc {
 			return
 		}
 
-		_ = h.containerRun("rm", "-f", name)
-
-		h.mu.Lock()
-		entries, _ := h.loadRegistry()
-		filtered := entries[:0]
-		for _, e := range entries {
-			if e.Name != name {
-				filtered = append(filtered, e)
-			}
-		}
-		if err := h.saveRegistry(filtered); err != nil {
+		if err := h.deleteContainerByName(name); err != nil {
 			log.Printf("openclaw: failed to save registry on delete: %v", err)
 		}
-		h.mu.Unlock()
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]interface{}{
