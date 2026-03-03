@@ -19,8 +19,6 @@ interface IdentityConfig {
   vibe: string
   principles: string
   boundaries: string
-  userName: string
-  userNotes: string
 }
 
 interface ContainerConfig {
@@ -985,8 +983,6 @@ const ProvisionTab: React.FC<{
     vibe: '',
     principles: '',
     boundaries: '',
-    userName: '',
-    userNotes: '',
   })
   const [container, setContainer] = useState<ContainerConfig>({
     containerName: '',
@@ -1198,7 +1194,7 @@ const IdentityStep: React.FC<{
       <h2 className={styles.stepTitle}>Step 1: Agent Identity</h2>
       <p className={styles.stepDescription}>
         Define who your OpenClaw agent is — its name, personality, principles, and boundaries.
-        These files form the agent's core identity (SOUL.md, IDENTITY.md, USER.md).
+        These files form the agent's core identity (SOUL.md, IDENTITY.md).
       </p>
 
       <div className={styles.sectionTitle}>Team Selection (Required)</div>
@@ -1258,19 +1254,6 @@ const IdentityStep: React.FC<{
         <label className={styles.formLabel}>Boundaries</label>
         <textarea className={styles.textArea} value={identity.boundaries} onChange={e => update('boundaries', e.target.value)} rows={4} placeholder="- Don't run destructive commands without approval..." />
         <div className={styles.formHint}>What should the agent never do? Safety guardrails and limits.</div>
-      </div>
-
-      <div className={styles.sectionTitle}>Your Team / User Context</div>
-
-      <div className={styles.formRow}>
-        <div className={styles.formGroup}>
-          <label className={styles.formLabel}>Team / User Name</label>
-          <input className={styles.textInput} value={identity.userName} onChange={e => update('userName', e.target.value)} placeholder="The Engineering Team" />
-        </div>
-        <div className={styles.formGroup}>
-          <label className={styles.formLabel}>Context Notes</label>
-          <input className={styles.textInput} value={identity.userNotes} onChange={e => update('userNotes', e.target.value)} placeholder="Platform engineering team..." />
-        </div>
       </div>
     </div>
   )
