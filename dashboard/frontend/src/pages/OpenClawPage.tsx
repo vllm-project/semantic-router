@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import styles from './OpenClawPage.module.css'
 
 // --- Types ---
@@ -19,8 +19,6 @@ interface IdentityConfig {
   vibe: string
   principles: string
   boundaries: string
-  userName: string
-  userNotes: string
 }
 
 interface ContainerConfig {
@@ -28,7 +26,6 @@ interface ContainerConfig {
   gatewayPort: number
   authToken: string
   modelBaseUrl: string
-  modelApiKey: string
   modelName: string
   memoryBackend: string
   memoryBaseUrl: string
@@ -45,6 +42,26 @@ interface OpenClawStatus {
   port: number
   healthy: boolean
   error: string
+  image?: string
+  createdAt?: string
+  teamId?: string
+  teamName?: string
+  agentName?: string
+  agentEmoji?: string
+  agentRole?: string
+  agentVibe?: string
+  agentPrinciples?: string
+}
+
+interface TeamProfile {
+  id: string
+  name: string
+  vibe?: string
+  role?: string
+  principal?: string
+  description?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 interface ProvisionResponse {
@@ -60,18 +77,108 @@ interface ProvisionResponse {
 // --- Provision Steps ---
 
 const PROVISION_STEPS = [
-  { key: 'identity', label: 'Identity' },
+  { key: 'identity', label: 'Identity & Team' },
   { key: 'skills', label: 'Skills' },
   { key: 'config', label: 'Configuration' },
   { key: 'deploy', label: 'Deploy' },
 ]
 
+const OPENCLAW_FEATURES = [
+  {
+    title: 'Intelligent Routing',
+    description: 'Model selection with cost-accuracy balance driven by vLLM SR routing intelligence.',
+    icon: '\u{1F9ED}',
+  },
+  {
+    title: 'Safety Guardrails',
+    description: 'Protect agents from jailbreak attacks, PII leakage, and hallucination risk.',
+    icon: '\u{1F6E1}\uFE0F',
+  },
+  {
+    title: 'Advanced Context Memory',
+    description: 'Persistent context and memory management for long-horizon, multi-step execution.',
+    icon: '\u{1F9E0}',
+  },
+  {
+    title: 'Knowledge Sharing',
+    description: 'Cross-agent experience and knowledge sharing for faster team learning loops.',
+    icon: '\u{1F501}',
+  },
+  {
+    title: 'Isolation & Team Management',
+    description: 'Multi-agent isolation with centralized team operations in one control plane.',
+    icon: '\u{1F9E9}',
+  },
+]
+
+const FALLBACK_MODEL_BASE_URL = 'http://127.0.0.1:8801/v1'
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object'
+
+const toPort = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const normalized = Math.trunc(value)
+    if (normalized >= 1 && normalized <= 65535) return normalized
+    return null
+  }
+  if (typeof value === 'string') {
+    const normalized = Number.parseInt(value.trim(), 10)
+    if (Number.isFinite(normalized) && normalized >= 1 && normalized <= 65535) {
+      return normalized
+    }
+  }
+  return null
+}
+
+const normalizeListenerHost = (value: unknown): string => {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  if (!raw || raw === '0.0.0.0' || raw === '::' || raw === '[::]') {
+    return '127.0.0.1'
+  }
+  return raw
+}
+
+const formatHostForUrl = (host: string): string => {
+  if (host.includes(':') && !host.startsWith('[') && !host.endsWith(']')) {
+    return `[${host}]`
+  }
+  return host
+}
+
+const extractListenerCandidates = (config: unknown): Record<string, unknown>[] => {
+  if (!isRecord(config)) return []
+
+  const listeners = Array.isArray(config.listeners) ? config.listeners : []
+  const apiServer = isRecord(config.api_server) ? config.api_server : null
+  const apiServerListeners = apiServer && Array.isArray(apiServer.listeners) ? apiServer.listeners : []
+
+  return [...listeners, ...apiServerListeners].filter(isRecord)
+}
+
+const deriveModelBaseUrlFromRouterConfig = (config: unknown): string | null => {
+  const listeners = extractListenerCandidates(config)
+  for (const listener of listeners) {
+    const port = toPort(listener.port)
+    if (!port) continue
+    const host = formatHostForUrl(normalizeListenerHost(listener.address))
+    return `http://${host}:${port}/v1`
+  }
+  return null
+}
+
+const getInitialModelBaseUrl = (): string => {
+  return FALLBACK_MODEL_BASE_URL
+}
+
 // --- Component ---
 
 const OpenClawPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'provision' | 'status'>('provision')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'team' | 'provision' | 'status'>('dashboard')
   const [containers, setContainers] = useState<OpenClawStatus[]>([])
+  const [teams, setTeams] = useState<TeamProfile[]>([])
   const [statusLoading, setStatusLoading] = useState(true)
+  const [teamsLoading, setTeamsLoading] = useState(true)
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -87,79 +194,759 @@ const OpenClawPage: React.FC = () => {
     }
   }, [])
 
+  const fetchTeams = useCallback(async () => {
+    try {
+      const res = await fetch('/api/openclaw/teams')
+      if (res.ok) {
+        const data = await res.json()
+        setTeams(Array.isArray(data) ? data : [])
+      } else {
+        setTeams([])
+      }
+    } catch {
+      setTeams([])
+    } finally {
+      setTeamsLoading(false)
+    }
+  }, [])
+
+  const refreshAll = useCallback(() => {
+    void Promise.all([fetchStatus(), fetchTeams()])
+  }, [fetchStatus, fetchTeams])
+
   useEffect(() => {
-    fetchStatus()
-    const interval = setInterval(fetchStatus, 15000)
+    refreshAll()
+    const interval = setInterval(refreshAll, 15000)
     return () => clearInterval(interval)
-  }, [fetchStatus])
+  }, [refreshAll])
 
   const runningCount = containers.filter(c => c.running).length
+  const teamCount = teams.length
 
   return (
     <div className={styles.container}>
       {/* Header */}
       <div className={styles.header}>
-        <div className={styles.headerLeft}>
+        <div className={styles.headerBody}>
+          <div className={styles.headerBadgeRow}>
+            <span className={`${styles.titleBadge} ${styles.badgePowered}`}>vLLM-SR Powered</span>
+            <span className={`${styles.titleBadge} ${styles.badgeTeam}`}>{teamCount} Teams</span>
+            <span className={`${styles.titleBadge} ${runningCount > 0 ? styles.badgeRunning : styles.badgeStopped}`}>
+              {runningCount} Running
+            </span>
+          </div>
           <h1 className={styles.title}>
-            OpenClaw Agent
-            {runningCount > 0 && (
-              <span className={`${styles.titleBadge} ${styles.badgeRunning}`}>
-                {runningCount} Running
-              </span>
-            )}
+            <span className={styles.titleLead}>Semantic Kernel</span> Powered OpenClaw Team
           </h1>
           <p className={styles.subtitle}>
-            Provision, configure, and manage your OpenClaw AI agents. OpenClaw uses Semantic Router
-            for intelligent model routing, memory, and knowledge management.
+            Evolved from vLLM-SR built on Semantic Kernel with System Intelligence.
           </p>
         </div>
-        <div className={styles.headerRight}>
-          <button className={styles.btnSecondary} onClick={fetchStatus}>
-            Refresh
-          </button>
+        <div className={styles.logoPanel}>
+          <img className={styles.logo} src="/openclaw.png" alt="OpenClaw logo" />
         </div>
       </div>
 
       {/* Tabs */}
-      <div className={styles.tabs}>
-        <button
-          className={`${styles.tab} ${activeTab === 'provision' ? styles.tabActive : ''}`}
-          onClick={() => setActiveTab('provision')}
-        >
-          <span className={styles.tabIcon}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
-            </svg>
-          </span>
-          Provision
-        </button>
-        <button
-          className={`${styles.tab} ${activeTab === 'status' ? styles.tabActive : ''}`}
-          onClick={() => setActiveTab('status')}
-        >
-          <span className={styles.tabIcon}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-            </svg>
-          </span>
-          Status ({containers.length})
-        </button>
+      <div className={styles.tabsBar}>
+        <div className={styles.tabs}>
+          <button
+            className={`${styles.tab} ${activeTab === 'dashboard' ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab('dashboard')}
+          >
+            <span className={styles.tabIcon}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                <polyline points="7.5 4.21 12 6.81 16.5 4.21" />
+                <polyline points="7.5 19.79 7.5 14.6 3 12" />
+                <polyline points="21 12 16.5 14.6 16.5 19.79" />
+                <polyline points="12 22.08 12 16.89 16.5 14.3" />
+                <polyline points="12 16.89 7.5 14.3" />
+                <polyline points="12 6.81 12 12" />
+              </svg>
+            </span>
+            Claw Dashboard
+          </button>
+          <button
+            className={`${styles.tab} ${activeTab === 'team' ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab('team')}
+          >
+            <span className={styles.tabIcon}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            </span>
+            Claw Team ({teamCount})
+          </button>
+          <button
+            className={`${styles.tab} ${activeTab === 'provision' ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab('provision')}
+          >
+            <span className={styles.tabIcon}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
+              </svg>
+            </span>
+            Claw Worker
+          </button>
+          <button
+            className={`${styles.tab} ${activeTab === 'status' ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab('status')}
+          >
+            <span className={styles.tabIcon}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+              </svg>
+            </span>
+            Claw Status ({containers.length})
+          </button>
+        </div>
       </div>
 
       {/* Tab Content */}
+      {activeTab === 'dashboard' && (
+        <div className={styles.tabContentShell}>
+          <ClawDashboardTab
+            containers={containers}
+            teams={teams}
+            onSwitchToStatus={() => setActiveTab('status')}
+          />
+        </div>
+      )}
+      {activeTab === 'team' && (
+        <div className={styles.tabContentShell}>
+          <TeamTab
+            teams={teams}
+            teamsLoading={teamsLoading}
+            containers={containers}
+            onTeamsUpdated={fetchTeams}
+          />
+        </div>
+      )}
       {activeTab === 'provision' && (
-        <ProvisionTab
-          containers={containers}
-          onProvisioned={fetchStatus}
-          onSwitchToStatus={() => setActiveTab('status')}
-        />
+        <div className={styles.tabContentShell}>
+          <WorkerTab
+            containers={containers}
+            teams={teams}
+            onProvisioned={refreshAll}
+            onSwitchToTeam={() => setActiveTab('team')}
+            onSwitchToStatus={() => setActiveTab('status')}
+          />
+        </div>
       )}
       {activeTab === 'status' && (
-        <StatusTab
-          containers={containers}
-          statusLoading={statusLoading}
-          onRefresh={fetchStatus}
-        />
+        <div className={styles.tabContentShell}>
+          <StatusTab
+            containers={containers}
+            statusLoading={statusLoading}
+            onRefresh={refreshAll}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+const truncateText = (value?: string, maxLength = 180): string => {
+  const text = (value || '').trim()
+  if (text.length <= maxLength) return text
+  return `${text.slice(0, maxLength).trim()}...`
+}
+
+const ClawDashboardTab: React.FC<{
+  containers: OpenClawStatus[]
+  teams: TeamProfile[]
+  onSwitchToStatus: () => void
+}> = ({ containers, teams, onSwitchToStatus }) => {
+  const totalAgents = containers.length
+  const totalTeams = teams.length
+  const healthyAgents = containers.filter(c => c.healthy).length
+  const runningAgents = containers.filter(c => c.running).length
+  const startingAgents = containers.filter(c => c.running && !c.healthy).length
+  const stoppedAgents = containers.filter(c => !c.running).length
+
+  const roleRows = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const c of containers) {
+      const role = (c.agentRole || '').trim() || 'Unspecified'
+      counts.set(role, (counts.get(role) || 0) + 1)
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+  }, [containers])
+
+  const roleMax = Math.max(...roleRows.map(([, value]) => value), 1)
+  const teamRows = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const c of containers) {
+      const team = (c.teamName || '').trim() || 'Unassigned'
+      counts.set(team, (counts.get(team) || 0) + 1)
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+  }, [containers])
+  const teamMax = Math.max(...teamRows.map(([, value]) => value), 1)
+  const teamCompositionRows = useMemo(() => {
+    const rows = new Map<string, { team: TeamProfile | null; agents: OpenClawStatus[] }>()
+    for (const team of teams) {
+      rows.set(team.id, { team, agents: [] })
+    }
+    for (const agent of containers) {
+      const key = (agent.teamId || '').trim() || '__unassigned__'
+      if (!rows.has(key)) {
+        rows.set(key, {
+          team: key === '__unassigned__'
+            ? null
+            : {
+                id: key,
+                name: (agent.teamName || key).trim() || key,
+                vibe: '',
+                role: '',
+                principal: '',
+              },
+          agents: [],
+        })
+      }
+      rows.get(key)?.agents.push(agent)
+    }
+    return Array.from(rows.values())
+      .filter(row => row.team !== null || row.agents.length > 0)
+      .sort((a, b) => b.agents.length - a.agents.length)
+  }, [teams, containers])
+
+  const productSpotlight = (
+    <section className={styles.productSection}>
+      <div className={styles.productFeatureGrid}>
+        {OPENCLAW_FEATURES.map(feature => (
+          <article key={feature.title} className={styles.productFeatureCard}>
+            <div className={styles.productFeatureIcon}>{feature.icon}</div>
+            <h3 className={styles.productFeatureTitle}>{feature.title}</h3>
+            <p className={styles.productFeatureDescription}>{feature.description}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+  const teamComposition = (
+    <section className={styles.teamCompositionSection}>
+      <div className={styles.teamCompositionHeader}>
+        <h3 className={styles.teamCompositionTitle}>OpenClaw Team Composition</h3>
+      </div>
+      <div className={styles.teamCompositionSummary}>
+        <span>{teamCompositionRows.length} teams</span>
+        <span>{totalAgents} agents</span>
+        <span>{healthyAgents} healthy</span>
+        <span>{runningAgents} running</span>
+      </div>
+      {teamCompositionRows.length === 0 ? (
+        <div className={styles.teamCompositionEmpty}>
+          No OpenClaw team data yet. Provision a team and agents to populate this view.
+        </div>
+      ) : (
+        <div className={styles.teamCompositionGrid}>
+          {teamCompositionRows.map((row, index) => {
+            const team = row.team
+            const teamName = team?.name || 'Unassigned'
+            return (
+              <article key={`${team?.id || 'unassigned'}-${index}`} className={styles.teamCompositionCard}>
+                <div className={styles.teamCompositionCardHeader}>
+                  <div>
+                    <h4 className={styles.teamCompositionCardTitle}>{teamName}</h4>
+                    <div className={styles.teamCompositionCardMeta}>
+                      {team?.role || 'No role'} • {team?.vibe || 'No vibe'}
+                    </div>
+                  </div>
+                  <span className={styles.teamCompositionCardCount}>
+                    {row.agents.length} agent{row.agents.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                {team?.principal && (
+                  <p className={styles.teamCompositionPrincipal}>{team.principal}</p>
+                )}
+                <div className={styles.teamCompositionAgentList}>
+                  {row.agents.length === 0 ? (
+                    <div className={styles.teamCompositionAgentEmpty}>No agents assigned.</div>
+                  ) : row.agents.map(agent => (
+                    <div key={agent.containerName} className={styles.teamCompositionAgentItem}>
+                      <span className={styles.teamCompositionAgentName}>{agent.agentName || agent.containerName}</span>
+                      <span className={`${styles.healthBadge} ${
+                        agent.healthy
+                          ? styles.healthBadgeHealthy
+                          : agent.running
+                            ? styles.healthBadgeRunning
+                            : styles.healthBadgeStopped
+                      }`}>
+                        {agent.healthy ? 'Healthy' : agent.running ? 'Starting' : 'Stopped'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      )}
+    </section>
+  )
+
+  if (containers.length === 0) {
+    return (
+      <div className={styles.teamDashboard}>
+        {productSpotlight}
+        {teamComposition}
+      </div>
+    )
+  }
+
+  return (
+    <div className={styles.teamDashboard}>
+      {productSpotlight}
+      {teamComposition}
+      <div className={styles.teamStatsGrid}>
+        <div className={styles.teamStatCard}>
+          <div className={styles.teamStatValue}>{totalAgents}</div>
+          <div className={styles.teamStatLabel}>Total Agents</div>
+        </div>
+        <div className={styles.teamStatCard}>
+          <div className={styles.teamStatValue}>{healthyAgents}</div>
+          <div className={styles.teamStatLabel}>Healthy</div>
+        </div>
+        <div className={styles.teamStatCard}>
+          <div className={styles.teamStatValue}>{runningAgents}</div>
+          <div className={styles.teamStatLabel}>Running</div>
+        </div>
+        <div className={styles.teamStatCard}>
+          <div className={styles.teamStatValue}>{totalTeams}</div>
+          <div className={styles.teamStatLabel}>Total Teams</div>
+        </div>
+      </div>
+
+      <div className={styles.teamChartsGrid}>
+        <div className={styles.teamPanel}>
+          <div className={styles.teamPanelHeader}>
+            <h3 className={styles.teamPanelTitle}>Health Distribution</h3>
+            <span className={styles.teamPanelSubtitle}>Realtime</span>
+          </div>
+          <div className={styles.breakdownList}>
+            {[
+              ['Healthy', healthyAgents, '#22c55e'],
+              ['Starting', startingAgents, '#eab308'],
+              ['Stopped', stoppedAgents, '#ef4444'],
+            ].map(([label, value, color]) => {
+              const numericValue = Number(value)
+              const pct = totalAgents > 0 ? Math.round((numericValue / totalAgents) * 100) : 0
+              return (
+                <div key={String(label)} className={styles.breakdownRow}>
+                  <div className={styles.breakdownLabel}>{label}</div>
+                  <div className={styles.breakdownTrack}>
+                    <div
+                      className={styles.breakdownBar}
+                      style={{ width: `${Math.max(8, pct)}%`, backgroundColor: String(color) }}
+                    />
+                  </div>
+                  <div className={styles.breakdownValue}>{numericValue} ({pct}%)</div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+        <div className={styles.teamPanel}>
+          <div className={styles.teamPanelHeader}>
+            <h3 className={styles.teamPanelTitle}>Role Distribution</h3>
+            <span className={styles.teamPanelSubtitle}>Top 5</span>
+          </div>
+          <div className={styles.breakdownList}>
+            {roleRows.map(([role, value]) => (
+              <div key={role} className={styles.breakdownRow}>
+                <div className={styles.breakdownLabel}>{role}</div>
+                <div className={styles.breakdownTrack}>
+                  <div className={styles.breakdownBar} style={{ width: `${Math.max(10, Math.round((value / roleMax) * 100))}%` }} />
+                </div>
+                <div className={styles.breakdownValue}>{value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className={styles.teamPanelsRow}>
+        <div className={styles.teamPanel}>
+          <div className={styles.teamPanelHeader}>
+            <h3 className={styles.teamPanelTitle}>Team Distribution</h3>
+            <span className={styles.teamPanelSubtitle}>Top 5</span>
+          </div>
+          <div className={styles.breakdownList}>
+            {teamRows.map(([team, value]) => (
+              <div key={team} className={styles.breakdownRow}>
+                <div className={styles.breakdownLabel}>{team}</div>
+                <div className={styles.breakdownTrack}>
+                  <div className={styles.breakdownBar} style={{ width: `${Math.max(10, Math.round((value / teamMax) * 100))}%` }} />
+                </div>
+                <div className={styles.breakdownValue}>{value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className={styles.teamPanel}>
+          <div className={styles.teamPanelHeader}>
+            <h3 className={styles.teamPanelTitle}>Quick Action</h3>
+            <span className={styles.teamPanelSubtitle}>Control Plane</span>
+          </div>
+          <p className={styles.panelText}>
+            Use Claw Status for lifecycle actions, logs, and embedded control UI.
+          </p>
+          <button className={styles.btnPrimary} onClick={onSwitchToStatus}>
+            Open Claw Status
+          </button>
+        </div>
+      </div>
+
+      <div className={styles.teamPanel}>
+        <div className={styles.teamPanelHeader}>
+          <h3 className={styles.teamPanelTitle}>Team Roster</h3>
+          <span className={styles.teamPanelSubtitle}>{totalAgents} agents</span>
+        </div>
+        <div className={styles.agentGrid}>
+          {containers.map((agent) => {
+            const name = agent.agentName?.trim() || agent.containerName
+            const emoji = agent.agentEmoji?.trim() || '\u{1F9E0}'
+            const role = agent.agentRole?.trim() || 'Not set'
+            const vibe = agent.agentVibe?.trim() || 'Not set'
+            const principles = truncateText(agent.agentPrinciples, 160) || 'Not set'
+
+            return (
+              <div key={agent.containerName} className={styles.agentCard}>
+                <div className={styles.agentCardHeader}>
+                  <div className={styles.agentAvatar}>{emoji}</div>
+                  <div className={styles.agentHeaderMeta}>
+                    <div className={styles.agentName}>{name}</div>
+                    <div className={styles.agentContainerRef}>{agent.containerName}</div>
+                    <div className={styles.teamTag}>{agent.teamName?.trim() || 'Unassigned'}</div>
+                  </div>
+                  <span
+                    className={`${styles.healthBadge} ${
+                      agent.healthy
+                        ? styles.healthBadgeHealthy
+                        : agent.running
+                          ? styles.healthBadgeRunning
+                          : styles.healthBadgeStopped
+                    }`}
+                  >
+                    {agent.healthy ? 'Healthy' : agent.running ? 'Starting' : 'Stopped'}
+                  </span>
+                </div>
+
+                <div className={styles.agentBody}>
+                  <div className={styles.agentMetaRow}>
+                    <span className={styles.agentMetaLabel}>Role</span>
+                    <span className={styles.agentMetaValue}>{role}</span>
+                  </div>
+                  <div className={styles.agentMetaRow}>
+                    <span className={styles.agentMetaLabel}>Vibe</span>
+                    <span className={styles.agentMetaValue}>{vibe}</span>
+                  </div>
+                  <div className={styles.agentMetaRow}>
+                    <span className={styles.agentMetaLabel}>Team</span>
+                    <span className={styles.agentMetaValue}>{agent.teamName?.trim() || 'Unassigned'}</span>
+                  </div>
+                  <div className={styles.agentMetaRow}>
+                    <span className={styles.agentMetaLabel}>Principal</span>
+                    <span className={styles.agentMetaValue}>{principles}</span>
+                  </div>
+                </div>
+
+                <div className={styles.agentFooter}>
+                  <button className={styles.btnSmall} onClick={onSwitchToStatus}>
+                    Manage
+                  </button>
+                  {agent.createdAt && (
+                    <span className={styles.agentTimestamp}>
+                      Created {new Date(agent.createdAt).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const TeamTab: React.FC<{
+  teams: TeamProfile[]
+  teamsLoading: boolean
+  containers: OpenClawStatus[]
+  onTeamsUpdated: () => void
+}> = ({ teams, teamsLoading, containers, onTeamsUpdated }) => {
+  const [searchQuery, setSearchQuery] = useState('')
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingTeamId, setEditingTeamId] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [form, setForm] = useState({
+    id: '',
+    name: '',
+    vibe: '',
+    role: '',
+    principal: '',
+    description: '',
+  })
+
+  const teamStats = useMemo(() => {
+    const counts = new Map<string, { total: number; running: number }>()
+    for (const container of containers) {
+      const key = (container.teamId || '').trim() || '__unassigned__'
+      const prev = counts.get(key) || { total: 0, running: 0 }
+      prev.total += 1
+      if (container.running) prev.running += 1
+      counts.set(key, prev)
+    }
+    return counts
+  }, [containers])
+
+  const updateForm = (field: keyof typeof form, value: string) =>
+    setForm(prev => ({ ...prev, [field]: value }))
+
+  const resetForm = () => {
+    setEditingTeamId(null)
+    setForm({
+      id: '',
+      name: '',
+      vibe: '',
+      role: '',
+      principal: '',
+      description: '',
+    })
+  }
+
+  const openCreateModal = () => {
+    resetForm()
+    setError('')
+    setIsModalOpen(true)
+  }
+
+  const handleSave = async () => {
+    const name = form.name.trim()
+    if (!name) {
+      setError('Team name is required')
+      return
+    }
+    setSaving(true)
+    setError('')
+    const payload = {
+      id: form.id.trim(),
+      name,
+      vibe: form.vibe.trim(),
+      role: form.role.trim(),
+      principal: form.principal.trim(),
+      description: form.description.trim(),
+    }
+    try {
+      const endpoint = editingTeamId
+        ? `/api/openclaw/teams/${encodeURIComponent(editingTeamId)}`
+        : '/api/openclaw/teams'
+      const method = editingTeamId ? 'PUT' : 'POST'
+      const res = await fetch(endpoint, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.error || 'Failed to save team')
+      } else {
+        resetForm()
+        setIsModalOpen(false)
+        onTeamsUpdated()
+      }
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleEdit = (team: TeamProfile) => {
+    setEditingTeamId(team.id)
+    setForm({
+      id: team.id,
+      name: team.name || '',
+      vibe: team.vibe || '',
+      role: team.role || '',
+      principal: team.principal || '',
+      description: team.description || '',
+    })
+    setError('')
+    setIsModalOpen(true)
+  }
+
+  const handleDelete = async (team: TeamProfile) => {
+    if (!confirm(`Delete team "${team.name}"? Assigned agents must be removed or reassigned first.`)) return
+    setSaving(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/openclaw/teams/${encodeURIComponent(team.id)}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.error || 'Failed to delete team')
+      } else {
+        if (editingTeamId === team.id) {
+          resetForm()
+          setIsModalOpen(false)
+        }
+        onTeamsUpdated()
+      }
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const filteredTeams = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    if (!query) {
+      return teams
+    }
+    return teams.filter(team => {
+      return [
+        team.id,
+        team.name,
+        team.role || '',
+        team.vibe || '',
+        team.principal || '',
+        team.description || '',
+      ].some(value => value.toLowerCase().includes(query))
+    })
+  }, [teams, searchQuery])
+
+  return (
+    <div className={styles.teamManager}>
+      <div className={styles.entityToolbar}>
+        <div className={styles.entitySearch}>
+          <input
+            className={styles.entitySearchInput}
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search team by name, id, role, vibe..."
+          />
+        </div>
+        <div className={styles.entityToolbarActions}>
+          <button className={styles.btnPrimary} onClick={openCreateModal}>
+            New Team
+          </button>
+        </div>
+      </div>
+      {error && <div className={styles.errorAlert}><span>{error}</span></div>}
+
+      {teamsLoading ? (
+        <div className={styles.loading}>
+          <div className={styles.spinner} />
+          <p>Loading teams...</p>
+        </div>
+      ) : filteredTeams.length === 0 ? (
+        <div className={styles.emptyState}>
+          <div className={styles.emptyStateText}>
+            {teams.length === 0 ? 'No teams yet.' : 'No teams match your search.'}
+          </div>
+        </div>
+      ) : (
+        <div className={styles.teamCardGrid}>
+          {filteredTeams.map(team => {
+            const stats = teamStats.get(team.id) || { total: 0, running: 0 }
+            return (
+              <article key={team.id} className={styles.teamEntityCard}>
+                <div className={styles.teamEntityHeader}>
+                  <div>
+                    <h3 className={styles.teamEntityName}>{team.name}</h3>
+                    <div className={styles.teamEntityId}>{team.id}</div>
+                  </div>
+                  <div className={styles.teamEntityActions}>
+                    <button className={styles.btnSmall} onClick={() => handleEdit(team)}>Edit</button>
+                    <button className={`${styles.btnSmall} ${styles.btnSmallDanger}`} onClick={() => handleDelete(team)} disabled={saving}>Delete</button>
+                  </div>
+                </div>
+                <div className={styles.teamEntityMeta}>
+                  <span><strong>Role:</strong> {team.role || 'Not set'}</span>
+                  <span><strong>Vibe:</strong> {team.vibe || 'Not set'}</span>
+                  <span><strong>Principal:</strong> {team.principal || 'Not set'}</span>
+                </div>
+                {team.description && <p className={styles.teamEntityDesc}>{truncateText(team.description, 180)}</p>}
+                <div className={styles.teamEntityStats}>
+                  <span>{stats.total} agent{stats.total !== 1 ? 's' : ''}</span>
+                  <span>{stats.running} running</span>
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      )}
+
+      {isModalOpen && (
+        <div className={styles.ocModalOverlay} onClick={() => !saving && setIsModalOpen(false)}>
+          <div className={styles.ocModal} onClick={e => e.stopPropagation()}>
+            <div className={styles.ocModalHeader}>
+              <h3 className={styles.ocModalTitle}>{editingTeamId ? 'Edit Team' : 'New Team'}</h3>
+              <button
+                className={styles.ocModalClose}
+                onClick={() => !saving && setIsModalOpen(false)}
+                disabled={saving}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <div className={styles.ocModalBody}>
+              <div className={styles.formRow}>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Team Name</label>
+                  <input className={styles.textInput} value={form.name} onChange={e => updateForm('name', e.target.value)} placeholder="Routing Core" />
+                </div>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Team ID (Optional)</label>
+                  <input className={styles.textInput} value={form.id} onChange={e => updateForm('id', e.target.value)} placeholder="routing-core" disabled={Boolean(editingTeamId)} />
+                </div>
+              </div>
+              <div className={styles.formRowThree}>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Vibe</label>
+                  <input className={styles.textInput} value={form.vibe} onChange={e => updateForm('vibe', e.target.value)} placeholder="Calm, decisive" />
+                </div>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Role</label>
+                  <input className={styles.textInput} value={form.role} onChange={e => updateForm('role', e.target.value)} placeholder="Research pod" />
+                </div>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Principal</label>
+                  <input className={styles.textInput} value={form.principal} onChange={e => updateForm('principal', e.target.value)} placeholder="Safety first" />
+                </div>
+              </div>
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Description</label>
+                <textarea className={styles.textArea} value={form.description} onChange={e => updateForm('description', e.target.value)} rows={4} placeholder="What this team is responsible for..." />
+              </div>
+            </div>
+            <div className={styles.ocModalFooter}>
+              <button
+                className={styles.btnSecondary}
+                onClick={() => setIsModalOpen(false)}
+                disabled={saving}
+              >
+                Cancel
+              </button>
+              <button className={styles.btnPrimary} onClick={handleSave} disabled={saving}>
+                {saving ? 'Saving...' : editingTeamId ? 'Update Team' : 'Create Team'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -178,6 +965,8 @@ const StatusTab: React.FC<{
   const [actionError, setActionError] = useState('')
   const [selectedContainer, setSelectedContainer] = useState<string | null>(null)
   const [gatewayToken, setGatewayToken] = useState('')
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const iframeContainerRef = useRef<HTMLDivElement | null>(null)
 
   const selected = containers.find(c => c.containerName === selectedContainer)
 
@@ -190,6 +979,14 @@ const StatusTab: React.FC<{
         .catch(() => {})
     }
   }, [selected?.healthy, selectedContainer])
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement))
+    }
+    document.addEventListener('fullscreenchange', onFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
+  }, [])
 
   const handleAction = async (action: 'start' | 'stop', name: string) => {
     setActionLoading(name)
@@ -253,20 +1050,51 @@ const StatusTab: React.FC<{
     const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws'
     const proxyBase = `/embedded/openclaw/${encodeURIComponent(selectedContainer)}/`
     const iframeSrc = `${proxyBase}#token=${encodeURIComponent(gatewayToken)}&gatewayUrl=${encodeURIComponent(`${wsProto}://${window.location.host}${proxyBase}`)}`
+    const openInNewTab = () => {
+      window.open(iframeSrc, '_blank', 'noopener,noreferrer')
+    }
+    const toggleFullscreen = async () => {
+      try {
+        if (!document.fullscreenElement) {
+          if (iframeContainerRef.current?.requestFullscreen) {
+            await iframeContainerRef.current.requestFullscreen()
+            return
+          }
+        } else {
+          await document.exitFullscreen()
+          return
+        }
+      } catch {
+        // fall through to new tab
+      }
+      openInNewTab()
+    }
+
     return (
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-          <button className={styles.btnSecondary} onClick={() => setSelectedContainer(null)} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        <div className={styles.embeddedHeader}>
+          <div className={styles.embeddedHeaderLeft}>
+            <button className={styles.btnSecondary} onClick={() => setSelectedContainer(null)} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              Back to Claw Status
+            </button>
+            <span style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
+              {selected.containerName} &mdash; port {selected.port}
+            </span>
+          </div>
+          <button className={styles.btnSecondary} onClick={toggleFullscreen} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 18 9 12 15 6" />
+              <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+              <path d="M16 3h3a2 2 0 0 1 2 2v3" />
+              <path d="M8 21H5a2 2 0 0 1-2-2v-3" />
+              <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
             </svg>
-            Back to Status
+            {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
           </button>
-          <span style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
-            {selected.containerName} &mdash; port {selected.port}
-          </span>
         </div>
-        <div className={styles.iframeContainer}>
+        <div ref={iframeContainerRef} className={styles.iframeContainer}>
           <iframe
             key={gatewayToken}
             className={styles.iframe}
@@ -290,105 +1118,424 @@ const StatusTab: React.FC<{
         </div>
       )}
 
+      {/** Keep refresh action placement consistent across empty and non-empty states */}
       {containers.length === 0 ? (
-        <div className={styles.emptyState}>
-          <div className={styles.emptyStateIcon}>{'\u{1F433}'}</div>
-          <div className={styles.emptyStateText}>
-            No OpenClaw containers provisioned yet.<br />
-            Use the <strong>Provision</strong> tab to create one.
+        <>
+          <div className={styles.emptyState}>
+            <div className={styles.emptyStateIcon}>{'\u{1F433}'}</div>
+            <div className={styles.emptyStateText}>
+              No OpenClaw containers provisioned yet.<br />
+              Use the <strong>Claw Provision</strong> tab to create one.
+            </div>
           </div>
-        </div>
+          <div className={styles.statusActionsCentered}>
+            <button className={styles.btnSecondary} onClick={onRefresh}>
+              Refresh Status
+            </button>
+          </div>
+        </>
       ) : (
-        <table className={styles.containerTable}>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Port</th>
-              <th>Health</th>
-              <th>Error</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {containers.map(c => (
-              <tr key={c.containerName}>
-                <td className={styles.containerTableName}>{c.containerName}</td>
-                <td className={styles.containerTablePort}>{c.port}</td>
-                <td>
-                  <span className={`${styles.healthBadge} ${
-                    c.healthy ? styles.healthBadgeHealthy :
-                    c.running ? styles.healthBadgeRunning :
-                    styles.healthBadgeStopped
-                  }`}>
-                    {c.healthy ? 'Healthy' : c.running ? 'Starting' : 'Stopped'}
-                  </span>
-                </td>
-                <td style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', maxWidth: '240px' }}>
-                  {c.error || '\u2014'}
-                </td>
-                <td>
-                  <div className={styles.containerActions}>
-                    {c.healthy && (
-                      <button
-                        className={`${styles.btnSmall} ${styles.btnSmallPrimary}`}
-                        onClick={() => setSelectedContainer(c.containerName)}
-                      >
-                        Dashboard
-                      </button>
-                    )}
-                    {c.running ? (
-                      <button
-                        className={styles.btnSmall}
-                        onClick={() => handleAction('stop', c.containerName)}
-                        disabled={actionLoading === c.containerName}
-                      >
-                        Stop
-                      </button>
-                    ) : (
-                      <button
-                        className={styles.btnSmall}
-                        onClick={() => handleAction('start', c.containerName)}
-                        disabled={actionLoading === c.containerName}
-                      >
-                        Start
-                      </button>
-                    )}
-                    <button
-                      className={`${styles.btnSmall} ${styles.btnSmallDanger}`}
-                      onClick={() => handleDelete(c.containerName)}
-                      disabled={actionLoading === c.containerName}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </td>
+        <>
+          <table className={styles.containerTable}>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Team</th>
+                <th>Port</th>
+                <th>Health</th>
+                <th>Error</th>
+                <th>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {containers.map(c => (
+                <tr key={c.containerName}>
+                  <td className={styles.containerTableName}>{c.containerName}</td>
+                  <td>{c.teamName?.trim() || 'Unassigned'}</td>
+                  <td className={styles.containerTablePort}>{c.port}</td>
+                  <td>
+                    <span className={`${styles.healthBadge} ${
+                      c.healthy ? styles.healthBadgeHealthy :
+                      c.running ? styles.healthBadgeRunning :
+                      styles.healthBadgeStopped
+                    }`}>
+                      {c.healthy ? 'Healthy' : c.running ? 'Starting' : 'Stopped'}
+                    </span>
+                  </td>
+                  <td style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', maxWidth: '240px' }}>
+                    {c.error || '\u2014'}
+                  </td>
+                  <td>
+                    <div className={styles.containerActions}>
+                      {c.healthy && (
+                        <button
+                          className={`${styles.btnSmall} ${styles.btnSmallPrimary}`}
+                          onClick={() => setSelectedContainer(c.containerName)}
+                        >
+                          Dashboard
+                        </button>
+                      )}
+                      {c.running ? (
+                        <button
+                          className={styles.btnSmall}
+                          onClick={() => handleAction('stop', c.containerName)}
+                          disabled={actionLoading === c.containerName}
+                        >
+                          Stop
+                        </button>
+                      ) : (
+                        <button
+                          className={styles.btnSmall}
+                          onClick={() => handleAction('start', c.containerName)}
+                          disabled={actionLoading === c.containerName}
+                        >
+                          Start
+                        </button>
+                      )}
+                      <button
+                        className={`${styles.btnSmall} ${styles.btnSmallDanger}`}
+                        onClick={() => handleDelete(c.containerName)}
+                        disabled={actionLoading === c.containerName}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className={styles.statusActions}>
+            <button className={styles.btnSecondary} onClick={onRefresh}>
+              Refresh Status
+            </button>
+          </div>
+        </>
       )}
-
-      <div style={{ display: 'flex', gap: '0.75rem' }}>
-        <button className={styles.btnSecondary} onClick={onRefresh}>
-          Refresh Status
-        </button>
-      </div>
     </div>
   )
 }
 
 // =============================================================
-//  Provision Tab — 4-Step Wizard
+//  Worker Tab — CRUD + Provision Wizard Modal
 // =============================================================
 
-const ProvisionTab: React.FC<{
+const WorkerTab: React.FC<{
   containers: OpenClawStatus[]
+  teams: TeamProfile[]
   onProvisioned: () => void
+  onSwitchToTeam: () => void
   onSwitchToStatus: () => void
-}> = ({ containers, onProvisioned, onSwitchToStatus }) => {
+}> = ({ containers, teams, onProvisioned, onSwitchToTeam, onSwitchToStatus }) => {
+  const [searchQuery, setSearchQuery] = useState('')
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [editingWorker, setEditingWorker] = useState<OpenClawStatus | null>(null)
+  const [editForm, setEditForm] = useState({
+    teamId: '',
+    name: '',
+    emoji: '',
+    role: '',
+    vibe: '',
+    principles: '',
+  })
+
+  const filteredWorkers = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    const sorted = [...containers].sort((a, b) => {
+      const left = (a.agentName || a.containerName || '').toLowerCase()
+      const right = (b.agentName || b.containerName || '').toLowerCase()
+      return left.localeCompare(right)
+    })
+    if (!query) return sorted
+    return sorted.filter(worker => (
+      [
+        worker.containerName,
+        worker.agentName || '',
+        worker.teamName || '',
+        worker.teamId || '',
+        worker.agentRole || '',
+        worker.agentVibe || '',
+        worker.agentPrinciples || '',
+      ].some(value => value.toLowerCase().includes(query))
+    ))
+  }, [containers, searchQuery])
+
+  const openEditModal = (worker: OpenClawStatus) => {
+    setEditingWorker(worker)
+    setEditForm({
+      teamId: worker.teamId || '',
+      name: worker.agentName || '',
+      emoji: worker.agentEmoji || '',
+      role: worker.agentRole || '',
+      vibe: worker.agentVibe || '',
+      principles: worker.agentPrinciples || '',
+    })
+    setError('')
+    setIsEditModalOpen(true)
+  }
+
+  const updateEditForm = (field: keyof typeof editForm, value: string) => {
+    setEditForm(prev => ({ ...prev, [field]: value }))
+  }
+
+  const handleUpdateWorker = async () => {
+    if (!editingWorker) return
+    if (!editForm.teamId.trim()) {
+      setError('Worker team is required')
+      return
+    }
+    setSaving(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/openclaw/workers/${encodeURIComponent(editingWorker.containerName)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          teamId: editForm.teamId.trim(),
+          identity: {
+            name: editForm.name.trim(),
+            emoji: editForm.emoji.trim(),
+            role: editForm.role.trim(),
+            vibe: editForm.vibe.trim(),
+            principles: editForm.principles.trim(),
+          },
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.error || 'Failed to update worker')
+      } else {
+        setIsEditModalOpen(false)
+        setEditingWorker(null)
+        onProvisioned()
+      }
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteWorker = async (worker: OpenClawStatus) => {
+    if (!confirm(`Delete worker "${worker.agentName || worker.containerName}"?`)) return
+    setSaving(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/openclaw/workers/${encodeURIComponent(worker.containerName)}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.error || 'Failed to delete worker')
+      } else {
+        onProvisioned()
+      }
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className={styles.teamManager}>
+      <div className={styles.entityToolbar}>
+        <div className={styles.entitySearch}>
+          <input
+            className={styles.entitySearchInput}
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search worker by name, team, role, vibe..."
+          />
+        </div>
+        <div className={styles.entityToolbarActions}>
+          <button className={styles.btnPrimary} onClick={() => setIsCreateModalOpen(true)}>
+            New Worker
+          </button>
+        </div>
+      </div>
+      {error && <div className={styles.errorAlert}><span>{error}</span></div>}
+
+      {filteredWorkers.length === 0 ? (
+        <div className={styles.emptyState}>
+          <div className={styles.emptyStateText}>
+            {containers.length === 0 ? 'No workers created yet.' : 'No workers match your search.'}
+          </div>
+        </div>
+      ) : (
+        <div className={styles.agentGrid}>
+          {filteredWorkers.map(worker => {
+            const name = worker.agentName?.trim() || worker.containerName
+            const emoji = worker.agentEmoji?.trim() || '\u{1F916}'
+            const role = worker.agentRole?.trim() || 'Not set'
+            const vibe = worker.agentVibe?.trim() || 'Not set'
+            const principles = truncateText(worker.agentPrinciples, 160) || 'Not set'
+
+            return (
+              <article key={worker.containerName} className={styles.agentCard}>
+                <div className={styles.agentCardHeader}>
+                  <div className={styles.agentAvatar}>{emoji}</div>
+                  <div className={styles.agentHeaderMeta}>
+                    <div className={styles.agentName}>{name}</div>
+                    <div className={styles.agentContainerRef}>{worker.containerName}</div>
+                    <div className={styles.teamTag}>{worker.teamName?.trim() || 'Unassigned'}</div>
+                  </div>
+                  <span className={`${styles.healthBadge} ${
+                    worker.healthy
+                      ? styles.healthBadgeHealthy
+                      : worker.running
+                        ? styles.healthBadgeRunning
+                        : styles.healthBadgeStopped
+                  }`}>
+                    {worker.healthy ? 'Healthy' : worker.running ? 'Starting' : 'Stopped'}
+                  </span>
+                </div>
+
+                <div className={styles.agentBody}>
+                  <div className={styles.agentMetaRow}>
+                    <span className={styles.agentMetaLabel}>Role</span>
+                    <span className={styles.agentMetaValue}>{role}</span>
+                  </div>
+                  <div className={styles.agentMetaRow}>
+                    <span className={styles.agentMetaLabel}>Vibe</span>
+                    <span className={styles.agentMetaValue}>{vibe}</span>
+                  </div>
+                  <div className={styles.agentMetaRow}>
+                    <span className={styles.agentMetaLabel}>Team</span>
+                    <span className={styles.agentMetaValue}>{worker.teamName?.trim() || 'Unassigned'}</span>
+                  </div>
+                  <div className={styles.agentMetaRow}>
+                    <span className={styles.agentMetaLabel}>Principal</span>
+                    <span className={styles.agentMetaValue}>{principles}</span>
+                  </div>
+                </div>
+
+                <div className={styles.agentFooter}>
+                  <div className={styles.entityRowActions}>
+                    <button className={styles.btnSmall} onClick={() => openEditModal(worker)}>Edit</button>
+                    <button className={styles.btnSmall} onClick={onSwitchToStatus}>Status</button>
+                    <button className={`${styles.btnSmall} ${styles.btnSmallDanger}`} onClick={() => handleDeleteWorker(worker)} disabled={saving}>
+                      Delete
+                    </button>
+                  </div>
+                  {worker.createdAt && (
+                    <span className={styles.agentTimestamp}>
+                      Created {new Date(worker.createdAt).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      )}
+
+      {isCreateModalOpen && (
+        <div className={styles.ocModalOverlay} onClick={() => setIsCreateModalOpen(false)}>
+          <div className={`${styles.ocModal} ${styles.ocModalWide}`} onClick={e => e.stopPropagation()}>
+            <div className={styles.ocModalHeader}>
+              <h3 className={styles.ocModalTitle}>New Worker</h3>
+              <button className={styles.ocModalClose} onClick={() => setIsCreateModalOpen(false)} aria-label="Close">
+                ×
+              </button>
+            </div>
+            <div className={styles.ocModalBody}>
+              <WorkerProvisionWizard
+                teams={teams}
+                onProvisioned={onProvisioned}
+                onSwitchToTeam={onSwitchToTeam}
+                onSwitchToStatus={onSwitchToStatus}
+                onCreated={() => setIsCreateModalOpen(false)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isEditModalOpen && editingWorker && (
+        <div className={styles.ocModalOverlay} onClick={() => !saving && setIsEditModalOpen(false)}>
+          <div className={styles.ocModal} onClick={e => e.stopPropagation()}>
+            <div className={styles.ocModalHeader}>
+              <h3 className={styles.ocModalTitle}>Edit Worker</h3>
+              <button className={styles.ocModalClose} onClick={() => !saving && setIsEditModalOpen(false)} disabled={saving} aria-label="Close">
+                ×
+              </button>
+            </div>
+            <div className={styles.ocModalBody}>
+              <div className={styles.formRow}>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Team</label>
+                  <select
+                    className={styles.selectInput}
+                    value={editForm.teamId}
+                    onChange={e => updateEditForm('teamId', e.target.value)}
+                  >
+                    <option value="">Select a team...</option>
+                    {teams.map(team => (
+                      <option key={team.id} value={team.id}>{team.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Emoji</label>
+                  <input
+                    className={styles.textInput}
+                    value={editForm.emoji}
+                    onChange={e => updateEditForm('emoji', e.target.value)}
+                    placeholder={'\u{1F916}'}
+                  />
+                </div>
+              </div>
+              <div className={styles.formRow}>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Worker Name</label>
+                  <input className={styles.textInput} value={editForm.name} onChange={e => updateEditForm('name', e.target.value)} placeholder="Atlas" />
+                </div>
+                <div className={styles.formGroup}>
+                  <label className={styles.formLabel}>Role</label>
+                  <input className={styles.textInput} value={editForm.role} onChange={e => updateEditForm('role', e.target.value)} placeholder="AI operations engineer" />
+                </div>
+              </div>
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Vibe</label>
+                <input className={styles.textInput} value={editForm.vibe} onChange={e => updateEditForm('vibe', e.target.value)} placeholder="Calm, precise, opinionated" />
+              </div>
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Principal</label>
+                <textarea className={styles.textArea} value={editForm.principles} onChange={e => updateEditForm('principles', e.target.value)} rows={5} placeholder="Core truths and operating principles..." />
+              </div>
+            </div>
+            <div className={styles.ocModalFooter}>
+              <button className={styles.btnSecondary} onClick={() => setIsEditModalOpen(false)} disabled={saving}>
+                Cancel
+              </button>
+              <button className={styles.btnPrimary} onClick={handleUpdateWorker} disabled={saving}>
+                {saving ? 'Saving...' : 'Update Worker'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// =============================================================
+//  Provision Wizard — 4-Step Wizard
+// =============================================================
+
+const WorkerProvisionWizard: React.FC<{
+  teams: TeamProfile[]
+  onProvisioned: () => void
+  onSwitchToTeam: () => void
+  onSwitchToStatus: () => void
+  onCreated?: () => void
+}> = ({ teams, onProvisioned, onSwitchToTeam, onSwitchToStatus, onCreated }) => {
   const [currentStep, setCurrentStep] = useState(0)
   const [skills, setSkills] = useState<SkillTemplate[]>([])
   const [selectedSkills, setSelectedSkills] = useState<string[]>([])
+  const [selectedTeamId, setSelectedTeamId] = useState('')
   const [identity, setIdentity] = useState<IdentityConfig>({
     name: '',
     emoji: '',
@@ -396,21 +1543,18 @@ const ProvisionTab: React.FC<{
     vibe: '',
     principles: '',
     boundaries: '',
-    userName: '',
-    userNotes: '',
   })
   const [container, setContainer] = useState<ContainerConfig>({
     containerName: '',
     gatewayPort: 0,
     authToken: '',
-    modelBaseUrl: 'http://127.0.0.1:8801/v1',
-    modelApiKey: '',
+    modelBaseUrl: getInitialModelBaseUrl(),
     modelName: 'auto',
-    memoryBackend: 'remote',
-    memoryBaseUrl: 'http://127.0.0.1:8080',
+    memoryBackend: 'local',
+    memoryBaseUrl: '',
     vectorStore: 'openclaw-demo',
     browserEnabled: false,
-    baseImage: 'openclaw:local',
+    baseImage: 'ghcr.io/openclaw/openclaw:latest',
     networkMode: 'host',
   })
   const [provisionResult, setProvisionResult] = useState<ProvisionResponse | null>(null)
@@ -419,6 +1563,20 @@ const ProvisionTab: React.FC<{
 
   // Fetch available skills and next port on mount
   useEffect(() => {
+    fetch('/api/router/config/all')
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        const discoveredModelBaseUrl = deriveModelBaseUrlFromRouterConfig(data)
+        if (!discoveredModelBaseUrl) return
+        setContainer(prev => {
+          if (prev.modelBaseUrl.trim() && prev.modelBaseUrl !== FALLBACK_MODEL_BASE_URL) {
+            return prev
+          }
+          return { ...prev, modelBaseUrl: discoveredModelBaseUrl }
+        })
+      })
+      .catch(() => {})
+
     fetch('/api/openclaw/skills')
       .then(r => r.json())
       .then(data => setSkills(data))
@@ -431,7 +1589,19 @@ const ProvisionTab: React.FC<{
       .catch(() => {})
   }, [])
 
-  const nameCollision = container.containerName !== '' && containers.some(c => c.containerName === container.containerName)
+  const selectedTeam = teams.find(team => team.id === selectedTeamId) || null
+
+  useEffect(() => {
+    if (!selectedTeamId && teams.length > 0) {
+      setSelectedTeamId(teams[0].id)
+    }
+  }, [teams, selectedTeamId])
+
+  useEffect(() => {
+    if (selectedTeamId && !teams.some(team => team.id === selectedTeamId)) {
+      setSelectedTeamId(teams[0]?.id || '')
+    }
+  }, [teams, selectedTeamId])
 
   const toggleSkill = (id: string) => {
     setSelectedSkills(prev =>
@@ -440,14 +1610,18 @@ const ProvisionTab: React.FC<{
   }
 
   const handleProvision = async () => {
+    if (!selectedTeamId || !selectedTeam) {
+      setProvisionError('Team selection is required before provisioning.')
+      return
+    }
     setProvisionLoading(true)
     setProvisionError('')
     setProvisionResult(null)
     try {
-      const res = await fetch('/api/openclaw/provision', {
+      const res = await fetch('/api/openclaw/workers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identity, skills: selectedSkills, container }),
+        body: JSON.stringify({ teamId: selectedTeamId, identity, skills: selectedSkills, container }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -455,6 +1629,7 @@ const ProvisionTab: React.FC<{
       } else {
         setProvisionResult(data)
         onProvisioned()
+        onCreated?.()
       }
     } catch (e) {
       setProvisionError(String(e))
@@ -504,14 +1679,31 @@ const ProvisionTab: React.FC<{
         </div>
       )}
 
+      {teams.length === 0 && (
+        <div className={styles.errorAlert} style={{ background: 'rgba(234, 179, 8, 0.1)', borderColor: 'rgba(234, 179, 8, 0.35)', color: '#eab308' }}>
+          <span>No team available. Create a team first, then come back to provision.</span>
+          <button className={styles.btnSmall} onClick={onSwitchToTeam} type="button">
+            Open Team Tab
+          </button>
+        </div>
+      )}
+
       {/* Step Content */}
-      {currentStep === 0 && <IdentityStep identity={identity} setIdentity={setIdentity} />}
+      {currentStep === 0 && (
+        <IdentityStep
+          identity={identity}
+          setIdentity={setIdentity}
+          teams={teams}
+          selectedTeamId={selectedTeamId}
+          setSelectedTeamId={setSelectedTeamId}
+          onSwitchToTeam={onSwitchToTeam}
+        />
+      )}
       {currentStep === 1 && <SkillsStep skills={skills} selectedSkills={selectedSkills} toggleSkill={toggleSkill} />}
       {currentStep === 2 && (
         <ConfigStep
           container={container}
           setContainer={setContainer}
-          nameCollision={nameCollision}
         />
       )}
       {currentStep === 3 && (
@@ -520,7 +1712,8 @@ const ProvisionTab: React.FC<{
           selectedSkills={selectedSkills}
           skills={skills}
           container={container}
-          nameCollision={nameCollision}
+          selectedTeam={selectedTeam}
+          teamMissing={!selectedTeamId}
           onProvision={handleProvision}
           provisionLoading={provisionLoading}
           provisionResult={provisionResult}
@@ -539,7 +1732,11 @@ const ProvisionTab: React.FC<{
         </div>
         <div className={styles.actionsRight}>
           {currentStep < 3 && (
-            <button className={styles.btnPrimary} onClick={() => goToStep(currentStep + 1)}>
+            <button
+              className={styles.btnPrimary}
+              onClick={() => goToStep(currentStep + 1)}
+              disabled={currentStep === 0 && !selectedTeamId}
+            >
               Next Step
             </button>
           )}
@@ -556,7 +1753,11 @@ const ProvisionTab: React.FC<{
 const IdentityStep: React.FC<{
   identity: IdentityConfig
   setIdentity: React.Dispatch<React.SetStateAction<IdentityConfig>>
-}> = ({ identity, setIdentity }) => {
+  teams: TeamProfile[]
+  selectedTeamId: string
+  setSelectedTeamId: React.Dispatch<React.SetStateAction<string>>
+  onSwitchToTeam: () => void
+}> = ({ identity, setIdentity, teams, selectedTeamId, setSelectedTeamId, onSwitchToTeam }) => {
   const update = (field: keyof IdentityConfig, value: string) =>
     setIdentity(prev => ({ ...prev, [field]: value }))
 
@@ -565,8 +1766,34 @@ const IdentityStep: React.FC<{
       <h2 className={styles.stepTitle}>Step 1: Agent Identity</h2>
       <p className={styles.stepDescription}>
         Define who your OpenClaw agent is — its name, personality, principles, and boundaries.
-        These files form the agent's core identity (SOUL.md, IDENTITY.md, USER.md).
+        These files form the agent's core identity (SOUL.md, IDENTITY.md).
       </p>
+
+      <div className={styles.sectionTitle}>Team Selection (Required)</div>
+      <div className={styles.formRow}>
+        <div className={styles.formGroup}>
+          <label className={styles.formLabel}>Target Team</label>
+          <select
+            className={styles.selectInput}
+            value={selectedTeamId}
+            onChange={e => setSelectedTeamId(e.target.value)}
+          >
+            <option value="">Select a team...</option>
+            {teams.map(team => (
+              <option key={team.id} value={team.id}>
+                {team.name}
+              </option>
+            ))}
+          </select>
+          <div className={styles.formHint}>Every agent must belong to one team.</div>
+        </div>
+        <div className={styles.formGroup}>
+          <label className={styles.formLabel}>Need a new team?</label>
+          <button className={styles.btnSecondary} onClick={onSwitchToTeam} type="button">
+            Go to Team Tab
+          </button>
+        </div>
+      </div>
 
       <div className={styles.formRowThree}>
         <div className={styles.formGroup}>
@@ -599,19 +1826,6 @@ const IdentityStep: React.FC<{
         <label className={styles.formLabel}>Boundaries</label>
         <textarea className={styles.textArea} value={identity.boundaries} onChange={e => update('boundaries', e.target.value)} rows={4} placeholder="- Don't run destructive commands without approval..." />
         <div className={styles.formHint}>What should the agent never do? Safety guardrails and limits.</div>
-      </div>
-
-      <div className={styles.sectionTitle}>Your Team / User Context</div>
-
-      <div className={styles.formRow}>
-        <div className={styles.formGroup}>
-          <label className={styles.formLabel}>Team / User Name</label>
-          <input className={styles.textInput} value={identity.userName} onChange={e => update('userName', e.target.value)} placeholder="The Engineering Team" />
-        </div>
-        <div className={styles.formGroup}>
-          <label className={styles.formLabel}>Context Notes</label>
-          <input className={styles.textInput} value={identity.userNotes} onChange={e => update('userNotes', e.target.value)} placeholder="Platform engineering team..." />
-        </div>
       </div>
     </div>
   )
@@ -663,8 +1877,7 @@ const SkillsStep: React.FC<{
 const ConfigStep: React.FC<{
   container: ContainerConfig
   setContainer: React.Dispatch<React.SetStateAction<ContainerConfig>>
-  nameCollision: boolean
-}> = ({ container, setContainer, nameCollision }) => {
+}> = ({ container, setContainer }) => {
   const update = (field: keyof ContainerConfig, value: string | number | boolean) =>
     setContainer(prev => ({ ...prev, [field]: value }))
 
@@ -678,16 +1891,7 @@ const ConfigStep: React.FC<{
 
       <div className={styles.sectionTitle}>Container</div>
 
-      <div className={styles.formRowThree}>
-        <div className={styles.formGroup}>
-          <label className={styles.formLabel}>Container Name</label>
-          <input className={styles.textInput} value={container.containerName} onChange={e => update('containerName', e.target.value)} placeholder="my-agent" />
-          {nameCollision && (
-            <div className={styles.nameWarning}>
-              A container with this name already exists and will be replaced.
-            </div>
-          )}
-        </div>
+      <div className={styles.formRow}>
         <div className={styles.formGroup}>
           <label className={styles.formLabel}>Gateway Port</label>
           <input className={styles.numberInput} type="number" value={container.gatewayPort} onChange={e => update('gatewayPort', parseInt(e.target.value) || 0)} />
@@ -720,7 +1924,7 @@ const ConfigStep: React.FC<{
         <div className={styles.formGroup}>
           <label className={styles.formLabel}>Model Base URL</label>
           <input className={styles.textInput} value={container.modelBaseUrl} onChange={e => update('modelBaseUrl', e.target.value)} />
-          <div className={styles.formHint}>Envoy/SR endpoint for confidence-routed inference</div>
+          <div className={styles.formHint}>Auto-discovered from router listeners in current config; editable if needed</div>
         </div>
         <div className={styles.formGroup}>
           <label className={styles.formLabel}>Model Name</label>
@@ -729,37 +1933,27 @@ const ConfigStep: React.FC<{
         </div>
       </div>
 
-      <div className={styles.formGroup}>
-        <label className={styles.formLabel}>API Key</label>
-        <input className={styles.textInput} type="password" value={container.modelApiKey} onChange={e => update('modelApiKey', e.target.value)} placeholder="vLLM API key" />
-      </div>
-
-      <div className={styles.sectionTitle}>Memory Backend (Semantic Router)</div>
+      <div className={styles.sectionTitle}>Memory Mode</div>
 
       <div className={styles.formRow}>
         <div className={styles.formGroup}>
           <label className={styles.formLabel}>Memory Backend</label>
           <div className={styles.toggle}>
             <button className={`${styles.toggleOption} ${container.memoryBackend === 'remote' ? styles.toggleOptionSelected : ''}`} onClick={() => update('memoryBackend', 'remote')}>
-              Remote (SR API)
+              Remote Embeddings
             </button>
             <button className={`${styles.toggleOption} ${container.memoryBackend === 'local' ? styles.toggleOptionSelected : ''}`} onClick={() => update('memoryBackend', 'local')}>
-              Local (files)
+              Built-in (Recommended)
             </button>
           </div>
         </div>
       </div>
 
       {container.memoryBackend === 'remote' && (
-        <div className={styles.formRow}>
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Memory Base URL</label>
-            <input className={styles.textInput} value={container.memoryBaseUrl} onChange={e => update('memoryBaseUrl', e.target.value)} />
-          </div>
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Vector Store Name</label>
-            <input className={styles.textInput} value={container.vectorStore} onChange={e => update('vectorStore', e.target.value)} />
-          </div>
+        <div className={styles.formGroup}>
+          <label className={styles.formLabel}>Embedding Base URL (Optional)</label>
+          <input className={styles.textInput} value={container.memoryBaseUrl} onChange={e => update('memoryBaseUrl', e.target.value)} placeholder="https://your-openai-compatible-endpoint/v1" />
+          <div className={styles.formHint}>Used for agents.defaults.memorySearch.remote.baseUrl</div>
         </div>
       )}
 
@@ -790,12 +1984,13 @@ const DeployStep: React.FC<{
   selectedSkills: string[]
   skills: SkillTemplate[]
   container: ContainerConfig
-  nameCollision: boolean
+  selectedTeam: TeamProfile | null
+  teamMissing: boolean
   onProvision: () => void
   provisionLoading: boolean
   provisionResult: ProvisionResponse | null
   onSwitchToStatus: () => void
-}> = ({ identity, selectedSkills, skills, container, nameCollision, onProvision, provisionLoading, provisionResult, onSwitchToStatus }) => {
+}> = ({ identity, selectedSkills, skills, container, selectedTeam, teamMissing, onProvision, provisionLoading, provisionResult, onSwitchToStatus }) => {
   const [copied, setCopied] = useState('')
   const [showCommands, setShowCommands] = useState(false)
 
@@ -815,9 +2010,9 @@ const DeployStep: React.FC<{
         Review your configuration, then provision and start the OpenClaw container.
       </p>
 
-      {nameCollision && (
-        <div className={styles.errorAlert} style={{ background: 'rgba(234, 179, 8, 0.1)', borderColor: 'rgba(234, 179, 8, 0.3)', color: '#eab308' }}>
-          <span>Container &quot;{container.containerName}&quot; already exists and will be replaced upon provisioning.</span>
+      {teamMissing && (
+        <div className={styles.errorAlert} style={{ background: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.35)', color: '#ef4444' }}>
+          <span>Team selection is required before deployment.</span>
         </div>
       )}
 
@@ -832,6 +2027,14 @@ const DeployStep: React.FC<{
           </div>
         </div>
         <div className={styles.summaryCard}>
+          <div className={styles.summaryCardTitle}>Team</div>
+          <div className={styles.summaryCardContent}>
+            <strong>{selectedTeam?.name || '(not selected)'}</strong><br />
+            {(selectedTeam?.role || 'No role set')}<br />
+            <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.8rem' }}>{selectedTeam?.vibe || 'No vibe set'}</span>
+          </div>
+        </div>
+        <div className={styles.summaryCard}>
           <div className={styles.summaryCardTitle}>Skills ({selectedSkills.length})</div>
           <div className={styles.summarySkillList}>
             {selectedSkillNames.map(s => (
@@ -843,7 +2046,7 @@ const DeployStep: React.FC<{
         <div className={styles.summaryCard}>
           <div className={styles.summaryCardTitle}>Container</div>
           <div className={styles.summaryCardContent}>
-            <strong>{container.containerName || '(auto)'}</strong> :{container.gatewayPort || 'auto'}<br />
+            <strong>Auto-generated by backend</strong> :{container.gatewayPort || 'auto'}<br />
             Image: {container.baseImage}<br />
             Network: {container.networkMode}
           </div>
@@ -852,7 +2055,7 @@ const DeployStep: React.FC<{
           <div className={styles.summaryCardTitle}>Model & Memory</div>
           <div className={styles.summaryCardContent}>
             Model: {container.modelName} via SR<br />
-            Memory: {container.memoryBackend === 'remote' ? `Remote (${container.memoryBaseUrl})` : 'Local files'}<br />
+            Memory: {container.memoryBackend === 'remote' ? `Remote embeddings${container.memoryBaseUrl ? ` (${container.memoryBaseUrl})` : ''}` : 'Built-in'}<br />
             Browser: {container.browserEnabled ? 'Enabled' : 'Disabled'}
           </div>
         </div>
@@ -860,7 +2063,7 @@ const DeployStep: React.FC<{
 
       {/* Provision & Start Button */}
       {!provisionResult && (
-        <button className={styles.btnSuccess} onClick={onProvision} disabled={provisionLoading}>
+        <button className={styles.btnSuccess} onClick={onProvision} disabled={provisionLoading || teamMissing}>
           {provisionLoading ? 'Provisioning & starting container...' : 'Provision & Start'}
         </button>
       )}
@@ -882,7 +2085,7 @@ const DeployStep: React.FC<{
           </div>
 
           <button className={styles.btnPrimary} onClick={onSwitchToStatus} style={{ marginBottom: '1rem' }}>
-            Go to Status
+            Go to Claw Status
           </button>
 
           {/* Collapsible reference commands */}

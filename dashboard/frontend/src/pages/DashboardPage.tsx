@@ -245,11 +245,13 @@ const DashboardPage: React.FC = () => {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch('/api/status')
-      if (res.ok) {
-        setStatus(await res.json())
+      const statusRes = await fetch('/api/status')
+      if (statusRes.ok) {
+        setStatus(await statusRes.json())
       }
-    } catch { /* silent */ }
+    } catch {
+      // Ignore transient polling errors.
+    }
   }, [])
 
   const fetchAll = useCallback(async (manual = false) => {

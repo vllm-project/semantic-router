@@ -312,6 +312,7 @@ def docker_start_vllm_sr(
         (return_code, stdout, stderr)
     """
     runtime = get_container_runtime()
+    env_vars = dict(env_vars or {})
 
     # Get and validate image
     image = get_docker_image(image=image, pull_policy=pull_policy)
@@ -416,6 +417,90 @@ def docker_start_vllm_sr(
             f"{models_dir}:/app/models:z",
         ]
     )
+
+    # OpenClaw workspace/config must live on a host-visible absolute path.
+    # The dashboard may call host docker via /var/run/docker.sock, and the host
+    # daemon resolves bind-mount source paths on the host filesystem (not the
+    # vllm-sr container filesystem).
+    default_openclaw_data_dir = os.path.join(config_dir, ".vllm-sr", "openclaw-data")
+    openclaw_data_dir = (
+        env_vars.get("OPENCLAW_DATA_DIR")
+        or os.getenv("OPENCLAW_DATA_DIR")
+        or default_openclaw_data_dir
+    )
+    openclaw_data_dir = os.path.abspath(openclaw_data_dir)
+    os.makedirs(openclaw_data_dir, exist_ok=True)
+    cmd.extend(["-v", f"{openclaw_data_dir}:{openclaw_data_dir}:z"])
+    env_vars["OPENCLAW_DATA_DIR"] = openclaw_data_dir
+    log.info(f"Mounting OpenClaw data directory: {openclaw_data_dir}")
+
+    # Default OpenClaw image for dashboard provisioning (can be overridden by host env).
+    env_vars.setdefault(
+        "OPENCLAW_BASE_IMAGE",
+        os.getenv("OPENCLAW_BASE_IMAGE", "ghcr.io/openclaw/openclaw:latest"),
+    )
+    # In vllm-sr serve deployment, prefer sharing dashboard container network
+    # namespace for OpenClaw child containers to avoid host routing ambiguity.
+    env_vars.setdefault(
+        "OPENCLAW_DEFAULT_NETWORK_MODE",
+        f"container:{VLLM_SR_DOCKER_NAME}",
+    )
+
+    # Enable dashboard OpenClaw lifecycle management from inside vllm-sr container.
+    # It needs Docker CLI access to host daemon.
+    if runtime == "docker":
+        docker_socket = os.getenv("VLLM_SR_DOCKER_SOCKET")
+        socket_candidates = []
+        if docker_socket:
+            socket_candidates.append(docker_socket)
+        else:
+            socket_candidates.append("/var/run/docker.sock")
+            xdg_runtime_dir = os.getenv("XDG_RUNTIME_DIR")
+            if xdg_runtime_dir:
+                socket_candidates.append(os.path.join(xdg_runtime_dir, "docker.sock"))
+            try:
+                socket_candidates.append(f"/run/user/{os.getuid()}/docker.sock")
+            except Exception:
+                pass
+
+        resolved_socket = next(
+            (
+                candidate
+                for candidate in socket_candidates
+                if candidate and os.path.exists(candidate)
+            ),
+            None,
+        )
+        if resolved_socket:
+            cmd.extend(["-v", f"{resolved_socket}:/var/run/docker.sock"])
+            log.info(
+                f"Mounting Docker socket for dashboard OpenClaw: {resolved_socket}"
+            )
+        else:
+            log.warning(
+                f"Docker socket not found (checked: {', '.join(socket_candidates)}); dashboard OpenClaw create/start/stop may be unavailable"
+            )
+
+        # Prefer mounting host docker CLI into the container so OpenClaw works
+        # even with older images that don't include docker binary.
+        docker_bin = os.getenv("VLLM_SR_DOCKER_BIN") or shutil.which("docker")
+        if not docker_bin:
+            for candidate in [
+                "/usr/local/bin/docker",
+                "/usr/bin/docker",
+                "/bin/docker",
+            ]:
+                if os.path.exists(candidate):
+                    docker_bin = candidate
+                    break
+        if docker_bin and os.path.exists(docker_bin):
+            container_docker_bin = "/usr/local/bin/docker"
+            cmd.extend(["-v", f"{docker_bin}:{container_docker_bin}:ro"])
+            cmd.extend(["-e", f"OPENCLAW_CONTAINER_RUNTIME={container_docker_bin}"])
+            log.info(f"Mounting Docker CLI for dashboard OpenClaw: {docker_bin}")
+        else:
+            # Fall back to PATH-based lookup inside container image.
+            cmd.extend(["-e", "OPENCLAW_CONTAINER_RUNTIME=docker"])
 
     # Add environment variables
     for key, value in env_vars.items():
