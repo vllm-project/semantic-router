@@ -6,15 +6,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 )
+
+var containerNameInvalidChars = regexp.MustCompile(`[^a-z0-9_.-]+`)
 
 // --- Registry ---
 
@@ -87,10 +91,218 @@ func (h *OpenClawHandler) nextAvailablePort() int {
 		used[e.Port] = true
 	}
 	for port := 18788; ; port++ {
-		if !used[port] {
+		if !used[port] && isTCPPortAvailable(port) {
 			return port
 		}
 	}
+}
+
+func isTCPPortAvailable(port int) bool {
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return false
+	}
+	_ = ln.Close()
+	return true
+}
+
+func canConnectTCP(host string, port int, timeout time.Duration) bool {
+	addr := net.JoinHostPort(host, fmt.Sprintf("%d", port))
+	conn, err := net.DialTimeout("tcp", addr, timeout)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
+}
+
+func detectContainerRuntime() (string, error) {
+	candidates := []string{
+		strings.TrimSpace(os.Getenv("OPENCLAW_CONTAINER_RUNTIME")),
+		strings.TrimSpace(os.Getenv("CONTAINER_RUNTIME")),
+		"docker",
+		"podman",
+		"/usr/local/bin/docker",
+		"/usr/bin/docker",
+		"/bin/docker",
+		"/usr/local/bin/podman",
+		"/usr/bin/podman",
+		"/bin/podman",
+	}
+
+	seen := make(map[string]bool)
+	checked := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate == "" || seen[candidate] {
+			continue
+		}
+		seen[candidate] = true
+		checked = append(checked, candidate)
+
+		if filepath.IsAbs(candidate) {
+			info, err := os.Stat(candidate)
+			if err == nil && !info.IsDir() {
+				return candidate, nil
+			}
+			continue
+		}
+
+		if resolved, err := exec.LookPath(candidate); err == nil {
+			return resolved, nil
+		}
+	}
+
+	return "", fmt.Errorf(
+		"container runtime not available (checked: %s). PATH=%q. OpenClaw requires docker/podman in dashboard runtime. If you use `vllm-sr serve`, ensure vllm-sr image includes Docker CLI and mount /var/run/docker.sock",
+		strings.Join(checked, ", "), os.Getenv("PATH"),
+	)
+}
+
+func defaultOpenClawBaseImage() string {
+	if candidate := strings.TrimSpace(os.Getenv("OPENCLAW_BASE_IMAGE")); candidate != "" {
+		return candidate
+	}
+	return "ghcr.io/openclaw/openclaw:latest"
+}
+
+func isContainerImageMissingError(output string) bool {
+	lower := strings.ToLower(output)
+	return strings.Contains(lower, "unable to find image") ||
+		strings.Contains(lower, "pull access denied") ||
+		strings.Contains(lower, "manifest unknown") ||
+		strings.Contains(lower, "repository does not exist")
+}
+
+func (h *OpenClawHandler) imageExists(image string) bool {
+	if strings.TrimSpace(image) == "" {
+		return false
+	}
+	_, err := h.containerCombinedOutput("image", "inspect", image)
+	return err == nil
+}
+
+func (h *OpenClawHandler) discoverLocalOpenClawImage() string {
+	out, err := h.containerOutput("image", "ls", "--format", "{{.Repository}}:{{.Tag}}")
+	if err != nil {
+		return ""
+	}
+
+	seen := make(map[string]bool)
+	latestCandidates := make([]string, 0)
+	otherCandidates := make([]string, 0)
+	for _, raw := range strings.Split(string(out), "\n") {
+		image := strings.TrimSpace(raw)
+		if image == "" || seen[image] {
+			continue
+		}
+		seen[image] = true
+
+		lower := strings.ToLower(image)
+		if strings.Contains(lower, "<none>") {
+			continue
+		}
+		if !strings.Contains(lower, "openclaw") {
+			continue
+		}
+		if strings.HasSuffix(lower, ":latest") {
+			latestCandidates = append(latestCandidates, image)
+		} else {
+			otherCandidates = append(otherCandidates, image)
+		}
+	}
+
+	if len(latestCandidates) > 0 {
+		return latestCandidates[0]
+	}
+	if len(otherCandidates) > 0 {
+		return otherCandidates[0]
+	}
+	return ""
+}
+
+func (h *OpenClawHandler) resolveBaseImage(requested string) string {
+	requested = strings.TrimSpace(requested)
+	if requested != "" && requested != "ghcr.io/openclaw/openclaw:latest" {
+		return requested
+	}
+
+	configured := defaultOpenClawBaseImage()
+	if configured != "ghcr.io/openclaw/openclaw:latest" {
+		return configured
+	}
+
+	if h.imageExists("ghcr.io/openclaw/openclaw:latest") {
+		return "ghcr.io/openclaw/openclaw:latest"
+	}
+
+	discovered := h.discoverLocalOpenClawImage()
+	if discovered != "" {
+		log.Printf("openclaw: auto-selected local image %q (ghcr.io/openclaw/openclaw:latest missing)", discovered)
+		return discovered
+	}
+
+	return "ghcr.io/openclaw/openclaw:latest"
+}
+
+func (h *OpenClawHandler) ensureImageAvailable(image string) error {
+	image = strings.TrimSpace(image)
+	if image == "" {
+		return fmt.Errorf("OpenClaw image is empty")
+	}
+	if h.imageExists(image) {
+		return nil
+	}
+
+	out, err := h.containerCombinedOutput("pull", image)
+	if err == nil {
+		log.Printf("openclaw: pulled missing image %q", image)
+		return nil
+	}
+
+	trimmed := strings.TrimSpace(string(out))
+	if strings.HasSuffix(strings.ToLower(image), ":local") {
+		return fmt.Errorf(
+			"OpenClaw image %q is missing locally and cannot be auto-pulled. Build/tag this image locally or set OPENCLAW_BASE_IMAGE to a pullable image",
+			image,
+		)
+	}
+	if trimmed == "" {
+		return fmt.Errorf("failed to pull OpenClaw image %q", image)
+	}
+	return fmt.Errorf("failed to pull OpenClaw image %q: %s", image, trimmed)
+}
+
+func (h *OpenClawHandler) containerCommand(args ...string) (*exec.Cmd, error) {
+	runtimeBin, err := detectContainerRuntime()
+	if err != nil {
+		return nil, err
+	}
+	return exec.Command(runtimeBin, args...), nil // #nosec G204
+}
+
+func (h *OpenClawHandler) containerOutput(args ...string) ([]byte, error) {
+	cmd, err := h.containerCommand(args...)
+	if err != nil {
+		return nil, err
+	}
+	return cmd.Output()
+}
+
+func (h *OpenClawHandler) containerCombinedOutput(args ...string) ([]byte, error) {
+	cmd, err := h.containerCommand(args...)
+	if err != nil {
+		return nil, err
+	}
+	return cmd.CombinedOutput()
+}
+
+func (h *OpenClawHandler) containerRun(args ...string) error {
+	cmd, err := h.containerCommand(args...)
+	if err != nil {
+		return err
+	}
+	return cmd.Run()
 }
 
 // containerDataDir returns the per-container data directory.
@@ -209,16 +421,87 @@ func (h *OpenClawHandler) TokenHandler() http.HandlerFunc {
 
 // --- Status ---
 
+func (h *OpenClawHandler) gatewayHostCandidates() []string {
+	candidates := []string{}
+
+	if explicit := strings.TrimSpace(os.Getenv("OPENCLAW_GATEWAY_HOST")); explicit != "" {
+		candidates = append(candidates, explicit)
+	}
+	if explicitList := strings.TrimSpace(os.Getenv("OPENCLAW_GATEWAY_HOSTS")); explicitList != "" {
+		for _, raw := range strings.Split(explicitList, ",") {
+			if host := strings.TrimSpace(raw); host != "" {
+				candidates = append(candidates, host)
+			}
+		}
+	}
+
+	candidates = append(candidates,
+		"127.0.0.1",
+		"host.docker.internal",
+		"host.containers.internal",
+	)
+
+	seen := map[string]bool{}
+	out := make([]string, 0, len(candidates))
+	for _, host := range candidates {
+		if host == "" || seen[host] {
+			continue
+		}
+		seen[host] = true
+		out = append(out, host)
+	}
+	return out
+}
+
+func (h *OpenClawHandler) resolveGatewayHost(port int) string {
+	candidates := h.gatewayHostCandidates()
+	if len(candidates) == 0 {
+		return "127.0.0.1"
+	}
+	for _, host := range candidates {
+		if canConnectTCP(host, port, 350*time.Millisecond) {
+			return host
+		}
+	}
+	return candidates[0]
+}
+
+func (h *OpenClawHandler) gatewayBaseURL(port int) string {
+	host := h.resolveGatewayHost(port)
+	return fmt.Sprintf("http://%s:%d", host, port)
+}
+
+func (h *OpenClawHandler) gatewayReachable(port int) bool {
+	client := &http.Client{Timeout: 1200 * time.Millisecond}
+	for _, host := range h.gatewayHostCandidates() {
+		target := fmt.Sprintf("http://%s:%d/health", host, port)
+		resp, err := client.Get(target)
+		if err == nil {
+			resp.Body.Close()
+			// Any HTTP response confirms the gateway endpoint is reachable.
+			return true
+		}
+		if canConnectTCP(host, port, 350*time.Millisecond) {
+			return true
+		}
+	}
+	return false
+}
+
 func (h *OpenClawHandler) checkContainerHealth(entry ContainerEntry) OpenClawStatus {
 	status := OpenClawStatus{
 		ContainerName: entry.Name,
-		GatewayURL:    fmt.Sprintf("http://localhost:%d", entry.Port),
+		GatewayURL:    h.gatewayBaseURL(entry.Port),
 		Port:          entry.Port,
 	}
 
-	out, err := exec.Command("docker", "inspect", "-f", "{{.State.Running}}", entry.Name).Output() // #nosec G204
+	out, err := h.containerOutput("inspect", "-f", "{{.State.Running}}", entry.Name)
 	if err != nil {
 		status.Running = false
+		if strings.Contains(err.Error(), "container runtime not available") {
+			status.Error = err.Error()
+			return status
+		}
 		status.Error = "Container not found"
 		return status
 	}
@@ -228,17 +511,15 @@ func (h *OpenClawHandler) checkContainerHealth(entry ContainerEntry) OpenClawSta
 		return status
 	}
 
-	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/health", entry.Port))
-	if err != nil {
+	gatewayReachable := h.gatewayReachable(entry.Port)
+	if !gatewayReachable {
 		status.Error = "Gateway not reachable"
 		return status
 	}
-	resp.Body.Close()
-	gatewayReachable := resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNoContent
 
 	// Compare positions so a successful restart after a previous failure is correctly detected.
-	if logOut, err := exec.Command("docker", "logs", "--tail", "80", entry.Name).CombinedOutput(); err == nil { // #nosec G204
+	logOut, logErr := h.containerCombinedOutput("logs", "--tail", "80", entry.Name)
+	if logErr == nil {
 		logs := string(logOut)
 		lastSuccess := strings.LastIndex(logs, "[gateway] listening on ws://")
 		lastFail := max(
@@ -348,14 +629,42 @@ func (h *OpenClawHandler) SkillsHandler() http.HandlerFunc {
 }
 
 func (h *OpenClawHandler) loadSkills() ([]SkillTemplate, error) {
-	candidates := []string{
+	candidates := make([]string, 0, 12)
+	if p := strings.TrimSpace(os.Getenv("OPENCLAW_SKILLS_PATH")); p != "" {
+		candidates = append(candidates, p)
+	}
+
+	candidates = append(candidates,
 		filepath.Join(h.dataDir, "skills.json"),
 		filepath.Join(h.dataDir, "..", "..", "config", "openclaw-skills.json"),
+		"/app/config/openclaw-skills.json",
+		"/app/dashboard/backend/config/openclaw-skills.json",
+		"./config/openclaw-skills.json",
+	)
+
+	if wd, err := os.Getwd(); err == nil {
+		candidates = append(candidates, filepath.Join(wd, "config", "openclaw-skills.json"))
 	}
 	if exe, err := os.Executable(); err == nil {
-		candidates = append(candidates, filepath.Join(filepath.Dir(exe), "config", "openclaw-skills.json"))
+		exeDir := filepath.Dir(exe)
+		candidates = append(candidates,
+			filepath.Join(exeDir, "config", "openclaw-skills.json"),
+			filepath.Join(exeDir, "..", "config", "openclaw-skills.json"),
+		)
 	}
-	for _, configPath := range candidates {
+
+	seen := make(map[string]struct{}, len(candidates))
+	for _, rawPath := range candidates {
+		configPath := strings.TrimSpace(rawPath)
+		if configPath == "" {
+			continue
+		}
+		cleanPath := filepath.Clean(configPath)
+		if _, ok := seen[cleanPath]; ok {
+			continue
+		}
+		seen[cleanPath] = struct{}{}
+
 		data, err := os.ReadFile(configPath)
 		if err != nil {
 			continue
@@ -364,6 +673,7 @@ func (h *OpenClawHandler) loadSkills() ([]SkillTemplate, error) {
 		if err := json.Unmarshal(data, &skills); err != nil {
 			return nil, fmt.Errorf("invalid %s: %w", configPath, err)
 		}
+		log.Printf("openclaw: loaded %d skills from %s", len(skills), configPath)
 		return skills, nil
 	}
 	return []SkillTemplate{}, nil
@@ -382,20 +692,34 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 			return
 		}
 
+		runtimeBin, runtimeErr := detectContainerRuntime()
+		if runtimeErr != nil {
+			writeJSONError(w, runtimeErr.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		runtimeName := filepath.Base(runtimeBin)
+		if runtimeName == "" {
+			runtimeName = runtimeBin
+		}
+
 		var req ProvisionRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, fmt.Sprintf(`{"error":"Invalid request: %v"}`, err), http.StatusBadRequest)
 			return
 		}
 
-		if req.Container.ContainerName == "" {
-			req.Container.ContainerName = "openclaw-demo"
-		}
+		req.Container.ContainerName = deriveContainerName(req.Container.ContainerName, req.Identity.Name)
 		if req.Container.AuthToken == "" {
 			req.Container.AuthToken = generateToken(24)
 		}
-		if req.Container.BaseImage == "" {
-			req.Container.BaseImage = "openclaw:local"
+		req.Container.BaseImage = h.resolveBaseImage(req.Container.BaseImage)
+		if preferredNetwork := strings.TrimSpace(os.Getenv("OPENCLAW_DEFAULT_NETWORK_MODE")); preferredNetwork != "" {
+			// In vllm-sr serve deployment, dashboard often runs in a container while OpenClaw
+			// is launched via host docker.sock. Using container:<dashboard-container> keeps
+			// gateway traffic in the same network namespace and avoids host routing issues.
+			if req.Container.NetworkMode == "" || strings.EqualFold(req.Container.NetworkMode, "host") {
+				req.Container.NetworkMode = preferredNetwork
+			}
 		}
 		if req.Container.NetworkMode == "" {
 			req.Container.NetworkMode = "host"
@@ -407,7 +731,7 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 			req.Container.ModelName = "auto"
 		}
 		if req.Container.MemoryBackend == "" {
-			req.Container.MemoryBackend = "remote"
+			req.Container.MemoryBackend = "local"
 		}
 
 		h.mu.Lock()
@@ -422,6 +746,18 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 					writeJSONError(w, fmt.Sprintf("Port %d already used by container %q", req.Container.GatewayPort, e.Name), http.StatusConflict)
 					return
 				}
+			}
+			if !isTCPPortAvailable(req.Container.GatewayPort) {
+				h.mu.Unlock()
+				writeJSONError(
+					w,
+					fmt.Sprintf(
+						"Port %d is already in use on host. Stop the existing gateway/container (e.g. `openclaw gateway stop`) or choose another port.",
+						req.Container.GatewayPort,
+					),
+					http.StatusConflict,
+				)
+				return
 			}
 		}
 
@@ -472,7 +808,13 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 			return
 		}
 
-		_ = exec.Command("docker", "rm", "-f", req.Container.ContainerName).Run() // #nosec G204
+		if err := h.ensureImageAvailable(req.Container.BaseImage); err != nil {
+			h.mu.Unlock()
+			writeJSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		_ = h.containerRun("rm", "-f", req.Container.ContainerName)
 
 		absCDir, _ := filepath.Abs(cDir)
 		volumeName := "openclaw-state-" + req.Container.ContainerName
@@ -489,10 +831,24 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 			req.Container.BaseImage,
 			"node", "openclaw.mjs", "gateway", "--allow-unconfigured", "--bind", "lan",
 		}
-		out, err := exec.Command("docker", args...).CombinedOutput() // #nosec G204
+		out, err := h.containerCombinedOutput(args...)
 		if err != nil {
+			trimmed := strings.TrimSpace(string(out))
+			if isContainerImageMissingError(trimmed) {
+				h.mu.Unlock()
+				writeJSONError(
+					w,
+					fmt.Sprintf(
+						"OpenClaw image %q is unavailable on host runtime. Build or pull this image first, or set OPENCLAW_BASE_IMAGE to an available image before starting dashboard.",
+						req.Container.BaseImage,
+					),
+					http.StatusBadRequest,
+				)
+				return
+			}
+
 			h.mu.Unlock()
-			writeJSONError(w, fmt.Sprintf("Failed to start container: %s (%v)", strings.TrimSpace(string(out)), err), http.StatusInternalServerError)
+			writeJSONError(w, fmt.Sprintf("Failed to start container: %s (%v)", trimmed, err), http.StatusInternalServerError)
 			return
 		}
 		containerID := strings.TrimSpace(string(out))
@@ -526,17 +882,11 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 		h.mu.Unlock()
 
 		healthy := false
-		client := &http.Client{Timeout: 3 * time.Second}
-		gatewayURL := fmt.Sprintf("http://127.0.0.1:%d", req.Container.GatewayPort)
 		for i := 0; i < 10; i++ {
 			time.Sleep(2 * time.Second)
-			resp, err := client.Get(gatewayURL + "/health")
-			if err == nil {
-				resp.Body.Close()
-				if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNoContent {
-					healthy = true
-					break
-				}
+			if h.gatewayReachable(req.Container.GatewayPort) {
+				healthy = true
+				break
 			}
 		}
 
@@ -545,7 +895,7 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 			msg = "Container started but gateway has not become healthy yet (may still be initializing)"
 		}
 
-		dockerCmd := generateDockerRunCmd(req, absCDir)
+		dockerCmd := generateDockerRunCmd(runtimeName, req, absCDir)
 		composeYAML := generateComposeYAML(req, absCDir)
 
 		log.Printf("OpenClaw provisioned: name=%s port=%d healthy=%v", req.Container.ContainerName, req.Container.GatewayPort, healthy)
@@ -587,7 +937,7 @@ func (h *OpenClawHandler) StartHandler() http.HandlerFunc {
 			writeJSONError(w, "containerName required", http.StatusBadRequest)
 			return
 		}
-		out, err := exec.Command("docker", "start", req.ContainerName).CombinedOutput() // #nosec G204
+		out, err := h.containerCombinedOutput("start", req.ContainerName)
 		if err != nil {
 			writeJSONError(w, fmt.Sprintf("Failed to start: %s (%v)", strings.TrimSpace(string(out)), err), http.StatusInternalServerError)
 			return
@@ -623,7 +973,7 @@ func (h *OpenClawHandler) StopHandler() http.HandlerFunc {
 			writeJSONError(w, "containerName required", http.StatusBadRequest)
 			return
 		}
-		out, err := exec.Command("docker", "stop", req.ContainerName).CombinedOutput() // #nosec G204
+		out, err := h.containerCombinedOutput("stop", req.ContainerName)
 		if err != nil {
 			writeJSONError(w, fmt.Sprintf("Failed to stop: %s (%v)", strings.TrimSpace(string(out)), err), http.StatusInternalServerError)
 			return
@@ -654,7 +1004,7 @@ func (h *OpenClawHandler) DeleteHandler() http.HandlerFunc {
 			return
 		}
 
-		_ = exec.Command("docker", "rm", "-f", name).Run() // #nosec G204
+		_ = h.containerRun("rm", "-f", name)
 
 		h.mu.Lock()
 		entries, _ := h.loadRegistry()
@@ -697,7 +1047,50 @@ func (h *OpenClawHandler) PortForContainer(name string) (int, bool) {
 	return 0, false
 }
 
+// TargetBaseForContainer resolves the HTTP base URL for a registered container.
+func (h *OpenClawHandler) TargetBaseForContainer(name string) (string, bool) {
+	port, ok := h.PortForContainer(name)
+	if !ok {
+		return "", false
+	}
+	return h.gatewayBaseURL(port), true
+}
+
 // --- Helpers ---
+
+func sanitizeContainerName(raw string) string {
+	cleaned := strings.ToLower(strings.TrimSpace(raw))
+	cleaned = containerNameInvalidChars.ReplaceAllString(cleaned, "-")
+	cleaned = strings.Trim(cleaned, "._-")
+	if cleaned == "" {
+		return ""
+	}
+
+	// Keep names bounded and still docker-friendly.
+	const maxLen = 63
+	if len(cleaned) > maxLen {
+		cleaned = strings.Trim(cleaned[:maxLen], "._-")
+	}
+	if cleaned == "" {
+		return ""
+	}
+
+	first := cleaned[0]
+	if !((first >= 'a' && first <= 'z') || (first >= '0' && first <= '9')) {
+		cleaned = "oc-" + cleaned
+	}
+	return cleaned
+}
+
+func deriveContainerName(requested, identityName string) string {
+	if name := sanitizeContainerName(requested); name != "" {
+		return name
+	}
+	if name := sanitizeContainerName(identityName); name != "" {
+		return name
+	}
+	return "openclaw-demo"
+}
 
 func writeJSONError(w http.ResponseWriter, msg string, code int) {
 	w.Header().Set("Content-Type", "application/json")
@@ -768,6 +1161,16 @@ func writeIdentityFiles(wsDir string, id IdentityConfig) error {
 }
 
 func writeOpenClawConfig(path string, req ProvisionRequest) error {
+	// Recover from stale state where a previous bad bind mount caused
+	// openclaw.json to be created as a directory on host.
+	if info, err := os.Stat(path); err == nil && info.IsDir() {
+		if err := os.RemoveAll(path); err != nil {
+			return fmt.Errorf("failed to replace config directory %s with file: %w", path, err)
+		}
+	} else if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to stat config path %s: %w", path, err)
+	}
+
 	cfg := map[string]interface{}{
 		"models": map[string]interface{}{
 			"providers": map[string]interface{}{
@@ -809,17 +1212,43 @@ func writeOpenClawConfig(path string, req ProvisionRequest) error {
 			},
 		},
 	}
-	if req.Container.MemoryBackend == "remote" && req.Container.MemoryBaseURL != "" {
-		cfg["memory"] = map[string]interface{}{
-			"backend": "remote",
-			"remote": map[string]interface{}{
-				"baseUrl":              req.Container.MemoryBaseURL,
-				"vectorStoreName":      req.Container.VectorStore,
-				"syncIntervalMs":       30000,
-				"searchMaxResults":     5,
-				"searchScoreThreshold": 0.3,
-			},
+	memoryBackend := strings.ToLower(strings.TrimSpace(req.Container.MemoryBackend))
+	if memoryBackend == "" {
+		memoryBackend = "local"
+	}
+
+	// OpenClaw v2 memory schema:
+	// - memory.backend accepts "builtin" or "qmd"
+	// - remote embedding config lives under agents.defaults.memorySearch
+	switch memoryBackend {
+	case "qmd":
+		cfg["memory"] = map[string]interface{}{"backend": "qmd"}
+	case "remote":
+		cfg["memory"] = map[string]interface{}{"backend": "builtin"}
+
+		memorySearch := map[string]interface{}{
+			"enabled":  true,
+			"provider": "openai",
 		}
+
+		remote := map[string]interface{}{}
+		if baseURL := strings.TrimSpace(req.Container.MemoryBaseURL); baseURL != "" {
+			remote["baseUrl"] = baseURL
+		}
+		if apiKey := strings.TrimSpace(req.Container.ModelAPIKey); apiKey != "" && apiKey != "not-needed" {
+			remote["apiKey"] = apiKey
+		}
+		if len(remote) > 0 {
+			memorySearch["remote"] = remote
+		}
+
+		agentsCfg, _ := cfg["agents"].(map[string]interface{})
+		defaultsCfg, _ := agentsCfg["defaults"].(map[string]interface{})
+		defaultsCfg["memorySearch"] = memorySearch
+	default:
+		// "local" (or unknown values) falls back to builtin memory without
+		// remote embedding configuration.
+		cfg["memory"] = map[string]interface{}{"backend": "builtin"}
 	}
 	if req.Container.BrowserEnabled {
 		cfg["browser"] = map[string]interface{}{"enabled": true, "headless": true, "noSandbox": true}
@@ -831,9 +1260,9 @@ func writeOpenClawConfig(path string, req ProvisionRequest) error {
 	return os.WriteFile(path, data, 0o644)
 }
 
-func generateDockerRunCmd(req ProvisionRequest, dataDir string) string {
+func generateDockerRunCmd(runtime string, req ProvisionRequest, dataDir string) string {
 	volumeName := "openclaw-state-" + req.Container.ContainerName
-	return fmt.Sprintf(`docker run -d \
+	return fmt.Sprintf(`%s run -d \
   --name %s \
   --user 0:0 \
   --network %s \
@@ -844,7 +1273,7 @@ func generateDockerRunCmd(req ProvisionRequest, dataDir string) string {
   -e OPENCLAW_STATE_DIR=/state \
   %s \
   node openclaw.mjs gateway --allow-unconfigured --bind lan`,
-		req.Container.ContainerName, req.Container.NetworkMode,
+		runtime, req.Container.ContainerName, req.Container.NetworkMode,
 		dataDir, dataDir, volumeName, req.Container.BaseImage)
 }
 
@@ -910,7 +1339,7 @@ func (h *OpenClawHandler) fetchSkillContent(skillID, baseImage string) string {
 		"/app/extensions/" + skillID + "/SKILL.md",
 	}
 	for _, p := range containerPaths {
-		out, err := exec.Command("docker", "run", "--rm", baseImage, "cat", p).Output() // #nosec G204
+		out, err := h.containerOutput("run", "--rm", baseImage, "cat", p)
 		if err == nil && len(out) > 0 {
 			return string(out)
 		}

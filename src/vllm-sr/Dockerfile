@@ -308,7 +308,8 @@ RUN set -eux; \
     apt-get install -y --no-install-recommends \
         supervisor \
         curl \
-        ca-certificates; \
+        ca-certificates \
+        docker.io; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*
 
@@ -334,6 +335,8 @@ COPY src/vllm-sr/requirements.txt /app/requirements.txt
 
 # Copy tools database to config directory
 COPY src/vllm-sr/cli/templates/tools_db.json /app/config/tools_db.json
+# Copy OpenClaw skill catalog consumed by dashboard /api/openclaw/skills
+COPY dashboard/backend/config/openclaw-skills.json /app/config/openclaw-skills.json
 
 # Copy bench directory for evaluation benchmarks
 COPY bench/ /app/bench/

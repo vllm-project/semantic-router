@@ -275,6 +275,13 @@ def serve(config, image, image_pull_policy, readonly, minimal, platform, algorit
                 env_vars[var] = os.environ[var]
                 log.info(f"Passing environment variable: {var}=***")
 
+        # OpenClaw runtime/image overrides for dashboard backend
+        openclaw_env_vars = ["OPENCLAW_BASE_IMAGE"]
+        for var in openclaw_env_vars:
+            if var in os.environ:
+                env_vars[var] = os.environ[var]
+                log.info(f"Passing environment variable: {var}={os.environ[var]}")
+
         # Minimal mode: disable dashboard and observability
         if minimal:
             env_vars["DISABLE_DASHBOARD"] = "true"

@@ -42,6 +42,7 @@ RUN apk --no-cache add ca-certificates wget su-exec
 WORKDIR /app
 COPY --from=backend-builder /app/dashboard-backend /app/dashboard-backend
 COPY --from=frontend-builder /app/frontend/dist /app/frontend
+COPY dashboard/backend/config/openclaw-skills.json /app/config/openclaw-skills.json
 # Copy entrypoint script
 COPY dashboard/backend/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh

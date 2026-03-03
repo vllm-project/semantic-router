@@ -406,11 +406,11 @@ const ProvisionTab: React.FC<{
     modelBaseUrl: 'http://127.0.0.1:8801/v1',
     modelApiKey: '',
     modelName: 'auto',
-    memoryBackend: 'remote',
-    memoryBaseUrl: 'http://127.0.0.1:8080',
+    memoryBackend: 'local',
+    memoryBaseUrl: '',
     vectorStore: 'openclaw-demo',
     browserEnabled: false,
-    baseImage: 'openclaw:local',
+    baseImage: 'ghcr.io/openclaw/openclaw:latest',
     networkMode: 'host',
   })
   const [provisionResult, setProvisionResult] = useState<ProvisionResponse | null>(null)
@@ -734,32 +734,27 @@ const ConfigStep: React.FC<{
         <input className={styles.textInput} type="password" value={container.modelApiKey} onChange={e => update('modelApiKey', e.target.value)} placeholder="vLLM API key" />
       </div>
 
-      <div className={styles.sectionTitle}>Memory Backend (Semantic Router)</div>
+      <div className={styles.sectionTitle}>Memory Mode</div>
 
       <div className={styles.formRow}>
         <div className={styles.formGroup}>
           <label className={styles.formLabel}>Memory Backend</label>
           <div className={styles.toggle}>
             <button className={`${styles.toggleOption} ${container.memoryBackend === 'remote' ? styles.toggleOptionSelected : ''}`} onClick={() => update('memoryBackend', 'remote')}>
-              Remote (SR API)
+              Remote Embeddings
             </button>
             <button className={`${styles.toggleOption} ${container.memoryBackend === 'local' ? styles.toggleOptionSelected : ''}`} onClick={() => update('memoryBackend', 'local')}>
-              Local (files)
+              Built-in (Recommended)
             </button>
           </div>
         </div>
       </div>
 
       {container.memoryBackend === 'remote' && (
-        <div className={styles.formRow}>
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Memory Base URL</label>
-            <input className={styles.textInput} value={container.memoryBaseUrl} onChange={e => update('memoryBaseUrl', e.target.value)} />
-          </div>
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>Vector Store Name</label>
-            <input className={styles.textInput} value={container.vectorStore} onChange={e => update('vectorStore', e.target.value)} />
-          </div>
+        <div className={styles.formGroup}>
+          <label className={styles.formLabel}>Embedding Base URL (Optional)</label>
+          <input className={styles.textInput} value={container.memoryBaseUrl} onChange={e => update('memoryBaseUrl', e.target.value)} placeholder="https://your-openai-compatible-endpoint/v1" />
+          <div className={styles.formHint}>Used for agents.defaults.memorySearch.remote.baseUrl</div>
         </div>
       )}
 
@@ -852,7 +847,7 @@ const DeployStep: React.FC<{
           <div className={styles.summaryCardTitle}>Model & Memory</div>
           <div className={styles.summaryCardContent}>
             Model: {container.modelName} via SR<br />
-            Memory: {container.memoryBackend === 'remote' ? `Remote (${container.memoryBaseUrl})` : 'Local files'}<br />
+            Memory: {container.memoryBackend === 'remote' ? `Remote embeddings${container.memoryBaseUrl ? ` (${container.memoryBaseUrl})` : ''}` : 'Built-in'}<br />
             Browser: {container.browserEnabled ? 'Enabled' : 'Disabled'}
           </div>
         </div>
