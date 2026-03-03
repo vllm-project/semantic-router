@@ -167,7 +167,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
                 isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
               }
             >
-              OpenClaw
+              OpenClaw Team
             </NavLink>
 
             {/* Divider */}

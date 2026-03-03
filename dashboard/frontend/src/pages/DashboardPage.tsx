@@ -56,6 +56,25 @@ interface RouterConfig {
   [key: string]: unknown
 }
 
+interface OpenClawTeam {
+  id: string
+  name: string
+  vibe?: string
+  role?: string
+  principal?: string
+}
+
+interface OpenClawAgentStatus {
+  running: boolean
+  healthy: boolean
+  containerName: string
+  teamId?: string
+  teamName?: string
+  agentName?: string
+  agentRole?: string
+  agentVibe?: string
+}
+
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
@@ -130,6 +149,34 @@ const SIGNAL_COLORS: Record<string, string> = {
   jailbreak: '#F48771',
   pii: '#FF6B6B',
 }
+
+const OPENCLAW_FEATURES = [
+  {
+    title: 'Intelligent Routing',
+    description: 'Model selection with cost-accuracy balance based on vLLM SR routing intelligence.',
+    icon: '🧭',
+  },
+  {
+    title: 'Safety by Design',
+    description: 'Secure agents against jailbreak attempts, PII leakage, and hallucination risks.',
+    icon: '🛡️',
+  },
+  {
+    title: 'Advanced Context Memory',
+    description: 'Persistent memory and context management for long-horizon, multi-step agent tasks.',
+    icon: '🧠',
+  },
+  {
+    title: 'Knowledge Sharing',
+    description: 'Enable experience and knowledge sharing across agents to speed up team-level learning.',
+    icon: '🔁',
+  },
+  {
+    title: 'Isolation and Team Ops',
+    description: 'Multi-agent isolation plus centralized OpenClaw Team management in one control plane.',
+    icon: '🧩',
+  },
+]
 
 const MiniFlowDiagram: React.FC<FlowProps> = React.memo(({ signals, decisions, models, plugins }) => {
   const signalTypes = Object.entries(signals.byType).sort((a, b) => b[1] - a[1])
@@ -237,6 +284,8 @@ const DashboardPage: React.FC = () => {
 
   const [config, setConfig] = useState<RouterConfig | null>(null)
   const [status, setStatus] = useState<SystemStatus | null>(null)
+  const [openclawTeams, setOpenclawTeams] = useState<OpenClawTeam[]>([])
+  const [openclawAgents, setOpenclawAgents] = useState<OpenClawAgentStatus[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -244,26 +293,46 @@ const DashboardPage: React.FC = () => {
   const configTickRef = useRef(0)
 
   const fetchStatus = useCallback(async () => {
-    try {
-      const res = await fetch('/api/status')
-      if (res.ok) {
-        setStatus(await res.json())
-      }
-    } catch { /* silent */ }
+    const [statusRes, openclawStatusRes, openclawTeamsRes] = await Promise.allSettled([
+      fetch('/api/status'),
+      fetch('/api/openclaw/status'),
+      fetch('/api/openclaw/teams'),
+    ])
+    if (statusRes.status === 'fulfilled' && statusRes.value.ok) {
+      setStatus(await statusRes.value.json())
+    }
+    if (openclawStatusRes.status === 'fulfilled' && openclawStatusRes.value.ok) {
+      const data = await openclawStatusRes.value.json()
+      setOpenclawAgents(Array.isArray(data) ? data : [])
+    }
+    if (openclawTeamsRes.status === 'fulfilled' && openclawTeamsRes.value.ok) {
+      const data = await openclawTeamsRes.value.json()
+      setOpenclawTeams(Array.isArray(data) ? data : [])
+    }
   }, [])
 
   const fetchAll = useCallback(async (manual = false) => {
     if (manual) setRefreshing(true)
     try {
-      const [cfgRes, statusRes] = await Promise.all([
+      const [cfgRes, statusRes, openclawStatusRes, openclawTeamsRes] = await Promise.all([
         fetch('/api/router/config/all'),
         fetch('/api/status'),
+        fetch('/api/openclaw/status'),
+        fetch('/api/openclaw/teams'),
       ])
       if (cfgRes.ok) {
         setConfig(await cfgRes.json())
       }
       if (statusRes.ok) {
         setStatus(await statusRes.json())
+      }
+      if (openclawStatusRes.ok) {
+        const data = await openclawStatusRes.json()
+        setOpenclawAgents(Array.isArray(data) ? data : [])
+      }
+      if (openclawTeamsRes.ok) {
+        const data = await openclawTeamsRes.json()
+        setOpenclawTeams(Array.isArray(data) ? data : [])
       }
       setLastUpdated(new Date())
       setError(null)
@@ -303,6 +372,30 @@ const DashboardPage: React.FC = () => {
   const pluginCount = useMemo(() => config ? countPlugins(config) : 0, [config])
   const healthyServices = useMemo(() => status?.services.filter(s => s.healthy).length ?? 0, [status])
   const totalServices = useMemo(() => status?.services.length ?? 0, [status])
+  const openclawRunningAgents = useMemo(() => openclawAgents.filter(agent => agent.running).length, [openclawAgents])
+  const openclawHealthyAgents = useMemo(() => openclawAgents.filter(agent => agent.healthy).length, [openclawAgents])
+  const openclawTeamRows = useMemo(() => {
+    const rows = new Map<string, { team: OpenClawTeam | null; agents: OpenClawAgentStatus[] }>()
+    for (const team of openclawTeams) {
+      rows.set(team.id, { team, agents: [] })
+    }
+    for (const agent of openclawAgents) {
+      const key = (agent.teamId || '').trim() || '__unassigned__'
+      if (!rows.has(key)) {
+        rows.set(key, { team: key === '__unassigned__' ? null : {
+          id: key,
+          name: agent.teamName || key,
+          vibe: '',
+          role: '',
+          principal: '',
+        }, agents: [] })
+      }
+      rows.get(key)?.agents.push(agent)
+    }
+    return Array.from(rows.values())
+      .filter(row => row.team !== null || row.agents.length > 0)
+      .sort((a, b) => b.agents.length - a.agents.length)
+  }, [openclawTeams, openclawAgents])
 
   // Categorize decisions for the table
   const categorizedDecisions = useMemo(() => {
@@ -364,6 +457,104 @@ const DashboardPage: React.FC = () => {
           <button onClick={() => fetchAll(true)}>Retry</button>
         </div>
       )}
+
+      <section className={styles.openclawSection}>
+        <div className={styles.openclawHero}>
+          <div className={styles.openclawHeroBody}>
+            <div className={styles.openclawBadge}>OpenClaw Team</div>
+            <h2 className={styles.openclawTitle}>
+              OpenClaw evolved from vLLM SR
+            </h2>
+            <p className={styles.openclawSubtitle}>
+              Productized multi-agent platform built on semantic routing intelligence,
+              safety guardrails, and collaborative memory for real production teams.
+            </p>
+            <div className={styles.openclawActions}>
+              <button className={styles.openclawPrimaryBtn} onClick={() => navigate('/openclaw')}>
+                Launch OpenClaw Team
+              </button>
+              <button className={styles.openclawGhostBtn} onClick={() => navigate('/topology')}>
+                Explore Routing Brain
+              </button>
+            </div>
+          </div>
+          <div className={styles.openclawVisual}>
+            <img src="/openclaw.png" alt="OpenClaw Team" className={styles.openclawVisualLogo} />
+            <div className={styles.openclawVisualMeta}>vLLM SR Powered</div>
+          </div>
+        </div>
+
+        <div className={styles.openclawFeatureGrid}>
+          {OPENCLAW_FEATURES.map((feature) => (
+            <article key={feature.title} className={styles.openclawFeatureCard}>
+              <div className={styles.openclawFeatureIcon}>{feature.icon}</div>
+              <h3 className={styles.openclawFeatureTitle}>{feature.title}</h3>
+              <p className={styles.openclawFeatureDescription}>{feature.description}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className={styles.openclawTeamSection}>
+        <div className={styles.cardHeader}>
+          <h2 className={styles.cardTitle}>OpenClaw Team Composition</h2>
+          <button className={styles.cardAction} onClick={() => navigate('/openclaw')}>
+            Manage Team &rsaquo;
+          </button>
+        </div>
+        <div className={styles.openclawTeamSummary}>
+          <span>{openclawTeamRows.length} teams</span>
+          <span>{openclawAgents.length} agents</span>
+          <span>{openclawHealthyAgents} healthy</span>
+          <span>{openclawRunningAgents} running</span>
+        </div>
+        {openclawTeamRows.length === 0 ? (
+          <div className={styles.emptyState}>No OpenClaw team data yet. Provision a team and agents to populate this view.</div>
+        ) : (
+          <div className={styles.openclawTeamGrid}>
+            {openclawTeamRows.map((row, index) => {
+              const team = row.team
+              const teamName = team?.name || 'Unassigned'
+              return (
+                <article key={`${team?.id || 'unassigned'}-${index}`} className={styles.openclawTeamCard}>
+                  <div className={styles.openclawTeamCardHeader}>
+                    <div>
+                      <h3 className={styles.openclawTeamCardTitle}>{teamName}</h3>
+                      <div className={styles.openclawTeamCardMeta}>
+                        {team?.role || 'No role'} • {team?.vibe || 'No vibe'}
+                      </div>
+                    </div>
+                    <span className={styles.openclawTeamCardCount}>
+                      {row.agents.length} agent{row.agents.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  {team?.principal && (
+                    <p className={styles.openclawTeamPrincipal}>{team.principal}</p>
+                  )}
+                  <div className={styles.openclawAgentList}>
+                    {row.agents.length === 0 ? (
+                      <div className={styles.openclawAgentEmpty}>No agents assigned.</div>
+                    ) : row.agents.map(agent => (
+                      <div key={agent.containerName} className={styles.openclawAgentItem}>
+                        <span className={styles.openclawAgentName}>{agent.agentName || agent.containerName}</span>
+                        <span className={`${styles.openclawAgentStatus} ${
+                          agent.healthy
+                            ? styles.openclawAgentHealthy
+                            : agent.running
+                              ? styles.openclawAgentStarting
+                              : styles.openclawAgentStopped
+                        }`}>
+                          {agent.healthy ? 'Healthy' : agent.running ? 'Starting' : 'Stopped'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        )}
+      </section>
 
       {/* Stats Cards */}
       <div className={styles.statsGrid}>

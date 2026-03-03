@@ -46,11 +46,24 @@ interface OpenClawStatus {
   error: string
   image?: string
   createdAt?: string
+  teamId?: string
+  teamName?: string
   agentName?: string
   agentEmoji?: string
   agentRole?: string
   agentVibe?: string
   agentPrinciples?: string
+}
+
+interface TeamProfile {
+  id: string
+  name: string
+  vibe?: string
+  role?: string
+  principal?: string
+  description?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 interface ProvisionResponse {
@@ -66,7 +79,7 @@ interface ProvisionResponse {
 // --- Provision Steps ---
 
 const PROVISION_STEPS = [
-  { key: 'identity', label: 'Identity' },
+  { key: 'identity', label: 'Identity & Team' },
   { key: 'skills', label: 'Skills' },
   { key: 'config', label: 'Configuration' },
   { key: 'deploy', label: 'Deploy' },
@@ -84,9 +97,11 @@ const getDynamicModelBaseUrl = (): string => {
 // --- Component ---
 
 const OpenClawPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'provision' | 'status'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'team' | 'provision' | 'status'>('dashboard')
   const [containers, setContainers] = useState<OpenClawStatus[]>([])
+  const [teams, setTeams] = useState<TeamProfile[]>([])
   const [statusLoading, setStatusLoading] = useState(true)
+  const [teamsLoading, setTeamsLoading] = useState(true)
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -102,13 +117,34 @@ const OpenClawPage: React.FC = () => {
     }
   }, [])
 
+  const fetchTeams = useCallback(async () => {
+    try {
+      const res = await fetch('/api/openclaw/teams')
+      if (res.ok) {
+        const data = await res.json()
+        setTeams(Array.isArray(data) ? data : [])
+      } else {
+        setTeams([])
+      }
+    } catch {
+      setTeams([])
+    } finally {
+      setTeamsLoading(false)
+    }
+  }, [])
+
+  const refreshAll = useCallback(() => {
+    void Promise.all([fetchStatus(), fetchTeams()])
+  }, [fetchStatus, fetchTeams])
+
   useEffect(() => {
-    fetchStatus()
-    const interval = setInterval(fetchStatus, 15000)
+    refreshAll()
+    const interval = setInterval(refreshAll, 15000)
     return () => clearInterval(interval)
-  }, [fetchStatus])
+  }, [refreshAll])
 
   const runningCount = containers.filter(c => c.running).length
+  const teamCount = teams.length
 
   return (
     <div className={styles.container}>
@@ -127,7 +163,7 @@ const OpenClawPage: React.FC = () => {
           Build, compose, and operate your OpenClaw team with unified identity, routing, and runtime control.
         </p>
         <div className={styles.headerActions}>
-          <button className={styles.btnSecondary} onClick={fetchStatus}>
+          <button className={styles.btnSecondary} onClick={refreshAll}>
             Refresh Team
           </button>
         </div>
@@ -151,6 +187,20 @@ const OpenClawPage: React.FC = () => {
             </svg>
           </span>
           Claw Dashboard ({containers.length})
+        </button>
+        <button
+          className={`${styles.tab} ${activeTab === 'team' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('team')}
+        >
+          <span className={styles.tabIcon}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+          </span>
+          Team ({teamCount})
         </button>
         <button
           className={`${styles.tab} ${activeTab === 'provision' ? styles.tabActive : ''}`}
@@ -180,13 +230,25 @@ const OpenClawPage: React.FC = () => {
       {activeTab === 'dashboard' && (
         <ClawDashboardTab
           containers={containers}
+          teams={teams}
           onSwitchToStatus={() => setActiveTab('status')}
+        />
+      )}
+      {activeTab === 'team' && (
+        <TeamTab
+          teams={teams}
+          teamsLoading={teamsLoading}
+          containers={containers}
+          onTeamsUpdated={fetchTeams}
+          onSwitchToProvision={() => setActiveTab('provision')}
         />
       )}
       {activeTab === 'provision' && (
         <ProvisionTab
           containers={containers}
-          onProvisioned={fetchStatus}
+          teams={teams}
+          onProvisioned={refreshAll}
+          onSwitchToTeam={() => setActiveTab('team')}
           onSwitchToStatus={() => setActiveTab('status')}
         />
       )}
@@ -194,7 +256,7 @@ const OpenClawPage: React.FC = () => {
         <StatusTab
           containers={containers}
           statusLoading={statusLoading}
-          onRefresh={fetchStatus}
+          onRefresh={refreshAll}
         />
       )}
     </div>
@@ -209,9 +271,11 @@ const truncateText = (value?: string, maxLength = 180): string => {
 
 const ClawDashboardTab: React.FC<{
   containers: OpenClawStatus[]
+  teams: TeamProfile[]
   onSwitchToStatus: () => void
-}> = ({ containers, onSwitchToStatus }) => {
+}> = ({ containers, teams, onSwitchToStatus }) => {
   const totalAgents = containers.length
+  const totalTeams = teams.length
   const healthyAgents = containers.filter(c => c.healthy).length
   const runningAgents = containers.filter(c => c.running).length
   const startingAgents = containers.filter(c => c.running && !c.healthy).length
@@ -228,19 +292,18 @@ const ClawDashboardTab: React.FC<{
       .slice(0, 5)
   }, [containers])
 
-  const vibeRows = useMemo(() => {
+  const roleMax = Math.max(...roleRows.map(([, value]) => value), 1)
+  const teamRows = useMemo(() => {
     const counts = new Map<string, number>()
     for (const c of containers) {
-      const vibe = (c.agentVibe || '').trim() || 'Unspecified'
-      counts.set(vibe, (counts.get(vibe) || 0) + 1)
+      const team = (c.teamName || '').trim() || 'Unassigned'
+      counts.set(team, (counts.get(team) || 0) + 1)
     }
     return Array.from(counts.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
   }, [containers])
-
-  const roleMax = Math.max(...roleRows.map(([, value]) => value), 1)
-  const vibeMax = Math.max(...vibeRows.map(([, value]) => value), 1)
+  const teamMax = Math.max(...teamRows.map(([, value]) => value), 1)
 
   if (containers.length === 0) {
     return (
@@ -270,8 +333,8 @@ const ClawDashboardTab: React.FC<{
           <div className={styles.teamStatLabel}>Running</div>
         </div>
         <div className={styles.teamStatCard}>
-          <div className={styles.teamStatValue}>{roleRows.length}</div>
-          <div className={styles.teamStatLabel}>Unique Roles</div>
+          <div className={styles.teamStatValue}>{totalTeams}</div>
+          <div className={styles.teamStatLabel}>Total Teams</div>
         </div>
       </div>
 
@@ -326,15 +389,15 @@ const ClawDashboardTab: React.FC<{
       <div className={styles.teamPanelsRow}>
         <div className={styles.teamPanel}>
           <div className={styles.teamPanelHeader}>
-            <h3 className={styles.teamPanelTitle}>Vibe Mix</h3>
+            <h3 className={styles.teamPanelTitle}>Team Distribution</h3>
             <span className={styles.teamPanelSubtitle}>Top 5</span>
           </div>
           <div className={styles.breakdownList}>
-            {vibeRows.map(([vibe, value]) => (
-              <div key={vibe} className={styles.breakdownRow}>
-                <div className={styles.breakdownLabel}>{vibe}</div>
+            {teamRows.map(([team, value]) => (
+              <div key={team} className={styles.breakdownRow}>
+                <div className={styles.breakdownLabel}>{team}</div>
                 <div className={styles.breakdownTrack}>
-                  <div className={styles.breakdownBar} style={{ width: `${Math.max(10, Math.round((value / vibeMax) * 100))}%` }} />
+                  <div className={styles.breakdownBar} style={{ width: `${Math.max(10, Math.round((value / teamMax) * 100))}%` }} />
                 </div>
                 <div className={styles.breakdownValue}>{value}</div>
               </div>
@@ -375,6 +438,7 @@ const ClawDashboardTab: React.FC<{
                   <div className={styles.agentHeaderMeta}>
                     <div className={styles.agentName}>{name}</div>
                     <div className={styles.agentContainerRef}>{agent.containerName}</div>
+                    <div className={styles.teamTag}>{agent.teamName?.trim() || 'Unassigned'}</div>
                   </div>
                   <span
                     className={`${styles.healthBadge} ${
@@ -399,6 +463,10 @@ const ClawDashboardTab: React.FC<{
                     <span className={styles.agentMetaValue}>{vibe}</span>
                   </div>
                   <div className={styles.agentMetaRow}>
+                    <span className={styles.agentMetaLabel}>Team</span>
+                    <span className={styles.agentMetaValue}>{agent.teamName?.trim() || 'Unassigned'}</span>
+                  </div>
+                  <div className={styles.agentMetaRow}>
                     <span className={styles.agentMetaLabel}>Principal</span>
                     <span className={styles.agentMetaValue}>{principles}</span>
                   </div>
@@ -419,6 +487,223 @@ const ClawDashboardTab: React.FC<{
           })}
         </div>
       </div>
+    </div>
+  )
+}
+
+const TeamTab: React.FC<{
+  teams: TeamProfile[]
+  teamsLoading: boolean
+  containers: OpenClawStatus[]
+  onTeamsUpdated: () => void
+  onSwitchToProvision: () => void
+}> = ({ teams, teamsLoading, containers, onTeamsUpdated, onSwitchToProvision }) => {
+  const [editingTeamId, setEditingTeamId] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [form, setForm] = useState({
+    id: '',
+    name: '',
+    vibe: '',
+    role: '',
+    principal: '',
+    description: '',
+  })
+
+  const teamStats = useMemo(() => {
+    const counts = new Map<string, { total: number; running: number }>()
+    for (const container of containers) {
+      const key = (container.teamId || '').trim() || '__unassigned__'
+      const prev = counts.get(key) || { total: 0, running: 0 }
+      prev.total += 1
+      if (container.running) prev.running += 1
+      counts.set(key, prev)
+    }
+    return counts
+  }, [containers])
+
+  const updateForm = (field: keyof typeof form, value: string) =>
+    setForm(prev => ({ ...prev, [field]: value }))
+
+  const resetForm = () => {
+    setEditingTeamId(null)
+    setForm({
+      id: '',
+      name: '',
+      vibe: '',
+      role: '',
+      principal: '',
+      description: '',
+    })
+  }
+
+  const handleSave = async () => {
+    const name = form.name.trim()
+    if (!name) {
+      setError('Team name is required')
+      return
+    }
+    setSaving(true)
+    setError('')
+    const payload = {
+      id: form.id.trim(),
+      name,
+      vibe: form.vibe.trim(),
+      role: form.role.trim(),
+      principal: form.principal.trim(),
+      description: form.description.trim(),
+    }
+    try {
+      const endpoint = editingTeamId
+        ? `/api/openclaw/teams/${encodeURIComponent(editingTeamId)}`
+        : '/api/openclaw/teams'
+      const method = editingTeamId ? 'PUT' : 'POST'
+      const res = await fetch(endpoint, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.error || 'Failed to save team')
+      } else {
+        resetForm()
+        onTeamsUpdated()
+      }
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleEdit = (team: TeamProfile) => {
+    setEditingTeamId(team.id)
+    setForm({
+      id: team.id,
+      name: team.name || '',
+      vibe: team.vibe || '',
+      role: team.role || '',
+      principal: team.principal || '',
+      description: team.description || '',
+    })
+    setError('')
+  }
+
+  const handleDelete = async (team: TeamProfile) => {
+    if (!confirm(`Delete team "${team.name}"? Assigned agents must be removed or reassigned first.`)) return
+    setSaving(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/openclaw/teams/${encodeURIComponent(team.id)}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.error || 'Failed to delete team')
+      } else {
+        if (editingTeamId === team.id) resetForm()
+        onTeamsUpdated()
+      }
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className={styles.teamManager}>
+      <div className={styles.teamPanel}>
+        <div className={styles.teamPanelHeader}>
+          <h3 className={styles.teamPanelTitle}>{editingTeamId ? 'Edit Team' : 'Create Team'}</h3>
+          <span className={styles.teamPanelSubtitle}>{teams.length} teams</span>
+        </div>
+        {error && <div className={styles.errorAlert}><span>{error}</span></div>}
+        <div className={styles.formRow}>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Team Name</label>
+            <input className={styles.textInput} value={form.name} onChange={e => updateForm('name', e.target.value)} placeholder="Routing Core" />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Team ID (Optional)</label>
+            <input className={styles.textInput} value={form.id} onChange={e => updateForm('id', e.target.value)} placeholder="routing-core" disabled={Boolean(editingTeamId)} />
+          </div>
+        </div>
+        <div className={styles.formRowThree}>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Vibe</label>
+            <input className={styles.textInput} value={form.vibe} onChange={e => updateForm('vibe', e.target.value)} placeholder="Calm, decisive" />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Role</label>
+            <input className={styles.textInput} value={form.role} onChange={e => updateForm('role', e.target.value)} placeholder="Research pod" />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Principal</label>
+            <input className={styles.textInput} value={form.principal} onChange={e => updateForm('principal', e.target.value)} placeholder="Safety first" />
+          </div>
+        </div>
+        <div className={styles.formGroup}>
+          <label className={styles.formLabel}>Description</label>
+          <textarea className={styles.textArea} value={form.description} onChange={e => updateForm('description', e.target.value)} rows={3} placeholder="What this team is responsible for..." />
+        </div>
+        <div className={styles.actions}>
+          <div className={styles.actionsLeft}>
+            {editingTeamId && <button className={styles.btnSecondary} onClick={resetForm}>Cancel Edit</button>}
+          </div>
+          <div className={styles.actionsRight}>
+            <button className={styles.btnPrimary} onClick={handleSave} disabled={saving}>
+              {saving ? 'Saving...' : editingTeamId ? 'Update Team' : 'Create Team'}
+            </button>
+            <button className={styles.btnSecondary} onClick={onSwitchToProvision}>
+              Create Agent
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {teamsLoading ? (
+        <div className={styles.loading}>
+          <div className={styles.spinner} />
+          <p>Loading teams...</p>
+        </div>
+      ) : teams.length === 0 ? (
+        <div className={styles.emptyState}>
+          <div className={styles.emptyStateIcon}>{'\u{1F465}'}</div>
+          <div className={styles.emptyStateText}>
+            No teams yet. Create one above before provisioning OpenClaw agents.
+          </div>
+        </div>
+      ) : (
+        <div className={styles.teamCardGrid}>
+          {teams.map(team => {
+            const stats = teamStats.get(team.id) || { total: 0, running: 0 }
+            return (
+              <article key={team.id} className={styles.teamEntityCard}>
+                <div className={styles.teamEntityHeader}>
+                  <div>
+                    <h3 className={styles.teamEntityName}>{team.name}</h3>
+                    <div className={styles.teamEntityId}>{team.id}</div>
+                  </div>
+                  <div className={styles.teamEntityActions}>
+                    <button className={styles.btnSmall} onClick={() => handleEdit(team)}>Edit</button>
+                    <button className={`${styles.btnSmall} ${styles.btnSmallDanger}`} onClick={() => handleDelete(team)} disabled={saving}>Delete</button>
+                  </div>
+                </div>
+                <div className={styles.teamEntityMeta}>
+                  <span><strong>Role:</strong> {team.role || 'Not set'}</span>
+                  <span><strong>Vibe:</strong> {team.vibe || 'Not set'}</span>
+                  <span><strong>Principal:</strong> {team.principal || 'Not set'}</span>
+                </div>
+                {team.description && <p className={styles.teamEntityDesc}>{truncateText(team.description, 180)}</p>}
+                <div className={styles.teamEntityStats}>
+                  <span>{stats.total} agent{stats.total !== 1 ? 's' : ''}</span>
+                  <span>{stats.running} running</span>
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -602,6 +887,7 @@ const StatusTab: React.FC<{
           <thead>
             <tr>
               <th>Name</th>
+              <th>Team</th>
               <th>Port</th>
               <th>Health</th>
               <th>Error</th>
@@ -612,6 +898,7 @@ const StatusTab: React.FC<{
             {containers.map(c => (
               <tr key={c.containerName}>
                 <td className={styles.containerTableName}>{c.containerName}</td>
+                <td>{c.teamName?.trim() || 'Unassigned'}</td>
                 <td className={styles.containerTablePort}>{c.port}</td>
                 <td>
                   <span className={`${styles.healthBadge} ${
@@ -682,12 +969,15 @@ const StatusTab: React.FC<{
 
 const ProvisionTab: React.FC<{
   containers: OpenClawStatus[]
+  teams: TeamProfile[]
   onProvisioned: () => void
+  onSwitchToTeam: () => void
   onSwitchToStatus: () => void
-}> = ({ containers, onProvisioned, onSwitchToStatus }) => {
+}> = ({ containers, teams, onProvisioned, onSwitchToTeam, onSwitchToStatus }) => {
   const [currentStep, setCurrentStep] = useState(0)
   const [skills, setSkills] = useState<SkillTemplate[]>([])
   const [selectedSkills, setSelectedSkills] = useState<string[]>([])
+  const [selectedTeamId, setSelectedTeamId] = useState('')
   const [identity, setIdentity] = useState<IdentityConfig>({
     name: '',
     emoji: '',
@@ -730,6 +1020,13 @@ const ProvisionTab: React.FC<{
   }, [])
 
   const nameCollision = container.containerName !== '' && containers.some(c => c.containerName === container.containerName)
+  const selectedTeam = teams.find(team => team.id === selectedTeamId) || null
+
+  useEffect(() => {
+    if (!selectedTeamId && teams.length > 0) {
+      setSelectedTeamId(teams[0].id)
+    }
+  }, [teams, selectedTeamId])
 
   const toggleSkill = (id: string) => {
     setSelectedSkills(prev =>
@@ -738,6 +1035,10 @@ const ProvisionTab: React.FC<{
   }
 
   const handleProvision = async () => {
+    if (!selectedTeamId) {
+      setProvisionError('Team selection is required before provisioning.')
+      return
+    }
     setProvisionLoading(true)
     setProvisionError('')
     setProvisionResult(null)
@@ -745,7 +1046,7 @@ const ProvisionTab: React.FC<{
       const res = await fetch('/api/openclaw/provision', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identity, skills: selectedSkills, container }),
+        body: JSON.stringify({ teamId: selectedTeamId, identity, skills: selectedSkills, container }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -802,8 +1103,26 @@ const ProvisionTab: React.FC<{
         </div>
       )}
 
+      {teams.length === 0 && (
+        <div className={styles.errorAlert} style={{ background: 'rgba(234, 179, 8, 0.1)', borderColor: 'rgba(234, 179, 8, 0.35)', color: '#eab308' }}>
+          <span>No team available. Create a team first, then come back to provision.</span>
+          <button className={styles.btnSmall} onClick={onSwitchToTeam} type="button">
+            Open Team Tab
+          </button>
+        </div>
+      )}
+
       {/* Step Content */}
-      {currentStep === 0 && <IdentityStep identity={identity} setIdentity={setIdentity} />}
+      {currentStep === 0 && (
+        <IdentityStep
+          identity={identity}
+          setIdentity={setIdentity}
+          teams={teams}
+          selectedTeamId={selectedTeamId}
+          setSelectedTeamId={setSelectedTeamId}
+          onSwitchToTeam={onSwitchToTeam}
+        />
+      )}
       {currentStep === 1 && <SkillsStep skills={skills} selectedSkills={selectedSkills} toggleSkill={toggleSkill} />}
       {currentStep === 2 && (
         <ConfigStep
@@ -818,6 +1137,8 @@ const ProvisionTab: React.FC<{
           selectedSkills={selectedSkills}
           skills={skills}
           container={container}
+          selectedTeam={selectedTeam}
+          teamMissing={!selectedTeamId}
           nameCollision={nameCollision}
           onProvision={handleProvision}
           provisionLoading={provisionLoading}
@@ -837,7 +1158,11 @@ const ProvisionTab: React.FC<{
         </div>
         <div className={styles.actionsRight}>
           {currentStep < 3 && (
-            <button className={styles.btnPrimary} onClick={() => goToStep(currentStep + 1)}>
+            <button
+              className={styles.btnPrimary}
+              onClick={() => goToStep(currentStep + 1)}
+              disabled={currentStep === 0 && !selectedTeamId}
+            >
               Next Step
             </button>
           )}
@@ -854,7 +1179,11 @@ const ProvisionTab: React.FC<{
 const IdentityStep: React.FC<{
   identity: IdentityConfig
   setIdentity: React.Dispatch<React.SetStateAction<IdentityConfig>>
-}> = ({ identity, setIdentity }) => {
+  teams: TeamProfile[]
+  selectedTeamId: string
+  setSelectedTeamId: React.Dispatch<React.SetStateAction<string>>
+  onSwitchToTeam: () => void
+}> = ({ identity, setIdentity, teams, selectedTeamId, setSelectedTeamId, onSwitchToTeam }) => {
   const update = (field: keyof IdentityConfig, value: string) =>
     setIdentity(prev => ({ ...prev, [field]: value }))
 
@@ -865,6 +1194,32 @@ const IdentityStep: React.FC<{
         Define who your OpenClaw agent is — its name, personality, principles, and boundaries.
         These files form the agent's core identity (SOUL.md, IDENTITY.md, USER.md).
       </p>
+
+      <div className={styles.sectionTitle}>Team Selection (Required)</div>
+      <div className={styles.formRow}>
+        <div className={styles.formGroup}>
+          <label className={styles.formLabel}>Target Team</label>
+          <select
+            className={styles.selectInput}
+            value={selectedTeamId}
+            onChange={e => setSelectedTeamId(e.target.value)}
+          >
+            <option value="">Select a team...</option>
+            {teams.map(team => (
+              <option key={team.id} value={team.id}>
+                {team.name}
+              </option>
+            ))}
+          </select>
+          <div className={styles.formHint}>Every agent must belong to one team.</div>
+        </div>
+        <div className={styles.formGroup}>
+          <label className={styles.formLabel}>Need a new team?</label>
+          <button className={styles.btnSecondary} onClick={onSwitchToTeam} type="button">
+            Go to Team Tab
+          </button>
+        </div>
+      </div>
 
       <div className={styles.formRowThree}>
         <div className={styles.formGroup}>
@@ -1078,12 +1433,14 @@ const DeployStep: React.FC<{
   selectedSkills: string[]
   skills: SkillTemplate[]
   container: ContainerConfig
+  selectedTeam: TeamProfile | null
+  teamMissing: boolean
   nameCollision: boolean
   onProvision: () => void
   provisionLoading: boolean
   provisionResult: ProvisionResponse | null
   onSwitchToStatus: () => void
-}> = ({ identity, selectedSkills, skills, container, nameCollision, onProvision, provisionLoading, provisionResult, onSwitchToStatus }) => {
+}> = ({ identity, selectedSkills, skills, container, selectedTeam, teamMissing, nameCollision, onProvision, provisionLoading, provisionResult, onSwitchToStatus }) => {
   const [copied, setCopied] = useState('')
   const [showCommands, setShowCommands] = useState(false)
 
@@ -1108,6 +1465,11 @@ const DeployStep: React.FC<{
           <span>Container &quot;{container.containerName}&quot; already exists and will be replaced upon provisioning.</span>
         </div>
       )}
+      {teamMissing && (
+        <div className={styles.errorAlert} style={{ background: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.35)', color: '#ef4444' }}>
+          <span>Team selection is required before deployment.</span>
+        </div>
+      )}
 
       {/* Summary */}
       <div className={styles.summaryGrid}>
@@ -1117,6 +1479,14 @@ const DeployStep: React.FC<{
             <strong>{identity.emoji} {identity.name || '(unnamed)'}</strong><br />
             {identity.role || '(no role)'}<br />
             <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.8rem' }}>{identity.vibe}</span>
+          </div>
+        </div>
+        <div className={styles.summaryCard}>
+          <div className={styles.summaryCardTitle}>Team</div>
+          <div className={styles.summaryCardContent}>
+            <strong>{selectedTeam?.name || '(not selected)'}</strong><br />
+            {(selectedTeam?.role || 'No role set')}<br />
+            <span style={{ color: 'var(--color-text-secondary)', fontSize: '0.8rem' }}>{selectedTeam?.vibe || 'No vibe set'}</span>
           </div>
         </div>
         <div className={styles.summaryCard}>
@@ -1148,7 +1518,7 @@ const DeployStep: React.FC<{
 
       {/* Provision & Start Button */}
       {!provisionResult && (
-        <button className={styles.btnSuccess} onClick={onProvision} disabled={provisionLoading}>
+        <button className={styles.btnSuccess} onClick={onProvision} disabled={provisionLoading || teamMissing}>
           {provisionLoading ? 'Provisioning & starting container...' : 'Provision & Start'}
         </button>
       )}

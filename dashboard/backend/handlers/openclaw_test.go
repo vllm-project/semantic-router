@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -172,7 +174,7 @@ func TestDeriveContainerName(t *testing.T) {
 			name:         "fallback to default when both empty/invalid",
 			requested:    "   ",
 			identityName: "🦞🦞",
-			expected:     "openclaw-demo",
+			expected:     "openclaw-vllm-sr",
 		},
 	}
 
@@ -221,5 +223,128 @@ func TestAgentsMdContent_IncludesIdentityReadStep(t *testing.T) {
 	content := agentsMdContent()
 	if !strings.Contains(content, "`IDENTITY.md`") {
 		t.Fatalf("AGENTS.md content should instruct reading IDENTITY.md")
+	}
+}
+
+func TestTeamsHandler_CreateAndList(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewOpenClawHandler(tempDir, false)
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/openclaw/teams", strings.NewReader(`{
+		"name":"Research",
+		"vibe":"Calm",
+		"role":"Routing Team",
+		"principal":"Safety first"
+	}`))
+	createResp := httptest.NewRecorder()
+	h.TeamsHandler().ServeHTTP(createResp, createReq)
+	if createResp.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", createResp.Code, createResp.Body.String())
+	}
+
+	var created TeamEntry
+	if err := json.Unmarshal(createResp.Body.Bytes(), &created); err != nil {
+		t.Fatalf("failed to parse create response: %v", err)
+	}
+	if created.ID == "" || created.Name != "Research" {
+		t.Fatalf("unexpected team payload: %+v", created)
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/openclaw/teams", nil)
+	listResp := httptest.NewRecorder()
+	h.TeamsHandler().ServeHTTP(listResp, listReq)
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", listResp.Code)
+	}
+
+	var teams []TeamEntry
+	if err := json.Unmarshal(listResp.Body.Bytes(), &teams); err != nil {
+		t.Fatalf("failed to parse list response: %v", err)
+	}
+	if len(teams) != 1 {
+		t.Fatalf("expected 1 team, got %d", len(teams))
+	}
+	if teams[0].ID != created.ID {
+		t.Fatalf("expected team ID %q, got %q", created.ID, teams[0].ID)
+	}
+}
+
+func TestTeamByIDHandler_UpdatePropagatesRegistryTeamName(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewOpenClawHandler(tempDir, false)
+
+	if err := h.saveTeams([]TeamEntry{{
+		ID:        "routing-core",
+		Name:      "Routing Core",
+		CreatedAt: "2026-01-01T00:00:00Z",
+		UpdatedAt: "2026-01-01T00:00:00Z",
+	}}); err != nil {
+		t.Fatalf("failed to seed teams: %v", err)
+	}
+	if err := h.saveRegistry([]ContainerEntry{{
+		Name:     "agent-1",
+		Port:     18788,
+		Image:    "ghcr.io/openclaw/openclaw:latest",
+		Token:    "token",
+		DataDir:  tempDir,
+		TeamID:   "routing-core",
+		TeamName: "Routing Core",
+	}}); err != nil {
+		t.Fatalf("failed to seed registry: %v", err)
+	}
+
+	updateReq := httptest.NewRequest(http.MethodPut, "/api/openclaw/teams/routing-core", strings.NewReader(`{
+		"name":"Routing Core Plus",
+		"vibe":"Focused",
+		"role":"Routing",
+		"principal":"Consistency"
+	}`))
+	updateResp := httptest.NewRecorder()
+	h.TeamByIDHandler().ServeHTTP(updateResp, updateReq)
+	if updateResp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", updateResp.Code, updateResp.Body.String())
+	}
+
+	entries, err := h.loadRegistry()
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 registry entry, got %d", len(entries))
+	}
+	if entries[0].TeamName != "Routing Core Plus" {
+		t.Fatalf("expected updated team name to propagate to registry, got %q", entries[0].TeamName)
+	}
+}
+
+func TestTeamByIDHandler_DeleteRejectsAssignedTeam(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewOpenClawHandler(tempDir, false)
+
+	if err := h.saveTeams([]TeamEntry{{
+		ID:        "alpha",
+		Name:      "Alpha",
+		CreatedAt: "2026-01-01T00:00:00Z",
+		UpdatedAt: "2026-01-01T00:00:00Z",
+	}}); err != nil {
+		t.Fatalf("failed to seed teams: %v", err)
+	}
+	if err := h.saveRegistry([]ContainerEntry{{
+		Name:     "agent-1",
+		Port:     18788,
+		Image:    "ghcr.io/openclaw/openclaw:latest",
+		Token:    "token",
+		DataDir:  tempDir,
+		TeamID:   "alpha",
+		TeamName: "Alpha",
+	}}); err != nil {
+		t.Fatalf("failed to seed registry: %v", err)
+	}
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/openclaw/teams/alpha", nil)
+	deleteResp := httptest.NewRecorder()
+	h.TeamByIDHandler().ServeHTTP(deleteResp, deleteReq)
+	if deleteResp.Code != http.StatusConflict {
+		t.Fatalf("expected 409 when team is assigned, got %d", deleteResp.Code)
 	}
 }

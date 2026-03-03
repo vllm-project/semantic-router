@@ -366,6 +366,8 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		ocHandler := handlers.NewOpenClawHandler(cfg.OpenClawDataDir, cfg.ReadonlyMode)
 		mux.HandleFunc("/api/openclaw/status", ocHandler.StatusHandler())
 		mux.HandleFunc("/api/openclaw/skills", ocHandler.SkillsHandler())
+		mux.HandleFunc("/api/openclaw/teams", ocHandler.TeamsHandler())
+		mux.HandleFunc("/api/openclaw/teams/", ocHandler.TeamByIDHandler())
 		mux.HandleFunc("/api/openclaw/provision", ocHandler.ProvisionHandler())
 		mux.HandleFunc("/api/openclaw/start", ocHandler.StartHandler())
 		mux.HandleFunc("/api/openclaw/stop", ocHandler.StopHandler())
@@ -413,6 +415,10 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	} else {
 		// Return disabled status even when feature is off
 		mux.HandleFunc("/api/openclaw/status", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[]`))
+		})
+		mux.HandleFunc("/api/openclaw/teams", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`[]`))
 		})

@@ -29,11 +29,24 @@ type ContainerEntry struct {
 	Token           string `json:"token"`
 	DataDir         string `json:"dataDir"`
 	CreatedAt       string `json:"createdAt"`
+	TeamID          string `json:"teamId,omitempty"`
+	TeamName        string `json:"teamName,omitempty"`
 	AgentName       string `json:"agentName,omitempty"`
 	AgentEmoji      string `json:"agentEmoji,omitempty"`
 	AgentRole       string `json:"agentRole,omitempty"`
 	AgentVibe       string `json:"agentVibe,omitempty"`
 	AgentPrinciples string `json:"agentPrinciples,omitempty"`
+}
+
+type TeamEntry struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Vibe        string `json:"vibe,omitempty"`
+	Role        string `json:"role,omitempty"`
+	Principal   string `json:"principal,omitempty"`
+	Description string `json:"description,omitempty"`
+	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
 }
 
 type OpenClawHandler struct {
@@ -48,6 +61,10 @@ func NewOpenClawHandler(dataDir string, readOnly bool) *OpenClawHandler {
 
 func (h *OpenClawHandler) registryPath() string {
 	return filepath.Join(h.dataDir, "containers.json")
+}
+
+func (h *OpenClawHandler) teamsPath() string {
+	return filepath.Join(h.dataDir, "teams.json")
 }
 
 func (h *OpenClawHandler) loadRegistry() ([]ContainerEntry, error) {
@@ -74,6 +91,41 @@ func (h *OpenClawHandler) saveRegistry(entries []ContainerEntry) error {
 		return err
 	}
 	return os.WriteFile(h.registryPath(), data, 0o644)
+}
+
+func (h *OpenClawHandler) loadTeams() ([]TeamEntry, error) {
+	data, err := os.ReadFile(h.teamsPath())
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []TeamEntry{}, nil
+		}
+		return nil, err
+	}
+	var entries []TeamEntry
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return nil, err
+	}
+	return entries, nil
+}
+
+func (h *OpenClawHandler) saveTeams(entries []TeamEntry) error {
+	data, err := json.MarshalIndent(entries, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(h.teamsPath()), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(h.teamsPath(), data, 0o644)
+}
+
+func findTeamByID(entries []TeamEntry, id string) *TeamEntry {
+	for i := range entries {
+		if entries[i].ID == id {
+			return &entries[i]
+		}
+	}
+	return nil
 }
 
 func (h *OpenClawHandler) findEntry(name string) *ContainerEntry {
@@ -358,6 +410,7 @@ type ProvisionRequest struct {
 	Identity  IdentityConfig  `json:"identity"`
 	Skills    []string        `json:"skills"`
 	Container ContainerConfig `json:"container"`
+	TeamID    string          `json:"teamId"`
 }
 
 type ProvisionResponse struct {
@@ -379,6 +432,8 @@ type OpenClawStatus struct {
 	Error           string `json:"error,omitempty"`
 	Image           string `json:"image,omitempty"`
 	CreatedAt       string `json:"createdAt,omitempty"`
+	TeamID          string `json:"teamId,omitempty"`
+	TeamName        string `json:"teamName,omitempty"`
 	AgentName       string `json:"agentName,omitempty"`
 	AgentEmoji      string `json:"agentEmoji,omitempty"`
 	AgentRole       string `json:"agentRole,omitempty"`
@@ -541,6 +596,8 @@ func (h *OpenClawHandler) checkContainerHealth(entry ContainerEntry) OpenClawSta
 		Port:            entry.Port,
 		Image:           entry.Image,
 		CreatedAt:       entry.CreatedAt,
+		TeamID:          entry.TeamID,
+		TeamName:        entry.TeamName,
 		AgentName:       snapshot.Name,
 		AgentEmoji:      snapshot.Emoji,
 		AgentRole:       snapshot.Role,
@@ -605,18 +662,38 @@ func (h *OpenClawHandler) StatusHandler() http.HandlerFunc {
 
 		h.mu.RLock()
 		entries, err := h.loadRegistry()
+		teams, teamErr := h.loadTeams()
 		h.mu.RUnlock()
 		if err != nil {
 			writeJSONError(w, fmt.Sprintf("Failed to load registry: %v", err), http.StatusInternalServerError)
 			return
+		}
+		teamNames := map[string]string{}
+		if teamErr == nil {
+			for _, team := range teams {
+				teamNames[team.ID] = team.Name
+			}
+		}
+
+		enrichTeam := func(status *OpenClawStatus) {
+			if status == nil || status.TeamID == "" {
+				return
+			}
+			if status.TeamName == "" {
+				if name, ok := teamNames[status.TeamID]; ok {
+					status.TeamName = name
+				}
+			}
 		}
 
 		name := r.URL.Query().Get("name")
 		if name != "" {
 			for _, e := range entries {
 				if e.Name == name {
+					status := h.checkContainerHealth(e)
+					enrichTeam(&status)
 					w.Header().Set("Content-Type", "application/json")
-					if err := json.NewEncoder(w).Encode(h.checkContainerHealth(e)); err != nil {
+					if err := json.NewEncoder(w).Encode(status); err != nil {
 						log.Printf("openclaw: status encode error: %v", err)
 					}
 					return
@@ -631,7 +708,9 @@ func (h *OpenClawHandler) StatusHandler() http.HandlerFunc {
 
 		statuses := make([]OpenClawStatus, 0, len(entries))
 		for _, e := range entries {
-			statuses = append(statuses, h.checkContainerHealth(e))
+			status := h.checkContainerHealth(e)
+			enrichTeam(&status)
+			statuses = append(statuses, status)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -732,6 +811,270 @@ func (h *OpenClawHandler) loadSkills() ([]SkillTemplate, error) {
 	return []SkillTemplate{}, nil
 }
 
+// --- Teams ---
+
+type teamPayload struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Vibe        string `json:"vibe"`
+	Role        string `json:"role"`
+	Principal   string `json:"principal"`
+	Description string `json:"description"`
+}
+
+func (h *OpenClawHandler) TeamsHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			h.mu.RLock()
+			teams, err := h.loadTeams()
+			h.mu.RUnlock()
+			if err != nil {
+				writeJSONError(w, fmt.Sprintf("Failed to load teams: %v", err), http.StatusInternalServerError)
+				return
+			}
+			sort.Slice(teams, func(i, j int) bool { return teams[i].Name < teams[j].Name })
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(teams); err != nil {
+				log.Printf("openclaw: teams encode error: %v", err)
+			}
+		case http.MethodPost:
+			if h.readOnly {
+				http.Error(w, `{"error":"Read-only mode enabled"}`, http.StatusForbidden)
+				return
+			}
+
+			var req teamPayload
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				writeJSONError(w, fmt.Sprintf("invalid request body: %v", err), http.StatusBadRequest)
+				return
+			}
+			name := strings.TrimSpace(req.Name)
+			if name == "" {
+				writeJSONError(w, "team name required", http.StatusBadRequest)
+				return
+			}
+
+			teamID := sanitizeTeamID(req.ID)
+			if teamID == "" {
+				teamID = sanitizeTeamID(name)
+			}
+			if teamID == "" {
+				writeJSONError(w, "team id is invalid", http.StatusBadRequest)
+				return
+			}
+
+			h.mu.Lock()
+			defer h.mu.Unlock()
+
+			teams, err := h.loadTeams()
+			if err != nil {
+				writeJSONError(w, fmt.Sprintf("Failed to load teams: %v", err), http.StatusInternalServerError)
+				return
+			}
+			for _, existing := range teams {
+				if existing.ID == teamID {
+					writeJSONError(w, fmt.Sprintf("team %q already exists", teamID), http.StatusConflict)
+					return
+				}
+				if strings.EqualFold(strings.TrimSpace(existing.Name), name) {
+					writeJSONError(w, fmt.Sprintf("team name %q already exists", name), http.StatusConflict)
+					return
+				}
+			}
+
+			now := time.Now().UTC().Format(time.RFC3339)
+			created := TeamEntry{
+				ID:          teamID,
+				Name:        name,
+				Vibe:        strings.TrimSpace(req.Vibe),
+				Role:        strings.TrimSpace(req.Role),
+				Principal:   strings.TrimSpace(req.Principal),
+				Description: strings.TrimSpace(req.Description),
+				CreatedAt:   now,
+				UpdatedAt:   now,
+			}
+			teams = append(teams, created)
+			sort.Slice(teams, func(i, j int) bool { return teams[i].Name < teams[j].Name })
+			if err := h.saveTeams(teams); err != nil {
+				writeJSONError(w, fmt.Sprintf("Failed to save teams: %v", err), http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			if err := json.NewEncoder(w).Encode(created); err != nil {
+				log.Printf("openclaw: create team encode error: %v", err)
+			}
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}
+}
+
+func (h *OpenClawHandler) TeamByIDHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		teamID := sanitizeTeamID(strings.TrimPrefix(r.URL.Path, "/api/openclaw/teams/"))
+		if teamID == "" {
+			writeJSONError(w, "team id required in path", http.StatusBadRequest)
+			return
+		}
+
+		switch r.Method {
+		case http.MethodGet:
+			h.mu.RLock()
+			teams, err := h.loadTeams()
+			h.mu.RUnlock()
+			if err != nil {
+				writeJSONError(w, fmt.Sprintf("Failed to load teams: %v", err), http.StatusInternalServerError)
+				return
+			}
+			team := findTeamByID(teams, teamID)
+			if team == nil {
+				writeJSONError(w, "team not found", http.StatusNotFound)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(team); err != nil {
+				log.Printf("openclaw: team encode error: %v", err)
+			}
+		case http.MethodPut, http.MethodPatch:
+			if h.readOnly {
+				http.Error(w, `{"error":"Read-only mode enabled"}`, http.StatusForbidden)
+				return
+			}
+
+			var req teamPayload
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				writeJSONError(w, fmt.Sprintf("invalid request body: %v", err), http.StatusBadRequest)
+				return
+			}
+			name := strings.TrimSpace(req.Name)
+			if name == "" {
+				writeJSONError(w, "team name required", http.StatusBadRequest)
+				return
+			}
+
+			h.mu.Lock()
+			defer h.mu.Unlock()
+
+			teams, err := h.loadTeams()
+			if err != nil {
+				writeJSONError(w, fmt.Sprintf("Failed to load teams: %v", err), http.StatusInternalServerError)
+				return
+			}
+
+			index := -1
+			for i := range teams {
+				if teams[i].ID == teamID {
+					index = i
+					continue
+				}
+				if strings.EqualFold(strings.TrimSpace(teams[i].Name), name) {
+					writeJSONError(w, fmt.Sprintf("team name %q already exists", name), http.StatusConflict)
+					return
+				}
+			}
+			if index < 0 {
+				writeJSONError(w, "team not found", http.StatusNotFound)
+				return
+			}
+
+			teams[index].Name = name
+			teams[index].Vibe = strings.TrimSpace(req.Vibe)
+			teams[index].Role = strings.TrimSpace(req.Role)
+			teams[index].Principal = strings.TrimSpace(req.Principal)
+			teams[index].Description = strings.TrimSpace(req.Description)
+			teams[index].UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+			updated := teams[index]
+
+			sort.Slice(teams, func(i, j int) bool { return teams[i].Name < teams[j].Name })
+			if err := h.saveTeams(teams); err != nil {
+				writeJSONError(w, fmt.Sprintf("Failed to save teams: %v", err), http.StatusInternalServerError)
+				return
+			}
+
+			entries, err := h.loadRegistry()
+			if err == nil {
+				changed := false
+				for i := range entries {
+					if entries[i].TeamID == teamID {
+						entries[i].TeamName = updated.Name
+						changed = true
+					}
+				}
+				if changed {
+					if err := h.saveRegistry(entries); err != nil {
+						log.Printf("openclaw: failed to save registry after team rename: %v", err)
+					}
+				}
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(updated); err != nil {
+				log.Printf("openclaw: update team encode error: %v", err)
+			}
+		case http.MethodDelete:
+			if h.readOnly {
+				http.Error(w, `{"error":"Read-only mode enabled"}`, http.StatusForbidden)
+				return
+			}
+
+			h.mu.Lock()
+			defer h.mu.Unlock()
+
+			entries, err := h.loadRegistry()
+			if err != nil {
+				writeJSONError(w, fmt.Sprintf("Failed to load registry: %v", err), http.StatusInternalServerError)
+				return
+			}
+			assigned := 0
+			for _, e := range entries {
+				if e.TeamID == teamID {
+					assigned++
+				}
+			}
+			if assigned > 0 {
+				writeJSONError(w, fmt.Sprintf("team is still assigned to %d agent(s)", assigned), http.StatusConflict)
+				return
+			}
+
+			teams, err := h.loadTeams()
+			if err != nil {
+				writeJSONError(w, fmt.Sprintf("Failed to load teams: %v", err), http.StatusInternalServerError)
+				return
+			}
+			filtered := teams[:0]
+			removed := false
+			for _, team := range teams {
+				if team.ID == teamID {
+					removed = true
+					continue
+				}
+				filtered = append(filtered, team)
+			}
+			if !removed {
+				writeJSONError(w, "team not found", http.StatusNotFound)
+				return
+			}
+			if err := h.saveTeams(filtered); err != nil {
+				writeJSONError(w, fmt.Sprintf("Failed to save teams: %v", err), http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": true,
+				"message": fmt.Sprintf("Team %s removed", teamID),
+			}); err != nil {
+				log.Printf("openclaw: delete team encode error: %v", err)
+			}
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}
+}
+
 // --- Provision ---
 
 func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
@@ -786,8 +1129,31 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 		if req.Container.MemoryBackend == "" {
 			req.Container.MemoryBackend = "local"
 		}
+		req.TeamID = sanitizeTeamID(req.TeamID)
+		if req.TeamID == "" {
+			writeJSONError(w, "teamId is required; create/select a team before provisioning", http.StatusBadRequest)
+			return
+		}
 
 		h.mu.Lock()
+		teams, err := h.loadTeams()
+		if err != nil {
+			h.mu.Unlock()
+			writeJSONError(w, fmt.Sprintf("Failed to load teams: %v", err), http.StatusInternalServerError)
+			return
+		}
+		team := findTeamByID(teams, req.TeamID)
+		if team == nil {
+			h.mu.Unlock()
+			writeJSONError(w, fmt.Sprintf("team %q not found", req.TeamID), http.StatusNotFound)
+			return
+		}
+		teamName := strings.TrimSpace(team.Name)
+		if teamName == "" {
+			h.mu.Unlock()
+			writeJSONError(w, fmt.Sprintf("team %q has empty name", req.TeamID), http.StatusBadRequest)
+			return
+		}
 
 		if req.Container.GatewayPort == 0 {
 			req.Container.GatewayPort = h.nextAvailablePort()
@@ -914,6 +1280,8 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 				entries[i].Image = req.Container.BaseImage
 				entries[i].Token = req.Container.AuthToken
 				entries[i].DataDir = absCDir
+				entries[i].TeamID = req.TeamID
+				entries[i].TeamName = teamName
 				entries[i].AgentName = strings.TrimSpace(req.Identity.Name)
 				entries[i].AgentEmoji = strings.TrimSpace(req.Identity.Emoji)
 				entries[i].AgentRole = strings.TrimSpace(req.Identity.Role)
@@ -931,6 +1299,8 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 				Token:           req.Container.AuthToken,
 				DataDir:         absCDir,
 				CreatedAt:       time.Now().UTC().Format(time.RFC3339),
+				TeamID:          req.TeamID,
+				TeamName:        teamName,
 				AgentName:       strings.TrimSpace(req.Identity.Name),
 				AgentEmoji:      strings.TrimSpace(req.Identity.Emoji),
 				AgentRole:       strings.TrimSpace(req.Identity.Role),
@@ -1143,6 +1513,10 @@ func sanitizeContainerName(raw string) string {
 		cleaned = "oc-" + cleaned
 	}
 	return cleaned
+}
+
+func sanitizeTeamID(raw string) string {
+	return sanitizeContainerName(raw)
 }
 
 func deriveContainerName(requested, identityName string) string {
