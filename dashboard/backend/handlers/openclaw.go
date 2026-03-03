@@ -61,8 +61,10 @@ func (h *OpenClawHandler) saveRegistry(entries []ContainerEntry) error {
 	if err != nil {
 		return err
 	}
-	os.MkdirAll(filepath.Dir(h.registryPath()), 0755)
-	return os.WriteFile(h.registryPath(), data, 0644)
+	if err := os.MkdirAll(filepath.Dir(h.registryPath()), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(h.registryPath(), data, 0o644)
 }
 
 func (h *OpenClawHandler) findEntry(name string) *ContainerEntry {
@@ -197,9 +199,11 @@ func (h *OpenClawHandler) TokenHandler() http.HandlerFunc {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
+		if err := json.NewEncoder(w).Encode(map[string]string{
 			"token": h.gatewayTokenForContainer(name),
-		})
+		}); err != nil {
+			log.Printf("openclaw: token encode error: %v", err)
+		}
 	}
 }
 
@@ -212,8 +216,7 @@ func (h *OpenClawHandler) checkContainerHealth(entry ContainerEntry) OpenClawSta
 		Port:          entry.Port,
 	}
 
-	// Check if docker container is running
-	out, err := exec.Command("docker", "inspect", "-f", "{{.State.Running}}", entry.Name).Output()
+	out, err := exec.Command("docker", "inspect", "-f", "{{.State.Running}}", entry.Name).Output() // #nosec G204
 	if err != nil {
 		status.Running = false
 		status.Error = "Container not found"
@@ -225,7 +228,6 @@ func (h *OpenClawHandler) checkContainerHealth(entry ContainerEntry) OpenClawSta
 		return status
 	}
 
-	// HTTP health check
 	client := &http.Client{Timeout: 2 * time.Second}
 	resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/health", entry.Port))
 	if err != nil {
@@ -235,9 +237,8 @@ func (h *OpenClawHandler) checkContainerHealth(entry ContainerEntry) OpenClawSta
 	resp.Body.Close()
 	gatewayReachable := resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNoContent
 
-	// Refine with log check — compare positions so a successful restart
-	// after a previous failure is correctly detected as healthy.
-	if logOut, err := exec.Command("docker", "logs", "--tail", "80", entry.Name).CombinedOutput(); err == nil {
+	// Compare positions so a successful restart after a previous failure is correctly detected.
+	if logOut, err := exec.Command("docker", "logs", "--tail", "80", entry.Name).CombinedOutput(); err == nil { // #nosec G204
 		logs := string(logOut)
 		lastSuccess := strings.LastIndex(logs, "[gateway] listening on ws://")
 		lastFail := max(
@@ -276,29 +277,33 @@ func (h *OpenClawHandler) StatusHandler() http.HandlerFunc {
 			return
 		}
 
-		// Single container query
 		name := r.URL.Query().Get("name")
 		if name != "" {
 			for _, e := range entries {
 				if e.Name == name {
 					w.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(w).Encode(h.checkContainerHealth(e))
+					if err := json.NewEncoder(w).Encode(h.checkContainerHealth(e)); err != nil {
+						log.Printf("openclaw: status encode error: %v", err)
+					}
 					return
 				}
 			}
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(OpenClawStatus{Error: "Container not in registry"})
+			if err := json.NewEncoder(w).Encode(OpenClawStatus{Error: "Container not in registry"}); err != nil {
+				log.Printf("openclaw: status encode error: %v", err)
+			}
 			return
 		}
 
-		// All containers
 		statuses := make([]OpenClawStatus, 0, len(entries))
 		for _, e := range entries {
 			statuses = append(statuses, h.checkContainerHealth(e))
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(statuses)
+		if err := json.NewEncoder(w).Encode(statuses); err != nil {
+			log.Printf("openclaw: statuses encode error: %v", err)
+		}
 	}
 }
 
@@ -314,7 +319,9 @@ func (h *OpenClawHandler) NextPortHandler() http.HandlerFunc {
 		port := h.nextAvailablePort()
 		h.mu.RUnlock()
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]int{"port": port})
+		if err := json.NewEncoder(w).Encode(map[string]int{"port": port}); err != nil {
+			log.Printf("openclaw: next-port encode error: %v", err)
+		}
 	}
 }
 
@@ -330,11 +337,13 @@ func (h *OpenClawHandler) SkillsHandler() http.HandlerFunc {
 		if err != nil {
 			log.Printf("Warning: failed to load skills config: %v", err)
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte("[]"))
+			_, _ = w.Write([]byte("[]"))
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(skills)
+		if err := json.NewEncoder(w).Encode(skills); err != nil {
+			log.Printf("openclaw: skills encode error: %v", err)
+		}
 	}
 }
 
@@ -403,7 +412,6 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 
 		h.mu.Lock()
 
-		// Auto-assign port if 0 or conflicts with another registered container
 		if req.Container.GatewayPort == 0 {
 			req.Container.GatewayPort = h.nextAvailablePort()
 		} else {
@@ -417,11 +425,14 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 			}
 		}
 
-		// Per-container data directory
 		cDir := h.containerDataDir(req.Container.ContainerName)
 		wsDir := filepath.Join(cDir, "workspace")
-		for _, sub := range []string{"workspace", "workspace/memory", "workspace/skills"} {
-			if err := os.MkdirAll(filepath.Join(cDir, sub), 0755); err != nil {
+		for _, sub := range []string{
+			"workspace",
+			"workspace/memory",
+			"workspace/skills",
+		} {
+			if err := os.MkdirAll(filepath.Join(cDir, sub), 0o755); err != nil {
 				h.mu.Unlock()
 				writeJSONError(w, fmt.Sprintf("Failed to create %s: %v", sub, err), http.StatusInternalServerError)
 				return
@@ -433,7 +444,7 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 			writeJSONError(w, fmt.Sprintf("Failed to write identity files: %v", err), http.StatusInternalServerError)
 			return
 		}
-		if err := os.WriteFile(filepath.Join(wsDir, "AGENTS.md"), []byte(agentsMdContent()), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(wsDir, "AGENTS.md"), []byte(agentsMdContent()), 0o644); err != nil {
 			h.mu.Unlock()
 			writeJSONError(w, fmt.Sprintf("Failed to write AGENTS.md: %v", err), http.StatusInternalServerError)
 			return
@@ -445,8 +456,13 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 				continue
 			}
 			skillDir := filepath.Join(wsDir, "skills", skillID)
-			os.MkdirAll(skillDir, 0755)
-			os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(content), 0644)
+			if err := os.MkdirAll(skillDir, 0o755); err != nil {
+				log.Printf("openclaw: failed to create skill dir %s: %v", skillID, err)
+				continue
+			}
+			if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(content), 0o644); err != nil {
+				log.Printf("openclaw: failed to write skill %s: %v", skillID, err)
+			}
 		}
 
 		configPath := filepath.Join(cDir, "openclaw.json")
@@ -456,8 +472,7 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 			return
 		}
 
-		// Only remove existing container with the SAME name
-		exec.Command("docker", "rm", "-f", req.Container.ContainerName).Run()
+		_ = exec.Command("docker", "rm", "-f", req.Container.ContainerName).Run() // #nosec G204
 
 		absCDir, _ := filepath.Abs(cDir)
 		volumeName := "openclaw-state-" + req.Container.ContainerName
@@ -474,7 +489,7 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 			req.Container.BaseImage,
 			"node", "openclaw.mjs", "gateway", "--allow-unconfigured", "--bind", "lan",
 		}
-		out, err := exec.Command("docker", args...).CombinedOutput()
+		out, err := exec.Command("docker", args...).CombinedOutput() // #nosec G204
 		if err != nil {
 			h.mu.Unlock()
 			writeJSONError(w, fmt.Sprintf("Failed to start container: %s (%v)", strings.TrimSpace(string(out)), err), http.StatusInternalServerError)
@@ -482,7 +497,6 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 		}
 		containerID := strings.TrimSpace(string(out))
 
-		// Update registry
 		entries, _ := h.loadRegistry()
 		found := false
 		for i := range entries {
@@ -506,10 +520,11 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 			})
 		}
 		sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
-		h.saveRegistry(entries)
+		if err := h.saveRegistry(entries); err != nil {
+			log.Printf("openclaw: failed to save registry: %v", err)
+		}
 		h.mu.Unlock()
 
-		// Health-check loop
 		healthy := false
 		client := &http.Client{Timeout: 3 * time.Second}
 		gatewayURL := fmt.Sprintf("http://127.0.0.1:%d", req.Container.GatewayPort)
@@ -535,7 +550,7 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 
 		log.Printf("OpenClaw provisioned: name=%s port=%d healthy=%v", req.Container.ContainerName, req.Container.GatewayPort, healthy)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ProvisionResponse{
+		if err := json.NewEncoder(w).Encode(ProvisionResponse{
 			Success:      true,
 			Message:      msg,
 			WorkspaceDir: wsDir,
@@ -543,7 +558,9 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 			ContainerID:  containerID,
 			DockerCmd:    dockerCmd,
 			ComposeYAML:  composeYAML,
-		})
+		}); err != nil {
+			log.Printf("openclaw: provision encode error: %v", err)
+		}
 	}
 }
 
@@ -559,19 +576,29 @@ func (h *OpenClawHandler) StartHandler() http.HandlerFunc {
 			http.Error(w, `{"error":"Read-only mode enabled"}`, http.StatusForbidden)
 			return
 		}
-		var req struct{ ContainerName string `json:"containerName"` }
-		json.NewDecoder(r.Body).Decode(&req)
+		var req struct {
+			ContainerName string `json:"containerName"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSONError(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
 		if req.ContainerName == "" {
 			writeJSONError(w, "containerName required", http.StatusBadRequest)
 			return
 		}
-		out, err := exec.Command("docker", "start", req.ContainerName).CombinedOutput()
+		out, err := exec.Command("docker", "start", req.ContainerName).CombinedOutput() // #nosec G204
 		if err != nil {
 			writeJSONError(w, fmt.Sprintf("Failed to start: %s (%v)", strings.TrimSpace(string(out)), err), http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "message": fmt.Sprintf("Container %s started", req.ContainerName)})
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": fmt.Sprintf("Container %s started", req.ContainerName),
+		}); err != nil {
+			log.Printf("openclaw: start encode error: %v", err)
+		}
 	}
 }
 
@@ -585,19 +612,29 @@ func (h *OpenClawHandler) StopHandler() http.HandlerFunc {
 			http.Error(w, `{"error":"Read-only mode enabled"}`, http.StatusForbidden)
 			return
 		}
-		var req struct{ ContainerName string `json:"containerName"` }
-		json.NewDecoder(r.Body).Decode(&req)
+		var req struct {
+			ContainerName string `json:"containerName"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSONError(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
 		if req.ContainerName == "" {
 			writeJSONError(w, "containerName required", http.StatusBadRequest)
 			return
 		}
-		out, err := exec.Command("docker", "stop", req.ContainerName).CombinedOutput()
+		out, err := exec.Command("docker", "stop", req.ContainerName).CombinedOutput() // #nosec G204
 		if err != nil {
 			writeJSONError(w, fmt.Sprintf("Failed to stop: %s (%v)", strings.TrimSpace(string(out)), err), http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "message": fmt.Sprintf("Container %s stopped", req.ContainerName)})
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": fmt.Sprintf("Container %s stopped", req.ContainerName),
+		}); err != nil {
+			log.Printf("openclaw: stop encode error: %v", err)
+		}
 	}
 }
 
@@ -617,7 +654,7 @@ func (h *OpenClawHandler) DeleteHandler() http.HandlerFunc {
 			return
 		}
 
-		exec.Command("docker", "rm", "-f", name).Run()
+		_ = exec.Command("docker", "rm", "-f", name).Run() // #nosec G204
 
 		h.mu.Lock()
 		entries, _ := h.loadRegistry()
@@ -627,11 +664,18 @@ func (h *OpenClawHandler) DeleteHandler() http.HandlerFunc {
 				filtered = append(filtered, e)
 			}
 		}
-		h.saveRegistry(filtered)
+		if err := h.saveRegistry(filtered); err != nil {
+			log.Printf("openclaw: failed to save registry on delete: %v", err)
+		}
 		h.mu.Unlock()
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "message": fmt.Sprintf("Container %s removed", name)})
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": fmt.Sprintf("Container %s removed", name),
+		}); err != nil {
+			log.Printf("openclaw: delete encode error: %v", err)
+		}
 	}
 }
 
@@ -658,7 +702,9 @@ func (h *OpenClawHandler) PortForContainer(name string) (int, bool) {
 func writeJSONError(w http.ResponseWriter, msg string, code int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+	if err := json.NewEncoder(w).Encode(map[string]string{"error": msg}); err != nil {
+		log.Printf("openclaw: error encode error: %v", err)
+	}
 }
 
 func generateToken(n int) string {
@@ -688,7 +734,7 @@ func writeIdentityFiles(wsDir string, id IdentityConfig) error {
 		soulParts = append(soulParts, "## Boundaries\n")
 		soulParts = append(soulParts, id.Boundaries+"\n")
 	}
-	if err := os.WriteFile(filepath.Join(wsDir, "SOUL.md"), []byte(strings.Join(soulParts, "\n")), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(wsDir, "SOUL.md"), []byte(strings.Join(soulParts, "\n")), 0o644); err != nil {
 		return err
 	}
 
@@ -706,7 +752,7 @@ func writeIdentityFiles(wsDir string, id IdentityConfig) error {
 	if id.Emoji != "" {
 		idParts = append(idParts, fmt.Sprintf("- **Emoji:** %s", id.Emoji))
 	}
-	if err := os.WriteFile(filepath.Join(wsDir, "IDENTITY.md"), []byte(strings.Join(idParts, "\n")+"\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(wsDir, "IDENTITY.md"), []byte(strings.Join(idParts, "\n")+"\n"), 0o644); err != nil {
 		return err
 	}
 
@@ -718,7 +764,7 @@ func writeIdentityFiles(wsDir string, id IdentityConfig) error {
 	if id.UserNotes != "" {
 		userParts = append(userParts, fmt.Sprintf("- **Notes:** %s", id.UserNotes))
 	}
-	return os.WriteFile(filepath.Join(wsDir, "USER.md"), []byte(strings.Join(userParts, "\n")+"\n"), 0644)
+	return os.WriteFile(filepath.Join(wsDir, "USER.md"), []byte(strings.Join(userParts, "\n")+"\n"), 0o644)
 }
 
 func writeOpenClawConfig(path string, req ProvisionRequest) error {
@@ -744,8 +790,9 @@ func writeOpenClawConfig(path string, req ProvisionRequest) error {
 		},
 		"agents": map[string]interface{}{
 			"defaults": map[string]interface{}{
-				"model": map[string]string{"primary": "vllm/" + req.Container.ModelName},
-				"workspace": "/workspace", "compaction": map[string]string{"mode": "safeguard"},
+				"model":      map[string]string{"primary": "vllm/" + req.Container.ModelName},
+				"workspace":  "/workspace",
+				"compaction": map[string]string{"mode": "safeguard"},
 			},
 			"list": []map[string]interface{}{
 				{"id": "demo", "default": true, "name": "Demo Agent", "workspace": "/workspace"},
@@ -766,8 +813,11 @@ func writeOpenClawConfig(path string, req ProvisionRequest) error {
 		cfg["memory"] = map[string]interface{}{
 			"backend": "remote",
 			"remote": map[string]interface{}{
-				"baseUrl": req.Container.MemoryBaseURL, "vectorStoreName": req.Container.VectorStore,
-				"syncIntervalMs": 30000, "searchMaxResults": 5, "searchScoreThreshold": 0.3,
+				"baseUrl":              req.Container.MemoryBaseURL,
+				"vectorStoreName":      req.Container.VectorStore,
+				"syncIntervalMs":       30000,
+				"searchMaxResults":     5,
+				"searchScoreThreshold": 0.3,
 			},
 		}
 	}
@@ -778,7 +828,7 @@ func writeOpenClawConfig(path string, req ProvisionRequest) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0o644)
 }
 
 func generateDockerRunCmd(req ProvisionRequest, dataDir string) string {
@@ -860,7 +910,7 @@ func (h *OpenClawHandler) fetchSkillContent(skillID, baseImage string) string {
 		"/app/extensions/" + skillID + "/SKILL.md",
 	}
 	for _, p := range containerPaths {
-		out, err := exec.Command("docker", "run", "--rm", baseImage, "cat", p).Output()
+		out, err := exec.Command("docker", "run", "--rm", baseImage, "cat", p).Output() // #nosec G204
 		if err == nil && len(out) > 0 {
 			return string(out)
 		}

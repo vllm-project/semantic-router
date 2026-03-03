@@ -16,7 +16,6 @@ import (
 // NewWebSocketAwareHandler returns an http.Handler that proxies both regular HTTP
 // and WebSocket upgrade requests to the target. This is required for services
 // like OpenClaw whose control UI uses WebSocket for real-time communication.
-//
 func NewWebSocketAwareHandler(targetBase, stripPrefix string) (http.Handler, error) {
 	targetURL, err := url.Parse(targetBase)
 	if err != nil {
@@ -160,11 +159,11 @@ func proxyWebSocket(w http.ResponseWriter, r *http.Request, target *url.URL, str
 	done := make(chan struct{}, 2)
 
 	go func() {
-		io.Copy(targetConn, clientBuf)
+		_, _ = io.Copy(targetConn, clientBuf)
 		done <- struct{}{}
 	}()
 	go func() {
-		io.Copy(clientConn, targetConn)
+		_, _ = io.Copy(clientConn, targetConn)
 		done <- struct{}{}
 	}()
 

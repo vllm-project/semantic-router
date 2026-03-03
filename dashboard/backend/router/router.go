@@ -410,7 +410,7 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		// Return disabled status even when feature is off
 		mux.HandleFunc("/api/openclaw/status", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`[]`))
+			_, _ = w.Write([]byte(`[]`))
 		})
 		mux.HandleFunc("/embedded/openclaw/", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
