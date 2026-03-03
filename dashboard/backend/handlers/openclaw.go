@@ -1089,7 +1089,7 @@ func deriveContainerName(requested, identityName string) string {
 	if name := sanitizeContainerName(identityName); name != "" {
 		return name
 	}
-	return "openclaw-demo"
+	return "openclaw-vllm-sr"
 }
 
 func writeJSONError(w http.ResponseWriter, msg string, code int) {
@@ -1202,7 +1202,7 @@ func writeOpenClawConfig(path string, req ProvisionRequest) error {
 				"compaction": map[string]string{"mode": "safeguard"},
 			},
 			"list": []map[string]interface{}{
-				{"id": "demo", "default": true, "name": "Demo Agent", "workspace": "/workspace"},
+				{"id": "vllm-sr", "default": true, "name": "vLLM-SR Powered Agent", "workspace": "/workspace"},
 			},
 		},
 		"commands": map[string]interface{}{"native": "auto", "nativeSkills": "auto", "restart": true},
