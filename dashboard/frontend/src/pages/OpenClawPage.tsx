@@ -109,8 +109,7 @@ const OpenClawPage: React.FC = () => {
             )}
           </h1>
           <p className={styles.subtitle}>
-            Provision, configure, and manage your OpenClaw AI agents. OpenClaw uses Semantic Router
-            for intelligent model routing, memory, and knowledge management.
+            Provision, configure, and manage your OpenClaw Agents Powered by intelligent model routing, memory, and knowledge management.
           </p>
         </div>
         <div className={styles.headerRight}>
