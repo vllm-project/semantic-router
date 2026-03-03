@@ -83,6 +83,34 @@ const PROVISION_STEPS = [
   { key: 'deploy', label: 'Deploy' },
 ]
 
+const OPENCLAW_FEATURES = [
+  {
+    title: 'Intelligent Routing',
+    description: 'Model selection with cost-accuracy balance driven by vLLM SR routing intelligence.',
+    icon: '\u{1F9ED}',
+  },
+  {
+    title: 'Safety Guardrails',
+    description: 'Protect agents from jailbreak attacks, PII leakage, and hallucination risk.',
+    icon: '\u{1F6E1}\uFE0F',
+  },
+  {
+    title: 'Advanced Context Memory',
+    description: 'Persistent context and memory management for long-horizon, multi-step execution.',
+    icon: '\u{1F9E0}',
+  },
+  {
+    title: 'Knowledge Sharing',
+    description: 'Cross-agent experience and knowledge sharing for faster team learning loops.',
+    icon: '\u{1F501}',
+  },
+  {
+    title: 'Isolation & Team Management',
+    description: 'Multi-agent isolation with centralized team operations in one control plane.',
+    icon: '\u{1F9E9}',
+  },
+]
+
 const FALLBACK_MODEL_BASE_URL = 'http://127.0.0.1:8801/v1'
 
 const getDynamicModelBaseUrl = (): string => {
@@ -148,114 +176,125 @@ const OpenClawPage: React.FC = () => {
     <div className={styles.container}>
       {/* Header */}
       <div className={styles.header}>
-        <img className={styles.logo} src="/openclaw.png" alt="OpenClaw logo" />
-        <div className={styles.titleRow}>
-          <h1 className={styles.title}>OpenClaw Team</h1>
-          {runningCount > 0 && (
-            <span className={`${styles.titleBadge} ${styles.badgeRunning}`}>
+        <div className={styles.headerBody}>
+          <div className={styles.headerBadgeRow}>
+            <span className={`${styles.titleBadge} ${styles.badgePowered}`}>vLLM-SR Powered</span>
+            <span className={`${styles.titleBadge} ${styles.badgeTeam}`}>{teamCount} Teams</span>
+            <span className={`${styles.titleBadge} ${runningCount > 0 ? styles.badgeRunning : styles.badgeStopped}`}>
               {runningCount} Running
             </span>
-          )}
+          </div>
+          <h1 className={styles.title}>
+            <span className={styles.titleLead}>Semantic Kernel</span> Powered OpenClaw Team
+          </h1>
+          <p className={styles.subtitle}>
+            Evolved from vLLM-SR built on Semantic Kernel with System Intelligence.
+          </p>
         </div>
-        <p className={styles.subtitle}>
-          Build, compose, and operate your OpenClaw team with unified identity, routing, and runtime control.
-        </p>
-        <div className={styles.headerActions}>
-          <button className={styles.btnSecondary} onClick={refreshAll}>
-            Refresh Team
-          </button>
+        <div className={styles.logoPanel}>
+          <img className={styles.logo} src="/openclaw.png" alt="OpenClaw logo" />
         </div>
       </div>
 
       {/* Tabs */}
-      <div className={styles.tabs}>
-        <button
-          className={`${styles.tab} ${activeTab === 'dashboard' ? styles.tabActive : ''}`}
-          onClick={() => setActiveTab('dashboard')}
-        >
-          <span className={styles.tabIcon}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-              <polyline points="7.5 4.21 12 6.81 16.5 4.21" />
-              <polyline points="7.5 19.79 7.5 14.6 3 12" />
-              <polyline points="21 12 16.5 14.6 16.5 19.79" />
-              <polyline points="12 22.08 12 16.89 16.5 14.3" />
-              <polyline points="12 16.89 7.5 14.3" />
-              <polyline points="12 6.81 12 12" />
-            </svg>
-          </span>
-          Claw Dashboard ({containers.length})
-        </button>
-        <button
-          className={`${styles.tab} ${activeTab === 'team' ? styles.tabActive : ''}`}
-          onClick={() => setActiveTab('team')}
-        >
-          <span className={styles.tabIcon}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-          </span>
-          Team ({teamCount})
-        </button>
-        <button
-          className={`${styles.tab} ${activeTab === 'provision' ? styles.tabActive : ''}`}
-          onClick={() => setActiveTab('provision')}
-        >
-          <span className={styles.tabIcon}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
-            </svg>
-          </span>
-          Claw Provision
-        </button>
-        <button
-          className={`${styles.tab} ${activeTab === 'status' ? styles.tabActive : ''}`}
-          onClick={() => setActiveTab('status')}
-        >
-          <span className={styles.tabIcon}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-            </svg>
-          </span>
-          Claw Status ({containers.length})
-        </button>
+      <div className={styles.tabsBar}>
+        <div className={styles.tabs}>
+          <button
+            className={`${styles.tab} ${activeTab === 'dashboard' ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab('dashboard')}
+          >
+            <span className={styles.tabIcon}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                <polyline points="7.5 4.21 12 6.81 16.5 4.21" />
+                <polyline points="7.5 19.79 7.5 14.6 3 12" />
+                <polyline points="21 12 16.5 14.6 16.5 19.79" />
+                <polyline points="12 22.08 12 16.89 16.5 14.3" />
+                <polyline points="12 16.89 7.5 14.3" />
+                <polyline points="12 6.81 12 12" />
+              </svg>
+            </span>
+            Claw Dashboard
+          </button>
+          <button
+            className={`${styles.tab} ${activeTab === 'team' ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab('team')}
+          >
+            <span className={styles.tabIcon}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            </span>
+            Claw Team ({teamCount})
+          </button>
+          <button
+            className={`${styles.tab} ${activeTab === 'provision' ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab('provision')}
+          >
+            <span className={styles.tabIcon}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
+              </svg>
+            </span>
+            Claw Worker
+          </button>
+          <button
+            className={`${styles.tab} ${activeTab === 'status' ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab('status')}
+          >
+            <span className={styles.tabIcon}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+              </svg>
+            </span>
+            Claw Status ({containers.length})
+          </button>
+        </div>
       </div>
 
       {/* Tab Content */}
       {activeTab === 'dashboard' && (
-        <ClawDashboardTab
-          containers={containers}
-          teams={teams}
-          onSwitchToStatus={() => setActiveTab('status')}
-        />
+        <div className={styles.tabContentShell}>
+          <ClawDashboardTab
+            containers={containers}
+            teams={teams}
+            onSwitchToStatus={() => setActiveTab('status')}
+          />
+        </div>
       )}
       {activeTab === 'team' && (
-        <TeamTab
-          teams={teams}
-          teamsLoading={teamsLoading}
-          containers={containers}
-          onTeamsUpdated={fetchTeams}
-          onSwitchToProvision={() => setActiveTab('provision')}
-        />
+        <div className={styles.tabContentShell}>
+          <TeamTab
+            teams={teams}
+            teamsLoading={teamsLoading}
+            containers={containers}
+            onTeamsUpdated={fetchTeams}
+            onSwitchToProvision={() => setActiveTab('provision')}
+          />
+        </div>
       )}
       {activeTab === 'provision' && (
-        <ProvisionTab
-          containers={containers}
-          teams={teams}
-          onProvisioned={refreshAll}
-          onSwitchToTeam={() => setActiveTab('team')}
-          onSwitchToStatus={() => setActiveTab('status')}
-        />
+        <div className={styles.tabContentShell}>
+          <ProvisionTab
+            containers={containers}
+            teams={teams}
+            onProvisioned={refreshAll}
+            onSwitchToTeam={() => setActiveTab('team')}
+            onSwitchToStatus={() => setActiveTab('status')}
+          />
+        </div>
       )}
       {activeTab === 'status' && (
-        <StatusTab
-          containers={containers}
-          statusLoading={statusLoading}
-          onRefresh={refreshAll}
-        />
+        <div className={styles.tabContentShell}>
+          <StatusTab
+            containers={containers}
+            statusLoading={statusLoading}
+            onRefresh={refreshAll}
+          />
+        </div>
       )}
     </div>
   )
@@ -302,14 +341,120 @@ const ClawDashboardTab: React.FC<{
       .slice(0, 5)
   }, [containers])
   const teamMax = Math.max(...teamRows.map(([, value]) => value), 1)
+  const teamCompositionRows = useMemo(() => {
+    const rows = new Map<string, { team: TeamProfile | null; agents: OpenClawStatus[] }>()
+    for (const team of teams) {
+      rows.set(team.id, { team, agents: [] })
+    }
+    for (const agent of containers) {
+      const key = (agent.teamId || '').trim() || '__unassigned__'
+      if (!rows.has(key)) {
+        rows.set(key, {
+          team: key === '__unassigned__'
+            ? null
+            : {
+                id: key,
+                name: (agent.teamName || key).trim() || key,
+                vibe: '',
+                role: '',
+                principal: '',
+              },
+          agents: [],
+        })
+      }
+      rows.get(key)?.agents.push(agent)
+    }
+    return Array.from(rows.values())
+      .filter(row => row.team !== null || row.agents.length > 0)
+      .sort((a, b) => b.agents.length - a.agents.length)
+  }, [teams, containers])
+
+  const productSpotlight = (
+    <section className={styles.productSection}>
+      <div className={styles.productFeatureGrid}>
+        {OPENCLAW_FEATURES.map(feature => (
+          <article key={feature.title} className={styles.productFeatureCard}>
+            <div className={styles.productFeatureIcon}>{feature.icon}</div>
+            <h3 className={styles.productFeatureTitle}>{feature.title}</h3>
+            <p className={styles.productFeatureDescription}>{feature.description}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+  const teamComposition = (
+    <section className={styles.teamCompositionSection}>
+      <div className={styles.teamCompositionHeader}>
+        <h3 className={styles.teamCompositionTitle}>OpenClaw Team Composition</h3>
+      </div>
+      <div className={styles.teamCompositionSummary}>
+        <span>{teamCompositionRows.length} teams</span>
+        <span>{totalAgents} agents</span>
+        <span>{healthyAgents} healthy</span>
+        <span>{runningAgents} running</span>
+      </div>
+      {teamCompositionRows.length === 0 ? (
+        <div className={styles.teamCompositionEmpty}>
+          No OpenClaw team data yet. Provision a team and agents to populate this view.
+        </div>
+      ) : (
+        <div className={styles.teamCompositionGrid}>
+          {teamCompositionRows.map((row, index) => {
+            const team = row.team
+            const teamName = team?.name || 'Unassigned'
+            return (
+              <article key={`${team?.id || 'unassigned'}-${index}`} className={styles.teamCompositionCard}>
+                <div className={styles.teamCompositionCardHeader}>
+                  <div>
+                    <h4 className={styles.teamCompositionCardTitle}>{teamName}</h4>
+                    <div className={styles.teamCompositionCardMeta}>
+                      {team?.role || 'No role'} • {team?.vibe || 'No vibe'}
+                    </div>
+                  </div>
+                  <span className={styles.teamCompositionCardCount}>
+                    {row.agents.length} agent{row.agents.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                {team?.principal && (
+                  <p className={styles.teamCompositionPrincipal}>{team.principal}</p>
+                )}
+                <div className={styles.teamCompositionAgentList}>
+                  {row.agents.length === 0 ? (
+                    <div className={styles.teamCompositionAgentEmpty}>No agents assigned.</div>
+                  ) : row.agents.map(agent => (
+                    <div key={agent.containerName} className={styles.teamCompositionAgentItem}>
+                      <span className={styles.teamCompositionAgentName}>{agent.agentName || agent.containerName}</span>
+                      <span className={`${styles.healthBadge} ${
+                        agent.healthy
+                          ? styles.healthBadgeHealthy
+                          : agent.running
+                            ? styles.healthBadgeRunning
+                            : styles.healthBadgeStopped
+                      }`}>
+                        {agent.healthy ? 'Healthy' : agent.running ? 'Starting' : 'Stopped'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      )}
+    </section>
+  )
 
   if (containers.length === 0) {
     return (
-      <div className={styles.emptyState}>
-        <div className={styles.emptyStateIcon}>{'\u{1F4DD}'}</div>
-        <div className={styles.emptyStateText}>
-          No agent profile available yet.<br />
-          Create one in <strong>Claw Provision</strong> and it will appear here.
+      <div className={styles.teamDashboard}>
+        {productSpotlight}
+        {teamComposition}
+        <div className={styles.emptyState}>
+          <div className={styles.emptyStateIcon}>{'\u{1F4DD}'}</div>
+          <div className={styles.emptyStateText}>
+            No agent profile available yet.<br />
+            Create one in <strong>Claw Provision</strong> and it will appear here.
+          </div>
         </div>
       </div>
     )
@@ -317,6 +462,8 @@ const ClawDashboardTab: React.FC<{
 
   return (
     <div className={styles.teamDashboard}>
+      {productSpotlight}
+      {teamComposition}
       <div className={styles.teamStatsGrid}>
         <div className={styles.teamStatCard}>
           <div className={styles.teamStatValue}>{totalAgents}</div>
@@ -872,91 +1019,100 @@ const StatusTab: React.FC<{
         </div>
       )}
 
+      {/** Keep refresh action placement consistent across empty and non-empty states */}
       {containers.length === 0 ? (
-        <div className={styles.emptyState}>
-          <div className={styles.emptyStateIcon}>{'\u{1F433}'}</div>
-          <div className={styles.emptyStateText}>
-            No OpenClaw containers provisioned yet.<br />
-            Use the <strong>Claw Provision</strong> tab to create one.
+        <>
+          <div className={styles.emptyState}>
+            <div className={styles.emptyStateIcon}>{'\u{1F433}'}</div>
+            <div className={styles.emptyStateText}>
+              No OpenClaw containers provisioned yet.<br />
+              Use the <strong>Claw Provision</strong> tab to create one.
+            </div>
           </div>
-        </div>
+          <div className={styles.statusActionsCentered}>
+            <button className={styles.btnSecondary} onClick={onRefresh}>
+              Refresh Status
+            </button>
+          </div>
+        </>
       ) : (
-        <table className={styles.containerTable}>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Team</th>
-              <th>Port</th>
-              <th>Health</th>
-              <th>Error</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {containers.map(c => (
-              <tr key={c.containerName}>
-                <td className={styles.containerTableName}>{c.containerName}</td>
-                <td>{c.teamName?.trim() || 'Unassigned'}</td>
-                <td className={styles.containerTablePort}>{c.port}</td>
-                <td>
-                  <span className={`${styles.healthBadge} ${
-                    c.healthy ? styles.healthBadgeHealthy :
-                    c.running ? styles.healthBadgeRunning :
-                    styles.healthBadgeStopped
-                  }`}>
-                    {c.healthy ? 'Healthy' : c.running ? 'Starting' : 'Stopped'}
-                  </span>
-                </td>
-                <td style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', maxWidth: '240px' }}>
-                  {c.error || '\u2014'}
-                </td>
-                <td>
-                  <div className={styles.containerActions}>
-                    {c.healthy && (
-                      <button
-                        className={`${styles.btnSmall} ${styles.btnSmallPrimary}`}
-                        onClick={() => setSelectedContainer(c.containerName)}
-                      >
-                        Dashboard
-                      </button>
-                    )}
-                    {c.running ? (
-                      <button
-                        className={styles.btnSmall}
-                        onClick={() => handleAction('stop', c.containerName)}
-                        disabled={actionLoading === c.containerName}
-                      >
-                        Stop
-                      </button>
-                    ) : (
-                      <button
-                        className={styles.btnSmall}
-                        onClick={() => handleAction('start', c.containerName)}
-                        disabled={actionLoading === c.containerName}
-                      >
-                        Start
-                      </button>
-                    )}
-                    <button
-                      className={`${styles.btnSmall} ${styles.btnSmallDanger}`}
-                      onClick={() => handleDelete(c.containerName)}
-                      disabled={actionLoading === c.containerName}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </td>
+        <>
+          <table className={styles.containerTable}>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Team</th>
+                <th>Port</th>
+                <th>Health</th>
+                <th>Error</th>
+                <th>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {containers.map(c => (
+                <tr key={c.containerName}>
+                  <td className={styles.containerTableName}>{c.containerName}</td>
+                  <td>{c.teamName?.trim() || 'Unassigned'}</td>
+                  <td className={styles.containerTablePort}>{c.port}</td>
+                  <td>
+                    <span className={`${styles.healthBadge} ${
+                      c.healthy ? styles.healthBadgeHealthy :
+                      c.running ? styles.healthBadgeRunning :
+                      styles.healthBadgeStopped
+                    }`}>
+                      {c.healthy ? 'Healthy' : c.running ? 'Starting' : 'Stopped'}
+                    </span>
+                  </td>
+                  <td style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', maxWidth: '240px' }}>
+                    {c.error || '\u2014'}
+                  </td>
+                  <td>
+                    <div className={styles.containerActions}>
+                      {c.healthy && (
+                        <button
+                          className={`${styles.btnSmall} ${styles.btnSmallPrimary}`}
+                          onClick={() => setSelectedContainer(c.containerName)}
+                        >
+                          Dashboard
+                        </button>
+                      )}
+                      {c.running ? (
+                        <button
+                          className={styles.btnSmall}
+                          onClick={() => handleAction('stop', c.containerName)}
+                          disabled={actionLoading === c.containerName}
+                        >
+                          Stop
+                        </button>
+                      ) : (
+                        <button
+                          className={styles.btnSmall}
+                          onClick={() => handleAction('start', c.containerName)}
+                          disabled={actionLoading === c.containerName}
+                        >
+                          Start
+                        </button>
+                      )}
+                      <button
+                        className={`${styles.btnSmall} ${styles.btnSmallDanger}`}
+                        onClick={() => handleDelete(c.containerName)}
+                        disabled={actionLoading === c.containerName}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className={styles.statusActions}>
+            <button className={styles.btnSecondary} onClick={onRefresh}>
+              Refresh Status
+            </button>
+          </div>
+        </>
       )}
-
-      <div style={{ display: 'flex', gap: '0.75rem' }}>
-        <button className={styles.btnSecondary} onClick={onRefresh}>
-          Refresh Status
-        </button>
-      </div>
     </div>
   )
 }
