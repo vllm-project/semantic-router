@@ -1442,7 +1442,6 @@ const WorkerTab: React.FC<{
             </div>
             <div className={styles.ocModalBody}>
               <WorkerProvisionWizard
-                containers={containers}
                 teams={teams}
                 onProvisioned={onProvisioned}
                 onSwitchToTeam={onSwitchToTeam}
@@ -1527,13 +1526,12 @@ const WorkerTab: React.FC<{
 // =============================================================
 
 const WorkerProvisionWizard: React.FC<{
-  containers: OpenClawStatus[]
   teams: TeamProfile[]
   onProvisioned: () => void
   onSwitchToTeam: () => void
   onSwitchToStatus: () => void
   onCreated?: () => void
-}> = ({ containers, teams, onProvisioned, onSwitchToTeam, onSwitchToStatus, onCreated }) => {
+}> = ({ teams, onProvisioned, onSwitchToTeam, onSwitchToStatus, onCreated }) => {
   const [currentStep, setCurrentStep] = useState(0)
   const [skills, setSkills] = useState<SkillTemplate[]>([])
   const [selectedSkills, setSelectedSkills] = useState<string[]>([])
@@ -1591,7 +1589,6 @@ const WorkerProvisionWizard: React.FC<{
       .catch(() => {})
   }, [])
 
-  const nameCollision = container.containerName !== '' && containers.some(c => c.containerName === container.containerName)
   const selectedTeam = teams.find(team => team.id === selectedTeamId) || null
 
   useEffect(() => {
@@ -1707,7 +1704,6 @@ const WorkerProvisionWizard: React.FC<{
         <ConfigStep
           container={container}
           setContainer={setContainer}
-          nameCollision={nameCollision}
         />
       )}
       {currentStep === 3 && (
@@ -1718,7 +1714,6 @@ const WorkerProvisionWizard: React.FC<{
           container={container}
           selectedTeam={selectedTeam}
           teamMissing={!selectedTeamId}
-          nameCollision={nameCollision}
           onProvision={handleProvision}
           provisionLoading={provisionLoading}
           provisionResult={provisionResult}
@@ -1882,8 +1877,7 @@ const SkillsStep: React.FC<{
 const ConfigStep: React.FC<{
   container: ContainerConfig
   setContainer: React.Dispatch<React.SetStateAction<ContainerConfig>>
-  nameCollision: boolean
-}> = ({ container, setContainer, nameCollision }) => {
+}> = ({ container, setContainer }) => {
   const update = (field: keyof ContainerConfig, value: string | number | boolean) =>
     setContainer(prev => ({ ...prev, [field]: value }))
 
@@ -1897,16 +1891,7 @@ const ConfigStep: React.FC<{
 
       <div className={styles.sectionTitle}>Container</div>
 
-      <div className={styles.formRowThree}>
-        <div className={styles.formGroup}>
-          <label className={styles.formLabel}>Container Name</label>
-          <input className={styles.textInput} value={container.containerName} onChange={e => update('containerName', e.target.value)} placeholder="my-agent" />
-          {nameCollision && (
-            <div className={styles.nameWarning}>
-              A container with this name already exists and will be replaced.
-            </div>
-          )}
-        </div>
+      <div className={styles.formRow}>
         <div className={styles.formGroup}>
           <label className={styles.formLabel}>Gateway Port</label>
           <input className={styles.numberInput} type="number" value={container.gatewayPort} onChange={e => update('gatewayPort', parseInt(e.target.value) || 0)} />
@@ -2001,12 +1986,11 @@ const DeployStep: React.FC<{
   container: ContainerConfig
   selectedTeam: TeamProfile | null
   teamMissing: boolean
-  nameCollision: boolean
   onProvision: () => void
   provisionLoading: boolean
   provisionResult: ProvisionResponse | null
   onSwitchToStatus: () => void
-}> = ({ identity, selectedSkills, skills, container, selectedTeam, teamMissing, nameCollision, onProvision, provisionLoading, provisionResult, onSwitchToStatus }) => {
+}> = ({ identity, selectedSkills, skills, container, selectedTeam, teamMissing, onProvision, provisionLoading, provisionResult, onSwitchToStatus }) => {
   const [copied, setCopied] = useState('')
   const [showCommands, setShowCommands] = useState(false)
 
@@ -2026,11 +2010,6 @@ const DeployStep: React.FC<{
         Review your configuration, then provision and start the OpenClaw container.
       </p>
 
-      {nameCollision && (
-        <div className={styles.errorAlert} style={{ background: 'rgba(234, 179, 8, 0.1)', borderColor: 'rgba(234, 179, 8, 0.3)', color: '#eab308' }}>
-          <span>Container &quot;{container.containerName}&quot; already exists and will be replaced upon provisioning.</span>
-        </div>
-      )}
       {teamMissing && (
         <div className={styles.errorAlert} style={{ background: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.35)', color: '#ef4444' }}>
           <span>Team selection is required before deployment.</span>
@@ -2067,7 +2046,7 @@ const DeployStep: React.FC<{
         <div className={styles.summaryCard}>
           <div className={styles.summaryCardTitle}>Container</div>
           <div className={styles.summaryCardContent}>
-            <strong>{container.containerName || '(auto)'}</strong> :{container.gatewayPort || 'auto'}<br />
+            <strong>Auto-generated by backend</strong> :{container.gatewayPort || 'auto'}<br />
             Image: {container.baseImage}<br />
             Network: {container.networkMode}
           </div>
