@@ -1,0 +1,207 @@
+[
+  {
+    "id": "coding-agent",
+    "name": "Coding Agent",
+    "description": "Delegate coding tasks to Codex, Claude Code, or Pi agents via background process. Builds features, reviews PRs, refactors codebases.",
+    "emoji": "🧩",
+    "category": "development",
+    "builtin": true,
+    "requires": ["codex|claude|opencode|pi"]
+  },
+  {
+    "id": "github",
+    "name": "GitHub",
+    "description": "GitHub operations via gh CLI: issues, PRs, CI runs, code review, API queries.",
+    "emoji": "🐙",
+    "category": "development",
+    "builtin": true,
+    "requires": ["gh"]
+  },
+  {
+    "id": "gh-issues",
+    "name": "GitHub Issues Auto-fix",
+    "description": "Fetch GitHub issues, spawn sub-agents to implement fixes and open PRs, then monitor and address review comments.",
+    "emoji": "🔧",
+    "category": "development",
+    "builtin": true,
+    "requires": ["curl", "git", "gh"]
+  },
+  {
+    "id": "oracle",
+    "name": "Oracle",
+    "description": "Prompt + file bundling CLI for querying LLMs with context. Sessions, engines, and file attachment patterns.",
+    "emoji": "🧿",
+    "category": "development",
+    "builtin": true,
+    "requires": ["oracle"]
+  },
+  {
+    "id": "canvas",
+    "name": "Canvas",
+    "description": "Display HTML content on connected OpenClaw nodes (games, visualizations, dashboards, interactive demos).",
+    "emoji": "🎨",
+    "category": "display",
+    "builtin": true
+  },
+  {
+    "id": "summarize",
+    "name": "Summarize",
+    "description": "Summarize or extract text/transcripts from URLs, podcasts, YouTube videos, and local files.",
+    "emoji": "🧾",
+    "category": "productivity",
+    "builtin": true,
+    "requires": ["summarize"]
+  },
+  {
+    "id": "nano-pdf",
+    "name": "PDF Editor",
+    "description": "Edit PDFs with natural-language instructions using the nano-pdf CLI.",
+    "emoji": "📄",
+    "category": "productivity",
+    "builtin": true,
+    "requires": ["nano-pdf"]
+  },
+  {
+    "id": "video-frames",
+    "name": "Video Frames",
+    "description": "Extract frames or short clips from videos using ffmpeg.",
+    "emoji": "🎞️",
+    "category": "media",
+    "builtin": true,
+    "requires": ["ffmpeg"]
+  },
+  {
+    "id": "openai-image-gen",
+    "name": "Image Generation",
+    "description": "Batch-generate images via OpenAI Images API with random prompt sampler and gallery output.",
+    "emoji": "🖼️",
+    "category": "media",
+    "builtin": true,
+    "requires": ["python3"]
+  },
+  {
+    "id": "voice-call",
+    "name": "Voice Call",
+    "description": "Start and manage voice calls via the OpenClaw voice-call plugin (Twilio, Telnyx, Plivo).",
+    "emoji": "📞",
+    "category": "communication",
+    "builtin": true
+  },
+  {
+    "id": "notion",
+    "name": "Notion",
+    "description": "Create and manage Notion pages, databases, and blocks via the Notion API.",
+    "emoji": "📝",
+    "category": "productivity",
+    "builtin": true
+  },
+  {
+    "id": "trello",
+    "name": "Trello",
+    "description": "Manage Trello boards, lists, and cards via the Trello REST API.",
+    "emoji": "📋",
+    "category": "productivity",
+    "builtin": true,
+    "requires": ["jq"]
+  },
+  {
+    "id": "gog",
+    "name": "Google Workspace",
+    "description": "Google Workspace CLI for Gmail, Calendar, Drive, Contacts, Sheets, and Docs.",
+    "emoji": "🎮",
+    "category": "productivity",
+    "builtin": true,
+    "requires": ["gog"]
+  },
+  {
+    "id": "sag",
+    "name": "Text-to-Speech (ElevenLabs)",
+    "description": "ElevenLabs text-to-speech with mac-style say UX.",
+    "emoji": "🗣️",
+    "category": "media",
+    "builtin": true,
+    "requires": ["sag"]
+  },
+  {
+    "id": "sherpa-onnx-tts",
+    "name": "Text-to-Speech (Local)",
+    "description": "Local offline text-to-speech via sherpa-onnx. No cloud dependency.",
+    "emoji": "🔊",
+    "category": "media",
+    "builtin": true
+  },
+  {
+    "id": "prose",
+    "name": "OpenProse",
+    "description": "OpenProse VM skill pack for multi-agent workflows. Orchestrates sessions and file I/O via prose.md specification.",
+    "emoji": "🪶",
+    "category": "automation",
+    "builtin": true
+  },
+  {
+    "id": "lobster",
+    "name": "Lobster Workflows",
+    "description": "Execute multi-step workflows with approval checkpoints. Repeatable automations with human-in-the-loop.",
+    "emoji": "🦞",
+    "category": "automation",
+    "builtin": true
+  },
+  {
+    "id": "peekaboo",
+    "name": "Peekaboo (macOS UI)",
+    "description": "Capture and automate macOS UI with the Peekaboo CLI. Screen capture and UI interaction.",
+    "emoji": "👀",
+    "category": "automation",
+    "builtin": true,
+    "requires": ["peekaboo"],
+    "os": ["darwin"]
+  },
+  {
+    "id": "camsnap",
+    "name": "Camera Capture",
+    "description": "Capture frames or clips from RTSP/ONVIF security cameras.",
+    "emoji": "📸",
+    "category": "media",
+    "builtin": true,
+    "requires": ["camsnap"]
+  },
+  {
+    "id": "apple-notes",
+    "name": "Apple Notes",
+    "description": "Manage Apple Notes via the memo CLI on macOS (create, view, edit, delete, search notes).",
+    "emoji": "📝",
+    "category": "productivity",
+    "builtin": true,
+    "requires": ["memo"],
+    "os": ["darwin"]
+  },
+  {
+    "id": "apple-reminders",
+    "name": "Apple Reminders",
+    "description": "Manage Apple Reminders via remindctl CLI (list, add, edit, complete, delete).",
+    "emoji": "⏰",
+    "category": "productivity",
+    "builtin": true,
+    "requires": ["remindctl"],
+    "os": ["darwin"]
+  },
+  {
+    "id": "bear-notes",
+    "name": "Bear Notes",
+    "description": "Create, search, and manage Bear notes via grizzly CLI.",
+    "emoji": "🐻",
+    "category": "productivity",
+    "builtin": true,
+    "requires": ["grizzly"],
+    "os": ["darwin"]
+  },
+  {
+    "id": "imsg",
+    "name": "iMessage",
+    "description": "iMessage/SMS CLI for listing chats, history, and sending messages via Messages.app.",
+    "emoji": "📨",
+    "category": "communication",
+    "builtin": true,
+    "os": ["darwin"]
+  }
+]

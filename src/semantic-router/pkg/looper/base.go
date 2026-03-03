@@ -20,11 +20,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
+
+var taggedToolCallPattern = regexp.MustCompile(`(?s)<tool_call>\s*(\{.*?\})\s*</tool_call>`)
 
 // BaseLooper is a basic implementation that calls models sequentially
 // and aggregates their responses. This is the POC implementation.
@@ -175,6 +179,24 @@ func (l *BaseLooper) formatJSONResponse(agg *AggregatedResponse, modelsUsed []st
 		}
 	}
 
+	// Fallback compatibility path:
+	// Some OpenAI-compatible backends emit "<tool_call>{...}</tool_call>" in content
+	// under tool_choice=auto instead of structured tool_calls. Convert that payload
+	// to tool_calls so downstream agents can execute tools.
+	if len(agg.Responses) > 0 {
+		last := agg.Responses[len(agg.Responses)-1]
+		if body, ok := rewriteTaggedToolCallResponse(last.Raw, agg.FinalModel); ok {
+			return &Response{
+				Body:          body,
+				ContentType:   "application/json",
+				Model:         agg.FinalModel,
+				ModelsUsed:    modelsUsed,
+				Iterations:    iterations,
+				AlgorithmType: "simple",
+			}, nil
+		}
+	}
+
 	completion := map[string]interface{}{
 		"id":      fmt.Sprintf("chatcmpl-looper-%d", time.Now().UnixNano()),
 		"object":  "chat.completion",
@@ -212,10 +234,100 @@ func (l *BaseLooper) formatJSONResponse(agg *AggregatedResponse, modelsUsed []st
 	}, nil
 }
 
+func rewriteTaggedToolCallResponse(raw []byte, finalModel string) ([]byte, bool) {
+	if len(raw) == 0 {
+		return nil, false
+	}
+
+	var completion map[string]interface{}
+	if err := json.Unmarshal(raw, &completion); err != nil {
+		return nil, false
+	}
+
+	choices, ok := completion["choices"].([]interface{})
+	if !ok || len(choices) == 0 {
+		return nil, false
+	}
+
+	firstChoice, ok := choices[0].(map[string]interface{})
+	if !ok {
+		return nil, false
+	}
+
+	message, ok := firstChoice["message"].(map[string]interface{})
+	if !ok {
+		return nil, false
+	}
+
+	content, _ := message["content"].(string)
+	toolName, argsJSON, ok := parseTaggedToolCall(content)
+	if !ok {
+		return nil, false
+	}
+
+	message["content"] = ""
+	message["tool_calls"] = []map[string]interface{}{
+		{
+			"id":   fmt.Sprintf("chatcmpl-tool-%d", time.Now().UnixNano()),
+			"type": "function",
+			"function": map[string]interface{}{
+				"name":      toolName,
+				"arguments": argsJSON,
+			},
+		},
+	}
+	firstChoice["finish_reason"] = "tool_calls"
+	completion["id"] = fmt.Sprintf("chatcmpl-looper-%d", time.Now().UnixNano())
+	completion["model"] = finalModel
+
+	body, err := json.Marshal(completion)
+	if err != nil {
+		return nil, false
+	}
+	return body, true
+}
+
+func parseTaggedToolCall(content string) (string, string, bool) {
+	matches := taggedToolCallPattern.FindStringSubmatch(content)
+	if len(matches) < 2 {
+		return "", "", false
+	}
+
+	var parsed struct {
+		Name      string          `json:"name"`
+		Arguments json.RawMessage `json:"arguments"`
+	}
+	if err := json.Unmarshal([]byte(matches[1]), &parsed); err != nil {
+		return "", "", false
+	}
+	if strings.TrimSpace(parsed.Name) == "" {
+		return "", "", false
+	}
+
+	argsJSON := strings.TrimSpace(string(parsed.Arguments))
+	if argsJSON == "" || argsJSON == "null" {
+		argsJSON = "{}"
+	} else if strings.HasPrefix(argsJSON, "\"") {
+		var decoded string
+		if err := json.Unmarshal(parsed.Arguments, &decoded); err == nil {
+			argsJSON = decoded
+		}
+	}
+
+	if !json.Valid([]byte(argsJSON)) {
+		fallback, _ := json.Marshal(map[string]string{"input": argsJSON})
+		argsJSON = string(fallback)
+	}
+
+	return parsed.Name, argsJSON, true
+}
+
 // formatStreamingResponse creates an SSE streaming response
 func (l *BaseLooper) formatStreamingResponse(agg *AggregatedResponse, modelsUsed []string, iterations int) (*Response, error) {
 	timestamp := time.Now().Unix()
 	id := fmt.Sprintf("chatcmpl-looper-%d", timestamp)
+
+	toolName, toolArgs, toolCallID, hasToolCall := resolveToolCallForStreaming(agg)
 
 	// Split content into chunks for streaming effect
 	chunks := splitIntoChunks(agg.CombinedContent, 50) // ~50 chars per chunk
@@ -241,9 +353,8 @@ func (l *BaseLooper) formatStreamingResponse(agg *AggregatedResponse, modelsUsed
 	firstChunkJSON, _ := json.Marshal(firstChunk)
 	sseBody = append(sseBody, []byte(fmt.Sprintf("data: %s\n\n", firstChunkJSON))...)
 
-	// Content chunks
-	for _, chunk := range chunks {
-		contentChunk := map[string]interface{}{
+	if hasToolCall {
+		toolChunk := map[string]interface{}{
 			"id":      id,
 			"object":  "chat.completion.chunk",
 			"created": timestamp,
@@ -252,17 +363,52 @@ func (l *BaseLooper) formatStreamingResponse(agg *AggregatedResponse, modelsUsed
 				{
 					"index": 0,
 					"delta": map[string]interface{}{
-						"content": chunk,
+						"tool_calls": []map[string]interface{}{
+							{
+								"index": 0,
+								"id":    toolCallID,
+								"type":  "function",
+								"function": map[string]interface{}{
+									"name":      toolName,
+									"arguments": toolArgs,
+								},
+							},
+						},
 					},
 					"finish_reason": nil,
 				},
 			},
 		}
-		chunkJSON, _ := json.Marshal(contentChunk)
-		sseBody = append(sseBody, []byte(fmt.Sprintf("data: %s\n\n", chunkJSON))...)
+		toolChunkJSON, _ := json.Marshal(toolChunk)
+		sseBody = append(sseBody, []byte(fmt.Sprintf("data: %s\n\n", toolChunkJSON))...)
+	} else {
+		// Content chunks
+		for _, chunk := range chunks {
+			contentChunk := map[string]interface{}{
+				"id":      id,
+				"object":  "chat.completion.chunk",
+				"created": timestamp,
+				"model":   agg.FinalModel,
+				"choices": []map[string]interface{}{
+					{
+						"index": 0,
+						"delta": map[string]interface{}{
+							"content": chunk,
+						},
+						"finish_reason": nil,
+					},
+				},
+			}
+			chunkJSON, _ := json.Marshal(contentChunk)
+			sseBody = append(sseBody, []byte(fmt.Sprintf("data: %s\n\n", chunkJSON))...)
+		}
 	}
 
 	// Final chunk with finish_reason
+	finalReason := "stop"
+	if hasToolCall {
+		finalReason = "tool_calls"
+	}
 	finalChunk := map[string]interface{}{
 		"id":      id,
 		"object":  "chat.completion.chunk",
@@ -272,7 +418,7 @@ func (l *BaseLooper) formatStreamingResponse(agg *AggregatedResponse, modelsUsed
 			{
 				"index":         0,
 				"delta":         map[string]interface{}{},
-				"finish_reason": "stop",
+				"finish_reason": finalReason,
 			},
 		},
 	}
@@ -290,6 +436,78 @@ func (l *BaseLooper) formatStreamingResponse(agg *AggregatedResponse, modelsUsed
 		Iterations:    iterations,
 		AlgorithmType: "simple",
 	}, nil
+}
+
+func resolveToolCallForStreaming(agg *AggregatedResponse) (string, string, string, bool) {
+	if len(agg.Responses) == 0 {
+		return "", "", "", false
+	}
+
+	last := agg.Responses[len(agg.Responses)-1]
+	if name, args, callID, ok := parseFirstToolCallFromRaw(last.Raw); ok {
+		return name, args, callID, true
+	}
+
+	if name, args, ok := parseTaggedToolCall(agg.CombinedContent); ok {
+		return name, args, fmt.Sprintf("chatcmpl-tool-%d", time.Now().UnixNano()), true
+	}
+
+	return "", "", "", false
+}
+
+func parseFirstToolCallFromRaw(raw []byte) (string, string, string, bool) {
+	if len(raw) == 0 {
+		return "", "", "", false
+	}
+
+	var completion map[string]interface{}
+	if err := json.Unmarshal(raw, &completion); err != nil {
+		return "", "", "", false
+	}
+
+	choices, ok := completion["choices"].([]interface{})
+	if !ok || len(choices) == 0 {
+		return "", "", "", false
+	}
+
+	firstChoice, ok := choices[0].(map[string]interface{})
+	if !ok {
+		return "", "", "", false
+	}
+
+	message, ok := firstChoice["message"].(map[string]interface{})
+	if !ok {
+		return "", "", "", false
+	}
+
+	toolCalls, ok := message["tool_calls"].([]interface{})
+	if !ok || len(toolCalls) == 0 {
+		return "", "", "", false
+	}
+
+	firstTool, ok := toolCalls[0].(map[string]interface{})
+	if !ok {
+		return "", "", "", false
+	}
+
+	function, ok := firstTool["function"].(map[string]interface{})
+	if !ok {
+		return "", "", "", false
+	}
+
+	name, _ := function["name"].(string)
+	args, _ := function["arguments"].(string)
+	callID, _ := firstTool["id"].(string)
+	if strings.TrimSpace(name) == "" {
+		return "", "", "", false
+	}
+	if strings.TrimSpace(args) == "" {
+		args = "{}"
+	}
+	if strings.TrimSpace(callID) == "" {
+		callID = fmt.Sprintf("chatcmpl-tool-%d", time.Now().UnixNano())
+	}
+	return name, args, callID, true
 }
 
 // splitIntoChunks splits a string into chunks of approximately the given size

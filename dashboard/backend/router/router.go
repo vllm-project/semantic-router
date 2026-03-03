@@ -1,12 +1,14 @@
 package router
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/evaluation"
@@ -352,6 +354,70 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		}
 	} else {
 		log.Printf("ML Pipeline feature disabled")
+	}
+
+	// OpenClaw endpoints and proxy (if enabled)
+	if cfg.OpenClawEnabled {
+		ocHandler := handlers.NewOpenClawHandler(cfg.OpenClawDataDir, cfg.ReadonlyMode)
+		mux.HandleFunc("/api/openclaw/status", ocHandler.StatusHandler())
+		mux.HandleFunc("/api/openclaw/skills", ocHandler.SkillsHandler())
+		mux.HandleFunc("/api/openclaw/provision", ocHandler.ProvisionHandler())
+		mux.HandleFunc("/api/openclaw/start", ocHandler.StartHandler())
+		mux.HandleFunc("/api/openclaw/stop", ocHandler.StopHandler())
+		mux.HandleFunc("/api/openclaw/token", ocHandler.TokenHandler())
+		mux.HandleFunc("/api/openclaw/next-port", ocHandler.NextPortHandler())
+		mux.HandleFunc("/api/openclaw/containers/", ocHandler.DeleteHandler())
+		log.Printf("OpenClaw API endpoints registered: /api/openclaw/*")
+
+		// Dynamic reverse proxy: /embedded/openclaw/{containerName}/...
+		// Lazily creates and caches a WebSocket-aware proxy per container.
+		var proxyCache sync.Map // map[string]http.Handler
+		mux.HandleFunc("/embedded/openclaw/", func(w http.ResponseWriter, r *http.Request) {
+			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			// Extract container name from path: /embedded/openclaw/{name}/...
+			rest := strings.TrimPrefix(r.URL.Path, "/embedded/openclaw/")
+			parts := strings.SplitN(rest, "/", 2)
+			name := parts[0]
+			if name == "" {
+				http.Error(w, "container name required in path", http.StatusBadRequest)
+				return
+			}
+			port, ok := ocHandler.PortForContainer(name)
+			if !ok {
+				http.Error(w, "container not found in registry", http.StatusNotFound)
+				return
+			}
+			// Look up or create cached proxy for this container
+			targetBase := fmt.Sprintf("http://127.0.0.1:%d", port)
+			stripPrefix := "/embedded/openclaw/" + name
+			cacheKey := fmt.Sprintf("%s:%d", name, port)
+			handler, loaded := proxyCache.Load(cacheKey)
+			if !loaded {
+				h, err := proxy.NewWebSocketAwareHandler(targetBase, stripPrefix)
+				if err != nil {
+					log.Printf("Failed to create proxy for %s: %v", name, err)
+					http.Error(w, "proxy error", http.StatusBadGateway)
+					return
+				}
+				handler, _ = proxyCache.LoadOrStore(cacheKey, h)
+			}
+			handler.(http.Handler).ServeHTTP(w, r)
+		})
+		log.Printf("OpenClaw dynamic proxy configured: /embedded/openclaw/{name}/ (WebSocket enabled)")
+	} else {
+		// Return disabled status even when feature is off
+		mux.HandleFunc("/api/openclaw/status", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[]`))
+		})
+		mux.HandleFunc("/embedded/openclaw/", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(serviceNotConfiguredHTML("OpenClaw", "OPENCLAW_ENABLED", "true")))
+		})
+		log.Printf("OpenClaw feature disabled")
 	}
 
 	// Envoy proxy for chat completions (if configured)

@@ -16,6 +16,7 @@ import MLSetupPage from './pages/MLSetupPage'
 import RatingsPage from './pages/RatingsPage'
 import BuilderPage from './pages/BuilderPage'
 import DashboardPage from './pages/DashboardPage'
+import OpenClawPage from './pages/OpenClawPage'
 import { ConfigSection } from './components/ConfigNav'
 import { ReadonlyProvider } from './contexts/ReadonlyContext'
 
@@ -274,6 +275,17 @@ const App: React.FC = () => {
                 onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
               >
                 <BuilderPage />
+              </Layout>
+            }
+          />
+          <Route
+            path="/openclaw"
+            element={
+              <Layout
+                configSection={configSection}
+                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+              >
+                <OpenClawPage />
               </Layout>
             }
           />
