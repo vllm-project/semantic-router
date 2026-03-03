@@ -107,6 +107,32 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 				return err
 			}
 
+			// AgentGateway: convert body mutation to StreamedResponse
+			if r.Config.IsAgentGateway() {
+				if rb := response.GetRequestBody(); rb != nil && rb.Response != nil {
+					var currentBody []byte
+					if rb.Response.BodyMutation != nil {
+						if b, ok := rb.Response.BodyMutation.Mutation.(*ext_proc.BodyMutation_Body); ok {
+							currentBody = b.Body
+						}
+					}
+					// If no structural body mutation occurred, use the original (accumulated) body
+					if currentBody == nil {
+						currentBody = v.RequestBody.Body
+					}
+
+					rb.Response.BodyMutation = &ext_proc.BodyMutation{
+						Mutation: &ext_proc.BodyMutation_StreamedResponse{
+							StreamedResponse: &ext_proc.StreamedBodyResponse{
+								Body:        currentBody,
+								EndOfStream: true,
+							},
+						},
+					}
+					logging.Infof("AgentGateway mode: enforced StreamedResponse mutation")
+				}
+			}
+
 			// AgentGateway: send deferred header response (updated with routing headers)
 			// then send the body response sequentially.
 			if r.Config.IsAgentGateway() && ctx.DeferredHeaderResponse != nil && !ctx.HeaderResponseSent {
