@@ -190,6 +190,7 @@ See [Choosing the Right Algorithm](./choosing-algorithm.md) for detailed guidanc
 
 ## Related Features
 
+- **[PRISM 153-Key Legitimacy Verification](./prism.md)** - Validate model domain legitimacy before or after selection
 - **User Feedback Routing** - Collect feedback signals via `/api/v1/feedback` endpoint
 - **Preference Routing** - Route based on user preferences in the system
 - **Domain Routing** - Route by topic category using embedding classification
@@ -210,3 +211,7 @@ The selection algorithms are based on these research papers:
 - **Thompson Sampling**: Classical multi-armed bandit approach; see [A Tutorial on Thompson Sampling](https://arxiv.org/abs/1707.02038) (Russo, Van Roy et al.)
 - **GMTRouter**: [GMTRouter: Personalized LLM Router over Multi-turn User Interactions](https://arxiv.org/abs/2511.08590) (Wang et al.) - 0.9-21.6% accuracy improvement
 - **Router-R1**: [Router-R1: Teaching LLMs Multi-Round Routing and Aggregation via RL](https://arxiv.org/abs/2506.09033) (Hu et al., NeurIPS 2025)
+
+### Legitimacy Verification
+
+- **PRISM 153-Key**: [PRISM: Protocol for Routed Intelligent Specialized Models](https://doi.org/10.5281/zenodo.18750029) (Saidi, 2025) - DNS-inspired legitimacy verification layer

@@ -28,6 +28,11 @@ We integrate both within the unified selection interface and extend them with th
 
 A key distinction of our work is that prior approaches address model selection in isolation, while we embed selection within a composable signal orchestration framework that also handles signal extraction, safety enforcement, caching, context augmentation, and multi-provider routing---enabling the same selection algorithms to serve fundamentally different deployment scenarios through configuration.
 
+\noindent\textbf{Legitimacy verification.}
+PRISM~\cite{saidi2025prism} introduces a DNS-inspired constraint protocol (the 153-key) that forces each model to declare its domain boundaries and formally refuse out-of-scope queries.
+While vLLM-SR answers ``which model is best suited?'', PRISM answers ``is this model legitimate to respond?''
+We integrate PRISM as a configurable verification layer that can operate before selection (coarse filter), after selection (fine filter), or both (hybrid), complementing---rather than replacing---the selection algorithms.
+
 \subsection{Multi-Provider and Multi-Endpoint Routing}
 
 Commercial LLM gateway products (OpenRouter, AWS Bedrock, Azure AI Studio) provide multi-provider access but lack the composable signal-driven routing that enables differentiated policies per routing decision.

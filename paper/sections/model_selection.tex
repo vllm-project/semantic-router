@@ -348,3 +348,32 @@ This uniformity enables:
 In multi-endpoint deployments where the same logical model may be served by different providers at different price points, the selection algorithms operate in conjunction with the endpoint router (\Cref{subsec:multi_endpoint}).
 The selection algorithm chooses the best \emph{model} based on semantic analysis, and the endpoint router resolves it to the most cost-effective \emph{provider endpoint}.
 This two-stage process separates quality optimization (which model is best for this query?) from cost optimization (which provider endpoint offers the best price for this model?), enabling fine-grained cost management across heterogeneous multi-cloud deployments.
+
+\subsection{PRISM 153-Key Legitimacy Verification}
+
+Orthogonal to model \emph{selection} (which model is best?) is model \emph{legitimacy} (is this model authorized to respond?).
+PRISM~\cite{saidi2025prism} (Protocol for Routed Intelligent Specialized Models) introduces a DNS-inspired constraint protocol called the \textbf{153-key}, which forces each model to explicitly declare its domain boundaries and formally refuse any out-of-scope query.
+Refusal is treated as a first-class output, not a fallback.
+
+The system supports three integration modes:
+
+\noindent\textbf{Fine Filter} (PRISM after selection).
+After the selection algorithm chooses $m^*$, PRISM verifies domain legitimacy:
+\begin{equation}
+  \text{Legitimacy}(m^*, q) = \mathbf{1}\bigl[\text{sim}(\mathbf{e}_q, \mathbf{d}_{m^*}) \geq \tau_{\text{prism}}\bigr]
+\end{equation}
+where $\mathbf{d}_{m^*}$ represents the declared domain boundary of $m^*$ and $\tau_{\text{prism}}$ is the legitimacy threshold.
+If verification fails, the system re-routes to the next-best candidate.
+
+\noindent\textbf{Coarse Filter} (PRISM before selection).
+Before selection, PRISM pre-qualifies the candidate set:
+\begin{equation}
+  \mathcal{M}'_{d^*} = \{m_k \in \mathcal{M}_{d^*} \mid \text{Legitimacy}(m_k, q) = 1\}
+\end{equation}
+Only legitimate models enter the selection pool, preventing GPU resources from being allocated to illegitimate requests.
+
+\noindent\textbf{Hybrid} (PRISM before and after selection).
+Both filters are applied: coarse pre-qualification followed by fine post-verification, providing maximum legitimacy assurance for critical deployments (healthcare, legal, finance).
+
+The hypothesis is that the combination of semantic selection (which model is most \emph{relevant}?) and PRISM legitimacy verification (is this model \emph{authorized}?) produces higher quality responses than either mechanism alone --- the responding model has been both selected for relevance and validated for domain compliance.
+This integration is configurable per-decision, allowing different routing decisions to apply different verification modes based on their risk profile.

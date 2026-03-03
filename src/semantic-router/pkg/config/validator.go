@@ -356,6 +356,13 @@ func validateDecisionAlgorithmConfig(decisionName string, algorithm *AlgorithmCo
 		}
 	}
 
+	// Validate PRISM config independently — it is a verification layer, not an algorithm type
+	if algorithm.PRISM != nil {
+		if err := validatePRISMAlgorithmConfig(algorithm.PRISM); err != nil {
+			return fmt.Errorf("decision '%s', algorithm.prism: %w", decisionName, err)
+		}
+	}
+
 	return nil
 }
 
@@ -382,6 +389,40 @@ func validateLatencyAwareAlgorithmConfig(cfg *LatencyAwareAlgorithmConfig) error
 
 	if hasTTFTPercentile && (cfg.TTFTPercentile < 1 || cfg.TTFTPercentile > 100) {
 		return fmt.Errorf("ttft_percentile must be between 1 and 100, got: %d", cfg.TTFTPercentile)
+	}
+
+	return nil
+}
+
+// validatePRISMAlgorithmConfig validates PRISM 153-key configuration.
+func validatePRISMAlgorithmConfig(cfg *PRISMAlgorithmConfig) error {
+	if !cfg.Enabled {
+		return nil
+	}
+
+	validModes := map[string]bool{
+		"fine_filter":   true,
+		"coarse_filter": true,
+		"hybrid":        true,
+	}
+	if cfg.Mode != "" && !validModes[cfg.Mode] {
+		return fmt.Errorf("mode must be one of: fine_filter, coarse_filter, hybrid; got: %s", cfg.Mode)
+	}
+
+	if cfg.DomainThreshold < 0 || cfg.DomainThreshold > 1 {
+		return fmt.Errorf("domain_threshold must be between 0.0 and 1.0, got: %f", cfg.DomainThreshold)
+	}
+
+	validPolicies := map[string]bool{
+		"reroute": true,
+		"reject":  true,
+	}
+	if cfg.RefusalPolicy != "" && !validPolicies[cfg.RefusalPolicy] {
+		return fmt.Errorf("refusal_policy must be one of: reroute, reject; got: %s", cfg.RefusalPolicy)
+	}
+
+	if cfg.MaxRerouteAttempts < 0 {
+		return fmt.Errorf("max_reroute_attempts must be non-negative, got: %d", cfg.MaxRerouteAttempts)
 	}
 
 	return nil
