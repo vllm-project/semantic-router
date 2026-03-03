@@ -188,7 +188,8 @@ func (h *OpenClawHandler) TeamByIDHandler() http.HandlerFunc {
 			updated := teams[index]
 
 			sort.Slice(teams, func(i, j int) bool { return teams[i].Name < teams[j].Name })
-			if err := h.saveTeams(teams); err != nil {
+			err = h.saveTeams(teams)
+			if err != nil {
 				writeJSONError(w, fmt.Sprintf("Failed to save teams: %v", err), http.StatusInternalServerError)
 				return
 			}

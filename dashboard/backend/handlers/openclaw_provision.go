@@ -124,19 +124,22 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 			"workspace/memory",
 			"workspace/skills",
 		} {
-			if err := os.MkdirAll(filepath.Join(cDir, sub), 0o755); err != nil {
+			err = os.MkdirAll(filepath.Join(cDir, sub), 0o755)
+			if err != nil {
 				h.mu.Unlock()
 				writeJSONError(w, fmt.Sprintf("Failed to create %s: %v", sub, err), http.StatusInternalServerError)
 				return
 			}
 		}
 
-		if err := writeIdentityFiles(wsDir, req.Identity); err != nil {
+		err = writeIdentityFiles(wsDir, req.Identity)
+		if err != nil {
 			h.mu.Unlock()
 			writeJSONError(w, fmt.Sprintf("Failed to write identity files: %v", err), http.StatusInternalServerError)
 			return
 		}
-		if err := os.WriteFile(filepath.Join(wsDir, "AGENTS.md"), []byte(agentsMdContent()), 0o644); err != nil {
+		err = os.WriteFile(filepath.Join(wsDir, "AGENTS.md"), []byte(agentsMdContent()), 0o644)
+		if err != nil {
 			h.mu.Unlock()
 			writeJSONError(w, fmt.Sprintf("Failed to write AGENTS.md: %v", err), http.StatusInternalServerError)
 			return
@@ -148,23 +151,27 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 				continue
 			}
 			skillDir := filepath.Join(wsDir, "skills", skillID)
-			if err := os.MkdirAll(skillDir, 0o755); err != nil {
+			err = os.MkdirAll(skillDir, 0o755)
+			if err != nil {
 				log.Printf("openclaw: failed to create skill dir %s: %v", skillID, err)
 				continue
 			}
-			if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(content), 0o644); err != nil {
+			err = os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(content), 0o644)
+			if err != nil {
 				log.Printf("openclaw: failed to write skill %s: %v", skillID, err)
 			}
 		}
 
 		configPath := filepath.Join(cDir, "openclaw.json")
-		if err := writeOpenClawConfig(configPath, req); err != nil {
+		err = writeOpenClawConfig(configPath, req)
+		if err != nil {
 			h.mu.Unlock()
 			writeJSONError(w, fmt.Sprintf("Failed to write config: %v", err), http.StatusInternalServerError)
 			return
 		}
 
-		if err := h.ensureImageAvailable(req.Container.BaseImage); err != nil {
+		err = h.ensureImageAvailable(req.Container.BaseImage)
+		if err != nil {
 			h.mu.Unlock()
 			writeJSONError(w, err.Error(), http.StatusBadRequest)
 			return
