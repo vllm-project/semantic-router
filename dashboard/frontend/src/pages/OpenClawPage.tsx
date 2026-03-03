@@ -250,12 +250,12 @@ const OpenClawPage: React.FC = () => {
           </div>
           <h1 className={styles.title}>
             <span className={styles.titleLinePrimary}>
-              <span className={styles.titleLead}>Semantic Kernel</span> Powered
+              <span className={styles.titleLead}>Semantic Router</span> Powered
             </span>
             <span className={styles.titleLineSecondary}>Claw Swarm</span>
           </h1>
           <p className={styles.subtitle}>
-            Evolved from vLLM-SR built on Semantic Kernel with System Intelligence.
+            Evolved from vLLM-SR built on Semantic Router with System Intelligence.
           </p>
         </div>
         <div className={styles.logoPanel}>
@@ -445,10 +445,10 @@ const ArchitectureTab: React.FC<{
       <section className={styles.productSection}>
         <div className={styles.kernelIntro}>
           <div className={styles.kernelIntroBody}>
-            <span className={styles.kernelBadge}>Semantic Kernel Topology</span>
+            <span className={styles.kernelBadge}>Full Mesh</span>
             <h3 className={styles.kernelTitle}>Claw Swarm Orchestration Fabric</h3>
             <p className={styles.kernelSubtitle}>
-              Top-layer Claws route intent into Semantic Kernel. Kernel capabilities then project requests into the model mesh.
+              Top-layer Claws route intent into Semantic Router. Kernel capabilities then project requests into the model mesh.
             </p>
           </div>
           <div className={styles.kernelMeta}>
@@ -516,7 +516,7 @@ const ArchitectureTab: React.FC<{
             viewport={{ once: true, amount: 0.35 }}
             transition={{ duration: 0.35 }}
           >
-            <div className={styles.kernelLayerLabel}>Layer 2 · Semantic Kernel</div>
+            <div className={styles.kernelLayerLabel}>Layer 2 · Semantic Router</div>
             <div className={styles.kernelCore}>
               <motion.div
                 className={styles.kernelPulse}
@@ -524,13 +524,13 @@ const ArchitectureTab: React.FC<{
                 transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
               />
               <div className={styles.kernelCoreHeader}>
-                <span className={styles.kernelCoreBadge}>Semantic Kernel</span>
+                <span className={styles.kernelCoreBadge}>Operating System</span>
                 <span className={styles.kernelCoreHint}>Module Management Layer</span>
               </div>
               <div className={styles.kernelCoreLead}>
                 <h4 className={styles.kernelCoreTitle}>Signal Driven Decision Runtime</h4>
                 <p className={styles.kernelCoreDescription}>
-                  Semantic Kernel acts as a control plane: it manages routing policy, safety, context lifecycle,
+                  Semantic Router acts as a control plane: it manages routing policy, safety, context lifecycle,
                   cross-claw memory sharing, and isolation before dispatching requests to model pools.
                 </p>
               </div>
