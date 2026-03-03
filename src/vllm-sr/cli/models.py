@@ -217,10 +217,30 @@ class Condition(BaseModel):
 
 
 class Rules(BaseModel):
-    """Routing rules."""
+    """Routing rules.
 
-    operator: str
-    conditions: List[Condition]
+    Accepts three formats:
+    1. Composite: {operator: "AND", conditions: [...]}
+    2. Match-all: {operator: "AND"} or {} (no WHEN clause)
+    3. Leaf node: {type: "keyword", name: "x"} (single signal ref)
+
+    Formats 2 and 3 are auto-normalised to composite form.
+    """
+
+    operator: str = "AND"
+    conditions: List[Condition] = []
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalise_leaf_or_empty(cls, data):
+        """Wrap a bare leaf node into AND([leaf]) and fill missing fields."""
+        if not isinstance(data, dict):
+            return data
+        # Leaf node: has type/name but no operator → wrap in AND
+        if "type" in data and "operator" not in data:
+            leaf = {"type": data["type"], "name": data.get("name", "")}
+            return {"operator": "AND", "conditions": [leaf]}
+        return data
 
 
 class ModelRef(BaseModel):

@@ -145,8 +145,6 @@ export interface AutoMixConfig {
 // ============== Plugin Types ==============
 export type PluginType =
   | 'semantic-cache'
-  | 'jailbreak'
-  | 'pii'
   | 'system_prompt'
   | 'header_mutation'
   | 'hallucination'

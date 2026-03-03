@@ -2260,25 +2260,6 @@ type MemoryPluginConfig struct {
 	Reflection          *MemoryReflectionConfig `json:"reflection,omitempty" yaml:"reflection,omitempty"`                     // Per-decision reflection override
 }
 
-// JailbreakPluginConfig represents configuration for jailbreak plugin
-type JailbreakPluginConfig struct {
-	Enabled        bool     `json:"enabled" yaml:"enabled"`
-	Threshold      *float32 `json:"threshold,omitempty" yaml:"threshold,omitempty"`
-	IncludeHistory bool     `json:"include_history,omitempty" yaml:"include_history,omitempty"` // Whether to include conversation history in detection (default: false)
-}
-
-// PIIPluginConfig represents configuration for pii plugin
-type PIIPluginConfig struct {
-	Enabled        bool     `json:"enabled" yaml:"enabled"`
-	Threshold      *float32 `json:"threshold,omitempty" yaml:"threshold,omitempty"`
-	IncludeHistory bool     `json:"include_history,omitempty" yaml:"include_history,omitempty"` // Whether to include conversation history in detection (default: false)
-
-	// PII Policy configuration
-	// When Enabled is true, all PII types are blocked by default unless listed in PIITypesAllowed
-	// When Enabled is false, PII detection is skipped entirely
-	PIITypesAllowed []string `json:"pii_types_allowed,omitempty" yaml:"pii_types_allowed,omitempty"`
-}
-
 // FastResponsePluginConfig represents configuration for fast_response plugin.
 // When a decision matches and has this plugin, the router short-circuits and returns
 // an OpenAI-compatible response directly (no upstream model call).
@@ -2525,36 +2506,6 @@ func (d *Decision) GetSemanticCacheConfig() *SemanticCachePluginConfig {
 	result := &SemanticCachePluginConfig{}
 	if err := unmarshalPluginConfig(config, result); err != nil {
 		logging.Errorf("Failed to unmarshal semantic-cache config: %v", err)
-		return nil
-	}
-	return result
-}
-
-// GetJailbreakConfig returns the jailbreak plugin configuration
-func (d *Decision) GetJailbreakConfig() *JailbreakPluginConfig {
-	config := d.GetPluginConfig("jailbreak")
-	if config == nil {
-		return nil
-	}
-
-	result := &JailbreakPluginConfig{}
-	if err := unmarshalPluginConfig(config, result); err != nil {
-		logging.Errorf("Failed to unmarshal jailbreak config: %v", err)
-		return nil
-	}
-	return result
-}
-
-// GetPIIConfig returns the pii plugin configuration
-func (d *Decision) GetPIIConfig() *PIIPluginConfig {
-	config := d.GetPluginConfig("pii")
-	if config == nil {
-		return nil
-	}
-
-	result := &PIIPluginConfig{}
-	if err := unmarshalPluginConfig(config, result); err != nil {
-		logging.Errorf("Failed to unmarshal pii config: %v", err)
 		return nil
 	}
 	return result

@@ -110,6 +110,10 @@ var endpointRegistry = []EndpointMetadata{
 	{Path: "/config/classification", Method: "PUT", Description: "Update classification configuration"},
 	{Path: "/config/system-prompts", Method: "GET", Description: "Get system prompt configuration (requires explicit enablement)"},
 	{Path: "/config/system-prompts", Method: "PUT", Description: "Update system prompt configuration (requires explicit enablement)"},
+	{Path: "/config/router", Method: "GET", Description: "Get the current router config as JSON"},
+	{Path: "/config/deploy", Method: "POST", Description: "Deploy a new router config (validates, backs up, writes, triggers hot-reload)"},
+	{Path: "/config/rollback", Method: "POST", Description: "Rollback to a previous config version"},
+	{Path: "/config/versions", Method: "GET", Description: "List available config backup versions"},
 }
 
 // taskTypeRegistry is a centralized registry of all supported task types

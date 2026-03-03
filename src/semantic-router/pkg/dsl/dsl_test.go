@@ -302,16 +302,16 @@ func TestParseMultiModel(t *testing.T) {
 }
 
 func TestParsePluginTemplate(t *testing.T) {
-	input := `PLUGIN safe_pii pii {
+	input := `PLUGIN my_hallu hallucination {
   enabled: true
-  pii_types_allowed: []
+  use_nli: true
 }
 
 ROUTE test {
   PRIORITY 1
   WHEN domain("test")
   MODEL "m:1b"
-  PLUGIN safe_pii
+  PLUGIN my_hallu
 }`
 	prog, errs := Parse(input)
 	if len(errs) > 0 {
@@ -321,13 +321,13 @@ ROUTE test {
 		t.Fatalf("expected 1 plugin decl, got %d", len(prog.Plugins))
 	}
 	pd := prog.Plugins[0]
-	if pd.Name != "safe_pii" || pd.PluginType != "pii" {
-		t.Errorf("expected safe_pii/pii, got %s/%s", pd.Name, pd.PluginType)
+	if pd.Name != "my_hallu" || pd.PluginType != "hallucination" {
+		t.Errorf("expected my_hallu/hallucination, got %s/%s", pd.Name, pd.PluginType)
 	}
 
 	r := prog.Routes[0]
-	if len(r.Plugins) != 1 || r.Plugins[0].Name != "safe_pii" {
-		t.Error("expected plugin ref to safe_pii")
+	if len(r.Plugins) != 1 || r.Plugins[0].Name != "my_hallu" {
+		t.Error("expected plugin ref to my_hallu")
 	}
 }
 
@@ -450,8 +450,9 @@ GLOBAL {
 	if d.Priority != 100 {
 		t.Errorf("expected priority 100, got %d", d.Priority)
 	}
-	if d.Rules.Type != "domain" || d.Rules.Name != "math" {
-		t.Errorf("expected rules type=domain name=math, got type=%s name=%s", d.Rules.Type, d.Rules.Name)
+	if d.Rules.Operator != "AND" || len(d.Rules.Conditions) != 1 ||
+		d.Rules.Conditions[0].Type != "domain" || d.Rules.Conditions[0].Name != "math" {
+		t.Errorf("expected rules AND([domain/math]), got operator=%s conditions=%d", d.Rules.Operator, len(d.Rules.Conditions))
 	}
 	if len(d.ModelRefs) != 1 {
 		t.Fatalf("expected 1 model ref, got %d", len(d.ModelRefs))
@@ -490,16 +491,16 @@ GLOBAL {
 }
 
 func TestCompilePluginTemplate(t *testing.T) {
-	input := `PLUGIN safe_pii pii {
+	input := `PLUGIN my_hallu hallucination {
   enabled: true
-  pii_types_allowed: []
+  use_nli: true
 }
 
 ROUTE test {
   PRIORITY 1
   WHEN domain("test")
   MODEL "m:1b"
-  PLUGIN safe_pii
+  PLUGIN my_hallu
 }
 
 SIGNAL domain test { description: "test" }`
@@ -515,8 +516,8 @@ SIGNAL domain test { description: "test" }`
 		t.Fatalf("expected 1 plugin, got %d", len(cfg.Decisions[0].Plugins))
 	}
 	p := cfg.Decisions[0].Plugins[0]
-	if p.Type != "pii" {
-		t.Errorf("expected plugin type pii, got %s", p.Type)
+	if p.Type != "hallucination" {
+		t.Errorf("expected plugin type hallucination, got %s", p.Type)
 	}
 }
 
@@ -786,11 +787,6 @@ SIGNAL complexity code_complexity {
 }
 
 # Plugins
-PLUGIN safe_pii pii {
-  enabled: true
-  pii_types_allowed: []
-}
-
 PLUGIN default_cache semantic_cache {
   enabled: true
   similarity_threshold: 0.80
@@ -804,14 +800,12 @@ ROUTE math_decision (description = "Math route") {
   PLUGIN system_prompt {
     system_prompt: "You are a math expert."
   }
-  PLUGIN safe_pii
 }
 
 ROUTE physics_decision {
   PRIORITY 100
   WHEN domain("physics")
   MODEL "qwen2.5:3b" (reasoning = true)
-  PLUGIN safe_pii
 }
 
 ROUTE urgent_ai_route {
@@ -825,7 +819,6 @@ ROUTE urgent_ai_route {
     hybrid_weights: { logprob_weight: 0.6, margin_weight: 0.4 }
     on_error: "skip"
   }
-  PLUGIN safe_pii
   PLUGIN default_cache
 }
 
@@ -833,7 +826,6 @@ ROUTE general_decision {
   PRIORITY 50
   WHEN domain("other")
   MODEL "qwen2.5:3b" (reasoning = false)
-  PLUGIN safe_pii
   PLUGIN default_cache
 }
 
@@ -1156,9 +1148,12 @@ GLOBAL {
 	if mathDec.Priority != 100 {
 		t.Errorf("round-trip: math_route priority = %d, want 100", mathDec.Priority)
 	}
-	if mathDec.Rules.Type != "domain" || mathDec.Rules.Name != "math" {
-		t.Errorf("round-trip: math_route rules = {type: %q, name: %q}, want {type: domain, name: math}",
-			mathDec.Rules.Type, mathDec.Rules.Name)
+	if mathDec.Rules.Operator != "AND" || len(mathDec.Rules.Conditions) != 1 {
+		t.Errorf("round-trip: math_route rules should be AND with 1 condition, got operator=%q conditions=%d",
+			mathDec.Rules.Operator, len(mathDec.Rules.Conditions))
+	} else if mathDec.Rules.Conditions[0].Type != "domain" || mathDec.Rules.Conditions[0].Name != "math" {
+		t.Errorf("round-trip: math_route rules condition = {type: %q, name: %q}, want {type: domain, name: math}",
+			mathDec.Rules.Conditions[0].Type, mathDec.Rules.Conditions[0].Name)
 	}
 	if len(mathDec.ModelRefs) != 1 {
 		t.Fatalf("round-trip: math_route expected 1 model ref, got %d", len(mathDec.ModelRefs))
@@ -1265,13 +1260,14 @@ ROUTE math_route {
 	}
 	rules := cfg.Decisions[0].Rules
 
-	// Single WHEN domain("math") should produce a leaf node
-	if !rules.IsLeaf() {
-		t.Fatalf("single WHEN should produce a leaf node, got operator=%q with %d conditions",
+	// Single WHEN domain("math") should be wrapped in AND for Python CLI compatibility
+	if rules.Operator != "AND" || len(rules.Conditions) != 1 {
+		t.Fatalf("single WHEN should produce AND with 1 condition, got operator=%q with %d conditions",
 			rules.Operator, len(rules.Conditions))
 	}
-	if rules.Type != "domain" || rules.Name != "math" {
-		t.Errorf("leaf node = {type: %q, name: %q}, want {type: domain, name: math}", rules.Type, rules.Name)
+	leaf := rules.Conditions[0]
+	if leaf.Type != "domain" || leaf.Name != "math" {
+		t.Errorf("leaf node = {type: %q, name: %q}, want {type: domain, name: math}", leaf.Type, leaf.Name)
 	}
 
 	// Verify this survives YAML round-trip
@@ -1285,12 +1281,14 @@ ROUTE math_route {
 	}
 
 	rtRules := rt.Decisions[0].Rules
-	if !rtRules.IsLeaf() {
-		t.Fatalf("after round-trip: expected leaf node, got operator=%q", rtRules.Operator)
+	if rtRules.Operator != "AND" || len(rtRules.Conditions) != 1 {
+		t.Fatalf("after round-trip: expected AND with 1 condition, got operator=%q with %d conditions",
+			rtRules.Operator, len(rtRules.Conditions))
 	}
-	if rtRules.Type != "domain" || rtRules.Name != "math" {
+	rtLeaf := rtRules.Conditions[0]
+	if rtLeaf.Type != "domain" || rtLeaf.Name != "math" {
 		t.Errorf("after round-trip: leaf = {type: %q, name: %q}, want {type: domain, name: math}",
-			rtRules.Type, rtRules.Name)
+			rtLeaf.Type, rtLeaf.Name)
 	}
 }
 
@@ -1762,12 +1760,6 @@ func TestCompileAllPluginTypes(t *testing.T) {
 		body       string
 		verifyType string // expected type after normalization
 	}{
-		{
-			name:       "jailbreak",
-			pluginType: "jailbreak",
-			body:       `enabled: true threshold: 0.8`,
-			verifyType: "jailbreak",
-		},
 		{
 			name:       "hallucination",
 			pluginType: "hallucination",
@@ -3103,8 +3095,8 @@ func TestFullExampleYAMLRoundTrip(t *testing.T) {
 			if d.Algorithm == nil || d.Algorithm.Type != "confidence" {
 				t.Error("urgent should have confidence algorithm")
 			}
-			if len(d.Plugins) != 2 {
-				t.Errorf("urgent plugins = %d, want 2", len(d.Plugins))
+			if len(d.Plugins) != 1 {
+				t.Errorf("urgent plugins = %d, want 1", len(d.Plugins))
 			}
 			break
 		}

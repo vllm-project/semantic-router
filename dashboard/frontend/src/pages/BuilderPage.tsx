@@ -1,7 +1,8 @@
 import React, { useEffect, useCallback, useState, useMemo, useRef, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { DiffEditor } from '@monaco-editor/react'
 import { useDSLStore } from '@/stores/dslStore'
-import type { EditorMode, Diagnostic, ASTSignalDecl, ASTRouteDecl, ASTPluginDecl, ASTBackendDecl, ASTModelRef, ASTAlgoSpec, ASTPluginRef, BoolExprNode } from '@/types/dsl'
+import type { EditorMode, Diagnostic, ASTSignalDecl, ASTRouteDecl, ASTPluginDecl, ASTBackendDecl, ASTModelRef, ASTAlgoSpec, ASTPluginRef, BoolExprNode, DeployStep } from '@/types/dsl'
 import { getSignalFieldSchema, getAlgorithmFieldSchema, getPluginFieldSchema, ALGORITHM_DESCRIPTIONS, PLUGIN_DESCRIPTIONS, SIGNAL_TYPES, PLUGIN_TYPES, BACKEND_TYPES, ALGORITHM_TYPES, serializeBoolExpr, serializeFields } from '@/lib/dslMutations'
 import type { FieldSchema, SignalType, RouteInput, RouteModelInput, RouteAlgoInput, RoutePluginInput } from '@/lib/dslMutations'
 import ExpressionBuilder from '@/components/ExpressionBuilder'
@@ -30,6 +31,39 @@ interface SectionState {
   global: boolean
 }
 
+// ---------- Deploy Step Item ----------
+
+const DEPLOY_STEP_ORDER: DeployStep[] = ['validating', 'backing_up', 'writing', 'reloading', 'done']
+
+const DeployStepItem: React.FC<{ step: DeployStep; current: DeployStep | null; label: string }> = ({ step, current, label }) => {
+  const currentIdx = current ? DEPLOY_STEP_ORDER.indexOf(current) : -1
+  const stepIdx = DEPLOY_STEP_ORDER.indexOf(step)
+  const isDone = current === 'done' || (currentIdx > stepIdx && current !== 'error')
+  const isActive = current === step
+  const isError = current === 'error' && isActive
+
+  return (
+    <div className={`${styles.deployStepItem} ${isDone ? styles.deployStepDone : ''} ${isActive ? styles.deployStepActive : ''} ${isError ? styles.deployStepError : ''}`}>
+      <span className={styles.deployStepIcon}>
+        {isDone ? (
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 8.5l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        ) : isActive && !isError ? (
+          <span className={styles.deployStepSpinner} />
+        ) : isError ? (
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
+          </svg>
+        ) : (
+          <span className={styles.deployStepPending} />
+        )}
+      </span>
+      <span className={styles.deployStepLabel}>{label}</span>
+    </div>
+  )
+}
+
 // ---------- Component ----------
 
 const BuilderPage: React.FC = () => {
@@ -54,6 +88,7 @@ const BuilderPage: React.FC = () => {
     reset,
     setMode,
     importYaml,
+    loadFromRouter,
     mutateSignal,
     addSignal,
     deleteSignal,
@@ -67,6 +102,17 @@ const BuilderPage: React.FC = () => {
     mutateRoute,
     addRoute,
     mutateGlobal,
+    requestDeploy,
+    executeDeploy,
+    dismissDeploy,
+    deploying,
+    deployStep,
+    deployResult,
+    showDeployConfirm,
+    deployPreviewCurrent,
+    deployPreviewMerged,
+    deployPreviewLoading,
+    deployPreviewError,
   } = useDSLStore()
 
   const [selection, setSelection] = useState<Selection | null>(null)
@@ -94,6 +140,10 @@ const BuilderPage: React.FC = () => {
   const isGuideDraggingRef = useRef(false)
   const guideDragStartXRef = useRef(0)
   const guideDragStartWidthRef = useRef(0)
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const diffEditorRef = useRef<any>(null)
+  const [diffChangeCount, setDiffChangeCount] = useState(0)
 
   const handleGuideDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -300,7 +350,7 @@ const BuilderPage: React.FC = () => {
     [addRoute],
   )
 
-  // --- Import YAML handlers ---
+  // --- Import Config handlers ---
 
   const handleOpenImport = useCallback(() => {
     setImportText('')
@@ -367,6 +417,21 @@ const BuilderPage: React.FC = () => {
       setImportUrlLoading(false)
     }
   }, [importUrl])
+
+  const [loadingFromRouter, setLoadingFromRouter] = useState(false)
+  const handleLoadFromRouter = useCallback(async () => {
+    setLoadingFromRouter(true)
+    setImportError(null)
+    try {
+      await loadFromRouter()
+      setShowImportModal(false)
+      setImportText('')
+    } catch (err) {
+      setImportError(`Failed to load from router: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setLoadingFromRouter(false)
+    }
+  }, [loadFromRouter])
 
   // Diagnostic counts
   const errorCount = diagnostics.filter((d) => d.level === 'error').length
@@ -502,13 +567,13 @@ const BuilderPage: React.FC = () => {
             className={styles.toolbarBtn}
             onClick={mode !== 'nl' ? handleOpenImport : undefined}
             disabled={!wasmReady || mode === 'nl'}
-            title={mode === 'nl' ? 'Import YAML is not available in NL mode (coming soon)' : 'Import from YAML config'}
+            title={mode === 'nl' ? 'Import Config is not available in NL mode (coming soon)' : 'Import router config'}
           >
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M8 2v8M5 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
               <path d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2" strokeLinecap="round" />
             </svg>
-            Import YAML
+            Import Config
           </button>
           <button
             className={styles.toolbarBtn}
@@ -536,6 +601,18 @@ const BuilderPage: React.FC = () => {
               <path d="M4 2l8 6-8 6V2z" fill="currentColor" />
             </svg>
             {loading ? 'Compiling…' : 'Compile'}
+          </button>
+          <button
+            className={styles.toolbarBtnDeploy}
+            onClick={requestDeploy}
+            disabled={!wasmReady || !dslSource.trim() || loading || deploying}
+            title="Deploy config to router"
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M8 2v8M5 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M2 12v1a1 1 0 001 1h10a1 1 0 001-1v-1" strokeLinecap="round" />
+            </svg>
+            {deploying ? 'Deploying…' : 'Deploy'}
           </button>
           <span className={styles.divider} />
           <button
@@ -743,12 +820,12 @@ const BuilderPage: React.FC = () => {
         onChange={handleImportFile}
       />
 
-      {/* Import YAML Modal */}
+      {/* Import Config Modal */}
       {showImportModal && (
         <div className={styles.modalOverlay} onClick={() => setShowImportModal(false)}>
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
-              <h3 className={styles.modalTitle}>Import YAML Config</h3>
+              <h3 className={styles.modalTitle}>Import Config</h3>
               <button className={styles.modalClose} onClick={() => setShowImportModal(false)}>
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
@@ -757,7 +834,7 @@ const BuilderPage: React.FC = () => {
             </div>
             <div className={styles.modalBody}>
               <p className={styles.modalHint}>
-                Paste a router config YAML below, load from a file, or fetch from a URL. It will be decompiled into DSL.
+                Paste a router config YAML below, load from a file, fetch from a URL, or load the current router config directly. It will be decompiled into DSL.
               </p>
               <div className={styles.importUrlRow}>
                 <input
@@ -807,6 +884,18 @@ const BuilderPage: React.FC = () => {
                 </svg>
                 Load File
               </button>
+              <button
+                className={styles.toolbarBtnPrimary}
+                onClick={handleLoadFromRouter}
+                disabled={loadingFromRouter}
+                title="Load the current running router config and decompile to DSL"
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <rect x="2" y="2" width="12" height="12" rx="2" />
+                  <path d="M8 5v6M5 8l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                {loadingFromRouter ? 'Loading…' : 'Load from Router'}
+              </button>
               <div style={{ marginLeft: 'auto', display: 'flex', gap: 'var(--spacing-sm)' }}>
                 <button className={styles.toolbarBtn} onClick={() => setShowImportModal(false)}>Cancel</button>
                 <button className={styles.toolbarBtnPrimary} onClick={handleImportConfirm} disabled={!importText.trim()}>Import</button>
@@ -850,6 +939,197 @@ const BuilderPage: React.FC = () => {
               }} />
             </div>
           </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Deploy Confirmation Modal with Diff Preview */}
+      {showDeployConfirm && createPortal(
+        <div className={styles.modalOverlay} onClick={dismissDeploy}>
+          <div className={styles.deployDiffModal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.deployModalHeader}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" strokeWidth="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              <span>Deploy to Router — Config Diff</span>
+              <div style={{ flex: 1 }} />
+              <span className={styles.deployDiffLabels}>
+                <span className={styles.deployDiffLabelOld}>Current</span>
+                <span style={{ margin: '0 0.25rem', color: 'var(--color-text-muted)' }}>&rarr;</span>
+                <span className={styles.deployDiffLabelNew}>After Deploy</span>
+              </span>
+            </div>
+            {/* Diff navigation bar — prev/next change buttons */}
+            {!deployPreviewLoading && !deployPreviewError && (
+              <div className={styles.deployDiffNav}>
+                <button
+                  className={styles.deployDiffNavBtn}
+                  title="Previous Change (↑)"
+                  onClick={() => {
+                    const editor = diffEditorRef.current
+                    if (!editor) return
+                    const nav = editor.getLineChanges()
+                    if (!nav || nav.length === 0) return
+                    const modifiedEditor = editor.getModifiedEditor()
+                    const currentLine = modifiedEditor.getPosition()?.lineNumber ?? 1
+                    // find previous change
+                    for (let i = nav.length - 1; i >= 0; i--) {
+                      const startLine = nav[i].modifiedStartLineNumber || nav[i].originalStartLineNumber
+                      if (startLine < currentLine) {
+                        modifiedEditor.revealLineInCenter(startLine)
+                        modifiedEditor.setPosition({ lineNumber: startLine, column: 1 })
+                        return
+                      }
+                    }
+                    // wrap around to last change
+                    const last = nav[nav.length - 1]
+                    const lastLine = last.modifiedStartLineNumber || last.originalStartLineNumber
+                    modifiedEditor.revealLineInCenter(lastLine)
+                    modifiedEditor.setPosition({ lineNumber: lastLine, column: 1 })
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M4 10l4-4 4 4" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <button
+                  className={styles.deployDiffNavBtn}
+                  title="Next Change (↓)"
+                  onClick={() => {
+                    const editor = diffEditorRef.current
+                    if (!editor) return
+                    const nav = editor.getLineChanges()
+                    if (!nav || nav.length === 0) return
+                    const modifiedEditor = editor.getModifiedEditor()
+                    const currentLine = modifiedEditor.getPosition()?.lineNumber ?? 1
+                    // find next change
+                    for (let i = 0; i < nav.length; i++) {
+                      const startLine = nav[i].modifiedStartLineNumber || nav[i].originalStartLineNumber
+                      if (startLine > currentLine) {
+                        modifiedEditor.revealLineInCenter(startLine)
+                        modifiedEditor.setPosition({ lineNumber: startLine, column: 1 })
+                        return
+                      }
+                    }
+                    // wrap around to first change
+                    const first = nav[0]
+                    const firstLine = first.modifiedStartLineNumber || first.originalStartLineNumber
+                    modifiedEditor.revealLineInCenter(firstLine)
+                    modifiedEditor.setPosition({ lineNumber: firstLine, column: 1 })
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M4 6l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <span className={styles.deployDiffNavInfo}>
+                  {diffChangeCount === 0 ? 'No changes' : `${diffChangeCount} change${diffChangeCount > 1 ? 's' : ''}`}
+                </span>
+              </div>
+            )}
+            <div className={styles.deployDiffBody}>
+              {deployPreviewLoading && (
+                <div className={styles.deployDiffLoading}>
+                  <div className={styles.spinner} />
+                  Loading config diff...
+                </div>
+              )}
+              {deployPreviewError && (
+                <div className={styles.deployDiffError}>
+                  Failed to load preview: {deployPreviewError}
+                </div>
+              )}
+              {!deployPreviewLoading && !deployPreviewError && (
+                <DiffEditor
+                  original={deployPreviewCurrent}
+                  modified={deployPreviewMerged}
+                  language="yaml"
+                  theme="vs-dark"
+                  onMount={(editor) => {
+                    diffEditorRef.current = editor
+                    // Update change count once diff is computed
+                    const updateCount = () => {
+                      const changes = editor.getLineChanges()
+                      setDiffChangeCount(changes?.length ?? 0)
+                    }
+                    // Monaco diff is async; poll briefly then use onDidUpdateDiff
+                    const timer = setTimeout(updateCount, 500)
+                    try { editor.onDidUpdateDiff(updateCount) } catch { /* older Monaco */ }
+                    return () => clearTimeout(timer)
+                  }}
+                  options={{
+                    readOnly: true,
+                    renderSideBySide: true,
+                    minimap: { enabled: true },
+                    scrollBeyondLastLine: false,
+                    fontSize: 12,
+                    lineNumbers: 'on',
+                    wordWrap: 'on',
+                    renderOverviewRuler: true,
+                    renderIndicators: true,
+                    contextmenu: false,
+                    scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
+                  }}
+                />
+              )}
+            </div>
+            <div className={styles.deployModalFooter}>
+              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', margin: 0, flex: 1 }}>
+                A backup of the current config will be created before deployment.
+              </p>
+              <button className={styles.toolbarBtn} onClick={dismissDeploy}>Cancel</button>
+              <button
+                className={styles.toolbarBtnDeploy}
+                onClick={executeDeploy}
+                disabled={deployPreviewLoading || !!deployPreviewError}
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M8 2v8M5 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M2 12v1a1 1 0 001 1h10a1 1 0 001-1v-1" strokeLinecap="round" />
+                </svg>
+                Deploy Now
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Deploy Progress / Result Toast */}
+      {(deploying || deployResult) && createPortal(
+        <div className={styles.deployToast}>
+          {deploying && (
+            <div className={styles.deployProgress}>
+              <div className={styles.deployStepList}>
+                <DeployStepItem step="validating" current={deployStep} label="Validating config" />
+                <DeployStepItem step="backing_up" current={deployStep} label="Creating backup" />
+                <DeployStepItem step="writing" current={deployStep} label="Writing config" />
+                <DeployStepItem step="reloading" current={deployStep} label="Router reloading" />
+              </div>
+            </div>
+          )}
+          {deployResult && !deploying && (
+            <div className={deployResult.status === 'success' ? styles.deployResultSuccess : styles.deployResultError}>
+              <div className={styles.deployResultIcon}>
+                {deployResult.status === 'success' ? (
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M3 8.5l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
+                  </svg>
+                )}
+              </div>
+              <span className={styles.deployResultMsg}>{deployResult.message}</span>
+              <button className={styles.deployResultDismiss} onClick={dismissDeploy}>
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+          )}
         </div>,
         document.body
       )}
@@ -1150,6 +1430,14 @@ const VisualMode: React.FC<VisualModeProps> = ({
               onAddEntity={onSetAddingEntity}
               onModeSwitch={onModeSwitch}
             />
+          ) : selection.name === '__list__' ? (
+            <EntityListView
+              kind={selection.kind}
+              ast={ast}
+              onSelect={onSelect}
+              onBack={() => onSelect(null)}
+              onAddEntity={onSetAddingEntity}
+            />
           ) : (
             <EntityDetailView
               selection={selection}
@@ -1395,7 +1683,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           { label: 'Backends', count: backendCount, kind: 'backend' as const, icon: <BackendIcon className={styles.statIcon} /> },
           { label: 'Global', count: hasGlobal ? 1 : 0, kind: 'global' as const, icon: <GlobalIcon className={styles.statIcon} /> },
         ].map(card => (
-          <div key={card.label} className={styles.statCard} onClick={() => card.count > 0 && onSelect({ kind: card.kind, name: card.kind === 'global' ? 'global' : '' })}>
+          <div key={card.label} className={styles.statCard} onClick={() => card.count > 0 && onSelect({ kind: card.kind, name: card.kind === 'global' ? 'global' : '__list__' })}>
             {card.icon}
             <span className={styles.statValue}>{card.count}</span>
             <span className={styles.statLabel}>{card.label}</span>
@@ -1495,6 +1783,99 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ===================================================================
+// Entity List View (shows all entities of a kind as a card grid)
+// ===================================================================
+
+interface EntityListViewProps {
+  kind: EntityKind
+  ast: ReturnType<typeof useDSLStore.getState>['ast']
+  onSelect: (sel: Selection) => void
+  onBack: () => void
+  onAddEntity: (kind: EntityKind) => void
+}
+
+const EntityListView: React.FC<EntityListViewProps> = ({ kind, ast, onSelect, onBack, onAddEntity }) => {
+  const META: Record<string, { title: string; icon: React.FC<{ className?: string }>; color: string }> = {
+    signal: { title: 'Signals', icon: SignalIcon, color: 'rgb(118, 185, 0)' },
+    route: { title: 'Routes', icon: RouteIcon, color: 'rgb(96, 165, 250)' },
+    plugin: { title: 'Plugins', icon: PluginIcon, color: 'rgb(168, 130, 255)' },
+    backend: { title: 'Backends', icon: BackendIcon, color: 'rgb(251, 191, 36)' },
+  }
+  const meta = META[kind]
+  if (!meta) return null
+  const Icon = meta.icon
+
+  const items: { name: string; type: string; desc?: string }[] = (() => {
+    switch (kind) {
+      case 'signal':
+        return (ast?.signals ?? []).map(s => ({ name: s.name, type: s.signalType, desc: Object.keys(s.fields).length > 0 ? `${Object.keys(s.fields).length} field(s)` : undefined }))
+      case 'route':
+        return (ast?.routes ?? []).map(r => ({
+          name: r.name,
+          type: r.when ? `P${r.priority}` : 'default',
+          desc: r.models.length > 0 ? r.models.map(m => m.model).join(', ') : undefined,
+        }))
+      case 'plugin':
+        return (ast?.plugins ?? []).map(p => ({ name: p.name, type: p.pluginType, desc: Object.keys(p.fields).length > 0 ? `${Object.keys(p.fields).length} field(s)` : undefined }))
+      case 'backend':
+        return (ast?.backends ?? []).map(b => ({ name: b.name, type: b.backendType, desc: Object.keys(b.fields).length > 0 ? `${Object.keys(b.fields).length} field(s)` : undefined }))
+      default:
+        return []
+    }
+  })()
+
+  return (
+    <div className={styles.entityListPanel}>
+      <div className={styles.entityListHeader}>
+        <button className={styles.backBtn} onClick={onBack} title="Back to Dashboard">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <Icon className={styles.statIcon} />
+        <span className={styles.entityListTitle}>{meta.title}</span>
+        <span className={styles.entityListCount}>{items.length}</span>
+        <div style={{ marginLeft: 'auto' }}>
+          <button className={styles.quickActionBtn} onClick={() => onAddEntity(kind)} style={{ padding: '0.5rem 1rem', fontSize: '0.8125rem' }}>
+            <span className={styles.quickActionIcon} style={{ width: 24, height: 24, fontSize: '0.875rem' }}>+</span>
+            New {meta.title.replace(/s$/, '')}
+          </button>
+        </div>
+      </div>
+      <div className={styles.entityListGrid}>
+        {items.map(item => (
+          <div
+            key={item.name}
+            className={styles.entityListCard}
+            onClick={() => onSelect({ kind, name: item.name })}
+            style={{ '--entity-accent': meta.color } as React.CSSProperties}
+          >
+            <div className={styles.entityListCardHeader}>
+              <Icon className={styles.entityListCardIcon} />
+              <span className={styles.entityListCardName}>{item.name}</span>
+            </div>
+            <span className={styles.entityListCardType}>{item.type}</span>
+            {item.desc && <span className={styles.entityListCardDesc}>{item.desc}</span>}
+            <div className={styles.entityListCardArrow}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+            </div>
+          </div>
+        ))}
+      </div>
+      {items.length === 0 && (
+        <div className={styles.emptyState}>
+          <div className={styles.emptyIcon}>
+            <Icon className={styles.statIcon} />
+          </div>
+          <div>No {meta.title.toLowerCase()} defined yet</div>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
+            Click the button above to create one
+          </div>
+        </div>
+      )}
     </div>
   )
 }

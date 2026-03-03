@@ -212,22 +212,6 @@ func validatePluginConfiguration(pluginType string, rawConfig []byte) error {
 			return fmt.Errorf("failed to unmarshal semantic-cache config: %w", err)
 		}
 
-	case "jailbreak":
-		var cfg config.JailbreakPluginConfig
-		decoder := json.NewDecoder(bytes.NewReader(rawConfig))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&cfg); err != nil {
-			return fmt.Errorf("failed to unmarshal jailbreak config: %w", err)
-		}
-
-	case "pii":
-		var cfg config.PIIPluginConfig
-		decoder := json.NewDecoder(bytes.NewReader(rawConfig))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&cfg); err != nil {
-			return fmt.Errorf("failed to unmarshal pii config: %w", err)
-		}
-
 	case "system_prompt":
 		var cfg config.SystemPromptPluginConfig
 		decoder := json.NewDecoder(bytes.NewReader(rawConfig))
@@ -278,7 +262,9 @@ func validatePluginConfiguration(pluginType string, rawConfig []byte) error {
 		}
 
 	default:
-		return fmt.Errorf("unknown plugin type: %s", pluginType)
+		// Unknown plugin types are passed through without schema validation.
+		// This allows extensibility — only well-known types are validated.
+		return nil
 	}
 
 	return nil

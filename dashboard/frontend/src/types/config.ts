@@ -365,6 +365,38 @@ export function detectConfigFormat(config: any): ConfigFormat {
 }
 
 /**
+ * Check if config has decisions, regardless of format.
+ * After deploy, the Router flattens Python CLI format to legacy struct fields
+ * (vllm_endpoints, model_config, keyword_rules, etc.) but preserves the `decisions` array.
+ * This helper detects that hybrid state so the UI can still render decisions.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function hasDecisions(config: any): boolean {
+  return Array.isArray(config?.decisions) && config.decisions.length > 0
+}
+
+/**
+ * Check if config has flat signal fields (keyword_rules, embedding_rules, etc.)
+ * that result from deploy flattening. These map to the nested signals.* structure.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function hasFlatSignals(config: any): boolean {
+  return !!(
+    config?.keyword_rules?.length ||
+    config?.embedding_rules?.length ||
+    config?.categories?.length ||
+    config?.fact_check_rules?.length ||
+    config?.user_feedback_rules?.length ||
+    config?.preference_rules?.length ||
+    config?.language_rules?.length ||
+    config?.context_rules?.length ||
+    config?.complexity_rules?.length ||
+    config?.jailbreak?.length ||
+    config?.pii?.length
+  )
+}
+
+/**
  * Check if config is in Python CLI format
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

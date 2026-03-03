@@ -84,13 +84,26 @@ async function getCachedModule(): Promise<CachedModule | null> {
 
 async function setCachedModule(module: WebAssembly.Module, etag: string | null): Promise<void> {
   try {
+    // Some browsers (Safari, strict CSP) don't support serializing WebAssembly.Module
+    // via structured clone into IndexedDB. Test with a small validation first.
     const db = await openCacheDB()
     return new Promise((resolve) => {
       const tx = db.transaction(IDB_STORE, 'readwrite')
       const store = tx.objectStore(IDB_STORE)
-      store.put({ module, etag } as CachedModule, IDB_KEY)
+      const req = store.put({ module, etag } as CachedModule, IDB_KEY)
+      req.onerror = (e) => {
+        // DataCloneError: WebAssembly.Module can not be serialized for storage
+        console.warn('[wasm] IndexedDB cache write failed (non-fatal):', (e.target as IDBRequest)?.error?.message)
+        e.preventDefault() // prevent uncaught error
+        db.close()
+        resolve()
+      }
       tx.oncomplete = () => { db.close(); resolve() }
-      tx.onerror = () => { db.close(); resolve() }
+      tx.onerror = (e) => {
+        e.preventDefault() // prevent uncaught error
+        db.close()
+        resolve()
+      }
     })
   } catch {
     // Cache write failure is non-fatal

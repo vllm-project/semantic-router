@@ -135,15 +135,13 @@ func (r *OpenAIRouter) startRouterReplay(
 		modelForRecord = originalModel
 	}
 
-	// Determine plugin status from decision configuration
+	// Determine guardrail status from decision's rules tree (whether signals are configured),
+	// not from whether they actually fired. This preserves the "configured = enabled" semantics
+	// so replay records can distinguish "not configured" from "configured but not triggered".
 	var jailbreakEnabled, piiEnabled, hallucinationEnabled bool
 	if ctx.VSRSelectedDecision != nil {
-		if jailbreakCfg := ctx.VSRSelectedDecision.GetJailbreakConfig(); jailbreakCfg != nil {
-			jailbreakEnabled = jailbreakCfg.Enabled
-		}
-		if piiCfg := ctx.VSRSelectedDecision.GetPIIConfig(); piiCfg != nil {
-			piiEnabled = piiCfg.Enabled
-		}
+		jailbreakEnabled = ctx.VSRSelectedDecision.HasSignalType("jailbreak")
+		piiEnabled = ctx.VSRSelectedDecision.HasSignalType("pii")
 		if hallucinationCfg := ctx.VSRSelectedDecision.GetHallucinationConfig(); hallucinationCfg != nil {
 			hallucinationEnabled = hallucinationCfg.Enabled
 		}

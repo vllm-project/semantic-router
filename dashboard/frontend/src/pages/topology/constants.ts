@@ -56,8 +56,6 @@ export const SIGNAL_LATENCY: Record<SignalType, string> = {
 // ============== Plugin Icons ==============
 export const PLUGIN_ICONS: Record<PluginType, string> = {
   'semantic-cache': '⚡',
-  'jailbreak': '🛡️',
-  'pii': '🔒',
   'system_prompt': '📝',
   'header_mutation': '🔧',
   'hallucination': '🔍',
@@ -68,8 +66,6 @@ export const PLUGIN_ICONS: Record<PluginType, string> = {
 // ============== Plugin Colors (NVIDIA Dark Theme) ==============
 export const PLUGIN_COLORS: Record<PluginType, { background: string; border: string }> = {
   'semantic-cache': { background: '#76b900', border: '#5a8f00' },  // NVIDIA Green
-  'jailbreak': { background: '#718096', border: '#4a5568' },       // Medium Gray
-  'pii': { background: '#5a6c7d', border: '#3d4a59' },             // Blue Gray
   'system_prompt': { background: '#8fd400', border: '#76b900' },   // Light Green
   'header_mutation': { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
   'hallucination': { background: '#556b7d', border: '#3d4a59' },   // Cool Gray
@@ -190,8 +186,6 @@ export const SIGNAL_TYPES: SignalType[] = [
 // ============== Plugin Types Array ==============
 export const PLUGIN_TYPES: PluginType[] = [
   'semantic-cache',
-  'jailbreak',
-  'pii',
   'system_prompt',
   'header_mutation',
   'hallucination',

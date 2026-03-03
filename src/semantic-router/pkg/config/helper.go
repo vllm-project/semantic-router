@@ -118,31 +118,65 @@ func (c *RouterConfig) GetModelAccessKey(modelName string) string {
 	return ""
 }
 
-// GetDecisionPIIPolicy returns the PII policy for a given decision
-// If the decision doesn't have a PII plugin or policy config, returns a default policy that allows all PII
-func (d *Decision) GetDecisionPIIPolicy() PIIPolicy {
-	piiConfig := d.GetPIIConfig()
-	if piiConfig == nil {
-		// Default policy allows all PII (no PII plugin configured)
+// GetDecisionPIIPolicy returns the PII policy for a given decision by looking at
+// the PIIRule signals referenced in the decision's rules tree.
+// If the decision doesn't reference any PII signals, returns a default policy that allows all PII.
+func (d *Decision) GetDecisionPIIPolicy(piiRules []PIIRule) PIIPolicy {
+	// Collect PII signal names referenced in the decision's rules
+	piiSignalNames := collectSignalNames(&d.Rules, "pii")
+	if len(piiSignalNames) == 0 {
+		// No PII signals → allow all PII
 		return PIIPolicy{
 			AllowByDefault: true,
 			PIITypes:       []string{},
 		}
 	}
 
-	// When PII plugin is enabled, default behavior is to block all PII (AllowByDefault: false)
-	// unless specific types are listed in PIITypesAllowed
-	allowByDefault := !piiConfig.Enabled
+	// Build a lookup for PIIRules by name
+	rulesByName := make(map[string]*PIIRule, len(piiRules))
+	for i := range piiRules {
+		rulesByName[piiRules[i].Name] = &piiRules[i]
+	}
+
+	// Aggregate PIITypesAllowed from all referenced PIIRules
+	var allAllowed []string
+	for _, name := range piiSignalNames {
+		if rule, ok := rulesByName[name]; ok {
+			allAllowed = append(allAllowed, rule.PIITypesAllowed...)
+		}
+	}
 
 	return PIIPolicy{
-		AllowByDefault: allowByDefault,
-		PIITypes:       piiConfig.PIITypesAllowed,
+		AllowByDefault: false,
+		PIITypes:       allAllowed,
 	}
 }
 
+// HasSignalType returns true if the decision's rules tree references at least
+// one signal of the given type (e.g., "jailbreak", "pii").
+func (d *Decision) HasSignalType(signalType string) bool {
+	return len(collectSignalNames(&d.Rules, signalType)) > 0
+}
+
+// collectSignalNames traverses a RuleNode tree and returns all leaf signal names
+// of the given signal type.
+func collectSignalNames(node *RuleNode, signalType string) []string {
+	if node == nil {
+		return nil
+	}
+	if node.Type == signalType && node.Name != "" {
+		return []string{node.Name}
+	}
+	var names []string
+	for i := range node.Conditions {
+		names = append(names, collectSignalNames(&node.Conditions[i], signalType)...)
+	}
+	return names
+}
+
 // IsDecisionAllowedForPIIType checks if a decision is allowed to process a specific PII type
-func (d *Decision) IsDecisionAllowedForPIIType(piiType string) bool {
-	policy := d.GetDecisionPIIPolicy()
+func (d *Decision) IsDecisionAllowedForPIIType(piiType string, piiRules []PIIRule) bool {
+	policy := d.GetDecisionPIIPolicy(piiRules)
 
 	// If allow_by_default is true, all PII types are allowed unless explicitly denied
 	if policy.AllowByDefault {
@@ -154,9 +188,9 @@ func (d *Decision) IsDecisionAllowedForPIIType(piiType string) bool {
 }
 
 // IsDecisionAllowedForPIITypes checks if a decision is allowed to process any of the given PII types
-func (d *Decision) IsDecisionAllowedForPIITypes(piiTypes []string) bool {
+func (d *Decision) IsDecisionAllowedForPIITypes(piiTypes []string, piiRules []PIIRule) bool {
 	for _, piiType := range piiTypes {
-		if !d.IsDecisionAllowedForPIIType(piiType) {
+		if !d.IsDecisionAllowedForPIIType(piiType, piiRules) {
 			return false
 		}
 	}
