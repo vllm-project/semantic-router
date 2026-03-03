@@ -99,6 +99,16 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
               Builder
             </NavLink>
 
+            {/* Primary: OpenClaw */}
+            <NavLink
+              to="/openclaw"
+              className={({ isActive }) =>
+                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+              }
+            >
+              OpenClaw
+            </NavLink>
+
             {/* Primary: Models */}
             <button
               className={`${styles.navLink} ${isModelsActive ? styles.navLinkActive : ''}`}
@@ -370,6 +380,9 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
             </button>
             <NavLink to="/builder" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
               Builder
+            </NavLink>
+            <NavLink to="/openclaw" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+              OpenClaw
             </NavLink>
 
             {/* Analysis section */}

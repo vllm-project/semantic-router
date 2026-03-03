@@ -43,6 +43,12 @@ type Config struct {
 	MLPipelineDataDir string
 	MLTrainingDir     string // path to src/training/model_selection/ml_model_selection
 	MLServiceURL      string // URL of the Python ML service sidecar (empty = subprocess mode)
+
+	// OpenClaw configuration
+	OpenClawEnabled bool
+	OpenClawURL     string // URL of OpenClaw gateway (default: http://localhost:18788)
+	OpenClawDataDir string // workspace generation directory
+	OpenClawToken   string // auth token for OpenClaw gateway
 }
 
 // env returns the env var or default
@@ -95,6 +101,12 @@ func LoadConfig() (*Config, error) {
 	mlTrainingDir := flag.String("ml-training-dir", env("ML_TRAINING_DIR", ""), "path to src/training/model_selection/ml_model_selection")
 	mlServiceURL := flag.String("ml-service-url", env("ML_SERVICE_URL", ""), "URL of Python ML service sidecar (empty = subprocess mode)")
 
+	// OpenClaw configuration
+	openclawEnabled := flag.Bool("openclaw", env("OPENCLAW_ENABLED", "true") == "true", "enable OpenClaw agent provisioning")
+	openclawURL := flag.String("openclaw-url", env("OPENCLAW_URL", "http://localhost:18788"), "OpenClaw gateway URL")
+	openclawDataDir := flag.String("openclaw-data", env("OPENCLAW_DATA_DIR", "./data/openclaw"), "OpenClaw workspace directory")
+	openclawToken := flag.String("openclaw-token", env("OPENCLAW_TOKEN", ""), "OpenClaw gateway auth token")
+
 	flag.Parse()
 
 	cfg.Port = *port
@@ -117,6 +129,10 @@ func LoadConfig() (*Config, error) {
 	cfg.MLPipelineDataDir = *mlPipelineDataDir
 	cfg.MLTrainingDir = *mlTrainingDir
 	cfg.MLServiceURL = *mlServiceURL
+	cfg.OpenClawEnabled = *openclawEnabled
+	cfg.OpenClawURL = *openclawURL
+	cfg.OpenClawDataDir = *openclawDataDir
+	cfg.OpenClawToken = *openclawToken
 
 	// Resolve config file path to absolute path
 	absConfigPath, err := filepath.Abs(cfg.ConfigFile)
