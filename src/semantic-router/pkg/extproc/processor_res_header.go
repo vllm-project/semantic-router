@@ -360,7 +360,7 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 			response.ModeOverride = &http_ext.ProcessingMode{
 				ResponseBodyMode: http_ext.ProcessingMode_STREAMED,
 			}
-		} else if r.Config.IsAgentGateway() {
+		} else if r.Config != nil && r.Config.IsAgentGateway() {
 			response.ModeOverride = &http_ext.ProcessingMode{
 				ResponseBodyMode: http_ext.ProcessingMode_BUFFERED,
 			}

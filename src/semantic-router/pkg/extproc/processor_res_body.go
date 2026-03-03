@@ -277,9 +277,9 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	// Standard Envoy uses the regular BodyMutation_Body.
 	needsBodyMutation := anthropicTransformed ||
 		(ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest) ||
-		(!ctx.IsStreamingResponse && r.Config.IsAgentGateway())
+		(!ctx.IsStreamingResponse && r.Config != nil && r.Config.IsAgentGateway())
 	if needsBodyMutation {
-		if r.Config.IsAgentGateway() {
+		if r.Config != nil && r.Config.IsAgentGateway() {
 			bodyMutation = &ext_proc.BodyMutation{
 				Mutation: &ext_proc.BodyMutation_StreamedResponse{
 					StreamedResponse: &ext_proc.StreamedBodyResponse{
