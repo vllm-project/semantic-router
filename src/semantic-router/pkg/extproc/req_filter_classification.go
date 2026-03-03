@@ -347,12 +347,14 @@ func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, de
 	if prismCfg := r.getPRISMConfig(algorithm); prismCfg != nil && prismCfg.Enabled {
 		if prismCfg.Mode == "fine_filter" || prismCfg.Mode == "hybrid" {
 			validator := r.buildPRISMValidator(prismCfg)
-			result, _ = validator.ValidateSelection(context.Background(), result, candidates, query, selector, selCtx)
-			if result == nil {
+			validatedResult, prismResult := validator.ValidateSelection(context.Background(), result, candidates, query, selector, selCtx)
+			if validatedResult == nil {
 				// PRISM rejected and refusal_policy is "reject"
-				logging.Warnf("[ModelSelection] PRISM rejected all candidates, using first model")
+				logging.Warnf("[ModelSelection] PRISM rejected all candidates (score=%.3f): %s",
+					prismResult.Score, prismResult.Reason)
 				return &candidates[0], "prism_rejected"
 			}
+			result = validatedResult
 		}
 	}
 

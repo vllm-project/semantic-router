@@ -166,7 +166,8 @@ func (v *PRISMValidator) InitializeFromConfig(modelConfig map[string]config.Mode
 		}
 	}
 
-	logging.Infof("[PRISM] Initialized domain boundaries for %d models", len(v.modelDomains))
+	logging.Infof("[PRISM] Initialized domain boundaries for %d models (%d with descriptions)",
+		len(v.modelDomains), len(v.modelDescriptions))
 }
 
 // Validate performs the PRISM 153-key legitimacy check for a model against a query.
