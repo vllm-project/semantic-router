@@ -193,6 +193,7 @@ func (h *OpenClawHandler) checkContainerHealth(entry ContainerEntry) OpenClawSta
 		AgentRole:       snapshot.Role,
 		AgentVibe:       snapshot.Vibe,
 		AgentPrinciples: snapshot.Principles,
+		RoleKind:        normalizeRoleKind(entry.RoleKind),
 	}
 
 	out, err := h.containerOutput("inspect", "-f", "{{.State.Running}}", entry.Name)

@@ -376,6 +376,8 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		mux.HandleFunc("/api/openclaw/teams/", ocHandler.TeamByIDHandler())
 		mux.HandleFunc("/api/openclaw/workers", ocHandler.WorkersHandler())
 		mux.HandleFunc("/api/openclaw/workers/", ocHandler.WorkerByIDHandler())
+		mux.HandleFunc("/api/openclaw/rooms", ocHandler.RoomsHandler())
+		mux.HandleFunc("/api/openclaw/rooms/", ocHandler.RoomByIDHandler())
 		mux.HandleFunc("/api/openclaw/provision", ocHandler.ProvisionHandler())
 		mux.HandleFunc("/api/openclaw/start", ocHandler.StartHandler())
 		mux.HandleFunc("/api/openclaw/stop", ocHandler.StopHandler())
@@ -439,6 +441,14 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		mux.HandleFunc("/api/openclaw/workers", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`[]`))
+		})
+		mux.HandleFunc("/api/openclaw/rooms", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[]`))
+		})
+		mux.HandleFunc("/api/openclaw/rooms/", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			http.Error(w, `{"error":"OpenClaw feature disabled"}`, http.StatusServiceUnavailable)
 		})
 		mux.HandleFunc("/embedded/openclaw/", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")

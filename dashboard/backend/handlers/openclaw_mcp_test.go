@@ -251,3 +251,71 @@ func TestOpenClawMCP_CreateWorkerUsesServerDefaultsForRuntimeFields(t *testing.T
 		t.Fatalf("expected read-only error, got %q", message)
 	}
 }
+
+func TestOpenClawMCP_UpdateWorkerRoleKindPromotesLeader(t *testing.T) {
+	oc := NewOpenClawHandler(t.TempDir(), false)
+	handler := &OpenClawMCPHandler{openClaw: oc}
+
+	team := TeamEntry{
+		ID:        "team-leader",
+		Name:      "Team Leader",
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := oc.saveTeams([]TeamEntry{team}); err != nil {
+		t.Fatalf("failed to seed teams: %v", err)
+	}
+	if err := oc.saveRegistry([]ContainerEntry{
+		{
+			Name:      "worker-a",
+			Port:      18788,
+			Image:     "ghcr.io/openclaw/openclaw:latest",
+			Token:     "token-a",
+			DataDir:   "/tmp/worker-a",
+			CreatedAt: time.Now().UTC().Format(time.RFC3339),
+			TeamID:    team.ID,
+			TeamName:  team.Name,
+			RoleKind:  "worker",
+		},
+		{
+			Name:      "worker-b",
+			Port:      18789,
+			Image:     "ghcr.io/openclaw/openclaw:latest",
+			Token:     "token-b",
+			DataDir:   "/tmp/worker-b",
+			CreatedAt: time.Now().UTC().Format(time.RFC3339),
+			TeamID:    team.ID,
+			TeamName:  team.Name,
+			RoleKind:  "leader",
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed workers: %v", err)
+	}
+
+	leaderKind := "leader"
+	updateResult, err := handler.updateWorkerTool(context.Background(), mcp.CallToolRequest{
+		Params: mcp.CallToolParams{Arguments: map[string]any{
+			"worker_id": "worker-a",
+			"role_kind": leaderKind,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("updateWorkerTool returned error: %v", err)
+	}
+	updatePayload := decodeMCPToolJSONResult(t, updateResult)
+	updateMap, ok := updatePayload.(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected update payload type: %T", updatePayload)
+	}
+	if updateMap["roleKind"] != "leader" {
+		t.Fatalf("expected roleKind=leader, got %#v", updateMap["roleKind"])
+	}
+
+	teams, err := oc.loadTeams()
+	if err != nil {
+		t.Fatalf("failed to load teams: %v", err)
+	}
+	if len(teams) != 1 || teams[0].LeaderID != "worker-a" {
+		t.Fatalf("expected team leader to be worker-a, got %+v", teams)
+	}
+}

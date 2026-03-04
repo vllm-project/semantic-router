@@ -28,6 +28,7 @@ type clawCreateTeamArgs struct {
 	Role        string `json:"role"`
 	Principal   string `json:"principal"`
 	Description string `json:"description"`
+	LeaderID    string `json:"leader_id,omitempty"`
 }
 
 type clawUpdateTeamArgs struct {
@@ -37,6 +38,7 @@ type clawUpdateTeamArgs struct {
 	Role        *string `json:"role,omitempty"`
 	Principal   *string `json:"principal,omitempty"`
 	Description *string `json:"description,omitempty"`
+	LeaderID    *string `json:"leader_id,omitempty"`
 }
 
 type clawDeleteTeamArgs struct {
@@ -58,6 +60,7 @@ type clawCreateWorkerArgs struct {
 	Role       string   `json:"role"`
 	Vibe       string   `json:"vibe"`
 	Principles string   `json:"principles"`
+	RoleKind   string   `json:"role_kind,omitempty"`
 	Skills     []string `json:"skills,omitempty"`
 }
 
@@ -69,6 +72,7 @@ type clawUpdateWorkerArgs struct {
 	Role       *string `json:"role,omitempty"`
 	Vibe       *string `json:"vibe,omitempty"`
 	Principles *string `json:"principles,omitempty"`
+	RoleKind   *string `json:"role_kind,omitempty"`
 }
 
 func NewOpenClawMCPHandler(openClaw *OpenClawHandler) *OpenClawMCPHandler {
@@ -123,6 +127,10 @@ func (h *OpenClawMCPHandler) registerTools(mcpServer *server.MCPServer) {
 					"type":        "string",
 					"description": "Team description.",
 				},
+				"leader_id": map[string]any{
+					"type":        "string",
+					"description": "Optional worker id to set as team leader.",
+				},
 			},
 			Required: []string{"name"},
 		},
@@ -157,6 +165,10 @@ func (h *OpenClawMCPHandler) registerTools(mcpServer *server.MCPServer) {
 				"description": map[string]any{
 					"type":        "string",
 					"description": "New team description.",
+				},
+				"leader_id": map[string]any{
+					"type":        "string",
+					"description": "Optional worker id to set as team leader. Use empty string to clear leader.",
 				},
 			},
 			Required: []string{"team_id"},
@@ -232,6 +244,10 @@ func (h *OpenClawMCPHandler) registerTools(mcpServer *server.MCPServer) {
 					"type":        "string",
 					"description": "Worker principles.",
 				},
+				"role_kind": map[string]any{
+					"type":        "string",
+					"description": "Optional role kind. Allowed values: leader, worker.",
+				},
 				"skills": map[string]any{
 					"type":        "array",
 					"description": "Optional skill IDs to inject into worker workspace.",
@@ -277,6 +293,10 @@ func (h *OpenClawMCPHandler) registerTools(mcpServer *server.MCPServer) {
 				"principles": map[string]any{
 					"type":        "string",
 					"description": "Optional new identity principles.",
+				},
+				"role_kind": map[string]any{
+					"type":        "string",
+					"description": "Optional role kind update. Allowed values: leader, worker.",
 				},
 			},
 			Required: []string{"worker_id"},
@@ -324,6 +344,7 @@ func (h *OpenClawMCPHandler) createTeamTool(_ context.Context, request mcp.CallT
 		"role":        strings.TrimSpace(args.Role),
 		"principal":   strings.TrimSpace(args.Principal),
 		"description": strings.TrimSpace(args.Description),
+		"leaderId":    strings.TrimSpace(args.LeaderID),
 	}
 
 	data, err := h.invokeOpenClawJSON(h.openClaw.TeamsHandler(), http.MethodPost, "/api/openclaw/teams", payload)
@@ -365,6 +386,9 @@ func (h *OpenClawMCPHandler) updateTeamTool(_ context.Context, request mcp.CallT
 		"role":        mergedString(args.Role, mapString(existing, "role")),
 		"principal":   mergedString(args.Principal, mapString(existing, "principal")),
 		"description": mergedString(args.Description, mapString(existing, "description")),
+	}
+	if args.LeaderID != nil {
+		payload["leaderId"] = strings.TrimSpace(*args.LeaderID)
 	}
 
 	updated, err := h.invokeOpenClawJSON(h.openClaw.TeamByIDHandler(), http.MethodPut, teamPath, payload)
@@ -471,6 +495,7 @@ func (h *OpenClawMCPHandler) createWorkerTool(_ context.Context, request mcp.Cal
 		"teamId":   teamID,
 		"skills":   args.Skills,
 		"identity": identity,
+		"roleKind": normalizeRoleKind(args.RoleKind),
 	}
 
 	data, err := h.invokeOpenClawJSON(h.openClaw.WorkersHandler(), http.MethodPost, "/api/openclaw/workers?async=true", payload)
@@ -515,6 +540,9 @@ func (h *OpenClawMCPHandler) updateWorkerTool(_ context.Context, request mcp.Cal
 			"vibe":       mergedString(args.Vibe, mapString(existing, "agentVibe")),
 			"principles": mergedString(args.Principles, mapString(existing, "agentPrinciples")),
 		}
+	}
+	if args.RoleKind != nil {
+		payload["roleKind"] = normalizeRoleKind(*args.RoleKind)
 	}
 
 	if len(payload) == 0 {

@@ -13,12 +13,13 @@ import (
 // --- Teams ---
 
 type teamPayload struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Vibe        string `json:"vibe"`
-	Role        string `json:"role"`
-	Principal   string `json:"principal"`
-	Description string `json:"description"`
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Vibe        string  `json:"vibe"`
+	Role        string  `json:"role"`
+	Principal   string  `json:"principal"`
+	Description string  `json:"description"`
+	LeaderID    *string `json:"leaderId,omitempty"`
 }
 
 func (h *OpenClawHandler) TeamsHandler() http.HandlerFunc {
@@ -82,6 +83,43 @@ func (h *OpenClawHandler) TeamsHandler() http.HandlerFunc {
 				}
 			}
 
+			leaderID := ""
+			if req.LeaderID != nil {
+				leaderID = sanitizeContainerName(strings.TrimSpace(*req.LeaderID))
+				if strings.TrimSpace(*req.LeaderID) != "" && leaderID == "" {
+					writeJSONError(w, "leaderId is invalid", http.StatusBadRequest)
+					return
+				}
+			}
+
+			entries, err := h.loadRegistry()
+			if err != nil {
+				writeJSONError(w, fmt.Sprintf("Failed to load workers: %v", err), http.StatusInternalServerError)
+				return
+			}
+			entriesChanged := false
+			if leaderID != "" {
+				leaderIndex := findContainerIndex(entries, leaderID)
+				if leaderIndex < 0 {
+					writeJSONError(w, fmt.Sprintf("leader worker %q not found", leaderID), http.StatusNotFound)
+					return
+				}
+				if entries[leaderIndex].TeamID != teamID {
+					writeJSONError(w, fmt.Sprintf("leader worker %q is not in team %q", leaderID, teamID), http.StatusConflict)
+					return
+				}
+				for i := range entries {
+					if entries[i].TeamID == teamID && normalizeRoleKind(entries[i].RoleKind) != "worker" {
+						entries[i].RoleKind = "worker"
+						entriesChanged = true
+					}
+				}
+				if normalizeRoleKind(entries[leaderIndex].RoleKind) != "leader" {
+					entries[leaderIndex].RoleKind = "leader"
+					entriesChanged = true
+				}
+			}
+
 			now := time.Now().UTC().Format(time.RFC3339)
 			created := TeamEntry{
 				ID:          teamID,
@@ -90,6 +128,7 @@ func (h *OpenClawHandler) TeamsHandler() http.HandlerFunc {
 				Role:        strings.TrimSpace(req.Role),
 				Principal:   strings.TrimSpace(req.Principal),
 				Description: strings.TrimSpace(req.Description),
+				LeaderID:    leaderID,
 				CreatedAt:   now,
 				UpdatedAt:   now,
 			}
@@ -98,6 +137,15 @@ func (h *OpenClawHandler) TeamsHandler() http.HandlerFunc {
 			if err := h.saveTeams(teams); err != nil {
 				writeJSONError(w, fmt.Sprintf("Failed to save teams: %v", err), http.StatusInternalServerError)
 				return
+			}
+			if entriesChanged {
+				if err := h.saveRegistry(entries); err != nil {
+					writeJSONError(w, fmt.Sprintf("Failed to save workers: %v", err), http.StatusInternalServerError)
+					return
+				}
+			}
+			if _, err := h.ensureDefaultRoomLocked(created); err != nil {
+				log.Printf("openclaw: failed to ensure default room after creating team %s: %v", created.ID, err)
 			}
 
 			w.Header().Set("Content-Type", "application/json")
@@ -184,6 +232,46 @@ func (h *OpenClawHandler) TeamByIDHandler() http.HandlerFunc {
 			teams[index].Role = strings.TrimSpace(req.Role)
 			teams[index].Principal = strings.TrimSpace(req.Principal)
 			teams[index].Description = strings.TrimSpace(req.Description)
+
+			entries, err := h.loadRegistry()
+			if err != nil {
+				writeJSONError(w, fmt.Sprintf("Failed to load workers: %v", err), http.StatusInternalServerError)
+				return
+			}
+
+			if req.LeaderID != nil {
+				nextLeaderID := sanitizeContainerName(strings.TrimSpace(*req.LeaderID))
+				if strings.TrimSpace(*req.LeaderID) != "" && nextLeaderID == "" {
+					writeJSONError(w, "leaderId is invalid", http.StatusBadRequest)
+					return
+				}
+				if nextLeaderID == "" {
+					teams[index].LeaderID = ""
+					for i := range entries {
+						if entries[i].TeamID == teamID && normalizeRoleKind(entries[i].RoleKind) != "worker" {
+							entries[i].RoleKind = "worker"
+						}
+					}
+				} else {
+					leaderIndex := findContainerIndex(entries, nextLeaderID)
+					if leaderIndex < 0 {
+						writeJSONError(w, fmt.Sprintf("leader worker %q not found", nextLeaderID), http.StatusNotFound)
+						return
+					}
+					if entries[leaderIndex].TeamID != teamID {
+						writeJSONError(w, fmt.Sprintf("leader worker %q is not in team %q", nextLeaderID, teamID), http.StatusConflict)
+						return
+					}
+					teams[index].LeaderID = nextLeaderID
+					for i := range entries {
+						if entries[i].TeamID == teamID && normalizeRoleKind(entries[i].RoleKind) != "worker" {
+							entries[i].RoleKind = "worker"
+						}
+					}
+					entries[leaderIndex].RoleKind = "leader"
+				}
+			}
+
 			teams[index].UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 			updated := teams[index]
 
@@ -193,19 +281,34 @@ func (h *OpenClawHandler) TeamByIDHandler() http.HandlerFunc {
 				writeJSONError(w, fmt.Sprintf("Failed to save teams: %v", err), http.StatusInternalServerError)
 				return
 			}
+			changed := false
+			for i := range entries {
+				if entries[i].TeamID == teamID && entries[i].TeamName != updated.Name {
+					entries[i].TeamName = updated.Name
+					changed = true
+				}
+			}
+			if req.LeaderID != nil {
+				changed = true
+			}
+			if changed {
+				if err := h.saveRegistry(entries); err != nil {
+					log.Printf("openclaw: failed to save registry after team update: %v", err)
+				}
+			}
 
-			entries, err := h.loadRegistry()
-			if err == nil {
-				changed := false
-				for i := range entries {
-					if entries[i].TeamID == teamID {
-						entries[i].TeamName = updated.Name
-						changed = true
+			rooms, roomErr := h.loadRooms()
+			if roomErr == nil {
+				roomsChanged := false
+				for i := range rooms {
+					if rooms[i].TeamID == teamID && rooms[i].Name == defaultRoomNameForTeam(strings.TrimSpace(req.Name)) {
+						rooms[i].UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+						roomsChanged = true
 					}
 				}
-				if changed {
-					if err := h.saveRegistry(entries); err != nil {
-						log.Printf("openclaw: failed to save registry after team rename: %v", err)
+				if roomsChanged {
+					if err := h.saveRooms(rooms); err != nil {
+						log.Printf("openclaw: failed to save rooms after team update: %v", err)
 					}
 				}
 			}
@@ -260,6 +363,9 @@ func (h *OpenClawHandler) TeamByIDHandler() http.HandlerFunc {
 			if err := h.saveTeams(filtered); err != nil {
 				writeJSONError(w, fmt.Sprintf("Failed to save teams: %v", err), http.StatusInternalServerError)
 				return
+			}
+			if err := h.deleteRoomsForTeamLocked(teamID); err != nil {
+				log.Printf("openclaw: failed to delete rooms for team %s: %v", teamID, err)
 			}
 
 			w.Header().Set("Content-Type", "application/json")

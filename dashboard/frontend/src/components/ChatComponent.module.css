@@ -47,20 +47,48 @@
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--color-text);
+  border: 1px solid rgba(118, 185, 1, 0.26);
+  background: rgba(118, 185, 1, 0.1);
+  color: #d6ef9b;
   cursor: pointer;
   transition: all var(--transition-fast);
 }
 
 .chatTopBarButton:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(118, 185, 1, 0.2);
+  border-color: rgba(118, 185, 1, 0.42);
 }
 
 .chatTopBarButton:active {
   transform: scale(0.96);
+}
+
+.clawViewToggle {
+  display: inline-flex;
+  border: 1px solid rgba(118, 185, 1, 0.28);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.clawViewButton {
+  border: none;
+  background: rgba(118, 185, 1, 0.08);
+  color: #a9c77f;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.52rem 0.72rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.clawViewButton:hover {
+  background: rgba(118, 185, 1, 0.18);
+  color: #d6ef9b;
+}
+
+.clawViewButtonActive {
+  background: rgba(118, 185, 1, 0.32);
+  color: #f0f8dd;
 }
 
 .sidebar {
@@ -764,9 +792,9 @@ body.playground-fullscreen .container {
   min-width: 96px;
   padding: 0 0.65rem;
   margin-right: 0.32rem;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--color-text-secondary);
+  border: 1px solid rgba(118, 185, 1, 0.26);
+  background: rgba(118, 185, 1, 0.08);
+  color: #a9c77f;
   border-radius: 999px;
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -774,9 +802,9 @@ body.playground-fullscreen .container {
 }
 
 .clawModeToggleButton:hover {
-  color: var(--color-text);
-  border-color: rgba(255, 255, 255, 0.26);
-  background: rgba(255, 255, 255, 0.08);
+  color: #d6ef9b;
+  border-color: rgba(118, 185, 1, 0.42);
+  background: rgba(118, 185, 1, 0.16);
 }
 
 .clawModeToggleButton:disabled {
@@ -785,21 +813,21 @@ body.playground-fullscreen .container {
 }
 
 .clawModeToggleButton:disabled:hover {
-  color: var(--color-text-secondary);
-  border-color: rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.03);
+  color: #a9c77f;
+  border-color: rgba(118, 185, 1, 0.26);
+  background: rgba(118, 185, 1, 0.08);
 }
 
 .clawModeToggleButton.clawToggleActive {
-  color: #fff;
-  background-color: rgba(239, 68, 68, 0.15);
-  border-color: rgba(239, 68, 68, 0.45);
+  color: #f0f8dd;
+  background-color: rgba(118, 185, 1, 0.3);
+  border-color: rgba(118, 185, 1, 0.5);
 }
 
 .clawModeToggleButton.clawToggleActive:hover {
-  color: #fff;
-  background-color: rgba(239, 68, 68, 0.24);
-  border-color: rgba(248, 113, 113, 0.6);
+  color: #f0f8dd;
+  background-color: rgba(118, 185, 1, 0.38);
+  border-color: rgba(118, 185, 1, 0.6);
 }
 
 .clawToggleIcon {
@@ -807,6 +835,7 @@ body.playground-fullscreen .container {
   height: 15px;
   object-fit: contain;
   display: inline-block;
+  filter: hue-rotate(65deg) saturate(180%) brightness(0.95);
 }
 
 .clawToggleLabel {

@@ -82,6 +82,7 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 			writeJSONError(w, "teamId is required; create/select a team before provisioning", http.StatusBadRequest)
 			return
 		}
+		req.RoleKind = normalizeRoleKind(req.RoleKind)
 		requestedPortExplicit := req.Container.GatewayPort != 0
 
 		if asyncRequested {
@@ -323,6 +324,7 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 				entries[i].AgentRole = strings.TrimSpace(req.Identity.Role)
 				entries[i].AgentVibe = strings.TrimSpace(req.Identity.Vibe)
 				entries[i].AgentPrinciples = strings.TrimSpace(req.Identity.Principles)
+				entries[i].RoleKind = req.RoleKind
 				found = true
 				break
 			}
@@ -342,11 +344,29 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 				AgentRole:       strings.TrimSpace(req.Identity.Role),
 				AgentVibe:       strings.TrimSpace(req.Identity.Vibe),
 				AgentPrinciples: strings.TrimSpace(req.Identity.Principles),
+				RoleKind:        req.RoleKind,
 			})
+		}
+		if req.RoleKind == "leader" {
+			for i := range entries {
+				if entries[i].TeamID == req.TeamID && entries[i].Name != req.Container.ContainerName {
+					entries[i].RoleKind = "worker"
+				}
+			}
+			for i := range teams {
+				if teams[i].ID == req.TeamID {
+					teams[i].LeaderID = req.Container.ContainerName
+					teams[i].UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+					break
+				}
+			}
 		}
 		sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
 		if err := h.saveRegistry(entries); err != nil {
 			log.Printf("openclaw: failed to save registry: %v", err)
+		}
+		if err := h.saveTeams(teams); err != nil {
+			log.Printf("openclaw: failed to save teams after provisioning: %v", err)
 		}
 		h.mu.Unlock()
 

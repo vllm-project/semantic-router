@@ -35,6 +35,7 @@ type ContainerEntry struct {
 	AgentRole       string `json:"agentRole,omitempty"`
 	AgentVibe       string `json:"agentVibe,omitempty"`
 	AgentPrinciples string `json:"agentPrinciples,omitempty"`
+	RoleKind        string `json:"roleKind,omitempty"`
 }
 
 type TeamEntry struct {
@@ -44,6 +45,7 @@ type TeamEntry struct {
 	Role        string `json:"role,omitempty"`
 	Principal   string `json:"principal,omitempty"`
 	Description string `json:"description,omitempty"`
+	LeaderID    string `json:"leaderId,omitempty"`
 	CreatedAt   string `json:"createdAt"`
 	UpdatedAt   string `json:"updatedAt"`
 }
@@ -53,6 +55,9 @@ type OpenClawHandler struct {
 	readOnly         bool
 	routerConfigPath string
 	mu               sync.RWMutex
+	roomSSEClients   sync.Map
+	roomSSELastEvent sync.Map
+	roomAutomationMu sync.Map
 }
 
 func NewOpenClawHandler(dataDir string, readOnly bool) *OpenClawHandler {
@@ -69,6 +74,14 @@ func (h *OpenClawHandler) registryPath() string {
 
 func (h *OpenClawHandler) teamsPath() string {
 	return filepath.Join(h.dataDir, "teams.json")
+}
+
+func (h *OpenClawHandler) roomsPath() string {
+	return filepath.Join(h.dataDir, "rooms.json")
+}
+
+func (h *OpenClawHandler) roomMessagesPath(roomID string) string {
+	return filepath.Join(h.dataDir, "room-messages", sanitizeRoomID(roomID)+".json")
 }
 
 func (h *OpenClawHandler) loadRegistry() ([]ContainerEntry, error) {
@@ -550,6 +563,7 @@ type ProvisionRequest struct {
 	Skills    []string        `json:"skills"`
 	Container ContainerConfig `json:"container"`
 	TeamID    string          `json:"teamId"`
+	RoleKind  string          `json:"roleKind,omitempty"`
 }
 
 type ProvisionResponse struct {
@@ -578,6 +592,7 @@ type OpenClawStatus struct {
 	AgentRole       string `json:"agentRole,omitempty"`
 	AgentVibe       string `json:"agentVibe,omitempty"`
 	AgentPrinciples string `json:"agentPrinciples,omitempty"`
+	RoleKind        string `json:"roleKind,omitempty"`
 }
 
 type identitySnapshot struct {
