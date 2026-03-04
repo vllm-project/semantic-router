@@ -188,7 +188,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install official AMD ORT wheel for ROCm 7.0 (not the third-party PyPI package)
 RUN pip3 install --no-cache-dir \
     https://repo.radeon.com/rocm/manylinux/rocm-rel-7.0/onnxruntime_rocm-1.22.1-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl \
-    huggingface_hub[cli] && \
+    'huggingface_hub[cli]==1.5.0' && \
     ORT_DIR=/usr/local/lib/python3.10/dist-packages/onnxruntime/capi && \
     ln -sf "$ORT_DIR"/libonnxruntime.so.* "$ORT_DIR/libonnxruntime.so"
 

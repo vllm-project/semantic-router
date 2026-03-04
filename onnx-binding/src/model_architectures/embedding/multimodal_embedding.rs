@@ -296,14 +296,15 @@ impl MultiModalEmbeddingModel {
     }
 
     fn maybe_truncate(&self, emb: Array1<f32>, target_dim: Option<usize>) -> UnifiedResult<Array1<f32>> {
-        let dim = target_dim.unwrap_or(0);
-        if dim > 0 && dim < emb.len() {
-            let truncated = emb.slice(ndarray::s![..dim]).to_owned();
-            let norm: f32 = truncated.iter().map(|x| x * x).sum::<f32>().sqrt();
-            let norm_safe = if norm > 1e-12 { norm } else { 1e-12 };
-            Ok(truncated.mapv(|x| x / norm_safe))
-        } else {
-            Ok(emb)
+        let norm: f32 = emb.iter().map(|x| x * x).sum::<f32>().sqrt();
+        let norm_safe = if norm > 1e-12 { norm } else { 1e-12 };
+        let normalized = emb.mapv(|x| x / norm_safe);
+
+        if let Some(dim) = target_dim {
+            if dim > 0 && dim < normalized.len() {
+                return Ok(normalized.slice(ndarray::s![..dim]).to_owned());
+            }
         }
+        Ok(normalized)
     }
 }

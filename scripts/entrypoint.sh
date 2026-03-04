@@ -26,6 +26,11 @@ if [[ ! -f "$BINARY" ]]; then
   echo "[entrypoint] Binary not found: $BINARY (AI_BINDING=$AI_BINDING)" >&2
   echo "[entrypoint] Falling back to candle binding..." >&2
   BINARY=/app/router-candle
+  AI_BINDING=candle
+  if [[ ! -f "$BINARY" ]]; then
+    echo "[entrypoint] Fallback binary also not found: $BINARY" >&2
+    exit 1
+  fi
 fi
 
 echo "[entrypoint] Starting semantic-router with AI_BINDING=$AI_BINDING"

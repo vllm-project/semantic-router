@@ -152,6 +152,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 	"unsafe"
 )
 
@@ -1028,6 +1029,9 @@ func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutpu
 	if status != 0 || result.error {
 		return nil, errors.New("multi-modal text encoding failed")
 	}
+	if result.data == nil || result.length <= 0 {
+		return nil, errors.New("multi-modal text encoding returned empty result")
+	}
 	defer C.free_multimodal_embedding(result.data, result.length)
 
 	emb := make([]float32, int(result.length))
@@ -1059,6 +1063,9 @@ func MultiModalEncodeImage(pixelData []float32, height, width, targetDim int) (*
 	if status != 0 || result.error {
 		return nil, errors.New("multi-modal image encoding failed")
 	}
+	if result.data == nil || result.length <= 0 {
+		return nil, errors.New("multi-modal image encoding returned empty result")
+	}
 	defer C.free_multimodal_embedding(result.data, result.length)
 
 	emb := make([]float32, int(result.length))
@@ -1085,6 +1092,9 @@ func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) 
 	)
 	if status != 0 || result.error {
 		return nil, errors.New("multi-modal audio encoding failed")
+	}
+	if result.data == nil || result.length <= 0 {
+		return nil, errors.New("multi-modal audio encoding returned empty result")
 	}
 	defer C.free_multimodal_embedding(result.data, result.length)
 
@@ -1129,15 +1139,24 @@ func MultiModalEncodeImageFromBase64(base64Str string, targetDim int) (*MultiMod
 }
 
 // MultiModalEncodeImageFromURL downloads an image from a URL and encodes it.
+// Only https URLs are allowed to mitigate SSRF risks.
 func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddingOutput, error) {
 	if url == "" {
 		return nil, errors.New("url cannot be empty")
 	}
-	resp, err := http.Get(url)
+	if !strings.HasPrefix(url, "https://") {
+		return nil, errors.New("only https URLs are allowed")
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP GET error: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP GET returned status %d", resp.StatusCode)
+	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 50*1024*1024))
 	if err != nil {
 		return nil, fmt.Errorf("read body error: %w", err)
