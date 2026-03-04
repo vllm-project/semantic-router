@@ -60,6 +60,8 @@ type clawRoomStreamEvent struct {
 
 var roomMentionPattern = regexp.MustCompile(`@([a-zA-Z0-9_.-]+)`)
 
+const roomAutomationProcessedAtKey = "automationProcessedAt"
+
 func (h *OpenClawHandler) loadRooms() ([]ClawRoomEntry, error) {
 	data, err := os.ReadFile(h.roomsPath())
 	if err != nil {
@@ -601,19 +603,21 @@ func (h *OpenClawHandler) ensureWorkerChatEndpoint(worker ContainerEntry) (bool,
 	changed := false
 	changed = enableGatewayEndpoint(cfg, "chatCompletions") || changed
 	changed = enableGatewayEndpoint(cfg, "responses") || changed
-	if !changed {
-		return false, nil
+	if changed {
+		updated, err := json.MarshalIndent(cfg, "", "  ")
+		if err != nil {
+			return false, fmt.Errorf("failed to marshal worker config update: %w", err)
+		}
+		if err := os.WriteFile(configPath, updated, 0o644); err != nil {
+			return false, fmt.Errorf("failed to persist worker config update: %w", err)
+		}
 	}
 
-	updated, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return false, fmt.Errorf("failed to marshal worker config update: %w", err)
-	}
-	if err := os.WriteFile(configPath, updated, 0o644); err != nil {
-		return false, fmt.Errorf("failed to persist worker config update: %w", err)
-	}
 	if _, err := h.containerCombinedOutput("restart", worker.Name); err != nil {
-		return false, fmt.Errorf("worker restart failed after endpoint update: %w", err)
+		if changed {
+			return false, fmt.Errorf("worker restart failed after endpoint update: %w", err)
+		}
+		return false, fmt.Errorf("worker restart failed during endpoint recovery: %w", err)
 	}
 
 	deadline := time.Now().Add(20 * time.Second)
@@ -650,7 +654,7 @@ func (h *OpenClawHandler) queryWorkerChatEndpoint(
 		req.Header.Set("X-OpenClaw-Token", token)
 	}
 
-	client := &http.Client{Timeout: 45 * time.Second}
+	client := &http.Client{Timeout: 60 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", 0, "", err
@@ -701,14 +705,15 @@ func (h *OpenClawHandler) queryWorkerChat(worker ContainerEntry, systemPrompt, u
 	}
 
 	attempt := func() (string, bool, error) {
-		allNotFound := true
+		allEndpointMissing := true
 		var lastErr error
 		for _, endpoint := range workerChatEndpointCandidates {
 			content, statusCode, body, err := h.queryWorkerChatEndpoint(targetBase, endpoint, token, payload)
 			if err == nil {
 				return content, false, nil
 			}
-			allNotFound = allNotFound && statusCode == http.StatusNotFound
+			// 404/405 both indicate the chat API endpoint is not active/available on the gateway.
+			allEndpointMissing = allEndpointMissing && (statusCode == http.StatusNotFound || statusCode == http.StatusMethodNotAllowed)
 
 			detail := strings.TrimSpace(body)
 			if detail == "" {
@@ -719,24 +724,24 @@ func (h *OpenClawHandler) queryWorkerChat(worker ContainerEntry, systemPrompt, u
 		if lastErr == nil {
 			lastErr = fmt.Errorf("worker chat request failed for all candidate endpoints")
 		}
-		return "", allNotFound, lastErr
+		return "", allEndpointMissing, lastErr
 	}
 
-	content, allNotFound, err := attempt()
+	content, allEndpointMissing, err := attempt()
 	if err == nil {
 		return content, nil
 	}
-	if !allNotFound {
+	if !allEndpointMissing {
 		return "", err
 	}
 
-	enabled, ensureErr := h.ensureWorkerChatEndpoint(worker)
+	recovered, ensureErr := h.ensureWorkerChatEndpoint(worker)
 	if ensureErr != nil {
 		return "", fmt.Errorf("%v; automatic endpoint repair failed: %w", err, ensureErr)
 	}
-	if !enabled {
+	if !recovered {
 		return "", fmt.Errorf(
-			"%v; worker endpoint appears disabled. ensure gateway.http.endpoints.chatCompletions.enabled=true in %s",
+			"%v; worker endpoint recovery skipped (read-only mode). ensure gateway.http.endpoints.chatCompletions.enabled=true in %s",
 			err,
 			h.workerConfigPath(worker),
 		)
@@ -844,6 +849,44 @@ func (h *OpenClawHandler) roomAutomationLock(roomID string) *sync.Mutex {
 	return actual.(*sync.Mutex)
 }
 
+func roomMessageAutomationProcessed(message ClawRoomMessage) bool {
+	if message.Metadata == nil {
+		return false
+	}
+	return strings.TrimSpace(message.Metadata[roomAutomationProcessedAtKey]) != ""
+}
+
+func (h *OpenClawHandler) markRoomMessageAutomationProcessed(roomID, messageID string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	messages, err := h.loadRoomMessages(roomID)
+	if err != nil {
+		return err
+	}
+
+	changed := false
+	for i := range messages {
+		if messages[i].ID != messageID {
+			continue
+		}
+		if roomMessageAutomationProcessed(messages[i]) {
+			return nil
+		}
+		if messages[i].Metadata == nil {
+			messages[i].Metadata = map[string]string{}
+		}
+		messages[i].Metadata[roomAutomationProcessedAtKey] = time.Now().UTC().Format(time.RFC3339Nano)
+		changed = true
+		break
+	}
+
+	if !changed {
+		return nil
+	}
+	return h.saveRoomMessages(roomID, messages)
+}
+
 func (h *OpenClawHandler) processRoomUserMessage(roomID string, triggerMessageID string) {
 	lock := h.roomAutomationLock(roomID)
 	lock.Lock()
@@ -906,6 +949,12 @@ func (h *OpenClawHandler) processRoomUserMessage(roomID string, triggerMessageID
 		if senderType == "system" {
 			continue
 		}
+		if roomMessageAutomationProcessed(trigger) {
+			continue
+		}
+		if err := h.markRoomMessageAutomationProcessed(roomID, trigger.ID); err != nil {
+			log.Printf("openclaw: failed to mark room message as processed room=%s message=%s err=%v", roomID, trigger.ID, err)
+		}
 
 		workers := teamWorkers(entries, team.ID)
 		targets := resolveMentionTargetsWithFallback(trigger.Mentions, *team, workers, senderType == "user")
@@ -914,18 +963,43 @@ func (h *OpenClawHandler) processRoomUserMessage(roomID string, triggerMessageID
 		}
 
 		triggerSenderID := sanitizeContainerName(trigger.SenderID)
+		type targetReplyResult struct {
+			target ContainerEntry
+			reply  ClawRoomMessage
+			err    error
+		}
+
+		results := make(chan targetReplyResult, len(targets))
+		expected := 0
+		snapshotMessages := append([]ClawRoomMessage(nil), messages...)
 		for _, target := range targets {
 			if triggerSenderID != "" && target.Name == triggerSenderID {
 				continue
 			}
+			expected++
 
 			var delegatedBy *ClawRoomMessage
 			if senderType == "leader" || senderType == "worker" {
 				triggerCopy := trigger
 				delegatedBy = &triggerCopy
 			}
+			targetCopy := target
+			delegatedByCopy := delegatedBy
+			go func() {
+				reply, err := h.runWorkerReply(*room, *team, workers, targetCopy, snapshotMessages, trigger, delegatedByCopy)
+				results <- targetReplyResult{
+					target: targetCopy,
+					reply:  reply,
+					err:    err,
+				}
+			}()
+		}
 
-			reply, err := h.runWorkerReply(*room, *team, workers, target, messages, trigger, delegatedBy)
+		for i := 0; i < expected; i++ {
+			result := <-results
+			target := result.target
+			reply := result.reply
+			err := result.err
 			if err != nil {
 				errMsg := newRoomMessage(
 					*room,

@@ -1174,6 +1174,211 @@ func TestProcessRoomUserMessage_SimultaneousMentionsContinueChain(t *testing.T) 
 	}
 }
 
+func TestProcessRoomUserMessage_DuplicateTriggerDoesNotReprocess(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewOpenClawHandler(tempDir, false)
+
+	var (
+		callsMu    sync.Mutex
+		workerCall int
+	)
+
+	workerSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("unexpected worker path: %s", r.URL.Path)
+		}
+		callsMu.Lock()
+		workerCall++
+		callsMu.Unlock()
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{
+					"message": map[string]any{
+						"content": "Done.",
+					},
+				},
+			},
+		})
+	}))
+	defer workerSrv.Close()
+
+	team := TeamEntry{
+		ID:        "team-dedup",
+		Name:      "Dedup Team",
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := h.saveTeams([]TeamEntry{team}); err != nil {
+		t.Fatalf("failed to seed team: %v", err)
+	}
+	if err := h.saveRegistry([]ContainerEntry{
+		{
+			Name:     "worker-a",
+			Port:     mustServerPort(t, workerSrv.URL),
+			Image:    "ghcr.io/openclaw/openclaw:latest",
+			Token:    "token-worker-a",
+			DataDir:  tempDir,
+			TeamID:   team.ID,
+			RoleKind: "worker",
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed worker: %v", err)
+	}
+
+	h.mu.Lock()
+	room, err := h.ensureDefaultRoomLocked(team)
+	h.mu.Unlock()
+	if err != nil {
+		t.Fatalf("failed to ensure room: %v", err)
+	}
+
+	trigger := newRoomMessage(room, "user", "user-1", "You", "@worker-a run once", nil)
+	if err := h.appendRoomMessage(room.ID, trigger); err != nil {
+		t.Fatalf("failed to append trigger message: %v", err)
+	}
+
+	h.processRoomUserMessage(room.ID, trigger.ID)
+	h.processRoomUserMessage(room.ID, trigger.ID)
+
+	callsMu.Lock()
+	gotCalls := workerCall
+	callsMu.Unlock()
+	if gotCalls != 1 {
+		t.Fatalf("expected worker to be called once for duplicate trigger id, got %d", gotCalls)
+	}
+
+	messages, err := h.loadRoomMessages(room.ID)
+	if err != nil {
+		t.Fatalf("failed to load room messages: %v", err)
+	}
+	var triggerStored *ClawRoomMessage
+	for i := range messages {
+		if messages[i].ID == trigger.ID {
+			triggerStored = &messages[i]
+			break
+		}
+	}
+	if triggerStored == nil {
+		t.Fatalf("trigger message not found in room history")
+	}
+	if triggerStored.Metadata == nil || strings.TrimSpace(triggerStored.Metadata[roomAutomationProcessedAtKey]) == "" {
+		t.Fatalf("trigger message should be marked as processed, got metadata: %+v", triggerStored.Metadata)
+	}
+}
+
+func TestProcessRoomUserMessage_MultiMentionsDispatchInParallel(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewOpenClawHandler(tempDir, false)
+
+	var (
+		startMu sync.Mutex
+		startA  time.Time
+		startB  time.Time
+	)
+
+	workerASrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("unexpected worker-a path: %s", r.URL.Path)
+		}
+		startMu.Lock()
+		startA = time.Now()
+		startMu.Unlock()
+
+		time.Sleep(300 * time.Millisecond)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{
+					"message": map[string]any{
+						"content": "worker-a done",
+					},
+				},
+			},
+		})
+	}))
+	defer workerASrv.Close()
+
+	workerBSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("unexpected worker-b path: %s", r.URL.Path)
+		}
+		startMu.Lock()
+		startB = time.Now()
+		startMu.Unlock()
+
+		time.Sleep(300 * time.Millisecond)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{
+					"message": map[string]any{
+						"content": "worker-b done",
+					},
+				},
+			},
+		})
+	}))
+	defer workerBSrv.Close()
+
+	team := TeamEntry{
+		ID:        "team-parallel",
+		Name:      "Parallel Team",
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := h.saveTeams([]TeamEntry{team}); err != nil {
+		t.Fatalf("failed to seed team: %v", err)
+	}
+	if err := h.saveRegistry([]ContainerEntry{
+		{
+			Name:     "worker-a",
+			Port:     mustServerPort(t, workerASrv.URL),
+			Image:    "ghcr.io/openclaw/openclaw:latest",
+			Token:    "token-a",
+			DataDir:  tempDir,
+			TeamID:   team.ID,
+			RoleKind: "worker",
+		},
+		{
+			Name:     "worker-b",
+			Port:     mustServerPort(t, workerBSrv.URL),
+			Image:    "ghcr.io/openclaw/openclaw:latest",
+			Token:    "token-b",
+			DataDir:  tempDir,
+			TeamID:   team.ID,
+			RoleKind: "worker",
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed workers: %v", err)
+	}
+
+	h.mu.Lock()
+	room, err := h.ensureDefaultRoomLocked(team)
+	h.mu.Unlock()
+	if err != nil {
+		t.Fatalf("failed to ensure room: %v", err)
+	}
+
+	userMessage := newRoomMessage(room, "user", "user-1", "You", "@worker-a @worker-b please run in parallel", nil)
+	if err := h.appendRoomMessage(room.ID, userMessage); err != nil {
+		t.Fatalf("failed to append user message: %v", err)
+	}
+
+	h.processRoomUserMessage(room.ID, userMessage.ID)
+
+	startMu.Lock()
+	defer startMu.Unlock()
+	if startA.IsZero() || startB.IsZero() {
+		t.Fatalf("expected both worker requests to be started, got startA=%v startB=%v", startA, startB)
+	}
+	diff := startA.Sub(startB)
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff > 220*time.Millisecond {
+		t.Fatalf("expected worker requests to start nearly together for parallel dispatch, diff=%s", diff)
+	}
+}
+
 func TestRoomMessagesPost_LeaderSenderTypeTriggersAutomation(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewOpenClawHandler(tempDir, false)
