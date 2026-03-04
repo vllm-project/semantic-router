@@ -654,7 +654,7 @@ func (h *OpenClawHandler) queryWorkerChatEndpoint(
 		req.Header.Set("X-OpenClaw-Token", token)
 	}
 
-	client := &http.Client{Timeout: 60 * time.Second}
+	client := &http.Client{Timeout: 300 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", 0, "", err
