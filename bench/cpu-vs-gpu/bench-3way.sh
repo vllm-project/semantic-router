@@ -94,10 +94,10 @@ start_router() {
 
     eval docker run -d --name "$SR_CONTAINER" \
         --network host \
-        $gpu_flags \
-        -e AI_BINDING=$ai_binding \
+        "$gpu_flags" \
+        -e AI_BINDING="$ai_binding" \
         -v "$config_file:/app/config/config.yaml:ro" \
-        $model_mounts \
+        "$model_mounts" \
         "$image"
 
     log "Waiting for SR to be ready..."
