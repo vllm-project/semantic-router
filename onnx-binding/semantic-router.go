@@ -1168,4 +1168,3 @@ func decodeAndResizeImageOnnx(data []byte, targetW, targetH int) ([]float32, err
 	}
 	return pixels, nil
 }
-
