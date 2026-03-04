@@ -961,10 +961,6 @@ func (h *OpenClawHandler) processRoomUserMessage(roomID string, triggerMessageID
 			// Hard policy: worker mentions are non-routable.
 			continue
 		}
-		if senderType == "leader" && !latestUserTaskIsExplicit(messages, triggerIndex) {
-			// Hard policy: leader cannot delegate until an explicit user task exists.
-			continue
-		}
 
 		workers := teamWorkers(entries, team.ID)
 		targets := resolveMentionTargetsWithFallback(trigger.Mentions, *team, workers, senderType == "user")
