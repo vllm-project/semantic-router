@@ -1139,7 +1139,9 @@ func MultiModalEncodeImageFromBase64(base64Str string, targetDim int) (*MultiMod
 }
 
 // MultiModalEncodeImageFromURL downloads an image from a URL and encodes it.
-// Only https URLs are allowed to mitigate SSRF risks.
+// This helper is intended for trusted, operator-supplied URLs only. It enforces
+// https-only and disables redirects, but does not perform full SSRF mitigation
+// (e.g., private IP blocking). Do not use with untrusted user input.
 func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddingOutput, error) {
 	if url == "" {
 		return nil, errors.New("url cannot be empty")
@@ -1148,7 +1150,12 @@ func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddi
 		return nil, errors.New("only https URLs are allowed")
 	}
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 	resp, err := client.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP GET error: %w", err)

@@ -9,6 +9,8 @@ DOCKER_REGISTRY ?= ghcr.io/vllm-project/semantic-router
 DOCKER_TAG ?= latest
 
 # Build all Docker images
+# Note: extproc-rocm is excluded because it requires x86_64 + ROCm hardware.
+# Build it explicitly with: make docker-build-extproc-rocm
 docker-build-all: ## Build all Docker images
 docker-build-all: docker-build-extproc docker-build-llm-katan docker-build-dashboard docker-build-precommit
 
@@ -87,7 +89,8 @@ docker-clean:
 	@echo "Docker cleanup completed"
 
 # Push Docker images (for CI/CD)
-docker-push-all: ## Build all Docker images
+# Note: extproc-rocm is excluded; push it explicitly with: make docker-push-extproc-rocm
+docker-push-all: ## Push all Docker images
 docker-push-all: docker-push-extproc docker-push-llm-katan
 	@$(LOG_TARGET)
 	@echo "All Docker images pushed successfully"

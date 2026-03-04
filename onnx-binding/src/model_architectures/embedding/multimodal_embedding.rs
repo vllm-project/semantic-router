@@ -135,7 +135,22 @@ impl MultiModalEmbeddingModel {
                 .map_err(|e| errors::model_load(&path_str, &e.to_string()));
         }
 
-        #[cfg(any(feature = "rocm", feature = "migraphx"))]
+        #[cfg(feature = "migraphx")]
+        {
+            use ort::execution_providers::MIGraphXExecutionProvider;
+            match Session::builder()
+                .map_err(|e| errors::ort_error(&e.to_string()))
+                .and_then(|b| b.with_execution_providers([MIGraphXExecutionProvider::default().with_fp16(true).build().error_on_failure()])
+                    .map_err(|e| errors::ort_error(&e.to_string())))
+                .and_then(|b| b.commit_from_file(onnx_path.as_ref())
+                    .map_err(|e| errors::model_load(&path_str, &e.to_string())))
+            {
+                Ok(s) => return Ok(s),
+                Err(e) => println!("WARN: MIGraphX EP failed: {}", e),
+            }
+        }
+
+        #[cfg(feature = "rocm")]
         {
             use ort::execution_providers::ROCmExecutionProvider;
             match Session::builder()

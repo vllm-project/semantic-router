@@ -64,24 +64,29 @@ start_router() {
 
     docker rm -f "$SR_CONTAINER" 2>/dev/null || true
 
-    local gpu_flags="" ai_binding="onnx"
-    local model_mounts=""
+    local ai_binding="onnx"
+    local -a gpu_flags=()
+    local -a model_mounts=()
 
     case "$mode" in
         onnx-gpu)
-            gpu_flags="--device=/dev/kfd --device=/dev/dri --group-add video --security-opt seccomp=unconfined"
-            model_mounts="-v $MODELS_DIR/mmbert32k-intent-classifier-merged-onnx:/app/models/mmbert32k-intent-classifier-merged-onnx \
-                          -v $MODELS_DIR/mmbert32k-jailbreak-detector-merged-onnx:/app/models/mmbert32k-jailbreak-detector-merged-onnx \
-                          -v $MODELS_DIR/mmbert32k-pii-detector-merged-onnx:/app/models/mmbert32k-pii-detector-merged-onnx"
+            gpu_flags=(--device=/dev/kfd --device=/dev/dri --group-add video --security-opt seccomp=unconfined)
+            model_mounts=(
+                -v "$MODELS_DIR/mmbert32k-intent-classifier-merged-onnx:/app/models/mmbert32k-intent-classifier-merged-onnx"
+                -v "$MODELS_DIR/mmbert32k-jailbreak-detector-merged-onnx:/app/models/mmbert32k-jailbreak-detector-merged-onnx"
+                -v "$MODELS_DIR/mmbert32k-pii-detector-merged-onnx:/app/models/mmbert32k-pii-detector-merged-onnx"
+            )
             ;;
         onnx-cpu)
-            model_mounts="-v $MODELS_DIR/mmbert32k-intent-classifier-merged-onnx:/app/models/mmbert32k-intent-classifier-merged-onnx \
-                          -v $MODELS_DIR/mmbert32k-jailbreak-detector-merged-onnx:/app/models/mmbert32k-jailbreak-detector-merged-onnx \
-                          -v $MODELS_DIR/mmbert32k-pii-detector-merged-onnx:/app/models/mmbert32k-pii-detector-merged-onnx"
+            model_mounts=(
+                -v "$MODELS_DIR/mmbert32k-intent-classifier-merged-onnx:/app/models/mmbert32k-intent-classifier-merged-onnx"
+                -v "$MODELS_DIR/mmbert32k-jailbreak-detector-merged-onnx:/app/models/mmbert32k-jailbreak-detector-merged-onnx"
+                -v "$MODELS_DIR/mmbert32k-pii-detector-merged-onnx:/app/models/mmbert32k-pii-detector-merged-onnx"
+            )
             ;;
         candle-cpu)
             ai_binding="candle"
-            model_mounts="-v $MODELS_DIR/candle:/app/models:rw"
+            model_mounts=(-v "$MODELS_DIR/candle:/app/models:rw")
             ;;
     esac
 
@@ -92,12 +97,12 @@ start_router() {
 
     log "Starting SR: mode=$mode, binding=$ai_binding, image=$image"
 
-    eval docker run -d --name "$SR_CONTAINER" \
+    docker run -d --name "$SR_CONTAINER" \
         --network host \
-        "$gpu_flags" \
+        "${gpu_flags[@]}" \
         -e AI_BINDING="$ai_binding" \
         -v "$config_file:/app/config/config.yaml:ro" \
-        "$model_mounts" \
+        "${model_mounts[@]}" \
         "$image"
 
     log "Waiting for SR to be ready..."

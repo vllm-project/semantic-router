@@ -5,11 +5,10 @@
 
 use crate::ffi::types::MultiModalEmbeddingResult;
 use crate::model_architectures::embedding::multimodal_embedding::MultiModalEmbeddingModel;
-use parking_lot::Mutex;
 use std::ffi::{c_char, CStr};
 use std::sync::OnceLock;
 
-static GLOBAL_MULTIMODAL: OnceLock<Mutex<MultiModalEmbeddingModel>> = OnceLock::new();
+static GLOBAL_MULTIMODAL: OnceLock<MultiModalEmbeddingModel> = OnceLock::new();
 
 /// Initialize multi-modal embedding model.
 ///
@@ -34,7 +33,13 @@ pub extern "C" fn init_multimodal_embedding_model(model_path: *const c_char, use
     }
     match MultiModalEmbeddingModel::load(&path, use_cpu) {
         Ok(model) => {
-            GLOBAL_MULTIMODAL.set(Mutex::new(model)).is_ok()
+            match GLOBAL_MULTIMODAL.set(model) {
+                Ok(()) => true,
+                Err(_) => {
+                    eprintln!("WARNING: multi-modal model already initialized by another thread");
+                    true
+                }
+            }
         }
         Err(e) => {
             eprintln!("ERROR: Failed to load multi-modal model: {:?}", e);
@@ -55,15 +60,15 @@ pub extern "C" fn multimodal_encode_text(
     let res = unsafe { &mut *result };
     *res = MultiModalEmbeddingResult::default();
 
-    let model_guard = match GLOBAL_MULTIMODAL.get() {
-        Some(m) => m.lock(),
+    let model = match GLOBAL_MULTIMODAL.get() {
+        Some(m) => m,
         None => { eprintln!("Error: multi-modal model not initialized"); return -1; }
     };
 
     let start = std::time::Instant::now();
     let dim = if target_dim > 0 { Some(target_dim as usize) } else { None };
 
-    match model_guard.encode_text(text_str, dim) {
+    match model.encode_text(text_str, dim) {
         Ok(emb) => {
             let len = emb.len();
             let mut data = emb.to_vec().into_boxed_slice();
@@ -97,20 +102,32 @@ pub extern "C" fn multimodal_encode_image(
     let res = unsafe { &mut *result };
     *res = MultiModalEmbeddingResult::default();
 
+    if height <= 0 || width <= 0 {
+        eprintln!("Error: invalid image dimensions: height={}, width={}", height, width);
+        res.error = true;
+        return -1;
+    }
     let h = height as usize;
     let w = width as usize;
-    let len = 3 * h * w;
+    let len = match 3usize.checked_mul(h).and_then(|v| v.checked_mul(w)) {
+        Some(l) => l,
+        None => {
+            eprintln!("Error: image size overflow for height={}, width={}", height, width);
+            res.error = true;
+            return -1;
+        }
+    };
     let pixels = unsafe { std::slice::from_raw_parts(pixel_data, len) };
 
-    let model_guard = match GLOBAL_MULTIMODAL.get() {
-        Some(m) => m.lock(),
+    let model = match GLOBAL_MULTIMODAL.get() {
+        Some(m) => m,
         None => { eprintln!("Error: multi-modal model not initialized"); return -1; }
     };
 
     let start = std::time::Instant::now();
     let dim = if target_dim > 0 { Some(target_dim as usize) } else { None };
 
-    match model_guard.encode_image(pixels, h, w, dim) {
+    match model.encode_image(pixels, h, w, dim) {
         Ok(emb) => {
             let elen = emb.len();
             let mut data = emb.to_vec().into_boxed_slice();
@@ -144,20 +161,32 @@ pub extern "C" fn multimodal_encode_audio(
     let res = unsafe { &mut *result };
     *res = MultiModalEmbeddingResult::default();
 
+    if n_mels <= 0 || time_frames <= 0 {
+        eprintln!("Error: n_mels and time_frames must be > 0 (got n_mels={}, time_frames={})", n_mels, time_frames);
+        res.error = true;
+        return -1;
+    }
     let nm = n_mels as usize;
     let tf = time_frames as usize;
-    let len = nm * tf;
+    let len = match nm.checked_mul(tf) {
+        Some(l) => l,
+        None => {
+            eprintln!("Error: overflow computing mel spectrogram length (n_mels={}, time_frames={})", n_mels, time_frames);
+            res.error = true;
+            return -1;
+        }
+    };
     let mel = unsafe { std::slice::from_raw_parts(mel_data, len) };
 
-    let model_guard = match GLOBAL_MULTIMODAL.get() {
-        Some(m) => m.lock(),
+    let model = match GLOBAL_MULTIMODAL.get() {
+        Some(m) => m,
         None => { eprintln!("Error: multi-modal model not initialized"); return -1; }
     };
 
     let start = std::time::Instant::now();
     let dim = if target_dim > 0 { Some(target_dim as usize) } else { None };
 
-    match model_guard.encode_audio(mel, nm, tf, dim) {
+    match model.encode_audio(mel, nm, tf, dim) {
         Ok(emb) => {
             let elen = emb.len();
             let mut data = emb.to_vec().into_boxed_slice();
