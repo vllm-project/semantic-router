@@ -167,6 +167,8 @@ func (p *Profile) GetTestCases() []string {
 		"response-api-error-nonexistent-response-id-delete",
 		"response-api-error-backend-passthrough",
 
+		// Memory user isolation
+		"memory-user-isolation",
 		// Response API edge cases
 		"response-api-edge-empty-input",
 		"response-api-edge-large-input",
