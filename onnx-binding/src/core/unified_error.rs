@@ -145,4 +145,12 @@ pub mod errors {
             source: source.to_string(),
         }
     }
+
+    pub fn validation(field: &str, expected: &str, actual: &str) -> UnifiedError {
+        UnifiedError::Validation {
+            field: field.to_string(),
+            expected: expected.to_string(),
+            actual: actual.to_string(),
+        }
+    }
 }

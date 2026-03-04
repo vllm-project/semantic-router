@@ -324,69 +324,58 @@ impl MmBertEmbeddingModel {
                 .commit_from_file(onnx_path.as_ref())
                 .map_err(|e: ort::Error| errors::model_load(&onnx_path_str, &e.to_string()))?
         } else {
-            // Try ROCm first (primary AMD GPU provider in onnxruntime-rocm)
             #[cfg(any(feature = "rocm", feature = "migraphx"))]
             {
                 use ort::execution_providers::ROCmExecutionProvider;
                 println!("INFO: Attempting ROCm execution provider...");
-                let result = Session::builder()
+                match Session::builder()
                     .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
-                    .with_execution_providers([ROCmExecutionProvider::default().build()])
-                    .map_err(|e: ort::Error| {
-                        println!("WARN: ROCm EP registration error: {}", e);
-                        errors::ort_error(&e.to_string())
-                    })?
-                    .commit_from_file(onnx_path.as_ref())
-                    .map_err(|e: ort::Error| errors::model_load(&onnx_path_str, &e.to_string()));
-
-                if let Ok(session) = result {
-                    println!("INFO: Using ROCm execution provider (AMD GPU)");
-                    return Ok(session);
-                } else {
-                    println!("WARN: ROCm session failed, trying MIGraphX...");
+                    .with_execution_providers([ROCmExecutionProvider::default().build().error_on_failure()])
+                    .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
+                {
+                    Ok(session) => {
+                        println!("INFO: Using ROCm execution provider (AMD GPU) — verified");
+                        return Ok(session);
+                    }
+                    Err(e) => println!("WARN: ROCm EP failed: {}", e),
                 }
             }
 
-            // Try MIGraphX as alternative
             #[cfg(feature = "migraphx")]
             {
                 use ort::execution_providers::MIGraphXExecutionProvider;
                 println!("INFO: Attempting MIGraphX execution provider...");
-                let result = Session::builder()
+                match Session::builder()
                     .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
                     .with_execution_providers([
                         MIGraphXExecutionProvider::default()
                             .with_fp16(true)
                             .build()
+                            .error_on_failure()
                     ])
-                    .map_err(|e: ort::Error| {
-                        println!("WARN: MIGraphX EP registration error: {}", e);
-                        errors::ort_error(&e.to_string())
-                    })?
-                    .commit_from_file(onnx_path.as_ref())
-                    .map_err(|e: ort::Error| errors::model_load(&onnx_path_str, &e.to_string()));
-
-                if let Ok(session) = result {
-                    println!("INFO: Using MIGraphX execution provider (AMD GPU - FAST)");
-                    return Ok(session);
-                } else {
-                    println!("WARN: MIGraphX failed, trying fallback...");
+                    .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
+                {
+                    Ok(session) => {
+                        println!("INFO: Using MIGraphX execution provider (AMD GPU) — verified");
+                        return Ok(session);
+                    }
+                    Err(e) => println!("WARN: MIGraphX EP failed: {}", e),
                 }
             }
 
             #[cfg(feature = "cuda")]
             {
                 use ort::execution_providers::CUDAExecutionProvider;
-                let result = Session::builder()
+                match Session::builder()
                     .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
-                    .with_execution_providers([CUDAExecutionProvider::default().build()])
-                    .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
-                    .commit_from_file(onnx_path.as_ref())
-                    .map_err(|e: ort::Error| errors::model_load(&onnx_path_str, &e.to_string()));
-
-                if let Ok(session) = result {
-                    println!("INFO: Using CUDA execution provider (NVIDIA GPU)");
-                    return Ok(session);
+                    .with_execution_providers([CUDAExecutionProvider::default().build().error_on_failure()])
+                    .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
+                {
+                    Ok(session) => {
+                        println!("INFO: Using CUDA execution provider (NVIDIA GPU) — verified");
+                        return Ok(session);
+                    }
+                    Err(e) => println!("WARN: CUDA EP failed: {}", e),
                 }
             }
 

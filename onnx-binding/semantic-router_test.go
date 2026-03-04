@@ -812,7 +812,7 @@ func TestClassificationStubs(t *testing.T) {
 	})
 
 	t.Run("ClassifyMmBert32KPII", func(t *testing.T) {
-		entities, err := ClassifyMmBert32KPII("My SSN is 123-45-6789", "")
+		entities, err := ClassifyMmBert32KPII("My SSN is 123-45-6789")
 		if err == nil {
 			t.Logf("Unexpected success: %d entities", len(entities))
 		}

@@ -143,6 +143,33 @@ pub struct MatryoshkaInfo {
     pub supports_2d: bool,
 }
 
+/// Multi-modal embedding result structure for FFI
+#[repr(C)]
+pub struct MultiModalEmbeddingResult {
+    /// Pointer to embedding data (array of f32)
+    pub data: *mut f32,
+    /// Length of the embedding vector
+    pub length: i32,
+    /// Whether an error occurred
+    pub error: bool,
+    /// Modality: 0=text, 1=image, 2=audio
+    pub modality: i32,
+    /// Processing time in milliseconds
+    pub processing_time_ms: f32,
+}
+
+impl Default for MultiModalEmbeddingResult {
+    fn default() -> Self {
+        Self {
+            data: std::ptr::null_mut(),
+            length: 0,
+            error: true,
+            modality: -1,
+            processing_time_ms: 0.0,
+        }
+    }
+}
+
 // ============================================================================
 // Unit Tests
 // ============================================================================
