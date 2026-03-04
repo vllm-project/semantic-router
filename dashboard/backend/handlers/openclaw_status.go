@@ -86,8 +86,13 @@ func (h *OpenClawHandler) TokenHandler() http.HandlerFunc {
 
 // --- Status ---
 
-func (h *OpenClawHandler) gatewayHostCandidates() []string {
+func (h *OpenClawHandler) gatewayHostCandidates(containerName string) []string {
 	candidates := []string{}
+
+	// First priority: container name (DNS resolution within bridge network)
+	if containerName != "" {
+		candidates = append(candidates, containerName)
+	}
 
 	if explicit := strings.TrimSpace(os.Getenv("OPENCLAW_GATEWAY_HOST")); explicit != "" {
 		candidates = append(candidates, explicit)
@@ -118,8 +123,8 @@ func (h *OpenClawHandler) gatewayHostCandidates() []string {
 	return out
 }
 
-func (h *OpenClawHandler) resolveGatewayHost(port int) string {
-	candidates := h.gatewayHostCandidates()
+func (h *OpenClawHandler) resolveGatewayHost(containerName string, port int) string {
+	candidates := h.gatewayHostCandidates(containerName)
 	if len(candidates) == 0 {
 		return "127.0.0.1"
 	}
@@ -131,14 +136,14 @@ func (h *OpenClawHandler) resolveGatewayHost(port int) string {
 	return candidates[0]
 }
 
-func (h *OpenClawHandler) gatewayBaseURL(port int) string {
-	host := h.resolveGatewayHost(port)
+func (h *OpenClawHandler) gatewayBaseURL(containerName string, port int) string {
+	host := h.resolveGatewayHost(containerName, port)
 	return fmt.Sprintf("http://%s:%d", host, port)
 }
 
-func (h *OpenClawHandler) gatewayReachable(port int) bool {
+func (h *OpenClawHandler) gatewayReachable(containerName string, port int) bool {
 	client := &http.Client{Timeout: 1200 * time.Millisecond}
-	for _, host := range h.gatewayHostCandidates() {
+	for _, host := range h.gatewayHostCandidates(containerName) {
 		target := fmt.Sprintf("http://%s:%d/health", host, port)
 		resp, err := client.Get(target)
 		if err == nil {
@@ -182,7 +187,7 @@ func (h *OpenClawHandler) checkContainerHealth(entry ContainerEntry) OpenClawSta
 
 	status := OpenClawStatus{
 		ContainerName:   entry.Name,
-		GatewayURL:      h.gatewayBaseURL(entry.Port),
+		GatewayURL:      h.gatewayBaseURL(entry.Name, entry.Port),
 		Port:            entry.Port,
 		Image:           entry.Image,
 		CreatedAt:       entry.CreatedAt,
@@ -212,7 +217,7 @@ func (h *OpenClawHandler) checkContainerHealth(entry ContainerEntry) OpenClawSta
 		return status
 	}
 
-	gatewayReachable := h.gatewayReachable(entry.Port)
+	gatewayReachable := h.gatewayReachable(entry.Name, entry.Port)
 	if !gatewayReachable {
 		status.Error = "Gateway not reachable"
 		return status
@@ -319,8 +324,10 @@ func (h *OpenClawHandler) NextPortHandler() http.HandlerFunc {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		// Accept optional networkMode query param; defaults to host mode behavior
+		networkMode := r.URL.Query().Get("networkMode")
 		h.mu.RLock()
-		port := h.nextAvailablePort()
+		port := h.nextAvailablePort(networkMode)
 		h.mu.RUnlock()
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]int{"port": port}); err != nil {

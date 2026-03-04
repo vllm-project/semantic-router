@@ -5,6 +5,7 @@ import os
 import sys
 import shutil
 import socket
+import json
 from cli.utils import getLogger
 from cli.consts import (
     VLLM_SR_DOCKER_NAME,
@@ -439,11 +440,11 @@ def docker_start_vllm_sr(
         "OPENCLAW_BASE_IMAGE",
         os.getenv("OPENCLAW_BASE_IMAGE", "ghcr.io/openclaw/openclaw:latest"),
     )
-    # In vllm-sr serve deployment, prefer sharing dashboard container network
-    # namespace for OpenClaw child containers to avoid host routing ambiguity.
+    # OpenClaw containers join the same bridge network as vllm-sr-container.
+    # This decouples their lifecycle: restarting vllm-sr no longer breaks agent networking.
     env_vars.setdefault(
         "OPENCLAW_DEFAULT_NETWORK_MODE",
-        f"container:{VLLM_SR_DOCKER_NAME}",
+        network_name or "vllm-sr-network",
     )
 
     # Enable dashboard OpenClaw lifecycle management from inside vllm-sr container.
@@ -864,3 +865,82 @@ def docker_start_grafana(network_name="vllm-sr-network", config_dir=None):
         return (0, result.stdout, result.stderr)
     except subprocess.CalledProcessError as e:
         return (e.returncode, e.stdout, e.stderr)
+
+
+def docker_network_disconnect(network_name, container_name):
+    """
+    Disconnect a container from a Docker network.
+
+    Args:
+        network_name: Name of the network
+        container_name: Name of the container
+
+    Returns:
+        (return_code, stdout, stderr)
+    """
+    runtime = get_container_runtime()
+    cmd = [runtime, "network", "disconnect", network_name, container_name]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return (0, result.stdout, result.stderr)
+    except subprocess.CalledProcessError as e:
+        return (e.returncode, e.stdout, e.stderr)
+
+
+def docker_network_connect(network_name, container_name):
+    """
+    Connect a container to a Docker network (idempotent).
+
+    Args:
+        network_name: Name of the network
+        container_name: Name of the container
+
+    Returns:
+        (return_code, stdout, stderr)
+    """
+    runtime = get_container_runtime()
+    cmd = [runtime, "network", "connect", network_name, container_name]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return (0, result.stdout, result.stderr)
+    except subprocess.CalledProcessError as e:
+        # "already connected" is not an error for our purposes
+        if "already" in (e.stderr or "").lower():
+            return (0, e.stdout, e.stderr)
+        return (e.returncode, e.stdout, e.stderr)
+
+
+def docker_start_container(container_name):
+    """Start a stopped container."""
+    runtime = get_container_runtime()
+    try:
+        log.info(f"Starting container: {container_name}")
+        subprocess.run(
+            [runtime, "start", container_name], check=True, capture_output=True
+        )
+        log.info(f"✓ Container started: {container_name}")
+        return True
+    except subprocess.CalledProcessError as e:
+        log.error(f"Failed to start container: {e}")
+        return False
+
+
+def load_openclaw_registry(data_dir):
+    """
+    Load OpenClaw container entries from containers.json.
+
+    Args:
+        data_dir: Path to the OpenClaw data directory
+
+    Returns:
+        List of container entry dicts
+    """
+    registry_path = os.path.join(data_dir, "containers.json")
+    if not os.path.exists(registry_path):
+        return []
+    try:
+        with open(registry_path) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError) as e:
+        log.warning(f"Failed to load OpenClaw registry: {e}")
+        return []

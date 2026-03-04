@@ -176,10 +176,11 @@ func (h *OpenClawHandler) PortForContainer(name string) (int, bool) {
 }
 
 // TargetBaseForContainer resolves the HTTP base URL for a registered container.
+// Uses the container name as hostname (DNS resolution via bridge network).
 func (h *OpenClawHandler) TargetBaseForContainer(name string) (string, bool) {
 	port, ok := h.PortForContainer(name)
 	if !ok {
 		return "", false
 	}
-	return h.gatewayBaseURL(port), true
+	return h.gatewayBaseURL(name, port), true
 }

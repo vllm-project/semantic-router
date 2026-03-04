@@ -183,14 +183,14 @@ func (c *WSClient) writePump() {
 				return
 			}
 
-			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			_ = c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := c.conn.WriteJSON(message); err != nil {
 				log.Printf("openclaw: WS write error for client %s: %v", c.clientID, err)
 				return
 			}
 
 		case <-ticker.C:
-			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			_ = c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
@@ -205,9 +205,9 @@ func (c *WSClient) readPump() {
 	}()
 
 	c.conn.SetReadLimit(64 * 1024) // 64KB max message size
-	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	_ = c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	c.conn.SetPongHandler(func(string) error {
-		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		_ = c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		return nil
 	})
 
@@ -371,7 +371,7 @@ func (c *WSClient) close() {
 	clients.Delete(c.clientID)
 
 	// Close connection and channel
-	c.conn.Close()
+	_ = c.conn.Close()
 	close(c.send)
 
 	log.Printf("openclaw: WebSocket client %s disconnected from room %s", c.clientID, c.roomID)

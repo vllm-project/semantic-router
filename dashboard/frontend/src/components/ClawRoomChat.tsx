@@ -640,7 +640,8 @@ const ClawRoomChat = ({
       }
     }
 
-    // SSE fallback connection
+    // SSE fallback connection (called via setTimeout on WebSocket failure)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const connectSSE = () => {
       if (!mounted || wsRef.current?.readyState === WebSocket.OPEN) return
 

@@ -20,9 +20,13 @@ from cli.docker_cli import (
     docker_exec,
     docker_create_network,
     docker_remove_network,
+    docker_network_disconnect,
+    docker_network_connect,
+    docker_start_container,
     docker_start_jaeger,
     docker_start_prometheus,
     docker_start_grafana,
+    load_openclaw_registry,
 )
 from cli.logo import print_vllm_logo
 
@@ -209,6 +213,40 @@ def start_vllm_sr(
         docker_logs(VLLM_SR_DOCKER_NAME, follow=False)
         sys.exit(1)
 
+    # Recover OpenClaw containers that were stopped by a previous `vllm-sr stop`.
+    # Reconnect them to the bridge network and start them.
+    if network_name:
+        default_openclaw_data_dir = os.path.join(
+            config_dir, ".vllm-sr", "openclaw-data"
+        )
+        openclaw_data_dir = (
+            env_vars.get("OPENCLAW_DATA_DIR")
+            or os.getenv("OPENCLAW_DATA_DIR")
+            or default_openclaw_data_dir
+        )
+        openclaw_data_dir = os.path.abspath(openclaw_data_dir)
+        openclaw_entries = load_openclaw_registry(openclaw_data_dir)
+        if openclaw_entries:
+            log.info(f"Recovering {len(openclaw_entries)} OpenClaw container(s)...")
+            for entry in openclaw_entries:
+                name = entry.get("name") or entry.get("containerName")
+                if not name:
+                    continue
+                cstatus = docker_container_status(name)
+                if cstatus == "not found":
+                    log.warning(f"OpenClaw container {name} no longer exists, skipping")
+                    continue
+                # Reconnect to bridge network (idempotent)
+                rc, _, _ = docker_network_connect(network_name, name)
+                if rc == 0:
+                    log.info(f"✓ Connected {name} to {network_name}")
+                else:
+                    log.warning(f"Failed to connect {name} to {network_name}")
+                # Start if stopped
+                if cstatus != "running":
+                    log.info(f"Starting OpenClaw container: {name}")
+                    docker_start_container(name)
+
     log.info("=" * 60)
     log.info("✓ vLLM Semantic Router is running!")
     log.info("")
@@ -263,6 +301,29 @@ def stop_vllm_sr():
         log.info("Container not found. Nothing to stop.")
         return
 
+    # Resolve OpenClaw data directory (same logic as start_vllm_sr)
+    config_dir = os.getcwd()
+    default_openclaw_data_dir = os.path.join(config_dir, ".vllm-sr", "openclaw-data")
+    openclaw_data_dir = os.getenv("OPENCLAW_DATA_DIR") or default_openclaw_data_dir
+    openclaw_data_dir = os.path.abspath(openclaw_data_dir)
+    network_name = "vllm-sr-network"
+
+    # Stop and disconnect OpenClaw containers before removing the network.
+    # Containers are stopped but NOT removed so they can be recovered on next serve.
+    openclaw_entries = load_openclaw_registry(openclaw_data_dir)
+    for entry in openclaw_entries:
+        name = entry.get("name") or entry.get("containerName")
+        if not name:
+            continue
+        cstatus = docker_container_status(name)
+        if cstatus == "not found":
+            continue
+        if cstatus == "running":
+            log.info(f"Stopping OpenClaw container: {name}")
+            docker_stop_container(name)
+        log.info(f"Disconnecting {name} from {network_name}")
+        docker_network_disconnect(network_name, name)
+
     if status == "running":
         docker_stop_container(VLLM_SR_DOCKER_NAME)
 
@@ -285,8 +346,7 @@ def stop_vllm_sr():
             docker_remove_container(container_name)
             log.info(f"✓ {container_name} stopped")
 
-    # Remove network
-    network_name = "vllm-sr-network"
+    # Remove network (now clean — OpenClaw containers already disconnected)
     return_code, stdout, stderr = docker_remove_network(network_name)
     if return_code == 0:
         log.info(f"✓ Network {network_name} removed")
