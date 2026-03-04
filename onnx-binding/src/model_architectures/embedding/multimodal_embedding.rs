@@ -152,10 +152,18 @@ impl MultiModalEmbeddingModel {
 
         #[cfg(feature = "rocm")]
         {
-            use ort::execution_providers::ROCmExecutionProvider;
+            use ort::execution_providers::{ROCmExecutionProvider, ArenaExtendStrategy};
+            use crate::core::gpu_memory;
+            let mem_limit = gpu_memory::get_gpu_mem_limit();
             match Session::builder()
                 .map_err(|e| errors::ort_error(&e.to_string()))
-                .and_then(|b| b.with_execution_providers([ROCmExecutionProvider::default().build().error_on_failure()])
+                .and_then(|b| b.with_execution_providers([
+                    ROCmExecutionProvider::default()
+                        .with_mem_limit(mem_limit)
+                        .with_arena_extend_strategy(ArenaExtendStrategy::SameAsRequested)
+                        .build()
+                        .error_on_failure()
+                    ])
                     .map_err(|e| errors::ort_error(&e.to_string())))
                 .and_then(|b| b.commit_from_file(onnx_path.as_ref())
                     .map_err(|e| errors::model_load(&path_str, &e.to_string())))

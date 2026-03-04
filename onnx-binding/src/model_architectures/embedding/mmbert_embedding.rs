@@ -283,6 +283,7 @@ impl MmBertEmbeddingModel {
 
         // Try common ONNX file names
         let candidates = [
+            "model_sdpa_fp16.onnx",
             "model.onnx",
             "encoder.onnx",
             "mmbert.onnx",
@@ -326,11 +327,19 @@ impl MmBertEmbeddingModel {
         } else {
             #[cfg(any(feature = "rocm", feature = "migraphx"))]
             {
-                use ort::execution_providers::ROCmExecutionProvider;
+                use ort::execution_providers::{ROCmExecutionProvider, ArenaExtendStrategy};
+                use crate::core::gpu_memory;
+                let mem_limit = gpu_memory::get_gpu_mem_limit();
                 println!("INFO: Attempting ROCm execution provider...");
                 match Session::builder()
                     .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
-                    .with_execution_providers([ROCmExecutionProvider::default().build().error_on_failure()])
+                    .with_execution_providers([
+                        ROCmExecutionProvider::default()
+                            .with_mem_limit(mem_limit)
+                            .with_arena_extend_strategy(ArenaExtendStrategy::SameAsRequested)
+                            .build()
+                            .error_on_failure()
+                    ])
                     .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
                 {
                     Ok(session) => {

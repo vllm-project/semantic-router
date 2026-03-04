@@ -221,7 +221,7 @@ impl MmBertSequenceClassifier {
     fn find_onnx_model<P: AsRef<Path>>(model_path: P) -> UnifiedResult<std::path::PathBuf> {
         let dir = model_path.as_ref();
 
-        let candidates = ["model.onnx", "classifier.onnx", "model_optimized.onnx"];
+        let candidates = ["model_sdpa_fp16.onnx", "model.onnx", "classifier.onnx", "model_optimized.onnx"];
 
         for candidate in &candidates {
             let path = dir.join(candidate);
@@ -265,7 +265,8 @@ impl MmBertSequenceClassifier {
             ClassifierExecutionProvider::Rocm | ClassifierExecutionProvider::Auto => {
                 #[cfg(feature = "rocm")]
                 {
-                    use ort::execution_providers::{ROCmExecutionProvider, MIGraphXExecutionProvider};
+                    use ort::execution_providers::{ROCmExecutionProvider, MIGraphXExecutionProvider, ArenaExtendStrategy};
+                    use crate::core::gpu_memory;
 
                     // Try MIGraphX first (better for MI300X) — error_on_failure()
                     // ensures we get a real error instead of silent CPU fallback.
@@ -283,10 +284,16 @@ impl MmBertSequenceClassifier {
                         }
                     }
 
-                    // Try ROCm EP
+                    let mem_limit = gpu_memory::get_gpu_mem_limit();
                     match Session::builder()
                         .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
-                        .with_execution_providers([ROCmExecutionProvider::default().build().error_on_failure()])
+                        .with_execution_providers([
+                            ROCmExecutionProvider::default()
+                                .with_mem_limit(mem_limit)
+                                .with_arena_extend_strategy(ArenaExtendStrategy::SameAsRequested)
+                                .build()
+                                .error_on_failure()
+                        ])
                         .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
                     {
                         Ok(session) => {
@@ -317,10 +324,18 @@ impl MmBertSequenceClassifier {
             ClassifierExecutionProvider::Cuda => {
                 #[cfg(feature = "cuda")]
                 {
-                    use ort::execution_providers::CUDAExecutionProvider;
+                    use ort::execution_providers::{CUDAExecutionProvider, ArenaExtendStrategy as CudaArenaStrategy};
+                    use crate::core::gpu_memory;
+                    let mem_limit = gpu_memory::get_gpu_mem_limit();
                     match Session::builder()
                         .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
-                        .with_execution_providers([CUDAExecutionProvider::default().build().error_on_failure()])
+                        .with_execution_providers([
+                            CUDAExecutionProvider::default()
+                                .with_memory_limit(mem_limit)
+                                .with_arena_extend_strategy(CudaArenaStrategy::SameAsRequested)
+                                .build()
+                                .error_on_failure()
+                        ])
                         .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
                     {
                         Ok(session) => {
