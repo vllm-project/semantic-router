@@ -62,42 +62,6 @@ var roomMentionPattern = regexp.MustCompile(`@([a-zA-Z0-9_.-]+)`)
 
 const roomAutomationProcessedAtKey = "automationProcessedAt"
 
-var explicitTaskKeywords = []string{
-	"请",
-	"帮",
-	"需要",
-	"任务",
-	"安排",
-	"执行",
-	"实现",
-	"完成",
-	"分析",
-	"优化",
-	"排查",
-	"修复",
-	"设计",
-	"部署",
-	"编写",
-	"生成",
-	"整理",
-	"推进",
-	"deliver",
-	"please",
-	"need",
-	"task",
-	"assign",
-	"implement",
-	"build",
-	"analyze",
-	"optimize",
-	"fix",
-	"design",
-	"deploy",
-	"write",
-	"create",
-	"execute",
-}
-
 func (h *OpenClawHandler) loadRooms() ([]ClawRoomEntry, error) {
 	data, err := os.ReadFile(h.roomsPath())
 	if err != nil {
