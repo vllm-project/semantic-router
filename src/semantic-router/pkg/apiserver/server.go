@@ -56,11 +56,16 @@ func Init(configPath string, port int, enableSystemPromptAPI bool) error {
 	}
 
 	// Get memory store if available (set by ExtProc router during init)
-	memoryStore := initMemoryStore(5, 500*time.Millisecond)
-	if memoryStore != nil {
-		logging.Infof("Memory management API enabled")
+	var memoryStore memory.Store
+	if shouldInitMemoryStore(cfg) {
+		memoryStore = initMemoryStore(5, 500*time.Millisecond)
+		if memoryStore != nil {
+			logging.Infof("Memory management API enabled")
+		} else {
+			logging.Infof("Memory store not available, memory management API will return 503")
+		}
 	} else {
-		logging.Infof("Memory store not available, memory management API will return 503")
+		logging.Infof("Memory disabled in config, skipping memory store initialization")
 	}
 
 	// Create server instance
@@ -119,6 +124,21 @@ func initMemoryStore(maxRetries int, retryInterval time.Duration) memory.Store {
 
 	logging.Warnf("Memory store not available after %d attempts", maxRetries)
 	return nil
+}
+
+func shouldInitMemoryStore(cfg *config.RouterConfig) bool {
+	if cfg == nil {
+		return false
+	}
+	if cfg.Memory.Enabled {
+		return true
+	}
+	for _, decision := range cfg.Decisions {
+		if decision.GetPluginConfig("memory") != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // setupRoutes configures all API routes

@@ -12,6 +12,7 @@ import (
 
 func (h *OpenClawHandler) deleteContainerByName(name string) error {
 	_ = h.containerRun("rm", "-f", name)
+	_ = h.containerRun("volume", "rm", "openclaw-state-"+name)
 
 	h.mu.Lock()
 	defer h.mu.Unlock()

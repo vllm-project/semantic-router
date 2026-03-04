@@ -1172,6 +1172,14 @@
   gap: 0.48rem;
 }
 
+.kernelNodeGridTwoByTwo {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.kernelModelGrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .kernelNodeCard {
   border: 1px solid rgba(148, 163, 184, 0.35);
   border-radius: var(--radius-md);

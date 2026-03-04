@@ -9,9 +9,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 var containerNameInvalidChars = regexp.MustCompile(`[^a-z0-9_.-]+`)
@@ -46,13 +49,18 @@ type TeamEntry struct {
 }
 
 type OpenClawHandler struct {
-	dataDir  string
-	readOnly bool
-	mu       sync.RWMutex
+	dataDir          string
+	readOnly         bool
+	routerConfigPath string
+	mu               sync.RWMutex
 }
 
 func NewOpenClawHandler(dataDir string, readOnly bool) *OpenClawHandler {
 	return &OpenClawHandler{dataDir: dataDir, readOnly: readOnly}
+}
+
+func (h *OpenClawHandler) SetRouterConfigPath(configPath string) {
+	h.routerConfigPath = strings.TrimSpace(configPath)
 }
 
 func (h *OpenClawHandler) registryPath() string {
@@ -217,6 +225,141 @@ func defaultOpenClawBaseImage() string {
 		return candidate
 	}
 	return "ghcr.io/openclaw/openclaw:latest"
+}
+
+func defaultOpenClawModelBaseURL() string {
+	if candidate := strings.TrimSpace(os.Getenv("OPENCLAW_MODEL_BASE_URL")); candidate != "" {
+		return candidate
+	}
+	return "http://127.0.0.1:8801/v1"
+}
+
+func (h *OpenClawHandler) resolveOpenClawModelBaseURL() string {
+	if candidate := strings.TrimSpace(os.Getenv("OPENCLAW_MODEL_BASE_URL")); candidate != "" {
+		return candidate
+	}
+	if candidate := h.discoverOpenClawModelBaseURLFromRouterConfig(); candidate != "" {
+		return candidate
+	}
+	return defaultOpenClawModelBaseURL()
+}
+
+func (h *OpenClawHandler) discoverOpenClawModelBaseURLFromRouterConfig() string {
+	configPath := strings.TrimSpace(h.routerConfigPath)
+	if configPath == "" {
+		return ""
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return ""
+	}
+
+	var config map[string]any
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return ""
+	}
+
+	for _, listener := range extractOpenClawRouterListeners(config) {
+		port, ok := openClawToPort(listener["port"])
+		if !ok {
+			continue
+		}
+		host := formatOpenClawURLHost(normalizeOpenClawListenerHost(asString(listener["address"])))
+		return fmt.Sprintf("http://%s:%d/v1", host, port)
+	}
+
+	return ""
+}
+
+func extractOpenClawRouterListeners(config map[string]any) []map[string]any {
+	listeners := make([]map[string]any, 0)
+
+	appendListeners := func(value any) {
+		entries, ok := value.([]any)
+		if !ok {
+			return
+		}
+		for _, entry := range entries {
+			if listener, ok := asStringMap(entry); ok {
+				listeners = append(listeners, listener)
+			}
+		}
+	}
+
+	appendListeners(config["listeners"])
+
+	if apiServer, ok := asStringMap(config["api_server"]); ok {
+		appendListeners(apiServer["listeners"])
+	}
+
+	return listeners
+}
+
+func asStringMap(value any) (map[string]any, bool) {
+	switch typed := value.(type) {
+	case map[string]any:
+		return typed, true
+	case map[any]any:
+		normalized := make(map[string]any, len(typed))
+		for key, nested := range typed {
+			textKey, ok := key.(string)
+			if !ok {
+				continue
+			}
+			normalized[textKey] = nested
+		}
+		return normalized, true
+	default:
+		return nil, false
+	}
+}
+
+func asString(value any) string {
+	text, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(text)
+}
+
+func openClawToPort(value any) (int, bool) {
+	switch typed := value.(type) {
+	case int:
+		if typed >= 1 && typed <= 65535 {
+			return typed, true
+		}
+	case int64:
+		port := int(typed)
+		if port >= 1 && port <= 65535 {
+			return port, true
+		}
+	case float64:
+		port := int(typed)
+		if port >= 1 && port <= 65535 && float64(port) == typed {
+			return port, true
+		}
+	case string:
+		port, err := strconv.Atoi(strings.TrimSpace(typed))
+		if err == nil && port >= 1 && port <= 65535 {
+			return port, true
+		}
+	}
+	return 0, false
+}
+
+func normalizeOpenClawListenerHost(host string) string {
+	if host == "" || host == "0.0.0.0" || host == "::" || host == "[::]" {
+		return "127.0.0.1"
+	}
+	return host
+}
+
+func formatOpenClawURLHost(host string) string {
+	if strings.Contains(host, ":") && !strings.HasPrefix(host, "[") && !strings.HasSuffix(host, "]") {
+		return "[" + host + "]"
+	}
+	return host
 }
 
 func isContainerImageMissingError(output string) bool {

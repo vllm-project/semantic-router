@@ -17,6 +17,12 @@ import (
 // and WebSocket upgrade requests to the target. This is required for services
 // like OpenClaw whose control UI uses WebSocket for real-time communication.
 func NewWebSocketAwareHandler(targetBase, stripPrefix string) (http.Handler, error) {
+	return NewWebSocketAwareHandlerWithHeaders(targetBase, stripPrefix, nil)
+}
+
+// NewWebSocketAwareHandlerWithHeaders behaves like NewWebSocketAwareHandler but
+// also injects static headers into all proxied HTTP and WebSocket upgrade requests.
+func NewWebSocketAwareHandlerWithHeaders(targetBase, stripPrefix string, staticHeaders map[string]string) (http.Handler, error) {
 	targetURL, err := url.Parse(targetBase)
 	if err != nil {
 		return nil, err
@@ -25,6 +31,22 @@ func NewWebSocketAwareHandler(targetBase, stripPrefix string) (http.Handler, err
 	httpProxy, err := NewReverseProxy(targetBase, stripPrefix, false)
 	if err != nil {
 		return nil, err
+	}
+	if len(staticHeaders) > 0 {
+		origDirector := httpProxy.Director
+		httpProxy.Director = func(r *http.Request) {
+			origDirector(r)
+			for key, value := range staticHeaders {
+				normalizedKey := strings.TrimSpace(key)
+				normalizedValue := strings.TrimSpace(value)
+				if normalizedKey == "" || normalizedValue == "" {
+					continue
+				}
+				// Static headers are authoritative in embedded mode to avoid stale
+				// client-side gateway tokens causing auth mismatch loops.
+				r.Header.Set(normalizedKey, normalizedValue)
+			}
+		}
 	}
 	origModify := httpProxy.ModifyResponse
 	httpProxy.ModifyResponse = func(resp *http.Response) error {
@@ -44,9 +66,18 @@ func NewWebSocketAwareHandler(targetBase, stripPrefix string) (http.Handler, err
 
 			var cfg map[string]interface{}
 			if err := json.Unmarshal(body, &cfg); err == nil {
-				if bp, _ := cfg["basePath"].(string); strings.TrimSpace(bp) == "" {
-					cfg["basePath"] = stripPrefix
+				embeddedBasePath := strings.TrimRight(strings.TrimSpace(stripPrefix), "/")
+				if embeddedBasePath == "" {
+					embeddedBasePath = "/"
 				}
+
+				// Always force embedded basePath. OpenClaw may default basePath to "/",
+				// which breaks WebSocket routing when loaded behind /embedded/openclaw/{name}/.
+				cfg["basePath"] = embeddedBasePath
+
+				// Provide a relative gateway URL so Control UI resolves WebSocket requests
+				// through the embedded proxy path (no host/port exposure in client config).
+				cfg["gatewayUrl"] = embeddedBasePath
 				updated, err := json.Marshal(cfg)
 				if err == nil {
 					resp.Body = io.NopCloser(bytes.NewReader(updated))
@@ -66,7 +97,7 @@ func NewWebSocketAwareHandler(targetBase, stripPrefix string) (http.Handler, err
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isWebSocketUpgrade(r) {
-			proxyWebSocket(w, r, targetURL, stripPrefix)
+			proxyWebSocket(w, r, targetURL, stripPrefix, staticHeaders)
 			return
 		}
 		httpProxy.ServeHTTP(w, r)
@@ -86,7 +117,7 @@ func isWebSocketUpgrade(r *http.Request) bool {
 	return false
 }
 
-func proxyWebSocket(w http.ResponseWriter, r *http.Request, target *url.URL, stripPrefix string) {
+func proxyWebSocket(w http.ResponseWriter, r *http.Request, target *url.URL, stripPrefix string, staticHeaders map[string]string) {
 	// Build the target address
 	targetHost := target.Host
 	if !strings.Contains(targetHost, ":") {
@@ -138,13 +169,42 @@ func proxyWebSocket(w http.ResponseWriter, r *http.Request, target *url.URL, str
 	reqBuf.WriteString(r.Method + " " + reqURL + " HTTP/1.1\r\n")
 	reqBuf.WriteString("Host: " + target.Host + "\r\n")
 
+	effectiveStaticHeaders := map[string]string{}
+	for key, value := range staticHeaders {
+		normalizedKey := strings.TrimSpace(key)
+		normalizedValue := strings.TrimSpace(value)
+		if normalizedKey == "" || normalizedValue == "" {
+			continue
+		}
+		effectiveStaticHeaders[normalizedKey] = normalizedValue
+	}
+
+	normalizedStaticHeaderKeys := map[string]struct{}{}
+	for key := range effectiveStaticHeaders {
+		trimmed := strings.ToLower(strings.TrimSpace(key))
+		if trimmed != "" {
+			normalizedStaticHeaderKeys[trimmed] = struct{}{}
+		}
+	}
+
 	for key, vals := range r.Header {
 		if strings.EqualFold(key, "Host") {
+			continue
+		}
+		if _, overridden := normalizedStaticHeaderKeys[strings.ToLower(strings.TrimSpace(key))]; overridden {
 			continue
 		}
 		for _, val := range vals {
 			reqBuf.WriteString(key + ": " + val + "\r\n")
 		}
+	}
+	for key, value := range effectiveStaticHeaders {
+		normalizedKey := strings.TrimSpace(key)
+		normalizedValue := strings.TrimSpace(value)
+		if normalizedKey == "" || normalizedValue == "" {
+			continue
+		}
+		reqBuf.WriteString(normalizedKey + ": " + normalizedValue + "\r\n")
 	}
 	reqBuf.WriteString("\r\n")
 

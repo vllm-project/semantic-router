@@ -121,6 +121,50 @@ func TestWriteOpenClawConfig_RemoteMemoryUsesCurrentSchema(t *testing.T) {
 	}
 }
 
+func TestGatewayTokenForContainer_PrefersConfigTokenOverRegistry(t *testing.T) {
+	h := NewOpenClawHandler(t.TempDir(), false)
+	workerName := "worker-a"
+
+	if err := h.saveRegistry([]ContainerEntry{
+		{
+			Name:  workerName,
+			Token: "registry-token",
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed registry: %v", err)
+	}
+
+	configPath := filepath.Join(h.containerDataDir(workerName), "openclaw.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{"gateway":{"auth":{"token":"config-token"}}}`), 0o644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	if got := h.gatewayTokenForContainer(workerName); got != "config-token" {
+		t.Fatalf("expected config token, got %q", got)
+	}
+}
+
+func TestGatewayTokenForContainer_FallsBackToRegistryToken(t *testing.T) {
+	h := NewOpenClawHandler(t.TempDir(), false)
+	workerName := "worker-b"
+
+	if err := h.saveRegistry([]ContainerEntry{
+		{
+			Name:  workerName,
+			Token: "registry-token-only",
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed registry: %v", err)
+	}
+
+	if got := h.gatewayTokenForContainer(workerName); got != "registry-token-only" {
+		t.Fatalf("expected registry token fallback, got %q", got)
+	}
+}
+
 func TestLoadSkills_UsesEnvOverridePath(t *testing.T) {
 	tempDir := t.TempDir()
 	skillsPath := filepath.Join(tempDir, "openclaw-skills.json")
@@ -185,6 +229,195 @@ func TestDeriveContainerName(t *testing.T) {
 				t.Fatalf("deriveContainerName(%q, %q) = %q, expected %q", tc.requested, tc.identityName, got, tc.expected)
 			}
 		})
+	}
+}
+
+func TestDefaultOpenClawModelBaseURL(t *testing.T) {
+	t.Setenv("OPENCLAW_MODEL_BASE_URL", "")
+	if got := defaultOpenClawModelBaseURL(); got != "http://127.0.0.1:8801/v1" {
+		t.Fatalf("expected fallback model base URL, got %q", got)
+	}
+
+	t.Setenv("OPENCLAW_MODEL_BASE_URL", "http://localhost:9999/v1")
+	if got := defaultOpenClawModelBaseURL(); got != "http://localhost:9999/v1" {
+		t.Fatalf("expected env model base URL, got %q", got)
+	}
+}
+
+func TestIsOpenClawGatewayPortConflict(t *testing.T) {
+	tests := []struct {
+		name     string
+		logs     string
+		port     int
+		expected bool
+	}{
+		{
+			name: "openclaw gateway already listening",
+			logs: "Gateway failed to start: another gateway instance is already listening on ws://0.0.0.0:18792",
+			port: 18792, expected: true,
+		},
+		{
+			name: "generic address already in use",
+			logs: "listen tcp 0.0.0.0:18792: bind: address already in use",
+			port: 18792, expected: true,
+		},
+		{
+			name: "port already in use",
+			logs: "Port 18792 is already in use.",
+			port: 18792, expected: true,
+		},
+		{
+			name: "unrelated error",
+			logs: "failed to pull image",
+			port: 18792, expected: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isOpenClawGatewayPortConflict(tc.logs, tc.port); got != tc.expected {
+				t.Fatalf("isOpenClawGatewayPortConflict() = %v, expected %v", got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestOpenClawGatewayListeningReady(t *testing.T) {
+	tests := []struct {
+		name     string
+		logs     string
+		expected bool
+	}{
+		{
+			name:     "success listening marker",
+			logs:     "[gateway] listening on ws://0.0.0.0:18796",
+			expected: true,
+		},
+		{
+			name:     "failure after success",
+			logs:     "[gateway] listening on ws://0.0.0.0:18796\nGateway failed to start: another gateway instance is already listening on ws://0.0.0.0:18796",
+			expected: false,
+		},
+		{
+			name:     "success after earlier failure",
+			logs:     "Gateway failed to start: another gateway instance is already listening on ws://0.0.0.0:18796\n[gateway] listening on ws://0.0.0.0:18797",
+			expected: true,
+		},
+		{
+			name:     "no listening marker",
+			logs:     "starting openclaw...",
+			expected: false,
+		},
+		{
+			name:     "empty logs",
+			logs:     "",
+			expected: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := openClawGatewayListeningReady(tc.logs); got != tc.expected {
+				t.Fatalf("openClawGatewayListeningReady() = %v, expected %v", got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestProvisionAsyncRequested(t *testing.T) {
+	tests := []struct {
+		name     string
+		url      string
+		header   string
+		expected bool
+	}{
+		{
+			name:     "query true",
+			url:      "/api/openclaw/workers?async=true",
+			expected: true,
+		},
+		{
+			name:     "query one",
+			url:      "/api/openclaw/workers?async=1",
+			expected: true,
+		},
+		{
+			name:     "header true",
+			url:      "/api/openclaw/workers",
+			header:   "true",
+			expected: true,
+		},
+		{
+			name:     "header on",
+			url:      "/api/openclaw/workers",
+			header:   "on",
+			expected: true,
+		},
+		{
+			name:     "disabled",
+			url:      "/api/openclaw/workers?async=false",
+			expected: false,
+		},
+		{
+			name:     "missing",
+			url:      "/api/openclaw/workers",
+			expected: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tc.url, nil)
+			if tc.header != "" {
+				req.Header.Set("X-OpenClaw-Async", tc.header)
+			}
+			if got := provisionAsyncRequested(req); got != tc.expected {
+				t.Fatalf("provisionAsyncRequested() = %v, expected %v", got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestResolveOpenClawModelBaseURL_UsesRouterListeners(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.yaml")
+	configYAML := `
+listeners:
+  - address: 0.0.0.0
+    port: 18889
+`
+	if err := os.WriteFile(configPath, []byte(configYAML), 0o644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	h := NewOpenClawHandler(tempDir, false)
+	h.SetRouterConfigPath(configPath)
+	t.Setenv("OPENCLAW_MODEL_BASE_URL", "")
+
+	if got := h.resolveOpenClawModelBaseURL(); got != "http://127.0.0.1:18889/v1" {
+		t.Fatalf("expected listener-derived model base URL, got %q", got)
+	}
+}
+
+func TestResolveOpenClawModelBaseURL_EnvOverrideWins(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.yaml")
+	configYAML := `
+api_server:
+  listeners:
+    - address: ::1
+      port: 18890
+`
+	if err := os.WriteFile(configPath, []byte(configYAML), 0o644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	h := NewOpenClawHandler(tempDir, false)
+	h.SetRouterConfigPath(configPath)
+	t.Setenv("OPENCLAW_MODEL_BASE_URL", "http://localhost:19999/v1")
+
+	if got := h.resolveOpenClawModelBaseURL(); got != "http://localhost:19999/v1" {
+		t.Fatalf("expected env override model base URL, got %q", got)
 	}
 }
 
