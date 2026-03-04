@@ -302,7 +302,7 @@ curl -X POST http://localhost:8000/v1/chat/completions \
 
 - **Production workloads**: Use Ollama or vLLM for production deployments
 - **Large model serving**: Designed for tiny models (< 1B parameters)
-- **Complex multi-agent workflows**: Use Semantic Kernel or similar frameworks
+- **Complex multi-agent workflows**: Use Semantic Router or similar frameworks
 - **High-performance inference**: Use vLLM or specialized serving solutions
 
 ## Configuration

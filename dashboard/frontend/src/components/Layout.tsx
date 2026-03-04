@@ -95,6 +95,16 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
               Brain
             </NavLink>
 
+            {/* Primary: OpenClaw */}
+            <NavLink
+              to="/clawswarm"
+              className={({ isActive }) =>
+                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+              }
+            >
+              ClawSwarm
+            </NavLink>
+
             {/* Build Dropdown */}
             <div className={styles.navDropdown}>
               <button
@@ -104,7 +114,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
                   toggleDropdown('build')
                 }}
               >
-                Build
+                Manager
                 <svg
                   width="12"
                   height="12"
@@ -159,16 +169,6 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
                 </div>
               )}
             </div>
-
-            {/* Primary: OpenClaw */}
-            <NavLink
-              to="/openclaw"
-              className={({ isActive }) =>
-                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
-              }
-            >
-              OpenClaw Team
-            </NavLink>
 
             {/* Divider */}
             <div className={styles.navDivider} />
@@ -406,11 +406,11 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
             >
               Decisions
             </button>
+            <NavLink to="/clawswarm" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+              ClawSwarm
+            </NavLink>
             <NavLink to="/builder" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
               Builder
-            </NavLink>
-            <NavLink to="/openclaw" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
-              OpenClaw
             </NavLink>
 
             {/* Analysis section */}

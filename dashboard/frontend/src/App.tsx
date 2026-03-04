@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route, useParams } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
 import Layout from './components/Layout'
 import LandingPage from './pages/LandingPage'
 import MonitoringPage from './pages/MonitoringPage'
@@ -279,7 +279,7 @@ const App: React.FC = () => {
             }
           />
           <Route
-            path="/openclaw"
+            path="/clawswarm"
             element={
               <Layout
                 configSection={configSection}
@@ -289,6 +289,7 @@ const App: React.FC = () => {
               </Layout>
             }
           />
+          <Route path="/openclaw" element={<Navigate to="/clawswarm" replace />} />
         </Routes>
       </BrowserRouter>
     </ReadonlyProvider>
