@@ -1379,7 +1379,7 @@ func TestProcessRoomUserMessage_MultiMentionsDispatchInParallel(t *testing.T) {
 	}
 }
 
-func TestRoomMessagesPost_LeaderSenderTypeRequiresExplicitUserTask(t *testing.T) {
+func TestRoomMessagesPost_LeaderSenderTypeTriggersAutomation(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewOpenClawHandler(tempDir, false)
 
@@ -1462,18 +1462,21 @@ func TestRoomMessagesPost_LeaderSenderTypeRequiresExplicitUserTask(t *testing.T)
 		t.Fatalf("expected senderID leader-1, got %q", created.SenderID)
 	}
 
-	deadline := time.Now().Add(500 * time.Millisecond)
-	for time.Now().Before(deadline) {
+	deadline := time.Now().Add(2 * time.Second)
+	for {
 		messages, err := h.loadRoomMessages(room.ID)
 		if err != nil {
 			t.Fatalf("failed to load room messages: %v", err)
 		}
 		for _, msg := range messages {
 			if msg.SenderID == "worker-a" && msg.SenderType == "worker" {
-				t.Fatalf("worker-a should not be triggered by leader message without explicit user task, got messages: %+v", messages)
+				return
 			}
 		}
-		time.Sleep(25 * time.Millisecond)
+		if time.Now().After(deadline) {
+			t.Fatalf("expected worker-a reply after leader message, got messages: %+v", messages)
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
 
