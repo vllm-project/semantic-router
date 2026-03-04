@@ -465,36 +465,6 @@ func stripLeadingMentions(content string) string {
 	return trimmed
 }
 
-func looksLikeExplicitTask(content string) bool {
-	normalized := strings.ToLower(strings.TrimSpace(content))
-	if normalized == "" {
-		return false
-	}
-	for _, keyword := range explicitTaskKeywords {
-		if strings.Contains(normalized, keyword) {
-			return true
-		}
-	}
-	return false
-}
-
-func latestUserTaskIsExplicit(messages []ClawRoomMessage, beforeIndex int) bool {
-	if beforeIndex <= 0 {
-		return false
-	}
-	for i := beforeIndex - 1; i >= 0; i-- {
-		if normalizeRoomSenderType(messages[i].SenderType) != "user" {
-			continue
-		}
-		content := stripLeadingMentions(messages[i].Content)
-		if content == "" {
-			content = strings.TrimSpace(messages[i].Content)
-		}
-		return looksLikeExplicitTask(content)
-	}
-	return false
-}
-
 func buildTeamMentionGuide(team TeamEntry, workers []ContainerEntry, self ContainerEntry) string {
 	if len(workers) == 0 {
 		return "No teammates registered."
