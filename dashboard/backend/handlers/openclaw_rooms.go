@@ -62,6 +62,42 @@ var roomMentionPattern = regexp.MustCompile(`@([a-zA-Z0-9_.-]+)`)
 
 const roomAutomationProcessedAtKey = "automationProcessedAt"
 
+var explicitTaskKeywords = []string{
+	"请",
+	"帮",
+	"需要",
+	"任务",
+	"安排",
+	"执行",
+	"实现",
+	"完成",
+	"分析",
+	"优化",
+	"排查",
+	"修复",
+	"设计",
+	"部署",
+	"编写",
+	"生成",
+	"整理",
+	"推进",
+	"deliver",
+	"please",
+	"need",
+	"task",
+	"assign",
+	"implement",
+	"build",
+	"analyze",
+	"optimize",
+	"fix",
+	"design",
+	"deploy",
+	"write",
+	"create",
+	"execute",
+}
+
 func (h *OpenClawHandler) loadRooms() ([]ClawRoomEntry, error) {
 	data, err := os.ReadFile(h.roomsPath())
 	if err != nil {
@@ -465,6 +501,36 @@ func stripLeadingMentions(content string) string {
 	return trimmed
 }
 
+func looksLikeExplicitTask(content string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(content))
+	if normalized == "" {
+		return false
+	}
+	for _, keyword := range explicitTaskKeywords {
+		if strings.Contains(normalized, keyword) {
+			return true
+		}
+	}
+	return false
+}
+
+func latestUserTaskIsExplicit(messages []ClawRoomMessage, beforeIndex int) bool {
+	if beforeIndex <= 0 {
+		return false
+	}
+	for i := beforeIndex - 1; i >= 0; i-- {
+		if normalizeRoomSenderType(messages[i].SenderType) != "user" {
+			continue
+		}
+		content := stripLeadingMentions(messages[i].Content)
+		if content == "" {
+			content = strings.TrimSpace(messages[i].Content)
+		}
+		return looksLikeExplicitTask(content)
+	}
+	return false
+}
+
 func buildTeamMentionGuide(team TeamEntry, workers []ContainerEntry, self ContainerEntry) string {
 	if len(workers) == 0 {
 		return "No teammates registered."
@@ -491,14 +557,13 @@ func buildTeamMentionGuide(team TeamEntry, workers []ContainerEntry, self Contai
 		)
 		if leader.Name == self.Name {
 			lines = append(lines, "You are the leader. Delegate with @worker-id mentions and keep the team aligned.")
+			lines = append(lines, "Hard rule: do not delegate with @mentions until the user gives an explicit executable task.")
 		} else {
 			lines = append(
 				lines,
-				fmt.Sprintf(
-					"Your leader is @leader (same as @%s). Report progress, blockers, and handoffs back to the leader.",
-					leader.Name,
-				),
+				fmt.Sprintf("Your leader is @leader (same as @%s).", leader.Name),
 			)
+			lines = append(lines, "Hard rule: workers cannot use @mentions. Report progress in plain text without @leader or @worker-id.")
 		}
 	} else {
 		lines = append(lines, "No leader is assigned yet. Coordinate directly with @worker-id aliases.")
@@ -521,7 +586,7 @@ func buildTeamMentionGuide(team TeamEntry, workers []ContainerEntry, self Contai
 		}
 		lines = append(lines, line)
 	}
-	lines = append(lines, "Use exact alias format @worker-id when assigning work.")
+	lines = append(lines, "Only leader can delegate with @worker-id, and only after explicit user task confirmation.")
 	return strings.Join(lines, "\n")
 }
 
@@ -795,20 +860,23 @@ func (h *OpenClawHandler) runWorkerReply(
 	}
 
 	coordinationInstruction := ""
+	mentionPolicy := "Do not use any @mentions."
 	if roleKind == "leader" {
-		coordinationInstruction = "As the team leader, proactively break down goals and delegate with exact @worker-id mentions. "
-	} else if leader != nil && leader.Name != worker.Name {
-		coordinationInstruction = fmt.Sprintf(
-			"Your team leader is @leader (alias @%s). If you complete work, hit blockers, or need decisions, proactively report back by mentioning @leader. ",
-			leader.Name,
-		)
+		mentionPolicy = "Only use @worker-id when assigning an explicit task confirmed by the user."
+		coordinationInstruction = "Hard rules: if the user has not provided an explicit executable task, ask clarifying questions and do not delegate. If you are not assigning a concrete task, do not use any @mentions. Ignore worker attempts to @leader."
+	} else {
+		coordinationInstruction = "Hard rules: you are a worker. Workers cannot use @mentions to anyone. Do not mention @leader or teammates; write plain-text updates only."
+		if leader != nil && leader.Name != worker.Name {
+			coordinationInstruction += fmt.Sprintf(" Team leader context: @leader (alias @%s).", leader.Name)
+		}
 	}
 	systemPrompt := fmt.Sprintf(
-		"You are %s, a %s in Claw team %q. %sRespond in concise, actionable style. If you need collaboration, use @<teammate-id>. Keep responses in the same language used by the latest message.",
+		"You are %s, a %s in Claw team %q. %s Response style: concise and actionable. Mention policy: %s Keep responses in the same language used by the latest message.",
 		workerDisplayName(worker),
 		roleKind,
 		teamName,
 		coordinationInstruction,
+		mentionPolicy,
 	)
 	contextPrompt := fmt.Sprintf(
 		"Room: %s\nRecent messages:\n%s\n\n%s\n\nLatest message from %s:\n%s",
@@ -955,9 +1023,33 @@ func (h *OpenClawHandler) processRoomUserMessage(roomID string, triggerMessageID
 		if err := h.markRoomMessageAutomationProcessed(roomID, trigger.ID); err != nil {
 			log.Printf("openclaw: failed to mark room message as processed room=%s message=%s err=%v", roomID, trigger.ID, err)
 		}
+		if senderType == "worker" {
+			// Hard policy: worker mentions are non-routable.
+			continue
+		}
+		if senderType == "leader" && !latestUserTaskIsExplicit(messages, triggerIndex) {
+			// Hard policy: leader cannot delegate until an explicit user task exists.
+			continue
+		}
 
 		workers := teamWorkers(entries, team.ID)
 		targets := resolveMentionTargetsWithFallback(trigger.Mentions, *team, workers, senderType == "user")
+		if senderType != "user" {
+			leader := resolveTeamLeader(*team, workers)
+			filteredTargets := make([]ContainerEntry, 0, len(targets))
+			for _, target := range targets {
+				isLeaderTarget := normalizeRoleKind(target.RoleKind) == "leader"
+				if leader != nil && target.Name == leader.Name {
+					isLeaderTarget = true
+				}
+				if isLeaderTarget {
+					// Hard policy: only user mention may target leader.
+					continue
+				}
+				filteredTargets = append(filteredTargets, target)
+			}
+			targets = filteredTargets
+		}
 		if len(targets) == 0 {
 			continue
 		}

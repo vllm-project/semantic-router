@@ -1141,8 +1141,8 @@ func TestProcessRoomUserMessage_SimultaneousMentionsContinueChain(t *testing.T) 
 	gotLeaderCalls := leaderCalls
 	gotWorkerCalls := workerCalls
 	callsMu.Unlock()
-	if gotLeaderCalls < 2 {
-		t.Fatalf("expected leader to be called at least twice, got %d", gotLeaderCalls)
+	if gotLeaderCalls != 1 {
+		t.Fatalf("expected leader to be called exactly once (worker @leader should be ignored), got %d", gotLeaderCalls)
 	}
 	if gotWorkerCalls < 2 {
 		t.Fatalf("expected worker to be called at least twice, got %d", gotWorkerCalls)
@@ -1152,8 +1152,8 @@ func TestProcessRoomUserMessage_SimultaneousMentionsContinueChain(t *testing.T) 
 	if err != nil {
 		t.Fatalf("failed to load room messages: %v", err)
 	}
-	if len(messages) < 5 {
-		t.Fatalf("expected at least 5 room messages, got %d", len(messages))
+	if len(messages) < 4 {
+		t.Fatalf("expected at least 4 room messages, got %d", len(messages))
 	}
 
 	leaderMentionedWorker := false
@@ -1379,7 +1379,7 @@ func TestProcessRoomUserMessage_MultiMentionsDispatchInParallel(t *testing.T) {
 	}
 }
 
-func TestRoomMessagesPost_LeaderSenderTypeTriggersAutomation(t *testing.T) {
+func TestRoomMessagesPost_LeaderSenderTypeRequiresExplicitUserTask(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewOpenClawHandler(tempDir, false)
 
@@ -1462,21 +1462,18 @@ func TestRoomMessagesPost_LeaderSenderTypeTriggersAutomation(t *testing.T) {
 		t.Fatalf("expected senderID leader-1, got %q", created.SenderID)
 	}
 
-	deadline := time.Now().Add(2 * time.Second)
-	for {
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
 		messages, err := h.loadRoomMessages(room.ID)
 		if err != nil {
 			t.Fatalf("failed to load room messages: %v", err)
 		}
 		for _, msg := range messages {
 			if msg.SenderID == "worker-a" && msg.SenderType == "worker" {
-				return
+				t.Fatalf("worker-a should not be triggered by leader message without explicit user task, got messages: %+v", messages)
 			}
 		}
-		if time.Now().After(deadline) {
-			t.Fatalf("expected worker-a reply after leader message, got messages: %+v", messages)
-		}
-		time.Sleep(20 * time.Millisecond)
+		time.Sleep(25 * time.Millisecond)
 	}
 }
 
@@ -1702,14 +1699,17 @@ func TestProcessRoomUserMessage_WorkerPromptIncludesLeaderRouting(t *testing.T) 
 	if workerPrompt == "" {
 		t.Fatalf("expected worker prompt to be captured")
 	}
-	if !strings.Contains(workerPrompt, "Your team leader is @leader (alias @leader-1).") {
-		t.Fatalf("expected system prompt to include leader alias instruction, got:\n%s", workerPrompt)
+	if !strings.Contains(workerPrompt, "Workers cannot use @mentions") {
+		t.Fatalf("expected worker system prompt to include strict mention prohibition, got:\n%s", workerPrompt)
 	}
 	if !strings.Contains(workerPrompt, "Leader aliases: @leader and @leader-1 = Echo") {
 		t.Fatalf("expected context prompt to include leader routing aliases, got:\n%s", workerPrompt)
 	}
-	if !strings.Contains(workerPrompt, "Your leader is @leader (same as @leader-1).") {
-		t.Fatalf("expected context prompt to include reporting guidance for worker, got:\n%s", workerPrompt)
+	if !strings.Contains(workerPrompt, "Hard rule: workers cannot use @mentions") {
+		t.Fatalf("expected context prompt to include worker no-mention hard rule, got:\n%s", workerPrompt)
+	}
+	if strings.Contains(workerPrompt, "proactively report back by mentioning @leader") {
+		t.Fatalf("worker prompt should not instruct @leader mentions anymore, got:\n%s", workerPrompt)
 	}
 }
 

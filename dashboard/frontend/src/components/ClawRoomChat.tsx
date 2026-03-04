@@ -264,7 +264,7 @@ const ClawRoomChat = ({
   const mentionHints = useMemo(() => mentionOptions.map(option => option.token), [mentionOptions])
 
   const leaderRoleText = leaderWorker?.agentRole || selectedTeam?.role || 'Team Leader'
-  const leaderVibeText = leaderWorker?.agentVibe || selectedTeam?.vibe || '协作-推进'
+  const leaderVibeText = leaderWorker?.agentVibe || selectedTeam?.vibe || 'Coordination-driven'
   const teamBriefText = useMemo(() => {
     if (selectedTeam?.description?.trim()) {
       return selectedTeam.description.trim()
@@ -1075,7 +1075,7 @@ const ClawRoomChat = ({
             </div>
 
             <div className={styles.teamGuide}>
-              协作建议：先用 <code>@leader</code> 进行任务分派，成员完成后通过 <code>@leader</code> 或 @{leaderWorker?.name || 'leader'} 回传进展。
+              Collaboration tip: start with <code>@leader</code> for delegation; members should report progress back via <code>@leader</code> or @{leaderWorker?.name || 'leader'}.
             </div>
           </header>
 
