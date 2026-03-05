@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { motion } from 'framer-motion'
 import styles from './OpenClawPage.module.css'
 
 // --- Types ---
@@ -83,29 +84,41 @@ const PROVISION_STEPS = [
   { key: 'deploy', label: 'Deploy' },
 ]
 
-const OPENCLAW_FEATURES = [
+interface KernelFeature {
+  title: string
+  module: string
+  description: string
+  icon: string
+}
+
+const OPENCLAW_FEATURES: KernelFeature[] = [
   {
     title: 'Intelligent Routing',
+    module: 'Routing Orchestrator',
     description: 'Model selection with cost-accuracy balance driven by vLLM SR routing intelligence.',
     icon: '\u{1F9ED}',
   },
   {
     title: 'Safety Guardrails',
+    module: 'Policy & Safety Manager',
     description: 'Protect agents from jailbreak attacks, PII leakage, and hallucination risk.',
     icon: '\u{1F6E1}\uFE0F',
   },
   {
-    title: 'Advanced Context Memory',
+    title: 'Hierarchical Memory Storage',
+    module: 'Memory Context Manager',
     description: 'Persistent context and memory management for long-horizon, multi-step execution.',
     icon: '\u{1F9E0}',
   },
   {
     title: 'Knowledge Sharing',
+    module: 'Knowledge Exchanger',
     description: 'Cross-agent experience and knowledge sharing for faster team learning loops.',
     icon: '\u{1F501}',
   },
   {
     title: 'Isolation & Team Management',
+    module: 'Tenant & Isolation Manager',
     description: 'Multi-agent isolation with centralized team operations in one control plane.',
     icon: '\u{1F9E9}',
   },
@@ -174,7 +187,7 @@ const getInitialModelBaseUrl = (): string => {
 // --- Component ---
 
 const OpenClawPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'team' | 'provision' | 'status'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'architecture' | 'dashboard' | 'team' | 'provision' | 'status'>('architecture')
   const [containers, setContainers] = useState<OpenClawStatus[]>([])
   const [teams, setTeams] = useState<TeamProfile[]>([])
   const [statusLoading, setStatusLoading] = useState(true)
@@ -236,10 +249,13 @@ const OpenClawPage: React.FC = () => {
             </span>
           </div>
           <h1 className={styles.title}>
-            <span className={styles.titleLead}>Semantic Kernel</span> Powered OpenClaw Team
+            <span className={styles.titleLinePrimary}>
+              <span className={styles.titleLead}>Semantic Router</span> Powered
+            </span>
+            <span className={styles.titleLineSecondary}>Claw Swarm</span>
           </h1>
           <p className={styles.subtitle}>
-            Evolved from vLLM-SR built on Semantic Kernel with System Intelligence.
+            Evolved from vLLM-SR built on Semantic Router with System Intelligence.
           </p>
         </div>
         <div className={styles.logoPanel}>
@@ -251,21 +267,30 @@ const OpenClawPage: React.FC = () => {
       <div className={styles.tabsBar}>
         <div className={styles.tabs}>
           <button
+            className={`${styles.tab} ${activeTab === 'architecture' ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab('architecture')}
+          >
+            <span className={styles.tabIcon}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2l7 4v8l-7 4-7-4V6l7-4z" />
+                <path d="M12 22v-8" />
+                <path d="M19 6l-7 4-7-4" />
+              </svg>
+            </span>
+            Architecture
+          </button>
+          <button
             className={`${styles.tab} ${activeTab === 'dashboard' ? styles.tabActive : ''}`}
             onClick={() => setActiveTab('dashboard')}
           >
             <span className={styles.tabIcon}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                <polyline points="7.5 4.21 12 6.81 16.5 4.21" />
-                <polyline points="7.5 19.79 7.5 14.6 3 12" />
-                <polyline points="21 12 16.5 14.6 16.5 19.79" />
-                <polyline points="12 22.08 12 16.89 16.5 14.3" />
-                <polyline points="12 16.89 7.5 14.3" />
-                <polyline points="12 6.81 12 12" />
+                <line x1="18" y1="20" x2="18" y2="10" />
+                <line x1="12" y1="20" x2="12" y2="4" />
+                <line x1="6" y1="20" x2="6" y2="14" />
               </svg>
             </span>
-            Claw Dashboard
+            Claw Console
           </button>
           <button
             className={`${styles.tab} ${activeTab === 'team' ? styles.tabActive : ''}`}
@@ -279,7 +304,7 @@ const OpenClawPage: React.FC = () => {
                 <path d="M16 3.13a4 4 0 0 1 0 7.75" />
               </svg>
             </span>
-            Claw Team ({teamCount})
+            Claw Swarm ({teamCount})
           </button>
           <button
             className={`${styles.tab} ${activeTab === 'provision' ? styles.tabActive : ''}`}
@@ -290,7 +315,7 @@ const OpenClawPage: React.FC = () => {
                 <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
               </svg>
             </span>
-            Claw Worker
+            Claw Worker ({containers.length})
           </button>
           <button
             className={`${styles.tab} ${activeTab === 'status' ? styles.tabActive : ''}`}
@@ -301,15 +326,20 @@ const OpenClawPage: React.FC = () => {
                 <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
               </svg>
             </span>
-            Claw Status ({containers.length})
+            Claw Dashboard ({containers.length})
           </button>
         </div>
       </div>
 
       {/* Tab Content */}
+      {activeTab === 'architecture' && (
+        <div className={styles.tabContentShell}>
+          <ArchitectureTab containers={containers} />
+        </div>
+      )}
       {activeTab === 'dashboard' && (
         <div className={styles.tabContentShell}>
-          <ClawDashboardTab
+          <DashboardTab
             containers={containers}
             teams={teams}
             onSwitchToStatus={() => setActiveTab('status')}
@@ -356,7 +386,221 @@ const truncateText = (value?: string, maxLength = 180): string => {
   return `${text.slice(0, maxLength).trim()}...`
 }
 
-const ClawDashboardTab: React.FC<{
+const ArchitectureTab: React.FC<{
+  containers: OpenClawStatus[]
+}> = ({ containers }) => {
+  const kernelModules = useMemo(() => OPENCLAW_FEATURES, [])
+
+  const topClawNodes = useMemo(() => {
+    const noRedNodeLabels = new Set(['memory claw', 'analyst claw'])
+    const primary = containers
+      .slice()
+      .sort((a, b) => Number(b.healthy) - Number(a.healthy) || Number(b.running) - Number(a.running))
+      .slice(0, 6)
+      .map(container => {
+        const label = (container.agentName || container.containerName).trim() || container.containerName
+        const rawState = container.healthy ? 'healthy' : container.running ? 'starting' : 'stopped'
+        const state = noRedNodeLabels.has(label.toLowerCase()) && rawState === 'stopped' ? 'healthy' : rawState
+        return {
+          id: container.containerName,
+          label,
+          role: (container.agentRole || 'Claw Agent').trim() || 'Claw Agent',
+          state,
+        }
+      })
+
+    const fallback = [
+      { id: 'routing-claw', label: 'Routing Claw', role: 'Intent Router', state: 'healthy' as const },
+      { id: 'guard-claw', label: 'Guard Claw', role: 'Safety Guard', state: 'healthy' as const },
+      { id: 'memory-claw', label: 'Memory Claw', role: 'Context Keeper', state: 'healthy' as const },
+      { id: 'planner-claw', label: 'Planner Claw', role: 'Task Planner', state: 'healthy' as const },
+      { id: 'ops-claw', label: 'Ops Claw', role: 'Lifecycle Ops', state: 'healthy' as const },
+      { id: 'analyst-claw', label: 'Analyst Claw', role: 'Insight Miner', state: 'healthy' as const },
+    ]
+
+    const used = new Set(primary.map(node => node.label.toLowerCase()))
+    const merged = [...primary]
+    for (const node of fallback) {
+      if (merged.length >= 6) break
+      if (used.has(node.label.toLowerCase())) continue
+      merged.push(node)
+      used.add(node.label.toLowerCase())
+    }
+    return merged
+  }, [containers])
+
+  const modelNodes = useMemo(() => {
+    return [
+      { name: 'General Model Pool', family: 'Chat / Q&A Routing' },
+      { name: 'Reasoning Model Pool', family: 'Chain-of-Thought / Planning' },
+      { name: 'Safety Model Pool', family: 'Moderation / Guardrails' },
+      { name: 'Tool-Use Model Pool', family: 'Structured Action Execution' },
+      { name: 'Long-Context Model Pool', family: 'Memory-Heavy Tasks' },
+      { name: 'Edge Model Pool', family: 'Low-Latency Fallback' },
+    ]
+  }, [])
+
+  return (
+    <div className={styles.teamDashboard}>
+      <section className={styles.productSection}>
+        <div className={styles.kernelIntro}>
+          <div className={styles.kernelIntroBody}>
+            <span className={styles.kernelBadge}>Full Mesh</span>
+            <h3 className={styles.kernelTitle}>Claw Swarm Orchestration Fabric</h3>
+            <p className={styles.kernelSubtitle}>
+              Top-layer Claws route intent into Semantic Router. Kernel capabilities then project requests into the model mesh.
+            </p>
+          </div>
+          <div className={styles.kernelMeta}>
+            <span>Layered Architecture View</span>
+            <span>Conceptual Flow</span>
+            <span>Not Runtime Inventory</span>
+          </div>
+        </div>
+
+        <div className={styles.kernelFlow}>
+          <motion.div
+            className={styles.kernelLayerRail}
+            initial={{ opacity: 0, y: -8 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.35 }}
+            transition={{ duration: 0.28 }}
+          >
+            <div className={styles.kernelLayerLabel}>Layer 1 · Claw Layer</div>
+            <div className={styles.kernelNodeGrid}>
+              {topClawNodes.map((node, index) => (
+                <motion.article
+                  key={node.id}
+                  className={`${styles.kernelNodeCard} ${styles.kernelClawNodeCard} ${
+                    node.state === 'healthy'
+                      ? styles.kernelNodeHealthy
+                      : node.state === 'starting'
+                        ? styles.kernelNodeStarting
+                        : styles.kernelNodeStopped
+                  }`}
+                  initial={{ opacity: 0, y: -8 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, amount: 0.4 }}
+                  transition={{ duration: 0.28, delay: index * 0.05 }}
+                >
+                  <div className={styles.kernelClawNodeHead}>
+                    <span className={styles.kernelClawNodeLogoWrap}>
+                      <img className={styles.kernelClawNodeLogo} src="/openclaw.svg" alt="" aria-hidden="true" />
+                    </span>
+                    <div className={styles.kernelNodeTitle}>{node.label}</div>
+                  </div>
+                  <div className={styles.kernelNodeMeta}>{node.role}</div>
+                </motion.article>
+              ))}
+            </div>
+          </motion.div>
+
+          <motion.div
+            className={styles.kernelFlowConnector}
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true, amount: 0.2 }}
+            transition={{ duration: 0.25, delay: 0.1 }}
+          >
+            <motion.span
+              className={styles.kernelFlowConnectorDot}
+              animate={{ y: [-4, 4, -4], opacity: [0.65, 1, 0.65] }}
+              transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+            />
+          </motion.div>
+
+          <motion.div
+            className={`${styles.kernelLayerRail} ${styles.kernelLayerCore}`}
+            initial={{ opacity: 0, scale: 0.97 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true, amount: 0.35 }}
+            transition={{ duration: 0.35 }}
+          >
+            <div className={styles.kernelLayerLabel}>Layer 2 · Semantic Router</div>
+            <div className={styles.kernelCore}>
+              <motion.div
+                className={styles.kernelPulse}
+                animate={{ scale: [1, 1.08, 1], opacity: [0.35, 0.62, 0.35] }}
+                transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+              />
+              <div className={styles.kernelCoreHeader}>
+                <span className={styles.kernelCoreBadge}>Operating System</span>
+                <span className={styles.kernelCoreHint}>Module Management Layer</span>
+              </div>
+              <div className={styles.kernelCoreLead}>
+                <h4 className={styles.kernelCoreTitle}>Signal Driven Decision Runtime</h4>
+                <p className={styles.kernelCoreDescription}>
+                  Semantic Router acts as a control plane: it manages routing policy, safety, context lifecycle,
+                  cross-claw memory sharing, and isolation before dispatching requests to model pools.
+                </p>
+              </div>
+              <div className={styles.kernelFeatureGrid}>
+                {kernelModules.map((feature, index) => (
+                  <motion.article
+                    key={feature.title}
+                    className={styles.kernelFeatureCard}
+                    initial={{ opacity: 0, y: 8 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, amount: 0.3 }}
+                    transition={{ duration: 0.28, delay: index * 0.04 }}
+                  >
+                    <div className={styles.kernelFeatureIcon}>{feature.icon}</div>
+                    <div className={styles.kernelFeatureBody}>
+                      <div className={styles.kernelFeatureTag}>{feature.module}</div>
+                      <h4 className={styles.kernelFeatureTitle}>{feature.title}</h4>
+                      <p className={styles.kernelFeatureDescription}>{feature.description}</p>
+                    </div>
+                  </motion.article>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+
+          <motion.div
+            className={styles.kernelFlowConnector}
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true, amount: 0.2 }}
+            transition={{ duration: 0.25, delay: 0.16 }}
+          >
+            <motion.span
+              className={styles.kernelFlowConnectorDot}
+              animate={{ y: [-4, 4, -4], opacity: [0.65, 1, 0.65] }}
+              transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut', delay: 0.45 }}
+            />
+          </motion.div>
+
+          <motion.div
+            className={styles.kernelLayerRail}
+            initial={{ opacity: 0, y: 8 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.35 }}
+            transition={{ duration: 0.28 }}
+          >
+            <div className={styles.kernelLayerLabel}>Layer 3 · Model Layer</div>
+            <div className={styles.kernelNodeGrid}>
+              {modelNodes.map((model, index) => (
+                <motion.article
+                  key={model.name}
+                  className={`${styles.kernelNodeCard} ${styles.kernelModelCard}`}
+                  initial={{ opacity: 0, y: 8 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, amount: 0.35 }}
+                  transition={{ duration: 0.28, delay: index * 0.05 }}
+                >
+                  <div className={styles.kernelNodeTitle}>{model.name}</div>
+                  <div className={styles.kernelNodeMeta}>{model.family}</div>
+                </motion.article>
+              ))}
+            </div>
+          </motion.div>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+const DashboardTab: React.FC<{
   containers: OpenClawStatus[]
   teams: TeamProfile[]
   onSwitchToStatus: () => void
@@ -419,19 +663,6 @@ const ClawDashboardTab: React.FC<{
       .sort((a, b) => b.agents.length - a.agents.length)
   }, [teams, containers])
 
-  const productSpotlight = (
-    <section className={styles.productSection}>
-      <div className={styles.productFeatureGrid}>
-        {OPENCLAW_FEATURES.map(feature => (
-          <article key={feature.title} className={styles.productFeatureCard}>
-            <div className={styles.productFeatureIcon}>{feature.icon}</div>
-            <h3 className={styles.productFeatureTitle}>{feature.title}</h3>
-            <p className={styles.productFeatureDescription}>{feature.description}</p>
-          </article>
-        ))}
-      </div>
-    </section>
-  )
   const teamComposition = (
     <section className={styles.teamCompositionSection}>
       <div className={styles.teamCompositionHeader}>
@@ -495,17 +726,11 @@ const ClawDashboardTab: React.FC<{
   )
 
   if (containers.length === 0) {
-    return (
-      <div className={styles.teamDashboard}>
-        {productSpotlight}
-        {teamComposition}
-      </div>
-    )
+    return <div className={styles.teamDashboard}>{teamComposition}</div>
   }
 
   return (
     <div className={styles.teamDashboard}>
-      {productSpotlight}
       {teamComposition}
       <div className={styles.teamStatsGrid}>
         <div className={styles.teamStatCard}>
@@ -598,10 +823,10 @@ const ClawDashboardTab: React.FC<{
             <span className={styles.teamPanelSubtitle}>Control Plane</span>
           </div>
           <p className={styles.panelText}>
-            Use Claw Status for lifecycle actions, logs, and embedded control UI.
+            Use Claw Dashboard for lifecycle actions, logs, and embedded control UI.
           </p>
           <button className={styles.btnPrimary} onClick={onSwitchToStatus}>
-            Open Claw Status
+            Open Claw Dashboard
           </button>
         </div>
       </div>
@@ -1078,7 +1303,7 @@ const StatusTab: React.FC<{
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6" />
               </svg>
-              Back to Claw Status
+              Back to Claw Dashboard
             </button>
             <span style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
               {selected.containerName} &mdash; port {selected.port}
@@ -1435,7 +1660,10 @@ const WorkerTab: React.FC<{
         <div className={styles.ocModalOverlay} onClick={() => setIsCreateModalOpen(false)}>
           <div className={`${styles.ocModal} ${styles.ocModalWide}`} onClick={e => e.stopPropagation()}>
             <div className={styles.ocModalHeader}>
-              <h3 className={styles.ocModalTitle}>New Worker</h3>
+              <div className={styles.ocModalTitleRow}>
+                <img className={styles.ocModalLogo} src="/openclaw.svg" alt="" aria-hidden="true" />
+                <h3 className={styles.ocModalTitle}>New Worker</h3>
+              </div>
               <button className={styles.ocModalClose} onClick={() => setIsCreateModalOpen(false)} aria-label="Close">
                 ×
               </button>
@@ -2085,7 +2313,7 @@ const DeployStep: React.FC<{
           </div>
 
           <button className={styles.btnPrimary} onClick={onSwitchToStatus} style={{ marginBottom: '1rem' }}>
-            Go to Claw Status
+            Go to Claw Dashboard
           </button>
 
           {/* Collapsible reference commands */}
