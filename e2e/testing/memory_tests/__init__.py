@@ -11,6 +11,10 @@ from memory_tests.test_pipeline import (
     SimilarityThresholdTest,
     StaleMemoryTest,
 )
+from memory_tests.test_per_decision import (
+    PerDecisionMemoryDisabledTest,
+    PerDecisionThresholdOverrideTest,
+)
 from memory_tests.test_storage import MemoryStorageTest, PluginCombinationTest
 
 __all__ = [
@@ -19,6 +23,8 @@ __all__ = [
     "MemoryInjectionPipelineTest",
     "MemoryStorageTest",
     "MilvusVerifier",
+    "PerDecisionMemoryDisabledTest",
+    "PerDecisionThresholdOverrideTest",
     "PluginCombinationTest",
     "SimilarityThresholdTest",
     "StaleMemoryTest",
