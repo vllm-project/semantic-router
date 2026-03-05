@@ -36,6 +36,31 @@ Preference   & $55$\,ms    & $110$\,ms    & Yes \\
 Heuristic signals complete in sub-millisecond time, while ML signals range from 15--120\,ms.
 With parallel evaluation, the wall-clock time is dominated by the slowest active signal ($\sim$120\,ms for domain classification) rather than the sum.
 
+\subsection{GPU-Accelerated Inference with SDPA}
+
+To accelerate ML signal extraction on long prompts, we re-export the mmBERT-32K classifiers from PyTorch using Scaled Dot-Product Attention (SDPA), apply ONNX Runtime graph optimization (Gelu/LayerNorm fusion), and convert weights to FP16.
+\Cref{tab:gpu_acceleration} reports single-session inference latency on an AMD Instinct MI300X using the ROCm execution provider, compared against CPU (x86-64, ORT default provider).
+
+\begin{table}[htbp]
+\centering
+\caption{mmBERT-32K inference latency: CPU (FP32) vs.\ GPU SDPA (FP16), single session, batch size 1}
+\label{tab:gpu_acceleration}
+\begin{tabular}{rrrr}
+\toprule
+\textbf{Seq.\ Length} & \textbf{CPU (ms)} & \textbf{GPU (ms)} & \textbf{Speedup} \\
+\midrule
+512    & 120   & 6.0   & 20$\times$ \\
+1{,}024  & 263   & 7.7   & 34$\times$ \\
+2{,}048  & 809   & 14.1  & 57$\times$ \\
+4{,}096  & 2{,}664 & 57.6  & 46$\times$ \\
+8{,}192  & 9{,}656 & 237   & 41$\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The SDPA re-export reduces the ONNX graph from 2{,}902 to 1{,}342 operators; FP16 conversion halves model size from 1.2\,GB to 587\,MB.
+At 8K tokens, GPU inference completes in 237\,ms---a 41$\times$ speedup over CPU---keeping all three classifiers (domain, jailbreak, PII) within a 250\,ms end-to-end budget when evaluated in parallel.
+
 \subsection{LoRA Memory Efficiency}
 
 \Cref{tab:lora_memory} shows the memory advantage of serving classifiers via LoRA adapters versus independent fine-tuned models.

@@ -1808,10 +1808,13 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 			ruleWg.Wait()
 
 			elapsed := time.Since(start)
+			latencySeconds := elapsed.Seconds()
 			results.Metrics.Jailbreak.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
 			if results.JailbreakConfidence > 0 {
 				results.Metrics.Jailbreak.Confidence = float64(results.JailbreakConfidence)
 			}
+
+			metrics.RecordSignalExtraction(config.SignalTypeJailbreak, "jailbreak_evaluated", latencySeconds)
 			logging.Infof("[Signal Computation] Jailbreak signal evaluation completed in %v", elapsed)
 		}()
 	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeJailbreak) {
@@ -1934,10 +1937,13 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 			ruleWg.Wait()
 
 			elapsed := time.Since(start)
+			latencySeconds := elapsed.Seconds()
 			results.Metrics.PII.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
 			if results.PIIDetected {
 				results.Metrics.PII.Confidence = 1.0 // Binary: PII found or not
 			}
+
+			metrics.RecordSignalExtraction(config.SignalTypePII, "pii_evaluated", latencySeconds)
 			logging.Infof("[Signal Computation] PII signal evaluation completed in %v", elapsed)
 		}()
 	} else if !isSignalTypeUsed(usedSignals, config.SignalTypePII) {

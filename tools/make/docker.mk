@@ -9,6 +9,8 @@ DOCKER_REGISTRY ?= ghcr.io/vllm-project/semantic-router
 DOCKER_TAG ?= latest
 
 # Build all Docker images
+# Note: extproc-rocm is excluded because it requires x86_64 + ROCm hardware.
+# Build it explicitly with: make docker-build-extproc-rocm
 docker-build-all: ## Build all Docker images
 docker-build-all: docker-build-extproc docker-build-llm-katan docker-build-dashboard docker-build-precommit
 
@@ -18,6 +20,13 @@ docker-build-extproc:
 	@$(LOG_TARGET)
 	@echo "Building extproc Docker image..."
 	@$(CONTAINER_RUNTIME) build -f tools/docker/Dockerfile.extproc -t $(DOCKER_REGISTRY)/extproc:$(DOCKER_TAG) .
+
+# Build extproc-rocm Docker image (AMD GPU / ROCm, x86_64 only)
+docker-build-extproc-rocm: ## Build extproc-rocm Docker image (AMD GPU)
+docker-build-extproc-rocm:
+	@$(LOG_TARGET)
+	@echo "Building extproc-rocm Docker image (x86_64 only, ROCm 7.0)..."
+	@$(CONTAINER_RUNTIME) build -f tools/docker/Dockerfile.extproc-rocm -t $(DOCKER_REGISTRY)/extproc-rocm:$(DOCKER_TAG) .
 
 # Build llm-katan Docker image
 docker-build-llm-katan: ## Build llm-katan Docker image
@@ -80,7 +89,8 @@ docker-clean:
 	@echo "Docker cleanup completed"
 
 # Push Docker images (for CI/CD)
-docker-push-all: ## Build all Docker images
+# Note: extproc-rocm is excluded; push it explicitly with: make docker-push-extproc-rocm
+docker-push-all: ## Push all Docker images
 docker-push-all: docker-push-extproc docker-push-llm-katan
 	@$(LOG_TARGET)
 	@echo "All Docker images pushed successfully"
@@ -90,6 +100,12 @@ docker-push-extproc:
 	@$(LOG_TARGET)
 	@echo "Pushing extproc Docker image..."
 	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/extproc:$(DOCKER_TAG)
+
+docker-push-extproc-rocm: ## Push extproc-rocm Docker image
+docker-push-extproc-rocm:
+	@$(LOG_TARGET)
+	@echo "Pushing extproc-rocm Docker image..."
+	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/extproc-rocm:$(DOCKER_TAG)
 
 docker-push-llm-katan: ## Push llm-katan Docker image
 docker-push-llm-katan:

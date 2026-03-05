@@ -25,6 +25,7 @@ on:
       - ".github/workflows/docker-publish.yml"
       - "tools/docker/Dockerfile*"
       - "candle-binding/**"
+      - "onnx-binding/**"
       - "src/**"
       - "e2e/testing/llm-katan/**"
       - "dashboard/**"
@@ -34,6 +35,7 @@ on:
       - ".github/workflows/docker-publish.yml"
       - "tools/docker/Dockerfile*"
       - "candle-binding/**"
+      - "onnx-binding/**"
       - "src/**"
       - "e2e/testing/llm-katan/**"
       - "dashboard/**"
@@ -59,7 +61,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        image: [extproc, llm-katan, vllm-sr]
+        image: [extproc, extproc-rocm, llm-katan, vllm-sr]
       fail-fast: false
 
     steps:
@@ -98,6 +100,9 @@ jobs:
           if [ "${{ matrix.image }}" = "extproc" ]; then
             echo "context=." >> $GITHUB_OUTPUT
             echo "dockerfile=./tools/docker/Dockerfile.extproc" >> $GITHUB_OUTPUT
+          elif [ "${{ matrix.image }}" = "extproc-rocm" ]; then
+            echo "context=." >> $GITHUB_OUTPUT
+            echo "dockerfile=./tools/docker/Dockerfile.extproc-rocm" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.image }}" = "llm-katan" ]; then
             echo "context=./e2e/testing/llm-katan" >> $GITHUB_OUTPUT
             echo "dockerfile=./e2e/testing/llm-katan/Dockerfile" >> $GITHUB_OUTPUT
@@ -130,7 +135,7 @@ jobs:
           load: true
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha,scope=${{ matrix.image }}-amd64
-          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-amd64
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-amd64,ignore-error=true
           build-args: |
             BUILDKIT_INLINE_CACHE=1
             CARGO_BUILD_JOBS=8
@@ -228,8 +233,6 @@ jobs:
           PLATFORM_SUFFIX=$(echo "${{ matrix.platform }}" | tr '/' '-')
           echo "platform_suffix=${PLATFORM_SUFFIX}" >> $GITHUB_OUTPUT
 
-          # For multi-arch push builds, always use cross-compilation Dockerfiles
-          # for images that have them (extproc, vllm-sr). This avoids slow QEMU emulation.
           if [ "${{ matrix.image }}" = "extproc" ]; then
             echo "context=." >> $GITHUB_OUTPUT
             echo "dockerfile=./tools/docker/Dockerfile.extproc" >> $GITHUB_OUTPUT
@@ -282,7 +285,7 @@ jobs:
           push: true
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha,scope=${{ matrix.image }}-${{ steps.build-params.outputs.platform_suffix }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ steps.build-params.outputs.platform_suffix }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ steps.build-params.outputs.platform_suffix }},ignore-error=true
           build-args: |
             BUILDKIT_INLINE_CACHE=1
             CARGO_BUILD_JOBS=20
@@ -309,6 +312,115 @@ jobs:
           else
             echo "::error title=Build Failed::${{ matrix.image }} (${{ matrix.platform }}) build failed after ${DURATION_MIN}m ${DURATION_SEC}s"
             echo "### Build failed for ${{ matrix.image }} (${{ matrix.platform }})" >> $GITHUB_STEP_SUMMARY
+            echo "- **Elapsed**: ${DURATION_MIN}m ${DURATION_SEC}s (${DURATION}s)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # extproc-rocm: amd64-only (ROCm does not support arm64), no manifest needed
+  build_extproc_rocm:
+    if: >-
+      github.event_name != 'pull_request'
+      && github.repository == 'vllm-project/semantic-router'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Free up disk space
+        run: |
+          echo "Before cleanup:"
+          df -h
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          echo "After cleanup:"
+          df -h
+
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            image=moby/buildkit:latest
+            network=host
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set lowercase repository owner
+        run: echo "REPOSITORY_OWNER_LOWER=$(echo $GITHUB_REPOSITORY_OWNER | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Generate date tag for nightly builds
+        id: date
+        if: inputs.is_nightly == true
+        run: echo "date_tag=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
+
+      - name: Generate tags
+        id: tags
+        run: |
+          REPO_LOWER="${{ env.REPOSITORY_OWNER_LOWER }}"
+          IMAGE="ghcr.io/${REPO_LOWER}/semantic-router/extproc-rocm"
+
+          if [ "${{ inputs.is_nightly }}" = "true" ]; then
+            TAG="nightly-${{ steps.date.outputs.date_tag }}"
+          else
+            TAG="${{ github.sha }}"
+          fi
+
+          TAGS="${IMAGE}:${TAG}"
+          if [ "${{ inputs.is_nightly }}" != "true" ]; then
+            TAGS="${TAGS},${IMAGE}:latest"
+          fi
+          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+
+      - name: Record build start time
+        id: build-start
+        run: echo "start=$(date +%s)" >> $GITHUB_OUTPUT
+
+      - name: Build and push extproc-rocm (amd64 only)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./tools/docker/Dockerfile.extproc-rocm
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha,scope=extproc-rocm-amd64
+          cache-to: type=gha,mode=max,scope=extproc-rocm-amd64,ignore-error=true
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+            CARGO_BUILD_JOBS=20
+            CARGO_INCREMENTAL=1
+            RUSTC_WRAPPER=""
+            CARGO_NET_GIT_FETCH_WITH_CLI=true
+          provenance: false
+
+      - name: Build summary and timing
+        if: always()
+        run: |
+          END=$(date +%s)
+          START="${{ steps.build-start.outputs.start }}"
+          DURATION=$((END - START))
+          DURATION_MIN=$((DURATION / 60))
+          DURATION_SEC=$((DURATION % 60))
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "::notice title=Build Success::extproc-rocm (amd64) built in ${DURATION_MIN}m ${DURATION_SEC}s"
+            echo "### Build Summary for extproc-rocm" >> $GITHUB_STEP_SUMMARY
+            echo "- **Platform**: linux/amd64 (ROCm, no arm64)" >> $GITHUB_STEP_SUMMARY
+            echo "- **Build time**: ${DURATION_MIN}m ${DURATION_SEC}s (${DURATION}s)" >> $GITHUB_STEP_SUMMARY
+            echo "- **Tags**: ${{ steps.tags.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "::error title=Build Failed::extproc-rocm build failed after ${DURATION_MIN}m ${DURATION_SEC}s"
+            echo "### Build failed for extproc-rocm" >> $GITHUB_STEP_SUMMARY
             echo "- **Elapsed**: ${DURATION_MIN}m ${DURATION_SEC}s (${DURATION}s)" >> $GITHUB_STEP_SUMMARY
           fi
 

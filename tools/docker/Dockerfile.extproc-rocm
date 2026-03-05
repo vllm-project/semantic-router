@@ -1,0 +1,215 @@
+# ROCm 7.0 + ONNX Runtime Dockerfile for AMD GPU inference.
+# x86_64 only (ROCm does not support arm64).
+# Defaults to AI_BINDING=onnx so the ONNX Runtime ROCm execution provider is used.
+#
+# Build:
+#   docker build -f tools/docker/Dockerfile.extproc-rocm -t semantic-router:rocm .
+#
+# Run:
+#   docker run --device=/dev/kfd --device=/dev/dri --group-add video \
+#     -v /path/to/config.yaml:/app/config/config.yaml \
+#     semantic-router:rocm
+
+# ============================================================================
+# Stage 1: Build candle-binding Rust library (x86_64, CPU-only)
+# ============================================================================
+FROM rust:1.90 AS candle-builder
+
+RUN apt-get update && apt-get install -y \
+    build-essential pkg-config lld clang libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true \
+    CARGO_INCREMENTAL=1 \
+    CARGO_PROFILE_RELEASE_LTO=thin \
+    CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+
+WORKDIR /app
+
+COPY candle-binding/Cargo.toml candle-binding/Cargo.loc[k] ./candle-binding/
+COPY tools/make/ tools/make/
+COPY Makefile ./
+
+RUN cd candle-binding && mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
+    OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu cargo build --release --no-default-features --target x86_64-unknown-linux-gnu && \
+    rm -rf src
+
+COPY candle-binding/src/ ./candle-binding/src/
+
+RUN cd candle-binding && \
+    find target -name "libcandle_semantic_router.so" -delete 2>/dev/null; \
+    OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu cargo build --release --no-default-features --target x86_64-unknown-linux-gnu
+
+# ============================================================================
+# Stage 2: Build onnx-binding Rust library with ROCm support
+# Uses rocm-dynamic feature (dlopen at runtime, no link-time ORT dependency).
+# ort 2.0.0-rc.10 targets ORT 1.22, matching onnxruntime-rocm on PyPI.
+# ============================================================================
+FROM rust:1.90 AS onnx-rocm-builder
+
+RUN apt-get update && apt-get install -y \
+    build-essential pkg-config lld clang libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true \
+    CARGO_INCREMENTAL=1 \
+    CARGO_PROFILE_RELEASE_LTO=thin \
+    CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+
+WORKDIR /app
+
+COPY onnx-binding/Cargo.toml onnx-binding/Cargo.loc[k] ./onnx-binding/
+
+RUN cd onnx-binding && mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
+    OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu \
+    cargo build --release --features rocm-dynamic --target x86_64-unknown-linux-gnu && \
+    rm -rf src
+
+COPY onnx-binding/src/ ./onnx-binding/src/
+
+RUN cd onnx-binding && \
+    find target -name "libonnx_semantic_router.so" -delete 2>/dev/null; \
+    find target -name "libonnx_semantic_router.a" -delete 2>/dev/null; \
+    OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu \
+    cargo build --release --features rocm-dynamic --target x86_64-unknown-linux-gnu && \
+    echo "=== Verifying ONNX-ROCm library ===" && \
+    find target -name "libonnx_semantic_router.so" -type f -exec ls -la {} \;
+
+# ============================================================================
+# Stage 3: Build ml-binding Rust library
+# ============================================================================
+FROM rust:1.90 AS ml-builder
+
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+WORKDIR /app
+
+COPY ml-binding/Cargo.toml ml-binding/Cargo.loc[k] ./ml-binding/
+
+RUN cd ml-binding && mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
+    cargo build --release --target x86_64-unknown-linux-gnu && rm -rf src
+
+COPY ml-binding/src/ ./ml-binding/src/
+
+RUN cd ml-binding && \
+    find target -name "libml_semantic_router.so" -delete 2>/dev/null; \
+    cargo build --release --target x86_64-unknown-linux-gnu
+
+# ============================================================================
+# Stage 4: Build nlp-binding Rust library
+# ============================================================================
+FROM rust:1.90 AS nlp-builder
+
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+WORKDIR /app
+
+COPY nlp-binding/Cargo.toml nlp-binding/Cargo.loc[k] ./nlp-binding/
+
+RUN cd nlp-binding && mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
+    cargo build --release --target x86_64-unknown-linux-gnu && rm -rf src
+
+COPY nlp-binding/src/ ./nlp-binding/src/
+
+RUN cd nlp-binding && \
+    find target -name "libnlp_binding.so" -delete 2>/dev/null; \
+    cargo build --release --target x86_64-unknown-linux-gnu
+
+# ============================================================================
+# Stage 5: Build Go application (both candle and onnx binaries)
+# ============================================================================
+FROM golang:1.24 AS go-builder
+
+RUN apt-get update && apt-get install -y libssl-dev file && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy Go module files
+RUN mkdir -p src/semantic-router
+COPY src/semantic-router/go.mod src/semantic-router/go.sum src/semantic-router/
+COPY src/semantic-router/go.onnx.mod src/semantic-router/go.onnx.sum src/semantic-router/
+COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/
+COPY onnx-binding/go.mod onnx-binding/semantic-router.go onnx-binding/
+COPY ml-binding/go.mod ml-binding/ml_binding.go ml-binding/
+COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go nlp-binding/
+
+RUN cd src/semantic-router && go mod download
+
+COPY src/semantic-router/ src/semantic-router/
+
+# Copy Rust libraries from builder stages (x86_64 only)
+COPY --from=candle-builder /app/candle-binding/target/x86_64-unknown-linux-gnu/release/libcandle_semantic_router.so /app/candle-binding/target/release/
+COPY --from=onnx-rocm-builder /app/onnx-binding/target/x86_64-unknown-linux-gnu/release/libonnx_semantic_router.so /app/onnx-binding/target/release/
+COPY --from=ml-builder /app/ml-binding/target/x86_64-unknown-linux-gnu/release/libml_semantic_router.so /app/ml-binding/target/release/
+COPY --from=nlp-builder /app/nlp-binding/target/x86_64-unknown-linux-gnu/release/libnlp_binding.so /app/nlp-binding/target/release/
+
+ENV CGO_ENABLED=1 \
+    LD_LIBRARY_PATH=/app/candle-binding/target/release:/app/onnx-binding/target/release:/app/ml-binding/target/release:/app/nlp-binding/target/release \
+    GOOS=linux GOARCH=amd64
+
+# Verify libraries
+RUN echo "=== Verifying libraries ===" && \
+    file /app/candle-binding/target/release/libcandle_semantic_router.so && \
+    file /app/onnx-binding/target/release/libonnx_semantic_router.so && \
+    file /app/ml-binding/target/release/libml_semantic_router.so && \
+    file /app/nlp-binding/target/release/libnlp_binding.so
+
+# Build candle router binary
+RUN mkdir -p bin && cd src/semantic-router && \
+    CGO_CFLAGS="-I/app/candle-binding" \
+    CGO_LDFLAGS="-L/app/candle-binding/target/release -L/app/ml-binding/target/release -L/app/nlp-binding/target/release -lcandle_semantic_router -lml_semantic_router -lnlp_binding" \
+    go build -ldflags="-w -s" -o ../../bin/router-candle cmd/main.go
+
+# Build onnx router binary (uses go.onnx.mod which replaces candle-binding => onnx-binding)
+RUN cd src/semantic-router && \
+    CGO_CFLAGS="-I/app/onnx-binding" \
+    CGO_LDFLAGS="-L/app/onnx-binding/target/release -L/app/ml-binding/target/release -L/app/nlp-binding/target/release -lonnx_semantic_router -lml_semantic_router -lnlp_binding" \
+    go build -modfile=go.onnx.mod -tags=onnx -ldflags="-w -s" -o ../../bin/router-onnx cmd/main.go
+
+# Collect shared libraries for final image
+RUN mkdir -p /app/lib && \
+    cp /app/candle-binding/target/release/libcandle_semantic_router.so /app/lib/ && \
+    cp /app/onnx-binding/target/release/libonnx_semantic_router.so /app/lib/ && \
+    cp /app/ml-binding/target/release/libml_semantic_router.so /app/lib/ && \
+    cp /app/nlp-binding/target/release/libnlp_binding.so /app/lib/ && \
+    echo "=== Staged libraries ===" && ls -la /app/lib/
+
+# ============================================================================
+# Final stage: ROCm 7.0 runtime image with ONNX Runtime ROCm
+# ============================================================================
+FROM rocm/dev-ubuntu-22.04:7.0
+
+# Install ROCm runtime libraries needed by ORT (hipBLAS, MIOpen, hipFFT)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates openssl python3-pip \
+    hipblas miopen-hip hipfft rccl && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install official AMD ORT wheel for ROCm 7.0 (not the third-party PyPI package)
+RUN pip3 install --no-cache-dir \
+    https://repo.radeon.com/rocm/manylinux/rocm-rel-7.0/onnxruntime_rocm-1.22.1-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl \
+    'huggingface_hub[cli]==1.5.0' && \
+    ORT_DIR=/usr/local/lib/python3.10/dist-packages/onnxruntime/capi && \
+    ln -sf "$ORT_DIR"/libonnxruntime.so.* "$ORT_DIR/libonnxruntime.so"
+
+WORKDIR /app
+
+# Copy both router binaries
+COPY --from=go-builder /app/bin/router-candle /app/router-candle
+COPY --from=go-builder /app/bin/router-onnx /app/router-onnx
+
+# Copy Rust shared libraries
+COPY --from=go-builder /app/lib/ /app/lib/
+
+COPY config/config.yaml /app/config/
+COPY scripts/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+# Point ort to the ROCm-enabled ORT library and set library paths
+ENV ORT_DYLIB_PATH=/usr/local/lib/python3.10/dist-packages/onnxruntime/capi/libonnxruntime.so \
+    LD_LIBRARY_PATH=/app/lib:/opt/rocm/lib:/usr/local/lib/python3.10/dist-packages/onnxruntime/capi \
+    AI_BINDING=onnx
+
+EXPOSE 50051
+
+ENTRYPOINT ["/app/entrypoint.sh"]

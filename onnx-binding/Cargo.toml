@@ -32,7 +32,7 @@ rocm-dynamic = ["rocm", "ort/load-dynamic"]
 
 [dependencies]
 # ONNX Runtime via ort crate - supports AMD GPU (ROCm), NVIDIA GPU (CUDA), and more
-ort = { version = "2.0.0-rc.11", default-features = false, features = ["std", "ndarray", "copy-dylibs", "download-binaries", "tls-native"] }
+ort = { version = "=2.0.0-rc.10", default-features = false, features = ["std", "ndarray", "copy-dylibs", "download-binaries"] }
 ndarray = "0.17"
 tokenizers = { version = "0.21.0", features = ["http"] }
 serde = { version = "1.0", features = ["derive"] }

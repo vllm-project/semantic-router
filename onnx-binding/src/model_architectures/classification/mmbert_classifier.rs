@@ -221,7 +221,7 @@ impl MmBertSequenceClassifier {
     fn find_onnx_model<P: AsRef<Path>>(model_path: P) -> UnifiedResult<std::path::PathBuf> {
         let dir = model_path.as_ref();
 
-        let candidates = ["model.onnx", "classifier.onnx", "model_optimized.onnx"];
+        let candidates = ["model_sdpa_fp16.onnx", "model.onnx", "classifier.onnx", "model_optimized.onnx"];
 
         for candidate in &candidates {
             let path = dir.join(candidate);
@@ -263,34 +263,59 @@ impl MmBertSequenceClassifier {
                     .map_err(|e: ort::Error| errors::model_load(&onnx_path_str, &e.to_string()))
             }
             ClassifierExecutionProvider::Rocm | ClassifierExecutionProvider::Auto => {
-                // Try ROCm/MIGraphX first
                 #[cfg(feature = "rocm")]
                 {
-                    use ort::execution_providers::{ROCmExecutionProvider, MIGraphXExecutionProvider};
+                    use ort::execution_providers::{ROCmExecutionProvider, MIGraphXExecutionProvider, ArenaExtendStrategy};
+                    use crate::core::gpu_memory;
 
-                    // Try MIGraphX first (better for MI300X)
-                    if let Ok(session) = Session::builder()
+                    // Try MIGraphX first (better for MI300X) — error_on_failure()
+                    // ensures we get a real error instead of silent CPU fallback.
+                    match Session::builder()
                         .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
-                        .with_execution_providers([MIGraphXExecutionProvider::default().build()])
+                        .with_execution_providers([MIGraphXExecutionProvider::default().build().error_on_failure()])
                         .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
                     {
-                        println!("INFO: Using MIGraphX execution provider (AMD GPU)");
-                        return Ok(session);
+                        Ok(session) => {
+                            println!("INFO: Using MIGraphX execution provider (AMD GPU) — verified");
+                            return Ok(session);
+                        }
+                        Err(e) => {
+                            println!("INFO: MIGraphX EP failed to register: {}", e);
+                        }
                     }
 
-                    // Try ROCm
-                    if let Ok(session) = Session::builder()
+                    let mem_limit = gpu_memory::get_gpu_mem_limit();
+                    match Session::builder()
                         .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
-                        .with_execution_providers([ROCmExecutionProvider::default().build()])
+                        .with_execution_providers([
+                            ROCmExecutionProvider::default()
+                                .with_mem_limit(mem_limit)
+                                .with_arena_extend_strategy(ArenaExtendStrategy::SameAsRequested)
+                                .build()
+                                .error_on_failure()
+                        ])
                         .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
                     {
-                        println!("INFO: Using ROCm execution provider (AMD GPU)");
-                        return Ok(session);
+                        Ok(session) => {
+                            println!("INFO: Using ROCm execution provider (AMD GPU) — verified");
+                            return Ok(session);
+                        }
+                        Err(e) => {
+                            println!("INFO: ROCm EP failed to register: {}", e);
+                        }
+                    }
+
+                    println!("WARNING: All GPU execution providers failed, falling back to CPU");
+                }
+
+                #[cfg(not(feature = "rocm"))]
+                {
+                    if matches!(provider, ClassifierExecutionProvider::Rocm) {
+                        println!("WARNING: ROCm requested but 'rocm' feature not enabled, using CPU");
                     }
                 }
 
-                // Fallback to CPU
-                println!("INFO: Falling back to CPU execution provider");
+                println!("INFO: Using CPU execution provider");
                 Session::builder()
                     .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
                     .commit_from_file(onnx_path.as_ref())
@@ -299,19 +324,34 @@ impl MmBertSequenceClassifier {
             ClassifierExecutionProvider::Cuda => {
                 #[cfg(feature = "cuda")]
                 {
-                    use ort::execution_providers::CUDAExecutionProvider;
-                    if let Ok(session) = Session::builder()
+                    use ort::execution_providers::{CUDAExecutionProvider, ArenaExtendStrategy as CudaArenaStrategy};
+                    use crate::core::gpu_memory;
+                    let mem_limit = gpu_memory::get_gpu_mem_limit();
+                    match Session::builder()
                         .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
-                        .with_execution_providers([CUDAExecutionProvider::default().build()])
+                        .with_execution_providers([
+                            CUDAExecutionProvider::default()
+                                .with_memory_limit(mem_limit)
+                                .with_arena_extend_strategy(CudaArenaStrategy::SameAsRequested)
+                                .build()
+                                .error_on_failure()
+                        ])
                         .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
                     {
-                        println!("INFO: Using CUDA execution provider (NVIDIA GPU)");
-                        return Ok(session);
+                        Ok(session) => {
+                            println!("INFO: Using CUDA execution provider (NVIDIA GPU) — verified");
+                            return Ok(session);
+                        }
+                        Err(e) => {
+                            println!("WARNING: CUDA EP failed: {}, falling back to CPU", e);
+                        }
                     }
                 }
 
-                // Fallback
-                println!("INFO: CUDA not available, falling back to CPU");
+                #[cfg(not(feature = "cuda"))]
+                println!("WARNING: CUDA requested but 'cuda' feature not enabled, using CPU");
+
+                println!("INFO: Using CPU execution provider");
                 Session::builder()
                     .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
                     .commit_from_file(onnx_path.as_ref())
@@ -321,18 +361,25 @@ impl MmBertSequenceClassifier {
                 #[cfg(feature = "openvino")]
                 {
                     use ort::execution_providers::OpenVINOExecutionProvider;
-                    if let Ok(session) = Session::builder()
+                    match Session::builder()
                         .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
-                        .with_execution_providers([OpenVINOExecutionProvider::default().build()])
+                        .with_execution_providers([OpenVINOExecutionProvider::default().build().error_on_failure()])
                         .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
                     {
-                        println!("INFO: Using OpenVINO execution provider (Intel)");
-                        return Ok(session);
+                        Ok(session) => {
+                            println!("INFO: Using OpenVINO execution provider (Intel) — verified");
+                            return Ok(session);
+                        }
+                        Err(e) => {
+                            println!("WARNING: OpenVINO EP failed: {}, falling back to CPU", e);
+                        }
                     }
                 }
 
-                // Fallback
-                println!("INFO: OpenVINO not available, falling back to CPU");
+                #[cfg(not(feature = "openvino"))]
+                println!("WARNING: OpenVINO requested but 'openvino' feature not enabled, using CPU");
+
+                println!("INFO: Using CPU execution provider");
                 Session::builder()
                     .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
                     .commit_from_file(onnx_path.as_ref())

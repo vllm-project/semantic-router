@@ -812,7 +812,7 @@ func TestClassificationStubs(t *testing.T) {
 	})
 
 	t.Run("ClassifyMmBert32KPII", func(t *testing.T) {
-		entities, err := ClassifyMmBert32KPII("My SSN is 123-45-6789", "")
+		entities, err := ClassifyMmBert32KPII("My SSN is 123-45-6789")
 		if err == nil {
 			t.Logf("Unexpected success: %d entities", len(entities))
 		}
@@ -1038,4 +1038,110 @@ func TestTypeDefinitions(t *testing.T) {
 			t.Errorf("Expected Label=NLIEntailment, got %d", result.Label)
 		}
 	})
+}
+
+// TestMultiModalEmbeddingOutput tests the MultiModalEmbeddingOutput struct.
+func TestMultiModalEmbeddingOutput(t *testing.T) {
+	output := MultiModalEmbeddingOutput{
+		Embedding:        []float32{0.1, 0.2, 0.3},
+		Modality:         "text",
+		ProcessingTimeMs: 5.0,
+	}
+	if output.Modality != "text" {
+		t.Errorf("Expected Modality='text', got '%s'", output.Modality)
+	}
+	if len(output.Embedding) != 3 {
+		t.Errorf("Expected 3 dims, got %d", len(output.Embedding))
+	}
+}
+
+// TestMultiModalEncodeTextNotInitialized verifies error when model is not loaded.
+func TestMultiModalEncodeTextNotInitialized(t *testing.T) {
+	_, err := MultiModalEncodeText("hello", 0)
+	if err == nil {
+		t.Error("Expected error when model not initialized, got nil")
+	}
+}
+
+// TestMultiModalEncodeImageEmptyInput tests empty pixel data.
+func TestMultiModalEncodeImageEmptyInput(t *testing.T) {
+	_, err := MultiModalEncodeImage(nil, 0, 0, 0)
+	if err == nil {
+		t.Error("Expected error for empty pixelData, got nil")
+	}
+}
+
+// TestMultiModalEncodeImageWrongSize tests mismatched pixel dimensions.
+func TestMultiModalEncodeImageWrongSize(t *testing.T) {
+	_, err := MultiModalEncodeImage([]float32{1.0, 2.0}, 512, 512, 0)
+	if err == nil {
+		t.Error("Expected error for wrong pixelData size, got nil")
+	}
+}
+
+// TestMultiModalEncodeAudioEmptyInput tests empty mel data.
+func TestMultiModalEncodeAudioEmptyInput(t *testing.T) {
+	_, err := MultiModalEncodeAudio(nil, 0, 0, 0)
+	if err == nil {
+		t.Error("Expected error for empty melData, got nil")
+	}
+}
+
+// TestMultiModalEncodeImageFromURLEmpty tests empty URL.
+func TestMultiModalEncodeImageFromURLEmpty(t *testing.T) {
+	_, err := MultiModalEncodeImageFromURL("", 0)
+	if err == nil {
+		t.Error("Expected error for empty URL, got nil")
+	}
+}
+
+// TestMultiModalEncodeImageFromURLHttpBlocked tests that http:// is rejected.
+func TestMultiModalEncodeImageFromURLHttpBlocked(t *testing.T) {
+	_, err := MultiModalEncodeImageFromURL("http://example.com/image.png", 0)
+	if err == nil {
+		t.Error("Expected error for http URL, got nil")
+	}
+}
+
+// TestMultiModalEncodeImageFromBase64Empty tests empty base64 input.
+func TestMultiModalEncodeImageFromBase64Empty(t *testing.T) {
+	_, err := MultiModalEncodeImageFromBase64("", 0)
+	if err == nil {
+		t.Error("Expected error for empty base64, got nil")
+	}
+}
+
+// TestMultiModalEncodeImageFromBase64Invalid tests invalid base64.
+func TestMultiModalEncodeImageFromBase64Invalid(t *testing.T) {
+	_, err := MultiModalEncodeImageFromBase64("not-valid-base64!!!", 0)
+	if err == nil {
+		t.Error("Expected error for invalid base64, got nil")
+	}
+}
+
+// TestMultiModalEncodeImageFromBytesEmpty tests empty byte input.
+func TestMultiModalEncodeImageFromBytesEmpty(t *testing.T) {
+	_, err := MultiModalEncodeImageFromBytes(nil, 0)
+	if err == nil {
+		t.Error("Expected error for empty bytes, got nil")
+	}
+}
+
+// TestModalityToString tests the modalityToString helper.
+func TestModalityToString(t *testing.T) {
+	tests := []struct {
+		input    int
+		expected string
+	}{
+		{0, "text"},
+		{1, "image"},
+		{2, "audio"},
+		{99, "unknown"},
+	}
+	for _, tt := range tests {
+		got := modalityToString(tt.input)
+		if got != tt.expected {
+			t.Errorf("modalityToString(%d) = %q, want %q", tt.input, got, tt.expected)
+		}
+	}
 }

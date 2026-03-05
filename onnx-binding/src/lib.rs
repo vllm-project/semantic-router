@@ -23,6 +23,9 @@ pub use core::unified_error::{UnifiedError, UnifiedResult};
 pub use model_architectures::embedding::mmbert_embedding::{
     MatryoshkaConfig, MmBertEmbeddingConfig, MmBertEmbeddingModel,
 };
+pub use model_architectures::embedding::multimodal_embedding::{
+    MultiModalConfig, MultiModalEmbeddingModel,
+};
 
 // Classification types
 pub use model_architectures::classification::{
