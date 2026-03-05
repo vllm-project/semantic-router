@@ -990,7 +990,8 @@ func TestProcessRoomUserMessage_LeaderDelegatesToWorker(t *testing.T) {
 	}
 
 	userMessage := newRoomMessage(room, "user", "user-1", "You", "Please @leader break this down and delegate.", nil)
-	if err := h.appendRoomMessage(room.ID, userMessage); err != nil {
+	err = h.appendRoomMessage(room.ID, userMessage)
+	if err != nil {
 		t.Fatalf("failed to append user message: %v", err)
 	}
 
@@ -1131,7 +1132,8 @@ func TestProcessRoomUserMessage_SimultaneousMentionsContinueChain(t *testing.T) 
 	}
 
 	userMessage := newRoomMessage(room, "user", "user-1", "You", "Please @leader and @worker-a collaborate.", nil)
-	if err := h.appendRoomMessage(room.ID, userMessage); err != nil {
+	err = h.appendRoomMessage(room.ID, userMessage)
+	if err != nil {
 		t.Fatalf("failed to append user message: %v", err)
 	}
 
@@ -1234,7 +1236,8 @@ func TestProcessRoomUserMessage_DuplicateTriggerDoesNotReprocess(t *testing.T) {
 	}
 
 	trigger := newRoomMessage(room, "user", "user-1", "You", "@worker-a run once", nil)
-	if err := h.appendRoomMessage(room.ID, trigger); err != nil {
+	err = h.appendRoomMessage(room.ID, trigger)
+	if err != nil {
 		t.Fatalf("failed to append trigger message: %v", err)
 	}
 

@@ -392,10 +392,6 @@ func resolveMentionTargetsWithFallback(
 	return out
 }
 
-func resolveMentionTargets(mentions []string, team TeamEntry, workers []ContainerEntry) []ContainerEntry {
-	return resolveMentionTargetsWithFallback(mentions, team, workers, true)
-}
-
 func buildRoomTranscript(messages []ClawRoomMessage, limit int) string {
 	if limit <= 0 {
 		limit = 16
@@ -736,11 +732,11 @@ func (h *OpenClawHandler) queryWorkerChat(worker ContainerEntry, systemPrompt, u
 
 	recovered, ensureErr := h.ensureWorkerChatEndpoint(worker)
 	if ensureErr != nil {
-		return "", fmt.Errorf("%v; automatic endpoint repair failed: %w", err, ensureErr)
+		return "", fmt.Errorf("%w; automatic endpoint repair failed: %w", err, ensureErr)
 	}
 	if !recovered {
 		return "", fmt.Errorf(
-			"%v; worker endpoint recovery skipped (read-only mode). ensure gateway.http.endpoints.chatCompletions.enabled=true in %s",
+			"%w; worker endpoint recovery skipped (read-only mode). ensure gateway.http.endpoints.chatCompletions.enabled=true in %s",
 			err,
 			h.workerConfigPath(worker),
 		)
@@ -748,7 +744,7 @@ func (h *OpenClawHandler) queryWorkerChat(worker ContainerEntry, systemPrompt, u
 
 	content, _, retryErr := attempt()
 	if retryErr != nil {
-		return "", fmt.Errorf("%v; retry after endpoint repair failed: %w", err, retryErr)
+		return "", fmt.Errorf("%w; retry after endpoint repair failed: %w", err, retryErr)
 	}
 	return content, nil
 }
@@ -1236,8 +1232,8 @@ func (h *OpenClawHandler) RoomByIDHandler() http.HandlerFunc {
 					return
 				}
 
-				nextRooms := append(rooms[:index:index], rooms[index+1:]...)
-				if err := h.saveRooms(nextRooms); err != nil {
+				rooms = append(rooms[:index], rooms[index+1:]...)
+				if err := h.saveRooms(rooms); err != nil {
 					h.mu.Unlock()
 					writeJSONError(w, fmt.Sprintf("Failed to save rooms: %v", err), http.StatusInternalServerError)
 					return
