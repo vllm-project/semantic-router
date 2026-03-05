@@ -62,9 +62,9 @@ const TopologyFlow: React.FC = () => {
     if (nodes.length > 0) {
       const timer = setTimeout(() => {
         fitView({
-          padding: 0.1,
+          padding: 0.12,
           duration: 300,
-          minZoom: 0.2,
+          minZoom: 0.15,
           maxZoom: 1.0
         })
       }, 100)
@@ -107,20 +107,36 @@ const TopologyFlow: React.FC = () => {
       <div className={styles.content}>
         {/* Flow Canvas */}
         <div className={styles.flowContainer}>
+          <div className={styles.layerGuide} aria-hidden="true">
+            <div className={styles.layerGuideItem}>
+              <span className={styles.layerGuideTag}>Layer 1</span>
+              <span className={styles.layerGuideTitle}>Signal Extraction</span>
+            </div>
+            <span className={styles.layerGuideArrow}>→</span>
+            <div className={styles.layerGuideItem}>
+              <span className={styles.layerGuideTag}>Layer 2</span>
+              <span className={styles.layerGuideTitle}>Decision Engine</span>
+            </div>
+            <span className={styles.layerGuideArrow}>→</span>
+            <div className={styles.layerGuideItem}>
+              <span className={styles.layerGuideTag}>Layer 3</span>
+              <span className={styles.layerGuideTitle}>Plugin Projection</span>
+            </div>
+          </div>
           <ReactFlow
             nodes={nodes}
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             nodeTypes={customNodeTypes}
-            connectionLineType={ConnectionLineType.Bezier}
+            connectionLineType={ConnectionLineType.SmoothStep}
             defaultEdgeOptions={{
-              type: 'bezier',
+              type: 'smoothstep',
               style: { strokeWidth: 1.5 },
             }}
             fitView
-            fitViewOptions={{ padding: 0.1, minZoom: 0.2, maxZoom: 1.0 }}
-            defaultViewport={{ x: 0, y: 0, zoom: 0.4 }}
+            fitViewOptions={{ padding: 0.12, minZoom: 0.15, maxZoom: 1.0 }}
+            defaultViewport={{ x: 0, y: 0, zoom: 0.32 }}
           >
             <Background 
               variant={BackgroundVariant.Dots}

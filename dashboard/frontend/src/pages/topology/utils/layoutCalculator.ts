@@ -12,6 +12,7 @@ import {
 } from '../types'
 import {
   LAYOUT_CONFIG,
+  TOPOLOGY_LAYER_LAYOUT,
   SIGNAL_TYPES,
   SIGNAL_LATENCY,
   EDGE_COLORS,
@@ -31,13 +32,21 @@ interface ModelConnection {
   reasoningEffort?: string
 }
 
-// Helper function to create edge with vertical connection points (top-to-bottom layout)
-function createVerticalEdge(baseEdge: Partial<Edge>): Edge {
+type LayerName = keyof typeof TOPOLOGY_LAYER_LAYOUT.x
+
+// Helper function to create edge using each node's default handles.
+// Node handles are configured as left-in / right-out for LR flow.
+function createFlowEdge(baseEdge: Partial<Edge>): Edge {
   return {
     ...baseEdge,
-    sourceHandle: 'bottom',  // Connect from bottom of source node
-    targetHandle: 'top',     // Connect to top of target node
   } as Edge
+}
+
+function getAdaptiveLayerSpacing(layerName: LayerName, nodeCount: number): number {
+  const rule = TOPOLOGY_LAYER_LAYOUT.verticalSpacing[layerName]
+  if (nodeCount <= rule.compactThreshold) return rule.base
+  const overflow = nodeCount - rule.compactThreshold
+  return Math.max(rule.min, rule.base - overflow * rule.compactStep)
 }
 
 // Calculate decision node height based on content
@@ -192,7 +201,7 @@ export function calculateFullLayout(
       },
     })
 
-    edges.push(createVerticalEdge({
+    edges.push(createFlowEdge({
       id: `e-${lastSourceId}-${signalGroupId}`,
       source: lastSourceId,
       target: signalGroupId,
@@ -258,7 +267,7 @@ export function calculateFullLayout(
       })
       
       // Connect from client to dynamic signal group
-      edges.push(createVerticalEdge({
+      edges.push(createFlowEdge({
         id: `e-${lastSourceId}-${signalGroupId}`,
         source: lastSourceId,
         target: signalGroupId,
@@ -334,7 +343,7 @@ export function calculateFullLayout(
       const signalGroupId = `signal-group-${signalType}`
       if (nodes.find(n => n.id === signalGroupId)) {
         hasConnection = true
-        edges.push(createVerticalEdge({
+        edges.push(createFlowEdge({
           id: `e-${signalGroupId}-${decisionId}`,
           source: signalGroupId,
           target: decisionId,
@@ -355,7 +364,7 @@ export function calculateFullLayout(
 
     // If no valid signal connections found, connect from default upstream
     if (!hasConnection) {
-      edges.push(createVerticalEdge({
+      edges.push(createFlowEdge({
         id: `e-${defaultUpstream}-${decisionId}`,
         source: defaultUpstream,
         target: decisionId,
@@ -386,7 +395,7 @@ export function calculateFullLayout(
         },
       })
 
-      edges.push(createVerticalEdge({
+      edges.push(createFlowEdge({
         id: `e-${currentSourceId}-${algorithmId}`,
         source: currentSourceId,
         target: algorithmId,
@@ -429,7 +438,7 @@ export function calculateFullLayout(
         },
       })
 
-      edges.push(createVerticalEdge({
+      edges.push(createFlowEdge({
         id: `e-${currentSourceId}-${pluginChainId}`,
         source: currentSourceId,
         target: pluginChainId,
@@ -462,7 +471,7 @@ export function calculateFullLayout(
     })
 
     // Connect default route from client (bypasses signal matching)
-    edges.push(createVerticalEdge({
+    edges.push(createFlowEdge({
       id: `e-${clientId}-${defaultRouteId}`,
       source: clientId,
       target: defaultRouteId,
@@ -510,7 +519,7 @@ export function calculateFullLayout(
       const signalGroupId = `signal-group-${signalType}`
       if (nodes.find(n => n.id === signalGroupId)) {
         hasSignalConnection = true
-        edges.push(createVerticalEdge({
+        edges.push(createFlowEdge({
           id: `e-${signalGroupId}-${fallbackDecisionId}`,
           source: signalGroupId,
           target: fallbackDecisionId,
@@ -533,7 +542,7 @@ export function calculateFullLayout(
     
     // If no signal connections, connect from client directly
     if (!hasSignalConnection) {
-      edges.push(createVerticalEdge({
+      edges.push(createFlowEdge({
         id: `e-${clientId}-${fallbackDecisionId}`,
         source: clientId,
         target: fallbackDecisionId,
@@ -641,7 +650,7 @@ export function calculateFullLayout(
       const configModelId = `model-${configKey.replace(/[^a-zA-Z0-9]/g, '-')}`
       const edgeHighlighted = isHighlighted(conn.sourceId) && isHighlighted(configModelId)
       
-      edges.push(createVerticalEdge({
+      edges.push(createFlowEdge({
         id: edgeId,
         source: conn.sourceId,
         target: modelId,
@@ -695,7 +704,7 @@ export function calculateFullLayout(
       // Default model already exists, just connect to it
       const edgeHighlighted = isHighlighted(defaultRouteId) && isHighlighted(existingModelNode.id)
 
-      edges.push(createVerticalEdge({
+      edges.push(createFlowEdge({
         id: `e-${defaultRouteId}-${existingModelNode.id}`,
         source: defaultRouteId,
         target: existingModelNode.id,
@@ -732,7 +741,7 @@ export function calculateFullLayout(
 
       const edgeHighlighted = isHighlighted(defaultRouteId) && modelHighlighted
 
-      edges.push(createVerticalEdge({
+      edges.push(createFlowEdge({
         id: `e-${defaultRouteId}-${defaultModelId}`,
         source: defaultRouteId,
         target: defaultModelId,
@@ -762,7 +771,7 @@ export function calculateFullLayout(
     
     if (existingModelNode) {
       // Connect fallback decision to existing model
-      edges.push(createVerticalEdge({
+      edges.push(createFlowEdge({
         id: `e-${fallbackDecisionSourceId}-${matchedModelId}`,
         source: fallbackDecisionSourceId,
         target: matchedModelId,
@@ -783,7 +792,7 @@ export function calculateFullLayout(
       const defaultModelNode = nodes.find(n => n.id === defaultModelId)
 
       if (defaultModelNode) {
-        edges.push(createVerticalEdge({
+        edges.push(createFlowEdge({
           id: `e-${fallbackDecisionSourceId}-${defaultModelId}`,
           source: fallbackDecisionSourceId,
           target: defaultModelId,
@@ -805,13 +814,13 @@ export function calculateFullLayout(
   const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}))
 
   g.setGraph({
-    rankdir: 'TB',           // Top to Bottom (changed from LR)
-    nodesep: 80,             // Horizontal spacing between nodes in same rank
-    ranksep: 100,            // Vertical spacing between ranks/rows
+    rankdir: 'LR',              // Left to Right
+    nodesep: 56,                // Vertical spacing in same rank
+    ranksep: 190,               // Horizontal spacing between ranks/columns
     marginx: 80,
     marginy: 80,
-    ranker: 'network-simplex', // Best for DAGs
-    align: 'UL',             // Align nodes to upper-left for better distribution
+    ranker: 'network-simplex',
+    align: 'UL',
   })
 
   // Add nodes with dimensions to Dagre
@@ -828,19 +837,25 @@ export function calculateFullLayout(
   // Run layout algorithm
   Dagre.layout(g)
 
-  // ============== Neural Network Layer Structure ==============
-  // Define fixed Y positions for each layer to create clear neural network structure
-  const LAYER_Y_POSITIONS = {
-    client: 0,           // Layer 1: User Query
-    signals: 280,        // Layer 2: Signals (increased from 200)
-    decisions: 680,      // Layer 3: Decisions (increased from 500)
-    algorithms: 900,     // Layer 3.5: Algorithms (between decisions and plugin chains)
-    pluginChains: 1100,  // Layer 4: Plugin Chains (increased from 1000)
-    models: 1400,        // Layer 5: Models (increased from 1300)
-  }
+  // Initialize from Dagre positions so each layer keeps a stable ordering
+  nodes.forEach(node => {
+    const dagreNode = g.node(node.id)
+    if (!dagreNode) return
+    const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
+    node.position = {
+      x: dagreNode.x - dim.width / 2,
+      y: dagreNode.y - dim.height / 2,
+    }
+  })
+
+  // ============== Three-Layer Architecture (Left -> Right) ==============
+  // Layer 1: Input (client + signals)
+  // Layer 2: Decision (decision engine)
+  // Layer 3: Projection (algorithm/plugin/model execution)
+  const LAYER_X_POSITIONS = TOPOLOGY_LAYER_LAYOUT.x
 
   // Group nodes by layer
-  const nodesByLayer: Record<string, Node[]> = {
+  const nodesByLayer: Record<LayerName, Node[]> = {
     client: [],
     signals: [],
     decisions: [],
@@ -865,46 +880,85 @@ export function calculateFullLayout(
     }
   })
 
-  // Apply positions with layer-based Y and centered X
+  const nodeById = new Map<string, Node>()
+  nodes.forEach(node => {
+    nodeById.set(node.id, node)
+  })
+
+  const incomingSourcesByTarget = new Map<string, string[]>()
+  edges.forEach(edge => {
+    if (!incomingSourcesByTarget.has(edge.target)) {
+      incomingSourcesByTarget.set(edge.target, [])
+    }
+    incomingSourcesByTarget.get(edge.target)!.push(edge.source)
+  })
+
+  const getNodeCenterY = (node: Node): number => {
+    const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
+    return (node.position?.y ?? 0) + dim.height / 2
+  }
+
+  // Use upstream barycenter ordering to reduce edge crossings in dense layers.
+  const getIncomingBarycenter = (nodeId: string, currentLayerX: number): number | null => {
+    const sourceIds = incomingSourcesByTarget.get(nodeId)
+    if (!sourceIds || sourceIds.length === 0) return null
+
+    const sourceCenters = sourceIds
+      .map(sourceId => nodeById.get(sourceId))
+      .filter((sourceNode): sourceNode is Node => Boolean(sourceNode))
+      .filter(sourceNode => (sourceNode.position?.x ?? 0) < currentLayerX)
+      .map(sourceNode => getNodeCenterY(sourceNode))
+      .filter(centerY => Number.isFinite(centerY))
+
+    if (sourceCenters.length === 0) return null
+
+    const sum = sourceCenters.reduce((acc, centerY) => acc + centerY, 0)
+    return sum / sourceCenters.length
+  }
+
+  // Apply positions with layer-based X and centered Y
   Object.entries(nodesByLayer).forEach(([layerName, layerNodes]) => {
     if (layerNodes.length === 0) return
 
-    const layerY = LAYER_Y_POSITIONS[layerName as keyof typeof LAYER_Y_POSITIONS]
+    const typedLayerName = layerName as LayerName
+    const layerX = LAYER_X_POSITIONS[typedLayerName]
+    const spacing = getAdaptiveLayerSpacing(typedLayerName, layerNodes.length)
 
-    // Calculate total width of all nodes in this layer
-    const totalWidth = layerNodes.reduce((sum, node) => {
+    const orderedNodes = [...layerNodes].sort(
+      (a, b) => {
+        const aBarycenter = getIncomingBarycenter(a.id, layerX)
+        const bBarycenter = getIncomingBarycenter(b.id, layerX)
+
+        if (aBarycenter !== null && bBarycenter !== null && aBarycenter !== bBarycenter) {
+          return aBarycenter - bBarycenter
+        }
+        if (aBarycenter !== null && bBarycenter === null) return -1
+        if (aBarycenter === null && bBarycenter !== null) return 1
+        return (a.position?.y ?? 0) - (b.position?.y ?? 0)
+      }
+    )
+
+    const totalHeight = orderedNodes.reduce((sum, node) => {
       const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
-      return sum + dim.width
+      return sum + dim.height
     }, 0)
 
-    // Different spacing for different layers
-    let spacing = 80  // Default spacing
-    if (layerName === 'pluginChains') {
-      spacing = 150  // More spacing for plugin chains
-    } else if (layerName === 'models') {
-      spacing = 120  // More spacing for models
-    } else if (layerName === 'decisions') {
-      spacing = 100  // Slightly more spacing for decisions
-    } else if (layerName === 'algorithms') {
-      spacing = 100  // Same spacing as decisions
+    if (orderedNodes.length === 1 && layerName === 'client') {
+      orderedNodes[0].position = { x: layerX, y: 0 }
+      return
     }
 
-    const totalSpacing = (layerNodes.length - 1) * spacing
-    const layerTotalWidth = totalWidth + totalSpacing
+    const totalSpacing = Math.max(orderedNodes.length - 1, 0) * spacing
+    let currentY = -(totalHeight + totalSpacing) / 2
 
-    // Start X position to center the layer
-    let currentX = -layerTotalWidth / 2
-
-    // Position each node in the layer
-    layerNodes.forEach(node => {
+    orderedNodes.forEach(node => {
       const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
-
       node.position = {
-        x: currentX,
-        y: layerY,
+        x: layerX,
+        y: currentY,
       }
 
-      currentX += dim.width + spacing
+      currentY += dim.height + spacing
     })
   })
 

@@ -166,6 +166,28 @@ export const LAYOUT_CONFIG = {
   pluginItemHeight: 20,        // Per plugin item
 }
 
+// ============== Three-Layer LR Layout (Brain Page) ==============
+// Keep these values configurable so dense topologies can be compacted
+// without changing layout code.
+export const TOPOLOGY_LAYER_LAYOUT = {
+  x: {
+    client: 0,
+    signals: 280,
+    decisions: 760,
+    algorithms: 1140,
+    pluginChains: 1400,
+    models: 1700,
+  },
+  verticalSpacing: {
+    client: { base: 0, min: 0, compactThreshold: 1, compactStep: 0 },
+    signals: { base: 34, min: 14, compactThreshold: 8, compactStep: 2.5 },
+    decisions: { base: 42, min: 16, compactThreshold: 9, compactStep: 3 },
+    algorithms: { base: 48, min: 20, compactThreshold: 4, compactStep: 4 },
+    pluginChains: { base: 52, min: 20, compactThreshold: 5, compactStep: 4 },
+    models: { base: 40, min: 14, compactThreshold: 9, compactStep: 3 },
+  },
+} as const
+
 // ============== Signal Types Array ==============
 export const SIGNAL_TYPES: SignalType[] = [
   'keyword',

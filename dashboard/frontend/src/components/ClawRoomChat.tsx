@@ -7,6 +7,7 @@ import {
   type ChangeEvent,
   type FormEvent,
   type KeyboardEvent,
+  type ReactNode,
 } from 'react'
 import MarkdownRenderer from './MarkdownRenderer'
 import styles from './ClawRoomChat.module.css'
@@ -101,6 +102,7 @@ interface SenderVisual {
 interface ClawRoomChatProps {
   isSidebarOpen?: boolean
   createRoomRequestToken?: number
+  inputModeControls?: ReactNode
 }
 
 const OPENCLAW_LOGO_SRC = '/openclaw.svg'
@@ -175,6 +177,7 @@ const sanitizeLookupKey = (value: string | undefined): string => {
 const ClawRoomChat = ({
   isSidebarOpen = true,
   createRoomRequestToken = 0,
+  inputModeControls,
 }: ClawRoomChatProps) => {
   const [teams, setTeams] = useState<TeamProfile[]>([])
   const [workers, setWorkers] = useState<WorkerProfile[]>([])
@@ -1158,7 +1161,14 @@ const ClawRoomChat = ({
           <header className={styles.chatHeader}>
             <div className={styles.chatTitleWrap}>
               <h3 className={styles.chatTitle}>{selectedTeam?.name || 'No team selected'}</h3>
-              {selectedTeam?.role && <span className={styles.chatSubtitle}>{selectedTeam.role}</span>}
+              {selectedRoomId && (
+                <span
+                  className={`${styles.chatTitleStatus} ${wsConnected ? styles.wsConnected : styles.wsDisconnected}`}
+                  title={wsConnected ? 'WebSocket connected' : 'WebSocket disconnected (using fallback)'}
+                >
+                  {wsConnected ? '● Live' : '○ Reconnecting...'}
+                </span>
+              )}
             </div>
 
             <div className={styles.teamInlineInfo}>
@@ -1166,14 +1176,6 @@ const ClawRoomChat = ({
                 <span className={styles.teamInlineMetaText}>
                   {selectedRoom ? `Room · ${selectedRoom.name}` : 'Create or select a room to start'}
                 </span>
-                {selectedRoomId && (
-                  <span
-                    className={wsConnected ? styles.wsConnected : styles.wsDisconnected}
-                    title={wsConnected ? 'WebSocket connected' : 'WebSocket disconnected (using fallback)'}
-                  >
-                    {wsConnected ? '● Live' : '○ Reconnecting...'}
-                  </span>
-                )}
                 {(selectedTeam?.role || selectedTeam?.vibe) && (
                   <div className={styles.metaInline}>
                     {selectedTeam?.role && <span className={styles.metaPill}>{selectedTeam.role}</span>}
@@ -1317,6 +1319,11 @@ const ClawRoomChat = ({
                   disabled={!selectedRoomId || posting}
                 />
                 <div className={styles.inputActionsRow}>
+                  {inputModeControls && (
+                    <div className={styles.inputModeControls}>
+                      {inputModeControls}
+                    </div>
+                  )}
                   <button
                     type="button"
                     className={styles.sendButton}

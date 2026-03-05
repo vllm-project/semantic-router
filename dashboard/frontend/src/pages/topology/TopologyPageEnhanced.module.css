@@ -89,6 +89,52 @@
   );
 }
 
+.layerGuide {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(9, 13, 9, 0.72);
+  border: 1px solid rgba(118, 185, 0, 0.35);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+.layerGuideItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 150px;
+}
+
+.layerGuideTag {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(190, 205, 190, 0.9);
+}
+
+.layerGuideTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f0f5eb;
+  white-space: nowrap;
+}
+
+.layerGuideArrow {
+  color: #76b900;
+  font-size: 18px;
+  line-height: 1;
+}
+
 /* ReactFlow Custom Styling */
 .flowContainer :global(.react-flow) {
   background: transparent;
@@ -268,6 +314,16 @@
   .bottomPanel {
     height: 90px;
   }
+
+  .layerGuide {
+    top: 10px;
+    gap: 8px;
+    padding: 6px 10px;
+  }
+
+  .layerGuideItem {
+    min-width: 130px;
+  }
 }
 
 @media (max-width: 768px) {
@@ -285,5 +341,9 @@
   /* Hide MiniMap (preview) on mobile */
   .flowContainer :global(.react-flow__minimap) {
     display: none !important;
+  }
+
+  .layerGuide {
+    display: none;
   }
 }
