@@ -13,12 +13,11 @@ import (
 
 // --- Token ---
 
-func (h *OpenClawHandler) gatewayTokenForContainer(name string) string {
-	entry := h.findEntry(name)
-	if entry != nil && entry.Token != "" {
-		return entry.Token
+func (h *OpenClawHandler) gatewayTokenFromConfigPath(configPath string) string {
+	configPath = strings.TrimSpace(configPath)
+	if configPath == "" {
+		return ""
 	}
-	configPath := filepath.Join(h.containerDataDir(name), "openclaw.json")
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return ""
@@ -33,7 +32,36 @@ func (h *OpenClawHandler) gatewayTokenForContainer(name string) string {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return ""
 	}
-	return cfg.Gateway.Auth.Token
+	return strings.TrimSpace(cfg.Gateway.Auth.Token)
+}
+
+func (h *OpenClawHandler) gatewayTokenForContainer(name string) string {
+	normalizedName := sanitizeContainerName(name)
+	if normalizedName == "" {
+		return ""
+	}
+
+	entry := h.findEntry(normalizedName)
+	if entry != nil && strings.TrimSpace(entry.DataDir) != "" {
+		configPath := filepath.Join(strings.TrimSpace(entry.DataDir), "openclaw.json")
+		if token := h.gatewayTokenFromConfigPath(configPath); token != "" {
+			return token
+		}
+	}
+
+	// Backward-compatible fallback path.
+	if token := h.gatewayTokenFromConfigPath(filepath.Join(h.containerDataDir(normalizedName), "openclaw.json")); token != "" {
+		return token
+	}
+
+	if entry != nil {
+		return strings.TrimSpace(entry.Token)
+	}
+	return ""
+}
+
+func (h *OpenClawHandler) GatewayTokenForContainer(name string) string {
+	return h.gatewayTokenForContainer(name)
 }
 
 func (h *OpenClawHandler) TokenHandler() http.HandlerFunc {
@@ -49,7 +77,7 @@ func (h *OpenClawHandler) TokenHandler() http.HandlerFunc {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]string{
-			"token": h.gatewayTokenForContainer(name),
+			"token": h.GatewayTokenForContainer(name),
 		}); err != nil {
 			log.Printf("openclaw: token encode error: %v", err)
 		}
@@ -165,6 +193,7 @@ func (h *OpenClawHandler) checkContainerHealth(entry ContainerEntry) OpenClawSta
 		AgentRole:       snapshot.Role,
 		AgentVibe:       snapshot.Vibe,
 		AgentPrinciples: snapshot.Principles,
+		RoleKind:        normalizeRoleKind(entry.RoleKind),
 	}
 
 	out, err := h.containerOutput("inspect", "-f", "{{.State.Running}}", entry.Name)

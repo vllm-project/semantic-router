@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -14,7 +15,7 @@ import (
 
 // SetupMCP configures MCP related routes
 // Returns MCP Manager instance for lifecycle management
-func SetupMCP(mux *http.ServeMux, cfg *config.Config) *mcp.Manager {
+func SetupMCP(mux *http.ServeMux, cfg *config.Config, openClawHandler *handlers.OpenClawHandler) *mcp.Manager {
 	if !cfg.MCPEnabled {
 		log.Printf("MCP feature disabled")
 		return nil
@@ -22,6 +23,30 @@ func SetupMCP(mux *http.ServeMux, cfg *config.Config) *mcp.Manager {
 
 	// Initialize MCP manager (in-memory only, no config persistence)
 	mcpManager := mcp.NewManager()
+
+	// Register built-in OpenClaw MCP endpoint and server config.
+	if cfg.OpenClawEnabled && openClawHandler != nil {
+		mux.Handle("/api/openclaw/mcp", handlers.NewOpenClawMCPHandler(openClawHandler))
+
+		serverURL := fmt.Sprintf("http://127.0.0.1:%s/api/openclaw/mcp", cfg.Port)
+		if err := mcpManager.AddServer(&mcp.ServerConfig{
+			ID:          mcp.BuiltinOpenClawServerID,
+			Name:        mcp.BuiltinOpenClawServerName,
+			Description: "Built-in MCP server for OpenClaw team, worker, and connection management",
+			Transport:   mcp.TransportStreamableHTTP,
+			Connection: mcp.ConnectionConfig{
+				URL: serverURL,
+			},
+			Enabled: false,
+			Options: &mcp.ServerOptions{
+				Timeout: 30000,
+			},
+		}); err != nil {
+			log.Printf("Failed to register built-in OpenClaw MCP server: %v", err)
+		} else {
+			log.Printf("Built-in OpenClaw MCP endpoint registered: /api/openclaw/mcp (server id: %s)", mcp.BuiltinOpenClawServerID)
+		}
+	}
 
 	// Create MCP handler
 	mcpHandler := handlers.NewMCPHandler(mcpManager, cfg.ReadonlyMode)

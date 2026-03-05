@@ -3,6 +3,9 @@
   border-radius: 8px;
   border: 1px solid rgba(118, 185, 0, 0.4);
   background: linear-gradient(to bottom, rgba(30, 30, 35, 0.5), rgba(25, 25, 30, 0.3));
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow: hidden;
   transition: all 0.2s ease;
 }
@@ -136,6 +139,10 @@
   padding: 14px;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
   background-color: rgba(20, 20, 25, 0.4);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
   animation: expandContent 0.2s ease;
 }
 
@@ -170,6 +177,8 @@
 .content :global(.markdown) span,
 .content :global(.markdown) div {
   color: rgba(255, 255, 255, 0.5) !important;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .content :global(.markdown) strong {

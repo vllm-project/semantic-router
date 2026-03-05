@@ -76,7 +76,7 @@ semantic_cache:
   # embedding_model: "mmbert"  # Optional: explicitly set if you want to override auto-detection
 
 tools:
-  enabled: true
+  enabled: false
   top_k: 3
   similarity_threshold: 0.2
   tools_db_path: "config/tools_db.json"

@@ -252,7 +252,7 @@ const OpenClawPage: React.FC = () => {
             <span className={styles.titleLinePrimary}>
               <span className={styles.titleLead}>Semantic Router</span> Powered
             </span>
-            <span className={styles.titleLineSecondary}>Claw Swarm</span>
+            <span className={styles.titleLineSecondary}>ClawOS</span>
           </h1>
           <p className={styles.subtitle}>
             Evolved from vLLM-SR built on Semantic Router with System Intelligence.
@@ -277,7 +277,7 @@ const OpenClawPage: React.FC = () => {
                 <path d="M19 6l-7 4-7-4" />
               </svg>
             </span>
-            Architecture
+            Overview
           </button>
           <button
             className={`${styles.tab} ${activeTab === 'dashboard' ? styles.tabActive : ''}`}
@@ -304,7 +304,7 @@ const OpenClawPage: React.FC = () => {
                 <path d="M16 3.13a4 4 0 0 1 0 7.75" />
               </svg>
             </span>
-            Claw Swarm ({teamCount})
+            Claw Team ({teamCount})
           </button>
           <button
             className={`${styles.tab} ${activeTab === 'provision' ? styles.tabActive : ''}`}
@@ -396,7 +396,7 @@ const ArchitectureTab: React.FC<{
     const primary = containers
       .slice()
       .sort((a, b) => Number(b.healthy) - Number(a.healthy) || Number(b.running) - Number(a.running))
-      .slice(0, 6)
+      .slice(0, 4)
       .map(container => {
         const label = (container.agentName || container.containerName).trim() || container.containerName
         const rawState = container.healthy ? 'healthy' : container.running ? 'starting' : 'stopped'
@@ -414,14 +414,12 @@ const ArchitectureTab: React.FC<{
       { id: 'guard-claw', label: 'Guard Claw', role: 'Safety Guard', state: 'healthy' as const },
       { id: 'memory-claw', label: 'Memory Claw', role: 'Context Keeper', state: 'healthy' as const },
       { id: 'planner-claw', label: 'Planner Claw', role: 'Task Planner', state: 'healthy' as const },
-      { id: 'ops-claw', label: 'Ops Claw', role: 'Lifecycle Ops', state: 'healthy' as const },
-      { id: 'analyst-claw', label: 'Analyst Claw', role: 'Insight Miner', state: 'healthy' as const },
     ]
 
     const used = new Set(primary.map(node => node.label.toLowerCase()))
     const merged = [...primary]
     for (const node of fallback) {
-      if (merged.length >= 6) break
+      if (merged.length >= 4) break
       if (used.has(node.label.toLowerCase())) continue
       merged.push(node)
       used.add(node.label.toLowerCase())
@@ -431,12 +429,14 @@ const ArchitectureTab: React.FC<{
 
   const modelNodes = useMemo(() => {
     return [
-      { name: 'General Model Pool', family: 'Chat / Q&A Routing' },
-      { name: 'Reasoning Model Pool', family: 'Chain-of-Thought / Planning' },
-      { name: 'Safety Model Pool', family: 'Moderation / Guardrails' },
-      { name: 'Tool-Use Model Pool', family: 'Structured Action Execution' },
-      { name: 'Long-Context Model Pool', family: 'Memory-Heavy Tasks' },
-      { name: 'Edge Model Pool', family: 'Low-Latency Fallback' },
+      { name: 'General Domain · Small', family: 'Fast intent triage, concise answers, low-latency chat turns.' },
+      { name: 'General Domain · Large', family: 'Deep multi-turn dialogue, synthesis, and broader world knowledge.' },
+      { name: 'Coding Domain · Small', family: 'Lightweight code edits, lint-aware fixes, and script scaffolding.' },
+      { name: 'Coding Domain · Large', family: 'Architecture refactors, debugging traces, and complex code generation.' },
+      { name: 'Multimodal Vision-Language Pool', family: 'Image-grounded understanding, visual QA, and scene-aware dialogue.' },
+      { name: 'Multimodal Audio-Speech Pool', family: 'Speech understanding, voice instructions, and audio-event interpretation.' },
+      { name: 'Multimodal Document-Insight Pool', family: 'PDF/table/chart comprehension with cross-page evidence synthesis.' },
+      { name: 'Multimodal Action-Orchestration Pool', family: 'Grounded tool calling over text, image, and structured interface states.' },
     ]
   }, [])
 
@@ -446,7 +446,7 @@ const ArchitectureTab: React.FC<{
         <div className={styles.kernelIntro}>
           <div className={styles.kernelIntroBody}>
             <span className={styles.kernelBadge}>Full Mesh</span>
-            <h3 className={styles.kernelTitle}>Claw Swarm Orchestration Fabric</h3>
+            <h3 className={styles.kernelTitle}>Claw Operating System</h3>
             <p className={styles.kernelSubtitle}>
               Top-layer Claws route intent into Semantic Router. Kernel capabilities then project requests into the model mesh.
             </p>
@@ -467,7 +467,7 @@ const ArchitectureTab: React.FC<{
             transition={{ duration: 0.28 }}
           >
             <div className={styles.kernelLayerLabel}>Layer 1 · Claw Layer</div>
-            <div className={styles.kernelNodeGrid}>
+            <div className={`${styles.kernelNodeGrid} ${styles.kernelNodeGridTwoByTwo}`}>
               {topClawNodes.map((node, index) => (
                 <motion.article
                   key={node.id}
@@ -578,7 +578,7 @@ const ArchitectureTab: React.FC<{
             transition={{ duration: 0.28 }}
           >
             <div className={styles.kernelLayerLabel}>Layer 3 · Model Layer</div>
-            <div className={styles.kernelNodeGrid}>
+            <div className={`${styles.kernelNodeGrid} ${styles.kernelModelGrid}`}>
               {modelNodes.map((model, index) => (
                 <motion.article
                   key={model.name}
@@ -1272,9 +1272,9 @@ const StatusTab: React.FC<{
         </div>
       )
     }
-    const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws'
     const proxyBase = `/embedded/openclaw/${encodeURIComponent(selectedContainer)}/`
-    const iframeSrc = `${proxyBase}#token=${encodeURIComponent(gatewayToken)}&gatewayUrl=${encodeURIComponent(`${wsProto}://${window.location.host}${proxyBase}`)}`
+    const gatewayUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}${proxyBase}`
+    const iframeSrc = `${proxyBase}#gatewayUrl=${encodeURIComponent(gatewayUrl)}&token=${encodeURIComponent(gatewayToken)}`
     const openInNewTab = () => {
       window.open(iframeSrc, '_blank', 'noopener,noreferrer')
     }

@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"sort"
@@ -25,6 +27,8 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 			return
 		}
 
+		asyncRequested := provisionAsyncRequested(r)
+
 		runtimeBin, runtimeErr := detectContainerRuntime()
 		if runtimeErr != nil {
 			writeJSONError(w, runtimeErr.Error(), http.StatusServiceUnavailable)
@@ -43,7 +47,11 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 
 		req.Container.ContainerName = deriveContainerName(req.Container.ContainerName, req.Identity.Name)
 		if req.Container.AuthToken == "" {
-			req.Container.AuthToken = generateToken(24)
+			if reusedToken := h.gatewayTokenForContainer(req.Container.ContainerName); reusedToken != "" {
+				req.Container.AuthToken = reusedToken
+			} else {
+				req.Container.AuthToken = generateToken(24)
+			}
 		}
 		req.Container.BaseImage = h.resolveBaseImage(req.Container.BaseImage)
 		if preferredNetwork := strings.TrimSpace(os.Getenv("OPENCLAW_DEFAULT_NETWORK_MODE")); preferredNetwork != "" {
@@ -57,6 +65,9 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 		if req.Container.NetworkMode == "" {
 			req.Container.NetworkMode = "host"
 		}
+		if req.Container.ModelBaseURL == "" {
+			req.Container.ModelBaseURL = h.resolveOpenClawModelBaseURL()
+		}
 		if req.Container.ModelAPIKey == "" {
 			req.Container.ModelAPIKey = "not-needed"
 		}
@@ -69,6 +80,26 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 		req.TeamID = sanitizeTeamID(req.TeamID)
 		if req.TeamID == "" {
 			writeJSONError(w, "teamId is required; create/select a team before provisioning", http.StatusBadRequest)
+			return
+		}
+		req.RoleKind = normalizeRoleKind(req.RoleKind)
+		requestedPortExplicit := req.Container.GatewayPort != 0
+
+		if asyncRequested {
+			reqCopy := req
+			go h.runProvisionAsync(reqCopy)
+
+			log.Printf("OpenClaw provision queued async: name=%s team=%s", req.Container.ContainerName, req.TeamID)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusAccepted)
+			if err := json.NewEncoder(w).Encode(ProvisionResponse{
+				Success:      true,
+				Message:      "Provision request accepted; worker creation is running asynchronously",
+				WorkspaceDir: filepath.Join(h.containerDataDir(req.Container.ContainerName), "workspace"),
+				ConfigPath:   filepath.Join(h.containerDataDir(req.Container.ContainerName), "openclaw.json"),
+			}); err != nil {
+				log.Printf("openclaw: provision encode error: %v", err)
+			}
 			return
 		}
 
@@ -177,8 +208,6 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 			return
 		}
 
-		_ = h.containerRun("rm", "-f", req.Container.ContainerName)
-
 		absCDir, _ := filepath.Abs(cDir)
 		volumeName := "openclaw-state-" + req.Container.ContainerName
 		args := []string{
@@ -194,27 +223,91 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 			req.Container.BaseImage,
 			"node", "openclaw.mjs", "gateway", "--allow-unconfigured", "--bind", "lan",
 		}
-		out, err := h.containerCombinedOutput(args...)
-		if err != nil {
-			trimmed := strings.TrimSpace(string(out))
-			if isContainerImageMissingError(trimmed) {
+		startAttemptLimit := 1
+		if !requestedPortExplicit {
+			startAttemptLimit = 4
+		}
+
+		var containerID string
+		for attempt := 0; attempt < startAttemptLimit; attempt++ {
+			if attempt > 0 {
+				req.Container.GatewayPort = h.nextAvailablePort()
+				if err := writeOpenClawConfig(configPath, req); err != nil {
+					h.mu.Unlock()
+					writeJSONError(w, fmt.Sprintf("Failed to refresh config for port retry: %v", err), http.StatusInternalServerError)
+					return
+				}
+				log.Printf(
+					"openclaw: retrying %q with alternate port %d (attempt %d/%d)",
+					req.Container.ContainerName,
+					req.Container.GatewayPort,
+					attempt+1,
+					startAttemptLimit,
+				)
+			}
+
+			_ = h.containerRun("rm", "-f", req.Container.ContainerName)
+
+			out, err := h.containerCombinedOutput(args...)
+			if err != nil {
+				trimmed := strings.TrimSpace(string(out))
+				if isContainerImageMissingError(trimmed) {
+					h.mu.Unlock()
+					writeJSONError(
+						w,
+						fmt.Sprintf(
+							"OpenClaw image %q is unavailable on host runtime. Build or pull this image first, or set OPENCLAW_BASE_IMAGE to an available image before starting dashboard.",
+							req.Container.BaseImage,
+						),
+						http.StatusBadRequest,
+					)
+					return
+				}
+				if !requestedPortExplicit && isOpenClawGatewayPortConflict(trimmed, req.Container.GatewayPort) && attempt+1 < startAttemptLimit {
+					log.Printf(
+						"openclaw: container runtime start failed due to port conflict on %d, retrying: %s",
+						req.Container.GatewayPort,
+						trimmed,
+					)
+					continue
+				}
+
+				h.mu.Unlock()
+				writeJSONError(w, fmt.Sprintf("Failed to start container: %s (%v)", trimmed, err), http.StatusInternalServerError)
+				return
+			}
+
+			containerID = strings.TrimSpace(string(out))
+			if requestedPortExplicit {
+				break
+			}
+
+			conflictLogs := h.detectImmediateGatewayPortConflict(req.Container.ContainerName, req.Container.GatewayPort)
+			if conflictLogs == "" {
+				break
+			}
+
+			_ = h.containerRun("rm", "-f", req.Container.ContainerName)
+			if attempt+1 >= startAttemptLimit {
 				h.mu.Unlock()
 				writeJSONError(
 					w,
 					fmt.Sprintf(
-						"OpenClaw image %q is unavailable on host runtime. Build or pull this image first, or set OPENCLAW_BASE_IMAGE to an available image before starting dashboard.",
-						req.Container.BaseImage,
+						"Gateway failed to bind port %d after %d attempts. Last error: %s",
+						req.Container.GatewayPort,
+						startAttemptLimit,
+						truncatePortConflictLog(conflictLogs),
 					),
-					http.StatusBadRequest,
+					http.StatusConflict,
 				)
 				return
 			}
-
-			h.mu.Unlock()
-			writeJSONError(w, fmt.Sprintf("Failed to start container: %s (%v)", trimmed, err), http.StatusInternalServerError)
-			return
+			log.Printf(
+				"openclaw: detected gateway port conflict for %q on %d; retrying with a new port",
+				req.Container.ContainerName,
+				req.Container.GatewayPort,
+			)
 		}
-		containerID := strings.TrimSpace(string(out))
 
 		entries, _ := h.loadRegistry()
 		found := false
@@ -231,6 +324,7 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 				entries[i].AgentRole = strings.TrimSpace(req.Identity.Role)
 				entries[i].AgentVibe = strings.TrimSpace(req.Identity.Vibe)
 				entries[i].AgentPrinciples = strings.TrimSpace(req.Identity.Principles)
+				entries[i].RoleKind = req.RoleKind
 				found = true
 				break
 			}
@@ -250,18 +344,39 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 				AgentRole:       strings.TrimSpace(req.Identity.Role),
 				AgentVibe:       strings.TrimSpace(req.Identity.Vibe),
 				AgentPrinciples: strings.TrimSpace(req.Identity.Principles),
+				RoleKind:        req.RoleKind,
 			})
+		}
+		if req.RoleKind == "leader" {
+			for i := range entries {
+				if entries[i].TeamID == req.TeamID && entries[i].Name != req.Container.ContainerName {
+					entries[i].RoleKind = "worker"
+				}
+			}
+			for i := range teams {
+				if teams[i].ID == req.TeamID {
+					teams[i].LeaderID = req.Container.ContainerName
+					teams[i].UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+					break
+				}
+			}
 		}
 		sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
 		if err := h.saveRegistry(entries); err != nil {
 			log.Printf("openclaw: failed to save registry: %v", err)
 		}
+		if err := h.saveTeams(teams); err != nil {
+			log.Printf("openclaw: failed to save teams after provisioning: %v", err)
+		}
 		h.mu.Unlock()
+
+		dockerCmd := generateDockerRunCmd(runtimeName, req, absCDir)
+		composeYAML := generateComposeYAML(req, absCDir)
 
 		healthy := false
 		for i := 0; i < 10; i++ {
 			time.Sleep(2 * time.Second)
-			if h.gatewayReachable(req.Container.GatewayPort) {
+			if h.gatewayHealthyForContainer(req.Container.ContainerName, req.Container.GatewayPort) {
 				healthy = true
 				break
 			}
@@ -271,9 +386,6 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 		if !healthy {
 			msg = "Container started but gateway has not become healthy yet (may still be initializing)"
 		}
-
-		dockerCmd := generateDockerRunCmd(runtimeName, req, absCDir)
-		composeYAML := generateComposeYAML(req, absCDir)
 
 		log.Printf("OpenClaw provisioned: name=%s port=%d healthy=%v", req.Container.ContainerName, req.Container.GatewayPort, healthy)
 		w.Header().Set("Content-Type", "application/json")
@@ -289,4 +401,147 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 			log.Printf("openclaw: provision encode error: %v", err)
 		}
 	}
+}
+
+func provisionAsyncRequested(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+
+	parseBool := func(raw string) bool {
+		switch strings.ToLower(strings.TrimSpace(raw)) {
+		case "1", "true", "yes", "on":
+			return true
+		default:
+			return false
+		}
+	}
+
+	if parseBool(r.URL.Query().Get("async")) {
+		return true
+	}
+	return parseBool(r.Header.Get("X-OpenClaw-Async"))
+}
+
+func (h *OpenClawHandler) runProvisionAsync(req ProvisionRequest) {
+	raw, err := json.Marshal(req)
+	if err != nil {
+		log.Printf("openclaw: async provision marshal failed for %s: %v", req.Container.ContainerName, err)
+		return
+	}
+
+	internalReq := httptest.NewRequest(http.MethodPost, "/api/openclaw/workers", bytes.NewReader(raw))
+	internalReq.Header.Set("Content-Type", "application/json")
+
+	recorder := httptest.NewRecorder()
+	h.ProvisionHandler().ServeHTTP(recorder, internalReq)
+
+	if recorder.Code >= http.StatusOK && recorder.Code < http.StatusMultipleChoices {
+		log.Printf("openclaw: async provision completed for %s (status=%d)", req.Container.ContainerName, recorder.Code)
+		return
+	}
+
+	log.Printf(
+		"openclaw: async provision failed for %s (status=%d): %s",
+		req.Container.ContainerName,
+		recorder.Code,
+		strings.TrimSpace(recorder.Body.String()),
+	)
+}
+
+func isOpenClawGatewayPortConflict(output string, port int) bool {
+	text := strings.ToLower(strings.TrimSpace(output))
+	if text == "" {
+		return false
+	}
+	if strings.Contains(text, "another gateway instance is already listening") {
+		return true
+	}
+	if strings.Contains(text, "address already in use") {
+		return true
+	}
+	if strings.Contains(text, "port") && strings.Contains(text, "already in use") {
+		return true
+	}
+	if port > 0 {
+		portToken := fmt.Sprintf(":%d", port)
+		if strings.Contains(text, portToken) && strings.Contains(text, "in use") {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *OpenClawHandler) detectImmediateGatewayPortConflict(containerName string, port int) string {
+	for i := 0; i < 80; i++ {
+		time.Sleep(500 * time.Millisecond)
+		logsOut, err := h.containerCombinedOutput("logs", "--tail", "120", containerName)
+		if err != nil {
+			continue
+		}
+		logs := strings.TrimSpace(string(logsOut))
+		if isOpenClawGatewayPortConflict(logs, port) {
+			return logs
+		}
+		if openClawGatewayListeningReady(logs) && h.gatewayReachable(port) {
+			return ""
+		}
+	}
+	return ""
+}
+
+func (h *OpenClawHandler) gatewayHealthyForContainer(containerName string, port int) bool {
+	if !h.containerRunning(containerName) {
+		return false
+	}
+
+	logsOut, err := h.containerCombinedOutput("logs", "--tail", "120", containerName)
+	if err != nil {
+		return false
+	}
+	logs := strings.TrimSpace(string(logsOut))
+	if isOpenClawGatewayPortConflict(logs, port) {
+		return false
+	}
+	if !openClawGatewayListeningReady(logs) {
+		return false
+	}
+	return h.gatewayReachable(port)
+}
+
+func (h *OpenClawHandler) containerRunning(containerName string) bool {
+	out, err := h.containerOutput("inspect", "-f", "{{.State.Running}}", containerName)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(string(out)), "true")
+}
+
+func openClawGatewayListeningReady(logs string) bool {
+	text := strings.TrimSpace(logs)
+	if text == "" {
+		return false
+	}
+
+	lastSuccess := strings.LastIndex(text, "[gateway] listening on ws://")
+	if lastSuccess < 0 {
+		return false
+	}
+
+	lastFail := max(
+		strings.LastIndex(text, "failed to start:"),
+		strings.LastIndex(text, "permission denied, mkdir '/state/"),
+		strings.LastIndex(text, "another gateway instance is already listening"),
+		strings.LastIndex(text, "already in use"),
+	)
+
+	return lastSuccess > lastFail
+}
+
+func truncatePortConflictLog(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if len(trimmed) <= 280 {
+		return trimmed
+	}
+	return strings.TrimSpace(trimmed[:277]) + "..."
 }

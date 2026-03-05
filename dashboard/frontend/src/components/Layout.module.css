@@ -104,15 +104,6 @@
   display: none;
 }
 
-/* Playground enhanced active state */
-.playgroundActive {
-  color: var(--color-text);
-  background: rgba(118, 185, 0, 0.1);
-  box-shadow: var(--glow-primary);
-  border-bottom: 2px solid var(--color-primary);
-  text-shadow: none;
-}
-
 /* Vertical divider between primary items and dropdowns */
 .navDivider {
   width: 1px;

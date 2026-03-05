@@ -312,8 +312,14 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		log.Printf("Evaluation feature disabled")
 	}
 
+	var openClawHandler *handlers.OpenClawHandler
+	if cfg.OpenClawEnabled {
+		openClawHandler = handlers.NewOpenClawHandler(cfg.OpenClawDataDir, cfg.ReadonlyMode)
+		openClawHandler.SetRouterConfigPath(cfg.AbsConfigPath)
+	}
+
 	// MCP endpoints (if enabled)
-	SetupMCP(mux, cfg)
+	SetupMCP(mux, cfg, openClawHandler)
 
 	// ML Pipeline endpoints (if enabled)
 	if cfg.MLPipelineEnabled {
@@ -362,14 +368,16 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	}
 
 	// OpenClaw endpoints and proxy (if enabled)
-	if cfg.OpenClawEnabled {
-		ocHandler := handlers.NewOpenClawHandler(cfg.OpenClawDataDir, cfg.ReadonlyMode)
+	if cfg.OpenClawEnabled && openClawHandler != nil {
+		ocHandler := openClawHandler
 		mux.HandleFunc("/api/openclaw/status", ocHandler.StatusHandler())
 		mux.HandleFunc("/api/openclaw/skills", ocHandler.SkillsHandler())
 		mux.HandleFunc("/api/openclaw/teams", ocHandler.TeamsHandler())
 		mux.HandleFunc("/api/openclaw/teams/", ocHandler.TeamByIDHandler())
 		mux.HandleFunc("/api/openclaw/workers", ocHandler.WorkersHandler())
 		mux.HandleFunc("/api/openclaw/workers/", ocHandler.WorkerByIDHandler())
+		mux.HandleFunc("/api/openclaw/rooms", ocHandler.RoomsHandler())
+		mux.HandleFunc("/api/openclaw/rooms/", ocHandler.RoomByIDHandler())
 		mux.HandleFunc("/api/openclaw/provision", ocHandler.ProvisionHandler())
 		mux.HandleFunc("/api/openclaw/start", ocHandler.StartHandler())
 		mux.HandleFunc("/api/openclaw/stop", ocHandler.StopHandler())
@@ -398,12 +406,18 @@ func Setup(cfg *config.Config) *http.ServeMux {
 				http.Error(w, "container not found in registry", http.StatusNotFound)
 				return
 			}
+			token := strings.TrimSpace(ocHandler.GatewayTokenForContainer(name))
+			staticHeaders := map[string]string{}
+			if token != "" {
+				staticHeaders["Authorization"] = "Bearer " + token
+				staticHeaders["X-OpenClaw-Token"] = token
+			}
 			// Look up or create cached proxy for this container
 			stripPrefix := "/embedded/openclaw/" + name
-			cacheKey := fmt.Sprintf("%s:%s", name, targetBase)
+			cacheKey := fmt.Sprintf("%s:%s:%s", name, targetBase, token)
 			handler, loaded := proxyCache.Load(cacheKey)
 			if !loaded {
-				h, err := proxy.NewWebSocketAwareHandler(targetBase, stripPrefix)
+				h, err := proxy.NewWebSocketAwareHandlerWithHeaders(targetBase, stripPrefix, staticHeaders)
 				if err != nil {
 					log.Printf("Failed to create proxy for %s: %v", name, err)
 					http.Error(w, "proxy error", http.StatusBadGateway)
@@ -427,6 +441,14 @@ func Setup(cfg *config.Config) *http.ServeMux {
 		mux.HandleFunc("/api/openclaw/workers", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`[]`))
+		})
+		mux.HandleFunc("/api/openclaw/rooms", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[]`))
+		})
+		mux.HandleFunc("/api/openclaw/rooms/", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			http.Error(w, `{"error":"OpenClaw feature disabled"}`, http.StatusServiceUnavailable)
 		})
 		mux.HandleFunc("/embedded/openclaw/", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")

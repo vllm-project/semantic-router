@@ -43,6 +43,19 @@ func sanitizeTeamID(raw string) string {
 	return sanitizeContainerName(raw)
 }
 
+func sanitizeRoomID(raw string) string {
+	return sanitizeContainerName(raw)
+}
+
+func normalizeRoleKind(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "leader":
+		return "leader"
+	default:
+		return "worker"
+	}
+}
+
 func deriveContainerName(requested, identityName string) string {
 	if name := sanitizeContainerName(requested); name != "" {
 		return name
@@ -219,6 +232,12 @@ func writeOpenClawConfig(path string, req ProvisionRequest) error {
 		"gateway": map[string]interface{}{
 			"port": req.Container.GatewayPort,
 			"auth": map[string]string{"mode": "token", "token": req.Container.AuthToken},
+			"http": map[string]interface{}{
+				"endpoints": map[string]interface{}{
+					"chatCompletions": map[string]interface{}{"enabled": true},
+					"responses":       map[string]interface{}{"enabled": true},
+				},
+			},
 			"controlUi": map[string]interface{}{
 				"dangerouslyDisableDeviceAuth": true,
 				"allowInsecureAuth":            true,

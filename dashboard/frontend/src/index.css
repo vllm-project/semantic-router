@@ -96,7 +96,8 @@ html {
   /* Default to dark theme */
   color-scheme: dark;
   height: 100%;
-  overflow-y: scroll;
+  overflow-x: hidden;
+  overflow-y: auto;
   scrollbar-gutter: stable both-edges;
 }
 
@@ -108,7 +109,8 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   height: 100%;
-  overflow-y: scroll;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 #root {

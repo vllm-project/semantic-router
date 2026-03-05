@@ -79,7 +79,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
             <NavLink
               to="/playground"
               className={({ isActive }) =>
-                isActive ? `${styles.navLink} ${styles.navLinkActive} ${styles.playgroundActive}` : styles.navLink
+                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
               }
             >
               Playground
@@ -97,12 +97,12 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
 
             {/* Primary: OpenClaw */}
             <NavLink
-              to="/clawswarm"
+              to="/clawos"
               className={({ isActive }) =>
                 isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
               }
             >
-              ClawSwarm
+              ClawOS
             </NavLink>
 
             {/* Build Dropdown */}
@@ -406,8 +406,8 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
             >
               Decisions
             </button>
-            <NavLink to="/clawswarm" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
-              ClawSwarm
+            <NavLink to="/clawos" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
+              ClawOS
             </NavLink>
             <NavLink to="/builder" className={styles.mobileNavLink} onClick={() => setMobileMenuOpen(false)}>
               Builder

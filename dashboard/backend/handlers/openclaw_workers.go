@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 )
 
 type workerIdentityPayload struct {
@@ -19,6 +20,7 @@ type workerIdentityPayload struct {
 
 type workerUpdatePayload struct {
 	TeamID   string                `json:"teamId"`
+	RoleKind *string               `json:"roleKind,omitempty"`
 	Identity workerIdentityPayload `json:"identity"`
 }
 
@@ -61,6 +63,7 @@ func enrichContainerIdentity(entry ContainerEntry) ContainerEntry {
 	entry.AgentRole = snapshot.Role
 	entry.AgentVibe = snapshot.Vibe
 	entry.AgentPrinciples = snapshot.Principles
+	entry.RoleKind = normalizeRoleKind(entry.RoleKind)
 	return entry
 }
 
@@ -177,6 +180,8 @@ func (h *OpenClawHandler) WorkerByIDHandler() http.HandlerFunc {
 			}
 
 			entry := entries[index]
+			originalEntry := entry
+			entry.RoleKind = normalizeRoleKind(entry.RoleKind)
 			teamID := sanitizeTeamID(req.TeamID)
 			if teamID != "" {
 				if teamErr != nil {
@@ -194,6 +199,60 @@ func (h *OpenClawHandler) WorkerByIDHandler() http.HandlerFunc {
 				entry.TeamName = strings.TrimSpace(team.Name)
 			}
 
+			teamsChanged := false
+			teamIndexes := make(map[string]int, len(teams))
+			for i := range teams {
+				teamIndexes[teams[i].ID] = i
+			}
+			now := time.Now().UTC().Format(time.RFC3339)
+
+			if originalEntry.TeamID != "" && originalEntry.TeamID != entry.TeamID {
+				if teamIndex, ok := teamIndexes[originalEntry.TeamID]; ok && teams[teamIndex].LeaderID == originalEntry.Name {
+					teams[teamIndex].LeaderID = ""
+					teams[teamIndex].UpdatedAt = now
+					teamsChanged = true
+				}
+			}
+
+			nextRoleKind := entry.RoleKind
+			if req.RoleKind != nil {
+				nextRoleKind = normalizeRoleKind(*req.RoleKind)
+			} else if originalEntry.TeamID != entry.TeamID && nextRoleKind == "leader" {
+				// Moving a leader across teams without explicit role update defaults to worker.
+				nextRoleKind = "worker"
+			}
+
+			if nextRoleKind == "leader" {
+				if entry.TeamID == "" {
+					h.mu.Unlock()
+					writeJSONError(w, "leader role requires team assignment", http.StatusBadRequest)
+					return
+				}
+				teamIndex, ok := teamIndexes[entry.TeamID]
+				if !ok {
+					h.mu.Unlock()
+					writeJSONError(w, fmt.Sprintf("team %q not found", entry.TeamID), http.StatusNotFound)
+					return
+				}
+				if teams[teamIndex].LeaderID != entry.Name {
+					teams[teamIndex].LeaderID = entry.Name
+					teams[teamIndex].UpdatedAt = now
+					teamsChanged = true
+				}
+				for i := range entries {
+					if entries[i].TeamID == entry.TeamID && entries[i].Name != entry.Name && normalizeRoleKind(entries[i].RoleKind) != "worker" {
+						entries[i].RoleKind = "worker"
+					}
+				}
+			} else if entry.TeamID != "" {
+				if teamIndex, ok := teamIndexes[entry.TeamID]; ok && teams[teamIndex].LeaderID == entry.Name {
+					teams[teamIndex].LeaderID = ""
+					teams[teamIndex].UpdatedAt = now
+					teamsChanged = true
+				}
+			}
+			entry.RoleKind = nextRoleKind
+
 			if workerIdentityProvided(req.Identity) {
 				entry.AgentName = strings.TrimSpace(req.Identity.Name)
 				entry.AgentEmoji = strings.TrimSpace(req.Identity.Emoji)
@@ -201,12 +260,43 @@ func (h *OpenClawHandler) WorkerByIDHandler() http.HandlerFunc {
 				entry.AgentVibe = strings.TrimSpace(req.Identity.Vibe)
 				entry.AgentPrinciples = strings.TrimSpace(req.Identity.Principles)
 			}
+			if nextRoleKind == "leader" {
+				teamName := strings.TrimSpace(entry.TeamName)
+				if teamName == "" {
+					if teamIndex, ok := teamIndexes[entry.TeamID]; ok {
+						teamName = strings.TrimSpace(teams[teamIndex].Name)
+					}
+				}
+				if teamName == "" {
+					teamName = "当前团队"
+				}
+
+				if strings.TrimSpace(entry.AgentRole) == "" {
+					entry.AgentRole = "Team Leader"
+				}
+				if strings.TrimSpace(entry.AgentVibe) == "" {
+					entry.AgentVibe = "统筹-协作"
+				}
+				if strings.TrimSpace(entry.AgentPrinciples) == "" {
+					entry.AgentPrinciples = fmt.Sprintf(
+						"你是 %s 的 leader。将目标拆解为可执行任务，主动使用 @<worker-id> 分派工作，并持续同步进展、风险与阻塞。",
+						teamName,
+					)
+				}
+			}
 
 			entries[index] = entry
 			if err := h.saveRegistry(entries); err != nil {
 				h.mu.Unlock()
 				writeJSONError(w, fmt.Sprintf("Failed to save workers: %v", err), http.StatusInternalServerError)
 				return
+			}
+			if teamsChanged {
+				if err := h.saveTeams(teams); err != nil {
+					h.mu.Unlock()
+					writeJSONError(w, fmt.Sprintf("Failed to save teams: %v", err), http.StatusInternalServerError)
+					return
+				}
 			}
 			h.mu.Unlock()
 

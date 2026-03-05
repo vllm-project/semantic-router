@@ -6,12 +6,14 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // --- Start / Stop / Delete ---
 
 func (h *OpenClawHandler) deleteContainerByName(name string) error {
 	_ = h.containerRun("rm", "-f", name)
+	_ = h.containerRun("volume", "rm", "openclaw-state-"+name)
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -20,13 +22,37 @@ func (h *OpenClawHandler) deleteContainerByName(name string) error {
 	if err != nil {
 		return err
 	}
+	teams, teamErr := h.loadTeams()
 	filtered := entries[:0]
+	deletedTeamID := ""
 	for _, e := range entries {
 		if e.Name != name {
 			filtered = append(filtered, e)
+			continue
+		}
+		deletedTeamID = e.TeamID
+	}
+	if err := h.saveRegistry(filtered); err != nil {
+		return err
+	}
+
+	if teamErr != nil || deletedTeamID == "" {
+		return nil
+	}
+	teamsChanged := false
+	for i := range teams {
+		if teams[i].ID == deletedTeamID && teams[i].LeaderID == name {
+			teams[i].LeaderID = ""
+			teams[i].UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+			teamsChanged = true
 		}
 	}
-	return h.saveRegistry(filtered)
+	if teamsChanged {
+		if err := h.saveTeams(teams); err != nil {
+			log.Printf("openclaw: failed to clear leader mapping for deleted worker %s: %v", name, err)
+		}
+	}
+	return nil
 }
 
 func (h *OpenClawHandler) StartHandler() http.HandlerFunc {

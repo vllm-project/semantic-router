@@ -7,9 +7,7 @@ const PlaygroundPage = () => {
     <div className={styles.container}>
       <AnimatedBackground speed="slow" />
       <div className={styles.chatWrapper}>
-        <ChatComponent
-          endpoint="/api/router/v1/chat/completions"
-        />
+        <ChatComponent endpoint="/api/router/v1/chat/completions" />
       </div>
     </div>
   )

@@ -8,8 +8,10 @@ import ThinkingBlock from './ThinkingBlock'
 import ErrorBoundary from './ErrorBoundary'
 import ReMoMResponsesDisplay from './ReMoMResponsesDisplay'
 import FeedbackButtons from './FeedbackButtons'
+import ClawRoomChat from './ClawRoomChat'
 import { useToolRegistry } from '../tools'
-import { useMCPToolSync } from '../tools/mcp'
+import { useMCPToolSync, parseMCPToolName } from '../tools/mcp'
+import { ensureOpenClawServerConnected, OPENCLAW_MCP_SERVER_ID } from '../tools/mcp/api'
 import { getTranslateAttr } from '../hooks/useNoTranslate'
 import { useConversationStorage } from '../hooks'
 import type { ToolCall, ToolResult, WebSearchResult } from '../tools'
@@ -73,7 +75,7 @@ const MessageActionBar = ({ content }: { content: string }) => {
 // Greeting lines - defined outside component to maintain stable reference
 const GREETING_LINES = [
   "Hi there, I am MoM :-)",
-  "The System Intelligence for LLMs",
+  "The System Intelligence for Agents and LLMs",
   "The World First Model-of-Models",
   "Open Source for Everyone",
   "How can I help you today?"
@@ -81,6 +83,19 @@ const GREETING_LINES = [
 
 const generateMessageId = () => `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
 const generateConversationId = () => `conv-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
+const CLAW_TOOL_NAME_PREFIX = `mcp_${OPENCLAW_MCP_SERVER_ID}_claw_`
+const CLAW_MODE_STORAGE_KEY = 'sr:playground:claw-mode'
+const CLAW_MODE_SYSTEM_PROMPT = [
+  'You are a witty, humorous Claw Manager, excellent at building teams and recruiting Claw Workers.',
+  'Quick context: OpenClaw is the overall agent platform; ClawOS is the orchestration/control mode in this chat; a Claw Team is an organizational unit; a Claw Worker is an individual anthropomorphic agent inside a team.',
+  'You should still answer normal user questions naturally.',
+  'When user intent is to create or manage Claw Teams/Workers:',
+  '1) Design each worker with a clear domain, strong anthropomorphic persona, distinctive speaking style, and explicit responsibilities.',
+  '2) Worker name MUST be in English only, and should be short and fun.',
+  "3) Other descriptive fields (such as role/vibe/principles/descriptions) should follow the user's language preference inferred from the conversation.",
+  '4) When creating a Claw Worker, the principles field MUST explicitly include team context (team name, mission, and collaboration expectations), and should be rich and concrete.',
+  '5) Before executing team/worker creation tools (or other mutating Claw actions), first present a concise plan/design for user confirmation; only execute after explicit user approval.',
+].join('\n')
 
 // Typing effect component for greeting with multiple lines
 // Memoized to prevent re-renders when parent state changes (e.g., input typing)
@@ -167,6 +182,118 @@ interface Message {
   toolResults?: ToolResult[]
   // For ReMoM: intermediate responses from multi-round reasoning
   reasoning_mom_responses?: ReMoMRoundResponse[]
+}
+
+interface ClawHighlightField {
+  label: string
+  value: string
+}
+
+const asRecord = (value: unknown): Record<string, unknown> | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+  return value as Record<string, unknown>
+}
+
+const toFieldString = (value: unknown): string => {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return ''
+}
+
+const truncateHighlight = (value: string, maxLength = 120): string => {
+  const text = value.trim()
+  if (text.length <= maxLength) return text
+  return `${text.slice(0, maxLength - 3).trim()}...`
+}
+
+const extractFromRawArgs = (rawArgs: string, key: string): string => {
+  if (!rawArgs) return ''
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const regex = new RegExp(`"${escapedKey}"\\s*:\\s*"([^"]*)`)
+  const match = rawArgs.match(regex)
+  return match?.[1]?.trim() || ''
+}
+
+const firstFieldValue = (source: Record<string, unknown> | null, keys: string[], rawArgs = ''): string => {
+  for (const key of keys) {
+    const value = toFieldString(source?.[key])
+    if (value) return value
+  }
+  if (rawArgs) {
+    for (const key of keys) {
+      const value = extractFromRawArgs(rawArgs, key)
+      if (value) return value
+    }
+  }
+  return ''
+}
+
+const toHighlightFields = (pairs: Array<[string, string]>): ClawHighlightField[] => {
+  return pairs
+    .filter(([, value]) => Boolean(value))
+    .map(([label, value]) => ({ label, value: truncateHighlight(value) }))
+}
+
+const buildClawRequestHighlights = (
+  clawToolName: string,
+  parsedArgs: Record<string, unknown> | null,
+  rawArgs: string
+): ClawHighlightField[] => {
+  if (clawToolName === 'claw_create_team') {
+    return toHighlightFields([
+      ['name', firstFieldValue(parsedArgs, ['name'], rawArgs)],
+      ['vibe', firstFieldValue(parsedArgs, ['vibe'], rawArgs)],
+      ['role', firstFieldValue(parsedArgs, ['role'], rawArgs)],
+      ['principal', firstFieldValue(parsedArgs, ['principal'], rawArgs)],
+    ])
+  }
+
+  if (clawToolName === 'claw_create_worker') {
+    return toHighlightFields([
+      ['name', firstFieldValue(parsedArgs, ['name'], rawArgs)],
+      ['vibe', firstFieldValue(parsedArgs, ['vibe'], rawArgs)],
+      ['role', firstFieldValue(parsedArgs, ['role'], rawArgs)],
+      ['team', firstFieldValue(parsedArgs, ['team_id', 'teamId'], rawArgs)],
+      ['emoji', firstFieldValue(parsedArgs, ['emoji'], rawArgs)],
+    ])
+  }
+
+  return []
+}
+
+const buildClawResultHighlights = (
+  clawToolName: string,
+  resultContent: unknown,
+  parsedArgs: Record<string, unknown> | null,
+  rawArgs: string
+): ClawHighlightField[] => {
+  const result = asRecord(resultContent)
+
+  if (clawToolName === 'claw_create_team') {
+    return toHighlightFields([
+      ['name', firstFieldValue(result, ['name']) || firstFieldValue(parsedArgs, ['name'], rawArgs)],
+      ['vibe', firstFieldValue(result, ['vibe']) || firstFieldValue(parsedArgs, ['vibe'], rawArgs)],
+      ['role', firstFieldValue(result, ['role']) || firstFieldValue(parsedArgs, ['role'], rawArgs)],
+      ['team_id', firstFieldValue(result, ['id'])],
+    ])
+  }
+
+  if (clawToolName === 'claw_create_worker') {
+    const identity = asRecord(result?.identity)
+    return toHighlightFields([
+      ['name', firstFieldValue(identity, ['name']) || firstFieldValue(result, ['agentName', 'name']) || firstFieldValue(parsedArgs, ['name'], rawArgs)],
+      ['vibe', firstFieldValue(identity, ['vibe']) || firstFieldValue(result, ['agentVibe']) || firstFieldValue(parsedArgs, ['vibe'], rawArgs)],
+      ['role', firstFieldValue(identity, ['role']) || firstFieldValue(result, ['agentRole']) || firstFieldValue(parsedArgs, ['role'], rawArgs)],
+      ['team', firstFieldValue(result, ['teamName', 'teamId']) || firstFieldValue(parsedArgs, ['team_id', 'teamId'], rawArgs)],
+      ['container', firstFieldValue(result, ['containerName'])],
+      ['message', firstFieldValue(result, ['message'])],
+    ])
+  }
+
+  return []
 }
 
 // Web Search Card Component
@@ -429,6 +556,28 @@ const ToolCard = ({
   onToggle: () => void
 }) => {
   const toolName = toolCall.function.name
+  const parsedMCPTool = parseMCPToolName(toolName)
+  const clawToolName = parsedMCPTool?.toolName || ''
+  const displayToolName = clawToolName || toolName
+  const isClawMCPToolCall = clawToolName.startsWith('claw_')
+  const isClawCreateToolCall = clawToolName === 'claw_create_team' || clawToolName === 'claw_create_worker'
+  const rawArgs = toolCall.function.arguments || ''
+  const parsedArgs = useMemo(() => {
+    try {
+      return asRecord(JSON.parse(rawArgs))
+    } catch {
+      return null
+    }
+  }, [rawArgs])
+  const requestHighlights = useMemo(
+    () => (isClawCreateToolCall ? buildClawRequestHighlights(clawToolName, parsedArgs, rawArgs) : []),
+    [clawToolName, isClawCreateToolCall, parsedArgs, rawArgs]
+  )
+  const resultHighlights = useMemo(
+    () => (isClawCreateToolCall ? buildClawResultHighlights(clawToolName, toolResult?.content, parsedArgs, rawArgs) : []),
+    [clawToolName, isClawCreateToolCall, parsedArgs, rawArgs, toolResult?.content]
+  )
+  const showResultHighlights = isClawCreateToolCall && (toolCall.status === 'completed' || toolCall.status === 'failed')
 
   if (toolName === 'search_web') {
     return (
@@ -454,18 +603,71 @@ const ToolCard = ({
 
   // Fallback for unknown tools
   return (
-    <div className={styles.webSearchCard}>
+    <div className={`${styles.webSearchCard} ${isClawMCPToolCall ? styles.mcpToolCard : ''}`}>
       <div className={styles.webSearchHeader} onClick={onToggle}>
-        <div className={styles.webSearchIcon}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-          </svg>
+        <div className={`${styles.webSearchIcon} ${isClawMCPToolCall ? styles.mcpToolIcon : ''}`}>
+          {isClawMCPToolCall ? (
+            <img src="/openclaw.svg" alt="" aria-hidden="true" />
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+            </svg>
+          )}
         </div>
         <div className={styles.webSearchInfo}>
-          <span className={styles.webSearchTitle}>{toolName}</span>
+          <span className={styles.webSearchTitle}>{displayToolName}</span>
           <span className={styles.webSearchQuery}>{toolCall.status}</span>
         </div>
       </div>
+      {isClawCreateToolCall && (
+        <div className={styles.clawToolHighlights}>
+          {requestHighlights.length > 0 && (
+            <div className={styles.clawToolHighlightSection}>
+              <span className={styles.clawToolHighlightHeading}>Request</span>
+              <div className={styles.clawToolHighlightRows}>
+                {requestHighlights.map(item => (
+                  <div key={`request-${item.label}`} className={styles.clawToolHighlightRow}>
+                    <span className={styles.clawToolHighlightKey}>{item.label}</span>
+                    <span className={styles.clawToolHighlightValue}>{item.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {showResultHighlights && (resultHighlights.length > 0 || Boolean(toolResult?.error)) && (
+            <div className={styles.clawToolHighlightSection}>
+              <span className={styles.clawToolHighlightHeading}>Result</span>
+              <div className={styles.clawToolHighlightRows}>
+                {resultHighlights.map(item => (
+                  <div key={`result-${item.label}`} className={styles.clawToolHighlightRow}>
+                    <span className={styles.clawToolHighlightKey}>{item.label}</span>
+                    <span className={styles.clawToolHighlightValue}>{item.value}</span>
+                  </div>
+                ))}
+                {toolResult?.error && (
+                  <div className={styles.clawToolHighlightRow}>
+                    <span className={styles.clawToolHighlightKey}>error</span>
+                    <span className={`${styles.clawToolHighlightValue} ${styles.clawToolHighlightError}`}>
+                      {truncateHighlight(toolResult.error, 180)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {isExpanded && toolCall.status === 'failed' && toolResult?.error && (
+        <div className={styles.webSearchResults}>
+          <div className={styles.sourceDetails}>
+            <div className={styles.sourceItem}>
+              <p className={styles.sourceItemSnippet} style={{ color: 'var(--color-error)' }}>
+                {toolResult.error}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -492,6 +694,30 @@ const ToolToggle = ({
         <path d="M2 12h20" />
         <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
       </svg>
+    </button>
+  )
+}
+
+const ClawModeToggle = ({
+  enabled,
+  onToggle,
+  disabled
+}: {
+  enabled: boolean
+  onToggle: () => void
+  disabled?: boolean
+}) => {
+  return (
+    <button
+      className={`${styles.clawModeToggleButton} ${enabled ? styles.clawToggleActive : ''}`}
+      onClick={onToggle}
+      disabled={disabled}
+      type="button"
+      aria-pressed={enabled}
+      aria-label={enabled ? 'Disable ClawOS' : 'Enable ClawOS'}
+    >
+      <img src="/openclaw.svg" alt="" aria-hidden="true" className={styles.clawToggleIcon} />
+      <span className={styles.clawToggleLabel}>ClawOS</span>
     </button>
   )
 }
@@ -679,6 +905,8 @@ interface ChatComponentProps {
   isFullscreenMode?: boolean
 }
 
+type ClawPlaygroundView = 'control' | 'room'
+
 const ChatComponent = ({
   endpoint = '/api/router/v1/chat/completions',
   isFullscreenMode = false,
@@ -694,8 +922,17 @@ const ChatComponent = ({
   const [pendingHeaders, setPendingHeaders] = useState<Record<string, string> | null>(null)
   const [isFullscreen] = useState(isFullscreenMode)
   const [enableWebSearch, setEnableWebSearch] = useState(true)
+  const [enableClawMode, setEnableClawMode] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true
+    const saved = window.localStorage.getItem(CLAW_MODE_STORAGE_KEY)
+    if (saved === null) return true
+    return saved === 'true'
+  })
+  const [isTogglingClawMode, setIsTogglingClawMode] = useState(false)
   const [expandedToolCards, setExpandedToolCards] = useState<Set<string>>(new Set())
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [clawView, setClawView] = useState<ClawPlaygroundView>(() => 'room')
+  const [teamRoomCreateToken, setTeamRoomCreateToken] = useState(0)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -715,7 +952,7 @@ const ChatComponent = ({
   }, [])
 
   // MCP 工具同步 - 自动将 MCP 服务器的工具同步到 toolRegistry
-  useMCPToolSync({ enabled: true, pollInterval: 30000 })
+  const { refresh: refreshMCPTools } = useMCPToolSync({ enabled: true, pollInterval: 30000 })
 
   // Tool Registry integration
   // Search tools (controlled by web search toggle)
@@ -728,6 +965,19 @@ const ChatComponent = ({
     enabledOnly: true,
     categories: ['code', 'file', 'image', 'custom'],
   })
+
+  const baseOtherToolDefinitions = useMemo(
+    () => otherToolDefinitions.filter(def => !def.function.name.startsWith(CLAW_TOOL_NAME_PREFIX)),
+    [otherToolDefinitions]
+  )
+  const clawToolDefinitions = useMemo(
+    () => otherToolDefinitions.filter(def => def.function.name.startsWith(CLAW_TOOL_NAME_PREFIX)),
+    [otherToolDefinitions]
+  )
+  const activeOtherToolDefinitions = useMemo(
+    () => (enableClawMode ? [...baseOtherToolDefinitions, ...clawToolDefinitions] : baseOtherToolDefinitions),
+    [baseOtherToolDefinitions, clawToolDefinitions, enableClawMode]
+  )
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -756,6 +1006,47 @@ const ChatComponent = ({
       document.body.classList.remove('playground-fullscreen')
     }
   }, [isFullscreen])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(CLAW_MODE_STORAGE_KEY, String(enableClawMode))
+  }, [enableClawMode])
+
+  useEffect(() => {
+    if (!enableClawMode) {
+      setIsTogglingClawMode(false)
+      setClawView('control')
+      return
+    }
+
+    let isCurrent = true
+    const bootstrapClawTools = async () => {
+      setIsTogglingClawMode(true)
+      try {
+        await ensureOpenClawServerConnected()
+        await refreshMCPTools()
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to enable Claw Mode'
+        console.warn(`[ClawOS] UI mode enabled, but MCP bootstrap failed: ${message}`)
+      } finally {
+        if (isCurrent) {
+          setIsTogglingClawMode(false)
+        }
+      }
+    }
+
+    void bootstrapClawTools()
+
+    return () => {
+      isCurrent = false
+    }
+  }, [enableClawMode, refreshMCPTools])
+
+  useEffect(() => {
+    if (enableClawMode && clawView === 'room') {
+      setIsSidebarOpen(false)
+    }
+  }, [enableClawMode, clawView])
 
   // Hydrate the most recent conversation from localStorage once
   useEffect(() => {
@@ -805,19 +1096,6 @@ const ChatComponent = ({
   const handleHeaderRevealComplete = useCallback(() => {
     setShowHeaderReveal(false)
     setPendingHeaders(null)
-  }, [])
-
-  const handleNewConversation = useCallback(() => {
-    abortControllerRef.current?.abort()
-    setIsLoading(false)
-    setConversationId(generateConversationId())
-    setMessages([])
-    setInputValue('')
-    setError(null)
-    setPendingHeaders(null)
-    setShowHeaderReveal(false)
-    setShowThinking(false)
-    setExpandedToolCards(new Set())
   }, [])
 
   const handleSelectConversation = useCallback(
@@ -934,6 +1212,10 @@ const ChatComponent = ({
         }
       }
 
+      if (enableClawMode) {
+        chatMessages.unshift({ role: 'system', content: CLAW_MODE_SYSTEM_PROMPT })
+      }
+
       // Add the new user message
       chatMessages.push({ role: 'user', content: trimmedInput })
 
@@ -948,7 +1230,7 @@ const ChatComponent = ({
       // - Search tools: only when web search is enabled
       // - Other tools: always available
       const activeTools = [
-        ...otherToolDefinitions,
+        ...activeOtherToolDefinitions,
         ...(enableWebSearch ? searchToolDefinitions : []),
       ]
       if (activeTools.length > 0) {
@@ -1532,10 +1814,9 @@ const ChatComponent = ({
     setIsLoading(false)
   }
 
-  const handleClear = () => {
+  const handleNewConversation = () => {
     abortControllerRef.current?.abort()
     setIsLoading(false)
-    deleteConversation(conversationId)
     setMessages([])
     setError(null)
     setPendingHeaders(null)
@@ -1545,6 +1826,30 @@ const ChatComponent = ({
     setInputValue('')
     setConversationId(generateConversationId())
   }
+
+  const handleToggleClawMode = useCallback(() => {
+    if (isLoading || isTogglingClawMode) return
+
+    if (enableClawMode) {
+      setEnableClawMode(false)
+      setError(null)
+      return
+    }
+
+    setEnableClawMode(true)
+    setClawView('room')
+    setError(null)
+  }, [enableClawMode, isLoading, isTogglingClawMode])
+
+  const isTeamRoomView = enableClawMode && clawView === 'room'
+
+  const handleTopBarCreate = useCallback(() => {
+    if (isTeamRoomView) {
+      setTeamRoomCreateToken(prev => prev + 1)
+      return
+    }
+    handleNewConversation()
+  }, [handleNewConversation, isTeamRoomView])
 
   return (
     <>
@@ -1565,9 +1870,11 @@ const ChatComponent = ({
         />
       )}
 
-      <div className={`${styles.container} ${isFullscreen ? styles.fullscreen : ''}`}>
+      <div
+        className={`${styles.container} ${isFullscreen ? styles.fullscreen : ''}`}
+      >
         <div className={styles.mainLayout}>
-          {isSidebarOpen && (
+          {!isTeamRoomView && isSidebarOpen && (
             <aside className={styles.sidebar}>
               <div className={styles.sidebarHeader}>
                 <div>
@@ -1575,28 +1882,6 @@ const ChatComponent = ({
                   <div className={styles.sidebarSubtitle}>
                     {conversationPreviews.length ? `${conversationPreviews.length} saved` : 'No saved conversations'}
                   </div>
-                </div>
-                <div className={styles.sidebarActions}>
-                  <button
-                    type="button"
-                    className={styles.sidebarButton}
-                    onClick={() => setIsSidebarOpen(false)}
-                    title="Hide sidebar"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M15 6l-6 6 6 6" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.sidebarButton}
-                    onClick={handleNewConversation}
-                    title="New conversation"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
                 </div>
               </div>
               <div className={styles.sidebarList}>
@@ -1650,153 +1935,121 @@ const ChatComponent = ({
 
           <div className={styles.chatArea}>
             <div className={styles.chatTopBar}>
-              <button
-                type="button"
-                className={styles.sidebarToggleButton}
-                onClick={() => setIsSidebarOpen(prev => !prev)}
-                title={isSidebarOpen ? 'Close' : 'Open'}
-              >
-                {isSidebarOpen ? (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M15 6l-6 6 6 6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                ) : (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-                <span className={styles.sidebarToggleLabel}>{isSidebarOpen ? 'Close' : 'Open'}</span>
-              </button>
-            </div>
-            {error && (
-              <div className={styles.error}>
-                <span className={styles.errorIcon}>⚠️</span>
-                <span>{error}</span>
+              <div className={styles.chatTopBarActions}>
                 <button
-                  className={styles.errorDismiss}
-                  onClick={() => setError(null)}
+                  type="button"
+                  className={styles.chatTopBarButton}
+                  onClick={() => setIsSidebarOpen(prev => !prev)}
+                  title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+                  aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
                 >
-                  ×
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <rect x="3" y="4" width="18" height="16" rx="3" />
+                    <path d="M9 4v16" />
+                    {isSidebarOpen ? (
+                      <path d="M15 9l-2.5 3 2.5 3" strokeLinecap="round" strokeLinejoin="round" />
+                    ) : (
+                      <path d="M12.5 9l2.5 3-2.5 3" strokeLinecap="round" strokeLinejoin="round" />
+                    )}
+                  </svg>
                 </button>
-              </div>
-            )}
-
-            <div className={styles.messagesContainer}>
-              {messages.length === 0 ? (
-                <div className={styles.emptyState}>
-                  <TypingGreeting lines={GREETING_LINES} />
-                </div>
-              ) : (
-                <div className={styles.messages}>
-                  {messages.map((message, msgIdx) => {
-                    const prevUserQuery = messages[msgIdx - 1]?.role === 'user' ? messages[msgIdx - 1].content : undefined
-                    return (
-                    <div
-                      key={message.id}
-                      className={`${styles.message} ${styles[message.role]}`}
-                      // Disable translation during streaming to prevent DOM conflicts
-                      translate={getTranslateAttr(message.isStreaming ?? false)}
+                <button
+                  type="button"
+                  className={styles.chatTopBarButton}
+                  onClick={handleTopBarCreate}
+                  title={isTeamRoomView ? 'New room' : 'New conversation'}
+                  aria-label={isTeamRoomView ? 'New room' : 'New conversation'}
+                >
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M14 4h-6a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3h1v3l3.6-3H14a3 3 0 0 0 3-3v-2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M17 3v6M14 6h6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                {enableClawMode && (
+                  <div className={styles.clawViewToggle}>
+                    <button
+                      type="button"
+                      className={`${styles.clawViewButton} ${clawView === 'room' ? styles.clawViewButtonActive : ''}`}
+                      onClick={() => setClawView('room')}
                     >
-                      <div className={styles.messageAvatar}>
-                        {message.role === 'user' ? (
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        ) : (
-                          <img src="/vllm.png" alt="vLLM SR" className={styles.avatarImage} />
-                        )}
-                      </div>
-                      <div className={styles.messageContent}>
-                        <div className={styles.messageRole}>
-                          {message.role === 'user' ? 'You' : 'vLLM SR'}
-                        </div>
-                        {/* Ratings mode: multiple choices */}
-                        {message.role === 'assistant' && message.choices && message.choices.length > 1 ? (
-                          <>
-                            {/* Show tool calls if any */}
-                            {message.toolCalls && message.toolCalls.length > 0 && (
-                              <div className={styles.toolCallsContainer}>
-                                {message.toolCalls.map(tc => (
-                                  <ToolCard
-                                    key={tc.id}
-                                    toolCall={tc}
-                                    toolResult={message.toolResults?.find(tr => tr.callId === tc.id)}
-                                    isExpanded={expandedToolCards.has(tc.id)}
-                                    onToggle={() => {
-                                      setExpandedToolCards(prev => {
-                                        const next = new Set(prev)
-                                        if (next.has(tc.id)) {
-                                          next.delete(tc.id)
-                                        } else {
-                                          next.add(tc.id)
-                                        }
-                                        return next
-                                      })
-                                    }}
-                                  />
-                                ))}
-                              </div>
+                      Team Room
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.clawViewButton} ${clawView === 'control' ? styles.clawViewButtonActive : ''}`}
+                      onClick={() => setClawView('control')}
+                    >
+                      Control Chat
+                    </button>
+                  </div>
+                )}
+                {enableClawMode && clawView === 'room' && (
+                  <ClawModeToggle
+                    enabled={enableClawMode}
+                    onToggle={handleToggleClawMode}
+                    disabled={isLoading || isTogglingClawMode}
+                  />
+                )}
+              </div>
+            </div>
+            {isTeamRoomView ? (
+              <ClawRoomChat
+                isSidebarOpen={isSidebarOpen}
+                createRoomRequestToken={teamRoomCreateToken}
+              />
+            ) : (
+              <>
+                {error && (
+                  <div className={styles.error}>
+                    <span className={styles.errorIcon}>⚠️</span>
+                    <span>{error}</span>
+                    <button
+                      className={styles.errorDismiss}
+                      onClick={() => setError(null)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+
+                <div className={`${styles.messagesContainer} ${messages.length === 0 ? styles.messagesContainerEmpty : ''}`}>
+                  {messages.length === 0 ? (
+                    <div className={styles.emptyState}>
+                      <TypingGreeting lines={GREETING_LINES} />
+                    </div>
+                  ) : (
+                    <div className={styles.messages}>
+                      {messages.map((message, msgIdx) => {
+                        const prevUserQuery = messages[msgIdx - 1]?.role === 'user' ? messages[msgIdx - 1].content : undefined
+                        return (
+                        <div
+                          key={message.id}
+                          className={`${styles.message} ${styles[message.role]}`}
+                          // Disable translation during streaming to prevent DOM conflicts
+                          translate={getTranslateAttr(message.isStreaming ?? false)}
+                        >
+                          <div className={styles.messageAvatar}>
+                            {message.role === 'user' ? (
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            ) : (
+                              <img src="/vllm.png" alt="vLLM SR" className={styles.avatarImage} />
                             )}
-                            {/* Show thinking block if available */}
-                            {message.thinkingProcess && (
-                              <ThinkingBlock
-                                content={message.thinkingProcess}
-                                isStreaming={message.isStreaming}
-                              />
-                            )}
-                            <div className={styles.ratingsChoices}>
-                              {message.choices.map((choice, idx) => (
-                                <div key={idx} className={styles.choiceCard}>
-                                  <div className={styles.choiceHeader}>
-                                    <span className={styles.choiceModel}>{choice.model || `Model ${idx + 1}`}</span>
-                                    <span className={styles.choiceIndex}>Choice {idx + 1}</span>
-                                  </div>
-                                  <div className={styles.choiceContent}>
-                                    <ErrorBoundary>
-                                      <ContentWithCitations
-                                        content={choice.content}
-                                        sources={
-                                          message.toolResults?.find(tr => tr.name === 'search_web')?.content
-                                        }
-                                        isStreaming={message.isStreaming}
-                                      />
-                                    </ErrorBoundary>
-                                    {message.isStreaming && idx === 0 && (
-                                      <span className={styles.cursor}>▊</span>
-                                    )}
-                                  </div>
-                                  {!message.isStreaming && choice.model && (
-                                    <div className={styles.choiceActions}>
-                                      <FeedbackButtons
-                                        modelId={choice.model}
-                                        category={message.headers?.['x-vsr-selected-decision']}
-                                        query={prevUserQuery}
-                                        otherModelIds={message.choices?.map(c => c.model).filter((m): m is string => m != null && m !== choice.model) ?? []}
-                                      />
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
+                          </div>
+                          <div className={styles.messageContent}>
+                            <div className={styles.messageRole}>
+                              {message.role === 'user' ? 'You' : 'vLLM SR'}
                             </div>
-                          </>
-                        ) : (
-                          /* Single choice mode */
-                          <>
-                            {/* Show tool calls if any - filter out failed ones for cleaner UX */}
-                            {message.role === 'assistant' && message.toolCalls && message.toolCalls.length > 0 && (() => {
-                              const successfulToolCalls = message.toolCalls.filter(tc => tc.status !== 'failed')
-                              const failedCount = message.toolCalls.length - successfulToolCalls.length
-
-                              if (successfulToolCalls.length === 0 && failedCount > 0) {
-                                // All failed, show nothing or a minimal indicator
-                                return null
-                              }
-
-                              return (
-                                <div className={styles.toolCallsContainer}>
-                                  {successfulToolCalls.map(tc => (
-                                    <ErrorBoundary key={tc.id}>
+                            {/* Ratings mode: multiple choices */}
+                            {message.role === 'assistant' && message.choices && message.choices.length > 1 ? (
+                              <>
+                                {/* Show tool calls if any */}
+                                {message.toolCalls && message.toolCalls.length > 0 && (
+                                  <div className={styles.toolCallsContainer}>
+                                    {message.toolCalls.map(tc => (
                                       <ToolCard
+                                        key={tc.id}
                                         toolCall={tc}
                                         toolResult={message.toolResults?.find(tr => tr.callId === tc.id)}
                                         isExpanded={expandedToolCards.has(tc.id)}
@@ -1812,132 +2065,197 @@ const ChatComponent = ({
                                           })
                                         }}
                                       />
-                                    </ErrorBoundary>
+                                    ))}
+                                  </div>
+                                )}
+                                {/* Show thinking block if available */}
+                                {message.thinkingProcess && (
+                                  <ThinkingBlock
+                                    content={message.thinkingProcess}
+                                    isStreaming={message.isStreaming}
+                                  />
+                                )}
+                                <div className={styles.ratingsChoices}>
+                                  {message.choices.map((choice, idx) => (
+                                    <div key={idx} className={styles.choiceCard}>
+                                      <div className={styles.choiceHeader}>
+                                        <span className={styles.choiceModel}>{choice.model || `Model ${idx + 1}`}</span>
+                                        <span className={styles.choiceIndex}>Choice {idx + 1}</span>
+                                      </div>
+                                      <div className={styles.choiceContent}>
+                                        <ErrorBoundary>
+                                          <ContentWithCitations
+                                            content={choice.content}
+                                            sources={
+                                              message.toolResults?.find(tr => tr.name === 'search_web')?.content
+                                            }
+                                            isStreaming={message.isStreaming}
+                                          />
+                                        </ErrorBoundary>
+                                        {message.isStreaming && idx === 0 && (
+                                          <span className={styles.cursor}>▊</span>
+                                        )}
+                                      </div>
+                                      {!message.isStreaming && choice.model && (
+                                        <div className={styles.choiceActions}>
+                                          <FeedbackButtons
+                                            modelId={choice.model}
+                                            category={message.headers?.['x-vsr-selected-decision']}
+                                            query={prevUserQuery}
+                                            otherModelIds={message.choices?.map(c => c.model).filter((m): m is string => m != null && m !== choice.model) ?? []}
+                                          />
+                                        </div>
+                                      )}
+                                    </div>
                                   ))}
                                 </div>
-                              )
-                            })()}
-                            {/* Show thinking block if available */}
-                            {message.role === 'assistant' && message.thinkingProcess && (
-                              <ThinkingBlock
-                                content={message.thinkingProcess}
-                                isStreaming={message.isStreaming}
-                              />
+                              </>
+                            ) : (
+                              /* Single choice mode */
+                              <>
+                                {/* Show tool calls if any (including failed calls for debugging/traceability) */}
+                                {message.role === 'assistant' && message.toolCalls && message.toolCalls.length > 0 && (
+                                  <div className={styles.toolCallsContainer}>
+                                    {message.toolCalls.map(tc => (
+                                      <ErrorBoundary key={tc.id}>
+                                        <ToolCard
+                                          toolCall={tc}
+                                          toolResult={message.toolResults?.find(tr => tr.callId === tc.id)}
+                                          isExpanded={expandedToolCards.has(tc.id)}
+                                          onToggle={() => {
+                                            setExpandedToolCards(prev => {
+                                              const next = new Set(prev)
+                                              if (next.has(tc.id)) {
+                                                next.delete(tc.id)
+                                              } else {
+                                                next.add(tc.id)
+                                              }
+                                              return next
+                                            })
+                                          }}
+                                        />
+                                      </ErrorBoundary>
+                                    ))}
+                                  </div>
+                                )}
+                                {/* Show thinking block if available */}
+                                {message.role === 'assistant' && message.thinkingProcess && (
+                                  <ThinkingBlock
+                                    content={message.thinkingProcess}
+                                    isStreaming={message.isStreaming}
+                                  />
+                                )}
+                                <div className={styles.messageText}>
+                                  {message.role === 'assistant' && message.content ? (
+                                    <>
+                                      <ErrorBoundary>
+                                        <ContentWithCitations
+                                          content={message.content}
+                                          sources={
+                                            message.toolResults?.find(tr => tr.name === 'search_web')?.content
+                                          }
+                                          isStreaming={message.isStreaming}
+                                        />
+                                      </ErrorBoundary>
+                                      {message.isStreaming && (
+                                        <span className={styles.cursor}>▊</span>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <>
+                                      {message.content || (message.isStreaming && (
+                                        <span className={styles.cursor}>▊</span>
+                                      ))}
+                                      {message.isStreaming && message.content && (
+                                        <span className={styles.cursor}>▊</span>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              </>
                             )}
-                            <div className={styles.messageText}>
-                              {message.role === 'assistant' && message.content ? (
-                                <>
-                                  <ErrorBoundary>
-                                    <ContentWithCitations
-                                      content={message.content}
-                                      sources={
-                                        message.toolResults?.find(tr => tr.name === 'search_web')?.content
-                                      }
-                                      isStreaming={message.isStreaming}
-                                    />
-                                  </ErrorBoundary>
-                                  {message.isStreaming && (
-                                    <span className={styles.cursor}>▊</span>
-                                  )}
-                                </>
-                              ) : (
-                                <>
-                                  {message.content || (message.isStreaming && (
-                                    <span className={styles.cursor}>▊</span>
-                                  ))}
-                                  {message.isStreaming && message.content && (
-                                    <span className={styles.cursor}>▊</span>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          </>
-                        )}
-                        {message.role === 'assistant' && message.headers && (
-                          <HeaderDisplay headers={message.headers} />
-                        )}
-                        {message.role === 'assistant' && message.reasoning_mom_responses && (
-                          <>
-                            {console.log('[ReMoM] Rendering ReMoMResponsesDisplay for message:', message.id, 'rounds:', message.reasoning_mom_responses)}
-                            <ReMoMResponsesDisplay rounds={message.reasoning_mom_responses} />
-                          </>
-                        )}
-                        {message.role === 'assistant' && message.content && !message.isStreaming && (
-                          <div className={styles.messageActionRow}>
-                            <MessageActionBar content={message.content} />
-                            {message.headers?.['x-vsr-selected-model'] && (
-                              <FeedbackButtons
-                                modelId={message.headers['x-vsr-selected-model']}
-                                category={message.headers['x-vsr-selected-decision']}
-                                query={prevUserQuery}
-                              />
+                            {message.role === 'assistant' && message.headers && (
+                              <HeaderDisplay headers={message.headers} />
+                            )}
+                            {message.role === 'assistant' && message.reasoning_mom_responses && (
+                              <>
+                                {console.log('[ReMoM] Rendering ReMoMResponsesDisplay for message:', message.id, 'rounds:', message.reasoning_mom_responses)}
+                                <ReMoMResponsesDisplay rounds={message.reasoning_mom_responses} />
+                              </>
+                            )}
+                            {message.role === 'assistant' && message.content && !message.isStreaming && (
+                              <div className={styles.messageActionRow}>
+                                <MessageActionBar content={message.content} />
+                                {message.headers?.['x-vsr-selected-model'] && (
+                                  <FeedbackButtons
+                                    modelId={message.headers['x-vsr-selected-model']}
+                                    category={message.headers['x-vsr-selected-decision']}
+                                    query={prevUserQuery}
+                                  />
+                                )}
+                              </div>
                             )}
                           </div>
-                        )}
-                      </div>
+                        </div>
+                        )
+                      })}
+                      <div ref={messagesEndRef} />
                     </div>
-                    )
-                  })}
-                  <div ref={messagesEndRef} />
-                </div>
-              )}
-            </div>
-
-            <div className={styles.inputContainer}>
-              <div className={`${styles.inputWrapper} ${inputValue.trim() ? styles.hasContent : ''}`}>
-                <textarea
-                  ref={inputRef}
-                  value={inputValue}
-                  onChange={e => setInputValue(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Ask me anything..."
-                  className={styles.input}
-                  rows={1}
-                  disabled={isLoading}
-                />
-                <div className={styles.inputActionsRow}>
-                  <div className={styles.inputActions}>
-                    <ToolToggle
-                      enabled={enableWebSearch}
-                      onToggle={() => setEnableWebSearch(!enableWebSearch)}
-                      disabled={isLoading}
-                    />
-                    <button
-                      className={styles.inputActionButton}
-                      onClick={handleClear}
-                      data-tooltip="Clear chat"
-                      type="button"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <path d="M2 4h12M5.5 4V2.5h5V4M13 4v9.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4M6.5 7v4M9.5 7v4" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </button>
-                  </div>
-                  {isLoading ? (
-                    <button
-                      className={`${styles.sendButton} ${styles.stopButton}`}
-                      onClick={handleStop}
-                      title="Stop generating"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                        <rect x="6" y="6" width="12" height="12" rx="2" />
-                      </svg>
-                    </button>
-                  ) : (
-                    <button
-                      className={styles.sendButton}
-                      onClick={handleSend}
-                      disabled={!inputValue.trim()}
-                      title="Send message"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <path d="M12 19V5M5 12l7-7 7 7" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </button>
                   )}
                 </div>
-              </div>
-            </div>
+
+                <div className={styles.inputContainer}>
+                  <div className={`${styles.inputWrapper} ${inputValue.trim() ? styles.hasContent : ''}`}>
+                    <textarea
+                      ref={inputRef}
+                      value={inputValue}
+                      onChange={e => setInputValue(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="Ask me anything..."
+                      className={styles.input}
+                      rows={1}
+                      disabled={isLoading}
+                    />
+                    <div className={styles.inputActionsRow}>
+                      <div className={styles.inputActions}>
+                        <ClawModeToggle
+                          enabled={enableClawMode}
+                          onToggle={handleToggleClawMode}
+                          disabled={isLoading || isTogglingClawMode}
+                        />
+                        <ToolToggle
+                          enabled={enableWebSearch}
+                          onToggle={() => setEnableWebSearch(!enableWebSearch)}
+                          disabled={isLoading || isTogglingClawMode}
+                        />
+                      </div>
+                      {isLoading ? (
+                        <button
+                          className={`${styles.sendButton} ${styles.stopButton}`}
+                          onClick={handleStop}
+                          title="Stop generating"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <rect x="6" y="6" width="12" height="12" rx="2" />
+                          </svg>
+                        </button>
+                      ) : (
+                        <button
+                          className={styles.sendButton}
+                          onClick={handleSend}
+                          disabled={!inputValue.trim()}
+                          title="Send message"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M12 19V5M5 12l7-7 7 7" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

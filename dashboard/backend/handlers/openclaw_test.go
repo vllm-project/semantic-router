@@ -2,12 +2,17 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestWriteOpenClawConfig_ReplacesDirectoryPath(t *testing.T) {
@@ -119,6 +124,67 @@ func TestWriteOpenClawConfig_RemoteMemoryUsesCurrentSchema(t *testing.T) {
 	if remote["baseUrl"] != "http://127.0.0.1:8080" {
 		t.Fatalf("memorySearch.remote.baseUrl mismatch: %v", remote["baseUrl"])
 	}
+
+	gateway, ok := cfg["gateway"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("gateway block missing or invalid")
+	}
+	httpCfg, ok := gateway["http"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("gateway.http block missing or invalid")
+	}
+	endpoints, ok := httpCfg["endpoints"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("gateway.http.endpoints block missing or invalid")
+	}
+	chatCompletions, ok := endpoints["chatCompletions"].(map[string]interface{})
+	if !ok || chatCompletions["enabled"] != true {
+		t.Fatalf("chatCompletions endpoint must be enabled by default, got: %#v", endpoints["chatCompletions"])
+	}
+}
+
+func TestGatewayTokenForContainer_PrefersConfigTokenOverRegistry(t *testing.T) {
+	h := NewOpenClawHandler(t.TempDir(), false)
+	workerName := "worker-a"
+
+	if err := h.saveRegistry([]ContainerEntry{
+		{
+			Name:  workerName,
+			Token: "registry-token",
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed registry: %v", err)
+	}
+
+	configPath := filepath.Join(h.containerDataDir(workerName), "openclaw.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{"gateway":{"auth":{"token":"config-token"}}}`), 0o644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	if got := h.gatewayTokenForContainer(workerName); got != "config-token" {
+		t.Fatalf("expected config token, got %q", got)
+	}
+}
+
+func TestGatewayTokenForContainer_FallsBackToRegistryToken(t *testing.T) {
+	h := NewOpenClawHandler(t.TempDir(), false)
+	workerName := "worker-b"
+
+	if err := h.saveRegistry([]ContainerEntry{
+		{
+			Name:  workerName,
+			Token: "registry-token-only",
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed registry: %v", err)
+	}
+
+	if got := h.gatewayTokenForContainer(workerName); got != "registry-token-only" {
+		t.Fatalf("expected registry token fallback, got %q", got)
+	}
 }
 
 func TestLoadSkills_UsesEnvOverridePath(t *testing.T) {
@@ -185,6 +251,195 @@ func TestDeriveContainerName(t *testing.T) {
 				t.Fatalf("deriveContainerName(%q, %q) = %q, expected %q", tc.requested, tc.identityName, got, tc.expected)
 			}
 		})
+	}
+}
+
+func TestDefaultOpenClawModelBaseURL(t *testing.T) {
+	t.Setenv("OPENCLAW_MODEL_BASE_URL", "")
+	if got := defaultOpenClawModelBaseURL(); got != "http://127.0.0.1:8801/v1" {
+		t.Fatalf("expected fallback model base URL, got %q", got)
+	}
+
+	t.Setenv("OPENCLAW_MODEL_BASE_URL", "http://localhost:9999/v1")
+	if got := defaultOpenClawModelBaseURL(); got != "http://localhost:9999/v1" {
+		t.Fatalf("expected env model base URL, got %q", got)
+	}
+}
+
+func TestIsOpenClawGatewayPortConflict(t *testing.T) {
+	tests := []struct {
+		name     string
+		logs     string
+		port     int
+		expected bool
+	}{
+		{
+			name: "openclaw gateway already listening",
+			logs: "Gateway failed to start: another gateway instance is already listening on ws://0.0.0.0:18792",
+			port: 18792, expected: true,
+		},
+		{
+			name: "generic address already in use",
+			logs: "listen tcp 0.0.0.0:18792: bind: address already in use",
+			port: 18792, expected: true,
+		},
+		{
+			name: "port already in use",
+			logs: "Port 18792 is already in use.",
+			port: 18792, expected: true,
+		},
+		{
+			name: "unrelated error",
+			logs: "failed to pull image",
+			port: 18792, expected: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isOpenClawGatewayPortConflict(tc.logs, tc.port); got != tc.expected {
+				t.Fatalf("isOpenClawGatewayPortConflict() = %v, expected %v", got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestOpenClawGatewayListeningReady(t *testing.T) {
+	tests := []struct {
+		name     string
+		logs     string
+		expected bool
+	}{
+		{
+			name:     "success listening marker",
+			logs:     "[gateway] listening on ws://0.0.0.0:18796",
+			expected: true,
+		},
+		{
+			name:     "failure after success",
+			logs:     "[gateway] listening on ws://0.0.0.0:18796\nGateway failed to start: another gateway instance is already listening on ws://0.0.0.0:18796",
+			expected: false,
+		},
+		{
+			name:     "success after earlier failure",
+			logs:     "Gateway failed to start: another gateway instance is already listening on ws://0.0.0.0:18796\n[gateway] listening on ws://0.0.0.0:18797",
+			expected: true,
+		},
+		{
+			name:     "no listening marker",
+			logs:     "starting openclaw...",
+			expected: false,
+		},
+		{
+			name:     "empty logs",
+			logs:     "",
+			expected: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := openClawGatewayListeningReady(tc.logs); got != tc.expected {
+				t.Fatalf("openClawGatewayListeningReady() = %v, expected %v", got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestProvisionAsyncRequested(t *testing.T) {
+	tests := []struct {
+		name     string
+		url      string
+		header   string
+		expected bool
+	}{
+		{
+			name:     "query true",
+			url:      "/api/openclaw/workers?async=true",
+			expected: true,
+		},
+		{
+			name:     "query one",
+			url:      "/api/openclaw/workers?async=1",
+			expected: true,
+		},
+		{
+			name:     "header true",
+			url:      "/api/openclaw/workers",
+			header:   "true",
+			expected: true,
+		},
+		{
+			name:     "header on",
+			url:      "/api/openclaw/workers",
+			header:   "on",
+			expected: true,
+		},
+		{
+			name:     "disabled",
+			url:      "/api/openclaw/workers?async=false",
+			expected: false,
+		},
+		{
+			name:     "missing",
+			url:      "/api/openclaw/workers",
+			expected: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tc.url, nil)
+			if tc.header != "" {
+				req.Header.Set("X-OpenClaw-Async", tc.header)
+			}
+			if got := provisionAsyncRequested(req); got != tc.expected {
+				t.Fatalf("provisionAsyncRequested() = %v, expected %v", got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestResolveOpenClawModelBaseURL_UsesRouterListeners(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.yaml")
+	configYAML := `
+listeners:
+  - address: 0.0.0.0
+    port: 18889
+`
+	if err := os.WriteFile(configPath, []byte(configYAML), 0o644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	h := NewOpenClawHandler(tempDir, false)
+	h.SetRouterConfigPath(configPath)
+	t.Setenv("OPENCLAW_MODEL_BASE_URL", "")
+
+	if got := h.resolveOpenClawModelBaseURL(); got != "http://127.0.0.1:18889/v1" {
+		t.Fatalf("expected listener-derived model base URL, got %q", got)
+	}
+}
+
+func TestResolveOpenClawModelBaseURL_EnvOverrideWins(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.yaml")
+	configYAML := `
+api_server:
+  listeners:
+    - address: ::1
+      port: 18890
+`
+	if err := os.WriteFile(configPath, []byte(configYAML), 0o644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	h := NewOpenClawHandler(tempDir, false)
+	h.SetRouterConfigPath(configPath)
+	t.Setenv("OPENCLAW_MODEL_BASE_URL", "http://localhost:19999/v1")
+
+	if got := h.resolveOpenClawModelBaseURL(); got != "http://localhost:19999/v1" {
+		t.Fatalf("expected env override model base URL, got %q", got)
 	}
 }
 
@@ -487,4 +742,1039 @@ func TestWorkerByIDHandler_Delete(t *testing.T) {
 	if len(entries) != 0 {
 		t.Fatalf("expected registry to be empty after delete, got %d entries", len(entries))
 	}
+}
+
+func TestWorkerByIDHandler_SetLeaderRoleUpdatesTeamAndDemotesOthers(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewOpenClawHandler(tempDir, false)
+
+	if err := h.saveTeams([]TeamEntry{
+		{
+			ID:        "core",
+			Name:      "Core Team",
+			LeaderID:  "worker-a",
+			CreatedAt: "2026-01-01T00:00:00Z",
+			UpdatedAt: "2026-01-01T00:00:00Z",
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed teams: %v", err)
+	}
+	if err := h.saveRegistry([]ContainerEntry{
+		{
+			Name:     "worker-a",
+			Port:     18788,
+			Image:    "ghcr.io/openclaw/openclaw:latest",
+			Token:    "token",
+			DataDir:  tempDir,
+			TeamID:   "core",
+			TeamName: "Core Team",
+			RoleKind: "leader",
+		},
+		{
+			Name:     "worker-b",
+			Port:     18789,
+			Image:    "ghcr.io/openclaw/openclaw:latest",
+			Token:    "token",
+			DataDir:  tempDir,
+			TeamID:   "core",
+			TeamName: "Core Team",
+			RoleKind: "worker",
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed workers: %v", err)
+	}
+
+	updateReq := httptest.NewRequest(http.MethodPut, "/api/openclaw/workers/worker-b", strings.NewReader(`{
+		"roleKind":"leader"
+	}`))
+	updateResp := httptest.NewRecorder()
+	h.WorkerByIDHandler().ServeHTTP(updateResp, updateReq)
+	if updateResp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", updateResp.Code, updateResp.Body.String())
+	}
+
+	teams, err := h.loadTeams()
+	if err != nil {
+		t.Fatalf("failed to load teams: %v", err)
+	}
+	if len(teams) != 1 || teams[0].LeaderID != "worker-b" {
+		t.Fatalf("expected team leader to become worker-b, got %+v", teams)
+	}
+
+	entries, err := h.loadRegistry()
+	if err != nil {
+		t.Fatalf("failed to load workers: %v", err)
+	}
+	roleByName := map[string]string{}
+	leaderRole := ""
+	leaderVibe := ""
+	leaderPrinciples := ""
+	for _, entry := range entries {
+		roleByName[entry.Name] = normalizeRoleKind(entry.RoleKind)
+		if entry.Name == "worker-b" {
+			leaderRole = strings.TrimSpace(entry.AgentRole)
+			leaderVibe = strings.TrimSpace(entry.AgentVibe)
+			leaderPrinciples = strings.TrimSpace(entry.AgentPrinciples)
+		}
+	}
+	if roleByName["worker-b"] != "leader" {
+		t.Fatalf("worker-b should be leader, got %q", roleByName["worker-b"])
+	}
+	if roleByName["worker-a"] != "worker" {
+		t.Fatalf("worker-a should be demoted to worker, got %q", roleByName["worker-a"])
+	}
+	if leaderRole == "" || leaderVibe == "" || leaderPrinciples == "" {
+		t.Fatalf("leader metadata defaults should be populated, got role=%q vibe=%q principles=%q", leaderRole, leaderVibe, leaderPrinciples)
+	}
+}
+
+func TestRoomsHandler_CreateAndMessageFlowWithoutAutomation(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewOpenClawHandler(tempDir, false)
+	if err := h.saveTeams([]TeamEntry{{
+		ID:        "team-a",
+		Name:      "Team A",
+		CreatedAt: "2026-01-01T00:00:00Z",
+		UpdatedAt: "2026-01-01T00:00:00Z",
+	}}); err != nil {
+		t.Fatalf("failed to seed team: %v", err)
+	}
+
+	createRoomReq := httptest.NewRequest(http.MethodPost, "/api/openclaw/rooms", strings.NewReader(`{
+		"teamId":"team-a",
+		"name":"Planning"
+	}`))
+	createRoomResp := httptest.NewRecorder()
+	h.RoomsHandler().ServeHTTP(createRoomResp, createRoomReq)
+	if createRoomResp.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", createRoomResp.Code, createRoomResp.Body.String())
+	}
+	var room ClawRoomEntry
+	if err := json.Unmarshal(createRoomResp.Body.Bytes(), &room); err != nil {
+		t.Fatalf("failed to parse room create response: %v", err)
+	}
+	if room.ID == "" {
+		t.Fatalf("room id should not be empty")
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/openclaw/rooms?teamId=team-a", nil)
+	listResp := httptest.NewRecorder()
+	h.RoomsHandler().ServeHTTP(listResp, listReq)
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 for room list, got %d", listResp.Code)
+	}
+
+	postReq := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/openclaw/rooms/%s/messages", room.ID), strings.NewReader(`{
+		"senderType":"system",
+		"senderName":"test",
+		"content":"hello @leader"
+	}`))
+	postResp := httptest.NewRecorder()
+	h.RoomByIDHandler().ServeHTTP(postResp, postReq)
+	if postResp.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for message post, got %d: %s", postResp.Code, postResp.Body.String())
+	}
+
+	msgListReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/openclaw/rooms/%s/messages?limit=10", room.ID), nil)
+	msgListResp := httptest.NewRecorder()
+	h.RoomByIDHandler().ServeHTTP(msgListResp, msgListReq)
+	if msgListResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 for message list, got %d", msgListResp.Code)
+	}
+	var messages []ClawRoomMessage
+	if err := json.Unmarshal(msgListResp.Body.Bytes(), &messages); err != nil {
+		t.Fatalf("failed to parse message list: %v", err)
+	}
+	if len(messages) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(messages))
+	}
+	if len(messages[0].Mentions) != 1 || messages[0].Mentions[0] != "leader" {
+		t.Fatalf("mention parsing mismatch: %+v", messages[0].Mentions)
+	}
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/openclaw/rooms/%s", room.ID), nil)
+	deleteResp := httptest.NewRecorder()
+	h.RoomByIDHandler().ServeHTTP(deleteResp, deleteReq)
+	if deleteResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 for room delete, got %d: %s", deleteResp.Code, deleteResp.Body.String())
+	}
+
+	getRoomReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/openclaw/rooms/%s", room.ID), nil)
+	getRoomResp := httptest.NewRecorder()
+	h.RoomByIDHandler().ServeHTTP(getRoomResp, getRoomReq)
+	if getRoomResp.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for deleted room, got %d", getRoomResp.Code)
+	}
+}
+
+func TestProcessRoomUserMessage_LeaderDelegatesToWorker(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewOpenClawHandler(tempDir, false)
+
+	leaderSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("unexpected leader path: %s", r.URL.Path)
+		}
+		if got := r.Header.Get("X-OpenClaw-Agent-Id"); got != "main" {
+			t.Fatalf("expected X-OpenClaw-Agent-Id=main, got %q", got)
+		}
+		var payload openAIChatRequest
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("failed to decode leader payload: %v", err)
+		}
+		if payload.Model != openClawPrimaryAgentModel {
+			t.Fatalf("unexpected leader model: %s", payload.Model)
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"@worker-a please prepare the implementation checklist."}}]}`))
+	}))
+	defer leaderSrv.Close()
+
+	workerSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("unexpected worker path: %s", r.URL.Path)
+		}
+		var payload openAIChatRequest
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("failed to decode worker payload: %v", err)
+		}
+		if payload.Model != openClawPrimaryAgentModel {
+			t.Fatalf("unexpected worker model: %s", payload.Model)
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"Checklist prepared and ready for review."}}]}`))
+	}))
+	defer workerSrv.Close()
+
+	leaderPort := mustServerPort(t, leaderSrv.URL)
+	workerPort := mustServerPort(t, workerSrv.URL)
+
+	team := TeamEntry{
+		ID:        "team-alpha",
+		Name:      "Alpha",
+		LeaderID:  "leader-1",
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := h.saveTeams([]TeamEntry{team}); err != nil {
+		t.Fatalf("failed to seed team: %v", err)
+	}
+	if err := h.saveRegistry([]ContainerEntry{
+		{
+			Name:     "leader-1",
+			Port:     leaderPort,
+			Image:    "ghcr.io/openclaw/openclaw:latest",
+			Token:    "leader-token",
+			DataDir:  tempDir,
+			TeamID:   team.ID,
+			TeamName: team.Name,
+			RoleKind: "leader",
+		},
+		{
+			Name:     "worker-a",
+			Port:     workerPort,
+			Image:    "ghcr.io/openclaw/openclaw:latest",
+			Token:    "worker-token",
+			DataDir:  tempDir,
+			TeamID:   team.ID,
+			TeamName: team.Name,
+			RoleKind: "worker",
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed workers: %v", err)
+	}
+
+	h.mu.Lock()
+	room, err := h.ensureDefaultRoomLocked(team)
+	h.mu.Unlock()
+	if err != nil {
+		t.Fatalf("failed to ensure room: %v", err)
+	}
+
+	userMessage := newRoomMessage(room, "user", "user-1", "You", "Please @leader break this down and delegate.", nil)
+	err = h.appendRoomMessage(room.ID, userMessage)
+	if err != nil {
+		t.Fatalf("failed to append user message: %v", err)
+	}
+
+	h.processRoomUserMessage(room.ID, userMessage.ID)
+
+	messages, err := h.loadRoomMessages(room.ID)
+	if err != nil {
+		t.Fatalf("failed to load room messages: %v", err)
+	}
+	if len(messages) < 3 {
+		t.Fatalf("expected at least 3 room messages (user + leader + worker), got %d", len(messages))
+	}
+
+	leaderFound := false
+	delegatedFound := false
+	for _, msg := range messages {
+		if msg.SenderID == "leader-1" && strings.Contains(msg.Content, "@worker-a") {
+			leaderFound = true
+		}
+		if msg.SenderID == "worker-a" && strings.Contains(strings.ToLower(msg.Content), "checklist prepared") {
+			delegatedFound = true
+		}
+	}
+	if !leaderFound {
+		t.Fatalf("expected leader response mentioning worker-a, got: %+v", messages)
+	}
+	if !delegatedFound {
+		t.Fatalf("expected delegated worker response, got: %+v", messages)
+	}
+}
+
+func TestProcessRoomUserMessage_SimultaneousMentionsContinueChain(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewOpenClawHandler(tempDir, false)
+
+	var (
+		callsMu     sync.Mutex
+		leaderCalls int
+		workerCalls int
+	)
+
+	leaderSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("unexpected leader path: %s", r.URL.Path)
+		}
+		var payload openAIChatRequest
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("failed to decode leader payload: %v", err)
+		}
+		callsMu.Lock()
+		leaderCalls++
+		call := leaderCalls
+		callsMu.Unlock()
+
+		content := "Leader reviewed worker output."
+		if call == 1 {
+			content = "@worker-a please draft the implementation plan."
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{
+					"message": map[string]any{
+						"content": content,
+					},
+				},
+			},
+		})
+	}))
+	defer leaderSrv.Close()
+
+	workerSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("unexpected worker path: %s", r.URL.Path)
+		}
+		var payload openAIChatRequest
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("failed to decode worker payload: %v", err)
+		}
+		callsMu.Lock()
+		workerCalls++
+		call := workerCalls
+		callsMu.Unlock()
+
+		content := "Worker final updates done."
+		if call == 1 {
+			content = "@leader initial draft is complete."
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{
+					"message": map[string]any{
+						"content": content,
+					},
+				},
+			},
+		})
+	}))
+	defer workerSrv.Close()
+
+	team := TeamEntry{
+		ID:        "team-sync",
+		Name:      "Sync Team",
+		LeaderID:  "leader-1",
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := h.saveTeams([]TeamEntry{team}); err != nil {
+		t.Fatalf("failed to seed team: %v", err)
+	}
+	if err := h.saveRegistry([]ContainerEntry{
+		{
+			Name:     "leader-1",
+			Port:     mustServerPort(t, leaderSrv.URL),
+			Image:    "ghcr.io/openclaw/openclaw:latest",
+			Token:    "leader-token",
+			DataDir:  tempDir,
+			TeamID:   team.ID,
+			RoleKind: "leader",
+		},
+		{
+			Name:     "worker-a",
+			Port:     mustServerPort(t, workerSrv.URL),
+			Image:    "ghcr.io/openclaw/openclaw:latest",
+			Token:    "worker-token",
+			DataDir:  tempDir,
+			TeamID:   team.ID,
+			RoleKind: "worker",
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed workers: %v", err)
+	}
+
+	h.mu.Lock()
+	room, err := h.ensureDefaultRoomLocked(team)
+	h.mu.Unlock()
+	if err != nil {
+		t.Fatalf("failed to ensure room: %v", err)
+	}
+
+	userMessage := newRoomMessage(room, "user", "user-1", "You", "Please @leader and @worker-a collaborate.", nil)
+	err = h.appendRoomMessage(room.ID, userMessage)
+	if err != nil {
+		t.Fatalf("failed to append user message: %v", err)
+	}
+
+	h.processRoomUserMessage(room.ID, userMessage.ID)
+
+	callsMu.Lock()
+	gotLeaderCalls := leaderCalls
+	gotWorkerCalls := workerCalls
+	callsMu.Unlock()
+	if gotLeaderCalls != 1 {
+		t.Fatalf("expected leader to be called exactly once (worker @leader should be ignored), got %d", gotLeaderCalls)
+	}
+	if gotWorkerCalls < 2 {
+		t.Fatalf("expected worker to be called at least twice, got %d", gotWorkerCalls)
+	}
+
+	messages, err := h.loadRoomMessages(room.ID)
+	if err != nil {
+		t.Fatalf("failed to load room messages: %v", err)
+	}
+	if len(messages) < 4 {
+		t.Fatalf("expected at least 4 room messages, got %d", len(messages))
+	}
+
+	leaderMentionedWorker := false
+	workerMentionedLeader := false
+	for _, msg := range messages {
+		if msg.SenderID == "leader-1" && strings.Contains(msg.Content, "@worker-a") {
+			leaderMentionedWorker = true
+		}
+		if msg.SenderID == "worker-a" && strings.Contains(strings.ToLower(msg.Content), "@leader") {
+			workerMentionedLeader = true
+		}
+	}
+	if !leaderMentionedWorker {
+		t.Fatalf("expected leader message that mentions worker-a, got: %+v", messages)
+	}
+	if !workerMentionedLeader {
+		t.Fatalf("expected worker message that mentions leader, got: %+v", messages)
+	}
+}
+
+func TestProcessRoomUserMessage_DuplicateTriggerDoesNotReprocess(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewOpenClawHandler(tempDir, false)
+
+	var (
+		callsMu    sync.Mutex
+		workerCall int
+	)
+
+	workerSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("unexpected worker path: %s", r.URL.Path)
+		}
+		callsMu.Lock()
+		workerCall++
+		callsMu.Unlock()
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{
+					"message": map[string]any{
+						"content": "Done.",
+					},
+				},
+			},
+		})
+	}))
+	defer workerSrv.Close()
+
+	team := TeamEntry{
+		ID:        "team-dedup",
+		Name:      "Dedup Team",
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := h.saveTeams([]TeamEntry{team}); err != nil {
+		t.Fatalf("failed to seed team: %v", err)
+	}
+	if err := h.saveRegistry([]ContainerEntry{
+		{
+			Name:     "worker-a",
+			Port:     mustServerPort(t, workerSrv.URL),
+			Image:    "ghcr.io/openclaw/openclaw:latest",
+			Token:    "token-worker-a",
+			DataDir:  tempDir,
+			TeamID:   team.ID,
+			RoleKind: "worker",
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed worker: %v", err)
+	}
+
+	h.mu.Lock()
+	room, err := h.ensureDefaultRoomLocked(team)
+	h.mu.Unlock()
+	if err != nil {
+		t.Fatalf("failed to ensure room: %v", err)
+	}
+
+	trigger := newRoomMessage(room, "user", "user-1", "You", "@worker-a run once", nil)
+	err = h.appendRoomMessage(room.ID, trigger)
+	if err != nil {
+		t.Fatalf("failed to append trigger message: %v", err)
+	}
+
+	h.processRoomUserMessage(room.ID, trigger.ID)
+	h.processRoomUserMessage(room.ID, trigger.ID)
+
+	callsMu.Lock()
+	gotCalls := workerCall
+	callsMu.Unlock()
+	if gotCalls != 1 {
+		t.Fatalf("expected worker to be called once for duplicate trigger id, got %d", gotCalls)
+	}
+
+	messages, err := h.loadRoomMessages(room.ID)
+	if err != nil {
+		t.Fatalf("failed to load room messages: %v", err)
+	}
+	var triggerStored *ClawRoomMessage
+	for i := range messages {
+		if messages[i].ID == trigger.ID {
+			triggerStored = &messages[i]
+			break
+		}
+	}
+	if triggerStored == nil {
+		t.Fatalf("trigger message not found in room history")
+	}
+	if triggerStored.Metadata == nil || strings.TrimSpace(triggerStored.Metadata[roomAutomationProcessedAtKey]) == "" {
+		t.Fatalf("trigger message should be marked as processed, got metadata: %+v", triggerStored.Metadata)
+	}
+}
+
+func TestProcessRoomUserMessage_MultiMentionsDispatchInParallel(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewOpenClawHandler(tempDir, false)
+
+	var (
+		startMu sync.Mutex
+		startA  time.Time
+		startB  time.Time
+	)
+
+	workerASrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("unexpected worker-a path: %s", r.URL.Path)
+		}
+		startMu.Lock()
+		startA = time.Now()
+		startMu.Unlock()
+
+		time.Sleep(300 * time.Millisecond)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{
+					"message": map[string]any{
+						"content": "worker-a done",
+					},
+				},
+			},
+		})
+	}))
+	defer workerASrv.Close()
+
+	workerBSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("unexpected worker-b path: %s", r.URL.Path)
+		}
+		startMu.Lock()
+		startB = time.Now()
+		startMu.Unlock()
+
+		time.Sleep(300 * time.Millisecond)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{
+					"message": map[string]any{
+						"content": "worker-b done",
+					},
+				},
+			},
+		})
+	}))
+	defer workerBSrv.Close()
+
+	team := TeamEntry{
+		ID:        "team-parallel",
+		Name:      "Parallel Team",
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := h.saveTeams([]TeamEntry{team}); err != nil {
+		t.Fatalf("failed to seed team: %v", err)
+	}
+	if err := h.saveRegistry([]ContainerEntry{
+		{
+			Name:     "worker-a",
+			Port:     mustServerPort(t, workerASrv.URL),
+			Image:    "ghcr.io/openclaw/openclaw:latest",
+			Token:    "token-a",
+			DataDir:  tempDir,
+			TeamID:   team.ID,
+			RoleKind: "worker",
+		},
+		{
+			Name:     "worker-b",
+			Port:     mustServerPort(t, workerBSrv.URL),
+			Image:    "ghcr.io/openclaw/openclaw:latest",
+			Token:    "token-b",
+			DataDir:  tempDir,
+			TeamID:   team.ID,
+			RoleKind: "worker",
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed workers: %v", err)
+	}
+
+	h.mu.Lock()
+	room, err := h.ensureDefaultRoomLocked(team)
+	h.mu.Unlock()
+	if err != nil {
+		t.Fatalf("failed to ensure room: %v", err)
+	}
+
+	userMessage := newRoomMessage(room, "user", "user-1", "You", "@worker-a @worker-b please run in parallel", nil)
+	if err := h.appendRoomMessage(room.ID, userMessage); err != nil {
+		t.Fatalf("failed to append user message: %v", err)
+	}
+
+	h.processRoomUserMessage(room.ID, userMessage.ID)
+
+	startMu.Lock()
+	defer startMu.Unlock()
+	if startA.IsZero() || startB.IsZero() {
+		t.Fatalf("expected both worker requests to be started, got startA=%v startB=%v", startA, startB)
+	}
+	diff := startA.Sub(startB)
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff > 220*time.Millisecond {
+		t.Fatalf("expected worker requests to start nearly together for parallel dispatch, diff=%s", diff)
+	}
+}
+
+func TestRoomMessagesPost_LeaderSenderTypeTriggersAutomation(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewOpenClawHandler(tempDir, false)
+
+	workerSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("unexpected worker path: %s", r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{
+					"message": map[string]any{
+						"content": "Done. Worker execution completed.",
+					},
+				},
+			},
+		})
+	}))
+	defer workerSrv.Close()
+
+	team := TeamEntry{
+		ID:        "team-room-post",
+		Name:      "Room Post Team",
+		LeaderID:  "leader-1",
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := h.saveTeams([]TeamEntry{team}); err != nil {
+		t.Fatalf("failed to seed team: %v", err)
+	}
+	if err := h.saveRegistry([]ContainerEntry{
+		{
+			Name:     "leader-1",
+			Port:     mustServerPort(t, workerSrv.URL),
+			Image:    "ghcr.io/openclaw/openclaw:latest",
+			Token:    "leader-token",
+			DataDir:  tempDir,
+			TeamID:   team.ID,
+			RoleKind: "leader",
+		},
+		{
+			Name:     "worker-a",
+			Port:     mustServerPort(t, workerSrv.URL),
+			Image:    "ghcr.io/openclaw/openclaw:latest",
+			Token:    "worker-token",
+			DataDir:  tempDir,
+			TeamID:   team.ID,
+			RoleKind: "worker",
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed workers: %v", err)
+	}
+
+	h.mu.Lock()
+	room, err := h.ensureDefaultRoomLocked(team)
+	h.mu.Unlock()
+	if err != nil {
+		t.Fatalf("failed to ensure room: %v", err)
+	}
+
+	postReq := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/openclaw/rooms/%s/messages", room.ID), strings.NewReader(`{
+		"senderType":"leader",
+		"senderId":"leader-1",
+		"senderName":"Leader One",
+		"content":"@worker-a please execute this task."
+	}`))
+	postResp := httptest.NewRecorder()
+	h.RoomByIDHandler().ServeHTTP(postResp, postReq)
+	if postResp.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for leader room post, got %d: %s", postResp.Code, postResp.Body.String())
+	}
+
+	var created ClawRoomMessage
+	if err := json.Unmarshal(postResp.Body.Bytes(), &created); err != nil {
+		t.Fatalf("failed to parse created room message: %v", err)
+	}
+	if created.SenderType != "leader" {
+		t.Fatalf("expected senderType leader, got %q", created.SenderType)
+	}
+	if created.SenderID != "leader-1" {
+		t.Fatalf("expected senderID leader-1, got %q", created.SenderID)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		messages, err := h.loadRoomMessages(room.ID)
+		if err != nil {
+			t.Fatalf("failed to load room messages: %v", err)
+		}
+		for _, msg := range messages {
+			if msg.SenderID == "worker-a" && msg.SenderType == "worker" {
+				return
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("expected worker-a reply after leader message, got messages: %+v", messages)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func TestProcessRoomUserMessage_StripsLeadingMentionsFromPrompt(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewOpenClawHandler(tempDir, false)
+
+	var (
+		promptMu sync.Mutex
+		prompts  = map[string][]string{}
+	)
+
+	makeWorkerServer := func(workerID string) *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/v1/chat/completions" {
+				t.Fatalf("unexpected worker path: %s", r.URL.Path)
+			}
+			var payload openAIChatRequest
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("failed to decode payload: %v", err)
+			}
+			if len(payload.Messages) == 0 {
+				t.Fatalf("expected non-empty messages payload")
+			}
+			userPrompt := payload.Messages[len(payload.Messages)-1].Content
+
+			promptMu.Lock()
+			prompts[workerID] = append(prompts[workerID], userPrompt)
+			promptMu.Unlock()
+
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"choices": []map[string]any{
+					{
+						"message": map[string]any{
+							"content": fmt.Sprintf("%s ready.", workerID),
+						},
+					},
+				},
+			})
+		}))
+	}
+
+	workerASrv := makeWorkerServer("worker-a")
+	defer workerASrv.Close()
+	workerBSrv := makeWorkerServer("worker-b")
+	defer workerBSrv.Close()
+
+	team := TeamEntry{
+		ID:        "team-prompt",
+		Name:      "Prompt Team",
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := h.saveTeams([]TeamEntry{team}); err != nil {
+		t.Fatalf("failed to seed team: %v", err)
+	}
+	if err := h.saveRegistry([]ContainerEntry{
+		{
+			Name:     "worker-a",
+			Port:     mustServerPort(t, workerASrv.URL),
+			Image:    "ghcr.io/openclaw/openclaw:latest",
+			Token:    "token-a",
+			DataDir:  tempDir,
+			TeamID:   team.ID,
+			TeamName: team.Name,
+			RoleKind: "worker",
+		},
+		{
+			Name:     "worker-b",
+			Port:     mustServerPort(t, workerBSrv.URL),
+			Image:    "ghcr.io/openclaw/openclaw:latest",
+			Token:    "token-b",
+			DataDir:  tempDir,
+			TeamID:   team.ID,
+			TeamName: team.Name,
+			RoleKind: "worker",
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed workers: %v", err)
+	}
+
+	h.mu.Lock()
+	room, err := h.ensureDefaultRoomLocked(team)
+	h.mu.Unlock()
+	if err != nil {
+		t.Fatalf("failed to ensure room: %v", err)
+	}
+
+	userMessage := newRoomMessage(
+		room,
+		"user",
+		"user-1",
+		"You",
+		"@worker-a @worker-b 介绍一下你们自己。",
+		nil,
+	)
+	if err := h.appendRoomMessage(room.ID, userMessage); err != nil {
+		t.Fatalf("failed to append user message: %v", err)
+	}
+
+	h.processRoomUserMessage(room.ID, userMessage.ID)
+
+	promptMu.Lock()
+	defer promptMu.Unlock()
+	for _, workerID := range []string{"worker-a", "worker-b"} {
+		workerPrompts := prompts[workerID]
+		if len(workerPrompts) == 0 {
+			t.Fatalf("expected prompt to be sent to %s", workerID)
+		}
+		firstPrompt := workerPrompts[0]
+		if !strings.Contains(firstPrompt, "Latest message from You:\n介绍一下你们自己。") {
+			t.Fatalf("expected stripped latest message for %s, got prompt:\n%s", workerID, firstPrompt)
+		}
+		if strings.Contains(firstPrompt, "Latest message from You:\n@worker-a") || strings.Contains(firstPrompt, "Latest message from You:\n@worker-b") {
+			t.Fatalf("latest message should not include leading mention list for %s, got prompt:\n%s", workerID, firstPrompt)
+		}
+		if !strings.Contains(firstPrompt, "[You] 介绍一下你们自己。") {
+			t.Fatalf("expected stripped transcript line for %s, got prompt:\n%s", workerID, firstPrompt)
+		}
+	}
+}
+
+func TestProcessRoomUserMessage_WorkerPromptIncludesLeaderRouting(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewOpenClawHandler(tempDir, false)
+
+	var (
+		promptMu     sync.Mutex
+		workerPrompt string
+	)
+
+	workerSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("unexpected worker path: %s", r.URL.Path)
+		}
+		var payload openAIChatRequest
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("failed to decode payload: %v", err)
+		}
+		if len(payload.Messages) == 0 {
+			t.Fatalf("expected non-empty messages payload")
+		}
+		systemPrompt := payload.Messages[0].Content
+		userPrompt := payload.Messages[len(payload.Messages)-1].Content
+
+		promptMu.Lock()
+		workerPrompt = systemPrompt + "\n\n" + userPrompt
+		promptMu.Unlock()
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{
+					"message": map[string]any{
+						"content": "收到，我会向 @leader 汇报。",
+					},
+				},
+			},
+		})
+	}))
+	defer workerSrv.Close()
+
+	team := TeamEntry{
+		ID:        "team-routing",
+		Name:      "Routing Team",
+		LeaderID:  "leader-1",
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := h.saveTeams([]TeamEntry{team}); err != nil {
+		t.Fatalf("failed to seed team: %v", err)
+	}
+	if err := h.saveRegistry([]ContainerEntry{
+		{
+			Name:      "leader-1",
+			Port:      18790,
+			Image:     "ghcr.io/openclaw/openclaw:latest",
+			Token:     "token-leader",
+			DataDir:   tempDir,
+			TeamID:    team.ID,
+			TeamName:  team.Name,
+			RoleKind:  "leader",
+			AgentName: "Echo",
+			AgentRole: "Team Leader",
+		},
+		{
+			Name:      "worker-a",
+			Port:      mustServerPort(t, workerSrv.URL),
+			Image:     "ghcr.io/openclaw/openclaw:latest",
+			Token:     "token-worker",
+			DataDir:   tempDir,
+			TeamID:    team.ID,
+			TeamName:  team.Name,
+			RoleKind:  "worker",
+			AgentName: "Mira",
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed workers: %v", err)
+	}
+
+	h.mu.Lock()
+	room, err := h.ensureDefaultRoomLocked(team)
+	h.mu.Unlock()
+	if err != nil {
+		t.Fatalf("failed to ensure room: %v", err)
+	}
+
+	userMessage := newRoomMessage(
+		room,
+		"user",
+		"user-1",
+		"You",
+		"@worker-a 请先完成排查，然后给 leader 汇报结果。",
+		nil,
+	)
+	if err := h.appendRoomMessage(room.ID, userMessage); err != nil {
+		t.Fatalf("failed to append user message: %v", err)
+	}
+
+	h.processRoomUserMessage(room.ID, userMessage.ID)
+
+	promptMu.Lock()
+	defer promptMu.Unlock()
+	if workerPrompt == "" {
+		t.Fatalf("expected worker prompt to be captured")
+	}
+	if !strings.Contains(workerPrompt, "Workers cannot use @mentions") {
+		t.Fatalf("expected worker system prompt to include strict mention prohibition, got:\n%s", workerPrompt)
+	}
+	if !strings.Contains(workerPrompt, "Leader aliases: @leader and @leader-1 = Echo") {
+		t.Fatalf("expected context prompt to include leader routing aliases, got:\n%s", workerPrompt)
+	}
+	if !strings.Contains(workerPrompt, "Hard rule: workers cannot use @mentions") {
+		t.Fatalf("expected context prompt to include worker no-mention hard rule, got:\n%s", workerPrompt)
+	}
+	if strings.Contains(workerPrompt, "proactively report back by mentioning @leader") {
+		t.Fatalf("worker prompt should not instruct @leader mentions anymore, got:\n%s", workerPrompt)
+	}
+}
+
+func TestQueryWorkerChat_FallsBackToAlternativeEndpoint(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewOpenClawHandler(tempDir, false)
+
+	primaryAttempts := 0
+	fallbackAttempts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/chat/completions":
+			primaryAttempts++
+			http.NotFound(w, r)
+		case "/api/openai/v1/chat/completions":
+			fallbackAttempts++
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"fallback endpoint reply"}}]}`))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	worker := ContainerEntry{
+		Name:     "mira",
+		Port:     mustServerPort(t, srv.URL),
+		Image:    "ghcr.io/openclaw/openclaw:latest",
+		Token:    "test-token",
+		DataDir:  tempDir,
+		RoleKind: "worker",
+	}
+	if err := h.saveRegistry([]ContainerEntry{worker}); err != nil {
+		t.Fatalf("failed to seed registry: %v", err)
+	}
+
+	content, err := h.queryWorkerChat(worker, "system", "user")
+	if err != nil {
+		t.Fatalf("queryWorkerChat should succeed via fallback endpoint: %v", err)
+	}
+	if !strings.Contains(content, "fallback endpoint reply") {
+		t.Fatalf("unexpected content: %q", content)
+	}
+	if primaryAttempts == 0 {
+		t.Fatalf("expected primary endpoint to be attempted at least once")
+	}
+	if fallbackAttempts == 0 {
+		t.Fatalf("expected fallback endpoint to be attempted at least once")
+	}
+}
+
+func mustServerPort(t *testing.T, rawURL string) int {
+	t.Helper()
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		t.Fatalf("failed to parse test server URL: %v", err)
+	}
+	port, err := strconv.Atoi(parsed.Port())
+	if err != nil {
+		t.Fatalf("failed to parse test server port: %v", err)
+	}
+	return port
 }

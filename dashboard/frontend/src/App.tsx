@@ -279,7 +279,7 @@ const App: React.FC = () => {
             }
           />
           <Route
-            path="/clawswarm"
+            path="/clawos"
             element={
               <Layout
                 configSection={configSection}
@@ -289,7 +289,7 @@ const App: React.FC = () => {
               </Layout>
             }
           />
-          <Route path="/openclaw" element={<Navigate to="/clawswarm" replace />} />
+          <Route path="/openclaw" element={<Navigate to="/clawos" replace />} />
         </Routes>
       </BrowserRouter>
     </ReadonlyProvider>
