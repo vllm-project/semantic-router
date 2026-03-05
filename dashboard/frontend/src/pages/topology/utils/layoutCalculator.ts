@@ -12,6 +12,7 @@ import {
 } from '../types'
 import {
   LAYOUT_CONFIG,
+  TOPOLOGY_LAYER_LAYOUT,
   SIGNAL_TYPES,
   SIGNAL_LATENCY,
   EDGE_COLORS,
@@ -21,6 +22,7 @@ import { groupSignalsByType } from './topologyParser'
 interface LayoutResult {
   nodes: Node[]
   edges: Edge[]
+  meta: LayoutMeta
 }
 
 interface ModelConnection {
@@ -31,13 +33,55 @@ interface ModelConnection {
   reasoningEffort?: string
 }
 
-// Helper function to create edge with vertical connection points (top-to-bottom layout)
-function createVerticalEdge(baseEdge: Partial<Edge>): Edge {
+type LayerName = keyof typeof TOPOLOGY_LAYER_LAYOUT.x
+export type DecisionDensityMode = 'compact' | 'balanced' | 'cinematic'
+
+interface LayoutMeta {
+  hiddenDecisionCount: number
+  visibleDecisionCount: number
+  totalDecisionCount: number
+}
+
+interface LayoutOptions {
+  densityMode?: DecisionDensityMode
+  expandHiddenDecisions?: boolean
+  onExpandHiddenDecisions?: () => void
+  focusMode?: boolean
+  focusedDecisionName?: string | null
+  onFocusDecision?: (decisionName: string) => void
+}
+
+const DENSITY_SPACING_SCALE: Record<DecisionDensityMode, number> = {
+  compact: 0.82,
+  balanced: 1,
+  cinematic: 1.24,
+}
+
+const DENSITY_LANE_GAP_SCALE: Record<DecisionDensityMode, number> = {
+  compact: 0.9,
+  balanced: 1,
+  cinematic: 1.12,
+}
+
+const DENSITY_VISIBLE_DECISION_LIMIT: Record<DecisionDensityMode, number> = {
+  compact: 16,
+  balanced: 12,
+  cinematic: 8,
+}
+
+// Helper function to create edge using each node's default handles.
+// Node handles are configured as left-in / right-out for LR flow.
+function createFlowEdge(baseEdge: Partial<Edge>): Edge {
   return {
     ...baseEdge,
-    sourceHandle: 'bottom',  // Connect from bottom of source node
-    targetHandle: 'top',     // Connect to top of target node
   } as Edge
+}
+
+function getAdaptiveLayerSpacing(layerName: LayerName, nodeCount: number): number {
+  const rule = TOPOLOGY_LAYER_LAYOUT.verticalSpacing[layerName]
+  if (nodeCount <= rule.compactThreshold) return rule.base
+  const overflow = nodeCount - rule.compactThreshold
+  return Math.max(rule.min, rule.base - overflow * rule.compactStep)
 }
 
 // Calculate decision node height based on content
@@ -106,10 +150,14 @@ export function calculateFullLayout(
   topology: ParsedTopology,
   collapseState: CollapseState,
   highlightedPath: string[] = [],
-  testResult?: TestQueryResult | null
+  testResult?: TestQueryResult | null,
+  layoutOptions?: LayoutOptions
 ): LayoutResult {
   const nodes: Node[] = []
   const edges: Edge[] = []
+  const densityMode = layoutOptions?.densityMode ?? 'balanced'
+  const spacingScale = DENSITY_SPACING_SCALE[densityMode]
+  const laneGapScale = DENSITY_LANE_GAP_SCALE[densityMode]
 
   // Helper to check if node is highlighted
   const isHighlighted = (id: string): boolean => {
@@ -192,7 +240,7 @@ export function calculateFullLayout(
       },
     })
 
-    edges.push(createVerticalEdge({
+    edges.push(createFlowEdge({
       id: `e-${lastSourceId}-${signalGroupId}`,
       source: lastSourceId,
       target: signalGroupId,
@@ -258,7 +306,7 @@ export function calculateFullLayout(
       })
       
       // Connect from client to dynamic signal group
-      edges.push(createVerticalEdge({
+      edges.push(createFlowEdge({
         id: `e-${lastSourceId}-${signalGroupId}`,
         source: lastSourceId,
         target: signalGroupId,
@@ -282,6 +330,19 @@ export function calculateFullLayout(
   // ============== 4. Decisions ==============
   // Track the final source node for each decision
   const decisionFinalSources: Record<string, string> = {}
+  const forcedVisibleDecisionNames = new Set<string>()
+  highlightedPath
+    .filter(id => id.startsWith('decision-'))
+    .forEach(id => forcedVisibleDecisionNames.add(id.substring(9)))
+  if (testResult?.matchedDecision) forcedVisibleDecisionNames.add(testResult.matchedDecision)
+  if (layoutOptions?.focusedDecisionName) forcedVisibleDecisionNames.add(layoutOptions.focusedDecisionName)
+
+  const sortedDecisions = [...topology.decisions].sort((a, b) => b.priority - a.priority)
+  const defaultVisibleLimit = DENSITY_VISIBLE_DECISION_LIMIT[densityMode]
+  const visibleDecisions = layoutOptions?.expandHiddenDecisions
+    ? sortedDecisions
+    : sortedDecisions.filter((decision, index) => index < defaultVisibleLimit || forcedVisibleDecisionNames.has(decision.name))
+  const hiddenDecisionCount = Math.max(0, topology.decisions.length - visibleDecisions.length)
 
   // Determine the default upstream source for decisions without signal connections
   // Prefer first signal group if exists, otherwise use last global plugin
@@ -291,7 +352,7 @@ export function calculateFullLayout(
   // Create a set of existing signal group IDs for quick lookup
   const existingSignalGroups = new Set(signalGroupIds)
 
-  topology.decisions.forEach(decision => {
+  visibleDecisions.forEach(decision => {
     const decisionId = `decision-${decision.name}`
     const isRulesCollapsed = collapseState.decisions[decision.name]
     const nodeHeight = getDecisionNodeHeight(decision, isRulesCollapsed)
@@ -316,6 +377,9 @@ export function calculateFullLayout(
         decision,
         rulesCollapsed: isRulesCollapsed,
         isHighlighted: isHighlighted(decisionId),
+        isFocusTarget: layoutOptions?.focusMode && layoutOptions?.focusedDecisionName === decision.name,
+        focusModeEnabled: layoutOptions?.focusMode ?? false,
+        onFocusDecision: layoutOptions?.onFocusDecision,
         isUnreachable,  // Pass unreachable flag to node
         unreachableReason: !hasConditions 
           ? 'No conditions defined' 
@@ -334,7 +398,7 @@ export function calculateFullLayout(
       const signalGroupId = `signal-group-${signalType}`
       if (nodes.find(n => n.id === signalGroupId)) {
         hasConnection = true
-        edges.push(createVerticalEdge({
+        edges.push(createFlowEdge({
           id: `e-${signalGroupId}-${decisionId}`,
           source: signalGroupId,
           target: decisionId,
@@ -355,7 +419,7 @@ export function calculateFullLayout(
 
     // If no valid signal connections found, connect from default upstream
     if (!hasConnection) {
-      edges.push(createVerticalEdge({
+      edges.push(createFlowEdge({
         id: `e-${defaultUpstream}-${decisionId}`,
         source: defaultUpstream,
         target: decisionId,
@@ -386,7 +450,7 @@ export function calculateFullLayout(
         },
       })
 
-      edges.push(createVerticalEdge({
+      edges.push(createFlowEdge({
         id: `e-${currentSourceId}-${algorithmId}`,
         source: currentSourceId,
         target: algorithmId,
@@ -429,7 +493,7 @@ export function calculateFullLayout(
         },
       })
 
-      edges.push(createVerticalEdge({
+      edges.push(createFlowEdge({
         id: `e-${currentSourceId}-${pluginChainId}`,
         source: currentSourceId,
         target: pluginChainId,
@@ -442,6 +506,20 @@ export function calculateFullLayout(
 
     decisionFinalSources[decision.name] = currentSourceId
   })
+
+  if (hiddenDecisionCount > 0 && !layoutOptions?.expandHiddenDecisions) {
+    const moreDecisionsId = 'more-decisions'
+    nodeDimensions.set(moreDecisionsId, { width: 200, height: 86 })
+    nodes.push({
+      id: moreDecisionsId,
+      type: 'moreDecisionsNode',
+      position: { x: 0, y: 0 },
+      data: {
+        hiddenCount: hiddenDecisionCount,
+        onExpand: layoutOptions?.onExpandHiddenDecisions,
+      },
+    })
+  }
 
   // ============== 5. Default Route Node ==============
   // Add a default route node when a default model is configured
@@ -462,7 +540,7 @@ export function calculateFullLayout(
     })
 
     // Connect default route from client (bypasses signal matching)
-    edges.push(createVerticalEdge({
+    edges.push(createFlowEdge({
       id: `e-${clientId}-${defaultRouteId}`,
       source: clientId,
       target: defaultRouteId,
@@ -510,7 +588,7 @@ export function calculateFullLayout(
       const signalGroupId = `signal-group-${signalType}`
       if (nodes.find(n => n.id === signalGroupId)) {
         hasSignalConnection = true
-        edges.push(createVerticalEdge({
+        edges.push(createFlowEdge({
           id: `e-${signalGroupId}-${fallbackDecisionId}`,
           source: signalGroupId,
           target: fallbackDecisionId,
@@ -533,7 +611,7 @@ export function calculateFullLayout(
     
     // If no signal connections, connect from client directly
     if (!hasSignalConnection) {
-      edges.push(createVerticalEdge({
+      edges.push(createFlowEdge({
         id: `e-${clientId}-${fallbackDecisionId}`,
         source: clientId,
         target: fallbackDecisionId,
@@ -558,7 +636,7 @@ export function calculateFullLayout(
   // For single-model decisions, aggregate by physical model
   const modelConnections: Map<string, ModelConnection[]> = new Map()
 
-  topology.decisions.forEach(decision => {
+  visibleDecisions.forEach(decision => {
     const finalSourceId = decisionFinalSources[decision.name]
     const hasAlgorithm = decision.algorithm && decision.algorithm.type !== 'static'
     const isMultiModel = decision.modelRefs.length > 1
@@ -641,7 +719,7 @@ export function calculateFullLayout(
       const configModelId = `model-${configKey.replace(/[^a-zA-Z0-9]/g, '-')}`
       const edgeHighlighted = isHighlighted(conn.sourceId) && isHighlighted(configModelId)
       
-      edges.push(createVerticalEdge({
+      edges.push(createFlowEdge({
         id: edgeId,
         source: conn.sourceId,
         target: modelId,
@@ -695,7 +773,7 @@ export function calculateFullLayout(
       // Default model already exists, just connect to it
       const edgeHighlighted = isHighlighted(defaultRouteId) && isHighlighted(existingModelNode.id)
 
-      edges.push(createVerticalEdge({
+      edges.push(createFlowEdge({
         id: `e-${defaultRouteId}-${existingModelNode.id}`,
         source: defaultRouteId,
         target: existingModelNode.id,
@@ -732,7 +810,7 @@ export function calculateFullLayout(
 
       const edgeHighlighted = isHighlighted(defaultRouteId) && modelHighlighted
 
-      edges.push(createVerticalEdge({
+      edges.push(createFlowEdge({
         id: `e-${defaultRouteId}-${defaultModelId}`,
         source: defaultRouteId,
         target: defaultModelId,
@@ -762,7 +840,7 @@ export function calculateFullLayout(
     
     if (existingModelNode) {
       // Connect fallback decision to existing model
-      edges.push(createVerticalEdge({
+      edges.push(createFlowEdge({
         id: `e-${fallbackDecisionSourceId}-${matchedModelId}`,
         source: fallbackDecisionSourceId,
         target: matchedModelId,
@@ -783,7 +861,7 @@ export function calculateFullLayout(
       const defaultModelNode = nodes.find(n => n.id === defaultModelId)
 
       if (defaultModelNode) {
-        edges.push(createVerticalEdge({
+        edges.push(createFlowEdge({
           id: `e-${fallbackDecisionSourceId}-${defaultModelId}`,
           source: fallbackDecisionSourceId,
           target: defaultModelId,
@@ -805,13 +883,13 @@ export function calculateFullLayout(
   const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}))
 
   g.setGraph({
-    rankdir: 'TB',           // Top to Bottom (changed from LR)
-    nodesep: 80,             // Horizontal spacing between nodes in same rank
-    ranksep: 100,            // Vertical spacing between ranks/rows
+    rankdir: 'LR',              // Left to Right
+    nodesep: 56,                // Vertical spacing in same rank
+    ranksep: 190,               // Horizontal spacing between ranks/columns
     marginx: 80,
     marginy: 80,
-    ranker: 'network-simplex', // Best for DAGs
-    align: 'UL',             // Align nodes to upper-left for better distribution
+    ranker: 'network-simplex',
+    align: 'UL',
   })
 
   // Add nodes with dimensions to Dagre
@@ -828,19 +906,25 @@ export function calculateFullLayout(
   // Run layout algorithm
   Dagre.layout(g)
 
-  // ============== Neural Network Layer Structure ==============
-  // Define fixed Y positions for each layer to create clear neural network structure
-  const LAYER_Y_POSITIONS = {
-    client: 0,           // Layer 1: User Query
-    signals: 280,        // Layer 2: Signals (increased from 200)
-    decisions: 680,      // Layer 3: Decisions (increased from 500)
-    algorithms: 900,     // Layer 3.5: Algorithms (between decisions and plugin chains)
-    pluginChains: 1100,  // Layer 4: Plugin Chains (increased from 1000)
-    models: 1400,        // Layer 5: Models (increased from 1300)
-  }
+  // Initialize from Dagre positions so each layer keeps a stable ordering
+  nodes.forEach(node => {
+    const dagreNode = g.node(node.id)
+    if (!dagreNode) return
+    const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
+    node.position = {
+      x: dagreNode.x - dim.width / 2,
+      y: dagreNode.y - dim.height / 2,
+    }
+  })
+
+  // ============== Three-Layer Architecture (Left -> Right) ==============
+  // Layer 1: Input (client + signals)
+  // Layer 2: Decision (decision engine)
+  // Layer 3: Projection (algorithm/plugin/model execution)
+  const LAYER_X_POSITIONS = TOPOLOGY_LAYER_LAYOUT.x
 
   // Group nodes by layer
-  const nodesByLayer: Record<string, Node[]> = {
+  const nodesByLayer: Record<LayerName, Node[]> = {
     client: [],
     signals: [],
     decisions: [],
@@ -854,7 +938,7 @@ export function calculateFullLayout(
       nodesByLayer.client.push(node)
     } else if (node.id.startsWith('signal-group-')) {
       nodesByLayer.signals.push(node)
-    } else if (node.id.startsWith('decision-') || node.id === 'default-route' || node.id === 'fallback-decision') {
+    } else if (node.id.startsWith('decision-') || node.id === 'default-route' || node.id === 'fallback-decision' || node.id === 'more-decisions') {
       nodesByLayer.decisions.push(node)
     } else if (node.id.startsWith('algorithm-')) {
       nodesByLayer.algorithms.push(node)
@@ -865,47 +949,250 @@ export function calculateFullLayout(
     }
   })
 
-  // Apply positions with layer-based Y and centered X
-  Object.entries(nodesByLayer).forEach(([layerName, layerNodes]) => {
+  const nodeById = new Map<string, Node>()
+  nodes.forEach(node => {
+    nodeById.set(node.id, node)
+  })
+
+  const incomingSourcesByTarget = new Map<string, string[]>()
+  edges.forEach(edge => {
+    if (!incomingSourcesByTarget.has(edge.target)) {
+      incomingSourcesByTarget.set(edge.target, [])
+    }
+    incomingSourcesByTarget.get(edge.target)!.push(edge.source)
+  })
+
+  const getNodeCenterY = (node: Node): number => {
+    const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
+    return (node.position?.y ?? 0) + dim.height / 2
+  }
+
+  // Use upstream barycenter ordering to reduce edge crossings in dense layers.
+  const getIncomingBarycenter = (nodeId: string, currentLayerX: number): number | null => {
+    const sourceIds = incomingSourcesByTarget.get(nodeId)
+    if (!sourceIds || sourceIds.length === 0) return null
+
+    const sourceCenters = sourceIds
+      .map(sourceId => nodeById.get(sourceId))
+      .filter((sourceNode): sourceNode is Node => Boolean(sourceNode))
+      .filter(sourceNode => (sourceNode.position?.x ?? 0) < currentLayerX)
+      .map(sourceNode => getNodeCenterY(sourceNode))
+      .filter(centerY => Number.isFinite(centerY))
+
+    if (sourceCenters.length === 0) return null
+
+    const sum = sourceCenters.reduce((acc, centerY) => acc + centerY, 0)
+    return sum / sourceCenters.length
+  }
+
+  const sortByBarycenter = (layerX: number) => (a: Node, b: Node) => {
+    const aBarycenter = getIncomingBarycenter(a.id, layerX)
+    const bBarycenter = getIncomingBarycenter(b.id, layerX)
+
+    if (aBarycenter !== null && bBarycenter !== null && aBarycenter !== bBarycenter) {
+      return aBarycenter - bBarycenter
+    }
+    if (aBarycenter !== null && bBarycenter === null) return -1
+    if (aBarycenter === null && bBarycenter !== null) return 1
+    return (a.position?.y ?? 0) - (b.position?.y ?? 0)
+  }
+
+  const getLaneOffsets = (laneCount: number, laneGap: number): number[] => {
+    if (laneCount <= 1) return [0]
+    return Array.from({ length: laneCount }, (_, index) => (index - (laneCount - 1) / 2) * laneGap)
+  }
+
+  const placeStack = (orderedNodes: Node[], x: number, spacing: number): void => {
+    if (orderedNodes.length === 0) return
+    const totalHeight = orderedNodes.reduce((sum, node) => {
+      const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
+      return sum + dim.height
+    }, 0)
+    const totalSpacing = Math.max(orderedNodes.length - 1, 0) * spacing
+    let currentY = -(totalHeight + totalSpacing) / 2
+
+    orderedNodes.forEach(node => {
+      const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
+      node.position = { x, y: currentY }
+      currentY += dim.height + spacing
+    })
+  }
+
+  const decisionLaneByName = new Map<string, number>()
+  const decisionCenterYByName = new Map<string, number>()
+  let decisionLaneCount = 1
+  let decisionLaneOffsets = [0]
+
+  const placeDecisionLayer = (): void => {
+    const layerNodes = nodesByLayer.decisions
     if (layerNodes.length === 0) return
 
-    const layerY = LAYER_Y_POSITIONS[layerName as keyof typeof LAYER_Y_POSITIONS]
+    const layerX = LAYER_X_POSITIONS.decisions
+    const spacing = Math.max(8, getAdaptiveLayerSpacing('decisions', layerNodes.length) * spacingScale)
+    const orderedNodes = [...layerNodes].sort(sortByBarycenter(layerX))
 
-    // Calculate total width of all nodes in this layer
-    const totalWidth = layerNodes.reduce((sum, node) => {
-      const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
-      return sum + dim.width
-    }, 0)
+    const regularDecisionNodes = orderedNodes.filter(node => node.id.startsWith('decision-'))
+    const auxiliaryNodes = orderedNodes.filter(node => !node.id.startsWith('decision-'))
 
-    // Different spacing for different layers
-    let spacing = 80  // Default spacing
-    if (layerName === 'pluginChains') {
-      spacing = 150  // More spacing for plugin chains
-    } else if (layerName === 'models') {
-      spacing = 120  // More spacing for models
-    } else if (layerName === 'decisions') {
-      spacing = 100  // Slightly more spacing for decisions
-    } else if (layerName === 'algorithms') {
-      spacing = 100  // Same spacing as decisions
+    const laneRule = TOPOLOGY_LAYER_LAYOUT.lanes.decisions
+    const maxPerLane = Math.min(6, laneRule.maxPerLane)
+    const requiredLanes = Math.ceil(Math.max(regularDecisionNodes.length, 1) / maxPerLane)
+    decisionLaneCount = Math.max(1, requiredLanes)
+    decisionLaneOffsets = getLaneOffsets(decisionLaneCount, laneRule.laneGap * laneGapScale)
+
+    const lanes: Node[][] = Array.from({ length: decisionLaneCount }, () => [])
+    const laneChunkSize = Math.max(1, maxPerLane)
+
+    regularDecisionNodes.forEach((node, index) => {
+      const laneIndex = Math.min(decisionLaneCount - 1, Math.floor(index / laneChunkSize))
+      lanes[laneIndex].push(node)
+    })
+
+    if (auxiliaryNodes.length > 0) {
+      const centerLane = Math.floor(decisionLaneCount / 2)
+      lanes[centerLane].push(...auxiliaryNodes)
     }
 
-    const totalSpacing = (layerNodes.length - 1) * spacing
-    const layerTotalWidth = totalWidth + totalSpacing
+    lanes.forEach((laneNodes, laneIndex) => {
+      const laneX = layerX + decisionLaneOffsets[laneIndex]
+      placeStack(laneNodes, laneX, spacing)
+      laneNodes.forEach(node => {
+        if (!node.id.startsWith('decision-')) return
+        const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
+        const decisionName = node.id.substring(9)
+        decisionLaneByName.set(decisionName, laneIndex)
+        decisionCenterYByName.set(decisionName, (node.position?.y ?? 0) + dim.height / 2)
+      })
+    })
+  }
 
-    // Start X position to center the layer
-    let currentX = -layerTotalWidth / 2
+  const placeDecisionLinkedLayer = (
+    layerName: 'algorithms' | 'pluginChains',
+    idPrefix: string,
+    laneGap: number
+  ): void => {
+    const layerNodes = nodesByLayer[layerName]
+    if (layerNodes.length === 0) return
 
-    // Position each node in the layer
+    const baseX = LAYER_X_POSITIONS[layerName]
+    const spacing = Math.max(8, getAdaptiveLayerSpacing(layerName, layerNodes.length) * spacingScale)
+    const alignedLaneOffsets = getLaneOffsets(decisionLaneCount, laneGap * laneGapScale)
+    const fallbackNodes: Node[] = []
+
     layerNodes.forEach(node => {
-      const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
-
-      node.position = {
-        x: currentX,
-        y: layerY,
+      if (!node.id.startsWith(idPrefix)) {
+        fallbackNodes.push(node)
+        return
       }
 
-      currentX += dim.width + spacing
+      const decisionName = node.id.substring(idPrefix.length)
+      const laneIndex = decisionLaneByName.get(decisionName)
+      const decisionCenterY = decisionCenterYByName.get(decisionName)
+
+      if (laneIndex === undefined || decisionCenterY === undefined) {
+        fallbackNodes.push(node)
+        return
+      }
+
+      const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
+      node.position = {
+        x: baseX + alignedLaneOffsets[laneIndex],
+        y: decisionCenterY - dim.height / 2,
+      }
     })
+
+    if (fallbackNodes.length > 0) {
+      const orderedFallback = [...fallbackNodes].sort(sortByBarycenter(baseX))
+      placeStack(orderedFallback, baseX, spacing)
+    }
+  }
+
+  const placeWrappedLayer = (layerName: 'models'): void => {
+    const layerNodes = nodesByLayer[layerName]
+    if (layerNodes.length === 0) return
+
+    const layerX = LAYER_X_POSITIONS[layerName]
+    const spacing = Math.max(8, getAdaptiveLayerSpacing(layerName, layerNodes.length) * spacingScale)
+    const orderedNodes = [...layerNodes].sort(sortByBarycenter(layerX))
+    const laneRule = TOPOLOGY_LAYER_LAYOUT.lanes.models
+    const laneCount = orderedNodes.length >= laneRule.enableAt
+      ? Math.max(1, Math.min(laneRule.maxLanes, Math.ceil(orderedNodes.length / laneRule.maxPerLane)))
+      : 1
+    const laneOffsets = getLaneOffsets(laneCount, laneRule.laneGap * laneGapScale)
+    const laneChunkSize = Math.max(1, Math.ceil(orderedNodes.length / laneCount))
+
+    const lanes: Node[][] = Array.from({ length: laneCount }, () => [])
+    orderedNodes.forEach((node, index) => {
+      const laneIndex = Math.min(laneCount - 1, Math.floor(index / laneChunkSize))
+      lanes[laneIndex].push(node)
+    })
+
+    lanes.forEach((laneNodes, laneIndex) => {
+      placeStack(laneNodes, layerX + laneOffsets[laneIndex], spacing)
+    })
+  }
+
+  const placedLayers = new Set<LayerName>()
+
+  placeDecisionLayer()
+  placedLayers.add('decisions')
+
+  placeDecisionLinkedLayer('algorithms', 'algorithm-', TOPOLOGY_LAYER_LAYOUT.lanes.algorithms.laneGap)
+  placedLayers.add('algorithms')
+
+  placeDecisionLinkedLayer('pluginChains', 'plugin-chain-', TOPOLOGY_LAYER_LAYOUT.lanes.pluginChains.laneGap)
+  placedLayers.add('pluginChains')
+
+  placeWrappedLayer('models')
+  placedLayers.add('models')
+
+  // ============== Fix default model alignment ==============
+  // After placeWrappedLayer, the default model may be mis-positioned because
+  // its upstream (default-route) sits at the bottom of the decisions stack.
+  // Re-align the default model's Y center to match the default-route node.
+  if (topology.defaultModel) {
+    const defaultRouteNode = nodeById.get('default-route')
+    if (defaultRouteNode) {
+      const routeDim = nodeDimensions.get('default-route') || { width: 160, height: 80 }
+      const routeCenterY = (defaultRouteNode.position?.y ?? 0) + routeDim.height / 2
+
+      // Find the default model node (could be shared with a decision)
+      const normalizedDefaultKey = topology.defaultModel.replace(/[^a-zA-Z0-9]/g, '-')
+      const defaultModelId = `model-${normalizedDefaultKey}`
+      const defaultModelNode = nodeById.get(defaultModelId)
+        || nodes.find(n => n.type === 'modelNode' && n.data.modelRef?.model === topology.defaultModel)
+
+      if (defaultModelNode) {
+        const modelDim = nodeDimensions.get(defaultModelNode.id) || { width: 180, height: 80 }
+        // Only reposition if the default model is NOT shared with other decisions
+        // (i.e. only connected from default-route)
+        const isShared = defaultModelNode.data.fromDecisions
+          && defaultModelNode.data.fromDecisions.length > 1
+          && defaultModelNode.data.fromDecisions.some((d: string) => d !== 'default')
+        if (!isShared) {
+          defaultModelNode.position = {
+            x: defaultModelNode.position?.x ?? LAYER_X_POSITIONS.models,
+            y: routeCenterY - modelDim.height / 2,
+          }
+        }
+      }
+    }
+  }
+
+  // Apply standard placement for the remaining layers.
+  ;(Object.entries(nodesByLayer) as [LayerName, Node[]][]).forEach(([layerName, layerNodes]) => {
+    if (layerNodes.length === 0 || placedLayers.has(layerName)) return
+
+    const layerX = LAYER_X_POSITIONS[layerName]
+    const orderedNodes = [...layerNodes].sort(sortByBarycenter(layerX))
+
+    if (orderedNodes.length === 1 && layerName === 'client') {
+      orderedNodes[0].position = { x: layerX, y: 0 }
+      return
+    }
+
+    const spacing = Math.max(8, getAdaptiveLayerSpacing(layerName, orderedNodes.length) * spacingScale)
+    placeStack(orderedNodes, layerX, spacing)
   })
 
   // ============== 9. Apply Highlighting ==============
@@ -991,5 +1278,79 @@ export function calculateFullLayout(
     })
   }
 
-  return { nodes, edges }
+  if (layoutOptions?.focusMode && layoutOptions?.focusedDecisionName) {
+    const focusedDecisionId = `decision-${layoutOptions.focusedDecisionName}`
+    const focusedNodeIds = new Set<string>()
+
+    if (nodes.some(node => node.id === focusedDecisionId)) {
+      focusedNodeIds.add(focusedDecisionId)
+      focusedNodeIds.add('client')
+
+      const outgoingBySource = new Map<string, string[]>()
+      const incomingByTarget = new Map<string, string[]>()
+      edges.forEach(edge => {
+        if (!outgoingBySource.has(edge.source)) outgoingBySource.set(edge.source, [])
+        outgoingBySource.get(edge.source)!.push(edge.target)
+        if (!incomingByTarget.has(edge.target)) incomingByTarget.set(edge.target, [])
+        incomingByTarget.get(edge.target)!.push(edge.source)
+      })
+
+      const queue: string[] = [focusedDecisionId]
+      while (queue.length > 0) {
+        const current = queue.shift()!
+        const downstream = outgoingBySource.get(current) || []
+        downstream.forEach(next => {
+          if (focusedNodeIds.has(next)) return
+          focusedNodeIds.add(next)
+          queue.push(next)
+        })
+      }
+
+      const directInputs = incomingByTarget.get(focusedDecisionId) || []
+      directInputs.forEach(sourceId => {
+        focusedNodeIds.add(sourceId)
+        const upstream = incomingByTarget.get(sourceId) || []
+        upstream.forEach(upId => focusedNodeIds.add(upId))
+      })
+    }
+
+    if (focusedNodeIds.size > 0) {
+      nodes.forEach(node => {
+        const isFocused = focusedNodeIds.has(node.id)
+        if (!isFocused) {
+          node.style = {
+            ...(node.style || {}),
+            opacity: 0.16,
+            filter: 'grayscale(0.4)',
+          }
+        } else if (node.id === focusedDecisionId) {
+          node.style = {
+            ...(node.style || {}),
+            opacity: 1,
+            filter: 'drop-shadow(0 0 14px rgba(118, 185, 0, 0.6))',
+          }
+        }
+      })
+
+      edges.forEach(edge => {
+        const inFocusPath = focusedNodeIds.has(edge.source) && focusedNodeIds.has(edge.target)
+        edge.style = {
+          ...(edge.style || {}),
+          opacity: inFocusPath ? 1 : 0.08,
+          strokeWidth: inFocusPath ? Math.max(Number(edge.style?.strokeWidth || 1.5), 2.6) : 1,
+        }
+        edge.animated = inFocusPath ? true : false
+      })
+    }
+  }
+
+  return {
+    nodes,
+    edges,
+    meta: {
+      hiddenDecisionCount,
+      visibleDecisionCount: visibleDecisions.length,
+      totalDecisionCount: topology.decisions.length,
+    },
+  }
 }

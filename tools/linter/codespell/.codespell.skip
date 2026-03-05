@@ -13,6 +13,7 @@
 ./website/public/*
 ./website/node_modules/*
 ./website/package-lock.json
+./dashboard/frontend/package-lock.json
 ./candle-binding/target
 ./vendor/*
 

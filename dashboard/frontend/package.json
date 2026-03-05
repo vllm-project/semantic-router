@@ -22,6 +22,7 @@
     "recharts": "^2.15.4",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
+    "three": "^0.183.2",
     "zustand": "^5.0.11"
   },
   "devDependencies": {
@@ -29,6 +30,7 @@
     "@playwright/test": "^1.57.0",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
+    "@types/three": "^0.183.1",
     "@typescript-eslint/eslint-plugin": "^8.45.0",
     "@typescript-eslint/parser": "^8.45.0",
     "@vitejs/plugin-react": "^4.3.4",

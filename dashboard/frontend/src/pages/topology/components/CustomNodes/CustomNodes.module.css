@@ -214,6 +214,12 @@
   border-style: dashed !important;
 }
 
+.decisionNode.focusTarget {
+  box-shadow:
+    0 0 0 2px rgba(118, 185, 0, 0.95),
+    0 0 20px rgba(118, 185, 0, 0.55);
+}
+
 .unreachableBanner {
   width: 100%;
   padding: 4px 8px;
@@ -252,6 +258,28 @@
   border-radius: 4px;
   font-size: 10px;
   font-weight: 600;
+}
+
+.focusDecisionBtn {
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.25);
+  color: #eaf2e4;
+  font-size: 10px;
+  line-height: 1;
+  border-radius: 999px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.focusDecisionBtn:hover {
+  border-color: rgba(118, 185, 0, 0.9);
+}
+
+.focusDecisionBtnActive {
+  background: rgba(118, 185, 0, 0.26);
+  border-color: rgba(118, 185, 0, 0.95);
 }
 
 .rulesSection {
@@ -683,6 +711,41 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ============== More Decisions Node ============== */
+.moreDecisionsNode {
+  padding: 12px 14px;
+  border-radius: 10px;
+  min-width: 180px;
+  border: 1px dashed rgba(118, 185, 0, 0.65);
+  background: rgba(20, 30, 20, 0.86);
+  color: #e8efe1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.32);
+}
+
+.moreDecisionsTitle {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.moreDecisionsButton {
+  border: 1px solid rgba(118, 185, 0, 0.75);
+  background: rgba(118, 185, 0, 0.16);
+  color: #f0f6ea;
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.moreDecisionsButton:hover {
+  border-color: rgba(118, 185, 0, 0.95);
+  background: rgba(118, 185, 0, 0.25);
 }
 
 /* Mobile Responsive */

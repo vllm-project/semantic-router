@@ -412,6 +412,12 @@ func resolveMentionTargetsWithFallback(
 		if token == "" {
 			continue
 		}
+		if token == "all" {
+			for _, worker := range workers {
+				picked[worker.Name] = worker
+			}
+			continue
+		}
 		if token == "leader" {
 			if leader != nil {
 				picked[leader.Name] = *leader

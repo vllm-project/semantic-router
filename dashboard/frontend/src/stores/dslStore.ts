@@ -377,9 +377,10 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
 
   importYaml(yaml: string) {
     const dsl = get().decompile(yaml)
-    if (dsl) {
-      get().loadDsl(dsl)
+    if (!dsl) {
+      throw new Error('Failed to decompile YAML')
     }
+    get().loadDsl(dsl)
   },
 
   async loadFromRouter() {

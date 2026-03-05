@@ -105,10 +105,13 @@ func DeployPreviewHandler(configPath string) http.HandlerFunc {
 			}
 		}
 
+		currentForDiff := canonicalizeYAMLForDiff(currentData)
+		previewForDiff := canonicalizeYAMLForDiff(previewBytes)
+
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(DeployPreviewResponse{
-			Current: string(currentData),
-			Preview: string(previewBytes),
+			Current: currentForDiff,
+			Preview: previewForDiff,
 		})
 	}
 }
@@ -464,6 +467,55 @@ func toStringKeyMap(v interface{}) (map[string]interface{}, bool) {
 		return result, true
 	}
 	return nil, false
+}
+
+// canonicalizeYAMLForDiff converts YAML into a normalized representation so
+// order-only key changes do not produce noisy diffs in the preview modal.
+func canonicalizeYAMLForDiff(raw []byte) string {
+	text := string(raw)
+	if strings.TrimSpace(text) == "" {
+		return text
+	}
+	if strings.Contains(text, "# No existing config") {
+		return text
+	}
+
+	var parsed interface{}
+	if err := yaml.Unmarshal(raw, &parsed); err != nil {
+		return text
+	}
+
+	normalized := normalizeYAMLValue(parsed)
+	canonical, err := yaml.Marshal(normalized)
+	if err != nil {
+		return text
+	}
+	return string(canonical)
+}
+
+func normalizeYAMLValue(v interface{}) interface{} {
+	switch value := v.(type) {
+	case map[string]interface{}:
+		normalized := make(map[string]interface{}, len(value))
+		for key, item := range value {
+			normalized[key] = normalizeYAMLValue(item)
+		}
+		return normalized
+	case map[interface{}]interface{}:
+		normalized := make(map[string]interface{}, len(value))
+		for key, item := range value {
+			normalized[fmt.Sprintf("%v", key)] = normalizeYAMLValue(item)
+		}
+		return normalized
+	case []interface{}:
+		normalized := make([]interface{}, len(value))
+		for i, item := range value {
+			normalized[i] = normalizeYAMLValue(item)
+		}
+		return normalized
+	default:
+		return value
+	}
 }
 
 // cleanupBackups removes old backups beyond maxBackups

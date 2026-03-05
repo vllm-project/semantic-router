@@ -1,161 +1,156 @@
-/* Futuristic Minimal Landing Page */
+/* ReactBits-style hero layout */
 .container {
   position: relative;
   min-height: 100vh;
   overflow: hidden;
-  background: #000000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background: #000;
 }
 
 .backgroundEffect {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.8;
+  opacity: 0.85;
 }
 
-/* Logo inline with title */
-.logoInline {
-  height: 0.7em;
-  width: auto;
-  vertical-align: baseline;
-  margin-right: 0.05em;
-  filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.3));
-  transition: all 0.3s ease;
-  display: inline-block;
-  position: relative;
-  top: 0;
-  animation: logoGlow 3s ease-in-out infinite;
-}
-
-.logoInline:hover {
-  filter: drop-shadow(0 0 30px rgba(255, 255, 255, 0.6));
-}
-
-/* Main Content - Centered */
 .mainContent {
   position: relative;
   z-index: 1;
+  min-height: 100vh;
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  padding: 2rem;
+  padding: 4.5rem 1.5rem 3rem;
 }
 
-/* Hero Section - Centered */
 .heroSection {
+  width: min(920px, 100%);
   text-align: center;
-  animation: fadeInUp 1.2s ease-out;
-  max-width: 900px;
+  padding: clamp(2rem, 3.5vw, 3.25rem) clamp(1.25rem, 4vw, 3rem);
+  animation: fadeInUp 0.8s ease-out;
 }
 
-.title {
-  font-size: 4rem;
-  font-weight: 700;
-  line-height: 1.2;
-  color: #ffffff;
-  margin: 0 0 2rem 0;
-  letter-spacing: -0.02em;
-  text-shadow: 0 0 40px rgba(255, 255, 255, 0.3);
-}
-
-.subtitle {
-  font-size: 1.25rem;
-  line-height: 1.6;
-  color: rgba(255, 255, 255, 0.7);
-  margin-bottom: 1rem;
-  font-weight: 300;
+.heroBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 1.1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(27, 28, 44, 0.64);
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 1.35rem;
   letter-spacing: 0.01em;
 }
 
+.badgeLogo {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.2));
+}
+
+.title {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.08em;
+  font-size: clamp(2.3rem, 5.4vw, 4.45rem);
+  font-weight: 750;
+  line-height: 1.06;
+  letter-spacing: -0.03em;
+  color: #ffffff;
+  text-wrap: balance;
+  text-shadow: 0 10px 35px rgba(0, 0, 0, 0.42);
+}
+
+.titleAccent {
+  background: linear-gradient(100deg, #fff 0%, #dafd95 68%, #b5ff70 100%);
+  -webkit-text-fill-color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.subtitle {
+  margin: 1.15rem auto 0;
+  max-width: 54ch;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: clamp(1rem, 1.5vw, 1.16rem);
+  line-height: 1.6;
+  font-weight: 400;
+}
+
 .highlight {
-  color: #76b900;
-  font-weight: 600;
-  text-shadow: 0 0 20px rgba(118, 185, 0, 0.4);
+  color: #b8ff67;
+  font-weight: 650;
 }
 
 .deployTargets {
-  font-size: 1rem;
-  color: rgba(255, 255, 255, 0.5);
-  margin-bottom: 3rem;
-  font-weight: 400;
-  letter-spacing: 0.15em;
+  margin: 0.7rem 0 0;
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 0.88rem;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
 }
 
-/* Launch Button - Futuristic with pulse effect */
-.launchButton {
-  position: relative;
-  display: inline-flex;
+.ctaGroup {
+  margin-top: 2rem;
+  display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1.5rem 4rem;
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #000000;
-  background: #ffffff;
-  border: none;
-  border-radius: 60px;
+  gap: 0.9rem;
+}
+
+.primaryButton,
+.secondaryButton {
+  min-width: 190px;
+  height: 54px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 1.08rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
   cursor: pointer;
-  transition: all 0.3s ease;
-  overflow: hidden;
-  box-shadow: 0 0 40px rgba(255, 255, 255, 0.4);
-  animation: pulse 2s ease-in-out infinite;
+  transition: transform 0.2s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
-.launchButton:hover {
-  transform: scale(1.05);
-  box-shadow: 0 0 60px rgba(255, 255, 255, 0.6);
+.primaryButton {
+  color: #0c0c10;
+  background: #fff;
+  box-shadow: 0 14px 28px rgba(255, 255, 255, 0.2);
 }
 
-.launchButton:active {
-  transform: scale(0.98);
+.secondaryButton {
+  color: #f5f5f7;
+  background: rgba(16, 18, 31, 0.56);
+  border-color: rgba(255, 255, 255, 0.26);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
-.launchText {
-  position: relative;
-  z-index: 2;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+.primaryButton:hover,
+.secondaryButton:hover {
+  transform: translateY(-2px);
 }
 
-.launchGlow {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 100%;
-  height: 100%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.8) 0%, transparent 70%);
-  transform: translate(-50%, -50%) scale(0);
-  transition: transform 0.5s ease;
-  pointer-events: none;
+.primaryButton:hover {
+  box-shadow: 0 16px 34px rgba(255, 255, 255, 0.28);
 }
 
-.launchButton:hover .launchGlow {
-  transform: translate(-50%, -50%) scale(1.5);
-}
-
-/* Animations */
-@keyframes logoGlow {
-  0%, 100% {
-    filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.3));
-  }
-  50% {
-    filter: drop-shadow(0 0 35px rgba(255, 255, 255, 0.7)) drop-shadow(0 0 15px rgba(255, 255, 255, 0.5));
-  }
+.secondaryButton:hover {
+  border-color: rgba(255, 255, 255, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    0 14px 26px rgba(5, 10, 24, 0.5);
 }
 
 @keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(30px);
+    transform: translateY(14px);
   }
   to {
     opacity: 1;
@@ -163,63 +158,55 @@
   }
 }
 
-@keyframes pulse {
-  0%, 100% {
-    box-shadow: 0 0 40px rgba(255, 255, 255, 0.4);
-  }
-  50% {
-    box-shadow: 0 0 60px rgba(255, 255, 255, 0.6);
-  }
-}
-
-/* Responsive Design */
-@media (max-width: 1024px) {
-  .title {
-    font-size: 3rem;
-  }
-
-  .subtitle {
-    font-size: 1.125rem;
-  }
-
-  .launchButton {
-    padding: 1.25rem 3rem;
-    font-size: 1.25rem;
-  }
-}
-
 @media (max-width: 768px) {
-  .title {
-    font-size: 2.5rem;
+  .mainContent {
+    padding-top: 4rem;
+  }
+
+  .heroSection {
+    padding: 1.75rem 1.2rem 1.55rem;
   }
 
   .subtitle {
-    font-size: 1rem;
-    margin-bottom: 3rem;
+    max-width: 40ch;
+    line-height: 1.5;
   }
 
-  .launchButton {
-    padding: 1rem 2.5rem;
-    font-size: 1.125rem;
+  .ctaGroup {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .primaryButton,
+  .secondaryButton {
+    width: min(100%, 320px);
+    min-width: 0;
   }
 }
 
 @media (max-width: 480px) {
-  .title {
-    font-size: 2rem;
-  }
-
-  .subtitle {
-    font-size: 0.9375rem;
-    margin-bottom: 2.5rem;
-  }
-
-  .launchButton {
-    padding: 0.875rem 2rem;
-    font-size: 1rem;
-  }
-
   .mainContent {
-    padding: 1rem;
+    padding: 3.5rem 0.9rem 2.3rem;
+  }
+
+  .heroBadge {
+    font-size: 0.86rem;
+    padding: 0.48rem 0.92rem;
+  }
+
+  .badgeLogo {
+    width: 16px;
+    height: 16px;
+  }
+
+  .deployTargets {
+    font-size: 0.78rem;
+    letter-spacing: 0.14em;
+  }
+
+  .primaryButton,
+  .secondaryButton {
+    height: 50px;
+    font-size: 0.98rem;
   }
 }

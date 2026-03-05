@@ -53,3 +53,5 @@ pasword
 critcal
 # Intentional partial name for exact-match test (authz_classifier_test.go)
 admi
+# Frontend identifier names (not spelling errors)
+currentY

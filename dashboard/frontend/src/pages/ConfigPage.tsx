@@ -343,6 +343,11 @@ const formatThreshold = (value: number): string => {
   return `${Math.round(value * 100)}%`
 }
 
+const TABLE_COLUMN_WIDTH = {
+  compact: '140px',
+  medium: '160px',
+} as const
+
 // Removed maskAddress - no longer needed after removing endpoint visibility toggle
 
 const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) => {
@@ -2471,7 +2476,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       {
         key: 'type',
         header: 'Type',
-        width: '140px',
+        width: TABLE_COLUMN_WIDTH.medium,
         sortable: true,
         render: (row) => {
           const typeColors: Record<SignalType, string> = {
@@ -3291,34 +3296,36 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
     return (
       <div className={styles.sectionPanel}>
-        <TableHeader
-          title="Signals"
-          count={allSignals.length}
-          searchPlaceholder="Search signals..."
-          searchValue={signalsSearch}
-          onSearchChange={setSignalsSearch}
-          onAdd={() => openSignalEditor('add')}
-          addButtonText="Add Signal"
-          disabled={isReadonly}
-        />
-
-        {(isPythonCLI || hasFlatSignals(config)) ? (
-          <DataTable
-            columns={signalsColumns}
-            data={filteredSignals}
-            keyExtractor={(row) => `${row.type}-${row.name}`}
-            onView={handleViewSignal}
-            onEdit={handleEditSignal}
-            onDelete={handleDeleteSignal}
-            emptyMessage={signalsSearch ? 'No signals match your search' : 'No signals configured'}
-            readonly={isReadonly}
+        <div className={styles.sectionTableBlock}>
+          <TableHeader
+            title="Signals"
+            count={allSignals.length}
+            searchPlaceholder="Search signals..."
+            searchValue={signalsSearch}
+            onSearchChange={setSignalsSearch}
+            onAdd={() => openSignalEditor('add')}
+            addButtonText="Add Signal"
+            disabled={isReadonly}
           />
-        ) : (
-          <div className={styles.emptyState}>
-            Signals are only available in Python CLI config format.
-            Current config uses legacy format - use "Intelligent Routing" features instead.
-          </div>
-        )}
+
+          {(isPythonCLI || hasFlatSignals(config)) ? (
+            <DataTable
+              columns={signalsColumns}
+              data={filteredSignals}
+              keyExtractor={(row) => `${row.type}-${row.name}`}
+              onView={handleViewSignal}
+              onEdit={handleEditSignal}
+              onDelete={handleDeleteSignal}
+              emptyMessage={signalsSearch ? 'No signals match your search' : 'No signals configured'}
+              readonly={isReadonly}
+            />
+          ) : (
+            <div className={styles.emptyState}>
+              Signals are only available in Python CLI config format.
+              Current config uses legacy format - use "Intelligent Routing" features instead.
+            </div>
+          )}
+        </div>
       </div>
     )
   }
@@ -3326,7 +3333,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   // Decisions Section - Routing rules with priorities (config.yaml)
   const renderDecisionsSection = () => {
     const decisions = config?.decisions || []
-    const defaultModel = getDefaultModel()
 
     // Filter decisions based on search
     const filteredDecisions = decisions.filter(decision =>
@@ -3346,7 +3352,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       {
         key: 'priority',
         header: 'Priority',
-        width: '100px',
+        width: TABLE_COLUMN_WIDTH.compact,
         align: 'center',
         sortable: true,
         render: (row) => (
@@ -3358,7 +3364,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       {
         key: 'conditions',
         header: 'Conditions',
-        width: '150px',
+        width: TABLE_COLUMN_WIDTH.medium,
         render: (row) => {
           const count = row.rules?.conditions?.length || 0
           return <span>{count} {count === 1 ? 'condition' : 'conditions'}</span>
@@ -3367,7 +3373,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       {
         key: 'models',
         header: 'Models',
-        width: '150px',
+        width: TABLE_COLUMN_WIDTH.medium,
         render: (row) => {
           const count = row.modelRefs?.length || 0
           return <span>{count} {count === 1 ? 'model' : 'models'}</span>
@@ -3932,49 +3938,36 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
     return (
       <div className={styles.sectionPanel}>
-        {/* Default Model Info */}
-        <div className={styles.coreSettingsInline}>
-          <div className={styles.inlineConfigRow}>
-            <span className={styles.inlineConfigLabel}>Default Model:</span>
-            <span className={styles.inlineConfigValue}>{defaultModel || 'N/A'}</span>
-          </div>
-          <div className={styles.inlineConfigRow}>
-            <span className={styles.inlineConfigLabel}>Default Reasoning:</span>
-            <span className={`${styles.badge} ${styles[`badge${config?.providers?.default_reasoning_effort || 'medium'}`]}`}>
-              {config?.providers?.default_reasoning_effort || 'medium'}
-            </span>
-          </div>
-        </div>
-
-        {/* Decisions Table */}
-        <TableHeader
-          title="Routing Decisions"
-          count={decisions.length}
-          searchPlaceholder="Search decisions..."
-          searchValue={decisionsSearch}
-          onSearchChange={setDecisionsSearch}
-          onAdd={() => openDecisionEditor('add')}
-          addButtonText="Add Decision"
-          disabled={isReadonly}
-        />
-
-        {(isPythonCLI || hasDecisions(config)) ? (
-          <DataTable
-            columns={decisionsColumns}
-            data={filteredDecisions}
-            keyExtractor={(row) => row.name}
-            onView={handleViewDecision}
-            onEdit={handleEditDecision}
-            onDelete={handleDeleteDecision}
-            emptyMessage={decisionsSearch ? 'No decisions match your search' : 'No routing decisions configured'}
-            readonly={isReadonly}
+        <div className={styles.sectionTableBlock}>
+          <TableHeader
+            title="Routing Decisions"
+            count={decisions.length}
+            searchPlaceholder="Search decisions..."
+            searchValue={decisionsSearch}
+            onSearchChange={setDecisionsSearch}
+            onAdd={() => openDecisionEditor('add')}
+            addButtonText="Add Decision"
+            disabled={isReadonly}
           />
-        ) : (
-          <div className={styles.emptyState}>
-            Decisions are only available in Python CLI config format.
-            Current config uses legacy format - see "Categories" in legacy mode.
-          </div>
-        )}
+
+          {(isPythonCLI || hasDecisions(config)) ? (
+            <DataTable
+              columns={decisionsColumns}
+              data={filteredDecisions}
+              keyExtractor={(row) => row.name}
+              onView={handleViewDecision}
+              onEdit={handleEditDecision}
+              onDelete={handleDeleteDecision}
+              emptyMessage={decisionsSearch ? 'No decisions match your search' : 'No routing decisions configured'}
+              readonly={isReadonly}
+            />
+          ) : (
+            <div className={styles.emptyState}>
+              Decisions are only available in Python CLI config format.
+              Current config uses legacy format - see "Categories" in legacy mode.
+            </div>
+          )}
+        </div>
       </div>
     )
   }
@@ -4011,7 +4004,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       {
         key: 'reasoning_family',
         header: 'Reasoning Family',
-        width: '180px',
+        width: TABLE_COLUMN_WIDTH.medium,
         sortable: true,
         render: (row) => row.reasoning_family ? (
           <span className={styles.badge} style={{ background: 'rgba(0, 212, 255, 0.15)', color: 'var(--color-accent-cyan)' }}>
@@ -4022,7 +4015,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       {
         key: 'endpoints',
         header: 'Endpoints',
-        width: '120px',
+        width: TABLE_COLUMN_WIDTH.compact,
         align: 'center',
         render: (row) => {
           const count = row.endpoints?.length || 0
@@ -4036,7 +4029,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       {
         key: 'pricing',
         header: 'Pricing',
-        width: '150px',
+        width: TABLE_COLUMN_WIDTH.medium,
         render: (row) => {
           if (!row.pricing) return <span style={{ color: 'var(--color-text-secondary)' }}>N/A</span>
           const currency = row.pricing.currency || 'USD'
@@ -4645,31 +4638,31 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
     return (
       <div className={styles.sectionPanel}>
-        {/* Reasoning Families Table */}
-        <TableHeader
-          title="Reasoning Families"
-          count={reasoningFamilyData.length}
-          searchPlaceholder=""
-          searchValue=""
-          onSearchChange={() => { }}
-          onAdd={handleAddReasoningFamily}
-          addButtonText="Add Family"
-          disabled={isReadonly}
-        />
+        <div className={styles.sectionTableBlock}>
+          <TableHeader
+            title="Reasoning Families"
+            count={reasoningFamilyData.length}
+            searchPlaceholder=""
+            searchValue=""
+            onSearchChange={() => { }}
+            onAdd={handleAddReasoningFamily}
+            addButtonText="Add Family"
+            disabled={isReadonly}
+          />
 
-        <DataTable
-          columns={reasoningFamilyColumns}
-          data={reasoningFamilyData}
-          keyExtractor={(row) => row.name}
-          onView={(row) => handleViewReasoningFamily(row.name)}
-          onEdit={(row) => handleEditReasoningFamily(row.name)}
-          onDelete={(row) => handleDeleteReasoningFamily(row.name)}
-          emptyMessage="No reasoning families configured"
-          readonly={isReadonly}
-        />
+          <DataTable
+            columns={reasoningFamilyColumns}
+            data={reasoningFamilyData}
+            keyExtractor={(row) => row.name}
+            onView={(row) => handleViewReasoningFamily(row.name)}
+            onEdit={(row) => handleEditReasoningFamily(row.name)}
+            onDelete={(row) => handleDeleteReasoningFamily(row.name)}
+            emptyMessage="No reasoning families configured"
+            readonly={isReadonly}
+          />
+        </div>
 
-        {/* Models Table */}
-        <div style={{ marginTop: '2rem' }}>
+        <div className={styles.sectionTableBlock}>
           <TableHeader
             title="Models"
             count={models.length}

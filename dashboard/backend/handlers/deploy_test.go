@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // ============================================================
@@ -262,6 +264,79 @@ func TestToStringKeyMap(t *testing.T) {
 				t.Errorf("Expected %v, got %v", tt.expected, ok)
 			}
 		})
+	}
+}
+
+func TestCanonicalizeYAMLForDiff_EquivalentMapOrder(t *testing.T) {
+	yamlA := []byte(`router:
+  default_model: gpt-4o
+  settings:
+    timeout: 30
+    retries: 3
+`)
+	yamlB := []byte(`router:
+  settings:
+    retries: 3
+    timeout: 30
+  default_model: gpt-4o
+`)
+
+	canonicalA := canonicalizeYAMLForDiff(yamlA)
+	canonicalB := canonicalizeYAMLForDiff(yamlB)
+
+	if canonicalA != canonicalB {
+		t.Fatalf("expected canonical YAML to match for order-only differences\nA:\n%s\nB:\n%s", canonicalA, canonicalB)
+	}
+
+	var parsedA map[string]interface{}
+	var parsedB map[string]interface{}
+	if err := yaml.Unmarshal([]byte(canonicalA), &parsedA); err != nil {
+		t.Fatalf("failed to unmarshal canonicalA: %v", err)
+	}
+	if err := yaml.Unmarshal([]byte(canonicalB), &parsedB); err != nil {
+		t.Fatalf("failed to unmarshal canonicalB: %v", err)
+	}
+	if fmt.Sprintf("%v", parsedA) != fmt.Sprintf("%v", parsedB) {
+		t.Fatalf("canonicalized documents are not semantically equal\nA=%v\nB=%v", parsedA, parsedB)
+	}
+}
+
+func TestDeployPreviewHandler_IgnoresOrderOnlyDiff(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.yaml")
+
+	current := `alpha:
+  first: 1
+  second: 2
+beta: true
+`
+	if err := os.WriteFile(configPath, []byte(current), 0o644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	previewRequest := `beta: true
+alpha:
+  second: 2
+  first: 1
+`
+	body, _ := json.Marshal(DeployRequest{YAML: previewRequest})
+	req := httptest.NewRequest(http.MethodPost, "/api/router/config/deploy/preview", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	DeployPreviewHandler(configPath)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d. body=%s", w.Code, w.Body.String())
+	}
+
+	var resp DeployPreviewResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode preview response: %v", err)
+	}
+
+	if resp.Current != resp.Preview {
+		t.Fatalf("expected no diff after canonicalization, but responses differ\ncurrent:\n%s\npreview:\n%s", resp.Current, resp.Preview)
 	}
 }
 

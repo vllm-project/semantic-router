@@ -234,6 +234,11 @@
   gap: 1.5rem;
 }
 
+.sectionTableBlock {
+  display: flex;
+  flex-direction: column;
+}
+
 .observabilityInfo {
   padding: 1.5rem;
   background: linear-gradient(135deg, rgba(118, 185, 0, 0.05) 0%, rgba(0, 212, 255, 0.05) 100%);
