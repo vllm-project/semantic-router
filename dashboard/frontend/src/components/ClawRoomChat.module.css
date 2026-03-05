@@ -328,17 +328,21 @@
 }
 
 .wsConnected {
+  display: inline-flex;
+  align-items: center;
   font-size: 0.72rem;
   color: var(--nv-green-500);
-  margin-left: 0.5rem;
   animation: pulse 2s infinite;
+  line-height: 1;
 }
 
 .wsDisconnected {
+  display: inline-flex;
+  align-items: center;
   font-size: 0.72rem;
   color: var(--nv-text-muted);
-  margin-left: 0.5rem;
   opacity: 0.7;
+  line-height: 1;
 }
 
 @keyframes pulse {

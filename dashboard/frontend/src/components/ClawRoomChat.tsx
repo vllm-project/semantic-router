@@ -1157,16 +1157,8 @@ const ClawRoomChat = ({
         <section className={styles.chatPanel}>
           <header className={styles.chatHeader}>
             <div className={styles.chatTitleWrap}>
-              <h3 className={styles.chatTitle}>{selectedRoom?.name || 'No room selected'}</h3>
-              <span className={styles.chatSubtitle}>{selectedTeam?.name || 'No team selected'}</span>
-              {selectedRoomId && (
-                <span
-                  className={wsConnected ? styles.wsConnected : styles.wsDisconnected}
-                  title={wsConnected ? 'WebSocket connected' : 'WebSocket disconnected (using fallback)'}
-                >
-                  {wsConnected ? '● Live' : '○ Reconnecting...'}
-                </span>
-              )}
+              <h3 className={styles.chatTitle}>{selectedTeam?.name || 'No team selected'}</h3>
+              {selectedTeam?.role && <span className={styles.chatSubtitle}>{selectedTeam.role}</span>}
             </div>
 
             <div className={styles.teamInlineInfo}>
@@ -1174,6 +1166,14 @@ const ClawRoomChat = ({
                 <span className={styles.teamInlineMetaText}>
                   {selectedRoom ? `Room · ${selectedRoom.name}` : 'Create or select a room to start'}
                 </span>
+                {selectedRoomId && (
+                  <span
+                    className={wsConnected ? styles.wsConnected : styles.wsDisconnected}
+                    title={wsConnected ? 'WebSocket connected' : 'WebSocket disconnected (using fallback)'}
+                  >
+                    {wsConnected ? '● Live' : '○ Reconnecting...'}
+                  </span>
+                )}
                 {(selectedTeam?.role || selectedTeam?.vibe) && (
                   <div className={styles.metaInline}>
                     {selectedTeam?.role && <span className={styles.metaPill}>{selectedTeam.role}</span>}
