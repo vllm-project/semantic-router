@@ -274,9 +274,9 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		logging.Infof("extractAutoStore: Falling back to global config, AutoStore=%v", r.Config.Memory.AutoStore)
 		autoStoreEnabled = true
 	}
-	logging.Infof("Memory store check: MemoryExtractor=%v, autoStore=%v",
-		r.MemoryExtractor != nil, autoStoreEnabled)
-	if r.MemoryExtractor != nil && autoStoreEnabled {
+	logging.Infof("Memory store check: MemoryExtractor=%v, autoStore=%v, responseJailbreakPassed=%v",
+		r.MemoryExtractor != nil, autoStoreEnabled, !ctx.ResponseJailbreakDetected)
+	if r.MemoryExtractor != nil && autoStoreEnabled && !ctx.ResponseJailbreakDetected {
 		currentUserMessage := extractCurrentUserMessage(ctx)
 		currentAssistantResponse := extractAssistantResponseText(responseBody)
 		go func() {
