@@ -58,14 +58,35 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 			// In vllm-sr serve deployment, dashboard often runs in a container while OpenClaw
 			// is launched via host docker.sock. Using container:<dashboard-container> keeps
 			// gateway traffic in the same network namespace and avoids host routing issues.
-			if req.Container.NetworkMode == "" || strings.EqualFold(req.Container.NetworkMode, "host") {
+			// Override generic values ("", "host", "bridge") with the preferred network so
+			// that the container is placed on the same user-defined bridge network as the
+			// dashboard (Docker's default "bridge" network does not support container-name
+			// DNS resolution).
+			nm := strings.ToLower(strings.TrimSpace(req.Container.NetworkMode))
+			if nm == "" || nm == "host" || nm == "bridge" {
 				req.Container.NetworkMode = preferredNetwork
 			}
 		}
 		if req.Container.NetworkMode == "" {
 			req.Container.NetworkMode = "host"
 		}
-		if req.Container.ModelBaseURL == "" {
+		// When using a user-defined bridge network, the OpenClaw container
+		// reaches the SR router via container-name DNS, not localhost.
+		// Automatically rewrite loopback addresses in modelBaseUrl to the
+		// dashboard container name so users don't have to do it manually.
+		if nm := req.Container.NetworkMode; nm != "host" && !strings.HasPrefix(nm, "container:") {
+			dashboardContainer := strings.TrimSpace(os.Getenv("OPENCLAW_DASHBOARD_CONTAINER_NAME"))
+			if dashboardContainer == "" {
+				dashboardContainer = vllmSrContainerName
+			}
+			if req.Container.ModelBaseURL == "" {
+				req.Container.ModelBaseURL = h.resolveOpenClawModelBaseURL()
+			}
+			req.Container.ModelBaseURL = rewriteLoopbackHost(req.Container.ModelBaseURL, dashboardContainer)
+			if req.Container.MemoryBaseURL != "" {
+				req.Container.MemoryBaseURL = rewriteLoopbackHost(req.Container.MemoryBaseURL, dashboardContainer)
+			}
+		} else if req.Container.ModelBaseURL == "" {
 			req.Container.ModelBaseURL = h.resolveOpenClawModelBaseURL()
 		}
 		if req.Container.ModelAPIKey == "" {
@@ -84,6 +105,7 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 		}
 		req.RoleKind = normalizeRoleKind(req.RoleKind)
 		requestedPortExplicit := req.Container.GatewayPort != 0
+		bridgeMode := isBridgeNetwork(req.Container.NetworkMode)
 
 		if asyncRequested {
 			reqCopy := req
@@ -124,8 +146,9 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 		}
 
 		if req.Container.GatewayPort == 0 {
-			req.Container.GatewayPort = h.nextAvailablePort()
-		} else {
+			req.Container.GatewayPort = h.nextAvailablePort(req.Container.NetworkMode)
+		} else if !bridgeMode {
+			// In host network mode, check for port conflicts
 			entries, _ := h.loadRegistry()
 			for _, e := range entries {
 				if e.Port == req.Container.GatewayPort && e.Name != req.Container.ContainerName {
@@ -147,6 +170,8 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 				return
 			}
 		}
+		// In bridge mode with explicit port: no host-level conflict check needed
+		// because each container has its own network namespace
 
 		cDir := h.containerDataDir(req.Container.ContainerName)
 		wsDir := filepath.Join(cDir, "workspace")
@@ -208,30 +233,59 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 			return
 		}
 
+		// For bridge network names, ensure the network exists before starting
+		// the container. This is idempotent: if the network already exists the
+		// command exits silently.
+		networkMode := req.Container.NetworkMode
+		if networkMode != "" && networkMode != "host" && !strings.HasPrefix(networkMode, "container:") {
+			if _, err := h.containerCombinedOutput("network", "create", "--driver", "bridge", networkMode); err != nil {
+				// "already exists" is expected and harmless.
+				if out, _ := h.containerCombinedOutput("network", "inspect", networkMode); len(out) == 0 {
+					log.Printf("openclaw: warning: could not ensure network %s exists: %v", networkMode, err)
+				}
+			}
+		}
+
 		absCDir, _ := filepath.Abs(cDir)
 		volumeName := "openclaw-state-" + req.Container.ContainerName
 		args := []string{
 			"run", "-d",
 			"--name", req.Container.ContainerName,
 			"--user", "0:0",
-			"--network", req.Container.NetworkMode,
-			"-v", absCDir + "/workspace:/workspace",
-			"-v", absCDir + "/openclaw.json:/config/openclaw.json:ro",
-			"-v", volumeName + ":/state",
+			"--network", networkMode,
+		}
+		// Override the image's built-in healthcheck to point at the actual gateway port.
+		healthCmd := fmt.Sprintf(
+			"node -e \"fetch('http://127.0.0.1:%d/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+			req.Container.GatewayPort,
+		)
+		args = append(args,
+			"--health-cmd", healthCmd,
+			"--health-interval", "30s",
+			"--health-timeout", "5s",
+			"--health-start-period", "15s",
+			"--health-retries", "3",
+		)
+		args = append(args,
+			"-v", absCDir+"/workspace:/workspace",
+			"-v", absCDir+"/openclaw.json:/config/openclaw.json:ro",
+			"-v", volumeName+":/state",
 			"-e", "OPENCLAW_CONFIG_PATH=/config/openclaw.json",
 			"-e", "OPENCLAW_STATE_DIR=/state",
 			req.Container.BaseImage,
 			"node", "openclaw.mjs", "gateway", "--allow-unconfigured", "--bind", "lan",
-		}
+		)
+		// In bridge mode, no port conflict retry needed since containers have isolated namespaces.
+		// In host mode, retry with alternate ports if user didn't explicitly request a port.
 		startAttemptLimit := 1
-		if !requestedPortExplicit {
+		if !bridgeMode && !requestedPortExplicit {
 			startAttemptLimit = 4
 		}
 
 		var containerID string
 		for attempt := 0; attempt < startAttemptLimit; attempt++ {
 			if attempt > 0 {
-				req.Container.GatewayPort = h.nextAvailablePort()
+				req.Container.GatewayPort = h.nextAvailablePort(req.Container.NetworkMode)
 				if err := writeOpenClawConfig(configPath, req); err != nil {
 					h.mu.Unlock()
 					writeJSONError(w, fmt.Sprintf("Failed to refresh config for port retry: %v", err), http.StatusInternalServerError)
@@ -263,7 +317,8 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 					)
 					return
 				}
-				if !requestedPortExplicit && isOpenClawGatewayPortConflict(trimmed, req.Container.GatewayPort) && attempt+1 < startAttemptLimit {
+				// Only retry port conflicts in host mode
+				if !bridgeMode && !requestedPortExplicit && isOpenClawGatewayPortConflict(trimmed, req.Container.GatewayPort) && attempt+1 < startAttemptLimit {
 					log.Printf(
 						"openclaw: container runtime start failed due to port conflict on %d, retrying: %s",
 						req.Container.GatewayPort,
@@ -278,7 +333,7 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 			}
 
 			containerID = strings.TrimSpace(string(out))
-			if requestedPortExplicit {
+			if bridgeMode || requestedPortExplicit {
 				break
 			}
 
@@ -483,7 +538,7 @@ func (h *OpenClawHandler) detectImmediateGatewayPortConflict(containerName strin
 		if isOpenClawGatewayPortConflict(logs, port) {
 			return logs
 		}
-		if openClawGatewayListeningReady(logs) && h.gatewayReachable(port) {
+		if openClawGatewayListeningReady(logs) && h.gatewayReachable(containerName, port) {
 			return ""
 		}
 	}
@@ -506,7 +561,7 @@ func (h *OpenClawHandler) gatewayHealthyForContainer(containerName string, port 
 	if !openClawGatewayListeningReady(logs) {
 		return false
 	}
-	return h.gatewayReachable(port)
+	return h.gatewayReachable(containerName, port)
 }
 
 func (h *OpenClawHandler) containerRunning(containerName string) bool {

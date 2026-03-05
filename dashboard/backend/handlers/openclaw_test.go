@@ -304,6 +304,46 @@ func TestIsOpenClawGatewayPortConflict(t *testing.T) {
 	}
 }
 
+func TestIsBridgeNetwork(t *testing.T) {
+	tests := []struct {
+		name        string
+		networkMode string
+		expected    bool
+	}{
+		{name: "empty string", networkMode: "", expected: false},
+		{name: "host mode", networkMode: "host", expected: false},
+		{name: "host mode uppercase", networkMode: "HOST", expected: false},
+		{name: "container mode", networkMode: "container:abc", expected: false},
+		{name: "container mode uppercase", networkMode: "Container:xyz", expected: false},
+		{name: "default bridge", networkMode: "bridge", expected: true},
+		{name: "user-defined bridge", networkMode: "vllm-sr-net", expected: true},
+		{name: "custom network", networkMode: "my-network", expected: true},
+		{name: "with spaces", networkMode: "  vllm-sr-net  ", expected: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isBridgeNetwork(tc.networkMode); got != tc.expected {
+				t.Fatalf("isBridgeNetwork(%q) = %v, expected %v", tc.networkMode, got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestNextAvailablePortBridgeMode(t *testing.T) {
+	// In bridge mode, should always return the fixed port
+	h := &OpenClawHandler{}
+
+	bridgeModes := []string{"vllm-sr-net", "bridge", "my-custom-network"}
+	for _, nm := range bridgeModes {
+		port := h.nextAvailablePort(nm)
+		if port != defaultBridgeGatewayPort {
+			t.Errorf("nextAvailablePort(%q) = %d, expected %d (fixed bridge port)",
+				nm, port, defaultBridgeGatewayPort)
+		}
+	}
+}
+
 func TestOpenClawGatewayListeningReady(t *testing.T) {
 	tests := []struct {
 		name     string

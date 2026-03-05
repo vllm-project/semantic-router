@@ -7,11 +7,36 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 )
+
+// rewriteLoopbackHost replaces 127.0.0.1 / localhost in a URL with the given
+// container name so that inter-container traffic uses Docker DNS instead of
+// loopback (which is unreachable across containers in bridge networks).
+func rewriteLoopbackHost(rawURL, containerName string) string {
+	if rawURL == "" || containerName == "" {
+		return rawURL
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+	host := u.Hostname()
+	if host != "127.0.0.1" && host != "localhost" && host != "0.0.0.0" {
+		return rawURL
+	}
+	port := u.Port()
+	if port != "" {
+		u.Host = containerName + ":" + port
+	} else {
+		u.Host = containerName
+	}
+	return u.String()
+}
 
 // --- Helpers ---
 
@@ -295,10 +320,19 @@ func writeOpenClawConfig(path string, req ProvisionRequest) error {
 
 func generateDockerRunCmd(runtime string, req ProvisionRequest, dataDir string) string {
 	volumeName := "openclaw-state-" + req.Container.ContainerName
+	healthCmd := fmt.Sprintf(
+		`node -e "fetch('http://127.0.0.1:%d/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"`,
+		req.Container.GatewayPort,
+	)
 	return fmt.Sprintf(`%s run -d \
   --name %s \
   --user 0:0 \
   --network %s \
+  --health-cmd '%s' \
+  --health-interval 30s \
+  --health-timeout 5s \
+  --health-start-period 15s \
+  --health-retries 3 \
   -v %s/workspace:/workspace \
   -v %s/openclaw.json:/config/openclaw.json:ro \
   -v %s:/state \
@@ -306,12 +340,51 @@ func generateDockerRunCmd(runtime string, req ProvisionRequest, dataDir string) 
   -e OPENCLAW_STATE_DIR=/state \
   %s \
   node openclaw.mjs gateway --allow-unconfigured --bind lan`,
-		runtime, req.Container.ContainerName, req.Container.NetworkMode,
+		runtime, req.Container.ContainerName, req.Container.NetworkMode, healthCmd,
 		dataDir, dataDir, volumeName, req.Container.BaseImage)
 }
 
 func generateComposeYAML(req ProvisionRequest, dataDir string) string {
 	volumeName := "openclaw-state-" + req.Container.ContainerName
+	networkMode := req.Container.NetworkMode
+
+	// For bridge network names (not "host" or "container:xxx"), use the networks syntax.
+	if networkMode != "" && networkMode != "host" && !strings.HasPrefix(networkMode, "container:") {
+		return fmt.Sprintf(`services:
+  openclaw:
+    image: %s
+    container_name: %s
+    user: "0:0"
+    networks:
+      - %s
+    volumes:
+      - %s/workspace:/workspace
+      - %s/openclaw.json:/config/openclaw.json:ro
+      - %s:/state
+    environment:
+      OPENCLAW_CONFIG_PATH: /config/openclaw.json
+      OPENCLAW_STATE_DIR: /state
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:%d/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    command: ["node", "openclaw.mjs", "gateway", "--allow-unconfigured", "--bind", "lan"]
+    restart: unless-stopped
+
+networks:
+  %s:
+    external: true
+
+volumes:
+  %s:
+`, req.Container.BaseImage, req.Container.ContainerName, networkMode,
+			dataDir, dataDir, volumeName,
+			req.Container.GatewayPort,
+			networkMode, volumeName)
+	}
+
 	return fmt.Sprintf(`services:
   openclaw:
     image: %s
@@ -325,13 +398,21 @@ func generateComposeYAML(req ProvisionRequest, dataDir string) string {
     environment:
       OPENCLAW_CONFIG_PATH: /config/openclaw.json
       OPENCLAW_STATE_DIR: /state
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:%d/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
     command: ["node", "openclaw.mjs", "gateway", "--allow-unconfigured", "--bind", "lan"]
     restart: unless-stopped
 
 volumes:
   %s:
-`, req.Container.BaseImage, req.Container.ContainerName, req.Container.NetworkMode,
-		dataDir, dataDir, volumeName, volumeName)
+`, req.Container.BaseImage, req.Container.ContainerName, networkMode,
+		dataDir, dataDir, volumeName,
+		req.Container.GatewayPort,
+		volumeName)
 }
 
 func agentsMdContent() string {

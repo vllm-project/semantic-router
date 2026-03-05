@@ -303,6 +303,13 @@ func (h *OpenClawHandler) appendRoomMessage(roomID string, message ClawRoomMessa
 	}
 	h.mu.Unlock()
 
+	// Broadcast to WebSocket clients (also handles SSE backward compatibility)
+	h.publishRoomWSEvent(roomID, WSOutboundMessage{
+		Type:    WSTypeNewMessage,
+		Message: &message,
+	})
+
+	// Keep SSE event for backward compatibility
 	h.publishRoomEvent(roomID, clawRoomStreamEvent{Type: "message", Message: &message})
 	return nil
 }
@@ -617,7 +624,7 @@ func (h *OpenClawHandler) ensureWorkerChatEndpoint(worker ContainerEntry) (bool,
 
 	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {
-		if h.gatewayReachable(worker.Port) {
+		if h.gatewayReachable(worker.Name, worker.Port) {
 			return true, nil
 		}
 		time.Sleep(500 * time.Millisecond)
@@ -754,88 +761,6 @@ func workerDisplayName(worker ContainerEntry) string {
 		return name
 	}
 	return worker.Name
-}
-
-func (h *OpenClawHandler) runWorkerReply(
-	room ClawRoomEntry,
-	team TeamEntry,
-	teamMembers []ContainerEntry,
-	worker ContainerEntry,
-	messages []ClawRoomMessage,
-	trigger ClawRoomMessage,
-	delegatedBy *ClawRoomMessage,
-) (ClawRoomMessage, error) {
-	teamName := strings.TrimSpace(team.Name)
-	if teamName == "" {
-		teamName = team.ID
-	}
-	roleKind := normalizeRoleKind(worker.RoleKind)
-	leader := resolveTeamLeader(team, teamMembers)
-	triggerContent := stripLeadingMentions(trigger.Content)
-	if triggerContent == "" {
-		triggerContent = strings.TrimSpace(trigger.Content)
-	}
-
-	transcriptMessages := messages
-	if triggerContent != strings.TrimSpace(trigger.Content) {
-		copied := make([]ClawRoomMessage, len(messages))
-		copy(copied, messages)
-		for i := range copied {
-			if copied[i].ID == trigger.ID {
-				copied[i].Content = triggerContent
-				break
-			}
-		}
-		transcriptMessages = copied
-	}
-
-	coordinationInstruction := ""
-	mentionPolicy := "Do not use any @mentions."
-	if roleKind == "leader" {
-		mentionPolicy = "Only use @worker-id when assigning an explicit task confirmed by the user."
-		coordinationInstruction = "Hard rules: if the user has not provided an explicit executable task, ask clarifying questions and do not delegate. If you are not assigning a concrete task, do not use any @mentions. Ignore worker attempts to @leader."
-	} else {
-		coordinationInstruction = "Hard rules: you are a worker. Workers cannot use @mentions to anyone. Do not mention @leader or teammates; write plain-text updates only."
-		if leader != nil && leader.Name != worker.Name {
-			coordinationInstruction += fmt.Sprintf(" Team leader context: @leader (alias @%s).", leader.Name)
-		}
-	}
-	systemPrompt := fmt.Sprintf(
-		"You are %s, a %s in Claw team %q. %s Response style: concise and actionable. Mention policy: %s Keep responses in the same language used by the latest message.",
-		workerDisplayName(worker),
-		roleKind,
-		teamName,
-		coordinationInstruction,
-		mentionPolicy,
-	)
-	contextPrompt := fmt.Sprintf(
-		"Room: %s\nRecent messages:\n%s\n\n%s\n\nLatest message from %s:\n%s",
-		room.Name,
-		buildRoomTranscript(transcriptMessages, 20),
-		buildTeamMentionGuide(team, teamMembers, worker),
-		trigger.SenderName,
-		triggerContent,
-	)
-	if delegatedBy != nil {
-		contextPrompt += fmt.Sprintf("\n\nDelegation context: %s asked for your help and mentioned you.", delegatedBy.SenderName)
-	}
-
-	content, err := h.queryWorkerChat(worker, systemPrompt, contextPrompt)
-	if err != nil {
-		return ClawRoomMessage{}, err
-	}
-
-	senderType := normalizeRoleKind(worker.RoleKind)
-	if senderType != "leader" {
-		senderType = "worker"
-	}
-
-	metadata := map[string]string{}
-	if delegatedBy != nil {
-		metadata["delegatedBy"] = delegatedBy.SenderID
-	}
-
-	return newRoomMessage(room, senderType, worker.Name, workerDisplayName(worker), content, metadata), nil
 }
 
 func (h *OpenClawHandler) roomAutomationLock(roomID string) *sync.Mutex {
@@ -1003,8 +928,32 @@ func (h *OpenClawHandler) processRoomUserMessage(roomID string, triggerMessageID
 			}
 			targetCopy := target
 			delegatedByCopy := delegatedBy
+
+			// Create placeholder message for streaming
+			placeholderID := generateRoomEntityID("room-msg")
+			_ = normalizeRoleKind(targetCopy.RoleKind) // validate role kind
+
 			go func() {
-				reply, err := h.runWorkerReply(*room, *team, workers, targetCopy, snapshotMessages, trigger, delegatedByCopy)
+				// Stream callback to push chunks to WebSocket clients
+				var contentBuilder strings.Builder
+				onChunk := func(chunk string, done bool) {
+					if chunk != "" {
+						contentBuilder.WriteString(chunk)
+					}
+					// Broadcast chunk to WebSocket clients
+					h.publishRoomWSEvent(roomID, WSOutboundMessage{
+						Type:      "message_chunk",
+						MessageID: placeholderID,
+						Status:    "streaming",
+					})
+				}
+
+				// Use streaming version
+				reply, err := h.runWorkerReplyStream(*room, *team, workers, targetCopy, snapshotMessages, trigger, delegatedByCopy, onChunk)
+				if err == nil {
+					// Override message ID to match placeholder
+					reply.ID = placeholderID
+				}
 				results <- targetReplyResult{
 					target: targetCopy,
 					reply:  reply,
@@ -1265,6 +1214,8 @@ func (h *OpenClawHandler) RoomByIDHandler() http.HandlerFunc {
 			h.handleRoomMessages(w, r, roomID)
 		case "stream":
 			h.handleRoomStream(w, r, roomID)
+		case "ws":
+			h.handleRoomWebSocket(w, r, roomID)
 		default:
 			http.NotFound(w, r)
 		}

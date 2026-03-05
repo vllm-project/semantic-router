@@ -59,6 +59,26 @@ interface RoomStreamEvent {
   message?: RoomMessage
 }
 
+// WebSocket message types
+interface WSInboundMessage {
+  type: 'send_message' | 'ping'
+  content?: string
+  senderType?: string
+  senderId?: string
+  senderName?: string
+}
+
+interface WSOutboundMessage {
+  type: string
+  roomId?: string
+  message?: RoomMessage
+  messageId?: string
+  chunk?: string
+  status?: string
+  error?: string
+  timestamp?: string
+}
+
 interface MentionOption {
   token: string
   description: string
@@ -179,9 +199,17 @@ const ClawRoomChat = ({
 
   const endRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
+  const wsRef = useRef<WebSocket | null>(null)
   const sourceRef = useRef<EventSource | null>(null)
   const reconnectTimerRef = useRef<number | null>(null)
+  const reconnectAttemptsRef = useRef(0)
+  const heartbeatTimerRef = useRef<number | null>(null)
   const lastCreateRoomRequestTokenRef = useRef(0)
+  const [wsConnected, setWsConnected] = useState(false)
+  // Track streaming message chunks (messageId -> accumulated content)
+  const [streamingMessages, setStreamingMessages] = useState<Map<string, string>>(new Map())
+  // Expose for future UI rendering (suppress TS6133)
+  void streamingMessages
 
   const selectedTeam = useMemo(
     () => teams.find(team => team.id === selectedTeamId) || null,
@@ -467,6 +495,12 @@ const ClawRoomChat = ({
   useEffect(() => {
     if (!selectedRoomId) {
       setMessages([])
+      setWsConnected(false)
+      setStreamingMessages(new Map())
+      if (wsRef.current) {
+        wsRef.current.close()
+        wsRef.current = null
+      }
       if (sourceRef.current) {
         sourceRef.current.close()
         sourceRef.current = null
@@ -475,6 +509,11 @@ const ClawRoomChat = ({
         window.clearTimeout(reconnectTimerRef.current)
         reconnectTimerRef.current = null
       }
+      if (heartbeatTimerRef.current !== null) {
+        window.clearInterval(heartbeatTimerRef.current)
+        heartbeatTimerRef.current = null
+      }
+      reconnectAttemptsRef.current = 0
       return
     }
 
@@ -493,8 +532,119 @@ const ClawRoomChat = ({
       }
     }
 
-    const connect = () => {
+    // WebSocket connection with automatic reconnect and heartbeat
+    const connectWebSocket = () => {
       if (!mounted) return
+
+      // Close existing connections
+      if (wsRef.current) {
+        wsRef.current.close()
+      }
+      if (sourceRef.current) {
+        sourceRef.current.close()
+        sourceRef.current = null
+      }
+      if (heartbeatTimerRef.current !== null) {
+        window.clearInterval(heartbeatTimerRef.current)
+        heartbeatTimerRef.current = null
+      }
+
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const wsUrl = `${protocol}//${window.location.host}/api/openclaw/rooms/${encodeURIComponent(selectedRoomId)}/ws`
+
+      const ws = new WebSocket(wsUrl)
+      wsRef.current = ws
+
+      ws.onopen = () => {
+        if (!mounted) return
+        console.log('WebSocket connected to room:', selectedRoomId)
+        setWsConnected(true)
+        reconnectAttemptsRef.current = 0 // Reset reconnect attempts on successful connection
+
+        // Start heartbeat (ping every 30 seconds)
+        heartbeatTimerRef.current = window.setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'ping' }))
+          }
+        }, 30000)
+      }
+
+      ws.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data) as WSOutboundMessage
+          if (payload.type === 'new_message' && payload.message) {
+            upsertMessage(payload.message)
+            // Clear streaming state for this message
+            if (payload.message.id) {
+              setStreamingMessages(prev => {
+                const next = new Map(prev)
+                next.delete(payload.message!.id)
+                return next
+              })
+            }
+          } else if (payload.type === 'message_chunk' && payload.messageId) {
+            // Handle streaming chunk - update streaming state
+            if (payload.chunk) {
+              setStreamingMessages(prev => {
+                const next = new Map(prev)
+                const existing = next.get(payload.messageId!) || ''
+                next.set(payload.messageId!, existing + payload.chunk)
+                return next
+              })
+            }
+          } else if (payload.type === 'pong') {
+            // Heartbeat response - connection is alive
+          } else if (payload.type === 'error' && payload.error) {
+            console.error('WebSocket error from server:', payload.error)
+            setError(payload.error)
+          }
+        } catch {
+          // ignore malformed messages
+        }
+      }
+
+      ws.onerror = (event) => {
+        console.error('WebSocket error:', event)
+        setWsConnected(false)
+      }
+
+      ws.onclose = (event) => {
+        if (!mounted) return
+        console.log('WebSocket closed:', event.code, event.reason)
+        setWsConnected(false)
+
+        // Clear heartbeat timer
+        if (heartbeatTimerRef.current !== null) {
+          window.clearInterval(heartbeatTimerRef.current)
+          heartbeatTimerRef.current = null
+        }
+
+        // Exponential backoff reconnect
+        if (reconnectTimerRef.current !== null) {
+          window.clearTimeout(reconnectTimerRef.current)
+        }
+
+        // Calculate delay with exponential backoff (max 30 seconds)
+        const baseDelay = 1000
+        const maxDelay = 30000
+        const delay = Math.min(baseDelay * Math.pow(2, reconnectAttemptsRef.current), maxDelay)
+        reconnectAttemptsRef.current += 1
+
+        console.log(`WebSocket reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current})`)
+
+        reconnectTimerRef.current = window.setTimeout(() => {
+          if (mounted) {
+            connectWebSocket()
+          }
+        }, delay)
+      }
+    }
+
+    // SSE fallback connection (called via setTimeout on WebSocket failure)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const connectSSE = () => {
+      if (!mounted || wsRef.current?.readyState === WebSocket.OPEN) return
+
       if (sourceRef.current) {
         sourceRef.current.close()
       }
@@ -519,15 +669,21 @@ const ClawRoomChat = ({
         if (reconnectTimerRef.current !== null) {
           window.clearTimeout(reconnectTimerRef.current)
         }
-        reconnectTimerRef.current = window.setTimeout(connect, 1500)
+        reconnectTimerRef.current = window.setTimeout(connectSSE, 1500)
       }
     }
 
     void loadMessages()
-    connect()
+    connectWebSocket()
 
     return () => {
       mounted = false
+      setWsConnected(false)
+      reconnectAttemptsRef.current = 0
+      if (wsRef.current) {
+        wsRef.current.close()
+        wsRef.current = null
+      }
       if (sourceRef.current) {
         sourceRef.current.close()
         sourceRef.current = null
@@ -535,6 +691,10 @@ const ClawRoomChat = ({
       if (reconnectTimerRef.current !== null) {
         window.clearTimeout(reconnectTimerRef.current)
         reconnectTimerRef.current = null
+      }
+      if (heartbeatTimerRef.current !== null) {
+        window.clearInterval(heartbeatTimerRef.current)
+        heartbeatTimerRef.current = null
       }
     }
   }, [fetchMessages, selectedRoomId, upsertMessage])
@@ -569,32 +729,48 @@ const ClawRoomChat = ({
 
     setPosting(true)
     try {
-      const resp = await fetch(`/api/openclaw/rooms/${encodeURIComponent(selectedRoomId)}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      // Try WebSocket first if connected
+      if (wsConnected && wsRef.current?.readyState === WebSocket.OPEN) {
+        const wsMessage: WSInboundMessage = {
+          type: 'send_message',
           content,
           senderType: 'user',
           senderName: 'You',
           senderId: 'playground-user',
-        }),
-      })
-      if (!resp.ok) {
-        const body = await resp.text()
-        throw new Error(body || `Send failed (${resp.status})`)
+        }
+        wsRef.current.send(JSON.stringify(wsMessage))
+        setDraft('')
+        setMentionAutocomplete(null)
+        setError(null)
+      } else {
+        // Fallback to HTTP POST
+        const resp = await fetch(`/api/openclaw/rooms/${encodeURIComponent(selectedRoomId)}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content,
+            senderType: 'user',
+            senderName: 'You',
+            senderId: 'playground-user',
+          }),
+        })
+        if (!resp.ok) {
+          const body = await resp.text()
+          throw new Error(body || `Send failed (${resp.status})`)
+        }
+        const created = await parseJSON<RoomMessage>(resp)
+        upsertMessage(created)
+        setDraft('')
+        setMentionAutocomplete(null)
+        setError(null)
       }
-      const created = await parseJSON<RoomMessage>(resp)
-      upsertMessage(created)
-      setDraft('')
-      setMentionAutocomplete(null)
-      setError(null)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to send room message'
       setError(message)
     } finally {
       setPosting(false)
     }
-  }, [draft, posting, selectedRoomId, upsertMessage])
+  }, [draft, posting, selectedRoomId, upsertMessage, wsConnected])
 
   const handleCreateRoom = useCallback(async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault()
@@ -975,6 +1151,14 @@ const ClawRoomChat = ({
             <div className={styles.chatTitleWrap}>
               <h3 className={styles.chatTitle}>{selectedRoom?.name || 'No room selected'}</h3>
               <span className={styles.chatSubtitle}>{selectedTeam?.name || 'No team selected'}</span>
+              {selectedRoomId && (
+                <span
+                  className={wsConnected ? styles.wsConnected : styles.wsDisconnected}
+                  title={wsConnected ? 'WebSocket connected' : 'WebSocket disconnected (using fallback)'}
+                >
+                  {wsConnected ? '● Live' : '○ Reconnecting...'}
+                </span>
+              )}
             </div>
 
             <div className={styles.metaGrid}>
