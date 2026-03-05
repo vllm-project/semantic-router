@@ -172,11 +172,11 @@ export const LAYOUT_CONFIG = {
 export const TOPOLOGY_LAYER_LAYOUT = {
   x: {
     client: 0,
-    signals: 280,
-    decisions: 760,
-    algorithms: 1140,
-    pluginChains: 1400,
-    models: 1700,
+    signals: 340,
+    decisions: 900,
+    algorithms: 1380,
+    pluginChains: 1700,
+    models: 2080,
   },
   verticalSpacing: {
     client: { base: 0, min: 0, compactThreshold: 1, compactStep: 0 },
@@ -184,7 +184,7 @@ export const TOPOLOGY_LAYER_LAYOUT = {
     decisions: { base: 42, min: 16, compactThreshold: 9, compactStep: 3 },
     algorithms: { base: 48, min: 20, compactThreshold: 4, compactStep: 4 },
     pluginChains: { base: 52, min: 20, compactThreshold: 5, compactStep: 4 },
-    models: { base: 40, min: 14, compactThreshold: 9, compactStep: 3 },
+    models: { base: 60, min: 24, compactThreshold: 9, compactStep: 3 },
   },
   lanes: {
     decisions: {

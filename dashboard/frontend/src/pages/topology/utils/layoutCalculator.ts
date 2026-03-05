@@ -1146,6 +1146,39 @@ export function calculateFullLayout(
   placeWrappedLayer('models')
   placedLayers.add('models')
 
+  // ============== Fix default model alignment ==============
+  // After placeWrappedLayer, the default model may be mis-positioned because
+  // its upstream (default-route) sits at the bottom of the decisions stack.
+  // Re-align the default model's Y center to match the default-route node.
+  if (topology.defaultModel) {
+    const defaultRouteNode = nodeById.get('default-route')
+    if (defaultRouteNode) {
+      const routeDim = nodeDimensions.get('default-route') || { width: 160, height: 80 }
+      const routeCenterY = (defaultRouteNode.position?.y ?? 0) + routeDim.height / 2
+
+      // Find the default model node (could be shared with a decision)
+      const normalizedDefaultKey = topology.defaultModel.replace(/[^a-zA-Z0-9]/g, '-')
+      const defaultModelId = `model-${normalizedDefaultKey}`
+      const defaultModelNode = nodeById.get(defaultModelId)
+        || nodes.find(n => n.type === 'modelNode' && n.data.modelRef?.model === topology.defaultModel)
+
+      if (defaultModelNode) {
+        const modelDim = nodeDimensions.get(defaultModelNode.id) || { width: 180, height: 80 }
+        // Only reposition if the default model is NOT shared with other decisions
+        // (i.e. only connected from default-route)
+        const isShared = defaultModelNode.data.fromDecisions
+          && defaultModelNode.data.fromDecisions.length > 1
+          && defaultModelNode.data.fromDecisions.some((d: string) => d !== 'default')
+        if (!isShared) {
+          defaultModelNode.position = {
+            x: defaultModelNode.position?.x ?? LAYER_X_POSITIONS.models,
+            y: routeCenterY - modelDim.height / 2,
+          }
+        }
+      }
+    }
+  }
+
   // Apply standard placement for the remaining layers.
   ;(Object.entries(nodesByLayer) as [LayerName, Node[]][]).forEach(([layerName, layerNodes]) => {
     if (layerNodes.length === 0 || placedLayers.has(layerName)) return

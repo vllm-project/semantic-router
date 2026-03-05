@@ -49,27 +49,20 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
       style={{
         background: colors.background,
         border: `2px solid ${colors.border}`,
+        cursor: focusModeEnabled ? 'pointer' : undefined,
       }}
       title={isUnreachable ? `⚠️ Unreachable: ${unreachableReason}` : undefined}
+      onClick={() => {
+        if (focusModeEnabled) {
+          onFocusDecision?.(name)
+        }
+      }}
     >
       <Handle type="target" position={Position.Left} />
 
       <div className={styles.decisionHeader}>
         <span className={styles.decisionIcon}>{isUnreachable ? '⚠️' : '🔀'}</span>
         <span className={styles.decisionName} title={name}>{name}</span>
-        {focusModeEnabled && (
-          <button
-            type="button"
-            className={`${styles.focusDecisionBtn} ${isFocusTarget ? styles.focusDecisionBtnActive : ''}`}
-            onClick={(event) => {
-              event.stopPropagation()
-              onFocusDecision?.(name)
-            }}
-            title={isFocusTarget ? 'Clear focus' : 'Focus this decision'}
-          >
-            {isFocusTarget ? '◉' : '◎'}
-          </button>
-        )}
         <span className={styles.decisionPriority}>P{priority}</span>
       </div>
 

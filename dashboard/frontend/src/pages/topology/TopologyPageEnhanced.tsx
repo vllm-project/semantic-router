@@ -43,7 +43,7 @@ const TopologyFlow: React.FC = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [densityMode, setDensityMode] = useState<DecisionDensityMode>('balanced')
   const [expandHiddenDecisions, setExpandHiddenDecisions] = useState(false)
-  const [focusMode, setFocusMode] = useState(false)
+  const [focusMode, setFocusMode] = useState(true)
   const [focusedDecisionName, setFocusedDecisionName] = useState<string | null>(null)
   const [layoutMeta, setLayoutMeta] = useState({
     hiddenDecisionCount: 0,
