@@ -302,13 +302,12 @@
 }
 
 .chatTitleWrap {
-  position: relative;
   display: flex;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
   min-width: 0;
   width: 100%;
-  text-align: center;
 }
 
 .chatTitle {
@@ -316,17 +315,15 @@
   font-size: 1rem;
   font-weight: 650;
   color: var(--nv-text-main);
-  width: 100%;
-  padding: 0 6rem;
+  max-width: min(100%, 760px);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-align: center;
 }
 
 .chatTitleStatus {
-  position: absolute;
-  right: 0;
-  top: 0;
+  flex-shrink: 0;
   white-space: nowrap;
 }
 
@@ -1478,8 +1475,8 @@
     padding: 0.68rem 0.72rem;
   }
 
-  .chatTitle {
-    padding: 0 5.2rem;
+  .chatTitleWrap {
+    gap: 0.3rem;
   }
 
   .messages {

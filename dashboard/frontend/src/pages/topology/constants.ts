@@ -186,6 +186,26 @@ export const TOPOLOGY_LAYER_LAYOUT = {
     pluginChains: { base: 52, min: 20, compactThreshold: 5, compactStep: 4 },
     models: { base: 40, min: 14, compactThreshold: 9, compactStep: 3 },
   },
+  lanes: {
+    decisions: {
+      enableAt: 14,
+      maxPerLane: 10,
+      maxLanes: 3,
+      laneGap: 250,
+    },
+    algorithms: {
+      laneGap: 220,
+    },
+    pluginChains: {
+      laneGap: 220,
+    },
+    models: {
+      enableAt: 10,
+      maxPerLane: 8,
+      maxLanes: 2,
+      laneGap: 210,
+    },
+  },
 } as const
 
 // ============== Signal Types Array ==============

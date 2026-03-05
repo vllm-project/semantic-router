@@ -916,50 +916,181 @@ export function calculateFullLayout(
     return sum / sourceCenters.length
   }
 
-  // Apply positions with layer-based X and centered Y
-  Object.entries(nodesByLayer).forEach(([layerName, layerNodes]) => {
-    if (layerNodes.length === 0) return
+  const sortByBarycenter = (layerX: number) => (a: Node, b: Node) => {
+    const aBarycenter = getIncomingBarycenter(a.id, layerX)
+    const bBarycenter = getIncomingBarycenter(b.id, layerX)
 
-    const typedLayerName = layerName as LayerName
-    const layerX = LAYER_X_POSITIONS[typedLayerName]
-    const spacing = getAdaptiveLayerSpacing(typedLayerName, layerNodes.length)
+    if (aBarycenter !== null && bBarycenter !== null && aBarycenter !== bBarycenter) {
+      return aBarycenter - bBarycenter
+    }
+    if (aBarycenter !== null && bBarycenter === null) return -1
+    if (aBarycenter === null && bBarycenter !== null) return 1
+    return (a.position?.y ?? 0) - (b.position?.y ?? 0)
+  }
 
-    const orderedNodes = [...layerNodes].sort(
-      (a, b) => {
-        const aBarycenter = getIncomingBarycenter(a.id, layerX)
-        const bBarycenter = getIncomingBarycenter(b.id, layerX)
+  const getLaneOffsets = (laneCount: number, laneGap: number): number[] => {
+    if (laneCount <= 1) return [0]
+    return Array.from({ length: laneCount }, (_, index) => (index - (laneCount - 1) / 2) * laneGap)
+  }
 
-        if (aBarycenter !== null && bBarycenter !== null && aBarycenter !== bBarycenter) {
-          return aBarycenter - bBarycenter
-        }
-        if (aBarycenter !== null && bBarycenter === null) return -1
-        if (aBarycenter === null && bBarycenter !== null) return 1
-        return (a.position?.y ?? 0) - (b.position?.y ?? 0)
-      }
-    )
-
+  const placeStack = (orderedNodes: Node[], x: number, spacing: number): void => {
+    if (orderedNodes.length === 0) return
     const totalHeight = orderedNodes.reduce((sum, node) => {
       const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
       return sum + dim.height
     }, 0)
+    const totalSpacing = Math.max(orderedNodes.length - 1, 0) * spacing
+    let currentY = -(totalHeight + totalSpacing) / 2
+
+    orderedNodes.forEach(node => {
+      const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
+      node.position = { x, y: currentY }
+      currentY += dim.height + spacing
+    })
+  }
+
+  const decisionLaneByName = new Map<string, number>()
+  const decisionCenterYByName = new Map<string, number>()
+  let decisionLaneCount = 1
+  let decisionLaneOffsets = [0]
+
+  const placeDecisionLayer = (): void => {
+    const layerNodes = nodesByLayer.decisions
+    if (layerNodes.length === 0) return
+
+    const layerX = LAYER_X_POSITIONS.decisions
+    const spacing = getAdaptiveLayerSpacing('decisions', layerNodes.length)
+    const orderedNodes = [...layerNodes].sort(sortByBarycenter(layerX))
+
+    const regularDecisionNodes = orderedNodes.filter(node => node.id.startsWith('decision-'))
+    const auxiliaryNodes = orderedNodes.filter(node => !node.id.startsWith('decision-'))
+
+    const laneRule = TOPOLOGY_LAYER_LAYOUT.lanes.decisions
+    decisionLaneCount = regularDecisionNodes.length >= laneRule.enableAt
+      ? Math.max(1, Math.min(laneRule.maxLanes, Math.ceil(regularDecisionNodes.length / laneRule.maxPerLane)))
+      : 1
+    decisionLaneOffsets = getLaneOffsets(decisionLaneCount, laneRule.laneGap)
+
+    const lanes: Node[][] = Array.from({ length: decisionLaneCount }, () => [])
+    const laneChunkSize = Math.max(1, Math.ceil(Math.max(regularDecisionNodes.length, 1) / decisionLaneCount))
+
+    regularDecisionNodes.forEach((node, index) => {
+      const laneIndex = Math.min(decisionLaneCount - 1, Math.floor(index / laneChunkSize))
+      lanes[laneIndex].push(node)
+    })
+
+    if (auxiliaryNodes.length > 0) {
+      const centerLane = Math.floor(decisionLaneCount / 2)
+      lanes[centerLane].push(...auxiliaryNodes)
+    }
+
+    lanes.forEach((laneNodes, laneIndex) => {
+      const laneX = layerX + decisionLaneOffsets[laneIndex]
+      placeStack(laneNodes, laneX, spacing)
+      laneNodes.forEach(node => {
+        if (!node.id.startsWith('decision-')) return
+        const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
+        const decisionName = node.id.substring(9)
+        decisionLaneByName.set(decisionName, laneIndex)
+        decisionCenterYByName.set(decisionName, (node.position?.y ?? 0) + dim.height / 2)
+      })
+    })
+  }
+
+  const placeDecisionLinkedLayer = (
+    layerName: 'algorithms' | 'pluginChains',
+    idPrefix: string,
+    laneGap: number
+  ): void => {
+    const layerNodes = nodesByLayer[layerName]
+    if (layerNodes.length === 0) return
+
+    const baseX = LAYER_X_POSITIONS[layerName]
+    const spacing = getAdaptiveLayerSpacing(layerName, layerNodes.length)
+    const alignedLaneOffsets = getLaneOffsets(decisionLaneCount, laneGap)
+    const fallbackNodes: Node[] = []
+
+    layerNodes.forEach(node => {
+      if (!node.id.startsWith(idPrefix)) {
+        fallbackNodes.push(node)
+        return
+      }
+
+      const decisionName = node.id.substring(idPrefix.length)
+      const laneIndex = decisionLaneByName.get(decisionName)
+      const decisionCenterY = decisionCenterYByName.get(decisionName)
+
+      if (laneIndex === undefined || decisionCenterY === undefined) {
+        fallbackNodes.push(node)
+        return
+      }
+
+      const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
+      node.position = {
+        x: baseX + alignedLaneOffsets[laneIndex],
+        y: decisionCenterY - dim.height / 2,
+      }
+    })
+
+    if (fallbackNodes.length > 0) {
+      const orderedFallback = [...fallbackNodes].sort(sortByBarycenter(baseX))
+      placeStack(orderedFallback, baseX, spacing)
+    }
+  }
+
+  const placeWrappedLayer = (layerName: 'models'): void => {
+    const layerNodes = nodesByLayer[layerName]
+    if (layerNodes.length === 0) return
+
+    const layerX = LAYER_X_POSITIONS[layerName]
+    const spacing = getAdaptiveLayerSpacing(layerName, layerNodes.length)
+    const orderedNodes = [...layerNodes].sort(sortByBarycenter(layerX))
+    const laneRule = TOPOLOGY_LAYER_LAYOUT.lanes.models
+    const laneCount = orderedNodes.length >= laneRule.enableAt
+      ? Math.max(1, Math.min(laneRule.maxLanes, Math.ceil(orderedNodes.length / laneRule.maxPerLane)))
+      : 1
+    const laneOffsets = getLaneOffsets(laneCount, laneRule.laneGap)
+    const laneChunkSize = Math.max(1, Math.ceil(orderedNodes.length / laneCount))
+
+    const lanes: Node[][] = Array.from({ length: laneCount }, () => [])
+    orderedNodes.forEach((node, index) => {
+      const laneIndex = Math.min(laneCount - 1, Math.floor(index / laneChunkSize))
+      lanes[laneIndex].push(node)
+    })
+
+    lanes.forEach((laneNodes, laneIndex) => {
+      placeStack(laneNodes, layerX + laneOffsets[laneIndex], spacing)
+    })
+  }
+
+  const placedLayers = new Set<LayerName>()
+
+  placeDecisionLayer()
+  placedLayers.add('decisions')
+
+  placeDecisionLinkedLayer('algorithms', 'algorithm-', TOPOLOGY_LAYER_LAYOUT.lanes.algorithms.laneGap)
+  placedLayers.add('algorithms')
+
+  placeDecisionLinkedLayer('pluginChains', 'plugin-chain-', TOPOLOGY_LAYER_LAYOUT.lanes.pluginChains.laneGap)
+  placedLayers.add('pluginChains')
+
+  placeWrappedLayer('models')
+  placedLayers.add('models')
+
+  // Apply standard placement for the remaining layers.
+  ;(Object.entries(nodesByLayer) as [LayerName, Node[]][]).forEach(([layerName, layerNodes]) => {
+    if (layerNodes.length === 0 || placedLayers.has(layerName)) return
+
+    const layerX = LAYER_X_POSITIONS[layerName]
+    const orderedNodes = [...layerNodes].sort(sortByBarycenter(layerX))
 
     if (orderedNodes.length === 1 && layerName === 'client') {
       orderedNodes[0].position = { x: layerX, y: 0 }
       return
     }
 
-    const totalSpacing = Math.max(orderedNodes.length - 1, 0) * spacing
-    let currentY = -(totalHeight + totalSpacing) / 2
-
-    orderedNodes.forEach(node => {
-      const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
-      node.position = {
-        x: layerX,
-        y: currentY,
-      }
-
-      currentY += dim.height + spacing
-    })
+    const spacing = getAdaptiveLayerSpacing(layerName, orderedNodes.length)
+    placeStack(orderedNodes, layerX, spacing)
   })
 
   // ============== 9. Apply Highlighting ==============
