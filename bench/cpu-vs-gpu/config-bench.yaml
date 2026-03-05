@@ -18,6 +18,14 @@ router_replay:
 semantic_cache:
   enabled: false
 
+# Prompt compression — compress long prompts before signal extraction to
+# reduce inference latency. Uses TextRank + position weighting (Lost in the
+# Middle) + TF-IDF. No LLM needed. Set max_tokens to the sweet spot from
+# the FA benchmark (512 tokens ≈ 19 ms per classifier on MI300X).
+prompt_compression:
+  enabled: PROMPT_COMPRESSION_PLACEHOLDER
+  max_tokens: PROMPT_COMPRESSION_MAX_TOKENS_PLACEHOLDER
+
 prompt_guard:
   enabled: true
   use_mmbert_32k: true

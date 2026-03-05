@@ -356,6 +356,11 @@ type InlineModels struct {
 	// Classifier configuration for text classification
 	Classifier `yaml:"classifier"`
 
+	// Prompt compression configuration — reduces long prompts before signal
+	// extraction to stay within latency budgets.
+	// Reference: Liu et al. "Lost in the Middle" (TACL 2024, arXiv:2307.03172)
+	PromptCompression PromptCompressionConfig `yaml:"prompt_compression"`
+
 	// Prompt guard configuration
 	PromptGuard PromptGuardConfig `yaml:"prompt_guard"`
 
@@ -1460,6 +1465,38 @@ type BatchSizeRangeConfig struct {
 	Min   int    `yaml:"min"`
 	Max   int    `yaml:"max"` // -1 means no upper limit
 	Label string `yaml:"label"`
+}
+
+// PromptCompressionConfig controls NLP-based prompt compression before signal
+// extraction. When enabled, long prompts are compressed to MaxTokens using a
+// sentence-level extractive approach that combines three scoring signals:
+//
+//   - TextRank (Mihalcea & Tarau, EMNLP 2004) — graph-based sentence importance
+//   - Position weighting (Liu et al., "Lost in the Middle", TACL 2024) — U-shaped
+//     attention curve upweighting beginning/end of prompt
+//   - TF-IDF information density (inspired by Selective Context, Li et al., EMNLP 2023)
+//
+// No LLM inference is used — compression runs in O(n²) on the number of sentences
+// (typically <1 ms for prompts under 32K tokens).
+type PromptCompressionConfig struct {
+	// Enabled controls whether prompt compression is applied before signal extraction.
+	Enabled bool `yaml:"enabled"`
+
+	// MaxTokens is the target token budget. Prompts within budget are passed through unchanged.
+	// Default: 512 (tuned for mmBERT-32K FA sweet spot at ≤512 tokens ≈ 19 ms, see PR #1431).
+	MaxTokens int `yaml:"max_tokens"`
+
+	// TextRankWeight controls the contribution of TextRank content-importance scores. Default: 0.4.
+	TextRankWeight float64 `yaml:"textrank_weight,omitempty"`
+
+	// PositionWeight controls the contribution of Lost-in-the-Middle position scores. Default: 0.3.
+	PositionWeight float64 `yaml:"position_weight,omitempty"`
+
+	// TFIDFWeight controls the contribution of TF-IDF information density scores. Default: 0.3.
+	TFIDFWeight float64 `yaml:"tfidf_weight,omitempty"`
+
+	// PositionDepth controls the amplitude of the U-shaped position curve (0–1). Default: 0.5.
+	PositionDepth float64 `yaml:"position_depth,omitempty"`
 }
 
 // PromptGuardConfig represents configuration for the prompt guard jailbreak detection

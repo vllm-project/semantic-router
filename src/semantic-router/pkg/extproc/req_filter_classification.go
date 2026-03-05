@@ -9,6 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/promptcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
@@ -61,6 +62,21 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 		allMessagesText = userContent
 	} else {
 		allMessagesText = strings.Join(nonUserMessages, " ")
+	}
+
+	// Prompt compression: reduce long prompts before signal extraction to cut
+	// inference latency (attention is O(n²) for SDPA, O(n) for FA — but still
+	// linear in sequence length). Compression preserves classification fidelity
+	// by using TextRank + position weighting + TF-IDF scoring.
+	if r.Config.PromptCompression.Enabled && r.Config.PromptCompression.MaxTokens > 0 {
+		cfg := buildCompressionConfig(r.Config.PromptCompression)
+		origTokens := promptcompression.CountTokensApprox(evaluationText)
+		if origTokens > cfg.MaxTokens {
+			result := promptcompression.Compress(evaluationText, cfg)
+			logging.Infof("[PromptCompression] Compressed evaluationText: %d -> %d tokens (ratio=%.2f, kept %d sentences)",
+				result.OriginalTokens, result.CompressedTokens, result.Ratio, len(result.KeptIndices))
+			evaluationText = result.Compressed
+		}
 	}
 
 	// Start signal evaluation span (Layer 1)
@@ -487,4 +503,23 @@ func (r *OpenAIRouter) processUserFeedbackForElo(userFeedbackSignals []string, m
 			logging.Warnf("[AutoFeedback] Failed to update Elo: %v", err)
 		}
 	}
+}
+
+// buildCompressionConfig translates the YAML config into the promptcompression
+// package's Config struct, applying defaults for omitted fields.
+func buildCompressionConfig(pc config.PromptCompressionConfig) promptcompression.Config {
+	cfg := promptcompression.DefaultConfig(pc.MaxTokens)
+	if pc.TextRankWeight > 0 {
+		cfg.TextRankWeight = pc.TextRankWeight
+	}
+	if pc.PositionWeight > 0 {
+		cfg.PositionWeight = pc.PositionWeight
+	}
+	if pc.TFIDFWeight > 0 {
+		cfg.TFIDFWeight = pc.TFIDFWeight
+	}
+	if pc.PositionDepth > 0 {
+		cfg.PositionDepth = pc.PositionDepth
+	}
+	return cfg
 }
