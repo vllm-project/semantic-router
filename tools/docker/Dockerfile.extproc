@@ -144,8 +144,8 @@ RUN cd onnx-binding && \
         echo "Skipping ONNX dependency pre-build for arm64."; \
         mkdir -p target/aarch64-unknown-linux-gnu/release; \
     else \
-        OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu \
-        OPENSSL_INCLUDE_DIR=/usr/include \
+        OPENSSL_LIB_DIR="$(pkg-config --variable=libdir openssl 2>/dev/null || echo /usr/lib/x86_64-linux-gnu)" \
+        OPENSSL_INCLUDE_DIR="$(pkg-config --variable=includedir openssl 2>/dev/null || echo /usr/include)" \
         cargo build --release --no-default-features --target x86_64-unknown-linux-gnu; \
     fi && \
     rm -rf src
@@ -160,8 +160,8 @@ RUN echo "Preparing ONNX binding for TARGETARCH=$TARGETARCH..." && \
     else \
         find target -name "libonnx_semantic_router.so" -delete 2>/dev/null; \
         find target -name "libonnx_semantic_router.a" -delete 2>/dev/null; \
-        OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu \
-        OPENSSL_INCLUDE_DIR=/usr/include \
+        OPENSSL_LIB_DIR="$(pkg-config --variable=libdir openssl 2>/dev/null || echo /usr/lib/x86_64-linux-gnu)" \
+        OPENSSL_INCLUDE_DIR="$(pkg-config --variable=includedir openssl 2>/dev/null || echo /usr/include)" \
         cargo build --release --no-default-features --target x86_64-unknown-linux-gnu; \
         echo "=== Verifying ONNX library ==="; \
         find target -name "libonnx_semantic_router.so" -type f -exec ls -la {} \;; \

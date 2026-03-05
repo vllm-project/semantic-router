@@ -486,7 +486,8 @@ body.playground-fullscreen .container {
 }
 
 .messagesContainerEmpty {
-  min-height: clamp(360px, calc(100vh - 220px), 760px);
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .emptyState {
@@ -1188,7 +1189,8 @@ body.playground-fullscreen .container {
   }
 
   .messagesContainerEmpty {
-    min-height: clamp(280px, calc(100vh - 180px), 620px);
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   .message {
