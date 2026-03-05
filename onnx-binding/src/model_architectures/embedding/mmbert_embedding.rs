@@ -24,6 +24,7 @@ use crate::core::unified_error::{errors, UnifiedError, UnifiedResult};
 use crate::model_architectures::embedding::pooling::{
     l2_normalize, mean_pool_3d, truncate_dimension,
 };
+use half::f16;
 use ndarray::{Array1, Array2, Array3};
 use ort::session::Session;
 use ort::value::Tensor;
@@ -334,26 +335,39 @@ impl MmBertEmbeddingModel {
     }
 
     /// Find ONNX model candidates in priority order.
+    ///
+    /// Searches: model_path/, model_path/onnx/, and HuggingFace-style
+    /// model_path/onnx/layer-{N}/ subdirectories (highest layer first as primary).
     fn find_onnx_models<P: AsRef<Path>>(model_path: P) -> UnifiedResult<Vec<std::path::PathBuf>> {
         let dir = model_path.as_ref();
         let onnx_subdir = dir.join("onnx");
-        let search_dirs = [dir, onnx_subdir.as_path()];
 
-        // Prefer GPU-optimized variant first, then compatibility variants.
-        let candidates = [
-            "model_sdpa_fp16.onnx",
-            "model.onnx",
-            "encoder.onnx",
-            "mmbert.onnx",
-            "model_optimized.onnx",
-        ];
+        let has_fa = std::env::var("ORT_CK_FLASH_ATTN_LIB").ok().filter(|s| !s.is_empty()).is_some();
+        let candidates: &[&str] = if has_fa {
+            &["model_fa_fp16.onnx", "model_fa.onnx", "model_sdpa_fp16.onnx", "model.onnx", "encoder.onnx", "mmbert.onnx", "model_optimized.onnx"]
+        } else {
+            &["model_sdpa_fp16.onnx", "model.onnx", "encoder.onnx", "mmbert.onnx", "model_optimized.onnx"]
+        };
+
+        let mut search_dirs: Vec<std::path::PathBuf> = vec![dir.to_path_buf(), onnx_subdir.clone()];
+
+        // HuggingFace-style layer subdirectories (highest layer first for primary model).
+        let matryoshka = MatryoshkaConfig::default();
+        let mut layers_desc: Vec<usize> = matryoshka.layers.clone();
+        layers_desc.sort_unstable_by(|a, b| b.cmp(a));
+        for layer in &layers_desc {
+            let layer_dir = onnx_subdir.join(format!("layer-{}", layer));
+            if layer_dir.is_dir() {
+                search_dirs.push(layer_dir);
+            }
+        }
 
         let mut results: Vec<std::path::PathBuf> = Vec::new();
-        for base_dir in search_dirs {
+        for base_dir in &search_dirs {
             if !base_dir.exists() || !base_dir.is_dir() {
                 continue;
             }
-            for candidate in &candidates {
+            for candidate in candidates {
                 let path = base_dir.join(candidate);
                 if path.exists() && !results.iter().any(|p| p == &path) {
                     results.push(path);
@@ -362,7 +376,7 @@ impl MmBertEmbeddingModel {
         }
 
         // Also include any other .onnx files as a final fallback set.
-        for base_dir in search_dirs {
+        for base_dir in &[dir.to_path_buf(), onnx_subdir] {
             if !base_dir.exists() || !base_dir.is_dir() {
                 continue;
             }
@@ -382,7 +396,7 @@ impl MmBertEmbeddingModel {
 
         if results.is_empty() {
             return Err(errors::file_not_found(&format!(
-                "No ONNX model found in {} (checked root and onnx/ subdir)",
+                "No ONNX model found in {} (checked root, onnx/, and onnx/layer-*/)",
                 dir.display()
             )));
         }
@@ -405,6 +419,17 @@ impl MmBertEmbeddingModel {
                 use crate::core::gpu_memory;
                 use ort::execution_providers::{ArenaExtendStrategy, ROCmExecutionProvider};
                 let mem_limit = gpu_memory::get_gpu_mem_limit();
+                let ck_fa_lib = std::env::var("ORT_CK_FLASH_ATTN_LIB").ok().filter(|s| !s.is_empty());
+                if let Some(ref lib) = ck_fa_lib {
+                    println!("INFO: CK Flash Attention custom op library: {}", lib);
+                }
+                let maybe_register_custom_ops = |builder: ort::session::builder::SessionBuilder| -> Result<ort::session::builder::SessionBuilder, ort::Error> {
+                    if let Some(ref lib) = ck_fa_lib {
+                        builder.with_operator_library(lib)
+                    } else {
+                        Ok(builder)
+                    }
+                };
                 println!("INFO: Attempting ROCm execution provider...");
                 match Session::builder()
                     .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
@@ -413,6 +438,7 @@ impl MmBertEmbeddingModel {
                         .with_arena_extend_strategy(ArenaExtendStrategy::SameAsRequested)
                         .build()
                         .error_on_failure()])
+                    .and_then(|b| maybe_register_custom_ops(b))
                     .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
                 {
                     Ok(session) => {
@@ -472,7 +498,13 @@ impl MmBertEmbeddingModel {
         Ok(session)
     }
 
-    /// Load layer-specific ONNX sessions for early exit support
+    /// Load layer-specific ONNX sessions for early exit support.
+    ///
+    /// Searches for layer models in multiple locations:
+    /// - model_path/model_layer_{N}.onnx  (legacy flat layout)
+    /// - model_path/onnx/model_layer_{N}.onnx
+    /// - model_path/onnx/layer-{N}/model_fa_fp16.onnx  (HuggingFace FA)
+    /// - model_path/onnx/layer-{N}/model.onnx           (HuggingFace default)
     fn load_layer_sessions<P: AsRef<Path>>(
         model_path: P,
         use_cpu: bool,
@@ -483,21 +515,36 @@ impl MmBertEmbeddingModel {
         let model_dir = model_path.as_ref();
         let onnx_dir = model_dir.join("onnx");
 
+        let has_fa = std::env::var("ORT_CK_FLASH_ATTN_LIB").ok().filter(|s| !s.is_empty()).is_some();
+
         for layer in &matryoshka.layers {
             let layer_filename = format!("model_layer_{}.onnx", layer);
-            let candidates = [
+            let hf_layer_dir = onnx_dir.join(format!("layer-{}", layer));
+
+            let mut candidates = vec![
                 model_dir.join(&layer_filename),
                 onnx_dir.join(&layer_filename),
             ];
+            // HuggingFace-style layer subdirectories with FA priority
+            if has_fa {
+                candidates.push(hf_layer_dir.join("model_fa_fp16.onnx"));
+                candidates.push(hf_layer_dir.join("model_fa.onnx"));
+            }
+            candidates.push(hf_layer_dir.join("model.onnx"));
+
             let found = candidates.iter().find(|p| p.exists()).cloned();
 
-            if let Some(layer_path) = found {
+            if let Some(ref layer_path) = found {
+                println!("INFO: Loading layer-{} from {}", layer, layer_path.display());
                 match Self::create_session(layer_path, use_cpu) {
                     Ok(session) => {
                         sessions.push(Some(session));
                         any_loaded = true;
                     }
-                    Err(_) => sessions.push(None),
+                    Err(e) => {
+                        println!("WARN: Failed to load layer-{}: {:?}", layer, e);
+                        sessions.push(None);
+                    }
                 }
             } else {
                 sessions.push(None);
@@ -692,70 +739,55 @@ impl MmBertEmbeddingModel {
             "embeddings",
         ];
 
+        // Extract tensor data as f32, with f16 fallback for FA FP16 models.
+        macro_rules! try_extract_f32 {
+            ($val:expr) => {{
+                let mut result: Option<(Vec<usize>, Vec<f32>)> = None;
+                if let Ok((shape, data)) = $val.try_extract_tensor::<f32>() {
+                    let dims: Vec<usize> = shape.iter().map(|&d| d as usize).collect();
+                    result = Some((dims, data.to_vec()));
+                } else if let Ok((shape, data)) = $val.try_extract_tensor::<f16>() {
+                    let dims: Vec<usize> = shape.iter().map(|&d| d as usize).collect();
+                    let f32_data: Vec<f32> = data.iter().map(|v| v.to_f32()).collect();
+                    result = Some((dims, f32_data));
+                }
+                result
+            }};
+        }
+
+        let process_output = |dims: &[usize], flat: Vec<f32>, mask: &Array2<i64>| -> UnifiedResult<Array2<f32>> {
+            if dims.len() == 2 {
+                Array2::from_shape_vec((dims[0], dims[1]), flat)
+                    .map_err(|e| errors::inference_error("reshape_output", &e.to_string()))
+            } else if dims.len() == 3 {
+                let (b, s, h) = (dims[0], dims[1], dims[2]);
+                let hidden = Array3::from_shape_vec((b, s, h), flat)
+                    .map_err(|e| errors::inference_error("reshape_hidden_states", &e.to_string()))?;
+                let mask_f32: Array2<f32> = mask.mapv(|x| x as f32);
+                Ok(mean_pool_3d(&hidden, &mask_f32))
+            } else {
+                Err(errors::inference_error("extract_output", &format!("Unexpected tensor rank: {}", dims.len())))
+            }
+        };
+
         for name in &output_names {
             if let Some(output_value) = outputs.get(*name) {
-                if let Ok((shape, data)) = output_value.try_extract_tensor::<f32>() {
-                    let dims: Vec<usize> = shape.iter().map(|&d| d as usize).collect();
-
-                    if dims.len() == 2 {
-                        // Already pooled: [batch, hidden_dim]
-                        let flat: Vec<f32> = data.to_vec();
-                        return Array2::from_shape_vec((dims[0], dims[1]), flat).map_err(|e| {
-                            errors::inference_error("reshape_output", &e.to_string())
-                        });
-                    } else if dims.len() == 3 {
-                        // Sequence output: [batch, seq_len, hidden_dim] - needs pooling
-                        let out_batch_size = dims[0];
-                        let out_seq_len = dims[1];
-                        let hidden_dim = dims[2];
-
-                        let flat: Vec<f32> = data.to_vec();
-                        let hidden_states =
-                            Array3::from_shape_vec((out_batch_size, out_seq_len, hidden_dim), flat)
-                                .map_err(|e| {
-                                    errors::inference_error("reshape_hidden_states", &e.to_string())
-                                })?;
-
-                        // Convert attention_mask to f32
-                        let attention_mask_f32: Array2<f32> = attention_mask.mapv(|x| x as f32);
-
-                        // Mean pooling
-                        return Ok(mean_pool_3d(&hidden_states, &attention_mask_f32));
-                    }
+                if let Some((dims, flat)) = try_extract_f32!(output_value) {
+                    return process_output(&dims, flat, &attention_mask);
                 }
             }
         }
 
         // Try first output if named outputs not found
         if let Some((_, output_value)) = outputs.iter().next() {
-            if let Ok((shape, data)) = output_value.try_extract_tensor::<f32>() {
-                let dims: Vec<usize> = shape.iter().map(|&d| d as usize).collect();
-
-                if dims.len() == 2 {
-                    let flat: Vec<f32> = data.to_vec();
-                    return Array2::from_shape_vec((dims[0], dims[1]), flat)
-                        .map_err(|e| errors::inference_error("reshape_output", &e.to_string()));
-                } else if dims.len() == 3 {
-                    let out_batch_size = dims[0];
-                    let out_seq_len = dims[1];
-                    let hidden_dim = dims[2];
-
-                    let flat: Vec<f32> = data.to_vec();
-                    let hidden_states =
-                        Array3::from_shape_vec((out_batch_size, out_seq_len, hidden_dim), flat)
-                            .map_err(|e| {
-                                errors::inference_error("reshape_hidden_states", &e.to_string())
-                            })?;
-
-                    let attention_mask_f32: Array2<f32> = attention_mask.mapv(|x| x as f32);
-                    return Ok(mean_pool_3d(&hidden_states, &attention_mask_f32));
-                }
+            if let Some((dims, flat)) = try_extract_f32!(output_value) {
+                return process_output(&dims, flat, &attention_mask);
             }
         }
 
         Err(errors::inference_error(
             "extract_output",
-            "Failed to extract output tensor",
+            "Failed to extract output tensor (tried f32 and f16)",
         ))
     }
 

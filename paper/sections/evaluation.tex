@@ -3,7 +3,7 @@
 \section{Evaluation}
 \label{sec:evaluation}
 
-We evaluate the routing system across three dimensions: signal extraction efficiency, LoRA multi-task scaling, and end-to-end routing correctness.
+We evaluate the routing system across four dimensions: signal extraction efficiency, GPU-accelerated long-context inference, LoRA multi-task scaling, and end-to-end routing correctness.
 
 \subsection{Signal Extraction Latency}
 
@@ -59,7 +59,64 @@ To accelerate ML signal extraction on long prompts, we re-export the mmBERT-32K 
 \end{table}
 
 The SDPA re-export reduces the ONNX graph from 2{,}902 to 1{,}342 operators; FP16 conversion halves model size from 1.2\,GB to 587\,MB.
-At 8K tokens, GPU inference completes in 237\,ms---a 41$\times$ speedup over CPU---keeping all three classifiers (domain, jailbreak, PII) within a 250\,ms end-to-end budget when evaluated in parallel.
+At 8K tokens, single-session GPU inference completes in 237\,ms---a 41$\times$ speedup over CPU.
+However, when all three classifiers are loaded concurrently (the operational configuration), SDPA's $\mathcal{O}(n^2)$ memory footprint causes OOM beyond $\sim$4K tokens.
+The next section addresses this limitation with flash attention.
+
+\subsection{Flash Attention via Composable Kernel}
+\label{sec:flash_attention}
+
+Standard SDPA materializes the full $\mathcal{O}(n^2)$ attention mask and $QK^\top$ matrix, causing out-of-memory (OOM) failures beyond $\sim$4{,}096 tokens when three classifiers are loaded concurrently.
+We replace SDPA attention subgraphs with a custom ONNX Runtime operator backed by AMD's Composable Kernel (CK) tiled flash attention, which computes attention in $\mathcal{O}(n)$ working memory.
+For ModernBERT's local-attention layers (sliding window of 128), the CK kernel's native \texttt{window\_size} parameters eliminate the dense mask entirely; a lightweight 1-D padding bias $[B,1,1,S]$ replaces the $[1,1,S,S]$ broadcast mask for all layers.
+
+\Cref{tab:fa_vs_sdpa} compares SDPA and FA at concurrency 1.
+\Cref{tab:fa_concurrency} then varies the number of concurrent requests to measure throughput under load.
+All measurements are median latency on an AMD Instinct MI300X with three classifiers loaded concurrently (domain, jailbreak, PII evaluated in parallel per request).
+
+\begin{table}[htbp]
+\centering
+\caption{End-to-end classification latency: SDPA vs.\ CK Flash Attention (FP16, ROCm EP, 3 classifiers in parallel, concurrency 1, MI300X)}
+\label{tab:fa_vs_sdpa}
+\begin{tabular}{rrrr}
+\toprule
+\textbf{Seq.\ Length} & \textbf{SDPA (ms)} & \textbf{FA (ms)} & \textbf{Speedup} \\
+\midrule
+512       & 19    & 19    & 1.0$\times$ \\
+1{,}024   & 26    & 23    & 1.1$\times$ \\
+2{,}048   & 51    & 32    & 1.6$\times$ \\
+4{,}096   & 167   & 51    & 3.3$\times$ \\
+8{,}192   & OOM   & 105   & --- \\
+16{,}384  & OOM   & 259   & --- \\
+32{,}768  & OOM   & 756   & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{CK Flash Attention latency under concurrent load (median / p95 in ms, MI300X)}
+\label{tab:fa_concurrency}
+\begin{tabular}{rrrrrrr}
+\toprule
+ & \multicolumn{2}{c}{\textbf{$C{=}1$}} & \multicolumn{2}{c}{\textbf{$C{=}10$}} & \multicolumn{2}{c}{\textbf{$C{=}20$}} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+\textbf{Seq.\ Len.} & \textbf{med} & \textbf{p95} & \textbf{med} & \textbf{p95} & \textbf{med} & \textbf{p95} \\
+\midrule
+512       & 19   & 19    & 77    & 123   & 142   & 238 \\
+1{,}024   & 23   & 24    & 104   & 167   & 189   & 325 \\
+2{,}048   & 32   & 32    & 141   & 234   & 275   & 456 \\
+4{,}096   & 51   & 52    & 281   & 998   & 521   & 847 \\
+8{,}192   & 105  & 105   & 601   & 873   & 1{,}058 & 1{,}732 \\
+16{,}384  & 259  & 260   & 1{,}567 & 2{,}426 & 3{,}089 & 4{,}817 \\
+32{,}768  & 756  & 763   & 5{,}406 & 7{,}503 & 9{,}872 & 14{,}862 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+At concurrency 1 (\Cref{tab:fa_vs_sdpa}), FA matches SDPA at short sequences and is 3.3$\times$ faster at 4K tokens; beyond 4K tokens SDPA cannot allocate the 1.5\,GB attention mask when three models share the GPU.
+Under concurrent load (\Cref{tab:fa_concurrency}), FA scales gracefully: 20 simultaneous 4K-token requests complete with a median of 521\,ms (p95 847\,ms), and even 20 concurrent 32K-token requests complete without OOM---a regime entirely inaccessible to SDPA.
+Latency scales approximately linearly with concurrency, confirming that the GPU compute pipeline serializes requests rather than experiencing pathological queuing.
 
 \subsection{LoRA Memory Efficiency}
 
