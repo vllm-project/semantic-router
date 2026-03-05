@@ -232,13 +232,13 @@ impl MmBertSequenceClassifier {
         let onnx_subdir = dir.join("onnx");
         let search_dirs = [dir, onnx_subdir.as_path()];
 
-        // Prefer GPU-optimized variant first, then compatibility variants.
-        let candidates = [
-            "model_sdpa_fp16.onnx",
-            "model.onnx",
-            "classifier.onnx",
-            "model_optimized.onnx",
-        ];
+        // Prefer FA-optimized variant when CK Flash Attention is available.
+        let has_fa = std::env::var("ORT_CK_FLASH_ATTN_LIB").ok().filter(|s| !s.is_empty()).is_some();
+        let candidates: &[&str] = if has_fa {
+            &["model_fa_fp16.onnx", "model_fa.onnx", "model_sdpa_fp16.onnx", "model.onnx", "classifier.onnx", "model_optimized.onnx"]
+        } else {
+            &["model_sdpa_fp16.onnx", "model.onnx", "classifier.onnx", "model_optimized.onnx"]
+        };
 
         let mut results: Vec<std::path::PathBuf> = Vec::new();
         // Try known ONNX filenames first in both model root and `onnx/` subdirectory.
@@ -246,7 +246,7 @@ impl MmBertSequenceClassifier {
             if !base_dir.exists() || !base_dir.is_dir() {
                 continue;
             }
-            for candidate in &candidates {
+            for candidate in candidates {
                 let path = base_dir.join(candidate);
                 if path.exists() && !results.iter().any(|p| p == &path) {
                     results.push(path);
@@ -330,13 +330,25 @@ impl MmBertSequenceClassifier {
                         ArenaExtendStrategy, MIGraphXExecutionProvider, ROCmExecutionProvider,
                     };
 
-                    // Try MIGraphX first (better for MI300X) — error_on_failure()
-                    // ensures we get a real error instead of silent CPU fallback.
+                    let ck_fa_lib = std::env::var("ORT_CK_FLASH_ATTN_LIB").ok().filter(|s| !s.is_empty());
+                    if let Some(ref lib) = ck_fa_lib {
+                        println!("INFO: CK Flash Attention custom op library: {}", lib);
+                    }
+
+                    let maybe_register_custom_ops = |builder: ort::session::builder::SessionBuilder| -> Result<ort::session::builder::SessionBuilder, ort::Error> {
+                        if let Some(ref lib) = ck_fa_lib {
+                            builder.with_operator_library(lib)
+                        } else {
+                            Ok(builder)
+                        }
+                    };
+
                     match Session::builder()
                         .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
                         .with_execution_providers([MIGraphXExecutionProvider::default()
                             .build()
                             .error_on_failure()])
+                        .and_then(|b| maybe_register_custom_ops(b))
                         .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
                     {
                         Ok(session) => {
@@ -358,6 +370,7 @@ impl MmBertSequenceClassifier {
                             .with_arena_extend_strategy(ArenaExtendStrategy::SameAsRequested)
                             .build()
                             .error_on_failure()])
+                        .and_then(|b| maybe_register_custom_ops(b))
                         .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
                     {
                         Ok(session) => {
@@ -741,11 +754,11 @@ fn logits_to_classification_results(
         let sum_exp: f32 = exp_vals.iter().sum();
         let probs: Vec<f32> = exp_vals.iter().map(|&x| x / sum_exp).collect();
 
-        // Find max
+        // Find max (NaN-safe: treat NaN as less than any value)
         let (class_id, &confidence) = probs
             .iter()
             .enumerate()
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Less))
             .unwrap();
 
         let label = config.get_label(class_id as i32);
@@ -901,11 +914,11 @@ fn bio_decode_entities(
         let sum_exp: f32 = exp_vals.iter().sum();
         let probs: Vec<f32> = exp_vals.iter().map(|&x| x / sum_exp).collect();
 
-        // Get predicted label
+        // Get predicted label (NaN-safe: treat NaN as less than any value)
         let (label_id, &confidence) = probs
             .iter()
             .enumerate()
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Less))
             .unwrap();
 
         let label = config.get_label(label_id as i32);

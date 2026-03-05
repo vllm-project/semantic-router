@@ -339,21 +339,20 @@ impl MmBertEmbeddingModel {
         let onnx_subdir = dir.join("onnx");
         let search_dirs = [dir, onnx_subdir.as_path()];
 
-        // Prefer GPU-optimized variant first, then compatibility variants.
-        let candidates = [
-            "model_sdpa_fp16.onnx",
-            "model.onnx",
-            "encoder.onnx",
-            "mmbert.onnx",
-            "model_optimized.onnx",
-        ];
+        // Prefer FA-optimized variant when CK Flash Attention is available.
+        let has_fa = std::env::var("ORT_CK_FLASH_ATTN_LIB").ok().filter(|s| !s.is_empty()).is_some();
+        let candidates: &[&str] = if has_fa {
+            &["model_fa_fp16.onnx", "model_fa.onnx", "model_sdpa_fp16.onnx", "model.onnx", "encoder.onnx", "mmbert.onnx", "model_optimized.onnx"]
+        } else {
+            &["model_sdpa_fp16.onnx", "model.onnx", "encoder.onnx", "mmbert.onnx", "model_optimized.onnx"]
+        };
 
         let mut results: Vec<std::path::PathBuf> = Vec::new();
         for base_dir in search_dirs {
             if !base_dir.exists() || !base_dir.is_dir() {
                 continue;
             }
-            for candidate in &candidates {
+            for candidate in candidates {
                 let path = base_dir.join(candidate);
                 if path.exists() && !results.iter().any(|p| p == &path) {
                     results.push(path);
@@ -405,6 +404,17 @@ impl MmBertEmbeddingModel {
                 use crate::core::gpu_memory;
                 use ort::execution_providers::{ArenaExtendStrategy, ROCmExecutionProvider};
                 let mem_limit = gpu_memory::get_gpu_mem_limit();
+                let ck_fa_lib = std::env::var("ORT_CK_FLASH_ATTN_LIB").ok().filter(|s| !s.is_empty());
+                if let Some(ref lib) = ck_fa_lib {
+                    println!("INFO: CK Flash Attention custom op library: {}", lib);
+                }
+                let maybe_register_custom_ops = |builder: ort::session::builder::SessionBuilder| -> Result<ort::session::builder::SessionBuilder, ort::Error> {
+                    if let Some(ref lib) = ck_fa_lib {
+                        builder.with_operator_library(lib)
+                    } else {
+                        Ok(builder)
+                    }
+                };
                 println!("INFO: Attempting ROCm execution provider...");
                 match Session::builder()
                     .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
@@ -413,6 +423,7 @@ impl MmBertEmbeddingModel {
                         .with_arena_extend_strategy(ArenaExtendStrategy::SameAsRequested)
                         .build()
                         .error_on_failure()])
+                    .and_then(|b| maybe_register_custom_ops(b))
                     .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
                 {
                     Ok(session) => {
