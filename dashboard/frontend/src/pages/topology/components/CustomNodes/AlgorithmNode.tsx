@@ -48,7 +48,7 @@ export const AlgorithmNode = memo<NodeProps<AlgorithmNodeData>>(({ data }) => {
         border: `2px solid ${colors.border}`,
       }}
     >
-      <Handle type="target" position={Position.Top} />
+      <Handle type="target" position={Position.Left} />
 
       <div className={styles.algorithmHeader}>
         <span className={styles.algorithmIcon}>{icon}</span>
@@ -61,7 +61,7 @@ export const AlgorithmNode = memo<NodeProps<AlgorithmNodeData>>(({ data }) => {
         </div>
       )}
 
-      <Handle type="source" position={Position.Bottom} />
+      <Handle type="source" position={Position.Right} />
     </div>
   )
 })

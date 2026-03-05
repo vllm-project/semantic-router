@@ -7,6 +7,7 @@ import {
   type ChangeEvent,
   type FormEvent,
   type KeyboardEvent,
+  type ReactNode,
 } from 'react'
 import MarkdownRenderer from './MarkdownRenderer'
 import styles from './ClawRoomChat.module.css'
@@ -101,6 +102,7 @@ interface SenderVisual {
 interface ClawRoomChatProps {
   isSidebarOpen?: boolean
   createRoomRequestToken?: number
+  inputModeControls?: ReactNode
 }
 
 const OPENCLAW_LOGO_SRC = '/openclaw.svg'
@@ -175,6 +177,7 @@ const sanitizeLookupKey = (value: string | undefined): string => {
 const ClawRoomChat = ({
   isSidebarOpen = true,
   createRoomRequestToken = 0,
+  inputModeControls,
 }: ClawRoomChatProps) => {
   const [teams, setTeams] = useState<TeamProfile[]>([])
   const [workers, setWorkers] = useState<WorkerProfile[]>([])
@@ -250,6 +253,13 @@ const ClawRoomChat = ({
   const mentionOptions = useMemo<MentionOption[]>(() => {
     const entries: MentionOption[] = []
     const seen = new Set<string>()
+
+    const allDesc =
+      teamWorkers.length > 0
+        ? `All claws in this team (${teamWorkers.length})`
+        : 'All claws in this team'
+    entries.push({ token: '@all', description: allDesc })
+    seen.add('@all')
 
     const leaderDesc = leaderWorker
       ? `Leader alias (${leaderWorker.agentName || leaderWorker.name})`
@@ -1157,11 +1167,10 @@ const ClawRoomChat = ({
         <section className={styles.chatPanel}>
           <header className={styles.chatHeader}>
             <div className={styles.chatTitleWrap}>
-              <h3 className={styles.chatTitle}>{selectedRoom?.name || 'No room selected'}</h3>
-              <span className={styles.chatSubtitle}>{selectedTeam?.name || 'No team selected'}</span>
+              <h3 className={styles.chatTitle}>{selectedTeam?.name || 'No team selected'}</h3>
               {selectedRoomId && (
                 <span
-                  className={wsConnected ? styles.wsConnected : styles.wsDisconnected}
+                  className={`${styles.chatTitleStatus} ${wsConnected ? styles.wsConnected : styles.wsDisconnected}`}
                   title={wsConnected ? 'WebSocket connected' : 'WebSocket disconnected (using fallback)'}
                 >
                   {wsConnected ? '● Live' : '○ Reconnecting...'}
@@ -1312,11 +1321,16 @@ const ClawRoomChat = ({
                   onClick={syncMentionByCursor}
                   onKeyUp={syncMentionByCursor}
                   onKeyDown={handleDraftKeyDown}
-                  placeholder="@leader to assign tasks, or @worker-name"
+                  placeholder="@all to mention everyone, @leader to assign tasks, or @worker-name"
                   rows={1}
                   disabled={!selectedRoomId || posting}
                 />
                 <div className={styles.inputActionsRow}>
+                  {inputModeControls && (
+                    <div className={styles.inputModeControls}>
+                      {inputModeControls}
+                    </div>
+                  )}
                   <button
                     type="button"
                     className={styles.sendButton}

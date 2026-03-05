@@ -303,11 +303,11 @@
 
 .chatTitleWrap {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
   min-width: 0;
   width: 100%;
-  align-items: center;
-  text-align: center;
 }
 
 .chatTitle {
@@ -315,30 +315,34 @@
   font-size: 1rem;
   font-weight: 650;
   color: var(--nv-text-main);
-  width: 100%;
+  max-width: min(100%, 760px);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-align: center;
 }
 
-.chatSubtitle {
-  width: 100%;
-  font-size: 0.78rem;
-  color: var(--nv-text-secondary);
+.chatTitleStatus {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .wsConnected {
+  display: inline-flex;
+  align-items: center;
   font-size: 0.72rem;
   color: var(--nv-green-500);
-  margin-left: 0.5rem;
   animation: pulse 2s infinite;
+  line-height: 1;
 }
 
 .wsDisconnected {
+  display: inline-flex;
+  align-items: center;
   font-size: 0.72rem;
   color: var(--nv-text-muted);
-  margin-left: 0.5rem;
   opacity: 0.7;
+  line-height: 1;
 }
 
 @keyframes pulse {
@@ -1131,8 +1135,16 @@
 .inputActionsRow {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
+  gap: 0.45rem;
   padding: 0.25rem 0.5rem 0.5rem 0.5rem;
+}
+
+.inputModeControls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
 }
 
 .sendButton {
@@ -1147,6 +1159,7 @@
   justify-content: center;
   font-size: 1rem;
   flex-shrink: 0;
+  margin-left: auto;
   transition: all var(--transition-fast);
   cursor: pointer;
 }
@@ -1462,6 +1475,10 @@
     padding: 0.68rem 0.72rem;
   }
 
+  .chatTitleWrap {
+    gap: 0.3rem;
+  }
+
   .messages {
     padding: 0.75rem 0.62rem;
     gap: 0.62rem;
@@ -1500,12 +1517,20 @@
   }
 
   .inputActionsRow {
-    display: contents;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0;
+    margin-right: 0.25rem;
+  }
+
+  .inputModeControls {
+    gap: 0.3rem;
   }
 
   .sendButton {
     width: 32px;
     height: 32px;
-    margin-right: 0.25rem;
+    margin-right: 0;
   }
 }

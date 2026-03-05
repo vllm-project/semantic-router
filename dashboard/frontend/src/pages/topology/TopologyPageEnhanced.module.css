@@ -89,6 +89,80 @@
   );
 }
 
+.layoutToolbar {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 8;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(10, 12, 10, 0.78);
+  border: 1px solid rgba(118, 185, 0, 0.25);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.toolbarSection {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 132px;
+}
+
+.toolbarLabel {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(174, 186, 174, 0.9);
+}
+
+.toolbarRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toolbarValue {
+  color: #dbe2d3;
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 44px;
+}
+
+.modeSwitch {
+  display: flex;
+  gap: 4px;
+}
+
+.modeBtn,
+.toolBtn {
+  border: 1px solid rgba(118, 185, 0, 0.28);
+  background: rgba(26, 30, 25, 0.84);
+  color: #dbe2d3;
+  font-size: 11px;
+  border-radius: 8px;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modeBtn:hover,
+.toolBtn:hover {
+  border-color: rgba(118, 185, 0, 0.7);
+  color: #f4f8ee;
+}
+
+.modeBtnActive,
+.toolBtnActive {
+  background: rgba(118, 185, 0, 0.22);
+  border-color: rgba(118, 185, 0, 0.85);
+  color: #f4f8ee;
+}
+
 /* ReactFlow Custom Styling */
 .flowContainer :global(.react-flow) {
   background: transparent;
@@ -268,6 +342,24 @@
   .bottomPanel {
     height: 90px;
   }
+
+  .layoutToolbar {
+    top: 10px;
+    right: 10px;
+    gap: 6px;
+    padding: 6px 8px;
+  }
+
+  .toolbarSection {
+    min-width: 110px;
+  }
+
+  .modeBtn,
+  .toolBtn {
+    font-size: 10px;
+    padding: 3px 7px;
+  }
+
 }
 
 @media (max-width: 768px) {
@@ -286,4 +378,9 @@
   .flowContainer :global(.react-flow__minimap) {
     display: none !important;
   }
+
+  .layoutToolbar {
+    display: none;
+  }
+
 }

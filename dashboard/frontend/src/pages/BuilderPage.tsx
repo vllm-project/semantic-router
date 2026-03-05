@@ -228,6 +228,7 @@ const BuilderPage: React.FC = () => {
   const [importUrlLoading, setImportUrlLoading] = useState(false)
   const importTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const autoLoadedDefaultConfigRef = useRef(false)
 
   // Initialize WASM on mount
   useEffect(() => {
@@ -366,13 +367,14 @@ const BuilderPage: React.FC = () => {
     if (!yaml) { setImportError('Please paste YAML content'); return }
     try {
       importYaml(yaml)
+      compile()
       setShowImportModal(false)
       setImportText('')
       setImportError(null)
     } catch {
       setImportError('Failed to decompile YAML. Make sure it is valid router config YAML.')
     }
-  }, [importText, importYaml])
+  }, [importText, importYaml, compile])
 
   const handleImportFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -424,6 +426,7 @@ const BuilderPage: React.FC = () => {
     setImportError(null)
     try {
       await loadFromRouter()
+      compile()
       setShowImportModal(false)
       setImportText('')
     } catch (err) {
@@ -431,7 +434,34 @@ const BuilderPage: React.FC = () => {
     } finally {
       setLoadingFromRouter(false)
     }
-  }, [loadFromRouter])
+  }, [loadFromRouter, compile])
+
+  // On first entry, load current router config and compile it by default.
+  useEffect(() => {
+    if (!wasmReady || autoLoadedDefaultConfigRef.current) return
+    autoLoadedDefaultConfigRef.current = true
+    let cancelled = false
+    const loadDefaultConfig = async () => {
+      setLoadingFromRouter(true)
+      setImportError(null)
+      try {
+        await loadFromRouter()
+        if (!cancelled) {
+          compile()
+        }
+      } catch (err) {
+        console.error('[BuilderPage] Failed to load default router config:', err)
+      } finally {
+        if (!cancelled) {
+          setLoadingFromRouter(false)
+        }
+      }
+    }
+    void loadDefaultConfig()
+    return () => {
+      cancelled = true
+    }
+  }, [wasmReady, loadFromRouter, compile])
 
   // Diagnostic counts
   const errorCount = diagnostics.filter((d) => d.level === 'error').length
@@ -878,25 +908,27 @@ const BuilderPage: React.FC = () => {
               {importError && <div className={styles.importError}>{importError}</div>}
             </div>
             <div className={styles.modalFooter}>
-              <button className={styles.toolbarBtn} onClick={() => fileInputRef.current?.click()}>
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M2 14h12M8 2v9M5 5l3-3 3 3" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Load File
-              </button>
-              <button
-                className={styles.toolbarBtnPrimary}
-                onClick={handleLoadFromRouter}
-                disabled={loadingFromRouter}
-                title="Load the current running router config and decompile to DSL"
-              >
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <rect x="2" y="2" width="12" height="12" rx="2" />
-                  <path d="M8 5v6M5 8l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                {loadingFromRouter ? 'Loading…' : 'Load from Router'}
-              </button>
-              <div style={{ marginLeft: 'auto', display: 'flex', gap: 'var(--spacing-sm)' }}>
+              <div className={styles.modalFooterImportActions}>
+                <button className={styles.toolbarBtn} onClick={() => fileInputRef.current?.click()}>
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M2 14h12M8 2v9M5 5l3-3 3 3" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Load File
+                </button>
+                <button
+                  className={styles.toolbarBtnPrimary}
+                  onClick={handleLoadFromRouter}
+                  disabled={loadingFromRouter}
+                  title="Load the current running router config and decompile to DSL"
+                >
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <rect x="2" y="2" width="12" height="12" rx="2" />
+                    <path d="M8 5v6M5 8l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  {loadingFromRouter ? 'Loading…' : 'Load from Router'}
+                </button>
+              </div>
+              <div className={styles.modalFooterPrimaryActions}>
                 <button className={styles.toolbarBtn} onClick={() => setShowImportModal(false)}>Cancel</button>
                 <button className={styles.toolbarBtnPrimary} onClick={handleImportConfirm} disabled={!importText.trim()}>Import</button>
               </div>

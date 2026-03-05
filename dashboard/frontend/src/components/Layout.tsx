@@ -18,11 +18,11 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
   const isConfigPage = location.pathname === '/config'
 
   // Active state detection
+  const isBuilderActive = location.pathname === '/builder'
   const isModelsActive = isConfigPage && configSection === 'models'
   const isSignalsActive = isConfigPage && configSection === 'signals'
   const isDecisionsActive = isConfigPage && configSection === 'decisions'
   const isBuildChildActive =
-    location.pathname === '/builder' ||
     isModelsActive ||
     isSignalsActive ||
     isDecisionsActive
@@ -105,6 +105,13 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
               ClawOS
             </NavLink>
 
+            <NavLink
+              to="/builder"
+              className={isBuilderActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink}
+            >
+              Builder
+            </NavLink>
+
             {/* Build Dropdown */}
             <div className={styles.navDropdown}>
               <button
@@ -129,13 +136,6 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
               </button>
               {openDropdown === 'build' && (
                 <div className={styles.dropdownMenu}>
-                  <NavLink
-                    to="/builder"
-                    className={`${styles.dropdownItem} ${location.pathname === '/builder' ? styles.dropdownItemActive : ''}`}
-                    onClick={() => setOpenDropdown(null)}
-                  >
-                    Builder
-                  </NavLink>
                   <button
                     className={`${styles.dropdownItem} ${isModelsActive ? styles.dropdownItemActive : ''}`}
                     onClick={() => {
