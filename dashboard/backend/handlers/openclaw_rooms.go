@@ -303,6 +303,13 @@ func (h *OpenClawHandler) appendRoomMessage(roomID string, message ClawRoomMessa
 	}
 	h.mu.Unlock()
 
+	// Broadcast to WebSocket clients (also handles SSE backward compatibility)
+	h.publishRoomWSEvent(roomID, WSOutboundMessage{
+		Type:    WSTypeNewMessage,
+		Message: &message,
+	})
+
+	// Keep SSE event for backward compatibility
 	h.publishRoomEvent(roomID, clawRoomStreamEvent{Type: "message", Message: &message})
 	return nil
 }
@@ -1003,8 +1010,35 @@ func (h *OpenClawHandler) processRoomUserMessage(roomID string, triggerMessageID
 			}
 			targetCopy := target
 			delegatedByCopy := delegatedBy
+
+			// Create placeholder message for streaming
+			placeholderID := generateRoomEntityID("room-msg")
+			placeholderSenderType := normalizeRoleKind(targetCopy.RoleKind)
+			if placeholderSenderType != "leader" {
+				placeholderSenderType = "worker"
+			}
+
 			go func() {
-				reply, err := h.runWorkerReply(*room, *team, workers, targetCopy, snapshotMessages, trigger, delegatedByCopy)
+				// Stream callback to push chunks to WebSocket clients
+				var contentBuilder strings.Builder
+				onChunk := func(chunk string, done bool) {
+					if chunk != "" {
+						contentBuilder.WriteString(chunk)
+					}
+					// Broadcast chunk to WebSocket clients
+					h.publishRoomWSEvent(roomID, WSOutboundMessage{
+						Type:      "message_chunk",
+						MessageID: placeholderID,
+						Status:    "streaming",
+					})
+				}
+
+				// Use streaming version
+				reply, err := h.runWorkerReplyStream(*room, *team, workers, targetCopy, snapshotMessages, trigger, delegatedByCopy, onChunk)
+				if err == nil {
+					// Override message ID to match placeholder
+					reply.ID = placeholderID
+				}
 				results <- targetReplyResult{
 					target: targetCopy,
 					reply:  reply,
@@ -1259,15 +1293,17 @@ func (h *OpenClawHandler) RoomByIDHandler() http.HandlerFunc {
 			return
 		}
 
-		sub := strings.ToLower(strings.TrimSpace(parts[1]))
-		switch sub {
-		case "messages":
-			h.handleRoomMessages(w, r, roomID)
-		case "stream":
-			h.handleRoomStream(w, r, roomID)
-		default:
-			http.NotFound(w, r)
-		}
+	sub := strings.ToLower(strings.TrimSpace(parts[1]))
+	switch sub {
+	case "messages":
+		h.handleRoomMessages(w, r, roomID)
+	case "stream":
+		h.handleRoomStream(w, r, roomID)
+	case "ws":
+		h.handleRoomWebSocket(w, r, roomID)
+	default:
+		http.NotFound(w, r)
+	}
 	}
 }
 
