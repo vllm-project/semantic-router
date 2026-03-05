@@ -135,7 +135,7 @@ jobs:
           load: true
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha,scope=${{ matrix.image }}-amd64
-          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-amd64
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-amd64,ignore-error=true
           build-args: |
             BUILDKIT_INLINE_CACHE=1
             CARGO_BUILD_JOBS=8
@@ -285,7 +285,7 @@ jobs:
           push: true
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha,scope=${{ matrix.image }}-${{ steps.build-params.outputs.platform_suffix }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ steps.build-params.outputs.platform_suffix }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ steps.build-params.outputs.platform_suffix }},ignore-error=true
           build-args: |
             BUILDKIT_INLINE_CACHE=1
             CARGO_BUILD_JOBS=20
@@ -395,7 +395,7 @@ jobs:
           push: true
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha,scope=extproc-rocm-amd64
-          cache-to: type=gha,mode=max,scope=extproc-rocm-amd64
+          cache-to: type=gha,mode=max,scope=extproc-rocm-amd64,ignore-error=true
           build-args: |
             BUILDKIT_INLINE_CACHE=1
             CARGO_BUILD_JOBS=20
