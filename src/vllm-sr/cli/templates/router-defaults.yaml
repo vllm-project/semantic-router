@@ -105,9 +105,9 @@ classifier:
     use_cpu: true
     pii_mapping_path: "models/mmbert32k-pii-detector-merged/pii_type_mapping.json"
 
-  # preference_model:
-  #   use_contrastive: true
-  #   embedding_model: "mmbert"
+  preference_model:
+    use_contrastive: true
+    embedding_model: "mmbert"
 
 # Hallucination mitigation configuration
 # Disabled by default - enable in decisions via hallucination plugin
