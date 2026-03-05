@@ -60,7 +60,7 @@ def download_training_data(
             local_dir=str(output_path),
             token=token,
         )
-        print(f"✓ Training data downloaded to {local_path}")
+        print(f"Training data downloaded to {local_path}")
         return local_path
 
     except Exception as e:
@@ -99,7 +99,7 @@ def download_models(
             local_dir=str(output_path),
             token=token,
         )
-        print(f"✓ Models downloaded to {local_dir}")
+        print(f"Models downloaded to {local_dir}")
 
         # Verify expected files exist
         missing = []
@@ -110,7 +110,7 @@ def download_models(
         if missing:
             print(f"⚠ Warning: Missing expected files: {missing}")
         else:
-            print(f"✓ All model files present: {MODEL_FILES}")
+            print(f"All model files present: {MODEL_FILES}")
 
     except Exception as e:
         print(f"✗ Download failed: {e}")
@@ -152,7 +152,7 @@ def download_single_model(
         token=token,
     )
 
-    print(f"✓ Downloaded to {local_path}")
+    print(f"Downloaded to {local_path}")
     return local_path
 
 

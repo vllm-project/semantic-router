@@ -2,7 +2,7 @@
 MMLU-Pro Problem Solver with Qwen3 Generative Fine-tuning + LoRA
 Fine-tunes Qwen3-0.6B to SOLVE MMLU-Pro problems (not just classify them).
 
-✅ **APPROACH**: Uses Qwen3 as a generative reasoning model
+**APPROACH**: Uses Qwen3 as a generative reasoning model
    - Qwen3 generates step-by-step reasoning + final answer
    - Chain-of-Thought (CoT) format for better reasoning
    - Specialized models per category group for better performance
@@ -651,7 +651,7 @@ def evaluate_model_on_samples(
             logger.info(f"Question: {question[:100]}...")
             logger.info(f"True Answer: {true_answer_text}")
             logger.info(f"Predicted: {predicted_answer_text}")
-            logger.info(f"{'✓ CORRECT' if is_correct else '✗ WRONG'}")
+            logger.info(f"{'CORRECT' if is_correct else '✗ WRONG'}")
 
         # Progress updates
         if (i + 1) % 10 == 0:
@@ -763,7 +763,7 @@ def main(
                 answer_letter = chr(65 + i)
                 break
 
-        logger.info(f"\n✓ Correct Answer (LETTER + TEXT format):")
+        logger.info(f"\nCorrect Answer (LETTER + TEXT format):")
         if answer_letter:
             logger.info(f"  {answer_letter}) {answer_text}")
         else:
@@ -788,13 +788,13 @@ def main(
         logger.info("")
 
     logger.info(f"{'=' * 80}")
-    logger.info("✅ Training data format verified!")
+    logger.info("Training data format verified!")
     logger.info(f"   All {len(train_samples)} training samples use ChatML format")
     logger.info(f"   Format: <|im_start|>user...question...<|im_end|>")
     logger.info(f"           <|im_start|>assistant...answer...<|im_end|>")
     logger.info(f"   Assistant will generate: 'The answer is X) <text>'")
     logger.info(f"   Example: 'The answer is A) crop farmers'")
-    logger.info(f"   ✅ Model trains ONLY on assistant response (not question)")
+    logger.info(f"   Model trains ONLY on assistant response (not question)")
     logger.info(f"{'=' * 80}\n")
 
     # Load tokenizer and model
@@ -855,7 +855,7 @@ def main(
     )
 
     logger.info(
-        f"✅ Baseline established: {baseline_results['overall_accuracy']:.2f}% accuracy"
+        f"Baseline established: {baseline_results['overall_accuracy']:.2f}% accuracy"
     )
     logger.info(f"   (Expected: ~10% for untrained model on 10-choice questions)\n")
 
@@ -979,7 +979,7 @@ def main(
     logger.info(f"  Relative Improvement:     {improvement_pct:+.1f}%")
 
     if improvement > 5:
-        logger.info(f"\n  ✅ SIGNIFICANT IMPROVEMENT! Model learned from fine-tuning!")
+        logger.info(f"\n  SIGNIFICANT IMPROVEMENT! Model learned from fine-tuning!")
     elif improvement > 0:
         logger.info(
             f"\n  ⚠️  Modest improvement. Consider more training data or epochs."
@@ -1055,9 +1055,7 @@ def main(
     with open(os.path.join(output_dir, "training_comparison.json"), "w") as f:
         json.dump(results, f, indent=2)
 
-    logger.info(
-        f"✅ Detailed results saved to: {output_dir}/training_comparison.json\n"
-    )
+    logger.info(f"Detailed results saved to: {output_dir}/training_comparison.json\n")
 
     log_memory_usage("Post-training")
 
@@ -1201,7 +1199,7 @@ def demo_inference(
                 )
                 print(f"True Answer: {true_answer_text}")
                 print(
-                    f"{'✓ CORRECT' if predicted_answer_text.lower().strip() == true_answer_text.lower().strip() else '✗ WRONG'}"
+                    f"{'CORRECT' if predicted_answer_text.lower().strip() == true_answer_text.lower().strip() else '✗ WRONG'}"
                 )
             print("=" * 80)
 

@@ -65,7 +65,7 @@ func (c *FactCheckClassifier) Initialize() error {
 		return fmt.Errorf("fact-check classifier requires ModelID to be configured")
 	}
 
-	logging.Infof("✅ Initializing Fact-Check Classifier:")
+	logging.Infof("Initializing Fact-Check Classifier:")
 	logging.Infof("Model: %s", c.config.ModelID)
 	logging.Infof("CPU Mode: %v", c.config.UseCPU)
 
@@ -78,7 +78,7 @@ func (c *FactCheckClassifier) Initialize() error {
 		}
 		c.useMmBERT32K = true
 		c.initialized = true
-		logging.Infof("✓ Fact-check classifier initialized successfully")
+		logging.Infof("Fact-check classifier initialized successfully")
 		return nil
 	}
 
@@ -89,7 +89,7 @@ func (c *FactCheckClassifier) Initialize() error {
 	}
 
 	c.initialized = true
-	logging.Infof("✓ Fact-check classifier initialized successfully")
+	logging.Infof("Fact-check classifier initialized successfully")
 
 	return nil
 }

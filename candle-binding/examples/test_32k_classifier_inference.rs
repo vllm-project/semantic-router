@@ -46,7 +46,7 @@ fn main() -> Result<()> {
         .map_err(|e| anyhow!("Failed to download tokenizer.json: {}", e))?;
     let base_weights_path = match api.get("model.safetensors") {
         Ok(path) => {
-            println!("   ✓ Base model downloaded (safetensors)");
+            println!("   Base model downloaded (safetensors)");
             path
         }
         Err(_) => {
@@ -57,7 +57,7 @@ fn main() -> Result<()> {
     };
 
     let base_model_dir = base_config_path.parent().unwrap();
-    println!("   ✓ Base model directory: {:?}", base_model_dir);
+    println!("   Base model directory: {:?}", base_model_dir);
 
     // Step 2: Load base model configuration
     println!("\nLoading base model configuration...");
@@ -66,7 +66,7 @@ fn main() -> Result<()> {
     let config: Config = serde_json::from_str(&config_str)
         .map_err(|e| anyhow!("Failed to parse config.json: {}", e))?;
 
-    println!("   ✓ Config loaded:");
+    println!("   Config loaded:");
     println!("     - hidden_size: {}", config.hidden_size);
     println!("     - vocab_size: {}", config.vocab_size);
 
@@ -98,7 +98,7 @@ fn main() -> Result<()> {
         .cloned()
         .ok_or_else(|| anyhow!("PII classifier not found"))?;
 
-    println!("   ✓ Found PII classifier at: {}", pii_classifier_path);
+    println!("   Found PII classifier at: {}", pii_classifier_path);
 
     // Load PII classifier config to get num_classes
     let pii_config_path = format!("{}/config.json", pii_classifier_path);
@@ -119,7 +119,7 @@ fn main() -> Result<()> {
         })
         .unwrap_or(2);
 
-    println!("   ✓ Number of classes: {}", num_classes);
+    println!("   Number of classes: {}", num_classes);
 
     // Load PII classifier weights
     let pii_weights_path = format!("{}/model.safetensors", pii_classifier_path);
@@ -187,7 +187,7 @@ fn main() -> Result<()> {
         variant.max_length()
     };
 
-    println!("   ✓ Effective max length: {} tokens", effective_max_length);
+    println!("   Effective max length: {} tokens", effective_max_length);
 
     // Create tokenizer config
     let tokenizer_config = TokenizationConfig {

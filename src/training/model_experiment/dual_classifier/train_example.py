@@ -126,7 +126,7 @@ def main():
         trainer.train()
 
         training_time = time.time() - start_time
-        print(f"\n✅ Training completed successfully!")
+        print(f"\nTraining completed successfully!")
         print(f"   Total time: {training_time:.1f} seconds")
         print(f"   Time per epoch: {training_time/config['num_epochs']:.1f} seconds")
 

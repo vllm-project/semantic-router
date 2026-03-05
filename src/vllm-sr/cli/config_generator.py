@@ -222,7 +222,7 @@ def generate_envoy_config_from_user_config(
     try:
         with open(output_path, "w") as f:
             f.write(rendered)
-        log.info(f"✓ Generated Envoy config: {output_path}")
+        log.info(f"Generated Envoy config: {output_path}")
     except Exception as e:
         log.error(f"Failed to write Envoy config: {e}")
         raise
@@ -333,7 +333,7 @@ def generate_envoy_config_from_router_config(
     try:
         with open(output_path, "w") as f:
             f.write(rendered)
-        log.info(f"✓ Generated Envoy config: {output_path}")
+        log.info(f"Generated Envoy config: {output_path}")
     except Exception as e:
         log.error(f"Failed to write Envoy config: {e}")
         raise
@@ -361,7 +361,7 @@ if __name__ == "__main__":
         # Generate Envoy config from user config
         generate_envoy_config_from_user_config(user_config, output_file)
 
-        log.info(f"✓ Envoy configuration generated: {output_file}")
+        log.info(f"Envoy configuration generated: {output_file}")
     except Exception as e:
         log.error(f"Config generation failed: {e}")
         import traceback

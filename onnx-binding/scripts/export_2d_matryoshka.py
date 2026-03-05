@@ -107,7 +107,7 @@ def export_layer_model(
     total_size = sum(f.stat().st_size for f in output_dir.glob("model.onnx*"))
     size_mb = total_size / 1e6
 
-    print(f"    ✓ Exported: {size_mb:.1f} MB")
+    print(f"    Exported: {size_mb:.1f} MB")
     return size_mb
 
 

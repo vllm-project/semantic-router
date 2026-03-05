@@ -108,7 +108,7 @@ rust: ## Ensure Rust is installed and build the Rust library with CUDA support (
 	if [ "$$ENABLE_FLASH_ATTN" = "1" ]; then \
 		if command -v nvcc >/dev/null 2>&1; then \
 			echo "Building Rust library with CUDA and Flash Attention support (ENABLE_FLASH_ATTN=1)..." && \
-			echo "✅ nvcc found: $$(nvcc --version | grep release)" && \
+			echo "nvcc found: $$(nvcc --version | grep release)" && \
 			echo "   Note: Flash Attention requires CUDA Compute Capability >= 8.0 (RTX 3090+, A100, H100)" && \
 			cd candle-binding && cargo build --release --features flash-attn; \
 		else \
@@ -156,7 +156,7 @@ rust-flash-attn: ## Build Rust library with Flash Attention 2 (requires CUDA env
 	@$(LOG_TARGET)
 	@echo "Building Rust library with Flash Attention 2 (requires CUDA)..."
 	@if command -v nvcc >/dev/null 2>&1; then \
-		echo "✅ nvcc found: $$(nvcc --version | grep release)"; \
+		echo "nvcc found: $$(nvcc --version | grep release)"; \
 	else \
 		echo "❌ nvcc not found in PATH. Please configure CUDA environment."; \
 		exit 1; \

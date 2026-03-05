@@ -73,7 +73,7 @@ class EmbeddingGenerator:
             trust_remote_code=is_qwen,  # Required for Qwen models
         )
         self.dim = self.model.get_sentence_embedding_dimension()
-        print(f"✓ Embedding model loaded (dim={self.dim})")
+        print(f"Embedding model loaded (dim={self.dim})")
 
         if self.dim != 768:
             print(f"  ⚠ Warning: Router expects 768-dim embeddings, got {self.dim}-dim")
@@ -131,7 +131,7 @@ def generate_embeddings_for_queries(
     """
     # Check cache first
     if cache_file and os.path.exists(cache_file):
-        print(f"✓ Loading cached embeddings from {cache_file}")
+        print(f"Loading cached embeddings from {cache_file}")
         data = np.load(cache_file, allow_pickle=True)
         return dict(data["embeddings"].item())
 
@@ -147,6 +147,6 @@ def generate_embeddings_for_queries(
         cache_path = Path(cache_file)
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         np.savez(cache_file, embeddings=result)
-        print(f"✓ Saved embeddings cache to {cache_file}")
+        print(f"Saved embeddings cache to {cache_file}")
 
     return result

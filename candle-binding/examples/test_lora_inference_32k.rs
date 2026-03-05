@@ -48,12 +48,12 @@ fn main() -> Result<()> {
         .map_err(|e| anyhow!("Failed to download model.safetensors: {}", e))?;
 
     let base_model_dir = base_config_path.parent().unwrap();
-    println!("   ✓ Base model directory: {:?}", base_model_dir);
+    println!("   Base model directory: {:?}", base_model_dir);
 
     // Load base model config
     let config_str = std::fs::read_to_string(&base_config_path)?;
     let config: Config = serde_json::from_str(&config_str)?;
-    println!("   ✓ Config loaded:");
+    println!("   Config loaded:");
     println!("     - hidden_size: {}", config.hidden_size);
     println!("     - vocab_size: {}", config.vocab_size);
     println!("     - num_hidden_layers: {}", config.num_hidden_layers);
@@ -97,7 +97,7 @@ fn main() -> Result<()> {
 
     let (lora_adapter, classifier_head, _num_classes) = match lora_adapter_path {
         Some(path) => {
-            println!("   ✓ Found LoRA adapter at: {}", path);
+            println!("   Found LoRA adapter at: {}", path);
             let lora_weights_path = format!("{}/model.safetensors", path);
 
             if !Path::new(&lora_weights_path).exists() {
@@ -119,7 +119,7 @@ fn main() -> Result<()> {
                 8 // Default rank
             };
 
-            println!("   ✓ LoRA rank: {}", lora_rank);
+            println!("   LoRA rank: {}", lora_rank);
 
             // Load LoRA weights
             let lora_vb = unsafe {
@@ -176,7 +176,7 @@ fn main() -> Result<()> {
                     .map_err(|e| anyhow!("Failed to load classifier bias: {}", e))?;
                 let classifier_head = Linear::new(classifier_weight.t()?, Some(classifier_bias));
                 println!("   Classification head loaded successfully!");
-                println!("   ✓ Number of classes: {}", num_classes);
+                println!("   Number of classes: {}", num_classes);
 
                 (Some(adapter), Some(classifier_head), num_classes)
             } else {
@@ -196,7 +196,7 @@ fn main() -> Result<()> {
                                                                                         // The weight is already in the correct shape [num_classes, hidden_size]
                 let classifier_head = Linear::new(classifier_weight, classifier_bias);
                 println!("   Traditional classifier head loaded successfully!");
-                println!("   ✓ Number of classes: {}", num_classes);
+                println!("   Number of classes: {}", num_classes);
 
                 (None, Some(classifier_head), num_classes)
             }

@@ -72,7 +72,8 @@ semantic_cache:
 
   # Embedding model for semantic similarity matching
   # If not specified, automatically uses the model configured in embedding_models section
-  # Options: "mmbert" (multilingual, 768-dim), "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
+  # Options: "mmbert" (multilingual, 768-dim), "multimodal" (text branch, 384-dim),
+  #          "qwen3" (high quality, 1024-dim, 32K context), "gemma" (balanced, 768-dim, 8K context)
   # embedding_model: "mmbert"  # Optional: explicitly set if you want to override auto-detection
 
 tools:
@@ -199,18 +200,20 @@ feedback_detector:
 # - Qwen3-Embedding-0.6B (Pro): Up to 32K context, high quality, 1024-dim
 # - EmbeddingGemma-300M (Flash): Up to 8K context, fast inference, Matryoshka support (768/512/256/128)
 # - mmBERT-Embed-32K-2D-Matryoshka (Ultra): Up to 32K context, 1800+ languages, 2D Matryoshka (layer early exit + dimension reduction)
+# - Multi-Modal-Embed-Small: text/image/audio shared space, 384-dim
 embedding_models:
   # qwen3_model_path: "models/mom-embedding-pro"
   # gemma_model_path: "models/mom-embedding-flash"
-  mmbert_model_path: "models/mom-embedding-ultra"
+  # mmbert_model_path: "models/mom-embedding-ultra"
+  multimodal_model_path: "models/mom-embedding-multimodal"
   use_cpu: true  # Set to false for GPU acceleration (requires CUDA)
   # HNSW Configuration
   # Improves performance by preloading candidate embeddings at startup
   # and using HNSW index for O(log n) similarity search
   hnsw_config:
-    model_type: "mmbert"         # Which model to use: "qwen3" (high quality), "gemma" (fast), or "mmbert" (multilingual)
+    model_type: "multimodal"         # Which model to use: "qwen3", "gemma", "mmbert", or "multimodal"
     preload_embeddings: true    # Precompute candidate embeddings at startup
-    target_dimension: 768        # Embedding dimension (1024 for qwen3, 768 for gemma/mmbert)
+    target_dimension: 73848        # Embedding dimension (1024 qwen3, 768 gemma/mmbert, 384 multimodal)
     # For mmbert only: target_layer (3/6/11/22) for layer early exit
     enable_soft_matching: true
     min_score_threshold: 0.5

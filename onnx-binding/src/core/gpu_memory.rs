@@ -38,7 +38,10 @@ fn compute_gpu_mem_limit() -> usize {
             );
             return limit;
         }
-        println!("WARN: [gpu_memory] Invalid ORT_GPU_MEM_LIMIT='{}', falling back to auto-probe", val);
+        println!(
+            "WARN: [gpu_memory] Invalid ORT_GPU_MEM_LIMIT='{}', falling back to auto-probe",
+            val
+        );
     }
 
     let num_sessions = env::var("ORT_GPU_NUM_SESSIONS")

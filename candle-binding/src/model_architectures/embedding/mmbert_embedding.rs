@@ -968,7 +968,7 @@ mod tests {
             );
         }
 
-        println!("✓ 32K RoPE computation verified");
+        println!("32K RoPE computation verified");
         println!("  - sin/cos shape: [{}, {}]", 32768, 32);
         println!("  - Position 0: cos=1, sin=0 ✓");
         println!("  - Position 32767: finite values, sin²+cos²=1 ✓");
@@ -1004,7 +1004,7 @@ mod tests {
             assert!(mask_data[idx].is_infinite() && mask_data[idx].is_sign_negative());
         }
 
-        println!("✓ Local attention mask verified for seq_len={}", seq_len);
+        println!("Local attention mask verified for seq_len={}", seq_len);
     }
 
     #[test]
@@ -1192,7 +1192,7 @@ mod integration_tests {
             "Model should use YaRN-scaled RoPE theta"
         );
 
-        println!("✓ Config verified:");
+        println!("Config verified:");
         println!(
             "  - max_position_embeddings: {}",
             model.config().max_position_embeddings
@@ -1255,14 +1255,14 @@ mod integration_tests {
             assert!((norm - 1.0).abs() < 0.01, "norm={}", norm);
 
             println!(
-                "  ✓ shape={:?}, norm={:.4}, time={:.2}s",
+                "  shape={:?}, norm={:.4}, time={:.2}s",
                 shape,
                 norm,
                 elapsed.as_secs_f32()
             );
         }
 
-        println!("✅ Context length test passed (32K support verified via config)");
+        println!("Context length test passed (32K support verified via config)");
     }
 
     /// Test that config is correctly loaded for 32K YaRN model
@@ -1316,7 +1316,7 @@ mod integration_tests {
             "vocab_size should be >= 200000 (mmBERT)"
         );
 
-        println!("✅ 32K YaRN config loaded and verified:");
+        println!("32K YaRN config loaded and verified:");
         println!(
             "   - max_position_embeddings: {}",
             config.max_position_embeddings

@@ -220,11 +220,11 @@ margin = avg(positive_similarity) - avg(negative_similarity)
 
 **Why:**
 
-- ✅ Works well across all domains
-- ✅ No domain detection needed
-- ✅ Simple deployment
-- ✅ Small memory overhead
-- ✅ Better generalization
+- Works well across all domains
+- No domain detection needed
+- Simple deployment
+- Small memory overhead
+- Better generalization
 
 **Configuration:**
 

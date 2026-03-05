@@ -357,7 +357,7 @@ func main() {
 		// Check correctness
 		isCorrect := labelName == test.expected
 		if isCorrect {
-			fmt.Printf("   ✓ CORRECT")
+			fmt.Printf("   CORRECT")
 			correctTests++
 		} else {
 			fmt.Printf("   ✗ INCORRECT (Expected: %s)", test.expected)

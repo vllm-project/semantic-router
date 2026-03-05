@@ -11,6 +11,7 @@
 //! - CPU ORT FP32: ~41ms
 
 use crate::core::unified_error::{errors, UnifiedResult};
+use half::f16;
 use ndarray::Array2;
 use ort::session::{Session, SessionOutputs};
 use ort::value::Tensor;
@@ -104,8 +105,9 @@ impl MmBertClassifierConfig {
         let config_str = std::fs::read_to_string(&config_path)
             .map_err(|_| errors::file_not_found(&config_path.display().to_string()))?;
 
-        let config_json: serde_json::Value = serde_json::from_str(&config_str)
-            .map_err(|e| errors::invalid_json(&config_path.display().to_string(), &e.to_string()))?;
+        let config_json: serde_json::Value = serde_json::from_str(&config_str).map_err(|e| {
+            errors::invalid_json(&config_path.display().to_string(), &e.to_string())
+        })?;
 
         // Parse id2label
         let mut id2label = HashMap::new();
@@ -120,7 +122,9 @@ impl MmBertClassifierConfig {
             }
         }
 
-        let num_labels = config_json["num_labels"].as_u64().unwrap_or(id2label.len() as u64) as usize;
+        let num_labels = config_json["num_labels"]
+            .as_u64()
+            .unwrap_or(id2label.len() as u64) as usize;
 
         Ok(Self {
             vocab_size: config_json["vocab_size"].as_u64().unwrap_or(256000) as usize,
@@ -197,17 +201,22 @@ impl MmBertSequenceClassifier {
         // Load tokenizer
         let tokenizer_path = model_path.as_ref().join("tokenizer.json");
         if !tokenizer_path.exists() {
-            return Err(errors::file_not_found(&tokenizer_path.display().to_string()));
+            return Err(errors::file_not_found(
+                &tokenizer_path.display().to_string(),
+            ));
         }
 
         let tokenizer = Tokenizer::from_file(&tokenizer_path)
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
 
-        // Find ONNX model
-        let onnx_path = Self::find_onnx_model(&model_path)?;
-
-        // Create session
-        let session = Self::create_session(&onnx_path, provider)?;
+        // Find ONNX model candidates and initialize with fallback.
+        let onnx_candidates = Self::find_onnx_models(&model_path)?;
+        let (session, onnx_path) =
+            Self::create_session_with_fallback(onnx_candidates, provider, &model_path_str)?;
+        println!(
+            "INFO: Selected classifier ONNX file: {}",
+            onnx_path.display()
+        );
 
         Ok(Self {
             session,
@@ -217,34 +226,85 @@ impl MmBertSequenceClassifier {
         })
     }
 
-    /// Find ONNX model file
-    fn find_onnx_model<P: AsRef<Path>>(model_path: P) -> UnifiedResult<std::path::PathBuf> {
+    /// Find ONNX model candidates in priority order.
+    fn find_onnx_models<P: AsRef<Path>>(model_path: P) -> UnifiedResult<Vec<std::path::PathBuf>> {
         let dir = model_path.as_ref();
+        let onnx_subdir = dir.join("onnx");
+        let search_dirs = [dir, onnx_subdir.as_path()];
 
-        let candidates = ["model_sdpa_fp16.onnx", "model.onnx", "classifier.onnx", "model_optimized.onnx"];
+        // Prefer GPU-optimized variant first, then compatibility variants.
+        let candidates = [
+            "model_sdpa_fp16.onnx",
+            "model.onnx",
+            "classifier.onnx",
+            "model_optimized.onnx",
+        ];
 
-        for candidate in &candidates {
-            let path = dir.join(candidate);
-            if path.exists() {
-                return Ok(path);
+        let mut results: Vec<std::path::PathBuf> = Vec::new();
+        // Try known ONNX filenames first in both model root and `onnx/` subdirectory.
+        for base_dir in search_dirs {
+            if !base_dir.exists() || !base_dir.is_dir() {
+                continue;
+            }
+            for candidate in &candidates {
+                let path = base_dir.join(candidate);
+                if path.exists() && !results.iter().any(|p| p == &path) {
+                    results.push(path);
+                }
             }
         }
 
-        // Look for any .onnx file
-        if let Ok(entries) = std::fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                if let Some(ext) = entry.path().extension() {
-                    if ext == "onnx" {
-                        return Ok(entry.path());
+        // Fallback: include any .onnx file in both locations.
+        for base_dir in search_dirs {
+            if !base_dir.exists() || !base_dir.is_dir() {
+                continue;
+            }
+            if let Ok(entries) = std::fs::read_dir(base_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if let Some(ext) = path.extension() {
+                        if ext == "onnx" {
+                            if !results.iter().any(|p| p == &path) {
+                                results.push(path);
+                            }
+                        }
                     }
                 }
             }
         }
 
-        Err(errors::file_not_found(&format!(
-            "No ONNX model found in {}",
-            dir.display()
-        )))
+        if results.is_empty() {
+            return Err(errors::file_not_found(&format!(
+                "No ONNX model found in {} (checked root and onnx/ subdir)",
+                dir.display(),
+            )));
+        }
+        Ok(results)
+    }
+
+    /// Create session from candidates with fallback across files.
+    fn create_session_with_fallback(
+        onnx_candidates: Vec<std::path::PathBuf>,
+        provider: ClassifierExecutionProvider,
+        model_path: &str,
+    ) -> UnifiedResult<(Session, std::path::PathBuf)> {
+        let mut last_error: Option<String> = None;
+        for onnx_path in onnx_candidates {
+            match Self::create_session(&onnx_path, provider) {
+                Ok(session) => return Ok((session, onnx_path)),
+                Err(e) => {
+                    let reason = format!("{:?}", e);
+                    println!(
+                        "WARN: Failed to initialize classifier session from {}: {}",
+                        onnx_path.display(),
+                        reason
+                    );
+                    last_error = Some(format!("{}: {}", onnx_path.display(), reason));
+                }
+            }
+        }
+        let detail = last_error.unwrap_or_else(|| "no ONNX candidate was loadable".to_string());
+        Err(errors::model_load(model_path, &detail))
     }
 
     /// Create ONNX Runtime session with specified provider
@@ -265,18 +325,24 @@ impl MmBertSequenceClassifier {
             ClassifierExecutionProvider::Rocm | ClassifierExecutionProvider::Auto => {
                 #[cfg(feature = "rocm")]
                 {
-                    use ort::execution_providers::{ROCmExecutionProvider, MIGraphXExecutionProvider, ArenaExtendStrategy};
                     use crate::core::gpu_memory;
+                    use ort::execution_providers::{
+                        ArenaExtendStrategy, MIGraphXExecutionProvider, ROCmExecutionProvider,
+                    };
 
                     // Try MIGraphX first (better for MI300X) — error_on_failure()
                     // ensures we get a real error instead of silent CPU fallback.
                     match Session::builder()
                         .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
-                        .with_execution_providers([MIGraphXExecutionProvider::default().build().error_on_failure()])
+                        .with_execution_providers([MIGraphXExecutionProvider::default()
+                            .build()
+                            .error_on_failure()])
                         .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
                     {
                         Ok(session) => {
-                            println!("INFO: Using MIGraphX execution provider (AMD GPU) — verified");
+                            println!(
+                                "INFO: Using MIGraphX execution provider (AMD GPU) — verified"
+                            );
                             return Ok(session);
                         }
                         Err(e) => {
@@ -287,13 +353,11 @@ impl MmBertSequenceClassifier {
                     let mem_limit = gpu_memory::get_gpu_mem_limit();
                     match Session::builder()
                         .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
-                        .with_execution_providers([
-                            ROCmExecutionProvider::default()
-                                .with_mem_limit(mem_limit)
-                                .with_arena_extend_strategy(ArenaExtendStrategy::SameAsRequested)
-                                .build()
-                                .error_on_failure()
-                        ])
+                        .with_execution_providers([ROCmExecutionProvider::default()
+                            .with_mem_limit(mem_limit)
+                            .with_arena_extend_strategy(ArenaExtendStrategy::SameAsRequested)
+                            .build()
+                            .error_on_failure()])
                         .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
                     {
                         Ok(session) => {
@@ -311,7 +375,9 @@ impl MmBertSequenceClassifier {
                 #[cfg(not(feature = "rocm"))]
                 {
                     if matches!(provider, ClassifierExecutionProvider::Rocm) {
-                        println!("WARNING: ROCm requested but 'rocm' feature not enabled, using CPU");
+                        println!(
+                            "WARNING: ROCm requested but 'rocm' feature not enabled, using CPU"
+                        );
                     }
                 }
 
@@ -324,18 +390,18 @@ impl MmBertSequenceClassifier {
             ClassifierExecutionProvider::Cuda => {
                 #[cfg(feature = "cuda")]
                 {
-                    use ort::execution_providers::{CUDAExecutionProvider, ArenaExtendStrategy as CudaArenaStrategy};
                     use crate::core::gpu_memory;
+                    use ort::execution_providers::{
+                        ArenaExtendStrategy as CudaArenaStrategy, CUDAExecutionProvider,
+                    };
                     let mem_limit = gpu_memory::get_gpu_mem_limit();
                     match Session::builder()
                         .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
-                        .with_execution_providers([
-                            CUDAExecutionProvider::default()
-                                .with_memory_limit(mem_limit)
-                                .with_arena_extend_strategy(CudaArenaStrategy::SameAsRequested)
-                                .build()
-                                .error_on_failure()
-                        ])
+                        .with_execution_providers([CUDAExecutionProvider::default()
+                            .with_memory_limit(mem_limit)
+                            .with_arena_extend_strategy(CudaArenaStrategy::SameAsRequested)
+                            .build()
+                            .error_on_failure()])
                         .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
                     {
                         Ok(session) => {
@@ -363,7 +429,9 @@ impl MmBertSequenceClassifier {
                     use ort::execution_providers::OpenVINOExecutionProvider;
                     match Session::builder()
                         .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
-                        .with_execution_providers([OpenVINOExecutionProvider::default().build().error_on_failure()])
+                        .with_execution_providers([OpenVINOExecutionProvider::default()
+                            .build()
+                            .error_on_failure()])
                         .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
                     {
                         Ok(session) => {
@@ -377,7 +445,9 @@ impl MmBertSequenceClassifier {
                 }
 
                 #[cfg(not(feature = "openvino"))]
-                println!("WARNING: OpenVINO requested but 'openvino' feature not enabled, using CPU");
+                println!(
+                    "WARNING: OpenVINO requested but 'openvino' feature not enabled, using CPU"
+                );
 
                 println!("INFO: Using CPU execution provider");
                 Session::builder()
@@ -431,7 +501,9 @@ impl MmBertSequenceClassifier {
             .map_err(|e: ort::Error| errors::inference_error("create_input_ids", &e.to_string()))?;
 
         let attention_mask_tensor = Tensor::from_array(([batch_size, max_len], attention_mask))
-            .map_err(|e: ort::Error| errors::inference_error("create_attention_mask", &e.to_string()))?;
+            .map_err(|e: ort::Error| {
+                errors::inference_error("create_attention_mask", &e.to_string())
+            })?;
 
         // Run inference
         let outputs = self
@@ -486,6 +558,15 @@ fn extract_logits_from_outputs(outputs: &SessionOutputs<'_>) -> UnifiedResult<Ar
                         .map_err(|e| errors::inference_error("reshape_logits", &e.to_string()));
                 }
             }
+            // FP16 models (e.g. model_sdpa_fp16.onnx on AMD) can emit f16 logits.
+            if let Ok((shape, data)) = output_value.try_extract_tensor::<f16>() {
+                let dims: Vec<usize> = shape.iter().map(|&d| d as usize).collect();
+                if dims.len() == 2 {
+                    let flat: Vec<f32> = data.iter().map(|v| v.to_f32()).collect();
+                    return Array2::from_shape_vec((dims[0], dims[1]), flat)
+                        .map_err(|e| errors::inference_error("reshape_logits", &e.to_string()));
+                }
+            }
         }
     }
 
@@ -499,42 +580,151 @@ fn extract_logits_from_outputs(outputs: &SessionOutputs<'_>) -> UnifiedResult<Ar
                     .map_err(|e| errors::inference_error("reshape_logits", &e.to_string()));
             }
         }
+        if let Ok((shape, data)) = output_value.try_extract_tensor::<f16>() {
+            let dims: Vec<usize> = shape.iter().map(|&d| d as usize).collect();
+            if dims.len() == 2 {
+                let flat: Vec<f32> = data.iter().map(|v| v.to_f32()).collect();
+                return Array2::from_shape_vec((dims[0], dims[1]), flat)
+                    .map_err(|e| errors::inference_error("reshape_logits", &e.to_string()));
+            }
+        }
     }
 
-    Err(errors::inference_error("extract_logits", "Failed to extract logits"))
+    Err(errors::inference_error(
+        "extract_logits",
+        "Failed to extract logits",
+    ))
 }
 
 /// Extract token-level logits from model output
 fn extract_token_logits_from_outputs(outputs: &SessionOutputs<'_>) -> UnifiedResult<Array2<f32>> {
-    let output_names = ["logits", "output", "predictions"];
+    fn reshape_token_logits(dims: &[usize], flat: Vec<f32>) -> UnifiedResult<Array2<f32>> {
+        let mut squeezed = dims.to_vec();
+        // Drop singleton dimensions around the tensor (e.g. [1, 1, seq, num] or [1, seq, num, 1]).
+        while squeezed.len() > 2 && squeezed.first() == Some(&1) {
+            squeezed.remove(0);
+        }
+        while squeezed.len() > 2 && squeezed.last() == Some(&1) {
+            squeezed.pop();
+        }
 
-    for name in &output_names {
-        if let Some(output_value) = outputs.get(*name) {
-            if let Ok((shape, data)) = output_value.try_extract_tensor::<f32>() {
+        match squeezed.as_slice() {
+            // [seq_len, num_labels]
+            [seq_len, num_labels] => {
+                let expected = seq_len.saturating_mul(*num_labels);
+                if flat.len() < expected {
+                    return Err(errors::inference_error(
+                        "reshape_token_logits",
+                        &format!(
+                            "tensor too small for shape {:?}: data_len={}, expected={}",
+                            squeezed,
+                            flat.len(),
+                            expected
+                        ),
+                    ));
+                }
+                Array2::from_shape_vec((*seq_len, *num_labels), flat.into_iter().take(expected).collect())
+                    .map_err(|e| errors::inference_error("reshape_token_logits", &e.to_string()))
+            }
+            // [batch, seq_len, num_labels] or [seq_len, 1, num_labels]
+            [a, b, c] => {
+                if *b == 1 && *a > 1 {
+                    // [seq_len, 1, num_labels]
+                    let seq_len = *a;
+                    let num_labels = *c;
+                    let expected = seq_len.saturating_mul(num_labels);
+                    if flat.len() < expected {
+                        return Err(errors::inference_error(
+                            "reshape_token_logits",
+                            &format!(
+                                "tensor too small for shape {:?}: data_len={}, expected={}",
+                                squeezed,
+                                flat.len(),
+                                expected
+                            ),
+                        ));
+                    }
+                    return Array2::from_shape_vec(
+                        (seq_len, num_labels),
+                        flat.into_iter().take(expected).collect(),
+                    )
+                    .map_err(|e| errors::inference_error("reshape_token_logits", &e.to_string()));
+                }
+
+                // Treat as [batch, seq_len, num_labels], keep first batch slice.
+                let seq_len = *b;
+                let num_labels = *c;
+                let per_batch = seq_len.saturating_mul(num_labels);
+                if flat.len() < per_batch {
+                    return Err(errors::inference_error(
+                        "reshape_token_logits",
+                        &format!(
+                            "tensor too small for shape {:?}: data_len={}, expected_at_least={}",
+                            squeezed,
+                            flat.len(),
+                            per_batch
+                        ),
+                    ));
+                }
+                Array2::from_shape_vec(
+                    (seq_len, num_labels),
+                    flat.into_iter().take(per_batch).collect(),
+                )
+                .map_err(|e| errors::inference_error("reshape_token_logits", &e.to_string()))
+            }
+            _ => Err(errors::inference_error(
+                "reshape_token_logits",
+                &format!("unsupported token logits shape: {:?}", dims),
+            )),
+        }
+    }
+
+    let output_names = ["logits", "output", "predictions", "output_0", "token_logits"];
+    let mut inspected_shapes: Vec<String> = Vec::new();
+
+    macro_rules! try_output {
+        ($output_name:expr, $output_value:expr) => {{
+            if let Ok((shape, data)) = $output_value.try_extract_tensor::<f32>() {
                 let dims: Vec<usize> = shape.iter().map(|&d| d as usize).collect();
-                if dims.len() == 3 && dims[0] == 1 {
-                    // [1, seq_len, num_labels] -> [seq_len, num_labels]
-                    let flat: Vec<f32> = data.to_vec();
-                    return Array2::from_shape_vec((dims[1], dims[2]), flat)
-                        .map_err(|e| errors::inference_error("reshape_token_logits", &e.to_string()));
+                inspected_shapes.push(format!("{}:f32{:?}", $output_name, dims));
+                if let Ok(arr) = reshape_token_logits(&dims, data.to_vec()) {
+                    return Ok(arr);
                 }
             }
-        }
-    }
 
-    // Try first output
-    if let Some((_, output_value)) = outputs.iter().next() {
-        if let Ok((shape, data)) = output_value.try_extract_tensor::<f32>() {
-            let dims: Vec<usize> = shape.iter().map(|&d| d as usize).collect();
-            if dims.len() == 3 && dims[0] == 1 {
-                let flat: Vec<f32> = data.to_vec();
-                return Array2::from_shape_vec((dims[1], dims[2]), flat)
-                    .map_err(|e| errors::inference_error("reshape_token_logits", &e.to_string()));
+            if let Ok((shape, data)) = $output_value.try_extract_tensor::<f16>() {
+                let dims: Vec<usize> = shape.iter().map(|&d| d as usize).collect();
+                inspected_shapes.push(format!("{}:f16{:?}", $output_name, dims));
+                let flat: Vec<f32> = data.iter().map(|v| v.to_f32()).collect();
+                if let Ok(arr) = reshape_token_logits(&dims, flat) {
+                    return Ok(arr);
+                }
             }
+        }};
+    }
+
+    // First try commonly used output names.
+    for name in &output_names {
+        if let Some(output_value) = outputs.get(*name) {
+            try_output!(*name, output_value);
         }
     }
 
-    Err(errors::inference_error("extract_token_logits", "Failed to extract token logits"))
+    // Then try all outputs (some exported ONNX models use non-standard names).
+    for (name, output_value) in outputs.iter() {
+        try_output!(name, output_value);
+    }
+
+    let detail = if inspected_shapes.is_empty() {
+        "Failed to extract token logits: no f32/f16 tensor outputs were found".to_string()
+    } else {
+        format!(
+            "Failed to extract token logits; inspected outputs: {}",
+            inspected_shapes.join(", ")
+        )
+    };
+
+    Err(errors::inference_error("extract_token_logits", &detail))
 }
 
 /// Convert logits to classification results
@@ -597,14 +787,24 @@ impl MmBertTokenClassifier {
 
         let tokenizer_path = model_path.as_ref().join("tokenizer.json");
         if !tokenizer_path.exists() {
-            return Err(errors::file_not_found(&tokenizer_path.display().to_string()));
+            return Err(errors::file_not_found(
+                &tokenizer_path.display().to_string(),
+            ));
         }
 
         let tokenizer = Tokenizer::from_file(&tokenizer_path)
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
 
-        let onnx_path = MmBertSequenceClassifier::find_onnx_model(&model_path)?;
-        let session = MmBertSequenceClassifier::create_session(&onnx_path, provider)?;
+        let onnx_candidates = MmBertSequenceClassifier::find_onnx_models(&model_path)?;
+        let (session, onnx_path) = MmBertSequenceClassifier::create_session_with_fallback(
+            onnx_candidates,
+            provider,
+            &model_path_str,
+        )?;
+        println!(
+            "INFO: Selected token-classifier ONNX file: {}",
+            onnx_path.display()
+        );
 
         Ok(Self {
             session,
@@ -639,8 +839,10 @@ impl MmBertTokenClassifier {
         let input_ids_tensor = Tensor::from_array(([1, seq_len], input_ids))
             .map_err(|e: ort::Error| errors::inference_error("create_input_ids", &e.to_string()))?;
 
-        let attention_mask_tensor = Tensor::from_array(([1, seq_len], attention_mask))
-            .map_err(|e: ort::Error| errors::inference_error("create_attention_mask", &e.to_string()))?;
+        let attention_mask_tensor =
+            Tensor::from_array(([1, seq_len], attention_mask)).map_err(|e: ort::Error| {
+                errors::inference_error("create_attention_mask", &e.to_string())
+            })?;
 
         // Run inference
         let outputs = self
@@ -731,7 +933,12 @@ fn bio_decode_entities(
             if let Some((ref entity_type, ent_start, _, ref mut ent_conf)) = current_entity {
                 let expected_type = &label[2..];
                 if entity_type == expected_type {
-                    current_entity = Some((entity_type.clone(), ent_start, end, (*ent_conf + confidence) / 2.0));
+                    current_entity = Some((
+                        entity_type.clone(),
+                        ent_start,
+                        end,
+                        (*ent_conf + confidence) / 2.0,
+                    ));
                 }
             }
         } else {

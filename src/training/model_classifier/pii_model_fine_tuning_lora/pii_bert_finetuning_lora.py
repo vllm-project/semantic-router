@@ -527,7 +527,7 @@ def analyze_data_quality(texts, token_labels, sample_size=5):
         for issue in issues:
             logger.warning(f"    - {issue}")
     else:
-        logger.info("✅ No obvious data quality issues detected")
+        logger.info("No obvious data quality issues detected")
 
 
 def create_presidio_pii_dataset(

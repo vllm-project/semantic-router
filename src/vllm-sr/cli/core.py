@@ -95,21 +95,21 @@ def start_vllm_sr(
         if return_code != 0:
             log.error(f"Failed to start Jaeger: {stderr}")
             sys.exit(1)
-        log.info("✓ Jaeger started successfully")
+        log.info("Jaeger started successfully")
 
         # Start Prometheus
         return_code, stdout, stderr = docker_start_prometheus(network_name, config_dir)
         if return_code != 0:
             log.error(f"Failed to start Prometheus: {stderr}")
             sys.exit(1)
-        log.info("✓ Prometheus started successfully")
+        log.info("Prometheus started successfully")
 
         # Start Grafana
         return_code, stdout, stderr = docker_start_grafana(network_name, config_dir)
         if return_code != 0:
             log.error(f"Failed to start Grafana: {stderr}")
             sys.exit(1)
-        log.info("✓ Grafana started successfully")
+        log.info("Grafana started successfully")
 
         # Add observability environment variables
         env_vars.update(
@@ -139,7 +139,7 @@ def start_vllm_sr(
         log.error(f"Failed to start container: {stderr}")
         sys.exit(1)
 
-    log.info("✓ vLLM Semantic Router container started successfully")
+    log.info("vLLM Semantic Router container started successfully")
 
     # Wait for services to be healthy
     log.info("Waiting for Router to become healthy...")
@@ -183,7 +183,7 @@ def start_vllm_sr(
         if return_code == 0:
             log.info("-" * 60)
             log.info(
-                f"✓ Router is healthy (after {int(time.time() - start_time)}s, {check_count} checks)"
+                f"Router is healthy (after {int(time.time() - start_time)}s, {check_count} checks)"
             )
             healthy = True
             break
@@ -248,7 +248,7 @@ def start_vllm_sr(
                     docker_start_container(name)
 
     log.info("=" * 60)
-    log.info("✓ vLLM Semantic Router is running!")
+    log.info("vLLM Semantic Router is running!")
     log.info("")
     log.info("Endpoints:")
     if not dashboard_disabled:
@@ -328,7 +328,7 @@ def stop_vllm_sr():
         docker_stop_container(VLLM_SR_DOCKER_NAME)
 
     docker_remove_container(VLLM_SR_DOCKER_NAME)
-    log.info("✓ vLLM Semantic Router stopped")
+    log.info("vLLM Semantic Router stopped")
 
     # Stop observability containers if they exist
     observability_containers = [
@@ -344,12 +344,12 @@ def stop_vllm_sr():
             if status == "running":
                 docker_stop_container(container_name)
             docker_remove_container(container_name)
-            log.info(f"✓ {container_name} stopped")
+            log.info(f"{container_name} stopped")
 
     # Remove network (now clean — OpenClaw containers already disconnected)
     return_code, stdout, stderr = docker_remove_network(network_name)
     if return_code == 0:
-        log.info(f"✓ Network {network_name} removed")
+        log.info(f"Network {network_name} removed")
 
 
 def show_logs(service: str, follow: bool = False):
@@ -452,7 +452,7 @@ def show_status(service: str = "all"):
             )
 
             if return_code == 0:
-                log.info("✓ Router: Running")
+                log.info("Router: Running")
             else:
                 log.info("⚠ Router: Status unknown")
         except Exception as e:
@@ -477,7 +477,7 @@ def show_status(service: str = "all"):
             )
 
             if return_code == 0 and stdout.strip() == "200":
-                log.info("✓ Envoy: Running")
+                log.info("Envoy: Running")
             else:
                 log.info("⚠ Envoy: Status unknown")
         except Exception as e:
@@ -502,7 +502,7 @@ def show_status(service: str = "all"):
             )
 
             if return_code == 0 and stdout.strip() in ["200", "301", "302"]:
-                log.info("✓ Dashboard: Running (http://localhost:8700)")
+                log.info("Dashboard: Running (http://localhost:8700)")
             else:
                 log.info("⚠ Dashboard: Status unknown")
         except Exception as e:

@@ -180,7 +180,10 @@ pub extern "C" fn free_unified_batch_result(result: *mut CUnifiedBatchResult) {
             for res in results.iter_mut() {
                 free_unified_result_inner(res);
             }
-            let _ = Box::from_raw(std::slice::from_raw_parts_mut(r.results, r.num_results as usize));
+            let _ = Box::from_raw(std::slice::from_raw_parts_mut(
+                r.results,
+                r.num_results as usize,
+            ));
             r.results = ptr::null_mut();
         }
     }
@@ -206,7 +209,10 @@ pub extern "C" fn free_lora_batch_result(result: *mut CLoRABatchResult) {
             for res in results.iter_mut() {
                 free_unified_result_inner(res);
             }
-            let _ = Box::from_raw(std::slice::from_raw_parts_mut(r.results, r.num_results as usize));
+            let _ = Box::from_raw(std::slice::from_raw_parts_mut(
+                r.results,
+                r.num_results as usize,
+            ));
             r.results = ptr::null_mut();
         }
     }
@@ -229,7 +235,8 @@ unsafe fn free_unified_result_inner(result: &mut CUnifiedResult) {
 
     // Free PII
     if !result.pii.pii_types.is_null() && result.pii.num_pii_types > 0 {
-        let types = std::slice::from_raw_parts_mut(result.pii.pii_types, result.pii.num_pii_types as usize);
+        let types =
+            std::slice::from_raw_parts_mut(result.pii.pii_types, result.pii.num_pii_types as usize);
         for t in types.iter_mut() {
             if !t.is_null() {
                 let _ = CString::from_raw(*t);
@@ -301,25 +308,15 @@ mod tests {
     #[test]
     fn test_init_unified_classifier_returns_false() {
         // Should return false since models don't exist
-        let result = init_unified_classifier_c(
-            ptr::null(),
-            ptr::null(),
-            ptr::null(),
-            ptr::null(),
-            true,
-        );
+        let result =
+            init_unified_classifier_c(ptr::null(), ptr::null(), ptr::null(), ptr::null(), true);
         assert!(!result);
     }
 
     #[test]
     fn test_init_lora_unified_classifier_returns_false() {
-        let result = init_lora_unified_classifier(
-            ptr::null(),
-            ptr::null(),
-            ptr::null(),
-            ptr::null(),
-            true,
-        );
+        let result =
+            init_lora_unified_classifier(ptr::null(), ptr::null(), ptr::null(), ptr::null(), true);
         assert!(!result);
     }
 

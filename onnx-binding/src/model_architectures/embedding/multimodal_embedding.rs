@@ -6,11 +6,11 @@
 //! ## Expected directory layout
 //! ```text
 //! <model_path>/
-//! ├── text_encoder.onnx      — MiniLM-L6-v2 (input_ids, attention_mask → 384-dim)
-//! ├── image_encoder.onnx     — SigLIP + projection (pixel_values → 384-dim)
-//! ├── audio_encoder.onnx     — Whisper-tiny (mel_spectrogram → 384-dim)
-//! ├── tokenizer.json
-//! └── config.json            — {"embedding_dim": 384, ...}
+//! ├── text_encoder.onnx OR onnx/text_encoder.onnx
+//! ├── image_encoder.onnx OR onnx/image_encoder.onnx
+//! ├── audio_encoder.onnx OR onnx/audio_encoder.onnx
+//! ├── tokenizer.json OR onnx/tokenizer.json
+//! └── config.json OR onnx/config.json
 //! ```
 
 use crate::core::unified_error::{errors, UnifiedResult};
@@ -45,25 +45,40 @@ impl Default for MultiModalConfig {
 
 impl MultiModalConfig {
     pub fn from_pretrained<P: AsRef<Path>>(model_path: P) -> UnifiedResult<Self> {
-        let config_path = model_path.as_ref().join("config.json");
+        let dir = model_path.as_ref();
+        let config_path = {
+            let root_cfg = dir.join("config.json");
+            if root_cfg.exists() {
+                root_cfg
+            } else {
+                dir.join("onnx").join("config.json")
+            }
+        };
         if !config_path.exists() {
             return Ok(Self::default());
         }
         let s = std::fs::read_to_string(&config_path)
             .map_err(|_| errors::file_not_found(&config_path.display().to_string()))?;
-        let v: serde_json::Value = serde_json::from_str(&s)
-            .map_err(|e| errors::invalid_json(&config_path.display().to_string(), &e.to_string()))?;
+        let v: serde_json::Value = serde_json::from_str(&s).map_err(|e| {
+            errors::invalid_json(&config_path.display().to_string(), &e.to_string())
+        })?;
         let mut cfg = Self::default();
         if let Some(d) = v["embedding_dim"].as_u64() {
             cfg.embedding_dim = d as usize;
         }
-        if let Some(s) = v.get("image_encoder").and_then(|o| o["image_size"].as_u64()) {
+        if let Some(s) = v
+            .get("image_encoder")
+            .and_then(|o| o["image_size"].as_u64())
+        {
             cfg.image_size = s as usize;
         }
         if let Some(m) = v.get("audio_encoder").and_then(|o| o["n_mels"].as_u64()) {
             cfg.n_mels = m as usize;
         }
-        if let Some(l) = v.get("text_encoder").and_then(|o| o["max_seq_len"].as_u64()) {
+        if let Some(l) = v
+            .get("text_encoder")
+            .and_then(|o| o["max_seq_len"].as_u64())
+        {
             cfg.max_seq_len = l as usize;
         }
         Ok(cfg)
@@ -86,16 +101,36 @@ impl MultiModalEmbeddingModel {
 
         let config = MultiModalConfig::from_pretrained(dir)?;
 
-        let tok_path = dir.join("tokenizer.json");
+        let find_artifact = |name: &str| -> Option<std::path::PathBuf> {
+            let root = dir.join(name);
+            if root.exists() {
+                return Some(root);
+            }
+            let onnx_subdir = dir.join("onnx").join(name);
+            if onnx_subdir.exists() {
+                return Some(onnx_subdir);
+            }
+            None
+        };
+
+        let tok_path = find_artifact("tokenizer.json").ok_or_else(|| {
+            errors::file_not_found(&dir.join("tokenizer.json").display().to_string())
+        })?;
         if !tok_path.exists() {
             return Err(errors::file_not_found(&tok_path.display().to_string()));
         }
         let tokenizer = Tokenizer::from_file(&tok_path)
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
 
-        let text_path = dir.join("text_encoder.onnx");
-        let image_path = dir.join("image_encoder.onnx");
-        let audio_path = dir.join("audio_encoder.onnx");
+        let text_path = find_artifact("text_encoder.onnx").ok_or_else(|| {
+            errors::file_not_found(&dir.join("text_encoder.onnx").display().to_string())
+        })?;
+        let image_path = find_artifact("image_encoder.onnx").ok_or_else(|| {
+            errors::file_not_found(&dir.join("image_encoder.onnx").display().to_string())
+        })?;
+        let audio_path = find_artifact("audio_encoder.onnx").ok_or_else(|| {
+            errors::file_not_found(&dir.join("audio_encoder.onnx").display().to_string())
+        })?;
 
         if !text_path.exists() {
             return Err(errors::file_not_found(&text_path.display().to_string()));
@@ -111,9 +146,14 @@ impl MultiModalEmbeddingModel {
         let image_session = Self::create_session(&image_path, use_cpu)?;
         let audio_session = Self::create_session(&audio_path, use_cpu)?;
 
-        println!("INFO: Multi-modal ONNX model loaded from {}", model_path_str);
-        println!("INFO: embedding_dim={}, image_size={}, n_mels={}",
-            config.embedding_dim, config.image_size, config.n_mels);
+        println!(
+            "INFO: Multi-modal ONNX model loaded from {}",
+            model_path_str
+        );
+        println!(
+            "INFO: embedding_dim={}, image_size={}, n_mels={}",
+            config.embedding_dim, config.image_size, config.n_mels
+        );
 
         Ok(Self {
             text_session: Mutex::new(text_session),
@@ -140,11 +180,17 @@ impl MultiModalEmbeddingModel {
             use ort::execution_providers::MIGraphXExecutionProvider;
             match Session::builder()
                 .map_err(|e| errors::ort_error(&e.to_string()))
-                .and_then(|b| b.with_execution_providers([MIGraphXExecutionProvider::default().with_fp16(true).build().error_on_failure()])
-                    .map_err(|e| errors::ort_error(&e.to_string())))
-                .and_then(|b| b.commit_from_file(onnx_path.as_ref())
-                    .map_err(|e| errors::model_load(&path_str, &e.to_string())))
-            {
+                .and_then(|b| {
+                    b.with_execution_providers([MIGraphXExecutionProvider::default()
+                        .with_fp16(true)
+                        .build()
+                        .error_on_failure()])
+                        .map_err(|e| errors::ort_error(&e.to_string()))
+                })
+                .and_then(|b| {
+                    b.commit_from_file(onnx_path.as_ref())
+                        .map_err(|e| errors::model_load(&path_str, &e.to_string()))
+                }) {
                 Ok(s) => return Ok(s),
                 Err(e) => println!("WARN: MIGraphX EP failed: {}", e),
             }
@@ -152,22 +198,23 @@ impl MultiModalEmbeddingModel {
 
         #[cfg(feature = "rocm")]
         {
-            use ort::execution_providers::{ROCmExecutionProvider, ArenaExtendStrategy};
             use crate::core::gpu_memory;
+            use ort::execution_providers::{ArenaExtendStrategy, ROCmExecutionProvider};
             let mem_limit = gpu_memory::get_gpu_mem_limit();
             match Session::builder()
                 .map_err(|e| errors::ort_error(&e.to_string()))
-                .and_then(|b| b.with_execution_providers([
-                    ROCmExecutionProvider::default()
+                .and_then(|b| {
+                    b.with_execution_providers([ROCmExecutionProvider::default()
                         .with_mem_limit(mem_limit)
                         .with_arena_extend_strategy(ArenaExtendStrategy::SameAsRequested)
                         .build()
-                        .error_on_failure()
-                    ])
-                    .map_err(|e| errors::ort_error(&e.to_string())))
-                .and_then(|b| b.commit_from_file(onnx_path.as_ref())
-                    .map_err(|e| errors::model_load(&path_str, &e.to_string())))
-            {
+                        .error_on_failure()])
+                        .map_err(|e| errors::ort_error(&e.to_string()))
+                })
+                .and_then(|b| {
+                    b.commit_from_file(onnx_path.as_ref())
+                        .map_err(|e| errors::model_load(&path_str, &e.to_string()))
+                }) {
                 Ok(s) => return Ok(s),
                 Err(e) => println!("WARN: ROCm EP failed: {}", e),
             }
@@ -178,11 +225,16 @@ impl MultiModalEmbeddingModel {
             use ort::execution_providers::CUDAExecutionProvider;
             match Session::builder()
                 .map_err(|e| errors::ort_error(&e.to_string()))
-                .and_then(|b| b.with_execution_providers([CUDAExecutionProvider::default().build().error_on_failure()])
-                    .map_err(|e| errors::ort_error(&e.to_string())))
-                .and_then(|b| b.commit_from_file(onnx_path.as_ref())
-                    .map_err(|e| errors::model_load(&path_str, &e.to_string())))
-            {
+                .and_then(|b| {
+                    b.with_execution_providers([CUDAExecutionProvider::default()
+                        .build()
+                        .error_on_failure()])
+                        .map_err(|e| errors::ort_error(&e.to_string()))
+                })
+                .and_then(|b| {
+                    b.commit_from_file(onnx_path.as_ref())
+                        .map_err(|e| errors::model_load(&path_str, &e.to_string()))
+                }) {
                 Ok(s) => return Ok(s),
                 Err(e) => println!("WARN: CUDA EP failed: {}", e),
             }
@@ -195,17 +247,29 @@ impl MultiModalEmbeddingModel {
             .map_err(|e| errors::model_load(&path_str, &e.to_string()))
     }
 
-    pub fn config(&self) -> &MultiModalConfig { &self.config }
-    pub fn model_path(&self) -> &str { &self.model_path }
+    pub fn config(&self) -> &MultiModalConfig {
+        &self.config
+    }
+    pub fn model_path(&self) -> &str {
+        &self.model_path
+    }
 
     /// Encode text → L2-normalised embedding.
     pub fn encode_text(&self, text: &str, target_dim: Option<usize>) -> UnifiedResult<Array1<f32>> {
-        let encoding = self.tokenizer.encode(text, true)
+        let encoding = self
+            .tokenizer
+            .encode(text, true)
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
 
         let max_len = encoding.len().min(self.config.max_seq_len);
-        let ids: Vec<i64> = encoding.get_ids()[..max_len].iter().map(|&id| id as i64).collect();
-        let mask: Vec<i64> = encoding.get_attention_mask()[..max_len].iter().map(|&m| m as i64).collect();
+        let ids: Vec<i64> = encoding.get_ids()[..max_len]
+            .iter()
+            .map(|&id| id as i64)
+            .collect();
+        let mask: Vec<i64> = encoding.get_attention_mask()[..max_len]
+            .iter()
+            .map(|&m| m as i64)
+            .collect();
         let seq_len = ids.len();
 
         let ids_tensor = Tensor::from_array(([1usize, seq_len], ids))
@@ -227,10 +291,20 @@ impl MultiModalEmbeddingModel {
 
     /// Encode pre-processed image pixels → L2-normalised embedding.
     /// `pixel_data` is [3 * H * W] in row-major, float32, pixel values in [0, 1].
-    pub fn encode_image(&self, pixel_data: &[f32], height: usize, width: usize, target_dim: Option<usize>) -> UnifiedResult<Array1<f32>> {
+    pub fn encode_image(
+        &self,
+        pixel_data: &[f32],
+        height: usize,
+        width: usize,
+        target_dim: Option<usize>,
+    ) -> UnifiedResult<Array1<f32>> {
         let expected = 3 * height * width;
         if pixel_data.len() != expected {
-            return Err(errors::validation("pixel_data length", &expected.to_string(), &pixel_data.len().to_string()));
+            return Err(errors::validation(
+                "pixel_data length",
+                &expected.to_string(),
+                &pixel_data.len().to_string(),
+            ));
         }
 
         let pixel_vec: Vec<f32> = pixel_data.to_vec();
@@ -252,10 +326,20 @@ impl MultiModalEmbeddingModel {
     /// `mel_data` is [n_mels * time_frames] in row-major.
     /// The Whisper ONNX model expects exactly 3000 time frames;
     /// shorter inputs are zero-padded, longer ones are truncated.
-    pub fn encode_audio(&self, mel_data: &[f32], n_mels: usize, time_frames: usize, target_dim: Option<usize>) -> UnifiedResult<Array1<f32>> {
+    pub fn encode_audio(
+        &self,
+        mel_data: &[f32],
+        n_mels: usize,
+        time_frames: usize,
+        target_dim: Option<usize>,
+    ) -> UnifiedResult<Array1<f32>> {
         let expected = n_mels * time_frames;
         if mel_data.len() != expected {
-            return Err(errors::validation("mel_data length", &expected.to_string(), &mel_data.len().to_string()));
+            return Err(errors::validation(
+                "mel_data length",
+                &expected.to_string(),
+                &mel_data.len().to_string(),
+            ));
         }
 
         const WHISPER_FRAMES: usize = 3000;
@@ -288,8 +372,16 @@ impl MultiModalEmbeddingModel {
     }
 
     /// Extract a 1-D embedding from session outputs, matching the mmbert pattern.
-    fn extract_embedding_from_outputs(&self, outputs: &ort::session::SessionOutputs) -> UnifiedResult<Array1<f32>> {
-        let names = ["embedding", "sentence_embedding", "pooler_output", "last_hidden_state"];
+    fn extract_embedding_from_outputs(
+        &self,
+        outputs: &ort::session::SessionOutputs,
+    ) -> UnifiedResult<Array1<f32>> {
+        let names = [
+            "embedding",
+            "sentence_embedding",
+            "pooler_output",
+            "last_hidden_state",
+        ];
         for name in &names {
             if let Some(output_value) = outputs.get(*name) {
                 if let Ok((shape, data)) = output_value.try_extract_tensor::<f32>() {
@@ -318,7 +410,11 @@ impl MultiModalEmbeddingModel {
         Err(errors::ort_error("no valid embedding output found"))
     }
 
-    fn maybe_truncate(&self, emb: Array1<f32>, target_dim: Option<usize>) -> UnifiedResult<Array1<f32>> {
+    fn maybe_truncate(
+        &self,
+        emb: Array1<f32>,
+        target_dim: Option<usize>,
+    ) -> UnifiedResult<Array1<f32>> {
         let norm: f32 = emb.iter().map(|x| x * x).sum::<f32>().sqrt();
         let norm_safe = if norm > 1e-12 { norm } else { 1e-12 };
         let normalized = emb.mapv(|x| x / norm_safe);

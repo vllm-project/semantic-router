@@ -76,9 +76,9 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		}
 		// Update global config reference for packages that rely on config.GetConfig()
 		config.Replace(cfg)
-		logging.Infof("[NewOpenAIRouter] Parsed config from file: %s, decisions=%d", configPath, len(cfg.Decisions))
+		logging.Debugf("[NewOpenAIRouter] Parsed config from file: %s, decisions=%d", configPath, len(cfg.Decisions))
 		for i, d := range cfg.Decisions {
-			logging.Infof("[NewOpenAIRouter]   decision[%d]: name=%q, modelRefs=%d, priority=%d", i, d.Name, len(d.ModelRefs), d.Priority)
+			logging.Debugf("[NewOpenAIRouter]   decision[%d]: name=%q, modelRefs=%d, priority=%d", i, d.Name, len(d.ModelRefs), d.Priority)
 		}
 	}
 
@@ -123,6 +123,9 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		if cfg.EmbeddingModels.MmBertModelPath != "" {
 			embeddingModel = "mmbert"
 			logging.Infof("Auto-selected mmbert for semantic cache (from embedding_models.mmbert_model_path)")
+		} else if cfg.EmbeddingModels.MultiModalModelPath != "" {
+			embeddingModel = "multimodal"
+			logging.Infof("Auto-selected multimodal for semantic cache (from embedding_models.multimodal_model_path)")
 		} else if cfg.EmbeddingModels.Qwen3ModelPath != "" {
 			embeddingModel = "qwen3"
 			logging.Infof("Auto-selected qwen3 for semantic cache (from embedding_models.qwen3_model_path)")
@@ -679,7 +682,7 @@ func createReplayRecorder(decisionName string, pluginCfg *config.RouterReplayPlu
 			maxRecords = routerreplay.DefaultMaxRecords
 		}
 		storage = store.NewMemoryStore(maxRecords, globalCfg.TTLSeconds)
-		logging.Infof("Router replay for %s using memory backend (max_records=%d)", decisionName, maxRecords)
+		logging.Debugf("Router replay for %s using memory backend (max_records=%d)", decisionName, maxRecords)
 
 	case "redis":
 		if globalCfg.Redis == nil {
@@ -704,7 +707,7 @@ func createReplayRecorder(decisionName string, pluginCfg *config.RouterReplayPlu
 		if err != nil {
 			return nil, fmt.Errorf("failed to create redis store: %w", err)
 		}
-		logging.Infof("Router replay for %s using redis backend (address=%s, key_prefix=%s, ttl=%ds, async=%v)",
+		logging.Debugf("Router replay for %s using redis backend (address=%s, key_prefix=%s, ttl=%ds, async=%v)",
 			decisionName, redisConfig.Address, keyPrefix, globalCfg.TTLSeconds, globalCfg.AsyncWrites)
 
 	case "postgres":
@@ -732,7 +735,7 @@ func createReplayRecorder(decisionName string, pluginCfg *config.RouterReplayPlu
 		if err != nil {
 			return nil, fmt.Errorf("failed to create postgres store: %w", err)
 		}
-		logging.Infof("Router replay for %s using postgres backend (host=%s, db=%s, table=%s, ttl=%ds, async=%v)",
+		logging.Debugf("Router replay for %s using postgres backend (host=%s, db=%s, table=%s, ttl=%ds, async=%v)",
 			decisionName, pgConfig.Host, pgConfig.Database, pgConfig.TableName, globalCfg.TTLSeconds, globalCfg.AsyncWrites)
 
 	case "milvus":
@@ -756,7 +759,7 @@ func createReplayRecorder(decisionName string, pluginCfg *config.RouterReplayPlu
 		if err != nil {
 			return nil, fmt.Errorf("failed to create milvus store: %w", err)
 		}
-		logging.Infof("Router replay for %s using milvus backend (address=%s, collection=%s, ttl=%ds, async=%v)",
+		logging.Debugf("Router replay for %s using milvus backend (address=%s, collection=%s, ttl=%ds, async=%v)",
 			decisionName, milvusConfig.Address, milvusConfig.CollectionName, globalCfg.TTLSeconds, globalCfg.AsyncWrites)
 
 	default:
@@ -949,7 +952,7 @@ func createMemoryStore(cfg *config.RouterConfig) (*memory.MilvusStore, error) {
 	}
 
 	// Auto-detect embedding model from embedding_models configuration
-	// Priority: bert (384-dim, best for memory) > mmbert > qwen3 > gemma
+	// Priority: bert (384-dim, best for memory) > mmbert > multimodal > qwen3 > gemma
 	embeddingModel := cfg.Memory.EmbeddingModel
 	if embeddingModel == "" {
 		if cfg.EmbeddingModels.BertModelPath != "" {
@@ -958,6 +961,9 @@ func createMemoryStore(cfg *config.RouterConfig) (*memory.MilvusStore, error) {
 		} else if cfg.EmbeddingModels.MmBertModelPath != "" {
 			embeddingModel = "mmbert"
 			logging.Infof("Memory: Auto-selected mmbert from embedding_models config")
+		} else if cfg.EmbeddingModels.MultiModalModelPath != "" {
+			embeddingModel = "multimodal"
+			logging.Infof("Memory: Auto-selected multimodal from embedding_models config")
 		} else if cfg.EmbeddingModels.Qwen3ModelPath != "" {
 			embeddingModel = "qwen3"
 			logging.Infof("Memory: Auto-selected qwen3 from embedding_models config")

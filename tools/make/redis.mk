@@ -86,18 +86,18 @@ verify-redis: start-redis ## Verify Redis installation and vector search capabil
 	@echo "1. Testing basic connectivity..."
 	@$(CONTAINER_RUNTIME) exec redis-semantic-cache redis-cli PING || \
 		(echo "❌ Redis connectivity failed" && exit 1)
-	@echo "✓ Redis is responding"
+	@echo "Redis is responding"
 	@echo ""
 	@echo "2. Checking RediSearch module..."
 	@$(CONTAINER_RUNTIME) exec redis-semantic-cache redis-cli MODULE LIST | grep -q search || \
 		(echo "❌ RediSearch module not found" && exit 1)
-	@echo "✓ RediSearch module is loaded"
+	@echo "RediSearch module is loaded"
 	@echo ""
 	@echo "3. Checking RedisJSON module..."
 	@$(CONTAINER_RUNTIME) exec redis-semantic-cache redis-cli MODULE LIST | grep -q ReJSON || \
 		echo "⚠ RedisJSON module not found (optional)"
 	@echo ""
-	@echo "✓ Redis Stack is ready for semantic caching!"
+	@echo "Redis Stack is ready for semantic caching!"
 	@echo ""
 	@echo "Access Redis:"
 	@echo "  • CLI: docker exec -it redis-semantic-cache redis-cli"

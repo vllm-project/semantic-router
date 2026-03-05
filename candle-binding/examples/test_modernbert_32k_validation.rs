@@ -321,7 +321,7 @@ fn load_model_and_tokenizer(
         .map_err(|e| anyhow!("Failed to download model.safetensors: {}", e))?;
 
     let base_model_dir = base_config_path.parent().unwrap().to_path_buf();
-    println!("   ✓ Base model directory: {:?}", base_model_dir);
+    println!("   Base model directory: {:?}", base_model_dir);
 
     // Load and parse config.json with detailed information
     let config_str = std::fs::read_to_string(&base_config_path)?;
@@ -410,7 +410,7 @@ fn load_model_and_tokenizer(
     // Load config for model loading
     let mut config: Config = serde_json::from_str(&config_str)?;
     println!(
-        "\n   ✓ Config loaded: hidden_size={}, vocab_size={}, max_position_embeddings={}",
+        "\n   Config loaded: hidden_size={}, vocab_size={}, max_position_embeddings={}",
         config.hidden_size, config.vocab_size, config.max_position_embeddings
     );
 

@@ -512,7 +512,7 @@ def main():
 
     # Print summary
     print("\n" + "=" * 80)
-    print("✅ Training Complete!")
+    print("Training Complete!")
     print("=" * 80)
     print(f"Model saved to: {args.output}")
     print(f"Base model: {args.base_model}")

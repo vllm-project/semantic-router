@@ -629,7 +629,7 @@ def validate_user_config(config: UserConfig) -> List[ValidationError]:
         for error in errors:
             log.warning(f"  • {error}")
     else:
-        log.info("✓ Configuration validation passed")
+        log.info("Configuration validation passed")
 
     return errors
 

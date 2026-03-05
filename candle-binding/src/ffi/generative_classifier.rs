@@ -165,27 +165,27 @@ pub extern "C" fn init_qwen3_multi_lora_classifier(base_model_path: *const c_cha
 
     // Check if already initialized
     if GLOBAL_QWEN3_MULTI_CLASSIFIER.get().is_some() {
-        println!("✅ Qwen3 Multi-LoRA classifier already initialized, reusing existing instance");
+        println!("Qwen3 Multi-LoRA classifier already initialized, reusing existing instance");
         return 0;
     }
 
     // Load multi-adapter classifier
     match Qwen3MultiLoRAClassifier::new(base_model_path_str, &device) {
-        Ok(classifier) => {
-            match GLOBAL_QWEN3_MULTI_CLASSIFIER.set(Mutex::new(classifier)) {
-                Ok(_) => {
-                    println!(
-                        "✅ Qwen3 Multi-LoRA classifier initialized with base model: {}",
-                        base_model_path_str
-                    );
-                    0
-                }
-                Err(_) => {
-                    println!("✅ Qwen3 Multi-LoRA classifier already initialized (race condition), reusing");
-                    0
-                }
+        Ok(classifier) => match GLOBAL_QWEN3_MULTI_CLASSIFIER.set(Mutex::new(classifier)) {
+            Ok(_) => {
+                println!(
+                    "Qwen3 Multi-LoRA classifier initialized with base model: {}",
+                    base_model_path_str
+                );
+                0
             }
-        }
+            Err(_) => {
+                println!(
+                    "Qwen3 Multi-LoRA classifier already initialized (race condition), reusing"
+                );
+                0
+            }
+        },
         Err(e) => {
             eprintln!("Error: failed to load Qwen3 Multi-LoRA classifier: {}", e);
             -1
@@ -249,7 +249,7 @@ pub extern "C" fn load_qwen3_lora_adapter(
         Ok(mut classifier) => match classifier.load_adapter(adapter_name_str, adapter_path_str) {
             Ok(_) => {
                 println!(
-                    "✅ Loaded adapter '{}' from: {}",
+                    "Loaded adapter '{}' from: {}",
                     adapter_name_str, adapter_path_str
                 );
                 0
@@ -707,7 +707,7 @@ pub extern "C" fn init_qwen3_guard(model_path: *const c_char) -> i32 {
 
     // Check if already initialized
     if GLOBAL_QWEN3_GUARD.get().is_some() {
-        println!("✅ Qwen3Guard already initialized, reusing existing instance");
+        println!("Qwen3Guard already initialized, reusing existing instance");
         return 0;
     }
 
@@ -715,11 +715,11 @@ pub extern "C" fn init_qwen3_guard(model_path: *const c_char) -> i32 {
     match Qwen3GuardModel::new(model_path_str, &device, None) {
         Ok(guard) => match GLOBAL_QWEN3_GUARD.set(Mutex::new(guard)) {
             Ok(_) => {
-                println!("✅ Qwen3Guard initialized: {}", model_path_str);
+                println!("Qwen3Guard initialized: {}", model_path_str);
                 0
             }
             Err(_) => {
-                println!("✅ Qwen3Guard already initialized (race condition), reusing");
+                println!("Qwen3Guard already initialized (race condition), reusing");
                 0
             }
         },
@@ -908,7 +908,7 @@ pub extern "C" fn init_qwen3_preference_classifier(
 
     // Avoid re-loading if already initialized
     if GLOBAL_QWEN3_PREFERENCE.get().is_some() {
-        println!("✅ Qwen3 preference classifier already initialized, reusing instance");
+        println!("Qwen3 preference classifier already initialized, reusing instance");
         return true;
     }
 
@@ -918,7 +918,7 @@ pub extern "C" fn init_qwen3_preference_classifier(
         Ok(classifier) => match GLOBAL_QWEN3_PREFERENCE.set(Mutex::new(classifier)) {
             Ok(_) => true,
             Err(_) => {
-                println!("✅ Qwen3 preference classifier already initialized (race), reusing");
+                println!("Qwen3 preference classifier already initialized (race), reusing");
                 true
             }
         },

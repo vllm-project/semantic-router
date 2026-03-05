@@ -622,6 +622,23 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 		withPII(piiMapping, piiInitializer, piiInference),
 	}
 
+	multiModalInitialized := false
+	initMultiModalIfNeeded := func(reason string) error {
+		if multiModalInitialized {
+			return nil
+		}
+		mmPath := config.ResolveModelPath(cfg.EmbeddingModels.MultiModalModelPath)
+		if mmPath == "" {
+			return fmt.Errorf("%s requires embedding_models.multimodal_model_path to be set", reason)
+		}
+		if err := initMultiModalModel(mmPath, cfg.EmbeddingModels.UseCPU); err != nil {
+			return fmt.Errorf("failed to initialize multimodal model for %s: %w", reason, err)
+		}
+		logging.Infof("Initialized multimodal embedding model for %s: %s", reason, mmPath)
+		multiModalInitialized = true
+		return nil
+	}
+
 	// Add keyword classifier if configured
 	if len(cfg.KeywordRules) > 0 {
 		keywordClassifier, err := NewKeywordClassifier(cfg.KeywordRules)
@@ -636,6 +653,11 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 	if len(cfg.EmbeddingRules) > 0 {
 		// Get optimization config from embedding models configuration
 		optConfig := cfg.EmbeddingModels.HNSWConfig
+		if strings.EqualFold(strings.TrimSpace(optConfig.ModelType), "multimodal") {
+			if err := initMultiModalIfNeeded("embedding_rules with model_type=multimodal"); err != nil {
+				return nil, err
+			}
+		}
 		keywordEmbeddingClassifier, err := NewEmbeddingClassifier(cfg.EmbeddingRules, optConfig)
 		if err != nil {
 			logging.Errorf("Failed to create keyword embedding classifier: %v", err)
@@ -662,14 +684,15 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 
 		// Initialize multimodal model if any complexity rule uses image candidates
 		if config.HasImageCandidatesInRules(cfg.ComplexityRules) {
-			mmPath := cfg.EmbeddingModels.MultiModalModelPath
-			if mmPath == "" {
-				return nil, fmt.Errorf("complexity rules have image_candidates but embedding_models.multimodal_model_path is not set")
+			if err := initMultiModalIfNeeded("complexity image_candidates"); err != nil {
+				return nil, err
 			}
-			if err := initMultiModalModel(mmPath, cfg.EmbeddingModels.UseCPU); err != nil {
-				return nil, fmt.Errorf("failed to initialize multimodal model for complexity image candidates: %w", err)
+		}
+
+		if strings.EqualFold(strings.TrimSpace(modelType), "multimodal") {
+			if err := initMultiModalIfNeeded("complexity model_type=multimodal"); err != nil {
+				return nil, err
 			}
-			logging.Infof("Initialized multimodal embedding model for complexity image candidates: %s", mmPath)
 		}
 
 		complexityClassifier, err := NewComplexityClassifier(cfg.ComplexityRules, modelType)
@@ -687,6 +710,11 @@ func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, p
 		for _, rule := range cfg.JailbreakRules {
 			if rule.Method != "contrastive" {
 				continue
+			}
+			if strings.EqualFold(strings.TrimSpace(defaultModelType), "multimodal") {
+				if err := initMultiModalIfNeeded("contrastive jailbreak with model_type=multimodal"); err != nil {
+					return nil, err
+				}
 			}
 			cjc, err := NewContrastiveJailbreakClassifier(rule, defaultModelType)
 			if err != nil {
@@ -796,7 +824,7 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 	// Skip initialization if using vLLM (no Candle model to initialize)
 	if c.Config.PromptGuard.UseVLLM {
 		externalCfg := c.Config.FindExternalModelByRole(config.ModelRoleGuardrail)
-		logging.Infof("🛡️  Initializing Jailbreak Detector (vLLM mode):")
+		logging.Infof("Initializing Jailbreak Detector (vLLM mode):")
 		if externalCfg != nil {
 			logging.Infof("External Model: %s", externalCfg.ModelName)
 			logging.Infof("Endpoint: %s", externalCfg.ModelEndpoint.Address)
@@ -816,7 +844,7 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 		return fmt.Errorf("not enough jailbreak types for classification, need at least 2, got %d", numClasses)
 	}
 
-	logging.Infof("🛡️  Initializing Jailbreak Detector:")
+	logging.Infof("Initializing Jailbreak Detector:")
 	logging.Infof("Model: %s", c.Config.PromptGuard.ModelID)
 	logging.Infof("Mapping: %s", c.Config.PromptGuard.JailbreakMappingPath)
 	logging.Infof("Classes: %d", numClasses)
@@ -929,7 +957,7 @@ func (c *Classifier) initializePIIClassifier() error {
 		return fmt.Errorf("not enough PII types for classification, need at least 2, got %d", numPIIClasses)
 	}
 
-	logging.Infof("🔒 Initializing PII Detector:")
+	logging.Infof("Initializing PII Detector:")
 	logging.Infof("Model: %s", c.Config.PIIModel.ModelID)
 	logging.Infof("Mapping: %s", c.Config.PIIMappingPath)
 	logging.Infof("Classes: %d", numPIIClasses)

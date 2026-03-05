@@ -2,9 +2,11 @@
 
 # Docker image configuration
 VLLM_SR_DOCKER_IMAGE_DEFAULT = "ghcr.io/vllm-project/semantic-router/vllm-sr:latest"
+VLLM_SR_DOCKER_IMAGE_ROCM = "ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest"
 VLLM_SR_DOCKER_IMAGE_DEV = "vllm-sr:dev"
 VLLM_SR_DOCKER_IMAGE_RELEASE = "vllm-sr:0.1.0"
 VLLM_SR_DOCKER_NAME = "vllm-sr-container"
+PLATFORM_AMD = "amd"
 
 # Image pull policies
 IMAGE_PULL_POLICY_ALWAYS = "always"

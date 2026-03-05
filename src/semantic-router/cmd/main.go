@@ -163,23 +163,26 @@ func main() {
 		logging.Infof("Metrics server disabled")
 	}
 
-	// Initialize embedding models BEFORE creating server, this ensures Qwen3/Gemma/mmBERT/BERT models are ready when semantic cache is initialized
+	// Initialize embedding models BEFORE creating server, this ensures Qwen3/Gemma/mmBERT/MultiModal/BERT models are ready
+	// when semantic cache/classifier components are initialized.
 	// Use the already loaded config instead of calling config.Load() again
 	var embeddingModelsInitialized bool
 
-	// Resolve model paths using registry (supports aliases like "qwen3", "gemma", "mmbert", "bert")
+	// Resolve model paths using registry (supports aliases like "qwen3", "gemma", "mmbert", "multimodal", "bert")
 	qwen3Path := config.ResolveModelPath(cfg.Qwen3ModelPath)
 	gemmaPath := config.ResolveModelPath(cfg.GemmaModelPath)
 	mmBertPath := config.ResolveModelPath(cfg.EmbeddingModels.MmBertModelPath)
+	multiModalPath := config.ResolveModelPath(cfg.EmbeddingModels.MultiModalModelPath)
 	bertPath := config.ResolveModelPath(cfg.EmbeddingModels.BertModelPath)
 
 	// Check if any unified models (qwen3/gemma/mmbert) are configured
 	hasUnifiedModels := qwen3Path != "" || gemmaPath != "" || mmBertPath != ""
+	hasMultiModalModel := multiModalPath != ""
 	hasBertModel := bertPath != ""
 
-	if hasUnifiedModels || hasBertModel {
-		logging.Infof("Initializing embedding models: qwen3=%q, gemma=%q, mmbert=%q, bert=%q, useCPU=%t",
-			qwen3Path, gemmaPath, mmBertPath, bertPath, cfg.EmbeddingModels.UseCPU)
+	if hasUnifiedModels || hasMultiModalModel || hasBertModel {
+		logging.Infof("Initializing embedding models: qwen3=%q, gemma=%q, mmbert=%q, multimodal=%q, bert=%q, useCPU=%t",
+			qwen3Path, gemmaPath, mmBertPath, multiModalPath, bertPath, cfg.EmbeddingModels.UseCPU)
 
 		// Initialize unified models (qwen3/gemma/mmbert) if any are configured
 		if hasUnifiedModels {
@@ -254,6 +257,18 @@ func main() {
 				embeddingModelsInitialized = true
 			}
 		}
+
+		// Initialize MultiModal model separately (text/image/audio embeddings)
+		if hasMultiModalModel {
+			logging.Infof("Initializing MultiModal embedding model: %s", multiModalPath)
+			if mmErr := candle_binding.InitMultiModalEmbeddingModel(multiModalPath, cfg.EmbeddingModels.UseCPU); mmErr != nil {
+				logging.Warnf("Failed to initialize MultiModal embedding model: %v", mmErr)
+				logging.Warnf("Embedding paths using 'multimodal' will not work")
+			} else {
+				logging.Infof("MultiModal embedding model initialized successfully (384-dim default)")
+				embeddingModelsInitialized = true
+			}
+		}
 	} else {
 		logging.Infof("No embedding models configured, skipping initialization")
 		logging.Infof("To enable embedding models, add to config.yaml:")
@@ -261,6 +276,7 @@ func main() {
 		logging.Infof("    qwen3_model_path: 'models/mom-embedding-pro'")
 		logging.Infof("    gemma_model_path: 'models/mom-embedding-flash'")
 		logging.Infof("    mmbert_model_path: 'models/mom-embedding-ultra'")
+		logging.Infof("    multimodal_model_path: 'models/mom-embedding-multimodal'")
 		logging.Infof("    bert_model_path: 'models/all-MiniLM-L12-v2'  # For memory (384-dim)")
 		logging.Infof("    use_cpu: true")
 		embeddingModelsInitialized = false
@@ -275,6 +291,8 @@ func main() {
 		if embeddingModel == "" {
 			if cfg.EmbeddingModels.MmBertModelPath != "" {
 				embeddingModel = "mmbert"
+			} else if cfg.EmbeddingModels.MultiModalModelPath != "" {
+				embeddingModel = "multimodal"
 			} else if cfg.Qwen3ModelPath != "" {
 				embeddingModel = "qwen3"
 			} else if cfg.GemmaModelPath != "" {

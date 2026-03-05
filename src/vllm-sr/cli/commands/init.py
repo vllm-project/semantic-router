@@ -62,7 +62,7 @@ def init_command(force: bool = False):
         log.warning("config.yaml already exists, overwriting...")
 
     shutil.copy2(template_config, config_file)
-    log.info(f"✓ Created config.yaml")
+    log.info(f"Created config.yaml")
 
     # Create .vllm-sr directory
     if vllm_sr_dir.exists():
@@ -73,7 +73,7 @@ def init_command(force: bool = False):
         shutil.rmtree(vllm_sr_dir)
 
     vllm_sr_dir.mkdir(exist_ok=True)
-    log.info(f"✓ Created .vllm-sr/ directory")
+    log.info(f"Created .vllm-sr/ directory")
 
     # Copy all template files to .vllm-sr/
     copied_files = []
@@ -85,7 +85,7 @@ def init_command(force: bool = False):
             log.info(f"  • Copied {template_file.name}")
 
     log.info("=" * 60)
-    log.info("✓ Initialization complete!")
+    log.info("Initialization complete!")
     log.info("")
     log.info("Created files:")
     log.info(f"  • config.yaml")

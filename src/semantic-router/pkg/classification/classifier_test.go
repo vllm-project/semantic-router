@@ -1303,11 +1303,11 @@ var _ = Describe("MCP Category Classifier", func() {
 		})
 
 		// Test suite summary:
-		// - Explicit configuration: ✓ (1 test)
-		// - Common tool names discovery: ✓ (4 tests - classify_text, classify, categorize, categorize_text)
-		// - Priority/precedence: ✓ (2 tests - classify_text first, common names over patterns)
-		// - Pattern matching: ✓ (4 tests - name, description, case-insensitive)
-		// - Error cases: ✓ (3 tests - no tools, no match, logging)
+		// - Explicit configuration: (1 test)
+		// - Common tool names discovery: (4 tests - classify_text, classify, categorize, categorize_text)
+		// - Priority/precedence: (2 tests - classify_text first, common names over patterns)
+		// - Pattern matching: (4 tests - name, description, case-insensitive)
+		// - Error cases: (3 tests - no tools, no match, logging)
 		// Total: 14 comprehensive tests for auto-discovery
 	})
 
@@ -2157,7 +2157,7 @@ func TestAutoDiscoverModels_RealModels(t *testing.T) {
 	if paths.ModernBertBase == "" {
 		t.Error("ModernBERT base model not found - auto-discovery logic failed")
 	} else {
-		t.Logf("✅ ModernBERT base found at: %s", paths.ModernBertBase)
+		t.Logf("ModernBERT base found at: %s", paths.ModernBertBase)
 	}
 
 	// Test validation
@@ -2166,14 +2166,14 @@ func TestAutoDiscoverModels_RealModels(t *testing.T) {
 		t.Logf("ValidateModelPaths() failed in real-models test: %v", err)
 		t.Skip("Skipping real-models validation because environment lacks complete models")
 	} else {
-		t.Log("✅ Model paths validation successful")
+		t.Log("Model paths validation successful")
 	}
 
 	// Test if paths are complete
 	if !paths.IsComplete() {
 		t.Error("Model paths are not complete")
 	} else {
-		t.Log("✅ All required models found")
+		t.Log("All required models found")
 	}
 }
 
@@ -2191,12 +2191,12 @@ func TestAutoInitializeUnifiedClassifier(t *testing.T) {
 		t.Skip("Skipping test: AutoInitializeUnifiedClassifier() returned nil classifier (models not available)")
 	}
 
-	t.Logf("✅ Unified classifier initialized successfully")
+	t.Logf("Unified classifier initialized successfully")
 	t.Logf("  Use LoRA: %v", classifier.useLoRA)
 	t.Logf("  Initialized: %v", classifier.initialized)
 
 	if classifier.useLoRA {
-		t.Log("✅ Using high-confidence LoRA models")
+		t.Log("Using high-confidence LoRA models")
 		if classifier.loraModelPaths == nil {
 			t.Error("LoRA model paths should not be nil when useLoRA is true")
 		} else {

@@ -50,7 +50,7 @@ def upload_training_data(
             exist_ok=True,
             token=token,
         )
-        print(f"✓ Dataset repository {repo_id} ready")
+        print(f"Dataset repository {repo_id} ready")
     except Exception as e:
         print(f"⚠ Warning creating repo: {e}")
 
@@ -64,7 +64,7 @@ def upload_training_data(
         commit_message="Upload ML model selection training data",
     )
 
-    print(f"✓ Training data uploaded to https://huggingface.co/datasets/{repo_id}")
+    print(f"Training data uploaded to https://huggingface.co/datasets/{repo_id}")
 
 
 def upload_models(
@@ -106,7 +106,7 @@ def upload_models(
             exist_ok=True,
             token=token,
         )
-        print(f"✓ Repository {repo_id} ready")
+        print(f"Repository {repo_id} ready")
     except Exception as e:
         print(f"⚠ Warning creating repo: {e}")
 
@@ -119,7 +119,7 @@ def upload_models(
         commit_message="Upload ML model selection models",
     )
 
-    print(f"✓ Models uploaded to https://huggingface.co/{repo_id}")
+    print(f"Models uploaded to https://huggingface.co/{repo_id}")
 
 
 def main():

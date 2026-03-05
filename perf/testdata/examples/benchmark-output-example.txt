@@ -56,6 +56,6 @@ CPU profiling saved to: ../reports/cpu.prof
 Memory profiling saved to: ../reports/mem.prof
 ok      github.com/vllm-project/semantic-router/perf/benchmarks    89.456s
 
-✓ Benchmarks complete
+Benchmarks complete
   Total time: 89.5s
   Profiles: reports/cpu.prof, reports/mem.prof

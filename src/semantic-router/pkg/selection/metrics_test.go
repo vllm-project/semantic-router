@@ -430,7 +430,7 @@ func TestFullFeedbackFlowMetrics(t *testing.T) {
 	RecordRatingChange("model-b", "test-category", 1500.0, finalB.Rating, "mixed")
 	RecordRatingChange("model-c", "test-category", 1500.0, finalC.Rating, "loss")
 
-	t.Log("✅ Full feedback flow test passed - Elo evolution verified!")
+	t.Log("Full feedback flow test passed - Elo evolution verified!")
 	t.Log("   - Feedback processed (3 events)")
 	t.Log("   - Ratings evolved correctly (A > B > C)")
 	t.Log("   - llm_model_elo_rating metrics recorded")
@@ -458,7 +458,7 @@ func TestAutoMixSpecificMetrics(t *testing.T) {
 	RecordAutoMixCapability("model-b", 0.72, 0.78, 5, 8)
 	RecordAutoMixCapability("model-c", 0.65, 0.70, 3, 10)
 
-	t.Log("✅ AutoMix-specific metrics verified!")
+	t.Log("AutoMix-specific metrics verified!")
 	t.Log("   - llm_model_automix_verification_prob recorded")
 	t.Log("   - llm_model_automix_quality recorded")
 	t.Log("   - llm_model_automix_success_rate recorded")
@@ -486,7 +486,7 @@ func TestRouterDCSpecificMetrics(t *testing.T) {
 	RecordRouterDCAffinity("model-b", 0.5)
 	RecordRouterDCAffinity("model-c", 0.3)
 
-	t.Log("✅ RouterDC-specific metrics verified!")
+	t.Log("RouterDC-specific metrics verified!")
 	t.Log("   - llm_model_routerdc_similarity recorded")
 	t.Log("   - llm_model_routerdc_affinity recorded")
 }
@@ -517,7 +517,7 @@ func TestAllMethodEvolutionMetrics(t *testing.T) {
 	if rA.Rating <= rB.Rating {
 		t.Error("   ❌ Elo evolution failed")
 	} else {
-		t.Log("   ✅ Elo evolution works")
+		t.Log("   Elo evolution works")
 	}
 
 	// 2. AutoMix evolution
@@ -544,7 +544,7 @@ func TestAllMethodEvolutionMetrics(t *testing.T) {
 		t.Logf("   automix-model-a: verification=%.2f, quality=%.2f", capA.VerificationProb, capA.AvgQuality)
 		t.Logf("   automix-model-b: verification=%.2f, quality=%.2f", capB.VerificationProb, capB.AvgQuality)
 		if capA.VerificationProb > capB.VerificationProb {
-			t.Log("   ✅ AutoMix evolution works")
+			t.Log("   AutoMix evolution works")
 		} else {
 			t.Log("   ⚠️ AutoMix evolution shows equal values (expected after 1 feedback)")
 		}
@@ -563,18 +563,18 @@ func TestAllMethodEvolutionMetrics(t *testing.T) {
 		t.Fatalf("RouterDC feedback failed: %v", err)
 	}
 	t.Log("   Affinity updated for routerdc-model-a (winner)")
-	t.Log("   ✅ RouterDC evolution works")
+	t.Log("   RouterDC evolution works")
 
 	// 4. Hybrid component agreement
 	t.Log("\n4. HYBRID COMPONENT AGREEMENT:")
 	RecordComponentAgreement(0.75)
 	RecordComponentAgreement(1.0)
 	RecordComponentAgreement(0.5)
-	t.Log("   ✅ Component agreement metrics recorded")
+	t.Log("   Component agreement metrics recorded")
 
 	t.Log("\n=== ALL METHOD EVOLUTION METRICS VERIFIED ===")
-	t.Log("   ✅ Elo: llm_model_elo_rating, llm_model_feedback_total, llm_model_rating_change")
-	t.Log("   ✅ AutoMix: llm_model_automix_verification_prob, llm_model_automix_quality, llm_model_automix_success_rate")
-	t.Log("   ✅ RouterDC: llm_model_routerdc_similarity, llm_model_routerdc_affinity")
-	t.Log("   ✅ Hybrid: llm_model_selection_component_agreement")
+	t.Log("   Elo: llm_model_elo_rating, llm_model_feedback_total, llm_model_rating_change")
+	t.Log("   AutoMix: llm_model_automix_verification_prob, llm_model_automix_quality, llm_model_automix_success_rate")
+	t.Log("   RouterDC: llm_model_routerdc_similarity, llm_model_routerdc_affinity")
+	t.Log("   Hybrid: llm_model_selection_component_agreement")
 }

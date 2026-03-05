@@ -15,7 +15,7 @@ echo ""
 # Check vLLM-Omni health
 echo "1. Checking vLLM-Omni health..."
 if curl -sf "${VLLM_OMNI_URL}/health" > /dev/null 2>&1; then
-    echo "   ✓ vLLM-Omni is healthy at ${VLLM_OMNI_URL}"
+    echo "   vLLM-Omni is healthy at ${VLLM_OMNI_URL}"
 else
     echo "   ✗ vLLM-Omni is not running at ${VLLM_OMNI_URL}"
     exit 1
@@ -52,7 +52,7 @@ echo ""
 
 # Check if response contains image
 if echo "$RESPONSE" | grep -q "image_url"; then
-    echo "   ✓ Image generated successfully!"
+    echo "   Image generated successfully!"
     
     # Extract and save the image
     IMAGE_DATA=$(echo "$RESPONSE" | python3 -c "
@@ -75,7 +75,7 @@ if isinstance(content, list):
     
     if [ -n "$IMAGE_DATA" ]; then
         echo "$IMAGE_DATA" | base64 -d > "$OUTPUT_FILE"
-        echo "   ✓ Image saved to: $OUTPUT_FILE"
+        echo "   Image saved to: $OUTPUT_FILE"
         echo ""
         echo "   Image info:"
         file "$OUTPUT_FILE" 2>/dev/null || echo "   (file command not available)"
@@ -91,5 +91,5 @@ fi
 
 echo ""
 echo "=============================================="
-echo "  ✓ Test Passed"
+echo "  Test Passed"
 echo "=============================================="

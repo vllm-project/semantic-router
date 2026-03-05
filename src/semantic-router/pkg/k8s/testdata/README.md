@@ -39,22 +39,22 @@ testdata/
 
 | # | File | Keyword | Embedding | Domain | Plugin | Use Case |
 |---|------|---------|-----------|--------|--------|----------|
-| 1 | 01-basic.yaml | ✓ | ✓ | ✓ | ✓ | Basic comprehensive example |
-| 2 | 02-keyword-only.yaml | ✓ | ✗ | ✗ | ✗ | FAQ detection, greetings |
-| 3 | 03-embedding-only.yaml | ✗ | ✓ | ✗ | ✗ | Customer support, technical issues |
-| 4 | 04-domain-only.yaml | ✗ | ✗ | ✓ | ✗ | STEM queries, subject routing |
-| 5 | 05-keyword-embedding.yaml | ✓ | ✓ | ✗ | ✗ | Urgent support with semantics |
-| 6 | 06-keyword-domain.yaml | ✓ | ✗ | ✓ | ✗ | Academic homework assistance |
-| 7 | 07-domain-embedding.yaml | ✗ | ✓ | ✓ | ✗ | Research queries by domain |
-| 8 | 08-keyword-embedding-domain.yaml | ✓ | ✓ | ✓ | ✗ | Comprehensive tech support |
-| 9 | 09-keyword-plugin.yaml | ✓ | ✗ | ✗ | ✓ | FAQ with caching |
-| 10 | 10-embedding-plugin.yaml | ✗ | ✓ | ✗ | ✓ | PII-protected queries |
-| 11 | 11-domain-plugin.yaml | ✗ | ✗ | ✓ | ✓ | Legal advice with disclaimers |
-| 12 | 12-keyword-embedding-plugin.yaml | ✓ | ✓ | ✗ | ✓ | Security queries with protection |
-| 13 | 13-keyword-domain-plugin.yaml | ✓ | ✗ | ✓ | ✓ | Medical queries with PII |
-| 14 | 14-domain-embedding-plugin.yaml | ✗ | ✓ | ✓ | ✓ | Financial advice with protection |
-| 15 | 15-keyword-embedding-domain-plugin.yaml | ✓ | ✓ | ✓ | ✓ | Enterprise compliance (full) |
-| 16 | 16-keyword-embedding-domain-no-plugin.yaml | ✓ | ✓ | ✓ | ✗ | Educational tutorials |
+| 1 | 01-basic.yaml | | | | | Basic comprehensive example |
+| 2 | 02-keyword-only.yaml | | ✗ | ✗ | ✗ | FAQ detection, greetings |
+| 3 | 03-embedding-only.yaml | ✗ | | ✗ | ✗ | Customer support, technical issues |
+| 4 | 04-domain-only.yaml | ✗ | ✗ | | ✗ | STEM queries, subject routing |
+| 5 | 05-keyword-embedding.yaml | | | ✗ | ✗ | Urgent support with semantics |
+| 6 | 06-keyword-domain.yaml | | ✗ | | ✗ | Academic homework assistance |
+| 7 | 07-domain-embedding.yaml | ✗ | | | ✗ | Research queries by domain |
+| 8 | 08-keyword-embedding-domain.yaml | | | | ✗ | Comprehensive tech support |
+| 9 | 09-keyword-plugin.yaml | | ✗ | ✗ | | FAQ with caching |
+| 10 | 10-embedding-plugin.yaml | ✗ | | ✗ | | PII-protected queries |
+| 11 | 11-domain-plugin.yaml | ✗ | ✗ | | | Legal advice with disclaimers |
+| 12 | 12-keyword-embedding-plugin.yaml | | | ✗ | | Security queries with protection |
+| 13 | 13-keyword-domain-plugin.yaml | | ✗ | | | Medical queries with PII |
+| 14 | 14-domain-embedding-plugin.yaml | ✗ | | | | Financial advice with protection |
+| 15 | 15-keyword-embedding-domain-plugin.yaml | | | | | Enterprise compliance (full) |
+| 16 | 16-keyword-embedding-domain-no-plugin.yaml | | | | ✗ | Educational tutorials |
 
 ## Test Scenarios Details
 

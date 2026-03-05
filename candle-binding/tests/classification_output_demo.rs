@@ -54,7 +54,7 @@ fn test_classification_output_scenarios() {
         bio_result.confidence,
         bio_result.probabilities[bio_result.class as usize]
     );
-    println!("   ✅ Valid distribution (sum = {:.6})\n", sum);
+    println!("   Valid distribution (sum = {:.6})\n", sum);
 
     // Scenario 2: Math question with high confidence
     let math_result = ClassificationResult {
@@ -91,7 +91,7 @@ fn test_classification_output_scenarios() {
 
     let sum: f32 = math_result.probabilities.iter().sum();
     assert!((sum - 1.0).abs() < 1e-5);
-    println!("   ✅ Valid distribution\n");
+    println!("   Valid distribution\n");
 
     // Scenario 3: Ambiguous case - physics vs engineering
     let ambiguous_result = ClassificationResult {
@@ -147,7 +147,7 @@ fn test_classification_output_scenarios() {
 
     let sum: f32 = ambiguous_result.probabilities.iter().sum();
     assert!((sum - 1.0).abs() < 1e-5);
-    println!("   ✅ Valid distribution");
+    println!("   Valid distribution");
     println!("   💡 Recommendation: Request clarification or use ensemble\n");
 
     // Scenario 4: Multi-category relevance (chemistry + biology)
@@ -181,7 +181,7 @@ fn test_classification_output_scenarios() {
 
     let sum: f32 = multi_result.probabilities.iter().sum();
     assert!((sum - 1.0).abs() < 1e-5);
-    println!("   ✅ Valid distribution");
+    println!("   Valid distribution");
     println!("   💡 Could use both category prompts for better response\n");
 
     // Scenario 5: Batch results comparison
@@ -224,7 +224,7 @@ fn test_classification_output_scenarios() {
         );
     }
 
-    println!("\n   ✅ Consistent classification across similar questions");
+    println!("\n   Consistent classification across similar questions");
 
     // Summary statistics
     println!("\n=== Summary Statistics ===");
@@ -247,10 +247,10 @@ fn test_classification_output_scenarios() {
     );
 
     println!("\n=== Validation Checks ===");
-    println!("   ✅ All probability distributions sum to 1.0");
-    println!("   ✅ Confidence equals max probability");
-    println!("   ✅ Class index matches category name");
-    println!("   ✅ Results are deterministic and consistent");
+    println!("   All probability distributions sum to 1.0");
+    println!("   Confidence equals max probability");
+    println!("   Class index matches category name");
+    println!("   Results are deterministic and consistent");
 
     println!("\n=== Classification Logic Verified! ===\n");
 }
@@ -300,7 +300,7 @@ fn test_entropy_and_uncertainty() {
     assert!(entropy_high < entropy_medium);
     assert!(entropy_medium < entropy_low);
 
-    println!("✅ Entropy increases with uncertainty (as expected)");
+    println!("Entropy increases with uncertainty (as expected)");
     println!("💡 Use entropy to detect ambiguous cases and request clarification\n");
 }
 
@@ -376,7 +376,7 @@ fn test_realistic_mmlu_pro_distribution() {
     let sum: f32 = bio_probs.iter().sum();
     assert!((sum - 1.0).abs() < 1e-5);
 
-    println!("\n✅ Distribution makes sense:");
+    println!("\nDistribution makes sense:");
     println!("   - Biology is highest (78%) ← Primary category");
     println!("   - Chemistry (8%) and Health (5%) are related ← Expected spillover");
     println!("   - Unrelated categories near 0% ← Correct");

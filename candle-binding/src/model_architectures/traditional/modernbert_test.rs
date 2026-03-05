@@ -637,7 +637,7 @@ fn test_mmbert_32k_integration_with_model() {
         ModernBertVariant::Multilingual32K,
         "Real model should be detected as Multilingual32K variant"
     );
-    println!("✓ Config correctly detected as Multilingual32K variant");
+    println!("Config correctly detected as Multilingual32K variant");
 
     // Verify config values match expected 32K YaRN parameters
     let config_str = std::fs::read_to_string(&config_path).expect("Failed to read config");
@@ -664,7 +664,7 @@ fn test_mmbert_32k_integration_with_model() {
         vocab_size
     );
 
-    println!("✓ Config values verified:");
+    println!("Config values verified:");
     println!("  - max_position_embeddings: {}", max_pos);
     println!("  - global_rope_theta: {} (YaRN-scaled)", rope_theta);
     println!("  - vocab_size: {}", vocab_size);
@@ -674,7 +674,7 @@ fn test_mmbert_32k_integration_with_model() {
     // Here we just verify the config detection and loading works
 
     println!("");
-    println!("✅ mmBERT-32K model config validation passed");
+    println!("mmBERT-32K model config validation passed");
     println!("   Model supports 32K context with YaRN RoPE scaling");
 }
 

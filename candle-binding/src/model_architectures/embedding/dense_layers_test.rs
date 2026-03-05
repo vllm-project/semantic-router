@@ -490,7 +490,7 @@ fn test_dense_bottleneck_load_from_path() {
     println!("\n=== Loading Dense Bottleneck from Path ===");
     let bottleneck: BottleneckDenseNet =
         BottleneckDenseNet::load_from_path(model_path, &device).expect("Failed to load bottleneck");
-    println!("  ✅ Loaded successfully");
+    println!("  Loaded successfully");
 
     // Create test input: [batch=2, dim=768]
     let input = Tensor::ones((2, 768), DType::F32, &device).expect("Failed to create input");
@@ -517,5 +517,5 @@ fn test_dense_bottleneck_load_from_path() {
     let sum: f32 = output_vec.iter().sum();
     let mean = sum / output_vec.len() as f32;
     println!("  Output mean: {:.6}", mean);
-    println!("  ✅ Dense Bottleneck works correctly");
+    println!("  Dense Bottleneck works correctly");
 }

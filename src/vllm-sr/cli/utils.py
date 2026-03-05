@@ -94,7 +94,7 @@ def wait_for_healthy(url, timeout=120, interval=2, logger=None):
     start_time = time.time()
     while time.time() - start_time < timeout:
         if health_check_endpoint(url):
-            logger.info(f"✓ Endpoint {url} is healthy")
+            logger.info(f"Endpoint {url} is healthy")
             return True
         time.sleep(interval)
 

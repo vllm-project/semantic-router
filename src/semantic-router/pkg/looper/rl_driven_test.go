@@ -48,7 +48,7 @@ func TestNewRLDrivenLooper(t *testing.T) {
 		t.Error("Expected selector to be initialized")
 	}
 
-	t.Log("✅ NewRLDrivenLooper creates looper with all components")
+	t.Log("NewRLDrivenLooper creates looper with all components")
 }
 
 func TestRLDrivenLooper_BuildSelectionContext(t *testing.T) {
@@ -88,7 +88,7 @@ func TestRLDrivenLooper_BuildSelectionContext(t *testing.T) {
 		t.Error("Expected all model refs to be in selection context")
 	}
 
-	t.Log("✅ buildSelectionContext correctly creates SelectionContext from Request")
+	t.Log("buildSelectionContext correctly creates SelectionContext from Request")
 }
 
 func TestRLDrivenLooper_FormatJSONResponse(t *testing.T) {
@@ -136,7 +136,7 @@ func TestRLDrivenLooper_FormatJSONResponse(t *testing.T) {
 		t.Error("Expected response body to have content")
 	}
 
-	t.Log("✅ formatJSONResponse creates valid JSON response")
+	t.Log("formatJSONResponse creates valid JSON response")
 }
 
 func TestRLDrivenLooper_FormatStreamingResponse(t *testing.T) {
@@ -188,7 +188,7 @@ func TestRLDrivenLooper_FormatStreamingResponse(t *testing.T) {
 		t.Error("Expected SSE stream to end with [DONE]")
 	}
 
-	t.Log("✅ formatStreamingResponse creates valid SSE response")
+	t.Log("formatStreamingResponse creates valid SSE response")
 }
 
 func TestFactory_RLDriven(t *testing.T) {
@@ -212,7 +212,7 @@ func TestFactory_RLDriven(t *testing.T) {
 		t.Error("Expected RL-driven looper to have selector")
 	}
 
-	t.Log("✅ Factory correctly creates RLDrivenLooper for 'rl_driven' type")
+	t.Log("Factory correctly creates RLDrivenLooper for 'rl_driven' type")
 }
 
 func TestRLDrivenLooper_SelectorIntegration(t *testing.T) {
@@ -232,7 +232,7 @@ func TestRLDrivenLooper_SelectorIntegration(t *testing.T) {
 		t.Errorf("Expected MethodRLDriven, got %s", looper.selector.Method())
 	}
 
-	t.Log("✅ RLDrivenLooper correctly integrates with RLDrivenSelector")
+	t.Log("RLDrivenLooper correctly integrates with RLDrivenSelector")
 }
 
 // Helper function

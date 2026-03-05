@@ -113,7 +113,7 @@ def evaluate_model(model, model_name, queries):
 
         # Check if model correctly ranks paraphrase > negative
         if r["positive_similarity"] > r["negative_similarity"]:
-            print(f"  ✓ CORRECT: Paraphrase ranked higher than negative")
+            print(f"  CORRECT: Paraphrase ranked higher than negative")
         else:
             print(f"  ✗ WRONG: Negative ranked higher than paraphrase!")
 
@@ -221,7 +221,7 @@ def main():
             / baseline_results["avg_margin"]
             * 100
         )
-        print(f"✓ The LoRA adapter shows {improvement:.1f}% improvement in margin!")
+        print(f"The LoRA adapter shows {improvement:.1f}% improvement in margin!")
         print(
             f"  This indicates better semantic understanding of domain-specific queries."
         )

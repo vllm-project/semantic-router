@@ -1,0 +1,434 @@
+# Multi-stage Dockerfile for vLLM Semantic Router (ROCm edition).
+# Builds an ONNX-backed router binary with ROCm dynamic loading enabled.
+# x86_64 only (ROCm runtime does not support arm64 for this image).
+ARG TARGETARCH
+ARG BUILDPLATFORM
+ARG GIT_SSL_NO_VERIFY=0
+
+# Stage 1: Build Rust candle-binding (CPU-only, cross-compiled for TARGETARCH)
+FROM --platform=$BUILDPLATFORM rustlang/rust:nightly AS rust-builder
+ARG TARGETARCH
+ARG GIT_SSL_NO_VERIFY
+WORKDIR /build
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+# Install cross-compilation toolchain and OpenSSL for arm64 (needed by hf-hub -> openssl-sys, esaxx-rs -> g++)
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+      dpkg --add-architecture arm64 && \
+      apt-get update && apt-get install -y \
+        gcc-aarch64-linux-gnu \
+        g++-aarch64-linux-gnu \
+        libssl-dev:arm64 \
+        libssl-dev \
+        pkg-config && \
+      rm -rf /var/lib/apt/lists/* && \
+      rustup target add aarch64-unknown-linux-gnu; \
+    fi
+
+# Configure cross-compilation environment for arm64
+# NOTE: Do NOT set OPENSSL_DIR globally — it breaks amd64 pkg-config discovery.
+# The rustlang/rust:nightly image (Debian) has libssl-dev pre-installed and
+# pkg-config finds it automatically for amd64. For arm64, we set OPENSSL_LIB_DIR
+# per-command below.
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+ENV PKG_CONFIG_ALLOW_CROSS=1
+ENV PKG_CONFIG_PATH_aarch64_unknown_linux_gnu=/usr/lib/aarch64-linux-gnu/pkgconfig
+
+# Copy Cargo manifest first for dependency caching
+COPY candle-binding/Cargo.toml candle-binding/Cargo.loc[k] ./
+
+# Pre-build dependencies with a dummy source for layer caching
+RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false || true; \
+    mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu \
+      cargo build --release --no-default-features --target aarch64-unknown-linux-gnu; \
+    else \
+      cargo build --release --no-default-features; \
+    fi && \
+    rm -rf src
+
+# Copy real source and rebuild (dependencies are cached from above)
+COPY candle-binding/src/ ./src/
+COPY candle-binding/go.mod candle-binding/semantic-router.go ./
+
+# Delete stale library from dummy build so cargo relinks with real FFI symbols
+RUN find target -name "libcandle_semantic_router.so" -delete 2>/dev/null; \
+    find target -name "libcandle_semantic_router.a" -delete 2>/dev/null; \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu \
+      cargo build --release --no-default-features --target aarch64-unknown-linux-gnu; \
+    else \
+      cargo build --release --no-default-features; \
+    fi
+
+# Normalize output: copy built artifacts to /build/out/
+RUN mkdir -p /build/out && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cp target/aarch64-unknown-linux-gnu/release/libcandle_semantic_router.so /build/out/ && \
+      (cp target/aarch64-unknown-linux-gnu/release/libcandle_semantic_router.a /build/out/ 2>/dev/null || true); \
+    else \
+      cp target/release/libcandle_semantic_router.so /build/out/ && \
+      (cp target/release/libcandle_semantic_router.a /build/out/ 2>/dev/null || true); \
+    fi && \
+    echo "=== Built library ===" && \
+    ls -la /build/out/ && \
+    file /build/out/libcandle_semantic_router.so && \
+    echo "Exported symbol count:" && \
+    nm -D /build/out/libcandle_semantic_router.so 2>/dev/null | grep -c " T " || true
+
+# Stage 1a: Build Rust ml-binding (Linfa ML algorithms, cross-compiled for TARGETARCH)
+FROM --platform=$BUILDPLATFORM rustlang/rust:nightly AS ml-builder
+ARG TARGETARCH
+ARG GIT_SSL_NO_VERIFY
+WORKDIR /build
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+# Reuse cross-compilation toolchain setup (same as rust-builder)
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+      dpkg --add-architecture arm64 && \
+      apt-get update && apt-get install -y \
+        gcc-aarch64-linux-gnu \
+        g++-aarch64-linux-gnu && \
+      rm -rf /var/lib/apt/lists/* && \
+      rustup target add aarch64-unknown-linux-gnu; \
+    fi
+
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+
+# Copy Cargo manifest for dependency caching
+COPY ml-binding/Cargo.toml ml-binding/Cargo.loc[k] ./
+
+# Pre-build dependencies with dummy source
+RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false || true; \
+    mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cargo build --release --target aarch64-unknown-linux-gnu; \
+    else \
+      cargo build --release; \
+    fi && \
+    rm -rf src
+
+# Copy real source and rebuild
+COPY ml-binding/src/ ./src/
+COPY ml-binding/go.mod ml-binding/ml_binding.go ./
+
+RUN find target -name "libml_semantic_router.so" -delete 2>/dev/null; \
+    find target -name "libml_semantic_router.a" -delete 2>/dev/null; \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cargo build --release --target aarch64-unknown-linux-gnu; \
+    else \
+      cargo build --release; \
+    fi
+
+# Normalize output
+RUN mkdir -p /build/out && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cp target/aarch64-unknown-linux-gnu/release/libml_semantic_router.so /build/out/ && \
+      (cp target/aarch64-unknown-linux-gnu/release/libml_semantic_router.a /build/out/ 2>/dev/null || true); \
+    else \
+      cp target/release/libml_semantic_router.so /build/out/ && \
+      (cp target/release/libml_semantic_router.a /build/out/ 2>/dev/null || true); \
+    fi && \
+    echo "=== Built ml-binding library ===" && \
+    ls -la /build/out/ && \
+    file /build/out/libml_semantic_router.so
+
+# Stage 1b: Build Rust nlp-binding (BM25 + N-gram keyword classification, cross-compiled)
+FROM --platform=$BUILDPLATFORM rustlang/rust:nightly AS nlp-builder
+ARG TARGETARCH
+ARG GIT_SSL_NO_VERIFY
+WORKDIR /build
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+      dpkg --add-architecture arm64 && \
+      apt-get update && apt-get install -y \
+        gcc-aarch64-linux-gnu \
+        g++-aarch64-linux-gnu && \
+      rm -rf /var/lib/apt/lists/* && \
+      rustup target add aarch64-unknown-linux-gnu; \
+    fi
+
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+
+COPY nlp-binding/Cargo.toml nlp-binding/Cargo.loc[k] ./
+
+RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false || true; \
+    mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cargo build --release --target aarch64-unknown-linux-gnu; \
+    else \
+      cargo build --release; \
+    fi && \
+    rm -rf src
+
+COPY nlp-binding/src/ ./src/
+
+RUN find target -name "libnlp_binding.so" -delete 2>/dev/null; \
+    find target -name "libnlp_binding.a" -delete 2>/dev/null; \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cargo build --release --target aarch64-unknown-linux-gnu; \
+    else \
+      cargo build --release; \
+    fi
+
+RUN mkdir -p /build/out && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cp target/aarch64-unknown-linux-gnu/release/libnlp_binding.so /build/out/ && \
+      (cp target/aarch64-unknown-linux-gnu/release/libnlp_binding.a /build/out/ 2>/dev/null || true); \
+    else \
+      cp target/release/libnlp_binding.so /build/out/ && \
+      (cp target/release/libnlp_binding.a /build/out/ 2>/dev/null || true); \
+    fi && \
+    echo "=== Built nlp-binding library ===" && \
+    ls -la /build/out/
+
+# Stage 1r: Build Rust onnx-binding (ROCm dynamic, amd64 only)
+FROM --platform=$BUILDPLATFORM rust:1.90 AS onnx-builder
+ARG TARGETARCH
+ARG GIT_SSL_NO_VERIFY
+WORKDIR /build
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+RUN if [ "$TARGETARCH" != "amd64" ]; then \
+      echo "ROCm vllm-sr image only supports TARGETARCH=amd64, got: $TARGETARCH" && exit 1; \
+    fi
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential \
+      pkg-config \
+      libssl-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY onnx-binding/Cargo.toml onnx-binding/Cargo.loc[k] ./
+
+RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false || true; \
+    mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
+    OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu \
+    cargo build --release --features rocm-dynamic --target x86_64-unknown-linux-gnu && \
+    rm -rf src
+
+COPY onnx-binding/src/ ./src/
+COPY onnx-binding/go.mod onnx-binding/semantic-router.go ./
+
+RUN find target -name "libonnx_semantic_router.so" -delete 2>/dev/null; \
+    find target -name "libonnx_semantic_router.a" -delete 2>/dev/null; \
+    OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu \
+    cargo build --release --features rocm-dynamic --target x86_64-unknown-linux-gnu
+
+RUN mkdir -p /build/out && \
+    cp target/x86_64-unknown-linux-gnu/release/libonnx_semantic_router.so /build/out/ && \
+    (cp target/x86_64-unknown-linux-gnu/release/libonnx_semantic_router.a /build/out/ 2>/dev/null || true) && \
+    echo "=== Built onnx-binding ROCm library ===" && \
+    ls -la /build/out/ && \
+    file /build/out/libonnx_semantic_router.so
+
+# Stage 1c-wasm: Build DSL compiler to WebAssembly for the dashboard
+# The WASM target only uses pkg/dsl (pure Go), but go.mod has replace directives
+# pointing to ../../candle-binding etc. We create stub go.mod files so go mod
+# download succeeds without copying the full binding source trees.
+FROM --platform=$BUILDPLATFORM golang:1.24 AS wasm-builder
+WORKDIR /build
+COPY src/semantic-router/ ./
+# Create stub modules for local replace directives (not needed by WASM build)
+RUN mkdir -p /candle-binding /ml-binding /nlp-binding && \
+    echo 'module github.com/vllm-project/semantic-router/candle-binding' > /candle-binding/go.mod && \
+    echo 'module github.com/vllm-project/semantic-router/ml-binding'    > /ml-binding/go.mod && \
+    echo 'module github.com/vllm-project/semantic-router/nlp-binding'   > /nlp-binding/go.mod
+RUN go mod download
+RUN CGO_ENABLED=0 GOOS=js GOARCH=wasm go build \
+      -ldflags="-s -w" \
+      -o /build/signal-compiler.wasm \
+      ./cmd/wasm/ && \
+    # Go 1.24+ moved wasm_exec.js from misc/wasm/ to lib/wasm/
+    if [ -f "$(go env GOROOT)/lib/wasm/wasm_exec.js" ]; then \
+      cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" /build/wasm_exec.js; \
+    else \
+      cp "$(go env GOROOT)/misc/wasm/wasm_exec.js" /build/wasm_exec.js; \
+    fi
+
+# Stage 1c: Build dashboard frontend with Node.js
+FROM node:20-alpine AS frontend-builder
+WORKDIR /app/frontend
+COPY dashboard/frontend/package.json dashboard/frontend/package-lock.json ./
+# Use official npm registry to avoid mirror timeouts
+RUN npm config set registry https://registry.npmjs.org/ && \
+    npm ci --include=dev
+COPY dashboard/frontend/ ./
+# Copy WASM artifacts into public/ before building
+COPY --from=wasm-builder /build/signal-compiler.wasm /build/wasm_exec.js ./public/
+RUN npm run build
+
+# Stage 1c: Build dashboard backend with Go
+FROM --platform=$BUILDPLATFORM golang:1.24 AS dashboard-builder
+ARG TARGETARCH
+WORKDIR /app
+
+ENV GOPROXY=https://proxy.golang.org,direct
+
+COPY src/semantic-router/go.mod src/semantic-router/go.sum /app/src/semantic-router/
+COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
+COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
+
+COPY dashboard/backend/go.mod dashboard/backend/go.sum /app/dashboard/backend/
+WORKDIR /app/dashboard/backend
+RUN go mod download
+
+COPY dashboard/backend/ /app/dashboard/backend/
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+      apt-get update && apt-get install -y gcc-aarch64-linux-gnu && rm -rf /var/lib/apt/lists/* && \
+      CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -ldflags="-w -s" -o /app/dashboard-backend main.go; \
+    else \
+      CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s" -o /app/dashboard-backend main.go; \
+    fi
+
+# Stage 2: Build Go semantic router
+FROM --platform=$BUILDPLATFORM golang:1.24 AS go-builder
+ARG TARGETARCH
+WORKDIR /build
+
+# Copy Rust libraries from all builders
+COPY --from=rust-builder /build/out/ /usr/local/lib/
+COPY --from=onnx-builder /build/out/ /usr/local/lib/
+COPY --from=ml-builder /build/out/ /usr/local/lib/
+COPY --from=nlp-builder /build/out/ /usr/local/lib/
+
+ENV LD_LIBRARY_PATH=/usr/local/lib
+
+# Copy candle-binding Go files (needed for go.mod replace directive)
+COPY --from=rust-builder /build/go.mod /build/semantic-router.go /build/../candle-binding/
+
+# Copy onnx-binding Go files (needed for go.onnx.mod replace directive)
+COPY --from=onnx-builder /build/go.mod /build/semantic-router.go /build/../onnx-binding/
+COPY --from=onnx-builder /build/out/ /build/../onnx-binding/target/release/
+
+# Copy ml-binding Go files (needed for go.mod replace directive)
+# Also copy the built library to ml-binding/target/release/ for CGO linking
+COPY ml-binding/go.mod ml-binding/ml_binding.go /build/../ml-binding/
+COPY --from=ml-builder /build/out/ /build/../ml-binding/target/release/
+
+# Copy nlp-binding Go files (needed for go.mod replace directive)
+COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go /build/../nlp-binding/
+COPY --from=nlp-builder /build/out/ /build/../nlp-binding/target/release/
+
+# Copy Go source (go.mod has local replace directives, so go mod download
+# requires candle-binding and ml-binding to be present first)
+COPY src/semantic-router/ .
+
+# Build ONNX router (ROCm image uses onnx-binding with dynamic ORT loading)
+RUN if [ "$TARGETARCH" != "amd64" ]; then \
+      echo "ROCm vllm-sr image only supports TARGETARCH=amd64, got: $TARGETARCH" && exit 1; \
+    fi && \
+    CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
+    CGO_CFLAGS="-I/build/../onnx-binding" \
+    CGO_LDFLAGS="-L/build/../onnx-binding/target/release -L/build/../ml-binding/target/release -L/build/../nlp-binding/target/release -lonnx_semantic_router -lml_semantic_router -lnlp_binding" \
+    go build -modfile=go.onnx.mod -tags=onnx -ldflags="-w -s" -o router cmd/main.go
+
+# Stage 3: Get Envoy binary
+FROM envoyproxy/envoy:v1.34-latest AS envoy
+
+# Stage 4: Final runtime image (ROCm 7.0 + ONNX Runtime ROCm)
+FROM rocm/dev-ubuntu-22.04:7.0
+ARG TARGETARCH
+ARG GIT_SSL_NO_VERIFY
+
+RUN if [ "$TARGETARCH" != "amd64" ]; then \
+      echo "ROCm vllm-sr image only supports TARGETARCH=amd64, got: $TARGETARCH" && exit 1; \
+    fi
+
+# Install system dependencies
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        python3 \
+        python3-pip \
+        supervisor \
+        curl \
+        ca-certificates \
+        hipblas \
+        miopen-hip \
+        hipfft \
+        rccl \
+        docker.io; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*
+
+# Install ROCm-enabled ONNX Runtime shared library
+RUN python3 -m pip install --no-cache-dir \
+      https://repo.radeon.com/rocm/manylinux/rocm-rel-7.0/onnxruntime_rocm-1.22.1-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl && \
+    ORT_DIR=/usr/local/lib/python3.10/dist-packages/onnxruntime/capi && \
+    ln -sf "$ORT_DIR"/libonnxruntime.so.* "$ORT_DIR/libonnxruntime.so"
+
+# Copy binaries from builders (rust artifacts from normalized /build/out/)
+COPY --from=go-builder /build/router /usr/local/bin/router
+COPY --from=rust-builder /build/out/libcandle_semantic_router.so /usr/local/lib/
+COPY --from=onnx-builder /build/out/libonnx_semantic_router.so /usr/local/lib/
+COPY --from=ml-builder /build/out/libml_semantic_router.so /usr/local/lib/
+COPY --from=nlp-builder /build/out/libnlp_binding.so /usr/local/lib/
+COPY --from=envoy /usr/local/bin/envoy /usr/local/bin/envoy
+COPY --from=dashboard-builder /app/dashboard-backend /usr/local/bin/dashboard-backend
+COPY --from=frontend-builder /app/frontend/dist /app/frontend
+
+# Set library path and ORT dynamic library path for onnx-binding
+ENV ORT_DYLIB_PATH=/usr/local/lib/python3.10/dist-packages/onnxruntime/capi/libonnxruntime.so \
+    LD_LIBRARY_PATH=/usr/local/lib:/opt/rocm/lib:/usr/local/lib/python3.10/dist-packages/onnxruntime/capi
+
+# Create necessary directories
+RUN mkdir -p /app /app/models /app/config /etc/envoy /var/log/supervisor /var/log
+
+# Copy Python CLI (includes templates in cli/templates/)
+WORKDIR /app
+COPY src/vllm-sr/cli/ /app/cli/
+COPY src/vllm-sr/requirements.txt /app/requirements.txt
+
+# Copy tools database to config directory
+COPY src/vllm-sr/cli/templates/tools_db.json /app/config/tools_db.json
+# Copy OpenClaw skill catalog consumed by dashboard /api/openclaw/skills
+COPY dashboard/backend/config/openclaw-skills.json /app/config/openclaw-skills.json
+
+# Copy bench directory for evaluation benchmarks
+COPY bench/ /app/bench/
+
+# Copy training/model_eval directory for signal evaluation
+COPY src/training/model_eval/ /app/src/training/model_eval/
+
+# GIT_SSL_NO_VERIFY=1: add --trusted-host for pypi (proxy)
+RUN if [ "$GIT_SSL_NO_VERIFY" = "1" ]; then PIP_EXTRA="--trusted-host pypi.org --trusted-host files.pythonhosted.org"; else PIP_EXTRA=""; fi && \
+    python3 -m pip install $PIP_EXTRA --no-cache-dir -r requirements.txt && \
+    python3 -m pip install $PIP_EXTRA --no-cache-dir -r /app/bench/requirements.txt && \
+    python3 -m pip install $PIP_EXTRA --no-cache-dir -r /app/src/training/model_eval/requirements.txt
+
+# Copy start scripts
+COPY src/vllm-sr/start-router.sh /app/start-router.sh
+COPY src/vllm-sr/start-dashboard.sh /app/start-dashboard.sh
+RUN chmod +x /app/start-router.sh /app/start-dashboard.sh
+
+# Copy supervisord configuration
+COPY src/vllm-sr/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Create log files and directories with proper permissions for non-root
+RUN touch /var/log/envoy_access.log /var/log/supervisor/supervisord.log && \
+    chmod 666 /var/log/envoy_access.log /var/log/supervisor/supervisord.log && \
+    chmod 777 /var/log /var/log/supervisor /var/run
+
+# Expose ports
+# Note: Listener ports are configured in config.yaml and mapped dynamically
+# 50051: Router gRPC (ExtProc)
+# 9190: Prometheus metrics
+# 9901: Envoy admin
+# 8700: Dashboard UI
+EXPOSE 50051 9190 9901 8700
+
+# Volume for model cache
+# Mount host's ./models directory to persist downloaded models
+VOLUME ["/app/models"]
+
+# Run supervisord
+ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

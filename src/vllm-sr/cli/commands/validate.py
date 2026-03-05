@@ -38,7 +38,7 @@ def validate_command(config_path: str):
         sys.exit(1)
 
     log.info("=" * 60)
-    log.info("✓ Configuration is valid!")
+    log.info("Configuration is valid!")
     log.info("=" * 60)
     log.info("\nConfiguration summary:")
     log.info(f"  Version: {user_config.version}")

@@ -29,7 +29,7 @@ fn main() -> anyhow::Result<()> {
         ModernBertVariant::Multilingual,
         "Expected Multilingual variant"
     );
-    println!("   ✓ Correctly detected as Multilingual (mmBERT)\n");
+    println!("   Correctly detected as Multilingual (mmBERT)\n");
 
     // 2. Test variant properties
     println!("2. Testing variant properties...");
@@ -41,7 +41,7 @@ fn main() -> anyhow::Result<()> {
     );
     assert_eq!(variant.max_length(), 8192);
     assert_eq!(variant.pad_token(), "<pad>");
-    println!("   ✓ Variant properties correct\n");
+    println!("   Variant properties correct\n");
 
     // 3. Test loading with auto-detection (will fail without classifier head, but let's check the error)
     println!("3. Testing TraditionalModernBertClassifier.load_from_directory...");
@@ -57,7 +57,7 @@ fn main() -> anyhow::Result<()> {
         Err(e) => {
             // Expected - base model doesn't have classifier weights
             println!("   Expected error (no classifier head): {}", e);
-            println!("   ✓ Error is expected - base mmBERT is for MLM, not classification\n");
+            println!("   Error is expected - base mmBERT is for MLM, not classification\n");
         }
     }
 
@@ -90,9 +90,9 @@ fn main() -> anyhow::Result<()> {
     }
 
     println!("\n=== Test Summary ===");
-    println!("✓ Variant detection works correctly");
-    println!("✓ Variant properties are correct for mmBERT");
-    println!("✓ Loading methods correctly identify model as multilingual");
+    println!("Variant detection works correctly");
+    println!("Variant properties are correct for mmBERT");
+    println!("Loading methods correctly identify model as multilingual");
     println!(
         "\nNote: Full classification requires a fine-tuned mmBERT model with a classifier head."
     );
