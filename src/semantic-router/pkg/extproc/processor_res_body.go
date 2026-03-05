@@ -226,35 +226,6 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		}
 	}
 
-	// Memory chunk storage (async, if auto_store enabled)
-	// Stores current turn directly in vector store -- no LLM extraction overhead.
-	autoStoreEnabled := extractAutoStore(ctx)
-	if !autoStoreEnabled && r.Config != nil && r.Config.Memory.AutoStore {
-		logging.Infof("extractAutoStore: Falling back to global config, AutoStore=%v", r.Config.Memory.AutoStore)
-		autoStoreEnabled = true
-	}
-	logging.Infof("Memory store check: MemoryExtractor=%v, autoStore=%v, jailbreakPassed=%v",
-		r.MemoryExtractor != nil, autoStoreEnabled, !ctx.JailbreakDetected)
-	if r.MemoryExtractor != nil && autoStoreEnabled && !ctx.JailbreakDetected {
-		currentUserMessage := extractCurrentUserMessage(ctx)
-		currentAssistantResponse := extractAssistantResponseText(responseBody)
-		go func() {
-			bgCtx := context.Background()
-			sessionID, userID, history, err := extractMemoryInfo(ctx)
-			if err != nil {
-				logging.Errorf("Memory store failed: %v", err)
-				return
-			}
-
-			logging.Infof("Memory store: sessionID=%s, userID=%s, userMsg=%d chars, assistantMsg=%d chars, history=%d msgs",
-				sessionID, userID, len(currentUserMessage), len(currentAssistantResponse), len(history))
-
-			if err := r.MemoryExtractor.ProcessResponseWithHistory(bgCtx, sessionID, userID, currentUserMessage, currentAssistantResponse, history); err != nil {
-				logging.Warnf("Memory store failed: %v", err)
-			}
-		}()
-	}
-
 	// Translate response for Response API requests
 	finalBody := responseBody
 	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest && r.ResponseAPIFilter != nil {
@@ -285,10 +256,44 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		}
 	}
 
+	// Perform response-level jailbreak detection if enabled
+	if jailbreakResponse := r.performResponseJailbreakDetection(ctx, responseBody); jailbreakResponse != nil {
+		return jailbreakResponse, nil
+	}
+
 	// Perform hallucination detection if enabled and conditions are met
 	if hallucinationResponse := r.performHallucinationDetection(ctx, responseBody); hallucinationResponse != nil {
 		// Hallucination detected and action is "block" - return error response
 		return hallucinationResponse, nil
+	}
+
+	// Memory chunk storage (async, if auto_store enabled)
+	// Runs AFTER response-level detection so ctx flags are set for gating.
+	autoStoreEnabled := extractAutoStore(ctx)
+	if !autoStoreEnabled && r.Config != nil && r.Config.Memory.AutoStore {
+		logging.Infof("extractAutoStore: Falling back to global config, AutoStore=%v", r.Config.Memory.AutoStore)
+		autoStoreEnabled = true
+	}
+	logging.Infof("Memory store check: MemoryExtractor=%v, autoStore=%v",
+		r.MemoryExtractor != nil, autoStoreEnabled)
+	if r.MemoryExtractor != nil && autoStoreEnabled {
+		currentUserMessage := extractCurrentUserMessage(ctx)
+		currentAssistantResponse := extractAssistantResponseText(responseBody)
+		go func() {
+			bgCtx := context.Background()
+			sessionID, userID, history, err := extractMemoryInfo(ctx)
+			if err != nil {
+				logging.Errorf("Memory store failed: %v", err)
+				return
+			}
+
+			logging.Infof("Memory store: sessionID=%s, userID=%s, userMsg=%d chars, assistantMsg=%d chars, history=%d msgs",
+				sessionID, userID, len(currentUserMessage), len(currentAssistantResponse), len(history))
+
+			if err := r.MemoryExtractor.ProcessResponseWithHistory(bgCtx, sessionID, userID, currentUserMessage, currentAssistantResponse, history); err != nil {
+				logging.Warnf("Memory store failed: %v", err)
+			}
+		}()
 	}
 
 	// Check unverified factual response if hallucination plugin is enabled
@@ -314,6 +319,11 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 				},
 			},
 		},
+	}
+
+	// Apply response jailbreak warning based on configured action
+	if ctx.ResponseJailbreakDetected {
+		modifiedBody, response = r.applyResponseJailbreakWarning(response, ctx, modifiedBody)
 	}
 
 	// Apply hallucination warning based on configured action

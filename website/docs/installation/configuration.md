@@ -2044,6 +2044,45 @@ This workflow ensures your configuration is:
 - Version controlled for tracking changes
 - Optimized for your specific use case
 
+## Response Jailbreak Detection
+
+Response-level jailbreak detection runs the jailbreak classifier on the **LLM response body** to catch adversarial content that passed input-level detection. This complements the existing input-level jailbreak detection (which scans user requests) by adding a second layer that scans what the LLM actually generates.
+
+The `response_jailbreak` plugin follows the same pattern as the existing `hallucination` plugin — it runs as a general response filter with configurable actions.
+
+### Configuration
+
+Add the `response_jailbreak` plugin to any decision:
+
+```yaml
+decisions:
+  - name: my_decision
+    plugins:
+      - type: response_jailbreak
+        configuration:
+          enabled: true
+          threshold: 0.5    # classifier confidence threshold (default: prompt_guard threshold)
+          action: header     # "header", "block", or "none"
+```
+
+### Actions
+
+| Action | Behavior |
+|--------|----------|
+| `header` | Add `x-vsr-response-jailbreak-*` warning headers to the response (default) |
+| `block` | Return a 403 error response instead of the original |
+| `none` | Log and record metrics only, pass the response through unchanged |
+
+### Response Headers
+
+When `action: header` is configured and jailbreak content is detected:
+
+| Header | Description |
+|--------|-------------|
+| `x-vsr-response-jailbreak-detected` | Set to `true` when jailbreak content is detected |
+| `x-vsr-response-jailbreak-type` | Type of jailbreak detected |
+| `x-vsr-response-jailbreak-confidence` | Confidence score of the detection |
+
 ## Next Steps
 
 - **[Installation Guide](installation.md)** - Setup instructions

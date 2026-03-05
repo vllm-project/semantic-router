@@ -182,6 +182,10 @@ func (r *OpenAIRouter) startRouterReplay(
 		JailbreakType:       ctx.JailbreakType,
 		JailbreakConfidence: ctx.JailbreakConfidence,
 
+		ResponseJailbreakDetected:   ctx.ResponseJailbreakDetected,
+		ResponseJailbreakType:       ctx.ResponseJailbreakType,
+		ResponseJailbreakConfidence: ctx.ResponseJailbreakConfidence,
+
 		PIIDetected: ctx.PIIDetected,
 		PIIEntities: ctx.PIIEntities,
 		PIIBlocked:  ctx.PIIBlocked,

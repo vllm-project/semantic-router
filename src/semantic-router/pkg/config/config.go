@@ -1136,7 +1136,7 @@ type MemoryQualityScoringConfig struct {
 // MemoryReflectionConfig configures the pre-injection validation gate.
 // Retrieved memories pass through heuristic filters before being injected
 // into the LLM request. This improves accuracy by removing stale/redundant
-// context and hardens against MINJA-style memory poisoning attacks.
+// context.
 type MemoryReflectionConfig struct {
 	// Enabled turns the reflection gate on/off (default: true when memory is enabled)
 	Enabled *bool `yaml:"enabled,omitempty"`
@@ -2233,7 +2233,7 @@ type ModelRef struct {
 
 // DecisionPlugin represents a plugin configuration for a decision
 type DecisionPlugin struct {
-	// Type specifies the plugin type. Permitted values: "semantic-cache", "jailbreak", "pii", "system_prompt", "header_mutation", "hallucination", "router_replay", "memory", "fast_response".
+	// Type specifies the plugin type. Permitted values: "semantic-cache", "jailbreak", "pii", "system_prompt", "header_mutation", "hallucination", "response_jailbreak", "router_replay", "memory", "fast_response".
 	Type string `yaml:"type" json:"type"`
 
 	// Configuration is the raw configuration for this plugin
@@ -2292,6 +2292,25 @@ type HeaderMutationPluginConfig struct {
 type HeaderPair struct {
 	Name  string `json:"name" yaml:"name"`
 	Value string `json:"value" yaml:"value"`
+}
+
+// ResponseJailbreakPluginConfig represents configuration for response-level jailbreak
+// detection. When enabled, the jailbreak classifier runs on the LLM response body to
+// catch adversarial content that passed input-level detection — including memory
+// poisoning patterns such as entity redirection and data reassignment (arXiv:2503.03704).
+type ResponseJailbreakPluginConfig struct {
+	Enabled bool `json:"enabled" yaml:"enabled"`
+
+	// Threshold is the classifier confidence threshold for flagging.
+	// Responses with confidence >= Threshold are treated as jailbreak content.
+	// Default: uses the global prompt_guard threshold.
+	Threshold float32 `json:"threshold,omitempty" yaml:"threshold,omitempty"`
+
+	// Action specifies what to do when jailbreak content is detected in the response.
+	// "header" - add warning headers to response (default)
+	// "block"  - return an error response instead of the original
+	// "none"   - no action, only log and metrics (still gates memory storage)
+	Action string `json:"action,omitempty" yaml:"action,omitempty"`
 }
 
 // HallucinationPluginConfig represents configuration for hallucination detection plugin
@@ -2554,6 +2573,21 @@ func (d *Decision) GetHallucinationConfig() *HallucinationPluginConfig {
 	result := &HallucinationPluginConfig{}
 	if err := unmarshalPluginConfig(config, result); err != nil {
 		logging.Errorf("Failed to unmarshal hallucination config: %v", err)
+		return nil
+	}
+	return result
+}
+
+// GetResponseJailbreakConfig returns the response_jailbreak plugin configuration
+func (d *Decision) GetResponseJailbreakConfig() *ResponseJailbreakPluginConfig {
+	config := d.GetPluginConfig("response_jailbreak")
+	if config == nil {
+		return nil
+	}
+
+	result := &ResponseJailbreakPluginConfig{}
+	if err := unmarshalPluginConfig(config, result); err != nil {
+		logging.Errorf("Failed to unmarshal response_jailbreak config: %v", err)
 		return nil
 	}
 	return result

@@ -67,6 +67,17 @@ type Memory struct {
 
 	// Importance is a score for prioritizing memories (0.0 to 1.0)
 	Importance float32 `json:"importance"`
+
+	// --- Provenance fields ---
+
+	// CreatedByUserID is the user whose conversation produced this memory.
+	CreatedByUserID string `json:"created_by_user_id,omitempty"`
+
+	// ConversationID is the session that produced this memory.
+	ConversationID string `json:"conversation_id,omitempty"`
+
+	// CreatedVia records the creation method: "llm_extraction", "api", "import".
+	CreatedVia string `json:"created_via,omitempty"`
 }
 
 // RetrieveResult represents a memory retrieved from search with its relevance score

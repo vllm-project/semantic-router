@@ -5,7 +5,7 @@ Memory Features E2E Test Suite — Risk-Based, Milvus-First
 Organized by priority derived from risk/return analysis (see ISSUE_1293_REVIEW.md):
 
   P0 Security:
-    - UserIsolationTest: Cross-user memory leak (MINJA/InjecMEM attack surface)
+    - UserIsolationTest: Cross-user memory leak prevention
 
   P1 Pipeline Correctness:
     - MemoryInjectionPipelineTest: The fundamental store -> extract -> inject contract

@@ -105,10 +105,15 @@ type RequestContext struct {
 	EnhancedHallucinationInfo *EnhancedHallucinationInfo // Detailed NLI info (when use_nli enabled)
 	UnverifiedFactualResponse bool                       // True if fact-check needed but no tools to verify against
 
-	// Jailbreak Detection Results
-	JailbreakDetected   bool    // True if jailbreak was detected
+	// Jailbreak Detection Results (request-level, from signal classification)
+	JailbreakDetected   bool    // True if jailbreak was detected in user input
 	JailbreakType       string  // Type of jailbreak detected
 	JailbreakConfidence float32 // Confidence score of jailbreak detection
+
+	// Response-level Jailbreak Detection Results (from response body scanning)
+	ResponseJailbreakDetected   bool    // True if jailbreak content detected in LLM response
+	ResponseJailbreakType       string  // Type of jailbreak detected in response
+	ResponseJailbreakConfidence float32 // Confidence score of response jailbreak detection
 
 	// PII Detection Results
 	PIIDetected bool     // True if PII was detected

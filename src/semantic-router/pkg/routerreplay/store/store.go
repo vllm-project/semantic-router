@@ -44,10 +44,15 @@ type Record struct {
 	JailbreakEnabled  bool `json:"jailbreak_enabled,omitempty"`
 	PIIEnabled        bool `json:"pii_enabled,omitempty"`
 
-	// Jailbreak Detection Results
+	// Jailbreak Detection Results (request-level)
 	JailbreakDetected   bool    `json:"jailbreak_detected,omitempty"`
 	JailbreakType       string  `json:"jailbreak_type,omitempty"`
 	JailbreakConfidence float32 `json:"jailbreak_confidence,omitempty"`
+
+	// Response Jailbreak Detection Results
+	ResponseJailbreakDetected   bool    `json:"response_jailbreak_detected,omitempty"`
+	ResponseJailbreakType       string  `json:"response_jailbreak_type,omitempty"`
+	ResponseJailbreakConfidence float32 `json:"response_jailbreak_confidence,omitempty"`
 
 	// PII Detection Results
 	PIIDetected bool     `json:"pii_detected,omitempty"`
