@@ -117,16 +117,16 @@ start_router() {
 
     docker rm -f "$SR_CONTAINER" 2>/dev/null || true
 
-    local gpu_flags=""
+    local gpu_flags=()
     if [ "$mode" = "gpu" ]; then
-        gpu_flags="--device=/dev/kfd --device=/dev/dri --group-add video"
+        gpu_flags=(--device=/dev/kfd --device=/dev/dri --group-add video)
     fi
 
     log "Starting SR in ${mode^^} mode..."
 
     docker run -d --name "$SR_CONTAINER" \
         --network host \
-        $gpu_flags \
+        "${gpu_flags[@]}" \
         -e AI_BINDING=onnx \
         -v "$config_file:/app/config/config.yaml:ro" \
         -v "$MODELS_DIR/mmbert32k-intent-classifier-merged-onnx:/app/models/mmbert32k-intent-classifier-merged-onnx:ro" \

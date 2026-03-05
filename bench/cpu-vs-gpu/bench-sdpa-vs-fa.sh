@@ -46,16 +46,16 @@ start_router() {
 
     docker rm -f "$SR_CONTAINER" 2>/dev/null || true
 
-    local env_flags="-e AI_BINDING=onnx"
+    local env_flags=(-e AI_BINDING=onnx)
     if [ "$mode" = "sdpa" ]; then
-        env_flags="$env_flags -e ORT_CK_FLASH_ATTN_LIB="
+        env_flags+=(-e ORT_CK_FLASH_ATTN_LIB=)
     fi
 
     log "Starting SR in ${mode^^} mode (image: $image)..."
     docker run -d --name "$SR_CONTAINER" \
         --network host \
         --device=/dev/kfd --device=/dev/dri --group-add video \
-        $env_flags \
+        "${env_flags[@]}" \
         -v "$config_file:/app/config/config.yaml:ro" \
         -v "$MODELS_DIR/mmbert32k-intent-classifier-merged-onnx:/app/models/mmbert32k-intent-classifier-merged-onnx:ro" \
         -v "$MODELS_DIR/mmbert32k-jailbreak-detector-merged-onnx:/app/models/mmbert32k-jailbreak-detector-merged-onnx:ro" \
