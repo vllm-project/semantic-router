@@ -80,7 +80,7 @@ def download_data(cache_dir: str = ".cache/ml_model_selection") -> Path:
     local_file = cache_path / HF_DATASET_FILE
 
     if local_file.exists():
-        print(f"✓ Using cached data: {local_file}")
+        print(f"Using cached data: {local_file}")
         return local_file
 
     print(f"Downloading data from HuggingFace: {HF_DATASET_REPO}")
@@ -91,7 +91,7 @@ def download_data(cache_dir: str = ".cache/ml_model_selection") -> Path:
             repo_type="dataset",
             local_dir=str(cache_path),
         )
-        print(f"✓ Downloaded to: {downloaded_path}")
+        print(f"Downloaded to: {downloaded_path}")
         return Path(downloaded_path)
     except Exception as e:
         print(f"⚠ Failed to download from HuggingFace: {e}")
@@ -149,7 +149,7 @@ def load_jsonl(file_path: Path) -> List[RoutingRecord]:
             except Exception as e:
                 print(f"⚠ Error processing line {line_num}: {e}")
 
-    print(f"✓ Loaded {len(records)} records from {file_path}")
+    print(f"Loaded {len(records)} records from {file_path}")
     return records
 
 

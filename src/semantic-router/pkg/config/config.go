@@ -795,7 +795,8 @@ type EmbeddingModels struct {
 // This struct is kept for backward compatibility and may be renamed in a future version.
 type HNSWConfig struct {
 	// ModelType specifies which embedding model to use (default: "qwen3")
-	// Options: "qwen3" (high quality, 32K context), "gemma" (fast, 8K context), or "mmbert" (multilingual, 2D Matryoshka)
+	// Options: "qwen3" (high quality, 32K context), "gemma" (fast, 8K context),
+	// "mmbert" (multilingual, 2D Matryoshka), or "multimodal" (text branch, 384-dim default)
 	// This model will be used for both preloading and runtime embedding generation
 	ModelType string `yaml:"model_type,omitempty"`
 
@@ -1061,10 +1062,12 @@ type SemanticCache struct {
 	// BackendConfigPath is a path to the backend-specific configuration file (Deprecated)
 	BackendConfigPath string `yaml:"backend_config_path,omitempty"`
 
-	// Embedding model to use for semantic similarity ("bert", "qwen3", "gemma")
+	// Embedding model to use for semantic similarity ("bert", "qwen3", "gemma", "mmbert", "multimodal")
 	// - "bert": Fast, 384-dim, good for short texts (default)
 	// - "qwen3": High quality, 1024-dim, supports 32K context
 	// - "gemma": Balanced, 768-dim, supports 8K context
+	// - "mmbert": Multilingual, 768-dim, supports 2D Matryoshka
+	// - "multimodal": Text branch of multi-modal model, 384-dim default
 	// Default: "bert"
 	EmbeddingModel string `yaml:"embedding_model,omitempty"`
 }
@@ -1083,7 +1086,7 @@ type MemoryConfig struct {
 
 	// EmbeddingModel specifies which embedding model to use
 	// If not set, auto-detected from embedding_models section
-	// Options: "bert", "mmbert", "qwen3", "gemma"
+	// Options: "bert", "mmbert", "multimodal", "qwen3", "gemma"
 	EmbeddingModel string `yaml:"embedding_model,omitempty"`
 
 	// ExtractionBatchSize is the number of turns between extraction runs (default: 10)

@@ -157,7 +157,7 @@ train_cpu_model() {
         local minutes=$((duration / 60))
         local seconds=$((duration % 60))
 
-        echo "✅ SUCCESS: $model_name trained on CPU in ${minutes}m ${seconds}s"
+        echo "SUCCESS: $model_name trained on CPU in ${minutes}m ${seconds}s"
         echo "$model_name: SUCCESS (${minutes}m ${seconds}s)" >> "$SUMMARY_FILE"
 
         return 0
@@ -197,7 +197,7 @@ test_cpu_model() {
         local python_cmd="python pii_bert_finetuning_lora.py --mode test --model-path $python_model_dir"
 
         if eval "$python_cmd" > "$python_test_log" 2>&1; then
-            echo "  ✅ Python test completed"
+            echo "  Python test completed"
 
             # Extract key metrics
             local entities_count=$(grep -o "[0-9]\+ entities detected" "$python_test_log" | head -1 | grep -o "[0-9]\+" || echo "0")
@@ -224,7 +224,7 @@ test_cpu_model() {
         local go_cmd="go run pii_bert_finetuning_lora_verifier.go -pii-token-model $rust_model_dir"
 
         if eval "$go_cmd" > "$go_test_log" 2>&1; then
-            echo "  ✅ Go test completed"
+            echo "  Go test completed"
             echo "$model_name: Go Test OK" >> "$SUMMARY_FILE"
         else
             echo "  ❌ Go test failed"
@@ -258,12 +258,12 @@ done
 echo ""
 echo "📊 CPU TRAINING SUMMARY:"
 echo "======================="
-echo "✅ Successful: ${#successful_models[@]} models"
+echo "Successful: ${#successful_models[@]} models"
 echo "❌ Failed: ${#failed_models[@]} models"
 
 if [[ ${#successful_models[@]} -gt 0 ]]; then
     echo ""
-    echo "✅ Successful models:"
+    echo "Successful models:"
     for model in "${successful_models[@]}"; do
         echo "   • $model"
     done

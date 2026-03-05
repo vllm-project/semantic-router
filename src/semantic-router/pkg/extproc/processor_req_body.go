@@ -274,7 +274,7 @@ func (r *OpenAIRouter) handleAnthropicRouting(openAIRequest *openai.ChatCompleti
 	}
 	if accessKey == "" {
 		// fail_open=true path: no key but allowed through — warn operator
-		logging.Warnf("No API key for Anthropic model %q (fail_open=true) — request will use empty key", targetModel)
+		logging.Debugf("No API key for Anthropic model %q (fail_open=true) — request will use empty key", targetModel)
 	}
 
 	// Update model in request to target model
@@ -652,7 +652,7 @@ func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, endp
 		logging.Infof("Added %s header for model %s (provider=%s)", authHeader, model, llmProvider)
 	} else {
 		// fail_open=true: preserve the original auth header from the client request
-		logging.Warnf("No API key for %s model %q (fail_open=true) — preserving original auth header", llmProvider, model)
+		logging.Debugf("No API key for %s model %q (fail_open=true) — preserving original auth header", llmProvider, model)
 	}
 	// Always strip ext_authz-injected per-user key headers to prevent credential leakage upstream
 	removeHeaders = append(removeHeaders, r.CredentialResolver.HeadersToStrip()...)
@@ -780,7 +780,7 @@ func (r *OpenAIRouter) createSpecifiedModelResponse(model string, upstreamModel 
 		})
 		logging.Infof("Added %s header for model %s (provider=%s)", authHeader, model, llmProvider)
 	} else {
-		logging.Warnf("No API key for %s model %q (fail_open=true) — preserving original auth header", llmProvider, model)
+		logging.Debugf("No API key for %s model %q (fail_open=true) — preserving original auth header", llmProvider, model)
 	}
 	// Always strip ext_authz-injected per-user key headers to prevent credential leakage upstream
 	removeHeaders = append(removeHeaders, r.CredentialResolver.HeadersToStrip()...)

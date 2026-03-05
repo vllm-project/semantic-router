@@ -10,8 +10,10 @@ from cli.utils import getLogger
 from cli.consts import (
     VLLM_SR_DOCKER_NAME,
     VLLM_SR_DOCKER_IMAGE_DEFAULT,
+    VLLM_SR_DOCKER_IMAGE_ROCM,
     VLLM_SR_DOCKER_IMAGE_DEV,
     VLLM_SR_DOCKER_IMAGE_RELEASE,
+    PLATFORM_AMD,
     IMAGE_PULL_POLICY_ALWAYS,
     IMAGE_PULL_POLICY_IF_NOT_PRESENT,
     IMAGE_PULL_POLICY_NEVER,
@@ -76,18 +78,55 @@ def get_container_runtime():
     return _container_runtime
 
 
-def get_docker_image(image=None, pull_policy=None):
+def _normalize_platform(platform):
+    """Normalize platform input for comparisons."""
+    if platform is None:
+        return ""
+    return str(platform).strip().lower()
+
+
+def _is_rocm_image(image_name):
+    """Return True when the image name appears to be a ROCm image variant."""
+    if not image_name:
+        return False
+    return "rocm" in image_name.lower()
+
+
+def _derive_rocm_variant(image_name):
+    """Return a ROCm variant for official vllm-sr image references."""
+    if not image_name:
+        return ""
+
+    image_name = image_name.strip()
+    default_repo = VLLM_SR_DOCKER_IMAGE_DEFAULT.rsplit(":", 1)[0]
+    if not image_name.startswith(default_repo):
+        return ""
+
+    # Only handle standard references like:
+    # - ghcr.io/.../vllm-sr
+    # - ghcr.io/.../vllm-sr:tag
+    if image_name == default_repo:
+        return f"{default_repo}-rocm:latest"
+    if image_name.startswith(f"{default_repo}:"):
+        tag = image_name.split(":")[-1]
+        return f"{default_repo}-rocm:{tag}"
+    return ""
+
+
+def get_docker_image(image=None, pull_policy=None, platform=None):
     """
     Determine which Docker image to use and handle pulling if needed.
 
     Priority:
     1. Explicit image parameter (--image)
     2. VLLM_SR_IMAGE environment variable
-    3. Default image (ghcr.io/vllm-project/semantic-router/vllm-sr:latest)
+    3. Platform-specific default image (e.g. AMD -> ROCm image)
+    4. Default image (ghcr.io/vllm-project/semantic-router/vllm-sr:latest)
 
     Args:
         image: Explicit image name (optional)
         pull_policy: Image pull policy - 'always', 'ifnotpresent', 'never' (optional)
+        platform: Platform hint from CLI/environment (e.g. 'amd')
 
     Returns:
         Docker image name
@@ -97,6 +136,9 @@ def get_docker_image(image=None, pull_policy=None):
     """
     if pull_policy is None:
         pull_policy = DEFAULT_IMAGE_PULL_POLICY
+    normalized_platform = _normalize_platform(platform) or _normalize_platform(
+        os.getenv("VLLM_SR_PLATFORM")
+    )
 
     # Determine which image to use
     selected_image = None
@@ -105,16 +147,52 @@ def get_docker_image(image=None, pull_policy=None):
     if image:
         selected_image = image
         log.info(f"Using specified image: {selected_image}")
+        if normalized_platform == PLATFORM_AMD and not _is_rocm_image(selected_image):
+            rocm_variant = _derive_rocm_variant(selected_image)
+            if rocm_variant:
+                log.warning(
+                    "Platform 'amd' selected with non-ROCm official vllm-sr image. "
+                    f"Switching to ROCm image: {rocm_variant}"
+                )
+                selected_image = rocm_variant
+            else:
+                log.warning(
+                    "Platform 'amd' selected but image does not look like a ROCm image. "
+                    "GPU acceleration may not be enabled. Prefer a '*-rocm' image."
+                )
 
     # 2. Check environment variable
     elif os.getenv("VLLM_SR_IMAGE"):
         selected_image = os.getenv("VLLM_SR_IMAGE")
         log.info(f"Using image from VLLM_SR_IMAGE: {selected_image}")
+        if normalized_platform == PLATFORM_AMD and not _is_rocm_image(selected_image):
+            rocm_variant = _derive_rocm_variant(selected_image)
+            if rocm_variant:
+                log.warning(
+                    "Platform 'amd' selected with non-ROCm official vllm-sr image in VLLM_SR_IMAGE. "
+                    f"Switching to ROCm image: {rocm_variant}"
+                )
+                selected_image = rocm_variant
+            else:
+                log.warning(
+                    "Platform 'amd' selected and VLLM_SR_IMAGE does not look like a ROCm image. "
+                    "GPU acceleration may not be enabled. Prefer a '*-rocm' image."
+                )
 
-    # 3. Use default image
+    # 3. Platform-specific default image
     else:
-        selected_image = VLLM_SR_DOCKER_IMAGE_DEFAULT
-        log.info(f"Using default image: {selected_image}")
+        if normalized_platform == PLATFORM_AMD:
+            selected_image = os.getenv(
+                "VLLM_SR_IMAGE_AMD", VLLM_SR_DOCKER_IMAGE_ROCM
+            ).strip()
+            if not selected_image:
+                selected_image = VLLM_SR_DOCKER_IMAGE_ROCM
+            log.info(
+                f"Platform '{normalized_platform}' detected, using AMD ROCm default image: {selected_image}"
+            )
+        else:
+            selected_image = VLLM_SR_DOCKER_IMAGE_DEFAULT
+            log.info(f"Using default image: {selected_image}")
 
     # Handle pull policy
     image_exists = docker_image_exists(selected_image)
@@ -135,7 +213,7 @@ def get_docker_image(image=None, pull_policy=None):
                 _show_image_not_found_error(selected_image)
                 sys.exit(1)
         else:
-            log.info(f"✓ Image exists locally: {selected_image}")
+            log.info(f"Image exists locally: {selected_image}")
 
     elif pull_policy == IMAGE_PULL_POLICY_NEVER:
         # Never pull, error if not exists
@@ -145,7 +223,7 @@ def get_docker_image(image=None, pull_policy=None):
             _show_image_not_found_error(selected_image)
             sys.exit(1)
         else:
-            log.info(f"✓ Image exists locally: {selected_image}")
+            log.info(f"Image exists locally: {selected_image}")
 
     return selected_image
 
@@ -211,7 +289,7 @@ def docker_pull_image(image_name):
             check=True,
         )
 
-        log.info(f"✓ Successfully pulled: {image_name}")
+        log.info(f"Successfully pulled: {image_name}")
         return True
 
     except subprocess.CalledProcessError as e:
@@ -268,7 +346,7 @@ def docker_stop_container(container_name):
         subprocess.run(
             [runtime, "stop", container_name], check=True, capture_output=True
         )
-        log.info(f"✓ Container stopped: {container_name}")
+        log.info(f"Container stopped: {container_name}")
         return True
     except subprocess.CalledProcessError as e:
         log.error(f"Failed to stop container: {e}")
@@ -281,7 +359,7 @@ def docker_remove_container(container_name):
     try:
         log.info(f"Removing container: {container_name}")
         subprocess.run([runtime, "rm", container_name], check=True, capture_output=True)
-        log.info(f"✓ Container removed: {container_name}")
+        log.info(f"Container removed: {container_name}")
         return True
     except subprocess.CalledProcessError as e:
         log.error(f"Failed to remove container: {e}")
@@ -316,7 +394,15 @@ def docker_start_vllm_sr(
     env_vars = dict(env_vars or {})
 
     # Get and validate image
-    image = get_docker_image(image=image, pull_policy=pull_policy)
+    platform = (
+        env_vars.get("DASHBOARD_PLATFORM")
+        or env_vars.get("VLLM_SR_PLATFORM")
+        or os.getenv("VLLM_SR_PLATFORM")
+    )
+    normalized_platform = _normalize_platform(platform)
+    image = get_docker_image(
+        image=image, pull_policy=pull_policy, platform=normalized_platform
+    )
 
     # File descriptor limit
     nofile_limit = int(os.getenv("VLLM_SR_NOFILE_LIMIT", DEFAULT_NOFILE_LIMIT))
@@ -348,6 +434,41 @@ def docker_start_vllm_sr(
     # Add network if specified (for observability)
     if network_name:
         cmd.extend(["--network", network_name])
+
+    # AMD GPU device passthrough
+    if normalized_platform == PLATFORM_AMD:
+        passthrough_enabled = os.getenv("VLLM_SR_AMD_GPU_PASSTHROUGH", "1").lower()
+        if passthrough_enabled not in ["0", "false", "no", "off"]:
+            required_devices = ["/dev/kfd", "/dev/dri"]
+            mounted_devices = []
+            missing_devices = []
+            for dev in required_devices:
+                if os.path.exists(dev):
+                    cmd.extend(["--device", dev])
+                    mounted_devices.append(dev)
+                else:
+                    missing_devices.append(dev)
+
+            if mounted_devices:
+                cmd.extend(["--group-add", "video"])
+                # These options match existing ROCm test/benchmark scripts and
+                # improve compatibility with host security defaults.
+                cmd.extend(["--cap-add", "SYS_PTRACE"])
+                cmd.extend(["--security-opt", "seccomp=unconfined"])
+                log.info(
+                    f"AMD GPU passthrough enabled with devices: {', '.join(mounted_devices)}"
+                )
+
+            if missing_devices:
+                log.warning(
+                    "Platform 'amd' selected but missing AMD GPU devices on host: "
+                    f"{', '.join(missing_devices)}. "
+                    "Container may fall back to CPU."
+                )
+        else:
+            log.info(
+                "AMD GPU passthrough disabled by VLLM_SR_AMD_GPU_PASSTHROUGH environment variable"
+            )
 
     # Add host gateway (syntax differs between docker and podman)
     if runtime == "docker":

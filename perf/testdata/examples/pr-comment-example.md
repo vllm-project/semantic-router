@@ -12,7 +12,7 @@ This is what will automatically appear as a comment on your PR when performance 
 
 | Metric | Count | Percentage |
 |--------|-------|------------|
-| ✅ Total Benchmarks | 32 | 100% |
+| Total Benchmarks | 32 | 100% |
 | ⚠️ Regressions | 1 | 3.1% |
 | 🚀 Improvements | 8 | 25.0% |
 | ➡️ No Change | 23 | 71.9% |
@@ -23,11 +23,11 @@ This is what will automatically appear as a comment on your PR when performance 
 
 | Component | Metric | Baseline | Current | Change | Status |
 |-----------|--------|----------|---------|--------|--------|
-| **Classification** (batch=1) | P95 Latency | 10.50ms | 10.12ms | -3.62% | ✅ |
+| **Classification** (batch=1) | P95 Latency | 10.50ms | 10.12ms | -3.62% | |
 | **Classification** (batch=10) | Throughput | 19.10 qps | 19.52 qps | +2.20% | 🚀 |
 | **Decision Engine** (complex) | P95 Latency | 0.46ms | 0.52ms | **+13.04%** | ⚠️ |
 | **Decision Engine** (complex) | Throughput | 2189 qps | 1952 qps | **-10.83%** | ⚠️ |
-| **Cache** (1K entries) | P95 Latency | 4.23ms | 4.15ms | -1.89% | ✅ |
+| **Cache** (1K entries) | P95 Latency | 4.23ms | 4.15ms | -1.89% | |
 | **Cache** (concurrency=50) | Throughput | 1267 qps | 1322 qps | +4.34% | 🚀 |
 
 ---
@@ -95,32 +95,32 @@ make perf-compare
 
 | Benchmark | ns/op | Change | Status |
 |-----------|-------|--------|--------|
-| BenchmarkClassifyBatch_Size1 | 10,123,456 | -1.19% | ✅ |
+| BenchmarkClassifyBatch_Size1 | 10,123,456 | -1.19% | |
 | BenchmarkClassifyBatch_Size10 | 51,234,567 | -2.12% | 🚀 |
-| BenchmarkClassifyBatch_Size50 | 212,345,678 | -1.54% | ✅ |
-| BenchmarkClassifyBatch_Size100 | 410,234,567 | -0.51% | ✅ |
-| BenchmarkClassifyCategory | 8,654,321 | -1.27% | ✅ |
-| BenchmarkClassifyPII | 10,089,123 | -0.34% | ✅ |
-| BenchmarkClassifyJailbreak | 9,823,456 | -0.54% | ✅ |
-| BenchmarkCGOOverhead | 3,423,456 | -0.96% | ✅ |
+| BenchmarkClassifyBatch_Size50 | 212,345,678 | -1.54% | |
+| BenchmarkClassifyBatch_Size100 | 410,234,567 | -0.51% | |
+| BenchmarkClassifyCategory | 8,654,321 | -1.27% | |
+| BenchmarkClassifyPII | 10,089,123 | -0.34% | |
+| BenchmarkClassifyJailbreak | 9,823,456 | -0.54% | |
+| BenchmarkCGOOverhead | 3,423,456 | -0.96% | |
 | BenchmarkEvaluateDecisions_Single | 229,876 | -2.00% | 🚀 |
-| BenchmarkEvaluateDecisions_Multiple | 342,123 | -1.03% | ✅ |
-| BenchmarkEvaluateDecisions_WithKeywords | 265,432 | -0.92% | ✅ |
+| BenchmarkEvaluateDecisions_Multiple | 342,123 | -1.03% | |
+| BenchmarkEvaluateDecisions_WithKeywords | 265,432 | -0.92% | |
 | BenchmarkEvaluateDecisions_Complex | 512,345 | **+12.16%** | ⚠️ |
-| BenchmarkRuleEvaluation_AND | 195,432 | -1.68% | ✅ |
-| BenchmarkRuleEvaluation_OR | 174,321 | -1.26% | ✅ |
-| BenchmarkPrioritySelection | 286,789 | -0.77% | ✅ |
+| BenchmarkRuleEvaluation_AND | 195,432 | -1.68% | |
+| BenchmarkRuleEvaluation_OR | 174,321 | -1.26% | |
+| BenchmarkPrioritySelection | 286,789 | -0.77% | |
 | BenchmarkCacheSearch_1000 | 3,389,012 | -1.96% | 🚀 |
-| BenchmarkCacheSearch_10000 | 7,823,456 | -0.84% | ✅ |
-| BenchmarkCacheSearch_HNSW | 2,312,345 | -1.42% | ✅ |
-| BenchmarkCacheSearch_Linear | 5,623,456 | -0.98% | ✅ |
-| BenchmarkCacheConcurrency_1 | 2,856,789 | -1.15% | ✅ |
+| BenchmarkCacheSearch_10000 | 7,823,456 | -0.84% | |
+| BenchmarkCacheSearch_HNSW | 2,312,345 | -1.42% | |
+| BenchmarkCacheSearch_Linear | 5,623,456 | -0.98% | |
+| BenchmarkCacheConcurrency_1 | 2,856,789 | -1.15% | |
 | BenchmarkCacheConcurrency_10 | 1,212,345 | -1.80% | 🚀 |
 | BenchmarkCacheConcurrency_50 | 756,234 | -4.16% | 🚀 |
 | BenchmarkProcessRequest | 445,678 | -2.43% | 🚀 |
-| BenchmarkProcessRequestBody | 671,234 | -1.13% | ✅ |
-| BenchmarkHeaderProcessing | 231,234 | -1.42% | ✅ |
-| BenchmarkFullRequestFlow | 878,901 | -1.26% | ✅ |
+| BenchmarkProcessRequestBody | 671,234 | -1.13% | |
+| BenchmarkHeaderProcessing | 231,234 | -1.42% | |
+| BenchmarkFullRequestFlow | 878,901 | -1.26% | |
 
 </details>
 

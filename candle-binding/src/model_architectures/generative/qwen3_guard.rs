@@ -117,7 +117,7 @@ impl Qwen3GuardModel {
         device: &Device,
         config: Option<Qwen3GuardConfig>,
     ) -> UnifiedResult<Self> {
-        println!("🛡️  Initializing Qwen3Guard Model");
+        println!("Initializing Qwen3Guard Model");
         println!("  Model path: {}", model_path);
 
         let base_dir = Path::new(model_path);
@@ -229,7 +229,7 @@ impl Qwen3GuardModel {
             input_context: None,
         })?;
 
-        println!("✅ Qwen3Guard model loaded successfully");
+        println!("Qwen3Guard model loaded successfully");
 
         let config = config.unwrap_or_default();
 
@@ -252,7 +252,7 @@ impl Qwen3GuardModel {
             }
             instance.initialize_prefix_caches()?;
             if instance.config.prefix_cache.verbose {
-                println!("✅ Prefix cache initialized successfully");
+                println!("Prefix cache initialized successfully");
             }
         }
 

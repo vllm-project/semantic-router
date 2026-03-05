@@ -80,7 +80,7 @@ def inject_algorithm_into_config(config_path: Path, algorithm: str) -> Path:
     with open(temp_config_path, "w") as f:
         yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
-    log.info(f"✓ Created config with algorithm: {temp_config_path}")
+    log.info(f"Created config with algorithm: {temp_config_path}")
 
     return temp_config_path
 
@@ -188,7 +188,8 @@ ALGORITHM_TYPES = [
 @click.option(
     "--platform",
     default=None,
-    help="Platform branding (e.g., 'amd' for AMD GPU deployments)",
+    help="Platform branding (e.g., 'amd' for AMD GPU deployments). "
+    "When set to amd, serve defaults to the ROCm image unless --image or VLLM_SR_IMAGE is provided.",
 )
 @click.option(
     "--algorithm",
@@ -299,6 +300,7 @@ def serve(config, image, image_pull_policy, readonly, minimal, platform, algorit
         # Platform branding
         if platform:
             env_vars["DASHBOARD_PLATFORM"] = platform
+            env_vars["VLLM_SR_PLATFORM"] = platform
             log.info(f"Platform branding: {platform}")
 
         # Model selection algorithm override
@@ -474,7 +476,7 @@ def dashboard(no_open):
         else:
             log.info(f"Opening dashboard: {dashboard_url}")
             webbrowser.open(dashboard_url)
-            log.info("✓ Dashboard opened in browser")
+            log.info("Dashboard opened in browser")
 
     except Exception as e:
         log.error(f"Error: {e}")

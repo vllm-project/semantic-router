@@ -73,10 +73,8 @@ pub extern "C" fn free_embedding_models_info(result: *mut super::types::Embeddin
         let info_result = &mut *result;
 
         if !info_result.models.is_null() && info_result.num_models > 0 {
-            let models_slice = std::slice::from_raw_parts_mut(
-                info_result.models,
-                info_result.num_models as usize,
-            );
+            let models_slice =
+                std::slice::from_raw_parts_mut(info_result.models, info_result.num_models as usize);
 
             for model_info in models_slice.iter_mut() {
                 if !model_info.model_name.is_null() {

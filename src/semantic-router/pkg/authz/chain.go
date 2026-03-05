@@ -81,7 +81,7 @@ func (r *CredentialResolver) KeyForProvider(provider LLMProvider, model string, 
 	triedStr := strings.Join(tried, " → ")
 
 	if r.failOpen {
-		logging.Warnf("No credential found for %s (model=%s) after trying [%s] — fail_open=true, allowing request without key", provider, model, triedStr)
+		logging.Debugf("No credential found for %s (model=%s) after trying [%s] — fail_open=true, allowing request without key", provider, model, triedStr)
 		return "", nil
 	}
 

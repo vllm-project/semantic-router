@@ -60,7 +60,11 @@ type clawRoomStreamEvent struct {
 
 var roomMentionPattern = regexp.MustCompile(`@([a-zA-Z0-9_.-]+)`)
 
-const roomAutomationProcessedAtKey = "automationProcessedAt"
+const (
+	roomAutomationProcessedAtKey = "automationProcessedAt"
+	roomIDDynamicSuffixBytes     = 2
+	roomIDDynamicMaxAttempts     = 12
+)
 
 func (h *OpenClawHandler) loadRooms() ([]ClawRoomEntry, error) {
 	data, err := os.ReadFile(h.roomsPath())
@@ -134,6 +138,38 @@ func defaultRoomNameForTeam(teamName string) string {
 
 func defaultRoomIDForTeam(teamID string) string {
 	return sanitizeRoomID("team-" + teamID)
+}
+
+func buildRoomIDWithDynamicSuffix(base string) string {
+	normalizedBase := sanitizeRoomID(base)
+	if normalizedBase == "" {
+		normalizedBase = "room"
+	}
+
+	suffix := sanitizeRoomID(generateToken(roomIDDynamicSuffixBytes))
+	if suffix == "" {
+		suffix = strconv.FormatInt(time.Now().UTC().UnixNano()%1_000_000, 10)
+	}
+	return sanitizeRoomID(fmt.Sprintf("%s-%s", normalizedBase, suffix))
+}
+
+func nextAvailableRoomID(base string, rooms []ClawRoomEntry) string {
+	normalizedBase := sanitizeRoomID(base)
+	if normalizedBase == "" {
+		normalizedBase = "room"
+	}
+	for attempt := 0; attempt < roomIDDynamicMaxAttempts; attempt++ {
+		candidate := buildRoomIDWithDynamicSuffix(normalizedBase)
+		if candidate != "" && findRoomByID(rooms, candidate) == nil {
+			return candidate
+		}
+	}
+
+	fallback := generateRoomEntityID(normalizedBase)
+	if findRoomByID(rooms, fallback) == nil {
+		return fallback
+	}
+	return generateRoomEntityID("room")
 }
 
 func (h *OpenClawHandler) ensureDefaultRoomLocked(team TeamEntry) (ClawRoomEntry, error) {
@@ -1069,13 +1105,7 @@ func (h *OpenClawHandler) RoomsHandler() http.HandlerFunc {
 			if roomName == "" {
 				roomName = defaultRoomNameForTeam(teamID)
 			}
-			roomID := sanitizeRoomID(req.ID)
-			if roomID == "" {
-				roomID = sanitizeRoomID(roomName)
-			}
-			if roomID == "" {
-				roomID = generateRoomEntityID("room")
-			}
+			requestedRoomID := sanitizeRoomID(req.ID)
 
 			h.mu.Lock()
 			defer h.mu.Unlock()
@@ -1093,12 +1123,31 @@ func (h *OpenClawHandler) RoomsHandler() http.HandlerFunc {
 				writeJSONError(w, fmt.Sprintf("Failed to load rooms: %v", err), http.StatusInternalServerError)
 				return
 			}
-			for _, room := range rooms {
-				if room.ID == roomID {
-					writeJSONError(w, fmt.Sprintf("room %q already exists", roomID), http.StatusConflict)
-					return
+
+			roomID := requestedRoomID
+			if roomID == "" {
+				baseRoomID := sanitizeRoomID(roomName)
+				if baseRoomID == "" {
+					baseRoomID = defaultRoomIDForTeam(teamID)
 				}
+				roomID = nextAvailableRoomID(baseRoomID, rooms)
 			}
+			if roomID == "" {
+				roomID = generateRoomEntityID("room")
+			}
+
+			if requestedRoomID != "" && findRoomByID(rooms, roomID) != nil {
+				writeJSONError(w, fmt.Sprintf("room %q already exists", roomID), http.StatusConflict)
+				return
+			}
+			if findRoomByID(rooms, roomID) != nil {
+				roomID = nextAvailableRoomID(roomID, rooms)
+			}
+			if roomID == "" || findRoomByID(rooms, roomID) != nil {
+				writeJSONError(w, "failed to generate unique room id", http.StatusInternalServerError)
+				return
+			}
+
 			now := time.Now().UTC().Format(time.RFC3339)
 			created := ClawRoomEntry{ID: roomID, TeamID: teamID, Name: roomName, CreatedAt: now, UpdatedAt: now}
 			rooms = append(rooms, created)

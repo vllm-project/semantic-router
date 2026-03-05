@@ -925,14 +925,14 @@ class MemoryConfig(BaseModel):
     See external_models configuration in providers section for details.
 
     The embedding_model is auto-detected from embedding_models if not specified.
-    Priority: bert > mmbert > qwen3 > gemma
+    Priority: bert > mmbert > multimodal > qwen3 > gemma
     """
 
     enabled: bool = True
     auto_store: bool = False  # Auto-store extracted facts after each response
     milvus: Optional[MemoryMilvusConfig] = None
     # Embedding model to use for memory vectors
-    # Options: "bert", "mmbert", "qwen3", "gemma"
+    # Options: "bert", "mmbert", "multimodal", "qwen3", "gemma"
     # If not set, auto-detected from embedding_models section (bert preferred)
     embedding_model: Optional[str] = None
     default_retrieval_limit: int = 5
@@ -952,11 +952,23 @@ class EmbeddingModelsConfig(BaseModel):
     mmbert_model_path: Optional[str] = Field(
         None, description="Path to mmBERT 2D Matryoshka model"
     )
+    multimodal_model_path: Optional[str] = Field(
+        None,
+        description="Path to multi-modal embedding model (text/image/audio)",
+    )
     bert_model_path: Optional[str] = Field(
         None,
         description="Path to BERT/MiniLM model (recommended for memory retrieval)",
     )
+    hnsw_config: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Embedding classifier tuning (model_type/target_dimension/etc.)",
+    )
     use_cpu: bool = Field(True, description="Use CPU for inference")
+
+    class Config:
+        # Preserve advanced nested fields when users pass through custom config blocks.
+        extra = "allow"
 
 
 class UserConfig(BaseModel):
@@ -974,6 +986,9 @@ class UserConfig(BaseModel):
 
     class Config:
         populate_by_name = True
+        # Allow advanced top-level blocks not yet modeled in the typed CLI schema
+        # (e.g., classifier/prompt_guard overrides) so merger can pass them through.
+        extra = "allow"
 
 
 # Resolve forward references for recursive condition trees.

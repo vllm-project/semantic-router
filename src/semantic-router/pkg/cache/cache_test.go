@@ -2504,7 +2504,7 @@ func BenchmarkHybridVsMilvus(b *testing.B) {
 				}
 
 				populateTime := time.Since(populateStart)
-				b.Logf("✓ Populated in %v (%.0f entries/sec)", populateTime, float64(cacheSize)/populateTime.Seconds())
+				b.Logf("Populated in %v (%.0f entries/sec)", populateTime, float64(cacheSize)/populateTime.Seconds())
 
 				// Wait for Milvus to be ready
 				time.Sleep(2 * time.Second)
@@ -2664,7 +2664,7 @@ func BenchmarkHybridVsMilvus(b *testing.B) {
 				}
 
 				populateTime := time.Since(populateStart)
-				b.Logf("✓ Populated in %v (%.0f entries/sec)", populateTime, float64(cacheSize)/populateTime.Seconds())
+				b.Logf("Populated in %v (%.0f entries/sec)", populateTime, float64(cacheSize)/populateTime.Seconds())
 
 				// Wait for Milvus to be ready
 				time.Sleep(2 * time.Second)
@@ -2826,7 +2826,7 @@ func BenchmarkComponentLatency(b *testing.B) {
 		for i := 0; i < cacheSize; i++ {
 			_ = cache.AddEntry(fmt.Sprintf("req-%d", i), "model", testQueries[i], []byte("req"), []byte("resp"), -1)
 		}
-		b.Logf("✓ HNSW index built")
+		b.Logf("HNSW index built")
 
 		query := testQueries[0]
 
@@ -2861,7 +2861,7 @@ func BenchmarkComponentLatency(b *testing.B) {
 			_ = milvusCache.AddEntry(fmt.Sprintf("req-%d", i), "model", testQueries[i], []byte("req"), []byte("resp"), -1)
 		}
 		time.Sleep(2 * time.Second)
-		b.Logf("✓ Milvus populated")
+		b.Logf("Milvus populated")
 
 		query := testQueries[0]
 
@@ -3088,7 +3088,7 @@ func TestHybridVsMilvusSmoke(t *testing.T) {
 			t.Fatalf("Expected 'ML is...', got '%s'", string(resp))
 		}
 
-		t.Logf("✓ Milvus cache smoke test passed")
+		t.Logf("Milvus cache smoke test passed")
 	})
 
 	// Test Hybrid cache
@@ -3129,7 +3129,7 @@ func TestHybridVsMilvusSmoke(t *testing.T) {
 			t.Fatalf("Expected 'DL is...', got '%s'", string(resp))
 		}
 
-		t.Logf("✓ Hybrid cache smoke test passed")
+		t.Logf("Hybrid cache smoke test passed")
 	})
 }
 
@@ -3890,7 +3890,7 @@ func BenchmarkLargeScale(b *testing.B) {
 						embPerSec, remaining.Round(time.Second))
 				}
 			}
-			b.Logf("✓ Generated %d embeddings in %v (%.0f emb/sec)",
+			b.Logf("Generated %d embeddings in %v (%.0f emb/sec)",
 				cacheSize, time.Since(embStart), float64(cacheSize)/time.Since(embStart).Seconds())
 
 			// Test query (use a query similar to middle entries for realistic search)
@@ -3933,7 +3933,7 @@ func BenchmarkLargeScale(b *testing.B) {
 							i+1, cacheSize, float64(i+1)/float64(cacheSize)*100)
 					}
 				}
-				b.Logf("✓ Linear cache built. Starting search benchmark...")
+				b.Logf("Linear cache built. Starting search benchmark...")
 
 				// Run search benchmark
 				b.ResetTimer()
@@ -3947,7 +3947,7 @@ func BenchmarkLargeScale(b *testing.B) {
 				b.StopTimer()
 
 				linearLatency = float64(time.Since(start).Nanoseconds()) / float64(b.N)
-				b.Logf("✓ Linear search complete: %.2f ms per query (%d iterations)",
+				b.Logf("Linear search complete: %.2f ms per query (%d iterations)",
 					linearLatency/1e6, b.N)
 
 				// Write to CSV
@@ -4012,7 +4012,7 @@ func BenchmarkLargeScale(b *testing.B) {
 						}
 					}
 					buildTime := time.Since(buildStart)
-					b.Logf("✓ HNSW index built in %v (%.0f entries/sec)",
+					b.Logf("HNSW index built in %v (%.0f entries/sec)",
 						buildTime, float64(cacheSize)/buildTime.Seconds())
 
 					// Run search benchmark
@@ -4030,7 +4030,7 @@ func BenchmarkLargeScale(b *testing.B) {
 					hnswLatency := float64(time.Since(start).Nanoseconds()) / float64(b.N)
 					speedup := linearLatency / hnswLatency
 
-					b.Logf("✓ HNSW search complete: %.2f ms per query (%d iterations)",
+					b.Logf("HNSW search complete: %.2f ms per query (%d iterations)",
 						hnswLatency/1e6, b.N)
 					b.Logf("📊 SPEEDUP: %.1fx faster than linear search (%.2f ms vs %.2f ms)",
 						speedup, hnswLatency/1e6, linearLatency/1e6)

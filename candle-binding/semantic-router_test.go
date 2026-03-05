@@ -620,7 +620,7 @@ func TestModernBERTPIITokenClassification(t *testing.T) {
 			}
 			t.Skipf("ModernBERT PII token classifier not available: %v", err)
 		}
-		t.Log("✓ PII token classifier initialized successfully")
+		t.Log("PII token classifier initialized successfully")
 	})
 
 	// Test each case
@@ -713,7 +713,7 @@ func TestModernBERTPIITokenClassification(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error for empty text")
 		} else {
-			t.Logf("✓ Empty text error handled: %v", err)
+			t.Logf("Empty text error handled: %v", err)
 		}
 
 		// Test with empty config path
@@ -721,7 +721,7 @@ func TestModernBERTPIITokenClassification(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error for empty config path")
 		} else {
-			t.Logf("✓ Empty config path error handled: %v", err)
+			t.Logf("Empty config path error handled: %v", err)
 		}
 
 		// Test with invalid config path
@@ -729,7 +729,7 @@ func TestModernBERTPIITokenClassification(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error for invalid config path")
 		} else {
-			t.Logf("✓ Invalid config path error handled: %v", err)
+			t.Logf("Invalid config path error handled: %v", err)
 		}
 	})
 
@@ -834,7 +834,7 @@ func TestModernBERTPIITokenClassification(t *testing.T) {
 		}
 
 		if len(entityCounts) > 0 && errorCount == 0 {
-			t.Logf("✓ Concurrent access successful: processed %d requests", len(entityCounts))
+			t.Logf("Concurrent access successful: processed %d requests", len(entityCounts))
 
 			// Check if results are consistent (they should be for same input)
 			firstCount := entityCounts[0]
@@ -1137,7 +1137,7 @@ func TestBertTokenClassification(t *testing.T) {
 			}
 			t.Skipf("BERT token classifier not available: %v", err)
 		}
-		t.Log("✓ BERT token classifier initialized successfully")
+		t.Log("BERT token classifier initialized successfully")
 	})
 
 	// Test each case
@@ -1662,7 +1662,7 @@ func TestInitEmbeddingModels(t *testing.T) {
 			// Verify that embeddings can still be generated (ModelFactory is functional)
 			_, testErr := GetEmbeddingSmart("test", 0.5, 0.5)
 			if testErr == nil {
-				t.Log("✓ ModelFactory is functional (already initialized)")
+				t.Log("ModelFactory is functional (already initialized)")
 			} else {
 				if isModelInitializationError(testErr) {
 					t.Skipf("Skipping test due to model unavailability: %v", testErr)
@@ -1671,7 +1671,7 @@ func TestInitEmbeddingModels(t *testing.T) {
 				}
 			}
 		} else {
-			t.Log("✓ Both embedding models initialized successfully")
+			t.Log("Both embedding models initialized successfully")
 		}
 	})
 
@@ -1684,14 +1684,14 @@ func TestInitEmbeddingModels(t *testing.T) {
 			// Verify functionality
 			_, testErr := GetEmbeddingSmart("test", 0.5, 0.5)
 			if testErr == nil {
-				t.Log("✓ ModelFactory is functional (already initialized)")
+				t.Log("ModelFactory is functional (already initialized)")
 			} else {
 				if isModelInitializationError(testErr) {
 					t.Skipf("Skipping test due to model unavailability: %v", testErr)
 				}
 			}
 		} else {
-			t.Log("✓ Qwen3 model initialized successfully")
+			t.Log("Qwen3 model initialized successfully")
 		}
 	})
 
@@ -1703,14 +1703,14 @@ func TestInitEmbeddingModels(t *testing.T) {
 			// Verify functionality
 			_, testErr := GetEmbeddingSmart("test", 0.5, 0.5)
 			if testErr == nil {
-				t.Log("✓ ModelFactory is functional (already initialized)")
+				t.Log("ModelFactory is functional (already initialized)")
 			} else {
 				if isModelInitializationError(testErr) {
 					t.Skipf("Skipping test due to model unavailability: %v", testErr)
 				}
 			}
 		} else {
-			t.Log("✓ Gemma model initialized successfully")
+			t.Log("Gemma model initialized successfully")
 		}
 	})
 
@@ -1719,7 +1719,7 @@ func TestInitEmbeddingModels(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error for invalid model paths")
 		} else {
-			t.Logf("✓ Invalid paths correctly returned error: %v", err)
+			t.Logf("Invalid paths correctly returned error: %v", err)
 		}
 	})
 }
@@ -1749,7 +1749,7 @@ func TestGetEmbeddingWithDim(t *testing.T) {
 			}
 		}
 
-		t.Logf("✓ Generated 768-dim embedding successfully")
+		t.Logf("Generated 768-dim embedding successfully")
 	})
 
 	t.Run("Matryoshka512", func(t *testing.T) {
@@ -1762,7 +1762,7 @@ func TestGetEmbeddingWithDim(t *testing.T) {
 			t.Errorf("Expected 512-dim embedding, got %d", len(embedding))
 		}
 
-		t.Logf("✓ Generated 512-dim Matryoshka embedding successfully")
+		t.Logf("Generated 512-dim Matryoshka embedding successfully")
 	})
 
 	t.Run("Matryoshka256", func(t *testing.T) {
@@ -1775,7 +1775,7 @@ func TestGetEmbeddingWithDim(t *testing.T) {
 			t.Errorf("Expected 256-dim embedding, got %d", len(embedding))
 		}
 
-		t.Logf("✓ Generated 256-dim Matryoshka embedding successfully")
+		t.Logf("Generated 256-dim Matryoshka embedding successfully")
 	})
 
 	t.Run("Matryoshka128", func(t *testing.T) {
@@ -1788,7 +1788,7 @@ func TestGetEmbeddingWithDim(t *testing.T) {
 			t.Errorf("Expected 128-dim embedding, got %d", len(embedding))
 		}
 
-		t.Logf("✓ Generated 128-dim Matryoshka embedding successfully")
+		t.Logf("Generated 128-dim Matryoshka embedding successfully")
 	})
 
 	t.Run("OversizedDimension", func(t *testing.T) {
@@ -1804,7 +1804,7 @@ func TestGetEmbeddingWithDim(t *testing.T) {
 		if len(embedding) != 1024 && len(embedding) != 768 {
 			t.Errorf("Expected full dimension (1024 or 768), got %d", len(embedding))
 		} else {
-			t.Logf("✓ Oversized dimension gracefully degraded to full dimension: %d", len(embedding))
+			t.Logf("Oversized dimension gracefully degraded to full dimension: %d", len(embedding))
 		}
 	})
 
@@ -1820,7 +1820,7 @@ func TestGetEmbeddingWithDim(t *testing.T) {
 			t.Errorf("Expected 768-dim embedding for long text, got %d", len(embedding))
 		}
 
-		t.Logf("✓ Generated embedding for long context text (%d chars)", len(longText))
+		t.Logf("Generated embedding for long context text (%d chars)", len(longText))
 	})
 }
 
@@ -1858,7 +1858,7 @@ func TestEmbeddingConsistency(t *testing.T) {
 		if maxDiff > TestEpsilon {
 			t.Errorf("Embeddings differ by more than epsilon: max diff = %e", maxDiff)
 		} else {
-			t.Logf("✓ Embeddings are consistent (max diff: %e)", maxDiff)
+			t.Logf("Embeddings are consistent (max diff: %e)", maxDiff)
 		}
 	})
 
@@ -1886,7 +1886,7 @@ func TestEmbeddingConsistency(t *testing.T) {
 		if maxDiff > TestEpsilon {
 			t.Errorf("Matryoshka prefix differs from full embedding: max diff = %e", maxDiff)
 		} else {
-			t.Logf("✓ Matryoshka 256 is a valid prefix of full 768 (max diff: %e)", maxDiff)
+			t.Logf("Matryoshka 256 is a valid prefix of full 768 (max diff: %e)", maxDiff)
 		}
 	})
 }
@@ -1943,7 +1943,7 @@ func TestEmbeddingPriorityRouting(t *testing.T) {
 				t.Errorf("Expected %d-dim embedding, got %d", tc.expectedDim, len(embedding))
 			}
 
-			t.Logf("✓ %s: Generated %d-dim embedding (%s)", tc.name, len(embedding), tc.description)
+			t.Logf("%s: Generated %d-dim embedding (%s)", tc.name, len(embedding), tc.description)
 		})
 	}
 }
@@ -2022,7 +2022,7 @@ func TestEmbeddingConcurrency(t *testing.T) {
 		t.Errorf("Expected %d results, got %d", expected, resultCount)
 	}
 
-	t.Logf("✓ Concurrent test passed: %d goroutines × %d iterations = %d successful embeddings",
+	t.Logf("Concurrent test passed: %d goroutines × %d iterations = %d successful embeddings",
 		numGoroutines, numIterations, resultCount)
 }
 
@@ -2074,7 +2074,7 @@ func TestQwen3MultiLoRAClassifier(t *testing.T) {
 			}
 			t.Fatalf("Failed to initialize Qwen3 Multi-LoRA classifier: %v", err)
 		}
-		t.Log("✓ Qwen3 Multi-LoRA classifier initialized successfully")
+		t.Log("Qwen3 Multi-LoRA classifier initialized successfully")
 	})
 
 	t.Run("LoadCategoryAdapter", func(t *testing.T) {
@@ -2085,7 +2085,7 @@ func TestQwen3MultiLoRAClassifier(t *testing.T) {
 			}
 			t.Fatalf("Failed to load category adapter: %v", err)
 		}
-		t.Log("✓ Category adapter loaded successfully")
+		t.Log("Category adapter loaded successfully")
 	})
 
 	t.Run("ListLoadedAdapters", func(t *testing.T) {
@@ -2101,7 +2101,7 @@ func TestQwen3MultiLoRAClassifier(t *testing.T) {
 			t.Error("Expected at least one loaded adapter")
 		}
 
-		t.Logf("✓ Loaded adapters: %v", adapters)
+		t.Logf("Loaded adapters: %v", adapters)
 
 		// Check that "category" adapter is in the list
 		found := false
@@ -2199,7 +2199,7 @@ func TestQwen3MultiLoRAClassifier(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error when using non-existent adapter")
 		} else {
-			t.Logf("✓ Correctly returned error for non-existent adapter: %v", err)
+			t.Logf("Correctly returned error for non-existent adapter: %v", err)
 		}
 	})
 }
@@ -2316,7 +2316,7 @@ func TestQwen3ZeroShotClassification(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error for empty categories list")
 		} else {
-			t.Logf("✓ Correctly returned error for empty categories: %v", err)
+			t.Logf("Correctly returned error for empty categories: %v", err)
 		}
 	})
 
@@ -2337,7 +2337,7 @@ func TestQwen3ZeroShotClassification(t *testing.T) {
 			t.Logf("Note: With single category, confidence is %.4f (softmax of one element)", result.Confidence)
 		}
 
-		t.Logf("✓ Single category classification works: %s", result.CategoryName)
+		t.Logf("Single category classification works: %s", result.CategoryName)
 	})
 
 	t.Run("ManyCategories", func(t *testing.T) {
@@ -2438,7 +2438,7 @@ func TestQwen3MultiLoRAConcurrency(t *testing.T) {
 		t.Errorf("Expected %d results, got %d", expected, len(categoryResults))
 	}
 
-	t.Logf("✓ Concurrent test passed: %d goroutines × %d iterations = %d successful classifications",
+	t.Logf("Concurrent test passed: %d goroutines × %d iterations = %d successful classifications",
 		numGoroutines, numIterations, len(categoryResults))
 }
 
@@ -2449,7 +2449,7 @@ func TestQwen3MultiLoRAEdgeCases(t *testing.T) {
 		result, err := ClassifyWithQwen3Adapter("", "category")
 		if err != nil {
 			// If model rejects empty text, that's also acceptable
-			t.Logf("✓ Empty text rejected with error: %v", err)
+			t.Logf("Empty text rejected with error: %v", err)
 		} else {
 			// If model accepts empty text (using special tokens), verify result is valid
 			if result.CategoryName == "" {
@@ -2458,7 +2458,7 @@ func TestQwen3MultiLoRAEdgeCases(t *testing.T) {
 			if result.Confidence < 0.0 || result.Confidence > 1.0 {
 				t.Errorf("Invalid confidence for empty text: %f", result.Confidence)
 			}
-			t.Logf("✓ Empty text classified as: %s (%.4f confidence)",
+			t.Logf("Empty text classified as: %s (%.4f confidence)",
 				result.CategoryName, result.Confidence)
 		}
 	})
@@ -2473,7 +2473,7 @@ func TestQwen3MultiLoRAEdgeCases(t *testing.T) {
 			}
 			t.Logf("Long text handling: %v", err)
 		} else {
-			t.Logf("✓ Handled long text successfully: category=%s, confidence=%.4f",
+			t.Logf("Handled long text successfully: category=%s, confidence=%.4f",
 				result.CategoryName, result.Confidence)
 		}
 	})
@@ -2487,7 +2487,7 @@ func TestQwen3MultiLoRAEdgeCases(t *testing.T) {
 			}
 			t.Fatalf("Failed to handle special characters: %v", err)
 		}
-		t.Logf("✓ Handled special characters: category=%s", result.CategoryName)
+		t.Logf("Handled special characters: category=%s", result.CategoryName)
 	})
 }
 
@@ -2535,7 +2535,7 @@ func TestQwen3Guard(t *testing.T) {
 			}
 			t.Fatalf("Failed to initialize Qwen3Guard: %v", err)
 		}
-		t.Log("✓ Qwen3Guard initialized successfully")
+		t.Log("Qwen3Guard initialized successfully")
 
 		// Verify initialization status
 		if !IsQwen3GuardInitialized() {
@@ -2573,7 +2573,7 @@ func TestQwen3Guard(t *testing.T) {
 					t.Logf("Safe content has categories: %v (raw: %s)", result.Categories, result.RawOutput)
 				}
 
-				t.Logf("✓ Correctly classified as Safe: %s", tc.text)
+				t.Logf("Correctly classified as Safe: %s", tc.text)
 			})
 		}
 	})
@@ -2617,9 +2617,9 @@ func TestQwen3Guard(t *testing.T) {
 				if result.SafetyLabel == "Safe" {
 					t.Logf("ℹ️  Simple PII classified as Safe: %s", tc.text)
 				} else if result.SafetyLabel == "Controversial" && hasPII {
-					t.Logf("✓ PII detected as Controversial: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
+					t.Logf("PII detected as Controversial: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
 				} else if result.SafetyLabel == "Unsafe" && hasPII {
-					t.Logf("✓ PII detected as Unsafe: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
+					t.Logf("PII detected as Unsafe: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
 				} else {
 					t.Logf("⚠️  Unexpected classification: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
 				}
@@ -2667,7 +2667,7 @@ func TestQwen3Guard(t *testing.T) {
 					t.Logf("Raw output: %s", result.RawOutput)
 				}
 
-				t.Logf("✓ Violent content detected: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
+				t.Logf("Violent content detected: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
 			})
 		}
 	})
@@ -2710,10 +2710,10 @@ func TestQwen3Guard(t *testing.T) {
 				}
 
 				if hasJailbreak {
-					t.Logf("✓ Jailbreak detected: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
+					t.Logf("Jailbreak detected: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
 				} else {
 					// Model may categorize by intended harm rather than "Jailbreak" category
-					t.Logf("✓ Flagged as %s (categorized by intent): Categories=%v", result.SafetyLabel, result.Categories)
+					t.Logf("Flagged as %s (categorized by intent): Categories=%v", result.SafetyLabel, result.Categories)
 				}
 			})
 		}
@@ -2747,7 +2747,7 @@ func TestQwen3Guard(t *testing.T) {
 					t.Logf("Raw output: %s", result.RawOutput)
 				}
 
-				t.Logf("✓ Multilingual classification: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
+				t.Logf("Multilingual classification: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
 			})
 		}
 	})
@@ -2773,7 +2773,7 @@ func TestQwen3Guard(t *testing.T) {
 					t.Fatalf("Failed to classify response safety: %v", err)
 				}
 
-				t.Logf("✓ Response classified: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
+				t.Logf("Response classified: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
 			})
 		}
 	})
@@ -2797,7 +2797,7 @@ func TestQwen3Guard(t *testing.T) {
 			t.Errorf("Raw output missing 'Safety:' pattern: %s", rawOutput)
 		}
 
-		t.Logf("✓ Raw output retrieved: %s", rawOutput)
+		t.Logf("Raw output retrieved: %s", rawOutput)
 	})
 
 	t.Run("EdgeCases", func(t *testing.T) {
@@ -2819,7 +2819,7 @@ func TestQwen3Guard(t *testing.T) {
 				}
 				t.Logf("Long text handling: %v", err)
 			} else {
-				t.Logf("✓ Long text classified: %s", result.SafetyLabel)
+				t.Logf("Long text classified: %s", result.SafetyLabel)
 			}
 		})
 
@@ -2832,7 +2832,7 @@ func TestQwen3Guard(t *testing.T) {
 				}
 				t.Fatalf("Failed with special characters: %v", err)
 			}
-			t.Logf("✓ Special characters handled: %s", result.SafetyLabel)
+			t.Logf("Special characters handled: %s", result.SafetyLabel)
 		})
 	})
 }
@@ -2904,7 +2904,7 @@ func TestQwen3GuardConcurrency(t *testing.T) {
 		t.Errorf("Expected %d results, got %d", expected, len(safetyLabels))
 	}
 
-	t.Logf("✓ Concurrent test passed: %d goroutines × %d iterations = %d successful classifications",
+	t.Logf("Concurrent test passed: %d goroutines × %d iterations = %d successful classifications",
 		numGoroutines, numIterations, len(safetyLabels))
 }
 
@@ -2940,7 +2940,7 @@ func TestQwen3GuardParsing(t *testing.T) {
 			t.Errorf("Invalid safety label: %s", result.SafetyLabel)
 		}
 
-		t.Logf("✓ Parsing verified: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
+		t.Logf("Parsing verified: Label=%s, Categories=%v", result.SafetyLabel, result.Categories)
 		t.Logf("  Raw output: %s", result.RawOutput)
 	})
 
@@ -3018,7 +3018,7 @@ func TestDebertaJailbreakClassifier(t *testing.T) {
 		}
 		t.Fatalf("Failed to initialize DeBERTa v3 jailbreak classifier: %v", err)
 	}
-	t.Log("✓ DeBERTa v3 jailbreak classifier initialized successfully")
+	t.Log("DeBERTa v3 jailbreak classifier initialized successfully")
 
 	t.Run("ClassifySafeText", func(t *testing.T) {
 		testCases := []struct {
@@ -3051,7 +3051,7 @@ func TestDebertaJailbreakClassifier(t *testing.T) {
 					t.Errorf("Confidence out of range: %f", result.Confidence)
 				}
 
-				t.Logf("✓ Correctly classified as SAFE: %s (confidence: %.4f)", tc.text, result.Confidence)
+				t.Logf("Correctly classified as SAFE: %s (confidence: %.4f)", tc.text, result.Confidence)
 			})
 		}
 	})
@@ -3088,7 +3088,7 @@ func TestDebertaJailbreakClassifier(t *testing.T) {
 					t.Errorf("Confidence out of range: %f", result.Confidence)
 				}
 
-				t.Logf("✓ Correctly detected INJECTION: %s (confidence: %.4f)", tc.text, result.Confidence)
+				t.Logf("Correctly detected INJECTION: %s (confidence: %.4f)", tc.text, result.Confidence)
 			})
 		}
 	})
@@ -3127,7 +3127,7 @@ func TestDebertaJailbreakClassifier(t *testing.T) {
 					t.Logf("Confidence: %.4f", result.Confidence)
 				}
 
-				t.Logf("✓ Correct classification for: %s (class: %d, confidence: %.4f)",
+				t.Logf("Correct classification for: %s (class: %d, confidence: %.4f)",
 					tc.text, result.Class, result.Confidence)
 			})
 		}
@@ -3164,7 +3164,7 @@ func TestDebertaJailbreakClassifier(t *testing.T) {
 						result.Confidence, tc.minConfidence, tc.text)
 				}
 
-				t.Logf("✓ High confidence detection: %s (class: %d, confidence: %.4f)",
+				t.Logf("High confidence detection: %s (class: %d, confidence: %.4f)",
 					tc.text, result.Class, result.Confidence)
 			})
 		}
@@ -3189,7 +3189,7 @@ func TestDebertaJailbreakClassifier(t *testing.T) {
 				}
 				t.Logf("Long text handling: %v", err)
 			} else {
-				t.Logf("✓ Long text classified: class=%d, confidence=%.4f", result.Class, result.Confidence)
+				t.Logf("Long text classified: class=%d, confidence=%.4f", result.Class, result.Confidence)
 			}
 		})
 
@@ -3202,7 +3202,7 @@ func TestDebertaJailbreakClassifier(t *testing.T) {
 				}
 				t.Fatalf("Failed with special characters: %v", err)
 			}
-			t.Logf("✓ Special characters handled: class=%d, confidence=%.4f", result.Class, result.Confidence)
+			t.Logf("Special characters handled: class=%d, confidence=%.4f", result.Class, result.Confidence)
 		})
 
 		t.Run("MultilingualText", func(t *testing.T) {
@@ -3223,7 +3223,7 @@ func TestDebertaJailbreakClassifier(t *testing.T) {
 					}
 					t.Logf("%s text handling: %v", ml.name, err)
 				} else {
-					t.Logf("✓ %s text classified: class=%d, confidence=%.4f", ml.name, result.Class, result.Confidence)
+					t.Logf("%s text classified: class=%d, confidence=%.4f", ml.name, result.Class, result.Confidence)
 				}
 			}
 		})
@@ -3297,7 +3297,7 @@ func TestDebertaConcurrency(t *testing.T) {
 		t.Errorf("Expected %d results, got %d", expected, len(classifications))
 	}
 
-	t.Logf("✓ Concurrent test passed: %d goroutines × %d iterations = %d successful classifications",
+	t.Logf("Concurrent test passed: %d goroutines × %d iterations = %d successful classifications",
 		numGoroutines, numIterations, len(classifications))
 }
 
@@ -3354,7 +3354,7 @@ func TestDebertaComparison(t *testing.T) {
 				if debertaResult.Class != modernbertResult.Class {
 					t.Logf("  ⚠️  Models disagree on classification")
 				} else {
-					t.Logf("  ✓ Models agree on classification")
+					t.Logf("  Models agree on classification")
 				}
 			}
 		})

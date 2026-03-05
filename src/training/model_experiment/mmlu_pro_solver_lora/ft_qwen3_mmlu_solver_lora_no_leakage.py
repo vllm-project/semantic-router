@@ -1,7 +1,7 @@
 """
 MMLU-Pro Problem Solver with Qwen3 - NO DATA LEAKAGE VERSION
 
-✅ **KEY DIFFERENCE**:
+**KEY DIFFERENCE**:
    - Trains on EXTERNAL datasets (GSM8K, MATH, ARC, etc.)
    - Tests on MMLU-Pro (held-out benchmark)
    - No overlap between training and test data!
@@ -277,7 +277,7 @@ def load_cached_datasets(cache_key: str):
         with open(cache_file, "rb") as f:
             cache_data = pickle.load(f)
 
-        logger.info(f"   ✅ Cache loaded successfully!")
+        logger.info(f"   Cache loaded successfully!")
         logger.info(f"   Train samples: {len(cache_data['train_samples'])}")
         logger.info(f"   Val samples: {len(cache_data['val_samples'])}")
 
@@ -527,9 +527,7 @@ def load_training_data_for_model_type(
             # Special case: use MMLU train split for law
             samples = load_mmlu_train_for_law(max_samples=actual_samples_to_load)
             all_samples.extend(samples)
-            logger.info(
-                f"  ✓ Loaded {len(samples)} samples from MMLU law (train split)"
-            )
+            logger.info(f"  Loaded {len(samples)} samples from MMLU law (train split)")
             continue
 
         try:
@@ -559,7 +557,7 @@ def load_training_data_for_model_type(
                     valid_samples += 1
 
             logger.info(
-                f"  ✓ Loaded {valid_samples}/{len(questions)} valid samples from {dataset_name}"
+                f"  Loaded {valid_samples}/{len(questions)} valid samples from {dataset_name}"
             )
 
         except Exception as e:
@@ -1196,13 +1194,13 @@ def evaluate_model_on_mmlu_pro(
                 logger.info(f"Question: {batch_questions[i][:100]}...")
                 logger.info(f"True Answer: {batch_true_answers[i]}")
                 logger.info(f"Predicted: {predicted_answer_text}")
-                logger.info(f"{'✓ CORRECT' if is_correct else '✗ WRONG'}")
+                logger.info(f"{'CORRECT' if is_correct else '✗ WRONG'}")
 
         # Batch completion with timing
         batch_time = time.time() - batch_start_time
         current_acc = (correct / total * 100) if total > 0 else 0
         logger.info(
-            f"✓ Batch {batch_idx + 1}/{num_batches} completed in {batch_time:.1f}s | "
+            f"Batch {batch_idx + 1}/{num_batches} completed in {batch_time:.1f}s | "
             f"Progress: {batch_end}/{len(test_samples)} ({batch_end / len(test_samples) * 100:.0f}%) | "
             f"Accuracy: {current_acc:.1f}%"
         )
@@ -1346,7 +1344,7 @@ def main(
 
     if cached_data is not None:
         # Use cached data
-        logger.info("✅ Using cached dataset - skipping data loading and processing!")
+        logger.info("Using cached dataset - skipping data loading and processing!")
         train_samples = cached_data["train_samples"]
         val_samples = cached_data["val_samples"]
         train_dataset = cached_data["train_dataset"]
@@ -1416,7 +1414,7 @@ def main(
                 answer_letter = chr(65 + i)
                 break
 
-        logger.info(f"\n✓ Correct Answer (LETTER + TEXT format):")
+        logger.info(f"\nCorrect Answer (LETTER + TEXT format):")
         if answer_letter:
             logger.info(f"  {answer_letter}) {answer_text}")
         else:
@@ -1455,13 +1453,13 @@ def main(
         logger.info("")
 
     logger.info(f"{'=' * 80}")
-    logger.info("✅ Training data format verified!")
+    logger.info("Training data format verified!")
     logger.info(f"   All {len(train_samples)} training samples use ChatML format")
     logger.info(f"   Format: <|im_start|>user...question...<|im_end|>")
     logger.info(f"           <|im_start|>assistant...answer...<|im_end|>")
     logger.info(f"   Assistant will generate: 'The answer is X) <text>'")
     logger.info(f"   Example: 'The answer is A) crop farmers'")
-    logger.info(f"   ✅ Model trains ONLY on assistant response (not question)")
+    logger.info(f"   Model trains ONLY on assistant response (not question)")
     logger.info(f"{'=' * 80}\n")
 
     # Load MMLU-Pro TEST data for evaluation
@@ -1511,7 +1509,7 @@ def main(
     )
 
     logger.info(
-        f"✓ LoRA config prepared: r={lora_rank}, alpha={lora_alpha}, dropout={lora_dropout}"
+        f"LoRA config prepared: r={lora_rank}, alpha={lora_alpha}, dropout={lora_dropout}"
     )
     logger.info(f"  Target modules: {target_modules}")
 
@@ -1544,7 +1542,7 @@ def main(
             cache_key, train_samples, val_samples, train_dataset, val_dataset
         )
     else:
-        logger.info("✅ Using cached tokenized datasets - ready to train!")
+        logger.info("Using cached tokenized datasets - ready to train!")
 
     # Setup output directory
     if output_dir is None:
@@ -1606,7 +1604,7 @@ def main(
         apply_chat_template, desc="Formatting validation data"
     )
 
-    logger.info(f"✓ Dataset formatted with columns: {train_dataset.column_names}")
+    logger.info(f"Dataset formatted with columns: {train_dataset.column_names}")
 
     # Create data collator for completion-only training
     # This masks ALL tokens EXCEPT the assistant's response
@@ -1685,12 +1683,12 @@ def main(
         logger.info("🧹 Cleaning up training resources to free GPU memory...")
         try:
             del trainer
-            logger.info("  ✓ Trainer deleted")
+            logger.info("  Trainer deleted")
         except:
             pass
         try:
             del model
-            logger.info("  ✓ Model deleted")
+            logger.info("  Model deleted")
         except:
             pass
 
@@ -1704,7 +1702,7 @@ def main(
         import time
 
         time.sleep(2)
-        logger.info("✓ GPU memory cleared for evaluation\n")
+        logger.info("GPU memory cleared for evaluation\n")
     else:
         logger.info(
             "\n⏸️  Non-main process: Skipping evaluation (will run on rank 0 only)"
@@ -1742,7 +1740,7 @@ def main(
     # Clean up baseline model to free memory
     del base_model_for_baseline
     clear_gpu_memory()
-    logger.info("✓ Baseline model unloaded\n")
+    logger.info("Baseline model unloaded\n")
 
     # Second: Evaluate trained model
     logger.info("📊 Step 2/2: Evaluating trained model...")
@@ -1794,12 +1792,10 @@ def main(
     logger.info(f"  Relative Improvement:     {improvement_pct:+.1f}%")
     logger.info(f"\n  Training Data: {TRAINING_DATASETS[model_type]['datasets']}")
     logger.info(f"  Test Data: MMLU-Pro {target_mmlu_categories}")
-    logger.info(f"  Data Leakage: ✅ NONE (completely separate datasets)")
+    logger.info(f"  Data Leakage: NONE (completely separate datasets)")
 
     if improvement > 5:
-        logger.info(
-            f"\n  ✅ SIGNIFICANT IMPROVEMENT! Model generalizes well to MMLU-Pro!"
-        )
+        logger.info(f"\n  SIGNIFICANT IMPROVEMENT! Model generalizes well to MMLU-Pro!")
     elif improvement > 0:
         logger.info(f"\n  ⚠️  Modest improvement. Model shows some transfer learning.")
     else:
@@ -1841,7 +1837,7 @@ def main(
     with open(os.path.join(output_dir, "training_comparison.json"), "w") as f:
         json.dump(results, f, indent=2)
 
-    logger.info(f"✅ Results saved to: {output_dir}/training_comparison.json\n")
+    logger.info(f"Results saved to: {output_dir}/training_comparison.json\n")
     log_memory_usage("Post-training")
 
 
@@ -1915,7 +1911,7 @@ if __name__ == "__main__":
             logger.info(f"🗑️  Clearing cache directory: {CACHE_DIR}")
             shutil.rmtree(CACHE_DIR)
             CACHE_DIR.mkdir(exist_ok=True)
-            logger.info("✅ Cache cleared")
+            logger.info("Cache cleared")
 
     # Helper functions for test mode
     def load_tokenizer(model_name: str):
@@ -2054,7 +2050,7 @@ if __name__ == "__main__":
         tokenizer.padding_side = (
             "left"  # Required for batched generation with decoder-only models
         )
-        logger.info(f"✓ Tokenizer padding side set to: {tokenizer.padding_side}")
+        logger.info(f"Tokenizer padding side set to: {tokenizer.padding_side}")
 
         # Conditionally evaluate baseline model
         baseline_results = None
@@ -2076,7 +2072,7 @@ if __name__ == "__main__":
                 batch_size=8,
             )
 
-            logger.info(f"✓ Baseline accuracy: {baseline_results['accuracy']:.1%}")
+            logger.info(f"Baseline accuracy: {baseline_results['accuracy']:.1%}")
 
             # Free baseline model memory
             del base_model
@@ -2108,7 +2104,7 @@ if __name__ == "__main__":
             batch_size=8,
         )
 
-        logger.info(f"✓ Trained accuracy: {trained_results['accuracy']:.1%}")
+        logger.info(f"Trained accuracy: {trained_results['accuracy']:.1%}")
 
         # Report comparison (if baseline was run)
         if baseline_results is not None:
@@ -2150,4 +2146,4 @@ if __name__ == "__main__":
         results_file = os.path.join(model_path, "evaluation_results.json")
         with open(results_file, "w") as f:
             json.dump(comparison, f, indent=2)
-        logger.info(f"\n✓ Results saved to: {results_file}")
+        logger.info(f"\nResults saved to: {results_file}")

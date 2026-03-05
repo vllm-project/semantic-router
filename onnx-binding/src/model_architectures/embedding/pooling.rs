@@ -88,7 +88,8 @@ mod tests {
 
     #[test]
     fn test_l2_normalize() {
-        let embeddings = Array2::from_shape_vec((2, 3), vec![1.0, 0.0, 0.0, 3.0, 4.0, 0.0]).unwrap();
+        let embeddings =
+            Array2::from_shape_vec((2, 3), vec![1.0, 0.0, 0.0, 3.0, 4.0, 0.0]).unwrap();
         let normalized = l2_normalize(&embeddings);
 
         // First row: [1, 0, 0] -> [1, 0, 0]
@@ -101,7 +102,8 @@ mod tests {
 
     #[test]
     fn test_truncate_dimension() {
-        let embeddings = Array2::from_shape_vec((2, 4), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]).unwrap();
+        let embeddings =
+            Array2::from_shape_vec((2, 4), vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]).unwrap();
         let truncated = truncate_dimension(&embeddings, 2);
 
         assert_eq!(truncated.shape(), &[2, 2]);

@@ -31,64 +31,172 @@
 .chatTopBar {
   display: flex;
   align-items: center;
-  padding: 0.75rem 1rem 0.25rem 1rem;
+  padding: 0.46rem 0.74rem 0.18rem 0.74rem;
+  --claw-topbar-control-height: 36px;
+  --claw-topbar-control-radius: 16px;
+  --claw-topbar-icon-width: 40px;
 }
 
 .chatTopBarActions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.34rem;
+}
+
+.chatTopBarActionsClawActive {
+  gap: 0.36rem;
 }
 
 .chatTopBarButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  border: 1px solid rgba(118, 185, 1, 0.26);
-  background: rgba(118, 185, 1, 0.1);
-  color: #d6ef9b;
+  width: var(--claw-topbar-icon-width);
+  height: var(--claw-topbar-control-height);
+  border-radius: var(--claw-topbar-control-radius);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(180deg, rgba(45, 51, 58, 0.72), rgba(24, 29, 34, 0.68));
+  color: #d9e8c0;
   cursor: pointer;
   transition: all var(--transition-fast);
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(12px) saturate(120%);
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 8px 16px rgba(0, 0, 0, 0.28);
+}
+
+.chatTopBarButton::before {
+  content: '';
+  position: absolute;
+  inset: 0.6px 0.6px 52% 0.6px;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0));
+  pointer-events: none;
 }
 
 .chatTopBarButton:hover {
-  background: rgba(118, 185, 1, 0.2);
-  border-color: rgba(118, 185, 1, 0.42);
+  background: linear-gradient(180deg, rgba(52, 58, 66, 0.8), rgba(28, 34, 40, 0.74));
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ecf5dd;
 }
 
 .chatTopBarButton:active {
-  transform: scale(0.96);
+  transform: translateY(0.5px) scale(0.97);
+}
+
+.chatTopBarButton svg {
+  width: 16px;
+  height: 16px;
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.22)) drop-shadow(0 2px 3px rgba(0, 0, 0, 0.28));
+}
+
+.chatTopBarButtonClawActive {
+  color: #fff1f2;
+  border-color: rgba(251, 191, 191, 0.42);
+  background: linear-gradient(180deg, rgba(93, 40, 48, 0.72), rgba(36, 31, 38, 0.72));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 238, 238, 0.24),
+    0 0 0 1px rgba(248, 113, 113, 0.14),
+    0 8px 16px rgba(116, 44, 44, 0.26);
+}
+
+.chatTopBarButtonClawActive:hover {
+  color: #ffffff;
+  border-color: rgba(254, 226, 226, 0.5);
+  background: linear-gradient(180deg, rgba(107, 46, 55, 0.78), rgba(42, 35, 43, 0.76));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 245, 245, 0.28),
+    0 0 0 1px rgba(254, 202, 202, 0.22),
+    0 10px 18px rgba(130, 52, 52, 0.3);
 }
 
 .clawViewToggle {
   display: inline-flex;
-  border: 1px solid rgba(118, 185, 1, 0.28);
-  border-radius: 12px;
+  height: var(--claw-topbar-control-height);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--claw-topbar-control-radius);
   overflow: hidden;
+  background: linear-gradient(180deg, rgba(45, 51, 58, 0.7), rgba(24, 29, 34, 0.66));
+  backdrop-filter: blur(12px) saturate(120%);
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 8px 16px rgba(0, 0, 0, 0.26);
+  position: relative;
 }
 
 .clawViewButton {
   border: none;
-  background: rgba(118, 185, 1, 0.08);
-  color: #a9c77f;
-  font-size: 0.8rem;
-  font-weight: 600;
-  padding: 0.52rem 0.72rem;
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-grid;
+  place-items: center;
+  height: 100%;
+  background: transparent;
+  color: #e6ebf0;
+  font-size: 0.73rem;
+  font-weight: 650;
+  min-width: 56px;
+  padding: 0 0.52rem;
   cursor: pointer;
   transition: all var(--transition-fast);
+  line-height: normal;
+  letter-spacing: 0.02em;
+  position: relative;
+  z-index: 1;
+  text-align: center;
+}
+
+.clawViewButton + .clawViewButton {
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.clawViewButtonLabel {
+  display: inline-block;
+  line-height: 1;
+  transform: translateY(0.5px);
 }
 
 .clawViewButton:hover {
-  background: rgba(118, 185, 1, 0.18);
-  color: #d6ef9b;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
 }
 
 .clawViewButtonActive {
-  background: rgba(118, 185, 1, 0.32);
-  color: #f0f8dd;
+  background: rgba(255, 255, 255, 0.13);
+  color: #ffffff;
+}
+
+.clawViewToggleClawActive {
+  border-color: rgba(251, 191, 191, 0.42);
+  box-shadow:
+    0 0 0 1px rgba(248, 113, 113, 0.14),
+    0 8px 16px rgba(116, 44, 44, 0.24),
+    inset 0 1px 0 rgba(254, 226, 226, 0.14);
+}
+
+.clawViewToggleClawActive .clawViewButton {
+  background: transparent;
+  color: #ffe4e5;
+}
+
+.clawViewToggleClawActive .clawViewButton + .clawViewButton {
+  border-left-color: rgba(255, 226, 226, 0.16);
+}
+
+.clawViewToggleClawActive .clawViewButton:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.clawViewToggleClawActive .clawViewButtonActive {
+  background: rgba(248, 113, 113, 0.24);
+  color: #ffffff;
 }
 
 .sidebar {
@@ -653,33 +761,51 @@ body.playground-fullscreen .container {
 .inputContainer {
   display: flex;
   flex-direction: column;
-  padding: 0.75rem 1rem;
-  background: rgba(255, 255, 255, 0.03);
+  align-items: center;
+  padding: 0.68rem 0.95rem 0.9rem;
+  background: transparent;
   flex-shrink: 0;
   margin-top: auto;
   position: sticky;
   bottom: 0;
   z-index: 5;
+  isolation: isolate;
 }
 
 .inputWrapper {
   display: flex;
   flex-direction: column;
-  background-color: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border);
+  width: 100%;
+  max-width: 920px;
+  margin: 0 auto;
+  background: rgba(22, 25, 28, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-2xl);
   overflow: hidden;
   transition: all var(--transition-base);
+  position: relative;
+  z-index: 1;
+  backdrop-filter: blur(14px) saturate(118%);
+  -webkit-backdrop-filter: blur(14px) saturate(118%);
+  box-shadow:
+    0 16px 32px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .inputWrapper:focus-within {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 0.5px var(--color-primary);
+  box-shadow:
+    0 0 0 1px rgba(118, 185, 1, 0.46),
+    0 16px 34px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .inputWrapper.hasContent {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 0.5px var(--color-primary);
+  box-shadow:
+    0 0 0 1px rgba(118, 185, 1, 0.46),
+    0 16px 34px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .input {
@@ -787,24 +913,43 @@ body.playground-fullscreen .container {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.38rem;
-  height: 32px;
-  min-width: 96px;
-  padding: 0 0.65rem;
-  margin-right: 0.32rem;
-  border: 1px solid rgba(118, 185, 1, 0.26);
-  background: rgba(118, 185, 1, 0.08);
-  color: #a9c77f;
-  border-radius: 999px;
+  gap: 0.3rem;
+  height: var(--claw-topbar-control-height);
+  min-width: 90px;
+  padding: 0 0.52rem;
+  margin-right: 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(180deg, rgba(45, 51, 58, 0.72), rgba(24, 29, 34, 0.68));
+  color: #d9e8c0;
+  border-radius: var(--claw-topbar-control-radius);
   cursor: pointer;
   transition: all var(--transition-fast);
   flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(12px) saturate(122%);
+  -webkit-backdrop-filter: blur(12px) saturate(122%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 8px 16px rgba(0, 0, 0, 0.28);
+}
+
+.clawModeToggleButton::before {
+  content: '';
+  position: absolute;
+  inset: 0.6px 0.6px 52% 0.6px;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0));
+  pointer-events: none;
 }
 
 .clawModeToggleButton:hover {
-  color: #d6ef9b;
-  border-color: rgba(118, 185, 1, 0.42);
-  background: rgba(118, 185, 1, 0.16);
+  color: #ecf5dd;
+  border-color: rgba(255, 255, 255, 0.2);
+  background: linear-gradient(180deg, rgba(52, 58, 66, 0.8), rgba(28, 34, 40, 0.74));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    0 10px 18px rgba(0, 0, 0, 0.3);
 }
 
 .clawModeToggleButton:disabled {
@@ -813,37 +958,53 @@ body.playground-fullscreen .container {
 }
 
 .clawModeToggleButton:disabled:hover {
-  color: #a9c77f;
-  border-color: rgba(118, 185, 1, 0.26);
-  background: rgba(118, 185, 1, 0.08);
+  color: #d9e8c0;
+  border-color: rgba(255, 255, 255, 0.14);
+  background: linear-gradient(180deg, rgba(45, 51, 58, 0.72), rgba(24, 29, 34, 0.68));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 8px 16px rgba(0, 0, 0, 0.28);
 }
 
 .clawModeToggleButton.clawToggleActive {
-  color: #f0f8dd;
-  background-color: rgba(118, 185, 1, 0.3);
-  border-color: rgba(118, 185, 1, 0.5);
+  color: #ffffff;
+  background: linear-gradient(180deg, rgba(116, 51, 61, 0.8), rgba(50, 40, 50, 0.78));
+  border-color: rgba(254, 226, 226, 0.56);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 246, 246, 0.32),
+    0 0 0 1px rgba(254, 202, 202, 0.24),
+    0 10px 18px rgba(130, 52, 52, 0.34);
 }
 
 .clawModeToggleButton.clawToggleActive:hover {
-  color: #f0f8dd;
-  background-color: rgba(118, 185, 1, 0.38);
-  border-color: rgba(118, 185, 1, 0.6);
+  color: #ffffff;
+  background: linear-gradient(180deg, rgba(126, 57, 68, 0.84), rgba(56, 45, 56, 0.8));
+  border-color: rgba(255, 236, 236, 0.62);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 250, 250, 0.34),
+    0 0 0 1px rgba(254, 202, 202, 0.28),
+    0 12px 20px rgba(137, 56, 56, 0.36);
 }
 
 .clawToggleIcon {
-  width: 15px;
-  height: 15px;
+  width: 12px;
+  height: 12px;
   object-fit: contain;
   display: inline-block;
-  filter: hue-rotate(65deg) saturate(180%) brightness(0.95);
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 1px 0 rgba(255, 228, 228, 0.24)) drop-shadow(0 1px 3px rgba(82, 16, 16, 0.34));
 }
 
 .clawToggleLabel {
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1;
-  letter-spacing: 0.02em;
-  font-weight: 600;
+  letter-spacing: 0.035em;
+  font-weight: 700;
   white-space: nowrap;
+  position: relative;
+  z-index: 1;
+  text-shadow: 0 1px 0 rgba(255, 230, 230, 0.2);
 }
 
 .sendButton {
@@ -946,6 +1107,11 @@ body.playground-fullscreen .container {
 
 /* Mobile Responsive */
 @media (max-width: 768px) {
+  .chatTopBar {
+    --claw-topbar-control-height: 32px;
+    --claw-topbar-icon-width: 34px;
+  }
+
   .header {
     padding: 0.75rem 1rem;
   }
@@ -964,9 +1130,8 @@ body.playground-fullscreen .container {
   }
 
   .chatTopBarButton {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
+    width: var(--claw-topbar-icon-width);
+    height: var(--claw-topbar-control-height);
   }
 
   .modelBadge {
@@ -1165,14 +1330,16 @@ body.playground-fullscreen .container {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  background-color: var(--color-bg-secondary);
-  border-top: 1px solid var(--color-border);
+  align-items: center;
+  padding: 0.68rem 0.95rem 0.9rem;
+  background-color: transparent;
+  border-top: none;
   flex-shrink: 0;
   margin-top: auto;
   position: sticky;
   bottom: 0;
   z-index: 5;
+  isolation: isolate;
 }
 
 .inputToolbar {

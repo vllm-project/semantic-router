@@ -81,7 +81,7 @@ class FeedbackDetector:
         self.max_length = getattr(self.model.config, "max_position_embeddings", 512)
         self.max_length = min(self.max_length, 8192)  # Cap for memory
 
-        print(f"  ✅ Loaded on {self.device}")
+        print(f"  Loaded on {self.device}")
 
     def classify(self, text: str) -> FeedbackResult:
         """

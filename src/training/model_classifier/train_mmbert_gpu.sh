@@ -66,7 +66,7 @@ train_task() {
     end_time=$(date +%s)
     duration=$((end_time - start_time))
     
-    echo -e "${GREEN}✓ $task_name completed in ${duration}s${NC}"
+    echo -e "${GREEN}$task_name completed in ${duration}s${NC}"
 }
 
 cd /workspace/training_lora

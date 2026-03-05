@@ -120,7 +120,7 @@ eval "$CMD"
 end_time=$(date +%s)
 duration=$((end_time - start_time))
 
-echo -e "${GREEN}✓ Training completed in ${duration}s${NC}"
+echo -e "${GREEN}Training completed in ${duration}s${NC}"
 
 # Run inference test
 echo -e "${BLUE}============================================${NC}"

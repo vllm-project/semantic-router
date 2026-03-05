@@ -238,7 +238,7 @@ func TestKeywordAccuracyWithConfidence(t *testing.T) {
 		if tc.ShouldMatch {
 			if matched {
 				tp++
-				status = "✓ TP"
+				status = "TP"
 			} else {
 				fn++
 				status = "✗ FN (MISS)"
@@ -246,7 +246,7 @@ func TestKeywordAccuracyWithConfidence(t *testing.T) {
 		} else {
 			if category == "" {
 				tn++
-				status = "✓ TN"
+				status = "TN"
 			} else {
 				fp++
 				status = "✗ FP (FALSE)"

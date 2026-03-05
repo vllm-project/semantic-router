@@ -29,7 +29,6 @@ pub use model_architectures::embedding::multimodal_embedding::{
 
 // Classification types
 pub use model_architectures::classification::{
-    ClassificationResult, ClassifierExecutionProvider, DetectedEntity,
-    MmBertClassifierConfig, MmBertSequenceClassifier, MmBertTokenClassifier,
-    TokenClassificationResult,
+    ClassificationResult, ClassifierExecutionProvider, DetectedEntity, MmBertClassifierConfig,
+    MmBertSequenceClassifier, MmBertTokenClassifier, TokenClassificationResult,
 };

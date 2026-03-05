@@ -54,7 +54,7 @@ func initTestTrainer(t *testing.T) *Trainer {
 	})
 
 	if testCandleAvailable {
-		t.Log("✓ Using Qwen3/Candle embeddings")
+		t.Log("Using Qwen3/Candle embeddings")
 	} else {
 		t.Log("⚠ Candle not available - using hash-based fallback")
 	}
@@ -124,7 +124,7 @@ func getPretrainedModelsPath(t *testing.T) string {
 
 		output, err := cmd.CombinedOutput()
 		if err == nil {
-			t.Logf("✓ Downloaded pretrained models to %s", modelsPath)
+			t.Logf("Downloaded pretrained models to %s", modelsPath)
 			return modelsPath
 		}
 		downloadErr = fmt.Errorf("%s: %w\n%s", hfCmd, err, string(output))
@@ -154,7 +154,7 @@ func loadPretrainedSelector(t *testing.T, algorithm string) Selector {
 		modelFile = "knn_model.json"
 		modelPath := filepath.Join(modelsPath, modelFile)
 		if loadErr = selector.Load(modelPath); loadErr == nil {
-			t.Logf("✓ Loaded pretrained %s model from %s", algorithm, modelPath)
+			t.Logf("Loaded pretrained %s model from %s", algorithm, modelPath)
 			return selector
 		}
 	case "kmeans":
@@ -162,7 +162,7 @@ func loadPretrainedSelector(t *testing.T, algorithm string) Selector {
 		modelFile = "kmeans_model.json"
 		modelPath := filepath.Join(modelsPath, modelFile)
 		if loadErr = selector.Load(modelPath); loadErr == nil {
-			t.Logf("✓ Loaded pretrained %s model from %s", algorithm, modelPath)
+			t.Logf("Loaded pretrained %s model from %s", algorithm, modelPath)
 			return selector
 		}
 	case "svm":
@@ -170,7 +170,7 @@ func loadPretrainedSelector(t *testing.T, algorithm string) Selector {
 		modelFile = "svm_model.json"
 		modelPath := filepath.Join(modelsPath, modelFile)
 		if loadErr = selector.Load(modelPath); loadErr == nil {
-			t.Logf("✓ Loaded pretrained %s model from %s", algorithm, modelPath)
+			t.Logf("Loaded pretrained %s model from %s", algorithm, modelPath)
 			return selector
 		}
 	case "mlp":
@@ -178,7 +178,7 @@ func loadPretrainedSelector(t *testing.T, algorithm string) Selector {
 		modelFile = "mlp_model.json"
 		modelPath := filepath.Join(modelsPath, modelFile)
 		if loadErr = selector.Load(modelPath); loadErr == nil {
-			t.Logf("✓ Loaded pretrained %s model from %s", algorithm, modelPath)
+			t.Logf("Loaded pretrained %s model from %s", algorithm, modelPath)
 			return selector
 		}
 	default:
@@ -706,7 +706,7 @@ func TestPretrainedModels_LoadAndSelect(t *testing.T) {
 				t.Errorf("Selected unknown model: %s", result.Model)
 			}
 
-			t.Logf("✓ %s selected model: %s for math query", algo, result.Model)
+			t.Logf("%s selected model: %s for math query", algo, result.Model)
 		})
 	}
 }

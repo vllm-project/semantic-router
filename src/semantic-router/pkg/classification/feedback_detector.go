@@ -147,7 +147,7 @@ func (d *FeedbackDetector) Initialize() error {
 		}
 		d.useMmBERT32K = true
 		d.initialized = true
-		logging.Infof("✓ Feedback detector initialized successfully")
+		logging.Infof("Feedback detector initialized successfully")
 		return nil
 	}
 
@@ -158,7 +158,7 @@ func (d *FeedbackDetector) Initialize() error {
 	}
 
 	d.initialized = true
-	logging.Infof("✓ Feedback detector initialized successfully")
+	logging.Infof("Feedback detector initialized successfully")
 
 	return nil
 }

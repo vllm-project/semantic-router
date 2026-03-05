@@ -127,7 +127,7 @@ func EnsureModels(specs []ModelSpec, config DownloadConfig) error {
 		if missingPaths[spec.LocalPath] {
 			logging.Infof("✗ %s (need download)", spec.LocalPath)
 		} else {
-			logging.Infof("✓ %s (ready)", spec.LocalPath)
+			logging.Infof("%s (ready)", spec.LocalPath)
 		}
 	}
 
@@ -144,7 +144,7 @@ func EnsureModels(specs []ModelSpec, config DownloadConfig) error {
 			// Check if this was a gated model that was gracefully skipped
 			if errors.Is(err, ErrGatedModelSkipped) || strings.Contains(err.Error(), ErrGatedModelSkipped.Error()) {
 				skippedCount++
-				logging.Infof("✓ %s (skipped - gated model, HF_TOKEN not available)", spec.LocalPath)
+				logging.Infof("%s (skipped - gated model, HF_TOKEN not available)", spec.LocalPath)
 				continue
 			}
 			logging.Warnf("Failed to download model %s: %v", spec.RepoID, err)

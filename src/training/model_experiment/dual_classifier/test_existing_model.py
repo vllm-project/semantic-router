@@ -7,7 +7,7 @@ def test_existing_model():
 
     # Test loading our existing trained model
     model = DualClassifier.from_pretrained("trained_model/", num_categories=10)
-    print("✅ Successfully loaded existing trained model")
+    print("Successfully loaded existing trained model")
 
     # Test prediction
     test_texts = [
@@ -31,7 +31,7 @@ def test_existing_model():
         print(f"    Category: {cat_pred} (confidence: {confidence:.3f})")
         print(f'    PII tokens: {pii_tokens if pii_tokens else "None detected"}')
 
-    print("\n✅ All model tests completed successfully!")
+    print("\nAll model tests completed successfully!")
 
 
 if __name__ == "__main__":

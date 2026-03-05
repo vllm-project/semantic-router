@@ -609,7 +609,7 @@ def main():
     with open(Path(output_dir) / "training_config.json", "w") as f:
         json.dump(config, f, indent=2)
 
-    print("\n✅ Training complete!")
+    print("\nTraining complete!")
     print(f"   Output: {output_dir}")
     if args.use_lora and args.merge_lora:
         print(f"   Merged: {merged_dir}")

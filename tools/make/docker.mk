@@ -55,7 +55,7 @@ docker-test-llm-katan:
 	@$(LOG_TARGET)
 	@echo "Testing llm-katan Docker image..."
 	@curl -f http://localhost:8000/v1/models || (echo "Models endpoint failed" && exit 1)
-	@echo "\n✅ llm-katan Docker image test passed"
+	@echo "\nllm-katan Docker image test passed"
 
 # Run llm-katan Docker image locally
 docker-run-llm-katan: ## Run llm-katan Docker image locally
@@ -121,15 +121,35 @@ docker-help: ## Show help for Docker-related make targets and environment variab
 	@echo "  DOCKER_REGISTRY   - Docker registry (default: ghcr.io/vllm-project/semantic-router)"
 	@echo "  DOCKER_TAG        - Docker tag (default: latest)"
 	@echo "  SERVED_NAME       - Served model name for custom runs"
+	@echo "  VLLM_SR_PLATFORM  - vllm-sr platform hint (set to amd to use ROCm defaults)"
+	@echo "  VLLM_SR_DOCKERFILE_AMD - Dockerfile used when VLLM_SR_PLATFORM=amd"
 
 ##@ vLLM-SR (Semantic Router CLI)
 
 # vLLM-SR specific variables
 VLLM_SR_IMAGE ?= ghcr.io/vllm-project/semantic-router/vllm-sr:latest
+VLLM_SR_IMAGE_ROCM ?= ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest
 VLLM_SR_CONTAINER ?= vllm-sr-container
+VLLM_SR_PLATFORM ?=
+VLLM_SR_PLATFORM_NORMALIZED := $(shell echo "$(VLLM_SR_PLATFORM)" | tr '[:upper:]' '[:lower:]')
+VLLM_SR_DOCKERFILE ?= src/vllm-sr/Dockerfile
+VLLM_SR_DOCKERFILE_AMD ?= src/vllm-sr/Dockerfile.rocm
+VLLM_SR_TARGETARCH ?= amd64
+VLLM_SR_BUILDPLATFORM ?= linux/amd64
+
+# AMD platform defaults (can still be overridden via env/CLI variables)
+ifeq ($(VLLM_SR_PLATFORM_NORMALIZED),amd)
+ifeq ($(origin VLLM_SR_IMAGE),file)
+VLLM_SR_IMAGE := $(VLLM_SR_IMAGE_ROCM)
+endif
+ifeq ($(origin VLLM_SR_DOCKERFILE),file)
+VLLM_SR_DOCKERFILE := $(VLLM_SR_DOCKERFILE_AMD)
+endif
+endif
+
 # Default 1 so vllm-sr build works behind corporate proxies; set GIT_SSL_NO_VERIFY=0 for strict SSL verification.
 GIT_SSL_NO_VERIFY ?= 1
-VLLM_SR_BUILD_ARGS := --network=host --build-arg TARGETARCH=amd64 --build-arg BUILDPLATFORM=linux/amd64
+VLLM_SR_BUILD_ARGS := --network=host --build-arg TARGETARCH=$(VLLM_SR_TARGETARCH) --build-arg BUILDPLATFORM=$(VLLM_SR_BUILDPLATFORM)
 ifeq ($(GIT_SSL_NO_VERIFY),1)
 VLLM_SR_BUILD_ARGS += --build-arg GIT_SSL_NO_VERIFY=1
 endif
@@ -151,18 +171,20 @@ vllm-sr-dev:
 	@echo ""
 	@echo "2. Rebuilding Docker image..."
 	@echo "  Building from: $(PWD)"
+	@echo "  Platform: $(if $(VLLM_SR_PLATFORM_NORMALIZED),$(VLLM_SR_PLATFORM_NORMALIZED),default)"
+	@echo "  Dockerfile: $(VLLM_SR_DOCKERFILE)"
 	@echo "  Image: $(VLLM_SR_IMAGE)"
 	@echo ""
-	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_IMAGE) -f src/vllm-sr/Dockerfile .
+	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_IMAGE) -f $(VLLM_SR_DOCKERFILE) .
 	@echo ""
-	@echo "✓ Image built: $(VLLM_SR_IMAGE)"
+	@echo "Image built: $(VLLM_SR_IMAGE)"
 	@echo ""
 	@echo "3. Installing vLLM-SR CLI in development mode..."
 	@pip install -e src/vllm-sr
-	@echo "✓ vLLM-SR CLI installed"
+	@echo "vLLM-SR CLI installed"
 	@echo ""
 	@echo "=========================================="
-	@echo "✓ Development Setup Complete"
+	@echo "Development Setup Complete"
 	@echo "=========================================="
 	@echo ""
 	@echo "Next steps:"
@@ -174,8 +196,10 @@ vllm-sr-build: ## Build vLLM Semantic Router Docker image
 vllm-sr-build:
 	@$(LOG_TARGET)
 	@echo "Building vLLM Semantic Router Docker image..."
-	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_IMAGE) -f src/vllm-sr/Dockerfile .
-	@echo "✓ Image built: $(VLLM_SR_IMAGE)"
+	@echo "  Platform: $(if $(VLLM_SR_PLATFORM_NORMALIZED),$(VLLM_SR_PLATFORM_NORMALIZED),default)"
+	@echo "  Dockerfile: $(VLLM_SR_DOCKERFILE)"
+	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_IMAGE) -f $(VLLM_SR_DOCKERFILE) .
+	@echo "Image built: $(VLLM_SR_IMAGE)"
 
 vllm-sr-start: ## Start vLLM Semantic Router service
 vllm-sr-start: vllm-sr-dev

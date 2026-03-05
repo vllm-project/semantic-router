@@ -433,7 +433,7 @@ pub mod fixtures {
 
         let elapsed = start.elapsed();
         println!(
-            "✅ Qwen3-Embedding-0.6B loaded successfully in {:.2}s",
+            "Qwen3-Embedding-0.6B loaded successfully in {:.2}s",
             elapsed.as_secs_f64()
         );
         model
@@ -491,7 +491,7 @@ pub mod fixtures {
 
         let elapsed = start.elapsed();
         println!(
-            "✅ Gemma3Model loaded successfully in {:.2}s",
+            "Gemma3Model loaded successfully in {:.2}s",
             elapsed.as_secs_f64()
         );
         model
@@ -548,7 +548,7 @@ pub mod fixtures {
 
         let elapsed = start.elapsed();
         println!(
-            "✅ GemmaEmbeddingModel loaded successfully in {:.2}s",
+            "GemmaEmbeddingModel loaded successfully in {:.2}s",
             elapsed.as_secs_f64()
         );
         model
@@ -564,7 +564,7 @@ pub mod fixtures {
         // Try CUDA first
         if let Ok(device) = Device::cuda_if_available(0) {
             if !matches!(device, Device::Cpu) {
-                println!("✅ Using CUDA GPU for testing");
+                println!("Using CUDA GPU for testing");
                 return device;
             }
         }
@@ -573,7 +573,7 @@ pub mod fixtures {
         #[cfg(target_os = "macos")]
         {
             if let Ok(device) = Device::new_metal(0) {
-                println!("✅ Using Metal GPU for testing");
+                println!("Using Metal GPU for testing");
                 return device;
             }
         }

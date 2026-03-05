@@ -39,7 +39,7 @@ fn main() -> anyhow::Result<()> {
         std::path::Path::new(&weights_path).exists(),
         "model.safetensors not found"
     );
-    println!("   ✓ All model files found\n");
+    println!("   All model files found\n");
 
     // 2. Load and verify config
     println!("2. Loading config.json...");
@@ -66,7 +66,7 @@ fn main() -> anyhow::Result<()> {
         "Expected vocab_size >= 200000 for mmBERT"
     );
     assert_eq!(position_type, "sans_pos", "Expected sans_pos for mmBERT");
-    println!("   ✓ Confirmed as mmBERT (multilingual)\n");
+    println!("   Confirmed as mmBERT (multilingual)\n");
 
     // 3. Load tokenizer
     println!("3. Loading tokenizer...");
@@ -74,7 +74,7 @@ fn main() -> anyhow::Result<()> {
         .map_err(|e| anyhow!("Failed to load tokenizer: {}", e))?;
     let tokenizer_vocab_size = tokenizer.get_vocab_size(false);
     println!("   tokenizer vocab_size: {}", tokenizer_vocab_size);
-    println!("   ✓ Tokenizer loaded\n");
+    println!("   Tokenizer loaded\n");
 
     // 4. Test tokenization with multilingual text
     println!("4. Testing multilingual tokenization...");
@@ -103,7 +103,7 @@ fn main() -> anyhow::Result<()> {
             &ids[..ids.len().min(5)]
         );
     }
-    println!("   ✓ Multilingual tokenization works\n");
+    println!("   Multilingual tokenization works\n");
 
     // 5. Load model weights
     println!("5. Loading model weights...");
@@ -111,12 +111,12 @@ fn main() -> anyhow::Result<()> {
     let config: Config = serde_json::from_str(&config_str)?;
 
     let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[&weights_path], DType::F32, &device)? };
-    println!("   ✓ Weights loaded from safetensors\n");
+    println!("   Weights loaded from safetensors\n");
 
     // 6. Create ModernBERT model
     println!("6. Creating ModernBERT model...");
     let model = ModernBert::load(vb, &config)?;
-    println!("   ✓ Model created successfully\n");
+    println!("   Model created successfully\n");
 
     // 7. Test forward pass
     println!("7. Testing forward pass with multilingual inputs...");
@@ -150,13 +150,13 @@ fn main() -> anyhow::Result<()> {
             "Expected hidden_size match"
         );
     }
-    println!("   ✓ Forward pass works for all languages\n");
+    println!("   Forward pass works for all languages\n");
 
     // 8. Summary
     println!("=== Test Summary ===");
-    println!("✓ mmBERT model loaded successfully");
-    println!("✓ Multilingual tokenization verified");
-    println!("✓ Model inference works");
+    println!("mmBERT model loaded successfully");
+    println!("Multilingual tokenization verified");
+    println!("Model inference works");
     println!("\nmmBERT is ready for multilingual text processing!");
 
     Ok(())

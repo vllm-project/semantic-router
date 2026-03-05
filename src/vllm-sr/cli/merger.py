@@ -636,9 +636,31 @@ def merge_configs(user_config: UserConfig, defaults: Dict[str, Any]) -> Dict[str
     # BERT is recommended for memory retrieval (forgiving semantic matching)
     if user_config.embedding_models:
         embedding_config = user_config.embedding_models.model_dump(exclude_none=True)
-        merged["embedding_models"] = embedding_config
+        default_embedding_config = merged.get("embedding_models", {})
+        if isinstance(default_embedding_config, dict):
+            merged_embedding = copy.deepcopy(default_embedding_config)
+            for key, value in embedding_config.items():
+                if (
+                    key == "hnsw_config"
+                    and isinstance(value, dict)
+                    and isinstance(merged_embedding.get("hnsw_config"), dict)
+                ):
+                    merged_embedding["hnsw_config"].update(value)
+                else:
+                    merged_embedding[key] = value
+            merged["embedding_models"] = merged_embedding
+        else:
+            merged["embedding_models"] = embedding_config
         log.info(f"  Added embedding_models configuration")
 
-    log.info("✓ Configuration merged successfully")
+    # Pass through additional top-level config blocks that are not part of the
+    # typed UserConfig schema yet (for advanced/legacy compatibility).
+    # Examples: classifier, prompt_guard, feedback_detector.
+    extra_fields = getattr(user_config, "model_extra", None) or {}
+    for key, value in extra_fields.items():
+        merged[key] = copy.deepcopy(value)
+        log.info(f"  Added passthrough top-level config: {key}")
+
+    log.info("Configuration merged successfully")
 
     return merged

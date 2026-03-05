@@ -59,7 +59,7 @@ def generate_command(
         log.warning("Continuing without Envoy config...")
 
     log.info("=" * 60)
-    log.info("✓ Configurations generated successfully")
+    log.info("Configurations generated successfully")
     log.info(f"  Output directory: {output_path.absolute()}")
     log.info(f"  Router config: {router_config_path.name}")
     if envoy_config_path:

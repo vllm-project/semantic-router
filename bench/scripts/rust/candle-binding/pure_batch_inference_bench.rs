@@ -44,7 +44,7 @@ fn initialize_classifier() -> Result<(), Box<dyn std::error::Error>> {
     MUTEX_CLASSIFIER
         .set(Mutex::new(classifier))
         .map_err(|_| "Failed to initialize classifier")?;
-    println!("✅ Classifier ready\n");
+    println!("Classifier ready\n");
 
     Ok(())
 }
@@ -170,7 +170,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load test data
     println!("\n📊 Loading test data...");
     let test_data = load_test_data();
-    println!("✅ Loaded {} test samples\n", test_data.len());
+    println!("Loaded {} test samples\n", test_data.len());
 
     // Initialize classifier
     initialize_classifier()?;

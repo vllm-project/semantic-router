@@ -416,7 +416,7 @@ fn test_gemma3_model_load(gemma3_model_only: Arc<Gemma3Model>) {
     println!("Gemma3Model Load Test (using cached fixture)");
     println!("{}\n", "=".repeat(80));
 
-    println!("  ✅ Gemma3Model loaded successfully via fixture");
+    println!("  Gemma3Model loaded successfully via fixture");
     println!(
         "  Model config: {} layers, {} attention heads",
         gemma3_model_only.config().num_hidden_layers,
@@ -470,5 +470,5 @@ fn test_gemma3_model_forward(gemma3_model_only: Arc<Gemma3Model>) {
         seq_len
     );
 
-    println!("  ✅ Forward pass test passed");
+    println!("  Forward pass test passed");
 }

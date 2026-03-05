@@ -242,7 +242,7 @@ fn benchmark_concurrent_requests(
     let total_requests = num_threads * requests_per_thread;
     let throughput = total_requests as f64 / elapsed.as_secs_f64();
 
-    println!("  ✅ Completed in {:.2}s", elapsed.as_secs_f64());
+    println!("  Completed in {:.2}s", elapsed.as_secs_f64());
     println!("  📈 Throughput: {:.2} emb/s", throughput);
 
     throughput
@@ -326,7 +326,7 @@ fn benchmark_concurrent_requests_batched(
     let total_requests = num_threads * requests_per_thread;
     let throughput = total_requests as f64 / elapsed.as_secs_f64();
 
-    println!("  ✅ Completed in {:.2}s", elapsed.as_secs_f64());
+    println!("  Completed in {:.2}s", elapsed.as_secs_f64());
     println!("  📈 Throughput: {:.2} emb/s", throughput);
 
     throughput
@@ -356,7 +356,7 @@ fn run_benchmarks(
     };
     let model_load_time = model_start.elapsed();
     println!(
-        "✅ Model loaded in {}",
+        "Model loaded in {}",
         format_duration(model_load_time.as_millis())
     );
 
@@ -551,12 +551,12 @@ fn run_benchmarks(
             );
         } else if improvement_pct > 20.0 {
             println!(
-                "  ✅ GOOD: {:.1}% improvement with continuous batching",
+                "  GOOD: {:.1}% improvement with continuous batching",
                 improvement_pct
             );
         } else if improvement_pct > 0.0 {
             println!(
-                "  ✓ Modest: {:.1}% improvement with continuous batching",
+                "  Modest: {:.1}% improvement with continuous batching",
                 improvement_pct
             );
         } else {
@@ -649,7 +649,7 @@ fn main() {
     println!("  Quick mode: {}", quick);
 
     #[cfg(feature = "flash-attn")]
-    println!("  Flash Attention: ✅ Enabled");
+    println!("  Flash Attention: Enabled");
 
     #[cfg(not(feature = "flash-attn"))]
     println!("  Flash Attention: ❌ Disabled");
@@ -687,5 +687,5 @@ fn main() {
         }
     }
 
-    println!("\n✅ Benchmark complete!\n");
+    println!("\nBenchmark complete!\n");
 }

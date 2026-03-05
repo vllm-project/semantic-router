@@ -82,7 +82,7 @@ def load_domain_prompts(domain: str) -> Dict:
 
     print(f"Loading prompts for domain: {domain}")
     domain_config = domains[canonical_domain]
-    print(f"✓ Loaded prompts for {domain} (role: {domain_config.get('role', 'N/A')})")
+    print(f"Loaded prompts for {domain} (role: {domain_config.get('role', 'N/A')})")
 
     return domain_config
 
@@ -254,7 +254,7 @@ def generate_negatives_batch_vllm(
             if good_negs:
                 examples_text += "GOOD (DO THIS):\n"
                 for neg in good_negs[:2]:
-                    examples_text += f'  ✅ "{neg}"\n'
+                    examples_text += f'  "{neg}"\n'
 
     prompts = []
     for query in queries:
@@ -420,7 +420,7 @@ def main():
             if checkpoint:
                 start_idx = checkpoint["queries_processed"]
                 print(
-                    f"✓ Resuming from checkpoint: {start_idx}/{len(queries)} queries processed"
+                    f"Resuming from checkpoint: {start_idx}/{len(queries)} queries processed"
                 )
                 print(f"  {checkpoint['samples_written']} samples already written")
                 print()
@@ -441,7 +441,7 @@ def main():
             tensor_parallel_size=args.tensor_parallel,
             disable_log_stats=True,  # Suppress token/s stats
         )
-        print(f"✓ vLLM initialized with {args.tensor_parallel} GPU(s)")
+        print(f"vLLM initialized with {args.tensor_parallel} GPU(s)")
         print()
 
         # Process in batches with streaming writes
@@ -457,7 +457,7 @@ def main():
             if shutdown_requested:
                 print("\n⚠️  Shutdown requested. Saving checkpoint...")
                 writer.write_checkpoint(start_idx + batch_idx, len(queries))
-                print("✓ Checkpoint saved. Safe to exit.")
+                print("Checkpoint saved. Safe to exit.")
                 sys.exit(0)
 
             actual_idx = start_idx + batch_idx
@@ -474,8 +474,8 @@ def main():
         # Final checkpoint
         writer.write_checkpoint(len(queries), len(queries))
 
-    print(f"\n✓ Generated {writer.samples_written} training samples")
-    print(f"✓ Saved to {args.output}")
+    print(f"\nGenerated {writer.samples_written} training samples")
+    print(f"Saved to {args.output}")
     print(f"\nAugmentation factor: {writer.samples_written / len(queries):.1f}x")
 
 

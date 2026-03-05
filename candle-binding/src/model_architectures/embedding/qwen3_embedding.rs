@@ -1302,9 +1302,9 @@ impl Qwen3Attention {
     /// Attention output tensor, shape [batch, num_heads, seq_len, head_dim]
     ///
     /// # Implementation Status
-    /// - ✅ **COMPLETED**: Integrated `candle-flash-attn` crate
-    /// - ✅ **COMPLETED**: Handles attention masks (non-causal for embedding models)
-    /// - ✅ **COMPLETED**: Validated numerical consistency with standard attention
+    /// - **COMPLETED**: Integrated `candle-flash-attn` crate
+    /// - **COMPLETED**: Handles attention masks (non-causal for embedding models)
+    /// - **COMPLETED**: Validated numerical consistency with standard attention
     ///
     /// # References
     /// - Flash Attention 2 Paper: <https://arxiv.org/abs/2205.14135>

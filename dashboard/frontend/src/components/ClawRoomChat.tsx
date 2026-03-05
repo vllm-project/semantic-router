@@ -103,6 +103,9 @@ interface ClawRoomChatProps {
   createRoomRequestToken?: number
 }
 
+const OPENCLAW_LOGO_SRC = '/openclaw.svg'
+const VLLM_AVATAR_SRC = '/vllm.png'
+
 const parseJSON = async <T,>(resp: Response): Promise<T> => {
   const text = await resp.text()
   if (!text.trim()) {
@@ -169,14 +172,6 @@ const sanitizeLookupKey = (value: string | undefined): string => {
   return (value || '').trim().toLowerCase()
 }
 
-const firstGlyph = (value: string): string => {
-  const input = value.trim()
-  if (!input) {
-    return '🤖'
-  }
-  return input[0]?.toUpperCase() || '🤖'
-}
-
 const ClawRoomChat = ({
   isSidebarOpen = true,
   createRoomRequestToken = 0,
@@ -237,16 +232,6 @@ const ClawRoomChat = ({
     return teamWorkers.find(worker => roleLabel(worker.roleKind) === 'leader') || null
   }, [selectedTeam?.leaderId, teamWorkers])
 
-  const workerMentionTokens = useMemo(() => {
-    return teamWorkers
-      .filter(worker => worker.name !== leaderWorker?.name)
-      .map(worker => `@${worker.name}`)
-  }, [leaderWorker?.name, teamWorkers])
-
-  const quickMentionTokens = useMemo(() => {
-    return Array.from(new Set(['@leader', ...workerMentionTokens]))
-  }, [workerMentionTokens])
-
   const workerLookup = useMemo(() => {
     const map = new Map<string, WorkerProfile>()
     for (const worker of teamWorkers) {
@@ -292,7 +277,29 @@ const ClawRoomChat = ({
   const mentionHints = useMemo(() => mentionOptions.map(option => option.token), [mentionOptions])
 
   const leaderRoleText = leaderWorker?.agentRole || selectedTeam?.role || 'Team Leader'
-  const leaderVibeText = leaderWorker?.agentVibe || selectedTeam?.vibe || 'Coordination-driven'
+  const memberResumeProfiles = useMemo(() => {
+    const profiles = teamWorkers.map(worker => {
+      const isLeader = selectedTeam?.leaderId === worker.name || roleLabel(worker.roleKind) === 'leader'
+      return {
+        id: worker.name,
+        isLeader,
+        displayName: worker.agentName || worker.name,
+        alias: `@${worker.name}`,
+        roleText: worker.agentRole || (isLeader ? leaderRoleText : 'Team Worker'),
+        vibeText: worker.agentVibe || selectedTeam?.vibe || 'Execution-focused',
+        principlesText: worker.agentPrinciples?.trim() || '',
+      }
+    })
+
+    profiles.sort((a, b) => {
+      if (a.isLeader !== b.isLeader) {
+        return a.isLeader ? -1 : 1
+      }
+      return a.displayName.localeCompare(b.displayName)
+    })
+
+    return profiles
+  }, [leaderRoleText, selectedTeam?.leaderId, selectedTeam?.vibe, teamWorkers])
   const teamBriefText = useMemo(() => {
     if (selectedTeam?.description?.trim()) {
       return selectedTeam.description.trim()
@@ -978,7 +985,7 @@ const ClawRoomChat = ({
       return {
         displayName: message.senderName || 'You',
         roleLabel: 'USER',
-        avatar: '🧑',
+        avatar: VLLM_AVATAR_SRC,
       }
     }
 
@@ -995,18 +1002,19 @@ const ClawRoomChat = ({
     const worker = lookupByID || lookupByName
 
     const displayName = worker?.agentName || message.senderName || message.senderId || 'Claw'
-    const avatar = worker?.agentEmoji?.trim() || (message.senderType === 'leader' ? '🧠' : firstGlyph(displayName))
 
     return {
       displayName,
       roleLabel: message.senderType === 'leader' ? 'LEADER' : 'WORKER',
-      avatar,
+      avatar: OPENCLAW_LOGO_SRC,
     }
   }, [workerLookup])
 
+  const containerClassName = `${styles.container} ${isSidebarOpen ? styles.containerSidebarOpen : ''}`
+
   if (loading) {
     return (
-      <div className={styles.container}>
+      <div className={containerClassName}>
         <div className={styles.loadingShell} aria-live="polite">
           <div className={styles.loadingTopRow}>
             <div className={`${styles.loadingTitle} ${styles.loadingPulse}`} />
@@ -1049,7 +1057,7 @@ const ClawRoomChat = ({
   }
 
   return (
-    <div className={styles.container}>
+    <div className={containerClassName}>
       {error && <div className={styles.error}>{error}</div>}
 
       <div className={styles.layout}>
@@ -1161,11 +1169,9 @@ const ClawRoomChat = ({
               )}
             </div>
 
-            <div className={styles.metaGrid}>
-              <div className={styles.metaCard}>
-                <span className={styles.metaLabel}>Team Brief</span>
-                <span className={styles.metaValue}>{selectedTeam?.name || 'No team selected'}</span>
-                <span className={styles.metaSubtle}>
+            <div className={styles.teamInlineInfo}>
+              <div className={styles.teamInlineMetaRow}>
+                <span className={styles.teamInlineMetaText}>
                   {selectedRoom ? `Room · ${selectedRoom.name}` : 'Create or select a room to start'}
                 </span>
                 {(selectedTeam?.role || selectedTeam?.vibe) && (
@@ -1174,92 +1180,69 @@ const ClawRoomChat = ({
                     {selectedTeam?.vibe && <span className={styles.metaPill}>{selectedTeam.vibe}</span>}
                   </div>
                 )}
-                <div className={styles.metaBrief}>{teamBriefText}</div>
               </div>
-
-              <div className={styles.metaCard}>
-                <span className={styles.metaLabel}>Leader</span>
-                {leaderWorker ? (
-                  <>
-                    <span className={styles.metaValue}>
-                      {leaderWorker.agentEmoji || '🧠'} {leaderWorker.agentName || leaderWorker.name}
-                    </span>
-                    <span className={styles.metaSubtle}>
-                      <code>@leader</code> alias · <code>@{leaderWorker.name}</code>
-                    </span>
-                    <div className={styles.metaInline}>
-                      <span className={styles.metaPill}>{leaderRoleText}</span>
-                      <span className={styles.metaPill}>{leaderVibeText}</span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <span className={styles.metaValue}>Leader not set</span>
-                    <span className={styles.metaSubtle}>Use member chips below to assign one</span>
-                  </>
-                )}
-              </div>
-
-              <div className={styles.metaCard}>
-                <span className={styles.metaLabel}>Members</span>
-                <span className={styles.metaValue}>
-                  {teamWorkers.length} {teamWorkers.length === 1 ? 'claw' : 'claws'}
-                </span>
-                <span className={styles.metaSubtle}>
-                  {leaderWorker
-                    ? `${Math.max(teamWorkers.length - 1, 0)} worker${teamWorkers.length - 1 === 1 ? '' : 's'} + 1 leader`
-                    : 'No leader assigned yet'}
-                </span>
-                {quickMentionTokens.length > 0 && (
-                  <div className={styles.quickMentionRow}>
-                    {quickMentionTokens.map(token => (
-                      <button
-                        key={token}
-                        type="button"
-                        className={styles.quickMentionButton}
-                        onClick={() => handleInsertMention(token)}
-                      >
-                        {token}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <div className={styles.teamInlineBrief}>{teamBriefText}</div>
             </div>
 
-            <div className={styles.participantStrip}>
-              {teamWorkers.length === 0 ? (
-                <span className={styles.emptyParticipants}>No workers in this team yet</span>
+            <div className={styles.memberQueueSection}>
+              <div className={styles.memberQueueHeading}>
+                <span className={styles.memberQueueTitle}>Members</span>
+                <span className={styles.memberQueueSubtitle}>
+                  {teamWorkers.length} {teamWorkers.length === 1 ? 'claw' : 'claws'}
+                  {leaderWorker ? ' · leader first' : ' · no leader set'}
+                </span>
+              </div>
+              {memberResumeProfiles.length === 0 ? (
+                <div className={styles.memberQueueEmpty}>No workers in this team yet</div>
               ) : (
-                teamWorkers.map(worker => {
-                  const isLeader = selectedTeam?.leaderId === worker.name || roleLabel(worker.roleKind) === 'leader'
-                  const display = worker.agentName || worker.name
-                  return (
-                    <div key={worker.name} className={styles.participantChip}>
-                      <span className={styles.participantAvatar}>{worker.agentEmoji || firstGlyph(display)}</span>
-                      <span className={styles.participantName}>@{worker.name}</span>
-                      <span className={isLeader ? styles.leaderBadge : styles.workerBadge}>
-                        {isLeader ? 'leader' : 'worker'}
-                      </span>
-                      {!isLeader && (
+                <div className={styles.memberQueueList}>
+                  {memberResumeProfiles.map(profile => (
+                    <article
+                      key={profile.id}
+                      className={`${styles.memberQueueItem} ${profile.isLeader ? styles.memberQueueItemLeader : ''}`}
+                    >
+                      <div className={styles.memberQueueTop}>
+                        <span className={styles.memberQueueIdentity}>
+                          <img
+                            src={OPENCLAW_LOGO_SRC}
+                            alt={profile.isLeader ? 'leader logo' : 'worker logo'}
+                            className={styles.metaLogo}
+                          />
+                          <span className={styles.memberQueueName}>{profile.displayName}</span>
+                        </span>
+                        <span className={profile.isLeader ? styles.memberResumeRoleLeader : styles.memberResumeRoleWorker}>
+                          {profile.isLeader ? 'LEADER' : 'WORKER'}
+                        </span>
+                      </div>
+                      <div className={styles.memberQueueBody}>
                         <button
                           type="button"
-                          className={styles.leaderAction}
-                          onClick={() => void handleSetLeader(worker.name)}
-                          disabled={settingLeaderId === worker.name}
-                          title="Set as leader"
+                          className={styles.quickMentionButton}
+                          onClick={() => handleInsertMention(profile.alias)}
                         >
-                          {settingLeaderId === worker.name ? '...' : '👑'}
+                          {profile.alias}
+                        </button>
+                        <span className={styles.memberQueueRole}>{profile.roleText}</span>
+                        <span className={styles.memberQueueVibe}>{profile.vibeText}</span>
+                      </div>
+                      {!profile.isLeader && (
+                        <button
+                          type="button"
+                          className={styles.memberPromoteButton}
+                          onClick={() => void handleSetLeader(profile.id)}
+                          disabled={settingLeaderId === profile.id}
+                        >
+                          {settingLeaderId === profile.id ? 'Setting…' : 'Set as leader'}
                         </button>
                       )}
-                    </div>
-                  )
-                })
+                    </article>
+                  ))}
+                </div>
               )}
             </div>
 
             <div className={styles.teamGuide}>
-              Collaboration tip: start with <code>@leader</code> for delegation; members should report progress back via <code>@leader</code> or @{leaderWorker?.name || 'leader'}.
+              Collaboration tip: start with <code>@leader</code> for delegation.
             </div>
           </header>
 
@@ -1272,17 +1255,35 @@ const ClawRoomChat = ({
               messages.map(message => {
                 const isUser = message.senderType === 'user'
                 const isSystem = message.senderType === 'system'
+                const isLeader = message.senderType === 'leader'
+                const isWorker = message.senderType === 'worker'
                 const senderVisual = resolveSenderVisual(message)
                 return (
                   <div
                     key={message.id}
                     className={`${styles.messageRow} ${isUser ? styles.messageRowUser : styles.messageRowAgent}`}
                   >
-                    <div className={styles.messageAvatar}>{senderVisual.avatar}</div>
+                    <div className={styles.messageAvatar}>
+                      {senderVisual.avatar === OPENCLAW_LOGO_SRC || senderVisual.avatar === VLLM_AVATAR_SRC ? (
+                        <img
+                          src={senderVisual.avatar}
+                          alt={`${senderVisual.roleLabel.toLowerCase()} avatar`}
+                          className={`${styles.avatarLogo} ${styles.messageAvatarLogo}`}
+                        />
+                      ) : (
+                        senderVisual.avatar
+                      )}
+                    </div>
                     <div className={styles.messageMain}>
                       <div className={styles.messageMeta}>
-                        <span className={styles.senderName}>{senderVisual.displayName}</span>
-                        <span className={styles.senderType}>{senderVisual.roleLabel}</span>
+                        <span className={`${styles.senderName} ${isLeader ? styles.senderNameLeader : ''}`}>
+                          {senderVisual.displayName}
+                        </span>
+                        <span
+                          className={`${styles.senderType} ${isLeader ? styles.senderTypeLeader : ''} ${isWorker ? styles.senderTypeWorker : ''}`}
+                        >
+                          {senderVisual.roleLabel}
+                        </span>
                         <span className={styles.timestamp}>{formatMessageTime(message.createdAt)}</span>
                       </div>
                       <div
@@ -1311,18 +1312,24 @@ const ClawRoomChat = ({
                   onClick={syncMentionByCursor}
                   onKeyUp={syncMentionByCursor}
                   onKeyDown={handleDraftKeyDown}
-                  placeholder="Type message... use @leader to assign/report, or @worker-name"
-                  rows={2}
+                  placeholder="@leader to assign tasks, or @worker-name"
+                  rows={1}
                   disabled={!selectedRoomId || posting}
                 />
-                <button
-                  type="button"
-                  className={styles.sendButton}
-                  onClick={() => void handleSend()}
-                  disabled={!selectedRoomId || posting || !draft.trim()}
-                >
-                  {posting ? '…' : '➤'}
-                </button>
+                <div className={styles.inputActionsRow}>
+                  <button
+                    type="button"
+                    className={styles.sendButton}
+                    onClick={() => void handleSend()}
+                    disabled={!selectedRoomId || posting || !draft.trim()}
+                    title="Send message"
+                    aria-label="Send message"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M12 19V5M5 12l7-7 7 7" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </div>
               </div>
 
               {mentionAutocomplete && mentionAutocomplete.options.length > 0 && (

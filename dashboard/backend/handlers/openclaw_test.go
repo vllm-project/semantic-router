@@ -947,6 +947,64 @@ func TestRoomsHandler_CreateAndMessageFlowWithoutAutomation(t *testing.T) {
 	}
 }
 
+func TestRoomsHandler_CreateRoomAutoSuffixAvoidsConflict(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewOpenClawHandler(tempDir, false)
+	if err := h.saveTeams([]TeamEntry{{
+		ID:        "llm-router-lab",
+		Name:      "LLM Router Lab",
+		CreatedAt: "2026-01-01T00:00:00Z",
+		UpdatedAt: "2026-01-01T00:00:00Z",
+	}}); err != nil {
+		t.Fatalf("failed to seed team: %v", err)
+	}
+
+	createWithName := func(name string) ClawRoomEntry {
+		req := httptest.NewRequest(http.MethodPost, "/api/openclaw/rooms", strings.NewReader(fmt.Sprintf(`{
+			"teamId":"llm-router-lab",
+			"name":"%s"
+		}`, name)))
+		resp := httptest.NewRecorder()
+		h.RoomsHandler().ServeHTTP(resp, req)
+		if resp.Code != http.StatusCreated {
+			t.Fatalf("expected 201, got %d: %s", resp.Code, resp.Body.String())
+		}
+		var created ClawRoomEntry
+		if err := json.Unmarshal(resp.Body.Bytes(), &created); err != nil {
+			t.Fatalf("failed to parse room create response: %v", err)
+		}
+		return created
+	}
+
+	first := createWithName("llm-router-lab-room")
+	second := createWithName("llm-router-lab-room")
+	if first.ID == second.ID {
+		t.Fatalf("room IDs should be unique, got duplicated id %q", first.ID)
+	}
+
+	baseID := sanitizeRoomID("llm-router-lab-room")
+	for _, room := range []ClawRoomEntry{first, second} {
+		if !strings.HasPrefix(room.ID, baseID+"-") {
+			t.Fatalf("room ID %q should keep fixed base prefix %q", room.ID, baseID+"-")
+		}
+		suffix := strings.TrimPrefix(room.ID, baseID+"-")
+		if len(suffix) < 4 {
+			t.Fatalf("room ID %q should include a short dynamic suffix", room.ID)
+		}
+	}
+
+	duplicateIDReq := httptest.NewRequest(http.MethodPost, "/api/openclaw/rooms", strings.NewReader(fmt.Sprintf(`{
+		"teamId":"llm-router-lab",
+		"name":"manual",
+		"id":"%s"
+	}`, first.ID)))
+	duplicateIDResp := httptest.NewRecorder()
+	h.RoomsHandler().ServeHTTP(duplicateIDResp, duplicateIDReq)
+	if duplicateIDResp.Code != http.StatusConflict {
+		t.Fatalf("expected explicit duplicate id to return 409, got %d: %s", duplicateIDResp.Code, duplicateIDResp.Body.String())
+	}
+}
+
 func TestProcessRoomUserMessage_LeaderDelegatesToWorker(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewOpenClawHandler(tempDir, false)

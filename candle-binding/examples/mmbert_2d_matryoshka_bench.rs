@@ -842,7 +842,7 @@ fn main() {
     };
 
     println!(
-        "✅ Model loaded in {:.2}s",
+        "Model loaded in {:.2}s",
         model_start.elapsed().as_secs_f64()
     );
 
@@ -968,6 +968,6 @@ fn main() {
     print_summary(&all_results, &matryoshka_config);
 
     println!("\n{}", "=".repeat(80));
-    println!("  ✅ Benchmark complete!");
+    println!("  Benchmark complete!");
     println!("{}\n", "=".repeat(80));
 }

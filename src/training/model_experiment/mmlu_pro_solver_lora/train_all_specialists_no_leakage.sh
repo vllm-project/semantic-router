@@ -52,7 +52,7 @@ Training 6 specialized models using external datasets:
   6. Generalist       (ARC + CommonsenseQA + TruthfulQA)
 
 Testing on: MMLU-Pro (held-out benchmark)
-Data Leakage: ✅ NONE (completely separate datasets!)
+Data Leakage: NONE (completely separate datasets!)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -86,7 +86,7 @@ if [ ! -f "$TRAINING_SCRIPT" ]; then
     echo "   Make sure you're running this from: src/training/training_lora/mmlu_pro_solver_lora/"
     exit 1
 fi
-echo "✓ Training script found: $TRAINING_SCRIPT"
+echo "Training script found: $TRAINING_SCRIPT"
 echo ""
 
 # Check GPU availability
@@ -171,7 +171,7 @@ train_specialist() {
 
         echo ""
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "✅ $MODEL_TYPE completed successfully!"
+        echo "$MODEL_TYPE completed successfully!"
         echo "   Duration: ${MODEL_DURATION_MIN}m ${MODEL_DURATION_SEC}s"
         echo "   Model saved to: $OUTPUT_DIR"
         echo "   Log saved to: $LOG_FILE"
@@ -351,7 +351,7 @@ echo "Failed: $FAILED_MODELS_COUNT"
 echo ""
 
 if [ ${#SUCCESSFUL_MODELS[@]} -gt 0 ]; then
-    echo "✅ Successful models:"
+    echo "Successful models:"
     for model in "${SUCCESSFUL_MODELS[@]}"; do
         echo "   - $model"
     done
@@ -445,7 +445,7 @@ Training Details:
 5. law: MMLU-train (law) → MMLU-Pro (law)
 6. generalist: Mixed datasets → MMLU-Pro (health, other)
 
-Data Leakage: ✅ NONE - Training and test datasets are completely separate!
+Data Leakage: NONE - Training and test datasets are completely separate!
 
 SUMMARY_EOF
 
@@ -454,7 +454,7 @@ echo ""
 
 # Exit with appropriate code
 if [ $FAILED_MODELS_COUNT -eq 0 ]; then
-    echo "✅ All models trained successfully!"
+    echo "All models trained successfully!"
     echo ""
     exit 0
 else

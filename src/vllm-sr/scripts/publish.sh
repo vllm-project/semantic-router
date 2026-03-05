@@ -47,7 +47,7 @@ case $COMMAND in
     twine check dist/*
     
     echo ""
-    echo -e "${GREEN}✓ Package check passed!${NC}"
+    echo -e "${GREEN}Package check passed!${NC}"
     echo ""
     echo "Package contents:"
     ls -lh dist/
@@ -71,7 +71,7 @@ case $COMMAND in
     twine upload --repository testpypi dist/* --verbose
     
     echo ""
-    echo -e "${GREEN}✓ Published to Test PyPI!${NC}"
+    echo -e "${GREEN}Published to Test PyPI!${NC}"
     echo ""
     echo "Test installation:"
     echo "  pip3 install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ vllm-sr==${CURRENT_VERSION}"
@@ -105,7 +105,7 @@ case $COMMAND in
     twine upload dist/* --verbose
     
     echo ""
-    echo -e "${GREEN}✓ Published to PyPI!${NC}"
+    echo -e "${GREEN}Published to PyPI!${NC}"
     echo ""
     echo "Installation:"
     echo "  pip3 install vllm-sr==${CURRENT_VERSION}"

@@ -225,7 +225,7 @@ impl DebertaV3Classifier {
             Self::default_labels(num_classes)
         };
 
-        println!("   ✓ Detected {} classes: {:?}", num_classes, id2label);
+        println!("   Detected {} classes: {:?}", num_classes, id2label);
 
         // Load tokenizer
         let base_tokenizer = Tokenizer::from_file(tokenizer_path).map_err(E::msg)?;
@@ -243,8 +243,8 @@ impl DebertaV3Classifier {
         // Load DeBERTa v3 model
         let model = DebertaV3SequenceClassifier::load(vb, &config, num_classes)?;
 
-        println!("   ✓ Model loaded successfully");
-        println!("   ✓ Device: {:?}", device);
+        println!("   Model loaded successfully");
+        println!("   Device: {:?}", device);
 
         Ok(Self {
             model,

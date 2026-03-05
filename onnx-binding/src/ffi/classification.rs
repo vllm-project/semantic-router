@@ -75,6 +75,8 @@ pub struct PIIResultFFI {
     pub processing_time_ms: f32,
     /// Error flag
     pub error: bool,
+    /// Error message (C string, must be freed by free_pii_result)
+    pub error_message: *mut c_char,
 }
 
 impl Default for PIIResultFFI {
@@ -84,7 +86,25 @@ impl Default for PIIResultFFI {
             num_entities: 0,
             processing_time_ms: 0.0,
             error: true,
+            error_message: std::ptr::null_mut(),
         }
+    }
+}
+
+fn make_error_cstring(message: &str) -> *mut c_char {
+    let sanitized = message.replace('\0', " ");
+    CString::new(sanitized)
+        .unwrap_or_else(|_| CString::new("unknown ffi error").unwrap())
+        .into_raw()
+}
+
+fn pii_error_result(message: &str) -> PIIResultFFI {
+    PIIResultFFI {
+        entities: std::ptr::null_mut(),
+        num_entities: 0,
+        processing_time_ms: 0.0,
+        error: true,
+        error_message: make_error_cstring(message),
     }
 }
 
@@ -93,7 +113,8 @@ impl Default for PIIResultFFI {
 // ============================================================================
 
 /// Global storage for sequence classifiers
-static SEQUENCE_CLASSIFIERS: OnceLock<Mutex<HashMap<String, MmBertSequenceClassifier>>> = OnceLock::new();
+static SEQUENCE_CLASSIFIERS: OnceLock<Mutex<HashMap<String, MmBertSequenceClassifier>>> =
+    OnceLock::new();
 
 /// Global storage for token classifiers (PII)
 static TOKEN_CLASSIFIERS: OnceLock<Mutex<HashMap<String, MmBertTokenClassifier>>> = OnceLock::new();
@@ -152,7 +173,10 @@ pub extern "C" fn init_sequence_classifier(
 
     match MmBertSequenceClassifier::load(&path_str, provider) {
         Ok(model) => {
-            println!("INFO: Loaded sequence classifier '{}' from {}", name_str, path_str);
+            println!(
+                "INFO: Loaded sequence classifier '{}' from {}",
+                name_str, path_str
+            );
             println!("INFO: {}", model.model_info());
 
             let mut classifiers = get_seq_classifiers().lock();
@@ -160,7 +184,10 @@ pub extern "C" fn init_sequence_classifier(
             true
         }
         Err(e) => {
-            eprintln!("ERROR: Failed to load sequence classifier '{}': {:?}", name_str, e);
+            eprintln!(
+                "ERROR: Failed to load sequence classifier '{}': {:?}",
+                name_str, e
+            );
             false
         }
     }
@@ -208,7 +235,10 @@ pub extern "C" fn init_token_classifier(
 
     match MmBertTokenClassifier::load(&path_str, provider) {
         Ok(model) => {
-            println!("INFO: Loaded token classifier '{}' from {}", name_str, path_str);
+            println!(
+                "INFO: Loaded token classifier '{}' from {}",
+                name_str, path_str
+            );
             println!("INFO: {}", model.model_info());
 
             let mut classifiers = get_tok_classifiers().lock();
@@ -216,7 +246,10 @@ pub extern "C" fn init_token_classifier(
             true
         }
         Err(e) => {
-            eprintln!("ERROR: Failed to load token classifier '{}': {:?}", name_str, e);
+            eprintln!(
+                "ERROR: Failed to load token classifier '{}': {:?}",
+                name_str, e
+            );
             false
         }
     }
@@ -346,7 +379,13 @@ pub extern "C" fn detect_pii(
     text: *const c_char,
     result: *mut PIIResultFFI,
 ) -> i32 {
-    if classifier_name.is_null() || text.is_null() || result.is_null() {
+    if result.is_null() {
+        return -1;
+    }
+    if classifier_name.is_null() || text.is_null() {
+        unsafe {
+            *result = pii_error_result("null pointer in detect_pii arguments");
+        }
         return -1;
     }
 
@@ -354,7 +393,7 @@ pub extern "C" fn detect_pii(
         match CStr::from_ptr(classifier_name).to_str() {
             Ok(s) => s,
             Err(_) => {
-                *result = PIIResultFFI::default();
+                *result = pii_error_result("invalid UTF-8 in classifier_name");
                 return -1;
             }
         }
@@ -364,7 +403,7 @@ pub extern "C" fn detect_pii(
         match CStr::from_ptr(text).to_str() {
             Ok(s) => s,
             Err(_) => {
-                *result = PIIResultFFI::default();
+                *result = pii_error_result("invalid UTF-8 in text");
                 return -1;
             }
         }
@@ -378,7 +417,7 @@ pub extern "C" fn detect_pii(
         None => {
             eprintln!("Error: PII classifier '{}' not found", name_str);
             unsafe {
-                *result = PIIResultFFI::default();
+                *result = pii_error_result(&format!("PII classifier '{}' not found", name_str));
             }
             return -1;
         }
@@ -417,6 +456,7 @@ pub extern "C" fn detect_pii(
                     num_entities,
                     processing_time_ms,
                     error: false,
+                    error_message: std::ptr::null_mut(),
                 };
             }
 
@@ -425,7 +465,7 @@ pub extern "C" fn detect_pii(
         Err(e) => {
             eprintln!("Error: PII detection failed: {:?}", e);
             unsafe {
-                *result = PIIResultFFI::default();
+                *result = pii_error_result(&format!("PII detection failed: {:?}", e));
             }
             -1
         }
@@ -485,6 +525,11 @@ pub extern "C" fn free_pii_result(result: *mut PIIResultFFI) {
 
             let _ = Box::from_raw(entities);
             r.entities = std::ptr::null_mut();
+        }
+
+        if !r.error_message.is_null() {
+            let _ = CString::from_raw(r.error_message);
+            r.error_message = std::ptr::null_mut();
         }
     }
 }
@@ -556,7 +601,8 @@ pub extern "C" fn classify_batch(
             for (i, classification) in classifications.into_iter().enumerate() {
                 let label_cstr = CString::new(classification.label).unwrap();
                 let num_classes = classification.probabilities.len() as i32;
-                let probs = Box::into_raw(classification.probabilities.into_boxed_slice()) as *mut f32;
+                let probs =
+                    Box::into_raw(classification.probabilities.into_boxed_slice()) as *mut f32;
 
                 unsafe {
                     *results.offset(i as isize) = ClassificationResultFFI {

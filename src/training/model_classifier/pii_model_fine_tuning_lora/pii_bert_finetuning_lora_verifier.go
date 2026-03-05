@@ -359,7 +359,7 @@ func main() {
 		// Check if prediction matches expectation
 		predictionCorrect := hasPII == testCase.expectedPII
 		if predictionCorrect {
-			fmt.Printf("✓ CORRECT: PII detection matches expectation\n")
+			fmt.Printf("CORRECT: PII detection matches expectation\n")
 			correctPredictions++
 		} else {
 			fmt.Printf("✗ INCORRECT: Expected HasPII=%v, got HasPII=%v\n",
@@ -387,7 +387,7 @@ func main() {
 
 			totalTypesFound += typesFound
 			if typesFound > 0 {
-				fmt.Printf("✓ Found %d/%d expected PII types\n", typesFound, len(testCase.expectedTypes))
+				fmt.Printf("Found %d/%d expected PII types\n", typesFound, len(testCase.expectedTypes))
 			} else {
 				fmt.Printf("✗ No expected PII types found\n")
 			}

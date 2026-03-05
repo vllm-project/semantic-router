@@ -157,7 +157,7 @@ Summary:
   Improvements: 5
   No Change: 27
 
-✓ No regressions detected
+No regressions detected
 ```
 
 ### Scenario 2: Regression Detected ⚠️
@@ -198,7 +198,7 @@ Significant Improvements:
 
 ### Status Indicators
 
-- ✅ **OK**: Within acceptable range
+- **OK**: Within acceptable range
 - 🚀 **IMPROVED**: Significant improvement (> 5%)
 - ⚠️ **REGRESSION**: Performance degraded beyond threshold
 - ➡️ **NO CHANGE**: Minimal difference (< 1%)

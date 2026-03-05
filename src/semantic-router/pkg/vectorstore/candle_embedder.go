@@ -66,8 +66,14 @@ func (e *CandleEmbedder) Embed(text string) ([]float32, error) {
 			return nil, fmt.Errorf("mmbert embedding failed: %w", err)
 		}
 		return output.Embedding, nil
+	case "multimodal":
+		output, err := candle_binding.GetEmbeddingWithModelType(text, "multimodal", e.dimension)
+		if err != nil {
+			return nil, fmt.Errorf("multimodal embedding failed: %w", err)
+		}
+		return output.Embedding, nil
 	default:
-		return nil, fmt.Errorf("unsupported embedding model: %s (must be bert, qwen3, gemma, or mmbert)", e.modelType)
+		return nil, fmt.Errorf("unsupported embedding model: %s (must be bert, qwen3, gemma, mmbert, or multimodal)", e.modelType)
 	}
 }
 

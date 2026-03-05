@@ -294,8 +294,8 @@ for name_pct_correct_total in \
     "User Feedback (EN)|$uf_pct|$uf_correct|$uf_total" \
     "User Feedback (Multilingual)|$ml_uf_pct|$ml_uf_correct|$ml_uf_total"; do
     IFS='|' read -r name pct correct total <<< "$name_pct_correct_total"
-    if [[ $pct -ge 90 ]]; then status="✅ Excellent"
-    elif [[ $pct -ge 70 ]]; then status="✅ Good"
+    if [[ $pct -ge 90 ]]; then status="Excellent"
+    elif [[ $pct -ge 70 ]]; then status="Good"
     elif [[ $pct -ge 50 ]]; then status="⚠️ Partial"
     else status="❌ Limited"; fi
     echo "| $name | $correct/$total ($pct%) | $status |"

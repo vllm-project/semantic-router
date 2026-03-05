@@ -622,16 +622,16 @@ def main():
         # Save corrected dataset
         output_path = Path(args.output_dir) / f"corrected_{args.split}"
         corrected_dataset.save_to_disk(str(output_path))
-        logger.info(f"✅ Corrected dataset saved to: {output_path}")
+        logger.info(f"Corrected dataset saved to: {output_path}")
 
         # Also save as JSONL for easy viewing
         jsonl_path = Path(args.output_dir) / f"corrected_{args.split}.jsonl"
         with open(jsonl_path, "w") as f:
             for example in corrected_dataset:
                 f.write(json.dumps(example, ensure_ascii=False) + "\n")
-        logger.info(f"✅ JSONL saved to: {jsonl_path}")
+        logger.info(f"JSONL saved to: {jsonl_path}")
 
-    logger.info("\n✅ Verification complete!")
+    logger.info("\nVerification complete!")
 
 
 if __name__ == "__main__":

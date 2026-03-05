@@ -9,16 +9,16 @@ A dual-purpose neural network classifier using DistilBERT for both **category cl
 
 This project implements a **proof-of-concept** dual-task learning system that demonstrates:
 
-### ✅ **Key Accomplishments (Task 2)**
+### **Key Accomplishments (Task 2)**
 
-- ✅ **Dual-Purpose Architecture**: Single DistilBERT model (~67M parameters) for both category classification and PII detection
-- ✅ **Memory Efficiency**: Shared backbone reduces parameters vs. two separate models
-- ✅ **Synthetic Data Pipeline**: Complete data generation with 10 categories and 5 PII pattern types
-- ✅ **Training Infrastructure**: Multi-task loss functions, metrics, and optimization
-- ✅ **Model Persistence**: Save/load functionality with full state preservation
-- ✅ **Comprehensive Testing**: 14 test cases covering all components (100% pass rate)
-- ✅ **Performance Validation**: Training completes in ~18.6 seconds on laptop hardware
-- ✅ **Production-Ready Features**: Progress tracking, metrics, and model checkpointing
+- **Dual-Purpose Architecture**: Single DistilBERT model (~67M parameters) for both category classification and PII detection
+- **Memory Efficiency**: Shared backbone reduces parameters vs. two separate models
+- **Synthetic Data Pipeline**: Complete data generation with 10 categories and 5 PII pattern types
+- **Training Infrastructure**: Multi-task loss functions, metrics, and optimization
+- **Model Persistence**: Save/load functionality with full state preservation
+- **Comprehensive Testing**: 14 test cases covering all components (100% pass rate)
+- **Performance Validation**: Training completes in ~18.6 seconds on laptop hardware
+- **Production-Ready Features**: Progress tracking, metrics, and model checkpointing
 
 ### 🔬 **POC Characteristics**
 
@@ -241,12 +241,12 @@ python -m pytest test_dual_classifier_system.py -v
 
 The project includes comprehensive testing with 14 test cases covering:
 
-- ✅ Synthetic data generation
-- ✅ Dataset creation and tokenization
-- ✅ Loss function computation
-- ✅ Training pipeline validation
-- ✅ Model persistence
-- ✅ End-to-end integration
+- Synthetic data generation
+- Dataset creation and tokenization
+- Loss function computation
+- Training pipeline validation
+- Model persistence
+- End-to-end integration
 
 All tests pass with excellent performance ratings.
 
@@ -310,21 +310,21 @@ pii_predictions = torch.argmax(pii_probs[0], dim=-1)
 
 print("Token-level PII detection:")
 for token, pred in zip(tokens, pii_predictions):
-    pii_status = "🔒 PII" if pred == 1 else "✅ Safe"
+    pii_status = "PII" if pred == 1 else "Safe"
     print(f"  '{token}' → {pii_status}")
 
 # Expected output:
-#   'my' → ✅ Safe
-#   'email' → ✅ Safe  
-#   'is' → ✅ Safe
-#   'john' → 🔒 PII
-#   '@' → 🔒 PII
-#   'example' → 🔒 PII
-#   '.' → 🔒 PII
-#   'com' → 🔒 PII
-#   'what' → ✅ Safe
-#   'is' → ✅ Safe
-#   'calculus' → ✅ Safe
+#   'my' → Safe
+#   'email' → Safe  
+#   'is' → Safe
+#   'john' → PII
+#   '@' → PII
+#   'example' → PII
+#   '.' → PII
+#   'com' → PII
+#   'what' → Safe
+#   'is' → Safe
+#   'calculus' → Safe
 ```
 
 **Key Points:**

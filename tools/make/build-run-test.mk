@@ -230,7 +230,7 @@ test-hallucination-detection: build-router download-models
 	@echo "1. Starting mock vLLM server on port 8002..."
 	@nohup python3 e2e/testing/mock-vllm-hallucination.py --port 8002 --host 127.0.0.1 > /tmp/mock_vllm.log 2>&1 & echo $$! > /tmp/mock_vllm_pid.txt
 	@sleep 2
-	@curl -sf http://127.0.0.1:8002/health > /dev/null && echo "   ✓ Mock vLLM server is healthy" || (echo "   ✗ Mock vLLM failed to start"; cat /tmp/mock_vllm.log; exit 1)
+	@curl -sf http://127.0.0.1:8002/health > /dev/null && echo "   Mock vLLM server is healthy" || (echo "   ✗ Mock vLLM failed to start"; cat /tmp/mock_vllm.log; exit 1)
 	@echo ""
 	@echo "2. Starting router with hallucination detection config..."
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
@@ -239,7 +239,7 @@ test-hallucination-detection: build-router download-models
 	@sleep 15
 	@echo ""
 	@echo "3. Checking router logs for model initialization..."
-	@grep -E "(Fact-check classifier initialized|Hallucination.*initialized)" /tmp/router_hal.log 2>/dev/null | head -4 && echo "   ✓ Models initialized" || echo "   ⚠ Check /tmp/router_hal.log for details"
+	@grep -E "(Fact-check classifier initialized|Hallucination.*initialized)" /tmp/router_hal.log 2>/dev/null | head -4 && echo "   Models initialized" || echo "   ⚠ Check /tmp/router_hal.log for details"
 	@echo ""
 	@echo "4. Starting Envoy proxy..."
 	@if ! command -v func-e >/dev/null 2>&1; then \
@@ -248,7 +248,7 @@ test-hallucination-detection: build-router download-models
 	fi
 	@nohup func-e run --config-path config/envoy.yaml > /tmp/envoy_hal.log 2>&1 & echo $$! > /tmp/envoy_hal_pid.txt
 	@sleep 3
-	@curl -sf http://localhost:19000/ready > /dev/null && echo "   ✓ Envoy is ready" || echo "   ⚠ Envoy may not be ready"
+	@curl -sf http://localhost:19000/ready > /dev/null && echo "   Envoy is ready" || echo "   ⚠ Envoy may not be ready"
 	@echo ""
 	@echo "5. Testing OpenAI Chat API through Envoy (with tool context for hallucination detection)..."
 	@echo '   Sending request WITH tool results to trigger hallucination detection...'
@@ -285,7 +285,7 @@ test-hallucination-detection: build-router download-models
 	@-kill $$(cat /tmp/mock_vllm_pid.txt 2>/dev/null) 2>/dev/null; rm -f /tmp/mock_vllm_pid.txt
 	@echo ""
 	@echo "=============================================="
-	@echo "✓ Hallucination Detection E2E Test Complete"
+	@echo "Hallucination Detection E2E Test Complete"
 	@echo "=============================================="
 	@echo ""
 	@echo "Pipeline tested:"
@@ -312,19 +312,19 @@ test-hallucination-detection-manual: build-router download-models
 	@-lsof -ti:8801 | xargs kill -9 2>/dev/null || true
 	@rm -f /tmp/mock_vllm.log /tmp/router_hal.log /tmp/envoy_hal.log
 	@sleep 2
-	@echo "   ✓ Cleanup complete"
+	@echo "   Cleanup complete"
 	@echo ""
 	@echo "1. Starting mock vLLM server on port 8002..."
 	@nohup python3 e2e/testing/mock-vllm-hallucination.py --port 8002 --host 127.0.0.1 > /tmp/mock_vllm.log 2>&1 & echo $$! > /tmp/mock_vllm_pid.txt
 	@sleep 2
-	@curl -sf http://127.0.0.1:8002/health > /dev/null && echo "   ✓ Mock vLLM server is healthy" || (echo "   ✗ Mock vLLM failed to start"; exit 1)
+	@curl -sf http://127.0.0.1:8002/health > /dev/null && echo "   Mock vLLM server is healthy" || (echo "   ✗ Mock vLLM failed to start"; exit 1)
 	@echo ""
 	@echo "2. Starting router with hallucination detection config..."
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
 		nohup ./bin/router -config=config/testing/config.hallucination.yaml > /tmp/router_hal.log 2>&1 & echo $$! > /tmp/router_hal_pid.txt
 	@echo "   Waiting for router to initialize models (15s)..."
 	@sleep 15
-	@grep "Fact-check classifier initialized" /tmp/router_hal.log && echo "   ✓ Models initialized" || echo "   ⚠ Check /tmp/router_hal.log"
+	@grep "Fact-check classifier initialized" /tmp/router_hal.log && echo "   Models initialized" || echo "   ⚠ Check /tmp/router_hal.log"
 	@echo ""
 	@echo "3. Starting Envoy proxy..."
 	@if ! command -v func-e >/dev/null 2>&1; then \
@@ -333,10 +333,10 @@ test-hallucination-detection-manual: build-router download-models
 	fi
 	@nohup func-e run --config-path config/envoy.yaml > /tmp/envoy_hal.log 2>&1 & echo $$! > /tmp/envoy_hal_pid.txt
 	@sleep 3
-	@curl -sf http://localhost:8801/health > /dev/null 2>&1 && echo "   ✓ Envoy is ready" || echo "   ✓ Envoy started (no /health endpoint)"
+	@curl -sf http://localhost:8801/health > /dev/null 2>&1 && echo "   Envoy is ready" || echo "   Envoy started (no /health endpoint)"
 	@echo ""
 	@echo "=============================================="
-	@echo "✓ Services Ready for Manual Testing"
+	@echo "Services Ready for Manual Testing"
 	@echo "=============================================="
 	@echo ""
 	@echo "Endpoints:"
@@ -364,7 +364,7 @@ test-hallucination-detection-manual: build-router download-models
 	@-pkill -f "mock-vllm-hallucination" 2>/dev/null || true
 	@-pkill -f "router.*config.hallucination" 2>/dev/null || true
 	@-pkill -f "func-e.*envoy" 2>/dev/null || true
-	@echo "✓ All services stopped"
+	@echo "All services stopped"
 
 # Stop hallucination detection services manually
 stop-hallucination-services: ## Stop hallucination detection services
@@ -379,7 +379,7 @@ stop-hallucination-services:
 	@-lsof -ti:8002 | xargs kill -9 2>/dev/null || true
 	@-lsof -ti:50051 | xargs kill -9 2>/dev/null || true
 	@-lsof -ti:8801 | xargs kill -9 2>/dev/null || true
-	@echo "✓ All services stopped"
+	@echo "All services stopped"
 
 # Hallucination Detection Demo with Tool Calling
 demo-hallucination: ## Run interactive hallucination detection demo (CLI)

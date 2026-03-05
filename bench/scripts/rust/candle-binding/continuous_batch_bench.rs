@@ -120,7 +120,7 @@ fn initialize_mutex_classifier() -> Result<(), Box<dyn std::error::Error>> {
     MUTEX_CLASSIFIER
         .set(Mutex::new(classifier))
         .map_err(|_| "Failed to initialize mutex classifier")?;
-    println!("✅ Mutex classifier ready\n");
+    println!("Mutex classifier ready\n");
 
     Ok(())
 }
@@ -446,7 +446,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load test data
     println!("\n📊 Loading test data...");
     let test_data = load_test_data();
-    println!("✅ Loaded {} test samples\n", test_data.len());
+    println!("Loaded {} test samples\n", test_data.len());
 
     let test_duration_secs = 10;
     let concurrency_levels = vec![1, 2, 4, 8, 12, 16, 24, 32]; // Extended concurrency testing
@@ -513,7 +513,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    println!("\n✅ Benchmark complete!");
+    println!("\nBenchmark complete!");
     println!("\n💡 Key Insights:");
     println!("  • Continuous batching with true batched inference at model level");
     println!("  • Adaptive batch sizing optimizes GPU utilization");

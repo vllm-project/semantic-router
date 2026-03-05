@@ -141,7 +141,7 @@ perf-check: perf-bench perf-compare
 		cat reports/comparison.json; \
 		exit 1; \
 	else \
-		echo "✅ No performance regressions detected"; \
+		echo "No performance regressions detected"; \
 	fi
 
 # Show performance test help

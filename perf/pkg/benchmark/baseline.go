@@ -238,6 +238,6 @@ func PrintComparisonResults(results []ComparisonResult) {
 	if regressionCount > 0 {
 		fmt.Printf("\n⚠️  WARNING: %d regression(s) detected!\n", regressionCount)
 	} else {
-		fmt.Printf("\n✓ No regressions detected\n")
+		fmt.Printf("\nNo regressions detected\n")
 	}
 }

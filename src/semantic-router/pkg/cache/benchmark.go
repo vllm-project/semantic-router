@@ -168,7 +168,7 @@ func populateCache(cache *InMemoryCache, size int) error {
 	}
 
 	throughput := float64(size) / populateDuration.Seconds()
-	fmt.Printf("  ✓ Population complete: %d entries in %v (%.0f entries/sec)\n",
+	fmt.Printf("  Population complete: %d entries in %v (%.0f entries/sec)\n",
 		size, populateDuration.Round(time.Millisecond), throughput)
 
 	return nil
@@ -534,7 +534,7 @@ func initEmbeddingModelsOnce() error {
 		// Use InitEmbeddingModelsBatched with FIXED scheduler (returns Vec instead of Tensor!)
 		err := candle_binding.InitEmbeddingModelsBatched(path, maxBatchSize, maxWaitMs, useCPU)
 		if err == nil {
-			fmt.Printf("✓ Qwen3 embedding model initialized from: %s\n", path)
+			fmt.Printf("Qwen3 embedding model initialized from: %s\n", path)
 			fmt.Printf("  Device: %s\n", deviceType)
 			fmt.Printf("  TRUE Continuous batching: ENABLED ✨ (FIXED - no CUDA context errors!)\n")
 			fmt.Printf("    - Max batch size: %d requests\n", maxBatchSize)

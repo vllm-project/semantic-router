@@ -112,7 +112,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    println!("\n✅ Benchmark complete!");
+    println!("\nBenchmark complete!");
 
     Ok(())
 }
@@ -135,7 +135,10 @@ fn benchmark_single(model: &mut MmBertEmbeddingModel, text: &str) {
     let min = times.iter().cloned().fold(f64::INFINITY, f64::min);
     let max = times.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
 
-    println!("  Single text: avg={:.2}ms, min={:.2}ms, max={:.2}ms", avg, min, max);
+    println!(
+        "  Single text: avg={:.2}ms, min={:.2}ms, max={:.2}ms",
+        avg, min, max
+    );
 }
 
 fn benchmark_batch(model: &mut MmBertEmbeddingModel, texts: &[&str]) {
@@ -155,5 +158,10 @@ fn benchmark_batch(model: &mut MmBertEmbeddingModel, texts: &[&str]) {
     let avg = times.iter().sum::<f64>() / times.len() as f64;
     let per_text = avg / texts.len() as f64;
 
-    println!("  Batch ({}): total={:.2}ms, per-text={:.2}ms", texts.len(), avg, per_text);
+    println!(
+        "  Batch ({}): total={:.2}ms, per-text={:.2}ms",
+        texts.len(),
+        avg,
+        per_text
+    );
 }

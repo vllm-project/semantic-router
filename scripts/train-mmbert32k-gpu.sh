@@ -91,7 +91,7 @@ def install_dependencies():
     ]
     for pkg in packages:
         subprocess.run([sys.executable, "-m", "pip", "install", "-q", pkg], check=True)
-    print("✅ Dependencies installed")
+    print("Dependencies installed")
 
 def train_model(name, script_path, extra_args=None):
     """Train a single model."""
@@ -111,7 +111,7 @@ def train_model(name, script_path, extra_args=None):
     
     elapsed = time.time() - start_time
     if result.returncode == 0:
-        print(f"✅ {name} completed in {elapsed/60:.1f} minutes")
+        print(f"{name} completed in {elapsed/60:.1f} minutes")
     else:
         print(f"❌ {name} failed (exit code: {result.returncode})")
     

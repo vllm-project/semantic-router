@@ -2307,7 +2307,7 @@ func InitMmBertClassifier(modelPath string, useCPU bool) error {
 		if !bool(success) {
 			err = fmt.Errorf("failed to initialize mmBERT classifier model")
 		} else {
-			log.Printf("   ✓ mmBERT classifier initialized successfully")
+			log.Printf("   mmBERT classifier initialized successfully")
 		}
 	})
 	return err
@@ -2332,7 +2332,7 @@ func InitMmBertClassifierAuto(modelPath string, useCPU bool) error {
 		if !bool(success) {
 			err = fmt.Errorf("failed to initialize classifier model with auto-detection")
 		} else {
-			log.Printf("   ✓ Classifier initialized successfully (variant auto-detected)")
+			log.Printf("   Classifier initialized successfully (variant auto-detected)")
 		}
 	})
 	return err
@@ -2355,7 +2355,7 @@ func InitMmBertTokenClassifier(modelPath string, useCPU bool) error {
 		if !bool(success) {
 			err = fmt.Errorf("failed to initialize mmBERT token classifier model")
 		} else {
-			log.Printf("   ✓ mmBERT token classifier initialized successfully")
+			log.Printf("   mmBERT token classifier initialized successfully")
 		}
 	})
 	return err
@@ -2412,7 +2412,7 @@ func InitMmBert32KIntentClassifier(modelPath string, useCPU bool) error {
 		if !bool(success) {
 			err = fmt.Errorf("failed to initialize mmBERT-32K intent classifier")
 		} else {
-			log.Printf("   ✓ mmBERT-32K intent classifier initialized (32K context)")
+			log.Printf("   mmBERT-32K intent classifier initialized (32K context)")
 		}
 	})
 	return err
@@ -2447,7 +2447,7 @@ func InitMmBert32KFactcheckClassifier(modelPath string, useCPU bool) error {
 			modelPath = "./models/mmbert32k-factcheck-classifier-lora"
 		}
 
-		log.Printf("✓ Initializing mmBERT-32K fact-check classifier: %s", modelPath)
+		log.Printf("Initializing mmBERT-32K fact-check classifier: %s", modelPath)
 
 		cModelID := C.CString(modelPath)
 		defer C.free(unsafe.Pointer(cModelID))
@@ -2456,7 +2456,7 @@ func InitMmBert32KFactcheckClassifier(modelPath string, useCPU bool) error {
 		if !bool(success) {
 			err = fmt.Errorf("failed to initialize mmBERT-32K fact-check classifier")
 		} else {
-			log.Printf("   ✓ mmBERT-32K fact-check classifier initialized")
+			log.Printf("   mmBERT-32K fact-check classifier initialized")
 		}
 	})
 	return err
@@ -2491,7 +2491,7 @@ func InitMmBert32KJailbreakClassifier(modelPath string, useCPU bool) error {
 			modelPath = "./models/mmbert32k-jailbreak-detector-lora"
 		}
 
-		log.Printf("🛡️  Initializing mmBERT-32K jailbreak detector: %s", modelPath)
+		log.Printf("Initializing mmBERT-32K jailbreak detector: %s", modelPath)
 
 		cModelID := C.CString(modelPath)
 		defer C.free(unsafe.Pointer(cModelID))
@@ -2500,7 +2500,7 @@ func InitMmBert32KJailbreakClassifier(modelPath string, useCPU bool) error {
 		if !bool(success) {
 			err = fmt.Errorf("failed to initialize mmBERT-32K jailbreak detector")
 		} else {
-			log.Printf("   ✓ mmBERT-32K jailbreak detector initialized")
+			log.Printf("   mmBERT-32K jailbreak detector initialized")
 		}
 	})
 	return err
@@ -2544,7 +2544,7 @@ func InitMmBert32KFeedbackClassifier(modelPath string, useCPU bool) error {
 		if !bool(success) {
 			err = fmt.Errorf("failed to initialize mmBERT-32K feedback detector")
 		} else {
-			log.Printf("   ✓ mmBERT-32K feedback detector initialized")
+			log.Printf("   mmBERT-32K feedback detector initialized")
 		}
 	})
 	return err
@@ -2578,7 +2578,7 @@ func InitMmBert32KPIIClassifier(modelPath string, useCPU bool) error {
 			modelPath = "./models/mmbert32k-pii-detector-lora"
 		}
 
-		log.Printf("🔒 Initializing mmBERT-32K PII detector: %s", modelPath)
+		log.Printf("Initializing mmBERT-32K PII detector: %s", modelPath)
 
 		cModelID := C.CString(modelPath)
 		defer C.free(unsafe.Pointer(cModelID))
@@ -2587,7 +2587,7 @@ func InitMmBert32KPIIClassifier(modelPath string, useCPU bool) error {
 		if !bool(success) {
 			err = fmt.Errorf("failed to initialize mmBERT-32K PII detector")
 		} else {
-			log.Printf("   ✓ mmBERT-32K PII detector initialized")
+			log.Printf("   mmBERT-32K PII detector initialized")
 		}
 	})
 	return err
@@ -2654,7 +2654,7 @@ func InitMmBert32KModalityClassifier(modelPath string, useCPU bool) error {
 		if !bool(success) {
 			err = fmt.Errorf("failed to initialize mmBERT-32K modality routing classifier")
 		} else {
-			log.Printf("   ✓ mmBERT-32K modality router initialized (AR/DIFFUSION/BOTH)")
+			log.Printf("   mmBERT-32K modality router initialized (AR/DIFFUSION/BOTH)")
 		}
 	})
 	return err
@@ -3656,7 +3656,7 @@ func InitQwen3MultiLoRAClassifier(baseModelPath string) error {
 		return fmt.Errorf("failed to initialize Qwen3 Multi-LoRA classifier (error code: %d)", result)
 	}
 
-	log.Printf("✅ Qwen3 Multi-LoRA classifier initialized from: %s", baseModelPath)
+	log.Printf("Qwen3 Multi-LoRA classifier initialized from: %s", baseModelPath)
 	return nil
 }
 
@@ -3673,7 +3673,7 @@ func LoadQwen3LoRAAdapter(adapterName, adapterPath string) error {
 		return fmt.Errorf("failed to load adapter '%s' (error code: %d)", adapterName, result)
 	}
 
-	log.Printf("✅ Loaded adapter '%s' from: %s", adapterName, adapterPath)
+	log.Printf("Loaded adapter '%s' from: %s", adapterName, adapterPath)
 	return nil
 }
 
@@ -3846,7 +3846,7 @@ func InitQwen3Guard(modelPath string) error {
 		return fmt.Errorf("failed to initialize Qwen3Guard (error code: %d)", result)
 	}
 
-	log.Printf("✅ Qwen3Guard initialized from: %s", modelPath)
+	log.Printf("Qwen3Guard initialized from: %s", modelPath)
 	return nil
 }
 

@@ -179,10 +179,10 @@ def main():
     # Load models
     print("\nLoading models...")
     baseline_model = load_baseline_model()
-    print("✓ Baseline model loaded")
+    print("Baseline model loaded")
 
     lora_model = load_lora_model(args.lora_path)
-    print("✓ Multi-domain LoRA model loaded")
+    print("Multi-domain LoRA model loaded")
 
     # Test on each domain
     domains = [
@@ -254,7 +254,7 @@ def main():
 
     print(f"\nDecision:")
     if min_improvement >= 15.0:
-        print("  ✅ SUCCESS! Multi-domain LoRA achieves ≥15% on all domains.")
+        print("  SUCCESS! Multi-domain LoRA achieves ≥15% on all domains.")
         print("  → Use multi-domain approach (594MB total)")
     elif min_improvement >= 10.0:
         print("  ⚠️  MARGINAL. Multi-domain LoRA achieves 10-15% improvement.")
@@ -269,7 +269,7 @@ def main():
     output_file = f"{args.lora_path}/evaluation_results.json"
     with open(output_file, "w") as f:
         json.dump(results, f, indent=2)
-    print(f"\n✓ Results saved to: {output_file}")
+    print(f"\nResults saved to: {output_file}")
 
 
 if __name__ == "__main__":

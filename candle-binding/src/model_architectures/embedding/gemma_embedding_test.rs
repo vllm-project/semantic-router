@@ -148,7 +148,7 @@ fn load_reference_outputs() -> Vec<ReferenceOutput> {
             panic!("Failed to generate reference data");
         }
 
-        eprintln!("✅ Reference data generated successfully");
+        eprintln!("Reference data generated successfully");
     }
 
     let json_content =
