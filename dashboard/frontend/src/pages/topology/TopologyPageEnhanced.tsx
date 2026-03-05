@@ -1,6 +1,6 @@
 // topology/TopologyPageEnhanced.tsx - Full Signal-Driven Decision Pipeline Visualization
 
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import ReactFlow, {
   Node,
   Background,
@@ -20,7 +20,7 @@ import { useTheme } from '../../hooks'
 import { customNodeTypes } from './components/CustomNodes'
 import { TestQueryInput } from './components/ControlPanel'
 import { ResultCard } from './components/ResultCard'
-import { calculateFullLayout } from './utils/layoutCalculator'
+import { calculateFullLayout, type DecisionDensityMode } from './utils/layoutCalculator'
 import styles from './TopologyPageEnhanced.module.css'
 
 // ============== Inner Flow Component ==============
@@ -41,21 +41,61 @@ const TopologyFlow: React.FC = () => {
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const { fitView } = useReactFlow()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [densityMode, setDensityMode] = useState<DecisionDensityMode>('balanced')
+  const [expandHiddenDecisions, setExpandHiddenDecisions] = useState(false)
+  const [focusMode, setFocusMode] = useState(false)
+  const [focusedDecisionName, setFocusedDecisionName] = useState<string | null>(null)
+  const [layoutMeta, setLayoutMeta] = useState({
+    hiddenDecisionCount: 0,
+    visibleDecisionCount: 0,
+    totalDecisionCount: 0,
+  })
+
+  const handleExpandHiddenDecisions = useCallback(() => {
+    setExpandHiddenDecisions(true)
+  }, [])
+
+  const handleDecisionFocus = useCallback((decisionName: string) => {
+    setFocusedDecisionName(prev => (prev === decisionName ? null : decisionName))
+    setFocusMode(true)
+  }, [])
+
+  const layoutOptions = useMemo(() => ({
+    densityMode,
+    expandHiddenDecisions,
+    onExpandHiddenDecisions: handleExpandHiddenDecisions,
+    focusMode,
+    focusedDecisionName: focusMode ? focusedDecisionName : null,
+    onFocusDecision: handleDecisionFocus,
+  }), [
+    densityMode,
+    expandHiddenDecisions,
+    handleExpandHiddenDecisions,
+    focusMode,
+    focusedDecisionName,
+    handleDecisionFocus,
+  ])
+
+  useEffect(() => {
+    setExpandHiddenDecisions(false)
+  }, [densityMode])
 
   // Generate full topology layout
   useEffect(() => {
     if (!data) return
 
     const highlightedPath = testResult?.highlightedPath || []
-    const { nodes: newNodes, edges: newEdges } = calculateFullLayout(
+    const { nodes: newNodes, edges: newEdges, meta } = calculateFullLayout(
       data,
       collapseState,
       highlightedPath,
-      testResult
+      testResult,
+      layoutOptions
     )
     setNodes(newNodes)
     setEdges(newEdges)
-  }, [data, collapseState, testResult, setNodes, setEdges])
+    setLayoutMeta(meta)
+  }, [data, collapseState, testResult, layoutOptions, setNodes, setEdges])
 
   // Fit view after nodes change - with extra bottom padding for input panel
   useEffect(() => {
@@ -107,22 +147,79 @@ const TopologyFlow: React.FC = () => {
       <div className={styles.content}>
         {/* Flow Canvas */}
         <div className={styles.flowContainer}>
-          <div className={styles.layerGuide} aria-hidden="true">
-            <div className={styles.layerGuideItem}>
-              <span className={styles.layerGuideTag}>Layer 1</span>
-              <span className={styles.layerGuideTitle}>Signal Extraction</span>
+          <div className={styles.layoutToolbar}>
+            <div className={styles.toolbarSection}>
+              <span className={styles.toolbarLabel}>Density</span>
+              <div className={styles.modeSwitch}>
+                {(['compact', 'balanced', 'cinematic'] as DecisionDensityMode[]).map(mode => (
+                  <button
+                    key={mode}
+                    className={`${styles.modeBtn} ${densityMode === mode ? styles.modeBtnActive : ''}`}
+                    onClick={() => setDensityMode(mode)}
+                    type="button"
+                  >
+                    {mode}
+                  </button>
+                ))}
+              </div>
             </div>
-            <span className={styles.layerGuideArrow}>→</span>
-            <div className={styles.layerGuideItem}>
-              <span className={styles.layerGuideTag}>Layer 2</span>
-              <span className={styles.layerGuideTitle}>Decision Engine</span>
+
+            <div className={styles.toolbarSection}>
+              <span className={styles.toolbarLabel}>Decisions</span>
+              <div className={styles.toolbarRow}>
+                <span className={styles.toolbarValue}>
+                  {layoutMeta.visibleDecisionCount}/{layoutMeta.totalDecisionCount}
+                </span>
+                {layoutMeta.hiddenDecisionCount > 0 && !expandHiddenDecisions && (
+                  <button
+                    type="button"
+                    className={styles.toolBtn}
+                    onClick={() => setExpandHiddenDecisions(true)}
+                  >
+                    +{layoutMeta.hiddenDecisionCount} more
+                  </button>
+                )}
+                {expandHiddenDecisions && layoutMeta.hiddenDecisionCount > 0 && (
+                  <button
+                    type="button"
+                    className={styles.toolBtn}
+                    onClick={() => setExpandHiddenDecisions(false)}
+                  >
+                    Fold Low Priority
+                  </button>
+                )}
+              </div>
             </div>
-            <span className={styles.layerGuideArrow}>→</span>
-            <div className={styles.layerGuideItem}>
-              <span className={styles.layerGuideTag}>Layer 3</span>
-              <span className={styles.layerGuideTitle}>Plugin Projection</span>
+
+            <div className={styles.toolbarSection}>
+              <span className={styles.toolbarLabel}>Focus</span>
+              <div className={styles.toolbarRow}>
+                <button
+                  type="button"
+                  className={`${styles.toolBtn} ${focusMode ? styles.toolBtnActive : ''}`}
+                  onClick={() => {
+                    setFocusMode(prev => {
+                      const next = !prev
+                      if (!next) setFocusedDecisionName(null)
+                      return next
+                    })
+                  }}
+                >
+                  {focusMode ? 'On' : 'Off'}
+                </button>
+                {focusedDecisionName && (
+                  <button
+                    type="button"
+                    className={styles.toolBtn}
+                    onClick={() => setFocusedDecisionName(null)}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
             </div>
           </div>
+
           <ReactFlow
             nodes={nodes}
             edges={edges}

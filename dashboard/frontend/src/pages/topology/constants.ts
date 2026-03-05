@@ -188,9 +188,9 @@ export const TOPOLOGY_LAYER_LAYOUT = {
   },
   lanes: {
     decisions: {
-      enableAt: 14,
-      maxPerLane: 10,
-      maxLanes: 3,
+      enableAt: 7,
+      maxPerLane: 6,
+      maxLanes: 6,
       laneGap: 250,
     },
     algorithms: {

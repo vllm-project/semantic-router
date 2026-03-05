@@ -10,9 +10,12 @@ interface DecisionNodeData {
   decision: DecisionConfig
   rulesCollapsed?: boolean
   isHighlighted?: boolean
+  isFocusTarget?: boolean
+  focusModeEnabled?: boolean
   isUnreachable?: boolean
   unreachableReason?: string
   onToggleRulesCollapse?: () => void
+  onFocusDecision?: (decisionName: string) => void
 }
 
 export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
@@ -20,9 +23,12 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
     decision, 
     rulesCollapsed = false, 
     isHighlighted, 
+    isFocusTarget = false,
+    focusModeEnabled = false,
     isUnreachable = false,
     unreachableReason,
-    onToggleRulesCollapse 
+    onToggleRulesCollapse,
+    onFocusDecision,
   } = data
   const { name, priority, rules, modelRefs, algorithm, plugins } = decision
 
@@ -39,7 +45,7 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
 
   return (
     <div
-      className={`${styles.decisionNode} ${isHighlighted ? styles.highlighted : ''} ${isUnreachable ? styles.unreachable : ''}`}
+      className={`${styles.decisionNode} ${isHighlighted ? styles.highlighted : ''} ${isUnreachable ? styles.unreachable : ''} ${isFocusTarget ? styles.focusTarget : ''}`}
       style={{
         background: colors.background,
         border: `2px solid ${colors.border}`,
@@ -51,6 +57,19 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
       <div className={styles.decisionHeader}>
         <span className={styles.decisionIcon}>{isUnreachable ? '⚠️' : '🔀'}</span>
         <span className={styles.decisionName} title={name}>{name}</span>
+        {focusModeEnabled && (
+          <button
+            type="button"
+            className={`${styles.focusDecisionBtn} ${isFocusTarget ? styles.focusDecisionBtnActive : ''}`}
+            onClick={(event) => {
+              event.stopPropagation()
+              onFocusDecision?.(name)
+            }}
+            title={isFocusTarget ? 'Clear focus' : 'Focus this decision'}
+          >
+            {isFocusTarget ? '◉' : '◎'}
+          </button>
+        )}
         <span className={styles.decisionPriority}>P{priority}</span>
       </div>
 

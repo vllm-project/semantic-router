@@ -254,6 +254,13 @@ const ClawRoomChat = ({
     const entries: MentionOption[] = []
     const seen = new Set<string>()
 
+    const allDesc =
+      teamWorkers.length > 0
+        ? `All claws in this team (${teamWorkers.length})`
+        : 'All claws in this team'
+    entries.push({ token: '@all', description: allDesc })
+    seen.add('@all')
+
     const leaderDesc = leaderWorker
       ? `Leader alias (${leaderWorker.agentName || leaderWorker.name})`
       : 'Leader alias'
@@ -1314,7 +1321,7 @@ const ClawRoomChat = ({
                   onClick={syncMentionByCursor}
                   onKeyUp={syncMentionByCursor}
                   onKeyDown={handleDraftKeyDown}
-                  placeholder="@leader to assign tasks, or @worker-name"
+                  placeholder="@all to mention everyone, @leader to assign tasks, or @worker-name"
                   rows={1}
                   disabled={!selectedRoomId || posting}
                 />

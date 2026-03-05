@@ -1961,9 +1961,23 @@
 .modalFooter {
   display: flex;
   align-items: center;
+  gap: var(--spacing-lg);
   padding: var(--spacing-md) var(--spacing-lg);
   border-top: 1px solid var(--color-border);
   flex-shrink: 0;
+}
+
+.modalFooterImportActions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.modalFooterPrimaryActions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
 }
 
 /* ===== Validation Panel (Visual Mode) ===== */
