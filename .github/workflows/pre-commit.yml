@@ -36,7 +36,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v5
         with:
-          node-version: 23
+          node-version: 20
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -52,7 +52,7 @@ jobs:
             build-essential \
             pkg-config \
             shellcheck
-          npm install -g markdownlint-cli
+          npm install -g markdownlint-cli@0.43.0
           pip install --user yamllint codespell
 
       - name: Set up golangci-lint
