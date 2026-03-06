@@ -2,7 +2,7 @@
 // long prompts to a token budget while preserving classification and embedding
 // fidelity. It uses no LLM inference — only classical NLP scoring.
 //
-// The compression pipeline combines three well-cited scoring signals:
+// The compression pipeline combines four well-cited scoring signals:
 //
 //  1. TextRank (Mihalcea & Tarau, EMNLP 2004) — graph-based sentence importance
 //     via PageRank over a cosine-similarity adjacency matrix.
@@ -15,7 +15,12 @@
 //     EMNLP 2023, arXiv:2310.06201) — sentences with rare, informative tokens
 //     score higher, approximating token-level self-information without an LM.
 //
-// Sentences are ranked by a weighted combination of these three scores. The
+//  4. Novelty scoring (adapted from Radev et al., IPM 2004; Carbonell &
+//     Goldstein, SIGIR 1998) — inverse of centroid-based centrality. Sentences
+//     whose TF vectors diverge from the document centroid score high, surfacing
+//     outlier content (jailbreak prefixes, PII) without keyword lists.
+//
+// Sentences are ranked by a weighted combination of these four scores. The
 // top-ranked sentences are selected to fit the token budget and reassembled in
 // their original order to preserve discourse coherence.
 //
@@ -43,16 +48,22 @@ type Config struct {
 	MaxTokens int
 
 	// TextRankWeight controls the contribution of TextRank content-importance
-	// scores. Default: 0.4.
+	// scores. Default: 0.20.
 	TextRankWeight float64
 
 	// PositionWeight controls the contribution of Lost-in-the-Middle position
-	// scores. Default: 0.3.
+	// scores. High weight preserves domain signals at prompt boundaries.
+	// Default: 0.40.
 	PositionWeight float64
 
 	// TFIDFWeight controls the contribution of TF-IDF information density
-	// scores. Default: 0.3.
+	// scores. Default: 0.35.
 	TFIDFWeight float64
+
+	// NoveltyWeight controls the contribution of novelty (inverse centrality)
+	// scores. Kept low to avoid displacing domain-representative content with
+	// outlier sentences. Default: 0.05.
+	NoveltyWeight float64
 
 	// PositionDepth controls the amplitude of the U-shaped position curve.
 	// 0 = flat (no position bias), 1 = maximum penalty for middle sentences.
@@ -61,12 +72,13 @@ type Config struct {
 
 	// PreserveFirstN always keeps the first N sentences regardless of score.
 	// Motivated by the primacy effect in "Lost in the Middle": the opening
-	// sentences provide critical framing context. Default: 1.
+	// sentences provide critical framing context. Default: 3 (covers system
+	// prompt, jailbreak prefixes, and initial PII in typical LLM API payloads).
 	PreserveFirstN int
 
 	// PreserveLastN always keeps the last N sentences regardless of score.
 	// Motivated by the recency effect: the final sentences often contain
-	// the user's actual request or question. Default: 1.
+	// the user's actual request or question. Default: 2.
 	PreserveLastN int
 }
 
@@ -74,12 +86,13 @@ type Config struct {
 func DefaultConfig(maxTokens int) Config {
 	return Config{
 		MaxTokens:      maxTokens,
-		TextRankWeight: 0.4,
-		PositionWeight: 0.3,
-		TFIDFWeight:    0.3,
+		TextRankWeight: 0.20,
+		PositionWeight: 0.40,
+		TFIDFWeight:    0.35,
+		NoveltyWeight:  0.05,
 		PositionDepth:  0.5,
-		PreserveFirstN: 1,
-		PreserveLastN:  1,
+		PreserveFirstN: 3,
+		PreserveLastN:  2,
 	}
 }
 
@@ -113,6 +126,7 @@ type ScoredSentence struct {
 	TextRank  float64
 	Position  float64
 	TFIDF     float64
+	Novelty   float64
 	Composite float64
 }
 
@@ -172,6 +186,20 @@ func Compress(text string, cfg Config) Result {
 	// --- Score computation ---
 	normalizeWeights(&cfg)
 
+	// Pre-compute TF vectors once for reuse by TextRank and Novelty.
+	tfVecs := make([]map[string]float64, n)
+	for i, tokens := range sentTokens {
+		tf := make(map[string]float64, len(tokens))
+		for _, t := range tokens {
+			tf[t]++
+		}
+		cnt := float64(len(tokens))
+		for k := range tf {
+			tf[k] /= cnt
+		}
+		tfVecs[i] = tf
+	}
+
 	textRankScores := NewTextRankScorer().ScoreSentences(sentTokens)
 	positionScores := PositionWeights(n, cfg.PositionDepth)
 	tfidfScorer := NewTFIDFScorer(sentTokens)
@@ -182,6 +210,13 @@ func Compress(text string, cfg Config) Result {
 	}
 	normalizeSlice(tfidfScores)
 
+	noveltyScorer := NewNoveltyScorer(tfVecs)
+	noveltyScores := make([]float64, n)
+	for i := range sentences {
+		noveltyScores[i] = noveltyScorer.ScoreSentence(tfVecs[i])
+	}
+	normalizeSlice(noveltyScores)
+
 	scored := make([]ScoredSentence, n)
 	for i := range sentences {
 		scored[i] = ScoredSentence{
@@ -191,9 +226,11 @@ func Compress(text string, cfg Config) Result {
 			TextRank: textRankScores[i],
 			Position: positionScores[i],
 			TFIDF:    tfidfScores[i],
+			Novelty:  noveltyScores[i],
 			Composite: cfg.TextRankWeight*textRankScores[i] +
 				cfg.PositionWeight*positionScores[i] +
-				cfg.TFIDFWeight*tfidfScores[i],
+				cfg.TFIDFWeight*tfidfScores[i] +
+				cfg.NoveltyWeight*noveltyScores[i],
 		}
 	}
 
@@ -317,18 +354,20 @@ func sampleSentences(sentences []string, n int) []string {
 	return result
 }
 
-// normalizeWeights ensures the three score weights sum to 1.0.
+// normalizeWeights ensures the four score weights sum to 1.0.
 func normalizeWeights(cfg *Config) {
-	total := cfg.TextRankWeight + cfg.PositionWeight + cfg.TFIDFWeight
+	total := cfg.TextRankWeight + cfg.PositionWeight + cfg.TFIDFWeight + cfg.NoveltyWeight
 	if total <= 0 {
-		cfg.TextRankWeight = 1.0 / 3.0
-		cfg.PositionWeight = 1.0 / 3.0
-		cfg.TFIDFWeight = 1.0 / 3.0
+		cfg.TextRankWeight = 0.25
+		cfg.PositionWeight = 0.25
+		cfg.TFIDFWeight = 0.25
+		cfg.NoveltyWeight = 0.25
 		return
 	}
 	cfg.TextRankWeight /= total
 	cfg.PositionWeight /= total
 	cfg.TFIDFWeight /= total
+	cfg.NoveltyWeight /= total
 }
 
 // normalizeSlice scales values to [0, 1] by dividing by the max.
