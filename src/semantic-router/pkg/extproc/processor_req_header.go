@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"crypto/subtle"
 	"strings"
 	"time"
 
@@ -22,6 +23,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	defer span.End()
 
 	method, path := captureRequestHeaders(v, ctx)
+	r.validateLooperRequest(v, ctx)
 	setRequestHeaderSpanAttributes(span, ctx, method, path)
 
 	if replayResp := r.handleRouterReplayAPI(method, path); replayResp != nil {
@@ -76,11 +78,41 @@ func captureRequestHeaders(
 		}
 		if header.Key == headers.VSRLooperRequest && headerValue == "true" {
 			ctx.LooperRequest = true
-			logging.Infof("Detected looper internal request, will skip plugin processing")
 		}
 	}
 
 	return ctx.Headers[":method"], ctx.Headers[":path"]
+}
+
+// validateLooperRequest authenticates looper requests using a shared secret.
+// Without this, any external client could send x-vsr-looper-request: true
+// to bypass all security plugins (jailbreak, PII, authz, decision).
+func (r *OpenAIRouter) validateLooperRequest(
+	v *ext_proc.ProcessingRequest_RequestHeaders,
+	ctx *RequestContext,
+) {
+	if !ctx.LooperRequest {
+		return
+	}
+	expectedSecret := r.Config.Looper.InternalSecret
+	if expectedSecret == "" {
+		ctx.LooperRequest = false
+		logging.Warnf("Rejected looper request: looper secret not configured (header from external client?)")
+		return
+	}
+	secret := ""
+	for _, h := range v.RequestHeaders.Headers.Headers {
+		if h.Key == headers.VSRLooperSecret {
+			secret = extractHeaderValue(h)
+			break
+		}
+	}
+	if subtle.ConstantTimeCompare([]byte(secret), []byte(expectedSecret)) == 1 {
+		logging.Infof("Validated looper internal request (secret match)")
+	} else {
+		ctx.LooperRequest = false
+		logging.Warnf("Rejected looper request: invalid or missing secret")
+	}
 }
 
 func setRequestHeaderSpanAttributes(

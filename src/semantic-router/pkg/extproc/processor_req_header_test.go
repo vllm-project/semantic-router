@@ -7,6 +7,8 @@ import (
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 type requestHeaderTestCase struct {
@@ -146,7 +148,12 @@ func assertRequestHeaderResponse(
 }
 
 func TestHandleRequestHeadersSetsLooperAndStreamingFlags(t *testing.T) {
-	router := &OpenAIRouter{}
+	router := &OpenAIRouter{Config: &config.RouterConfig{
+		Looper: config.LooperConfig{
+			Endpoint:       "http://localhost:8080/v1/chat/completions",
+			InternalSecret: "test-secret-abc123",
+		},
+	}}
 	requestHeaders := &ext_proc.ProcessingRequest_RequestHeaders{
 		RequestHeaders: &ext_proc.HttpHeaders{
 			Headers: &core.HeaderMap{
@@ -155,6 +162,7 @@ func TestHandleRequestHeadersSetsLooperAndStreamingFlags(t *testing.T) {
 					{Key: ":path", Value: "/v1/chat/completions"},
 					{Key: "accept", Value: "text/event-stream"},
 					{Key: "x-vsr-looper-request", Value: "true"},
+					{Key: "x-vsr-looper-secret", Value: "test-secret-abc123"},
 					{Key: "x-request-id", Value: "req-123"},
 				},
 			},

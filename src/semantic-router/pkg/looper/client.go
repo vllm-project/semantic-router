@@ -39,6 +39,7 @@ type Client struct {
 	headers           map[string]string
 	decisionName      string            // Decision name to pass in looper requests
 	endpointOverrides map[string]string // Per-model endpoint URL overrides
+	internalSecret    string            // Shared secret to authenticate looper requests
 }
 
 // NewClient creates a new looper HTTP client
@@ -47,8 +48,9 @@ func NewClient(cfg *config.LooperConfig) *Client {
 		httpClient: &http.Client{
 			Timeout: time.Duration(cfg.GetTimeout()) * time.Second,
 		},
-		endpoint: cfg.Endpoint,
-		headers:  cfg.Headers,
+		endpoint:       cfg.Endpoint,
+		headers:        cfg.Headers,
+		internalSecret: cfg.InternalSecret,
 	}
 	if len(cfg.ModelEndpoints) > 0 {
 		c.endpointOverrides = cfg.ModelEndpoints
@@ -201,6 +203,11 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 	// These allow extproc to identify looper requests and lookup decision configuration
 	httpReq.Header.Set("x-vsr-looper-request", "true")
 	httpReq.Header.Set("x-vsr-looper-iteration", fmt.Sprintf("%d", iteration))
+
+	// Add shared secret to authenticate this as a genuine internal looper request
+	if c.internalSecret != "" {
+		httpReq.Header.Set("x-vsr-looper-secret", c.internalSecret)
+	}
 
 	// Add decision name header for extproc to lookup decision configuration
 	if c.decisionName != "" {
