@@ -10,8 +10,9 @@ import (
 	"path/filepath"
 	"time"
 
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"gopkg.in/yaml.v3"
+
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 const setupModeKey = "setup"
@@ -134,8 +135,8 @@ func SetupActivateHandler(configPath string, readonlyMode bool, configDir string
 			return
 		}
 
-		if err := validateSetupCandidate(candidate); err != nil {
-			http.Error(w, fmt.Sprintf("Setup activation validation failed: %v", err), http.StatusBadRequest)
+		if validationErr := validateSetupCandidate(candidate); validationErr != nil {
+			http.Error(w, fmt.Sprintf("Setup activation validation failed: %v", validationErr), http.StatusBadRequest)
 			return
 		}
 
@@ -297,15 +298,15 @@ func validateSetupCandidate(configMap map[string]interface{}) error {
 		return err
 	}
 	tempConfigPath := tempConfigFile.Name()
-	if err := tempConfigFile.Close(); err != nil {
-		return err
+	if closeErr := tempConfigFile.Close(); closeErr != nil {
+		return closeErr
 	}
 	defer func() {
 		_ = os.Remove(tempConfigPath)
 	}()
 
-	if err := os.WriteFile(tempConfigPath, yamlData, 0o644); err != nil {
-		return err
+	if writeErr := os.WriteFile(tempConfigPath, yamlData, 0o644); writeErr != nil {
+		return writeErr
 	}
 
 	parsedConfig, err := routerconfig.Parse(tempConfigPath)
@@ -314,8 +315,8 @@ func validateSetupCandidate(configMap map[string]interface{}) error {
 	}
 	if len(parsedConfig.VLLMEndpoints) > 0 {
 		for _, endpoint := range parsedConfig.VLLMEndpoints {
-			if err := validateEndpointAddress(endpoint.Address); err != nil {
-				return err
+			if endpointErr := validateEndpointAddress(endpoint.Address); endpointErr != nil {
+				return endpointErr
 			}
 		}
 	}
@@ -328,8 +329,8 @@ func validateSetupCandidate(configMap map[string]interface{}) error {
 		_ = os.RemoveAll(tempOutputDir)
 	}()
 
-	if _, err := generateRouterConfigWithPython(tempConfigPath, tempOutputDir); err != nil {
-		return err
+	if _, generateErr := generateRouterConfigWithPython(tempConfigPath, tempOutputDir); generateErr != nil {
+		return generateErr
 	}
 
 	return nil

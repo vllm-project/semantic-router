@@ -303,17 +303,6 @@ func checkServiceFromContainerLogs(service string) (bool, string) {
 	return false, "Status unknown"
 }
 
-// checkServiceFromLogs checks if a service is running by examining container logs
-// This mirrors the vllm-sr Python CLI approach
-func checkServiceFromLogs(service string) (bool, string) {
-	logContent := getContainerLogsTail(200)
-	if logContent == "" {
-		return false, "Status unknown (check logs)"
-	}
-
-	return checkServiceInLogContent(service, logContent)
-}
-
 func checkServiceInLogContent(service, logContent string) (bool, string) {
 	logContentLower := strings.ToLower(logContent)
 
