@@ -2,10 +2,12 @@ package extproc
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
@@ -231,7 +233,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 		// Use advanced model selection (Elo, RouterDC, AutoMix, Hybrid, or Static)
 		// Pass decision's algorithm config for per-decision algorithm override
 		// Pass categoryName for ML selectors to create feature vectors with category one-hot encoding
-		selectedModelRef, usedMethod := r.selectModelFromCandidates(result.Decision.ModelRefs, decisionName, userContent, result.Decision.Algorithm, categoryName)
+		selectedModelRef, usedMethod := r.selectModelFromCandidates(result.Decision.ModelRefs, decisionName, userContent, result.Decision.Algorithm, categoryName, ctx)
 
 		// Use LoRA name if specified, otherwise use the base model name
 		selectedModel = selectedModelRef.Model
@@ -284,7 +286,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 // The algorithm parameter allows per-decision algorithm override (aligned with looper pattern).
 // The categoryName parameter is the detected domain category (e.g., "physics", "math") for ML feature vectors.
 // Returns the selected model and the method name used for logging.
-func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, decisionName string, query string, algorithm *config.AlgorithmConfig, categoryName string) (*config.ModelRef, string) {
+func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, decisionName string, query string, algorithm *config.AlgorithmConfig, categoryName string, ctx *RequestContext) (*config.ModelRef, string) {
 	if len(modelRefs) == 0 {
 		return nil, ""
 	}
@@ -313,6 +315,14 @@ func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, de
 	costWeight, qualityWeight := r.getSelectionWeights(algorithm)
 	latencyAwareTPOTPercentile, latencyAwareTTFTPercentile := r.getLatencyAwarePercentiles(algorithm)
 
+	// Extract session context for backend affinity if enabled in config
+	// This enables KV cache optimization when requests from the same user
+	// route to the same backend
+	var userID, sessionID string
+	if r.shouldEnableSessionAffinity(algorithm) {
+		userID, sessionID = r.extractSessionContext(ctx)
+	}
+
 	selCtx := &selection.SelectionContext{
 		Query:                      query,
 		DecisionName:               decisionName,
@@ -320,6 +330,8 @@ func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, de
 		CandidateModels:            modelRefs,
 		CostWeight:                 costWeight,
 		QualityWeight:              qualityWeight,
+		UserID:                     userID,
+		SessionID:                  sessionID,
 		LatencyAwareTPOTPercentile: latencyAwareTPOTPercentile,
 		LatencyAwareTTFTPercentile: latencyAwareTTFTPercentile,
 	}
@@ -487,4 +499,54 @@ func (r *OpenAIRouter) processUserFeedbackForElo(userFeedbackSignals []string, m
 			logging.Warnf("[AutoFeedback] Failed to update Elo: %v", err)
 		}
 	}
+}
+
+// shouldEnableSessionAffinity checks if session affinity is enabled for the given algorithm.
+// Session affinity routes requests from the same user to the same backend for KV cache optimization.
+// This is only safe when you trust user IDs and want to prevent cross-user KV cache contamination.
+func (r *OpenAIRouter) shouldEnableSessionAffinity(algorithm *config.AlgorithmConfig) bool {
+	if r.Config == nil {
+		return false
+	}
+
+	// Check if RLDriven config is present and enabled
+	if algorithm != nil && algorithm.RLDriven != nil {
+		return algorithm.RLDriven.EnableSessionAffinity
+	}
+
+	return false
+}
+
+// extractSessionContext extracts user ID for backend affinity.
+// This enables user-based routing for KV cache optimization.
+//
+// Priority for UserID:
+//  1. X-Authz-User-ID header (from authorization/authentication system)
+//  2. "user" field in Chat Completions request body (OpenAI spec)
+//
+// User-based affinity is critical for vLLM prefix caching: when the same user's
+// requests route to the same backend, vLLM can reuse KV cache from previous
+// interactions, reducing compute and latency. This also prevents KV cache
+// cross-contamination between different users.
+func (r *OpenAIRouter) extractSessionContext(ctx *RequestContext) (userID string, sessionID string) {
+	// Extract UserID from authorization header (priority 1)
+	userID = ctx.Headers[headers.AuthzUserID]
+
+	// Extract UserID from request body if not in headers (priority 2)
+	if userID == "" && ctx.OriginalRequestBody != nil {
+		var requestBody struct {
+			User string `json:"user,omitempty"`
+		}
+		if err := json.Unmarshal(ctx.OriginalRequestBody, &requestBody); err == nil {
+			userID = requestBody.User
+		}
+	}
+
+	// Log user context for debugging
+	if userID != "" {
+		logging.Infof("[UserContext] UserID=%q (enables backend affinity for KV cache optimization)", userID)
+	}
+
+	// Return empty sessionID as we only use userID for affinity
+	return userID, ""
 }
