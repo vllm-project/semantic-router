@@ -158,7 +158,8 @@ func (p *IngestionPipeline) AttachFile(vectorStoreID, fileID string, strategy *C
 
 	select {
 	case p.jobQueue <- job:
-		return vsf, nil
+		snapshot := *vsf
+		return &snapshot, nil
 	default:
 		// Queue is full.
 		p.setFileStatus(vsfID, "failed", &FileError{
