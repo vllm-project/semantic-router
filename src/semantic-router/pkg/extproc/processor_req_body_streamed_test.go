@@ -79,26 +79,6 @@ func assertChunkEaten(t *testing.T, resp *ext_proc.ProcessingResponse, msg strin
 	assert.Empty(t, bm.GetBody(), msg+": body must be empty")
 }
 
-// feedChunks sends all chunks to the handler. The last chunk is sent with
-// EndOfStream=true. Returns the EOS response.
-func feedChunks(t *testing.T, h *StreamedBodyHandler, ctx *RequestContext, chunks [][]byte) *ext_proc.ProcessingResponse {
-	t.Helper()
-	var lastResp *ext_proc.ProcessingResponse
-	for i, chunk := range chunks {
-		eos := i == len(chunks)-1
-		resp, err := h.HandleChunk(&ext_proc.HttpBody{
-			Body:        chunk,
-			EndOfStream: eos,
-		}, ctx)
-		require.NoError(t, err, "chunk %d/%d", i+1, len(chunks))
-		if !eos {
-			assertChunkEaten(t, resp, fmt.Sprintf("non-EOS chunk %d/%d", i+1, len(chunks)))
-		}
-		lastResp = resp
-	}
-	return lastResp
-}
-
 // =====================================================================
 // Dispatch: BUFFERED vs STREAMED detection
 // =====================================================================
@@ -283,7 +263,7 @@ func TestHandler_ModelFieldAtEndOfJSON(t *testing.T) {
 	body := makeTestBodyModelLast("gpt-4o-mini", "test data")
 	// Send first chunk with only the messages part (model at end)
 	splitAt := bytes.Index(body, []byte(`"model"`))
-	require.Greater(t, splitAt, 0, "model field must exist in body")
+	require.Positive(t, splitAt, "model field must exist in body")
 
 	resp1, err := h.HandleChunk(&ext_proc.HttpBody{Body: body[:splitAt], EndOfStream: false}, ctx)
 	require.NoError(t, err)
@@ -877,11 +857,11 @@ func TestHandler_FullFlow_TinyChunks_AutoModel(t *testing.T) {
 }
 
 // =====================================================================
-// continueEmptyBody structure
+// sharedContinueEmptyBody (pooled singleton)
 // =====================================================================
 
-func TestContinueEmptyBody_StructureCorrect(t *testing.T) {
-	resp := continueEmptyBody()
+func TestSharedContinueEmptyBody_StructureCorrect(t *testing.T) {
+	resp := sharedContinueEmptyBody
 	require.NotNil(t, resp)
 
 	br := resp.GetRequestBody()
@@ -893,10 +873,22 @@ func TestContinueEmptyBody_StructureCorrect(t *testing.T) {
 	assert.Empty(t, bm.GetBody())
 }
 
-func TestContinueEmptyBody_IndependentInstances(t *testing.T) {
-	r1 := continueEmptyBody()
-	r2 := continueEmptyBody()
-	assert.NotSame(t, r1, r2, "each call must return a new instance")
+func TestSharedContinueEmptyBody_IsSingleton(t *testing.T) {
+	r1 := sharedContinueEmptyBody
+	r2 := sharedContinueEmptyBody
+	assert.Same(t, r1, r2, "shared response must be the same pointer")
+}
+
+func TestSharedContinueEmptyBody_ReturnedByHandler(t *testing.T) {
+	router := makeTestRouter("auto")
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	resp, err := h.HandleChunk(&ext_proc.HttpBody{Body: []byte(`{"mod`), EndOfStream: false}, ctx)
+	require.NoError(t, err)
+	assert.Same(t, sharedContinueEmptyBody, resp,
+		"non-EOS chunk should return the pooled singleton, not a fresh allocation")
 }
 
 // =====================================================================
@@ -1053,4 +1045,322 @@ func BenchmarkHandler_ByteByByte_1K(b *testing.B) {
 		}
 		h.Release()
 	}
+}
+
+// =====================================================================
+// Guard: max body size
+// =====================================================================
+
+func makeTestRouterWithLimits(autoModel string, maxBytes int64, timeoutSec int) *OpenAIRouter {
+	cfg := &config.RouterConfig{
+		BackendModels: config.BackendModels{
+			DefaultModel: "fallback-model",
+		},
+		RouterOptions: config.RouterOptions{
+			StreamedBodyMode:       true,
+			MaxStreamedBodyBytes:   maxBytes,
+			StreamedBodyTimeoutSec: timeoutSec,
+		},
+	}
+	if autoModel != "" {
+		cfg.AutoModelName = autoModel
+	}
+	return &OpenAIRouter{Config: cfg}
+}
+
+func TestGuard_MaxBytes_RejectsOversizedBody(t *testing.T) {
+	router := makeTestRouterWithLimits("auto", 100, 0)
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	// First chunk: 60 bytes — under limit
+	resp, err := h.HandleChunk(&ext_proc.HttpBody{
+		Body: bytes.Repeat([]byte("A"), 60), EndOfStream: false,
+	}, ctx)
+	require.NoError(t, err)
+	assertChunkEaten(t, resp, "under limit")
+
+	// Second chunk: 60 more bytes — total 120 > limit 100
+	_, err = h.HandleChunk(&ext_proc.HttpBody{
+		Body: bytes.Repeat([]byte("B"), 60), EndOfStream: false,
+	}, ctx)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "too large")
+}
+
+func TestGuard_MaxBytes_ExactLimitAllowed(t *testing.T) {
+	router := makeTestRouterWithLimits("auto", 100, 0)
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	resp, err := h.HandleChunk(&ext_proc.HttpBody{
+		Body: bytes.Repeat([]byte("X"), 100), EndOfStream: false,
+	}, ctx)
+	require.NoError(t, err, "exactly at limit should be allowed")
+	assertChunkEaten(t, resp, "at limit")
+}
+
+func TestGuard_MaxBytes_OneByteOverRejects(t *testing.T) {
+	router := makeTestRouterWithLimits("auto", 100, 0)
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	_, err := h.HandleChunk(&ext_proc.HttpBody{
+		Body: bytes.Repeat([]byte("X"), 101), EndOfStream: false,
+	}, ctx)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "too large")
+}
+
+func TestGuard_MaxBytes_ZeroMeansUnlimited(t *testing.T) {
+	router := makeTestRouterWithLimits("auto", 0, 0)
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	bigChunk := bytes.Repeat([]byte("X"), 1_000_000)
+	resp, err := h.HandleChunk(&ext_proc.HttpBody{Body: bigChunk, EndOfStream: false}, ctx)
+	require.NoError(t, err, "no limit → should accept any size")
+	assertChunkEaten(t, resp, "unlimited")
+}
+
+func TestGuard_MaxBytes_ErrorOnInitState(t *testing.T) {
+	router := makeTestRouterWithLimits("auto", 50, 0)
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	_, err := h.HandleChunk(&ext_proc.HttpBody{
+		Body: bytes.Repeat([]byte("Z"), 60), EndOfStream: false,
+	}, ctx)
+	require.Error(t, err, "should reject even in init state")
+	assert.Equal(t, stateInit, h.state, "state should not have advanced past init")
+}
+
+func TestGuard_MaxBytes_ErrorOnPassthroughState(t *testing.T) {
+	router := makeTestRouterWithLimits("auto", 200, 0)
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	body := makeTestBody("gpt-4", "hello", false)
+	_, err := h.HandleChunk(&ext_proc.HttpBody{Body: body, EndOfStream: false}, ctx)
+	require.NoError(t, err)
+	assert.Equal(t, statePassthrough, h.state)
+
+	// Push over limit
+	_, err = h.HandleChunk(&ext_proc.HttpBody{
+		Body: bytes.Repeat([]byte("X"), 200), EndOfStream: false,
+	}, ctx)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "too large")
+}
+
+func TestGuard_MaxBytes_ErrorOnAccumulateState(t *testing.T) {
+	router := makeTestRouterWithLimits("auto", 200, 0)
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	body := makeTestBody("auto", "hello", false)
+	_, err := h.HandleChunk(&ext_proc.HttpBody{Body: body, EndOfStream: false}, ctx)
+	require.NoError(t, err)
+	assert.Equal(t, stateAccumulate, h.state)
+
+	_, err = h.HandleChunk(&ext_proc.HttpBody{
+		Body: bytes.Repeat([]byte("X"), 200), EndOfStream: false,
+	}, ctx)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "too large")
+}
+
+func TestGuard_MaxBytes_IncrementalGrowthToLimit(t *testing.T) {
+	limit := int64(500)
+	router := makeTestRouterWithLimits("auto", limit, 0)
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	body := makeTestBody("auto", "test", false)
+	_, err := h.HandleChunk(&ext_proc.HttpBody{Body: body, EndOfStream: false}, ctx)
+	require.NoError(t, err)
+
+	chunkSize := 50
+	for int64(h.buf.Len()+chunkSize) <= limit {
+		_, err = h.HandleChunk(&ext_proc.HttpBody{
+			Body: bytes.Repeat([]byte("A"), chunkSize), EndOfStream: false,
+		}, ctx)
+		require.NoError(t, err, "at %d bytes, still under limit %d", h.buf.Len(), limit)
+	}
+
+	// One more push over
+	_, err = h.HandleChunk(&ext_proc.HttpBody{
+		Body: bytes.Repeat([]byte("B"), chunkSize), EndOfStream: false,
+	}, ctx)
+	require.Error(t, err)
+}
+
+// =====================================================================
+// Guard: accumulation timeout
+// =====================================================================
+
+func TestGuard_Timeout_RejectsStaleAccumulation(t *testing.T) {
+	// Use 1-second timeout
+	router := makeTestRouterWithLimits("auto", 0, 1)
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	// First chunk is fine
+	resp, err := h.HandleChunk(&ext_proc.HttpBody{
+		Body: []byte(`{"mod`), EndOfStream: false,
+	}, ctx)
+	require.NoError(t, err)
+	assertChunkEaten(t, resp, "before timeout")
+
+	// Simulate time passing by moving the deadline into the past
+	h.deadline = time.Now().Add(-1 * time.Second)
+
+	_, err = h.HandleChunk(&ext_proc.HttpBody{
+		Body: []byte(`el":`), EndOfStream: false,
+	}, ctx)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "timed out")
+}
+
+func TestGuard_Timeout_ZeroMeansNoDeadline(t *testing.T) {
+	router := makeTestRouterWithLimits("auto", 0, 0)
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	assert.True(t, h.deadline.IsZero(), "zero timeout should produce zero deadline")
+
+	// Should not error even after writing data
+	resp, err := h.HandleChunk(&ext_proc.HttpBody{
+		Body: []byte(`{"mod`), EndOfStream: false,
+	}, ctx)
+	require.NoError(t, err)
+	assertChunkEaten(t, resp, "no deadline")
+}
+
+func TestGuard_Timeout_DeadlineSetCorrectly(t *testing.T) {
+	before := time.Now()
+	router := makeTestRouterWithLimits("auto", 0, 30)
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+	after := time.Now()
+
+	assert.False(t, h.deadline.IsZero())
+	assert.True(t, h.deadline.After(before.Add(29*time.Second)),
+		"deadline should be ~30s from now")
+	assert.True(t, h.deadline.Before(after.Add(31*time.Second)),
+		"deadline should be ~30s from now")
+}
+
+func TestGuard_Timeout_InAllStates(t *testing.T) {
+	states := []struct {
+		name  string
+		state streamedBodyState
+	}{
+		{"init", stateInit},
+		{"passthrough", statePassthrough},
+		{"accumulate", stateAccumulate},
+	}
+
+	for _, s := range states {
+		t.Run(s.name, func(t *testing.T) {
+			router := makeTestRouterWithLimits("auto", 0, 1)
+			ctx := &RequestContext{Headers: make(map[string]string)}
+			h := newStreamedBodyHandler(router, ctx)
+			defer h.Release()
+			h.state = s.state
+			h.deadline = time.Now().Add(-1 * time.Second) // expired
+
+			_, err := h.HandleChunk(&ext_proc.HttpBody{
+				Body: []byte("data"), EndOfStream: false,
+			}, ctx)
+			require.Error(t, err, "state %s should be guarded by timeout", s.name)
+			assert.Contains(t, err.Error(), "timed out")
+		})
+	}
+}
+
+// =====================================================================
+// Guard: combined max bytes + timeout
+// =====================================================================
+
+func TestGuard_Combined_MaxBytesTriggersFirst(t *testing.T) {
+	router := makeTestRouterWithLimits("auto", 50, 300)
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	_, err := h.HandleChunk(&ext_proc.HttpBody{
+		Body: bytes.Repeat([]byte("X"), 60), EndOfStream: false,
+	}, ctx)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "too large",
+		"max bytes should trigger before timeout")
+}
+
+func TestGuard_Combined_TimeoutTriggersFirst(t *testing.T) {
+	router := makeTestRouterWithLimits("auto", 1_000_000, 1)
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	h.deadline = time.Now().Add(-1 * time.Second) // expired
+
+	_, err := h.HandleChunk(&ext_proc.HttpBody{
+		Body: []byte("tiny"), EndOfStream: false,
+	}, ctx)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "timed out",
+		"timeout should trigger before max bytes")
+}
+
+// =====================================================================
+// Guard: errors stop processing (no state advance after error)
+// =====================================================================
+
+func TestGuard_ErrorPreventsStateAdvance(t *testing.T) {
+	router := makeTestRouterWithLimits("auto", 10, 0)
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	body := makeTestBody("auto", "too much content that exceeds the tiny limit", false)
+	_, err := h.HandleChunk(&ext_proc.HttpBody{Body: body, EndOfStream: false}, ctx)
+	require.Error(t, err)
+	assert.Equal(t, stateInit, h.state,
+		"on guard error, state machine should not advance")
+}
+
+// =====================================================================
+// Pool reuse clears guard fields
+// =====================================================================
+
+func TestGuard_PoolReuse_ClearsGuardFields(t *testing.T) {
+	router := makeTestRouterWithLimits("auto", 500, 60)
+	ctx := &RequestContext{Headers: make(map[string]string)}
+
+	h1 := newStreamedBodyHandler(router, ctx)
+	assert.Equal(t, int64(500), h1.maxBytes)
+	assert.False(t, h1.deadline.IsZero())
+	h1.Release()
+
+	// Get a new handler from pool with no-limit router
+	routerNoLimit := makeTestRouter("auto")
+	h2 := newStreamedBodyHandler(routerNoLimit, ctx)
+	defer h2.Release()
+
+	assert.Equal(t, int64(0), h2.maxBytes,
+		"pool-recycled handler must reset maxBytes from new config")
+	assert.True(t, h2.deadline.IsZero(),
+		"pool-recycled handler must reset deadline from new config")
 }

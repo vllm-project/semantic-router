@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"bytes"
+	"fmt"
 	"sync"
 	"time"
 
@@ -36,21 +37,51 @@ const (
 //
 // Both paths eat every chunk and emit the full body only on EOS, so upstream
 // never receives partial/duplicated data regardless of body mutations.
+//
+// Safety:
+//   - MaxBytes: if configured, rejects requests whose accumulated body exceeds
+//     the limit (HTTP 413).
+//   - Deadline: if configured, rejects requests that take too long to
+//     accumulate (HTTP 408).
+//   - GC: the "eat chunk" response is pooled so intermediate chunks produce
+//     zero allocations on the hot path.
 type StreamedBodyHandler struct {
 	router *OpenAIRouter
 	ctx    *RequestContext
 	state  streamedBodyState
 	buf    bytes.Buffer
 
-	// Fields extracted from first chunk
 	model    string
 	isStream bool
 	isAuto   bool
+
+	// Guards: populated once from config at creation time.
+	maxBytes int64
+	deadline time.Time // zero value = no deadline
 }
 
 var streamedHandlerPool = sync.Pool{
 	New: func() interface{} {
 		return &StreamedBodyHandler{}
+	},
+}
+
+// Shared immutable "eat chunk" response. Because the response only contains
+// CONTINUE + empty body (no per-request data), a single instance is safe to
+// return from every non-EOS chunk across all goroutines. This eliminates ~5
+// protobuf allocations per chunk that would otherwise become immediate garbage.
+var sharedContinueEmptyBody = &ext_proc.ProcessingResponse{
+	Response: &ext_proc.ProcessingResponse_RequestBody{
+		RequestBody: &ext_proc.BodyResponse{
+			Response: &ext_proc.CommonResponse{
+				Status: ext_proc.CommonResponse_CONTINUE,
+				BodyMutation: &ext_proc.BodyMutation{
+					Mutation: &ext_proc.BodyMutation_Body{
+						Body: []byte{},
+					},
+				},
+			},
+		},
 	},
 }
 
@@ -63,6 +94,15 @@ func newStreamedBodyHandler(router *OpenAIRouter, ctx *RequestContext) *Streamed
 	h.model = ""
 	h.isStream = false
 	h.isAuto = false
+
+	h.maxBytes = 0
+	h.deadline = time.Time{}
+	if router.Config != nil {
+		h.maxBytes = router.Config.MaxStreamedBodyBytes
+		if sec := router.Config.StreamedBodyTimeoutSec; sec > 0 {
+			h.deadline = time.Now().Add(time.Duration(sec) * time.Second)
+		}
+	}
 	return h
 }
 
@@ -81,6 +121,10 @@ func (h *StreamedBodyHandler) HandleChunk(body *ext_proc.HttpBody, ctx *RequestC
 
 	h.buf.Write(chunk)
 
+	if err := h.checkGuards(); err != nil {
+		return nil, err
+	}
+
 	switch h.state {
 	case stateInit:
 		return h.handleInit(eos)
@@ -89,8 +133,25 @@ func (h *StreamedBodyHandler) HandleChunk(body *ext_proc.HttpBody, ctx *RequestC
 	case stateAccumulate:
 		return h.handleAccumulate(eos)
 	default:
-		return continueEmptyBody(), nil
+		return sharedContinueEmptyBody, nil
 	}
+}
+
+// checkGuards enforces max-body and deadline limits. Returning an error causes
+// the gRPC stream to close, which makes Envoy apply its failure_mode_allow
+// policy (typically returning 500 or passing through).
+func (h *StreamedBodyHandler) checkGuards() error {
+	if h.maxBytes > 0 && int64(h.buf.Len()) > h.maxBytes {
+		logging.Infof("[StreamedBody] Accumulated %d bytes exceeds limit %d — aborting",
+			h.buf.Len(), h.maxBytes)
+		return fmt.Errorf("streamed body too large: %d > %d bytes", h.buf.Len(), h.maxBytes)
+	}
+	if !h.deadline.IsZero() && time.Now().After(h.deadline) {
+		logging.Infof("[StreamedBody] Accumulation deadline exceeded after %d bytes — aborting",
+			h.buf.Len())
+		return fmt.Errorf("streamed body accumulation timed out after %d bytes", h.buf.Len())
+	}
+	return nil
 }
 
 // handleInit accumulates bytes until the model field can be extracted from the
@@ -102,9 +163,8 @@ func (h *StreamedBodyHandler) handleInit(eos bool) (*ext_proc.ProcessingResponse
 
 	h.model = extractModelFast(buf)
 
-	// If model not found yet and not EOS, keep accumulating
 	if h.model == "" && !eos {
-		return continueEmptyBody(), nil
+		return sharedContinueEmptyBody, nil
 	}
 
 	h.isStream = extractStreamParamFast(buf)
@@ -137,7 +197,7 @@ func (h *StreamedBodyHandler) handleInit(eos bool) (*ext_proc.ProcessingResponse
 // forwarded intermediate chunks would be duplicated by an EOS body mutation.
 func (h *StreamedBodyHandler) handlePassthrough(eos bool) (*ext_proc.ProcessingResponse, error) {
 	if !eos {
-		return continueEmptyBody(), nil
+		return sharedContinueEmptyBody, nil
 	}
 
 	h.ctx.ProcessingStartTime = time.Now()
@@ -157,7 +217,7 @@ func (h *StreamedBodyHandler) handlePassthrough(eos bool) (*ext_proc.ProcessingR
 // classification + body mutation pipeline runs on the accumulated body.
 func (h *StreamedBodyHandler) handleAccumulate(eos bool) (*ext_proc.ProcessingResponse, error) {
 	if !eos {
-		return continueEmptyBody(), nil
+		return sharedContinueEmptyBody, nil
 	}
 
 	h.ctx.ProcessingStartTime = time.Now()
@@ -172,23 +232,3 @@ func (h *StreamedBodyHandler) handleAccumulate(eos bool) (*ext_proc.ProcessingRe
 
 	return h.router.handleRequestBody(v, h.ctx)
 }
-
-// continueEmptyBody returns a CONTINUE response that replaces the chunk with
-// an empty body (effectively "eating" it on the Envoy side).
-func continueEmptyBody() *ext_proc.ProcessingResponse {
-	return &ext_proc.ProcessingResponse{
-		Response: &ext_proc.ProcessingResponse_RequestBody{
-			RequestBody: &ext_proc.BodyResponse{
-				Response: &ext_proc.CommonResponse{
-					Status: ext_proc.CommonResponse_CONTINUE,
-					BodyMutation: &ext_proc.BodyMutation{
-						Mutation: &ext_proc.BodyMutation_Body{
-							Body: []byte{},
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
