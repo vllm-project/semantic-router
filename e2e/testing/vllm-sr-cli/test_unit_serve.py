@@ -263,9 +263,15 @@ listeners:
 
         # Run serve with HF_TOKEN - use verbose/debug to see docker command
         return_code, stdout, stderr = self.run_cli(
-            ["serve", "--image-pull-policy", "never"],
-            env={"HF_TOKEN": test_token},
-            timeout=30,
+            [
+                "serve",
+                "--image",
+                "nonexistent-image:12345",
+                "--image-pull-policy",
+                "never",
+            ],
+            env={"HF_TOKEN": test_token, "PYTHONUNBUFFERED": "1"},
+            timeout=120,
         )
 
         output = (stdout + stderr).lower()
