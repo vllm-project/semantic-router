@@ -15,10 +15,13 @@ import "math"
 // distributional observation that adversarial or sensitive content uses
 // vocabulary distinct from the document's dominant topic.
 type NoveltyScorer struct {
-	centroid map[string]float64
+	centroid     map[string]float64
+	centroidNorm float64 // pre-computed sqrt(sum(v^2)) of centroid
 }
 
 // NewNoveltyScorer builds a document centroid from pre-computed TF vectors.
+// The centroid's L2 norm is cached so ScoreSentence avoids re-iterating
+// the centroid map on every call.
 func NewNoveltyScorer(tfVecs []map[string]float64) *NoveltyScorer {
 	if len(tfVecs) == 0 {
 		return &NoveltyScorer{centroid: make(map[string]float64)}
@@ -33,7 +36,15 @@ func NewNoveltyScorer(tfVecs []map[string]float64) *NoveltyScorer {
 		}
 	}
 
-	return &NoveltyScorer{centroid: centroid}
+	var normSq float64
+	for _, v := range centroid {
+		normSq += v * v
+	}
+
+	return &NoveltyScorer{
+		centroid:     centroid,
+		centroidNorm: math.Sqrt(normSq),
+	}
 }
 
 // ScoreSentence returns the novelty of a sentence: 1 - cosine(tf, centroid).
@@ -43,18 +54,15 @@ func (ns *NoveltyScorer) ScoreSentence(tf map[string]float64) float64 {
 		return 0
 	}
 
-	var dot, normA, normB float64
+	var dot, normA float64
 	for term, fa := range tf {
 		normA += fa * fa
 		if fb, ok := ns.centroid[term]; ok {
 			dot += fa * fb
 		}
 	}
-	for _, fb := range ns.centroid {
-		normB += fb * fb
-	}
 
-	denom := math.Sqrt(normA) * math.Sqrt(normB)
+	denom := math.Sqrt(normA) * ns.centroidNorm
 	if denom == 0 {
 		return 1.0
 	}

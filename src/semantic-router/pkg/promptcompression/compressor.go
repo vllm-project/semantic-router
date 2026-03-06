@@ -186,7 +186,7 @@ func Compress(text string, cfg Config) Result {
 	// --- Score computation ---
 	normalizeWeights(&cfg)
 
-	// Pre-compute TF vectors once for reuse by TextRank and Novelty.
+	// Pre-compute TF vectors once — shared by TextRank, TF-IDF, and Novelty.
 	tfVecs := make([]map[string]float64, n)
 	for i, tokens := range sentTokens {
 		tf := make(map[string]float64, len(tokens))
@@ -200,25 +200,32 @@ func Compress(text string, cfg Config) Result {
 		tfVecs[i] = tf
 	}
 
-	textRankScores := NewTextRankScorer().ScoreSentences(sentTokens)
+	textRankScores := NewTextRankScorer().ScoreSentencesWithTF(tfVecs)
 	positionScores := PositionWeights(n, cfg.PositionDepth)
 	tfidfScorer := NewTFIDFScorer(sentTokens)
 
 	tfidfScores := make([]float64, n)
 	for i := range sentences {
-		tfidfScores[i] = tfidfScorer.ScoreSentence(sentTokens[i])
+		tfidfScores[i] = tfidfScorer.ScoreSentenceWithTF(tfVecs[i])
 	}
 	normalizeSlice(tfidfScores)
 
-	noveltyScorer := NewNoveltyScorer(tfVecs)
-	noveltyScores := make([]float64, n)
-	for i := range sentences {
-		noveltyScores[i] = noveltyScorer.ScoreSentence(tfVecs[i])
+	var noveltyScores []float64
+	if cfg.NoveltyWeight > 0 {
+		noveltyScorer := NewNoveltyScorer(tfVecs)
+		noveltyScores = make([]float64, n)
+		for i := range sentences {
+			noveltyScores[i] = noveltyScorer.ScoreSentence(tfVecs[i])
+		}
+		normalizeSlice(noveltyScores)
 	}
-	normalizeSlice(noveltyScores)
 
 	scored := make([]ScoredSentence, n)
 	for i := range sentences {
+		var nov float64
+		if noveltyScores != nil {
+			nov = noveltyScores[i]
+		}
 		scored[i] = ScoredSentence{
 			Index:    i,
 			Text:     sentences[i],
@@ -226,11 +233,11 @@ func Compress(text string, cfg Config) Result {
 			TextRank: textRankScores[i],
 			Position: positionScores[i],
 			TFIDF:    tfidfScores[i],
-			Novelty:  noveltyScores[i],
+			Novelty:  nov,
 			Composite: cfg.TextRankWeight*textRankScores[i] +
 				cfg.PositionWeight*positionScores[i] +
 				cfg.TFIDFWeight*tfidfScores[i] +
-				cfg.NoveltyWeight*noveltyScores[i],
+				cfg.NoveltyWeight*nov,
 		}
 	}
 

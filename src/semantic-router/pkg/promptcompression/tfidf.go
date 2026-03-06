@@ -78,9 +78,6 @@ func (s *TFIDFScorer) IDF(term string) float64 {
 
 // ScoreSentence returns the mean TF-IDF score for a sentence's tokens.
 // Higher scores indicate sentences with more informative (rarer) content.
-//
-// GC note: pre-sizes the TF map and reuses the scorer's IDF cache to avoid
-// per-call map growth.
 func (s *TFIDFScorer) ScoreSentence(tokens []string) float64 {
 	if len(tokens) == 0 {
 		return 0
@@ -97,5 +94,18 @@ func (s *TFIDFScorer) ScoreSentence(tokens []string) float64 {
 		sum += (float64(count) / n) * s.IDF(term)
 	}
 
+	return sum
+}
+
+// ScoreSentenceWithTF returns the mean TF-IDF score using a pre-computed
+// TF vector (map[term]frequency), avoiding a per-call map allocation.
+func (s *TFIDFScorer) ScoreSentenceWithTF(tf map[string]float64) float64 {
+	if len(tf) == 0 {
+		return 0
+	}
+	var sum float64
+	for term, freq := range tf {
+		sum += freq * s.IDF(term)
+	}
 	return sum
 }
