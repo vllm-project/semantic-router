@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -385,6 +386,7 @@ type PIIOptions struct {
 	ConfidenceThreshold float64  `json:"confidence_threshold,omitempty"`
 	ReturnPositions     bool     `json:"return_positions,omitempty"`
 	MaskEntities        bool     `json:"mask_entities,omitempty"`
+	RevealEntityText    bool     `json:"reveal_entity_text,omitempty"`
 }
 
 // PIIResponse represents the response from PII detection
@@ -427,40 +429,115 @@ func (s *ClassificationService) DetectPII(req PIIRequest) (*PIIResponse, error) 
 	}
 
 	// Perform PII detection using the classifier with full details
-	detections, err := s.classifier.ClassifyPIIWithDetails(req.Text)
+	// Use custom confidence threshold if provided
+	var detections []classification.PIIDetection
+	var err error
+	if req.Options != nil && req.Options.ConfidenceThreshold > 0 {
+		detections, err = s.classifier.ClassifyPIIWithDetailsAndThreshold(req.Text, float32(req.Options.ConfidenceThreshold))
+	} else {
+		detections, err = s.classifier.ClassifyPIIWithDetails(req.Text)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("PII detection failed: %w", err)
 	}
-
 	processingTime := time.Since(start).Milliseconds()
+	response := s.buildPIIResponse(req.Text, detections, req.Options)
+	response.ProcessingTimeMs = processingTime
+	return response, nil
+}
 
-	// Build response
-	response := &PIIResponse{
-		HasPII:           len(detections) > 0,
-		Entities:         []PIIEntity{},
-		ProcessingTimeMs: processingTime,
+// buildPIIResponse processes raw PII detections into a PIIResponse, applying all options.
+func (s *ClassificationService) buildPIIResponse(text string, detections []classification.PIIDetection, options *PIIOptions) *PIIResponse {
+	// Filter by entity types if specified
+	if options != nil && len(options.EntityTypes) > 0 {
+		filtered := detections[:0]
+		for _, d := range detections {
+			for _, t := range options.EntityTypes {
+				if strings.EqualFold(d.EntityType, t) {
+					filtered = append(filtered, d)
+					break
+				}
+			}
+		}
+		detections = filtered
 	}
 
-	// Convert PII detections to API entities with actual confidence scores
+	returnPositions := options != nil && options.ReturnPositions
+	maskEntities := options != nil && options.MaskEntities
+	revealEntityText := options != nil && options.RevealEntityText
+
+	// Build placeholder mapping for masking: (EntityType, Text) -> placeholder
+	var placeholders map[string]string
+	if maskEntities {
+		typeCounters := make(map[string]map[string]int)
+		placeholders = make(map[string]string)
+		for _, detection := range detections {
+			key := detection.EntityType + "\x00" + detection.Text
+			if _, exists := placeholders[key]; exists {
+				continue
+			}
+			texts, ok := typeCounters[detection.EntityType]
+			if !ok {
+				texts = make(map[string]int)
+				typeCounters[detection.EntityType] = texts
+			}
+			idx := len(texts)
+			texts[detection.Text] = idx
+			placeholders[key] = fmt.Sprintf("[%s_%d]", detection.EntityType, idx)
+		}
+	}
+
+	response := &PIIResponse{
+		HasPII:   len(detections) > 0,
+		Entities: []PIIEntity{},
+	}
+
 	for _, detection := range detections {
+		value := "[DETECTED]"
+		if revealEntityText {
+			value = detection.Text
+		}
 		entity := PIIEntity{
 			Type:       detection.EntityType,
-			Value:      "[DETECTED]",                  // Redacted for security
-			Confidence: float64(detection.Confidence), // Actual confidence from model
-			StartPos:   detection.Start,
-			EndPos:     detection.End,
+			Value:      value,
+			Confidence: float64(detection.Confidence),
+		}
+		if returnPositions {
+			entity.StartPos = detection.Start
+			entity.EndPos = detection.End
+		}
+		if maskEntities {
+			key := detection.EntityType + "\x00" + detection.Text
+			entity.MaskedValue = placeholders[key]
 		}
 		response.Entities = append(response.Entities, entity)
 	}
 
-	// Set security recommendation
+	// Build masked text by replacing entity spans in reverse order
+	if maskEntities && len(detections) > 0 {
+		sorted := make([]classification.PIIDetection, len(detections))
+		copy(sorted, detections)
+		sort.Slice(sorted, func(i, j int) bool {
+			return sorted[i].Start > sorted[j].Start
+		})
+		maskedText := text
+		for _, detection := range sorted {
+			key := detection.EntityType + "\x00" + detection.Text
+			placeholder := placeholders[key]
+			if detection.Start >= 0 && detection.End <= len(maskedText) && detection.Start < detection.End {
+				maskedText = maskedText[:detection.Start] + placeholder + maskedText[detection.End:]
+			}
+		}
+		response.MaskedText = maskedText
+	}
+
 	if response.HasPII {
 		response.SecurityRecommendation = "block"
 	} else {
 		response.SecurityRecommendation = "allow"
 	}
 
-	return response, nil
+	return response
 }
 
 // SecurityRequest represents a request for security detection

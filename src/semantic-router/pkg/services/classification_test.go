@@ -4,6 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -416,5 +419,201 @@ func TestGetRecommendedModel_EmptyModelRefs(t *testing.T) {
 	if result != expected {
 		t.Errorf("getRecommendedModel(%q) with empty ModelRefs = %q, want %q (should fallback to default)",
 			"math", result, expected)
+	}
+}
+
+func TestDetectPII_EdgeCases(t *testing.T) {
+	t.Run("Empty_text_returns_error", func(t *testing.T) {
+		service := &ClassificationService{classifier: nil}
+		_, err := service.DetectPII(PIIRequest{Text: ""})
+		require.Error(t, err)
+		assert.Equal(t, "text cannot be empty", err.Error())
+	})
+
+	t.Run("Nil_classifier_returns_placeholder", func(t *testing.T) {
+		service := &ClassificationService{classifier: nil}
+		resp, err := service.DetectPII(PIIRequest{Text: "hello"})
+		require.NoError(t, err)
+		assert.False(t, resp.HasPII)
+		assert.Empty(t, resp.Entities)
+		assert.Equal(t, "allow", resp.SecurityRecommendation)
+	})
+}
+
+func TestBuildPIIResponse(t *testing.T) {
+	sampleDetections := []classification.PIIDetection{
+		{EntityType: "EMAIL", Start: 13, End: 29, Text: "alice@test.com", Confidence: 0.95},
+		{EntityType: "PERSON", Start: 0, End: 5, Text: "Alice", Confidence: 0.88},
+		{EntityType: "PHONE", Start: 37, End: 49, Text: "555-123-4567", Confidence: 0.75},
+	}
+	sampleText := "Alice reached alice@test.com at tel 555-123-4567"
+
+	service := &ClassificationService{}
+
+	tests := []struct {
+		name       string
+		text       string
+		detections []classification.PIIDetection
+		options    *PIIOptions
+		check      func(t *testing.T, resp *PIIResponse)
+	}{
+		{
+			name:       "No_detections",
+			text:       "hello world",
+			detections: []classification.PIIDetection{},
+			options:    nil,
+			check: func(t *testing.T, resp *PIIResponse) {
+				assert.False(t, resp.HasPII)
+				assert.Empty(t, resp.Entities)
+				assert.Equal(t, "allow", resp.SecurityRecommendation)
+				assert.Empty(t, resp.MaskedText)
+			},
+		},
+		{
+			name:       "Default_options_nil",
+			text:       sampleText,
+			detections: sampleDetections[:2],
+			options:    nil,
+			check: func(t *testing.T, resp *PIIResponse) {
+				assert.True(t, resp.HasPII)
+				assert.Len(t, resp.Entities, 2)
+				assert.Equal(t, "[DETECTED]", resp.Entities[0].Value)
+				assert.Equal(t, "[DETECTED]", resp.Entities[1].Value)
+				assert.Equal(t, 0, resp.Entities[0].StartPos)
+				assert.Equal(t, 0, resp.Entities[0].EndPos)
+				assert.Empty(t, resp.MaskedText)
+				assert.Equal(t, "block", resp.SecurityRecommendation)
+			},
+		},
+		{
+			name:       "RevealEntityText_true",
+			text:       sampleText,
+			detections: sampleDetections[:1],
+			options:    &PIIOptions{RevealEntityText: true},
+			check: func(t *testing.T, resp *PIIResponse) {
+				assert.Equal(t, "alice@test.com", resp.Entities[0].Value)
+			},
+		},
+		{
+			name:       "RevealEntityText_false",
+			text:       sampleText,
+			detections: sampleDetections[:1],
+			options:    &PIIOptions{RevealEntityText: false},
+			check: func(t *testing.T, resp *PIIResponse) {
+				assert.Equal(t, "[DETECTED]", resp.Entities[0].Value)
+			},
+		},
+		{
+			name:       "ReturnPositions_true",
+			text:       sampleText,
+			detections: sampleDetections[:1],
+			options:    &PIIOptions{ReturnPositions: true},
+			check: func(t *testing.T, resp *PIIResponse) {
+				assert.Equal(t, 13, resp.Entities[0].StartPos)
+				assert.Equal(t, 29, resp.Entities[0].EndPos)
+			},
+		},
+		{
+			name:       "ReturnPositions_false",
+			text:       sampleText,
+			detections: sampleDetections[:1],
+			options:    &PIIOptions{ReturnPositions: false},
+			check: func(t *testing.T, resp *PIIResponse) {
+				assert.Equal(t, 0, resp.Entities[0].StartPos)
+				assert.Equal(t, 0, resp.Entities[0].EndPos)
+			},
+		},
+		{
+			name:       "EntityTypes_filter",
+			text:       sampleText,
+			detections: sampleDetections,
+			options:    &PIIOptions{EntityTypes: []string{"EMAIL", "PHONE"}},
+			check: func(t *testing.T, resp *PIIResponse) {
+				assert.Len(t, resp.Entities, 2)
+				assert.Equal(t, "EMAIL", resp.Entities[0].Type)
+				assert.Equal(t, "PHONE", resp.Entities[1].Type)
+			},
+		},
+		{
+			name:       "EntityTypes_case_insensitive",
+			text:       sampleText,
+			detections: sampleDetections[:1],
+			options:    &PIIOptions{EntityTypes: []string{"email"}},
+			check: func(t *testing.T, resp *PIIResponse) {
+				assert.Len(t, resp.Entities, 1)
+				assert.Equal(t, "EMAIL", resp.Entities[0].Type)
+			},
+		},
+		{
+			name: "MaskEntities_basic",
+			text: "Contact alice@test.com please",
+			detections: []classification.PIIDetection{
+				{EntityType: "EMAIL", Start: 8, End: 22, Text: "alice@test.com", Confidence: 0.95},
+			},
+			options: &PIIOptions{MaskEntities: true},
+			check: func(t *testing.T, resp *PIIResponse) {
+				assert.Equal(t, "Contact [EMAIL_0] please", resp.MaskedText)
+				assert.Equal(t, "[EMAIL_0]", resp.Entities[0].MaskedValue)
+			},
+		},
+		{
+			name: "MaskEntities_same_entity_twice",
+			text: "Email alice@test.com and again alice@test.com",
+			detections: []classification.PIIDetection{
+				{EntityType: "EMAIL", Start: 6, End: 20, Text: "alice@test.com", Confidence: 0.95},
+				{EntityType: "EMAIL", Start: 31, End: 45, Text: "alice@test.com", Confidence: 0.93},
+			},
+			options: &PIIOptions{MaskEntities: true},
+			check: func(t *testing.T, resp *PIIResponse) {
+				assert.Equal(t, "[EMAIL_0]", resp.Entities[0].MaskedValue)
+				assert.Equal(t, "[EMAIL_0]", resp.Entities[1].MaskedValue)
+				assert.Equal(t, "Email [EMAIL_0] and again [EMAIL_0]", resp.MaskedText)
+			},
+		},
+		{
+			name: "MaskEntities_different_texts_same_type",
+			text: "Email alice@test.com and bob@test.com",
+			detections: []classification.PIIDetection{
+				{EntityType: "EMAIL", Start: 6, End: 20, Text: "alice@test.com", Confidence: 0.95},
+				{EntityType: "EMAIL", Start: 25, End: 37, Text: "bob@test.com", Confidence: 0.92},
+			},
+			options: &PIIOptions{MaskEntities: true},
+			check: func(t *testing.T, resp *PIIResponse) {
+				assert.Equal(t, "[EMAIL_0]", resp.Entities[0].MaskedValue)
+				assert.Equal(t, "[EMAIL_1]", resp.Entities[1].MaskedValue)
+				assert.Equal(t, "Email [EMAIL_0] and [EMAIL_1]", resp.MaskedText)
+			},
+		},
+		{
+			name: "Combined_options",
+			text: "Alice alice@test.com",
+			detections: []classification.PIIDetection{
+				{EntityType: "PERSON", Start: 0, End: 5, Text: "Alice", Confidence: 0.88},
+				{EntityType: "EMAIL", Start: 6, End: 20, Text: "alice@test.com", Confidence: 0.95},
+			},
+			options: &PIIOptions{
+				EntityTypes:      []string{"EMAIL"},
+				ReturnPositions:  true,
+				MaskEntities:     true,
+				RevealEntityText: true,
+			},
+			check: func(t *testing.T, resp *PIIResponse) {
+				require.Len(t, resp.Entities, 1)
+				e := resp.Entities[0]
+				assert.Equal(t, "EMAIL", e.Type)
+				assert.Equal(t, "alice@test.com", e.Value)
+				assert.Equal(t, 6, e.StartPos)
+				assert.Equal(t, 20, e.EndPos)
+				assert.Equal(t, "[EMAIL_0]", e.MaskedValue)
+				assert.Equal(t, "Alice [EMAIL_0]", resp.MaskedText)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := service.buildPIIResponse(tt.text, tt.detections, tt.options)
+			tt.check(t, resp)
+		})
 	}
 }
