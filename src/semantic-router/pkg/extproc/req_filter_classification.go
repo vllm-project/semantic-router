@@ -68,14 +68,22 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	// inference latency (attention is O(n²) for SDPA, O(n) for FA — but still
 	// linear in sequence length). Compression preserves classification fidelity
 	// by using TextRank + position weighting + TF-IDF scoring.
+	//
+	// Signals listed in skip_signals (default: jailbreak, pii) always receive
+	// the original uncompressed text because they need every token.
+	compressedText := evaluationText
+	var skipCompressionSignals map[string]bool
 	if r.Config.PromptCompression.Enabled && r.Config.PromptCompression.MaxTokens > 0 {
 		cfg := buildCompressionConfig(r.Config.PromptCompression)
 		origTokens := promptcompression.CountTokensApprox(evaluationText)
-		if origTokens > cfg.MaxTokens {
+		if r.Config.PromptCompression.MinLength > 0 && len(evaluationText) <= r.Config.PromptCompression.MinLength {
+			logging.Infof("[PromptCompression] Skipped: %d chars <= min_length threshold %d", len(evaluationText), r.Config.PromptCompression.MinLength)
+		} else if origTokens > cfg.MaxTokens {
 			result := promptcompression.Compress(evaluationText, cfg)
 			logging.Infof("[PromptCompression] Compressed evaluationText: %d -> %d tokens (ratio=%.2f, kept %d sentences)",
 				result.OriginalTokens, result.CompressedTokens, result.Ratio, len(result.KeptIndices))
-			evaluationText = result.Compressed
+			compressedText = result.Compressed
+			skipCompressionSignals = r.Config.PromptCompression.SkipSignalsSet()
 		}
 	}
 
@@ -83,12 +91,10 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	signalStart := time.Now()
 	signalCtx, signalSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanSignalEvaluation)
 
-	// Evaluate all signals first to get detailed signal information
-	// Use evaluationText for most signals, but pass allMessagesText for context counting
-	// EvaluateAllSignalsWithHeaders also evaluates the authz signal using request headers
-	// (x-authz-user-id, x-authz-user-groups injected by Authorino / ext_authz).
-	// In extproc, we always use normal mode (only evaluate signals used in decisions)
-	signals, authzErr := r.Classifier.EvaluateAllSignalsWithHeaders(evaluationText, allMessagesText, nonUserMessages, ctx.Headers, false, ctx.RequestImageURL)
+	// Evaluate all signals first to get detailed signal information.
+	// Pass both compressed and original text: signals in skipCompressionSignals
+	// (e.g. jailbreak, pii) use the original; others use the compressed text.
+	signals, authzErr := r.Classifier.EvaluateAllSignalsWithHeaders(compressedText, allMessagesText, nonUserMessages, ctx.Headers, false, ctx.RequestImageURL, evaluationText, skipCompressionSignals)
 	if authzErr != nil {
 		signalSpan.End()
 		// Authz failure is a hard error — do not silently bypass.

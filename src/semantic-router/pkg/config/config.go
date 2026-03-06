@@ -1486,6 +1486,17 @@ type PromptCompressionConfig struct {
 	// Default: 512 (tuned for mmBERT-32K FA sweet spot at ≤512 tokens ≈ 19 ms, see PR #1431).
 	MaxTokens int `yaml:"max_tokens"`
 
+	// MinLength is the character-count threshold below which compression is skipped.
+	// Short prompts don't benefit from compression. No tokenizer is involved —
+	// this is a simple len(text) check. Default: 0 (disabled).
+	MinLength int `yaml:"min_length,omitempty"`
+
+	// SkipSignals lists signal types that must receive the original (uncompressed) prompt.
+	// Signals like "jailbreak" and "pii" need every token to detect threats/entities;
+	// signals like "domain" and "embedding" tolerate compressed input.
+	// Default: ["jailbreak", "pii"] when omitted.
+	SkipSignals []string `yaml:"skip_signals,omitempty"`
+
 	// TextRankWeight controls the contribution of TextRank content-importance scores. Default: 0.4.
 	TextRankWeight float64 `yaml:"textrank_weight,omitempty"`
 
@@ -1497,6 +1508,20 @@ type PromptCompressionConfig struct {
 
 	// PositionDepth controls the amplitude of the U-shaped position curve (0–1). Default: 0.5.
 	PositionDepth float64 `yaml:"position_depth,omitempty"`
+}
+
+// SkipSignalsSet returns the set of signal types that should skip compression.
+// Defaults to jailbreak and pii when SkipSignals is not configured.
+func (pc PromptCompressionConfig) SkipSignalsSet() map[string]bool {
+	signals := pc.SkipSignals
+	if len(signals) == 0 {
+		signals = []string{SignalTypeJailbreak, SignalTypePII}
+	}
+	m := make(map[string]bool, len(signals))
+	for _, s := range signals {
+		m[s] = true
+	}
+	return m
 }
 
 // PromptGuardConfig represents configuration for the prompt guard jailbreak detection
