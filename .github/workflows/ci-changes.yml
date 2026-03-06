@@ -47,6 +47,8 @@ on:
         value: ${{ jobs.filter.outputs.e2e_multi_endpoint }}
       e2e_authz_rbac:
         value: ${{ jobs.filter.outputs.e2e_authz_rbac }}
+      e2e_streaming:
+        value: ${{ jobs.filter.outputs.e2e_streaming }}
       e2e_common:
         value: ${{ jobs.filter.outputs.e2e_common }}
 
@@ -77,6 +79,7 @@ jobs:
       e2e_ml_model_selection: ${{ steps.changes.outputs.e2e_ml_model_selection }}
       e2e_multi_endpoint: ${{ steps.changes.outputs.e2e_multi_endpoint }}
       e2e_authz_rbac: ${{ steps.changes.outputs.e2e_authz_rbac }}
+      e2e_streaming: ${{ steps.changes.outputs.e2e_streaming }}
       e2e_common: ${{ steps.changes.outputs.e2e_common }}
     steps:
       - uses: actions/checkout@v4
@@ -167,6 +170,10 @@ jobs:
               - 'config/testing/config.authz-rbac.yaml'
               - 'config/authz/**'
               - 'src/semantic-router/pkg/classification/authz*.go'
+            e2e_streaming:
+              - 'e2e/profiles/streaming/**'
+              - 'deploy/kubernetes/streaming/**'
+              - 'src/semantic-router/pkg/extproc/processor_req_body_streamed*.go'
             # Common e2e code that affects all profiles
             e2e_common:
               - 'e2e/pkg/**'
