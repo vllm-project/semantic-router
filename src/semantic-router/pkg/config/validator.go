@@ -121,6 +121,15 @@ func validateConfigStructure(cfg *RouterConfig) error {
 			}
 		}
 
+		// Validate modelRefs count to prevent cost amplification.
+		// Looper algorithms (confidence, ratings) execute up to len(modelRefs) backend calls.
+		const maxModelRefs = 10
+		if len(decision.ModelRefs) > maxModelRefs {
+			logging.Warnf("Decision '%s' has %d modelRefs (max recommended: %d). "+
+				"Each looper request may trigger up to %d backend calls.",
+				decision.Name, len(decision.ModelRefs), maxModelRefs, len(decision.ModelRefs))
+		}
+
 		// Validate algorithm one-of semantics and type-specific configuration.
 		if err := validateDecisionAlgorithmConfig(decision.Name, decision.Algorithm); err != nil {
 			return err
@@ -353,6 +362,24 @@ func validateDecisionAlgorithmConfig(decisionName string, algorithm *AlgorithmCo
 		}
 		if err := validateLatencyAwareAlgorithmConfig(algorithm.LatencyAware); err != nil {
 			return fmt.Errorf("decision '%s', algorithm.latency_aware: %w", decisionName, err)
+		}
+	}
+
+	// Validate ReMoM breadth_schedule bounds to prevent cost explosion.
+	// breadth_schedule: [32, 8] = 32 + 8 + 1 (final) = 41 backend calls per request.
+	if normalizedType == "remom" && algorithm.ReMoM != nil {
+		totalCalls := 1 // final synthesis round
+		for _, breadth := range algorithm.ReMoM.BreadthSchedule {
+			if breadth <= 0 {
+				return fmt.Errorf("decision '%s': remom.breadth_schedule values must be positive, got %d", decisionName, breadth)
+			}
+			totalCalls += breadth
+		}
+		const maxTotalCalls = 64
+		if totalCalls > maxTotalCalls {
+			return fmt.Errorf("decision '%s': remom.breadth_schedule would trigger %d backend calls per request (max %d). "+
+				"Reduce breadth_schedule values to limit cost",
+				decisionName, totalCalls, maxTotalCalls)
 		}
 	}
 
