@@ -8,65 +8,49 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/promptcompression"
 )
-
-// Default chunk size for the semi-streaming model detection boundary.
-// The model field is typically within the first 256 bytes of an OpenAI
-// request, so 4KB gives plenty of margin while staying small.
-const defaultChunkSize = 4096
 
 // streamedBodyState tracks the processing phase for STREAMED body mode.
 type streamedBodyState int
 
 const (
-	stateInit        streamedBodyState = iota // accumulating first chunk for model detection
-	statePassthrough                          // non-auto model: forward chunks unchanged
-	stateAccumulate                           // auto model: eat chunks, incremental preprocess
+	stateInit        streamedBodyState = iota // accumulating until model field is detected
+	statePassthrough                          // non-auto model: eat chunks, emit full body on EOS
+	stateAccumulate                           // auto model: eat chunks, classify on EOS
 )
 
 // StreamedBodyHandler implements semi-streaming request body processing.
 //
 // In Envoy STREAMED mode, body arrives as multiple HttpBody messages. For each
 // message the handler MUST return exactly one ProcessingResponse. The handler
-// accumulates the first ChunkSize bytes to detect the model field (via gjson),
-// then branches:
+// accumulates bytes until the model field can be extracted (via gjson), then
+// branches:
 //
-//   - Passthrough (non-auto model): forward chunks unchanged to the upstream.
-//     Header mutations are applied on the end_of_stream response.
-//   - Accumulate (auto model): eat each chunk (replace with empty body) and
-//     run incremental sentence splitting. On end_of_stream, perform the full
-//     classification + body mutation pipeline.
+//   - Passthrough (non-auto model): continue eating chunks (replacing each
+//     with an empty body) so that upstream sees nothing until EOS. On EOS the
+//     full accumulated body is passed to handleRequestBody which may apply
+//     model-alias rewrites and header mutations, then emits the complete
+//     (possibly mutated) body as a single response.
+//   - Accumulate (auto model): same chunk-eating strategy. On EOS the full
+//     classification + body mutation pipeline runs.
+//
+// Both paths eat every chunk and emit the full body only on EOS, so upstream
+// never receives partial/duplicated data regardless of body mutations.
 type StreamedBodyHandler struct {
-	router    *OpenAIRouter
-	ctx       *RequestContext
-	state     streamedBodyState
-	buf       bytes.Buffer
-	chunkSize int
+	router *OpenAIRouter
+	ctx    *RequestContext
+	state  streamedBodyState
+	buf    bytes.Buffer
 
 	// Fields extracted from first chunk
 	model    string
 	isStream bool
 	isAuto   bool
-
-	// Incremental preprocessing state (accumulate path only)
-	preproc *incrementalPreprocessor
-}
-
-// incrementalPreprocessor accumulates text and performs sentence splitting at
-// fixed-size boundaries so that TextRank scoring on end_of_stream has less
-// work to do.
-type incrementalPreprocessor struct {
-	sentences     []string
-	tfVectors     []map[string]float64
-	processedUpTo int // byte offset already processed
 }
 
 var streamedHandlerPool = sync.Pool{
 	New: func() interface{} {
-		return &StreamedBodyHandler{
-			chunkSize: defaultChunkSize,
-		}
+		return &StreamedBodyHandler{}
 	},
 }
 
@@ -79,7 +63,6 @@ func newStreamedBodyHandler(router *OpenAIRouter, ctx *RequestContext) *Streamed
 	h.model = ""
 	h.isStream = false
 	h.isAuto = false
-	h.preproc = nil
 	return h
 }
 
@@ -87,7 +70,6 @@ func newStreamedBodyHandler(router *OpenAIRouter, ctx *RequestContext) *Streamed
 func (h *StreamedBodyHandler) Release() {
 	h.router = nil
 	h.ctx = nil
-	h.preproc = nil
 	h.buf.Reset()
 	streamedHandlerPool.Put(h)
 }
@@ -139,7 +121,6 @@ func (h *StreamedBodyHandler) handleInit(eos bool) (*ext_proc.ProcessingResponse
 
 	if h.isAuto {
 		h.state = stateAccumulate
-		h.preproc = &incrementalPreprocessor{}
 		logging.Infof("[StreamedBody] Model %q detected as auto — accumulating", h.model)
 		return h.handleAccumulate(eos)
 	}
@@ -149,44 +130,22 @@ func (h *StreamedBodyHandler) handleInit(eos bool) (*ext_proc.ProcessingResponse
 	return h.handlePassthrough(eos)
 }
 
-// handlePassthrough forwards chunks unchanged. On end_of_stream, performs the
-// full body processing pipeline for header mutations (endpoint, auth, etc.)
-// and deferred classification.
+// handlePassthrough eats chunks (replacing each with an empty body so upstream
+// sees nothing yet). On EOS the full accumulated body is passed through the
+// standard pipeline for model-alias rewrites and header mutations, then emitted
+// as a single complete body. This avoids the corrupted-body problem where
+// forwarded intermediate chunks would be duplicated by an EOS body mutation.
 func (h *StreamedBodyHandler) handlePassthrough(eos bool) (*ext_proc.ProcessingResponse, error) {
 	if !eos {
-		return continueNoMutation(), nil
-	}
-
-	h.ctx.ProcessingStartTime = time.Now()
-	h.ctx.OriginalRequestBody = h.buf.Bytes()
-
-	requestBody := h.ctx.OriginalRequestBody
-	v := &ext_proc.ProcessingRequest_RequestBody{
-		RequestBody: &ext_proc.HttpBody{
-			Body:        requestBody,
-			EndOfStream: true,
-		},
-	}
-
-	return h.router.handleRequestBody(v, h.ctx)
-}
-
-// handleAccumulate eats chunks (replaces with empty body) and performs
-// incremental sentence preprocessing. On end_of_stream, runs the full
-// classification + body mutation pipeline.
-func (h *StreamedBodyHandler) handleAccumulate(eos bool) (*ext_proc.ProcessingResponse, error) {
-	if !eos {
-		h.runIncrementalPreprocess()
 		return continueEmptyBody(), nil
 	}
 
 	h.ctx.ProcessingStartTime = time.Now()
-	h.ctx.OriginalRequestBody = h.buf.Bytes()
+	h.ctx.OriginalRequestBody = bytes.Clone(h.buf.Bytes())
 
-	requestBody := h.ctx.OriginalRequestBody
 	v := &ext_proc.ProcessingRequest_RequestBody{
 		RequestBody: &ext_proc.HttpBody{
-			Body:        requestBody,
+			Body:        h.ctx.OriginalRequestBody,
 			EndOfStream: true,
 		},
 	}
@@ -194,39 +153,24 @@ func (h *StreamedBodyHandler) handleAccumulate(eos bool) (*ext_proc.ProcessingRe
 	return h.router.handleRequestBody(v, h.ctx)
 }
 
-// runIncrementalPreprocess performs sentence splitting on newly accumulated
-// bytes and builds per-sentence TF vectors. This work is deducted from the
-// TextRank critical path on end_of_stream.
-func (h *StreamedBodyHandler) runIncrementalPreprocess() {
-	if h.preproc == nil {
-		return
-	}
-	buf := h.buf.Bytes()
-	if len(buf) <= h.preproc.processedUpTo {
-		return
+// handleAccumulate eats chunks (replaces with empty body). On EOS the full
+// classification + body mutation pipeline runs on the accumulated body.
+func (h *StreamedBodyHandler) handleAccumulate(eos bool) (*ext_proc.ProcessingResponse, error) {
+	if !eos {
+		return continueEmptyBody(), nil
 	}
 
-	fast, err := extractContentFast(buf)
-	if err != nil || fast.UserContent == "" {
-		return
+	h.ctx.ProcessingStartTime = time.Now()
+	h.ctx.OriginalRequestBody = bytes.Clone(h.buf.Bytes())
+
+	v := &ext_proc.ProcessingRequest_RequestBody{
+		RequestBody: &ext_proc.HttpBody{
+			Body:        h.ctx.OriginalRequestBody,
+			EndOfStream: true,
+		},
 	}
 
-	sentences := promptcompression.SplitSentences(fast.UserContent)
-	if len(sentences) <= len(h.preproc.sentences) {
-		return
-	}
-
-	newSentences := sentences[len(h.preproc.sentences):]
-	for _, s := range newSentences {
-		words := promptcompression.TokenizeWords(s)
-		tf := make(map[string]float64, len(words))
-		for _, w := range words {
-			tf[w]++
-		}
-		h.preproc.tfVectors = append(h.preproc.tfVectors, tf)
-	}
-	h.preproc.sentences = sentences
-	h.preproc.processedUpTo = len(buf)
+	return h.router.handleRequestBody(v, h.ctx)
 }
 
 // continueEmptyBody returns a CONTINUE response that replaces the chunk with
@@ -248,16 +192,3 @@ func continueEmptyBody() *ext_proc.ProcessingResponse {
 	}
 }
 
-// continueNoMutation returns a CONTINUE response with no body mutation,
-// allowing the chunk to pass through to the upstream unchanged.
-func continueNoMutation() *ext_proc.ProcessingResponse {
-	return &ext_proc.ProcessingResponse{
-		Response: &ext_proc.ProcessingResponse_RequestBody{
-			RequestBody: &ext_proc.BodyResponse{
-				Response: &ext_proc.CommonResponse{
-					Status: ext_proc.CommonResponse_CONTINUE,
-				},
-			},
-		},
-	}
-}
