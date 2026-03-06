@@ -3604,4 +3604,87 @@ model_config:
 			})
 		})
 	})
+
+	// -----------------------------------------------------------------------
+	// PromptCompressionConfig
+	// -----------------------------------------------------------------------
+	Describe("PromptCompressionConfig", func() {
+		Context("SkipSignalsSet", func() {
+			It("should default to jailbreak and pii when SkipSignals is empty", func() {
+				pc := PromptCompressionConfig{Enabled: true, MaxTokens: 512}
+				s := pc.SkipSignalsSet()
+				Expect(s).To(HaveKey("jailbreak"))
+				Expect(s).To(HaveKey("pii"))
+				Expect(s).To(HaveLen(2))
+			})
+
+			It("should use configured SkipSignals when provided", func() {
+				pc := PromptCompressionConfig{
+					Enabled:     true,
+					MaxTokens:   512,
+					SkipSignals: []string{"jailbreak"},
+				}
+				s := pc.SkipSignalsSet()
+				Expect(s).To(HaveKey("jailbreak"))
+				Expect(s).NotTo(HaveKey("pii"))
+				Expect(s).To(HaveLen(1))
+			})
+
+			It("should support adding custom signal types to skip list", func() {
+				pc := PromptCompressionConfig{
+					Enabled:     true,
+					MaxTokens:   512,
+					SkipSignals: []string{"jailbreak", "pii", "fact_check"},
+				}
+				s := pc.SkipSignalsSet()
+				Expect(s).To(HaveKey("jailbreak"))
+				Expect(s).To(HaveKey("pii"))
+				Expect(s).To(HaveKey("fact_check"))
+				Expect(s).To(HaveLen(3))
+			})
+		})
+
+		Context("MinLength", func() {
+			It("should be zero by default", func() {
+				pc := PromptCompressionConfig{Enabled: true, MaxTokens: 512}
+				Expect(pc.MinLength).To(Equal(0))
+			})
+
+			It("should parse from YAML", func() {
+				yamlStr := `
+enabled: true
+max_tokens: 512
+min_length: 2000
+skip_signals:
+  - jailbreak
+  - pii
+`
+				var pc PromptCompressionConfig
+				err := yaml.Unmarshal([]byte(yamlStr), &pc)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(pc.Enabled).To(BeTrue())
+				Expect(pc.MaxTokens).To(Equal(512))
+				Expect(pc.MinLength).To(Equal(2000))
+				Expect(pc.SkipSignals).To(Equal([]string{"jailbreak", "pii"}))
+			})
+
+			It("should parse custom skip signals from YAML", func() {
+				yamlStr := `
+enabled: true
+max_tokens: 256
+min_length: 1000
+skip_signals:
+  - jailbreak
+`
+				var pc PromptCompressionConfig
+				err := yaml.Unmarshal([]byte(yamlStr), &pc)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(pc.MinLength).To(Equal(1000))
+				Expect(pc.SkipSignals).To(Equal([]string{"jailbreak"}))
+				s := pc.SkipSignalsSet()
+				Expect(s).To(HaveKey("jailbreak"))
+				Expect(s).NotTo(HaveKey("pii"))
+			})
+		})
+	})
 })

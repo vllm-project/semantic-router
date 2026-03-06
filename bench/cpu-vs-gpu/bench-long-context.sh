@@ -103,10 +103,18 @@ print(json.dumps(payload))
 generate_config() {
     local mode=$1
     local out="$RESULTS_DIR/config-${mode}.yaml"
+    local pc_enabled="${PROMPT_COMPRESSION:-false}"
+    local pc_max_tokens="${PROMPT_COMPRESSION_MAX_TOKENS:-512}"
     if [ "$mode" = "cpu" ]; then
-        sed 's/USE_CPU_PLACEHOLDER/true/g' "$SCRIPT_DIR/config-bench.yaml" > "$out"
+        sed -e 's/USE_CPU_PLACEHOLDER/true/g' \
+            -e "s/PROMPT_COMPRESSION_PLACEHOLDER/${pc_enabled}/g" \
+            -e "s/PROMPT_COMPRESSION_MAX_TOKENS_PLACEHOLDER/${pc_max_tokens}/g" \
+            "$SCRIPT_DIR/config-bench.yaml" > "$out"
     else
-        sed 's/USE_CPU_PLACEHOLDER/false/g' "$SCRIPT_DIR/config-bench.yaml" > "$out"
+        sed -e 's/USE_CPU_PLACEHOLDER/false/g' \
+            -e "s/PROMPT_COMPRESSION_PLACEHOLDER/${pc_enabled}/g" \
+            -e "s/PROMPT_COMPRESSION_MAX_TOKENS_PLACEHOLDER/${pc_max_tokens}/g" \
+            "$SCRIPT_DIR/config-bench.yaml" > "$out"
     fi
     echo "$out"
 }

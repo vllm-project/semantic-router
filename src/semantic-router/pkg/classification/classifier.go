@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -1154,8 +1155,7 @@ func isSignalTypeUsed(usedSignals map[string]bool, signalType string) bool {
 // EvaluateAllSignals evaluates all signal types and returns SignalResults
 // This is the new method that includes fact_check signals
 func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
-	// For backward compatibility, use the same text for both evaluation and context counting
-	return c.EvaluateAllSignalsWithContext(text, text, nil, false)
+	return c.EvaluateAllSignalsWithContext(text, text, nil, false, "", nil)
 }
 
 // EvaluateAllSignalsWithHeaders evaluates all signal types including the authz signal.
@@ -1168,12 +1168,22 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 // This prevents silent bypass of authz policies.
 //
 // headers: request headers from ext_proc (includes Authorino-injected authz headers)
-func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText string, nonUserMessages []string, headers map[string]string, forceEvaluateAll bool, imageURL ...string) (*SignalResults, error) {
-	img := ""
-	if len(imageURL) > 0 {
-		img = imageURL[0]
+//
+// Optional trailing arguments (positional after imageURL):
+//   - uncompressedText (string): original text before prompt compression
+//   - skipCompressionSignals (map[string]bool): signal types that must use uncompressedText
+func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText string, nonUserMessages []string, headers map[string]string, forceEvaluateAll bool, imageURL string, extra ...interface{}) (*SignalResults, error) {
+	var uncompressedText string
+	var skipCompressionSignals map[string]bool
+	if len(extra) >= 2 {
+		if s, ok := extra[0].(string); ok {
+			uncompressedText = s
+		}
+		if m, ok := extra[1].(map[string]bool); ok {
+			skipCompressionSignals = m
+		}
 	}
-	results := c.EvaluateAllSignalsWithContext(text, contextText, nonUserMessages, forceEvaluateAll, img)
+	results := c.EvaluateAllSignalsWithContext(text, contextText, nonUserMessages, forceEvaluateAll, uncompressedText, skipCompressionSignals, imageURL)
 
 	// Evaluate authz signal if role bindings are configured and the signal type is used
 	usedSignals := c.getUsedSignals()
@@ -1220,15 +1230,19 @@ func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText stri
 // EvaluateAllSignalsWithForceOption evaluates signals with option to force evaluate all
 // forceEvaluateAll: if true, evaluates all configured signals regardless of decision usage
 func (c *Classifier) EvaluateAllSignalsWithForceOption(text string, forceEvaluateAll bool) *SignalResults {
-	return c.EvaluateAllSignalsWithContext(text, text, nil, forceEvaluateAll)
+	return c.EvaluateAllSignalsWithContext(text, text, nil, forceEvaluateAll, "", nil)
 }
 
-// EvaluateAllSignalsWithContext evaluates all signal types with separate text for context counting
-// text: text to use for signal evaluation (usually latest user message)
-// contextText: text to use for context token counting (usually all messages combined)
-// nonUserMessages: conversation history (non-user messages) for jailbreak/PII with include_history
-// forceEvaluateAll: if true, evaluates all configured signals regardless of decision usage (for eval scenarios)
-func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string, nonUserMessages []string, forceEvaluateAll bool, imageURL ...string) *SignalResults {
+// EvaluateAllSignalsWithContext evaluates all signal types with separate text for context counting.
+//
+// text: (possibly compressed) text for signal evaluation
+// contextText: text for context token counting (usually all messages combined)
+// nonUserMessages: conversation history for jailbreak/PII with include_history
+// forceEvaluateAll: if true, evaluates all configured signals regardless of decision usage
+// uncompressedText: original text before prompt compression (empty = no compression happened)
+// skipCompressionSignals: signal types that must use uncompressedText instead of text
+// imageURL: optional image URL for multimodal signals
+func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string, nonUserMessages []string, forceEvaluateAll bool, uncompressedText string, skipCompressionSignals map[string]bool, imageURL ...string) *SignalResults {
 	// Determine which signals (type:name) should be evaluated
 	var usedSignals map[string]bool
 	if forceEvaluateAll {
@@ -1238,6 +1252,16 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 	} else {
 		// Normal mode: only evaluate signals used in decisions
 		usedSignals = c.getUsedSignals()
+	}
+
+	// textForSignal returns the original uncompressed text for signals that
+	// must not receive compressed input (e.g. jailbreak, pii), and the
+	// (possibly compressed) text for everything else.
+	textForSignal := func(signalType string) string {
+		if uncompressedText != "" && skipCompressionSignals[signalType] {
+			return uncompressedText
+		}
+		return text
 	}
 
 	results := &SignalResults{
@@ -1253,7 +1277,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			category, keywords, err := c.keywordClassifier.ClassifyWithKeywords(text)
+			category, keywords, err := c.keywordClassifier.ClassifyWithKeywords(textForSignal(config.SignalTypeKeyword))
 			elapsed := time.Since(start)
 			latencySeconds := elapsed.Seconds()
 
@@ -1290,7 +1314,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			matchedRules, err := c.keywordEmbeddingClassifier.ClassifyAll(text)
+			matchedRules, err := c.keywordEmbeddingClassifier.ClassifyAll(textForSignal(config.SignalTypeEmbedding))
 			elapsed := time.Since(start)
 
 			// Record metrics
@@ -1342,7 +1366,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			result, err := c.categoryInference.Classify(text)
+			result, err := c.categoryInference.Classify(textForSignal(config.SignalTypeDomain))
 			elapsed := time.Since(start)
 			latencySeconds := elapsed.Seconds()
 
@@ -1391,7 +1415,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			factCheckResult, err := c.ClassifyFactCheck(text)
+			factCheckResult, err := c.ClassifyFactCheck(textForSignal(config.SignalTypeFactCheck))
 			elapsed := time.Since(start)
 			latencySeconds := elapsed.Seconds()
 
@@ -1439,7 +1463,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			feedbackResult, err := c.ClassifyFeedback(text)
+			feedbackResult, err := c.ClassifyFeedback(textForSignal(config.SignalTypeUserFeedback))
 			elapsed := time.Since(start)
 			latencySeconds := elapsed.Seconds()
 
@@ -1487,8 +1511,8 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			// Build conversation JSON from text (simple single-turn format)
-			conversationJSON := fmt.Sprintf(`[{"role":"user","content":"%s"}]`, text)
+			contentBytes, _ := json.Marshal(textForSignal(config.SignalTypePreference))
+			conversationJSON := fmt.Sprintf(`[{"role":"user","content":%s}]`, contentBytes)
 
 			preferenceResult, err := c.preferenceClassifier.Classify(conversationJSON)
 			elapsed := time.Since(start)
@@ -1539,7 +1563,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			languageResult, err := c.languageClassifier.Classify(text)
+			languageResult, err := c.languageClassifier.Classify(textForSignal(config.SignalTypeLanguage))
 			elapsed := time.Since(start)
 			latencySeconds := elapsed.Seconds()
 
@@ -1618,7 +1642,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			matchedRules, err := c.complexityClassifier.ClassifyWithImage(text, imgArg)
+			matchedRules, err := c.complexityClassifier.ClassifyWithImage(textForSignal(config.SignalTypeComplexity), imgArg)
 			elapsed := time.Since(start)
 			latencySeconds := elapsed.Seconds()
 
@@ -1652,7 +1676,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			modalityResult := c.classifyModality(text, &c.Config.ModalityDetector.ModalityDetectionConfig)
+			modalityResult := c.classifyModality(textForSignal(config.SignalTypeModality), &c.Config.ModalityDetector.ModalityDetectionConfig)
 			elapsed := time.Since(start)
 			latencySeconds := elapsed.Seconds()
 
@@ -1688,6 +1712,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			jailbreakText := textForSignal(config.SignalTypeJailbreak)
 			start := time.Now()
 
 			// Step 1: Collect the union of unique content pieces needed by classifier rules.
@@ -1702,10 +1727,10 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 				if rule.Method == "contrastive" {
 					continue
 				}
-				if text != "" {
-					if _, ok := classifierContentSeen[text]; !ok {
-						classifierContentSeen[text] = struct{}{}
-						classifierContents = append(classifierContents, text)
+				if jailbreakText != "" {
+					if _, ok := classifierContentSeen[jailbreakText]; !ok {
+						classifierContentSeen[jailbreakText] = struct{}{}
+						classifierContents = append(classifierContents, jailbreakText)
 					}
 				}
 				if rule.IncludeHistory {
@@ -1738,8 +1763,8 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 					defer ruleWg.Done()
 
 					contentToAnalyze := []string{}
-					if text != "" {
-						contentToAnalyze = append(contentToAnalyze, text)
+					if jailbreakText != "" {
+						contentToAnalyze = append(contentToAnalyze, jailbreakText)
 					}
 					if rule.IncludeHistory && len(nonUserMessages) > 0 {
 						contentToAnalyze = append(contentToAnalyze, nonUserMessages...)
@@ -1854,6 +1879,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			piiText := textForSignal(config.SignalTypePII)
 			start := time.Now()
 
 			// Step 1: Collect the union of unique content pieces across all PII rules.
@@ -1863,9 +1889,9 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 			}
 			contentSeen := make(map[string]struct{})
 			var uniqueContents []string
-			if text != "" {
-				contentSeen[text] = struct{}{}
-				uniqueContents = append(uniqueContents, text)
+			if piiText != "" {
+				contentSeen[piiText] = struct{}{}
+				uniqueContents = append(uniqueContents, piiText)
 			}
 			for _, rule := range c.Config.PIIRules {
 				if rule.IncludeHistory {
@@ -1897,8 +1923,8 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 					defer ruleWg.Done()
 
 					ruleContents := []string{}
-					if text != "" {
-						ruleContents = append(ruleContents, text)
+					if piiText != "" {
+						ruleContents = append(ruleContents, piiText)
 					}
 					if rule.IncludeHistory {
 						for _, msg := range nonUserMessages {

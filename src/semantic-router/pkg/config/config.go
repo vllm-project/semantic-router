@@ -366,6 +366,11 @@ type InlineModels struct {
 	// Classifier configuration for text classification
 	Classifier `yaml:"classifier"`
 
+	// Prompt compression configuration — reduces long prompts before signal
+	// extraction to stay within latency budgets.
+	// Reference: Liu et al. "Lost in the Middle" (TACL 2024, arXiv:2307.03172)
+	PromptCompression PromptCompressionConfig `yaml:"prompt_compression"`
+
 	// Prompt guard configuration
 	PromptGuard PromptGuardConfig `yaml:"prompt_guard"`
 
@@ -1470,6 +1475,68 @@ type BatchSizeRangeConfig struct {
 	Min   int    `yaml:"min"`
 	Max   int    `yaml:"max"` // -1 means no upper limit
 	Label string `yaml:"label"`
+}
+
+// PromptCompressionConfig controls NLP-based prompt compression before signal
+// extraction. When enabled, long prompts are compressed to MaxTokens using a
+// sentence-level extractive approach that combines four scoring signals:
+//
+//   - TextRank (Mihalcea & Tarau, EMNLP 2004) — graph-based sentence importance
+//   - Position weighting (Liu et al., "Lost in the Middle", TACL 2024) — U-shaped
+//     attention curve upweighting beginning/end of prompt
+//   - TF-IDF information density (inspired by Selective Context, Li et al., EMNLP 2023)
+//   - Novelty scoring (Carbonell & Goldstein, SIGIR 1998) — inverse centrality to
+//     surface outlier content like jailbreak prefixes and PII
+//
+// No LLM inference is used — compression runs in O(n²) on the number of sentences
+// (typically <1 ms for prompts under 32K tokens).
+//
+// Weight fields default to zero, which causes the downstream compressor to use its
+// built-in defaults (TextRank 0.20, Position 0.40, TF-IDF 0.35, Novelty 0.05).
+type PromptCompressionConfig struct {
+	// Enabled controls whether prompt compression is applied before signal extraction.
+	Enabled bool `yaml:"enabled"`
+
+	// MaxTokens is the target token budget. Prompts within budget are passed through unchanged.
+	// Default: 512 (tuned for mmBERT-32K FA sweet spot at ≤512 tokens ≈ 19 ms, see PR #1431).
+	MaxTokens int `yaml:"max_tokens"`
+
+	// MinLength is the character-count threshold below which compression is skipped.
+	// Short prompts don't benefit from compression. No tokenizer is involved —
+	// this is a simple len(text) check. Default: 0 (disabled).
+	MinLength int `yaml:"min_length,omitempty"`
+
+	// SkipSignals lists signal types that must receive the original (uncompressed) prompt.
+	// Signals like "jailbreak" and "pii" need every token to detect threats/entities;
+	// signals like "domain" and "embedding" tolerate compressed input.
+	// Default: ["jailbreak", "pii"] when omitted.
+	SkipSignals []string `yaml:"skip_signals,omitempty"`
+
+	// TextRankWeight controls the contribution of TextRank content-importance scores. Default: 0.20.
+	TextRankWeight float64 `yaml:"textrank_weight,omitempty"`
+
+	// PositionWeight controls the contribution of Lost-in-the-Middle position scores. Default: 0.40.
+	PositionWeight float64 `yaml:"position_weight,omitempty"`
+
+	// TFIDFWeight controls the contribution of TF-IDF information density scores. Default: 0.35.
+	TFIDFWeight float64 `yaml:"tfidf_weight,omitempty"`
+
+	// PositionDepth controls the amplitude of the U-shaped position curve (0–1). Default: 0.5.
+	PositionDepth float64 `yaml:"position_depth,omitempty"`
+}
+
+// SkipSignalsSet returns the set of signal types that should skip compression.
+// Defaults to jailbreak and pii when SkipSignals is not configured.
+func (pc PromptCompressionConfig) SkipSignalsSet() map[string]bool {
+	signals := pc.SkipSignals
+	if len(signals) == 0 {
+		signals = []string{SignalTypeJailbreak, SignalTypePII}
+	}
+	m := make(map[string]bool, len(signals))
+	for _, s := range signals {
+		m[s] = true
+	}
+	return m
 }
 
 // PromptGuardConfig represents configuration for the prompt guard jailbreak detection

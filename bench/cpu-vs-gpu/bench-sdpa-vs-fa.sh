@@ -35,7 +35,12 @@ PROMPTS=(
 
 generate_config() {
     local out="$RESULTS_DIR/config-gpu.yaml"
-    sed 's/USE_CPU_PLACEHOLDER/false/g' "$SCRIPT_DIR/config-bench.yaml" > "$out"
+    local pc_enabled="${PROMPT_COMPRESSION:-false}"
+    local pc_max_tokens="${PROMPT_COMPRESSION_MAX_TOKENS:-512}"
+    sed -e 's/USE_CPU_PLACEHOLDER/false/g' \
+        -e "s/PROMPT_COMPRESSION_PLACEHOLDER/${pc_enabled}/g" \
+        -e "s/PROMPT_COMPRESSION_MAX_TOKENS_PLACEHOLDER/${pc_max_tokens}/g" \
+        "$SCRIPT_DIR/config-bench.yaml" > "$out"
     echo "$out"
 }
 
