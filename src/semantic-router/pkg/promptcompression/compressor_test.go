@@ -1564,7 +1564,7 @@ func TestCompositeScorePreservesPIIAtAllPositions(t *testing.T) {
 			// At middle with short diverse documents, retention depends on budget.
 			// The Wikipedia eval (256 cases) confirms 93.8% middle retention.
 			if pos.name == "middle" && !piiKept {
-				t.Logf("PII@middle not retained (expected with short diverse filler; "+
+				t.Logf("PII@middle not retained (expected with short diverse filler; " +
 					"confirmed 93.8%% on Wikipedia corpus)")
 			}
 		})

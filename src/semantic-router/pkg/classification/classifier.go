@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -1510,8 +1511,8 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			// Build conversation JSON from text (simple single-turn format)
-			conversationJSON := fmt.Sprintf(`[{"role":"user","content":"%s"}]`, textForSignal(config.SignalTypePreference))
+			contentBytes, _ := json.Marshal(textForSignal(config.SignalTypePreference))
+			conversationJSON := fmt.Sprintf(`[{"role":"user","content":%s}]`, contentBytes)
 
 			preferenceResult, err := c.preferenceClassifier.Classify(conversationJSON)
 			elapsed := time.Since(start)

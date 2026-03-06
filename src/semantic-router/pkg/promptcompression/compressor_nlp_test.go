@@ -173,26 +173,26 @@ func TestBM25ANDClassificationConsistency(t *testing.T) {
 	for _, compressionRatio := range []float64{0.75, 0.5, 0.33} {
 		name := fmt.Sprintf("ratio_%.0f_pct", compressionRatio*100)
 		t.Run(name, func(t *testing.T) {
-				originalTokens := CountTokensApprox(text)
-				budget := int(float64(originalTokens) * compressionRatio)
-				cfg := DefaultConfig(budget)
-				compressed := Compress(text, cfg)
+			originalTokens := CountTokensApprox(text)
+			budget := int(float64(originalTokens) * compressionRatio)
+			cfg := DefaultConfig(budget)
+			compressed := Compress(text, cfg)
 
-				compClassifier := nlp_binding.NewBM25Classifier()
-				defer compClassifier.Free()
-				if err := compClassifier.AddRule("code_debug", "AND", []string{"code", "debug"}, 0.1, false); err != nil {
-					t.Fatalf("AddRule failed: %v", err)
-				}
+			compClassifier := nlp_binding.NewBM25Classifier()
+			defer compClassifier.Free()
+			if err := compClassifier.AddRule("code_debug", "AND", []string{"code", "debug"}, 0.1, false); err != nil {
+				t.Fatalf("AddRule failed: %v", err)
+			}
 
-				compResult := compClassifier.Classify(compressed.Compressed)
-				t.Logf("Compression %.0f%%: matched=%v keywords=%v tokens=%d->%d",
-					compressionRatio*100, compResult.Matched, compResult.MatchedKeywords,
-					compressed.OriginalTokens, compressed.CompressedTokens)
+			compResult := compClassifier.Classify(compressed.Compressed)
+			t.Logf("Compression %.0f%%: matched=%v keywords=%v tokens=%d->%d",
+				compressionRatio*100, compResult.Matched, compResult.MatchedKeywords,
+				compressed.OriginalTokens, compressed.CompressedTokens)
 
-				if !compResult.Matched && compressionRatio >= 0.5 {
-					t.Errorf("AND classification lost at %.0f%% compression", compressionRatio*100)
-				}
-			})
+			if !compResult.Matched && compressionRatio >= 0.5 {
+				t.Errorf("AND classification lost at %.0f%% compression", compressionRatio*100)
+			}
+		})
 	}
 }
 
