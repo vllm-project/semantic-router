@@ -1,3 +1,7 @@
+# Advanced runtime defaults for the router container.
+# Most first-run users do not need to edit this file.
+# Start with `vllm-sr serve` and configure models in the dashboard unless you are tuning runtime internals.
+#
 # Response API Configuration
 # Enables OpenAI Response API support with conversation chaining
 response_api:
@@ -246,7 +250,7 @@ observability:
 looper:
   enabled: true  # Enable looper for multi-model decisions
   # Endpoint points to Envoy (same container), which handles load balancing and auth
-  # Port should match listener port (default: 8888)
+  # Port should match listener port (default: 8899)
   endpoint: "http://localhost:8899/v1/chat/completions"
   timeout_seconds: 1200  # Timeout in seconds for each model call
   headers: {}  # Optional headers (e.g., {"Authorization": "Bearer xxx"})

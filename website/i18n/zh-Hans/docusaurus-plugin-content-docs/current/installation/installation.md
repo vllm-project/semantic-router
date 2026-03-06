@@ -41,85 +41,35 @@ pip install vllm-sr
 vllm-sr --version
 ```
 
-### 2. 初始化配置
-
-```bash
-# 在当前目录创建 config.yaml
-vllm-sr init
-```
-
-这将创建一个带有默认设置的 `config.yaml` 文件。
-
-### 3. 配置后端
-
-编辑生成的 `config.yaml` 以配置您的模型和后端 endpoint：
-
-```yaml
-providers:
-  # 模型配置
-  models:
-    - name: "qwen/qwen3-1.8b"           # 模型名称
-      endpoints:
-        - name: "my_vllm"
-          weight: 1
-          endpoint: "localhost:8000"    # 域名或 IP:端口
-          protocol: "http"              # http 或 https
-      access_key: "your-token-here"     # 可选：用于身份验证
-
-  # 回退的默认模型
-  default_model: "qwen/qwen3-1.8b"
-```
-
-**配置选项：**
-
-- **endpoint**: 带有端口的域名或 IP 地址（例如 `localhost:8000`、`api.openai.com`）
-- **protocol**: `http` 或 `https`
-- **access_key**: 可选的身份验证 token（Bearer token）
-- **weight**: 负载均衡权重（默认：1）
-
-**示例：本地 vLLM**
-
-```yaml
-providers:
-  models:
-    - name: "qwen/qwen3-1.8b"
-      endpoints:
-        - name: "local_vllm"
-          weight: 1
-          endpoint: "localhost:8000"
-          protocol: "http"
-  default_model: "qwen/qwen3-1.8b"
-```
-
-**示例：带有 HTTPS 的外部 API**
-
-```yaml
-providers:
-  models:
-    - name: "openai/gpt-4"
-      endpoints:
-        - name: "openai_api"
-          weight: 1
-          endpoint: "api.openai.com"
-          protocol: "https"
-      access_key: "sk-xxxxxx"
-  default_model: "openai/gpt-4"
-```
-
-### 4. 启动 Router
+### 2. 启动 `vllm-sr`
 
 ```bash
 vllm-sr serve
 ```
 
+如果当前目录还没有 `config.yaml`，`vllm-sr serve` 会自动 bootstrap 一个最小工作区，并以 setup mode 启动 dashboard。
+
 Router 将：
 
 - 自动下载所需的 ML 模型（约 1.5GB，一次性）
-- 在端口 8888 上启动 Envoy Proxy
-- 启动 Semantic Router 服务
+- 在端口 8700 上启动 dashboard
+- 激活后在端口 8888 上启动 Envoy Proxy
+- 激活后启动 Semantic Router 服务
 - 在端口 9190 上启用 metrics
 
-### 5. 测试 Router
+### 3. 打开 Dashboard
+
+在浏览器中打开 [http://localhost:8700](http://localhost:8700)。
+
+首次使用时：
+
+1. 先配置一个或多个模型。
+2. 选择 routing preset，或保留 single-model baseline。
+3. 激活生成的配置。
+
+激活后，`config.yaml` 会写入当前目录，Router 会退出 setup mode。
+
+### 4. 测试 Router
 
 ```bash
 curl http://localhost:8888/v1/chat/completions \
@@ -130,7 +80,7 @@ curl http://localhost:8888/v1/chat/completions \
   }'
 ```
 
-### 6. 启动 Dashboard
+### 5. 可选：通过 CLI 打开 Dashboard
 
 ```bash
 vllm-sr dashboard
@@ -152,6 +102,20 @@ vllm-sr stop
 ```
 
 ## 高级配置
+
+### YAML-first 工作流
+
+如果您更倾向于直接编辑 YAML，而不是使用 dashboard setup flow：
+
+```bash
+# 在当前目录生成一个精简的高级样板
+vllm-sr init
+
+# 启动前校验它
+vllm-sr validate config.yaml
+```
+
+`vllm-sr init` 是可选的。它会为 YAML-first 用户生成 advanced sample 和 `.vllm-sr/router-defaults.yaml`。`router-defaults.yaml` 保存的是高级 runtime defaults，不是首次进入 dashboard 时必须编辑的文件。
 
 ### HuggingFace 设置
 

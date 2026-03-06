@@ -1,10 +1,13 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import ColorBends from '../components/ColorBends'
+import { useSetup } from '../contexts/SetupContext'
 import styles from './LandingPage.module.css'
 
 const LandingPage: React.FC = () => {
   const navigate = useNavigate()
+  const { setupState } = useSetup()
+  const setupMode = setupState?.setupMode ?? false
 
   return (
     <div className={styles.container}>
@@ -50,9 +53,9 @@ const LandingPage: React.FC = () => {
           <div className={styles.ctaGroup}>
             <button
               className={styles.primaryButton}
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate(setupMode ? '/setup' : '/dashboard')}
             >
-              Get Started
+              {setupMode ? 'Open Setup' : 'Get Started'}
             </button>
             <button
               className={styles.secondaryButton}

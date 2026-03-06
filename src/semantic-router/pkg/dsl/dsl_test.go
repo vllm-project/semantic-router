@@ -2062,6 +2062,14 @@ ROUTE test {
 func TestCompileGlobalFullCoverage(t *testing.T) {
 	input := `
 GLOBAL {
+  listeners: [
+    {
+      name: "http-8899"
+      address: "0.0.0.0"
+      port: 8899
+      timeout: "300s"
+    }
+  ]
   default_model: "qwen2.5:3b"
   strategy: "priority"
   default_reasoning_effort: "medium"
@@ -2121,6 +2129,21 @@ GLOBAL {
 
 	if cfg.DefaultModel != "qwen2.5:3b" {
 		t.Errorf("default_model = %q", cfg.DefaultModel)
+	}
+	if len(cfg.Listeners) != 1 {
+		t.Fatalf("listeners count = %d, want 1", len(cfg.Listeners))
+	}
+	if cfg.Listeners[0].Name != "http-8899" {
+		t.Errorf("listener name = %q, want http-8899", cfg.Listeners[0].Name)
+	}
+	if cfg.Listeners[0].Address != "0.0.0.0" {
+		t.Errorf("listener address = %q, want 0.0.0.0", cfg.Listeners[0].Address)
+	}
+	if cfg.Listeners[0].Port != 8899 {
+		t.Errorf("listener port = %d, want 8899", cfg.Listeners[0].Port)
+	}
+	if cfg.Listeners[0].Timeout != "300s" {
+		t.Errorf("listener timeout = %q, want 300s", cfg.Listeners[0].Timeout)
 	}
 	if cfg.DefaultReasoningEffort != "medium" {
 		t.Errorf("default_reasoning_effort = %q", cfg.DefaultReasoningEffort)
@@ -4251,6 +4274,34 @@ func TestEmitUserYAML(t *testing.T) {
 	}
 }
 
+func TestEmitUserYAML_IncludesListeners(t *testing.T) {
+	cfg := &config.RouterConfig{
+		APIServer: config.APIServer{
+			Listeners: []config.Listener{
+				{
+					Name:    "http-8899",
+					Address: "0.0.0.0",
+					Port:    8899,
+					Timeout: "300s",
+				},
+			},
+		},
+	}
+
+	userYAML, err := EmitUserYAML(cfg)
+	if err != nil {
+		t.Fatalf("EmitUserYAML error: %v", err)
+	}
+
+	yamlStr := string(userYAML)
+	if !strings.Contains(yamlStr, "listeners:") {
+		t.Fatal("expected listeners section in user YAML")
+	}
+	if !strings.Contains(yamlStr, "port: 8899") {
+		t.Fatal("expected listener port in user YAML")
+	}
+}
+
 // TestEmitHelm verifies that EmitHelm produces a valid Helm values.yaml structure.
 func TestEmitHelm(t *testing.T) {
 	cfg, errs := Compile(fullDSLExample)
@@ -4369,6 +4420,53 @@ GLOBAL {
 	}
 	if !cfg2.RateLimit.FailOpen {
 		t.Error("ratelimit.fail_open lost during round-trip")
+	}
+}
+
+func TestDecompileGlobalListenersRoundTrip(t *testing.T) {
+	input := `
+SIGNAL domain test { description: "test" }
+ROUTE test_route { PRIORITY 1 WHEN domain("test") MODEL "m:1b" }
+GLOBAL {
+  listeners: [
+    {
+      name: "http-8899"
+      address: "0.0.0.0"
+      port: 8899
+      timeout: "300s"
+    }
+  ]
+  default_model: "m:1b"
+}
+`
+	cfg, errs := Compile(input)
+	if len(errs) > 0 {
+		t.Fatalf("compile errors: %v", errs)
+	}
+	if len(cfg.Listeners) != 1 || cfg.Listeners[0].Port != 8899 {
+		t.Fatalf("compiled listeners = %#v", cfg.Listeners)
+	}
+
+	dslText, err := Decompile(cfg)
+	if err != nil {
+		t.Fatalf("decompile error: %v", err)
+	}
+	if !strings.Contains(dslText, "listeners") {
+		t.Fatal("decompiled DSL missing listeners block")
+	}
+	if !strings.Contains(dslText, "port: 8899") {
+		t.Fatal("decompiled DSL missing listener port")
+	}
+
+	cfg2, errs2 := Compile(dslText)
+	if len(errs2) > 0 {
+		t.Fatalf("re-compile errors: %v", errs2)
+	}
+	if len(cfg2.Listeners) != 1 {
+		t.Fatalf("re-compiled listeners count = %d, want 1", len(cfg2.Listeners))
+	}
+	if cfg2.Listeners[0].Name != "http-8899" || cfg2.Listeners[0].Port != 8899 {
+		t.Fatalf("listener lost during round-trip: %#v", cfg2.Listeners[0])
 	}
 }
 

@@ -49,6 +49,18 @@ def _iter_condition_nodes(conditions):
             yield from _iter_condition_nodes(condition.conditions)
 
 
+def _iter_merged_condition_nodes(conditions):
+    """Depth-first traversal over merged router condition dicts."""
+    if not conditions:
+        return
+    for condition in conditions:
+        if not isinstance(condition, dict):
+            continue
+        yield condition
+        if condition.get("conditions"):
+            yield from _iter_merged_condition_nodes(condition["conditions"])
+
+
 def _is_latency_aware_algorithm(decision) -> bool:
     if not decision.algorithm:
         return False
@@ -422,11 +434,20 @@ def validate_merged_config(merged_config: Dict[str, Any]) -> List[ValidationErro
     if "categories" in merged_config:
         categories = merged_config["categories"]
         if not categories:
-            errors.append(
-                ValidationError(
-                    "No categories configured or auto-generated", field="categories"
+            has_domain_conditions = any(
+                condition.get("type") == "domain"
+                for decision in merged_config.get("decisions", [])
+                for condition in _iter_merged_condition_nodes(
+                    decision.get("rules", {}).get("conditions", [])
                 )
             )
+            if has_domain_conditions:
+                errors.append(
+                    ValidationError(
+                        "No categories configured or auto-generated",
+                        field="categories",
+                    )
+                )
 
     return errors
 

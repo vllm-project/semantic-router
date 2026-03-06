@@ -117,10 +117,8 @@ func DeployPreviewHandler(configPath string) http.HandlerFunc {
 }
 
 // DeployHandler handles DSL config deployment.
-// It follows the same pattern as UpdateConfigHandler:
-//  1. Write YAML to config.yaml (the user-facing config)
-//  2. Call regenerateRouterConfig (Python CLI) to generate .vllm-sr/router-config.yaml
-//  3. Router's fsnotify watcher detects the change and hot-reloads
+// It writes the user-facing config.yaml, then synchronously propagates the
+// change to Router and Envoy before returning success.
 //
 // POST /api/router/config/deploy
 func DeployHandler(configPath string, readonlyMode bool, configDir string) http.HandlerFunc {
@@ -157,8 +155,8 @@ func DeployHandler(configPath string, readonlyMode bool, configDir string) http.
 	}
 }
 
-// RollbackHandler rolls back to a specific backup version.
-// After writing, it calls regenerateRouterConfig to regenerate .vllm-sr/router-config.yaml.
+// RollbackHandler rolls back to a specific backup version and synchronously
+// propagates the restored config to Router and Envoy.
 // POST /api/router/config/rollback
 func RollbackHandler(configPath string, readonlyMode bool, configDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -276,24 +274,22 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 	}
 
 	// Step 5: Atomic write to config.yaml
-	tmpConfigFile := configPath + ".tmp"
-	if err := os.WriteFile(tmpConfigFile, yamlBytes, 0o644); err != nil {
+	if err := writeConfigAtomically(configPath, yamlBytes); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to write config: %v", err), http.StatusInternalServerError)
 		return
-	}
-	if err := os.Rename(tmpConfigFile, configPath); err != nil {
-		if writeErr := os.WriteFile(configPath, yamlBytes, 0o644); writeErr != nil {
-			http.Error(w, fmt.Sprintf("Failed to write config: %v", writeErr), http.StatusInternalServerError)
-			return
-		}
 	}
 
 	log.Printf("[Deploy] Config written to %s: version=%s, size=%d bytes", configPath, version, len(yamlBytes))
 
-	// Step 6: Regenerate .vllm-sr/router-config.yaml (same as UpdateConfigHandler)
-	// This calls the Python CLI to convert nested user config to flat Router format.
-	// The Router's fsnotify watcher will detect the change and hot-reload.
-	go regenerateRouterConfig(configPath, configDir)
+	// Step 6: Propagate the new config to the managed runtime before returning.
+	if err := propagateConfigToRuntime(configPath, configDir); err != nil {
+		if restoreErr := restorePreviousRuntimeConfig(configPath, configDir, existingData); restoreErr != nil {
+			http.Error(w, fmt.Sprintf("Failed to apply deployed config to runtime: %v. Failed to restore previous config: %v", err, restoreErr), http.StatusInternalServerError)
+			return
+		}
+		http.Error(w, fmt.Sprintf("Failed to apply deployed config to runtime: %v. Previous config restored.", err), http.StatusInternalServerError)
+		return
+	}
 
 	// Step 7: Clean up old backups (keep only maxBackups most recent)
 	cleanupBackups(backupDir)
@@ -302,7 +298,7 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 	_ = json.NewEncoder(w).Encode(DeployResponse{
 		Status:  "success",
 		Version: version,
-		Message: "Config deployed successfully. Router will reload automatically via fsnotify.",
+		Message: "Config deployed successfully. Router and Envoy have been updated.",
 	})
 }
 
@@ -355,28 +351,27 @@ func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir str
 	}
 
 	// Atomic write to config.yaml
-	tmpConfigFile := configPath + ".tmp"
-	if err := os.WriteFile(tmpConfigFile, backupData, 0o644); err != nil {
+	if err := writeConfigAtomically(configPath, backupData); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to write config: %v", err), http.StatusInternalServerError)
 		return
-	}
-	if err := os.Rename(tmpConfigFile, configPath); err != nil {
-		if writeErr := os.WriteFile(configPath, backupData, 0o644); writeErr != nil {
-			http.Error(w, fmt.Sprintf("Failed to write config: %v", writeErr), http.StatusInternalServerError)
-			return
-		}
 	}
 
 	log.Printf("[Rollback] Config rolled back to version %s, written to %s", version, configPath)
 
-	// Regenerate .vllm-sr/router-config.yaml (same as UpdateConfigHandler)
-	go regenerateRouterConfig(configPath, configDir)
+	if err := propagateConfigToRuntime(configPath, configDir); err != nil {
+		if restoreErr := restorePreviousRuntimeConfig(configPath, configDir, existingData); restoreErr != nil {
+			http.Error(w, fmt.Sprintf("Failed to apply rolled back config to runtime: %v. Failed to restore previous config: %v", err, restoreErr), http.StatusInternalServerError)
+			return
+		}
+		http.Error(w, fmt.Sprintf("Failed to apply rolled back config to runtime: %v. Previous config restored.", err), http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(DeployResponse{
 		Status:  "success",
 		Version: version,
-		Message: fmt.Sprintf("Rolled back to version %s. Router will reload automatically.", version),
+		Message: fmt.Sprintf("Rolled back to version %s. Router and Envoy have been updated.", version),
 	})
 }
 

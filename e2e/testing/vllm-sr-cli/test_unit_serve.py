@@ -36,7 +36,7 @@ class TestVllmSRServe(CLITestBase):
         super().tearDown()
 
     def _create_minimal_config(self, port: int = 8888) -> str:
-        """Create a minimal config.yaml for testing."""
+        """Create a lean active config.yaml for testing."""
         config_content = f"""version: v0.1
 
 listeners:
@@ -45,23 +45,13 @@ listeners:
     port: {port}
     timeout: "60s"
 
-signals:
-  keywords:
-    - name: "test_keywords"
-      operator: "OR"
-      keywords:
-        - "test"
-      case_sensitive: false
-
 decisions:
   - name: "default_route"
     description: "Default test route"
     priority: 100
     rules:
       operator: "AND"
-      conditions:
-        - type: "keyword"
-          name: "test_keywords"
+      conditions: []
     modelRefs:
       - model: "test-model"
         use_reasoning: false
@@ -81,27 +71,54 @@ providers:
             f.write(config_content)
         return config_path
 
-    def test_serve_requires_config_file(self):
-        """Test that serve fails without config.yaml."""
+    def test_serve_bootstraps_missing_config_file(self):
+        """Test that serve bootstraps setup mode when config.yaml is missing."""
         self.print_test_header(
-            "Serve Requires Config File",
-            "Validates that serve fails gracefully when config.yaml is missing",
+            "Serve Bootstraps Missing Config File",
+            "Validates that serve creates bootstrap setup files instead of requiring init",
         )
 
-        # Run serve without creating config.yaml
-        return_code, stdout, stderr = self.run_cli(["serve"])
+        # Run serve without creating config.yaml. Use a fake image and never-pull so the
+        # command fails after bootstrap instead of waiting on a real container image.
+        return_code, stdout, stderr = self.run_cli(
+            [
+                "serve",
+                "--image",
+                "nonexistent-image:bootstrap",
+                "--image-pull-policy",
+                "never",
+            ],
+            timeout=30,
+        )
 
-        # Should fail
-        self.assertNotEqual(return_code, 0, "serve should fail without config.yaml")
-
-        # Output should mention config file
+        # The command may still fail because the image does not exist, but it should no
+        # longer fail because config.yaml is missing.
         output = (stdout + stderr).lower()
         self.assertTrue(
-            "config" in output or "not found" in output,
-            f"Error message should mention config. Got: {output[:200]}",
+            os.path.exists(os.path.join(self.test_dir, "config.yaml")),
+            "serve should create a bootstrap config.yaml",
+        )
+        self.assertTrue(
+            os.path.isdir(os.path.join(self.test_dir, ".vllm-sr")),
+            "serve should create a bootstrap .vllm-sr directory",
+        )
+        self.assertNotIn(
+            "run 'vllm-sr init' to create a config file",
+            output,
+            "serve should no longer require init before startup",
+        )
+        self.assertIn(
+            "bootstrap",
+            output,
+            f"Expected bootstrap messaging. Got: {output[:300]}",
+        )
+        self.assertNotEqual(
+            return_code, 0, "fake image should still cause a startup failure"
         )
 
-        self.print_test_result(True, "serve correctly requires config.yaml")
+        self.print_test_result(
+            True, "serve bootstraps setup mode when config is missing"
+        )
 
     def test_serve_with_custom_config_path(self):
         """Test that serve accepts --config flag for custom config path."""

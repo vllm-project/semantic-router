@@ -10,6 +10,11 @@ import webbrowser
 import yaml
 from pathlib import Path
 from cli import __version__
+from cli.bootstrap import (
+    DASHBOARD_SETUP_MODE_ENV,
+    SETUP_MODE_ENV,
+    ensure_bootstrap_workspace,
+)
 from cli.utils import getLogger
 
 # Track temp directories for cleanup
@@ -119,9 +124,10 @@ def main(ctx, version):
 )
 def init(force):
     """
-    Initialize vLLM Semantic Router configuration.
+    Generate an advanced YAML sample for vLLM Semantic Router.
 
-    Creates config.yaml and .vllm-sr/ directory with template files.
+    Creates config.yaml and .vllm-sr/ with advanced sample files for YAML-first users.
+    Most users can start directly with `vllm-sr serve`.
 
     Examples:
         vllm-sr init
@@ -246,14 +252,33 @@ def serve(config, image, image_pull_policy, readonly, minimal, platform, algorit
         vllm-sr serve --platform amd
     """
     try:
-        # Check if config file exists
         config_path = Path(config)
-        if not config_path.exists():
-            log.error(f"Config file not found: {config}")
-            log.error("Run 'vllm-sr init' to create a config file")
-            sys.exit(1)
+        bootstrap = ensure_bootstrap_workspace(config_path)
+        config_path = bootstrap.config_path
+        setup_mode = bootstrap.setup_mode
+
+        if bootstrap.created_config:
+            log.warning(f"Config file not found: {config}")
+            log.info(f"Created bootstrap setup config: {config_path}")
+        if bootstrap.created_output_dir:
+            log.info(f"Created bootstrap output directory: {bootstrap.output_dir}")
+        if bootstrap.created_defaults:
+            log.info(
+                f"Copied router defaults reference: {bootstrap.output_dir / 'router-defaults.yaml'}"
+            )
 
         log.info(f"Using config file: {config}")
+
+        if setup_mode and minimal:
+            log.error(
+                "Setup mode requires the dashboard. Remove --minimal or create a full config first."
+            )
+            sys.exit(1)
+        if setup_mode and readonly:
+            log.error(
+                "Setup mode requires dashboard editing. Remove --readonly or activate a config first."
+            )
+            sys.exit(1)
 
         # Collect environment variables to pass to container
         env_vars = {}
@@ -297,6 +322,13 @@ def serve(config, image, image_pull_policy, readonly, minimal, platform, algorit
             env_vars["DASHBOARD_READONLY"] = "true"
             log.info("Dashboard read-only mode: ENABLED")
 
+        if setup_mode:
+            env_vars[SETUP_MODE_ENV] = "true"
+            env_vars[DASHBOARD_SETUP_MODE_ENV] = "true"
+            log.info(
+                "Setup mode: starting dashboard-first bootstrap flow without router/envoy"
+            )
+
         # Platform branding
         if platform:
             env_vars["DASHBOARD_PLATFORM"] = platform
@@ -307,7 +339,11 @@ def serve(config, image, image_pull_policy, readonly, minimal, platform, algorit
         # This injects algorithm.type into all decisions in the config
         # Implements CLI translation logic per issue #1103 acceptance criteria
         effective_config_path = config_path
-        if algorithm:
+        if algorithm and setup_mode:
+            log.warning(
+                f"--algorithm={algorithm} ignored in setup mode until a runnable config is activated"
+            )
+        elif algorithm:
             algo = algorithm.lower()
             log.info(f"Model selection algorithm: {algo}")
 
@@ -336,7 +372,7 @@ def serve(config, image, image_pull_policy, readonly, minimal, platform, algorit
             env_vars=env_vars,
             image=image,
             pull_policy=image_pull_policy,
-            enable_observability=not minimal,
+            enable_observability=not minimal and not setup_mode,
         )
 
     except KeyboardInterrupt:

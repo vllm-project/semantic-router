@@ -97,6 +97,24 @@
   box-shadow: var(--glow-primary);
 }
 
+.secondaryButton {
+  padding: 0.5rem 1.1rem;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.secondaryButton:hover {
+  border-color: rgba(0, 212, 255, 0.28);
+  background: rgba(0, 212, 255, 0.08);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .header {
@@ -118,8 +136,8 @@
     width: 100%;
   }
 
-  .addButton {
+  .addButton,
+  .secondaryButton {
     width: 100%;
   }
 }
-
