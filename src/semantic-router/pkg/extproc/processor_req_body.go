@@ -334,7 +334,7 @@ func (r *OpenAIRouter) handleAnthropicRouting(openAIRequest *openai.ChatCompleti
 			RequestBody: &ext_proc.BodyResponse{
 				Response: &ext_proc.CommonResponse{
 					Status:          ext_proc.CommonResponse_CONTINUE,
-					ClearRouteCache: true,
+					ClearRouteCache: r.shouldClearRouteCache(),
 					HeaderMutation: &ext_proc.HeaderMutation{
 						SetHeaders:    setHeaders,
 						RemoveHeaders: removeHeaders,
@@ -598,14 +598,33 @@ func resolveProviderAuth(profile *config.ProviderProfile) (authz.LLMProvider, st
 // createRoutingResponse creates a routing response with mutations.
 // endpointName is the name of the selected VLLMEndpoint (used to look up provider profile).
 func (r *OpenAIRouter) createRoutingResponse(model string, endpoint string, endpointName string, modifiedBody []byte, ctx *RequestContext) *ext_proc.ProcessingResponse {
-	bodyMutation := &ext_proc.BodyMutation{
-		Mutation: &ext_proc.BodyMutation_Body{
+	bodyMutation := &ext_proc.BodyMutation{}
+	if r.Config.IsAgentGateway() {
+		bodyMutation.Mutation = &ext_proc.BodyMutation_StreamedResponse{
+			StreamedResponse: &ext_proc.StreamedBodyResponse{
+				Body:        modifiedBody,
+				EndOfStream: true,
+			},
+		}
+		logging.Infof("createRoutingResponse: using StreamedResponse body mutation for AgentGateway")
+	} else {
+		bodyMutation.Mutation = &ext_proc.BodyMutation_Body{
 			Body: modifiedBody,
-		},
+		}
 	}
 
 	setHeaders := []*core.HeaderValueOption{}
 	removeHeaders := []string{"content-length"} // Always remove old content-length when body is modified
+
+	// Always set Content-Type to application/json for the upstream request.
+	// Clients may omit it or send application/x-www-form-urlencoded, which causes
+	// providers like OpenAI to reject the body even after extproc rewrites it.
+	setHeaders = append(setHeaders, &core.HeaderValueOption{
+		Header: &core.HeaderValue{
+			Key:      "content-type",
+			RawValue: []byte("application/json"),
+		},
+	})
 
 	// Add new content-length header for the modified body
 	if len(modifiedBody) > 0 {
@@ -876,10 +895,19 @@ func (r *OpenAIRouter) createSpecifiedModelResponse(model string, upstreamModel 
 					RawValue: []byte(fmt.Sprintf("%d", len(bodyBytes))),
 				},
 			})
-			bodyMutation = &ext_proc.BodyMutation{
-				Mutation: &ext_proc.BodyMutation_Body{
+			bodyMutation = &ext_proc.BodyMutation{}
+			if r.Config.IsAgentGateway() {
+				bodyMutation.Mutation = &ext_proc.BodyMutation_StreamedResponse{
+					StreamedResponse: &ext_proc.StreamedBodyResponse{
+						Body:        bodyBytes,
+						EndOfStream: true,
+					},
+				}
+				logging.Infof("createSpecifiedModelResponse: using StreamedResponse body mutation for AgentGateway")
+			} else {
+				bodyMutation.Mutation = &ext_proc.BodyMutation_Body{
 					Body: bodyBytes,
-				},
+				}
 			}
 		}
 	}

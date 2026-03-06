@@ -14,6 +14,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
@@ -52,6 +53,15 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 
 		statusCode = getStatusFromHeaders(v.ResponseHeaders.Headers)
 		isSuccessful = statusCode >= 200 && statusCode < 300
+
+		// AgentGateway fallback: if status is missing (common in some sequential flows)
+		// or if content-type detection failed but we expected a stream from the request.
+		if statusCode == 0 && ctx.ExpectStreamingResponse {
+			logging.Infof("handleResponseHeaders: Status missing but stream expected from request, assuming streaming success")
+			ctx.IsStreamingResponse = true
+			isSuccessful = true
+			statusCode = 200
+		}
 
 		if statusCode != 0 {
 			if statusCode >= 500 {
@@ -341,11 +351,19 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 		},
 	}
 
-	// If this is a streaming (SSE) response, instruct Envoy to stream the response body to ExtProc
-	// so we can capture TTFT on the first body chunk. Requires allow_mode_override: true in Envoy config.
-	if ctx != nil && ctx.IsStreamingResponse {
-		response.ModeOverride = &http_ext.ProcessingMode{
-			ResponseBodyMode: http_ext.ProcessingMode_STREAMED,
+	// Response Body Mode:
+	// - SSE: STREAMED so we receive chunks live (TTFT, streaming cache).
+	// - AgentGateway non-streaming: BUFFERED so Envoy delivers one complete chunk.
+	// - All other cases: no override (default Envoy behaviour).
+	if ctx != nil {
+		if ctx.IsStreamingResponse {
+			response.ModeOverride = &http_ext.ProcessingMode{
+				ResponseBodyMode: http_ext.ProcessingMode_STREAMED,
+			}
+		} else if r.Config != nil && r.Config.IsAgentGateway() {
+			response.ModeOverride = &http_ext.ProcessingMode{
+				ResponseBodyMode: http_ext.ProcessingMode_BUFFERED,
+			}
 		}
 	}
 

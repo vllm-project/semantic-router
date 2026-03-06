@@ -897,6 +897,10 @@ func (r *OpenAIRouter) createErrorResponse(statusCode int, message string) *ext_
 
 // shouldClearRouteCache checks if route cache should be cleared
 func (r *OpenAIRouter) shouldClearRouteCache() bool {
+	// AgentGateway ignores ClearRouteCache entirely
+	if r.Config.IsAgentGateway() {
+		return false
+	}
 	// Check if feature is enabled
 	return r.Config.ClearRouteCache
 }

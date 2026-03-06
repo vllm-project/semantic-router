@@ -407,6 +407,189 @@ var _ = Describe("Process Stream Handling", func() {
 	})
 })
 
+var _ = Describe("AgentGateway Integration", func() {
+	var (
+		router *OpenAIRouter
+		cfg    *config.RouterConfig
+	)
+
+	BeforeEach(func() {
+		cfg = CreateTestConfig()
+		cfg.GatewayType = "agentgateway"
+		var err error
+		router, err = CreateTestRouter(cfg)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	Context("deferred header pattern", func() {
+		It("should defer header response until body EndOfStream", func() {
+			requests := []*ext_proc.ProcessingRequest{
+				{
+					Request: &ext_proc.ProcessingRequest_RequestHeaders{
+						RequestHeaders: &ext_proc.HttpHeaders{
+							Headers: &core.HeaderMap{
+								Headers: []*core.HeaderValue{
+									{Key: "content-type", Value: "application/json"},
+									{Key: "x-request-id", Value: "agw-deferred-test"},
+								},
+							},
+						},
+					},
+				},
+				{
+					Request: &ext_proc.ProcessingRequest_RequestBody{
+						RequestBody: &ext_proc.HttpBody{
+							Body:        []byte(`{"model": "model-a", "messages": [{"role": "user", "content": "Hello"}]}`),
+							EndOfStream: true,
+						},
+					},
+				},
+			}
+
+			stream := NewMockStream(requests)
+			err := router.Process(stream)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Should get exactly 2 responses:
+			// 1. The deferred header response (updated with routing headers)
+			// 2. The body response (containing body mutation)
+			Expect(len(stream.Responses)).To(Equal(2))
+
+			// The first response: deferred header
+			headerResp := stream.Responses[0].GetRequestHeaders()
+			Expect(headerResp).NotTo(BeNil())
+
+			// Verify routing header was updated (from default-model to model-a)
+			found := false
+			for _, h := range headerResp.Response.HeaderMutation.SetHeaders {
+				if h.Header.Key == "x-vsr-selected-model" {
+					Expect(string(h.Header.RawValue)).To(Equal("model-a"))
+					found = true
+				}
+			}
+			Expect(found).To(BeTrue(), "x-vsr-selected-model header should be present")
+
+			// The second response: request body
+			bodyResp := stream.Responses[1].GetRequestBody()
+			Expect(bodyResp).NotTo(BeNil())
+
+			// Verify body mutation is StreamedResponse for AgentGateway
+			Expect(bodyResp.Response.BodyMutation).NotTo(BeNil())
+			streamedBody := bodyResp.Response.BodyMutation.GetStreamedResponse()
+			Expect(streamedBody).NotTo(BeNil(), "Should use StreamedResponse for AgentGateway")
+			Expect(streamedBody.EndOfStream).To(BeTrue())
+		})
+	})
+
+	Context("body chunk accumulation", func() {
+		It("should suppress intermediate body chunks and accumulate them", func() {
+			bodyPart1 := []byte(`{"model": "model-a", "messages": `)
+			bodyPart2 := []byte(`[{"role": "user", "content": "Hello"}]}`)
+
+			requests := []*ext_proc.ProcessingRequest{
+				{
+					Request: &ext_proc.ProcessingRequest_RequestHeaders{
+						RequestHeaders: &ext_proc.HttpHeaders{
+							Headers: &core.HeaderMap{
+								Headers: []*core.HeaderValue{
+									{Key: "content-type", Value: "application/json"},
+									{Key: "x-request-id", Value: "agw-chunk-test"},
+								},
+							},
+						},
+					},
+				},
+				{
+					Request: &ext_proc.ProcessingRequest_RequestBody{
+						RequestBody: &ext_proc.HttpBody{
+							Body:        bodyPart1,
+							EndOfStream: false,
+						},
+					},
+				},
+				{
+					Request: &ext_proc.ProcessingRequest_RequestBody{
+						RequestBody: &ext_proc.HttpBody{
+							Body:        bodyPart2,
+							EndOfStream: true,
+						},
+					},
+				},
+			}
+
+			stream := NewMockStream(requests)
+			err := router.Process(stream)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Should get exactly 2 responses
+			// Sequential responses: Deferred Header then Final Body
+			Expect(len(stream.Responses)).To(Equal(2))
+
+			// First: Header
+			Expect(stream.Responses[0].GetRequestHeaders()).NotTo(BeNil())
+
+			// Second: Body
+			Expect(stream.Responses[1].GetRequestBody()).NotTo(BeNil())
+
+			// Verify body mutation is StreamedResponse
+			streamedBody := stream.Responses[1].GetRequestBody().Response.BodyMutation.GetStreamedResponse()
+			Expect(streamedBody).NotTo(BeNil())
+		})
+	})
+
+	Context("ClearRouteCache suppression", func() {
+		It("should not set ClearRouteCache in agentgateway mode", func() {
+			cfg.ClearRouteCache = true
+			Expect(router.shouldClearRouteCache()).To(BeFalse())
+		})
+
+		It("should set ClearRouteCache in envoy mode", func() {
+			cfg.GatewayType = ""
+			cfg.ClearRouteCache = true
+			Expect(router.shouldClearRouteCache()).To(BeTrue())
+		})
+	})
+
+	Context("Envoy mode unchanged", func() {
+		It("should send header response immediately in default mode", func() {
+			cfg.GatewayType = ""
+			envoyRouter, err := CreateTestRouter(cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			requests := []*ext_proc.ProcessingRequest{
+				{
+					Request: &ext_proc.ProcessingRequest_RequestHeaders{
+						RequestHeaders: &ext_proc.HttpHeaders{
+							Headers: &core.HeaderMap{
+								Headers: []*core.HeaderValue{
+									{Key: "content-type", Value: "application/json"},
+									{Key: "x-request-id", Value: "envoy-test"},
+								},
+							},
+						},
+					},
+				},
+				{
+					Request: &ext_proc.ProcessingRequest_RequestBody{
+						RequestBody: &ext_proc.HttpBody{
+							Body: []byte(`{"model": "model-a", "messages": [{"role": "user", "content": "Hello"}]}`),
+						},
+					},
+				},
+			}
+
+			stream := NewMockStream(requests)
+			err = envoyRouter.Process(stream)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Envoy mode: 2 responses (header immediately + body immediately)
+			Expect(len(stream.Responses)).To(Equal(2))
+			Expect(stream.Responses[0].GetRequestHeaders()).NotTo(BeNil())
+			Expect(stream.Responses[1].GetRequestBody()).NotTo(BeNil())
+		})
+	})
+})
+
 // MockStream implements the ext_proc.ExternalProcessor_ProcessServer interface for testing
 type MockStream struct {
 	Requests  []*ext_proc.ProcessingRequest
