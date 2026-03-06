@@ -30,8 +30,18 @@ func extractContentFast(body []byte) (*FastExtractResult, error) {
 	if !modelResult.Exists() {
 		return nil, errMissingModel
 	}
+	if modelResult.Type != gjson.String {
+		return nil, &jsonTypeError{field: "model", want: "string", got: modelResult.Type.String()}
+	}
 	r.Model = modelResult.String()
-	r.Stream = gjson.GetBytes(body, "stream").Bool()
+
+	streamResult := gjson.GetBytes(body, "stream")
+	if streamResult.Exists() {
+		if streamResult.Type != gjson.True && streamResult.Type != gjson.False {
+			return nil, &jsonTypeError{field: "stream", want: "boolean", got: streamResult.Type.String()}
+		}
+		r.Stream = streamResult.Type == gjson.True
+	}
 
 	messages := gjson.GetBytes(body, "messages")
 	if !messages.Exists() || !messages.IsArray() {
@@ -143,3 +153,9 @@ var errMissingModel = &jsonFieldError{field: "model"}
 type jsonFieldError struct{ field string }
 
 func (e *jsonFieldError) Error() string { return "missing required field: " + e.field }
+
+type jsonTypeError struct{ field, want, got string }
+
+func (e *jsonTypeError) Error() string {
+	return "field " + e.field + " must be " + e.want + ", got " + e.got
+}

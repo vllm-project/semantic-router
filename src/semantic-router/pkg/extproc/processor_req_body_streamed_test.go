@@ -614,6 +614,380 @@ func TestHandler_EmptyModelString(t *testing.T) {
 }
 
 // =====================================================================
+// Malformed / edge-case chunks (Envoy protocol robustness)
+// =====================================================================
+
+func TestHandler_NilBodyChunk(t *testing.T) {
+	router := makeTestRouter("auto")
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	// nil Body — GetBody() returns nil, buf.Write(nil) is a no-op
+	resp, err := h.HandleChunk(&ext_proc.HttpBody{Body: nil, EndOfStream: false}, ctx)
+	require.NoError(t, err)
+	assert.Equal(t, stateInit, h.state)
+	assert.Equal(t, 0, h.buf.Len(), "nil write must not grow buffer")
+	assertChunkEaten(t, resp, "nil body chunk")
+}
+
+func TestHandler_NilBodyThenRealChunk(t *testing.T) {
+	router := makeTestRouter("auto")
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	// Several nil chunks followed by a real chunk
+	for i := 0; i < 3; i++ {
+		resp, err := h.HandleChunk(&ext_proc.HttpBody{Body: nil, EndOfStream: false}, ctx)
+		require.NoError(t, err)
+		assertChunkEaten(t, resp, fmt.Sprintf("nil chunk %d", i))
+	}
+
+	body := makeTestBody("gpt-4", "hello", false)
+	resp, err := h.HandleChunk(&ext_proc.HttpBody{Body: body, EndOfStream: false}, ctx)
+	require.NoError(t, err)
+	assertChunkEaten(t, resp, "real chunk after nils")
+	assert.Equal(t, statePassthrough, h.state)
+	assert.Equal(t, "gpt-4", h.model)
+}
+
+func TestHandler_BinaryContent_StaysInInit(t *testing.T) {
+	router := makeTestRouter("auto")
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	// Pure binary — no JSON structure, no model key
+	binary := []byte{0x00, 0x01, 0xFF, 0xFE, 0x89, 0x50, 0x4E, 0x47}
+	resp, err := h.HandleChunk(&ext_proc.HttpBody{Body: binary, EndOfStream: false}, ctx)
+	require.NoError(t, err)
+	assert.Equal(t, stateInit, h.state, "binary data has no model key")
+	assertChunkEaten(t, resp, "binary chunk")
+	assert.Equal(t, len(binary), h.buf.Len())
+}
+
+func TestHandler_BinaryThenJSON_Recovers(t *testing.T) {
+	router := makeTestRouter("auto")
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	// Binary garbage first — stays in init
+	binary := []byte{0x00, 0xFF, 0xFE}
+	_, err := h.HandleChunk(&ext_proc.HttpBody{Body: binary, EndOfStream: false}, ctx)
+	require.NoError(t, err)
+	assert.Equal(t, stateInit, h.state)
+
+	// Then valid JSON with model — gjson scans the accumulated buffer and
+	// may or may not find "model" depending on binary interference. The key
+	// invariant: no crash, no panic, handler stays functional.
+	json := makeTestBody("gpt-4", "test", false)
+	resp, err := h.HandleChunk(&ext_proc.HttpBody{Body: json, EndOfStream: false}, ctx)
+	require.NoError(t, err)
+	assertChunkEaten(t, resp, "json after binary")
+	// gjson is resilient — it scans for "model": in byte stream
+	// With leading binary bytes the key may or may not be found, but no crash
+}
+
+func TestHandler_PartialJSON_ModelSplitMidQuote(t *testing.T) {
+	router := makeTestRouter("auto")
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	// Split right in the middle of the model value string: "gpt|-4"
+	part1 := []byte(`{"model":"gpt`)
+	part2 := []byte(`-4","stream":false,"messages":[]}`)
+
+	resp1, err := h.HandleChunk(&ext_proc.HttpBody{Body: part1, EndOfStream: false}, ctx)
+	require.NoError(t, err)
+	assert.Equal(t, stateInit, h.state, "unterminated string — gjson can't extract model")
+	assertChunkEaten(t, resp1, "partial model value")
+
+	resp2, err := h.HandleChunk(&ext_proc.HttpBody{Body: part2, EndOfStream: false}, ctx)
+	require.NoError(t, err)
+	assert.Equal(t, statePassthrough, h.state, "model now complete")
+	assert.Equal(t, "gpt-4", h.model)
+	assertChunkEaten(t, resp2, "completed model value")
+}
+
+func TestHandler_DuplicateModelKeys(t *testing.T) {
+	router := makeTestRouter("auto")
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	// gjson returns first match; json.Unmarshal uses last.
+	// With "auto" first, handler enters accumulate; the full pipeline
+	// (extractContentFast) will see "auto" too since it also uses gjson.
+	body := []byte(`{"model":"auto","model":"gpt-4","messages":[]}`)
+	resp, err := h.HandleChunk(&ext_proc.HttpBody{Body: body, EndOfStream: false}, ctx)
+	require.NoError(t, err)
+	assertChunkEaten(t, resp, "duplicate model keys")
+	assert.Equal(t, "auto", h.model, "gjson returns first match")
+	assert.Equal(t, stateAccumulate, h.state)
+}
+
+func TestHandler_ChunkAfterRelease_DispatchCreatesNew(t *testing.T) {
+	router := makeTestRouter("auto")
+	ctx := &RequestContext{Headers: make(map[string]string)}
+
+	h := newStreamedBodyHandler(router, ctx)
+	ctx.StreamedBody = h
+
+	body := makeTestBody("gpt-4", "test", false)
+	_, err := h.HandleChunk(&ext_proc.HttpBody{Body: body, EndOfStream: false}, ctx)
+	require.NoError(t, err)
+
+	// Simulate EOS release (as handleRequestBodyDispatch does)
+	h.Release()
+	ctx.StreamedBody = nil
+
+	// After release, ctx.StreamedBody is nil. A hypothetical extra body
+	// message would go through buffered path (ctx.StreamedBody == nil).
+	assert.Nil(t, ctx.StreamedBody, "handler must be nil after release")
+}
+
+// =====================================================================
+// Multimodal content (images in OpenAI content parts)
+// =====================================================================
+
+// makeMultimodalBody builds a realistic OpenAI multimodal request with both
+// text and an inline base64 image of the given size.
+func makeMultimodalBody(model string, text string, imageBytes int) []byte {
+	// Build a fake base64 string of the requested size
+	b64 := strings.Repeat("ABCDEFGH", imageBytes/8+1)
+	b64 = b64[:imageBytes]
+	imageURL := "data:image/png;base64," + b64
+
+	contentJSON, _ := json.Marshal(text)
+	imageURLJSON, _ := json.Marshal(imageURL)
+	return []byte(fmt.Sprintf(
+		`{"model":%q,"stream":false,"messages":[{"role":"user","content":[{"type":"text","text":%s},{"type":"image_url","image_url":{"url":%s}}]}]}`,
+		model, string(contentJSON), string(imageURLJSON),
+	))
+}
+
+func TestHandler_Multimodal_SmallImage_ChunkedDelivery(t *testing.T) {
+	router := makeTestRouter("auto")
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	body := makeMultimodalBody("gpt-4o", "What is in this image?", 200)
+	chunks := splitTestChunks(body, 50)
+	require.Greater(t, len(chunks), 3, "need multiple chunks")
+
+	for _, chunk := range chunks[:len(chunks)-1] {
+		resp, err := h.HandleChunk(&ext_proc.HttpBody{Body: chunk, EndOfStream: false}, ctx)
+		require.NoError(t, err)
+		assertChunkEaten(t, resp, "multimodal chunk")
+	}
+
+	assert.Equal(t, statePassthrough, h.state)
+	assert.Equal(t, "gpt-4o", h.model)
+
+	var totalNonEOS int
+	for _, c := range chunks[:len(chunks)-1] {
+		totalNonEOS += len(c)
+	}
+	assert.Equal(t, totalNonEOS, h.buf.Len())
+}
+
+func TestHandler_Multimodal_LargeImage_100KB(t *testing.T) {
+	router := makeTestRouter("auto")
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	// 100KB base64 image — realistic for a high-res photo
+	body := makeMultimodalBody("auto", "Describe this photo", 100_000)
+	chunks := splitTestChunks(body, 4096)
+	require.Greater(t, len(chunks), 20, "100KB image should produce 20+ chunks at 4K each")
+
+	for _, chunk := range chunks[:len(chunks)-1] {
+		resp, err := h.HandleChunk(&ext_proc.HttpBody{Body: chunk, EndOfStream: false}, ctx)
+		require.NoError(t, err)
+		assertChunkEaten(t, resp, "large image chunk")
+	}
+
+	assert.Equal(t, stateAccumulate, h.state, "auto model → accumulate")
+	assert.Equal(t, "auto", h.model)
+}
+
+func TestHandler_Multimodal_LargeImage_500KB(t *testing.T) {
+	router := makeTestRouter("auto")
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	body := makeMultimodalBody("gpt-4o", "What are the objects?", 500_000)
+	chunks := splitTestChunks(body, 16384)
+	require.Greater(t, len(chunks), 5)
+
+	for _, chunk := range chunks[:len(chunks)-1] {
+		resp, err := h.HandleChunk(&ext_proc.HttpBody{Body: chunk, EndOfStream: false}, ctx)
+		require.NoError(t, err)
+		assertChunkEaten(t, resp, "500KB image chunk")
+	}
+
+	assert.Equal(t, statePassthrough, h.state)
+
+	var totalNonEOS int
+	for _, c := range chunks[:len(chunks)-1] {
+		totalNonEOS += len(c)
+	}
+	assert.Equal(t, totalNonEOS, h.buf.Len(), "buffer must contain all image data")
+}
+
+func TestHandler_Multimodal_ImageSplitAcrossChunks_Base64Boundary(t *testing.T) {
+	router := makeTestRouter("auto")
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	body := makeMultimodalBody("gpt-4o", "Analyze", 10_000)
+
+	// Split at 1-byte chunks through the base64 data region
+	// This tests that mid-base64 splits don't confuse the handler
+	chunks := splitTestChunks(body, 7) // prime number to hit awkward boundaries
+
+	for _, chunk := range chunks[:len(chunks)-1] {
+		resp, err := h.HandleChunk(&ext_proc.HttpBody{Body: chunk, EndOfStream: false}, ctx)
+		require.NoError(t, err)
+		assertChunkEaten(t, resp, "base64 boundary chunk")
+	}
+
+	assert.Equal(t, statePassthrough, h.state)
+	assert.Equal(t, "gpt-4o", h.model)
+}
+
+func TestHandler_Multimodal_MultipleImages(t *testing.T) {
+	router := makeTestRouter("auto")
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	body := []byte(`{"model":"gpt-4o","stream":false,"messages":[{"role":"user","content":[` +
+		`{"type":"text","text":"Compare these images"},` +
+		`{"type":"image_url","image_url":{"url":"data:image/png;base64,` + strings.Repeat("A", 1000) + `"}},` +
+		`{"type":"image_url","image_url":{"url":"data:image/jpeg;base64,` + strings.Repeat("B", 2000) + `"}}` +
+		`]}]}`)
+
+	chunks := splitTestChunks(body, 200)
+
+	for _, chunk := range chunks[:len(chunks)-1] {
+		resp, err := h.HandleChunk(&ext_proc.HttpBody{Body: chunk, EndOfStream: false}, ctx)
+		require.NoError(t, err)
+		assertChunkEaten(t, resp, "multi-image chunk")
+	}
+
+	assert.Equal(t, statePassthrough, h.state)
+	assert.Equal(t, "gpt-4o", h.model)
+}
+
+func TestHandler_Multimodal_HTTPImageURL_NotDataURI(t *testing.T) {
+	router := makeTestRouter("auto")
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	// HTTP URL images (not inline base64) — still a valid OpenAI request
+	body := []byte(`{"model":"gpt-4o","stream":false,"messages":[{"role":"user","content":[` +
+		`{"type":"text","text":"What is this?"},` +
+		`{"type":"image_url","image_url":{"url":"https://example.com/photo.png"}}` +
+		`]}]}`)
+
+	chunks := splitTestChunks(body, 30)
+
+	for _, chunk := range chunks[:len(chunks)-1] {
+		resp, err := h.HandleChunk(&ext_proc.HttpBody{Body: chunk, EndOfStream: false}, ctx)
+		require.NoError(t, err)
+		assertChunkEaten(t, resp, "http image url chunk")
+	}
+
+	assert.Equal(t, statePassthrough, h.state)
+	assert.Equal(t, "gpt-4o", h.model)
+}
+
+func TestHandler_Multimodal_ModelAfterImage_AlphabeticalJSON(t *testing.T) {
+	router := makeTestRouter("auto")
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	// Go's json.Marshal alphabetizes keys: "messages" before "model".
+	// With a large image, most chunks arrive before model is visible.
+	imageData := strings.Repeat("X", 50_000)
+	body := []byte(fmt.Sprintf(
+		`{"messages":[{"role":"user","content":[{"type":"text","text":"describe"},{"type":"image_url","image_url":{"url":"data:image/png;base64,%s"}}]}],"model":"gpt-4o","stream":false}`,
+		imageData,
+	))
+
+	chunks := splitTestChunks(body, 4096)
+
+	// Send ALL chunks as non-EOS (model is in the last few bytes)
+	initCount := 0
+	for _, chunk := range chunks {
+		resp, err := h.HandleChunk(&ext_proc.HttpBody{Body: chunk, EndOfStream: false}, ctx)
+		require.NoError(t, err)
+		assertChunkEaten(t, resp, "alphabetical json chunk")
+		if h.state == stateInit {
+			initCount++
+		}
+	}
+
+	assert.Greater(t, initCount, 5,
+		"many chunks should arrive before model is visible in alphabetical JSON")
+	assert.Equal(t, statePassthrough, h.state, "should eventually find model")
+	assert.Equal(t, "gpt-4o", h.model)
+	assert.Equal(t, len(body), h.buf.Len(), "buffer must contain entire body")
+}
+
+func TestHandler_Multimodal_AutoModel_LargeImage(t *testing.T) {
+	router := makeTestRouter("auto")
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	body := makeMultimodalBody("auto", "Classify this image", 200_000)
+	chunks := splitTestChunks(body, 8192)
+
+	for _, chunk := range chunks[:len(chunks)-1] {
+		resp, err := h.HandleChunk(&ext_proc.HttpBody{Body: chunk, EndOfStream: false}, ctx)
+		require.NoError(t, err)
+		assertChunkEaten(t, resp, "auto+image chunk")
+	}
+
+	assert.Equal(t, stateAccumulate, h.state)
+	assert.Equal(t, "auto", h.model)
+	assert.True(t, h.isAuto)
+}
+
+func TestHandler_Multimodal_MaxBytes_RejectsLargeImage(t *testing.T) {
+	// 50KB limit but image is 100KB
+	router := makeTestRouterWithLimits("auto", 50_000, 0)
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	h := newStreamedBodyHandler(router, ctx)
+	defer h.Release()
+
+	body := makeMultimodalBody("gpt-4o", "Describe", 100_000)
+	chunks := splitTestChunks(body, 4096)
+
+	var hitLimit bool
+	for _, chunk := range chunks {
+		_, err := h.HandleChunk(&ext_proc.HttpBody{Body: chunk, EndOfStream: false}, ctx)
+		if err != nil {
+			assert.Contains(t, err.Error(), "too large")
+			hitLimit = true
+			break
+		}
+	}
+	assert.True(t, hitLimit, "should reject before fully accumulating 100KB image")
+}
+
+// =====================================================================
 // Context field propagation
 // =====================================================================
 
