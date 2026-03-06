@@ -373,6 +373,7 @@ def docker_start_vllm_sr(
     image=None,
     pull_policy=None,
     network_name=None,
+    openclaw_network_name=None,
     minimal=False,
 ):
     """
@@ -384,7 +385,8 @@ def docker_start_vllm_sr(
         listeners: List of listener configurations from config.yaml
         image: Container image to use (optional)
         pull_policy: Image pull policy (optional)
-        network_name: Docker network name (optional, for observability)
+        network_name: Docker network name for the main container (optional)
+        openclaw_network_name: Shared Docker network name for dashboard/OpenClaw
         minimal: If True, skip dashboard port mapping (default: False)
 
     Returns:
@@ -561,11 +563,11 @@ def docker_start_vllm_sr(
         "OPENCLAW_BASE_IMAGE",
         os.getenv("OPENCLAW_BASE_IMAGE", "ghcr.io/openclaw/openclaw:latest"),
     )
-    # OpenClaw containers join the same bridge network as vllm-sr-container.
-    # This decouples their lifecycle: restarting vllm-sr no longer breaks agent networking.
+    # OpenClaw containers should use a stable shared bridge network so the
+    # dashboard can always reach their gateway by container name.
     env_vars.setdefault(
         "OPENCLAW_DEFAULT_NETWORK_MODE",
-        network_name or "vllm-sr-network",
+        openclaw_network_name or "vllm-sr-network",
     )
 
     # Enable dashboard OpenClaw lifecycle management from inside vllm-sr container.

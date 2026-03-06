@@ -6,7 +6,14 @@ import ViewModal, { ViewSection } from '../components/ViewModal'
 import { DataTable, Column } from '../components/DataTable'
 import TableHeader from '../components/TableHeader'
 import EndpointsEditor, { Endpoint } from '../components/EndpointsEditor'
+import RoutingPresetModal from '../components/RoutingPresetModal'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import {
+  getRoutingPreset,
+  listDecisionNames,
+  listSignalNames,
+  type RoutingPresetId,
+} from '../presets/routingPresets'
 import {
   ConfigFormat,
   detectConfigFormat,
@@ -348,9 +355,69 @@ const TABLE_COLUMN_WIDTH = {
   medium: '160px',
 } as const
 
+const SIGNAL_SECTION_KEYS = [
+  'keywords',
+  'embeddings',
+  'domains',
+  'fact_check',
+  'user_feedbacks',
+  'preferences',
+  'language',
+  'context',
+  'complexity',
+  'jailbreak',
+  'pii',
+] as const
+
+type ConfigSignalSections = NonNullable<ConfigData['signals']>
+
+const collectConfiguredSignalNames = (signals?: ConfigData['signals']) => {
+  if (!signals) {
+    return new Set<string>()
+  }
+
+  return new Set(
+    SIGNAL_SECTION_KEYS.flatMap((key) => ((signals as ConfigSignalSections)[key] || []).map((entry) => entry.name))
+  )
+}
+
+const clonePresetSignals = (signals?: Record<string, unknown>) => {
+  if (!signals) {
+    return undefined
+  }
+
+  return Object.fromEntries(
+    Object.entries(signals).map(([key, value]) => [key, Array.isArray(value) ? value.map((item) => ({ ...item })) : value]),
+  )
+}
+
+const clonePresetDecisions = (decisions: Array<{
+  name: string
+  description: string
+  priority: number
+  rules: {
+    operator: 'AND' | 'OR' | 'NOT'
+    conditions: Array<{ type: string; name: string }>
+  }
+  modelRefs: Array<{ model: string; use_reasoning: boolean }>
+  plugins?: Array<{ type: string; configuration: Record<string, unknown> }>
+}>) =>
+  decisions.map((decision) => ({
+    ...decision,
+    rules: {
+      ...decision.rules,
+      conditions: decision.rules.conditions.map((condition) => ({ ...condition })),
+    },
+    modelRefs: decision.modelRefs.map((modelRef) => ({ ...modelRef })),
+    plugins: decision.plugins?.map((plugin) => ({
+      ...plugin,
+      configuration: { ...plugin.configuration },
+    })),
+  }))
+
 // Removed maskAddress - no longer needed after removing endpoint visibility toggle
 
-const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) => {
+const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => {
   const { isReadonly } = useReadonly()
   const [config, setConfig] = useState<ConfigData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -387,6 +454,10 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   const [decisionsSearch, setDecisionsSearch] = useState('')
   const [signalsSearch, setSignalsSearch] = useState('')
   const [modelsSearch, setModelsSearch] = useState('')
+  const [presetModalOpen, setPresetModalOpen] = useState(false)
+  const [selectedRoutingPresetId, setSelectedRoutingPresetId] = useState<RoutingPresetId | null>('starter-routing')
+  const [presetApplyState, setPresetApplyState] = useState<'idle' | 'applying'>('idle')
+  const [presetApplyError, setPresetApplyError] = useState<string | null>(null)
 
   // Expandable rows state for models
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set())
@@ -580,6 +651,91 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     cfg.decisions = (cfg.decisions || []).filter(d => d.name !== targetName)
   }
 
+  const getSelectedPresetConflicts = () => {
+    if (!config?.providers?.default_model || !selectedRoutingPresetId) {
+      return []
+    }
+
+    const preset = getRoutingPreset(selectedRoutingPresetId)
+    if (!preset) {
+      return []
+    }
+
+    const fragment = preset.build(config.providers.default_model)
+    const existingSignalNames = collectConfiguredSignalNames(config.signals)
+    const existingDecisionNames = new Set((config.decisions || []).map((decision) => decision.name))
+    const conflicts: string[] = []
+
+    for (const signalName of listSignalNames(fragment.signals)) {
+      if (existingSignalNames.has(signalName)) {
+        conflicts.push(`Signal "${signalName}" already exists`)
+      }
+    }
+
+    for (const decisionName of listDecisionNames(fragment.decisions)) {
+      if (existingDecisionNames.has(decisionName)) {
+        conflicts.push(`Decision "${decisionName}" already exists`)
+      }
+    }
+
+    return conflicts
+  }
+
+  const handleApplyRoutingPreset = async () => {
+    if (!config || !isPythonCLI || !selectedRoutingPresetId || !config.providers?.default_model) {
+      return
+    }
+
+    const conflicts = getSelectedPresetConflicts()
+    if (conflicts.length > 0) {
+      return
+    }
+
+    const preset = getRoutingPreset(selectedRoutingPresetId)
+    if (!preset) {
+      return
+    }
+
+    const fragment = preset.build(config.providers.default_model)
+    const mergedSignals = clonePresetSignals(fragment.signals as Record<string, unknown> | undefined)
+    const mergedDecisions = clonePresetDecisions(fragment.decisions)
+    const nextSignals = { ...(config.signals || {}) } as Record<string, Array<Record<string, unknown>>>
+
+    const nextConfig: ConfigData = {
+      ...config,
+      signals: nextSignals as ConfigData['signals'],
+      decisions: [...(config.decisions || [])],
+    }
+
+    if (mergedSignals) {
+      for (const [key, value] of Object.entries(mergedSignals)) {
+        if (!Array.isArray(value) || value.length === 0) {
+          continue
+        }
+
+        const existingValues = nextSignals[key] || []
+        nextSignals[key] = [
+          ...existingValues,
+          ...(value as Array<Record<string, unknown>>),
+        ]
+      }
+    }
+
+    nextConfig.decisions = [...(nextConfig.decisions || []), ...mergedDecisions]
+
+    setPresetApplyState('applying')
+    setPresetApplyError(null)
+
+    try {
+      await saveConfig(nextConfig)
+      setPresetModalOpen(false)
+    } catch (err) {
+      setPresetApplyError(err instanceof Error ? err.message : 'Failed to apply preset')
+    } finally {
+      setPresetApplyState('idle')
+    }
+  }
+
 
   const handleDeleteDecision = async (decision: DecisionConfig) => {
     if (!confirm(`Are you sure you want to delete decision "${decision.name}"?`)) {
@@ -621,6 +777,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
   // Helper: Check if using Python CLI format
   const isPythonCLI = configFormat === 'python-cli'
+  const selectedPresetConflicts = getSelectedPresetConflicts()
 
   // Effective router config - merges routerDefaults (system settings) with config (fallback)
   // For Python CLI: system settings like bert_model, tools, prompt_guard come from routerDefaults
@@ -3945,6 +4102,15 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
             searchPlaceholder="Search decisions..."
             searchValue={decisionsSearch}
             onSearchChange={setDecisionsSearch}
+            onSecondaryAction={
+              isPythonCLI && config?.providers?.default_model
+                ? () => {
+                    setPresetApplyError(null)
+                    setPresetModalOpen(true)
+                  }
+                : undefined
+            }
+            secondaryActionText="Apply preset"
             onAdd={() => openDecisionEditor('add')}
             addButtonText="Add Decision"
             disabled={isReadonly}
@@ -4786,6 +4952,24 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         onEdit={isReadonly ? undefined : (viewModalEditCallback || undefined)}
         title={viewModalTitle}
         sections={viewModalSections}
+      />
+
+      <RoutingPresetModal
+        isOpen={presetModalOpen}
+        defaultModel={config?.providers?.default_model || ''}
+        selectedPresetId={selectedRoutingPresetId}
+        conflicts={selectedPresetConflicts}
+        error={presetApplyError}
+        isApplying={presetApplyState === 'applying'}
+        onClose={() => {
+          setPresetModalOpen(false)
+          setPresetApplyError(null)
+        }}
+        onSelectPreset={(presetId) => {
+          setSelectedRoutingPresetId(presetId)
+          setPresetApplyError(null)
+        }}
+        onApply={() => void handleApplyRoutingPreset()}
       />
     </div>
   )

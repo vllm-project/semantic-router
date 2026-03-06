@@ -205,6 +205,7 @@ RUN mkdir -p /candle-binding /ml-binding /nlp-binding && \
     echo 'module github.com/vllm-project/semantic-router/nlp-binding'   > /nlp-binding/go.mod
 RUN go mod download
 RUN CGO_ENABLED=0 GOOS=js GOARCH=wasm go build \
+      -buildvcs=false \
       -ldflags="-s -w" \
       -o /build/signal-compiler.wasm \
       ./cmd/wasm/ && \
@@ -237,6 +238,7 @@ ENV GOPROXY=https://proxy.golang.org,direct
 COPY src/semantic-router/go.mod src/semantic-router/go.sum /app/src/semantic-router/
 COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
 COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
+COPY src/semantic-router/pkg/startupstatus/ /app/src/semantic-router/pkg/startupstatus/
 
 COPY dashboard/backend/go.mod dashboard/backend/go.sum /app/dashboard/backend/
 WORKDIR /app/dashboard/backend
@@ -245,9 +247,9 @@ RUN go mod download
 COPY dashboard/backend/ /app/dashboard/backend/
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
       apt-get update && apt-get install -y gcc-aarch64-linux-gnu && rm -rf /var/lib/apt/lists/* && \
-      CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -ldflags="-w -s" -o /app/dashboard-backend main.go; \
+      CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -buildvcs=false -ldflags="-w -s" -o /app/dashboard-backend main.go; \
     else \
-      CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s" -o /app/dashboard-backend main.go; \
+      CGO_ENABLED=1 GOOS=linux go build -buildvcs=false -ldflags="-w -s" -o /app/dashboard-backend main.go; \
     fi
 
 # Stage 2: Build Go semantic router
@@ -290,9 +292,9 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
       CC=aarch64-linux-gnu-gcc \
       CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
       CGO_LDFLAGS="-L/usr/lib/aarch64-linux-gnu -lssl -lcrypto" \
-      go build -ldflags="-w -s" -o router cmd/main.go; \
+      go build -buildvcs=false -ldflags="-w -s" -o router cmd/main.go; \
     else \
-      CGO_ENABLED=1 go build -ldflags="-w -s" -o router cmd/main.go; \
+      CGO_ENABLED=1 go build -buildvcs=false -ldflags="-w -s" -o router cmd/main.go; \
     fi
 
 # Stage 3: Get Envoy binary

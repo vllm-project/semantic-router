@@ -92,6 +92,7 @@ type APIOverviewResponse struct {
 // endpointRegistry is a centralized registry of all API endpoints with their metadata
 var endpointRegistry = []EndpointMetadata{
 	{Path: "/health", Method: "GET", Description: "Health check endpoint"},
+	{Path: "/ready", Method: "GET", Description: "Readiness endpoint that turns green only after startup completes"},
 	{Path: "/api/v1", Method: "GET", Description: "API discovery and documentation"},
 	{Path: "/openapi.json", Method: "GET", Description: "OpenAPI 3.0 specification"},
 	{Path: "/docs", Method: "GET", Description: "Interactive Swagger UI documentation"},
@@ -148,6 +149,7 @@ func (s *ClassificationAPIServer) handleAPIOverview(w http.ResponseWriter, _ *ht
 			"swagger_ui":    "/docs",
 			"models_info":   "/info/models",
 			"health":        "/health",
+			"ready":         "/ready",
 		},
 	}
 

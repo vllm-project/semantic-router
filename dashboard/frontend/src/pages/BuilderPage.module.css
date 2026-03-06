@@ -2420,23 +2420,7 @@
    =================================================================== */
 
 .toolbarBtnDeploy {
-  composes: toolbarBtn;
-  background: rgba(96, 165, 250, 0.15);
-  color: rgb(96, 165, 250);
-  border-color: rgba(96, 165, 250, 0.3);
-}
-
-.toolbarBtnDeploy:hover {
-  background: rgba(96, 165, 250, 0.25);
-  border-color: rgb(96, 165, 250);
-  color: rgb(147, 197, 253);
-  box-shadow: 0 0 8px rgba(96, 165, 250, 0.2);
-}
-
-.toolbarBtnDeploy:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  box-shadow: none;
+  composes: toolbarBtnPrimary;
 }
 
 /* Deploy Confirmation Modal */
@@ -2676,10 +2660,11 @@
   align-items: center;
   gap: 0.625rem;
   padding: 0.75rem 1rem;
-  background: rgba(34, 197, 94, 0.1);
-  border: 1px solid rgba(34, 197, 94, 0.3);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-success);
   border-radius: var(--radius-lg);
-  color: var(--color-success);
+  color: var(--color-text);
   font-size: var(--text-xs);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
@@ -2689,10 +2674,11 @@
   align-items: center;
   gap: 0.625rem;
   padding: 0.75rem 1rem;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-danger);
   border-radius: var(--radius-lg);
-  color: var(--color-danger);
+  color: var(--color-text);
   font-size: var(--text-xs);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
@@ -2700,32 +2686,48 @@
 .deployResultIcon {
   display: flex;
   align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
   flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+}
+
+.deployResultSuccess .deployResultIcon {
+  color: var(--color-success);
+}
+
+.deployResultError .deployResultIcon {
+  color: var(--color-danger);
 }
 
 .deployResultMsg {
   flex: 1;
   font-weight: 500;
   line-height: 1.4;
+  color: var(--color-text);
 }
 
 .deployResultDismiss {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 1.75rem;
+  height: 1.75rem;
   flex-shrink: 0;
-  background: transparent;
-  border: none;
-  color: currentColor;
-  opacity: 0.6;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  opacity: 1;
   cursor: pointer;
   border-radius: var(--radius-sm);
   transition: all var(--transition-fast);
 }
 
 .deployResultDismiss:hover {
-  opacity: 1;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-bg-elevated);
+  border-color: var(--color-border-hover);
+  color: var(--color-text);
 }

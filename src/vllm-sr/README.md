@@ -20,14 +20,13 @@ pip install -e .
 ### Usage
 
 ```bash
-# Initialize vLLM Semantic Router Configuration
-vllm-sr init
-
-# Start the router (includes dashboard)
-# Provide your HF_TOKEN to run the evaluation tests; this is required for downloading the necessary datasets
+# Start the router (includes dashboard and first-run setup)
 HF_TOKEN=hf_xxx vllm-sr serve
 
-# Open dashboard in browser
+# Open the dashboard
+# http://localhost:8700
+
+# Optional: open the dashboard in your browser
 vllm-sr dashboard
 
 # View logs
@@ -41,6 +40,20 @@ vllm-sr status
 # Stop
 vllm-sr stop
 ```
+
+If you start in an empty directory, `vllm-sr serve` bootstraps a minimal workspace and opens the dashboard in setup mode. Configure your first model there, then activate routing.
+
+### Advanced YAML-first setup
+
+```bash
+# Generate an advanced sample config if you prefer editing YAML directly
+vllm-sr init
+
+# Validate the sample before serving
+vllm-sr validate config.yaml
+```
+
+`vllm-sr init` is optional. It generates a lean advanced sample plus `.vllm-sr/router-defaults.yaml` for users who want to hand-author routing config. `router-defaults.yaml` contains advanced runtime defaults; it is not required for first-run dashboard setup.
 
 ## Features
 
@@ -192,7 +205,7 @@ plugins:
 **CLI Commands:**
 
 ```bash
-# Initialize config with plugin examples
+# Generate an advanced YAML sample if you want to edit config directly
 vllm-sr init
 
 # Validate configuration (including plugins)

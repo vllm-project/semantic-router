@@ -9,6 +9,7 @@ from cli.consts import (
     HEALTH_CHECK_TIMEOUT,
     DEFAULT_API_PORT,
     DEFAULT_ENVOY_PORT,
+    DEFAULT_LISTENER_PORT,
 )
 from cli.docker_cli import (
     docker_container_status,
@@ -76,19 +77,21 @@ def start_vllm_sr(
         docker_stop_container(VLLM_SR_DOCKER_NAME)
         docker_remove_container(VLLM_SR_DOCKER_NAME)
 
+    shared_network_name = "vllm-sr-network"
     network_name = None
     config_dir = os.path.dirname(os.path.abspath(config_file))
+
+    # OpenClaw containers and the dashboard need a stable shared bridge network
+    # even when observability is disabled.
+    return_code, stdout, stderr = docker_create_network(shared_network_name)
+    if return_code != 0:
+        log.error(f"Failed to create shared OpenClaw network: {stderr}")
+        sys.exit(1)
 
     # Start observability stack if enabled
     if enable_observability:
         log.info("Starting observability stack (Jaeger + Prometheus + Grafana)...")
-        network_name = "vllm-sr-network"
-
-        # Create Docker network
-        return_code, stdout, stderr = docker_create_network(network_name)
-        if return_code != 0:
-            log.error(f"Failed to create network: {stderr}")
-            sys.exit(1)
+        network_name = shared_network_name
 
         # Start Jaeger
         return_code, stdout, stderr = docker_start_jaeger(network_name)
@@ -123,6 +126,7 @@ def start_vllm_sr(
 
     # Detect minimal mode (dashboard disabled)
     dashboard_disabled = env_vars.get("DISABLE_DASHBOARD") == "true"
+    setup_mode = str(env_vars.get("VLLM_SR_SETUP_MODE", "")).lower() == "true"
 
     # Start vllm-sr container
     return_code, stdout, stderr = docker_start_vllm_sr(
@@ -132,6 +136,7 @@ def start_vllm_sr(
         image=image,
         pull_policy=pull_policy,
         network_name=network_name,
+        openclaw_network_name=shared_network_name,
         minimal=dashboard_disabled,
     )
 
@@ -140,6 +145,67 @@ def start_vllm_sr(
         sys.exit(1)
 
     log.info("vLLM Semantic Router container started successfully")
+
+    # Ensure the dashboard container is always present on the shared OpenClaw
+    # bridge network, regardless of its primary startup network.
+    rc, _, connect_err = docker_network_connect(
+        shared_network_name, VLLM_SR_DOCKER_NAME
+    )
+    if rc != 0:
+        log.error(
+            f"Failed to connect {VLLM_SR_DOCKER_NAME} to {shared_network_name}: {connect_err}"
+        )
+        docker_stop_container(VLLM_SR_DOCKER_NAME)
+        docker_remove_container(VLLM_SR_DOCKER_NAME)
+        sys.exit(1)
+    log.info(f"✓ Connected {VLLM_SR_DOCKER_NAME} to {shared_network_name}")
+
+    if setup_mode:
+        if dashboard_disabled:
+            log.error("Setup mode started without dashboard enabled")
+            sys.exit(1)
+
+        log.info("Setup mode detected: skipping Router and Envoy health checks")
+        log.info("Waiting for Dashboard to become healthy...")
+
+        start_time = time.time()
+        healthy = False
+        while time.time() - start_time < HEALTH_CHECK_TIMEOUT:
+            return_code, stdout, stderr = docker_exec(
+                VLLM_SR_DOCKER_NAME,
+                ["curl", "-f", "-s", "http://localhost:8700/healthz"],
+            )
+            if return_code == 0:
+                healthy = True
+                break
+            time.sleep(2)
+
+        if not healthy:
+            log.error("Dashboard failed to become healthy in setup mode")
+            docker_logs(VLLM_SR_DOCKER_NAME, follow=False, tail=100)
+            sys.exit(1)
+
+        status = docker_container_status(VLLM_SR_DOCKER_NAME)
+        if status == "exited":
+            log.error("Container exited unexpectedly during setup mode")
+            docker_logs(VLLM_SR_DOCKER_NAME, follow=False)
+            sys.exit(1)
+
+        log.info("=" * 60)
+        log.info("vLLM Semantic Router setup mode is running!")
+        log.info("")
+        log.info("Next steps:")
+        log.info("  • Open http://localhost:8700")
+        log.info("  • Configure your first model in the dashboard")
+        log.info("  • Activate a runnable config to enable routing")
+        log.info("")
+        log.info("Commands:")
+        log.info("  • vllm-sr dashboard              Open dashboard in browser")
+        log.info("  • vllm-sr logs <envoy|router|dashboard> [-f]")
+        log.info("  • vllm-sr status [envoy|router|dashboard|all]")
+        log.info("  • vllm-sr stop")
+        log.info("=" * 60)
+        return
 
     # Wait for services to be healthy
     log.info("Waiting for Router to become healthy...")
@@ -214,38 +280,35 @@ def start_vllm_sr(
         sys.exit(1)
 
     # Recover OpenClaw containers that were stopped by a previous `vllm-sr stop`.
-    # Reconnect them to the bridge network and start them.
-    if network_name:
-        default_openclaw_data_dir = os.path.join(
-            config_dir, ".vllm-sr", "openclaw-data"
-        )
-        openclaw_data_dir = (
-            env_vars.get("OPENCLAW_DATA_DIR")
-            or os.getenv("OPENCLAW_DATA_DIR")
-            or default_openclaw_data_dir
-        )
-        openclaw_data_dir = os.path.abspath(openclaw_data_dir)
-        openclaw_entries = load_openclaw_registry(openclaw_data_dir)
-        if openclaw_entries:
-            log.info(f"Recovering {len(openclaw_entries)} OpenClaw container(s)...")
-            for entry in openclaw_entries:
-                name = entry.get("name") or entry.get("containerName")
-                if not name:
-                    continue
-                cstatus = docker_container_status(name)
-                if cstatus == "not found":
-                    log.warning(f"OpenClaw container {name} no longer exists, skipping")
-                    continue
-                # Reconnect to bridge network (idempotent)
-                rc, _, _ = docker_network_connect(network_name, name)
-                if rc == 0:
-                    log.info(f"✓ Connected {name} to {network_name}")
-                else:
-                    log.warning(f"Failed to connect {name} to {network_name}")
-                # Start if stopped
-                if cstatus != "running":
-                    log.info(f"Starting OpenClaw container: {name}")
-                    docker_start_container(name)
+    # Reconnect them to the shared bridge network and start them.
+    default_openclaw_data_dir = os.path.join(config_dir, ".vllm-sr", "openclaw-data")
+    openclaw_data_dir = (
+        env_vars.get("OPENCLAW_DATA_DIR")
+        or os.getenv("OPENCLAW_DATA_DIR")
+        or default_openclaw_data_dir
+    )
+    openclaw_data_dir = os.path.abspath(openclaw_data_dir)
+    openclaw_entries = load_openclaw_registry(openclaw_data_dir)
+    if openclaw_entries:
+        log.info(f"Recovering {len(openclaw_entries)} OpenClaw container(s)...")
+        for entry in openclaw_entries:
+            name = entry.get("name") or entry.get("containerName")
+            if not name:
+                continue
+            cstatus = docker_container_status(name)
+            if cstatus == "not found":
+                log.warning(f"OpenClaw container {name} no longer exists, skipping")
+                continue
+            # Reconnect to bridge network (idempotent)
+            rc, _, _ = docker_network_connect(shared_network_name, name)
+            if rc == 0:
+                log.info(f"✓ Connected {name} to {shared_network_name}")
+            else:
+                log.warning(f"Failed to connect {name} to {shared_network_name}")
+            # Start if stopped
+            if cstatus != "running":
+                log.info(f"Starting OpenClaw container: {name}")
+                docker_start_container(name)
 
     log.info("=" * 60)
     log.info("vLLM Semantic Router is running!")
@@ -277,7 +340,7 @@ def start_vllm_sr(
 
     # Get first listener port for curl example
     if listeners:
-        first_port = listeners[0].get("port", 8888)
+        first_port = listeners[0].get("port", DEFAULT_LISTENER_PORT)
         print()  # Empty line without timestamp
         print("Test with curl:")
         print()

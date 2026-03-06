@@ -2,8 +2,8 @@
 """
 test_vllm_sr_init.py - Tests for 'vllm-sr init' command.
 
-This test validates the initialization command:
-- Creates config.yaml from template
+This test validates the init command as an advanced YAML sample generator:
+- Creates a lean config.yaml from template
 - Creates .vllm-sr/ directory with default files
 - Handles --force flag for overwriting
 - Validates created file contents
@@ -22,7 +22,7 @@ class TestVllmSRInit(CLITestBase):
     """Tests for the vllm-sr init command."""
 
     def test_init_creates_config_yaml(self):
-        """Test that init creates config.yaml file."""
+        """Test that init creates a lean advanced sample config.yaml file."""
         self.print_test_header(
             "Init Creates config.yaml",
             "Validates that 'vllm-sr init' creates a config.yaml file in current directory",
@@ -38,12 +38,39 @@ class TestVllmSRInit(CLITestBase):
         config_path = os.path.join(self.test_dir, "config.yaml")
         self.assertFileExists(config_path, "config.yaml was not created")
 
-        # Verify it contains expected content
+        # Verify it contains expected lean sample content
         self.assertFileContains(
             config_path, "version:", "config.yaml missing version field"
         )
         self.assertFileContains(
             config_path, "listeners:", "config.yaml missing listeners field"
+        )
+        self.assertFileContains(
+            config_path,
+            "default-route",
+            "config.yaml missing catch-all default decision",
+        )
+        self.assertFileContains(
+            config_path,
+            "replace-with-your-model",
+            "config.yaml missing placeholder model",
+        )
+        with open(config_path, "r") as f:
+            content = f.read()
+        self.assertNotIn(
+            "math_keywords",
+            content,
+            "config.yaml should not include old heavy demo signals",
+        )
+        self.assertNotIn(
+            "block_jailbreak",
+            content,
+            "config.yaml should not include old heavy demo routes",
+        )
+        self.assertNotIn(
+            "remom_route",
+            content,
+            "config.yaml should not include old heavy demo algorithms",
         )
 
         self.print_test_result(True, "config.yaml created successfully")
@@ -52,7 +79,7 @@ class TestVllmSRInit(CLITestBase):
         """Test that init creates .vllm-sr/ directory with template files."""
         self.print_test_header(
             "Init Creates .vllm-sr/ Directory",
-            "Validates that 'vllm-sr init' creates .vllm-sr/ directory with defaults",
+            "Validates that 'vllm-sr init' creates .vllm-sr/ directory with advanced runtime defaults",
         )
 
         # Run init command
@@ -136,6 +163,7 @@ class TestVllmSRInit(CLITestBase):
             content = f.read()
         self.assertNotIn("old_field", content, "Old config content still present")
         self.assertIn("listeners:", content, "New config missing listeners field")
+        self.assertIn("default-route", content, "New config missing catch-all route")
 
         self.print_test_result(True, "init --force successfully overwrote config")
 
@@ -152,8 +180,14 @@ class TestVllmSRInit(CLITestBase):
         # Combine stdout and stderr for message checking
         output = stdout + stderr
 
-        # Should contain success indicators
-        success_indicators = ["config.yaml", ".vllm-sr", "vllm-sr serve"]
+        # Should contain advanced-sample guidance
+        success_indicators = [
+            "config.yaml",
+            ".vllm-sr",
+            "advanced yaml sample",
+            "yaml-first",
+            "vllm-sr serve",
+        ]
         found_indicators = []
 
         for indicator in success_indicators:

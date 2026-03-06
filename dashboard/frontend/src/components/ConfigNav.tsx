@@ -18,10 +18,10 @@ interface ConfigNavProps {
 const ConfigNav: React.FC<ConfigNavProps> = ({ activeSection, onSectionChange }) => {
   const sections = [
     {
-      id: 'signals' as ConfigSection,
-      icon: '📡',
-      title: 'Signals',
-      description: 'Keywords, embeddings, domains & preferences'
+      id: 'models' as ConfigSection,
+      icon: '🤖',
+      title: 'Models',
+      description: 'Provider models and endpoints'
     },
     {
       id: 'decisions' as ConfigSection,
@@ -30,10 +30,10 @@ const ConfigNav: React.FC<ConfigNavProps> = ({ activeSection, onSectionChange })
       description: 'Routing rules with priorities & plugins'
     },
     {
-      id: 'models' as ConfigSection,
-      icon: '🤖',
-      title: 'Models',
-      description: 'Provider models and endpoints'
+      id: 'signals' as ConfigSection,
+      icon: '📡',
+      title: 'Signals',
+      description: 'Keywords, embeddings, domains & preferences'
     },
     {
       id: 'router-config' as ConfigSection,

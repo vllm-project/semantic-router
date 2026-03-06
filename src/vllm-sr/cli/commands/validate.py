@@ -51,7 +51,9 @@ def validate_command(config_path: str):
             log.info(f"  Fact check signals: {len(user_config.signals.fact_check)}")
         log.info(f"  Domains: {len(user_config.signals.domains)}")
     else:
-        log.info(f"  Signals: None (will auto-generate categories)")
+        log.info(
+            "  Signals: None (catch-all routing is supported; domain categories will auto-generate when needed)"
+        )
 
     log.info(f"  Decisions: {len(user_config.decisions)}")
 

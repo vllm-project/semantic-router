@@ -15,7 +15,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
   const location = useLocation()
   const navigate = useNavigate()
 
-  const isConfigPage = location.pathname === '/config'
+  const isConfigPage = location.pathname === '/config' || location.pathname.startsWith('/config/')
 
   // Active state detection
   const isBuilderActive = location.pathname === '/builder'
@@ -109,7 +109,7 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
               to="/builder"
               className={isBuilderActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink}
             >
-              Builder
+              DSL
             </NavLink>
 
             {/* Build Dropdown */}
@@ -147,16 +147,6 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
                     Models
                   </button>
                   <button
-                    className={`${styles.dropdownItem} ${isSignalsActive ? styles.dropdownItemActive : ''}`}
-                    onClick={() => {
-                      onConfigSectionChange?.('signals')
-                      navigate('/config')
-                      setOpenDropdown(null)
-                    }}
-                  >
-                    Signals
-                  </button>
-                  <button
                     className={`${styles.dropdownItem} ${isDecisionsActive ? styles.dropdownItemActive : ''}`}
                     onClick={() => {
                       onConfigSectionChange?.('decisions')
@@ -165,6 +155,16 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
                     }}
                   >
                     Decisions
+                  </button>
+                  <button
+                    className={`${styles.dropdownItem} ${isSignalsActive ? styles.dropdownItemActive : ''}`}
+                    onClick={() => {
+                      onConfigSectionChange?.('signals')
+                      navigate('/config')
+                      setOpenDropdown(null)
+                    }}
+                  >
+                    Signals
                   </button>
                 </div>
               )}

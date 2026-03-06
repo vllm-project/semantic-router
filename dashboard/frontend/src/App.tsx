@@ -19,6 +19,9 @@ import DashboardPage from './pages/DashboardPage'
 import OpenClawPage from './pages/OpenClawPage'
 import { ConfigSection } from './components/ConfigNav'
 import { ReadonlyProvider } from './contexts/ReadonlyContext'
+import { SetupProvider, useSetup } from './contexts/SetupContext'
+import SetupWizardPage from './pages/SetupWizardPage'
+import OnboardingGuide from './components/OnboardingGuide'
 
 const ConfigSectionRoute: React.FC<{
   configSection: ConfigSection
@@ -54,9 +57,271 @@ const ConfigSectionRoute: React.FC<{
   )
 }
 
+const SetupStatusPage: React.FC<{
+  title: string
+  description: string
+  actionLabel: string
+  onAction: () => void
+}> = ({ title, description, actionLabel, onAction }) => (
+  <div
+    style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: '100vh',
+      padding: '2rem',
+      background:
+        'radial-gradient(circle at top, rgba(118, 185, 0, 0.12), transparent 30%), var(--color-bg)',
+    }}
+  >
+    <div
+      style={{
+        width: '100%',
+        maxWidth: '560px',
+        padding: '2rem',
+        borderRadius: '1rem',
+        border: '1px solid var(--color-border)',
+        background: 'var(--color-bg-secondary)',
+        boxShadow: '0 20px 48px rgba(0, 0, 0, 0.28)',
+      }}
+    >
+      <h1 style={{ fontSize: '1.5rem', marginBottom: '0.75rem' }}>{title}</h1>
+      <p style={{ color: 'var(--color-text-secondary)', lineHeight: '1.6' }}>{description}</p>
+      <button
+        onClick={onAction}
+        style={{
+          marginTop: '1.25rem',
+          padding: '0.75rem 1.15rem',
+          borderRadius: '0.75rem',
+          background: 'var(--color-primary)',
+          color: '#081000',
+          fontWeight: 700,
+        }}
+      >
+        {actionLabel}
+      </button>
+    </div>
+  </div>
+)
+
+const AppRouter: React.FC = () => {
+  const { setupState, isLoading, error, refreshSetupState } = useSetup()
+  const [configSection, setConfigSection] = useState<ConfigSection>('models')
+
+  if (isLoading) {
+    return (
+      <SetupStatusPage
+        title="Loading setup state"
+        description="The dashboard is checking whether this workspace is already activated or still in first-run setup mode."
+        actionLabel="Refresh"
+        onAction={() => {
+          window.location.reload()
+        }}
+      />
+    )
+  }
+
+  if (error) {
+    return (
+      <SetupStatusPage
+        title="Unable to load setup state"
+        description={error}
+        actionLabel="Retry"
+        onAction={() => {
+          void refreshSetupState()
+        }}
+      />
+    )
+  }
+
+  const setupMode = setupState?.setupMode ?? false
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        {setupMode ? (
+          <>
+            <Route path="/setup" element={<SetupWizardPage />} />
+            <Route path="*" element={<Navigate to="/setup" replace />} />
+          </>
+        ) : (
+          <>
+            <Route
+              path="/dashboard"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <DashboardPage />
+                </Layout>
+              }
+            />
+            <Route
+              path="/monitoring"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <MonitoringPage />
+                </Layout>
+              }
+            />
+            <Route
+              path="/config"
+              element={
+                <ConfigSectionRoute
+                  configSection={configSection}
+                  setConfigSection={setConfigSection}
+                />
+              }
+            />
+            <Route
+              path="/config/:section"
+              element={
+                <ConfigSectionRoute
+                  configSection={configSection}
+                  setConfigSection={setConfigSection}
+                />
+              }
+            />
+            <Route
+              path="/playground"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                  hideHeaderOnMobile={true}
+                >
+                  <PlaygroundPage />
+                </Layout>
+              }
+            />
+            <Route path="/playground/fullscreen" element={<PlaygroundFullscreenPage />} />
+            <Route
+              path="/topology"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <TopologyPage />
+                </Layout>
+              }
+            />
+            <Route
+              path="/tracing"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <TracingPage />
+                </Layout>
+              }
+            />
+            <Route
+              path="/status"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <StatusPage />
+                </Layout>
+              }
+            />
+            <Route
+              path="/logs"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <LogsPage />
+                </Layout>
+              }
+            />
+            <Route
+              path="/replay"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <ReplayPage />
+                </Layout>
+              }
+            />
+            <Route
+              path="/evaluation"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <EvaluationPage />
+                </Layout>
+              }
+            />
+            <Route
+              path="/ml-setup"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <MLSetupPage />
+                </Layout>
+              }
+            />
+            <Route
+              path="/ratings"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <RatingsPage />
+                </Layout>
+              }
+            />
+            <Route
+              path="/builder"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <BuilderPage />
+                </Layout>
+              }
+            />
+            <Route
+              path="/clawos"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <OpenClawPage />
+                </Layout>
+              }
+            />
+            <Route path="/openclaw" element={<Navigate to="/clawos" replace />} />
+            <Route path="/setup" element={<Navigate to="/dashboard" replace />} />
+          </>
+        )}
+      </Routes>
+      {!setupMode && <OnboardingGuide />}
+    </BrowserRouter>
+  )
+}
+
 const App: React.FC = () => {
   const [isInIframe, setIsInIframe] = useState(false)
-  const [configSection, setConfigSection] = useState<ConfigSection>('signals')
 
   useEffect(() => {
     // Detect if we're running inside an iframe (potential loop)
@@ -117,181 +382,9 @@ const App: React.FC = () => {
 
   return (
     <ReadonlyProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route
-            path="/"
-            element={<LandingPage />}
-          />
-          <Route
-            path="/dashboard"
-            element={
-              <Layout
-                configSection={configSection}
-                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-              >
-                <DashboardPage />
-              </Layout>
-            }
-          />
-          <Route
-            path="/monitoring"
-            element={
-              <Layout
-                configSection={configSection}
-                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-              >
-                <MonitoringPage />
-              </Layout>
-            }
-          />
-          <Route
-            path="/config"
-            element={
-              <ConfigSectionRoute
-                configSection={configSection}
-                setConfigSection={setConfigSection}
-              />
-            }
-          />
-          <Route
-            path="/config/:section"
-            element={
-              <ConfigSectionRoute
-                configSection={configSection}
-                setConfigSection={setConfigSection}
-              />
-            }
-          />
-          <Route
-            path="/playground"
-            element={
-              <Layout
-                configSection={configSection}
-                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-                hideHeaderOnMobile={true}
-              >
-                <PlaygroundPage />
-              </Layout>
-            }
-          />
-          <Route
-            path="/playground/fullscreen"
-            element={<PlaygroundFullscreenPage />}
-          />
-          <Route
-            path="/topology"
-            element={
-              <Layout
-                configSection={configSection}
-                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-              >
-                <TopologyPage />
-              </Layout>
-            }
-          />
-          <Route
-            path="/tracing"
-            element={
-              <Layout
-                configSection={configSection}
-                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-              >
-                <TracingPage />
-              </Layout>
-            }
-          />
-          <Route
-            path="/status"
-            element={
-              <Layout
-                configSection={configSection}
-                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-              >
-                <StatusPage />
-              </Layout>
-            }
-          />
-          <Route
-            path="/logs"
-            element={
-              <Layout
-                configSection={configSection}
-                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-              >
-                <LogsPage />
-              </Layout>
-            }
-          />
-          <Route
-            path="/replay"
-            element={
-              <Layout
-                configSection={configSection}
-                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-              >
-                <ReplayPage />
-              </Layout>
-            }
-          />
-          <Route
-            path="/evaluation"
-            element={
-              <Layout
-                configSection={configSection}
-                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-              >
-                <EvaluationPage />
-              </Layout>
-            }
-          />
-          <Route
-            path="/ml-setup"
-            element={
-              <Layout
-                configSection={configSection}
-                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-              >
-                <MLSetupPage />
-              </Layout>
-            }
-          />
-          <Route
-            path="/ratings"
-            element={
-              <Layout
-                configSection={configSection}
-                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-              >
-                <RatingsPage />
-              </Layout>
-            }
-          />
-          <Route
-            path="/builder"
-            element={
-              <Layout
-                configSection={configSection}
-                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-              >
-                <BuilderPage />
-              </Layout>
-            }
-          />
-          <Route
-            path="/clawos"
-            element={
-              <Layout
-                configSection={configSection}
-                onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
-              >
-                <OpenClawPage />
-              </Layout>
-            }
-          />
-          <Route path="/openclaw" element={<Navigate to="/clawos" replace />} />
-        </Routes>
-      </BrowserRouter>
+      <SetupProvider>
+        <AppRouter />
+      </SetupProvider>
     </ReadonlyProvider>
   )
 }

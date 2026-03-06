@@ -8,6 +8,8 @@ interface TableHeaderProps {
   searchPlaceholder?: string
   searchValue?: string
   onSearchChange?: (value: string) => void
+  onSecondaryAction?: () => void
+  secondaryActionText?: string
   onAdd?: () => void
   addButtonText?: string
   disabled?: boolean
@@ -20,6 +22,8 @@ const TableHeader: React.FC<TableHeaderProps> = ({
   searchPlaceholder = 'Search...',
   searchValue = '',
   onSearchChange,
+  onSecondaryAction,
+  secondaryActionText = 'More',
   onAdd,
   addButtonText = 'Add New',
   disabled = false
@@ -43,6 +47,11 @@ const TableHeader: React.FC<TableHeaderProps> = ({
             onChange={(e) => onSearchChange(e.target.value)}
           />
         )}
+        {onSecondaryAction && !disabled && (
+          <button className={styles.secondaryButton} onClick={onSecondaryAction}>
+            {secondaryActionText}
+          </button>
+        )}
         {onAdd && !disabled && (
           <button className={styles.addButton} onClick={onAdd}>
             {addButtonText}
@@ -54,4 +63,3 @@ const TableHeader: React.FC<TableHeaderProps> = ({
 }
 
 export default TableHeader
-

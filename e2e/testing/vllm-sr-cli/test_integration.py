@@ -21,6 +21,42 @@ class TestServeIntegration(CLITestBase):
     # Timeout for waiting for container to be running
     CONTAINER_STARTUP_TIMEOUT = 120
 
+    def _create_minimal_config(self, port: int = 8888) -> str:
+        """Create a lean active config without requiring `vllm-sr init`."""
+        config_path = os.path.join(self.test_dir, "config.yaml")
+        config_content = f"""version: v0.1
+
+listeners:
+  - name: "test-listener"
+    address: "0.0.0.0"
+    port: {port}
+    timeout: "60s"
+
+decisions:
+  - name: "default-route"
+    description: "Default route for integration testing"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions: []
+    modelRefs:
+      - model: "test-model"
+        use_reasoning: false
+
+providers:
+  models:
+    - name: "test-model"
+      endpoints:
+        - name: "primary"
+          weight: 100
+          endpoint: "host.docker.internal:8000/v1"
+          protocol: "http"
+  default_model: "test-model"
+"""
+        with open(config_path, "w") as f:
+            f.write(config_content)
+        return config_path
+
     def _start_serve_background(self) -> subprocess.Popen:
         """Start vllm-sr serve in background (non-blocking)."""
         cmd = ["vllm-sr", "serve", "--image-pull-policy", "ifnotpresent"]
@@ -40,19 +76,18 @@ class TestServeIntegration(CLITestBase):
         "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
     )
     def test_serve_full_startup(self):
-        """Test complete serve workflow: init → serve → container running."""
+        """Test complete serve workflow: config → serve → container running."""
         self.print_test_header(
             "Full Serve Integration Test",
-            "Tests: init → serve → container running → stop",
+            "Tests: config → serve → container running → stop",
         )
 
         serve_process = None
 
         try:
-            # Step 1: Initialize config
-            return_code, _, _ = self.run_cli(["init", "--force"])
-            self.assertEqual(return_code, 0, "init failed")
-            print("  ✓ init succeeded")
+            # Step 1: Create a lean active config
+            self._create_minimal_config()
+            print("  ✓ config.yaml created")
 
             # Step 2: Start serve in background
             serve_process = self._start_serve_background()
@@ -120,9 +155,8 @@ class TestServeIntegration(CLITestBase):
         test_token = "hf_integration_test_token_xyz"
 
         try:
-            # Step 1: Initialize config
-            return_code, _, _ = self.run_cli(["init", "--force"])
-            self.assertEqual(return_code, 0, "init failed")
+            # Step 1: Create a lean active config
+            self._create_minimal_config()
 
             # Step 2: Start serve with HF_TOKEN in environment
             cmd = ["vllm-sr", "serve", "--image-pull-policy", "ifnotpresent"]
@@ -199,9 +233,8 @@ class TestServeIntegration(CLITestBase):
         serve_process = None
 
         try:
-            # Step 1: Initialize config
-            return_code, _, _ = self.run_cli(["init", "--force"])
-            self.assertEqual(return_code, 0, "init failed")
+            # Step 1: Create a lean active config
+            self._create_minimal_config()
 
             # Step 2: Create models directory (CLI should create it, but ensure it exists)
             models_dir = os.path.join(self.test_dir, "models")
@@ -282,8 +315,8 @@ class TestServeIntegration(CLITestBase):
         serve_process = None
 
         try:
-            # Step 1: Initialize and start
-            self.run_cli(["init", "--force"])
+            # Step 1: Create config and start
+            self._create_minimal_config()
             serve_process = self._start_serve_background()
             time.sleep(5)
 
@@ -331,8 +364,8 @@ class TestServeIntegration(CLITestBase):
         serve_process = None
 
         try:
-            # Step 1: Initialize and start
-            self.run_cli(["init", "--force"])
+            # Step 1: Create config and start
+            self._create_minimal_config()
             serve_process = self._start_serve_background()
             time.sleep(5)
 
@@ -379,8 +412,8 @@ class TestServeIntegration(CLITestBase):
         serve_process = None
 
         try:
-            # Step 1: Initialize and start
-            self.run_cli(["init", "--force"])
+            # Step 1: Create config and start
+            self._create_minimal_config()
             serve_process = self._start_serve_background()
             time.sleep(5)
 
@@ -425,9 +458,8 @@ class TestServeIntegration(CLITestBase):
             "Verifies 'never' policy fails when image is not available locally",
         )
 
-        # Step 1: Initialize config
-        return_code, _, _ = self.run_cli(["init", "--force"])
-        self.assertEqual(return_code, 0, "init failed")
+        # Step 1: Create a lean active config
+        self._create_minimal_config()
 
         # Step 2: Try to serve with fake image and never policy
         fake_image = "fake-nonexistent-image:doesnotexist12345"
@@ -459,9 +491,8 @@ class TestServeIntegration(CLITestBase):
         )
 
         try:
-            # Step 1: Initialize config
-            return_code, _, _ = self.run_cli(["init", "--force"])
-            self.assertEqual(return_code, 0, "init failed")
+            # Step 1: Create a lean active config
+            self._create_minimal_config()
 
             # Step 2: Run serve briefly with always policy
             # We use run_cli with a short timeout - if it accepts the flag, test passes

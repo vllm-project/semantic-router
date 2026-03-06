@@ -318,8 +318,18 @@ type ToolSelection struct {
 	Tools ToolsConfig `yaml:"tools"`
 }
 
+// Listener configures an externally exposed HTTP listener for the router stack.
+type Listener struct {
+	Name    string `yaml:"name"`
+	Address string `yaml:"address"`
+	Port    int    `yaml:"port"`
+	Timeout string `yaml:"timeout,omitempty"`
+}
+
 // API server configuration
 type APIServer struct {
+	// Listeners exposed by the user-facing vllm-sr stack configuration.
+	Listeners []Listener `yaml:"listeners,omitempty"`
 	// API configuration for classification endpoints
 	API APIConfig `yaml:"api"`
 }

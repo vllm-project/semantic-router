@@ -25,6 +25,7 @@ type Config struct {
 
 	// Read-only mode for public beta deployments
 	ReadonlyMode bool
+	SetupMode    bool
 
 	// Platform branding (e.g., "amd" for AMD GPU deployments)
 	Platform string
@@ -78,6 +79,7 @@ func LoadConfig() (*Config, error) {
 
 	// Read-only mode for public beta deployments
 	readonlyMode := flag.Bool("readonly", env("DASHBOARD_READONLY", "false") == "true", "enable read-only mode (disable config editing)")
+	setupMode := flag.Bool("setup-mode", env("DASHBOARD_SETUP_MODE", "false") == "true", "enable dashboard setup mode")
 
 	// Platform branding
 	platform := flag.String("platform", env("DASHBOARD_PLATFORM", ""), "platform branding (e.g., 'amd' for AMD GPU deployments)")
@@ -119,6 +121,7 @@ func LoadConfig() (*Config, error) {
 	cfg.JaegerURL = *jaegerURL
 	cfg.EnvoyURL = *envoyURL
 	cfg.ReadonlyMode = *readonlyMode
+	cfg.SetupMode = *setupMode
 	cfg.Platform = *platform
 	cfg.EvaluationEnabled = *evaluationEnabled
 	cfg.EvaluationDBPath = *evaluationDBPath

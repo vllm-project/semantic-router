@@ -183,6 +183,9 @@ func Setup(cfg *config.Config) *http.ServeMux {
 
 	// Settings endpoint for frontend (readonly mode, etc.)
 	mux.HandleFunc("/api/settings", handlers.SettingsHandler(cfg))
+	mux.HandleFunc("/api/setup/state", handlers.SetupStateHandler(cfg.AbsConfigPath))
+	mux.HandleFunc("/api/setup/validate", handlers.SetupValidateHandler(cfg.AbsConfigPath))
+	mux.HandleFunc("/api/setup/activate", handlers.SetupActivateHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir))
 
 	// Config endpoints - MUST be registered BEFORE proxy to take precedence
 	// In Go's ServeMux, exact path matches registered first take precedence over prefix handlers
@@ -225,7 +228,7 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	log.Printf("Fetch Raw API endpoint registered: /api/tools/fetch-raw")
 
 	// Status endpoint - shows service health status (aligns with vllm-sr status)
-	mux.HandleFunc("/api/status", handlers.StatusHandler(cfg.RouterAPIURL))
+	mux.HandleFunc("/api/status", handlers.StatusHandler(cfg.RouterAPIURL, cfg.ConfigDir))
 	log.Printf("Status API endpoint registered: /api/status")
 
 	// Logs endpoint - shows service logs (aligns with vllm-sr logs)

@@ -41,6 +41,16 @@ import type {
   ConfigVersion,
 } from '@/types/dsl'
 
+interface DeployStatusService {
+  name?: string
+  healthy?: boolean
+}
+
+interface DeployStatusResponse {
+  overall?: string
+  services?: DeployStatusService[]
+}
+
 // ---------- Store State ----------
 
 interface DSLState {
@@ -583,7 +593,13 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
         body: JSON.stringify({ yaml: yamlOutput, dsl: dslSource }),
       })
 
-      const data = await resp.json()
+      const responseText = await resp.text()
+      let data: { version?: string; message?: string; error?: string } = {}
+      try {
+        data = responseText ? JSON.parse(responseText) as typeof data : {}
+      } catch {
+        data = responseText ? { message: responseText } : {}
+      }
 
       if (!resp.ok) {
         set({
@@ -597,14 +613,21 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
         return
       }
 
-      // Wait for router reload (poll status)
+      // Wait for runtime reload (poll actual health status)
       set({ deployStep: 'reloading' })
       let healthy = false
       for (let i = 0; i < 10; i++) {
         await new Promise(r => setTimeout(r, 500))
         try {
           const statusResp = await fetch('/api/status')
-          if (statusResp.ok) {
+          if (!statusResp.ok) continue
+
+          const statusData = await statusResp.json() as DeployStatusResponse
+          const routerHealthy = statusData.services?.find(service => service.name === 'Router')?.healthy === true
+          const envoyService = statusData.services?.find(service => service.name === 'Envoy')
+          const envoyHealthy = envoyService ? envoyService.healthy === true : true
+
+          if (statusData.overall === 'healthy' && routerHealthy && envoyHealthy) {
             healthy = true
             break
           }
@@ -620,8 +643,8 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
           status: 'success',
           version: data.version,
           message: healthy
-            ? `Deployed v${data.version} — Router reloaded successfully.`
-            : `Deployed v${data.version} — Router reload status unknown (check logs).`,
+            ? `Deployed v${data.version} — Router and Envoy reloaded successfully.`
+            : `Deployed v${data.version} — Runtime reload status unknown (check logs).`,
         },
         dirty: false,
       })

@@ -105,17 +105,16 @@ source vsr/bin/activate
 pip3 install vllm-sr
 ```
 
-### Step 3: Initialize and Configure
+### Step 3: Download and Configure the AMD Profile
 
-Initialize vllm-sr to create the default configuration, then replace it with the intelligent routing configuration:
+`vllm-sr serve` can bootstrap the local workspace automatically, so you do not need to run `vllm-sr init` first for this playbook. Download the AMD routing profile directly:
 
 ```bash
-# Initialize vllm-sr (creates default config.yaml)
-vllm-sr init
-
-# Download and replace with the AMD-optimized config.yaml
+# Download the AMD-optimized config.yaml
 wget -O config.yaml https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/amd/config.yaml
 ```
+
+If `.vllm-sr/router-defaults.yaml` is not present yet, `vllm-sr serve --platform=amd` will create it automatically on first start.
 
 ### Step 4: Start vLLM Semantic Router
 
