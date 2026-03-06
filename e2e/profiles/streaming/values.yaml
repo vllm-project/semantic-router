@@ -150,13 +150,11 @@ config:
           use_reasoning: false
 
     - name: "general_decision"
-      description: "General knowledge and miscellaneous topics"
+      description: "Catch-all with semantic cache for all unmatched requests"
       priority: 50
       rules:
         operator: "AND"
-        conditions:
-          - type: "domain"
-            name: "other"
+        conditions: []
       modelRefs:
         - model: "base-model"
           use_reasoning: false
