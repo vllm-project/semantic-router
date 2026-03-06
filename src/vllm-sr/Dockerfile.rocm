@@ -372,13 +372,17 @@ COPY --from=rust-builder /build/out/libcandle_semantic_router.so /usr/local/lib/
 COPY --from=onnx-builder /build/out/libonnx_semantic_router.so /usr/local/lib/
 COPY --from=ml-builder /build/out/libml_semantic_router.so /usr/local/lib/
 COPY --from=nlp-builder /build/out/libnlp_binding.so /usr/local/lib/
+COPY onnx-binding/ort-ck-flash-attn/prebuilt/libort_ck_flash_attn.so* /usr/local/lib/
 COPY --from=envoy /usr/local/bin/envoy /usr/local/bin/envoy
 COPY --from=dashboard-builder /app/dashboard-backend /usr/local/bin/dashboard-backend
 COPY --from=frontend-builder /app/frontend/dist /app/frontend
 
-# Set library path and ORT dynamic library path for onnx-binding
+# Set library path and ORT dynamic library path for onnx-binding.
+# When FA models are present, the ONNX binding will auto-register the CK Flash
+# Attention custom op via ORT_CK_FLASH_ATTN_LIB and prefer model_fa_fp16.onnx.
 ENV ORT_DYLIB_PATH=/usr/local/lib/python3.10/dist-packages/onnxruntime/capi/libonnxruntime.so \
-    LD_LIBRARY_PATH=/usr/local/lib:/opt/rocm/lib:/usr/local/lib/python3.10/dist-packages/onnxruntime/capi
+    LD_LIBRARY_PATH=/usr/local/lib:/opt/rocm/lib:/usr/local/lib/python3.10/dist-packages/onnxruntime/capi \
+    ORT_CK_FLASH_ATTN_LIB=/usr/local/lib/libort_ck_flash_attn.so
 
 # Create necessary directories
 RUN mkdir -p /app /app/models /app/config /etc/envoy /var/log/supervisor /var/log
