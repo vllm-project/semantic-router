@@ -353,6 +353,12 @@ type RouterOptions struct {
 
 	// Gateway route cache clearing
 	ClearRouteCache bool `yaml:"clear_route_cache"`
+
+	// StreamedBodyMode enables semi-streaming body processing. When true, the
+	// ext_proc expects Envoy to send request bodies as multiple STREAMED chunks
+	// instead of a single BUFFERED message. Must be set to true when Envoy is
+	// configured with request_body_mode: "STREAMED".
+	StreamedBodyMode bool `yaml:"streamed_body_mode,omitempty"`
 }
 
 // InlineModels represents the configuration for models that are built into the binary

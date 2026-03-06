@@ -37,7 +37,7 @@ static_resources:
               processing_mode:
                 request_header_mode: "SEND"
                 response_header_mode: "SEND"
-                request_body_mode: "BUFFERED"
+                request_body_mode: "STREAMED"
                 response_body_mode: "BUFFERED"
                 request_trailer_mode: "SKIP"
                 response_trailer_mode: "SKIP"
