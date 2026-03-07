@@ -668,6 +668,30 @@ type LatencyAwareAlgorithmConfig struct {
 	Description string `yaml:"description,omitempty"`
 }
 
+// PRISMAlgorithmConfig configures the PRISM 153-key legitimacy verification layer.
+// PRISM (Protocol for Routed Intelligent Specialized Models) ensures that each model
+// explicitly declares its domain boundaries and formally refuses out-of-scope queries.
+// Reference: Zenodo 10.5281/zenodo.18750029
+type PRISMAlgorithmConfig struct {
+	// Enabled controls whether PRISM verification is active (default: false)
+	Enabled bool `yaml:"enabled"`
+
+	// Mode controls where PRISM verification is applied:
+	// "fine_filter" (Option 1): After model selection — validates the selected model
+	// "coarse_filter" (Option 2): Before model selection — pre-qualifies candidates
+	// "hybrid" (Option 3): Both before and after model selection
+	Mode string `yaml:"mode,omitempty"`
+
+	// DomainThreshold is the minimum domain alignment score for legitimacy (0.0–1.0, default: 0.3)
+	DomainThreshold float64 `yaml:"domain_threshold,omitempty"`
+
+	// RefusalPolicy controls behavior on refusal: "reroute" (default) or "reject"
+	RefusalPolicy string `yaml:"refusal_policy,omitempty"`
+
+	// MaxRerouteAttempts limits rerouting attempts when refusal_policy is "reroute" (default: 3)
+	MaxRerouteAttempts int `yaml:"max_reroute_attempts,omitempty"`
+}
+
 type Signals struct {
 	// Keyword-based classification rules
 	KeywordRules []KeywordRule `yaml:"keyword_rules,omitempty"`
@@ -2128,6 +2152,10 @@ type AlgorithmConfig struct {
 	RLDriven     *RLDrivenSelectionConfig     `yaml:"rl_driven,omitempty"`
 	GMTRouter    *GMTRouterSelectionConfig    `yaml:"gmtrouter,omitempty"`
 	LatencyAware *LatencyAwareAlgorithmConfig `yaml:"latency_aware,omitempty"`
+
+	// PRISM configures the 153-key legitimacy verification layer
+	// Reference: PRISM — Protocol for Routed Intelligent Specialized Models (Zenodo: 10.5281/zenodo.18750029)
+	PRISM *PRISMAlgorithmConfig `yaml:"prism,omitempty"`
 
 	// OnError defines behavior when algorithm fails: "skip" or "fail"
 	// - "skip": Skip and use fallback (default)

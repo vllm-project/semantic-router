@@ -73,6 +73,19 @@ const papers = [
     ],
     featured: true,
   },
+  {
+    id: 5,
+    type: 'paper',
+    title: 'PRISM: Protocol for Routed Intelligent Specialized Models',
+    authors: 'Mossaab Saidi',
+    venue: 'Zenodo',
+    year: '2025',
+    abstract: 'PRISM introduces a DNS-inspired semantic routing architecture for specialized SLMs, featuring the 153-key legitimacy verification protocol that forces each model to declare its domain boundaries and formally refuse out-of-scope queries.',
+    links: [
+      { type: 'paper', url: 'https://doi.org/10.5281/zenodo.18750029', label: '📄 Paper' },
+    ],
+    featured: true,
+  },
 ]
 
 const talks = [
