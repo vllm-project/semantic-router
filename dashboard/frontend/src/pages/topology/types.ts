@@ -343,6 +343,8 @@ export interface ConfigData {
   preference_rules?: Array<{
     name: string
     description?: string
+    examples?: string[]
+    threshold?: number
   }>
   language_rules?: Array<{
     name: string
@@ -440,6 +442,8 @@ export interface ConfigData {
     preferences?: Array<{
       name: string
       description?: string
+      examples?: string[]
+      threshold?: number
     }>
     language?: Array<{
       name: string

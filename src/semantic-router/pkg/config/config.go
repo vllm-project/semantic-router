@@ -768,7 +768,7 @@ type Classifier struct {
 	MCPCategoryModel `yaml:"mcp_category_model,omitempty"`
 	// PII detection model
 	PIIModel `yaml:"pii_model"`
-	// Preference model configuration for local preference classification
+	// Preference model configuration for contrastive preference classification
 	PreferenceModel PreferenceModelConfig `yaml:"preference_model,omitempty"`
 }
 
@@ -1615,21 +1615,15 @@ type FeedbackDetectorConfig struct {
 	FeedbackMappingPath string `yaml:"feedback_mapping_path"`
 }
 
-// PreferenceModelConfig represents configuration for local (Candle) preference classification
-// This enables running the preference classifier without an external vLLM endpoint.
+// PreferenceModelConfig represents configuration for contrastive preference classification.
+// When enabled, preference routing uses embedding similarity instead of local Candle models.
 type PreferenceModelConfig struct {
-	// Model ID/path for the preference classification model (Candle model path)
-	ModelID string `yaml:"model_id"`
+	// UseContrastive enables few-shot contrastive preference routing using embeddings
+	UseContrastive bool `yaml:"use_contrastive"`
 
-	// Confidence threshold for accepting the predicted preference (0.0-1.0)
-	// If 0, no thresholding is applied.
-	Threshold float32 `yaml:"threshold,omitempty"`
-
-	// Use CPU for inference (Candle CPU flag)
-	UseCPU bool `yaml:"use_cpu"`
-
-	// Use Qwen3 preference classifier (zero-shot / fine-tuned)
-	UseQwen3 bool `yaml:"use_qwen3"`
+	// EmbeddingModel selects the embedding backbone for contrastive preference
+	// Supported values follow GetEmbeddingWithModelType (e.g. "qwen3", "gemma", "mmbert")
+	EmbeddingModel string `yaml:"embedding_model,omitempty"`
 }
 
 // ExternalModelConfig represents configuration for external LLM-based models
@@ -2905,6 +2899,15 @@ type PreferenceRule struct {
 	// Description provides human-readable explanation of what this route handles
 	// This description is sent to the external LLM for route matching
 	Description string `yaml:"description,omitempty"`
+
+	// Examples are few-shot preference hints used by the contrastive classifier
+	// Each example should resemble a user request that maps to this preference.
+	Examples []string `yaml:"examples,omitempty"`
+
+	// Threshold overrides the classifier-level threshold for this specific preference
+	// When set (>0), similarity scores below this value are rejected even if they are
+	// the highest among all preferences.
+	Threshold float32 `yaml:"threshold,omitempty"`
 }
 
 // LanguageRule defines a rule for multi-language detection signal classification

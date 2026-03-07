@@ -2899,12 +2899,12 @@ func (c *Classifier) IsLanguageEnabled() bool {
 
 // IsPreferenceClassifierEnabled checks if preference classification is enabled and properly configured
 func (c *Classifier) IsPreferenceClassifierEnabled() bool {
-	// Need preference rules configured and either a local Candle model or an external model
+	// Need preference rules configured and either contrastive mode or an external model
 	if len(c.Config.PreferenceRules) == 0 {
 		return false
 	}
 
-	if c.Config.Classifier.PreferenceModel.ModelID != "" {
+	if c.Config.Classifier.PreferenceModel.UseContrastive {
 		return true
 	}
 

@@ -42,6 +42,7 @@ require (
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
+	github.com/vllm-project/semantic-router/nlp-binding v0.0.0-00010101000000-000000000000 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.38.0 // indirect
@@ -62,5 +63,9 @@ require (
 replace github.com/vllm-project/semantic-router/src/semantic-router => ../src/semantic-router
 
 replace github.com/vllm-project/semantic-router/candle-binding => ../candle-binding
+
+replace github.com/vllm-project/semantic-router/ml-binding => ../ml-binding
+
+replace github.com/vllm-project/semantic-router/nlp-binding => ../nlp-binding
 
 exclude google.golang.org/genproto v0.0.0-20220503193339-ba3ae3f07e29

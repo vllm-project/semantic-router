@@ -36,7 +36,8 @@ interface ModelConfig {
   use_modernbert?: boolean
   threshold: number
   use_cpu: boolean
-  use_qwen3?: boolean
+  use_contrastive?: boolean
+  embedding_model?: string
   category_mapping_path?: string
   pii_mapping_path?: string
   jailbreak_mapping_path?: string
@@ -173,7 +174,7 @@ interface ConfigData {
     }>
     fact_check?: Array<{ name: string; description: string }>
     user_feedbacks?: Array<{ name: string; description: string }>
-    preferences?: Array<{ name: string; description: string }>
+    preferences?: Array<{ name: string; description: string; examples?: string[]; threshold?: number }>
     language?: Array<{ name: string }>
     context?: Array<{ name: string; min_tokens: string; max_tokens: string; description?: string }>
     complexity?: Array<{
@@ -330,6 +331,8 @@ interface AddSignalFormState {
   mmlu_categories: string
   min_tokens?: string
   max_tokens?: string
+  preference_examples?: string
+  preference_threshold?: number
   complexity_threshold?: number
   hard_candidates?: string
   easy_candidates?: string
@@ -1553,55 +1556,42 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
   }
 
   // ============================================================================
-  // 4b. PREFERENCE MODEL SECTION (LOCAL CANDLE)
+  // 4b. PREFERENCE MODEL SECTION (CONTRASTIVE)
   // ============================================================================
 
   const renderPreferenceModel = () => {
     const preferenceModel = routerConfig.classifier?.preference_model
+    const isContrastive = Boolean(preferenceModel?.use_contrastive)
 
     return (
       <div className={styles.section}>
         <div className={styles.sectionHeader}>
-          <h3 className={styles.sectionTitle}>Preference Model (Work In Progress)</h3>
+          <h3 className={styles.sectionTitle}>Preference Model</h3>
           <button
+            hidden // edit does not work for config provided by default template
             className={styles.sectionEditButton}
             onClick={() => {
               openEditModal(
                 preferenceModel ? 'Edit Preference Model' : 'Add Preference Model',
                 preferenceModel || {
-                  model_id: '',
-                  threshold: 0,
-                  use_cpu: false,
-                  use_qwen3: true,
+                  use_contrastive: true,
+                  embedding_model: '',
                 },
                 [
                   {
-                    name: 'model_id',
-                    label: 'Model ID or Path',
-                    type: 'text',
-                    required: true,
-                    placeholder: '',
-                    description: 'Local Candle model path or HuggingFace ID for preference routing',
-                  },
-                  {
-                    name: 'threshold',
-                    label: 'Confidence Threshold',
-                    type: 'percentage',
-                    placeholder: '0',
-                    description: 'Minimum confidence to accept a preference (0-100%, optional)',
-                    step: 1,
-                  },
-                  {
-                    name: 'use_cpu',
-                    label: 'Use CPU',
+                    name: 'use_contrastive',
+                    label: 'Use Contrastive Preference',
                     type: 'boolean',
-                    description: 'Force CPU inference instead of GPU/Metal when available',
+                    description: 'Enable embedding-based contrastive routing instead of external LLM routing',
                   },
                   {
-                    name: 'use_qwen3',
-                    label: 'Use Qwen3 Model',
-                    type: 'boolean',
-                    description: 'Enable Qwen3 zero-shot/fine-tuned preference classifier',
+                    name: 'embedding_model',
+                    label: 'Embedding Model',
+                    type: 'select',
+                    options: ['', 'mmbert', 'qwen3', 'gemma'],
+                    placeholder: 'Select embedding model',
+                    description: 'Embedding backbone for contrastive preference routing (requires embedding_models path)',
+                    shouldHide: data => !data.use_contrastive,
                   },
                 ],
                 async (data) => {
@@ -1621,26 +1611,29 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           {preferenceModel ? (
             <div className={styles.modelCard}>
               <div className={styles.modelCardHeader}>
-                <span className={styles.modelCardTitle}>Local Preference Classifier</span>
+                <span className={styles.modelCardTitle}>
+                  {isContrastive ? 'Contrastive Preference Classifier' : 'External Preference Classifier'}
+                </span>
                 <span className={`${styles.statusBadge} ${styles.statusActive}`}>
-                  {preferenceModel.use_cpu ? 'CPU' : 'GPU'}
+                  {isContrastive ? 'Contrastive' : 'External'}
                 </span>
               </div>
               <div className={styles.modelCardBody}>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Model ID</span>
-                  <span className={styles.configValue}>{preferenceModel.model_id}</span>
-                </div>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Threshold</span>
-                  <span className={styles.configValue}>{formatThreshold(preferenceModel.threshold || 0)}</span>
-                </div>
-                <div className={styles.configRow}>
-                  <span className={styles.configLabel}>Qwen3</span>
-                  <span className={`${styles.statusBadge} ${preferenceModel.use_qwen3 ? styles.statusActive : styles.statusInactive}`}>
-                    {preferenceModel.use_qwen3 ? '✓ Enabled' : '✗ Disabled'}
-                  </span>
-                </div>
+                {isContrastive ? (
+                  <>
+                    <div className={styles.configRow}>
+                      <span className={styles.configLabel}>Embedding Model</span>
+                      <span className={styles.configValue}>{preferenceModel.embedding_model || 'Not set'}</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className={styles.configRow}>
+                      <span className={styles.configLabel}>Mode</span>
+                      <span className={styles.configValue}>Uses external LLM preference classifier</span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           ) : (
@@ -2533,10 +2526,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
 
     // Preferences
     effectiveSignals?.preferences?.forEach(pref => {
+      const examplesCount = pref.examples?.length || 0
+      const thresholdText = pref.threshold !== undefined ? ` • threshold ${formatThreshold(pref.threshold)}` : ''
+      const examplesText = examplesCount > 0 ? ` • ${examplesCount} ${examplesCount === 1 ? 'example' : 'examples'}` : ''
       allSignals.push({
         name: pref.name,
         type: 'Preference',
-        summary: pref.description || 'No description',
+        summary: `${pref.description || 'No description'}${examplesText}${thresholdText}`,
         rawData: pref
       })
     })
@@ -2767,6 +2763,27 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
             }
           ]
         })
+      } else if (signal.type === 'Preference') {
+        sections.push({
+          title: 'Preference Configuration',
+          fields: [
+            { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
+            { label: 'Threshold', value: signal.rawData.threshold !== undefined ? formatThreshold(signal.rawData.threshold) : 'Not set' },
+            {
+              label: 'Examples',
+              value: signal.rawData.examples?.length ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontFamily: 'var(--font-mono)', fontSize: '0.9rem' }}>
+                  {signal.rawData.examples.map((ex: string, i: number) => (
+                    <div key={i} style={{ padding: '0.35rem 0.5rem', background: 'rgba(234, 179, 8, 0.1)', borderRadius: 6 }}>
+                      {ex}
+                    </div>
+                  ))}
+                </div>
+              ) : 'No examples provided',
+              fullWidth: true
+            }
+          ]
+        })
       } else if (signal.type === 'Language') {
         sections.push({
           title: 'Language Signal',
@@ -2899,6 +2916,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         candidates: '',
         aggregation_method: 'mean',
         mmlu_categories: '',
+        preference_examples: '',
+        preference_threshold: undefined,
         min_tokens: '0',
         max_tokens: '8K',
         complexity_threshold: 0.1,
@@ -2927,6 +2946,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         candidates: (signal.rawData.candidates || []).join('\n'),
         aggregation_method: signal.rawData.aggregation_method || 'mean',
         mmlu_categories: (signal.rawData.mmlu_categories || []).join('\n'),
+        preference_examples: (signal.rawData.examples || []).join('\n'),
+        preference_threshold: signal.rawData.threshold,
         min_tokens: signal.rawData.min_tokens || '0',
         max_tokens: signal.rawData.max_tokens || '8K',
         complexity_threshold: signal.rawData.threshold ?? 0.1,
@@ -3007,6 +3028,28 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           type: 'textarea',
           placeholder: 'Comma or newline separated categories',
           shouldHide: conditionallyHideFieldExceptType('Domain')
+        }
+      ]
+
+      const preferenceFields: FieldConfig[] = [
+        {
+          name: 'preference_examples',
+          label: 'Examples (preference only)',
+          type: 'textarea',
+          placeholder: 'One example per line to represent this preference',
+          description: 'Few-shot hints sent to the contrastive preference classifier.',
+          shouldHide: conditionallyHideFieldExceptType('Preference')
+        },
+        {
+          name: 'preference_threshold',
+          label: 'Threshold (preference only)',
+          type: 'number',
+          min: 0,
+          max: 1,
+          step: 0.01,
+          placeholder: 'e.g., 0.35',
+          description: 'Override the global preference threshold for this specific rule.',
+          shouldHide: conditionallyHideFieldExceptType('Preference')
         }
       ]
 
@@ -3163,6 +3206,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           type: 'textarea',
           placeholder: 'Optional description for this signal'
         },
+        ...preferenceFields,
         ...keywordFields,
         ...embeddingFields,
         ...domainFields,
@@ -3248,12 +3292,26 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
             break
           }
           case 'Preference': {
+            const examples = listInputToArray(formData.preference_examples || '')
+            const hasThreshold = Number.isFinite(formData.preference_threshold)
+            const threshold = hasThreshold ? Math.max(0, Math.min(1, Number(formData.preference_threshold))) : undefined
+
+            const preferenceRule: { name: string; description: string; examples?: string[]; threshold?: number } = {
+              name,
+              description: formData.description || ''
+            }
+
+            if (examples.length > 0) {
+              preferenceRule.examples = examples
+            }
+
+            if (threshold !== undefined && threshold > 0) {
+              preferenceRule.threshold = threshold
+            }
+
             newConfig.signals.preferences = [
               ...(newConfig.signals.preferences || []),
-              {
-                name,
-                description: formData.description
-              }
+              preferenceRule
             ]
             break
           }
