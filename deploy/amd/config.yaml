@@ -638,7 +638,7 @@ decisions:
         - type: "complexity"
           name: "math_problem:medium"
     modelRefs:
-      - model: "Qwen3.5-122B-A10B-FP8"
+      - model: "Qwen3.5-9B"
         use_reasoning: true
         reasoning_effort: "low"
     plugins:
@@ -1030,7 +1030,7 @@ decisions:
         - type: "context"
           name: "short_context"
     modelRefs:
-      - model: "Qwen3.5-122B-A10B-FP8"
+      - model: "Qwen3.5-9B"
         use_reasoning: false
     plugins:
       - type: "semantic-cache"
