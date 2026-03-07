@@ -1,7 +1,7 @@
 # vLLM Semantic Router Configuration for AMD ROCm
 # Demonstrates intelligent routing with keyword, domain, embedding, language, fact_check, jailbreak, and pii signals
 # Domain-specific PII guardrails: economics domain uses pii_relaxed to block high-sensitivity PII (SSN, credit card, etc.)
-# Simulates model selection with multiple model names pointing to the same vLLM endpoint
+# Routes requests between two real vLLM backends: a large model and a small model
 
 version: v0.1
 
@@ -544,7 +544,7 @@ decisions:
   #           - type: "jailbreak"
   #             name: "jailbreak_contrastive_strict"
   #   modelRefs:
-  #     - model: "openai/gpt-oss-20b"
+  #     - model: "Qwen2.5-7B"
   #       use_reasoning: false
   #   plugins:
   #     - type: "fast_response"
@@ -563,7 +563,7 @@ decisions:
   #       - type: "pii"
   #         name: "pii_relaxed"
   #   modelRefs:
-  #     - model: "openai/gpt-oss-20b"
+  #     - model: "Qwen2.5-7B"
   #       use_reasoning: false
   #   plugins:
   #     - type: "fast_response"
@@ -582,7 +582,7 @@ decisions:
         - type: "fact_check"
           name: "no_fact_check_needed"
     modelRefs:
-      - model: "Qwen/Qwen3-235B"
+      - model: "MiniMax-M2.1"
         use_reasoning: true
         reasoning_effort: "high"
     plugins:
@@ -609,7 +609,7 @@ decisions:
   #       - type: "complexity"
   #         name: "math_problem:hard"
   #   modelRefs:
-  #     - model: "DeepSeek-V3.2"
+  #     - model: "MiniMax-M2.1"
   #       use_reasoning: true
   #       reasoning_effort: "high"
   #   plugins:
@@ -638,7 +638,7 @@ decisions:
   #       - type: "complexity"
   #         name: "math_problem:medium"
   #   modelRefs:
-  #     - model: "Qwen/Qwen3-235B"
+  #     - model: "MiniMax-M2.1"
   #       use_reasoning: true
   #       reasoning_effort: "low"
   #   plugins:
@@ -663,7 +663,7 @@ decisions:
         - type: "domain"
           name: "chemistry"
     modelRefs:
-      - model: "Qwen/Qwen3-235B"
+      - model: "MiniMax-M2.1"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
@@ -688,7 +688,7 @@ decisions:
         - type: "domain"
           name: "biology"
     modelRefs:
-      - model: "Qwen/Qwen3-235B"
+      - model: "MiniMax-M2.1"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
@@ -713,7 +713,7 @@ decisions:
         - type: "domain"
           name: "health"
     modelRefs:
-      - model: "GLM-4.7"
+      - model: "MiniMax-M2.1"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
@@ -738,7 +738,7 @@ decisions:
         - type: "domain"
           name: "physics"
     modelRefs:
-      - model: "GLM-4.7"
+      - model: "MiniMax-M2.1"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
@@ -763,7 +763,7 @@ decisions:
         - type: "domain"
           name: "engineering"
     modelRefs:
-      - model: "DeepSeek-V3.2"
+      - model: "MiniMax-M2.1"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
@@ -788,7 +788,7 @@ decisions:
         - type: "domain"
           name: "law"
     modelRefs:
-      - model: "Qwen/Qwen3-235B"
+      - model: "MiniMax-M2.1"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
@@ -815,7 +815,7 @@ decisions:
         - type: "domain"
           name: "economics"
     modelRefs:
-      - model: "Qwen/Qwen3-235B"
+      - model: "MiniMax-M2.1"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
@@ -844,7 +844,7 @@ decisions:
   #       - type: "complexity"
   #         name: "computer_science:hard"
   #   modelRefs:
-  #     - model: "DeepSeek-V3.2"
+  #     - model: "MiniMax-M2.1"
   #       use_reasoning: true
   #       reasoning_effort: "high"
   #   plugins:
@@ -869,7 +869,7 @@ decisions:
         - type: "domain"
           name: "psychology"
     modelRefs:
-      - model: "Qwen/Qwen3-235B"
+      - model: "MiniMax-M2.1"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
@@ -894,7 +894,7 @@ decisions:
         - type: "domain"
           name: "philosophy"
     modelRefs:
-      - model: "Qwen/Qwen3-235B"
+      - model: "MiniMax-M2.1"
         use_reasoning: true
         reasoning_effort: "high"
     plugins:
@@ -919,7 +919,7 @@ decisions:
         - type: "domain"
           name: "history"
     modelRefs:
-      - model: "GLM-4.7"
+      - model: "MiniMax-M2.1"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
@@ -946,7 +946,7 @@ decisions:
   #       - type: "keyword"
   #         name: "thinking_zh"
   #   modelRefs:
-  #     - model: "Kimi-K2-Thinking"
+  #     - model: "MiniMax-M2.1"
   #       use_reasoning: true
   #       reasoning_effort: "high"
   #   plugins:
@@ -972,7 +972,7 @@ decisions:
   #       - type: "complexity"
   #         name: "computer_science:medium"
   #   modelRefs:
-  #     - model: "openai/gpt-oss-120b"
+  #     - model: "MiniMax-M2.1"
   #       use_reasoning: true
   #       reasoning_effort: "low"
   #   plugins:
@@ -1001,7 +1001,7 @@ decisions:
   #       - type: "context"
   #         name: "short_context"
   #   modelRefs:
-  #     - model: "openai/gpt-oss-20b"
+  #     - model: "Qwen2.5-7B"
   #       use_reasoning: false
   #   plugins:
   #     - type: "semantic-cache"
@@ -1030,7 +1030,7 @@ decisions:
   #       - type: "context"
   #         name: "short_context"
   #   modelRefs:
-  #     - model: "GLM-4.7"
+  #     - model: "MiniMax-M2.1"
   #       use_reasoning: false
   #   plugins:
   #     - type: "semantic-cache"
@@ -1059,7 +1059,7 @@ decisions:
   #       - type: "context"
   #         name: "long_context"
   #   modelRefs:
-  #     - model: "Kimi-K2-Thinking"
+  #     - model: "MiniMax-M2.1"
   #       use_reasoning: true
   #       reasoning_effort: "high"
   #   plugins:
@@ -1090,9 +1090,9 @@ decisions:
         - type: "context"
           name: "short_context"
     modelRefs:
-      - model: "openai/gpt-oss-20b"
+      - model: "Qwen2.5-7B"
         use_reasoning: false
-      - model: "openai/gpt-oss-120b"
+      - model: "MiniMax-M2.1"
         use_reasoning: false
     plugins:
       - type: "semantic-cache"
@@ -1109,83 +1109,29 @@ decisions:
 
 # Providers - Backend model configuration
 providers:
-  # Model configuration - All models point to the same vLLM endpoint
-  # This simulates model selection with different model names
+  # Route directly to two real vLLM containers on the shared Docker network.
+  # reasoning_family is intentionally omitted so the router does not inject
+  # fake alias-specific reasoning params into the real backends.
   models:
-    - name: "openai/gpt-oss-120b"
-      reasoning_family: "gpt-oss"
-      param_size: "120b"
+    - name: "MiniMax-M2.1"
+      param_size: "139b"
       endpoints:
-        - name: "vllm_endpoint"
+        - name: "vllm_139b"
           weight: 1
-          endpoint: "vllm-gpt-oss-120b:8000"
+          endpoint: "vllm-minimax-m2:8000"
           protocol: "http"
 
-    - name: "openai/gpt-oss-20b"
-      reasoning_family: "gpt-oss"
-      param_size: "20b"
+    - name: "Qwen2.5-7B"
+      param_size: "7b"
       endpoints:
-        - name: "vllm_endpoint"
+        - name: "vllm_7b"
           weight: 1
-          endpoint: "vllm-gpt-oss-120b:8000"
-          protocol: "http"
-
-    - name: "Qwen/Qwen3-235B"
-      reasoning_family: "qwen3"
-      param_size: "235b"
-      endpoints:
-        - name: "vllm_endpoint"
-          weight: 1
-          endpoint: "vllm-gpt-oss-120b:8000"
-          protocol: "http"
-
-    - name: "Kimi-K2-Thinking"
-      reasoning_family: "kimi"
-      param_size: "200b"
-      endpoints:
-        - name: "vllm_endpoint"
-          weight: 1
-          endpoint: "vllm-gpt-oss-120b:8000"
-          protocol: "http"
-
-    - name: "GLM-4.7"
-      reasoning_family: "glm"
-      param_size: "47b"
-      endpoints:
-        - name: "vllm_endpoint"
-          weight: 1
-          endpoint: "vllm-gpt-oss-120b:8000"
-          protocol: "http"
-
-    - name: "DeepSeek-V3.2"
-      reasoning_family: "deepseek"
-      param_size: "320b"
-      endpoints:
-        - name: "vllm_endpoint"
-          weight: 1
-          endpoint: "vllm-gpt-oss-120b:8000"
+          endpoint: "vllm-qwen-7b:8000"
           protocol: "http"
 
   # Default model for unmatched queries
-  default_model: "openai/gpt-oss-120b"
+  default_model: "MiniMax-M2.1"
 
-  # Reasoning families configuration
-  reasoning_families:
-    gpt-oss:
-      type: "reasoning_effort"
-      parameter: "reasoning_effort"
-    qwen3:
-      type: "reasoning_effort"
-      parameter: "reasoning_effort"
-    kimi:
-      type: "reasoning_effort"
-      parameter: "reasoning_effort"
-    glm:
-      type: "reasoning_effort"
-      parameter: "reasoning_effort"
-    deepseek:
-      type: "reasoning_effort"
-      parameter: "reasoning_effort"
-
-  # Default reasoning effort level
+  # Keep the routing metadata so decision intent stays visible even though
+  # backend-specific reasoning parameters are not injected for these real models.
   default_reasoning_effort: "high"
