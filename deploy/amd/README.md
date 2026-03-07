@@ -64,7 +64,7 @@ sudo docker run -d \
   --group-add=video \
   --ipc=host \
   --security-opt seccomp=unconfined \
-  vllm/vllm-openai-rocm:v0.15.0 \
+  vllm/vllm-openai-rocm:v0.17.0 \
     --model Qwen/Qwen3.5-122B-A10B-FP8 \
     --served-model-name Qwen3.5-122B-A10B-FP8 \
     --port 8000 \
@@ -72,8 +72,8 @@ sudo docker run -d \
     --tool-call-parser qwen3_coder \
     --trust-remote-code \
     --reasoning-parser qwen3 \
-    --max-model-len 262144 \
-    --gpu-memory-utilization 0.82
+    --max-model-len 65536 \
+    --gpu-memory-utilization 0.80
 
 sudo docker run -d \
   --name vllm-qwen-9b \
@@ -86,16 +86,18 @@ sudo docker run -d \
   --group-add=video \
   --ipc=host \
   --security-opt seccomp=unconfined \
-  vllm/vllm-openai-rocm:v0.15.0 \
+  vllm/vllm-openai-rocm:v0.17.0 \
     --model Qwen/Qwen3.5-9B \
     --served-model-name Qwen3.5-9B \
     --port 8000 \
     --enable-auto-tool-choice \
     --tool-call-parser qwen3_coder \
     --trust-remote-code \
-    --max-model-len 262144 \
+    --max-model-len 32768 \
     --gpu-memory-utilization 0.16
 ```
+
+On a single MI300X, if the 122B FP8 backend fails the startup memory check, lower `--gpu-memory-utilization` to `0.80` or below first. If it still does not fit, reduce `--max-model-len` from `262144` to a smaller value such as `65536` or `32768`.
 
 The AMD `config.yaml` profile below assumes these containers are reachable by Docker DNS on `vllm-sr-network` as `vllm-qwen-122b-fp8:8000` and `vllm-qwen-9b:8000`.
 
