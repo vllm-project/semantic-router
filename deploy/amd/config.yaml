@@ -1,7 +1,7 @@
 # vLLM Semantic Router Configuration for AMD ROCm
 # Demonstrates intelligent routing with keyword, domain, embedding, language, fact_check, jailbreak, and pii signals
 # Domain-specific PII guardrails: economics domain uses pii_relaxed to block high-sensitivity PII (SSN, credit card, etc.)
-# Simulates model selection with multiple model names pointing to the same vLLM endpoint
+# Routes requests between two real vLLM backends: a large model and a small model
 
 version: v0.1
 
@@ -528,199 +528,47 @@ signals:
 
 # Decisions - Intelligent routing rules
 decisions:
-  # Priority 203: ReMoM Algorithm with high effort
-  - name: "remom_high_effort"
-    description: "ReMoM Algorithm with high effort"
-    priority: 203
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "keyword"
-          name: "remom_high"
-    modelRefs:
-      - model: "DeepSeek-V3.2"
-        use_reasoning: true
-        reasoning_effort: "high"
-        weight: 0.5
-      - model: "openai/gpt-oss-20b"
-        use_reasoning: true
-        reasoning_effort: "high"
-        weight: 0.3
-      - model: "Qwen/Qwen3-235B"
-        use_reasoning: true
-        reasoning_effort: "high"
-        weight: 0.2
-    plugins:
-      - type: "semantic-cache"
-        configuration:
-          enabled: false
-      - type: "router_replay"
-        configuration:
-          enabled: true
-          max_records: 10000           # Maximum records in memory (default: 200)
-          capture_request_body: true   # Capture request payloads (default: false)
-          capture_response_body: true  # Capture response payloads (default: false)
-          max_body_bytes: 4096         # Max bytes per body, truncates if exceeded (default: 4096)
-    algorithm:
-      type: "remom"
-      remom:
-        breadth_schedule: [32, 4]  # Low intensity for demonstration
-        # Model distribution strategy:
-        # - "weighted": Distribute calls based on model weights (default)
-        # - "equal": Distribute evenly across all models
-        # - "first_only": Use only the first model (PaCoRe-compatible)
-        model_distribution: "weighted"
-        compaction_strategy: "full"
-        # Behavior on model call failure: "skip" or "fail"
-        on_error: "skip"
+  # # Priority 1004: Strict jailbreak policy for health domain (classifier + contrastive)
+  # - name: "guardrails_health_strict"
+  #   description: "Block strict jailbreak detections in health domain (classifier or contrastive)"
+  #   priority: 1004
+  #   rules:
+  #     operator: "AND"
+  #     conditions:
+  #       - type: "domain"
+  #         name: "health"
+  #       - operator: "OR"
+  #         conditions:
+  #           - type: "jailbreak"
+  #             name: "jailbreak_strict"
+  #           - type: "jailbreak"
+  #             name: "jailbreak_contrastive_strict"
+  #   modelRefs:
+  #     - model: "Qwen3.5-9B"
+  #       use_reasoning: false
+  #   plugins:
+  #     - type: "fast_response"
+  #       configuration:
+  #         message: "I am vLLM-SR, Your request has been declined. Attempts to bypass safety guidelines in sensitive domains are not permitted."
 
-  # Priority 202: ReMoM Algorithm with medium effort
-  - name: "remom_medium_effort"
-    description: "ReMoM Algorithm with medium effort"
-    priority: 202
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "keyword"
-          name: "remom_medium"
-    modelRefs:
-      - model: "Kimi-K2-Thinking"
-        use_reasoning: true
-        reasoning_effort: "medium"
-      - model: "GLM-4.7"
-        use_reasoning: true
-        reasoning_effort: "medium"
-      - model: "DeepSeek-V3.2"
-        use_reasoning: true
-        reasoning_effort: "medium"
-      - model: "openai/gpt-oss-120b"
-        use_reasoning: true
-        reasoning_effort: "medium"
-    plugins:
-      - type: "semantic-cache"
-        configuration:
-          enabled: false
-      - type: "router_replay"
-        configuration:
-          enabled: true
-          max_records: 10000           # Maximum records in memory (default: 200)
-          capture_request_body: true   # Capture request payloads (default: false)
-          capture_response_body: true  # Capture response payloads (default: false)
-          max_body_bytes: 4096         # Max bytes per body, truncates if exceeded (default: 4096)
-    algorithm:
-      type: "remom"
-      remom:
-        breadth_schedule: [16, 4]  # Low intensity for demonstration
-        # Model distribution strategy:
-        # - "weighted": Distribute calls based on model weights (default)
-        # - "equal": Distribute evenly across all models
-        # - "first_only": Use only the first model (PaCoRe-compatible)
-        model_distribution: "equal"
-        compaction_strategy: "full"
-        # Behavior on model call failure: "skip" or "fail"
-        on_error: "skip"
-
-  # Priority 201: ReMoM Algorithm with low effort
-  - name: "remom_low_effort"
-    description: "ReMoM Algorithm with low effort"
-    priority: 201
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "keyword"
-          name: "remom_low"
-    modelRefs:
-      - model: "openai/gpt-oss-120b"
-        use_reasoning: true
-        reasoning_effort: "low"
-    plugins:
-      - type: "semantic-cache"
-        configuration:
-          enabled: false
-      - type: "router_replay"
-        configuration:
-          enabled: true
-          max_records: 10000           # Maximum records in memory (default: 200)
-          capture_request_body: true   # Capture request payloads (default: false)
-          capture_response_body: true  # Capture response payloads (default: false)
-          max_body_bytes: 4096         # Max bytes per body, truncates if exceeded (default: 4096)
-    algorithm:
-      type: "remom"
-      remom:
-        breadth_schedule: [8]  # Low intensity for demonstration
-        # Model distribution strategy:
-        # - "weighted": Distribute calls based on model weights (default)
-        # - "equal": Distribute evenly across all models
-        # - "first_only": Use only the first model (PaCoRe-compatible)
-        model_distribution: "first_only"
-        compaction_strategy: "full"
-        # Behavior on model call failure: "skip" or "fail"
-        on_error: "skip"
-
-  # Priority 1004: Strict jailbreak policy for health domain (classifier + contrastive)
-  - name: "guardrails_health_strict"
-    description: "Block strict jailbreak detections in health domain (classifier or contrastive)"
-    priority: 1004
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "domain"
-          name: "health"
-        - operator: "OR"
-          conditions:
-            - type: "jailbreak"
-              name: "jailbreak_strict"
-            - type: "jailbreak"
-              name: "jailbreak_contrastive_strict"
-    modelRefs:
-      - model: "openai/gpt-oss-20b"
-        use_reasoning: false
-    plugins:
-      - type: "fast_response"
-        configuration:
-          message: "I am vLLM-SR, Your request has been declined. Attempts to bypass safety guidelines in sensitive domains are not permitted."
-
-  # Priority 1000: General jailbreak detection (keyword + classifier + contrastive)
-  - name: "general_guardrails"
-    description: "Block jailbreak attempts with signal-driven security checks"
-    priority: 1000
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "keyword"
-          name: "jailbreak_attempt"
-        - type: "jailbreak"
-          name: "jailbreak_standard"
-        - type: "jailbreak"
-          name: "jailbreak_strict"
-        - type: "jailbreak"
-          name: "jailbreak_contrastive"
-    modelRefs:
-      - model: "openai/gpt-oss-20b"
-        use_reasoning: false
-    plugins:
-      - type: "fast_response"
-        configuration:
-          message: "I am vLLM-SR, I'm sorry, but I cannot process this request as it appears to violate our usage policies."
-
-  # Priority 999: PII detection guardrail
-  - name: "guardrails_pii_economics"
-    description: "Block requests containing disallowed PII in economics domain"
-    priority: 999
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "domain"
-          name: "business"
-        - type: "pii"
-          name: "pii_relaxed"
-    modelRefs:
-      - model: "openai/gpt-oss-20b"
-        use_reasoning: false
-    plugins:
-      - type: "fast_response"
-        configuration:
-          message: "I'm sorry, but I cannot process this request because it contains personally identifiable information that our policy does not allow."
+  # # Priority 999: PII detection guardrail
+  # - name: "guardrails_pii_economics"
+  #   description: "Block requests containing disallowed PII in economics domain"
+  #   priority: 999
+  #   rules:
+  #     operator: "AND"
+  #     conditions:
+  #       - type: "domain"
+  #         name: "business"
+  #       - type: "pii"
+  #         name: "pii_relaxed"
+  #   modelRefs:
+  #     - model: "Qwen3.5-9B"
+  #       use_reasoning: false
+  #   plugins:
+  #     - type: "fast_response"
+  #       configuration:
+  #         message: "I'm sorry, but I cannot process this request because it contains personally identifiable information that our policy does not allow."
 
   # Priority 160: Creative/Opinion queries - NO fact check needed
   - name: "creative_ideas"
@@ -734,13 +582,10 @@ decisions:
         - type: "fact_check"
           name: "no_fact_check_needed"
     modelRefs:
-      - model: "Qwen/Qwen3-235B"
+      - model: "Qwen3.5-122B-A10B-FP8"
         use_reasoning: true
         reasoning_effort: "high"
     plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "You are Qwen3-235B, a creative and insightful assistant. Feel free to explore ideas, provide opinions, and think outside the box."
       - type: "semantic-cache"
         configuration:
           enabled: false
@@ -764,13 +609,10 @@ decisions:
         - type: "complexity"
           name: "math_problem:hard"
     modelRefs:
-      - model: "DeepSeek-V3.2"
+      - model: "Qwen3.5-122B-A10B-FP8"
         use_reasoning: true
         reasoning_effort: "high"
     plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "You are Qwen3-235B, a mathematics expert. Provide rigorous proofs with step-by-step with hard reasoning."
       - type: "semantic-cache"
         configuration:
           enabled: false
@@ -796,13 +638,10 @@ decisions:
         - type: "complexity"
           name: "math_problem:medium"
     modelRefs:
-      - model: "Qwen/Qwen3-235B"
+      - model: "Qwen3.5-9B"
         use_reasoning: true
         reasoning_effort: "low"
     plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "You are Qwen3-235B, a mathematics expert. Provide simple answers with easy reasoning."
       - type: "semantic-cache"
         configuration:
           enabled: false
@@ -824,13 +663,10 @@ decisions:
         - type: "domain"
           name: "chemistry"
     modelRefs:
-      - model: "Qwen/Qwen3-235B"
+      - model: "Qwen3.5-122B-A10B-FP8"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "You are Qwen3-235B, a chemistry expert. Explain chemical reactions, molecular structures, and laboratory techniques with scientific rigor."
       - type: "semantic-cache"
         configuration:
           enabled: false
@@ -852,13 +688,10 @@ decisions:
         - type: "domain"
           name: "biology"
     modelRefs:
-      - model: "Qwen/Qwen3-235B"
+      - model: "Qwen3.5-122B-A10B-FP8"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "You are Qwen3-235B, a biology expert. Explain molecular biology, genetics, ecology, and life sciences with detailed scientific explanations."
       - type: "semantic-cache"
         configuration:
           enabled: false
@@ -880,13 +713,10 @@ decisions:
         - type: "domain"
           name: "health"
     modelRefs:
-      - model: "GLM-4.7"
+      - model: "Qwen3.5-122B-A10B-FP8"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "You are GLM-4.7, a medical information assistant. Provide accurate health information based on scientific evidence. Always remind users to consult healthcare professionals for medical advice."
       - type: "semantic-cache"
         configuration:
           enabled: false
@@ -908,13 +738,10 @@ decisions:
         - type: "domain"
           name: "physics"
     modelRefs:
-      - model: "GLM-4.7"
+      - model: "Qwen3.5-122B-A10B-FP8"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "You are GLM-4.7, a physics expert. Explain concepts with mathematical derivations and verified facts."
       - type: "semantic-cache"
         configuration:
           enabled: false
@@ -936,13 +763,10 @@ decisions:
         - type: "domain"
           name: "engineering"
     modelRefs:
-      - model: "DeepSeek-V3.2"
+      - model: "Qwen3.5-122B-A10B-FP8"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "You are DeepSeek-V3.2, an engineering expert. Provide technical solutions with practical considerations, calculations, and design principles."
       - type: "semantic-cache"
         configuration:
           enabled: false
@@ -964,13 +788,10 @@ decisions:
         - type: "domain"
           name: "law"
     modelRefs:
-      - model: "Qwen/Qwen3-235B"
+      - model: "Qwen3.5-122B-A10B-FP8"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "You are Qwen3-235B, a legal information assistant. Provide information about legal principles and concepts. Always remind users to consult qualified legal professionals for legal advice."
       - type: "semantic-cache"
         configuration:
           enabled: false
@@ -994,13 +815,10 @@ decisions:
         - type: "domain"
           name: "economics"
     modelRefs:
-      - model: "Qwen/Qwen3-235B"
+      - model: "Qwen3.5-122B-A10B-FP8"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "You are Qwen3-235B, a business and economics expert. Provide insights on business strategy, management, economics, and financial topics with practical analysis."
       - type: "semantic-cache"
         configuration:
           enabled: false
@@ -1026,13 +844,10 @@ decisions:
         - type: "complexity"
           name: "computer_science:hard"
     modelRefs:
-      - model: "DeepSeek-V3.2"
+      - model: "Qwen3.5-122B-A10B-FP8"
         use_reasoning: true
         reasoning_effort: "high"
     plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "You are DeepSeek-V3.2, an expert software engineer. Provide detailed, well-structured code solutions with explanations."
       - type: "semantic-cache"
         configuration:
           enabled: false
@@ -1054,13 +869,10 @@ decisions:
         - type: "domain"
           name: "psychology"
     modelRefs:
-      - model: "Qwen/Qwen3-235B"
+      - model: "Qwen3.5-122B-A10B-FP8"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "You are Qwen3-235B, a psychology expert. Explain cognitive processes, behavioral patterns, and mental health topics with empathy and scientific accuracy."
       - type: "semantic-cache"
         configuration:
           enabled: false
@@ -1082,13 +894,10 @@ decisions:
         - type: "domain"
           name: "philosophy"
     modelRefs:
-      - model: "Qwen/Qwen3-235B"
+      - model: "Qwen3.5-122B-A10B-FP8"
         use_reasoning: true
         reasoning_effort: "high"
     plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "You are Qwen3-235B, a philosophy expert. Explore philosophical concepts, ethical dilemmas, and logical reasoning with depth and clarity."
       - type: "semantic-cache"
         configuration:
           enabled: false
@@ -1110,13 +919,10 @@ decisions:
         - type: "domain"
           name: "history"
     modelRefs:
-      - model: "GLM-4.7"
+      - model: "Qwen3.5-122B-A10B-FP8"
         use_reasoning: true
         reasoning_effort: "medium"
     plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "You are GLM-4.7, a history expert. Provide accurate historical information about events, time periods, cultures, and civilizations with context and analysis."
       - type: "semantic-cache"
         configuration:
           enabled: false
@@ -1140,13 +946,10 @@ decisions:
         - type: "keyword"
           name: "thinking_zh"
     modelRefs:
-      - model: "Kimi-K2-Thinking"
+      - model: "Qwen3.5-122B-A10B-FP8"
         use_reasoning: true
         reasoning_effort: "high"
     plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "你是 Kimi-K2-Thinking，一个专业的AI助手，擅长深度分析和复杂推理。请提供详细、深入的回答。"
       - type: "router_replay"
         configuration:
           enabled: true
@@ -1169,13 +972,10 @@ decisions:
         - type: "complexity"
           name: "computer_science:medium"
     modelRefs:
-      - model: "openai/gpt-oss-120b"
+      - model: "Qwen3.5-122B-A10B-FP8"
         use_reasoning: true
         reasoning_effort: "low"
     plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "You are a fast coding assistant. Provide code solutions quickly."
       - type: "semantic-cache"
         configuration:
           enabled: false
@@ -1201,15 +1001,12 @@ decisions:
         - type: "context"
           name: "short_context"
     modelRefs:
-      - model: "openai/gpt-oss-20b"
+      - model: "Qwen3.5-9B"
         use_reasoning: false
     plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "你是由 openai 开发的模型 gpt-oss-20b, 一个高效的AI助手。请提供简洁、准确的回答。"
       - type: "semantic-cache"
         configuration:
-          enabled: true
+          enabled: false
           similarity_threshold: 0.85
       - type: "router_replay"
         configuration:
@@ -1233,15 +1030,12 @@ decisions:
         - type: "context"
           name: "short_context"
     modelRefs:
-      - model: "GLM-4.7"
+      - model: "Qwen3.5-9B"
         use_reasoning: false
     plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "You are GLM-4.7, an efficient AI assistant. Provide concise, accurate answers."
       - type: "semantic-cache"
         configuration:
-          enabled: true
+          enabled: false
           similarity_threshold: 0.85
       - type: "router_replay"
         configuration:
@@ -1265,13 +1059,10 @@ decisions:
         - type: "context"
           name: "long_context"
     modelRefs:
-      - model: "Kimi-K2-Thinking"
+      - model: "Qwen3.5-122B-A10B-FP8"
         use_reasoning: true
         reasoning_effort: "high"
     plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "You are Kimi-K2-Thinking, an expert analyst. Provide comprehensive, well-reasoned responses with deep insights."
       - type: "semantic-cache"
         configuration:
           enabled: false
@@ -1299,18 +1090,15 @@ decisions:
         - type: "context"
           name: "short_context"
     modelRefs:
-      - model: "openai/gpt-oss-20b"
+      - model: "Qwen3.5-9B"
         use_reasoning: false
-      - model: "openai/gpt-oss-120b"
+      - model: "Qwen3.5-122B-A10B-FP8"
         use_reasoning: false
     plugins:
-      - type: "system_prompt"
-        configuration:
-          system_prompt: "You are openai/gpt-oss-20b, a quick thinking and helpful assistant for general queries in casual chat."
       - type: "semantic-cache"
         configuration:
-          enabled: true
-          similarity_threshold: 0.85
+          enabled: false
+          similarity_threshold: 0.99
       - type: "router_replay"
         configuration:
           enabled: true
@@ -1321,83 +1109,29 @@ decisions:
 
 # Providers - Backend model configuration
 providers:
-  # Model configuration - All models point to the same vLLM endpoint
-  # This simulates model selection with different model names
+  # Route directly to two real vLLM containers on the shared Docker network.
+  # reasoning_family is intentionally omitted so the router does not inject
+  # backend-specific reasoning params into these real backends.
   models:
-    - name: "openai/gpt-oss-120b"
-      reasoning_family: "gpt-oss"
-      param_size: "120b"
+    - name: "Qwen3.5-122B-A10B-FP8"
+      param_size: "122b"
       endpoints:
-        - name: "vllm_endpoint"
+        - name: "vllm_122b_fp8"
           weight: 1
-          endpoint: "vllm-gpt-oss-120b:8000"
+          endpoint: "vllm-qwen-122b-fp8:8000"
           protocol: "http"
 
-    - name: "openai/gpt-oss-20b"
-      reasoning_family: "gpt-oss"
-      param_size: "20b"
+    - name: "Qwen3.5-9B"
+      param_size: "9b"
       endpoints:
-        - name: "vllm_endpoint"
+        - name: "vllm_9b"
           weight: 1
-          endpoint: "vllm-gpt-oss-120b:8000"
-          protocol: "http"
-
-    - name: "Qwen/Qwen3-235B"
-      reasoning_family: "qwen3"
-      param_size: "235b"
-      endpoints:
-        - name: "vllm_endpoint"
-          weight: 1
-          endpoint: "vllm-gpt-oss-120b:8000"
-          protocol: "http"
-
-    - name: "Kimi-K2-Thinking"
-      reasoning_family: "kimi"
-      param_size: "200b"
-      endpoints:
-        - name: "vllm_endpoint"
-          weight: 1
-          endpoint: "vllm-gpt-oss-120b:8000"
-          protocol: "http"
-
-    - name: "GLM-4.7"
-      reasoning_family: "glm"
-      param_size: "47b"
-      endpoints:
-        - name: "vllm_endpoint"
-          weight: 1
-          endpoint: "vllm-gpt-oss-120b:8000"
-          protocol: "http"
-
-    - name: "DeepSeek-V3.2"
-      reasoning_family: "deepseek"
-      param_size: "320b"
-      endpoints:
-        - name: "vllm_endpoint"
-          weight: 1
-          endpoint: "vllm-gpt-oss-120b:8000"
+          endpoint: "vllm-qwen-9b:8000"
           protocol: "http"
 
   # Default model for unmatched queries
-  default_model: "openai/gpt-oss-120b"
+  default_model: "Qwen3.5-122B-A10B-FP8"
 
-  # Reasoning families configuration
-  reasoning_families:
-    gpt-oss:
-      type: "reasoning_effort"
-      parameter: "reasoning_effort"
-    qwen3:
-      type: "reasoning_effort"
-      parameter: "reasoning_effort"
-    kimi:
-      type: "reasoning_effort"
-      parameter: "reasoning_effort"
-    glm:
-      type: "reasoning_effort"
-      parameter: "reasoning_effort"
-    deepseek:
-      type: "reasoning_effort"
-      parameter: "reasoning_effort"
-
-  # Default reasoning effort level
-  default_reasoning_effort: "low"
+  # Keep the routing metadata so decision intent stays visible even though
+  # backend-specific reasoning parameters are not injected for these real models.
+  default_reasoning_effort: "high"
