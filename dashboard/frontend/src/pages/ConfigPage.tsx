@@ -6,7 +6,14 @@ import ViewModal, { ViewSection } from '../components/ViewModal'
 import { DataTable, Column } from '../components/DataTable'
 import TableHeader from '../components/TableHeader'
 import EndpointsEditor, { Endpoint } from '../components/EndpointsEditor'
+import RoutingPresetModal from '../components/RoutingPresetModal'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import {
+  getRoutingPreset,
+  listDecisionNames,
+  listSignalNames,
+  type RoutingPresetId,
+} from '../presets/routingPresets'
 import {
   ConfigFormat,
   detectConfigFormat,
@@ -346,9 +353,74 @@ const formatThreshold = (value: number): string => {
   return `${Math.round(value * 100)}%`
 }
 
+const TABLE_COLUMN_WIDTH = {
+  compact: '140px',
+  medium: '160px',
+} as const
+
+const SIGNAL_SECTION_KEYS = [
+  'keywords',
+  'embeddings',
+  'domains',
+  'fact_check',
+  'user_feedbacks',
+  'preferences',
+  'language',
+  'context',
+  'complexity',
+  'jailbreak',
+  'pii',
+] as const
+
+type ConfigSignalSections = NonNullable<ConfigData['signals']>
+
+const collectConfiguredSignalNames = (signals?: ConfigData['signals']) => {
+  if (!signals) {
+    return new Set<string>()
+  }
+
+  return new Set(
+    SIGNAL_SECTION_KEYS.flatMap((key) => ((signals as ConfigSignalSections)[key] || []).map((entry) => entry.name))
+  )
+}
+
+const clonePresetSignals = (signals?: Record<string, unknown>) => {
+  if (!signals) {
+    return undefined
+  }
+
+  return Object.fromEntries(
+    Object.entries(signals).map(([key, value]) => [key, Array.isArray(value) ? value.map((item) => ({ ...item })) : value]),
+  )
+}
+
+const clonePresetDecisions = (decisions: Array<{
+  name: string
+  description: string
+  priority: number
+  rules: {
+    operator: 'AND' | 'OR' | 'NOT'
+    conditions: Array<{ type: string; name: string }>
+  }
+  modelRefs: Array<{ model: string; use_reasoning: boolean }>
+  plugins?: Array<{ type: string; configuration: Record<string, unknown> }>
+}>) =>
+  decisions.map((decision) => ({
+    ...decision,
+    rules: {
+      ...decision.rules,
+      conditions: decision.rules.conditions.map((condition) => ({ ...condition })),
+    },
+    modelRefs: decision.modelRefs.map((modelRef) => ({ ...modelRef })),
+    plugins: decision.plugins?.map((plugin) => ({
+      ...plugin,
+      configuration: { ...plugin.configuration },
+    })),
+  }))
+
 // Removed maskAddress - no longer needed after removing endpoint visibility toggle
 
-const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) => {
+const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => {
   const { isReadonly } = useReadonly()
   const [config, setConfig] = useState<ConfigData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -385,6 +457,10 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   const [decisionsSearch, setDecisionsSearch] = useState('')
   const [signalsSearch, setSignalsSearch] = useState('')
   const [modelsSearch, setModelsSearch] = useState('')
+  const [presetModalOpen, setPresetModalOpen] = useState(false)
+  const [selectedRoutingPresetId, setSelectedRoutingPresetId] = useState<RoutingPresetId | null>('starter-routing')
+  const [presetApplyState, setPresetApplyState] = useState<'idle' | 'applying'>('idle')
+  const [presetApplyError, setPresetApplyError] = useState<string | null>(null)
 
   // Expandable rows state for models
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set())
@@ -578,6 +654,91 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
     cfg.decisions = (cfg.decisions || []).filter(d => d.name !== targetName)
   }
 
+  const getSelectedPresetConflicts = () => {
+    if (!config?.providers?.default_model || !selectedRoutingPresetId) {
+      return []
+    }
+
+    const preset = getRoutingPreset(selectedRoutingPresetId)
+    if (!preset) {
+      return []
+    }
+
+    const fragment = preset.build(config.providers.default_model)
+    const existingSignalNames = collectConfiguredSignalNames(config.signals)
+    const existingDecisionNames = new Set((config.decisions || []).map((decision) => decision.name))
+    const conflicts: string[] = []
+
+    for (const signalName of listSignalNames(fragment.signals)) {
+      if (existingSignalNames.has(signalName)) {
+        conflicts.push(`Signal "${signalName}" already exists`)
+      }
+    }
+
+    for (const decisionName of listDecisionNames(fragment.decisions)) {
+      if (existingDecisionNames.has(decisionName)) {
+        conflicts.push(`Decision "${decisionName}" already exists`)
+      }
+    }
+
+    return conflicts
+  }
+
+  const handleApplyRoutingPreset = async () => {
+    if (!config || !isPythonCLI || !selectedRoutingPresetId || !config.providers?.default_model) {
+      return
+    }
+
+    const conflicts = getSelectedPresetConflicts()
+    if (conflicts.length > 0) {
+      return
+    }
+
+    const preset = getRoutingPreset(selectedRoutingPresetId)
+    if (!preset) {
+      return
+    }
+
+    const fragment = preset.build(config.providers.default_model)
+    const mergedSignals = clonePresetSignals(fragment.signals as Record<string, unknown> | undefined)
+    const mergedDecisions = clonePresetDecisions(fragment.decisions)
+    const nextSignals = { ...(config.signals || {}) } as Record<string, Array<Record<string, unknown>>>
+
+    const nextConfig: ConfigData = {
+      ...config,
+      signals: nextSignals as ConfigData['signals'],
+      decisions: [...(config.decisions || [])],
+    }
+
+    if (mergedSignals) {
+      for (const [key, value] of Object.entries(mergedSignals)) {
+        if (!Array.isArray(value) || value.length === 0) {
+          continue
+        }
+
+        const existingValues = nextSignals[key] || []
+        nextSignals[key] = [
+          ...existingValues,
+          ...(value as Array<Record<string, unknown>>),
+        ]
+      }
+    }
+
+    nextConfig.decisions = [...(nextConfig.decisions || []), ...mergedDecisions]
+
+    setPresetApplyState('applying')
+    setPresetApplyError(null)
+
+    try {
+      await saveConfig(nextConfig)
+      setPresetModalOpen(false)
+    } catch (err) {
+      setPresetApplyError(err instanceof Error ? err.message : 'Failed to apply preset')
+    } finally {
+      setPresetApplyState('idle')
+    }
+  }
+
 
   const handleDeleteDecision = async (decision: DecisionConfig) => {
     if (!confirm(`Are you sure you want to delete decision "${decision.name}"?`)) {
@@ -619,6 +780,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
   // Helper: Check if using Python CLI format
   const isPythonCLI = configFormat === 'python-cli'
+  const selectedPresetConflicts = getSelectedPresetConflicts()
 
   // Effective router config - merges routerDefaults (system settings) with config (fallback)
   // For Python CLI: system settings like bert_model, tools, prompt_guard come from routerDefaults
@@ -2467,7 +2629,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       {
         key: 'type',
         header: 'Type',
-        width: '140px',
+        width: TABLE_COLUMN_WIDTH.medium,
         sortable: true,
         render: (row) => {
           const typeColors: Record<SignalType, string> = {
@@ -3349,34 +3511,36 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
     return (
       <div className={styles.sectionPanel}>
-        <TableHeader
-          title="Signals"
-          count={allSignals.length}
-          searchPlaceholder="Search signals..."
-          searchValue={signalsSearch}
-          onSearchChange={setSignalsSearch}
-          onAdd={() => openSignalEditor('add')}
-          addButtonText="Add Signal"
-          disabled={isReadonly}
-        />
-
-        {(isPythonCLI || hasFlatSignals(config)) ? (
-          <DataTable
-            columns={signalsColumns}
-            data={filteredSignals}
-            keyExtractor={(row) => `${row.type}-${row.name}`}
-            onView={handleViewSignal}
-            onEdit={handleEditSignal}
-            onDelete={handleDeleteSignal}
-            emptyMessage={signalsSearch ? 'No signals match your search' : 'No signals configured'}
-            readonly={isReadonly}
+        <div className={styles.sectionTableBlock}>
+          <TableHeader
+            title="Signals"
+            count={allSignals.length}
+            searchPlaceholder="Search signals..."
+            searchValue={signalsSearch}
+            onSearchChange={setSignalsSearch}
+            onAdd={() => openSignalEditor('add')}
+            addButtonText="Add Signal"
+            disabled={isReadonly}
           />
-        ) : (
-          <div className={styles.emptyState}>
-            Signals are only available in Python CLI config format.
-            Current config uses legacy format - use "Intelligent Routing" features instead.
-          </div>
-        )}
+
+          {(isPythonCLI || hasFlatSignals(config)) ? (
+            <DataTable
+              columns={signalsColumns}
+              data={filteredSignals}
+              keyExtractor={(row) => `${row.type}-${row.name}`}
+              onView={handleViewSignal}
+              onEdit={handleEditSignal}
+              onDelete={handleDeleteSignal}
+              emptyMessage={signalsSearch ? 'No signals match your search' : 'No signals configured'}
+              readonly={isReadonly}
+            />
+          ) : (
+            <div className={styles.emptyState}>
+              Signals are only available in Python CLI config format.
+              Current config uses legacy format - use "Intelligent Routing" features instead.
+            </div>
+          )}
+        </div>
       </div>
     )
   }
@@ -3384,7 +3548,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
   // Decisions Section - Routing rules with priorities (config.yaml)
   const renderDecisionsSection = () => {
     const decisions = config?.decisions || []
-    const defaultModel = getDefaultModel()
 
     // Filter decisions based on search
     const filteredDecisions = decisions.filter(decision =>
@@ -3404,7 +3567,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       {
         key: 'priority',
         header: 'Priority',
-        width: '100px',
+        width: TABLE_COLUMN_WIDTH.compact,
         align: 'center',
         sortable: true,
         render: (row) => (
@@ -3416,7 +3579,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       {
         key: 'conditions',
         header: 'Conditions',
-        width: '150px',
+        width: TABLE_COLUMN_WIDTH.medium,
         render: (row) => {
           const count = row.rules?.conditions?.length || 0
           return <span>{count} {count === 1 ? 'condition' : 'conditions'}</span>
@@ -3425,7 +3588,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       {
         key: 'models',
         header: 'Models',
-        width: '150px',
+        width: TABLE_COLUMN_WIDTH.medium,
         render: (row) => {
           const count = row.modelRefs?.length || 0
           return <span>{count} {count === 1 ? 'model' : 'models'}</span>
@@ -3990,49 +4153,45 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
     return (
       <div className={styles.sectionPanel}>
-        {/* Default Model Info */}
-        <div className={styles.coreSettingsInline}>
-          <div className={styles.inlineConfigRow}>
-            <span className={styles.inlineConfigLabel}>Default Model:</span>
-            <span className={styles.inlineConfigValue}>{defaultModel || 'N/A'}</span>
-          </div>
-          <div className={styles.inlineConfigRow}>
-            <span className={styles.inlineConfigLabel}>Default Reasoning:</span>
-            <span className={`${styles.badge} ${styles[`badge${config?.providers?.default_reasoning_effort || 'medium'}`]}`}>
-              {config?.providers?.default_reasoning_effort || 'medium'}
-            </span>
-          </div>
-        </div>
-
-        {/* Decisions Table */}
-        <TableHeader
-          title="Routing Decisions"
-          count={decisions.length}
-          searchPlaceholder="Search decisions..."
-          searchValue={decisionsSearch}
-          onSearchChange={setDecisionsSearch}
-          onAdd={() => openDecisionEditor('add')}
-          addButtonText="Add Decision"
-          disabled={isReadonly}
-        />
-
-        {(isPythonCLI || hasDecisions(config)) ? (
-          <DataTable
-            columns={decisionsColumns}
-            data={filteredDecisions}
-            keyExtractor={(row) => row.name}
-            onView={handleViewDecision}
-            onEdit={handleEditDecision}
-            onDelete={handleDeleteDecision}
-            emptyMessage={decisionsSearch ? 'No decisions match your search' : 'No routing decisions configured'}
-            readonly={isReadonly}
+        <div className={styles.sectionTableBlock}>
+          <TableHeader
+            title="Routing Decisions"
+            count={decisions.length}
+            searchPlaceholder="Search decisions..."
+            searchValue={decisionsSearch}
+            onSearchChange={setDecisionsSearch}
+            onSecondaryAction={
+              isPythonCLI && config?.providers?.default_model
+                ? () => {
+                    setPresetApplyError(null)
+                    setPresetModalOpen(true)
+                  }
+                : undefined
+            }
+            secondaryActionText="Apply preset"
+            onAdd={() => openDecisionEditor('add')}
+            addButtonText="Add Decision"
+            disabled={isReadonly}
           />
-        ) : (
-          <div className={styles.emptyState}>
-            Decisions are only available in Python CLI config format.
-            Current config uses legacy format - see "Categories" in legacy mode.
-          </div>
-        )}
+
+          {(isPythonCLI || hasDecisions(config)) ? (
+            <DataTable
+              columns={decisionsColumns}
+              data={filteredDecisions}
+              keyExtractor={(row) => row.name}
+              onView={handleViewDecision}
+              onEdit={handleEditDecision}
+              onDelete={handleDeleteDecision}
+              emptyMessage={decisionsSearch ? 'No decisions match your search' : 'No routing decisions configured'}
+              readonly={isReadonly}
+            />
+          ) : (
+            <div className={styles.emptyState}>
+              Decisions are only available in Python CLI config format.
+              Current config uses legacy format - see "Categories" in legacy mode.
+            </div>
+          )}
+        </div>
       </div>
     )
   }
@@ -4069,7 +4228,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       {
         key: 'reasoning_family',
         header: 'Reasoning Family',
-        width: '180px',
+        width: TABLE_COLUMN_WIDTH.medium,
         sortable: true,
         render: (row) => row.reasoning_family ? (
           <span className={styles.badge} style={{ background: 'rgba(0, 212, 255, 0.15)', color: 'var(--color-accent-cyan)' }}>
@@ -4080,7 +4239,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       {
         key: 'endpoints',
         header: 'Endpoints',
-        width: '120px',
+        width: TABLE_COLUMN_WIDTH.compact,
         align: 'center',
         render: (row) => {
           const count = row.endpoints?.length || 0
@@ -4094,7 +4253,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
       {
         key: 'pricing',
         header: 'Pricing',
-        width: '150px',
+        width: TABLE_COLUMN_WIDTH.medium,
         render: (row) => {
           if (!row.pricing) return <span style={{ color: 'var(--color-text-secondary)' }}>N/A</span>
           const currency = row.pricing.currency || 'USD'
@@ -4703,31 +4862,31 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
 
     return (
       <div className={styles.sectionPanel}>
-        {/* Reasoning Families Table */}
-        <TableHeader
-          title="Reasoning Families"
-          count={reasoningFamilyData.length}
-          searchPlaceholder=""
-          searchValue=""
-          onSearchChange={() => { }}
-          onAdd={handleAddReasoningFamily}
-          addButtonText="Add Family"
-          disabled={isReadonly}
-        />
+        <div className={styles.sectionTableBlock}>
+          <TableHeader
+            title="Reasoning Families"
+            count={reasoningFamilyData.length}
+            searchPlaceholder=""
+            searchValue=""
+            onSearchChange={() => { }}
+            onAdd={handleAddReasoningFamily}
+            addButtonText="Add Family"
+            disabled={isReadonly}
+          />
 
-        <DataTable
-          columns={reasoningFamilyColumns}
-          data={reasoningFamilyData}
-          keyExtractor={(row) => row.name}
-          onView={(row) => handleViewReasoningFamily(row.name)}
-          onEdit={(row) => handleEditReasoningFamily(row.name)}
-          onDelete={(row) => handleDeleteReasoningFamily(row.name)}
-          emptyMessage="No reasoning families configured"
-          readonly={isReadonly}
-        />
+          <DataTable
+            columns={reasoningFamilyColumns}
+            data={reasoningFamilyData}
+            keyExtractor={(row) => row.name}
+            onView={(row) => handleViewReasoningFamily(row.name)}
+            onEdit={(row) => handleEditReasoningFamily(row.name)}
+            onDelete={(row) => handleDeleteReasoningFamily(row.name)}
+            emptyMessage="No reasoning families configured"
+            readonly={isReadonly}
+          />
+        </div>
 
-        {/* Models Table */}
-        <div style={{ marginTop: '2rem' }}>
+        <div className={styles.sectionTableBlock}>
           <TableHeader
             title="Models"
             count={models.length}
@@ -4851,6 +5010,24 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'signals' }) =>
         onEdit={isReadonly ? undefined : (viewModalEditCallback || undefined)}
         title={viewModalTitle}
         sections={viewModalSections}
+      />
+
+      <RoutingPresetModal
+        isOpen={presetModalOpen}
+        defaultModel={config?.providers?.default_model || ''}
+        selectedPresetId={selectedRoutingPresetId}
+        conflicts={selectedPresetConflicts}
+        error={presetApplyError}
+        isApplying={presetApplyState === 'applying'}
+        onClose={() => {
+          setPresetModalOpen(false)
+          setPresetApplyError(null)
+        }}
+        onSelectPreset={(presetId) => {
+          setSelectedRoutingPresetId(presetId)
+          setPresetApplyError(null)
+        }}
+        onApply={() => void handleApplyRoutingPreset()}
       />
     </div>
   )

@@ -623,7 +623,7 @@ def download_all_datasets(config: Optional[DataConfig] = None) -> dict:
     print("Download Summary:")
     print("=" * 60)
     for name, success in results.items():
-        status = "✓ Success" if success else "✗ Failed"
+        status = "Success" if success else "✗ Failed"
         print(f"  {name}: {status}")
 
     print("\n📊 Dataset categories:")
@@ -1359,7 +1359,7 @@ def label_dataset(
                 "Please ensure the vLLM server is running and healthy before labeling."
             )
             raise RuntimeError(f"Model health check failed: {health_msg}")
-        logger.info(f"✓ {health_msg}")
+        logger.info(f"{health_msg}")
     else:
         logger.warning("⚠️ Skipping health check (--skip-health-check)")
 
@@ -1451,7 +1451,7 @@ def label_dataset(
                     logger.error("Consider stopping and restarting the model server.")
                     # Continue but with caution
                 else:
-                    logger.info(f"✓ Model recovered: {health_msg}")
+                    logger.info(f"Model recovered: {health_msg}")
                     garbage_detector.reset()  # Reset on recovery
 
             with ThreadPoolExecutor(max_workers=config.workers) as executor:
@@ -1647,7 +1647,7 @@ def label_all_datasets(
             print(f"  ⚠️  No examples found, skipping...")
             continue
 
-        print(f"  ✓ Found {len(examples):,} examples")
+        print(f"  Found {len(examples):,} examples")
 
         # Label with production config
         output_path = os.path.join(labeled_dir, f"{name}_labeled.jsonl")
@@ -1670,7 +1670,7 @@ def label_all_datasets(
         # Print results
         success = stats["total"] - stats["errors"]
         success_rate = success / max(1, stats["total"]) * 100
-        print(f"  ✓ Results: {success}/{stats['total']} ({success_rate:.1f}% success)")
+        print(f"  Results: {success}/{stats['total']} ({success_rate:.1f}% success)")
         print(
             f"    Labels: SAT={stats['SAT']}, NEED_CLAR={stats['NEED_CLARIFICATION']}, "
             f"WRONG={stats['WRONG_ANSWER']}, WANT_DIFF={stats['WANT_DIFFERENT']}"
@@ -1690,7 +1690,7 @@ def label_all_datasets(
                         out_f.write(line)
                         total_lines += 1
 
-    print(f"✓ Combined {total_lines:,} labeled examples to {combined_path}")
+    print(f"Combined {total_lines:,} labeled examples to {combined_path}")
 
     # Summary
     print("\n" + "=" * 70)

@@ -6,24 +6,13 @@ use std::fmt;
 #[derive(Debug)]
 pub enum UnifiedError {
     /// Model loading or initialization error
-    ModelLoad {
-        model_path: String,
-        source: String,
-    },
+    ModelLoad { model_path: String, source: String },
     /// Configuration error
-    Config {
-        field: String,
-        message: String,
-    },
+    Config { field: String, message: String },
     /// Inference error
-    Inference {
-        operation: String,
-        source: String,
-    },
+    Inference { operation: String, source: String },
     /// Tokenization error
-    Tokenization {
-        source: String,
-    },
+    Tokenization { source: String },
     /// Validation error
     Validation {
         field: String,
@@ -31,22 +20,13 @@ pub enum UnifiedError {
         actual: String,
     },
     /// File not found
-    FileNotFound {
-        path: String,
-    },
+    FileNotFound { path: String },
     /// Invalid JSON
-    InvalidJson {
-        path: String,
-        source: String,
-    },
+    InvalidJson { path: String, source: String },
     /// ONNX Runtime error
-    OrtError {
-        source: String,
-    },
+    OrtError { source: String },
     /// Generic error
-    Other {
-        message: String,
-    },
+    Other { message: String },
 }
 
 impl fmt::Display for UnifiedError {

@@ -15,6 +15,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
 // Init starts the API server
@@ -147,6 +148,7 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 
 	// Health check endpoint
 	mux.HandleFunc("GET /health", s.handleHealth)
+	mux.HandleFunc("GET /ready", s.handleReady)
 
 	// API discovery endpoint
 	mux.HandleFunc("GET /api/v1", s.handleAPIOverview)
@@ -227,6 +229,45 @@ func (s *ClassificationAPIServer) handleHealth(w http.ResponseWriter, _ *http.Re
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"status": "healthy", "service": "classification-api"}`))
+}
+
+// handleReady reports whether router startup has completed enough for traffic.
+func (s *ClassificationAPIServer) handleReady(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	state, err := startupstatus.Load(startupstatus.StatusPathFromConfigPath(s.configPath))
+	if err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"status":"starting","service":"classification-api","ready":false}`))
+		return
+	}
+
+	if !state.Ready {
+		s.writeJSONResponse(w, http.StatusServiceUnavailable, map[string]interface{}{
+			"status":            "starting",
+			"service":           "classification-api",
+			"ready":             false,
+			"phase":             state.Phase,
+			"message":           state.Message,
+			"downloading_model": state.DownloadingModel,
+			"pending_models":    state.PendingModels,
+			"ready_models":      state.ReadyModels,
+			"total_models":      state.TotalModels,
+		})
+		return
+	}
+
+	s.writeJSONResponse(w, http.StatusOK, map[string]interface{}{
+		"status":            "ready",
+		"service":           "classification-api",
+		"ready":             true,
+		"phase":             state.Phase,
+		"message":           state.Message,
+		"downloading_model": state.DownloadingModel,
+		"pending_models":    state.PendingModels,
+		"ready_models":      state.ReadyModels,
+		"total_models":      state.TotalModels,
+	})
 }
 
 // Helper methods for JSON handling

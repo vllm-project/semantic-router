@@ -463,7 +463,7 @@ class Jailbreak_Dataset:
                 f"Dataset imbalance detected: {final_jailbreak_count} vs {final_benign_count}"
             )
         else:
-            logger.info("✅ Dataset is well balanced")
+            logger.info("Dataset is well balanced")
         return all_texts, all_labels
 
     def prepare_datasets(self, max_samples=1000):

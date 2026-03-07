@@ -72,7 +72,7 @@ class KNNModel:
         # Get unique model names
         self.model_names = sorted(set(s.model_name for s in samples))
 
-        print(f"✓ KNN trained with {len(samples)} samples, k={self.k}")
+        print(f"KNN trained with {len(samples)} samples, k={self.k}")
 
     def predict(self, feature_vector: np.ndarray) -> str:
         """Predict best model using quality-weighted voting."""
@@ -122,7 +122,7 @@ class KNNModel:
             json.dump(data, f)
 
         size_mb = Path(path).stat().st_size / (1024 * 1024)
-        print(f"✓ Saved KNN model to {path} ({size_mb:.1f} MB)")
+        print(f"Saved KNN model to {path} ({size_mb:.1f} MB)")
 
     @classmethod
     def load(cls, path: str) -> "KNNModel":
@@ -238,9 +238,7 @@ class KMeansModel:
         for cluster_id, scores in cluster_scores.items():
             self.cluster_models[cluster_id] = max(scores, key=scores.get)
 
-        print(
-            f"✓ KMeans trained with {len(samples)} samples, {self.n_clusters} clusters"
-        )
+        print(f"KMeans trained with {len(samples)} samples, {self.n_clusters} clusters")
 
     def predict(self, feature_vector: np.ndarray) -> str:
         """Predict best model for a query."""
@@ -275,7 +273,7 @@ class KMeansModel:
             json.dump(data, f)
 
         size_mb = Path(path).stat().st_size / (1024 * 1024)
-        print(f"✓ Saved KMeans model to {path} ({size_mb:.1f} MB)")
+        print(f"Saved KMeans model to {path} ({size_mb:.1f} MB)")
 
     @classmethod
     def load(cls, path: str) -> "KMeansModel":
@@ -366,7 +364,7 @@ class SVMModel:
         )
         self.svm.fit(X, y)
 
-        print(f"✓ SVM trained with {len(weighted_features)} weighted samples")
+        print(f"SVM trained with {len(weighted_features)} weighted samples")
 
     def predict(self, feature_vector: np.ndarray) -> str:
         """Predict best model."""
@@ -441,7 +439,7 @@ class SVMModel:
             json.dump(data, f)
 
         size_mb = Path(path).stat().st_size / (1024 * 1024)
-        print(f"✓ Saved SVM model to {path} ({size_mb:.1f} MB)")
+        print(f"Saved SVM model to {path} ({size_mb:.1f} MB)")
 
     @classmethod
     def load(cls, path: str) -> "SVMModel":
@@ -654,7 +652,7 @@ class MLPModel:
             if (epoch + 1) % 20 == 0:
                 print(f"  Epoch {epoch + 1}/{self.epochs}, Loss: {avg_loss:.4f}")
 
-        print(f"✓ MLP trained with {len(samples)} samples, final loss: {best_loss:.4f}")
+        print(f"MLP trained with {len(samples)} samples, final loss: {best_loss:.4f}")
 
     def predict(self, feature_vector: np.ndarray) -> str:
         """Predict best model."""
@@ -790,7 +788,7 @@ class MLPModel:
             json.dump(data, f)
 
         size_mb = Path(path).stat().st_size / (1024 * 1024)
-        print(f"✓ Saved MLP model to {path} ({size_mb:.2f} MB)")
+        print(f"Saved MLP model to {path} ({size_mb:.2f} MB)")
 
     @classmethod
     def load(cls, path: str, device: str = "cpu") -> "MLPModel":

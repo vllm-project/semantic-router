@@ -11,12 +11,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// Default block patterns are intentionally empty. The primary adversarial
-// content gate is SR's jailbreak classifier which runs on the request path;
-// only requests that pass the classifier reach the LLM and produce memories.
-// The write-path fallback lives in sanitize.go for when the classifier is
-// disabled. Users can add custom patterns via config if needed.
-var defaultBlockPatterns []string
+// defaultBlockPatterns is empty by default.
+// Operators can add custom block_patterns via MemoryReflectionConfig.
+var defaultBlockPatterns = []string{}
 
 // ReflectionGate filters retrieved memories before injection using heuristic
 // rules: recency decay, redundancy dedup, and token budget enforcement.

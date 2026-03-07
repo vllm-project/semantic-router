@@ -9,6 +9,7 @@ import { PluginChainNode } from './PluginChainNode'
 import { ModelNode } from './ModelNode'
 import { DefaultRouteNode } from './DefaultRouteNode'
 import { FallbackDecisionNode } from './FallbackDecisionNode'
+import { MoreDecisionsNode } from './MoreDecisionsNode'
 
 export {
   ClientNode,
@@ -20,6 +21,7 @@ export {
   ModelNode,
   DefaultRouteNode,
   FallbackDecisionNode,
+  MoreDecisionsNode,
 }
 
 // Node types registry for ReactFlow
@@ -33,4 +35,5 @@ export const customNodeTypes = {
   modelNode: ModelNode,
   defaultRouteNode: DefaultRouteNode,
   fallbackDecisionNode: FallbackDecisionNode,
+  moreDecisionsNode: MoreDecisionsNode,
 }

@@ -201,7 +201,7 @@ def train_models(
         mlp.train(samples)
         mlp.save(str(output_dir / "mlp_model.json"))
 
-    print(f"\n✓ {num_models} model(s) trained and saved to", output_dir)
+    print(f"\n{num_models} model(s) trained and saved to", output_dir)
 
 
 def run_training_pipeline(
@@ -315,7 +315,7 @@ def run_training_pipeline(
     )
 
     elapsed = time.time() - start_time
-    print(f"\n✅ Training complete in {elapsed:.1f}s")
+    print(f"\nTraining complete in {elapsed:.1f}s")
     print(f"   Models saved to: {output_path.absolute()}")
 
     # Collect output files

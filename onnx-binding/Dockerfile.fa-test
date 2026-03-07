@@ -1,0 +1,57 @@
+# Dockerfile for running Flash Attention integration tests on ROCm GPUs.
+#
+# Build:
+#   docker build -f Dockerfile.fa-test -t onnx-fa-test .
+#
+# Run (requires AMD GPU):
+#   docker run --rm --device=/dev/kfd --device=/dev/dri \
+#     --security-opt seccomp=unconfined \
+#     -v $HOME/.cache/huggingface:/root/.cache/huggingface \
+#     onnx-fa-test [--download] [--test-filter TestFA_Embedding]
+
+FROM rocm/onnxruntime:rocm7.0_ub22.04_ort1.22_torch2.8.0
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends git wget && \
+    rm -rf /var/lib/apt/lists/*
+
+# Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Go 1.24
+RUN wget -qO- "https://go.dev/dl/go1.24.0.linux-amd64.tar.gz" | tar -C /usr/local -xzf -
+ENV PATH="/usr/local/go/bin:/root/go/bin:${PATH}"
+
+# ORT paths
+ENV ORT_DYLIB_PATH=/opt/venv/lib/python3.10/site-packages/onnxruntime/capi/libonnxruntime.so.1.22.1
+ENV LD_LIBRARY_PATH=/opt/venv/lib/python3.10/site-packages/onnxruntime/capi:/opt/rocm/lib:${LD_LIBRARY_PATH}
+
+WORKDIR /workspace
+
+# Copy and build Rust onnx-binding
+COPY Cargo.toml Cargo.lock* ./
+RUN mkdir -p src && echo "fn main() {}" > src/main.rs && cargo fetch || true && rm -rf src
+COPY src/ src/
+RUN cargo build --release --features rocm-dynamic
+
+# Copy pre-built FA custom op
+COPY ort-ck-flash-attn/prebuilt/libort_ck_flash_attn.so* /usr/local/lib/
+RUN ldconfig
+ENV ORT_CK_FLASH_ATTN_LIB=/usr/local/lib/libort_ck_flash_attn.so
+
+# Copy Go sources and FA test
+COPY go.mod go.sum* ./
+COPY semantic-router.go fa_test.go ./
+
+# Copy scripts
+COPY scripts/download_fa_models.py scripts/run_fa_tests.sh scripts/
+RUN chmod +x scripts/run_fa_tests.sh
+
+# Pre-install huggingface_hub for model download
+RUN pip install --quiet huggingface_hub 2>/dev/null || true
+
+ENV FA_MODELS_DIR=/models
+ENV CGO_ENABLED=1
+
+ENTRYPOINT ["/workspace/scripts/run_fa_tests.sh"]

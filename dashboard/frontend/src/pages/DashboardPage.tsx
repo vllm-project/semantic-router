@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { getModelStatusSummary, type RouterRuntimeStatus } from '../utils/routerRuntime'
 import styles from './DashboardPage.module.css'
 
 /* ------------------------------------------------------------------ */
@@ -19,6 +20,7 @@ interface SystemStatus {
   deployment_type: string
   services: ServiceStatus[]
   version?: string
+  router_runtime?: RouterRuntimeStatus
 }
 
 interface SignalConfig {
@@ -305,6 +307,7 @@ const DashboardPage: React.FC = () => {
   const pluginCount = useMemo(() => config ? countPlugins(config) : 0, [config])
   const healthyServices = useMemo(() => status?.services.filter(s => s.healthy).length ?? 0, [status])
   const totalServices = useMemo(() => status?.services.length ?? 0, [status])
+  const modelStatus = useMemo(() => getModelStatusSummary(status), [status])
 
   // Categorize decisions for the table
   const categorizedDecisions = useMemo(() => {
@@ -369,16 +372,16 @@ const DashboardPage: React.FC = () => {
 
       {/* Stats Cards */}
       <div className={styles.statsGrid}>
-        <button className={styles.statCard} onClick={() => navigate('/config/signals')}>
-          <div className={styles.statIcon} style={{ background: 'var(--color-primary)', boxShadow: 'var(--glow-primary)' }}>
+        <button className={styles.statCard} onClick={() => navigate('/config/models')}>
+          <div className={styles.statIcon} style={{ background: 'var(--color-accent-purple)', boxShadow: 'var(--glow-purple)' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+              <rect x="2" y="3" width="20" height="18" rx="3" />
+              <path d="M8 7v10M12 7v10M16 7v10" />
             </svg>
           </div>
           <div className={styles.statContent}>
-            <span className={styles.statValue}>{signalStats.total}</span>
-            <span className={styles.statLabel}>Signals</span>
+            <span className={styles.statValue}>{modelCount}</span>
+            <span className={styles.statLabel}>Models</span>
           </div>
           <span className={styles.statArrow}>&rsaquo;</span>
         </button>
@@ -396,16 +399,16 @@ const DashboardPage: React.FC = () => {
           <span className={styles.statArrow}>&rsaquo;</span>
         </button>
 
-        <button className={styles.statCard} onClick={() => navigate('/config/models')}>
-          <div className={styles.statIcon} style={{ background: 'var(--color-accent-purple)', boxShadow: 'var(--glow-purple)' }}>
+        <button className={styles.statCard} onClick={() => navigate('/config/signals')}>
+          <div className={styles.statIcon} style={{ background: 'var(--color-primary)', boxShadow: 'var(--glow-primary)' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
-              <rect x="2" y="3" width="20" height="18" rx="3" />
-              <path d="M8 7v10M12 7v10M16 7v10" />
+              <circle cx="12" cy="12" r="3" />
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
             </svg>
           </div>
           <div className={styles.statContent}>
-            <span className={styles.statValue}>{modelCount}</span>
-            <span className={styles.statLabel}>Models</span>
+            <span className={styles.statValue}>{signalStats.total}</span>
+            <span className={styles.statLabel}>Signals</span>
           </div>
           <span className={styles.statArrow}>&rsaquo;</span>
         </button>
@@ -423,6 +426,26 @@ const DashboardPage: React.FC = () => {
           <div className={styles.statContent}>
             <span className={styles.statValue}>{healthyServices}/{totalServices}</span>
             <span className={styles.statLabel}>Services Healthy</span>
+          </div>
+          <span className={styles.statArrow}>&rsaquo;</span>
+        </button>
+
+        <button className={styles.statCard} onClick={() => navigate('/status')}>
+          <div className={`${styles.statIcon} ${
+            modelStatus.tone === 'ok' ? styles.statIconHealthy :
+            modelStatus.tone === 'warn' ? styles.statIconStarting :
+            styles.statIconDown
+          }`}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 3v10" />
+              <path d="M8.5 9.5 12 13l3.5-3.5" />
+              <path d="M4 19h16" />
+            </svg>
+          </div>
+          <div className={styles.statContent}>
+            <span className={styles.statValue}>{modelStatus.value}</span>
+            <span className={styles.statLabel}>Model Status</span>
+            <span className={styles.statDetail}>{modelStatus.detail}</span>
           </div>
           <span className={styles.statArrow}>&rsaquo;</span>
         </button>
@@ -531,17 +554,23 @@ const DashboardPage: React.FC = () => {
                 </svg>
                 Run Evaluation
               </button>
-              <button className={styles.quickLink} onClick={() => navigate('/config/signals')}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <path d="M12 20V10M18 20V4M6 20v-4" />
-                </svg>
-                Manage Signals
-              </button>
               <button className={styles.quickLink} onClick={() => navigate('/config/models')}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                   <rect x="2" y="3" width="20" height="18" rx="3" /><path d="M8 7v10M16 7v10" />
                 </svg>
                 Manage Models
+              </button>
+              <button className={styles.quickLink} onClick={() => navigate('/config/decisions')}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M4 6h16M4 12h8M4 18h12" />
+                </svg>
+                Manage Decisions
+              </button>
+              <button className={styles.quickLink} onClick={() => navigate('/config/signals')}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M12 20V10M18 20V4M6 20v-4" />
+                </svg>
+                Manage Signals
               </button>
             </div>
           </div>

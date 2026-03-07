@@ -391,12 +391,8 @@ pub extern "C" fn calculate_embedding_similarity(
     }
 
     // Calculate cosine similarity
-    let emb1 = unsafe {
-        std::slice::from_raw_parts(emb1_result.data, emb1_result.length as usize)
-    };
-    let emb2 = unsafe {
-        std::slice::from_raw_parts(emb2_result.data, emb2_result.length as usize)
-    };
+    let emb1 = unsafe { std::slice::from_raw_parts(emb1_result.data, emb1_result.length as usize) };
+    let emb2 = unsafe { std::slice::from_raw_parts(emb2_result.data, emb2_result.length as usize) };
 
     let dot_product: f32 = emb1.iter().zip(emb2.iter()).map(|(a, b)| a * b).sum();
     let norm1: f32 = emb1.iter().map(|x| x * x).sum::<f32>().sqrt();
@@ -551,7 +547,11 @@ pub extern "C" fn calculate_similarity_batch(
             .map(|(a, b)| a * b)
             .sum();
         let norm_query: f32 = query_embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
-        let norm_candidate: f32 = candidate_embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+        let norm_candidate: f32 = candidate_embedding
+            .iter()
+            .map(|x| x * x)
+            .sum::<f32>()
+            .sqrt();
 
         let similarity = if norm_query > 0.0 && norm_candidate > 0.0 {
             dot_product / (norm_query * norm_candidate)
@@ -623,36 +623,37 @@ pub extern "C" fn get_embedding_models_info(result: *mut EmbeddingModelsInfoResu
 
     // mmBERT model info
     let model_name = CString::new("mmbert").unwrap();
-    let (is_loaded, max_seq, default_dim, model_path, supports_exit, layers_str) = if let Some(model_lock) = model_opt {
-        let model = model_lock.lock();
-        let config = model.config();
-        let layers = model
-            .available_exit_layers()
-            .iter()
-            .map(|l| l.to_string())
-            .collect::<Vec<_>>()
-            .join(",");
-        let path = CString::new(model.model_info()).unwrap();
-        let layers_cstr = CString::new(layers).unwrap();
-        (
-            true,
-            config.max_position_embeddings as i32,
-            config.hidden_size as i32,
-            path.into_raw(),
-            model.supports_layer_exit(),
-            layers_cstr.into_raw(),
-        )
-    } else {
-        let empty = CString::new("").unwrap();
-        (
-            false,
-            0,
-            0,
-            empty.clone().into_raw(),
-            false,
-            empty.into_raw(),
-        )
-    };
+    let (is_loaded, max_seq, default_dim, model_path, supports_exit, layers_str) =
+        if let Some(model_lock) = model_opt {
+            let model = model_lock.lock();
+            let config = model.config();
+            let layers = model
+                .available_exit_layers()
+                .iter()
+                .map(|l| l.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+            let path = CString::new(model.model_info()).unwrap();
+            let layers_cstr = CString::new(layers).unwrap();
+            (
+                true,
+                config.max_position_embeddings as i32,
+                config.hidden_size as i32,
+                path.into_raw(),
+                model.supports_layer_exit(),
+                layers_cstr.into_raw(),
+            )
+        } else {
+            let empty = CString::new("").unwrap();
+            (
+                false,
+                0,
+                0,
+                empty.clone().into_raw(),
+                false,
+                empty.into_raw(),
+            )
+        };
 
     models_vec.push(EmbeddingModelInfo {
         model_name: model_name.into_raw(),
@@ -691,7 +692,8 @@ pub extern "C" fn get_matryoshka_info(result: *mut MatryoshkaInfo) -> i32 {
         return -1;
     }
 
-    let config = crate::model_architectures::embedding::mmbert_embedding::MatryoshkaConfig::default();
+    let config =
+        crate::model_architectures::embedding::mmbert_embedding::MatryoshkaConfig::default();
 
     let dimensions = config
         .dimensions

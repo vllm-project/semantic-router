@@ -66,7 +66,7 @@ def download_ragtruth(output_dir: Path) -> Optional[Path]:
     ragtruth_path = output_dir / "ragtruth_data.json"
 
     if ragtruth_path.exists():
-        print(f"✓ RAGTruth found at: {ragtruth_path}")
+        print(f"RAGTruth found at: {ragtruth_path}")
         return ragtruth_path
 
     # Check if raw files exist
@@ -150,7 +150,7 @@ def preprocess_ragtruth_raw(raw_dir: Path, output_dir: Path) -> Path:
     with open(output_path, "w") as f:
         json.dump(samples, f, indent=2)
 
-    print(f"✓ Saved {len(samples)} RAGTruth samples to: {output_path}")
+    print(f"Saved {len(samples)} RAGTruth samples to: {output_path}")
     return output_path
 
 
@@ -195,7 +195,7 @@ def download_dart_e2e_from_huggingface(
         dart_path = output_dir / "dart_spans.json"
         with open(dart_path, "w") as f:
             json.dump(dart_samples, f, indent=2)
-        print(f"✓ Saved {len(dart_samples)} DART samples to: {dart_path}")
+        print(f"Saved {len(dart_samples)} DART samples to: {dart_path}")
 
     except Exception as e:
         print(f"Warning: Could not download DART: {e}")
@@ -221,7 +221,7 @@ def download_dart_e2e_from_huggingface(
         e2e_path = output_dir / "e2e_spans.json"
         with open(e2e_path, "w") as f:
             json.dump(e2e_samples, f, indent=2)
-        print(f"✓ Saved {len(e2e_samples)} E2E samples to: {e2e_path}")
+        print(f"Saved {len(e2e_samples)} E2E samples to: {e2e_path}")
 
     except Exception as e:
         print(f"Warning: Could not download E2E: {e}")
@@ -238,7 +238,7 @@ def load_dataset_file(path: Path) -> list[dict]:
     with open(path, "r") as f:
         data = json.load(f)
 
-    print(f"✓ Loaded {len(data)} samples from: {path}")
+    print(f"Loaded {len(data)} samples from: {path}")
     return data
 
 
@@ -432,26 +432,26 @@ def main():
     train_path = output_dir / "train.json"
     with open(train_path, "w") as f:
         json.dump(train_samples, f, indent=2)
-    print(f"✓ Saved {len(train_samples)} training samples to: {train_path}")
+    print(f"Saved {len(train_samples)} training samples to: {train_path}")
 
     # Save dev
     dev_path = output_dir / "dev.json"
     with open(dev_path, "w") as f:
         json.dump(dev_samples, f, indent=2)
-    print(f"✓ Saved {len(dev_samples)} dev samples to: {dev_path}")
+    print(f"Saved {len(dev_samples)} dev samples to: {dev_path}")
 
     # Save test
     test_path = output_dir / "test.json"
     with open(test_path, "w") as f:
         json.dump(test_samples, f, indent=2)
-    print(f"✓ Saved {len(test_samples)} test samples to: {test_path}")
+    print(f"Saved {len(test_samples)} test samples to: {test_path}")
 
     # Save combined (train + dev for compatibility)
     combined_path = output_dir / "combined_train.json"
     with open(combined_path, "w") as f:
         json.dump(train_samples + dev_samples, f, indent=2)
     print(
-        f"✓ Saved {len(train_samples) + len(dev_samples)} combined samples to: {combined_path}"
+        f"Saved {len(train_samples) + len(dev_samples)} combined samples to: {combined_path}"
     )
 
     print("\n" + "=" * 60)

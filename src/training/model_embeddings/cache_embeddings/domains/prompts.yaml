@@ -202,9 +202,9 @@ domains:
       ❌ Anchor: "tax lien priority" → Negative: "federal vs state liens"
 
       EXAMPLES OF SUCCESS (WHAT TO DO):
-      ✅ Anchor: "Colameta trade secrets" → Negative: "What rights do defendants have during police interrogations?"
-      ✅ Anchor: "bomb-making felony" → Negative: "How are patents evaluated for novelty and non-obviousness?"
-      ✅ Anchor: "tax lien priority" → Negative: "What criteria determine refugee status for asylum applications?"
+      Anchor: "Colameta trade secrets" → Negative: "What rights do defendants have during police interrogations?"
+      Anchor: "bomb-making felony" → Negative: "How are patents evaluated for novelty and non-obviousness?"
+      Anchor: "tax lien priority" → Negative: "What criteria determine refugee status for asylum applications?"
 
     negative_examples:
       - original: "Colameta's use of Protégé data in creating a competing business violated trade secret protections."
@@ -289,9 +289,9 @@ domains:
 
       STEP 3: STAY RELATED BUT DISTINCT
       - **DO**: Keep the same disorder/concept but change the aspect
-        ✅ "symptoms of anxiety disorder" → "treatment options for anxiety disorder"
-        ✅ "symptoms of anxiety disorder" → "risk factors for developing anxiety"
-        ✅ "symptoms of anxiety disorder" → "neurobiological causes of anxiety"
+        "symptoms of anxiety disorder" → "treatment options for anxiety disorder"
+        "symptoms of anxiety disorder" → "risk factors for developing anxiety"
+        "symptoms of anxiety disorder" → "neurobiological causes of anxiety"
 
       - **DON'T**: Jump to completely unrelated topics
         ❌ "symptoms of anxiety disorder" → "groupthink in decision making"
@@ -313,13 +313,13 @@ domains:
       ❌ Anchor: "How does working memory function?" → Negative: "What is working memory capacity?" (too similar)
 
       EXAMPLES OF SUCCESS (WHAT TO DO):
-      ✅ Anchor: "What are symptoms of anxiety disorder?" → Negative: "What causes anxiety disorders to develop?"
-      ✅ Anchor: "What are symptoms of anxiety disorder?" → Negative: "How are anxiety disorders treated with CBT?"
-      ✅ Anchor: "What are symptoms of anxiety disorder?" → Negative: "What risk factors increase likelihood of anxiety disorders?"
-      ✅ Anchor: "How does working memory function?" → Negative: "What brain regions are involved in working memory?"
-      ✅ Anchor: "How does working memory function?" → Negative: "How does aging affect working memory capacity?"
-      ✅ Anchor: "What is operant conditioning?" → Negative: "How is operant conditioning applied in behavior therapy?"
-      ✅ Anchor: "What is operant conditioning?" → Negative: "What are the neural mechanisms underlying operant conditioning?"
+      Anchor: "What are symptoms of anxiety disorder?" → Negative: "What causes anxiety disorders to develop?"
+      Anchor: "What are symptoms of anxiety disorder?" → Negative: "How are anxiety disorders treated with CBT?"
+      Anchor: "What are symptoms of anxiety disorder?" → Negative: "What risk factors increase likelihood of anxiety disorders?"
+      Anchor: "How does working memory function?" → Negative: "What brain regions are involved in working memory?"
+      Anchor: "How does working memory function?" → Negative: "How does aging affect working memory capacity?"
+      Anchor: "What is operant conditioning?" → Negative: "How is operant conditioning applied in behavior therapy?"
+      Anchor: "What is operant conditioning?" → Negative: "What are the neural mechanisms underlying operant conditioning?"
 
     negative_examples:
       - original: "What are symptoms of generalized anxiety disorder?"

@@ -88,6 +88,7 @@ typedef struct {
     int num_entities;
     float processing_time_ms;
     bool error;
+    char* error_message;
 } PIIResultFFI;
 
 // ============================================================================
@@ -411,6 +412,8 @@ func modelTypeToString(modelType int) string {
 	switch modelType {
 	case 0:
 		return "mmbert"
+	case 3:
+		return "multimodal"
 	default:
 		return "unknown"
 	}
@@ -444,8 +447,22 @@ func GetEmbedding2DMatryoshka(text string, modelType string, targetLayer int, ta
 
 // GetEmbeddingWithModelType generates embedding with specific model type
 func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
-	// ORT binding only supports mmbert, ignore modelType
-	return GetEmbeddingWithMetadata(text, 0, 0, targetDim)
+	switch strings.ToLower(strings.TrimSpace(modelType)) {
+	case "multimodal":
+		output, err := MultiModalEncodeText(text, targetDim)
+		if err != nil {
+			return nil, err
+		}
+		return &EmbeddingOutput{
+			Embedding:        output.Embedding,
+			ModelType:        "multimodal",
+			SequenceLength:   0,
+			ProcessingTimeMs: output.ProcessingTimeMs,
+		}, nil
+	default:
+		// ONNX binding uses mmBERT path for all non-multimodal requests.
+		return GetEmbeddingWithMetadata(text, 0, 0, targetDim)
+	}
 }
 
 // ============================================================================
@@ -567,12 +584,19 @@ func ClassifyMmBert32KPII(text string) ([]TokenEntity, error) {
 
 	var result C.PIIResultFFI
 	status := C.detect_pii(cName, cText, &result)
+	defer C.free_pii_result(&result)
 
 	if status != 0 || result.error {
-		return nil, errors.New("PII detection failed")
+		if result.error_message != nil {
+			return nil, fmt.Errorf(
+				"PII detection failed (status=%d, ffi_error=%t): %s",
+				int(status),
+				bool(result.error),
+				C.GoString(result.error_message),
+			)
+		}
+		return nil, fmt.Errorf("PII detection failed (status=%d, ffi_error=%t)", int(status), bool(result.error))
 	}
-
-	defer C.free_pii_result(&result)
 
 	// Copy entities
 	entities := make([]TokenEntity, int(result.num_entities))
@@ -1008,8 +1032,7 @@ func modalityToString(m int) string {
 }
 
 // InitMultiModalEmbeddingModel loads the multi-modal ONNX model.
-// modelPath must contain text_encoder.onnx, image_encoder.onnx,
-// audio_encoder.onnx, and tokenizer.json.
+// modelPath can contain encoders/tokenizer either at root or under modelPath/onnx.
 func InitMultiModalEmbeddingModel(modelPath string, useCPU bool) error {
 	cPath := C.CString(modelPath)
 	defer C.free(unsafe.Pointer(cPath))

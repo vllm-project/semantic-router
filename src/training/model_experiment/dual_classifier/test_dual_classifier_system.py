@@ -460,14 +460,14 @@ def run_performance_test():
     trainer.train_epoch()
     training_time = time.time() - start_time
 
-    print(f"✅ Training 50 samples took {training_time:.1f} seconds")
+    print(f"Training 50 samples took {training_time:.1f} seconds")
     print(f"   That's {training_time/50:.3f} seconds per sample")
 
     # Performance thresholds (adjust based on your system)
     if training_time < 30:
         print("   🚀 Excellent performance!")
     elif training_time < 60:
-        print("   ✅ Good performance!")
+        print("   Good performance!")
     else:
         print("   ⚠️  Consider reducing batch_size or max_length for faster training")
 

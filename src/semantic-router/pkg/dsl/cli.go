@@ -84,7 +84,7 @@ func CLIValidate(inputPath string, w io.Writer) int {
 
 	diags, _ := Validate(string(data))
 	if len(diags) == 0 {
-		fmt.Fprintln(w, "✅ No issues found.")
+		fmt.Fprintln(w, "No issues found.")
 		return 0
 	}
 

@@ -37,7 +37,7 @@ fn main() -> Result<()> {
         .map_err(|e| anyhow!("Failed to download tokenizer.json: {}", e))?;
     let base_weights_path = match api.get("model.safetensors") {
         Ok(path) => {
-            println!("   ✓ Base model downloaded (safetensors)");
+            println!("   Base model downloaded (safetensors)");
             path
         }
         Err(_) => {
@@ -48,7 +48,7 @@ fn main() -> Result<()> {
     };
 
     let base_model_dir = base_config_path.parent().unwrap();
-    println!("   ✓ Base model directory: {:?}", base_model_dir);
+    println!("   Base model directory: {:?}", base_model_dir);
 
     // Step 2: Load base model configuration
     println!("\nLoading base model configuration...");
@@ -57,7 +57,7 @@ fn main() -> Result<()> {
     let config: Config = serde_json::from_str(&config_str)
         .map_err(|e| anyhow!("Failed to parse config.json: {}", e))?;
 
-    println!("   ✓ Config loaded:");
+    println!("   Config loaded:");
     println!("     - hidden_size: {}", config.hidden_size);
     println!("     - vocab_size: {}", config.vocab_size);
     println!(
@@ -106,7 +106,7 @@ fn main() -> Result<()> {
 
     let pii_classifier_path = match pii_classifier_path {
         Some(path) => {
-            println!("   ✓ Found PII classifier at: {}", path);
+            println!("   Found PII classifier at: {}", path);
             path
         }
         None => {
@@ -141,7 +141,7 @@ fn main() -> Result<()> {
         })
         .unwrap_or(2);
 
-    println!("   ✓ Number of classes: {}", num_classes);
+    println!("   Number of classes: {}", num_classes);
 
     // Try to load classifier weights from PII model
     let pii_weights_path = format!("{}/model.safetensors", pii_classifier_path);

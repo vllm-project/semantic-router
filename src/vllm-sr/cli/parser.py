@@ -51,7 +51,7 @@ def parse_user_config(config_path: str) -> UserConfig:
     # Validate with Pydantic
     try:
         config = UserConfig(**data)
-        log.info(f"✓ Configuration parsed successfully")
+        log.info(f"Configuration parsed successfully")
         log.info(f"  Version: {config.version}")
         log.info(f"  Listeners: {len(config.listeners)}")
         log.info(f"  Decisions: {len(config.decisions)}")

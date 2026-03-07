@@ -304,6 +304,46 @@ func TestIsOpenClawGatewayPortConflict(t *testing.T) {
 	}
 }
 
+func TestIsBridgeNetwork(t *testing.T) {
+	tests := []struct {
+		name        string
+		networkMode string
+		expected    bool
+	}{
+		{name: "empty string", networkMode: "", expected: false},
+		{name: "host mode", networkMode: "host", expected: false},
+		{name: "host mode uppercase", networkMode: "HOST", expected: false},
+		{name: "container mode", networkMode: "container:abc", expected: false},
+		{name: "container mode uppercase", networkMode: "Container:xyz", expected: false},
+		{name: "default bridge", networkMode: "bridge", expected: true},
+		{name: "user-defined bridge", networkMode: "vllm-sr-net", expected: true},
+		{name: "custom network", networkMode: "my-network", expected: true},
+		{name: "with spaces", networkMode: "  vllm-sr-net  ", expected: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isBridgeNetwork(tc.networkMode); got != tc.expected {
+				t.Fatalf("isBridgeNetwork(%q) = %v, expected %v", tc.networkMode, got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestNextAvailablePortBridgeMode(t *testing.T) {
+	// In bridge mode, should always return the fixed port
+	h := &OpenClawHandler{}
+
+	bridgeModes := []string{"vllm-sr-net", "bridge", "my-custom-network"}
+	for _, nm := range bridgeModes {
+		port := h.nextAvailablePort(nm)
+		if port != defaultBridgeGatewayPort {
+			t.Errorf("nextAvailablePort(%q) = %d, expected %d (fixed bridge port)",
+				nm, port, defaultBridgeGatewayPort)
+		}
+	}
+}
+
 func TestOpenClawGatewayListeningReady(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -907,6 +947,64 @@ func TestRoomsHandler_CreateAndMessageFlowWithoutAutomation(t *testing.T) {
 	}
 }
 
+func TestRoomsHandler_CreateRoomAutoSuffixAvoidsConflict(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewOpenClawHandler(tempDir, false)
+	if err := h.saveTeams([]TeamEntry{{
+		ID:        "llm-router-lab",
+		Name:      "LLM Router Lab",
+		CreatedAt: "2026-01-01T00:00:00Z",
+		UpdatedAt: "2026-01-01T00:00:00Z",
+	}}); err != nil {
+		t.Fatalf("failed to seed team: %v", err)
+	}
+
+	createWithName := func(name string) ClawRoomEntry {
+		req := httptest.NewRequest(http.MethodPost, "/api/openclaw/rooms", strings.NewReader(fmt.Sprintf(`{
+			"teamId":"llm-router-lab",
+			"name":"%s"
+		}`, name)))
+		resp := httptest.NewRecorder()
+		h.RoomsHandler().ServeHTTP(resp, req)
+		if resp.Code != http.StatusCreated {
+			t.Fatalf("expected 201, got %d: %s", resp.Code, resp.Body.String())
+		}
+		var created ClawRoomEntry
+		if err := json.Unmarshal(resp.Body.Bytes(), &created); err != nil {
+			t.Fatalf("failed to parse room create response: %v", err)
+		}
+		return created
+	}
+
+	first := createWithName("llm-router-lab-room")
+	second := createWithName("llm-router-lab-room")
+	if first.ID == second.ID {
+		t.Fatalf("room IDs should be unique, got duplicated id %q", first.ID)
+	}
+
+	baseID := sanitizeRoomID("llm-router-lab-room")
+	for _, room := range []ClawRoomEntry{first, second} {
+		if !strings.HasPrefix(room.ID, baseID+"-") {
+			t.Fatalf("room ID %q should keep fixed base prefix %q", room.ID, baseID+"-")
+		}
+		suffix := strings.TrimPrefix(room.ID, baseID+"-")
+		if len(suffix) < 4 {
+			t.Fatalf("room ID %q should include a short dynamic suffix", room.ID)
+		}
+	}
+
+	duplicateIDReq := httptest.NewRequest(http.MethodPost, "/api/openclaw/rooms", strings.NewReader(fmt.Sprintf(`{
+		"teamId":"llm-router-lab",
+		"name":"manual",
+		"id":"%s"
+	}`, first.ID)))
+	duplicateIDResp := httptest.NewRecorder()
+	h.RoomsHandler().ServeHTTP(duplicateIDResp, duplicateIDReq)
+	if duplicateIDResp.Code != http.StatusConflict {
+		t.Fatalf("expected explicit duplicate id to return 409, got %d: %s", duplicateIDResp.Code, duplicateIDResp.Body.String())
+	}
+}
+
 func TestProcessRoomUserMessage_LeaderDelegatesToWorker(t *testing.T) {
 	tempDir := t.TempDir()
 	h := NewOpenClawHandler(tempDir, false)
@@ -1173,6 +1271,153 @@ func TestProcessRoomUserMessage_SimultaneousMentionsContinueChain(t *testing.T) 
 	}
 	if !workerMentionedLeader {
 		t.Fatalf("expected worker message that mentions leader, got: %+v", messages)
+	}
+}
+
+func TestProcessRoomUserMessage_MentionAllTargetsEntireTeam(t *testing.T) {
+	tempDir := t.TempDir()
+	h := NewOpenClawHandler(tempDir, false)
+
+	var (
+		callsMu      sync.Mutex
+		leaderCalls  int
+		workerACalls int
+		workerBCalls int
+	)
+
+	leaderSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("unexpected leader path: %s", r.URL.Path)
+		}
+		callsMu.Lock()
+		leaderCalls++
+		callsMu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{
+					"message": map[string]any{
+						"content": "Leader acknowledged.",
+					},
+				},
+			},
+		})
+	}))
+	defer leaderSrv.Close()
+
+	workerASrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("unexpected worker-a path: %s", r.URL.Path)
+		}
+		callsMu.Lock()
+		workerACalls++
+		callsMu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{
+					"message": map[string]any{
+						"content": "Worker A acknowledged.",
+					},
+				},
+			},
+		})
+	}))
+	defer workerASrv.Close()
+
+	workerBSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("unexpected worker-b path: %s", r.URL.Path)
+		}
+		callsMu.Lock()
+		workerBCalls++
+		callsMu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{
+					"message": map[string]any{
+						"content": "Worker B acknowledged.",
+					},
+				},
+			},
+		})
+	}))
+	defer workerBSrv.Close()
+
+	team := TeamEntry{
+		ID:        "team-all",
+		Name:      "All Team",
+		LeaderID:  "leader-1",
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		UpdatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := h.saveTeams([]TeamEntry{team}); err != nil {
+		t.Fatalf("failed to seed team: %v", err)
+	}
+	if err := h.saveRegistry([]ContainerEntry{
+		{
+			Name:     "leader-1",
+			Port:     mustServerPort(t, leaderSrv.URL),
+			Image:    "ghcr.io/openclaw/openclaw:latest",
+			Token:    "leader-token",
+			DataDir:  tempDir,
+			TeamID:   team.ID,
+			RoleKind: "leader",
+		},
+		{
+			Name:     "worker-a",
+			Port:     mustServerPort(t, workerASrv.URL),
+			Image:    "ghcr.io/openclaw/openclaw:latest",
+			Token:    "worker-a-token",
+			DataDir:  tempDir,
+			TeamID:   team.ID,
+			RoleKind: "worker",
+		},
+		{
+			Name:     "worker-b",
+			Port:     mustServerPort(t, workerBSrv.URL),
+			Image:    "ghcr.io/openclaw/openclaw:latest",
+			Token:    "worker-b-token",
+			DataDir:  tempDir,
+			TeamID:   team.ID,
+			RoleKind: "worker",
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed workers: %v", err)
+	}
+
+	h.mu.Lock()
+	room, err := h.ensureDefaultRoomLocked(team)
+	h.mu.Unlock()
+	if err != nil {
+		t.Fatalf("failed to ensure room: %v", err)
+	}
+
+	userMessage := newRoomMessage(
+		room,
+		"user",
+		"user-1",
+		"You",
+		"@all 请同步你们当前的状态。",
+		nil,
+	)
+	if err := h.appendRoomMessage(room.ID, userMessage); err != nil {
+		t.Fatalf("failed to append user message: %v", err)
+	}
+
+	h.processRoomUserMessage(room.ID, userMessage.ID)
+
+	callsMu.Lock()
+	gotLeader := leaderCalls
+	gotWorkerA := workerACalls
+	gotWorkerB := workerBCalls
+	callsMu.Unlock()
+	if gotLeader != 1 {
+		t.Fatalf("expected leader to be called once for @all, got %d", gotLeader)
+	}
+	if gotWorkerA != 1 {
+		t.Fatalf("expected worker-a to be called once for @all, got %d", gotWorkerA)
+	}
+	if gotWorkerB != 1 {
+		t.Fatalf("expected worker-b to be called once for @all, got %d", gotWorkerB)
 	}
 }
 

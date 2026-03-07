@@ -42,12 +42,12 @@ fn main() -> Result<()> {
         .map_err(|e| anyhow!("Failed to download model.safetensors: {}", e))?;
 
     let base_model_dir = base_config_path.parent().unwrap();
-    println!("   ✓ Base model directory: {:?}", base_model_dir);
+    println!("   Base model directory: {:?}", base_model_dir);
 
     // Load base model config
     let config_str = std::fs::read_to_string(&base_config_path)?;
     let config: Config = serde_json::from_str(&config_str)?;
-    println!("   ✓ Config loaded:");
+    println!("   Config loaded:");
     println!("     - hidden_size: {}", config.hidden_size);
     println!("     - vocab_size: {}", config.vocab_size);
     println!("     - num_hidden_layers: {}", config.num_hidden_layers);
@@ -89,7 +89,7 @@ fn main() -> Result<()> {
 
     let lora_adapter_path = match lora_adapter_path {
         Some(path) => {
-            println!("   ✓ Found LoRA adapter at: {}", path);
+            println!("   Found LoRA adapter at: {}", path);
             path
         }
         None => {
@@ -124,7 +124,7 @@ fn main() -> Result<()> {
         || model_vb.get((1, 1), "lora_A.weight").is_ok();
 
     if has_lora {
-        println!("   ✓ This is a LoRA adapter model");
+        println!("   This is a LoRA adapter model");
 
         // Step 5: Try to load LoRA adapter
         println!("\nAttempting to load LoRA adapter for intent classification...");
@@ -192,7 +192,7 @@ fn main() -> Result<()> {
     }
 
     // Step 5: Check for traditional classifier
-    println!("   ✓ This appears to be a traditional classifier model");
+    println!("   This appears to be a traditional classifier model");
     println!("\nAttempting to load classifier weights...");
 
     match model_vb.get((3, modernbert_hidden_size), "classifier.weight") {

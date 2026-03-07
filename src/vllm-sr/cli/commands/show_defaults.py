@@ -21,7 +21,7 @@ def show_defaults_command(output_file: str = None):
         try:
             with open(output_file, "w") as f:
                 f.write(defaults_yaml)
-            log.info(f"✓ Defaults written to: {output_file}")
+            log.info(f"Defaults written to: {output_file}")
         except Exception as e:
             log.error(f"Failed to write defaults: {e}")
             sys.exit(1)

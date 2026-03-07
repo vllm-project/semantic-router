@@ -222,7 +222,7 @@ impl Qwen3MultiLoRAClassifier {
             context: None,
         })?;
 
-        println!("✅ Qwen3 model loaded successfully\n");
+        println!("Qwen3 model loaded successfully\n");
 
         Ok(Self {
             base_model,
@@ -374,7 +374,7 @@ impl Qwen3MultiLoRAClassifier {
         );
 
         println!(
-            "✅ Adapter '{}' loaded and injected successfully\n",
+            "Adapter '{}' loaded and injected successfully\n",
             adapter_name
         );
 

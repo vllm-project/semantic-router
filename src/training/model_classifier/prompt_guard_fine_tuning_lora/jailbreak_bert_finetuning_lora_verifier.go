@@ -344,7 +344,7 @@ func main() {
 			labelName, result.Class, result.Confidence)
 		isCorrect := labelName == test.expected
 		if isCorrect {
-			fmt.Printf(" ✓ CORRECT")
+			fmt.Printf(" CORRECT")
 		} else {
 			fmt.Printf(" ✗ INCORRECT")
 		}

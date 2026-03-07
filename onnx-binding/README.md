@@ -75,9 +75,9 @@ The mmBERT model supports two dimensions of flexibility:
 
 | Platform | Backend | glibc | Status |
 |----------|---------|-------|--------|
-| Linux (any) | CPU | 2.38+ | ✓ Recommended |
-| `rocm/pytorch:latest` | AMD MI300X | 2.39 | ✓ Working |
-| NVIDIA containers | CUDA | varies | ✓ Working |
+| Linux (any) | CPU | 2.38+ | Recommended |
+| `rocm/pytorch:latest` | AMD MI300X | 2.39 | Working |
+| NVIDIA containers | CUDA | varies | Working |
 
 ## Quick Start: CPU (Recommended)
 

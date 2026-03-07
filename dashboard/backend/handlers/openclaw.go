@@ -158,7 +158,33 @@ func (h *OpenClawHandler) findEntry(name string) *ContainerEntry {
 	return nil
 }
 
-func (h *OpenClawHandler) nextAvailablePort() int {
+// defaultBridgeGatewayPort is the fixed port used for all OpenClaw containers
+// when running in bridge network mode. Since each container has its own network
+// namespace with a unique IP, port conflicts cannot occur.
+const defaultBridgeGatewayPort = 18790
+
+// isBridgeNetwork returns true if the network mode is a user-defined bridge network
+// (not "host" and not "container:xxx"). In bridge mode, each container has an
+// isolated network namespace, so all containers can safely bind to the same port.
+func isBridgeNetwork(networkMode string) bool {
+	nm := strings.ToLower(strings.TrimSpace(networkMode))
+	if nm == "" || nm == "host" {
+		return false
+	}
+	if strings.HasPrefix(nm, "container:") {
+		return false
+	}
+	return true
+}
+
+func (h *OpenClawHandler) nextAvailablePort(networkMode string) int {
+	// In bridge network mode, all containers can safely use the same port
+	// because each container has its own network namespace with a unique IP.
+	if isBridgeNetwork(networkMode) {
+		return defaultBridgeGatewayPort
+	}
+
+	// Host network mode: need to find an available port on the host
 	entries, _ := h.loadRegistry()
 	used := map[int]bool{}
 	for _, e := range entries {

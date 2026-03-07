@@ -13,6 +13,7 @@ type EmbeddingModelType string
 const (
 	EmbeddingModelBERT   EmbeddingModelType = "bert"
 	EmbeddingModelMMBERT EmbeddingModelType = "mmbert"
+	EmbeddingModelMulti  EmbeddingModelType = "multimodal"
 	EmbeddingModelQwen3  EmbeddingModelType = "qwen3"
 	EmbeddingModelGemma  EmbeddingModelType = "gemma"
 )
@@ -58,6 +59,17 @@ func GenerateEmbedding(text string, cfg EmbeddingConfig) ([]float32, error) {
 		}
 		return output.Embedding, nil
 
+	case "multimodal":
+		targetDim := cfg.Dimension
+		if targetDim <= 0 {
+			targetDim = 384
+		}
+		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, targetDim)
+		if err != nil {
+			return nil, fmt.Errorf("multimodal embedding failed: %w", err)
+		}
+		return output.Embedding, nil
+
 	case "bert", "":
 		// Use traditional GetEmbedding for BERT (default)
 		embedding, err := candle_binding.GetEmbedding(text, 0)
@@ -67,6 +79,6 @@ func GenerateEmbedding(text string, cfg EmbeddingConfig) ([]float32, error) {
 		return embedding, nil
 
 	default:
-		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', 'gemma', or 'mmbert')", modelName)
+		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', 'gemma', 'mmbert', or 'multimodal')", modelName)
 	}
 }

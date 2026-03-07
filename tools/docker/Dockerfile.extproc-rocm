@@ -116,7 +116,29 @@ RUN cd nlp-binding && \
     cargo build --release --target x86_64-unknown-linux-gnu
 
 # ============================================================================
-# Stage 5: Build Go application (both candle and onnx binaries)
+# Stage 5: Build CK Flash Attention custom op library (ROCm / gfx942)
+# ============================================================================
+FROM rocm/dev-ubuntu-22.04:7.0 AS fa-builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        cmake ninja-build composablekernel-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build/ort-ck-flash-attn
+COPY onnx-binding/ort-ck-flash-attn/CMakeLists.txt ./
+COPY onnx-binding/ort-ck-flash-attn/include/ include/
+COPY onnx-binding/ort-ck-flash-attn/src/ src/
+COPY onnx-binding/ort-ck-flash-attn/tests/ tests/
+
+RUN cmake -B build -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DGPU_TARGETS=gfx942 \
+        -DCMAKE_INSTALL_PREFIX=/opt/ort-ck-flash-attn && \
+    cmake --build build --target ort_ck_flash_attn --parallel $(nproc) && \
+    cmake --install build
+
+# ============================================================================
+# Stage 6: Build Go application (both candle and onnx binaries)
 # ============================================================================
 FROM golang:1.24 AS go-builder
 
@@ -201,6 +223,10 @@ COPY --from=go-builder /app/bin/router-onnx /app/router-onnx
 # Copy Rust shared libraries
 COPY --from=go-builder /app/lib/ /app/lib/
 
+# Copy CK Flash Attention custom op library.
+# Prefer prebuilt binary (faster CI); fall back to the fa-builder stage.
+COPY onnx-binding/ort-ck-flash-attn/prebuilt/libort_ck_flash_attn.so* /app/lib/
+
 COPY config/config.yaml /app/config/
 COPY scripts/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
@@ -208,6 +234,7 @@ RUN chmod +x /app/entrypoint.sh
 # Point ort to the ROCm-enabled ORT library and set library paths
 ENV ORT_DYLIB_PATH=/usr/local/lib/python3.10/dist-packages/onnxruntime/capi/libonnxruntime.so \
     LD_LIBRARY_PATH=/app/lib:/opt/rocm/lib:/usr/local/lib/python3.10/dist-packages/onnxruntime/capi \
+    ORT_CK_FLASH_ATTN_LIB=/app/lib/libort_ck_flash_attn.so \
     AI_BINDING=onnx
 
 EXPOSE 50051

@@ -41,7 +41,7 @@ fn setup_embedding_models() {
             panic!("Failed to initialize embedding models for FFI tests");
         }
 
-        println!("✅ ModelFactory initialized for FFI tests");
+        println!("ModelFactory initialized for FFI tests");
     });
 }
 

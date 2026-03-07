@@ -95,6 +95,7 @@ const CLAW_MODE_SYSTEM_PROMPT = [
   "3) Other descriptive fields (such as role/vibe/principles/descriptions) should follow the user's language preference inferred from the conversation.",
   '4) When creating a Claw Worker, the principles field MUST explicitly include team context (team name, mission, and collaboration expectations), and should be rich and concrete.',
   '5) Before executing team/worker creation tools (or other mutating Claw actions), first present a concise plan/design for user confirmation; only execute after explicit user approval.',
+  '6) Team design MUST include exactly one leader. Ensure one worker is designated with role_kind="leader", and ensure team leader_id points to that leader (set on creation if possible, otherwise update the team after creating workers).',
 ].join('\n')
 
 // Typing effect component for greeting with multiple lines
@@ -717,7 +718,7 @@ const ClawModeToggle = ({
       aria-label={enabled ? 'Disable ClawOS' : 'Enable ClawOS'}
     >
       <img src="/openclaw.svg" alt="" aria-hidden="true" className={styles.clawToggleIcon} />
-      <span className={styles.clawToggleLabel}>ClawOS</span>
+      <span className={styles.clawToggleLabel}>ClawMode</span>
     </button>
   )
 }
@@ -931,7 +932,7 @@ const ChatComponent = ({
   const [isTogglingClawMode, setIsTogglingClawMode] = useState(false)
   const [expandedToolCards, setExpandedToolCards] = useState<Set<string>>(new Set())
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const [clawView, setClawView] = useState<ClawPlaygroundView>(() => 'room')
+  const [clawView, setClawView] = useState<ClawPlaygroundView>(() => 'control')
   const [teamRoomCreateToken, setTeamRoomCreateToken] = useState(0)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -1837,11 +1838,16 @@ const ChatComponent = ({
     }
 
     setEnableClawMode(true)
-    setClawView('room')
     setError(null)
   }, [enableClawMode, isLoading, isTogglingClawMode])
 
   const isTeamRoomView = enableClawMode && clawView === 'room'
+  const modeToggleDisabled = isLoading || isTogglingClawMode
+
+  const handleToggleTeamView = useCallback(() => {
+    if (!enableClawMode || modeToggleDisabled) return
+    setClawView(prev => (prev === 'room' ? 'control' : 'room'))
+  }, [enableClawMode, modeToggleDisabled])
 
   const handleTopBarCreate = useCallback(() => {
     if (isTeamRoomView) {
@@ -1850,6 +1856,21 @@ const ChatComponent = ({
     }
     handleNewConversation()
   }, [handleNewConversation, isTeamRoomView])
+
+  const roomChatToggleControl = enableClawMode ? (
+    <button
+      type="button"
+      className={`${styles.teamToggleButton} ${isTeamRoomView ? styles.teamToggleButtonActive : ''}`}
+      onClick={handleToggleTeamView}
+      aria-pressed={isTeamRoomView}
+      aria-label={isTeamRoomView ? 'Exit ClawRoom view' : 'Open ClawRoom view'}
+      title={isTeamRoomView ? 'Switch to chat view' : 'Switch to room chat view'}
+      disabled={modeToggleDisabled}
+    >
+      <img src="/openclaw.svg" alt="" aria-hidden="true" className={styles.clawToggleIcon} />
+      <span className={styles.teamToggleLabel}>ClawRoom</span>
+    </button>
+  ) : null
 
   return (
     <>
@@ -1965,37 +1986,35 @@ const ChatComponent = ({
                     <path d="M17 3v6M14 6h6" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </button>
-                {enableClawMode && (
-                  <div className={styles.clawViewToggle}>
-                    <button
-                      type="button"
-                      className={`${styles.clawViewButton} ${clawView === 'room' ? styles.clawViewButtonActive : ''}`}
-                      onClick={() => setClawView('room')}
-                    >
-                      Team Room
-                    </button>
-                    <button
-                      type="button"
-                      className={`${styles.clawViewButton} ${clawView === 'control' ? styles.clawViewButtonActive : ''}`}
-                      onClick={() => setClawView('control')}
-                    >
-                      Control Chat
-                    </button>
-                  </div>
-                )}
-                {enableClawMode && clawView === 'room' && (
-                  <ClawModeToggle
-                    enabled={enableClawMode}
-                    onToggle={handleToggleClawMode}
-                    disabled={isLoading || isTogglingClawMode}
-                  />
-                )}
               </div>
             </div>
             {isTeamRoomView ? (
               <ClawRoomChat
                 isSidebarOpen={isSidebarOpen}
                 createRoomRequestToken={teamRoomCreateToken}
+                inputModeControls={(
+                  <>
+                    <button
+                      type="button"
+                      className={`${styles.inputActionButton} ${styles.searchToggleActive}`}
+                      onClick={event => event.preventDefault()}
+                      data-tooltip="Web Search enabled in Room Chat"
+                      aria-label="Web Search enabled in Room Chat"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M2 12h20" />
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                      </svg>
+                    </button>
+                    <ClawModeToggle
+                      enabled={enableClawMode}
+                      onToggle={handleToggleClawMode}
+                      disabled={modeToggleDisabled}
+                    />
+                    {roomChatToggleControl}
+                  </>
+                )}
               />
             ) : (
               <>
@@ -2218,16 +2237,17 @@ const ChatComponent = ({
                     />
                     <div className={styles.inputActionsRow}>
                       <div className={styles.inputActions}>
-                        <ClawModeToggle
-                          enabled={enableClawMode}
-                          onToggle={handleToggleClawMode}
-                          disabled={isLoading || isTogglingClawMode}
-                        />
                         <ToolToggle
                           enabled={enableWebSearch}
                           onToggle={() => setEnableWebSearch(!enableWebSearch)}
                           disabled={isLoading || isTogglingClawMode}
                         />
+                        <ClawModeToggle
+                          enabled={enableClawMode}
+                          onToggle={handleToggleClawMode}
+                          disabled={modeToggleDisabled}
+                        />
+                        {roomChatToggleControl}
                       </div>
                       {isLoading ? (
                         <button

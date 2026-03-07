@@ -135,7 +135,7 @@ if [ "$SKIP_AWS" = false ]; then
     INSTANCE_IP=$(grep "Public IP:" "$INSTANCE_FILE" | awk '{print $3}')
     SSH_KEY=$(grep "ssh -i" "$INSTANCE_FILE" | sed 's/.*-i //' | awk '{print $1}')
 
-    echo -e "${GREEN}✓ Instance ready: $INSTANCE_IP${NC}"
+    echo -e "${GREEN}Instance ready: $INSTANCE_IP${NC}"
     echo ""
 
     # Wait for instance to be fully ready
@@ -168,7 +168,7 @@ if [ "$SKIP_UPLOAD" = false ]; then
         "$SCRIPT_DIR"/{generate_training_data.py,lora_trainer.py,losses.py,common_utils.py,__init__.py} \
         "ubuntu@$INSTANCE_IP:~/semantic-router/src/training/cache_embeddings/"
 
-    echo -e "${GREEN}✓ Upload complete${NC}"
+    echo -e "${GREEN}Upload complete${NC}"
     echo ""
 else
     echo -e "${YELLOW}[2/6] Skipping upload${NC}"
@@ -202,7 +202,7 @@ EOF
     echo -e "${YELLOW}Killing test process...${NC}"
     kill $TRAIN_PID 2>/dev/null || true
 
-    echo -e "${GREEN}✓ Data generation started successfully!${NC}"
+    echo -e "${GREEN}Data generation started successfully!${NC}"
     echo ""
     echo -e "${BLUE}In production, this step would run for ~1.5-2 hours and execute:${NC}"
     echo "  python3 generate_training_data.py \\"
@@ -231,7 +231,7 @@ python3 src/training/cache_embeddings/generate_training_data.py \
   --checkpoint-interval 50
 EOFREMOTE
 
-    echo -e "${GREEN}✓ Data generation complete${NC}"
+    echo -e "${GREEN}Data generation complete${NC}"
     echo ""
 fi
 
@@ -259,7 +259,7 @@ python3 src/training/cache_embeddings/lora_trainer.py \
   --temperature 0.05
 EOF
 
-    echo -e "${GREEN}✓ Training complete${NC}"
+    echo -e "${GREEN}Training complete${NC}"
     echo ""
 fi
 
@@ -274,7 +274,7 @@ else
         "ubuntu@$INSTANCE_IP:~/semantic-router/models/${DOMAIN}-cache-lora/*" \
         "$REPO_ROOT/$OUTPUT_DIR/"
 
-    echo -e "${GREEN}✓ Downloaded to: $OUTPUT_DIR${NC}"
+    echo -e "${GREEN}Downloaded to: $OUTPUT_DIR${NC}"
     echo ""
 fi
 
@@ -311,7 +311,7 @@ if [ "$SKIP_CLEANUP" = false ] || [ "$TEST_MODE" = true ]; then
                 echo -e "${GREEN}Terminating instance...${NC}"
                 cd "$AWS_DIR"
                 ./deploy-vllm.sh cleanup
-                echo -e "${GREEN}✓ Instance terminated${NC}"
+                echo -e "${GREEN}Instance terminated${NC}"
                 ;;
             2)
                 echo -e "${YELLOW}Stopping instance (can be restarted later)...${NC}"
@@ -322,7 +322,7 @@ if [ "$SKIP_CLEANUP" = false ] || [ "$TEST_MODE" = true ]; then
 
                 if [ -n "$INSTANCE_ID" ] && [ "$INSTANCE_ID" != "None" ]; then
                     aws ec2 stop-instances --instance-ids "$INSTANCE_ID"
-                    echo -e "${GREEN}✓ Instance stopped (ID: $INSTANCE_ID)${NC}"
+                    echo -e "${GREEN}Instance stopped (ID: $INSTANCE_ID)${NC}"
                     echo -e "${BLUE}To restart: aws ec2 start-instances --instance-ids $INSTANCE_ID${NC}"
                 else
                     echo -e "${RED}Error: Could not find instance ID${NC}"
@@ -375,7 +375,7 @@ if [ "$PUSH_HF" = true ] && [ -n "$HF_REPO" ]; then
     cd "$REPO_ROOT/$OUTPUT_DIR"
     huggingface-cli upload "$HF_REPO" . --repo-type model
 
-    echo -e "${GREEN}✓ Pushed to HuggingFace: https://huggingface.co/$HF_REPO${NC}"
+    echo -e "${GREEN}Pushed to HuggingFace: https://huggingface.co/$HF_REPO${NC}"
     echo ""
 fi
 

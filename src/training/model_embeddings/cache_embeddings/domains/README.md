@@ -13,12 +13,12 @@ This directory contains configuration files for training domain-specific cache e
 
 That's it! The script will:
 
-1. ✅ Provision AWS GPU instance (g5.12xlarge with 4x A10G)
-2. ✅ Upload your data and code
-3. ✅ Run vLLM data generation (~2 hours)
-4. ✅ Train LoRA adapter (~5 minutes)
-5. ✅ Download trained model
-6. ✅ Cleanup AWS instance
+1. Provision AWS GPU instance (g5.12xlarge with 4x A10G)
+2. Upload your data and code
+3. Run vLLM data generation (~2 hours)
+4. Train LoRA adapter (~5 minutes)
+5. Download trained model
+6. Cleanup AWS instance
 
 ### Push to HuggingFace
 
@@ -42,10 +42,10 @@ The multi-domain LoRA approach has proven effective across diverse domains. Vali
 
 Domains with validated improvement results:
 
-- ✅ **Medical/Healthcare** (+14.6%) - Clinical terms, diseases, treatments
-- ✅ **Law** (+16.9%) - Case law, legal concepts
-- ✅ **Programming** (+11.3%) - Code, technical documentation
-- ✅ **Psychology** (+34.9%) - Mental health, theories
+- **Medical/Healthcare** (+14.6%) - Clinical terms, diseases, treatments
+- **Law** (+16.9%) - Case law, legal concepts
+- **Programming** (+11.3%) - Code, technical documentation
+- **Psychology** (+34.9%) - Mental health, theories
 
 **Multi-domain average: +19.4% improvement**
 
@@ -125,11 +125,11 @@ See what would happen without actually running:
 
 | Field | Required | Description | Example |
 |-------|----------|-------------|---------|
-| `domain` | ✅ | Domain identifier | `medical` |
-| `description` | ✅ | Brief description | `"Medical queries"` |
-| `data_file` | ✅ | Path to queries (from repo root) | `data/cache_embeddings/medical/...` |
-| `queries_count` | ✅ | Approximate query count | `44603` |
-| `output_dir` | ✅ | Where to save model | `models/medical-cache-lora` |
+| `domain` | | Domain identifier | `medical` |
+| `description` | | Brief description | `"Medical queries"` |
+| `data_file` | | Path to queries (from repo root) | `data/cache_embeddings/medical/...` |
+| `queries_count` | | Approximate query count | `44603` |
+| `output_dir` | | Where to save model | `models/medical-cache-lora` |
 | `hf_repo` | ❌ | HuggingFace repo for upload | `org/model-name` |
 | `vllm_model` | ❌ | LLM for generation | `Qwen/Qwen2.5-1.5B-Instruct` |
 | `base_model` | ❌ | Base embedding model | `sentence-transformers/all-MiniLM-L12-v2` |

@@ -173,6 +173,21 @@ const (
 	VerificationContextMissing = "x-vsr-verification-context-missing"
 )
 
+// Response Jailbreak Detection Headers
+// These headers are added to responses when response-level jailbreak detection
+// finds adversarial content (e.g., memory poisoning patterns) in the LLM response.
+const (
+	// ResponseJailbreakDetected indicates that jailbreak content was detected in the LLM response.
+	// Value: "true"
+	ResponseJailbreakDetected = "x-vsr-response-jailbreak-detected"
+
+	// ResponseJailbreakType specifies the type of jailbreak detected in the response.
+	ResponseJailbreakType = "x-vsr-response-jailbreak-type"
+
+	// ResponseJailbreakConfidence indicates the confidence level of the response jailbreak detection.
+	ResponseJailbreakConfidence = "x-vsr-response-jailbreak-confidence"
+)
+
 // Auth Backend Injected Headers
 // These headers are set by the external authorization service (Authorino, Envoy Gateway JWT,
 // oauth2-proxy, etc.) after successful user authentication.

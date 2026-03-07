@@ -47,7 +47,7 @@ echo "Reference: 'What Are the Implications of Your Question?'"
 echo "           Non-Information Seeking Question-Type Identification (ACL LREC 2024)"
 clone_or_update "https://github.com/YaoSun0422/NISQ_dataset.git" "NISQ_dataset"
 if [ -f "NISQ_dataset/final_train.csv" ]; then
-    echo "  ✓ NISQ dataset ready (final_train.csv found)"
+    echo "  NISQ dataset ready (final_train.csv found)"
     wc -l NISQ_dataset/final_train.csv | awk '{print "    Lines: " $1}'
 else
     echo "  ✗ Warning: final_train.csv not found"
@@ -58,7 +58,7 @@ echo "=== Downloading FaithDial Dataset ==="
 echo "Reference: 'FaithDial: A Benchmark for Information-Seeking Dialogue' (TACL 2022)"
 clone_or_update "https://huggingface.co/datasets/McGill-NLP/FaithDial" "FaithDial_dataset"
 if [ -f "FaithDial_dataset/train.json" ]; then
-    echo "  ✓ FaithDial dataset ready (train.json found)"
+    echo "  FaithDial dataset ready (train.json found)"
 else
     echo "  ✗ Warning: train.json not found"
 fi
@@ -68,7 +68,7 @@ echo "=== Downloading FactCHD Dataset ==="
 echo "Reference: 'FactCHD: Benchmarking Fact-Conflicting Hallucination Detection' (2024)"
 clone_or_update "https://huggingface.co/datasets/zjunlp/FactCHD" "FactCHD_dataset"
 if [ -f "FactCHD_dataset/fact_train_noe.jsonl" ]; then
-    echo "  ✓ FactCHD dataset ready (fact_train_noe.jsonl found)"
+    echo "  FactCHD dataset ready (fact_train_noe.jsonl found)"
     wc -l FactCHD_dataset/fact_train_noe.jsonl | awk '{print "    Lines: " $1}'
 else
     echo "  ✗ Warning: fact_train_noe.jsonl not found"

@@ -31,7 +31,7 @@ type MilvusCache struct {
 	missCount           int64
 	lastCleanupTime     *time.Time
 	mu                  sync.RWMutex
-	embeddingModel      string // "bert", "qwen3", "gemma", or "mmbert"
+	embeddingModel      string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
 }
 
 // MilvusCacheOptions contains configuration parameters for Milvus cache initialization
@@ -282,11 +282,18 @@ func (c *MilvusCache) getEmbedding(text string) ([]float32, error) {
 			return nil, err
 		}
 		return output.Embedding, nil
+	case "multimodal":
+		// Use multimodal text encoder branch (384-dim default)
+		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, 384)
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
 	case "bert", "":
 		// Use traditional GetEmbedding for BERT (default)
 		return candle_binding.GetEmbedding(text, 0)
 	default:
-		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', 'gemma', or 'mmbert')", c.embeddingModel)
+		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', 'gemma', 'mmbert', or 'multimodal')", c.embeddingModel)
 	}
 }
 

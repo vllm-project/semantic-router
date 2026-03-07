@@ -2,7 +2,7 @@
 MMLU-Pro Category Classification with Qwen3 Generative Fine-tuning + LoRA
 Fine-tunes Qwen3-0.6B as an instruction-following model to GENERATE category labels.
 
-✅ **CORRECT APPROACH**: Uses Qwen3 as a generative model (text-to-text)
+**CORRECT APPROACH**: Uses Qwen3 as a generative model (text-to-text)
    - Qwen3 generates category names as text
    - Standard causal language modeling (how Qwen3 was pre-trained)
    - Instruction-tuning format (like ChatGPT/Claude)
@@ -658,7 +658,7 @@ def main(
             logger.info(f"\n[{i+1}/{num_test_samples}] Question: {question[:100]}...")
             logger.info(f"  True: {true_category}")
             logger.info(f"  Predicted: {predicted_category}")
-            logger.info(f"  {'✓ CORRECT' if is_correct else '✗ WRONG'}")
+            logger.info(f"  {'CORRECT' if is_correct else '✗ WRONG'}")
 
     accuracy = (correct / total * 100) if total > 0 else 0
     logger.info("\n" + "=" * 50)

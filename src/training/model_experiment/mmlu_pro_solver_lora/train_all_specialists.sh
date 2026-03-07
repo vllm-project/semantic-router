@@ -72,7 +72,7 @@ train_model() {
         --gpu-id "$GPU_ID" \
         2>&1 | tee "$LOG_FILE"; then
         echo ""
-        echo "✓ Successfully trained $MODEL_TYPE"
+        echo "Successfully trained $MODEL_TYPE"
         echo "  Log: $LOG_FILE"
         echo ""
     else

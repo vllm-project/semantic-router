@@ -124,17 +124,17 @@ def show_config_command(
     print("=" * 80)
 
     if show_user:
-        print(f"✓ User config: {config_path}")
+        print(f"User config: {config_path}")
 
     if show_router:
         if router_config_path.exists():
-            print(f"✓ Router config: {router_config_path}")
+            print(f"Router config: {router_config_path}")
         else:
             print(f"⚠ Router config: Not generated yet")
 
     if show_envoy:
         if envoy_config_path.exists():
-            print(f"✓ Envoy config: {envoy_config_path}")
+            print(f"Envoy config: {envoy_config_path}")
         else:
             print(f"⚠ Envoy config: Not generated yet")
 
