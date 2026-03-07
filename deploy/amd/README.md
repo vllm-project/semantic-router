@@ -99,6 +99,19 @@ sudo docker run -d \
     --gpu-memory-utilization 0.16
 ```
 
+`--api-key "${VLLM_API_KEY:?Set VLLM_API_KEY in .env}"` means the vLLM OpenAI-compatible endpoint requires a Bearer token, and the shell must already have `VLLM_API_KEY` set before you run `docker run`. `docker run` does not automatically read `.env`, so load it first or export the variable manually:
+
+```bash
+set -a
+source .env
+set +a
+
+# or export it directly
+export VLLM_API_KEY=your-secret-key
+```
+
+If you are doing local-only testing and do not want authentication, remove the `--api-key ...` argument from both `docker run` commands.
+
 The AMD `config.yaml` and `claw.yaml` profiles below assume these containers are reachable by Docker DNS on `vllm-sr-network` as `vllm-minimax-m2:8000` and `vllm-qwen-7b:8000`.
 
 **Verify both vLLM backends are running:**
