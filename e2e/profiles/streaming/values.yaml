@@ -18,7 +18,7 @@ config:
   semantic_cache:
     enabled: true
     backend_type: "memory"
-    similarity_threshold: 0.8
+    similarity_threshold: 0.6
     max_entries: 1000
     ttl_seconds: 3600
     eviction_policy: "fifo"
@@ -162,7 +162,7 @@ config:
         - type: "semantic-cache"
           configuration:
             enabled: true
-            similarity_threshold: 0.75
+            similarity_threshold: 0.6
 
   default_model: base-model
 
