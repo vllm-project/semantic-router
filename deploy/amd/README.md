@@ -46,6 +46,23 @@ This playbook demonstrates:
 
 ## Installation
 
+### Step 0: Export Required Environment Variables
+
+The `docker run` commands below use `--api-key "${VLLM_API_KEY:?Set VLLM_API_KEY in .env}"`. This makes the vLLM OpenAI-compatible endpoint require a Bearer token, and the shell must already have `VLLM_API_KEY` set before you start the containers.
+
+`docker run` does not automatically read `.env`, so load it first or export the variable manually:
+
+```bash
+set -a
+source .env
+set +a
+
+# or export it directly
+export VLLM_API_KEY=your-secret-key
+```
+
+If you are doing local-only testing and do not want authentication, remove the `--api-key ...` argument from both `docker run` commands in Step 1.
+
 ### Step 1: Deploy vLLM on AMD ROCm
 
 Create the shared Docker network first, then start one real large-model backend and one real small-model backend.
@@ -99,19 +116,6 @@ sudo docker run -d \
     --gpu-memory-utilization 0.16
 ```
 
-`--api-key "${VLLM_API_KEY:?Set VLLM_API_KEY in .env}"` means the vLLM OpenAI-compatible endpoint requires a Bearer token, and the shell must already have `VLLM_API_KEY` set before you run `docker run`. `docker run` does not automatically read `.env`, so load it first or export the variable manually:
-
-```bash
-set -a
-source .env
-set +a
-
-# or export it directly
-export VLLM_API_KEY=your-secret-key
-```
-
-If you are doing local-only testing and do not want authentication, remove the `--api-key ...` argument from both `docker run` commands.
-
 The AMD `config.yaml` and `claw.yaml` profiles below assume these containers are reachable by Docker DNS on `vllm-sr-network` as `vllm-minimax-m2:8000` and `vllm-qwen-7b:8000`.
 
 **Verify both vLLM backends are running:**
@@ -139,9 +143,13 @@ source vsr/bin/activate
 pip3 install vllm-sr
 ```
 
-### Step 3: Download and Configure the AMD Profile
+### Step 3 (Optional): Download and Configure the AMD Profile
 
-`vllm-sr serve` can bootstrap the local workspace automatically, so you do not need to run `vllm-sr init` first for this playbook. Download the AMD routing profile directly:
+This step is optional now. If you want a YAML-first flow, download the AMD routing profile directly. If you prefer a dashboard-first flow, skip this step, start `vllm-sr`, then configure models and routing from the dashboard setup flow.
+
+`vllm-sr serve` can bootstrap the local workspace automatically, so you do not need to run `vllm-sr init` first for this playbook.
+
+Download the AMD routing profile directly:
 
 ```bash
 # Download the AMD-optimized config.yaml
@@ -152,7 +160,7 @@ If `.vllm-sr/router-defaults.yaml` is not present yet, `vllm-sr serve --platform
 
 ### Step 4: Start vLLM Semantic Router
 
-Start the semantic router with the configuration:
+Start the semantic router. If you skipped Step 3, use the dashboard to configure your first model and activate routing after startup:
 
 ```bash
 # Start vllm-sr
