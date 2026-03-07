@@ -46,23 +46,6 @@ This playbook demonstrates:
 
 ## Installation
 
-### Step 0: Export Required Environment Variables
-
-The `docker run` commands below use `--api-key "${VLLM_API_KEY:?Set VLLM_API_KEY in .env}"`. This makes the vLLM OpenAI-compatible endpoint require a Bearer token, and the shell must already have `VLLM_API_KEY` set before you start the containers.
-
-`docker run` does not automatically read `.env`, so load it first or export the variable manually:
-
-```bash
-set -a
-source .env
-set +a
-
-# or export it directly
-export VLLM_API_KEY=your-secret-key
-```
-
-If you are doing local-only testing and do not want authentication, remove the `--api-key ...` argument from both `docker run` commands in Step 1.
-
 ### Step 1: Deploy vLLM on AMD ROCm
 
 Create the shared Docker network first, then start one real large-model backend and one real small-model backend.
@@ -84,7 +67,6 @@ sudo docker run -d \
   vllm/vllm-openai-rocm:v0.15.0 \
     --model cerebras/MiniMax-M2.1-REAP-139B-A10B \
     --served-model-name MiniMax-M2.1 \
-    --api-key "${VLLM_API_KEY:?Set VLLM_API_KEY in .env}" \
     --port 8000 \
     --enable-auto-tool-choice \
     --tool-call-parser minimax_m2 \
@@ -107,7 +89,6 @@ sudo docker run -d \
   vllm/vllm-openai-rocm:v0.15.0 \
     --model Qwen/Qwen2.5-7B-Instruct \
     --served-model-name Qwen2.5-7B \
-    --api-key "${VLLM_API_KEY:?Set VLLM_API_KEY in .env}" \
     --port 8000 \
     --enable-auto-tool-choice \
     --tool-call-parser hermes \
