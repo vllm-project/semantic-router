@@ -4,8 +4,6 @@
 
 mom_registry:
   "models/mmbert32k-intent-classifier-merged-onnx": "llm-semantic-router/mmbert32k-intent-classifier-merged"
-  "models/mmbert32k-jailbreak-detector-merged-onnx": "llm-semantic-router/mmbert32k-jailbreak-detector-merged"
-  "models/mmbert32k-pii-detector-merged-onnx": "llm-semantic-router/mmbert32k-pii-detector-merged"
 
 response_api:
   enabled: false
@@ -26,13 +24,11 @@ prompt_compression:
   enabled: PROMPT_COMPRESSION_PLACEHOLDER
   max_tokens: PROMPT_COMPRESSION_MAX_TOKENS_PLACEHOLDER
 
+# Enable semi-streaming body processing. Requires Envoy request_body_mode: STREAMED.
+streamed_body_mode: true
+
 prompt_guard:
-  enabled: true
-  use_mmbert_32k: true
-  model_id: "models/mmbert32k-jailbreak-detector-merged-onnx"
-  jailbreak_mapping_path: "models/mmbert32k-jailbreak-detector-merged-onnx/jailbreak_mapping.json"
-  use_cpu: USE_CPU_PLACEHOLDER
-  threshold: 0.5
+  enabled: false
 
 classifier:
   category_model:
@@ -41,23 +37,6 @@ classifier:
     model_id: "models/mmbert32k-intent-classifier-merged-onnx"
     category_mapping_path: "models/mmbert32k-intent-classifier-merged-onnx/category_mapping.json"
     use_cpu: USE_CPU_PLACEHOLDER
-    threshold: 0.5
-  pii_model:
-    enabled: true
-    use_mmbert_32k: true
-    model_id: "models/mmbert32k-pii-detector-merged-onnx"
-    pii_mapping_path: "models/mmbert32k-pii-detector-merged-onnx/pii_mapping.json"
-    use_cpu: USE_CPU_PLACEHOLDER
-    threshold: 0.5
-
-# Signal rules: define named signals so decisions can reference them
-jailbreak:
-  - name: "jailbreak_detected"
-    method: "classifier"
-    threshold: 0.5
-
-pii:
-  - name: "pii_deny_all"
     threshold: 0.5
 
 hallucination_mitigation:
@@ -90,32 +69,6 @@ categories:
     description: "Computer science questions"
 
 decisions:
-  - name: "safety_guard"
-    description: "Block jailbreak attempts"
-    priority: 200
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "jailbreak"
-          name: "jailbreak_detected"
-    modelRefs:
-      - model: "auto"
-        use_reasoning: false
-        weight: 100
-
-  - name: "pii_guard"
-    description: "Flag PII content"
-    priority: 150
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "pii"
-          name: "pii_deny_all"
-    modelRefs:
-      - model: "auto"
-        use_reasoning: false
-        weight: 100
-
   - name: "default"
     description: "Route by domain"
     priority: 100

@@ -24,6 +24,7 @@ import (
 	responseapiredis "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis"
 	responseapirediscluster "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis-cluster"
 	routingstrategies "github.com/vllm-project/semantic-router/e2e/profiles/routing-strategies"
+	streaming "github.com/vllm-project/semantic-router/e2e/profiles/streaming"
 
 	// Import profiles to register test cases
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/ai-gateway"
@@ -37,6 +38,7 @@ import (
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis-cluster"
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/routing-strategies"
+	_ "github.com/vllm-project/semantic-router/e2e/profiles/streaming"
 
 	// ML-based model selection profile
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/ml-model-selection"
@@ -149,6 +151,8 @@ func getProfile(name string) (framework.Profile, error) {
 		return responseapirediscluster.NewProfile(), nil
 	case "routing-strategies":
 		return routingstrategies.NewProfile(), nil
+	case "streaming":
+		return streaming.NewProfile(), nil
 	case "ml-model-selection":
 		return mlmodelselection.NewProfile(), nil
 	case "multi-endpoint":

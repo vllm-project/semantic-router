@@ -28,7 +28,13 @@ import (
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
-// handleRequestBody processes the request body
+// handleRequestBody processes the request body.
+//
+// The hot path uses gjson-based field extraction (extractContentFast) to avoid
+// the expensive json.Unmarshal into the full OpenAI SDK struct. The SDK struct
+// is parsed lazily — only when body mutations are actually needed (modality
+// routing, memory injection, model routing). Requests that hit fast_response,
+// rate limiting, or cache never pay the full parse cost.
 func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBody, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
 	// Record start time for model routing
 	ctx.ProcessingStartTime = time.Now()
@@ -44,86 +50,61 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 			return r.createErrorResponse(400, "Invalid Response API request: "+err.Error()), nil
 		}
 		if respCtx != nil && translatedBody != nil {
-			// Update context with full Response API context
 			ctx.ResponseAPICtx = respCtx
 			requestBody = translatedBody
 			logging.Infof("Response API: Translated to Chat Completions format")
 		} else {
-			// Translation returned nil - this means the request is missing required fields (e.g., 'input')
-			// Return error since the request was sent to /v1/responses but is not valid Response API format
 			logging.Errorf("Response API: Request to /v1/responses missing required 'input' field")
 			return r.createErrorResponse(400, "Invalid Response API request: 'input' field is required. Use 'input' instead of 'messages' for Response API."), nil
 		}
 	}
 
-	// Extract stream parameter from original request and update ExpectStreamingResponse if needed
-	hasStreamParam := extractStreamParam(requestBody)
-	if hasStreamParam {
-		logging.Infof("Original request contains stream parameter: true")
-		ctx.ExpectStreamingResponse = true // Set this if stream param is found
-	}
-
-	// Parse the OpenAI request using SDK types
-	openAIRequest, err := parseOpenAIRequest(requestBody)
-	if err != nil {
-		logging.Errorf("Error parsing OpenAI request: %v", err)
-		// Attempt to determine model for labeling (may be unknown here)
+	// --- Fast extraction phase (gjson, no full SDK parse) ---
+	fast, fastErr := extractContentFast(requestBody)
+	if fastErr != nil {
+		logging.Errorf("Error extracting request fields: %v", fastErr)
 		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
-		// Count this request as well, with unknown model if necessary
 		metrics.RecordModelRequest(ctx.RequestModel)
-		return nil, status.Errorf(codes.InvalidArgument, "invalid request body: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid request body: %v", fastErr)
 	}
 
-	// Store the original model
-	originalModel := openAIRequest.Model
+	if fast.Stream {
+		logging.Infof("Original request contains stream parameter: true")
+		ctx.ExpectStreamingResponse = true
+	}
 
-	// Set the model on context early so error metrics can label it
+	originalModel := fast.Model
 	if ctx.RequestModel == "" {
 		ctx.RequestModel = originalModel
 	}
 
-	// Check if this is a looper internal request - if so, execute decision plugins
-	// (lookup decision by name and apply configured plugins)
+	// Looper requests are handled separately (they parse the SDK struct internally)
 	if r.isLooperRequest(ctx) {
 		logging.Infof("[Looper] Internal request detected, executing decision plugins for model: %s", originalModel)
 		return r.handleLooperInternalRequestWithPlugins(originalModel, ctx)
 	}
 
-	// Get content from messages
-	userContent, nonUserMessages := extractUserAndNonUserContent(openAIRequest)
-
-	// Store user content for later use in hallucination detection
+	userContent := fast.UserContent
+	nonUserMessages := fast.NonUserMessages
 	ctx.UserContent = userContent
+	ctx.RequestImageURL = fast.FirstImageURL
 
-	// Extract the first image URL for Tier 1 complexity pre-routing
-	ctx.RequestImageURL = extractFirstImageURL(openAIRequest)
+	// --- Classification, security, caching (no SDK struct needed) ---
 
-	// Perform decision evaluation and model selection once at the beginning
-	// Use decision-based routing if decisions are configured, otherwise fall back to category-based
-	// This also evaluates fact-check signal as part of the signal evaluation
 	decisionName, _, reasoningDecision, selectedModel, authzErr := r.performDecisionEvaluation(originalModel, userContent, nonUserMessages, ctx)
 	if authzErr != nil {
-		// Authz failure is a hard error — return 403 Forbidden.
-		// This happens when role_bindings are configured but the x-authz-user-id header is missing.
 		logging.Errorf("[Request Body] Authz evaluation failed: %v", authzErr)
 		return r.createErrorResponse(403, authzErr.Error()), nil
 	}
 
-	// Record the initial request to this model (count all requests)
 	metrics.RecordModelRequest(selectedModel)
 
-	// Fast response plugin: if the matched decision has a fast_response plugin,
-	// short-circuit and return an OpenAI-compatible response immediately without
-	// hitting any upstream model. This is the "Action" side of the Signal→Decision→Action
-	// pipeline, commonly used with jailbreak/PII signals.
 	if resp := r.handleFastResponse(ctx, decisionName); resp != nil {
 		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
 		r.updateRouterReplayStatus(ctx, 200, false)
 		return resp, nil
 	}
 
-	// Rate limit check — after security checks, before cache/RAG/routing.
-	// This prevents rate-limited users from consuming cache or RAG resources.
 	if r.RateLimiter != nil {
 		rlCtx := r.buildRateLimitContext(ctx, selectedModel)
 		decision, err := r.RateLimiter.Check(rlCtx)
@@ -136,27 +117,21 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 				rlCtx.UserID, rlCtx.Model, decision.Provider, decision.Remaining)
 			return r.createRateLimitResponse(decision), nil
 		}
-		// Store context on RequestContext for post-response reporting
 		ctx.RateLimitCtx = &rlCtx
 	}
 
-	// Handle caching with decision-specific settings
 	if response, shouldReturn := r.handleCaching(ctx, decisionName); shouldReturn {
 		logging.Infof("handleCaching returned a response, returning immediately")
 		return response, nil
 	}
 	logging.Infof("handleCaching returned no cached response, continuing to model routing")
 
-	// Execute RAG plugin if enabled (after cache check, before other plugins)
-	// RAG plugin retrieves context and injects it into the request
 	if ragErr := r.executeRAGPlugin(ctx, decisionName); ragErr != nil {
-		// If RAG fails with on_failure=block, return error response
 		return r.createErrorResponse(503, fmt.Sprintf("RAG retrieval failed: %v", ragErr)), nil
 	}
 
-	// If the Responses API request includes an explicit image_generation tool and the
-	// modality classifier did not already detect a modality, use the tool presence as a
-	// strong signal. With text content present we classify as BOTH; otherwise DIFFUSION.
+	// --- Lazy SDK parse: only needed for modality routing, memory, and model routing ---
+
 	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.HasImageGenerationTool &&
 		(ctx.ModalityClassification == nil || ctx.ModalityClassification.Modality == "" || ctx.ModalityClassification.Modality == ModalityAR) {
 		modality := ModalityDiffusion
@@ -171,45 +146,37 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		logging.Infof("[ModalityRouter] Explicit image_generation tool detected — forcing modality=%s", modality)
 	}
 
-	// Modality routing: if the decision matched a modality signal (DIFFUSION/BOTH),
-	// execute image generation. This is driven by the modality signal in the decision engine
-	// or by the explicit image_generation tool detection above.
+	openAIRequest, err := parseOpenAIRequest(requestBody)
+	if err != nil {
+		logging.Errorf("Error parsing OpenAI request for routing: %v", err)
+		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
+		return nil, status.Errorf(codes.InvalidArgument, "invalid request body: %v", err)
+	}
+
 	if resp, err := r.handleModalityFromDecision(ctx, openAIRequest); err != nil {
 		logging.Errorf("[ModalityRouter] Error: %v", err)
 		return r.createErrorResponse(503, fmt.Sprintf("Modality routing failed: %v", err)), nil
 	} else if resp != nil {
-		return resp, nil // DIFFUSION/BOTH short-circuit — image already generated
+		return resp, nil
 	}
 
-	// Handle memory retrieval (if enabled)
-	// Memory retrieval happens after cache check to avoid unnecessary work on cache hits
-	// and before model routing to inject memories into LLM context
 	requestBody, memErr := r.handleMemoryRetrieval(ctx, userContent, requestBody, openAIRequest)
 	if memErr != nil {
 		logging.Warnf("Memory retrieval failed: %v, continuing without memory", memErr)
-		// Graceful degradation: continue without memory if retrieval fails
 	}
-	// Update the translated body with injected memories for Response API
 	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest && len(requestBody) > 0 {
 		ctx.ResponseAPICtx.TranslatedBody = requestBody
 	}
 
-	// Re-parse openAIRequest from memory-augmented body so the looper
-	// (which uses openAIRequest directly) includes injected memories.
 	if ctx.MemoryContext != "" {
 		if updatedReq, parseErr := parseOpenAIRequest(requestBody); parseErr == nil {
 			openAIRequest = updatedReq
-			// Verify the reparsed request has messages
-			marshaledCheck, _ := json.Marshal(updatedReq)
-			logging.Infof("[MemoryPatch] Re-parsed request with memory, body_len=%d, reparsed_len=%d", len(requestBody), len(marshaledCheck))
-			logging.Infof("[MemoryPatch] Original body snippet: %.300s", string(requestBody))
-			logging.Infof("[MemoryPatch] Reparsed body snippet: %.300s", string(marshaledCheck))
+			logging.Infof("[MemoryPatch] Re-parsed request with memory, body_len=%d", len(requestBody))
 		} else {
 			logging.Errorf("[MemoryPatch] Failed to re-parse memory-augmented body: %v", parseErr)
 		}
 	}
 
-	// Handle model selection and routing with pre-computed classification results and selected model
 	return r.handleModelRouting(openAIRequest, originalModel, decisionName, reasoningDecision, selectedModel, ctx)
 }
 
@@ -901,25 +868,9 @@ func (r *OpenAIRouter) createSpecifiedModelResponse(model string, upstreamModel 
 }
 
 // rewriteModelInBody rewrites the "model" field in a JSON request body.
-// Uses a generic map approach to preserve all other fields.
+// Uses sjson for in-place byte-level replacement (no unmarshal/marshal cycle).
 func rewriteModelInBody(body []byte, newModel string) ([]byte, error) {
-	var requestMap map[string]json.RawMessage
-	if err := json.Unmarshal(body, &requestMap); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal request body: %w", err)
-	}
-
-	modelJSON, err := json.Marshal(newModel)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal new model name: %w", err)
-	}
-	requestMap["model"] = json.RawMessage(modelJSON)
-
-	rewritten, err := json.Marshal(requestMap)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal rewritten request: %w", err)
-	}
-
-	return rewritten, nil
+	return rewriteModelInBodyFast(body, newModel)
 }
 
 // getModelAccessKey retrieves the access_key for a given model from the config

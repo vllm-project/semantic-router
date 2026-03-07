@@ -46,49 +46,23 @@ func parseOpenAIRequest(data []byte) (*openai.ChatCompletionNewParams, error) {
 	return &req, nil
 }
 
-// extractStreamParam extracts the stream parameter from the original request body
+// extractStreamParam extracts the stream parameter from the original request body.
+// Uses gjson for O(scan) extraction without allocating a map.
 func extractStreamParam(originalBody []byte) bool {
-	var requestMap map[string]interface{}
-	if err := json.Unmarshal(originalBody, &requestMap); err != nil {
-		return false
-	}
-
-	if streamValue, exists := requestMap["stream"]; exists {
-		if stream, ok := streamValue.(bool); ok {
-			return stream
-		}
-	}
-	return false
+	return extractStreamParamFast(originalBody)
 }
 
-// serializeOpenAIRequestWithStream converts request back to JSON, preserving the stream parameter from original request
+// serializeOpenAIRequestWithStream converts request back to JSON, preserving
+// the stream parameter from the original request. Uses sjson for in-place
+// field insertion instead of unmarshal → modify → marshal.
 func serializeOpenAIRequestWithStream(req *openai.ChatCompletionNewParams, hasStreamParam bool) ([]byte, error) {
-	// First serialize the SDK object
 	sdkBytes, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
-
-	// If original request had stream parameter, add it back along with stream_options
 	if hasStreamParam {
-		var sdkMap map[string]interface{}
-		if err := json.Unmarshal(sdkBytes, &sdkMap); err == nil {
-			sdkMap["stream"] = true
-
-			// Automatically add stream_options to enable usage tracking in streaming responses
-			// This ensures vLLM returns token usage information in the final chunk
-			sdkMap["stream_options"] = map[string]interface{}{
-				"include_usage": true,
-			}
-
-			logging.Infof("Added stream_options.include_usage=true for streaming request")
-
-			if modifiedBytes, err := json.Marshal(sdkMap); err == nil {
-				return modifiedBytes, nil
-			}
-		}
+		sdkBytes = addStreamFieldsFast(sdkBytes)
 	}
-
 	return sdkBytes, nil
 }
 
@@ -174,26 +148,6 @@ func statusCodeToEnum(statusCode int) typev3.StatusCode {
 	}
 }
 
-// extractFirstImageURL returns the first safe inline image data-URI from user messages.
-// Only base64-encoded data URIs are accepted to prevent SSRF and local file reads.
-func extractFirstImageURL(req *openai.ChatCompletionNewParams) string {
-	for _, msg := range req.Messages {
-		if msg.OfUser == nil {
-			continue
-		}
-		for _, part := range msg.OfUser.Content.OfArrayOfContentParts {
-			if part.OfImageURL == nil {
-				continue
-			}
-			url := part.OfImageURL.ImageURL.URL
-			if isSafeImageDataURL(url) {
-				return url
-			}
-		}
-	}
-	return ""
-}
-
 // isSafeImageDataURL returns true only for inline base64-encoded image data URIs
 // with an allowlisted MIME type (e.g. "data:image/png;base64,...").
 // HTTP(S) URLs, non-image data URIs, and file paths are rejected to prevent
@@ -221,15 +175,8 @@ func isSafeImageDataURL(url string) bool {
 	return payload != ""
 }
 
-// rewriteRequestModel rewrites the model field in the request body JSON
-// Used by looper internal requests to route to specific models
+// rewriteRequestModel rewrites the model field in the request body JSON.
+// Uses sjson for in-place field replacement.
 func rewriteRequestModel(originalBody []byte, newModel string) ([]byte, error) {
-	var requestMap map[string]interface{}
-	if err := json.Unmarshal(originalBody, &requestMap); err != nil {
-		return nil, err
-	}
-
-	requestMap["model"] = newModel
-
-	return json.Marshal(requestMap)
+	return rewriteModelInBodyFast(originalBody, newModel)
 }

@@ -13,6 +13,38 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
+// handleRequestBodyDispatch routes body messages to the correct handler.
+//
+// BUFFERED mode (default): the message goes straight to handleRequestBody.
+//
+// STREAMED mode (streamed_body_mode: true in config): Envoy sends multiple
+// body messages. A StreamedBodyHandler accumulates chunks, detects the model
+// from the first few KB, and either passes through or accumulates for the
+// full pipeline on end_of_stream.
+func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_RequestBody, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+	eos := v.RequestBody.GetEndOfStream()
+
+	// If we already have a handler from a previous chunk, continue streaming
+	if ctx.StreamedBody != nil {
+		resp, err := ctx.StreamedBody.HandleChunk(v.RequestBody, ctx)
+		if eos {
+			ctx.StreamedBody.Release()
+			ctx.StreamedBody = nil
+		}
+		return resp, err
+	}
+
+	// Decide mode based on config: only use streaming handler when explicitly enabled
+	streamedMode := r.Config != nil && r.Config.StreamedBodyMode
+	if streamedMode && !eos {
+		ctx.StreamedBody = newStreamedBodyHandler(r, ctx)
+		return ctx.StreamedBody.HandleChunk(v.RequestBody, ctx)
+	}
+
+	// BUFFERED mode or single-message STREAMED — use classic pipeline
+	return r.handleRequestBody(v, ctx)
+}
+
 // Process implements the ext_proc calls
 func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) error {
 	logging.Infof("Processing at stage [init]")
@@ -78,7 +110,7 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 			}
 
 		case *ext_proc.ProcessingRequest_RequestBody:
-			response, err := r.handleRequestBody(v, ctx)
+			response, err := r.handleRequestBodyDispatch(v, ctx)
 			if err != nil {
 				logging.Errorf("handleRequestBody failed: %v", err)
 				return err

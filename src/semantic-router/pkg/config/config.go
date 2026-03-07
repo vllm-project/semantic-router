@@ -353,6 +353,22 @@ type RouterOptions struct {
 
 	// Gateway route cache clearing
 	ClearRouteCache bool `yaml:"clear_route_cache"`
+
+	// StreamedBodyMode enables semi-streaming body processing. When true, the
+	// ext_proc expects Envoy to send request bodies as multiple STREAMED chunks
+	// instead of a single BUFFERED message. Must be set to true when Envoy is
+	// configured with request_body_mode: "STREAMED".
+	StreamedBodyMode bool `yaml:"streamed_body_mode,omitempty"`
+
+	// MaxStreamedBodyBytes caps how many bytes the streamed body handler will
+	// accumulate before aborting the request. 0 means no limit (default).
+	MaxStreamedBodyBytes int64 `yaml:"max_streamed_body_bytes,omitempty"`
+
+	// StreamedBodyTimeoutSec is the maximum wall-clock seconds the handler
+	// will spend accumulating chunks before discarding the buffer and
+	// returning an error. 0 means no timeout (default — relies on Envoy's
+	// message_timeout instead).
+	StreamedBodyTimeoutSec int `yaml:"streamed_body_timeout_sec,omitempty"`
 }
 
 // InlineModels represents the configuration for models that are built into the binary
