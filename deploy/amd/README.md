@@ -72,7 +72,7 @@ sudo docker run -d \
     --tool-call-parser qwen3_coder \
     --trust-remote-code \
     --reasoning-parser qwen3 \
-    --max-model-len 65536 \
+    --max-model-len 32768 \
     --gpu-memory-utilization 0.80
 
 sudo docker run -d \
@@ -87,14 +87,14 @@ sudo docker run -d \
   --ipc=host \
   --security-opt seccomp=unconfined \
   vllm/vllm-openai-rocm:v0.17.0 \
-    --model Qwen/Qwen3.5-9B \
+    --model Qwen/Qwen3.5-4B \
     --served-model-name Qwen3.5-9B \
     --port 8000 \
     --enable-auto-tool-choice \
     --tool-call-parser qwen3_coder \
     --trust-remote-code \
     --max-model-len 32768 \
-    --gpu-memory-utilization 0.16
+    --gpu-memory-utilization 0.14
 ```
 
 On a single MI300X, if the 122B FP8 backend fails the startup memory check, lower `--gpu-memory-utilization` to `0.80` or below first. If it still does not fit, reduce `--max-model-len` from `262144` to a smaller value such as `65536` or `32768`.
