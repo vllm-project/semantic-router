@@ -34,6 +34,9 @@ import {
   formatThreshold,
   ModelConfigEntry,
   NormalizedModel,
+  normalizeEndpoint,
+  normalizeEndpointProtocol,
+  normalizeEndpoints,
   ReasoningFamily,
   SignalType,
   TABLE_COLUMN_WIDTH,
@@ -430,7 +433,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         const model: NormalizedModel = {
           name: m.name,
           reasoning_family: m.reasoning_family,
-          endpoints: m.endpoints || [],
+          endpoints: normalizeEndpoints(m.endpoints),
           access_key: m.access_key,
           pricing: m.pricing,
         }
@@ -444,12 +447,12 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         reasoning_family: cfg.reasoning_family,
         endpoints: cfg.preferred_endpoints?.map((ep: string) => {
           const endpoint = config.vllm_endpoints?.find((e: VLLMEndpoint) => e.name === ep)
-          return endpoint ? {
+          return endpoint ? normalizeEndpoint({
             name: ep,
             weight: endpoint.weight || 1,
             endpoint: `${endpoint.address}:${endpoint.port}`,
             protocol: 'http',
-          } : null
+          }, 0) : null
         }).filter((e): e is NonNullable<typeof e> => e !== null) || [],
         access_key: undefined,
         pricing: cfg.pricing
@@ -2316,29 +2319,32 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
               </tr>
             </thead>
             <tbody>
-              {model.endpoints.map((ep, idx) => (
-                <tr key={idx} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                  <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem', fontWeight: 500 }}>{ep.name}</td>
-                  <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem', fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)' }}>
-                    {isReadonly ? '************' : (ep.endpoint || 'N/A')}
-                  </td>
-                  <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
-                    <span style={{
-                      padding: '0.25rem 0.5rem',
-                      background: ep.protocol === 'https' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
-                      borderRadius: '4px',
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
-                      textTransform: 'uppercase'
-                    }}>
-                      {ep.protocol || 'http'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', fontSize: '0.875rem', fontFamily: 'var(--font-mono)' }}>
-                    {ep.weight}
-                  </td>
-                </tr>
-              ))}
+              {model.endpoints.map((ep, idx) => {
+                const protocol = normalizeEndpointProtocol(ep.protocol)
+                return (
+                  <tr key={idx} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                    <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem', fontWeight: 500 }}>{ep.name}</td>
+                    <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem', fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)' }}>
+                      {isReadonly ? '************' : (ep.endpoint || 'N/A')}
+                    </td>
+                    <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
+                      <span style={{
+                        padding: '0.25rem 0.5rem',
+                        background: protocol === 'https' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
+                        borderRadius: '4px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        textTransform: 'uppercase'
+                      }}>
+                        {protocol}
+                      </span>
+                    </td>
+                    <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', fontSize: '0.875rem', fontFamily: 'var(--font-mono)' }}>
+                      {ep.weight}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -2367,7 +2373,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
               value: (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   {model.endpoints.map((ep, i) => {
-                    const isHttps = ep.protocol === 'https'
+                    const protocol = normalizeEndpointProtocol(ep.protocol)
+                    const isHttps = protocol === 'https'
                     return (
                       <div key={i} style={{
                         border: '1px solid var(--color-border)',
@@ -2407,7 +2414,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                               background: isHttps ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
                               color: isHttps ? 'rgb(34, 197, 94)' : 'rgb(234, 179, 8)'
                             }}>
-                              {ep.protocol.toUpperCase()}
+                              {protocol.toUpperCase()}
                             </span>
                           </span>
                           <span>Weight: {ep.weight}</span>
@@ -2526,7 +2533,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
         ],
         async (data) => {
           // Endpoints are already validated by EndpointsEditor
-          const endpoints = data.endpoints || []
+          const endpoints = normalizeEndpoints(data.endpoints)
 
           const newConfig = { ...config }
 
@@ -2580,7 +2587,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           reasoning_family: model.reasoning_family || '',
           access_key: model.access_key || '',
           // Endpoints
-          endpoints: model.endpoints || [],
+          endpoints: normalizeEndpoints(model.endpoints),
           // Pricing
           currency: model.pricing?.currency || 'USD',
           prompt_per_1m: model.pricing?.prompt_per_1m || 0,
@@ -2636,7 +2643,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
           const newConfig = { ...config }
 
           // Endpoints are already validated by EndpointsEditor
-          const endpoints = data.endpoints || []
+          const endpoints = normalizeEndpoints(data.endpoints)
 
           if (isPythonCLI && newConfig.providers?.models) {
             newConfig.providers = { ...newConfig.providers }

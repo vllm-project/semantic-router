@@ -1,3 +1,4 @@
+import type { Endpoint } from '../components/EndpointsEditor'
 import type { DecisionConditionType } from '../types/config'
 
 export interface VLLMEndpoint {
@@ -94,7 +95,7 @@ export interface ModelConfigEntry {
 export interface NormalizedModel {
   name: string
   reasoning_family?: string
-  endpoints: Array<{ name: string; weight: number; endpoint: string; protocol: string }>
+  endpoints: Endpoint[]
   access_key?: string
   pricing?: {
     currency?: string
@@ -387,6 +388,23 @@ export const normalizeModelScores = (
     use_reasoning: false,
   }))
 }
+
+export const normalizeEndpointProtocol = (protocol: unknown): Endpoint['protocol'] =>
+  protocol === 'https' ? 'https' : 'http'
+
+export const normalizeEndpoint = (
+  endpoint: Partial<Endpoint> | undefined,
+  index: number
+): Endpoint => ({
+  name: endpoint?.name?.trim() || `endpoint-${index + 1}`,
+  endpoint: endpoint?.endpoint?.trim() || '',
+  protocol: normalizeEndpointProtocol(endpoint?.protocol),
+  weight:
+    typeof endpoint?.weight === 'number' && Number.isFinite(endpoint.weight) ? endpoint.weight : 1,
+})
+
+export const normalizeEndpoints = (endpoints: Partial<Endpoint>[] | undefined): Endpoint[] =>
+  Array.isArray(endpoints) ? endpoints.map((endpoint, index) => normalizeEndpoint(endpoint, index)) : []
 
 export const TABLE_COLUMN_WIDTH = {
   compact: '140px',

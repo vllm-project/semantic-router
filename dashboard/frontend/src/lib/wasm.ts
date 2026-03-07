@@ -87,22 +87,43 @@ async function setCachedModule(module: WebAssembly.Module, etag: string | null):
     // Some browsers (Safari, strict CSP) don't support serializing WebAssembly.Module
     // via structured clone into IndexedDB. Test with a small validation first.
     const db = await openCacheDB()
-    return new Promise((resolve) => {
-      const tx = db.transaction(IDB_STORE, 'readwrite')
-      const store = tx.objectStore(IDB_STORE)
-      const req = store.put({ module, etag } as CachedModule, IDB_KEY)
-      req.onerror = (e) => {
-        // DataCloneError: WebAssembly.Module can not be serialized for storage
-        console.warn('[wasm] IndexedDB cache write failed (non-fatal):', (e.target as IDBRequest)?.error?.message)
-        e.preventDefault() // prevent uncaught error
+    await new Promise<void>((resolve) => {
+      let settled = false
+      const finish = () => {
+        if (settled) return
+        settled = true
         db.close()
         resolve()
       }
-      tx.oncomplete = () => { db.close(); resolve() }
-      tx.onerror = (e) => {
-        e.preventDefault() // prevent uncaught error
-        db.close()
-        resolve()
+
+      try {
+        const tx = db.transaction(IDB_STORE, 'readwrite')
+        const store = tx.objectStore(IDB_STORE)
+
+        let req: IDBRequest<IDBValidKey>
+        try {
+          req = store.put({ module, etag } as CachedModule, IDB_KEY)
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unknown error'
+          console.warn('[wasm] IndexedDB cache write skipped (non-fatal):', message)
+          finish()
+          return
+        }
+
+        req.onerror = (e) => {
+          // DataCloneError: WebAssembly.Module can not be serialized for storage
+          console.warn('[wasm] IndexedDB cache write failed (non-fatal):', (e.target as IDBRequest)?.error?.message)
+          e.preventDefault() // prevent uncaught error
+          finish()
+        }
+        tx.oncomplete = finish
+        tx.onabort = finish
+        tx.onerror = (e) => {
+          e.preventDefault() // prevent uncaught error
+          finish()
+        }
+      } catch {
+        finish()
       }
     })
   } catch {
@@ -182,14 +203,14 @@ async function init(): Promise<void> {
         const result = await WebAssembly.instantiate(module, go.importObject)
         wasmInstance = result
         // Cache in background
-        setCachedModule(module, etag)
+        void setCachedModule(module, etag)
       } else {
         // Fallback for environments without compileStreaming
         const bytes = await resp.arrayBuffer()
         const module = await WebAssembly.compile(bytes)
         const result = await WebAssembly.instantiate(module, go.importObject)
         wasmInstance = result
-        setCachedModule(module, etag)
+        void setCachedModule(module, etag)
       }
     }
 
