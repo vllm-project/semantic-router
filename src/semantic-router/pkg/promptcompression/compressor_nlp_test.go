@@ -1,7 +1,4 @@
 //go:build !windows && cgo && (amd64 || arm64)
-// +build !windows
-// +build cgo
-// +build amd64 arm64
 
 package promptcompression
 

@@ -13,6 +13,23 @@ body:
       description: A clear and concise description of what the feature is.
     validations:
       required: true
+  - type: dropdown
+    attributes:
+      label: Primary layer
+      description: Which core layer should primarily own this feature?
+      options:
+        - signal
+        - plugin
+        - global level
+        - unsure
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Why this layer?
+      description: Explain why this belongs in signal, plugin, or the global level. Signal is for extracting information from text, plugin is for decision-driven processing, and global level is for intentionally cross-cutting behavior.
+    validations:
+      required: false
   - type: textarea
     attributes:
       label: Why do you need this feature?

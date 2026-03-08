@@ -368,22 +368,40 @@ func validateLatencyAwareAlgorithmConfig(cfg *LatencyAwareAlgorithmConfig) error
 		return fmt.Errorf("must specify at least one of tpot_percentile (1-100) or ttft_percentile (1-100). RECOMMENDED: use both for comprehensive latency evaluation")
 	}
 
-	// Warn (but don't error) if only one is set - recommend using both
+	warnIncompleteLatencyAwarePercentiles(hasTPOTPercentile, hasTTFTPercentile)
+
+	for _, field := range []struct {
+		name    string
+		value   int
+		enabled bool
+	}{
+		{name: "tpot_percentile", value: cfg.TPOTPercentile, enabled: hasTPOTPercentile},
+		{name: "ttft_percentile", value: cfg.TTFTPercentile, enabled: hasTTFTPercentile},
+	} {
+		if err := validateLatencyAwarePercentile(field.name, field.value, field.enabled); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func warnIncompleteLatencyAwarePercentiles(hasTPOTPercentile bool, hasTTFTPercentile bool) {
 	if hasTPOTPercentile && !hasTTFTPercentile {
 		logging.Warnf("algorithm.latency_aware: only tpot_percentile is set. RECOMMENDED: also set ttft_percentile for comprehensive latency evaluation (user-perceived latency)")
 	}
 	if !hasTPOTPercentile && hasTTFTPercentile {
 		logging.Warnf("algorithm.latency_aware: only ttft_percentile is set. RECOMMENDED: also set tpot_percentile for comprehensive latency evaluation (token generation throughput)")
 	}
+}
 
-	if hasTPOTPercentile && (cfg.TPOTPercentile < 1 || cfg.TPOTPercentile > 100) {
-		return fmt.Errorf("tpot_percentile must be between 1 and 100, got: %d", cfg.TPOTPercentile)
+func validateLatencyAwarePercentile(name string, value int, enabled bool) error {
+	if !enabled {
+		return nil
 	}
-
-	if hasTTFTPercentile && (cfg.TTFTPercentile < 1 || cfg.TTFTPercentile > 100) {
-		return fmt.Errorf("ttft_percentile must be between 1 and 100, got: %d", cfg.TTFTPercentile)
+	if value < 1 || value > 100 {
+		return fmt.Errorf("%s must be between 1 and 100, got: %d", name, value)
 	}
-
 	return nil
 }
 
@@ -397,22 +415,28 @@ func validateAdvancedToolFilteringConfig(cfg *RouterConfig) error {
 		return nil
 	}
 
-	if advanced.CandidatePoolSize != nil && *advanced.CandidatePoolSize < 0 {
-		return fmt.Errorf("tools.advanced_filtering.candidate_pool_size must be >= 0")
+	for _, field := range []struct {
+		name  string
+		value *int
+	}{
+		{name: "candidate_pool_size", value: advanced.CandidatePoolSize},
+		{name: "min_lexical_overlap", value: advanced.MinLexicalOverlap},
+	} {
+		if err := validateAdvancedToolFilteringNonNegativeInt(field.name, field.value); err != nil {
+			return err
+		}
 	}
 
-	if advanced.MinLexicalOverlap != nil && *advanced.MinLexicalOverlap < 0 {
-		return fmt.Errorf("tools.advanced_filtering.min_lexical_overlap must be >= 0")
-	}
-
-	if advanced.MinCombinedScore != nil &&
-		(*advanced.MinCombinedScore < 0.0 || *advanced.MinCombinedScore > 1.0) {
-		return fmt.Errorf("tools.advanced_filtering.min_combined_score must be between 0.0 and 1.0")
-	}
-
-	if advanced.CategoryConfidenceThreshold != nil &&
-		(*advanced.CategoryConfidenceThreshold < 0.0 || *advanced.CategoryConfidenceThreshold > 1.0) {
-		return fmt.Errorf("tools.advanced_filtering.category_confidence_threshold must be between 0.0 and 1.0")
+	for _, field := range []struct {
+		name  string
+		value *float32
+	}{
+		{name: "min_combined_score", value: advanced.MinCombinedScore},
+		{name: "category_confidence_threshold", value: advanced.CategoryConfidenceThreshold},
+	} {
+		if err := validateAdvancedToolFilteringUnitFloat(field.name, field.value); err != nil {
+			return err
+		}
 	}
 
 	weightFields := []struct {
@@ -426,12 +450,26 @@ func validateAdvancedToolFilteringConfig(cfg *RouterConfig) error {
 		{"category", advanced.Weights.Category},
 	}
 	for _, field := range weightFields {
-		if field.value != nil && (*field.value < 0.0 || *field.value > 1.0) {
-			return fmt.Errorf("tools.advanced_filtering.weights.%s must be between 0.0 and 1.0", field.name)
+		if err := validateAdvancedToolFilteringUnitFloat("weights."+field.name, field.value); err != nil {
+			return err
 		}
 	}
 
 	return nil
+}
+
+func validateAdvancedToolFilteringNonNegativeInt(name string, value *int) error {
+	if value == nil || *value >= 0 {
+		return nil
+	}
+	return fmt.Errorf("tools.advanced_filtering.%s must be >= 0", name)
+}
+
+func validateAdvancedToolFilteringUnitFloat(name string, value *float32) error {
+	if value == nil || (*value >= 0.0 && *value <= 1.0) {
+		return nil
+	}
+	return fmt.Errorf("tools.advanced_filtering.%s must be between 0.0 and 1.0", name)
 }
 
 // validateLoRAName checks if the specified LoRA name is defined in the model's configuration

@@ -232,12 +232,16 @@ vllm-sr-start: vllm-sr-dev
 ##@ vLLM-SR Tests (e2e tests for vllm-sr CLI)
 # Tests are located in e2e/testing/vllm-sr-cli/
 
+vllm-sr-install-cli: ## Install vLLM-SR CLI in editable mode for local test execution
+vllm-sr-install-cli:
+	@python3 -m pip install -e src/vllm-sr
+
 vllm-sr-test: ## Run CLI unit tests (fast, no Docker image required)
-vllm-sr-test:
+vllm-sr-test: vllm-sr-install-cli
 	@$(LOG_TARGET)
 	@cd e2e/testing/vllm-sr-cli && python run_cli_tests.py --verbose
 
 vllm-sr-test-integration: ## Run CLI unit + integration tests (requires Docker image)
-vllm-sr-test-integration: vllm-sr-build
+vllm-sr-test-integration: vllm-sr-build vllm-sr-install-cli
 	@$(LOG_TARGET)
 	@cd e2e/testing/vllm-sr-cli && RUN_INTEGRATION_TESTS=true python run_cli_tests.py --verbose --integration

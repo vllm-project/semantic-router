@@ -12,7 +12,6 @@ Signed-off-by: vLLM-SR Team
 """
 
 import os
-import sys
 import unittest
 
 from cli_test_base import CLITestBase
@@ -29,33 +28,33 @@ class TestVllmSRInit(CLITestBase):
         )
 
         # Run init command
-        return_code, stdout, stderr = self.run_cli(["init"])
+        return_code, _stdout, stderr = self.run_cli(["init"])
 
         # Verify command succeeded
         self.assertEqual(return_code, 0, f"init command failed: {stderr}")
 
         # Verify config.yaml was created
         config_path = os.path.join(self.test_dir, "config.yaml")
-        self.assertFileExists(config_path, "config.yaml was not created")
+        self.assert_file_exists(config_path, "config.yaml was not created")
 
         # Verify it contains expected lean sample content
-        self.assertFileContains(
+        self.assert_file_contains(
             config_path, "version:", "config.yaml missing version field"
         )
-        self.assertFileContains(
+        self.assert_file_contains(
             config_path, "listeners:", "config.yaml missing listeners field"
         )
-        self.assertFileContains(
+        self.assert_file_contains(
             config_path,
             "default-route",
             "config.yaml missing catch-all default decision",
         )
-        self.assertFileContains(
+        self.assert_file_contains(
             config_path,
             "replace-with-your-model",
             "config.yaml missing placeholder model",
         )
-        with open(config_path, "r") as f:
+        with open(config_path, encoding="utf-8") as f:
             content = f.read()
         self.assertNotIn(
             "math_keywords",
@@ -83,14 +82,14 @@ class TestVllmSRInit(CLITestBase):
         )
 
         # Run init command
-        return_code, stdout, stderr = self.run_cli(["init"])
+        return_code, _stdout, stderr = self.run_cli(["init"])
 
         # Verify command succeeded
         self.assertEqual(return_code, 0, f"init command failed: {stderr}")
 
         # Verify .vllm-sr directory was created
         vllm_sr_dir = os.path.join(self.test_dir, ".vllm-sr")
-        self.assertDirExists(vllm_sr_dir, ".vllm-sr/ directory was not created")
+        self.assert_dir_exists(vllm_sr_dir, ".vllm-sr/ directory was not created")
 
         # Verify expected files exist in .vllm-sr/
         expected_files = ["router-defaults.yaml", "envoy.template.yaml"]
@@ -124,11 +123,11 @@ class TestVllmSRInit(CLITestBase):
             f.write(original_content)
 
         # Run init command without --force
-        return_code, stdout, stderr = self.run_cli(["init"])
+        return_code, _stdout, _stderr = self.run_cli(["init"])
 
         # Command may succeed (skipping existing file) or fail - both are acceptable
         # The key is that the original file is NOT overwritten
-        with open(config_path, "r") as f:
+        with open(config_path, encoding="utf-8") as f:
             content = f.read()
 
         # Verify original file content is preserved
@@ -136,7 +135,7 @@ class TestVllmSRInit(CLITestBase):
         self.assertIn("custom_field", content, "Original config content was lost")
 
         print(f"  Return code: {return_code}")
-        print(f"  Original content preserved: ✓")
+        print("  Original content preserved: ✓")
 
         self.print_test_result(True, "init correctly preserved existing config")
 
@@ -153,13 +152,13 @@ class TestVllmSRInit(CLITestBase):
             f.write("# This should be overwritten\nold_field: true\n")
 
         # Run init with --force
-        return_code, stdout, stderr = self.run_cli(["init", "--force"])
+        return_code, _stdout, stderr = self.run_cli(["init", "--force"])
 
         # Should succeed
         self.assertEqual(return_code, 0, f"init --force failed: {stderr}")
 
         # Verify file was overwritten with template content
-        with open(config_path, "r") as f:
+        with open(config_path, encoding="utf-8") as f:
             content = f.read()
         self.assertNotIn("old_field", content, "Old config content still present")
         self.assertIn("listeners:", content, "New config missing listeners field")
@@ -175,7 +174,7 @@ class TestVllmSRInit(CLITestBase):
         )
 
         # Run init command
-        return_code, stdout, stderr = self.run_cli(["init"])
+        _return_code, stdout, stderr = self.run_cli(["init"])
 
         # Combine stdout and stderr for message checking
         output = stdout + stderr

@@ -1,0 +1,601 @@
+version: 1
+
+surfaces:
+  router_config_contract:
+    description: Router-side config schema, DSL emission, CRD translation, and example config compatibility.
+    paths:
+      - src/semantic-router/pkg/config/**
+      - src/semantic-router/pkg/dsl/**
+      - src/semantic-router/pkg/k8s/**
+      - config/**/*.yaml
+    task_rules:
+      - router-core
+      - repo-docs
+  router_runtime:
+    description: Signal evaluation, routing decisions, extproc request/response handling, and runtime selection behavior.
+    paths:
+      - src/semantic-router/pkg/classification/**
+      - src/semantic-router/pkg/decision/**
+      - src/semantic-router/pkg/extproc/**
+      - src/semantic-router/pkg/services/**
+      - src/semantic-router/pkg/modelselection/**
+    task_rules:
+      - router-core
+  native_binding:
+    description: Rust and cgo/onnx binding layers that back runtime signal or model evaluation.
+    paths:
+      - candle-binding/**
+      - ml-binding/**
+      - nlp-binding/**
+      - onnx-binding/**
+      - src/semantic-router/pkg/classification/unified_classifier_*.go
+    task_rules:
+      - rust-bindings
+      - router-core
+  response_headers:
+    description: x-vsr header constants, router emission, and dashboard display/reveal contracts.
+    paths:
+      - src/semantic-router/pkg/headers/**
+      - src/semantic-router/pkg/extproc/processor_res_header.go
+      - src/semantic-router/pkg/extproc/req_filter_looper.go
+      - dashboard/frontend/src/components/HeaderDisplay.tsx
+      - dashboard/frontend/src/components/HeaderReveal.tsx
+      - dashboard/frontend/src/components/ChatComponent.tsx
+    task_rules:
+      - router-core
+      - dashboard
+  python_cli_schema:
+    description: Python CLI typed schema, parser, validator, merger, and signal/plugin config translation.
+    paths:
+      - src/vllm-sr/cli/models.py
+      - src/vllm-sr/cli/parser.py
+      - src/vllm-sr/cli/validator.py
+      - src/vllm-sr/cli/merger.py
+      - src/vllm-sr/tests/**
+    task_rules:
+      - vllm-sr-cli
+  dashboard_config_ui:
+    description: Dashboard config editing, config display, and mutation flows for router-facing config.
+    paths:
+      - dashboard/frontend/src/pages/ConfigPage.tsx
+      - dashboard/frontend/src/pages/BuilderPage.tsx
+      - dashboard/frontend/src/pages/DslEditorPage.tsx
+      - dashboard/frontend/src/lib/dslMutations.ts
+      - dashboard/frontend/src/lib/dslLanguage.ts
+    task_rules:
+      - dashboard
+  topology_visualization:
+    description: Dashboard topology parsing, layout, graph nodes, and highlighted decision-path visualization.
+    paths:
+      - dashboard/backend/handlers/topology.go
+      - dashboard/frontend/src/pages/topology/**
+    task_rules:
+      - dashboard
+  playground_reveal:
+    description: Playground chat, response reveal overlays, and user-visible signal/header presentation.
+    paths:
+      - dashboard/frontend/src/pages/PlaygroundPage.tsx
+      - dashboard/frontend/src/pages/PlaygroundFullscreenPage.tsx
+      - dashboard/frontend/src/components/ChatComponent.tsx
+      - dashboard/frontend/src/components/HeaderDisplay.tsx
+      - dashboard/frontend/src/components/HeaderReveal.tsx
+    task_rules:
+      - dashboard
+  dsl_crd:
+    description: DSL compiler/decompiler, CRD conversion, and Kubernetes-facing route translation.
+    paths:
+      - src/semantic-router/pkg/dsl/**
+      - src/semantic-router/pkg/k8s/**
+      - deploy/operator/**
+    task_rules:
+      - router-core
+      - e2e-framework
+  docs_examples:
+    description: User-facing docs, examples, presets, and reference configs that explain or demonstrate behavior.
+    paths:
+      - docs/**
+      - website/**
+      - deploy/amd/**
+      - config/**/*.yaml
+    task_rules:
+      - repo-docs
+  harness_docs:
+    description: Shared agent entry, indexed harness docs, local AGENTS supplements, skill prose, and durable governance records for the agent contract itself.
+    paths:
+      - AGENTS.md
+      - docs/agent/**
+      - tools/agent/skills/**
+      - src/vllm-sr/cli/AGENTS.md
+      - src/semantic-router/pkg/config/AGENTS.md
+      - src/semantic-router/pkg/extproc/AGENTS.md
+      - dashboard/frontend/src/pages/AGENTS.md
+      - dashboard/frontend/src/components/AGENTS.md
+    task_rules:
+      - agent_text
+      - repo-docs
+  harness_exec:
+    description: Executable harness manifests, scripts, and Make/CI entrypoints that implement agent behavior.
+    paths:
+      - tools/agent/*.yaml
+      - tools/agent/scripts/**
+      - tools/make/agent.mk
+    task_rules:
+      - agent_exec
+      - make-and-ci
+  contributor_interface:
+    description: Contributor-facing wrappers that expose the harness to humans through README, contributing docs, PR templates, and issue templates.
+    paths:
+      - README.md
+      - CONTRIBUTING.md
+      - .github/PULL_REQUEST_TEMPLATE.md
+      - .github/ISSUE_TEMPLATE/**
+    task_rules:
+      - repo-docs
+      - agent_text
+  local_smoke:
+    description: Canonical local image build, serve, and smoke validation flow.
+    paths:
+      - tools/make/agent.mk
+      - tools/make/docker.mk
+      - src/vllm-sr/cli/**
+      - config/testing/config.agent-smoke.cpu.yaml
+      - config/testing/config.agent-smoke.amd.yaml
+    task_rules:
+      - vllm-sr-cli
+      - make-and-ci
+  local_e2e:
+    description: Affected local E2E profile selection and local profile execution.
+    paths:
+      - tools/agent/e2e-profile-map.yaml
+      - e2e/profiles/**
+      - e2e/testcases/**
+      - config/testing/**
+      - deploy/kubernetes/**
+      - deploy/kserve/**
+      - deploy/openshift/**
+    task_rules:
+      - e2e-framework
+  ci_e2e:
+    description: CI-side fanout, change classification, and standard profile matrix execution.
+    paths:
+      - .github/workflows/ci-changes.yml
+      - .github/workflows/integration-test-k8s.yml
+      - .github/workflows/integration-test-vllm-sr-cli.yml
+      - .github/workflows/pre-commit.yml
+      - tools/agent/e2e-profile-map.yaml
+      - tools/agent/task-matrix.yaml
+      - tools/agent/skill-registry.yaml
+    task_rules:
+      - agent_exec
+      - ci-general
+      - e2e-framework
+
+skills:
+  primary:
+    - name: harness-contract-change
+      path: tools/agent/skills/harness-contract-change/SKILL.md
+      description: Change the repository's agent contract, harness docs, manifests, scripts, or contributor-facing wrapper surfaces.
+      priority: 200
+      selector_paths:
+        - AGENTS.md
+        - README.md
+        - CONTRIBUTING.md
+        - docs/agent/**
+        - tools/agent/skills/**
+        - src/vllm-sr/cli/AGENTS.md
+        - src/semantic-router/pkg/config/AGENTS.md
+        - src/semantic-router/pkg/extproc/AGENTS.md
+        - dashboard/frontend/src/pages/AGENTS.md
+        - dashboard/frontend/src/components/AGENTS.md
+        - tools/agent/*.yaml
+        - tools/agent/scripts/**
+        - tools/make/agent.mk
+        - .github/PULL_REQUEST_TEMPLATE.md
+        - .github/ISSUE_TEMPLATE/**
+        - .github/workflows/ci-changes.yml
+        - .github/workflows/integration-test-k8s.yml
+        - .github/workflows/integration-test-vllm-sr-cli.yml
+        - .github/workflows/pre-commit.yml
+      fragments:
+        - harness-governance
+        - e2e-selection
+      required_surfaces:
+        - harness_docs
+      conditional_surfaces:
+        - harness_exec
+        - contributor_interface
+        - ci_e2e
+      optional_surfaces: []
+      stop_conditions:
+        - The harness change introduces a second conflicting source of truth instead of updating the canonical one.
+        - The harness contract cannot be validated mechanically in the same change.
+      acceptance_criteria:
+        - Harness prose and executable rules stay aligned.
+        - Harness-only changes resolve to harness-specific surfaces and validation commands.
+    - name: signal-end-to-end
+      path: tools/agent/skills/signal-end-to-end/SKILL.md
+      description: Add or evolve a signal that spans config contract, router runtime, CLI translation, UI surfaces, and E2E.
+      priority: 60
+      selector_paths:
+        - src/semantic-router/pkg/config/**
+        - src/semantic-router/pkg/classification/**
+        - src/semantic-router/pkg/decision/**
+        - src/vllm-sr/cli/models.py
+        - src/vllm-sr/cli/parser.py
+        - src/vllm-sr/cli/validator.py
+        - src/vllm-sr/cli/merger.py
+        - candle-binding/**
+        - ml-binding/**
+        - nlp-binding/**
+        - onnx-binding/**
+        - src/semantic-router/pkg/dsl/**
+        - src/semantic-router/pkg/k8s/**
+      fragments:
+        - router-runtime
+        - python-cli-schema
+        - binding-ffi
+        - dashboard-config-ui
+        - topology-playground
+        - dsl-crd
+        - e2e-selection
+        - architecture-guardrails
+      required_surfaces:
+        - router_config_contract
+        - router_runtime
+        - python_cli_schema
+        - local_e2e
+        - ci_e2e
+      conditional_surfaces:
+        - native_binding
+        - response_headers
+        - dashboard_config_ui
+        - topology_visualization
+        - playground_reveal
+        - dsl_crd
+        - docs_examples
+      optional_surfaces:
+        - local_smoke
+      stop_conditions:
+        - The signal contract is ambiguous across router config, Python CLI schema, and dashboard config UI.
+        - The feature needs a new native model/runtime path that cannot be validated in the current environment.
+      acceptance_criteria:
+        - Router config/runtime and Python CLI schema are aligned for the new signal.
+        - Relevant UI or header surfaces are updated when the signal is user-visible.
+        - At least one relevant E2E path is added or updated when behavior changes.
+    - name: plugin-end-to-end
+      path: tools/agent/skills/plugin-end-to-end/SKILL.md
+      description: Change a plugin contract or plugin chain that spans config, runtime, headers, CLI parsing, and E2E.
+      priority: 100
+      selector_paths:
+        - src/semantic-router/pkg/config/*plugin*.go
+        - src/semantic-router/pkg/extproc/req_filter_*.go
+        - src/vllm-sr/tests/test_plugin_*.py
+        - e2e/testcases/plugin_*.go
+      fragments:
+        - router-runtime
+        - python-cli-schema
+        - dashboard-config-ui
+        - e2e-selection
+        - architecture-guardrails
+      required_surfaces:
+        - router_config_contract
+        - router_runtime
+        - python_cli_schema
+        - local_e2e
+        - ci_e2e
+      conditional_surfaces:
+        - response_headers
+        - dashboard_config_ui
+        - topology_visualization
+        - playground_reveal
+        - docs_examples
+      optional_surfaces:
+        - local_smoke
+      stop_conditions:
+        - The plugin behavior change cannot be expressed consistently in config, runtime, and tests.
+      acceptance_criteria:
+        - Plugin config, runtime behavior, and tests stay aligned.
+        - User-visible plugin changes include matching UI/header updates when applicable.
+    - name: header-contract-change
+      path: tools/agent/skills/header-contract-change/SKILL.md
+      description: Add or change x-vsr request/response header contracts and the user-visible reveal/display path.
+      priority: 95
+      selector_paths:
+        - src/semantic-router/pkg/headers/**
+        - src/semantic-router/pkg/extproc/processor_res_header.go
+        - src/semantic-router/pkg/extproc/req_filter_looper.go
+        - dashboard/frontend/src/components/HeaderDisplay.tsx
+        - dashboard/frontend/src/components/HeaderReveal.tsx
+        - dashboard/frontend/src/components/ChatComponent.tsx
+      fragments:
+        - router-runtime
+        - topology-playground
+        - dashboard-config-ui
+        - e2e-selection
+        - architecture-guardrails
+      required_surfaces:
+        - response_headers
+      conditional_surfaces:
+        - dashboard_config_ui
+        - playground_reveal
+        - topology_visualization
+        - local_e2e
+        - ci_e2e
+      optional_surfaces:
+        - docs_examples
+      stop_conditions:
+        - The header semantics are not stable enough to expose to users or downstream tooling.
+      acceptance_criteria:
+        - Header constants, emission, and display/reveal allowlists stay aligned.
+        - Relevant tests cover any new or changed user-visible header contract.
+    - name: config-schema-evolution
+      path: tools/agent/skills/config-schema-evolution/SKILL.md
+      description: Evolve a config contract that must stay aligned across router config, CLI schema, dashboard UI, and docs/examples.
+      priority: 90
+      selector_paths:
+        - src/semantic-router/pkg/config/**
+        - src/vllm-sr/cli/models.py
+        - src/vllm-sr/cli/parser.py
+        - src/vllm-sr/cli/validator.py
+        - src/vllm-sr/cli/merger.py
+        - dashboard/frontend/src/pages/ConfigPage.tsx
+        - src/semantic-router/pkg/dsl/**
+        - src/semantic-router/pkg/k8s/**
+      fragments:
+        - router-runtime
+        - python-cli-schema
+        - dashboard-config-ui
+        - dsl-crd
+        - e2e-selection
+        - architecture-guardrails
+      required_surfaces:
+        - router_config_contract
+        - python_cli_schema
+        - dashboard_config_ui
+        - docs_examples
+      conditional_surfaces:
+        - dsl_crd
+        - topology_visualization
+        - playground_reveal
+      optional_surfaces:
+        - local_e2e
+        - ci_e2e
+      stop_conditions:
+        - Compatibility policy is unclear between router config, CLI schema, and dashboard config serialization.
+      acceptance_criteria:
+        - The same schema change is represented consistently in router, CLI, dashboard, and docs/examples.
+    - name: routing-decision-change
+      path: tools/agent/skills/routing-decision-change/SKILL.md
+      description: Change decision evaluation, routing policy, or model selection behavior in the runtime path.
+      priority: 88
+      selector_paths:
+        - src/semantic-router/pkg/decision/**
+        - src/semantic-router/pkg/modelselection/**
+        - src/semantic-router/pkg/classification/**
+      fragments:
+        - router-runtime
+        - e2e-selection
+        - architecture-guardrails
+      required_surfaces:
+        - router_runtime
+        - local_e2e
+        - ci_e2e
+      conditional_surfaces:
+        - response_headers
+        - docs_examples
+      optional_surfaces:
+        - local_smoke
+      stop_conditions:
+        - The routing behavior change needs product or policy guidance that is not encoded in config/tests.
+      acceptance_criteria:
+        - Decision behavior is covered by targeted tests and affected E2E profiles.
+    - name: startup-chain-change
+      path: tools/agent/skills/startup-chain-change/SKILL.md
+      description: Change local image build, serve, startup chain, or canonical smoke behavior.
+      priority: 86
+      selector_paths:
+        - src/vllm-sr/**
+        - src/vllm-sr/Dockerfile*
+        - tools/make/docker.mk
+        - tools/make/agent.mk
+        - config/testing/config.agent-smoke.cpu.yaml
+        - config/testing/config.agent-smoke.amd.yaml
+      fragments:
+        - python-cli-schema
+        - e2e-selection
+        - architecture-guardrails
+      required_surfaces:
+        - local_smoke
+        - python_cli_schema
+      conditional_surfaces:
+        - response_headers
+        - local_e2e
+        - ci_e2e
+        - docs_examples
+      optional_surfaces:
+        - dashboard_config_ui
+      stop_conditions:
+        - The startup path cannot be validated locally in the selected environment.
+      acceptance_criteria:
+        - Canonical serve path works with the default smoke config for the selected environment.
+        - Startup-chain changes include local smoke and relevant CLI/integration coverage.
+    - name: dashboard-surface-change
+      path: tools/agent/skills/dashboard-surface-change/SKILL.md
+      description: Change dashboard config, topology, or playground surfaces that reflect router behavior.
+      priority: 92
+      selector_paths:
+        - dashboard/frontend/**
+        - dashboard/backend/**
+      fragments:
+        - dashboard-config-ui
+        - topology-playground
+        - e2e-selection
+        - architecture-guardrails
+      required_surfaces:
+        - dashboard_config_ui
+      conditional_surfaces:
+        - topology_visualization
+        - playground_reveal
+        - response_headers
+        - docs_examples
+      optional_surfaces:
+        - local_e2e
+        - ci_e2e
+      stop_conditions:
+        - The dashboard surface change depends on backend/router contract changes that are not specified.
+      acceptance_criteria:
+        - Dashboard surface changes remain aligned with router contracts and any user-visible signal/header semantics.
+    - name: cross-stack-bugfix
+      path: tools/agent/skills/cross-stack-bugfix/SKILL.md
+      description: Fallback primary skill for multi-surface fixes that do not map cleanly to a narrower archetype.
+      priority: 0
+      selector_paths: []
+      fragments:
+        - router-runtime
+        - python-cli-schema
+        - dashboard-config-ui
+        - topology-playground
+        - e2e-selection
+        - architecture-guardrails
+      required_surfaces:
+        - local_e2e
+        - ci_e2e
+      conditional_surfaces:
+        - router_config_contract
+        - router_runtime
+        - native_binding
+        - response_headers
+        - python_cli_schema
+        - dashboard_config_ui
+        - topology_visualization
+        - playground_reveal
+        - dsl_crd
+        - docs_examples
+        - local_smoke
+      optional_surfaces: []
+      stop_conditions:
+        - The bug spans multiple contracts and the owning primary skill cannot be determined from changed files alone.
+      acceptance_criteria:
+        - The fix documents impacted surfaces and explicitly records any conditional surfaces skipped.
+  fragments:
+    - name: harness-governance
+      path: tools/agent/skills/harness-governance/SKILL.md
+      description: Indexed docs, executable harness manifests, and contributor wrapper surfaces for the shared agent contract.
+      owned_surfaces:
+        - harness_docs
+        - harness_exec
+        - contributor_interface
+      stop_conditions:
+        - The edit leaves prose and executable harness sources in disagreement.
+      acceptance_criteria:
+        - Canonical harness docs, manifests, and contributor wrappers stay in sync.
+    - name: router-runtime
+      path: tools/agent/skills/router-runtime/SKILL.md
+      description: Router runtime, signal evaluation, and decision-engine implementation details.
+      owned_surfaces:
+        - router_runtime
+      stop_conditions:
+        - Runtime behavior changes need a contract change outside the router that is not defined yet.
+      acceptance_criteria:
+        - Runtime behavior, tests, and emitted metadata stay aligned.
+    - name: python-cli-schema
+      path: tools/agent/skills/python-cli-schema/SKILL.md
+      description: Python CLI schema, parser, validator, and config translation details.
+      owned_surfaces:
+        - python_cli_schema
+      stop_conditions:
+        - CLI schema behavior diverges from router config semantics and compatibility is unclear.
+      acceptance_criteria:
+        - CLI schema, parser, validator, and merger agree on the same contract.
+    - name: binding-ffi
+      path: tools/agent/skills/binding-ffi/SKILL.md
+      description: Native binding and FFI layers for runtime classifiers or signal evaluation.
+      owned_surfaces:
+        - native_binding
+      stop_conditions:
+        - The native path cannot be compiled or validated in the current environment.
+      acceptance_criteria:
+        - Binding interface and router call sites agree on types and behavior.
+    - name: dashboard-config-ui
+      path: tools/agent/skills/dashboard-config-ui/SKILL.md
+      description: Dashboard config editor and UI contract details.
+      owned_surfaces:
+        - dashboard_config_ui
+      stop_conditions:
+        - Dashboard serialization behavior conflicts with router or CLI contract.
+      acceptance_criteria:
+        - Config UI remains aligned with router/CLI schema and edit flows.
+    - name: topology-playground
+      path: tools/agent/skills/topology-playground/SKILL.md
+      description: Topology visualization and playground reveal/display behavior.
+      owned_surfaces:
+        - topology_visualization
+        - playground_reveal
+      stop_conditions:
+        - UI reveal behavior depends on backend metadata not available in the current change.
+      acceptance_criteria:
+        - Topology and playground expose the intended user-visible behavior without contract drift.
+    - name: dsl-crd
+      path: tools/agent/skills/dsl-crd/SKILL.md
+      description: DSL, CRD, and Kubernetes translation details for router config.
+      owned_surfaces:
+        - dsl_crd
+      stop_conditions:
+        - DSL/CRD compatibility policy is unclear or missing for the new behavior.
+      acceptance_criteria:
+        - DSL/CRD translations stay in sync with router config contract.
+    - name: e2e-selection
+      path: tools/agent/skills/e2e-selection/SKILL.md
+      description: Local and CI E2E profile selection and affected-profile validation.
+      owned_surfaces:
+        - local_e2e
+        - ci_e2e
+      stop_conditions:
+        - The affected profile cannot be determined from the current mapping and needs manual routing.
+      acceptance_criteria:
+        - Local and CI E2E expectations are explicit and match the profile map.
+    - name: local-dev-cpu
+      path: tools/agent/skills/local-dev-cpu/SKILL.md
+      description: Canonical CPU-local image build, serve, and smoke workflow.
+      owned_surfaces:
+        - local_smoke
+      stop_conditions:
+        - CPU-local smoke cannot be run in the current workspace or runtime.
+      acceptance_criteria:
+        - The default CPU smoke config starts successfully and passes smoke checks.
+    - name: local-dev-amd
+      path: tools/agent/skills/local-dev-amd/SKILL.md
+      description: Canonical AMD-local image build, serve, and smoke workflow.
+      owned_surfaces:
+        - local_smoke
+      stop_conditions:
+        - AMD-local smoke cannot be run or the platform image mapping is unavailable.
+      acceptance_criteria:
+        - The default AMD smoke config starts successfully and preserves AMD image/platform behavior.
+    - name: architecture-guardrails
+      path: tools/agent/skills/architecture-guardrails/SKILL.md
+      description: Structural limits, dependency boundaries, and design-pattern guardrails.
+      owned_surfaces:
+        - router_runtime
+        - python_cli_schema
+        - dashboard_config_ui
+      stop_conditions:
+        - The proposed edit requires an exception to the current structure rules.
+      acceptance_criteria:
+        - Changed code passes structure rules and preserves modular boundaries.
+  support:
+    - name: feature-complete-checklist
+      path: tools/agent/skills/feature-complete-checklist/SKILL.md
+      description: Final validation checklist and reporting shape before closing a task.
+      acceptance_criteria:
+        - The final report records primary skill, impacted surfaces, validation results, and any skipped conditional surfaces.
+  legacy_reference:
+    - name: go-router-change
+      path: tools/agent/skills/go-router-change/SKILL.md
+      description: Legacy router-centric reference skill retained during the transition to project-level skills.
+    - name: vllm-sr-cli-docker-change
+      path: tools/agent/skills/vllm-sr-cli-docker-change/SKILL.md
+      description: Legacy CLI/startup reference skill retained during the transition to project-level skills.
+    - name: e2e-profile-selection
+      path: tools/agent/skills/e2e-profile-selection/SKILL.md
+      description: Legacy E2E mapping reference skill retained during the transition to project-level skills.

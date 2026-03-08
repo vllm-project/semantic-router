@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from cli import core, docker_cli
+from cli import core, docker_cli, docker_start
 
 
 def test_docker_start_vllm_sr_sets_openclaw_shared_network_env(tmp_path, monkeypatch):
@@ -20,11 +20,11 @@ def test_docker_start_vllm_sr_sets_openclaw_shared_network_env(tmp_path, monkeyp
         captured["cmd"] = cmd
         return SimpleNamespace(stdout="container-id\n", stderr="")
 
-    monkeypatch.setattr(docker_cli, "get_container_runtime", lambda: "docker")
-    monkeypatch.setattr(docker_cli, "get_docker_image", lambda **kwargs: "test-image")
-    monkeypatch.setattr(docker_cli.subprocess, "run", fake_run)
+    monkeypatch.setattr(docker_start, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(docker_start, "get_docker_image", lambda **kwargs: "test-image")
+    monkeypatch.setattr(docker_start.subprocess, "run", fake_run)
     monkeypatch.setattr(
-        docker_cli.shutil,
+        docker_start.shutil,
         "which",
         lambda name: str(docker_bin) if name == "docker" else None,
     )

@@ -138,6 +138,20 @@ The documentation includes:
 - **[Model Training](https://vllm-semantic-router.com/docs/training/training-overview/)** - How classification models work
 - **[API Reference](https://vllm-semantic-router.com/docs/api/router/)** - Complete API documentation
 
+## Contributor Harness
+
+For repository-specific development and agent workflow rules, start with [AGENTS.md](AGENTS.md) and the indexed harness docs in [docs/agent/README.md](docs/agent/README.md).
+If the desired architecture and the current implementation still diverge after your change, record the durable gap in [docs/agent/tech-debt-register.md](docs/agent/tech-debt-register.md).
+
+Use the shared entrypoints:
+
+```bash
+make agent-scorecard
+make agent-report ENV=cpu CHANGED_FILES="path/one,path/two"
+make agent-ci-gate CHANGED_FILES="path/one,path/two"
+make agent-feature-gate ENV=cpu CHANGED_FILES="path/one,path/two"
+```
+
 ## Community 👋
 
 For questions, feedback, or to contribute, please join `#semantic-router` channel in vLLM Slack.
