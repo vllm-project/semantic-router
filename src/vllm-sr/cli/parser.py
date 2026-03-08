@@ -50,13 +50,18 @@ def parse_user_config(config_path: str) -> UserConfig:
     except Exception as e:
         raise ConfigParseError(f"Failed to read configuration file: {e}") from e
 
+    return parse_user_config_data(data)
+
+
+def parse_user_config_data(data: dict[str, Any]) -> UserConfig:
+    """Parse and validate already-loaded configuration data."""
+
     if not data:
         raise ConfigParseError("Configuration file is empty")
 
     if not isinstance(data, dict):
         raise ConfigParseError("Configuration file must contain a top-level mapping")
 
-    # Validate with Pydantic
     try:
         data = normalize_legacy_user_config(data)
         validate_user_config_top_level_keys(data)
@@ -71,7 +76,6 @@ def parse_user_config(config_path: str) -> UserConfig:
         log.info(f"  Models: {len(config.providers.models)}")
         return config
     except ValidationError as e:
-        # Format validation errors nicely
         errors = []
         for error in e.errors():
             loc = " -> ".join(str(x) for x in error["loc"])

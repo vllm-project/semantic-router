@@ -3,23 +3,20 @@
 import copy
 from typing import Any
 
+from cli.authoring_runtime_compile import build_first_slice_runtime_overlay
 from cli.compat_blocks import dump_typed_compat_block, get_typed_compat_blocks
 from cli.models import UserConfig
 from cli.router_translation import (
     extract_categories_from_decisions,
     translate_complexity_signals,
     translate_context_signals,
-    translate_decisions,
     translate_embedding_signals,
     translate_fact_check_signals,
     translate_jailbreak_signals,
-    translate_keyword_signals,
     translate_language_signals,
-    translate_listeners,
     translate_modality_signals,
     translate_pii_signals,
     translate_preference_signals,
-    translate_providers_to_router_format,
     translate_role_binding_signals,
     translate_user_feedback_signals,
 )
@@ -28,7 +25,6 @@ from cli.utils import getLogger
 log = getLogger(__name__)
 
 _SIGNAL_TRANSLATIONS = (
-    ("keywords", "keyword_rules", translate_keyword_signals, "keyword signals"),
     ("embeddings", "embedding_rules", translate_embedding_signals, "embedding signals"),
     (
         "fact_check",
@@ -123,10 +119,8 @@ def merge_configs(user_config: UserConfig, defaults: dict[str, Any]) -> dict[str
     log.info("Merging user configuration with defaults...")
 
     merged = copy.deepcopy(defaults)
-    _merge_listeners(merged, user_config)
+    _merge_first_slice_runtime(merged, user_config)
     _merge_signals(merged, user_config)
-    _merge_decisions(merged, user_config)
-    _merge_providers(merged, user_config)
     _merge_optional_blocks(merged, user_config)
     _merge_typed_compat_blocks(merged, user_config)
 
@@ -134,12 +128,30 @@ def merge_configs(user_config: UserConfig, defaults: dict[str, Any]) -> dict[str
     return merged
 
 
-def _merge_listeners(merged: dict[str, Any], user_config: UserConfig) -> None:
-    if not user_config.listeners:
-        return
+def _merge_first_slice_runtime(merged: dict[str, Any], user_config: UserConfig) -> None:
+    runtime_overlay = build_first_slice_runtime_overlay(user_config)
+    merged.update(copy.deepcopy(runtime_overlay))
 
-    merged["listeners"] = translate_listeners(user_config.listeners)
-    log.info(f"  Added {len(user_config.listeners)} listeners")
+    if runtime_overlay.get("listeners"):
+        log.info(f"  Added {len(runtime_overlay['listeners'])} listeners")
+
+    if runtime_overlay.get("keyword_rules"):
+        log.info(f"  Added {len(runtime_overlay['keyword_rules'])} keyword signals")
+
+    if runtime_overlay.get("decisions") is not None:
+        log.info(f"  Added {len(runtime_overlay['decisions'])} decisions")
+
+    model_config = runtime_overlay.get("model_config")
+    if model_config is not None:
+        log.info(f"  Added {len(model_config)} models")
+
+    vllm_endpoints = runtime_overlay.get("vllm_endpoints")
+    if vllm_endpoints is not None:
+        log.info(f"  Added {len(vllm_endpoints)} endpoints")
+
+    external_models = runtime_overlay.get("external_models")
+    if external_models:
+        log.info(f"  Added {len(external_models)} external_models")
 
 
 def _merge_signals(merged: dict[str, Any], user_config: UserConfig) -> None:
@@ -172,23 +184,6 @@ def _merge_signals(merged: dict[str, Any], user_config: UserConfig) -> None:
 
     merged["categories"] = extract_categories_from_decisions(user_config.decisions)
     log.info(f"  Auto-generated {len(merged['categories'])} categories from decisions")
-
-
-def _merge_decisions(merged: dict[str, Any], user_config: UserConfig) -> None:
-    merged["decisions"] = translate_decisions(user_config.decisions)
-    log.info(f"  Added {len(user_config.decisions)} decisions")
-
-
-def _merge_providers(merged: dict[str, Any], user_config: UserConfig) -> None:
-    provider_config = translate_providers_to_router_format(user_config.providers)
-    if not provider_config.get("external_models"):
-        provider_config.pop("external_models", None)
-
-    merged.update(provider_config)
-    log.info(f"  Added {len(user_config.providers.models)} models")
-    log.info(f"  Added {len(provider_config['vllm_endpoints'])} endpoints")
-    if provider_config.get("external_models"):
-        log.info(f"  Added {len(provider_config['external_models'])} external_models")
 
 
 def _merge_optional_blocks(merged: dict[str, Any], user_config: UserConfig) -> None:
