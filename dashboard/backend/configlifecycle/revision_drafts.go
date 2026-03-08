@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -17,6 +18,17 @@ type revisionDraftPayload struct {
 }
 
 func (s *Service) SaveDraftRevision(input RevisionDraftInput) (*RevisionSaveResult, error) {
+	return s.saveDraftRevision(input, revisionAPIMutationContext())
+}
+
+func (s *Service) SaveDraftRevisionAs(input RevisionDraftInput, actorID string) (*RevisionSaveResult, error) {
+	return s.saveDraftRevision(input, revisionAPIMutationContextForActor(actorID))
+}
+
+func (s *Service) saveDraftRevision(
+	input RevisionDraftInput,
+	mutation revisionMutationContext,
+) (*RevisionSaveResult, error) {
 	if err := ensureRevisionStoreAvailable(s); err != nil {
 		return nil, err
 	}
@@ -32,16 +44,19 @@ func (s *Service) SaveDraftRevision(input RevisionDraftInput) (*RevisionSaveResu
 		return nil, err
 	}
 
-	revision, err := s.buildDraftRevision(ctx, input, existing, payload)
+	revision, err := s.buildDraftRevision(ctx, input, existing, payload, mutation)
 	if err != nil {
 		return nil, err
 	}
 	if err := s.Stores.Revisions.SaveConfigRevision(ctx, revision); err != nil {
 		return nil, fmt.Errorf("failed to save config draft revision: %w", err)
 	}
+	if err := s.archiveDSL(input.DSLSource); err != nil {
+		log.Printf("Warning: failed to archive DSL source for revision %s: %v", revision.ID, err)
+	}
 
 	message := fmt.Sprintf("Saved config draft revision %s.", revision.ID)
-	if err := s.appendRevisionAudit(ctx, "config.save_draft", revision.ID, console.AuditOutcomeSuccess, message, revision.Metadata); err != nil {
+	if err := s.appendRevisionAudit(ctx, mutation.actorID, "config.save_draft", revision.ID, console.AuditOutcomeSuccess, message, revision.Metadata); err != nil {
 		return nil, err
 	}
 	return s.revisionSaveResult(ctx, *revision, message)
@@ -130,11 +145,19 @@ func (s *Service) buildDraftRevision(
 	input RevisionDraftInput,
 	existing *console.ConfigRevision,
 	payload revisionDraftPayload,
+	mutation revisionMutationContext,
 ) (*console.ConfigRevision, error) {
 	parentRevisionID, err := s.resolveDraftParentRevisionID(ctx, input.ParentRevisionID, existing)
 	if err != nil {
 		return nil, err
 	}
+
+	metadata := s.revisionMutationMetadata(
+		existingMetadata(existing),
+		input.Metadata,
+		"save_draft",
+		mutation,
+	)
 
 	revision := &console.ConfigRevision{
 		ID:                input.ID,
@@ -144,12 +167,10 @@ func (s *Service) buildDraftRevision(
 		Summary:           coalesceString(input.Summary, existingSummary(existing)),
 		DocumentJSON:      payload.documentJSON,
 		RuntimeConfigYAML: payload.runtimeConfigYAML,
-		CreatedBy:         coalesceString(existingCreatedBy(existing), consoleServiceActorID),
-		Metadata:          s.baseMetadata(mergeMetadataMaps(existingMetadata(existing), input.Metadata)),
+		CreatedBy:         coalesceString(existingCreatedBy(existing), mutation.actorID),
+		Metadata:          metadata,
 		CreatedAt:         existingCreatedAt(existing),
 	}
-	revision.Metadata["operation"] = "save_draft"
-	revision.Metadata["trigger_source"] = revisionAPITriggerSource
 	return revision, nil
 }
 

@@ -8,9 +8,17 @@ interface TaskCreationFormProps {
   onSubmit: (request: CreateTaskRequest) => void;
   onCancel: () => void;
   loading?: boolean;
+  canSubmit?: boolean;
+  submitDisabledReason?: string;
 }
 
-export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFormProps) {
+export function TaskCreationForm({
+  onSubmit,
+  onCancel,
+  loading,
+  canSubmit = true,
+  submitDisabledReason,
+}: TaskCreationFormProps) {
   const form = useTaskCreationForm();
   const { datasets: availableDatasets, loading: datasetsLoading } = useDatasets();
 
@@ -269,14 +277,17 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
 
   return (
     <div className={styles.container}>
+      {!canSubmit && submitDisabledReason && (
+        <div className={styles.errorBanner}>{submitDisabledReason}</div>
+      )}
       {renderStepIndicator()}
 
-      <div className={styles.content}>
+      <fieldset className={styles.content} disabled={!canSubmit || loading} style={{ border: 0, margin: 0, padding: 0 }}>
         {form.step === 1 && renderStep1()}
         {form.step === 2 && renderStep2()}
         {form.step === 3 && renderStep3()}
         {form.step === 4 && renderStep4()}
-      </div>
+      </fieldset>
 
       <div className={styles.footer}>
         <button className={styles.cancelButton} onClick={onCancel} disabled={loading}>
@@ -292,12 +303,17 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
             <button
               className={styles.nextButton}
               onClick={form.nextStep}
-              disabled={!form.isStepValid(form.step) || loading}
+              disabled={!canSubmit || !form.isStepValid(form.step) || loading}
             >
               Next
             </button>
           ) : (
-            <button className={styles.submitButton} onClick={handleSubmit} disabled={loading}>
+            <button
+              className={styles.submitButton}
+              onClick={handleSubmit}
+              disabled={!canSubmit || loading}
+              title={canSubmit ? 'Create Task' : submitDisabledReason || 'Operator role required'}
+            >
               {loading ? 'Creating...' : 'Create Task'}
             </button>
           )}

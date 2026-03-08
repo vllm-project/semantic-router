@@ -18,6 +18,7 @@ import BuilderPage from './pages/BuilderPage'
 import DashboardPage from './pages/DashboardPage'
 import OpenClawPage from './pages/OpenClawPage'
 import { ConfigSection } from './components/ConfigNav'
+import { ConsoleAuthProvider, useConsoleAuth } from './contexts/ConsoleAuthContext'
 import { ReadonlyProvider } from './contexts/ReadonlyContext'
 import { SetupProvider, useSetup } from './contexts/SetupContext'
 import SetupWizardPage from './pages/SetupWizardPage'
@@ -104,8 +105,45 @@ const SetupStatusPage: React.FC<{
   </div>
 )
 
+const ProtectedConsoleRoute: React.FC<{
+  allowed: boolean
+  loading: boolean
+  deniedTitle: string
+  deniedDescription: string
+  children: React.ReactNode
+}> = ({ allowed, loading, deniedTitle, deniedDescription, children }) => {
+  if (loading) {
+    return (
+      <SetupStatusPage
+        title="Loading access policy"
+        description="The dashboard is resolving the current session and route capabilities."
+        actionLabel="Refresh"
+        onAction={() => {
+          window.location.reload()
+        }}
+      />
+    )
+  }
+
+  if (!allowed) {
+    return (
+      <SetupStatusPage
+        title={deniedTitle}
+        description={deniedDescription}
+        actionLabel="Go to Dashboard"
+        onAction={() => {
+          window.location.assign('/dashboard')
+        }}
+      />
+    )
+  }
+
+  return <>{children}</>
+}
+
 const AppRouter: React.FC = () => {
   const { setupState, isLoading, error, refreshSetupState } = useSetup()
+  const { capabilities, isLoading: authLoading } = useConsoleAuth()
   const [configSection, setConfigSection] = useState<ConfigSection>('models')
 
   if (isLoading) {
@@ -269,12 +307,19 @@ const AppRouter: React.FC = () => {
             <Route
               path="/ml-setup"
               element={
-                <Layout
-                  configSection={configSection}
-                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                <ProtectedConsoleRoute
+                  allowed={capabilities.canRunMLPipeline}
+                  loading={authLoading}
+                  deniedTitle="ML Setup Requires Operator Access"
+                  deniedDescription="Your current dashboard role can view the console, but only operators can run ML benchmarks, training jobs, or config generation."
                 >
-                  <MLSetupPage />
-                </Layout>
+                  <Layout
+                    configSection={configSection}
+                    onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                  >
+                    <MLSetupPage />
+                  </Layout>
+                </ProtectedConsoleRoute>
               }
             />
             <Route
@@ -302,12 +347,19 @@ const AppRouter: React.FC = () => {
             <Route
               path="/clawos"
               element={
-                <Layout
-                  configSection={configSection}
-                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                <ProtectedConsoleRoute
+                  allowed={capabilities.canAdminister}
+                  loading={authLoading}
+                  deniedTitle="ClawOS Requires Administrator Access"
+                  deniedDescription="ClawOS is an admin-only control surface because it provisions workers, embeds gateway UIs, and manages container-level OpenClaw state."
                 >
-                  <OpenClawPage />
-                </Layout>
+                  <Layout
+                    configSection={configSection}
+                    onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                  >
+                    <OpenClawPage />
+                  </Layout>
+                </ProtectedConsoleRoute>
               }
             />
             <Route path="/openclaw" element={<Navigate to="/clawos" replace />} />
@@ -382,9 +434,11 @@ const App: React.FC = () => {
 
   return (
     <ReadonlyProvider>
-      <SetupProvider>
-        <AppRouter />
-      </SetupProvider>
+      <ConsoleAuthProvider>
+        <SetupProvider>
+          <AppRouter />
+        </SetupProvider>
+      </ConsoleAuthProvider>
     </ReadonlyProvider>
   )
 }

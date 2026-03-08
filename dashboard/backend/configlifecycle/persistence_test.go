@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/console"
@@ -71,8 +72,14 @@ func TestUpdateConfigPersistsCompatibilityRevision(t *testing.T) {
 	if revision.Source != "compat_config_update" {
 		t.Fatalf("expected compat_config_update source, got %q", revision.Source)
 	}
+	if revision.CreatedBy != compatibilityActorID {
+		t.Fatalf("expected compat actor %q, got %q", compatibilityActorID, revision.CreatedBy)
+	}
 	if revision.RuntimeConfigYAML == "" {
 		t.Fatal("expected runtime_config_yaml to be persisted")
+	}
+	if stringMetadata(revision.Metadata, "trigger_source") != "config_api" {
+		t.Fatalf("expected config_api trigger source, got %#v", revision.Metadata["trigger_source"])
 	}
 
 	deployEvents, err := stores.Deployments.ListDeployEvents(ctx, console.DeployEventFilter{
@@ -99,6 +106,9 @@ func TestUpdateConfigPersistsCompatibilityRevision(t *testing.T) {
 	if len(auditEvents) != 1 {
 		t.Fatalf("expected 1 audit event, got %d", len(auditEvents))
 	}
+	assertRevisionAuditCount(t, stores, "config.save_draft", console.AuditOutcomeSuccess, 1)
+	assertRevisionAuditCount(t, stores, "config.validate_revision", console.AuditOutcomeSuccess, 1)
+	assertRevisionAuditCount(t, stores, "config.activate_revision", console.AuditOutcomeSuccess, 1)
 }
 
 func TestDeployAndRollbackPersistRevisionHistory(t *testing.T) {
@@ -132,11 +142,50 @@ model_config:
 	if deployRevision.Status != console.ConfigRevisionStatusActive {
 		t.Fatalf("expected deploy revision to be active, got %q", revisions[0].Status)
 	}
+	if deployRevision.CreatedBy != compatibilityActorID {
+		t.Fatalf("expected compat actor %q, got %q", compatibilityActorID, deployRevision.CreatedBy)
+	}
+	if stringMetadata(deployRevision.Metadata, "trigger_source") != "deploy_api" {
+		t.Fatalf("expected deploy_api trigger source, got %#v", deployRevision.Metadata["trigger_source"])
+	}
+	if stringMetadata(deployRevision.Metadata, "deploy_version") != deployResult.Version {
+		t.Fatalf("expected deploy version metadata %q, got %#v", deployResult.Version, deployRevision.Metadata["deploy_version"])
+	}
+	assertRevisionAuditCount(t, stores, "config.save_draft", console.AuditOutcomeSuccess, 1)
+	assertRevisionAuditCount(t, stores, "config.validate_revision", console.AuditOutcomeSuccess, 1)
+	assertRevisionAuditCount(t, stores, "config.activate_revision", console.AuditOutcomeSuccess, 1)
 
 	if _, rollbackErr := service.Rollback(deployResult.Version); rollbackErr != nil {
 		t.Fatalf("Rollback() error = %v", rollbackErr)
 	}
 	assertRollbackPersistence(t, ctx, stores, deployRevision.ID)
+}
+
+func TestDeployPreviewPrefersPersistedActiveRevision(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := writePersistenceTestConfig(t, tempDir)
+	stores := openPersistenceTestStores(t, tempDir)
+	service := NewWithStores(configPath, tempDir, stores)
+
+	saveActiveRevisionForReadModel(t, stores, []byte(persistedActiveConfig))
+
+	preview, err := service.DeployPreview(DeployRequest{
+		YAML: `
+decisions:
+  - name: staged-decision
+    description: staged
+    priority: 200
+`,
+	})
+	if err != nil {
+		t.Fatalf("DeployPreview() error = %v", err)
+	}
+	if !strings.Contains(preview.Current, "persisted-model") {
+		t.Fatalf("expected preview to use persisted active revision, got:\n%s", preview.Current)
+	}
+	if strings.Contains(preview.Current, "bert_model:") {
+		t.Fatalf("expected preview current config to avoid legacy file-backed config, got:\n%s", preview.Current)
+	}
 }
 
 func writePersistenceTestConfig(t *testing.T, dir string) string {
@@ -180,6 +229,12 @@ func assertRollbackPersistence(t *testing.T, ctx context.Context, stores *consol
 	if activeRevision.Source != "compat_config_rollback" {
 		t.Fatalf("expected rollback revision source, got %q", activeRevision.Source)
 	}
+	if activeRevision.CreatedBy != compatibilityActorID {
+		t.Fatalf("expected rollback revision actor %q, got %q", compatibilityActorID, activeRevision.CreatedBy)
+	}
+	if stringMetadata(activeRevision.Metadata, "trigger_source") != "rollback_api" {
+		t.Fatalf("expected rollback_api trigger source, got %#v", activeRevision.Metadata["trigger_source"])
+	}
 	if rolledBackRevision == nil {
 		t.Fatal("expected to find the original deploy revision")
 	}
@@ -203,6 +258,9 @@ func assertRollbackPersistence(t *testing.T, ctx context.Context, stores *consol
 	if rollbackEvents[0].RollbackRevisionID != deployRevisionID {
 		t.Fatalf("expected rollback deploy event to point at %q, got %q", deployRevisionID, rollbackEvents[0].RollbackRevisionID)
 	}
+	if rollbackEvents[0].TriggerSource != "rollback_api" {
+		t.Fatalf("expected rollback trigger source rollback_api, got %q", rollbackEvents[0].TriggerSource)
+	}
 
 	auditEvents, err := stores.Audit.ListAuditEvents(ctx, console.AuditEventFilter{
 		Action: "config.rollback",
@@ -214,6 +272,9 @@ func assertRollbackPersistence(t *testing.T, ctx context.Context, stores *consol
 	if len(auditEvents) != 1 {
 		t.Fatalf("expected 1 rollback audit event, got %d", len(auditEvents))
 	}
+	assertRevisionAuditCount(t, stores, "config.save_draft", console.AuditOutcomeSuccess, 2)
+	assertRevisionAuditCount(t, stores, "config.validate_revision", console.AuditOutcomeSuccess, 2)
+	assertRevisionAuditCount(t, stores, "config.activate_revision", console.AuditOutcomeSuccess, 2)
 }
 
 func findRollbackRevisions(revisions []console.ConfigRevision, deployRevisionID string) (*console.ConfigRevision, *console.ConfigRevision) {

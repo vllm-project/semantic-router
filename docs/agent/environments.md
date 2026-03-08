@@ -6,6 +6,7 @@
 - Start with `vllm-sr serve --image-pull-policy never`
 - Use this for the default local Docker workflow
 - Default smoke config: [config.agent-smoke.cpu.yaml](../../config/testing/config.agent-smoke.cpu.yaml)
+  - The smoke config is intentionally API-only and clears bundled local-model defaults so startup validation does not depend on opportunistic HF downloads.
 - If you need a non-default config, run `make agent-serve-local ENV=cpu AGENT_SERVE_CONFIG=<config>`
 
 ## `amd-local`
@@ -14,6 +15,7 @@
 - Start with `vllm-sr serve --image-pull-policy never --platform amd`
 - Use this for ROCm/AMD validation and platform-default image checks
 - Default smoke config: [config.agent-smoke.amd.yaml](../../config/testing/config.agent-smoke.amd.yaml)
+  - Like the CPU smoke profile, this config explicitly clears bundled local-model defaults so feature-gate startup stays focused on container health.
 - If you need a non-default config, run `make agent-serve-local ENV=amd AGENT_SERVE_CONFIG=<config>`
 - For real AMD model deployment and backend container setup, read [deploy/amd/README.md](../../deploy/amd/README.md)
 - Use [deploy/amd/config.yaml](../../deploy/amd/config.yaml) as the reference YAML-first AMD routing profile

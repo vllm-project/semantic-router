@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	backendapp "github.com/vllm-project/semantic-router/dashboard/backend/app"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
@@ -22,10 +23,12 @@ func buildOpenClawHandler(cfg *config.Config) *handlers.OpenClawHandler {
 	return openClawHandler
 }
 
-func registerOpenClawRoutes(mux *http.ServeMux, cfg *config.Config, openClawHandler *handlers.OpenClawHandler) {
+func registerOpenClawRoutes(mux *http.ServeMux, app *backendapp.App, openClawHandler *handlers.OpenClawHandler) {
+	cfg := app.Config
+	access := newRouteAccess(app)
 	if cfg.OpenClawEnabled && openClawHandler != nil {
-		registerOpenClawAPIRoutes(mux, openClawHandler)
-		registerOpenClawEmbeddedProxy(mux, openClawHandler)
+		registerOpenClawAPIRoutes(mux, access, openClawHandler)
+		registerOpenClawEmbeddedProxy(mux, app, access, openClawHandler)
 		log.Printf("OpenClaw API endpoints registered: /api/openclaw/*")
 		log.Printf("OpenClaw dynamic proxy configured: /embedded/openclaw/{name}/ (WebSocket enabled)")
 		return
@@ -35,27 +38,30 @@ func registerOpenClawRoutes(mux *http.ServeMux, cfg *config.Config, openClawHand
 	log.Printf("OpenClaw feature disabled")
 }
 
-func registerOpenClawAPIRoutes(mux *http.ServeMux, openClawHandler *handlers.OpenClawHandler) {
-	mux.HandleFunc("/api/openclaw/status", openClawHandler.StatusHandler())
-	mux.HandleFunc("/api/openclaw/skills", openClawHandler.SkillsHandler())
-	mux.HandleFunc("/api/openclaw/teams", openClawHandler.TeamsHandler())
-	mux.HandleFunc("/api/openclaw/teams/", openClawHandler.TeamByIDHandler())
-	mux.HandleFunc("/api/openclaw/workers", openClawHandler.WorkersHandler())
-	mux.HandleFunc("/api/openclaw/workers/", openClawHandler.WorkerByIDHandler())
-	mux.HandleFunc("/api/openclaw/rooms", openClawHandler.RoomsHandler())
-	mux.HandleFunc("/api/openclaw/rooms/", openClawHandler.RoomByIDHandler())
-	mux.HandleFunc("/api/openclaw/provision", openClawHandler.ProvisionHandler())
-	mux.HandleFunc("/api/openclaw/start", openClawHandler.StartHandler())
-	mux.HandleFunc("/api/openclaw/stop", openClawHandler.StopHandler())
-	mux.HandleFunc("/api/openclaw/token", openClawHandler.TokenHandler())
-	mux.HandleFunc("/api/openclaw/next-port", openClawHandler.NextPortHandler())
-	mux.HandleFunc("/api/openclaw/containers/", openClawHandler.DeleteHandler())
+func registerOpenClawAPIRoutes(mux *http.ServeMux, access routeAccess, openClawHandler *handlers.OpenClawHandler) {
+	mux.Handle("/api/openclaw/status", access.admin(openClawHandler.StatusHandler()))
+	mux.Handle("/api/openclaw/skills", access.admin(openClawHandler.SkillsHandler()))
+	mux.Handle("/api/openclaw/teams", access.admin(openClawHandler.TeamsHandler()))
+	mux.Handle("/api/openclaw/teams/", access.admin(openClawHandler.TeamByIDHandler()))
+	mux.Handle("/api/openclaw/workers", access.admin(openClawHandler.WorkersHandler()))
+	mux.Handle("/api/openclaw/workers/", access.admin(openClawHandler.WorkerByIDHandler()))
+	mux.Handle("/api/openclaw/rooms", access.admin(openClawHandler.RoomsHandler()))
+	mux.Handle("/api/openclaw/rooms/", access.admin(openClawHandler.RoomByIDHandler()))
+	mux.Handle("/api/openclaw/provision", access.admin(openClawHandler.ProvisionHandler()))
+	mux.Handle("/api/openclaw/start", access.admin(openClawHandler.StartHandler()))
+	mux.Handle("/api/openclaw/stop", access.admin(openClawHandler.StopHandler()))
+	mux.Handle("/api/openclaw/token", access.admin(openClawHandler.TokenHandler()))
+	mux.Handle("/api/openclaw/next-port", access.admin(openClawHandler.NextPortHandler()))
+	mux.Handle("/api/openclaw/containers/", access.admin(openClawHandler.DeleteHandler()))
 }
 
-func registerOpenClawEmbeddedProxy(mux *http.ServeMux, openClawHandler *handlers.OpenClawHandler) {
+func registerOpenClawEmbeddedProxy(mux *http.ServeMux, app *backendapp.App, access routeAccess, openClawHandler *handlers.OpenClawHandler) {
 	var proxyCache sync.Map
 
-	mux.HandleFunc("/embedded/openclaw/", func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/embedded/openclaw/", access.admin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if rejectCrossOriginProxyAccess(w, r) {
+			return
+		}
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
@@ -66,6 +72,9 @@ func registerOpenClawEmbeddedProxy(mux *http.ServeMux, openClawHandler *handlers
 		if name == "" {
 			http.Error(w, "container name required in path", http.StatusBadRequest)
 			return
+		}
+		if len(parts) == 1 || strings.TrimSpace(parts[1]) == "" {
+			appendEmbeddedServiceAudit(app, r, "openclaw", name)
 		}
 
 		targetBase, token, ok := resolveOpenClawTarget(name, openClawHandler)
@@ -81,7 +90,7 @@ func registerOpenClawEmbeddedProxy(mux *http.ServeMux, openClawHandler *handlers
 			return
 		}
 		handler.ServeHTTP(w, r)
-	})
+	})))
 }
 
 func resolveOpenClawTarget(name string, openClawHandler *handlers.OpenClawHandler) (string, string, bool) {

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ColorBends from '../components/ColorBends'
+import { useConsoleAuth } from '../contexts/ConsoleAuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import { useSetup } from '../contexts/SetupContext'
 import {
@@ -33,7 +34,10 @@ import styles from './SetupWizardPage.module.css'
 const SetupWizardPage: React.FC = () => {
   const navigate = useNavigate()
   const { setupState, refreshSetupState } = useSetup()
-  const { isReadonly, isLoading: readonlyLoading } = useReadonly()
+  const { isReadonly: readonlyMode, isLoading: readonlyLoading } = useReadonly()
+  const { capabilities, isLoading: authLoading } = useConsoleAuth()
+  const permissionLoading = readonlyLoading || authLoading
+  const isReadonly = readonlyMode || authLoading || !capabilities.canActivateSetup
 
   const [currentStep, setCurrentStep] = useState<SetupStep>(0)
   const [models, setModels] = useState<ModelDraft[]>([createModelDraft(1)])
@@ -310,7 +314,7 @@ const SetupWizardPage: React.FC = () => {
               modelsCount={models.length}
               generatedDecisions={generatedDecisions}
               previewSource={previewSource}
-              readonlyLoading={readonlyLoading}
+              readonlyLoading={permissionLoading}
               isReadonly={isReadonly}
               onValidateAgain={() => void handleValidateAgain()}
             />
@@ -336,7 +340,7 @@ const SetupWizardPage: React.FC = () => {
                     validationState !== 'valid' ||
                     !validatedCounts.canActivate ||
                     activationState === 'activating' ||
-                    (!readonlyLoading && isReadonly)
+                    (!permissionLoading && isReadonly)
                   }
                 >
                   {activationState === 'activating' ? 'Activating…' : 'Activate'}

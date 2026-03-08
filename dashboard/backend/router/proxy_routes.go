@@ -6,6 +6,7 @@ import (
 	"net/http/httputil"
 	"strings"
 
+	backendapp "github.com/vllm-project/semantic-router/dashboard/backend/app"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
 	"github.com/vllm-project/semantic-router/dashboard/backend/proxy"
@@ -19,26 +20,31 @@ type proxySet struct {
 	jaegerStatic  *httputil.ReverseProxy
 }
 
-func registerIntegrationRoutes(mux *http.ServeMux, cfg *config.Config) proxySet {
+func registerIntegrationRoutes(mux *http.ServeMux, app *backendapp.App) proxySet {
+	cfg := app.Config
+	access := newRouteAccess(app)
 	proxies := proxySet{}
 	proxies.envoy = buildReverseProxy(cfg.EnvoyURL, "", false, "envoy")
 	if proxies.envoy != nil {
 		log.Printf("Envoy proxy configured: %s → /api/router/v1/chat/completions", cfg.EnvoyURL)
 	}
 
-	proxies.routerAPI = registerRouterAPIProxy(mux, cfg, proxies.envoy)
-	proxies.grafanaStatic = registerGrafanaRoutes(mux, cfg)
+	proxies.routerAPI = registerRouterAPIProxy(mux, cfg, access, proxies.envoy)
+	proxies.grafanaStatic = registerGrafanaRoutes(mux, app, access)
 	proxies.jaegerAPI, proxies.jaegerStatic = buildJaegerAPIProxies(cfg)
 	return proxies
 }
 
-func registerRouterAPIProxy(mux *http.ServeMux, cfg *config.Config, envoyProxy *httputil.ReverseProxy) *httputil.ReverseProxy {
-	routerAPIProxy := buildReverseProxy(cfg.RouterAPIURL, "/api/router", true, "router API")
+func registerRouterAPIProxy(mux *http.ServeMux, cfg *config.Config, access routeAccess, envoyProxy *httputil.ReverseProxy) *httputil.ReverseProxy {
+	routerAPIProxy := buildReverseProxy(cfg.RouterAPIURL, "/api/router", cfg.ProxyForwardAuth, "router API")
 	if routerAPIProxy == nil {
 		return nil
 	}
 
-	mux.HandleFunc("/api/router/", func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/api/router/", access.viewer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if rejectCrossOriginProxyAccess(w, r) {
+			return
+		}
 		if strings.HasPrefix(r.URL.Path, "/api/router/config/") {
 			http.NotFound(w, r)
 			return
@@ -47,7 +53,7 @@ func registerRouterAPIProxy(mux *http.ServeMux, cfg *config.Config, envoyProxy *
 			return
 		}
 		routerAPIProxy.ServeHTTP(w, r)
-	})
+	})))
 	log.Printf("Router API proxy configured: %s (excluding /api/router/config/*)", cfg.RouterAPIURL)
 	return routerAPIProxy
 }
@@ -69,18 +75,27 @@ func tryServeEnvoyProxy(w http.ResponseWriter, r *http.Request, envoyProxy *http
 	return true
 }
 
-func registerGrafanaRoutes(mux *http.ServeMux, cfg *config.Config) *httputil.ReverseProxy {
+func registerGrafanaRoutes(mux *http.ServeMux, app *backendapp.App, access routeAccess) *httputil.ReverseProxy {
+	cfg := app.Config
 	if cfg.GrafanaURL == "" {
-		mux.HandleFunc("/embedded/grafana/", notConfiguredServiceHandler("Grafana", "TARGET_GRAFANA_URL", "http://localhost:3000"))
+		mux.Handle("/embedded/grafana/", access.viewer(notConfiguredServiceHandler("Grafana", "TARGET_GRAFANA_URL", "http://localhost:3000")))
 		log.Printf("Warning: Grafana URL not configured")
 		return nil
 	}
 
 	embeddedProxy := buildReverseProxy(cfg.GrafanaURL, "/embedded/grafana", false, "grafana")
-	mux.HandleFunc("/embedded/grafana/", withCORSPreflight(embeddedProxy))
+	mux.Handle("/embedded/grafana/", access.viewer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if rejectCrossOriginProxyAccess(w, r) {
+			return
+		}
+		if r.URL.Path == "/embedded/grafana" || r.URL.Path == "/embedded/grafana/" {
+			appendEmbeddedServiceAudit(app, r, "grafana", "grafana")
+		}
+		withCORSPreflight(embeddedProxy).ServeHTTP(w, r)
+	})))
 
 	staticProxy := buildOptionalReverseProxy(cfg.GrafanaURL)
-	registerGrafanaStaticRoutes(mux, staticProxy)
+	registerGrafanaStaticRoutes(mux, access, staticProxy)
 	if staticProxy != nil {
 		log.Printf("Grafana proxy configured: %s", cfg.GrafanaURL)
 		log.Printf("Grafana static assets proxied: /public/, /avatar/, /login")
@@ -91,14 +106,17 @@ func registerGrafanaRoutes(mux *http.ServeMux, cfg *config.Config) *httputil.Rev
 	return nil
 }
 
-func registerGrafanaStaticRoutes(mux *http.ServeMux, grafanaStaticProxy *httputil.ReverseProxy) {
-	mux.HandleFunc("/public/", grafanaStaticHandler(grafanaStaticProxy, `{"error":"Service not available","message":"Grafana static proxy not configured"}`))
-	mux.HandleFunc("/avatar/", grafanaStaticHandler(grafanaStaticProxy, `{"error":"Service not available","message":"Grafana static proxy not configured"}`))
-	mux.HandleFunc("/login", grafanaStaticHandler(grafanaStaticProxy, `{"error":"Service not available","message":"Grafana proxy not configured"}`))
+func registerGrafanaStaticRoutes(mux *http.ServeMux, access routeAccess, grafanaStaticProxy *httputil.ReverseProxy) {
+	mux.Handle("/public/", access.viewer(grafanaStaticHandler(grafanaStaticProxy, `{"error":"Service not available","message":"Grafana static proxy not configured"}`)))
+	mux.Handle("/avatar/", access.viewer(grafanaStaticHandler(grafanaStaticProxy, `{"error":"Service not available","message":"Grafana static proxy not configured"}`)))
+	mux.Handle("/login", access.viewer(grafanaStaticHandler(grafanaStaticProxy, `{"error":"Service not available","message":"Grafana proxy not configured"}`)))
 }
 
-func grafanaStaticHandler(grafanaStaticProxy *httputil.ReverseProxy, failureMessage string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func grafanaStaticHandler(grafanaStaticProxy *httputil.ReverseProxy, failureMessage string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if rejectCrossOriginProxyAccess(w, r) {
+			return
+		}
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
@@ -107,7 +125,7 @@ func grafanaStaticHandler(grafanaStaticProxy *httputil.ReverseProxy, failureMess
 			return
 		}
 		grafanaStaticProxy.ServeHTTP(w, r)
-	}
+	})
 }
 
 func buildJaegerAPIProxies(cfg *config.Config) (*httputil.ReverseProxy, *httputil.ReverseProxy) {
@@ -117,8 +135,11 @@ func buildJaegerAPIProxies(cfg *config.Config) (*httputil.ReverseProxy, *httputi
 	return buildOptionalReverseProxy(cfg.JaegerURL), buildOptionalReverseProxy(cfg.JaegerURL)
 }
 
-func registerSmartAPIRoutes(mux *http.ServeMux, proxies proxySet) {
-	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
+func registerSmartAPIRoutes(mux *http.ServeMux, access routeAccess, proxies proxySet) {
+	mux.Handle("/api/", access.viewer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if rejectCrossOriginProxyAccess(w, r) {
+			return
+		}
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
@@ -142,7 +163,7 @@ func registerSmartAPIRoutes(mux *http.ServeMux, proxies proxySet) {
 			log.Printf("No handler available for: %s", r.URL.Path)
 			writeJSONResponse(w, http.StatusBadGateway, `{"error":"Service not available","message":"No API handler configured for this path"}`)
 		}
-	})
+	})))
 }
 
 func isJaegerAPIPath(path string) bool {
@@ -152,58 +173,84 @@ func isJaegerAPIPath(path string) bool {
 		strings.HasPrefix(path, "/api/dependencies")
 }
 
-func registerMetricsRoutes(mux *http.ServeMux, cfg *config.Config) {
-	mux.HandleFunc("/metrics/router", func(w http.ResponseWriter, r *http.Request) {
+func registerMetricsRoutes(mux *http.ServeMux, access routeAccess, cfg *config.Config) {
+	mux.Handle("/metrics/router", access.viewer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, cfg.RouterMetrics, http.StatusTemporaryRedirect)
-	})
+	})))
 }
 
-func registerPrometheusRoutes(mux *http.ServeMux, cfg *config.Config) {
+func registerPrometheusRoutes(mux *http.ServeMux, app *backendapp.App, access routeAccess) {
+	cfg := app.Config
 	if cfg.PrometheusURL == "" {
-		mux.HandleFunc("/embedded/prometheus/", notConfiguredServiceHandler("Prometheus", "TARGET_PROMETHEUS_URL", "http://localhost:9090"))
+		mux.Handle("/embedded/prometheus/", access.viewer(notConfiguredServiceHandler("Prometheus", "TARGET_PROMETHEUS_URL", "http://localhost:9090")))
 		log.Printf("Warning: Prometheus URL not configured")
 		return
 	}
 
 	prometheusProxy := buildReverseProxy(cfg.PrometheusURL, "/embedded/prometheus", false, "prometheus")
-	mux.HandleFunc("/embedded/prometheus", withCORSPreflight(prometheusProxy))
-	mux.HandleFunc("/embedded/prometheus/", withCORSPreflight(prometheusProxy))
+	protectedPrometheus := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if rejectCrossOriginProxyAccess(w, r) {
+			return
+		}
+		if r.URL.Path == "/embedded/prometheus" || r.URL.Path == "/embedded/prometheus/" {
+			appendEmbeddedServiceAudit(app, r, "prometheus", "prometheus")
+		}
+		withCORSPreflight(prometheusProxy).ServeHTTP(w, r)
+	})
+	mux.Handle("/embedded/prometheus", access.viewer(protectedPrometheus))
+	mux.Handle("/embedded/prometheus/", access.viewer(protectedPrometheus))
 	log.Printf("Prometheus proxy configured: %s", cfg.PrometheusURL)
 }
 
-func registerJaegerRoutes(mux *http.ServeMux, cfg *config.Config, proxies proxySet) {
+func registerJaegerRoutes(mux *http.ServeMux, app *backendapp.App, access routeAccess, proxies proxySet) {
+	cfg := app.Config
 	if cfg.JaegerURL == "" {
-		mux.HandleFunc("/embedded/jaeger/", notConfiguredServiceHandler("Jaeger", "TARGET_JAEGER_URL", "http://localhost:16686"))
+		mux.Handle("/embedded/jaeger/", access.viewer(notConfiguredServiceHandler("Jaeger", "TARGET_JAEGER_URL", "http://localhost:16686")))
 		log.Printf("Info: Jaeger URL not configured (optional)")
 		return
 	}
 
 	jaegerProxy := buildJaegerProxy(cfg.JaegerURL)
-	mux.HandleFunc("/embedded/jaeger", withCORSPreflight(jaegerProxy))
-	mux.HandleFunc("/embedded/jaeger/", withCORSPreflight(jaegerProxy))
-	registerJaegerStaticRoutes(mux, proxies.jaegerStatic)
+	protectedJaeger := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if rejectCrossOriginProxyAccess(w, r) {
+			return
+		}
+		if r.URL.Path == "/embedded/jaeger" || r.URL.Path == "/embedded/jaeger/" {
+			appendEmbeddedServiceAudit(app, r, "jaeger", "jaeger")
+		}
+		withCORSPreflight(jaegerProxy).ServeHTTP(w, r)
+	})
+	mux.Handle("/embedded/jaeger", access.viewer(protectedJaeger))
+	mux.Handle("/embedded/jaeger/", access.viewer(protectedJaeger))
+	registerJaegerStaticRoutes(mux, access, proxies.jaegerStatic)
 	log.Printf("Jaeger proxy configured: %s", cfg.JaegerURL)
 }
 
-func registerJaegerStaticRoutes(mux *http.ServeMux, jaegerStaticProxy *httputil.ReverseProxy) {
+func registerJaegerStaticRoutes(mux *http.ServeMux, access routeAccess, jaegerStaticProxy *httputil.ReverseProxy) {
 	if jaegerStaticProxy == nil {
 		return
 	}
 
-	mux.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/static/", access.viewer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if rejectCrossOriginProxyAccess(w, r) {
+			return
+		}
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
 		log.Printf("Proxying Jaeger /static/ asset: %s", r.URL.Path)
 		jaegerStaticProxy.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/dependencies", func(w http.ResponseWriter, r *http.Request) {
+	})))
+	mux.Handle("/dependencies", access.viewer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if rejectCrossOriginProxyAccess(w, r) {
+			return
+		}
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
 		log.Printf("Proxying Jaeger dependencies page: %s", r.URL.Path)
 		jaegerStaticProxy.ServeHTTP(w, r)
-	})
+	})))
 }
 
 func buildReverseProxy(target, stripPrefix string, forwardAuth bool, name string) *httputil.ReverseProxy {

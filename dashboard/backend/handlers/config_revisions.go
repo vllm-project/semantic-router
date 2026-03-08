@@ -107,7 +107,7 @@ func ActivateConfigRevisionHandlerWithService(service *configlifecycle.Service, 
 			return
 		}
 
-		result, err := service.ActivateRevision(req.ID)
+		result, err := service.ActivateRevisionAs(req.ID, requestActorID(r))
 		if err != nil {
 			writeLifecycleError(w, err)
 			return

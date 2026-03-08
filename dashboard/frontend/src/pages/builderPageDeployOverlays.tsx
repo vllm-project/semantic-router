@@ -282,7 +282,7 @@ const BuilderDeployConfirmModal: React.FC<BuilderDeployConfirmModalProps> = ({
               flex: 1,
             }}
           >
-            A backup of the current config will be created before deployment.
+            The proposed config will be saved as a validated revision before activation.
           </p>
           <button className={styles.toolbarBtn} onClick={onClose}>
             Cancel
@@ -347,12 +347,12 @@ const BuilderDeployToast: React.FC<BuilderDeployToastProps> = ({
             <DeployStepItem
               step="backing_up"
               current={deployStep}
-              label="Creating backup"
+              label="Saving draft revision"
             />
             <DeployStepItem
               step="writing"
               current={deployStep}
-              label="Writing config"
+              label="Activating revision"
             />
             <DeployStepItem
               step="reloading"

@@ -2,8 +2,10 @@ package config
 
 import (
 	"flag"
+	"fmt"
 	"path/filepath"
 	"runtime"
+	"time"
 )
 
 type flagValues struct {
@@ -29,6 +31,20 @@ type flagValues struct {
 	consoleDBPath       *string
 	consoleStoreDSN     *string
 
+	authMode              *string
+	authSessionCookieName *string
+	authSessionTTL        *string
+	authBootstrapUserID   *string
+	authBootstrapEmail    *string
+	authBootstrapName     *string
+	authBootstrapRole     *string
+	authBootstrapSubject  *string
+	authProxyUserHeader   *string
+	authProxyEmailHeader  *string
+	authProxyNameHeader   *string
+	authProxyRolesHeader  *string
+	proxyForwardAuth      *bool
+
 	mcpEnabled *bool
 
 	mlPipelineEnabled *bool
@@ -47,7 +63,10 @@ func LoadConfig() (*Config, error) {
 	values := registerFlags()
 	flag.Parse()
 
-	cfg := values.buildConfig()
+	cfg, err := values.buildConfig()
+	if err != nil {
+		return nil, err
+	}
 	if err := resolveConfigPaths(cfg); err != nil {
 		return nil, err
 	}
@@ -60,6 +79,7 @@ func registerFlags() *flagValues {
 	registerUpstreamFlags(values)
 	registerEvaluationFlags(values)
 	registerConsoleFlags(values)
+	registerAuthFlags(values)
 	registerFeatureFlags(values)
 	return values
 }
@@ -95,6 +115,22 @@ func registerConsoleFlags(values *flagValues) {
 	values.consoleStoreDSN = flag.String("console-store-dsn", env("CONSOLE_STORE_DSN", ""), "dashboard console store DSN")
 }
 
+func registerAuthFlags(values *flagValues) {
+	values.authMode = flag.String("auth-mode", env("DASHBOARD_AUTH_MODE", "bootstrap"), "dashboard auth mode (bootstrap, proxy)")
+	values.authSessionCookieName = flag.String("auth-cookie", env("DASHBOARD_AUTH_COOKIE", "vllm_sr_session"), "dashboard auth session cookie name")
+	values.authSessionTTL = flag.String("auth-session-ttl", env("DASHBOARD_AUTH_SESSION_TTL", "12h"), "dashboard auth session TTL")
+	values.authBootstrapUserID = flag.String("auth-bootstrap-user-id", env("DASHBOARD_AUTH_BOOTSTRAP_USER_ID", "local-admin"), "dashboard bootstrap auth user id")
+	values.authBootstrapEmail = flag.String("auth-bootstrap-email", env("DASHBOARD_AUTH_BOOTSTRAP_EMAIL", ""), "dashboard bootstrap auth email")
+	values.authBootstrapName = flag.String("auth-bootstrap-name", env("DASHBOARD_AUTH_BOOTSTRAP_NAME", "Local Admin"), "dashboard bootstrap auth display name")
+	values.authBootstrapRole = flag.String("auth-bootstrap-role", env("DASHBOARD_AUTH_BOOTSTRAP_ROLE", "admin"), "dashboard bootstrap auth role")
+	values.authBootstrapSubject = flag.String("auth-bootstrap-subject", env("DASHBOARD_AUTH_BOOTSTRAP_SUBJECT", "local-admin"), "dashboard bootstrap auth external subject")
+	values.authProxyUserHeader = flag.String("auth-proxy-user-header", env("DASHBOARD_AUTH_PROXY_USER_HEADER", "X-Forwarded-User"), "dashboard proxy auth user header")
+	values.authProxyEmailHeader = flag.String("auth-proxy-email-header", env("DASHBOARD_AUTH_PROXY_EMAIL_HEADER", "X-Forwarded-Email"), "dashboard proxy auth email header")
+	values.authProxyNameHeader = flag.String("auth-proxy-name-header", env("DASHBOARD_AUTH_PROXY_NAME_HEADER", "X-Forwarded-Name"), "dashboard proxy auth display-name header")
+	values.authProxyRolesHeader = flag.String("auth-proxy-roles-header", env("DASHBOARD_AUTH_PROXY_ROLES_HEADER", "X-Forwarded-Roles"), "dashboard proxy auth roles header")
+	values.proxyForwardAuth = flag.Bool("proxy-forward-auth", env("DASHBOARD_PROXY_FORWARD_AUTH", "false") == "true", "forward Authorization headers to proxied router APIs")
+}
+
 func registerFeatureFlags(values *flagValues) {
 	values.mcpEnabled = flag.Bool("mcp", env("MCP_ENABLED", "true") == "true", "enable MCP (Model Context Protocol) feature")
 	values.mlPipelineEnabled = flag.Bool("ml-pipeline", env("ML_PIPELINE_ENABLED", "true") == "true", "enable ML pipeline (benchmark, train, config)")
@@ -114,37 +150,55 @@ func defaultPythonBinary() string {
 	return "python3"
 }
 
-func (values *flagValues) buildConfig() *Config {
-	return &Config{
-		Port:                 *values.port,
-		StaticDir:            *values.staticDir,
-		ConfigFile:           *values.configFile,
-		GrafanaURL:           *values.grafanaURL,
-		PrometheusURL:        *values.prometheusURL,
-		RouterAPIURL:         *values.routerAPIURL,
-		RouterMetrics:        *values.routerMetrics,
-		JaegerURL:            *values.jaegerURL,
-		EnvoyURL:             *values.envoyURL,
-		ReadonlyMode:         *values.readonlyMode,
-		SetupMode:            *values.setupMode,
-		Platform:             *values.platform,
-		EvaluationEnabled:    *values.evaluationEnabled,
-		EvaluationDBPath:     *values.evaluationDBPath,
-		EvaluationResultsDir: *values.evaluationResultsDir,
-		PythonPath:           *values.pythonPath,
-		ConsoleStoreBackend:  *values.consoleStoreBackend,
-		ConsoleDBPath:        *values.consoleDBPath,
-		ConsoleStoreDSN:      *values.consoleStoreDSN,
-		MCPEnabled:           *values.mcpEnabled,
-		MLPipelineEnabled:    *values.mlPipelineEnabled,
-		MLPipelineDataDir:    *values.mlPipelineDataDir,
-		MLTrainingDir:        *values.mlTrainingDir,
-		MLServiceURL:         *values.mlServiceURL,
-		OpenClawEnabled:      *values.openClawEnabled,
-		OpenClawURL:          *values.openClawURL,
-		OpenClawDataDir:      *values.openClawDataDir,
-		OpenClawToken:        *values.openClawToken,
+func (values *flagValues) buildConfig() (*Config, error) {
+	authSessionTTL, err := time.ParseDuration(*values.authSessionTTL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid auth session TTL %q: %w", *values.authSessionTTL, err)
 	}
+
+	return &Config{
+		Port:                  *values.port,
+		StaticDir:             *values.staticDir,
+		ConfigFile:            *values.configFile,
+		GrafanaURL:            *values.grafanaURL,
+		PrometheusURL:         *values.prometheusURL,
+		RouterAPIURL:          *values.routerAPIURL,
+		RouterMetrics:         *values.routerMetrics,
+		JaegerURL:             *values.jaegerURL,
+		EnvoyURL:              *values.envoyURL,
+		ReadonlyMode:          *values.readonlyMode,
+		SetupMode:             *values.setupMode,
+		Platform:              *values.platform,
+		EvaluationEnabled:     *values.evaluationEnabled,
+		EvaluationDBPath:      *values.evaluationDBPath,
+		EvaluationResultsDir:  *values.evaluationResultsDir,
+		PythonPath:            *values.pythonPath,
+		ConsoleStoreBackend:   *values.consoleStoreBackend,
+		ConsoleDBPath:         *values.consoleDBPath,
+		ConsoleStoreDSN:       *values.consoleStoreDSN,
+		AuthMode:              *values.authMode,
+		AuthSessionCookieName: *values.authSessionCookieName,
+		AuthSessionTTL:        authSessionTTL,
+		AuthBootstrapUserID:   *values.authBootstrapUserID,
+		AuthBootstrapEmail:    *values.authBootstrapEmail,
+		AuthBootstrapName:     *values.authBootstrapName,
+		AuthBootstrapRole:     *values.authBootstrapRole,
+		AuthBootstrapSubject:  *values.authBootstrapSubject,
+		AuthProxyUserHeader:   *values.authProxyUserHeader,
+		AuthProxyEmailHeader:  *values.authProxyEmailHeader,
+		AuthProxyNameHeader:   *values.authProxyNameHeader,
+		AuthProxyRolesHeader:  *values.authProxyRolesHeader,
+		ProxyForwardAuth:      *values.proxyForwardAuth,
+		MCPEnabled:            *values.mcpEnabled,
+		MLPipelineEnabled:     *values.mlPipelineEnabled,
+		MLPipelineDataDir:     *values.mlPipelineDataDir,
+		MLTrainingDir:         *values.mlTrainingDir,
+		MLServiceURL:          *values.mlServiceURL,
+		OpenClawEnabled:       *values.openClawEnabled,
+		OpenClawURL:           *values.openClawURL,
+		OpenClawDataDir:       *values.openClawDataDir,
+		OpenClawToken:         *values.openClawToken,
+	}, nil
 }
 
 func resolveConfigPaths(cfg *Config) error {

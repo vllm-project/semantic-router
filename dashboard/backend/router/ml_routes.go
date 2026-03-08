@@ -6,12 +6,15 @@ import (
 	"os"
 	"path/filepath"
 
+	backendapp "github.com/vllm-project/semantic-router/dashboard/backend/app"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mlpipeline"
 )
 
-func registerMLPipelineRoutes(mux *http.ServeMux, cfg *config.Config) {
+func registerMLPipelineRoutes(mux *http.ServeMux, app *backendapp.App) {
+	cfg := app.Config
+	access := newRouteAccess(app)
 	if !cfg.MLPipelineEnabled {
 		log.Printf("ML Pipeline feature disabled")
 		return
@@ -26,13 +29,13 @@ func registerMLPipelineRoutes(mux *http.ServeMux, cfg *config.Config) {
 	})
 	mlHandler := handlers.NewMLPipelineHandler(mlRunner)
 
-	mux.HandleFunc("/api/ml-pipeline/jobs", mlHandler.ListJobsHandler())
-	mux.HandleFunc("/api/ml-pipeline/jobs/", mlHandler.GetJobHandler())
-	mux.HandleFunc("/api/ml-pipeline/benchmark", mlHandler.RunBenchmarkHandler())
-	mux.HandleFunc("/api/ml-pipeline/train", mlHandler.RunTrainHandler())
-	mux.HandleFunc("/api/ml-pipeline/config", mlHandler.GenerateConfigHandler())
-	mux.HandleFunc("/api/ml-pipeline/download/", mlHandler.DownloadOutputHandler())
-	mux.HandleFunc("/api/ml-pipeline/stream/", mlHandler.StreamProgressHandler())
+	mux.Handle("/api/ml-pipeline/jobs", access.viewer(mlHandler.ListJobsHandler()))
+	mux.Handle("/api/ml-pipeline/jobs/", access.viewer(mlHandler.GetJobHandler()))
+	mux.Handle("/api/ml-pipeline/benchmark", access.operator(mlHandler.RunBenchmarkHandler()))
+	mux.Handle("/api/ml-pipeline/train", access.operator(mlHandler.RunTrainHandler()))
+	mux.Handle("/api/ml-pipeline/config", access.operator(mlHandler.GenerateConfigHandler()))
+	mux.Handle("/api/ml-pipeline/download/", access.viewer(mlHandler.DownloadOutputHandler()))
+	mux.Handle("/api/ml-pipeline/stream/", access.viewer(mlHandler.StreamProgressHandler()))
 	log.Printf("ML Pipeline API endpoints registered: /api/ml-pipeline/*")
 	logMLTrainingDir(trainingDir)
 }

@@ -26,3 +26,36 @@ providers:
           endpoint: "host.docker.internal:8000/v1"
           protocol: "http"
   default_model: "smoke-model"
+
+# Keep smoke startup API-only even after merging router defaults. The
+# dashboard/local-smoke gates only need the router, Envoy, and dashboard
+# processes to boot; they should not pull optional local models from HF.
+model_selection:
+  enabled: false
+
+prompt_guard:
+  enabled: false
+  model_id: ""
+
+classifier:
+  category_model:
+    model_id: ""
+  pii_model:
+    model_id: ""
+
+hallucination_mitigation:
+  enabled: false
+  fact_check_model:
+    model_id: ""
+  hallucination_model:
+    model_id: ""
+  nli_model:
+    model_id: ""
+
+feedback_detector:
+  enabled: false
+  model_id: ""
+
+embedding_models:
+  mmbert_model_path: ""
+  use_cpu: true

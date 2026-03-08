@@ -5,6 +5,14 @@
   overflow: hidden;
 }
 
+.errorBanner {
+  padding: var(--spacing-sm, 0.75rem) var(--spacing-md, 1rem);
+  border-bottom: 1px solid rgba(239, 68, 68, 0.25);
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
+  font-size: var(--text-sm, 0.875rem);
+}
+
 .stepIndicator {
   display: flex;
   border-bottom: 1px solid var(--color-border, #333);

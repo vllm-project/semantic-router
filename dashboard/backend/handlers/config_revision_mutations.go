@@ -13,6 +13,7 @@ type SaveConfigRevisionDraftRequest struct {
 	ParentRevisionID  string                 `json:"parentRevisionId,omitempty"`
 	Source            string                 `json:"source,omitempty"`
 	Summary           string                 `json:"summary,omitempty"`
+	DSLSource         string                 `json:"dslSource,omitempty"`
 	Document          interface{}            `json:"document,omitempty"`
 	RuntimeConfigYAML string                 `json:"runtimeConfigYAML,omitempty"`
 	Metadata          map[string]interface{} `json:"metadata,omitempty"`
@@ -49,15 +50,16 @@ func SaveConfigRevisionDraftHandlerWithService(service *configlifecycle.Service,
 			return
 		}
 
-		result, err := service.SaveDraftRevision(configlifecycle.RevisionDraftInput{
+		result, err := service.SaveDraftRevisionAs(configlifecycle.RevisionDraftInput{
 			ID:                req.ID,
 			ParentRevisionID:  req.ParentRevisionID,
 			Source:            req.Source,
 			Summary:           req.Summary,
+			DSLSource:         req.DSLSource,
 			Document:          req.Document,
 			RuntimeConfigYAML: req.RuntimeConfigYAML,
 			Metadata:          req.Metadata,
-		})
+		}, requestActorID(r))
 		if err != nil {
 			writeLifecycleError(w, err)
 			return
@@ -87,7 +89,7 @@ func ValidateConfigRevisionHandlerWithService(service *configlifecycle.Service, 
 			return
 		}
 
-		result, err := service.ValidateRevision(req.ID)
+		result, err := service.ValidateRevisionAs(req.ID, requestActorID(r))
 		if err != nil {
 			writeLifecycleError(w, err)
 			return

@@ -13,6 +13,7 @@
   - `make agent-serve-local ENV=amd AGENT_SERVE_CONFIG=deploy/amd/config.yaml`
   - plus the backend/network setup from `deploy/amd/README.md`
 - Feature-gate smoke defaults to the env-specific manifest config under `config/testing/config.agent-smoke.*.yaml`
+  - These smoke configs explicitly blank the bundled local-model defaults inherited from `router-defaults.yaml`, so the local startup gate validates runtime health rather than opportunistic model downloads.
 - Use `AGENT_SERVE_CONFIG` only when you need to override that default
 - Treat `src/vllm-sr/**`, `tools/make/docker.mk`, and `src/vllm-sr/Dockerfile*` as startup-chain changes
 - For these changes, run:

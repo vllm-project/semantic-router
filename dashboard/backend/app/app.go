@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/configlifecycle"
 	"github.com/vllm-project/semantic-router/dashboard/backend/console"
@@ -12,6 +13,7 @@ import (
 type App struct {
 	Config          *config.Config
 	Console         *console.Stores
+	Auth            *auth.Service
 	ConfigLifecycle *configlifecycle.Service
 }
 
@@ -30,9 +32,28 @@ func New(cfg *config.Config) (*App, error) {
 		return nil, fmt.Errorf("failed to initialize console stores: %w", err)
 	}
 
+	authService, err := auth.New(auth.Config{
+		Mode:              auth.Mode(cfg.AuthMode),
+		SessionCookieName: cfg.AuthSessionCookieName,
+		SessionTTL:        cfg.AuthSessionTTL,
+		BootstrapUserID:   cfg.AuthBootstrapUserID,
+		BootstrapEmail:    cfg.AuthBootstrapEmail,
+		BootstrapName:     cfg.AuthBootstrapName,
+		BootstrapRole:     console.ConsoleRole(cfg.AuthBootstrapRole),
+		BootstrapSubject:  cfg.AuthBootstrapSubject,
+		ProxyUserHeader:   cfg.AuthProxyUserHeader,
+		ProxyEmailHeader:  cfg.AuthProxyEmailHeader,
+		ProxyNameHeader:   cfg.AuthProxyNameHeader,
+		ProxyRolesHeader:  cfg.AuthProxyRolesHeader,
+	}, consoleStores)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize dashboard auth service: %w", err)
+	}
+
 	return &App{
 		Config:          cfg,
 		Console:         consoleStores,
+		Auth:            authService,
 		ConfigLifecycle: configlifecycle.NewWithStores(cfg.AbsConfigPath, cfg.ConfigDir, consoleStores),
 	}, nil
 }

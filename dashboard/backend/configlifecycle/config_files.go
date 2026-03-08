@@ -28,7 +28,7 @@ func (s *Service) ConfigYAML() ([]byte, error) {
 }
 
 func (s *Service) UpdateConfig(configData map[string]interface{}) error {
-	existingData, err := os.ReadFile(s.ConfigPath)
+	existingData, err := s.currentConfigYAML()
 	if err != nil {
 		return fmt.Errorf("failed to read existing config: %w", err)
 	}
@@ -51,6 +51,23 @@ func (s *Service) UpdateConfig(configData map[string]interface{}) error {
 	if err := validateConfigYAML(yamlData); err != nil {
 		return &Error{StatusCode: 400, Message: fmt.Sprintf("Config validation failed: %v", err)}
 	}
+	if s.hasRevisionStore() {
+		_, err := s.runCompatibilityRevisionWorkflow(yamlData, compatibilityWorkflowOptions{
+			source:         "compat_config_update",
+			summary:        "Applied config update via compatibility API",
+			triggerSource:  "config_api",
+			auditAction:    "config.update",
+			successMessage: "Config update applied via compatibility API.",
+			metadata: map[string]interface{}{
+				"compat_operation": "update",
+			},
+		})
+		return err
+	}
+	return s.applyConfigUpdateDirect(existingData, yamlData)
+}
+
+func (s *Service) applyConfigUpdateDirect(existingData []byte, yamlData []byte) error {
 	if err := writeConfigAtomically(s.ConfigPath, yamlData); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}

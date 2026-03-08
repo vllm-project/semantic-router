@@ -6,19 +6,22 @@ import (
 	"os"
 	"path/filepath"
 
+	backendapp "github.com/vllm-project/semantic-router/dashboard/backend/app"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/evaluation"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
 )
 
-func registerEvaluationRoutes(mux *http.ServeMux, cfg *config.Config) {
+func registerEvaluationRoutes(mux *http.ServeMux, app *backendapp.App) {
+	cfg := app.Config
+	access := newRouteAccess(app)
 	if !cfg.EvaluationEnabled {
 		log.Printf("Evaluation feature disabled")
 		return
 	}
 
-	mux.HandleFunc("/api/evaluation/datasets", handlers.GetDatasetsHandler())
+	mux.Handle("/api/evaluation/datasets", access.viewer(handlers.GetDatasetsHandler()))
 	log.Printf("Evaluation datasets endpoint registered: /api/evaluation/datasets")
 
 	evalHandler, err := newEvaluationHandler(cfg)
@@ -27,8 +30,8 @@ func registerEvaluationRoutes(mux *http.ServeMux, cfg *config.Config) {
 		return
 	}
 
-	registerEvaluationTaskRoutes(mux, evalHandler)
-	registerEvaluationExecutionRoutes(mux, evalHandler)
+	registerEvaluationTaskRoutes(mux, access, evalHandler)
+	registerEvaluationExecutionRoutes(mux, access, evalHandler)
 	log.Printf("Evaluation API endpoints registered: /api/evaluation/*")
 }
 
@@ -58,16 +61,21 @@ func resolveEvaluationProjectRoot(cfg *config.Config) string {
 	return filepath.Dir(cfg.ConfigDir)
 }
 
-func registerEvaluationTaskRoutes(mux *http.ServeMux, evalHandler *handlers.EvaluationHandler) {
+func registerEvaluationTaskRoutes(mux *http.ServeMux, access routeAccess, evalHandler *handlers.EvaluationHandler) {
+	listTasks := access.viewer(evalHandler.ListTasksHandler())
+	createTask := access.operator(evalHandler.CreateTaskHandler())
+	getTask := access.viewer(evalHandler.GetTaskHandler())
+	deleteTask := access.operator(evalHandler.DeleteTaskHandler())
+
 	mux.HandleFunc("/api/evaluation/tasks", func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
 		switch r.Method {
 		case http.MethodGet:
-			evalHandler.ListTasksHandler().ServeHTTP(w, r)
+			listTasks.ServeHTTP(w, r)
 		case http.MethodPost:
-			evalHandler.CreateTaskHandler().ServeHTTP(w, r)
+			createTask.ServeHTTP(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -79,20 +87,20 @@ func registerEvaluationTaskRoutes(mux *http.ServeMux, evalHandler *handlers.Eval
 		}
 		switch r.Method {
 		case http.MethodGet:
-			evalHandler.GetTaskHandler().ServeHTTP(w, r)
+			getTask.ServeHTTP(w, r)
 		case http.MethodDelete:
-			evalHandler.DeleteTaskHandler().ServeHTTP(w, r)
+			deleteTask.ServeHTTP(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
 }
 
-func registerEvaluationExecutionRoutes(mux *http.ServeMux, evalHandler *handlers.EvaluationHandler) {
-	mux.HandleFunc("/api/evaluation/run", evalHandler.RunTaskHandler())
-	mux.HandleFunc("/api/evaluation/cancel/", evalHandler.CancelTaskHandler())
-	mux.HandleFunc("/api/evaluation/stream/", evalHandler.StreamProgressHandler())
-	mux.HandleFunc("/api/evaluation/results/", evalHandler.GetResultsHandler())
-	mux.HandleFunc("/api/evaluation/export/", evalHandler.ExportResultsHandler())
-	mux.HandleFunc("/api/evaluation/history", evalHandler.GetHistoryHandler())
+func registerEvaluationExecutionRoutes(mux *http.ServeMux, access routeAccess, evalHandler *handlers.EvaluationHandler) {
+	mux.Handle("/api/evaluation/run", access.operator(evalHandler.RunTaskHandler()))
+	mux.Handle("/api/evaluation/cancel/", access.operator(evalHandler.CancelTaskHandler()))
+	mux.Handle("/api/evaluation/stream/", access.viewer(evalHandler.StreamProgressHandler()))
+	mux.Handle("/api/evaluation/results/", access.viewer(evalHandler.GetResultsHandler()))
+	mux.Handle("/api/evaluation/export/", access.operator(evalHandler.ExportResultsHandler()))
+	mux.Handle("/api/evaluation/history", access.viewer(evalHandler.GetHistoryHandler()))
 }

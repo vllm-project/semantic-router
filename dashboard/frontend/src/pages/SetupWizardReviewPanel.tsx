@@ -104,7 +104,7 @@ export function ReviewActivatePanel({
 
           {!readonlyLoading && isReadonly && (
             <div className={styles.readonlyPanel}>
-              This dashboard is running in read-only mode. Review is available, but activation is disabled.
+              This dashboard is read-only or your current console role cannot activate setup. Review is available, but activation is disabled.
             </div>
           )}
         </div>

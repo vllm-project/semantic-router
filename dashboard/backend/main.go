@@ -45,6 +45,10 @@ func main() {
 	log.Printf("Router API: %s → /api/router/*", cfg.RouterAPIURL)
 	log.Printf("Router Metrics: %s → /metrics/router", cfg.RouterMetrics)
 	log.Printf("Console Store: %s (%s)", cfg.ConsoleStoreBackend, cfg.ConsoleDBPath)
+	log.Printf("Dashboard Auth: %s (cookie=%s, ttl=%s)", cfg.AuthMode, cfg.AuthSessionCookieName, cfg.AuthSessionTTL)
+	if cfg.ProxyForwardAuth {
+		log.Printf("Router API proxy Authorization forwarding: ENABLED")
+	}
 	if cfg.ReadonlyMode {
 		log.Printf("Read-only mode: ENABLED (config editing disabled)")
 	}

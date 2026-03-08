@@ -46,8 +46,11 @@ func (s *Service) DeployPreview(req DeployRequest) (DeployPreview, error) {
 		return DeployPreview{}, err
 	}
 
-	currentData, err := os.ReadFile(s.ConfigPath)
+	currentData, err := s.currentConfigYAML()
 	if err != nil {
+		if !os.IsNotExist(err) {
+			return DeployPreview{}, err
+		}
 		currentData = []byte("# No existing config\n")
 	}
 
@@ -63,6 +66,51 @@ func (s *Service) DeployPreview(req DeployRequest) (DeployPreview, error) {
 }
 
 func (s *Service) Deploy(req DeployRequest) (DeployResult, error) {
+	if s.hasRevisionStore() {
+		return s.deployWithRevisionWorkflow(req)
+	}
+	return s.deployDirect(req)
+}
+
+func (s *Service) deployWithRevisionWorkflow(req DeployRequest) (DeployResult, error) {
+	yamlBytes, err := parseDeployYAML(req.YAML)
+	if err != nil {
+		return DeployResult{}, err
+	}
+
+	existingData, readErr := s.currentConfigYAML()
+	if readErr != nil && !os.IsNotExist(readErr) {
+		return DeployResult{}, readErr
+	}
+	if len(existingData) > 0 {
+		yamlBytes = mergeYAMLWithExisting(existingData, yamlBytes)
+	}
+
+	result, err := s.runCompatibilityRevisionWorkflow(yamlBytes, compatibilityWorkflowOptions{
+		source:         "compat_config_deploy",
+		summary:        "Applied config deploy via compatibility API",
+		triggerSource:  "deploy_api",
+		auditAction:    "config.deploy",
+		successMessage: "Config deployed successfully. Router and Envoy have been updated.",
+		metadata: map[string]interface{}{
+			"compat_operation": "deploy",
+			"dsl_present":      strings.TrimSpace(req.DSL) != "",
+		},
+	})
+	if err != nil {
+		return DeployResult{}, err
+	}
+	if err := s.archiveDSL(req.DSL); err != nil {
+		log.Printf("Warning: failed to archive DSL source: %v", err)
+	}
+	CleanupBackups(s.backupDir())
+	return DeployResult{
+		Version: result.Version,
+		Message: result.Message,
+	}, nil
+}
+
+func (s *Service) deployDirect(req DeployRequest) (DeployResult, error) {
 	if !deployMu.TryLock() {
 		return DeployResult{}, &Error{
 			StatusCode: 409,
@@ -120,70 +168,6 @@ func (s *Service) Deploy(req DeployRequest) (DeployResult, error) {
 	return DeployResult{
 		Version: version,
 		Message: "Config deployed successfully. Router and Envoy have been updated.",
-	}, nil
-}
-
-func (s *Service) Rollback(version string) (DeployResult, error) {
-	if !deployMu.TryLock() {
-		return DeployResult{}, &Error{
-			StatusCode: 409,
-			Code:       "deploy_in_progress",
-			Message:    "Another deploy operation is in progress.",
-		}
-	}
-	defer deployMu.Unlock()
-
-	backupFile := filepath.Join(s.backupDir(), fmt.Sprintf("config.%s.yaml", version))
-	backupData, err := os.ReadFile(backupFile)
-	if err != nil {
-		return DeployResult{}, &Error{
-			StatusCode: 404,
-			Code:       "version_not_found",
-			Message:    fmt.Sprintf("Backup version %s not found", version),
-		}
-	}
-	var yamlCheck interface{}
-	if err := yaml.Unmarshal(backupData, &yamlCheck); err != nil {
-		return DeployResult{}, &Error{
-			StatusCode: 400,
-			Code:       "backup_invalid",
-			Message:    fmt.Sprintf("Backup config has invalid YAML: %v", err),
-		}
-	}
-
-	existingData, readErr := os.ReadFile(s.ConfigPath)
-	if readErr == nil && len(existingData) > 0 {
-		_ = s.backupConfigData(existingData, time.Now().Format("20060102-150405"))
-	}
-	if err := writeConfigAtomically(s.ConfigPath, backupData); err != nil {
-		return DeployResult{}, fmt.Errorf("failed to write config: %w", err)
-	}
-
-	log.Printf("[Rollback] Config rolled back to version %s, written to %s", version, s.ConfigPath)
-	if err := s.propagateConfigToRuntime(); err != nil {
-		if restoreErr := s.restorePreviousRuntimeConfig(existingData); restoreErr != nil {
-			return DeployResult{}, fmt.Errorf("failed to apply rolled back config to runtime: %w; failed to restore previous config: %w", err, restoreErr)
-		}
-		return DeployResult{}, fmt.Errorf("failed to apply rolled back config to runtime: %w; previous config restored", err)
-	}
-
-	s.recordSuccessfulCompatibilityChange(backupData, revisionPersistenceOptions{
-		source:         "compat_config_rollback",
-		summary:        "Rolled back config via compatibility API",
-		action:         "config.rollback",
-		triggerSource:  "rollback_api",
-		revisionStatus: "active",
-		previousStatus: "rolled_back",
-		deployStatus:   "rolled_back",
-		message:        fmt.Sprintf("Rolled back to version %s. Router and Envoy have been updated.", version),
-		metadata: map[string]interface{}{
-			"operation":        "rollback",
-			"rollback_version": version,
-		},
-	})
-	return DeployResult{
-		Version: version,
-		Message: fmt.Sprintf("Rolled back to version %s. Router and Envoy have been updated.", version),
 	}, nil
 }
 

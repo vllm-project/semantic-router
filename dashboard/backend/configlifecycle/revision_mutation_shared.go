@@ -9,7 +9,37 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/console"
 )
 
+const (
+	consoleServiceActorID = "dashboard-console"
+	compatibilityActorID  = "dashboard-compat"
+)
+
 const revisionAPITriggerSource = "revision_api"
+
+type revisionMutationContext struct {
+	actorID              string
+	triggerSource        string
+	compatibilityAdapter bool
+}
+
+func revisionAPIMutationContext() revisionMutationContext {
+	return revisionAPIMutationContextForActor("")
+}
+
+func revisionAPIMutationContextForActor(actorID string) revisionMutationContext {
+	return revisionMutationContext{
+		actorID:       coalesceString(actorID, consoleServiceActorID),
+		triggerSource: revisionAPITriggerSource,
+	}
+}
+
+func compatibilityMutationContext(triggerSource string) revisionMutationContext {
+	return revisionMutationContext{
+		actorID:              compatibilityActorID,
+		triggerSource:        triggerSource,
+		compatibilityAdapter: true,
+	}
+}
 
 // RevisionDraftInput captures the persisted revision fields accepted by the draft API.
 type RevisionDraftInput struct {
@@ -17,6 +47,7 @@ type RevisionDraftInput struct {
 	ParentRevisionID  string
 	Source            string
 	Summary           string
+	DSLSource         string
 	Document          interface{}
 	RuntimeConfigYAML string
 	Metadata          map[string]interface{}
@@ -59,8 +90,24 @@ func ensureRevisionID(err error, revisionID string) error {
 	return nil
 }
 
+func (s *Service) revisionMutationMetadata(
+	base map[string]interface{},
+	override map[string]interface{},
+	operation string,
+	mutation revisionMutationContext,
+) map[string]interface{} {
+	metadata := s.baseMetadata(mergeMetadataMaps(base, override))
+	metadata["operation"] = operation
+	metadata["trigger_source"] = mutation.triggerSource
+	if mutation.compatibilityAdapter {
+		metadata["compatibility_adapter"] = true
+	}
+	return metadata
+}
+
 func (s *Service) appendRevisionAudit(
 	ctx context.Context,
+	actorID string,
 	action string,
 	revisionID string,
 	outcome console.AuditOutcome,
@@ -73,7 +120,7 @@ func (s *Service) appendRevisionAudit(
 
 	event := &console.AuditEvent{
 		ActorType:  console.PrincipalTypeServiceAccount,
-		ActorID:    consoleServiceActorID,
+		ActorID:    actorID,
 		Action:     action,
 		TargetType: "config_revision",
 		TargetID:   revisionID,

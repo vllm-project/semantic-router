@@ -169,10 +169,19 @@ export interface DeployResult {
 }
 
 export interface ConfigVersion {
+  id?: string
   version: string
   timestamp: string
   source: string
   filename: string
+  parentRevisionId?: string
+  status?: string
+  summary?: string
+  createdBy?: string
+  runtimeTarget?: string
+  lastDeployStatus?: string
+  lastDeployMessage?: string
+  activatedAt?: string
 }
 
 // ---------- Editor State ----------

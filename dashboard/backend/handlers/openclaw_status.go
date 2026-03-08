@@ -64,6 +64,17 @@ func (h *OpenClawHandler) GatewayTokenForContainer(name string) string {
 	return h.gatewayTokenForContainer(name)
 }
 
+func (h *OpenClawHandler) embeddedGatewayToken(name string) string {
+	if strings.TrimSpace(h.GatewayTokenForContainer(name)) == "" {
+		return ""
+	}
+	normalizedName := sanitizeContainerName(name)
+	if normalizedName == "" {
+		return ""
+	}
+	return "dashboard-proxy-" + normalizedName
+}
+
 func (h *OpenClawHandler) TokenHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -77,7 +88,7 @@ func (h *OpenClawHandler) TokenHandler() http.HandlerFunc {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]string{
-			"token": h.GatewayTokenForContainer(name),
+			"token": h.embeddedGatewayToken(name),
 		}); err != nil {
 			log.Printf("openclaw: token encode error: %v", err)
 		}
@@ -159,6 +170,16 @@ func (h *OpenClawHandler) gatewayReachable(containerName string, port int) bool 
 }
 
 func (h *OpenClawHandler) checkContainerHealth(entry ContainerEntry) OpenClawStatus {
+	snapshot := h.resolveIdentitySnapshot(entry)
+	status := h.newOpenClawStatus(entry, snapshot)
+	if !h.populateContainerRuntime(&status, entry) {
+		return status
+	}
+	h.populateGatewayHealth(&status, entry)
+	return status
+}
+
+func (h *OpenClawHandler) resolveIdentitySnapshot(entry ContainerEntry) identitySnapshot {
 	snapshot := identitySnapshot{
 		Name:       entry.AgentName,
 		Emoji:      entry.AgentEmoji,
@@ -184,8 +205,11 @@ func (h *OpenClawHandler) checkContainerHealth(entry ContainerEntry) OpenClawSta
 			snapshot.Principles = fileSnapshot.Principles
 		}
 	}
+	return snapshot
+}
 
-	status := OpenClawStatus{
+func (h *OpenClawHandler) newOpenClawStatus(entry ContainerEntry, snapshot identitySnapshot) OpenClawStatus {
+	return OpenClawStatus{
 		ContainerName:   entry.Name,
 		GatewayURL:      h.gatewayBaseURL(entry.Name, entry.Port),
 		Port:            entry.Port,
@@ -200,27 +224,32 @@ func (h *OpenClawHandler) checkContainerHealth(entry ContainerEntry) OpenClawSta
 		AgentPrinciples: snapshot.Principles,
 		RoleKind:        normalizeRoleKind(entry.RoleKind),
 	}
+}
 
+func (h *OpenClawHandler) populateContainerRuntime(status *OpenClawStatus, entry ContainerEntry) bool {
 	out, err := h.containerOutput("inspect", "-f", "{{.State.Running}}", entry.Name)
 	if err != nil {
 		status.Running = false
 		if strings.Contains(err.Error(), "container runtime not available") {
 			status.Error = err.Error()
-			return status
+			return false
 		}
 		status.Error = "Container not found"
-		return status
+		return false
 	}
 	status.Running = strings.TrimSpace(string(out)) == "true"
 	if !status.Running {
 		status.Error = "Container stopped"
-		return status
+		return false
 	}
+	return true
+}
 
+func (h *OpenClawHandler) populateGatewayHealth(status *OpenClawStatus, entry ContainerEntry) {
 	gatewayReachable := h.gatewayReachable(entry.Name, entry.Port)
 	if !gatewayReachable {
 		status.Error = "Gateway not reachable"
-		return status
+		return
 	}
 
 	// Compare positions so a successful restart after a previous failure is correctly detected.
@@ -246,7 +275,6 @@ func (h *OpenClawHandler) checkContainerHealth(entry ContainerEntry) OpenClawSta
 	if status.Healthy {
 		status.Error = ""
 	}
-	return status
 }
 
 func (h *OpenClawHandler) StatusHandler() http.HandlerFunc {

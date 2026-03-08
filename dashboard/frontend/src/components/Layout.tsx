@@ -1,5 +1,6 @@
 import React, { useState, useEffect, ReactNode } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { useConsoleAuth } from '../contexts/ConsoleAuthContext'
 import styles from './Layout.module.css'
 
 interface LayoutProps {
@@ -12,6 +13,7 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectionChange, hideHeaderOnMobile }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [openDropdown, setOpenDropdown] = useState<'build' | 'analysis' | 'operations' | null>(null)
+  const { capabilities, isLoading: authLoading } = useConsoleAuth()
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -35,6 +37,9 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
     (isConfigPage && configSection === 'router-config') ||
     (isConfigPage && configSection === 'mcp') ||
     ['/status', '/logs', '/monitoring', '/tracing'].includes(location.pathname)
+  const showClawOS = authLoading || capabilities.canAdminister
+  const showMLSetup = authLoading || capabilities.canRunMLPipeline
+  const showMCPServers = authLoading || capabilities.canAdminister
 
   const toggleDropdown = (dropdown: 'build' | 'analysis' | 'operations') => {
     setOpenDropdown(prev => prev === dropdown ? null : dropdown)
@@ -96,14 +101,16 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
             </NavLink>
 
             {/* Primary: OpenClaw */}
-            <NavLink
-              to="/clawos"
-              className={({ isActive }) =>
-                isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
-              }
-            >
-              ClawOS
-            </NavLink>
+            {showClawOS && (
+              <NavLink
+                to="/clawos"
+                className={({ isActive }) =>
+                  isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
+                }
+              >
+                ClawOS
+              </NavLink>
+            )}
 
             <NavLink
               to="/builder"
@@ -247,14 +254,16 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
               {openDropdown === 'operations' && (
                 <div className={styles.dropdownMenuRight}>
                   {/* ML Tools */}
-                  <NavLink
-                    to="/ml-setup"
-                    className={`${styles.dropdownItem} ${location.pathname === '/ml-setup' ? styles.dropdownItemActive : ''}`}
-                    onClick={() => setOpenDropdown(null)}
-                  >
-                    ML Setup
-                  </NavLink>
-                  <div className={styles.dropdownDivider}></div>
+                  {showMLSetup && (
+                    <NavLink
+                      to="/ml-setup"
+                      className={`${styles.dropdownItem} ${location.pathname === '/ml-setup' ? styles.dropdownItemActive : ''}`}
+                      onClick={() => setOpenDropdown(null)}
+                    >
+                      ML Setup
+                    </NavLink>
+                  )}
+                  {showMLSetup && <div className={styles.dropdownDivider}></div>}
                   {/* Config */}
                   <button
                     className={`${styles.dropdownItem} ${isConfigPage && configSection === 'router-config' ? styles.dropdownItemActive : ''}`}
@@ -266,17 +275,19 @@ const Layout: React.FC<LayoutProps> = ({ children, configSection, onConfigSectio
                   >
                     Router Config
                   </button>
-                  <button
-                    className={`${styles.dropdownItem} ${isConfigPage && configSection === 'mcp' ? styles.dropdownItemActive : ''}`}
-                    onClick={() => {
-                      onConfigSectionChange?.('mcp')
-                      navigate('/config')
-                      setOpenDropdown(null)
-                    }}
-                  >
-                    MCP Servers
-                  </button>
-                  <div className={styles.dropdownDivider}></div>
+                  {showMCPServers && (
+                    <button
+                      className={`${styles.dropdownItem} ${isConfigPage && configSection === 'mcp' ? styles.dropdownItemActive : ''}`}
+                      onClick={() => {
+                        onConfigSectionChange?.('mcp')
+                        navigate('/config')
+                        setOpenDropdown(null)
+                      }}
+                    >
+                      MCP Servers
+                    </button>
+                  )}
+                  {showMCPServers && <div className={styles.dropdownDivider}></div>}
                   {/* Observability */}
                   <NavLink
                     to="/status"

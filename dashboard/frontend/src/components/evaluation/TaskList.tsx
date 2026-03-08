@@ -6,6 +6,8 @@ import styles from './TaskList.module.css';
 interface TaskListProps {
   tasks: EvaluationTask[];
   loading: boolean;
+  canManageTasks?: boolean;
+  manageDisabledReason?: string;
   onView: (task: EvaluationTask) => void;
   onRun: (task: EvaluationTask) => void;
   onCancel: (task: EvaluationTask) => void;
@@ -13,7 +15,17 @@ interface TaskListProps {
   onRefresh: () => void;
 }
 
-export function TaskList({ tasks, loading, onView, onRun, onCancel, onDelete, onRefresh }: TaskListProps) {
+export function TaskList({
+  tasks,
+  loading,
+  canManageTasks = true,
+  manageDisabledReason,
+  onView,
+  onRun,
+  onCancel,
+  onDelete,
+  onRefresh,
+}: TaskListProps) {
 
   const getStatusBadge = useCallback((status: EvaluationTask['status']) => {
     const info = STATUS_INFO[status];
@@ -126,6 +138,7 @@ export function TaskList({ tasks, loading, onView, onRun, onCancel, onDelete, on
                         className={`${styles.actionButton} ${styles.runButton}`}
                         onClick={() => onRun(task)}
                         title="Run Evaluation"
+                        disabled={!canManageTasks}
                       >
                         Run
                       </button>
@@ -135,6 +148,7 @@ export function TaskList({ tasks, loading, onView, onRun, onCancel, onDelete, on
                         className={`${styles.actionButton} ${styles.cancelButton}`}
                         onClick={() => onCancel(task)}
                         title="Cancel Evaluation"
+                        disabled={!canManageTasks}
                       >
                         Cancel
                       </button>
@@ -142,8 +156,8 @@ export function TaskList({ tasks, loading, onView, onRun, onCancel, onDelete, on
                     <button
                       className={`${styles.actionButton} ${styles.deleteButton}`}
                       onClick={() => onDelete(task)}
-                      title="Delete Task"
-                      disabled={task.status === 'running'}
+                      title={canManageTasks ? 'Delete Task' : manageDisabledReason || 'Operator role required'}
+                      disabled={!canManageTasks || task.status === 'running'}
                     >
                       Delete
                     </button>

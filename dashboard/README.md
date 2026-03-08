@@ -76,7 +76,7 @@ Read-only dashboard mode:
 - Enable via CLI: `vllm-sr serve --readonly`
 - Or set env: `DASHBOARD_READONLY=true`
 - Effects:
-  - Frontend hides add/edit/delete actions and shows a read-only banner
+  - Frontend hides or disables write actions and shows a read-only or permission banner
   - Backend rejects write APIs with `403 Forbidden` for:
     - `POST /api/router/config/update`
     - `POST /api/router/config/defaults/update`
@@ -102,12 +102,14 @@ Read-only dashboard mode:
   - `GET /api/ml-pipeline/download/{id}/{filename}` → Download job output files
 - Normalizes headers for iframe embedding: strips/overrides `X-Frame-Options` and `Content-Security-Policy` frame-ancestors as needed
 - SPA routing support: serves `index.html` for all non-asset routes
-- Central point for JWT/OIDC in the future (forward or exchange tokens to upstreams)
+- Dashboard-owned auth/session boundary with local bootstrap mode and trusted-proxy mode for shared deployments
 
 Smart API routing:
 
-- Requests to `/api/router/*` go to the Router API with Authorization forwarded.
-- Other `/api/*` requests (e.g., Grafana’s API) are proxied to Grafana when configured.
+- Requests to `/api/router/*` go to the Router API behind the dashboard session and RBAC boundary.
+- `Authorization` pass-through to the router proxy is disabled by default and can be re-enabled explicitly with `DASHBOARD_PROXY_FORWARD_AUTH=true`.
+- Other `/api/*` requests (e.g., Grafana’s API) are proxied only after the dashboard resolves an authenticated viewer session.
+- Browser-originated proxy requests to `/api/*` and `/embedded/*` must now come from the dashboard origin; cross-origin proxy access is rejected before the request reaches upstream services.
 
 ## Directory Layout
 
@@ -162,6 +164,12 @@ Optional:
 
 - `ROUTER_CONFIG_PATH` (default: `../../config/config.yaml`) — path to the router config file used by the config APIs and Tools DB.
 - `DASHBOARD_STATIC_DIR` — override static assets directory (defaults to `../frontend`).
+- `DASHBOARD_AUTH_MODE` — `bootstrap` for local auto-admin sessions, or `proxy` for deployments behind an auth gateway that injects trusted identity headers.
+- `DASHBOARD_AUTH_COOKIE` — dashboard session cookie name (default: `vllm_sr_session`).
+- `DASHBOARD_AUTH_SESSION_TTL` — dashboard session TTL (default: `12h`).
+- `DASHBOARD_AUTH_BOOTSTRAP_ROLE` — local bootstrap role (`viewer`, `editor`, `operator`, `admin`; default: `admin`).
+- `DASHBOARD_AUTH_PROXY_USER_HEADER` / `DASHBOARD_AUTH_PROXY_EMAIL_HEADER` / `DASHBOARD_AUTH_PROXY_NAME_HEADER` / `DASHBOARD_AUTH_PROXY_ROLES_HEADER` — trusted header names used in `proxy` mode.
+- `DASHBOARD_PROXY_FORWARD_AUTH` — set to `true` only when the router upstream requires incoming `Authorization` pass-through.
 - `ML_SERVICE_URL` — URL of the Python ML service sidecar for HTTP mode (e.g., `http://ml-service:8686`). If not set, the dashboard uses subprocess mode (runs Python scripts directly).
 - `ML_PIPELINE_ENABLED` — set to `true` to enable ML pipeline features in Docker Compose/K8s deployments.
   Note: The backend already adjusts frame-busting headers (X-Frame-Options/CSP) to allow embedding from the dashboard origin; no extra env flag is required.
@@ -212,9 +220,23 @@ Recommended upstream settings for embedding:
 
 ## Security & access control
 
-- MVP: bearer token/JWT support via `Authorization: Bearer <token>` in requests to `/api/router/*` (forwarded to router API)
+- Dashboard auth modes:
+  - `bootstrap` (default): local-friendly session bootstrap with a persisted console user and role binding
+  - `proxy`: production path for dashboards fronted by an OIDC-aware gateway or auth proxy that injects trusted user headers
+- Session lifecycle:
+  - `GET /api/auth/session` resolves or creates the current dashboard session and returns the effective role plus capabilities
+  - `POST /api/auth/logout` revokes the local dashboard session cookie
+- Route-level RBAC:
+  - `viewer` for read paths and embedded service access
+  - `editor` for draft and config editing paths
+  - `operator` for deploy, rollback, setup activation, and evaluation or ML execution
+  - `admin` for MCP, OpenClaw, and other admin-only control-plane routes
+- Frontend capability alignment:
+  - Config, setup, evaluation, ML setup, and OpenClaw pages now resolve `/api/auth/session` and disable or hide mutation actions when the current role is insufficient.
+  - The main navigation also hides admin-only surfaces such as ClawOS and MCP management unless the session can administer them.
 - Frame embedding: backend strips/overrides `X-Frame-Options` and `Content-Security-Policy` headers from upstreams to permit `frame-ancestors 'self'` only
-- Future: OIDC login on dashboard, session cookie, and per-route RBAC; signed proxy sessions to embedded services
+- Router proxy auth forwarding is opt-in, not default, to avoid broad credential pass-through across embedded services
+- Embedded OpenClaw mediation: the dashboard proxy injects the gateway token server-side for embedded OpenClaw traffic, so the browser no longer needs the raw container token to open the control UI
 
 Write access warning for config updates:
 
@@ -232,7 +254,7 @@ Write access warning for config updates:
 — Backend: Go server with reverse proxies for `/embedded/*` and `/api/router/*`, plus `/api/router/config/all`
 — Frontend: SPA with embedded observability + built-in chat playground + structured config viewer
 — K8s manifests: Deployment + Service + ConfigMap; optional Ingress (add per cluster)
-— Future: OIDC, per-route RBAC, metrics summary endpoint
+— Auth/session, RBAC, capability-aware frontend routing, and same-origin embedded proxy mediation now terminate at the dashboard backend, and the canonical local smoke path validates the minimal console startup profile without requiring bundled local-model downloads
 
 ## Quick Start
 

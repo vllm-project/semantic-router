@@ -12,8 +12,6 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/console"
 )
 
-const compatibilityActorID = "dashboard-compat"
-
 type revisionPersistenceOptions struct {
 	source         string
 	summary        string

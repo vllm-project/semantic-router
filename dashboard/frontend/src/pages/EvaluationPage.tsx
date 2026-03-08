@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useConsoleAuth } from '../contexts/ConsoleAuthContext';
 import type { EvaluationTask, CreateTaskRequest } from '../types/evaluation';
 import { useTasks, useTaskMutations, useResults } from '../hooks/useEvaluation';
 import {
@@ -18,8 +19,11 @@ interface TabState {
 }
 
 export function EvaluationPage() {
+  const { capabilities, isLoading: authLoading } = useConsoleAuth();
   const { tasks, loading: tasksLoading, refresh: refreshTasks } = useTasks(true);
   const { loading: mutationLoading, error: mutationError, createTask, runTask, cancelTask, deleteTask, clearError } = useTaskMutations();
+  const canManageEvaluation = !authLoading && capabilities.canRunEvaluation;
+  const evaluationPermissionMessage = 'Operator role required to create, run, cancel, delete, or export evaluation tasks.';
 
   const [tabState, setTabState] = useState<TabState>({ active: 'tasks', selectedTaskId: null });
 
@@ -102,6 +106,12 @@ export function EvaluationPage() {
         </div>
       </div>
 
+      {!authLoading && !canManageEvaluation && (
+        <div className={styles.errorBanner}>
+          <span>{evaluationPermissionMessage}</span>
+        </div>
+      )}
+
       {mutationError && (
         <div className={styles.errorBanner}>
           <span>{mutationError}</span>
@@ -120,10 +130,12 @@ export function EvaluationPage() {
           <ProgressTracker
             taskId={tabState.selectedTaskId}
             onComplete={handleProgressComplete}
-            onCancel={() => {
+            onCancel={canManageEvaluation ? () => {
               const task = tasks.find(t => t.id === tabState.selectedTaskId);
               if (task) handleCancelTask(task);
-            }}
+            } : undefined}
+            canCancel={canManageEvaluation}
+            cancelDisabledReason={evaluationPermissionMessage}
           />
         </div>
       )}
@@ -132,6 +144,8 @@ export function EvaluationPage() {
         <ReportViewer
           results={selectedResults}
           onBack={handleBackFromReport}
+          canExport={canManageEvaluation}
+          exportDisabledReason={evaluationPermissionMessage}
         />
       )}
 
@@ -155,6 +169,8 @@ export function EvaluationPage() {
               <TaskList
                 tasks={tasks}
                 loading={tasksLoading || mutationLoading}
+                canManageTasks={canManageEvaluation}
+                manageDisabledReason={evaluationPermissionMessage}
                 onView={handleViewTask}
                 onRun={handleRunTask}
                 onCancel={handleCancelTask}
@@ -168,6 +184,8 @@ export function EvaluationPage() {
                 onSubmit={handleCreateTask}
                 onCancel={handleCancelCreate}
                 loading={mutationLoading}
+                canSubmit={canManageEvaluation}
+                submitDisabledReason={evaluationPermissionMessage}
               />
             )}
 

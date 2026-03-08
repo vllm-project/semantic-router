@@ -7,9 +7,16 @@ import styles from './ReportViewer.module.css';
 interface ReportViewerProps {
   results: TaskResults;
   onBack?: () => void;
+  canExport?: boolean;
+  exportDisabledReason?: string;
 }
 
-export function ReportViewer({ results, onBack }: ReportViewerProps) {
+export function ReportViewer({
+  results,
+  onBack,
+  canExport = true,
+  exportDisabledReason,
+}: ReportViewerProps) {
   const { task, results: evaluationResults } = results;
 
   const handleExport = useCallback(async (format: 'json' | 'csv') => {
@@ -58,10 +65,20 @@ export function ReportViewer({ results, onBack }: ReportViewerProps) {
           </div>
         </div>
         <div className={styles.headerRight}>
-          <button className={styles.exportButton} onClick={() => handleExport('json')}>
+          <button
+            className={styles.exportButton}
+            onClick={() => handleExport('json')}
+            disabled={!canExport}
+            title={canExport ? 'Export JSON' : exportDisabledReason || 'Operator role required'}
+          >
             Export JSON
           </button>
-          <button className={styles.exportButton} onClick={() => handleExport('csv')}>
+          <button
+            className={styles.exportButton}
+            onClick={() => handleExport('csv')}
+            disabled={!canExport}
+            title={canExport ? 'Export CSV' : exportDisabledReason || 'Operator role required'}
+          >
             Export CSV
           </button>
         </div>

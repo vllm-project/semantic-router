@@ -10,23 +10,24 @@ import (
 // Setup configures all routes and returns the configured mux.
 func Setup(app *backendapp.App) *http.ServeMux {
 	cfg := app.Config
+	access := newRouteAccess(app)
 	mux := http.NewServeMux()
 	registerCoreRoutes(mux, app)
 	registerConfigRoutes(mux, app)
-	registerToolsRoutes(mux, cfg)
-	registerDashboardUtilityRoutes(mux, cfg)
-	registerEvaluationRoutes(mux, cfg)
+	registerToolsRoutes(mux, app)
+	registerDashboardUtilityRoutes(mux, app)
+	registerEvaluationRoutes(mux, app)
 
 	openClawHandler := buildOpenClawHandler(cfg)
-	SetupMCP(mux, cfg, openClawHandler)
-	registerMLPipelineRoutes(mux, cfg)
-	registerOpenClawRoutes(mux, cfg, openClawHandler)
+	SetupMCP(mux, app, openClawHandler)
+	registerMLPipelineRoutes(mux, app)
+	registerOpenClawRoutes(mux, app, openClawHandler)
 
-	proxies := registerIntegrationRoutes(mux, cfg)
-	registerSmartAPIRoutes(mux, proxies)
-	registerMetricsRoutes(mux, cfg)
-	registerPrometheusRoutes(mux, cfg)
-	registerJaegerRoutes(mux, cfg, proxies)
+	proxies := registerIntegrationRoutes(mux, app)
+	registerSmartAPIRoutes(mux, access, proxies)
+	registerMetricsRoutes(mux, access, cfg)
+	registerPrometheusRoutes(mux, app, access)
+	registerJaegerRoutes(mux, app, access, proxies)
 	mux.Handle("/", handlers.StaticFileServer(cfg.StaticDir))
 
 	return mux

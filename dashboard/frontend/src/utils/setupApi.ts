@@ -1,3 +1,4 @@
+import { createAndActivateConfigRevision } from './configRevisionApi'
 import { SetupActivateResponse, SetupState, SetupValidateResponse } from '../types/setup'
 
 async function readErrorMessage(response: Response): Promise<string> {
@@ -47,5 +48,19 @@ export async function validateSetupConfig(
 export async function activateSetupConfig(
   config: Record<string, unknown>,
 ): Promise<SetupActivateResponse> {
-  return postSetupConfig<SetupActivateResponse>('/api/setup/activate', config)
+  const result = await createAndActivateConfigRevision({
+    document: config,
+    source: 'setup_wizard_activate',
+    summary: 'Activated setup config from Setup Wizard',
+    metadata: {
+      ui_surface: 'setup_wizard',
+      setup_flow: true,
+    },
+  })
+
+  return {
+    status: 'success',
+    setupMode: true,
+    message: result.message,
+  }
 }

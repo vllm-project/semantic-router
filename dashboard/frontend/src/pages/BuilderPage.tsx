@@ -6,6 +6,7 @@ import React, {
   useRef,
 } from "react";
 
+import { useConsoleAuth } from "@/contexts/ConsoleAuthContext";
 import { useDSLStore } from "@/stores/dslStore";
 import type { EditorMode } from "@/types/dsl";
 import type { RouteInput } from "@/lib/dslMutations";
@@ -25,6 +26,7 @@ import type { EntityKind, SectionState, Selection } from "./builderPageTypes";
 // ---------- Component ----------
 
 const BuilderPage: React.FC = () => {
+  const { capabilities, isLoading: authLoading } = useConsoleAuth();
   const {
     dslSource,
     diagnostics,
@@ -407,6 +409,7 @@ const BuilderPage: React.FC = () => {
         dslSource={dslSource}
         loading={loading}
         deploying={deploying}
+        canDeploy={!authLoading && capabilities.canDeployConfig}
         guideOpen={guideOpen}
         outputPanelOpen={outputPanelOpen}
         onModeSwitch={handleModeSwitch}

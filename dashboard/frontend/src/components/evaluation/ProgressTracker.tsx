@@ -7,9 +7,17 @@ interface ProgressTrackerProps {
   taskId: string;
   onComplete?: () => void;
   onCancel?: () => void;
+  canCancel?: boolean;
+  cancelDisabledReason?: string;
 }
 
-export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTrackerProps) {
+export function ProgressTracker({
+  taskId,
+  onComplete,
+  onCancel,
+  canCancel = true,
+  cancelDisabledReason,
+}: ProgressTrackerProps) {
   const { task, refresh: refreshTask } = useTask(taskId);
   const { progress, connected, completed, error } = useProgress(taskId, task?.status === 'running');
 
@@ -134,7 +142,12 @@ export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTracke
 
       {task.status === 'running' && onCancel && (
         <div className={styles.actions}>
-          <button className={styles.cancelButton} onClick={onCancel}>
+          <button
+            className={styles.cancelButton}
+            onClick={onCancel}
+            disabled={!canCancel}
+            title={canCancel ? 'Cancel Evaluation' : cancelDisabledReason || 'Operator role required'}
+          >
             Cancel Evaluation
           </button>
         </div>

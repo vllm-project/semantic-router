@@ -7,6 +7,7 @@ import { DataTable, Column } from '../components/DataTable'
 import TableHeader from '../components/TableHeader'
 import EndpointsEditor, { Endpoint } from '../components/EndpointsEditor'
 import RoutingPresetModal from '../components/RoutingPresetModal'
+import { useConsoleAuth } from '../contexts/ConsoleAuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import ConfigPageRouterConfigSection from './ConfigPageRouterConfigSection'
 import {
@@ -23,6 +24,7 @@ import {
   DecisionConditionType
 } from '../types/config'
 import { MCPConfigPanel } from '../components/MCPConfigPanel'
+import { createAndActivateConfigRevision } from '../utils/configRevisionApi'
 import {
   AddSignalFormState,
   clonePresetDecisions,
@@ -47,7 +49,9 @@ interface ConfigPageProps {
 // Removed maskAddress - no longer needed after removing endpoint visibility toggle
 
 const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => {
-  const { isReadonly } = useReadonly()
+  const { isReadonly: readonlyMode } = useReadonly()
+  const { capabilities, isLoading: authLoading } = useConsoleAuth()
+  const isReadonly = readonlyMode || authLoading || !capabilities.canDeployConfig
   const [config, setConfig] = useState<ConfigData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -163,42 +167,22 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const saveConfig = async (updatedConfig: any) => {
-    // Prevent save in read-only mode
+    // Prevent save when the console cannot activate config changes
     if (isReadonly) {
-      throw new Error('Dashboard is in read-only mode. Configuration editing is disabled.')
+      throw new Error('Your current console session cannot activate configuration changes.')
     }
 
     try {
-      const response = await fetch('/api/router/config/update', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      await createAndActivateConfigRevision({
+        document: updatedConfig,
+        source: 'config_page_update',
+        summary: 'Applied config update from Config Page',
+        metadata: {
+          ui_surface: 'config_page',
         },
-        body: JSON.stringify(updatedConfig),
       })
-
-      if (!response.ok) {
-        // Try to read error message from response body
-        const errorText = await response.text()
-        let errorMessage = `HTTP ${response.status}: ${response.statusText}`
-        if (errorText) {
-          try {
-            const errorJson = JSON.parse(errorText)
-            if (errorJson.error || errorJson.message) {
-              errorMessage = errorJson.error || errorJson.message
-            } else {
-              errorMessage = errorText
-            }
-          } catch {
-            // If not JSON, use the text as-is
-            errorMessage = errorText
-          }
-        }
-        throw new Error(errorMessage)
-      }
-
-      // Refresh config after save
       await fetchConfig()
+      window.dispatchEvent(new CustomEvent('config-deployed'))
     } catch (err) {
       throw new Error(err instanceof Error ? err.message : 'Failed to save configuration')
     }

@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"time"
 )
 
 // Config holds all application configuration
@@ -37,6 +38,21 @@ type Config struct {
 	ConsoleStoreBackend string
 	ConsoleDBPath       string
 	ConsoleStoreDSN     string
+
+	// Dashboard auth/session configuration
+	AuthMode              string
+	AuthSessionCookieName string
+	AuthSessionTTL        time.Duration
+	AuthBootstrapUserID   string
+	AuthBootstrapEmail    string
+	AuthBootstrapName     string
+	AuthBootstrapRole     string
+	AuthBootstrapSubject  string
+	AuthProxyUserHeader   string
+	AuthProxyEmailHeader  string
+	AuthProxyNameHeader   string
+	AuthProxyRolesHeader  string
+	ProxyForwardAuth      bool
 
 	// MCP configuration
 	MCPEnabled bool
