@@ -13,6 +13,7 @@ on:
       - 'tools/make/docker.mk'
       - 'tools/make/milvus.mk'
       - 'e2e/testing/09-memory-features-test.py'
+      - 'e2e/testing/run_memory_integration.sh'
       - 'e2e/testing/llm-katan/**'
       - 'config/testing/config.memory*.yaml'
       - '.github/workflows/integration-test-memory.yml'

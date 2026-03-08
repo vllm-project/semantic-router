@@ -249,71 +249,8 @@ vllm-sr-test-integration: vllm-sr-build vllm-sr-install-cli
 memory-test-integration: ## Run memory integration tests with local Milvus, llm-katan, and vllm-sr serve
 memory-test-integration: vllm-sr-build vllm-sr-install-cli docker-build-llm-katan
 	@$(LOG_TARGET)
-	@set -e; \
-	TEST_DIR=$$(mktemp -d -t vsr-memory-test-XXXXXX); \
-	VLLM_SR_PID=""; \
-	cleanup() { \
-		if [ -n "$$VLLM_SR_PID" ] && kill -0 "$$VLLM_SR_PID" 2>/dev/null; then \
-			kill "$$VLLM_SR_PID" 2>/dev/null || true; \
-			wait "$$VLLM_SR_PID" 2>/dev/null || true; \
-		fi; \
-		vllm-sr stop >/dev/null 2>&1 || true; \
-		$(CONTAINER_RUNTIME) stop llm-katan >/dev/null 2>&1 || true; \
-		$(CONTAINER_RUNTIME) rm llm-katan >/dev/null 2>&1 || true; \
-		$(MAKE) stop-milvus >/dev/null 2>&1 || true; \
-		rm -rf "$$TEST_DIR"; \
-	}; \
-	trap cleanup EXIT INT TERM; \
-	python3 -m pip install -U "huggingface_hub[cli]" hf_transfer requests pymilvus; \
-	mkdir -p "$$TEST_DIR/models"; \
-	HF_HUB_ENABLE_HF_TRANSFER=1 \
-	python3 -c "from huggingface_hub import snapshot_download; snapshot_download('sentence-transformers/all-MiniLM-L12-v2', local_dir='$$TEST_DIR/models/mom-embedding-light', local_dir_use_symlinks=False)"; \
-	$(MAKE) start-milvus; \
-	cp config/testing/config.memory-user.yaml "$$TEST_DIR/config.yaml"; \
-	$(CONTAINER_RUNTIME) run -d --name llm-katan --network host \
-		$(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG) \
-		llm-katan --model dummy --host 0.0.0.0 --port 8000 --served-model-name qwen3 --backend echo >/dev/null; \
-	for i in $$(seq 1 30); do \
-		if curl -s http://localhost:8000/health >/dev/null 2>&1; then \
-			echo "llm-katan ready"; \
-			break; \
-		fi; \
-		if ! $(CONTAINER_RUNTIME) ps --filter "name=llm-katan" --format '{{.Names}}' | grep -q '^llm-katan$$'; then \
-			echo "llm-katan container exited unexpectedly"; \
-			$(CONTAINER_RUNTIME) logs llm-katan || true; \
-			exit 1; \
-		fi; \
-		sleep 1; \
-	done; \
-	( \
-		cd "$$TEST_DIR" && \
-		vllm-sr serve --config config.yaml --image $(VLLM_SR_IMAGE) --image-pull-policy never > serve.log 2>&1 & \
-		VLLM_SR_PID=$$!; \
-		echo "$$VLLM_SR_PID" > serve.pid \
-	); \
-	VLLM_SR_PID=$$(cat "$$TEST_DIR/serve.pid"); \
-	for i in $$(seq 1 180); do \
-		HTTP_CODE=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8888/health 2>/dev/null || echo "000"); \
-		if [ "$$HTTP_CODE" = "200" ]; then \
-			echo "vllm-sr ready"; \
-			break; \
-		fi; \
-		if ! kill -0 "$$VLLM_SR_PID" 2>/dev/null; then \
-			echo "vllm-sr serve exited unexpectedly"; \
-			cat "$$TEST_DIR/serve.log" || true; \
-			exit 1; \
-		fi; \
-		sleep 2; \
-	done; \
-	HTTP_CODE=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8888/health 2>/dev/null || echo "000"); \
-	if [ "$$HTTP_CODE" != "200" ]; then \
-		echo "vllm-sr did not become healthy"; \
-		cat "$$TEST_DIR/serve.log" || true; \
-		exit 1; \
-	fi; \
-	cd e2e/testing && \
-	PYTHONUNBUFFERED=1 \
-	ROUTER_ENDPOINT=http://localhost:8888 \
-	MILVUS_ADDRESS=localhost:19530 \
-	MILVUS_COLLECTION=memory_test_ci \
-	python3 09-memory-features-test.py
+	@CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) \
+	DOCKER_REGISTRY=$(DOCKER_REGISTRY) \
+	DOCKER_TAG=$(DOCKER_TAG) \
+	VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) \
+	bash e2e/testing/run_memory_integration.sh
