@@ -39,11 +39,17 @@ See [environments.md](environments.md) for the concrete commands.
 - Behavior-visible routing, startup, config, Docker, CLI, or API changes require updated or new E2E coverage unless the change is a pure refactor.
 - Documentation-only changes should not trigger local smoke or heavy E2E unless the task matrix escalates them.
 - Core, common, startup-chain, Docker, or agent-execution changes may expand CI profile coverage beyond the locally affected set.
+- Workflow-driven integration suites are part of the canonical validation story when they are listed in `tools/agent/e2e-profile-map.yaml`.
+- The current workflow-driven suites are:
+  - `vllm-sr-cli-integration` via `make vllm-sr-test-integration`
+  - `memory-integration` via `make memory-test-integration`
+- Manual-only Go profiles are valid durable suites, but they must be named in `manual_profile_rules` instead of existing as undocumented runner-only paths.
 
 ## Source of Truth
 
 - Gate selection and commands: [../../tools/agent/task-matrix.yaml](../../tools/agent/task-matrix.yaml)
 - Environment resolution: [../../tools/agent/repo-manifest.yaml](../../tools/agent/repo-manifest.yaml)
 - E2E profile mapping: [../../tools/agent/e2e-profile-map.yaml](../../tools/agent/e2e-profile-map.yaml)
+- E2E taxonomy and suite selection guidance: [playbooks/e2e-selection.md](playbooks/e2e-selection.md)
 - Executable entrypoints: [../../tools/make/agent.mk](../../tools/make/agent.mk)
 - Done criteria: [feature-complete-checklist.md](feature-complete-checklist.md)

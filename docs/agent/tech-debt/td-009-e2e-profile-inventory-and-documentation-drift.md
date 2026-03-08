@@ -2,7 +2,7 @@
 
 ## Status
 
-Open
+Closed
 
 ## Scope
 
@@ -10,15 +10,17 @@ test discoverability and profile inventory
 
 ## Summary
 
-The documented supported profile list, the actual runner inventory, and the harness profile map no longer present one synchronized view of the active profile set.
+The documented supported profile list, the actual runner inventory, and the harness profile map previously drifted out of sync. The repo now has one mechanically checked runnable profile inventory and consistent response-api helper naming, so this gap is retired.
 
 ## Evidence
 
 - [e2e/README.md](../../../e2e/README.md)
-- [e2e/cmd/e2e/main.go](../../../e2e/cmd/e2e/main.go)
+- [e2e/profiles/all/imports.go](../../../e2e/profiles/all/imports.go)
+- [e2e/pkg/framework/profile_registry.go](../../../e2e/pkg/framework/profile_registry.go)
 - [tools/agent/e2e-profile-map.yaml](../../../tools/agent/e2e-profile-map.yaml)
+- [tools/agent/scripts/agent_ci_validation.py](../../../tools/agent/scripts/agent_ci_validation.py)
 - [e2e/profiles/response-api/profile.go](../../../e2e/profiles/response-api/profile.go)
-- [e2e/profiles/responseapi/redis_profile.go](../../../e2e/profiles/responseapi/redis_profile.go)
+- [e2e/profiles/response-api-shared/redis_profile.go](../../../e2e/profiles/response-api-shared/redis_profile.go)
 
 ## Why It Matters
 
@@ -33,5 +35,11 @@ The documented supported profile list, the actual runner inventory, and the harn
 
 ## Exit Criteria
 
-- `e2e/README.md`, `e2e/cmd/e2e/main.go`, and `tools/agent/e2e-profile-map.yaml` stay synchronized for the active profile set.
-- Profile additions or removals can be mechanically validated against the canonical inventory.
+- Satisfied on 2026-03-08: `e2e/README.md`, `e2e/profiles/all/imports.go`, and `tools/agent/e2e-profile-map.yaml` now stay synchronized for the active profile set.
+- Satisfied on 2026-03-08: profile additions or removals can be mechanically validated against the canonical inventory, and the last `responseapi` helper naming drift is gone.
+
+## Resolution
+
+- The runnable profile inventory is now mechanically synchronized across `e2e/README.md`, `e2e/profiles/all/imports.go`, and `tools/agent/e2e-profile-map.yaml`.
+- `tools/agent/scripts/agent_ci_validation.py` now checks that runnable inventory drift before the harness accepts a change.
+- The shared Redis-backed helper moved from `e2e/profiles/responseapi/` to `e2e/profiles/response-api-shared/`, so the response-api E2E stack no longer exposes a divergent helper naming convention.

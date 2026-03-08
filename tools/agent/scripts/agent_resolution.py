@@ -111,9 +111,9 @@ def unique_preserve_order(values: Iterable[str]) -> list[str]:
     return result
 
 
-def resolve_context(changed_files: list[str]) -> ResolvedContext:
-    repo_manifest, task_matrix, e2e_map, _, _ = load_manifests()
-    local_rule_path_set = local_agent_rule_paths(repo_manifest)
+def match_task_matrix_rules(
+    task_matrix: dict, changed_files: list[str], local_rule_path_set: set[str]
+) -> tuple[list[dict], list[str], list[str], bool]:
     matched_rules: list[dict] = []
     fast_tests: list[str] = []
     feature_tests: list[str] = []
@@ -137,37 +137,82 @@ def resolve_context(changed_files: list[str]) -> ResolvedContext:
                 "requires_local_smoke", False
             )
 
-    full_ci = any(
-        matches_with_local_rule_policy(
-            path, e2e_map["full_ci_triggers"], local_rule_path_set
-        )
-        for path in changed_files
-    )
-    targeted_profiles = [
+    return matched_rules, fast_tests, feature_tests, requires_local_smoke
+
+
+def targeted_profiles_for_rules(
+    profile_rules: dict, changed_files: list[str], local_rule_path_set: set[str]
+) -> list[str]:
+    return [
         profile
-        for profile, data in e2e_map["profile_rules"].items()
+        for profile, data in profile_rules.items()
         if any(
             matches_with_local_rule_policy(path, data["paths"], local_rule_path_set)
             for path in changed_files
         )
     ]
 
+
+def resolve_e2e_profiles(
+    changed_files: list[str], e2e_map: dict, local_rule_path_set: set[str]
+) -> tuple[list[str], list[str], list[str], str]:
+    standard_profile_rules = e2e_map.get("profile_rules", {})
+    manual_profile_rules = e2e_map.get("manual_profile_rules", {})
+    workflow_suite_rules = e2e_map.get("workflow_suite_rules", {})
+    full_ci = any(
+        matches_with_local_rule_policy(
+            path, e2e_map["full_ci_triggers"], local_rule_path_set
+        )
+        for path in changed_files
+    )
+    targeted_profiles = targeted_profiles_for_rules(
+        standard_profile_rules, changed_files, local_rule_path_set
+    )
+    targeted_manual_profiles = targeted_profiles_for_rules(
+        manual_profile_rules, changed_files, local_rule_path_set
+    )
+    targeted_workflow_suites = targeted_profiles_for_rules(
+        workflow_suite_rules, changed_files, local_rule_path_set
+    )
+
     if full_ci:
         local_profiles = targeted_profiles or e2e_map["default_local_profiles"]
+        local_profiles.extend(targeted_manual_profiles)
         ci_profiles = e2e_map["full_ci_profiles"]
         ci_mode = "all"
-    elif targeted_profiles:
-        local_profiles = targeted_profiles
+    elif targeted_profiles or targeted_manual_profiles:
+        local_profiles = [*targeted_profiles, *targeted_manual_profiles]
         ci_profiles = targeted_profiles
-        ci_mode = "targeted"
+        ci_mode = "targeted" if targeted_profiles else "none"
     else:
         local_profiles = []
         ci_profiles = []
         ci_mode = "none"
 
-    doc_only = bool(matched_rules) and all(
+    return (
+        local_profiles,
+        ci_profiles,
+        targeted_workflow_suites,
+        ci_mode,
+    )
+
+
+def is_doc_only_rule_set(matched_rules: list[dict]) -> bool:
+    return bool(matched_rules) and all(
         rule.get("doc_only", False) for rule in matched_rules
     )
+
+
+def resolve_context(changed_files: list[str]) -> ResolvedContext:
+    repo_manifest, task_matrix, e2e_map, _, _ = load_manifests()
+    local_rule_path_set = local_agent_rule_paths(repo_manifest)
+    matched_rules, fast_tests, feature_tests, requires_local_smoke = (
+        match_task_matrix_rules(task_matrix, changed_files, local_rule_path_set)
+    )
+    local_profiles, ci_profiles, targeted_workflow_suites, ci_mode = (
+        resolve_e2e_profiles(changed_files, e2e_map, local_rule_path_set)
+    )
+    doc_only = is_doc_only_rule_set(matched_rules)
     if doc_only:
         local_profiles = []
     return ResolvedContext(
@@ -178,6 +223,7 @@ def resolve_context(changed_files: list[str]) -> ResolvedContext:
         requires_local_smoke=requires_local_smoke and not doc_only,
         local_e2e_profiles=unique_preserve_order(local_profiles),
         ci_e2e_profiles=unique_preserve_order(ci_profiles),
+        workflow_integration_suites=unique_preserve_order(targeted_workflow_suites),
         ci_e2e_mode=ci_mode,
         doc_only=doc_only,
     )
@@ -319,6 +365,7 @@ def resolve_skill(changed_files: list[str], env_name: str | None) -> SkillResolu
 def build_validation_commands(
     env: EnvironmentResolution, context: ResolvedContext
 ) -> list[str]:
+    _, _, e2e_map, _, _ = load_manifests()
     commands = [*context.fast_tests, *context.feature_tests]
     if context.requires_local_smoke and env.local_env:
         commands.extend(
@@ -330,6 +377,11 @@ def build_validation_commands(
         )
     for profile in context.local_e2e_profiles:
         commands.append(f"make e2e-test E2E_PROFILE={profile} E2E_VERBOSE=true")
+    for suite_name in context.workflow_integration_suites:
+        suite = e2e_map.get("workflow_suite_rules", {}).get(suite_name, {})
+        local_command = suite.get("local_command")
+        if local_command:
+            commands.append(local_command)
     return unique_preserve_order(commands)
 
 

@@ -71,6 +71,7 @@ subsystems:
       - deploy/openshift/**
     entrypoints:
       - e2e/cmd/e2e/main.go
+      - e2e/profiles/all/imports.go
   - name: agent-contract
     paths:
       - AGENTS.md
@@ -117,6 +118,7 @@ docs:
   - docs/agent/governance.md
   - docs/agent/plans/README.md
   - docs/agent/plans/pl-0001-harness-roadmap.md
+  - docs/agent/plans/pl-0002-e2e-rationalization-roadmap.md
   - docs/agent/tech-debt-register.md
   - docs/agent/tech-debt/README.md
   - docs/agent/tech-debt/td-001-config-surface-fragmentation.md
@@ -128,6 +130,7 @@ docs:
   - docs/agent/tech-debt/td-007-e2e-integration-surfaces-split-across-frameworks.md
   - docs/agent/tech-debt/td-008-e2e-profile-matrix-shared-router-coverage-ownership.md
   - docs/agent/tech-debt/td-009-e2e-profile-inventory-and-documentation-drift.md
+  - docs/agent/tech-debt/td-010-e2e-framework-extension-paths.md
   - docs/agent/glossary.md
   - docs/agent/adr/README.md
   - docs/agent/adr/adr-0001-harness-layering.md
@@ -191,6 +194,9 @@ doc_governance:
     - path: docs/agent/plans/pl-0001-harness-roadmap.md
       steward: agent-contract
       freshness: update at the start and end of each harness refactor loop and after each completed loop task
+    - path: docs/agent/plans/pl-0002-e2e-rationalization-roadmap.md
+      steward: e2e
+      freshness: update at the start and end of each E2E rationalization loop and after each completed loop task
     - path: docs/agent/tech-debt-register.md
       steward: agent-contract
       freshness: update when debt workflow or landing-page guidance changes
@@ -224,6 +230,9 @@ doc_governance:
     - path: docs/agent/tech-debt/td-009-e2e-profile-inventory-and-documentation-drift.md
       steward: agent-contract
       freshness: update when the TD009 debt record changes materially
+    - path: docs/agent/tech-debt/td-010-e2e-framework-extension-paths.md
+      steward: agent-contract
+      freshness: update when the TD010 debt record changes materially
     - path: docs/agent/glossary.md
       steward: agent-contract
       freshness: update when harness terms or categories change

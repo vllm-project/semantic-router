@@ -206,8 +206,12 @@ surfaces:
     paths:
       - .github/workflows/ci-changes.yml
       - .github/workflows/integration-test-k8s.yml
+      - .github/workflows/integration-test-memory.yml
       - .github/workflows/integration-test-vllm-sr-cli.yml
       - .github/workflows/pre-commit.yml
+      - e2e/testing/vllm-sr-cli/**
+      - e2e/testing/09-memory-features-test.py
+      - e2e/testing/llm-katan/**
       - tools/agent/skill-registry.yaml
       - tools/agent/task-matrix.yaml
       - tools/agent/e2e-profile-map.yaml
@@ -478,6 +482,7 @@ skills:
         - src/vllm-sr/**
         - src/vllm-sr/Dockerfile*
         - tools/make/docker.mk
+        - e2e/testing/vllm-sr-cli/**
         - config/testing/config.agent-smoke.cpu.yaml
         - config/testing/config.agent-smoke.amd.yaml
       fragments:

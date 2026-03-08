@@ -2,7 +2,7 @@
 
 ## Status
 
-Open
+Closed
 
 ## Scope
 
@@ -10,7 +10,7 @@ test architecture and harness coverage
 
 ## Summary
 
-The repository currently maintains multiple durable integration and E2E entrypoints that sit outside one coherent harness-wide selection story.
+The repository previously maintained multiple durable integration and E2E entrypoints that sat outside one coherent harness-wide selection story. The harness now classifies workflow-driven integration suites alongside Go profiles, so this gap is retired.
 
 ## Evidence
 
@@ -18,7 +18,9 @@ The repository currently maintains multiple durable integration and E2E entrypoi
 - [docs/agent/playbooks/e2e-selection.md](../playbooks/e2e-selection.md)
 - [tools/agent/task-matrix.yaml](../../../tools/agent/task-matrix.yaml)
 - [tools/agent/e2e-profile-map.yaml](../../../tools/agent/e2e-profile-map.yaml)
-- [e2e/cmd/e2e/main.go](../../../e2e/cmd/e2e/main.go)
+- [tools/agent/scripts/agent_resolution.py](../../../tools/agent/scripts/agent_resolution.py)
+- [e2e/profiles/all/imports.go](../../../e2e/profiles/all/imports.go)
+- [e2e/pkg/framework/profile_registry.go](../../../e2e/pkg/framework/profile_registry.go)
 - [e2e/testing/run_all_tests.py](../../../e2e/testing/run_all_tests.py)
 - [.github/workflows/integration-test-memory.yml](../../../.github/workflows/integration-test-memory.yml)
 - [.github/workflows/integration-test-vllm-sr-cli.yml](../../../.github/workflows/integration-test-vllm-sr-cli.yml)
@@ -36,5 +38,11 @@ The repository currently maintains multiple durable integration and E2E entrypoi
 
 ## Exit Criteria
 
-- A contributor can change any integration or E2E file and get a deterministic `agent-report` result with named validation commands and affected suites.
-- Workflow-only suites are either absorbed into the canonical harness or documented as bounded exceptions instead of parallel hidden paths.
+- Satisfied on 2026-03-08: contributors can change any durable integration or E2E file and get a deterministic `agent-report` result with named validation commands and affected suites.
+- Satisfied on 2026-03-08: workflow-only suites are now part of the canonical harness selection path instead of hidden parallel paths.
+
+## Resolution
+
+- `tools/agent/e2e-profile-map.yaml` now classifies standard profiles, manual-only profiles, and workflow-driven integration suites in one canonical taxonomy.
+- `docs/agent/playbooks/e2e-selection.md` and `docs/agent/testing-strategy.md` publish that taxonomy as the human-readable system of record.
+- `tools/agent/task-matrix.yaml` and `tools/agent/scripts/agent_resolution.py` now surface workflow suites through `make agent-report`, including named local commands for CLI and memory integration changes.

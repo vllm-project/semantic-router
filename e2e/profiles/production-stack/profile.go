@@ -7,12 +7,10 @@ import (
 	"os/exec"
 	"time"
 
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
-
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
+	"github.com/vllm-project/semantic-router/e2e/pkg/testmatrix"
 
 	// Import testcases package to register all test cases via their init() functions
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
@@ -151,20 +149,20 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
 
 	p.log("Cleaning up Gateway API resources")
-	p.cleanupGatewayResources(ctx, opts)
+	_ = p.cleanupGatewayResources(ctx, opts)
 
 	p.log("Cleaning up Prometheus")
-	p.cleanupPrometheus(ctx, opts)
+	_ = p.cleanupPrometheus(ctx, opts)
 
 	p.log("Uninstalling Envoy AI Gateway")
-	deployer.Uninstall(ctx, releaseAIGatewayCRD, namespaceAIGateway)
-	deployer.Uninstall(ctx, releaseAIGateway, namespaceAIGateway)
+	_ = deployer.Uninstall(ctx, releaseAIGatewayCRD, namespaceAIGateway)
+	_ = deployer.Uninstall(ctx, releaseAIGateway, namespaceAIGateway)
 
 	p.log("Uninstalling Envoy Gateway")
-	deployer.Uninstall(ctx, releaseEnvoyGateway, namespaceEnvoyGateway)
+	_ = deployer.Uninstall(ctx, releaseEnvoyGateway, namespaceEnvoyGateway)
 
 	p.log("Uninstalling Semantic Router")
-	deployer.Uninstall(ctx, releaseSemanticRouter, namespaceSemanticRouter)
+	_ = deployer.Uninstall(ctx, releaseSemanticRouter, namespaceSemanticRouter)
 
 	p.log("Production Stack test environment teardown complete")
 	return nil
@@ -172,22 +170,16 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 
 // GetTestCases returns the list of test cases for this profile
 func (p *Profile) GetTestCases() []string {
-	return []string{
-		// Standard functional tests
-		"chat-completions-request",
-		"chat-completions-stress-request",
-		"domain-classify",
-		"semantic-cache",
-		"pii-detection",
-		"jailbreak-detection",
-		"chat-completions-progressive-stress",
-		// Production stack specific tests (HA/LB/Observability)
-		"multi-replica-health",
-		"load-balancing-verification",
-		"failover-during-traffic",
-		"performance-throughput",
-		"resource-utilization-monitoring",
-	}
+	return testmatrix.Combine(
+		testmatrix.RouterSmoke,
+		[]string{
+			"multi-replica-health",
+			"load-balancing-verification",
+			"failover-during-traffic",
+			"performance-throughput",
+			"resource-utilization-monitoring",
+		},
+	)
 }
 
 // GetServiceConfig returns the service configuration for accessing the deployed service
@@ -287,63 +279,37 @@ func (p *Profile) deployGatewayResources(ctx context.Context, opts *framework.Se
 }
 
 func (p *Profile) verifyEnvironment(ctx context.Context, opts *framework.SetupOptions) error {
-	// Create Kubernetes client
-	config, err := clientcmd.BuildConfigFromFlags("", opts.KubeConfig)
+	client, err := helpers.NewKubeClient(opts.KubeConfig)
 	if err != nil {
-		return fmt.Errorf("failed to build kubeconfig: %w", err)
+		return err
 	}
 
-	client, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return fmt.Errorf("failed to create kube client: %w", err)
-	}
-
-	startTime := time.Now()
 	p.log("Waiting for Envoy Gateway service to be ready...")
-
-	var envoyService string
-	for {
-		envoyService, err = helpers.GetEnvoyServiceName(ctx, client, labelSelectorGateway, p.verbose)
-		if err == nil {
-			podErr := helpers.VerifyServicePodsRunning(ctx, client, namespaceEnvoyGateway, envoyService, p.verbose)
-			if podErr == nil {
-				p.log("Envoy Gateway service is ready: %s", envoyService)
-				break
-			}
-			if p.verbose {
-				p.log("Envoy service found but pods not ready: %v", podErr)
-			}
-			err = fmt.Errorf("service pods not ready: %w", podErr)
-		}
-
-		if time.Since(startTime) >= timeoutServiceRetry {
-			return fmt.Errorf("failed to get Envoy service with running pods after %v: %w", timeoutServiceRetry, err)
-		}
-
-		if p.verbose {
-			p.log("Envoy service not ready, retrying in %v... (elapsed: %v)",
-				intervalServiceRetry, time.Since(startTime).Round(time.Second))
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(intervalServiceRetry):
-		}
+	if _, err := helpers.WaitForServiceByLabelWithReadyPods(
+		ctx,
+		client,
+		namespaceEnvoyGateway,
+		labelSelectorGateway,
+		timeoutServiceRetry,
+		intervalServiceRetry,
+		p.verbose,
+		p.log,
+	); err != nil {
+		return err
 	}
 
 	p.log("Verifying all deployments are healthy...")
-
-	if err := helpers.CheckDeployment(ctx, client, namespaceSemanticRouter, deploymentSemanticRouter, p.verbose); err != nil {
-		return fmt.Errorf("semantic-router deployment not healthy: %w", err)
-	}
-
-	if err := helpers.CheckDeployment(ctx, client, namespaceEnvoyGateway, deploymentEnvoyGateway, p.verbose); err != nil {
-		return fmt.Errorf("envoy-gateway deployment not healthy: %w", err)
-	}
-
-	if err := helpers.CheckDeployment(ctx, client, namespaceAIGateway, deploymentAIGateway, p.verbose); err != nil {
-		return fmt.Errorf("ai-gateway-controller deployment not healthy: %w", err)
+	if err := helpers.VerifyDeployments(
+		ctx,
+		client,
+		[]helpers.DeploymentRef{
+			{Namespace: namespaceSemanticRouter, Name: deploymentSemanticRouter},
+			{Namespace: namespaceEnvoyGateway, Name: deploymentEnvoyGateway},
+			{Namespace: namespaceAIGateway, Name: deploymentAIGateway},
+		},
+		p.verbose,
+	); err != nil {
+		return fmt.Errorf("deployment not healthy: %w", err)
 	}
 
 	p.log("All deployments are healthy")
@@ -431,18 +397,18 @@ func (p *Profile) deployPrometheus(ctx context.Context, opts *framework.SetupOpt
 
 func (p *Profile) cleanupPrometheus(ctx context.Context, opts *framework.TeardownOptions) error {
 	prometheusDir := "deploy/kubernetes/observability/prometheus"
-	p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/service.yaml", "-n", namespaceDefault, "--ignore-not-found=true")
-	p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/deployment.yaml", "-n", namespaceDefault, "--ignore-not-found=true")
-	p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/pvc.yaml", "-n", namespaceDefault, "--ignore-not-found=true")
-	p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/configmap.yaml", "-n", namespaceDefault, "--ignore-not-found=true")
-	p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/rbac.yaml", "--ignore-not-found=true")
-	p.kubectl(ctx, opts.KubeConfig, "delete", "serviceaccount", "prometheus", "-n", namespaceDefault, "--ignore-not-found=true")
+	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/service.yaml", "-n", namespaceDefault, "--ignore-not-found=true")
+	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/deployment.yaml", "-n", namespaceDefault, "--ignore-not-found=true")
+	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/pvc.yaml", "-n", namespaceDefault, "--ignore-not-found=true")
+	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/configmap.yaml", "-n", namespaceDefault, "--ignore-not-found=true")
+	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/rbac.yaml", "--ignore-not-found=true")
+	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "serviceaccount", "prometheus", "-n", namespaceDefault, "--ignore-not-found=true")
 	return nil
 }
 
 func (p *Profile) cleanupGatewayResources(ctx context.Context, opts *framework.TeardownOptions) error {
-	p.kubectlDelete(ctx, opts.KubeConfig, gatewayAPIManifest)
-	p.kubectlDelete(ctx, opts.KubeConfig, baseModelManifest)
+	_ = p.kubectlDelete(ctx, opts.KubeConfig, gatewayAPIManifest)
+	_ = p.kubectlDelete(ctx, opts.KubeConfig, baseModelManifest)
 	return nil
 }
 

@@ -11,6 +11,9 @@ import os
 import subprocess
 import time
 import unittest
+from contextlib import contextmanager
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 from cli_test_base import CLITestBase
 
@@ -57,7 +60,9 @@ providers:
             f.write(config_content)
         return config_path
 
-    def _start_serve_background(self) -> subprocess.Popen:
+    def _start_serve_background(
+        self, env: dict[str, str] | None = None
+    ) -> subprocess.Popen:
         """Start vllm-sr serve in background (non-blocking)."""
         cmd = ["vllm-sr", "serve", "--image-pull-policy", "ifnotpresent"]
         print(f"\nStarting in background: {' '.join(cmd)}")
@@ -68,77 +73,148 @@ providers:
             stderr=subprocess.PIPE,
             text=True,
             cwd=self.test_dir,
+            env=env,
         )
         return process
+
+    def _stop_serve_process(self, serve_process: subprocess.Popen | None):
+        """Terminate a background serve process if it is still running."""
+        if serve_process and serve_process.poll() is None:
+            serve_process.terminate()
+            try:
+                serve_process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                serve_process.kill()
+
+    def _wait_for_running_container(self, serve_process: subprocess.Popen):
+        """Ensure serve stayed alive long enough to launch the container."""
+        time.sleep(5)
+
+        if serve_process.poll() is not None:
+            stdout, stderr = serve_process.communicate()
+            self.fail(f"Serve crashed: {stderr[:500] or stdout[:500]}")
+
+        print(
+            f"  Waiting for container (timeout: {self.CONTAINER_STARTUP_TIMEOUT}s)..."
+        )
+        if not self.wait_for_container_running(timeout=self.CONTAINER_STARTUP_TIMEOUT):
+            self._stop_serve_process(serve_process)
+            stdout, stderr = serve_process.communicate(timeout=10)
+            self.fail(f"Container did not start: {stderr[:500] or stdout[:500]}")
+
+        print("  ✓ Container is running")
+
+    @contextmanager
+    def _running_serve(
+        self,
+        *,
+        env: dict[str, str] | None = None,
+        ensure_models_dir: bool = False,
+    ):
+        """Start one background serve session and clean it up automatically."""
+        self._create_minimal_config()
+        if ensure_models_dir:
+            os.makedirs(os.path.join(self.test_dir, "models"), exist_ok=True)
+
+        full_env = os.environ.copy()
+        if env:
+            full_env.update(env)
+
+        serve_process = self._start_serve_background(env=full_env)
+        try:
+            self._wait_for_running_container(serve_process)
+            yield serve_process
+        finally:
+            self._stop_serve_process(serve_process)
 
     @unittest.skipUnless(
         os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
         "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
     )
-    def test_serve_full_startup(self):
-        """Test complete serve workflow: config → serve → container running."""
+    def test_running_container_contracts(self):
+        """Test one running container session against the core CLI contracts."""
         self.print_test_header(
-            "Full Serve Integration Test",
-            "Tests: config → serve → container running → stop",
+            "Running Container Integration Test",
+            "Tests one serve startup against health, mounts, status, and logs",
         )
 
-        serve_process = None
-
-        try:
-            # Step 1: Create a lean active config
-            self._create_minimal_config()
-            print("  ✓ config.yaml created")
-
-            # Step 2: Start serve in background
-            serve_process = self._start_serve_background()
-            time.sleep(5)
-
-            # Check process didn't crash
-            if serve_process.poll() is not None:
-                stdout, stderr = serve_process.communicate()
-                self.fail(f"Serve crashed: {stderr[:500]}")
-
-            # Step 3: Wait for container
-            print(
-                f"  Waiting for container (timeout: {self.CONTAINER_STARTUP_TIMEOUT}s)..."
-            )
-            if not self.wait_for_container_running(
-                timeout=self.CONTAINER_STARTUP_TIMEOUT
-            ):
-                serve_process.terminate()
-                stdout, stderr = serve_process.communicate(timeout=10)
-                self.fail(f"Container did not start: {stderr[:500]}")
-
-            print("  ✓ Container is running")
-
-            # Step 4: Check health (informational only)
+        with self._running_serve(ensure_models_dir=True):
             self._check_health_endpoint()
+            self._assert_volume_mounting()
+            self._assert_status_command()
+            self._assert_logs_command()
 
-            self.print_test_result(True, "CLI serve workflow completed successfully")
-
-        finally:
-            if serve_process and serve_process.poll() is None:
-                print("  Cleaning up serve process...")
-                serve_process.terminate()
-                try:
-                    serve_process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    serve_process.kill()
+        self.print_test_result(True, "Running container contracts verified")
 
     def _check_health_endpoint(self):
         """Check health endpoint (informational, doesn't fail test)."""
-        import urllib.request
-        import urllib.error
-
         try:
             url = "http://localhost:8888/health"
-            with urllib.request.urlopen(url, timeout=10) as response:
+            with urllib_request.urlopen(url, timeout=10) as response:
                 print(f"  ✓ Health check: {response.status}")
-        except urllib.error.HTTPError as e:
+        except urllib_error.HTTPError as e:
             # 500 = service running but no backend - expected with default config
             print(f"  ⚠ Health check: {e.code} (expected without backend)")
         except Exception as e:
             print(f"  ⚠ Health check failed: {e}")
+
+    def _assert_volume_mounting(self):
+        """Verify config and models directories are mounted into the container."""
+        return_code, stdout, stderr = self.inspect_container("{{json .Mounts}}")
+        if return_code != 0:
+            self.fail(f"container inspect failed: {stderr}")
+
+        mounts = stdout.lower()
+        print(f"  Mounts: {mounts[:200]}...")
+
+        config_mounted = "config.yaml" in mounts or "config" in mounts
+        models_mounted = "models" in mounts
+
+        if config_mounted:
+            print("  ✓ config.yaml is mounted")
+        else:
+            print("  ⚠ config.yaml mount not detected")
+
+        if models_mounted:
+            print("  ✓ models/ directory is mounted")
+        else:
+            print("  ⚠ models/ mount not detected")
+
+        self.assertTrue(
+            config_mounted or models_mounted,
+            "No expected mounts found in container",
+        )
+
+    def _assert_status_command(self):
+        """Verify the status command reports a running container."""
+        _return_code, stdout, stderr = self.run_cli(["status"])
+        output = (stdout + stderr).lower()
+
+        running_indicators = ["running", "up", "healthy", "started"]
+        status_ok = any(indicator in output for indicator in running_indicators)
+        if not status_ok:
+            self.fail(f"Status doesn't show running. Got: {output[:300]}")
+
+        print("  ✓ Status shows container is running")
+
+    def _assert_logs_command(self):
+        """Verify the logs command returns container output for one service."""
+        time.sleep(5)
+        service_failures: list[str] = []
+        for service in ("router", "envoy", "dashboard"):
+            return_code, stdout, stderr = self.run_cli(["logs", service])
+            output = stdout + stderr
+            if return_code == 0 and output.strip():
+                print(f"  ✓ Logs retrieved from {service} ({len(output)} chars)")
+                print(f"  Sample: {output[:100]}...")
+                return
+            service_failures.append(
+                f"{service}: rc={return_code}, output={output[:120]}"
+            )
+
+        self.fail(
+            "logs command failed for all services: " + " | ".join(service_failures)
+        )
 
     @unittest.skipUnless(
         os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
@@ -148,255 +224,25 @@ providers:
         """Test that environment variables are actually passed to container."""
         self.print_test_header(
             "Environment Variable Integration Test",
-            "Verifies HF_TOKEN is inside running container via docker inspect",
+            "Verifies HF_TOKEN is inside running container via container inspect",
         )
 
-        serve_process = None
         test_token = "hf_integration_test_token_xyz"
+        with self._running_serve(env={"HF_TOKEN": test_token}):
+            return_code, stdout, stderr = self.inspect_container("{{.Config.Env}}")
+            if return_code != 0:
+                self.fail(f"container inspect failed: {stderr}")
 
-        try:
-            # Step 1: Create a lean active config
-            self._create_minimal_config()
+            container_env = stdout
+            if "HF_TOKEN=" not in container_env:
+                self.fail("HF_TOKEN not found in container environment")
+            if test_token not in container_env:
+                self.fail("HF_TOKEN value mismatch in container")
 
-            # Step 2: Start serve with HF_TOKEN in environment
-            cmd = ["vllm-sr", "serve", "--image-pull-policy", "ifnotpresent"]
-            env = os.environ.copy()
-            env["HF_TOKEN"] = test_token
+            print("  ✓ HF_TOKEN found in container environment")
+            print("  ✓ HF_TOKEN has correct value")
 
-            serve_process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                cwd=self.test_dir,
-                env=env,
-            )
-            time.sleep(5)
-
-            # Step 3: Wait for container
-            if not self.wait_for_container_running(
-                timeout=self.CONTAINER_STARTUP_TIMEOUT
-            ):
-                self.fail("Container did not start")
-
-            print("  ✓ Container is running")
-
-            # Step 4: Use docker inspect to verify HF_TOKEN is in container
-            result = subprocess.run(
-                [
-                    "docker",
-                    "inspect",
-                    "--format",
-                    "{{.Config.Env}}",
-                    "vllm-sr-container",
-                ],
-                capture_output=True,
-                text=True,
-            )
-
-            if result.returncode == 0:
-                container_env = result.stdout
-                if "HF_TOKEN=" in container_env:
-                    print("  ✓ HF_TOKEN found in container environment")
-                    # Verify the actual value
-                    if test_token in container_env:
-                        print("  ✓ HF_TOKEN has correct value")
-                        self.print_test_result(
-                            True, "Environment variable passed to container"
-                        )
-                    else:
-                        self.fail("HF_TOKEN value mismatch in container")
-                else:
-                    self.fail("HF_TOKEN not found in container environment")
-            else:
-                self.fail(f"docker inspect failed: {result.stderr}")
-
-        finally:
-            if serve_process and serve_process.poll() is None:
-                serve_process.terminate()
-                try:
-                    serve_process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    serve_process.kill()
-
-    @unittest.skipUnless(
-        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
-        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
-    )
-    def test_volume_mounting(self):
-        """Test that config and models directories are mounted into container."""
-        self.print_test_header(
-            "Volume Mounting Integration Test",
-            "Verifies config.yaml and models/ are mounted via docker inspect",
-        )
-
-        serve_process = None
-
-        try:
-            # Step 1: Create a lean active config
-            self._create_minimal_config()
-
-            # Step 2: Create models directory (CLI should create it, but ensure it exists)
-            models_dir = os.path.join(self.test_dir, "models")
-            os.makedirs(models_dir, exist_ok=True)
-
-            # Step 3: Start serve
-            serve_process = self._start_serve_background()
-            time.sleep(5)
-
-            # Step 4: Wait for container
-            if not self.wait_for_container_running(
-                timeout=self.CONTAINER_STARTUP_TIMEOUT
-            ):
-                self.fail("Container did not start")
-
-            print("  ✓ Container is running")
-
-            # Step 5: Use docker inspect to verify mounts
-            result = subprocess.run(
-                [
-                    "docker",
-                    "inspect",
-                    "--format",
-                    "{{json .Mounts}}",
-                    "vllm-sr-container",
-                ],
-                capture_output=True,
-                text=True,
-            )
-
-            if result.returncode != 0:
-                self.fail(f"docker inspect failed: {result.stderr}")
-
-            mounts = result.stdout.lower()
-            print(f"  Mounts: {mounts[:200]}...")
-
-            # Check for config.yaml mount
-            config_mounted = "config.yaml" in mounts or "config" in mounts
-            if config_mounted:
-                print("  ✓ config.yaml is mounted")
-            else:
-                print("  ⚠ config.yaml mount not detected")
-
-            # Check for models directory mount
-            models_mounted = "models" in mounts
-            if models_mounted:
-                print("  ✓ models/ directory is mounted")
-            else:
-                print("  ⚠ models/ mount not detected")
-
-            # At least one mount should be present
-            self.assertTrue(
-                config_mounted or models_mounted,
-                "No expected mounts found in container",
-            )
-
-            self.print_test_result(True, "Volume mounting verified")
-
-        finally:
-            if serve_process and serve_process.poll() is None:
-                serve_process.terminate()
-                try:
-                    serve_process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    serve_process.kill()
-
-    @unittest.skipUnless(
-        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
-        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
-    )
-    def test_status_shows_running_container(self):
-        """Test that vllm-sr status correctly reports running container."""
-        self.print_test_header(
-            "Status Command Integration Test",
-            "Verifies status shows running container after serve",
-        )
-
-        serve_process = None
-
-        try:
-            # Step 1: Create config and start
-            self._create_minimal_config()
-            serve_process = self._start_serve_background()
-            time.sleep(5)
-
-            # Step 2: Wait for container
-            if not self.wait_for_container_running(
-                timeout=self.CONTAINER_STARTUP_TIMEOUT
-            ):
-                self.fail("Container did not start")
-
-            # Step 3: Check status command
-            return_code, stdout, stderr = self.run_cli(["status"])
-            output = (stdout + stderr).lower()
-
-            # Status should indicate running
-            running_indicators = ["running", "up", "healthy", "started"]
-            status_ok = any(ind in output for ind in running_indicators)
-
-            if status_ok:
-                print("  ✓ Status shows container is running")
-                self.print_test_result(
-                    True, "Status correctly reports running container"
-                )
-            else:
-                self.fail(f"Status doesn't show running. Got: {output[:300]}")
-
-        finally:
-            if serve_process and serve_process.poll() is None:
-                serve_process.terminate()
-                try:
-                    serve_process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    serve_process.kill()
-
-    @unittest.skipUnless(
-        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
-        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
-    )
-    def test_logs_retrieves_container_logs(self):
-        """Test that vllm-sr logs retrieves actual container logs."""
-        self.print_test_header(
-            "Logs Command Integration Test",
-            "Verifies logs command retrieves container output",
-        )
-
-        serve_process = None
-
-        try:
-            # Step 1: Create config and start
-            self._create_minimal_config()
-            serve_process = self._start_serve_background()
-            time.sleep(5)
-
-            # Step 2: Wait for container
-            if not self.wait_for_container_running(
-                timeout=self.CONTAINER_STARTUP_TIMEOUT
-            ):
-                self.fail("Container did not start")
-
-            # Wait a bit for container to produce some logs
-            time.sleep(5)
-
-            # Step 3: Get logs
-            return_code, stdout, stderr = self.run_cli(["logs"])
-            output = stdout + stderr
-
-            # Logs should contain something (startup messages, etc.)
-            if len(output.strip()) > 0:
-                print(f"  ✓ Logs retrieved ({len(output)} chars)")
-                print(f"  Sample: {output[:100]}...")
-                self.print_test_result(True, "Logs command retrieves container output")
-            else:
-                self.fail("Logs command returned empty output")
-
-        finally:
-            if serve_process and serve_process.poll() is None:
-                serve_process.terminate()
-                try:
-                    serve_process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    serve_process.kill()
+        self.print_test_result(True, "Environment variable passed to container")
 
     @unittest.skipUnless(
         os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
@@ -409,43 +255,20 @@ providers:
             "Verifies stop command terminates the container",
         )
 
-        serve_process = None
-
-        try:
-            # Step 1: Create config and start
-            self._create_minimal_config()
-            serve_process = self._start_serve_background()
-            time.sleep(5)
-
-            # Step 2: Wait for container
-            if not self.wait_for_container_running(
-                timeout=self.CONTAINER_STARTUP_TIMEOUT
-            ):
-                self.fail("Container did not start")
-
+        with self._running_serve():
             print("  ✓ Container is running")
 
-            # Step 3: Stop the container
-            return_code, stdout, stderr = self.run_cli(["stop"])
+            return_code, _stdout, _stderr = self.run_cli(["stop"])
             print(f"  Stop command returned: {return_code}")
 
-            # Step 4: Verify container is stopped
             time.sleep(3)  # Give it time to stop
 
             status = self.container_status()
-            if status is None or status != "running":
-                print("  ✓ Container is stopped")
-                self.print_test_result(True, "Stop command terminates container")
-            else:
+            if status == "running":
                 self.fail(f"Container still running after stop. Status: {status}")
+            print("  ✓ Container is stopped")
 
-        finally:
-            if serve_process and serve_process.poll() is None:
-                serve_process.terminate()
-                try:
-                    serve_process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    serve_process.kill()
+        self.print_test_result(True, "Stop command terminates container")
 
     @unittest.skipUnless(
         os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
@@ -500,7 +323,7 @@ providers:
             print(f"\nRunning: vllm-sr {' '.join(cmd)}")
 
             # Use run_cli which handles timeouts gracefully
-            return_code, stdout, stderr = self.run_cli(cmd, timeout=20)
+            _return_code, stdout, stderr = self.run_cli(cmd, timeout=20)
             output = (stdout + stderr).lower()
 
             # Check for pull-related messages in output
