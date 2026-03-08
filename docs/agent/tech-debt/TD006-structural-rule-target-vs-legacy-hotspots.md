@@ -17,10 +17,12 @@ The harness correctly ratchets the repo toward smaller modules, but several lega
 - [docs/agent/architecture-guardrails.md](../architecture-guardrails.md)
 - [docs/agent/repo-map.md](../repo-map.md)
 - [tools/agent/structure-rules.yaml](../../../tools/agent/structure-rules.yaml)
+- [tools/agent/scripts/agent_doc_validation.py](../../../tools/agent/scripts/agent_doc_validation.py)
 
 ## Why It Matters
 
 - The harness correctly states that large hotspot files are debt, not precedent, but several code areas still depend on hotspot-specific exceptions and ratchets.
+- The harness-side validation layer still includes at least one oversized script that remains above the warning threshold even after related changes land.
 - This is the right governance posture, but it remains a real code/spec gap until the worst hotspots no longer need special handling.
 
 ## Desired End State

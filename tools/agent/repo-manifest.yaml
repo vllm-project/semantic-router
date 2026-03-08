@@ -113,6 +113,7 @@ validation:
 docs:
   - AGENTS.md
   - docs/agent/README.md
+  - docs/agent/context-management.md
   - docs/agent/governance.md
   - docs/agent/plans/README.md
   - docs/agent/plans/harness-roadmap.md
@@ -178,6 +179,9 @@ doc_governance:
     - path: docs/agent/README.md
       steward: agent-contract
       freshness: update when canonical harness docs are added, removed, or reorganized
+    - path: docs/agent/context-management.md
+      steward: agent-contract
+      freshness: update when the task-first disclosure model or context-pack flow changes
     - path: docs/agent/governance.md
       steward: agent-contract
       freshness: update when source-of-truth policy or rule layering changes

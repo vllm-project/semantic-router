@@ -10,6 +10,7 @@ import shlex
 import subprocess
 from collections.abc import Iterable
 
+from agent_context_pack import build_context_pack
 from agent_models import (
     AgentReport,
     EnvironmentResolution,
@@ -336,9 +337,14 @@ def build_report(changed_files: list[str], env_name: str) -> AgentReport:
     env = resolve_environment(env_name)
     skill = resolve_skill(changed_files, env_name)
     context = resolve_context(changed_files)
+    context_pack = build_context_pack(changed_files, env, skill, context)
     commands = build_validation_commands(env, context)
     return AgentReport(
-        env=env, skill=skill, context=context, validation_commands=commands
+        env=env,
+        skill=skill,
+        context=context,
+        context_pack=context_pack,
+        validation_commands=commands,
     )
 
 
