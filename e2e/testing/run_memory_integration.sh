@@ -18,7 +18,36 @@ KEEP_TEST_DIR="${KEEP_MEMORY_TEST_DIR:-0}"
 
 VLLM_SR_PID=""
 
+reclaim_test_dir_permissions() {
+    local host_uid host_gid
+
+    host_uid="$(id -u)"
+    host_gid="$(id -g)"
+
+    "${CONTAINER_RUNTIME}" run --rm --user root \
+        -v "${TEST_DIR}:/artifacts" \
+        --entrypoint /bin/sh \
+        "${VLLM_SR_IMAGE}" \
+        -c "chown -R ${host_uid}:${host_gid} /artifacts || chmod -R a+rwX /artifacts" \
+        >/dev/null 2>&1
+}
+
+remove_test_dir() {
+    if [[ ! -d "${TEST_DIR}" ]]; then
+        return 0
+    fi
+
+    if rm -rf "${TEST_DIR}" 2>/dev/null; then
+        return 0
+    fi
+
+    reclaim_test_dir_permissions || return 1
+    rm -rf "${TEST_DIR}"
+}
+
 cleanup() {
+    local exit_code=$?
+
     if [[ -z "${VLLM_SR_PID}" && -f "${PID_FILE}" ]]; then
         VLLM_SR_PID="$(cat "${PID_FILE}" 2>/dev/null || true)"
     fi
@@ -36,8 +65,13 @@ cleanup() {
     if [[ "${KEEP_TEST_DIR}" == "1" ]]; then
         echo "Preserving memory integration artifacts at ${TEST_DIR}"
     else
-        rm -rf "${TEST_DIR}"
+        if ! remove_test_dir; then
+            echo "Warning: failed to clean up memory integration artifacts at ${TEST_DIR}" >&2
+            echo "Set KEEP_MEMORY_TEST_DIR=1 to inspect the leftover files manually." >&2
+        fi
     fi
+
+    return "${exit_code}"
 }
 
 trap cleanup EXIT INT TERM
