@@ -36,6 +36,10 @@ def load_yaml(path: Path) -> dict:
         return yaml.safe_load(handle)
 
 
+def load_context_map() -> dict:
+    return load_yaml(AGENT_DIR / "context-map.yaml")
+
+
 def load_manifests() -> tuple[dict, dict, dict, dict, dict]:
     return (
         load_yaml(AGENT_DIR / "repo-manifest.yaml"),

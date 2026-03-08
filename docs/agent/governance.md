@@ -24,6 +24,7 @@ This document defines how the repository's agent rules are layered and maintaine
 - Keep summary guidance in `AGENTS.md`, not the full rule body.
 - Put durable prose guidance in `docs/agent/*`.
 - Put important repeated rules into executable checks when possible.
+- Keep task-first context disclosure executable through `tools/agent/context-map.yaml` and `make agent-report`, not as a second prose-only handbook.
 - If prose and executable rules disagree, fix them in the same change.
 - Record durable unresolved gaps in the debt entry files indexed from [tech-debt/README.md](tech-debt/README.md), and keep [tech-debt-register.md](tech-debt-register.md) as the landing page for that workflow.
 - If desired architecture and current implementation still diverge after a change, promote that gap there instead of leaving it only in PR text or chat.
@@ -44,6 +45,7 @@ These can exist as PR descriptions, issue notes, or temporary working docs, but 
 
 - Every canonical agent doc must be reachable from [README.md](README.md) or [AGENTS.md](../../AGENTS.md).
 - Every canonical executable rule must be reachable from [repo-manifest.yaml](../../tools/agent/repo-manifest.yaml).
+- Every task-first context reference must point back to a canonical doc, skill, or executable rule instead of creating a parallel source of truth.
 - Canonical docs and local rule supplements carry machine-readable stewardship and freshness metadata in `repo-manifest.yaml`.
 - Keep `AGENTS.md` short enough to be a navigation entrypoint instead of a handbook.
 - When a repeated failure mode appears, prefer adding a script, Make target, or CI check over adding more prose.

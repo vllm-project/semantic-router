@@ -183,11 +183,11 @@ The test suite includes:
 
 5. **Commit your changes:**
 
-   Commit your changes with a clear message, making sure to **sign off** on your work using the `-s` flag. This is required by the project's **Developer Certificate of Origin (DCO)**.
+   Commit your changes with a clear message, making sure to **sign off** on your work using the `-s` flag. This is required by the project's **Developer Certificate of Origin (DCO)**. The repository does not require commit messages to use the PR title classification prefixes.
 
    ```bash
    git add .
-   git commit -s -m "feat: add your feature description"
+   git commit -s -m "clarify PR title guidance"
    ```
 
 ### Debugging
@@ -264,6 +264,7 @@ make precommit-local
    - Unit tests for all components
 
 2. **Create a pull request** with:
+   - A classified PR title using the repository prefixes from [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md), such as `[Doc] Clarify PR title guidance` or `[Router][CI/Build] Tighten affected test selection`
    - Clear description of changes
    - Reference to any related issues
    - Test results and validation steps

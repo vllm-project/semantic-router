@@ -28,6 +28,13 @@ REQUIRED_DOC_SECTIONS = {
         "## Executable Contract",
         "## Contributor Interface",
     ],
+    "docs/agent/context-management.md": [
+        "## Why This Exists",
+        "## Disclosure Layers",
+        "## Context Pack Flow",
+        "## Source of Truth",
+        "## Maintenance Rules",
+    ],
     "docs/agent/governance.md": [
         "## Rule Layers",
         "## Source of Truth Policy",

@@ -58,9 +58,10 @@ Every ADR should include:
 - `## Decision`
 - `## Consequences`
 
-Use zero-padded numeric prefixes such as `0001-...md`, `0002-...md`.
+Use file names such as `adr-0001-example.md`, `adr-0002-example.md`.
+Keep the numeric index unique within `docs/agent/adr/`.
 
 ## Current ADRs
 
-- [0001-harness-layering.md](0001-harness-layering.md)
-- [0002-tech-debt-index-and-entry-directory.md](0002-tech-debt-index-and-entry-directory.md)
+- [adr-0001-harness-layering.md](adr-0001-harness-layering.md)
+- [adr-0002-tech-debt-index-and-entry-directory.md](adr-0002-tech-debt-index-and-entry-directory.md)

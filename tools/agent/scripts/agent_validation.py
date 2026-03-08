@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from agent_ci_validation import validate_ci_changes_filters
+from agent_context_validation import validate_context_map
 from agent_doc_validation import (
     validate_agent_harness_layers,
     validate_support_files,
@@ -15,6 +16,7 @@ from agent_support import (
     build_skill_lookup,
     collect_make_targets,
     collect_manifest_globs,
+    load_context_map,
     load_manifests,
     validate_glob,
 )
@@ -106,6 +108,7 @@ def collect_validation_errors() -> list[str]:
     repo_manifest, task_matrix, e2e_map, structure_rules, skill_registry = (
         load_manifests()
     )
+    context_map = load_context_map()
     make_targets = collect_make_targets()
     errors: list[str] = []
 
@@ -119,6 +122,9 @@ def collect_validation_errors() -> list[str]:
     validate_ci_changes_filters(repo_manifest, task_matrix, e2e_map, errors)
     validate_support_files(repo_manifest, errors)
     validate_agent_harness_layers(repo_manifest, task_matrix, skill_registry, errors)
+    validate_context_map(
+        repo_manifest, task_matrix, skill_registry, context_map, errors
+    )
     validate_skill_registry(repo_manifest, task_matrix, skill_registry, errors)
     return errors
 

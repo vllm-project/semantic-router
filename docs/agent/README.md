@@ -6,6 +6,8 @@ This directory is the human-readable system of record for the repository's agent
 
 ## Start Here
 
+- [context-management.md](context-management.md)
+  - task-first progressive disclosure and `agent-report` context-pack flow
 - [repo-map.md](repo-map.md)
   - repo layout, hotspots, entrypoints, and high-risk areas
 - [environments.md](environments.md)
@@ -53,6 +55,7 @@ This directory is the human-readable system of record for the repository's agent
 ## Executable Contract
 
 - [../../tools/agent/repo-manifest.yaml](../../tools/agent/repo-manifest.yaml)
+- [../../tools/agent/context-map.yaml](../../tools/agent/context-map.yaml)
 - [../../tools/agent/skill-registry.yaml](../../tools/agent/skill-registry.yaml)
 - [../../tools/agent/task-matrix.yaml](../../tools/agent/task-matrix.yaml)
 - [../../tools/agent/e2e-profile-map.yaml](../../tools/agent/e2e-profile-map.yaml)
@@ -62,12 +65,15 @@ This directory is the human-readable system of record for the repository's agent
   - `make agent-validate`
   - `make agent-scorecard`
   - `make agent-report ENV=cpu CHANGED_FILES="..."`
+    - emits validation commands plus a task-first context pack
 
 ## Contributor Interface
 
 - [../../AGENTS.md](../../AGENTS.md)
 - [../../CONTRIBUTING.md](../../CONTRIBUTING.md)
+  - contributor workflow, validation expectations, and the `git commit -s` signoff requirement
 - [../../.github/copilot-instructions.md](../../.github/copilot-instructions.md)
 - [../../.github/PULL_REQUEST_TEMPLATE.md](../../.github/PULL_REQUEST_TEMPLATE.md)
+  - PR title classification, required change summary and validation fields, and the review checklist
 - [../../.github/ISSUE_TEMPLATE/001_feature_request.yaml](../../.github/ISSUE_TEMPLATE/001_feature_request.yaml)
 - [../../.github/ISSUE_TEMPLATE/002_bug_report.yaml](../../.github/ISSUE_TEMPLATE/002_bug_report.yaml)
