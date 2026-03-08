@@ -169,6 +169,8 @@ type MemoryConfig struct {
 	ExtractionBatchSize        int                        `yaml:"extraction_batch_size,omitempty"`
 	DefaultRetrievalLimit      int                        `yaml:"default_retrieval_limit,omitempty"`
 	DefaultSimilarityThreshold float32                    `yaml:"default_similarity_threshold,omitempty"`
+	HybridSearch               bool                       `yaml:"hybrid_search,omitempty"`
+	HybridMode                 string                     `yaml:"hybrid_mode,omitempty"`
 	AdaptiveThreshold          bool                       `yaml:"adaptive_threshold,omitempty"`
 	QualityScoring             MemoryQualityScoringConfig `yaml:"quality_scoring,omitempty"`
 	Reflection                 MemoryReflectionConfig     `yaml:"reflection,omitempty"`

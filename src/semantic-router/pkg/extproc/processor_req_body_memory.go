@@ -148,6 +148,9 @@ func (r *OpenAIRouter) buildMemoryRetrieveOptions(
 	if memoryPluginConfig != nil && memoryPluginConfig.HybridSearch {
 		retrieveOpts.HybridSearch = true
 		retrieveOpts.HybridMode = memoryPluginConfig.HybridMode
+	} else if r.Config.Memory.HybridSearch {
+		retrieveOpts.HybridSearch = true
+		retrieveOpts.HybridMode = r.Config.Memory.HybridMode
 	}
 	if retrieveOpts.Limit <= 0 {
 		retrieveOpts.Limit = 5
