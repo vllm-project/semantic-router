@@ -181,6 +181,12 @@ def _merge_typed_compat_blocks(merged: dict[str, Any], user_config: UserConfig) 
         )
         log.info("  Added prompt_guard configuration")
 
+    if compat_blocks.router_replay is not None:
+        merged["router_replay"] = compat_blocks.router_replay.model_dump(
+            exclude_none=True
+        )
+        log.info("  Added router_replay configuration")
+
     if compat_blocks.tools is not None:
         merged["tools"] = compat_blocks.tools.model_dump(exclude_none=True)
         log.info("  Added tools configuration")

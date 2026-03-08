@@ -149,6 +149,63 @@ class LooperCompatConfig(BaseModel):
     headers: dict[str, str] | None = None
 
 
+class RouterReplayRedisCompatConfig(BaseModel):
+    """Typed schema for router_replay.redis."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    address: str | None = None
+    db: int | None = None
+    password: str | None = None
+    use_tls: bool | None = None
+    tls_skip_verify: bool | None = None
+    max_retries: int | None = None
+    pool_size: int | None = None
+    key_prefix: str | None = None
+
+
+class RouterReplayPostgresCompatConfig(BaseModel):
+    """Typed schema for router_replay.postgres."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    host: str | None = None
+    port: int | None = None
+    database: str | None = None
+    user: str | None = None
+    password: str | None = None
+    ssl_mode: str | None = None
+    max_open_conns: int | None = None
+    max_idle_conns: int | None = None
+    conn_max_lifetime: int | None = None
+    table_name: str | None = None
+
+
+class RouterReplayMilvusCompatConfig(BaseModel):
+    """Typed schema for router_replay.milvus."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    address: str | None = None
+    username: str | None = None
+    password: str | None = None
+    collection_name: str | None = None
+    consistency_level: str | None = None
+
+
+class RouterReplayCompatConfig(BaseModel):
+    """Explicit router_replay schema while the wider CLI contract still migrates."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    store_backend: str | None = None
+    ttl_seconds: int | None = None
+    async_writes: bool | None = None
+    redis: RouterReplayRedisCompatConfig | None = None
+    postgres: RouterReplayPostgresCompatConfig | None = None
+    milvus: RouterReplayMilvusCompatConfig | None = None
+
+
 class TypedCompatBlocks(BaseModel):
     """Explicitly parsed compatibility blocks that no longer rely on model_extra."""
 
@@ -157,6 +214,7 @@ class TypedCompatBlocks(BaseModel):
     looper: LooperCompatConfig | None = None
     observability: ObservabilityCompatConfig | None = None
     prompt_guard: PromptGuardCompatConfig | None = None
+    router_replay: RouterReplayCompatConfig | None = None
     tools: ToolsCompatConfig | None = None
 
 
@@ -174,6 +232,8 @@ def extract_typed_compat_blocks(
         typed_input["observability"] = sanitized_data.pop("observability")
     if "prompt_guard" in sanitized_data:
         typed_input["prompt_guard"] = sanitized_data.pop("prompt_guard")
+    if "router_replay" in sanitized_data:
+        typed_input["router_replay"] = sanitized_data.pop("router_replay")
     if "tools" in sanitized_data:
         typed_input["tools"] = sanitized_data.pop("tools")
 
