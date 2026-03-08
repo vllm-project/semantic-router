@@ -52,7 +52,7 @@ This plan tracks the long-horizon remediation loop for `TD005 Dashboard Lacks En
 - [ ] `TD005-P10` Expand validation coverage for enterprise-console behavior.
   - Done when `make dashboard-check` covers the touched backend and frontend paths, user-visible changes have E2E coverage, and the local smoke path validates the console startup model.
 - [ ] `TD005-P11` Complete rollout, migration, and debt retirement updates.
-  - Done when docs, migration notes, and any required ADRs are updated and `TD005` can be retired from the debt register.
+  - Done when docs, migration notes, and any required ADRs are updated and `TD005` can be retired from the indexed tech-debt entry set.
 
 ## Current Loop
 
@@ -84,6 +84,7 @@ This plan tracks the long-horizon remediation loop for `TD005 Dashboard Lacks En
 
 ## Follow-up Debt / ADR Links
 
+- [../tech-debt/TD005-dashboard-enterprise-console-foundations.md](../tech-debt/TD005-dashboard-enterprise-console-foundations.md)
 - [../tech-debt-register.md](../tech-debt-register.md)
 - Related debt intersections: `TD001 Config Surface Fragmentation Across Router, CLI, K8s, and Dashboard`, `TD004 Local-First CLI and Kubernetes Lifecycle Still Feel Split`
 - [../adr/README.md](../adr/README.md)
