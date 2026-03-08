@@ -1,0 +1,31 @@
+line-length = 88
+target-version = "py310"
+
+[lint]
+select = [
+  "B",
+  "C4",
+  "C90",
+  "E",
+  "F",
+  "I",
+  "N",
+  "PL",
+  "RUF",
+  "SIM",
+  "UP",
+  "W",
+]
+ignore = [
+  "E501",
+  "PLR0913",
+]
+
+[lint.mccabe]
+max-complexity = 12
+
+[lint.pylint]
+max-branches = 12
+max-returns = 8
+max-statements = 50
+max-nested-blocks = 4

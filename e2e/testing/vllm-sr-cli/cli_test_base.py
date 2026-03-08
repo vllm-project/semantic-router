@@ -9,16 +9,18 @@ Provides common utilities for testing CLI commands including:
 Signed-off-by: vLLM-SR Team
 """
 
-import json
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 import time
 import unittest
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from contextlib import suppress
+from urllib import error as urllib_error
+from urllib import request as urllib_request
+
+HTTP_STATUS_OK = 200
+SUPPORTED_CONTAINER_RUNTIMES = ("docker", "podman")
 
 
 class CLITestBase(unittest.TestCase):
@@ -71,50 +73,58 @@ class CLITestBase(unittest.TestCase):
         """Detect available container runtime (docker or podman)."""
         # Check for explicit environment variable
         env_runtime = os.getenv("CONTAINER_RUNTIME")
-        if env_runtime and env_runtime.lower() in ["docker", "podman"]:
-            if shutil.which(env_runtime.lower()):
-                return env_runtime.lower()
+        normalized_runtime = (env_runtime or "").lower()
+        if normalized_runtime in SUPPORTED_CONTAINER_RUNTIMES and shutil.which(
+            normalized_runtime
+        ):
+            return normalized_runtime
 
         # Auto-detect
         if shutil.which("docker"):
             return "docker"
-        elif shutil.which("podman"):
+        if shutil.which("podman"):
             return "podman"
-        else:
-            raise RuntimeError("Neither docker nor podman found in PATH")
+        raise RuntimeError("Neither docker nor podman found in PATH")
+
+    @staticmethod
+    def _run_subprocess(
+        command: list[str],
+        *,
+        timeout: int,
+        capture_output: bool = True,
+        text: bool = True,
+        env: dict[str, str] | None = None,
+        cwd: str | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            command,
+            capture_output=capture_output,
+            text=text,
+            timeout=timeout,
+            env=env,
+            cwd=cwd,
+            check=False,
+        )
 
     @classmethod
     def _cleanup_container(cls):
         """Stop and remove any existing vllm-sr container."""
         runtime = cls.container_runtime
-        try:
-            # Stop container if running
-            subprocess.run(
-                [runtime, "stop", cls.CONTAINER_NAME],
-                capture_output=True,
-                timeout=30,
-            )
-        except Exception:
-            pass
-
-        try:
-            # Remove container
-            subprocess.run(
-                [runtime, "rm", "-f", cls.CONTAINER_NAME],
-                capture_output=True,
-                timeout=30,
-            )
-        except Exception:
-            pass
+        for command in (
+            [runtime, "stop", cls.CONTAINER_NAME],
+            [runtime, "rm", "-f", cls.CONTAINER_NAME],
+        ):
+            with suppress(Exception):
+                cls._run_subprocess(command, timeout=30)
 
     def run_cli(
         self,
-        args: List[str],
-        timeout: int = None,
-        env: Dict[str, str] = None,
+        args: list[str],
+        timeout: int | None = None,
+        env: dict[str, str] | None = None,
         capture_output: bool = True,
-        cwd: str = None,
-    ) -> Tuple[int, str, str]:
+        cwd: str | None = None,
+    ) -> tuple[int, str, str]:
         """
         Run a vllm-sr CLI command.
 
@@ -132,7 +142,7 @@ class CLITestBase(unittest.TestCase):
             timeout = self.DEFAULT_TIMEOUT
 
         # Build command
-        cmd = ["vllm-sr"] + args
+        cmd = ["vllm-sr", *args]
 
         # Merge environment
         full_env = os.environ.copy()
@@ -142,10 +152,9 @@ class CLITestBase(unittest.TestCase):
         print(f"\nRunning: {' '.join(cmd)}")
 
         try:
-            result = subprocess.run(
+            result = self._run_subprocess(
                 cmd,
                 capture_output=capture_output,
-                text=True,
                 timeout=timeout,
                 env=full_env,
                 cwd=cwd or self.test_dir,
@@ -158,7 +167,7 @@ class CLITestBase(unittest.TestCase):
                 if stderr:
                     print(f"STDERR: {stderr[:500]}")
             else:
-                print(f"Command succeeded")
+                print("Command succeeded")
 
             return result.returncode, stdout, stderr
 
@@ -177,7 +186,7 @@ class CLITestBase(unittest.TestCase):
             'running', 'exited', 'paused', 'not found', or 'error'
         """
         try:
-            result = subprocess.run(
+            result = self._run_subprocess(
                 [
                     self.container_runtime,
                     "ps",
@@ -187,8 +196,6 @@ class CLITestBase(unittest.TestCase):
                     "--format",
                     "{{.Status}}",
                 ],
-                capture_output=True,
-                text=True,
                 timeout=10,
             )
             status = result.stdout.strip()
@@ -218,7 +225,7 @@ class CLITestBase(unittest.TestCase):
             time.sleep(2)
         return False
 
-    def wait_for_health(self, port: int = 8080, timeout: int = None) -> bool:
+    def wait_for_health(self, port: int = 8080, timeout: int | None = None) -> bool:
         """
         Wait for the router health endpoint to respond.
 
@@ -232,19 +239,16 @@ class CLITestBase(unittest.TestCase):
         if timeout is None:
             timeout = self.HEALTH_CHECK_TIMEOUT
 
-        import urllib.request
-        import urllib.error
-
         url = f"http://localhost:{port}/health"
         start = time.time()
 
         while time.time() - start < timeout:
             try:
-                with urllib.request.urlopen(url, timeout=5) as response:
-                    if response.status == 200:
+                with urllib_request.urlopen(url, timeout=5) as response:
+                    if response.status == HTTP_STATUS_OK:
                         print(f"✓ Health check passed on port {port}")
                         return True
-            except (urllib.error.URLError, urllib.error.HTTPError, OSError):
+            except (urllib_error.URLError, urllib_error.HTTPError, OSError):
                 pass
             time.sleep(2)
 
@@ -254,7 +258,7 @@ class CLITestBase(unittest.TestCase):
     def container_logs(self, tail: int = 50) -> str:
         """Get container logs."""
         try:
-            result = subprocess.run(
+            result = self._run_subprocess(
                 [
                     self.container_runtime,
                     "logs",
@@ -262,8 +266,6 @@ class CLITestBase(unittest.TestCase):
                     str(tail),
                     self.CONTAINER_NAME,
                 ],
-                capture_output=True,
-                text=True,
                 timeout=10,
             )
             return result.stdout + result.stderr
@@ -273,17 +275,26 @@ class CLITestBase(unittest.TestCase):
     def image_exists(self, image_name: str) -> bool:
         """Check if a container image exists locally."""
         try:
-            result = subprocess.run(
+            result = self._run_subprocess(
                 [self.container_runtime, "images", "-q", image_name],
-                capture_output=True,
-                text=True,
                 timeout=10,
             )
             return bool(result.stdout.strip())
         except Exception:
             return False
 
-    def print_test_header(self, name: str, description: str = None):
+    def container_runtime_accessible(self) -> bool:
+        """Return True when the configured container runtime daemon is reachable."""
+        try:
+            result = self._run_subprocess(
+                [self.container_runtime, "info"],
+                timeout=10,
+            )
+            return result.returncode == 0
+        except Exception:
+            return False
+
+    def print_test_header(self, name: str, description: str | None = None):
         """Print a formatted test header."""
         print(f"\n{'='*60}")
         print(f"TEST: {name}")
@@ -298,19 +309,21 @@ class CLITestBase(unittest.TestCase):
         if message:
             print(f"Details: {message}")
 
-    def assertFileExists(self, path: str, msg: str = None):
+    def assert_file_exists(self, path: str, msg: str | None = None):
         """Assert that a file exists."""
         if not os.path.exists(path):
             self.fail(msg or f"File does not exist: {path}")
 
-    def assertFileContains(self, path: str, content: str, msg: str = None):
+    def assert_file_contains(
+        self, path: str, content: str, msg: str | None = None
+    ) -> None:
         """Assert that a file contains specific content."""
-        with open(path, "r") as f:
+        with open(path, encoding="utf-8") as f:
             file_content = f.read()
         if content not in file_content:
             self.fail(msg or f"File {path} does not contain: {content}")
 
-    def assertDirExists(self, path: str, msg: str = None):
+    def assert_dir_exists(self, path: str, msg: str | None = None) -> None:
         """Assert that a directory exists."""
         if not os.path.isdir(path):
             self.fail(msg or f"Directory does not exist: {path}")

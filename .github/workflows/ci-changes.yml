@@ -20,6 +20,10 @@ on:
         value: ${{ jobs.filter.outputs.docker }}
       make:
         value: ${{ jobs.filter.outputs.make }}
+      agent_text:
+        value: ${{ jobs.filter.outputs.agent_text }}
+      agent_exec:
+        value: ${{ jobs.filter.outputs.agent_exec }}
       # Per-profile e2e change detection
       e2e_istio:
         value: ${{ jobs.filter.outputs.e2e_istio }}
@@ -65,6 +69,8 @@ jobs:
       ci: ${{ steps.changes.outputs.ci }}
       docker: ${{ steps.changes.outputs.docker }}
       make: ${{ steps.changes.outputs.make }}
+      agent_text: ${{ steps.changes.outputs.agent_text }}
+      agent_exec: ${{ steps.changes.outputs.agent_exec }}
       # Per-profile e2e outputs
       e2e_istio: ${{ steps.changes.outputs.e2e_istio }}
       e2e_ai_gateway: ${{ steps.changes.outputs.e2e_ai_gateway }}
@@ -123,11 +129,32 @@ jobs:
             ci:
               - '.github/workflows/**'
             docker:
+              - 'src/vllm-sr/Dockerfile*'
+              - 'dashboard/backend/Dockerfile'
               - 'tools/docker/Dockerfile*'
               - 'docker/**'
             make:
               - 'Makefile'
               - 'tools/make/**'
+            agent_text:
+              - 'AGENTS.md'
+              - 'docs/agent/**'
+              - 'tools/agent/skills/**'
+              - 'src/vllm-sr/cli/AGENTS.md'
+              - 'src/semantic-router/pkg/config/AGENTS.md'
+              - 'src/semantic-router/pkg/extproc/AGENTS.md'
+              - 'dashboard/frontend/src/pages/AGENTS.md'
+              - 'dashboard/frontend/src/components/AGENTS.md'
+              - '.github/PULL_REQUEST_TEMPLATE.md'
+              - '.github/ISSUE_TEMPLATE/**'
+            agent_exec:
+              - 'tools/agent/*.yaml'
+              - 'tools/agent/scripts/**'
+              - 'tools/make/agent.mk'
+              - '.github/workflows/ci-changes.yml'
+              - '.github/workflows/integration-test-k8s.yml'
+              - '.github/workflows/integration-test-vllm-sr-cli.yml'
+              - '.github/workflows/pre-commit.yml'
             # Per-profile e2e filters
             e2e_istio:
               - 'e2e/profiles/istio/**'
@@ -168,8 +195,9 @@ jobs:
             e2e_authz_rbac:
               - 'e2e/profiles/authz-rbac/**'
               - 'config/testing/config.authz-rbac.yaml'
-              - 'config/authz/**'
+              - 'config/testing/authz-profile-*.yaml'
               - 'src/semantic-router/pkg/classification/authz*.go'
+              - 'src/semantic-router/pkg/authz/**'
             e2e_streaming:
               - 'e2e/profiles/streaming/**'
               - 'deploy/kubernetes/streaming/**'

@@ -1,905 +1,29 @@
-import { useState, useRef, useEffect, useCallback, memo, useMemo } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import styles from './ChatComponent.module.css'
-import HeaderDisplay from './HeaderDisplay'
-import MarkdownRenderer from './MarkdownRenderer'
 import ThinkingAnimation from './ThinkingAnimation'
 import HeaderReveal from './HeaderReveal'
-import ThinkingBlock from './ThinkingBlock'
-import ErrorBoundary from './ErrorBoundary'
-import ReMoMResponsesDisplay from './ReMoMResponsesDisplay'
-import FeedbackButtons from './FeedbackButtons'
 import ClawRoomChat from './ClawRoomChat'
+import { ClawModeToggle } from './ChatComponentControls'
+import ChatConversationSidebar from './ChatConversationSidebar'
+import ChatComponentInputBar from './ChatComponentInputBar'
+import ChatComponentMessages from './ChatComponentMessages'
+import ChatComponentTopBar from './ChatComponentTopBar'
+import {
+  CLAW_MODE_STORAGE_KEY,
+  CLAW_MODE_SYSTEM_PROMPT,
+  CLAW_TOOL_NAME_PREFIX,
+  type Choice,
+  type ConversationPreview,
+  generateConversationId,
+  generateMessageId,
+  type Message,
+  type ReMoMRoundResponse,
+} from './ChatComponentTypes'
 import { useToolRegistry } from '../tools'
-import { useMCPToolSync, parseMCPToolName } from '../tools/mcp'
-import { ensureOpenClawServerConnected, OPENCLAW_MCP_SERVER_ID } from '../tools/mcp/api'
-import { getTranslateAttr } from '../hooks/useNoTranslate'
+import { useMCPToolSync } from '../tools/mcp'
+import { ensureOpenClawServerConnected } from '../tools/mcp/api'
 import { useConversationStorage } from '../hooks'
-import type { ToolCall, ToolResult, WebSearchResult } from '../tools'
-
-// Copy button component for copying full response
-const CopyResponseButton = ({ copied, onCopy }: { copied: boolean; onCopy: () => void }) => {
-  return (
-    <button
-      className={styles.actionButton}
-      onClick={onCopy}
-      title={copied ? 'Copied!' : 'Copy'}
-      aria-label={copied ? 'Copied!' : 'Copy'}
-    >
-      {copied ? (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
-      ) : (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <rect x="9" y="9" width="13" height="13" rx="2" />
-          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-        </svg>
-      )}
-    </button>
-  )
-}
-
-// Message action bar component
-const MessageActionBar = ({ content }: { content: string }) => {
-  const [copied, setCopied] = useState(false)
-
-  const handleCopy = useCallback(async () => {
-    if (!content) return
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(content)
-      } else {
-        const textArea = document.createElement('textarea')
-        textArea.value = content
-        textArea.style.position = 'fixed'
-        textArea.style.left = '-9999px'
-        document.body.appendChild(textArea)
-        textArea.select()
-        document.execCommand('copy')
-        document.body.removeChild(textArea)
-      }
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error('Failed to copy:', err)
-    }
-  }, [content])
-
-  return (
-    <div className={styles.messageActionBar}>
-      <CopyResponseButton copied={copied} onCopy={handleCopy} />
-    </div>
-  )
-}
-
-// Greeting lines - defined outside component to maintain stable reference
-const GREETING_LINES = [
-  "Hi there, I am MoM :-)",
-  "The System Intelligence for Agents and LLMs",
-  "The World First Model-of-Models",
-  "Open Source for Everyone",
-  "How can I help you today?"
-]
-
-const generateMessageId = () => `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
-const generateConversationId = () => `conv-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
-const CLAW_TOOL_NAME_PREFIX = `mcp_${OPENCLAW_MCP_SERVER_ID}_claw_`
-const CLAW_MODE_STORAGE_KEY = 'sr:playground:claw-mode'
-const CLAW_MODE_SYSTEM_PROMPT = [
-  'You are a witty, humorous Claw Manager, excellent at building teams and recruiting Claw Workers.',
-  'Quick context: OpenClaw is the overall agent platform; ClawOS is the orchestration/control mode in this chat; a Claw Team is an organizational unit; a Claw Worker is an individual anthropomorphic agent inside a team.',
-  'You should still answer normal user questions naturally.',
-  'When user intent is to create or manage Claw Teams/Workers:',
-  '1) Design each worker with a clear domain, strong anthropomorphic persona, distinctive speaking style, and explicit responsibilities.',
-  '2) Worker name MUST be in English only, and should be short and fun.',
-  "3) Other descriptive fields (such as role/vibe/principles/descriptions) should follow the user's language preference inferred from the conversation.",
-  '4) When creating a Claw Worker, the principles field MUST explicitly include team context (team name, mission, and collaboration expectations), and should be rich and concrete.',
-  '5) Before executing team/worker creation tools (or other mutating Claw actions), first present a concise plan/design for user confirmation; only execute after explicit user approval.',
-  '6) Team design MUST include exactly one leader. Ensure one worker is designated with role_kind="leader", and ensure team leader_id points to that leader (set on creation if possible, otherwise update the team after creating workers).',
-].join('\n')
-
-// Typing effect component for greeting with multiple lines
-// Memoized to prevent re-renders when parent state changes (e.g., input typing)
-const TypingGreeting = memo(({ lines }: { lines: string[] }) => {
-  const [currentLineIndex, setCurrentLineIndex] = useState(0)
-  const [displayedText, setDisplayedText] = useState('')
-  const [isTyping, setIsTyping] = useState(true)
-
-  useEffect(() => {
-    if (currentLineIndex >= lines.length) return
-
-    const currentLine = lines[currentLineIndex]
-    let charIndex = 0
-    setIsTyping(true)
-    setDisplayedText('')
-
-    const typingInterval = setInterval(() => {
-      if (charIndex < currentLine.length) {
-        setDisplayedText(currentLine.slice(0, charIndex + 1))
-        charIndex++
-      } else {
-        clearInterval(typingInterval)
-        setIsTyping(false)
-        // Wait before moving to next line
-        setTimeout(() => {
-          if (currentLineIndex < lines.length - 1) {
-            setCurrentLineIndex(prev => prev + 1)
-          }
-        }, 1500)
-      }
-    }, 60)
-
-    return () => clearInterval(typingInterval)
-  }, [currentLineIndex, lines])
-
-  return (
-    <div className={styles.typingGreeting} translate="no">
-      <h2>
-        {displayedText}
-        {isTyping && <span className={styles.typingCursor}>|</span>}
-      </h2>
-    </div>
-  )
-})
-
-// Choice represents a single model's response in ratings mode
-interface Choice {
-  content: string
-  model?: string
-}
-
-// ReMoM intermediate response structure
-interface ReMoMIntermediateResp {
-  model: string
-  content: string
-  reasoning?: string
-  compacted_content?: string
-  token_count?: number
-}
-
-interface ReMoMRoundResponse {
-  round: number
-  breadth: number
-  responses: ReMoMIntermediateResp[]
-}
-
-// Re-export ToolCall and ToolResult types from tools module
-// Local SearchResult alias for backward compatibility
-type SearchResult = WebSearchResult
-
-interface Message {
-  id: string
-  role: 'user' | 'assistant' | 'system'
-  content: string
-  timestamp: Date
-  isStreaming?: boolean
-  headers?: Record<string, string>
-  // For ratings mode: multiple choices from different models
-  choices?: Choice[]
-  // Thinking process (from reasoning_content field)
-  thinkingProcess?: string
-  // Tool calls and results
-  toolCalls?: ToolCall[]
-  toolResults?: ToolResult[]
-  // For ReMoM: intermediate responses from multi-round reasoning
-  reasoning_mom_responses?: ReMoMRoundResponse[]
-}
-
-interface ClawHighlightField {
-  label: string
-  value: string
-}
-
-const asRecord = (value: unknown): Record<string, unknown> | null => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return null
-  }
-  return value as Record<string, unknown>
-}
-
-const toFieldString = (value: unknown): string => {
-  if (value === null || value === undefined) return ''
-  if (typeof value === 'string') return value.trim()
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
-  return ''
-}
-
-const truncateHighlight = (value: string, maxLength = 120): string => {
-  const text = value.trim()
-  if (text.length <= maxLength) return text
-  return `${text.slice(0, maxLength - 3).trim()}...`
-}
-
-const extractFromRawArgs = (rawArgs: string, key: string): string => {
-  if (!rawArgs) return ''
-  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const regex = new RegExp(`"${escapedKey}"\\s*:\\s*"([^"]*)`)
-  const match = rawArgs.match(regex)
-  return match?.[1]?.trim() || ''
-}
-
-const firstFieldValue = (source: Record<string, unknown> | null, keys: string[], rawArgs = ''): string => {
-  for (const key of keys) {
-    const value = toFieldString(source?.[key])
-    if (value) return value
-  }
-  if (rawArgs) {
-    for (const key of keys) {
-      const value = extractFromRawArgs(rawArgs, key)
-      if (value) return value
-    }
-  }
-  return ''
-}
-
-const toHighlightFields = (pairs: Array<[string, string]>): ClawHighlightField[] => {
-  return pairs
-    .filter(([, value]) => Boolean(value))
-    .map(([label, value]) => ({ label, value: truncateHighlight(value) }))
-}
-
-const buildClawRequestHighlights = (
-  clawToolName: string,
-  parsedArgs: Record<string, unknown> | null,
-  rawArgs: string
-): ClawHighlightField[] => {
-  if (clawToolName === 'claw_create_team') {
-    return toHighlightFields([
-      ['name', firstFieldValue(parsedArgs, ['name'], rawArgs)],
-      ['vibe', firstFieldValue(parsedArgs, ['vibe'], rawArgs)],
-      ['role', firstFieldValue(parsedArgs, ['role'], rawArgs)],
-      ['principal', firstFieldValue(parsedArgs, ['principal'], rawArgs)],
-    ])
-  }
-
-  if (clawToolName === 'claw_create_worker') {
-    return toHighlightFields([
-      ['name', firstFieldValue(parsedArgs, ['name'], rawArgs)],
-      ['vibe', firstFieldValue(parsedArgs, ['vibe'], rawArgs)],
-      ['role', firstFieldValue(parsedArgs, ['role'], rawArgs)],
-      ['team', firstFieldValue(parsedArgs, ['team_id', 'teamId'], rawArgs)],
-      ['emoji', firstFieldValue(parsedArgs, ['emoji'], rawArgs)],
-    ])
-  }
-
-  return []
-}
-
-const buildClawResultHighlights = (
-  clawToolName: string,
-  resultContent: unknown,
-  parsedArgs: Record<string, unknown> | null,
-  rawArgs: string
-): ClawHighlightField[] => {
-  const result = asRecord(resultContent)
-
-  if (clawToolName === 'claw_create_team') {
-    return toHighlightFields([
-      ['name', firstFieldValue(result, ['name']) || firstFieldValue(parsedArgs, ['name'], rawArgs)],
-      ['vibe', firstFieldValue(result, ['vibe']) || firstFieldValue(parsedArgs, ['vibe'], rawArgs)],
-      ['role', firstFieldValue(result, ['role']) || firstFieldValue(parsedArgs, ['role'], rawArgs)],
-      ['team_id', firstFieldValue(result, ['id'])],
-    ])
-  }
-
-  if (clawToolName === 'claw_create_worker') {
-    const identity = asRecord(result?.identity)
-    return toHighlightFields([
-      ['name', firstFieldValue(identity, ['name']) || firstFieldValue(result, ['agentName', 'name']) || firstFieldValue(parsedArgs, ['name'], rawArgs)],
-      ['vibe', firstFieldValue(identity, ['vibe']) || firstFieldValue(result, ['agentVibe']) || firstFieldValue(parsedArgs, ['vibe'], rawArgs)],
-      ['role', firstFieldValue(identity, ['role']) || firstFieldValue(result, ['agentRole']) || firstFieldValue(parsedArgs, ['role'], rawArgs)],
-      ['team', firstFieldValue(result, ['teamName', 'teamId']) || firstFieldValue(parsedArgs, ['team_id', 'teamId'], rawArgs)],
-      ['container', firstFieldValue(result, ['containerName'])],
-      ['message', firstFieldValue(result, ['message'])],
-    ])
-  }
-
-  return []
-}
-
-// Web Search Card Component
-const WebSearchCard = ({
-  toolCall,
-  toolResult,
-  isExpanded,
-  onToggle
-}: {
-  toolCall: ToolCall
-  toolResult?: ToolResult
-  isExpanded: boolean
-  onToggle: () => void
-}) => {
-  // Safely parse arguments - may be incomplete during streaming
-  let query = ''
-  try {
-    const args = JSON.parse(toolCall.function.arguments || '{}')
-    query = args.query || ''
-  } catch {
-    // Arguments still streaming or invalid, show partial or empty
-    const match = toolCall.function.arguments?.match(/"query"\s*:\s*"([^"]*)/)
-    query = (match && match[1]) || 'Searching...'
-  }
-
-  // Safely get results - ensure it's an array
-  const results = useMemo(() => {
-    if (!toolResult?.content) return undefined
-    if (Array.isArray(toolResult.content)) {
-      return toolResult.content as SearchResult[]
-    }
-    // If content is a string (error message), return undefined
-    return undefined
-  }, [toolResult?.content])
-
-  return (
-    <div className={styles.webSearchCard}>
-      <div className={styles.webSearchHeader} onClick={onToggle}>
-        <div className={styles.webSearchIcon}>
-          {toolCall.status === 'running' ? (
-            <svg className={styles.searchSpinner} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="8" />
-              <path d="M21 21l-4.35-4.35" />
-            </svg>
-          ) : (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="8" />
-              <path d="M21 21l-4.35-4.35" />
-            </svg>
-          )}
-        </div>
-        <div className={styles.webSearchInfo}>
-          <span className={styles.webSearchTitle}>
-            {toolCall.status === 'running' ? 'Searching...' : 'Web Search'}
-          </span>
-          <span className={styles.webSearchQuery}>"{query}"</span>
-        </div>
-        <div className={styles.webSearchStatus}>
-          {toolCall.status === 'completed' && results && (
-            <span className={styles.webSearchCount}>{results.length} sources</span>
-          )}
-          <svg
-            className={`${styles.webSearchChevron} ${isExpanded ? styles.expanded : ''}`}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </div>
-      </div>
-
-      {isExpanded && toolCall.status === 'completed' && results && results.length > 0 && (
-        <div className={styles.webSearchResults}>
-          <div className={styles.sourcePills}>
-            {results.map((result, idx) => (
-              <a
-                key={idx}
-                href={result.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={styles.sourcePill}
-                title={result.snippet}
-              >
-                <span className={styles.sourcePillNumber}>{idx + 1}</span>
-                <span className={styles.sourcePillDomain}>{(() => { try { return new URL(result.url).hostname } catch { return result.url } })()}</span>
-              </a>
-            ))}
-          </div>
-          <div className={styles.sourceDetails}>
-            {results.map((result, idx) => (
-              <div key={idx} className={styles.sourceItem}>
-                <div className={styles.sourceItemHeader}>
-                  <span className={styles.sourceItemNumber}>[{idx + 1}]</span>
-                  <a
-                    href={result.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={styles.sourceItemTitle}
-                  >
-                    {result.title}
-                  </a>
-                </div>
-                <p className={styles.sourceItemSnippet}>{result.snippet}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {toolCall.status === 'running' && (
-        <div className={styles.webSearchLoading}>
-          <div className={styles.webSearchLoadingBar} />
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Open Web Card Component - displays webpage content extraction
-const OpenWebCard = ({
-  toolCall,
-  toolResult,
-  isExpanded,
-  onToggle
-}: {
-  toolCall: ToolCall
-  toolResult?: ToolResult
-  isExpanded: boolean
-  onToggle: () => void
-}) => {
-  // Safely parse arguments
-  let url = ''
-  try {
-    const args = JSON.parse(toolCall.function.arguments || '{}')
-    url = args.url || ''
-  } catch {
-    const match = toolCall.function.arguments?.match(/"url"\s*:\s*"([^"]*)/)
-    url = (match && match[1]) || 'Loading...'
-  }
-
-  // Extract domain from URL
-  const domain = useMemo(() => {
-    try {
-      return new URL(url).hostname
-    } catch {
-      return url
-    }
-  }, [url])
-
-  // Get result data
-  const resultData = useMemo(() => {
-    if (!toolResult?.content) return null
-    if (typeof toolResult.content === 'object' && toolResult.content !== null) {
-      const data = toolResult.content as { title?: string; content?: string; length?: number; truncated?: boolean }
-      return data
-    }
-    return null
-  }, [toolResult?.content])
-
-  return (
-    <div className={styles.webSearchCard}>
-      <div className={styles.webSearchHeader} onClick={onToggle}>
-        <div className={styles.webSearchIcon}>
-          {toolCall.status === 'running' ? (
-            <svg className={styles.searchSpinner} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-            </svg>
-          ) : (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-            </svg>
-          )}
-        </div>
-        <div className={styles.webSearchInfo}>
-          <span className={styles.webSearchTitle}>
-            {toolCall.status === 'running' ? 'Opening page...' : 'Web Page'}
-          </span>
-          <span className={styles.webSearchQuery}>{domain}</span>
-        </div>
-        <div className={styles.webSearchStatus}>
-          {toolCall.status === 'completed' && resultData && (
-            <span className={styles.webSearchCount}>
-              {resultData.length ? `${Math.round(resultData.length / 1000)}k chars` : ''}
-              {resultData.truncated ? ' (truncated)' : ''}
-            </span>
-          )}
-          {toolCall.status === 'failed' && (
-            <span className={styles.webSearchCount} style={{ color: 'var(--color-error)' }}>Failed</span>
-          )}
-          <svg
-            className={`${styles.webSearchChevron} ${isExpanded ? styles.expanded : ''}`}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </div>
-      </div>
-
-      {isExpanded && toolCall.status === 'completed' && resultData && (
-        <div className={styles.webSearchResults}>
-          <div className={styles.sourceDetails}>
-            <div className={styles.sourceItem}>
-              <div className={styles.sourceItemHeader}>
-                <a
-                  href={url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={styles.sourceItemTitle}
-                >
-                  {resultData.title || 'Untitled'}
-                </a>
-              </div>
-              <div className={styles.openWebContent}>
-                {resultData.content?.substring(0, 500)}
-                {(resultData.content?.length || 0) > 500 && '...'}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isExpanded && toolCall.status === 'failed' && toolResult?.error && (
-        <div className={styles.webSearchResults}>
-          <div className={styles.sourceDetails}>
-            <div className={styles.sourceItem}>
-              <p className={styles.sourceItemSnippet} style={{ color: 'var(--color-error)' }}>
-                {toolResult.error}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {toolCall.status === 'running' && (
-        <div className={styles.webSearchLoading}>
-          <div className={styles.webSearchLoadingBar} />
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Generic Tool Card - routes to specific card based on tool type
-const ToolCard = ({
-  toolCall,
-  toolResult,
-  isExpanded,
-  onToggle
-}: {
-  toolCall: ToolCall
-  toolResult?: ToolResult
-  isExpanded: boolean
-  onToggle: () => void
-}) => {
-  const toolName = toolCall.function.name
-  const parsedMCPTool = parseMCPToolName(toolName)
-  const clawToolName = parsedMCPTool?.toolName || ''
-  const displayToolName = clawToolName || toolName
-  const isClawMCPToolCall = clawToolName.startsWith('claw_')
-  const isClawCreateToolCall = clawToolName === 'claw_create_team' || clawToolName === 'claw_create_worker'
-  const rawArgs = toolCall.function.arguments || ''
-  const parsedArgs = useMemo(() => {
-    try {
-      return asRecord(JSON.parse(rawArgs))
-    } catch {
-      return null
-    }
-  }, [rawArgs])
-  const requestHighlights = useMemo(
-    () => (isClawCreateToolCall ? buildClawRequestHighlights(clawToolName, parsedArgs, rawArgs) : []),
-    [clawToolName, isClawCreateToolCall, parsedArgs, rawArgs]
-  )
-  const resultHighlights = useMemo(
-    () => (isClawCreateToolCall ? buildClawResultHighlights(clawToolName, toolResult?.content, parsedArgs, rawArgs) : []),
-    [clawToolName, isClawCreateToolCall, parsedArgs, rawArgs, toolResult?.content]
-  )
-  const showResultHighlights = isClawCreateToolCall && (toolCall.status === 'completed' || toolCall.status === 'failed')
-
-  if (toolName === 'search_web') {
-    return (
-      <WebSearchCard
-        toolCall={toolCall}
-        toolResult={toolResult}
-        isExpanded={isExpanded}
-        onToggle={onToggle}
-      />
-    )
-  }
-
-  if (toolName === 'open_web') {
-    return (
-      <OpenWebCard
-        toolCall={toolCall}
-        toolResult={toolResult}
-        isExpanded={isExpanded}
-        onToggle={onToggle}
-      />
-    )
-  }
-
-  // Fallback for unknown tools
-  return (
-    <div className={`${styles.webSearchCard} ${isClawMCPToolCall ? styles.mcpToolCard : ''}`}>
-      <div className={styles.webSearchHeader} onClick={onToggle}>
-        <div className={`${styles.webSearchIcon} ${isClawMCPToolCall ? styles.mcpToolIcon : ''}`}>
-          {isClawMCPToolCall ? (
-            <img src="/openclaw.svg" alt="" aria-hidden="true" />
-          ) : (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-            </svg>
-          )}
-        </div>
-        <div className={styles.webSearchInfo}>
-          <span className={styles.webSearchTitle}>{displayToolName}</span>
-          <span className={styles.webSearchQuery}>{toolCall.status}</span>
-        </div>
-      </div>
-      {isClawCreateToolCall && (
-        <div className={styles.clawToolHighlights}>
-          {requestHighlights.length > 0 && (
-            <div className={styles.clawToolHighlightSection}>
-              <span className={styles.clawToolHighlightHeading}>Request</span>
-              <div className={styles.clawToolHighlightRows}>
-                {requestHighlights.map(item => (
-                  <div key={`request-${item.label}`} className={styles.clawToolHighlightRow}>
-                    <span className={styles.clawToolHighlightKey}>{item.label}</span>
-                    <span className={styles.clawToolHighlightValue}>{item.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {showResultHighlights && (resultHighlights.length > 0 || Boolean(toolResult?.error)) && (
-            <div className={styles.clawToolHighlightSection}>
-              <span className={styles.clawToolHighlightHeading}>Result</span>
-              <div className={styles.clawToolHighlightRows}>
-                {resultHighlights.map(item => (
-                  <div key={`result-${item.label}`} className={styles.clawToolHighlightRow}>
-                    <span className={styles.clawToolHighlightKey}>{item.label}</span>
-                    <span className={styles.clawToolHighlightValue}>{item.value}</span>
-                  </div>
-                ))}
-                {toolResult?.error && (
-                  <div className={styles.clawToolHighlightRow}>
-                    <span className={styles.clawToolHighlightKey}>error</span>
-                    <span className={`${styles.clawToolHighlightValue} ${styles.clawToolHighlightError}`}>
-                      {truncateHighlight(toolResult.error, 180)}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-      {isExpanded && toolCall.status === 'failed' && toolResult?.error && (
-        <div className={styles.webSearchResults}>
-          <div className={styles.sourceDetails}>
-            <div className={styles.sourceItem}>
-              <p className={styles.sourceItemSnippet} style={{ color: 'var(--color-error)' }}>
-                {toolResult.error}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Tool Toggle Component
-const ToolToggle = ({
-  enabled,
-  onToggle,
-  disabled
-}: {
-  enabled: boolean
-  onToggle: () => void
-  disabled?: boolean
-}) => {
-  return (
-    <button
-      className={`${styles.inputActionButton} ${enabled ? styles.searchToggleActive : ''}`}
-      onClick={onToggle}
-      disabled={disabled}
-      data-tooltip={enabled ? 'Web Search enabled' : 'Enable Web Search'}
-    >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <circle cx="12" cy="12" r="10" />
-        <path d="M2 12h20" />
-        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-      </svg>
-    </button>
-  )
-}
-
-const ClawModeToggle = ({
-  enabled,
-  onToggle,
-  disabled
-}: {
-  enabled: boolean
-  onToggle: () => void
-  disabled?: boolean
-}) => {
-  return (
-    <button
-      className={`${styles.clawModeToggleButton} ${enabled ? styles.clawToggleActive : ''}`}
-      onClick={onToggle}
-      disabled={disabled}
-      type="button"
-      aria-pressed={enabled}
-      aria-label={enabled ? 'Disable ClawOS' : 'Enable ClawOS'}
-    >
-      <img src="/openclaw.svg" alt="" aria-hidden="true" className={styles.clawToggleIcon} />
-      <span className={styles.clawToggleLabel}>ClawMode</span>
-    </button>
-  )
-}
-
-// Citation Link Component - renders [1], [2], etc. as clickable links
-const CitationLink = ({
-  number,
-  url,
-  title
-}: {
-  number: number
-  url?: string
-  title?: string
-}) => {
-  const handleClick = (e: React.MouseEvent) => {
-    if (url) {
-      e.preventDefault()
-      window.open(url, '_blank', 'noopener,noreferrer')
-    }
-  }
-
-  return (
-    <span
-      className={styles.citationLink}
-      onClick={handleClick}
-      title={title || `Source ${number}`}
-      role="button"
-      tabIndex={0}
-    >
-      [{number}]
-    </span>
-  )
-}
-
-// Content with Citations - parses [1], [2] etc and renders as clickable links
-const ContentWithCitations = ({
-  content,
-  sources,
-  isStreaming = false
-}: {
-  content: string
-  sources?: SearchResult[] | unknown
-  isStreaming?: boolean
-}) => {
-  // Safely normalize sources to array
-  const safeSources = useMemo(() => {
-    if (!sources) return undefined
-    if (Array.isArray(sources)) return sources as SearchResult[]
-    return undefined
-  }, [sources])
-
-  // Disable translation during streaming to prevent DOM conflicts
-  const translateAttr = getTranslateAttr(isStreaming)
-
-  // Memoize the processed content to avoid re-parsing on every render
-  const processedContent = useMemo(() => {
-    // Safety check for content - always return consistent structure
-    if (!content || typeof content !== 'string') {
-      return null
-    }
-
-    // Parse content and replace [n] patterns with citation links
-    const parseContentWithCitations = (text: string, keyPrefix: string): React.ReactNode[] => {
-      const parts: React.ReactNode[] = []
-      // Match [1], [2], [3] etc. - citation format
-      const citationRegex = /\[(\d+)\]/g
-      let lastIndex = 0
-      let match
-      let keyIndex = 0
-      let iterationCount = 0
-      const maxIterations = 1000 // Prevent infinite loop
-
-      while ((match = citationRegex.exec(text)) !== null && iterationCount < maxIterations) {
-        iterationCount++
-        // Add text before the citation
-        if (match.index > lastIndex) {
-          parts.push(<span key={`${keyPrefix}-text-${keyIndex++}`}>{text.slice(lastIndex, match.index)}</span>)
-        }
-
-        const citationNumber = parseInt(match[1], 10)
-        const source = safeSources?.[citationNumber - 1] // 1-indexed
-
-        parts.push(
-          <CitationLink
-            key={`${keyPrefix}-citation-${keyIndex++}`}
-            number={citationNumber}
-            url={source?.url}
-            title={source ? `${source.title} - ${(() => { try { return new URL(source.url).hostname } catch { return source.url } })()}` : undefined}
-          />
-        )
-
-        lastIndex = match.index + match[0].length
-      }
-
-      // Add remaining text
-      if (lastIndex < text.length) {
-        parts.push(<span key={`${keyPrefix}-text-${keyIndex++}`}>{text.slice(lastIndex)}</span>)
-      }
-
-      return parts
-    }
-
-    // If no sources, just render with MarkdownRenderer wrapped in consistent container
-    if (!safeSources || safeSources.length === 0) {
-      return <MarkdownRenderer content={content} />
-    }
-
-    // Check if content has citations
-    const hasCitations = /\[\d+\]/.test(content)
-
-    if (!hasCitations) {
-      return <MarkdownRenderer content={content} />
-    }
-
-    // For content with citations, we need to handle it specially
-    // Split by markdown blocks to preserve code blocks etc.
-    const lines = content.split('\n')
-    const processedLines: React.ReactNode[] = []
-    let inCodeBlock = false
-    let codeBlockContent = ''
-    let codeBlockLang = ''
-
-    lines.forEach((line, lineIndex) => {
-      // Check for code block start/end
-      if (line.startsWith('```')) {
-        if (!inCodeBlock) {
-          inCodeBlock = true
-          codeBlockLang = line.slice(3).trim()
-          codeBlockContent = ''
-        } else {
-          // End of code block - render as markdown
-          processedLines.push(
-            <div key={`code-${lineIndex}`} className={styles.codeBlockWrapper}>
-              <MarkdownRenderer
-                content={`\`\`\`${codeBlockLang}\n${codeBlockContent}\`\`\``}
-              />
-            </div>
-          )
-          inCodeBlock = false
-          codeBlockLang = ''
-        }
-        return
-      }
-
-      if (inCodeBlock) {
-        codeBlockContent += (codeBlockContent ? '\n' : '') + line
-        return
-      }
-
-      // For regular lines, check for citations
-      if (/\[\d+\]/.test(line)) {
-        // Line has citations - render with citation links
-        processedLines.push(
-          <p key={`line-${lineIndex}`} className={styles.citationParagraph}>
-            {parseContentWithCitations(line, `line-${lineIndex}`)}
-          </p>
-        )
-      } else if (line.trim() === '') {
-        // Empty line - add spacer div instead of br for consistent structure
-        processedLines.push(<div key={`space-${lineIndex}`} className={styles.lineBreak} />)
-      } else {
-        // Regular line without citations - use markdown wrapped in div
-        processedLines.push(
-          <div key={`md-${lineIndex}`} className={styles.markdownLine}>
-            <MarkdownRenderer content={line} />
-          </div>
-        )
-      }
-    })
-
-    return <>{processedLines}</>
-  }, [content, safeSources])
-
-  // Always return consistent div structure
-  // Disable translation during streaming to prevent DOM conflicts with browser translators
-  return (
-    <div className={styles.contentWithCitations} translate={translateAttr}>
-      {processedContent}
-    </div>
-  )
-}
+import type { ToolCall, ToolResult } from '../tools'
 
 interface ChatComponentProps {
   endpoint?: string
@@ -1070,7 +194,7 @@ const ChatComponent = ({
     saveConversation(conversationId, messages)
   }, [conversationId, messages, saveConversation])
 
-  const conversationPreviews = useMemo(() => {
+  const conversationPreviews = useMemo<ConversationPreview[]>(() => {
     return [...conversations]
       .sort((a, b) => a.createdAt - b.createdAt)
       .map(conv => {
@@ -1815,7 +939,7 @@ const ChatComponent = ({
     setIsLoading(false)
   }
 
-  const handleNewConversation = () => {
+  const handleNewConversation = useCallback(() => {
     abortControllerRef.current?.abort()
     setIsLoading(false)
     setMessages([])
@@ -1826,7 +950,7 @@ const ChatComponent = ({
     setExpandedToolCards(new Set())
     setInputValue('')
     setConversationId(generateConversationId())
-  }
+  }, [])
 
   const handleToggleClawMode = useCallback(() => {
     if (isLoading || isTogglingClawMode) return
@@ -1857,6 +981,18 @@ const ChatComponent = ({
     handleNewConversation()
   }, [handleNewConversation, isTeamRoomView])
 
+  const handleToggleToolCard = useCallback((toolCallId: string) => {
+    setExpandedToolCards(prev => {
+      const next = new Set(prev)
+      if (next.has(toolCallId)) {
+        next.delete(toolCallId)
+      } else {
+        next.add(toolCallId)
+      }
+      return next
+    })
+  }, [])
+
   const roomChatToggleControl = enableClawMode ? (
     <button
       type="button"
@@ -1874,7 +1010,6 @@ const ChatComponent = ({
 
   return (
     <>
-      {/* Thinking Animation */}
       {showThinking && (
         <ThinkingAnimation
           onComplete={handleThinkingComplete}
@@ -1882,7 +1017,6 @@ const ChatComponent = ({
         />
       )}
 
-      {/* Header Reveal */}
       {showHeaderReveal && pendingHeaders && (
         <HeaderReveal
           headers={pendingHeaders}
@@ -1896,98 +1030,21 @@ const ChatComponent = ({
       >
         <div className={styles.mainLayout}>
           {!isTeamRoomView && isSidebarOpen && (
-            <aside className={styles.sidebar}>
-              <div className={styles.sidebarHeader}>
-                <div>
-                  <div className={styles.sidebarTitle}>Conversations</div>
-                  <div className={styles.sidebarSubtitle}>
-                    {conversationPreviews.length ? `${conversationPreviews.length} saved` : 'No saved conversations'}
-                  </div>
-                </div>
-              </div>
-              <div className={styles.sidebarList}>
-                {conversationPreviews.length === 0 ? (
-                  <div className={styles.sidebarEmpty}>Start a conversation to see it here.</div>
-                ) : (
-                  conversationPreviews.map(conv => (
-                    <div
-                      key={conv.id}
-                      className={`${styles.sidebarItem} ${conv.id === conversationId ? styles.sidebarItemActive : ''}`}
-                      onClick={() => handleSelectConversation(conv.id)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          handleSelectConversation(conv.id)
-                        }
-                      }}
-                    >
-                      <div className={styles.sidebarItemText}>
-                        <div className={styles.sidebarItemTitle}>{conv.preview}</div>
-                        <div className={styles.sidebarItemMeta}>
-                          {new Date(conv.updatedAt).toLocaleString(undefined, {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            month: 'short',
-                            day: 'numeric',
-                          })}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        className={styles.sidebarDeleteButton}
-                        onClick={e => {
-                          e.stopPropagation()
-                          handleDeleteConversation(conv.id)
-                        }}
-                        title="Delete conversation"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                          <path d="M2 4h12M5.5 4V2.5h5V4M13 4v9.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4M6.5 7v4M9.5 7v4" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            </aside>
+            <ChatConversationSidebar
+              conversationId={conversationId}
+              conversationPreviews={conversationPreviews}
+              onDeleteConversation={handleDeleteConversation}
+              onSelectConversation={handleSelectConversation}
+            />
           )}
 
           <div className={styles.chatArea}>
-            <div className={styles.chatTopBar}>
-              <div className={styles.chatTopBarActions}>
-                <button
-                  type="button"
-                  className={styles.chatTopBarButton}
-                  onClick={() => setIsSidebarOpen(prev => !prev)}
-                  title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-                  aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-                >
-                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <rect x="3" y="4" width="18" height="16" rx="3" />
-                    <path d="M9 4v16" />
-                    {isSidebarOpen ? (
-                      <path d="M15 9l-2.5 3 2.5 3" strokeLinecap="round" strokeLinejoin="round" />
-                    ) : (
-                      <path d="M12.5 9l2.5 3-2.5 3" strokeLinecap="round" strokeLinejoin="round" />
-                    )}
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  className={styles.chatTopBarButton}
-                  onClick={handleTopBarCreate}
-                  title={isTeamRoomView ? 'New room' : 'New conversation'}
-                  aria-label={isTeamRoomView ? 'New room' : 'New conversation'}
-                >
-                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M14 4h-6a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3h1v3l3.6-3H14a3 3 0 0 0 3-3v-2" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M17 3v6M14 6h6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-              </div>
-            </div>
+            <ChatComponentTopBar
+              isSidebarOpen={isSidebarOpen}
+              isTeamRoomView={isTeamRoomView}
+              onCreate={handleTopBarCreate}
+              onToggleSidebar={() => setIsSidebarOpen(prev => !prev)}
+            />
             {isTeamRoomView ? (
               <ClawRoomChat
                 isSidebarOpen={isSidebarOpen}
@@ -2030,250 +1087,29 @@ const ChatComponent = ({
                     </button>
                   </div>
                 )}
+                <ChatComponentMessages
+                  expandedToolCards={expandedToolCards}
+                  messages={messages}
+                  messagesEndRef={messagesEndRef}
+                  onToggleToolCard={handleToggleToolCard}
+                />
 
-                <div className={`${styles.messagesContainer} ${messages.length === 0 ? styles.messagesContainerEmpty : ''}`}>
-                  {messages.length === 0 ? (
-                    <div className={styles.emptyState}>
-                      <TypingGreeting lines={GREETING_LINES} />
-                    </div>
-                  ) : (
-                    <div className={styles.messages}>
-                      {messages.map((message, msgIdx) => {
-                        const prevUserQuery = messages[msgIdx - 1]?.role === 'user' ? messages[msgIdx - 1].content : undefined
-                        return (
-                        <div
-                          key={message.id}
-                          className={`${styles.message} ${styles[message.role]}`}
-                          // Disable translation during streaming to prevent DOM conflicts
-                          translate={getTranslateAttr(message.isStreaming ?? false)}
-                        >
-                          <div className={styles.messageAvatar}>
-                            {message.role === 'user' ? (
-                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
-                            ) : (
-                              <img src="/vllm.png" alt="vLLM SR" className={styles.avatarImage} />
-                            )}
-                          </div>
-                          <div className={styles.messageContent}>
-                            <div className={styles.messageRole}>
-                              {message.role === 'user' ? 'You' : 'vLLM SR'}
-                            </div>
-                            {/* Ratings mode: multiple choices */}
-                            {message.role === 'assistant' && message.choices && message.choices.length > 1 ? (
-                              <>
-                                {/* Show tool calls if any */}
-                                {message.toolCalls && message.toolCalls.length > 0 && (
-                                  <div className={styles.toolCallsContainer}>
-                                    {message.toolCalls.map(tc => (
-                                      <ToolCard
-                                        key={tc.id}
-                                        toolCall={tc}
-                                        toolResult={message.toolResults?.find(tr => tr.callId === tc.id)}
-                                        isExpanded={expandedToolCards.has(tc.id)}
-                                        onToggle={() => {
-                                          setExpandedToolCards(prev => {
-                                            const next = new Set(prev)
-                                            if (next.has(tc.id)) {
-                                              next.delete(tc.id)
-                                            } else {
-                                              next.add(tc.id)
-                                            }
-                                            return next
-                                          })
-                                        }}
-                                      />
-                                    ))}
-                                  </div>
-                                )}
-                                {/* Show thinking block if available */}
-                                {message.thinkingProcess && (
-                                  <ThinkingBlock
-                                    content={message.thinkingProcess}
-                                    isStreaming={message.isStreaming}
-                                  />
-                                )}
-                                <div className={styles.ratingsChoices}>
-                                  {message.choices.map((choice, idx) => (
-                                    <div key={idx} className={styles.choiceCard}>
-                                      <div className={styles.choiceHeader}>
-                                        <span className={styles.choiceModel}>{choice.model || `Model ${idx + 1}`}</span>
-                                        <span className={styles.choiceIndex}>Choice {idx + 1}</span>
-                                      </div>
-                                      <div className={styles.choiceContent}>
-                                        <ErrorBoundary>
-                                          <ContentWithCitations
-                                            content={choice.content}
-                                            sources={
-                                              message.toolResults?.find(tr => tr.name === 'search_web')?.content
-                                            }
-                                            isStreaming={message.isStreaming}
-                                          />
-                                        </ErrorBoundary>
-                                        {message.isStreaming && idx === 0 && (
-                                          <span className={styles.cursor}>▊</span>
-                                        )}
-                                      </div>
-                                      {!message.isStreaming && choice.model && (
-                                        <div className={styles.choiceActions}>
-                                          <FeedbackButtons
-                                            modelId={choice.model}
-                                            category={message.headers?.['x-vsr-selected-decision']}
-                                            query={prevUserQuery}
-                                            otherModelIds={message.choices?.map(c => c.model).filter((m): m is string => m != null && m !== choice.model) ?? []}
-                                          />
-                                        </div>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              </>
-                            ) : (
-                              /* Single choice mode */
-                              <>
-                                {/* Show tool calls if any (including failed calls for debugging/traceability) */}
-                                {message.role === 'assistant' && message.toolCalls && message.toolCalls.length > 0 && (
-                                  <div className={styles.toolCallsContainer}>
-                                    {message.toolCalls.map(tc => (
-                                      <ErrorBoundary key={tc.id}>
-                                        <ToolCard
-                                          toolCall={tc}
-                                          toolResult={message.toolResults?.find(tr => tr.callId === tc.id)}
-                                          isExpanded={expandedToolCards.has(tc.id)}
-                                          onToggle={() => {
-                                            setExpandedToolCards(prev => {
-                                              const next = new Set(prev)
-                                              if (next.has(tc.id)) {
-                                                next.delete(tc.id)
-                                              } else {
-                                                next.add(tc.id)
-                                              }
-                                              return next
-                                            })
-                                          }}
-                                        />
-                                      </ErrorBoundary>
-                                    ))}
-                                  </div>
-                                )}
-                                {/* Show thinking block if available */}
-                                {message.role === 'assistant' && message.thinkingProcess && (
-                                  <ThinkingBlock
-                                    content={message.thinkingProcess}
-                                    isStreaming={message.isStreaming}
-                                  />
-                                )}
-                                <div className={styles.messageText}>
-                                  {message.role === 'assistant' && message.content ? (
-                                    <>
-                                      <ErrorBoundary>
-                                        <ContentWithCitations
-                                          content={message.content}
-                                          sources={
-                                            message.toolResults?.find(tr => tr.name === 'search_web')?.content
-                                          }
-                                          isStreaming={message.isStreaming}
-                                        />
-                                      </ErrorBoundary>
-                                      {message.isStreaming && (
-                                        <span className={styles.cursor}>▊</span>
-                                      )}
-                                    </>
-                                  ) : (
-                                    <>
-                                      {message.content || (message.isStreaming && (
-                                        <span className={styles.cursor}>▊</span>
-                                      ))}
-                                      {message.isStreaming && message.content && (
-                                        <span className={styles.cursor}>▊</span>
-                                      )}
-                                    </>
-                                  )}
-                                </div>
-                              </>
-                            )}
-                            {message.role === 'assistant' && message.headers && (
-                              <HeaderDisplay headers={message.headers} />
-                            )}
-                            {message.role === 'assistant' && message.reasoning_mom_responses && (
-                              <>
-                                {console.log('[ReMoM] Rendering ReMoMResponsesDisplay for message:', message.id, 'rounds:', message.reasoning_mom_responses)}
-                                <ReMoMResponsesDisplay rounds={message.reasoning_mom_responses} />
-                              </>
-                            )}
-                            {message.role === 'assistant' && message.content && !message.isStreaming && (
-                              <div className={styles.messageActionRow}>
-                                <MessageActionBar content={message.content} />
-                                {message.headers?.['x-vsr-selected-model'] && (
-                                  <FeedbackButtons
-                                    modelId={message.headers['x-vsr-selected-model']}
-                                    category={message.headers['x-vsr-selected-decision']}
-                                    query={prevUserQuery}
-                                  />
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        )
-                      })}
-                      <div ref={messagesEndRef} />
-                    </div>
-                  )}
-                </div>
-
-                <div className={styles.inputContainer}>
-                  <div className={`${styles.inputWrapper} ${inputValue.trim() ? styles.hasContent : ''}`}>
-                    <textarea
-                      ref={inputRef}
-                      value={inputValue}
-                      onChange={e => setInputValue(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      placeholder="Ask me anything..."
-                      className={styles.input}
-                      rows={1}
-                      disabled={isLoading}
-                    />
-                    <div className={styles.inputActionsRow}>
-                      <div className={styles.inputActions}>
-                        <ToolToggle
-                          enabled={enableWebSearch}
-                          onToggle={() => setEnableWebSearch(!enableWebSearch)}
-                          disabled={isLoading || isTogglingClawMode}
-                        />
-                        <ClawModeToggle
-                          enabled={enableClawMode}
-                          onToggle={handleToggleClawMode}
-                          disabled={modeToggleDisabled}
-                        />
-                        {roomChatToggleControl}
-                      </div>
-                      {isLoading ? (
-                        <button
-                          className={`${styles.sendButton} ${styles.stopButton}`}
-                          onClick={handleStop}
-                          title="Stop generating"
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <rect x="6" y="6" width="12" height="12" rx="2" />
-                          </svg>
-                        </button>
-                      ) : (
-                        <button
-                          className={styles.sendButton}
-                          onClick={handleSend}
-                          disabled={!inputValue.trim()}
-                          title="Send message"
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <path d="M12 19V5M5 12l7-7 7 7" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                <ChatComponentInputBar
+                  enableClawMode={enableClawMode}
+                  enableWebSearch={enableWebSearch}
+                  inputRef={inputRef}
+                  inputValue={inputValue}
+                  isLoading={isLoading}
+                  isTogglingClawMode={isTogglingClawMode}
+                  modeToggleDisabled={modeToggleDisabled}
+                  onChangeInput={setInputValue}
+                  onKeyDown={handleKeyDown}
+                  onSend={handleSend}
+                  onStop={handleStop}
+                  onToggleClawMode={handleToggleClawMode}
+                  onToggleWebSearch={() => setEnableWebSearch(prev => !prev)}
+                  roomChatToggleControl={roomChatToggleControl}
+                />
               </>
             )}
           </div>

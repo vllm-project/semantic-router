@@ -14,7 +14,7 @@ make vllm-sr-test-integration  # Unit + Integration tests
 
 | Target | Description | Requires |
 |--------|-------------|----------|
-| `make vllm-sr-test` | Run unit tests only | Python, vllm-sr CLI |
+| `make vllm-sr-test` | Run unit tests only | Python (bootstraps local `vllm-sr` CLI) |
 | `make vllm-sr-test-integration` | Run unit + integration tests | Docker image (builds automatically) |
 
 ## Test Files

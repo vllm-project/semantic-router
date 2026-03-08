@@ -1,0 +1,22 @@
+# vLLM-SR CLI and Docker Playbook
+
+- The canonical local loop is image-first:
+  - `make vllm-sr-dev`
+  - `vllm-sr serve --image-pull-policy never`
+- AMD loop:
+  - `make vllm-sr-dev VLLM_SR_PLATFORM=amd`
+  - `vllm-sr serve --image-pull-policy never --platform amd`
+- AMD real-model deployment reference:
+  - [deploy/amd/README.md](../../deploy/amd/README.md)
+  - [deploy/amd/config.yaml](../../deploy/amd/config.yaml)
+- If the task is about deploying real AMD backends instead of smoke validation, prefer:
+  - `make agent-serve-local ENV=amd AGENT_SERVE_CONFIG=deploy/amd/config.yaml`
+  - plus the backend/network setup from `deploy/amd/README.md`
+- Feature-gate smoke defaults to the env-specific manifest config under `config/testing/config.agent-smoke.*.yaml`
+- Use `AGENT_SERVE_CONFIG` only when you need to override that default
+- Treat `src/vllm-sr/**`, `tools/make/docker.mk`, and `src/vllm-sr/Dockerfile*` as startup-chain changes
+- For these changes, run:
+  - CLI fast tests
+  - CLI integration tests
+  - local smoke
+  - affected E2E profiles

@@ -1,0 +1,266 @@
+version: 1
+default_env: cpu
+
+supported_envs:
+  cpu-local:
+    aliases:
+      - cpu
+    build_target: make vllm-sr-dev
+    serve_command: vllm-sr serve --image-pull-policy never
+    description: Default local Docker image workflow.
+    local_env: true
+    smoke_config: config/testing/config.agent-smoke.cpu.yaml
+    local_dev_fragment: local-dev-cpu
+  amd-local:
+    aliases:
+      - amd
+    build_target: make vllm-sr-dev VLLM_SR_PLATFORM=amd
+    serve_command: vllm-sr serve --image-pull-policy never --platform amd
+    description: AMD ROCm local workflow.
+    local_env: true
+    smoke_config: config/testing/config.agent-smoke.amd.yaml
+    local_dev_fragment: local-dev-amd
+    deployment_reference: deploy/amd/README.md
+    example_config: deploy/amd/config.yaml
+  ci-k8s:
+    aliases:
+      - ci-k8s
+    build_target: make build-e2e
+    serve_command: make e2e-test
+    description: kind/Kubernetes merge-gate workflow.
+    local_env: false
+
+subsystems:
+  - name: vllm-sr-cli
+    paths:
+      - src/vllm-sr/**
+      - src/vllm-sr/Dockerfile*
+      - src/vllm-sr/Makefile
+    entrypoints:
+      - src/vllm-sr/cli/main.py
+      - src/vllm-sr/cli/core.py
+      - src/vllm-sr/cli/docker_cli.py
+      - tools/make/docker.mk
+  - name: router-core
+    paths:
+      - src/semantic-router/**
+      - config/**
+      - scripts/**
+    entrypoints:
+      - src/semantic-router/cmd/main.go
+  - name: rust-bindings
+    paths:
+      - candle-binding/**
+      - ml-binding/**
+      - nlp-binding/**
+    entrypoints:
+      - candle-binding/src/lib.rs
+      - ml-binding/src/lib.rs
+      - nlp-binding/src/lib.rs
+  - name: dashboard
+    paths:
+      - dashboard/**
+    entrypoints:
+      - dashboard/backend/main.go
+      - dashboard/frontend/src/main.tsx
+  - name: e2e
+    paths:
+      - e2e/**
+      - deploy/kubernetes/**
+      - deploy/kserve/**
+      - deploy/openshift/**
+    entrypoints:
+      - e2e/cmd/e2e/main.go
+  - name: agent-contract
+    paths:
+      - AGENTS.md
+      - docs/agent/**
+      - tools/agent/skills/**
+      - tools/agent/*.yaml
+      - tools/agent/scripts/**
+      - .github/PULL_REQUEST_TEMPLATE.md
+    entrypoints:
+      - AGENTS.md
+      - docs/agent/README.md
+      - tools/agent/scripts/agent_gate.py
+
+validation:
+  smoke:
+    container_name: vllm-sr-container
+    dashboard_url: http://localhost:8700
+    status_command: vllm-sr status all
+    router_health_path: http://localhost:8000/health
+    envoy_ready_path: http://localhost:8801/ready
+  e2e:
+    default_local_profile: ai-gateway
+    full_ci_profiles:
+      - ai-gateway
+      - aibrix
+      - routing-strategies
+      - dynamic-config
+      - llm-d
+      - istio
+      - production-stack
+      - response-api
+      - response-api-redis
+      - response-api-redis-cluster
+      - ml-model-selection
+      - multi-endpoint
+      - authz-rbac
+      - streaming
+
+docs:
+  - AGENTS.md
+  - docs/agent/README.md
+  - docs/agent/governance.md
+  - docs/agent/plans/README.md
+  - docs/agent/plans/harness-roadmap.md
+  - docs/agent/tech-debt-register.md
+  - docs/agent/glossary.md
+  - docs/agent/adr/README.md
+  - docs/agent/adr/0001-harness-layering.md
+  - docs/agent/change-surfaces.md
+  - docs/agent/repo-map.md
+  - docs/agent/environments.md
+  - docs/agent/module-boundaries.md
+  - docs/agent/local-rules.md
+  - docs/agent/testing-strategy.md
+  - docs/agent/skill-catalog.md
+  - docs/agent/amd-local.md
+  - docs/agent/feature-complete-checklist.md
+  - docs/agent/architecture-guardrails.md
+  - docs/agent/playbooks/go-router.md
+  - docs/agent/playbooks/rust-bindings.md
+  - docs/agent/playbooks/vllm-sr-cli-docker.md
+  - docs/agent/playbooks/e2e-selection.md
+  - deploy/amd/README.md
+
+local_agent_rules:
+  - path: src/vllm-sr/cli/AGENTS.md
+    scope: src/vllm-sr/cli/**
+    steward: vllm-sr-cli
+    freshness: update when CLI orchestration or hotspot boundaries change
+  - path: src/semantic-router/pkg/config/AGENTS.md
+    scope: src/semantic-router/pkg/config/**
+    steward: router-core
+    freshness: update when config-package boundaries or hotspot expectations change
+  - path: src/semantic-router/pkg/extproc/AGENTS.md
+    scope: src/semantic-router/pkg/extproc/**
+    steward: router-core
+    freshness: update when extproc hotspot boundaries or phase seams change
+  - path: dashboard/frontend/src/pages/AGENTS.md
+    scope: dashboard/frontend/src/pages/**
+    steward: dashboard
+    freshness: update when page-level hotspot boundaries or extraction expectations change
+  - path: dashboard/frontend/src/components/AGENTS.md
+    scope: dashboard/frontend/src/components/**
+    steward: dashboard
+    freshness: update when component hotspot boundaries or extraction expectations change
+
+doc_governance:
+  owner_source: GOVERNANCE.md
+  canonical_docs:
+    - path: AGENTS.md
+      steward: agent-contract
+      freshness: update when the harness entrypoint, command set, or rule layering changes
+    - path: docs/agent/README.md
+      steward: agent-contract
+      freshness: update when canonical harness docs are added, removed, or reorganized
+    - path: docs/agent/governance.md
+      steward: agent-contract
+      freshness: update when source-of-truth policy or rule layering changes
+    - path: docs/agent/plans/README.md
+      steward: agent-contract
+      freshness: update when canonical execution plans are added, removed, or reorganized
+    - path: docs/agent/plans/harness-roadmap.md
+      steward: agent-contract
+      freshness: update at the start and end of each harness refactor loop and after each completed loop task
+    - path: docs/agent/tech-debt-register.md
+      steward: agent-contract
+      freshness: update when durable architecture or harness debt is discovered, retired, or materially re-scoped
+    - path: docs/agent/glossary.md
+      steward: agent-contract
+      freshness: update when harness terms or categories change
+    - path: docs/agent/adr/README.md
+      steward: agent-contract
+      freshness: update when ADR inventory changes
+    - path: docs/agent/adr/0001-harness-layering.md
+      steward: agent-contract
+      freshness: update only if the harness layering decision changes materially
+    - path: docs/agent/change-surfaces.md
+      steward: agent-contract
+      freshness: update when surfaces or their mappings change
+    - path: docs/agent/repo-map.md
+      steward: agent-contract
+      freshness: update when core subsystems, hotspots, or entrypoints change
+    - path: docs/agent/environments.md
+      steward: agent-contract
+      freshness: update when supported environments or default smoke paths change
+    - path: docs/agent/module-boundaries.md
+      steward: agent-contract
+      freshness: update when subsystem seams or local-rule boundaries change
+    - path: docs/agent/local-rules.md
+      steward: agent-contract
+      freshness: update when indexed local AGENTS files change
+    - path: docs/agent/testing-strategy.md
+      steward: agent-contract
+      freshness: update when gate sequencing or validation expectations change
+    - path: docs/agent/skill-catalog.md
+      steward: agent-contract
+      freshness: update when skill taxonomy or names change
+    - path: docs/agent/amd-local.md
+      steward: agent-contract
+      freshness: update when AMD-local workflow or deployment references change
+    - path: docs/agent/feature-complete-checklist.md
+      steward: agent-contract
+      freshness: update when done criteria or reporting fields change
+    - path: docs/agent/architecture-guardrails.md
+      steward: agent-contract
+      freshness: update when structural or modularity guardrails change
+    - path: docs/agent/playbooks/go-router.md
+      steward: router-core
+      freshness: update when canonical router implementation workflow changes
+    - path: docs/agent/playbooks/rust-bindings.md
+      steward: rust-bindings
+      freshness: update when native-binding workflow changes
+    - path: docs/agent/playbooks/vllm-sr-cli-docker.md
+      steward: vllm-sr-cli
+      freshness: update when CLI/startup workflow changes
+    - path: docs/agent/playbooks/e2e-selection.md
+      steward: e2e
+      freshness: update when E2E profile selection rules change
+
+skills:
+  - tools/agent/skills/harness-contract-change/SKILL.md
+  - tools/agent/skills/signal-end-to-end/SKILL.md
+  - tools/agent/skills/plugin-end-to-end/SKILL.md
+  - tools/agent/skills/header-contract-change/SKILL.md
+  - tools/agent/skills/config-platform-change/SKILL.md
+  - tools/agent/skills/decision-logic-change/SKILL.md
+  - tools/agent/skills/algorithm-selection-change/SKILL.md
+  - tools/agent/skills/startup-chain-change/SKILL.md
+  - tools/agent/skills/dashboard-surface-change/SKILL.md
+  - tools/agent/skills/dashboard-console-platform-change/SKILL.md
+  - tools/agent/skills/k8s-operator-change/SKILL.md
+  - tools/agent/skills/classifier-post-training/SKILL.md
+  - tools/agent/skills/cross-stack-bugfix/SKILL.md
+  - tools/agent/skills/harness-governance/SKILL.md
+  - tools/agent/skills/signal-runtime/SKILL.md
+  - tools/agent/skills/decision-logic/SKILL.md
+  - tools/agent/skills/algorithm-selection/SKILL.md
+  - tools/agent/skills/plugin-runtime/SKILL.md
+  - tools/agent/skills/binding-ffi/SKILL.md
+  - tools/agent/skills/python-cli-schema/SKILL.md
+  - tools/agent/skills/python-cli-runtime/SKILL.md
+  - tools/agent/skills/dashboard-config-ui/SKILL.md
+  - tools/agent/skills/dashboard-console-backend/SKILL.md
+  - tools/agent/skills/topology-visualization/SKILL.md
+  - tools/agent/skills/playground-reveal/SKILL.md
+  - tools/agent/skills/dsl-crd/SKILL.md
+  - tools/agent/skills/k8s-operator/SKILL.md
+  - tools/agent/skills/training-model-classifier/SKILL.md
+  - tools/agent/skills/e2e-selection/SKILL.md
+  - tools/agent/skills/local-dev-cpu/SKILL.md
+  - tools/agent/skills/local-dev-amd/SKILL.md
+  - tools/agent/skills/feature-complete-checklist/SKILL.md
+  - tools/agent/skills/architecture-guardrails/SKILL.md

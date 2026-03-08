@@ -11,7 +11,7 @@ ignore: |
   .venv
   # Jinja2 template files (contain {% %} and {{ }} syntax)
   **/*.template.yaml
-  **/.vllm-sr/*.yaml
+  **/.vllm-sr/**
 
 rules:
   braces:

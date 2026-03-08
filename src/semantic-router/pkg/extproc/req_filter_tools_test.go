@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -32,37 +33,35 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Initialize embedding models (ModelFactory) for tools tests
-		// Try to find Qwen3 or Gemma models in the models directory
-		qwen3Path := "../../../../models/mom-embedding-pro"
-		gemmaPath := "../../../../models/mom-embedding-flash"
-
-		// Check if at least one model exists
-		qwen3Exists := false
-		gemmaExists := false
-		if _, statErr := os.Stat(qwen3Path); statErr == nil {
-			qwen3Exists = true
+		qwen3Candidates := []string{
+			resolveExtprocTestPath("../../../../models/mom-embedding-pro"),
+			resolveExtprocTestPath("../../../../models/mom-embedding-ultra"),
 		}
-		if _, statErr := os.Stat(gemmaPath); statErr == nil {
-			gemmaExists = true
+		gemmaCandidates := []string{
+			resolveExtprocTestPath("../../../../models/mom-embedding-flash"),
+		}
+		qwen3ToUse := ""
+		for _, candidate := range qwen3Candidates {
+			if extprocTestModelArtifactsAvailable(candidate) {
+				qwen3ToUse = candidate
+				break
+			}
+		}
+		gemmaToUse := ""
+		for _, candidate := range gemmaCandidates {
+			if extprocTestModelArtifactsAvailable(candidate) {
+				gemmaToUse = candidate
+				break
+			}
 		}
 
-		// Initialize ModelFactory if at least one model is available
-		if qwen3Exists || gemmaExists {
-			qwen3ToUse := ""
-			gemmaToUse := ""
-			if qwen3Exists {
-				qwen3ToUse = qwen3Path
-			}
-			if gemmaExists {
-				gemmaToUse = gemmaPath
-			}
+		if qwen3ToUse == "" && gemmaToUse == "" {
+			Skip("Skipping tool selection tests: embedding models are not available")
+		}
 
-			err = candle_binding.InitEmbeddingModels(qwen3ToUse, gemmaToUse, "", true)
-			if err != nil {
-				// Log warning but don't fail - tests will skip if ModelFactory is not initialized
-				GinkgoWriter.Printf("Warning: Failed to initialize embedding models: %v\n", err)
-				GinkgoWriter.Printf("Tools tests requiring ModelFactory will be skipped\n")
-			}
+		err = candle_binding.InitEmbeddingModels(qwen3ToUse, gemmaToUse, "", true)
+		if err != nil {
+			Skip(fmt.Sprintf("Skipping tool selection tests: failed to initialize embedding models: %v", err))
 		}
 
 		// Create temporary directory for tools database

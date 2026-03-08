@@ -629,8 +629,10 @@ var _ = Describe("FactCheckClassifier Integration", func() {
 	)
 
 	BeforeEach(func() {
+		modelPath := resolveExtprocTestPath("../../../../models/mom-halugate-sentinel")
+		skipExtprocSpecIfModelArtifactsMissing("Fact-check model", modelPath)
 		cfg = &config.FactCheckModelConfig{
-			ModelID:   "../../../../models/mom-halugate-sentinel",
+			ModelID:   modelPath,
 			Threshold: 0.7,
 		}
 		var err error
@@ -695,7 +697,7 @@ var _ = Describe("HallucinationDetector Integration", func() {
 			return path
 		}
 		// Try relative path from test directory (extproc -> models)
-		relativePath := "../../../../../models/mom-halugate-detector"
+		relativePath := resolveExtprocTestPath("../../../../../models/mom-halugate-detector")
 		if _, err := os.Stat(relativePath); err == nil {
 			return relativePath
 		}
@@ -711,9 +713,7 @@ var _ = Describe("HallucinationDetector Integration", func() {
 
 	BeforeEach(func() {
 		modelPath := getModelPath()
-		if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-			Skip("Skipping: Hallucination model not found at " + modelPath)
-		}
+		skipExtprocSpecIfModelArtifactsMissing("Hallucination model", modelPath)
 
 		cfg = &config.HallucinationModelConfig{
 			ModelID:   modelPath,

@@ -1,0 +1,91 @@
+version: 1
+
+limits:
+  file_lines:
+    warn: 400
+    error: 600
+  function_lines:
+    error: 80
+  nesting:
+    error: 4
+  interface_methods:
+    error: 5
+
+languages:
+  go:
+    globs:
+      - src/**/*.go
+      - dashboard/backend/**/*.go
+      - e2e/**/*.go
+      - deploy/**/*.go
+  python:
+    globs:
+      - src/**/*.py
+      - e2e/**/*.py
+      - tools/**/*.py
+      - bench/**/*.py
+  rust:
+    globs:
+      - candle-binding/src/**/*.rs
+      - ml-binding/src/**/*.rs
+      - nlp-binding/src/**/*.rs
+      - onnx-binding/src/**/*.rs
+  typescript:
+    parser: none
+    globs:
+      - dashboard/frontend/src/**/*.ts
+      - dashboard/frontend/src/**/*.tsx
+
+ignore_globs:
+  - website/**
+  - docs/**
+  - models/**
+  - '**/*.pb.go'
+  - '**/zz_generated*'
+  - '**/node_modules/**'
+
+legacy_hotspots:
+  - paths:
+      - src/semantic-router/pkg/cache/cache_test.go
+      - src/semantic-router/pkg/config/config.go
+      - src/semantic-router/pkg/config/rag_plugin.go
+      - src/semantic-router/pkg/config/validator.go
+  - paths:
+      - src/semantic-router/pkg/extproc/extproc_test.go
+    function_checks: relaxed
+  - paths:
+      - src/semantic-router/pkg/classification/hallucination_detector_test.go
+      - src/semantic-router/pkg/classification/hallucination_test.go
+      - src/semantic-router/pkg/extproc/hallucination_test.go
+      - src/semantic-router/pkg/extproc/req_filter_tools_test.go
+    function_checks: relaxed
+  - paths:
+      - src/semantic-router/pkg/extproc/processor_req_body.go
+      - src/semantic-router/pkg/extproc/processor_res_body.go
+      - src/semantic-router/pkg/promptcompression/compressor_nlp_test.go
+      - src/vllm-sr/cli/docker_cli.py
+      - dashboard/frontend/src/pages/BuilderPage.tsx
+      - dashboard/frontend/src/pages/ConfigPage.tsx
+      - dashboard/frontend/src/pages/SetupWizardPage.tsx
+      - dashboard/frontend/src/components/ChatComponent.tsx
+      - dashboard/frontend/src/components/ExpressionBuilder.tsx
+
+dependency_rules:
+  - name: prod-code-must-not-reference-e2e-docs-or-agent-tools
+    applies_to:
+      - src/semantic-router/**/*.go
+      - src/vllm-sr/**/*.py
+      - candle-binding/src/**/*.rs
+      - ml-binding/src/**/*.rs
+      - nlp-binding/src/**/*.rs
+    forbidden_literals:
+      - github.com/vllm-project/semantic-router/e2e
+      - e2e/
+      - docs/agent/
+      - tools/agent/
+      - website/
+  - name: dashboard-backend-must-not-reference-frontend-source
+    applies_to:
+      - dashboard/backend/**/*.go
+    forbidden_literals:
+      - dashboard/frontend/src/

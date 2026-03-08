@@ -8,6 +8,8 @@ on:
     branches: [main]
     paths:
       - 'src/vllm-sr/**'
+      - 'src/vllm-sr/Dockerfile*'
+      - 'tools/make/docker.mk'
       - 'e2e/testing/vllm-sr-cli/**'
       - '.github/workflows/integration-test-vllm-sr-cli.yml'
 
@@ -15,6 +17,8 @@ on:
     branches: [main]
     paths:
       - 'src/vllm-sr/**'
+      - 'src/vllm-sr/Dockerfile*'
+      - 'tools/make/docker.mk'
       - 'e2e/testing/vllm-sr-cli/**'
       - '.github/workflows/integration-test-vllm-sr-cli.yml'
 

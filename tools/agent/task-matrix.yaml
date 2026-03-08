@@ -1,0 +1,133 @@
+version: 1
+
+rules:
+  - name: repo-docs
+    doc_only: true
+    paths:
+      - docs/**
+      - website/**
+      - README.md
+      - CONTRIBUTING.md
+    fast_tests: []
+    feature_tests: []
+    requires_local_smoke: false
+  - name: agent_text
+    doc_only: true
+    paths:
+      - AGENTS.md
+      - docs/agent/**
+      - tools/agent/skills/**
+      - src/vllm-sr/cli/AGENTS.md
+      - src/semantic-router/pkg/config/AGENTS.md
+      - src/semantic-router/pkg/extproc/AGENTS.md
+      - dashboard/frontend/src/pages/AGENTS.md
+      - dashboard/frontend/src/components/AGENTS.md
+      - .github/PULL_REQUEST_TEMPLATE.md
+      - .github/ISSUE_TEMPLATE/**
+    fast_tests:
+      - make agent-validate
+    feature_tests: []
+    requires_local_smoke: false
+  - name: agent_exec
+    doc_only: false
+    paths:
+      - tools/agent/*.yaml
+      - tools/agent/scripts/**
+      - tools/make/agent.mk
+      - .github/workflows/ci-changes.yml
+      - .github/workflows/integration-test-k8s.yml
+      - .github/workflows/integration-test-vllm-sr-cli.yml
+      - .github/workflows/pre-commit.yml
+    fast_tests:
+      - make agent-validate
+    feature_tests: []
+    requires_local_smoke: false
+  - name: vllm-sr-cli
+    doc_only: false
+    paths:
+      - src/vllm-sr/**
+      - src/vllm-sr/Dockerfile*
+      - tools/make/docker.mk
+    fast_tests:
+      - make vllm-sr-test
+    feature_tests:
+      - make vllm-sr-test-integration
+    requires_local_smoke: true
+  - name: router-core
+    doc_only: false
+    paths:
+      - src/semantic-router/**
+      - config/**
+      - scripts/**
+    fast_tests:
+      - make test-semantic-router
+    feature_tests: []
+    requires_local_smoke: true
+  - name: rust-bindings
+    doc_only: false
+    paths:
+      - candle-binding/**
+      - ml-binding/**
+      - nlp-binding/**
+    fast_tests:
+      - make test-binding-minimal
+    feature_tests:
+      - make test-binding-lora
+    requires_local_smoke: false
+  - name: dashboard
+    doc_only: false
+    paths:
+      - dashboard/**
+    fast_tests:
+      - make dashboard-check
+    feature_tests: []
+    requires_local_smoke: true
+  - name: e2e-framework
+    doc_only: false
+    paths:
+      - e2e/pkg/**
+      - e2e/cmd/**
+      - e2e/testcases/**
+      - e2e/go.mod
+      - e2e/go.sum
+    fast_tests:
+      - make build-e2e
+    feature_tests: []
+    requires_local_smoke: false
+  - name: operator-stack
+    doc_only: false
+    paths:
+      - deploy/operator/**
+      - deploy/kubernetes/crds/**
+      - src/semantic-router/pkg/apis/**
+    fast_tests:
+      - make generate-crd
+    feature_tests: []
+    requires_local_smoke: false
+  - name: training-stack
+    doc_only: false
+    paths:
+      - src/training/**
+      - tools/make/models.mk
+      - scripts/train-mmbert32k-gpu.sh
+      - website/docs/training/**
+    fast_tests: []
+    feature_tests: []
+    requires_local_smoke: false
+  - name: make-and-ci
+    doc_only: false
+    paths:
+      - Makefile
+      - tools/make/**
+    fast_tests:
+      - make agent-validate
+    feature_tests: []
+    requires_local_smoke: true
+  - name: ci-general
+    doc_only: false
+    paths:
+      - .github/workflows/**
+    fast_tests:
+      - make agent-validate
+    feature_tests: []
+    requires_local_smoke: false

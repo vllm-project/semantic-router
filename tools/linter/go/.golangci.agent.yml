@@ -1,0 +1,28 @@
+version: "2"
+
+run:
+  timeout: "5m"
+
+linters:
+  enable:
+    - cyclop
+    - funlen
+    - gocognit
+    - interfacebloat
+    - nestif
+  settings:
+    cyclop:
+      max-complexity: 12
+    funlen:
+      lines: 80
+      statements: 40
+    gocognit:
+      min-complexity: 20
+    interfacebloat:
+      max: 5
+    nestif:
+      min-complexity: 4
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

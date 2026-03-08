@@ -31,17 +31,24 @@ Before you begin, ensure you have the following installed:
    cd semantic-router
    ```
 
-2. **Start the development environment:**
+2. **Use the canonical local image workflow:**
 
    ```bash
-   make vllm-sr-start
+   make vllm-sr-dev
+   vllm-sr serve --image-pull-policy never
    ```
 
-   This single command handles everything:
-   - Cleans up old containers
-   - Builds the Docker image with all dependencies (Rust, Go, models)
+   For AMD ROCm development:
+
+   ```bash
+   make vllm-sr-dev VLLM_SR_PLATFORM=amd
+   vllm-sr serve --image-pull-policy never --platform amd
+   ```
+
+   This workflow:
+   - Rebuilds the local image
    - Installs the `vllm-sr` CLI tool
-   - Starts all services (semantic router, envoy, dashboard)
+   - Uses the local image only, without pulling a remote fallback
 
 3. **Install Python dependencies (Optional):**
 
@@ -54,6 +61,29 @@ Before you begin, ensure you have the following installed:
    ```
 
 ## Running Tests
+
+### Agent Gates
+
+The repository-specific agent harness is indexed in [docs/agent/README.md](docs/agent/README.md). Treat [AGENTS.md](AGENTS.md) as the short entrypoint and `docs/agent/*` plus `tools/agent/*` as the durable source of truth.
+If a real architecture or code/spec gap remains after your change, add or update the durable item in [docs/agent/tech-debt-register.md](docs/agent/tech-debt-register.md).
+
+Read these first:
+
+- [docs/agent/testing-strategy.md](docs/agent/testing-strategy.md)
+- [docs/agent/module-boundaries.md](docs/agent/module-boundaries.md)
+
+Use the agent-specific gates for changed files:
+
+```bash
+make agent-bootstrap
+make agent-validate
+make agent-scorecard
+make agent-report ENV=cpu CHANGED_FILES="path/one,path/two"
+make agent-ci-gate CHANGED_FILES="path/one,path/two"
+make agent-feature-gate ENV=cpu CHANGED_FILES="path/one,path/two"
+```
+
+`ENV=amd` is required when platform-specific behavior changed.
 
 ### Unit Tests
 
@@ -138,15 +168,17 @@ The test suite includes:
 3. **Build and test:**
 
    ```bash
-   make vllm-sr-start  # Start all services
-   make test           # Run unit tests
+   make agent-report ENV=cpu CHANGED_FILES="path/one,path/two"
+   make agent-ci-gate CHANGED_FILES="path/one,path/two"
+   make agent-feature-gate ENV=cpu CHANGED_FILES="path/one,path/two"
    ```
 
 4. **Run end-to-end tests:**
 
    ```bash
-   # Services are already running from vllm-sr-start
-   python e2e/testing/run_all_tests.py
+   make agent-e2e-affected CHANGED_FILES="path/one,path/two"
+   # Or run a specific profile directly
+   make e2e-test E2E_PROFILE=ai-gateway
    ```
 
 5. **Commit your changes:**

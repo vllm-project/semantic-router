@@ -7,13 +7,11 @@ on:
       - main
     paths-ignore:
       - 'website/**'
-      - '**/*.md'
   push:
     branches:
       - main
     paths-ignore:
       - 'website/**'
-      - '**/*.md'
   workflow_dispatch: # Allow manual triggering
 
 concurrency:
@@ -38,6 +36,10 @@ jobs:
           # Run all profiles if common e2e code, core code changes, or manual/scheduled trigger
           if [[ "${{ needs.changes.outputs.e2e_common }}" == "true" ]] || \
              [[ "${{ needs.changes.outputs.core }}" == "true" ]] || \
+             [[ "${{ needs.changes.outputs.docker }}" == "true" ]] || \
+             [[ "${{ needs.changes.outputs.make }}" == "true" ]] || \
+             [[ "${{ needs.changes.outputs.ci }}" == "true" ]] || \
+             [[ "${{ needs.changes.outputs.agent_exec }}" == "true" ]] || \
              [[ "${{ github.event_name }}" == "schedule" ]] || \
              [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo 'profiles=["ai-gateway", "aibrix", "routing-strategies", "dynamic-config", "llm-d", "istio", "production-stack", "response-api", "response-api-redis", "response-api-redis-cluster", "ml-model-selection", "multi-endpoint", "authz-rbac", "streaming"]' >> $GITHUB_OUTPUT
