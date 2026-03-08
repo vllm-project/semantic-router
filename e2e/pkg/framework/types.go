@@ -3,6 +3,7 @@ package framework
 import (
 	"context"
 
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -24,15 +25,8 @@ type Profile interface {
 	GetServiceConfig() ServiceConfig
 }
 
-// ServiceConfig contains configuration for accessing a service
-type ServiceConfig struct {
-	LabelSelector string // e.g., "gateway.envoyproxy.io/owning-gateway-namespace=default,..."
-	Namespace     string
-	Name          string // optional, if empty will use LabelSelector to find service
-	ServicePort   string // service port exposed by the Kubernetes Service
-	LocalPort     string // optional fixed local port; empty means allocate an ephemeral port
-	PortMapping   string // deprecated compatibility shim: "localPort:servicePort"
-}
+// ServiceConfig is the canonical service-connection contract shared by profiles and testcases.
+type ServiceConfig = pkgtestcases.ServiceConfig
 
 // SetupOptions contains options for profile setup
 type SetupOptions struct {

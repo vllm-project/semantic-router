@@ -168,18 +168,11 @@ func (r *Runner) runSingleTest(ctx context.Context, kubeClient *kubernetes.Clien
 	}
 
 	opts := testcases.TestCaseOptions{
-		Verbose:    r.opts.Verbose,
-		Namespace:  "default",
-		Timeout:    "5m",
-		RestConfig: r.restConfig,
-		ServiceConfig: testcases.ServiceConfig{
-			LabelSelector: svcConfig.LabelSelector,
-			Namespace:     svcConfig.Namespace,
-			Name:          svcConfig.Name,
-			ServicePort:   svcConfig.ServicePort,
-			LocalPort:     svcConfig.LocalPort,
-			PortMapping:   svcConfig.PortMapping,
-		},
+		Verbose:       r.opts.Verbose,
+		Namespace:     "default",
+		Timeout:       "5m",
+		RestConfig:    r.restConfig,
+		ServiceConfig: svcConfig,
 		SetDetails: func(details map[string]interface{}) {
 			result.Details = details
 		},
