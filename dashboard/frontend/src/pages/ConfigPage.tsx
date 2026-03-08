@@ -32,11 +32,7 @@ import {
   DecisionConfig,
   DecisionFormState,
   formatThreshold,
-  ModelConfigEntry,
-  NormalizedModel,
-  normalizeEndpoint,
-  normalizeEndpointProtocol,
-  normalizeEndpoints,
+  ModelConfigEntry, NormalizedModel, normalizeEndpoint, normalizeEndpoints,
   ReasoningFamily,
   SignalType,
   TABLE_COLUMN_WIDTH,
@@ -2319,32 +2315,29 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
               </tr>
             </thead>
             <tbody>
-              {model.endpoints.map((ep, idx) => {
-                const protocol = normalizeEndpointProtocol(ep.protocol)
-                return (
-                  <tr key={idx} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                    <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem', fontWeight: 500 }}>{ep.name}</td>
-                    <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem', fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)' }}>
-                      {isReadonly ? '************' : (ep.endpoint || 'N/A')}
-                    </td>
-                    <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
-                      <span style={{
-                        padding: '0.25rem 0.5rem',
-                        background: protocol === 'https' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
-                        borderRadius: '4px',
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        textTransform: 'uppercase'
-                      }}>
-                        {protocol}
-                      </span>
-                    </td>
-                    <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', fontSize: '0.875rem', fontFamily: 'var(--font-mono)' }}>
-                      {ep.weight}
-                    </td>
-                  </tr>
-                )
-              })}
+              {model.endpoints.map((ep, idx) => (
+                <tr key={idx} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                  <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem', fontWeight: 500 }}>{ep.name}</td>
+                  <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem', fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)' }}>
+                    {isReadonly ? '************' : (ep.endpoint || 'N/A')}
+                  </td>
+                  <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
+                    <span style={{
+                      padding: '0.25rem 0.5rem',
+                      background: ep.protocol === 'https' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
+                      borderRadius: '4px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      textTransform: 'uppercase'
+                    }}>
+                      {ep.protocol}
+                    </span>
+                  </td>
+                  <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', fontSize: '0.875rem', fontFamily: 'var(--font-mono)' }}>
+                    {ep.weight}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -2373,8 +2366,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
               value: (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   {model.endpoints.map((ep, i) => {
-                    const protocol = normalizeEndpointProtocol(ep.protocol)
-                    const isHttps = protocol === 'https'
+                    const isHttps = ep.protocol === 'https'
                     return (
                       <div key={i} style={{
                         border: '1px solid var(--color-border)',
@@ -2414,7 +2406,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'models' }) => 
                               background: isHttps ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
                               color: isHttps ? 'rgb(34, 197, 94)' : 'rgb(234, 179, 8)'
                             }}>
-                              {protocol.toUpperCase()}
+                              {ep.protocol.toUpperCase()}
                             </span>
                           </span>
                           <span>Weight: {ep.weight}</span>
