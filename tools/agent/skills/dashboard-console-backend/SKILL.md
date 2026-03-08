@@ -14,6 +14,7 @@ description: Dashboard backend, persistence, auth/session, and server-side conso
 
 - [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)
 - [docs/agent/tech-debt-register.md](../../../../docs/agent/tech-debt-register.md)
+- [docs/agent/tech-debt/README.md](../../../../docs/agent/tech-debt/README.md)
 
 ## Standard Commands
 

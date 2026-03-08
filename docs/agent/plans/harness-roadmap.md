@@ -94,12 +94,13 @@ This document is the first canonical execution plan for the repository's agent h
 
 - Start from the highest-priority open task in this file.
 - After each completed task, update this file before moving to the next one.
-- If a durable architectural gap remains after a loop step, also update `docs/agent/tech-debt-register.md`.
+- If a durable architectural gap remains after a loop step, also update the matching indexed debt entry under `docs/agent/tech-debt/`.
 - If the loop makes a durable governance decision, also update `docs/agent/adr/`.
 
 ## Follow-up Debt / ADR Links
 
 - [../tech-debt-register.md](../tech-debt-register.md)
+- [../tech-debt/README.md](../tech-debt/README.md)
 - [../adr/README.md](../adr/README.md)
 
 ## Current Loop Tasks

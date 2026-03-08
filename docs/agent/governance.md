@@ -25,7 +25,8 @@ This document defines how the repository's agent rules are layered and maintaine
 - Put durable prose guidance in `docs/agent/*`.
 - Put important repeated rules into executable checks when possible.
 - If prose and executable rules disagree, fix them in the same change.
-- If desired architecture and current implementation still diverge after a change, record that gap in [tech-debt-register.md](tech-debt-register.md) instead of leaving it only in PR text or chat.
+- Record durable unresolved gaps in the debt entry files indexed from [tech-debt/README.md](tech-debt/README.md), and keep [tech-debt-register.md](tech-debt-register.md) as the landing page for that workflow.
+- If desired architecture and current implementation still diverge after a change, promote that gap there instead of leaving it only in PR text or chat.
 - Record long-horizon loop execution in [plans/README.md](plans/README.md) and the plan files it indexes.
 - Record durable harness decisions in [adr/README.md](adr/README.md) and the ADR files it indexes.
 - Do not use ADRs for temporary execution plans, one-off migrations, or debt items that have not yet reached a durable decision.
@@ -47,7 +48,8 @@ These can exist as PR descriptions, issue notes, or temporary working docs, but 
 - Keep `AGENTS.md` short enough to be a navigation entrypoint instead of a handbook.
 - When a repeated failure mode appears, prefer adding a script, Make target, or CI check over adding more prose.
 - When a document stops being durable shared guidance, remove it from the canonical layer.
-- When a code/spec mismatch is real but not fixed yet, treat it as tracked technical debt and update the debt register in the same change that documents the gap.
+- Keep technical debt discoverable through the landing page and the indexed `docs/agent/tech-debt/*.md` entry files.
+- When a code/spec mismatch is real but not fixed yet, treat it as tracked technical debt and update the matching debt entry in the same change that documents the gap.
 - Keep execution plans task-focused and resumable instead of turning them into a second architecture handbook.
 - Keep ADRs small, decision-focused, and indexed from `docs/agent/adr/README.md` instead of turning them into implementation handbooks.
 

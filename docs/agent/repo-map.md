@@ -66,6 +66,7 @@
 - [AGENTS.md](../../AGENTS.md)
 - [docs/agent/governance.md](governance.md)
 - [docs/agent/tech-debt-register.md](tech-debt-register.md)
+- [docs/agent/tech-debt/README.md](tech-debt/README.md)
 - [docs/agent/change-surfaces.md](change-surfaces.md)
 - [docs/agent/environments.md](environments.md)
 - [docs/agent/feature-complete-checklist.md](feature-complete-checklist.md)

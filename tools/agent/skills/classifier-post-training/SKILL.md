@@ -15,6 +15,7 @@ description: Use when changing model-classifier fine-tuning, post-training data 
 
 - [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)
 - [docs/agent/tech-debt-register.md](../../../../docs/agent/tech-debt-register.md)
+- [docs/agent/tech-debt/README.md](../../../../docs/agent/tech-debt/README.md)
 - [src/training/model_classifier/README.md](../../../../src/training/model_classifier/README.md)
 
 ## Standard Commands
@@ -25,4 +26,4 @@ description: Use when changing model-classifier fine-tuning, post-training data 
 ## Acceptance
 
 - Training workflow changes keep scripts, docs, and artifact expectations aligned
-- Runtime-facing artifact contract changes are either updated in code or recorded as tracked debt
+- Runtime-facing artifact contract changes are either updated in code or recorded as tracked debt through the matching indexed debt entry

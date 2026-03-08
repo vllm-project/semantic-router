@@ -37,8 +37,8 @@ Typical ADR-worthy changes:
   - record durable harness decisions
 - `docs/agent/plans/*.md`
   - record active long-horizon execution loops and current execution state
-- `docs/agent/tech-debt-register.md`
-  - records known durable gaps between the desired architecture and the current implementation
+- `docs/agent/tech-debt-register.md` and `docs/agent/tech-debt/*.md`
+  - record the landing page plus detailed entries for known durable gaps between the desired architecture and the current implementation
 - temporary execution plans
   - belong in working notes, issues, or PR descriptions until promoted into a durable canonical artifact
 
@@ -63,3 +63,4 @@ Use zero-padded numeric prefixes such as `0001-...md`, `0002-...md`.
 ## Current ADRs
 
 - [0001-harness-layering.md](0001-harness-layering.md)
+- [0002-tech-debt-index-and-entry-directory.md](0002-tech-debt-index-and-entry-directory.md)

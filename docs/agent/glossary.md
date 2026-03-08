@@ -34,7 +34,7 @@ A canonical, loop-scoped file for long-horizon execution work. Execution plans g
 
 ## Technical Debt Register
 
-The canonical record of durable gaps between the desired architecture and the current implementation when the gap is known but not yet fully retired.
+The canonical record of durable gaps between the desired architecture and the current implementation, kept as a summary register plus indexed per-item debt entry files.
 
 ## Local Rules
 

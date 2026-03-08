@@ -38,8 +38,8 @@ Typical examples:
   - track active long-horizon execution loops
 - `docs/agent/adr/*.md`
   - record durable decisions
-- `docs/agent/tech-debt-register.md`
-  - records durable unresolved gaps
+- `docs/agent/tech-debt-register.md` and `docs/agent/tech-debt/*.md`
+  - record the landing page plus detailed entries for durable unresolved gaps
 - `docs/agent/README.md`
   - indexes the canonical harness
 

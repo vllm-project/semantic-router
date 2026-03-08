@@ -12,7 +12,7 @@ FIX #xxxx (*link existing issues this PR will resolve*)
 - Environment used for local validation: `cpu-local` / `amd-local`
 - Behavior-visible change: `yes` / `no`
 - E2E added or updated:
-- Debt register:
+- Debt entry:
 
 ## Validation
 
@@ -29,7 +29,7 @@ FIX #xxxx (*link existing issues this PR will resolve*)
 - [ ] Make sure the code changes pass the [pre-commit](https://github.com/vllm-project/semantic-router/blob/main/CONTRIBUTING.md) checks.
 - [ ] Resolve and record the project-level primary skill and impacted surfaces.
 - [ ] If shared agent rules changed, update the relevant source-of-truth docs under `docs/agent/` and run `make agent-validate`.
-- [ ] If the desired architecture still diverges from the implementation after this PR, add or update the relevant item in `docs/agent/tech-debt-register.md`.
+- [ ] If the desired architecture still diverges from the implementation after this PR, add or update the relevant debt entry indexed from `docs/agent/tech-debt/README.md`.
 - [ ] Run the agent fast gate for changed files.
 - [ ] Run the agent feature gate for behavior-visible changes.
 - [ ] Sign-off your commit by using <code>-s</code> when doing <code>git commit</code>

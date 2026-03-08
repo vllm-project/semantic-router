@@ -16,6 +16,7 @@ description: Use when changing dashboard backend, console persistence, auth, or 
 
 - [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)
 - [docs/agent/tech-debt-register.md](../../../../docs/agent/tech-debt-register.md)
+- [docs/agent/tech-debt/README.md](../../../../docs/agent/tech-debt/README.md)
 - [docs/agent/feature-complete-checklist.md](../../../../docs/agent/feature-complete-checklist.md)
 
 ## Standard Commands
@@ -27,4 +28,4 @@ description: Use when changing dashboard backend, console persistence, auth, or 
 ## Acceptance
 
 - Console backend changes remain aligned with frontend callers and local smoke expectations
-- Any new auth, storage, or session behavior is documented in the canonical harness or debt register
+- Any new auth, storage, or session behavior is documented in the canonical harness or tracked through the matching indexed debt entry

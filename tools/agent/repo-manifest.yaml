@@ -117,9 +117,20 @@ docs:
   - docs/agent/plans/README.md
   - docs/agent/plans/harness-roadmap.md
   - docs/agent/tech-debt-register.md
+  - docs/agent/tech-debt/README.md
+  - docs/agent/tech-debt/TD001-config-surface-fragmentation.md
+  - docs/agent/tech-debt/TD002-config-portability-gap-local-vs-k8s.md
+  - docs/agent/tech-debt/TD003-package-topology-hotspot-layout-debt.md
+  - docs/agent/tech-debt/TD004-python-cli-kubernetes-workflow-separation.md
+  - docs/agent/tech-debt/TD005-dashboard-enterprise-console-foundations.md
+  - docs/agent/tech-debt/TD006-structural-rule-target-vs-legacy-hotspots.md
+  - docs/agent/tech-debt/TD007-e2e-integration-surfaces-split-across-frameworks.md
+  - docs/agent/tech-debt/TD008-e2e-profile-matrix-shared-router-coverage-ownership.md
+  - docs/agent/tech-debt/TD009-e2e-profile-inventory-and-documentation-drift.md
   - docs/agent/glossary.md
   - docs/agent/adr/README.md
   - docs/agent/adr/0001-harness-layering.md
+  - docs/agent/adr/0002-tech-debt-index-and-entry-directory.md
   - docs/agent/change-surfaces.md
   - docs/agent/repo-map.md
   - docs/agent/environments.md
@@ -178,7 +189,37 @@ doc_governance:
       freshness: update at the start and end of each harness refactor loop and after each completed loop task
     - path: docs/agent/tech-debt-register.md
       steward: agent-contract
-      freshness: update when durable architecture or harness debt is discovered, retired, or materially re-scoped
+      freshness: update when debt workflow or landing-page guidance changes
+    - path: docs/agent/tech-debt/README.md
+      steward: agent-contract
+      freshness: update when debt entry template or inventory changes
+    - path: docs/agent/tech-debt/TD001-config-surface-fragmentation.md
+      steward: agent-contract
+      freshness: update when the TD001 debt record changes materially
+    - path: docs/agent/tech-debt/TD002-config-portability-gap-local-vs-k8s.md
+      steward: agent-contract
+      freshness: update when the TD002 debt record changes materially
+    - path: docs/agent/tech-debt/TD003-package-topology-hotspot-layout-debt.md
+      steward: agent-contract
+      freshness: update when the TD003 debt record changes materially
+    - path: docs/agent/tech-debt/TD004-python-cli-kubernetes-workflow-separation.md
+      steward: agent-contract
+      freshness: update when the TD004 debt record changes materially
+    - path: docs/agent/tech-debt/TD005-dashboard-enterprise-console-foundations.md
+      steward: agent-contract
+      freshness: update when the TD005 debt record changes materially
+    - path: docs/agent/tech-debt/TD006-structural-rule-target-vs-legacy-hotspots.md
+      steward: agent-contract
+      freshness: update when the TD006 debt record changes materially
+    - path: docs/agent/tech-debt/TD007-e2e-integration-surfaces-split-across-frameworks.md
+      steward: agent-contract
+      freshness: update when the TD007 debt record changes materially
+    - path: docs/agent/tech-debt/TD008-e2e-profile-matrix-shared-router-coverage-ownership.md
+      steward: agent-contract
+      freshness: update when the TD008 debt record changes materially
+    - path: docs/agent/tech-debt/TD009-e2e-profile-inventory-and-documentation-drift.md
+      steward: agent-contract
+      freshness: update when the TD009 debt record changes materially
     - path: docs/agent/glossary.md
       steward: agent-contract
       freshness: update when harness terms or categories change
@@ -188,6 +229,9 @@ doc_governance:
     - path: docs/agent/adr/0001-harness-layering.md
       steward: agent-contract
       freshness: update only if the harness layering decision changes materially
+    - path: docs/agent/adr/0002-tech-debt-index-and-entry-directory.md
+      steward: agent-contract
+      freshness: update only if the tech debt documentation model changes materially
     - path: docs/agent/change-surfaces.md
       steward: agent-contract
       freshness: update when surfaces or their mappings change

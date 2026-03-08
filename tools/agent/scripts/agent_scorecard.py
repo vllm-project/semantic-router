@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from agent_models import HarnessScorecard
 from agent_support import REPO_ROOT, load_manifests
+from agent_tech_debt_support import collect_open_tech_debt_items
 from agent_validation import collect_validation_errors
 
 
@@ -46,21 +47,3 @@ def collect_open_execution_plan_tasks() -> list[str]:
             if stripped.startswith("- [ ]"):
                 tasks.append(f"{plan_path.name}: {stripped[6:].strip()}")
     return tasks
-
-
-def collect_open_tech_debt_items() -> list[str]:
-    debt_path = REPO_ROOT / "docs" / "agent" / "tech-debt-register.md"
-    if not debt_path.exists():
-        return []
-
-    items: list[str] = []
-    current_heading: str | None = None
-    for line in debt_path.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if stripped.startswith("### TD"):
-            current_heading = stripped.removeprefix("### ").strip()
-            continue
-        if current_heading and stripped.lower() == "- status: open":
-            items.append(current_heading)
-            current_heading = None
-    return items

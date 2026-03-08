@@ -44,7 +44,7 @@ Then review the code change itself for bugs, regressions, missing validation, an
   - `tools/agent/skill-registry.yaml`
 - For hotspot changes, verify the nearest local `AGENTS.md` was respected.
 - For long-horizon work, verify active loop execution lives under `docs/agent/plans/*.md` instead of ad hoc notes.
-- For durable unresolved code/spec mismatches, verify the gap is promoted to `docs/agent/tech-debt-register.md`.
+- For durable unresolved code/spec mismatches, verify the gap is promoted to an indexed debt entry under `docs/agent/tech-debt/`.
 - For durable governance or architecture decisions, verify they are recorded in `docs/agent/adr/` when needed.
 
 ## Architecture and Modularity Checks

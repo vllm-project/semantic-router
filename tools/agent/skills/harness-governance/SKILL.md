@@ -28,6 +28,7 @@ description: Human-readable docs, executable manifests, and contributor interfac
 
 - [docs/agent/governance.md](../../../../docs/agent/governance.md)
 - [docs/agent/tech-debt-register.md](../../../../docs/agent/tech-debt-register.md)
+- [docs/agent/tech-debt/README.md](../../../../docs/agent/tech-debt/README.md)
 - [tools/agent/repo-manifest.yaml](../../repo-manifest.yaml)
 - [tools/agent/task-matrix.yaml](../../task-matrix.yaml)
 
@@ -39,4 +40,4 @@ description: Human-readable docs, executable manifests, and contributor interfac
 ## Acceptance
 
 - Canonical harness docs, manifests, and contributor surfaces stay aligned and discoverable
-- Durable architecture or harness gaps are promoted into the debt register when they are not retired in the same change
+- Durable architecture or harness gaps are promoted into indexed debt entries when they are not retired in the same change

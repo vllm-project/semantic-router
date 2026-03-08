@@ -141,7 +141,7 @@ The documentation includes:
 ## Contributor Harness
 
 For repository-specific development and agent workflow rules, start with [AGENTS.md](AGENTS.md) and the indexed harness docs in [docs/agent/README.md](docs/agent/README.md).
-If the desired architecture and the current implementation still diverge after your change, record the durable gap in [docs/agent/tech-debt-register.md](docs/agent/tech-debt-register.md).
+If the desired architecture and the current implementation still diverge after your change, record the durable gap in the debt entry set indexed from [docs/agent/tech-debt/README.md](docs/agent/tech-debt/README.md).
 
 Use the shared entrypoints:
 

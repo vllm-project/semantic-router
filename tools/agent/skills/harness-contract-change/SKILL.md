@@ -32,6 +32,7 @@ description: Use when changing the repository's agent contract, docs index, mani
 - [docs/agent/governance.md](../../../../docs/agent/governance.md)
 - [docs/agent/plans/README.md](../../../../docs/agent/plans/README.md)
 - [docs/agent/tech-debt-register.md](../../../../docs/agent/tech-debt-register.md)
+- [docs/agent/tech-debt/README.md](../../../../docs/agent/tech-debt/README.md)
 
 ## Standard Commands
 
@@ -44,4 +45,4 @@ description: Use when changing the repository's agent contract, docs index, mani
 
 - Harness docs, manifests, scripts, and contributor wrappers remain aligned
 - The change improves discoverability, source-of-truth clarity, or mechanical enforcement of the harness
-- Any durable code/spec divergence discovered during the harness change is recorded in the tech-debt register instead of being left only in PR text
+- Any durable code/spec divergence discovered during the harness change is recorded in the matching indexed debt entry instead of being left only in PR text

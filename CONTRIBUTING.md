@@ -65,7 +65,7 @@ Before you begin, ensure you have the following installed:
 ### Agent Gates
 
 The repository-specific agent harness is indexed in [docs/agent/README.md](docs/agent/README.md). Treat [AGENTS.md](AGENTS.md) as the short entrypoint and `docs/agent/*` plus `tools/agent/*` as the durable source of truth.
-If a real architecture or code/spec gap remains after your change, add or update the durable item in [docs/agent/tech-debt-register.md](docs/agent/tech-debt-register.md).
+If a real architecture or code/spec gap remains after your change, add or update the durable debt entry indexed from [docs/agent/tech-debt/README.md](docs/agent/tech-debt/README.md).
 
 Read these first:
 

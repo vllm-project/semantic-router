@@ -16,6 +16,7 @@ description: Use when a config representation must stay aligned across router co
 
 - [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)
 - [docs/agent/tech-debt-register.md](../../../../docs/agent/tech-debt-register.md)
+- [docs/agent/tech-debt/README.md](../../../../docs/agent/tech-debt/README.md)
 - [docs/agent/module-boundaries.md](../../../../docs/agent/module-boundaries.md)
 
 ## Standard Commands
@@ -27,5 +28,5 @@ description: Use when a config representation must stay aligned across router co
 ## Acceptance
 
 - The same config concept is represented consistently across the touched config surfaces
-- Any intentional remaining mismatch is recorded in the tech-debt register in the same change
+- Any intentional remaining mismatch is recorded in the matching indexed debt entry in the same change
 - Platform-facing translation tests or validations are updated when behavior changes
