@@ -177,6 +177,7 @@ surfaces:
     paths:
       - README.md
       - CONTRIBUTING.md
+      - .github/copilot-instructions.md
       - .github/PULL_REQUEST_TEMPLATE.md
       - .github/ISSUE_TEMPLATE/**
     task_rules:
@@ -201,7 +202,7 @@ surfaces:
     task_rules:
       - e2e-framework
   ci_e2e:
-    description: CI fanout, change classification, and standard profile-matrix execution for the merge gate.
+    description: CI fanout, workflow-driven integration suites, and standard profile-matrix execution for the merge gate.
     paths:
       - .github/workflows/ci-changes.yml
       - .github/workflows/integration-test-k8s.yml
@@ -234,6 +235,7 @@ skills:
         - tools/agent/*.yaml
         - tools/agent/scripts/**
         - tools/make/agent.mk
+        - .github/copilot-instructions.md
         - .github/PULL_REQUEST_TEMPLATE.md
         - .github/ISSUE_TEMPLATE/**
         - .github/workflows/ci-changes.yml
