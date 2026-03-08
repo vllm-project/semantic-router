@@ -23,6 +23,7 @@ This document is the landing page for durable gaps between the repository's desi
 - Use stable IDs (`TD001`, `TD002`, ...) so PRs and follow-up work can point to the same debt item.
 - Do not duplicate per-item status, scope, or summary in this landing page.
 - Do not use this file for one-off branch tasks or temporary debugging notes.
+
 ## How to Retire Debt
 
 - Close an item only when the underlying architectural gap is materially reduced, not just renamed.
