@@ -116,6 +116,48 @@ class TestCLITopLevelCompatibility(unittest.TestCase):
         self.assertIn("prompt_guard", str(ctx.exception))
         self.assertIn("totally_unknown_field", str(ctx.exception))
 
+    def test_response_api_uses_typed_compat_path(self):
+        defaults = load_embedded_defaults()
+        config_data = _base_user_config()
+        config_data["response_api"] = {
+            **defaults["response_api"],
+            "store_backend": "redis",
+            "redis": {
+                "address": "redis.internal:6379",
+                "db": 1,
+                "key_prefix": "responses:",
+                "cluster_mode": True,
+                "cluster_addresses": [
+                    "redis-1.internal:6379",
+                    "redis-2.internal:6379",
+                ],
+                "tls_enabled": True,
+            },
+        }
+
+        user_config = _parse_config_dict(config_data)
+        compat_blocks = get_typed_compat_blocks(user_config)
+
+        self.assertIsNotNone(compat_blocks.response_api)
+        self.assertEqual(
+            config_data["response_api"],
+            compat_blocks.response_api.model_dump(exclude_none=True),
+        )
+        self.assertNotIn("response_api", getattr(user_config, "model_extra", {}) or {})
+
+        merged = merge_configs(user_config, defaults)
+        self.assertEqual(config_data["response_api"], merged["response_api"])
+
+    def test_parse_rejects_unknown_response_api_field(self):
+        config_data = _base_user_config()
+        config_data["response_api"] = {"enabled": True, "totally_unknown_field": True}
+
+        with self.assertRaises(ConfigParseError) as ctx:
+            _parse_config_dict(config_data)
+
+        self.assertIn("response_api", str(ctx.exception))
+        self.assertIn("totally_unknown_field", str(ctx.exception))
+
     def test_looper_uses_typed_compat_path(self):
         defaults = load_embedded_defaults()
         config_data = _base_user_config()

@@ -206,6 +206,54 @@ class RouterReplayCompatConfig(BaseModel):
     milvus: RouterReplayMilvusCompatConfig | None = None
 
 
+class ResponseAPIMilvusCompatConfig(BaseModel):
+    """Typed schema for response_api.milvus."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    address: str | None = None
+    database: str | None = None
+    collection: str | None = None
+
+
+class ResponseAPIRedisCompatConfig(BaseModel):
+    """Typed schema for response_api.redis."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    address: str | None = None
+    password: str | None = None
+    db: int | None = None
+    key_prefix: str | None = None
+    cluster_mode: bool | None = None
+    cluster_addresses: list[str] | None = None
+    pool_size: int | None = None
+    min_idle_conns: int | None = None
+    max_retries: int | None = None
+    dial_timeout: int | None = None
+    read_timeout: int | None = None
+    write_timeout: int | None = None
+    tls_enabled: bool | None = None
+    tls_cert_path: str | None = None
+    tls_key_path: str | None = None
+    tls_ca_path: str | None = None
+    config_path: str | None = None
+
+
+class ResponseAPICompatConfig(BaseModel):
+    """Explicit response_api schema while the wider CLI contract still migrates."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool | None = None
+    store_backend: str | None = None
+    ttl_seconds: int | None = None
+    max_responses: int | None = None
+    backend_config_path: str | None = None
+    milvus: ResponseAPIMilvusCompatConfig | None = None
+    redis: ResponseAPIRedisCompatConfig | None = None
+
+
 class TypedCompatBlocks(BaseModel):
     """Explicitly parsed compatibility blocks that no longer rely on model_extra."""
 
@@ -214,6 +262,7 @@ class TypedCompatBlocks(BaseModel):
     looper: LooperCompatConfig | None = None
     observability: ObservabilityCompatConfig | None = None
     prompt_guard: PromptGuardCompatConfig | None = None
+    response_api: ResponseAPICompatConfig | None = None
     router_replay: RouterReplayCompatConfig | None = None
     tools: ToolsCompatConfig | None = None
 
@@ -232,6 +281,8 @@ def extract_typed_compat_blocks(
         typed_input["observability"] = sanitized_data.pop("observability")
     if "prompt_guard" in sanitized_data:
         typed_input["prompt_guard"] = sanitized_data.pop("prompt_guard")
+    if "response_api" in sanitized_data:
+        typed_input["response_api"] = sanitized_data.pop("response_api")
     if "router_replay" in sanitized_data:
         typed_input["router_replay"] = sanitized_data.pop("router_replay")
     if "tools" in sanitized_data:

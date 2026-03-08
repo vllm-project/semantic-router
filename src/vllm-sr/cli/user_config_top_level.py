@@ -4,6 +4,7 @@ EXPLICIT_TYPED_TOP_LEVEL_KEYS = {
     "looper",
     "observability",
     "prompt_guard",
+    "response_api",
     "router_replay",
     "tools",
 }
@@ -42,7 +43,6 @@ LEGACY_RUNTIME_TOP_LEVEL_COMPATIBILITY_KEYS = {
     "provider_profiles",
     "ratelimit",
     "reasoning_families",
-    "response_api",
     "role_bindings",
     "semantic_cache",
     "streamed_body_mode",

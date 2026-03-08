@@ -219,6 +219,7 @@ This section freezes the first loop-level inventory for `L001`. It is intentiona
 - `2026-03-08`: `C004` advanced again by moving `observability` off raw CLI passthrough onto the typed compat seam, including nested metrics/tracing validation so router-owned telemetry config now bypasses `model_extra` as well.
 - `2026-03-09`: `C004` advanced again by moving `looper` off raw CLI passthrough onto the typed compat seam, preserving the existing transitional `enabled` field while explicitly validating looper runtime knobs like `model_endpoints`, retries, and gRPC sizing.
 - `2026-03-09`: `C004` advanced again by moving `router_replay` off raw CLI passthrough onto the typed compat seam, including explicit validation for backend selection and backend-specific redis/postgres/milvus storage settings.
+- `2026-03-09`: `C004` advanced again by moving `response_api` off raw CLI passthrough onto the typed compat seam, including explicit validation for redis and milvus backend settings used by the response storage path.
 - Use dual-read, single-write migration wherever compatibility is needed.
 - Keep `RouterConfig` runtime-oriented until the canonical contract and compiler path are stable.
 - Prefer generated/shared bindings where practical; if generation is deferred, keep adapters in dedicated seam modules rather than scattering translation logic back into hotspots.

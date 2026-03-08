@@ -181,6 +181,12 @@ def _merge_typed_compat_blocks(merged: dict[str, Any], user_config: UserConfig) 
         )
         log.info("  Added prompt_guard configuration")
 
+    if compat_blocks.response_api is not None:
+        merged["response_api"] = compat_blocks.response_api.model_dump(
+            exclude_none=True
+        )
+        log.info("  Added response_api configuration")
+
     if compat_blocks.router_replay is not None:
         merged["router_replay"] = compat_blocks.router_replay.model_dump(
             exclude_none=True
