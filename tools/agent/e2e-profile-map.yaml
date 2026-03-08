@@ -1,0 +1,98 @@
+version: 1
+
+default_local_profiles:
+  - ai-gateway
+
+full_ci_profiles:
+  - ai-gateway
+  - aibrix
+  - routing-strategies
+  - dynamic-config
+  - llm-d
+  - istio
+  - production-stack
+  - response-api
+  - response-api-redis
+  - response-api-redis-cluster
+  - ml-model-selection
+  - multi-endpoint
+  - authz-rbac
+  - streaming
+
+full_ci_triggers:
+  - src/semantic-router/**
+  - src/vllm-sr/**
+  - src/vllm-sr/Dockerfile*
+  - tools/make/**
+  - tools/agent/*.yaml
+  - tools/agent/scripts/**
+  - tools/make/agent.mk
+  - .github/workflows/**
+  - e2e/pkg/**
+  - e2e/cmd/**
+  - e2e/testcases/**
+  - e2e/go.mod
+  - e2e/go.sum
+  - config/testing/**
+
+profile_rules:
+  ai-gateway:
+    paths:
+      - e2e/profiles/ai-gateway/**
+      - deploy/kubernetes/ai-gateway/**
+  aibrix:
+    paths:
+      - e2e/profiles/aibrix/**
+      - deploy/kubernetes/aibrix/**
+  routing-strategies:
+    paths:
+      - e2e/profiles/routing-strategies/**
+      - deploy/kubernetes/routing-strategies/**
+  dynamic-config:
+    paths:
+      - e2e/profiles/dynamic-config/**
+  llm-d:
+    paths:
+      - e2e/profiles/llm-d/**
+      - deploy/kubernetes/llmd-base/**
+  istio:
+    paths:
+      - e2e/profiles/istio/**
+      - deploy/kubernetes/istio/**
+  production-stack:
+    paths:
+      - e2e/profiles/production-stack/**
+  response-api:
+    paths:
+      - e2e/profiles/response-api/**
+  response-api-redis:
+    paths:
+      - e2e/profiles/response-api-redis/**
+      - deploy/kubernetes/response-api/**
+  response-api-redis-cluster:
+    paths:
+      - e2e/profiles/response-api-redis-cluster/**
+      - deploy/kubernetes/response-api/redis-cluster.yaml
+  ml-model-selection:
+    paths:
+      - e2e/profiles/ml-model-selection/**
+      - src/semantic-router/pkg/modelselection/**
+      - src/training/model_selection/ml_model_selection/**
+      - ml-binding/**
+  multi-endpoint:
+    paths:
+      - e2e/profiles/multi-endpoint/**
+      - config/testing/config.multi-endpoint.yaml
+      - scripts/multi-endpoint/**
+  authz-rbac:
+    paths:
+      - e2e/profiles/authz-rbac/**
+      - config/testing/config.authz-rbac.yaml
+      - config/testing/authz-profile-*.yaml
+      - src/semantic-router/pkg/classification/authz*.go
+      - src/semantic-router/pkg/authz/**
+  streaming:
+    paths:
+      - e2e/profiles/streaming/**
+      - deploy/kubernetes/streaming/**
+      - src/semantic-router/pkg/extproc/processor_req_body_streamed*.go

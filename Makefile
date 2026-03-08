@@ -19,6 +19,7 @@ _run:
 		-f tools/make/models.mk \
 		-f tools/make/pre-commit.mk \
 		-f tools/make/docker.mk \
+		-f tools/make/agent.mk \
 		-f tools/make/dockerless.mk \
 		-f tools/make/kube.mk \
 		-f tools/make/helm.mk \

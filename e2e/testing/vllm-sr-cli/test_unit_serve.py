@@ -14,9 +14,6 @@ Signed-off-by: vLLM-SR Team
 """
 
 import os
-import subprocess
-import sys
-import time
 import unittest
 
 from cli_test_base import CLITestBase
@@ -144,7 +141,7 @@ listeners:
 
         # Run serve with --config pointing to custom path
         # Use --image-pull-policy=never to avoid pulling and fail fast if image missing
-        return_code, stdout, stderr = self.run_cli(
+        _return_code, stdout, stderr = self.run_cli(
             ["serve", "--config", config_path, "--image-pull-policy", "never"],
             timeout=30,
         )
@@ -186,12 +183,21 @@ listeners:
         # Should fail
         self.assertNotEqual(return_code, 0, "Should fail with non-existent image")
 
-        # Output should mention image not found
+        # When the daemon is reachable, serve should fail on the missing image itself.
+        # When the daemon is down, the command may fail earlier while preparing runtime
+        # resources, but it should still surface a container-runtime issue rather than a
+        # config/flag parsing error.
         output = (stdout + stderr).lower()
-        self.assertTrue(
-            "not found" in output or "never" in output or "image" in output,
-            f"Should mention image issue. Got: {output[:300]}",
-        )
+        if self.container_runtime_accessible():
+            self.assertTrue(
+                "not found" in output or "never" in output or "image" in output,
+                f"Should mention image issue. Got: {output[:300]}",
+            )
+        else:
+            self.assertTrue(
+                "daemon" in output or "docker" in output or "podman" in output,
+                f"Should mention container runtime issue. Got: {output[:300]}",
+            )
 
         self.print_test_result(True, "never policy correctly fails for missing image")
 
@@ -216,12 +222,10 @@ listeners:
 
         # Run with ifnotpresent - should not fail immediately for image reasons
         # (though may fail later for other reasons like model loading)
-        return_code, stdout, stderr = self.run_cli(
+        _, _, _ = self.run_cli(
             ["serve", "--image-pull-policy", "ifnotpresent"],
             timeout=60,
         )
-
-        output = (stdout + stderr).lower()
 
         # Document behavior
         if image_exists:
@@ -246,7 +250,7 @@ listeners:
         # Note: We can't fully test the pull behavior without network access
         # but we can verify the flag is accepted and behavior is documented
 
-        return_code, stdout, stderr = self.run_cli(
+        _, stdout, stderr = self.run_cli(
             ["serve", "--image-pull-policy", "always"],
             timeout=30,
         )
@@ -279,7 +283,7 @@ listeners:
         test_token = "hf_test_token_12345"
 
         # Run serve with HF_TOKEN - use verbose/debug to see docker command
-        return_code, stdout, stderr = self.run_cli(
+        _, stdout, stderr = self.run_cli(
             ["serve", "--image-pull-policy", "never"],
             env={"HF_TOKEN": test_token},
             timeout=30,
@@ -324,7 +328,7 @@ listeners:
         self._create_minimal_config(port=test_port)
 
         # Run serve (will likely fail due to missing image, but we can check the command built)
-        return_code, stdout, stderr = self.run_cli(
+        _, stdout, stderr = self.run_cli(
             ["serve", "--image-pull-policy", "never"],
             timeout=30,
         )
@@ -348,7 +352,7 @@ listeners:
         self._create_minimal_config()
 
         # Run serve with --readonly-dashboard flag
-        return_code, stdout, stderr = self.run_cli(
+        _, stdout, stderr = self.run_cli(
             ["serve", "--readonly-dashboard", "--image-pull-policy", "never"],
             timeout=30,
         )
@@ -369,7 +373,7 @@ listeners:
         )
 
         # Create config with identifiable content
-        config_path = self._create_minimal_config()
+        self._create_minimal_config()
 
         # The actual mount verification would require the container to start
         # This test documents expected behavior
@@ -397,7 +401,7 @@ listeners:
         )
 
         # Run serve (even if it fails, it should create the directory)
-        return_code, stdout, stderr = self.run_cli(
+        _, _, _ = self.run_cli(
             ["serve", "--image-pull-policy", "never"],
             timeout=30,
         )
