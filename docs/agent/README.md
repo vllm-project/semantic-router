@@ -71,7 +71,9 @@ This directory is the human-readable system of record for the repository's agent
 
 - [../../AGENTS.md](../../AGENTS.md)
 - [../../CONTRIBUTING.md](../../CONTRIBUTING.md)
+  - contributor workflow, validation expectations, and the `git commit -s` signoff requirement
 - [../../.github/copilot-instructions.md](../../.github/copilot-instructions.md)
 - [../../.github/PULL_REQUEST_TEMPLATE.md](../../.github/PULL_REQUEST_TEMPLATE.md)
+  - PR title classification, required change summary and validation fields, and the review checklist
 - [../../.github/ISSUE_TEMPLATE/001_feature_request.yaml](../../.github/ISSUE_TEMPLATE/001_feature_request.yaml)
 - [../../.github/ISSUE_TEMPLATE/002_bug_report.yaml](../../.github/ISSUE_TEMPLATE/002_bug_report.yaml)

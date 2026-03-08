@@ -104,6 +104,8 @@ surfaces:
       reason: Top-level contributor entrypoint that should stay aligned with the harness.
     - path: CONTRIBUTING.md
       reason: Contributor-facing wrapper around the harness workflow.
+    - path: .github/PULL_REQUEST_TEMPLATE.md
+      reason: Canonical PR title, body, checklist, and signoff expectations for contributor-facing changes.
   local_smoke:
     - path: docs/agent/environments.md
       reason: Local build, serve, and smoke behavior by environment.
