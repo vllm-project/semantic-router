@@ -1,10 +1,12 @@
 """Top-level config key policy for the transitional CLI authoring path."""
 
 EXPLICIT_TYPED_TOP_LEVEL_KEYS = {
+    "api",
     "auto_model_name",
     "authz",
     "bert_model",
     "classifier",
+    "config_source",
     "clear_route_cache",
     "feedback_detector",
     "hallucination_mitigation",
@@ -13,27 +15,29 @@ EXPLICIT_TYPED_TOP_LEVEL_KEYS = {
     "looper",
     "max_streamed_body_bytes",
     "modality_detector",
+    "mom_registry",
     "observability",
     "prompt_guard",
     "provider_profiles",
+    "default_model",
+    "default_reasoning_effort",
     "ratelimit",
+    "reasoning_families",
     "semantic_cache",
     "response_api",
     "router_replay",
+    "strategy",
     "streamed_body_mode",
     "streamed_body_timeout_sec",
     "tools",
+    "vector_store",
 }
 
 
 LEGACY_RUNTIME_TOP_LEVEL_COMPATIBILITY_KEYS = {
-    "api",
     "categories",
     "complexity_rules",
-    "config_source",
     "context_rules",
-    "default_model",
-    "default_reasoning_effort",
     "embedding_rules",
     "fact_check_rules",
     "jailbreak",
@@ -42,14 +46,10 @@ LEGACY_RUNTIME_TOP_LEVEL_COMPATIBILITY_KEYS = {
     "modality_rules",
     "model_config",
     "model_selection",
-    "mom_registry",
     "pii",
     "preference_rules",
-    "reasoning_families",
     "role_bindings",
-    "strategy",
     "user_feedback_rules",
-    "vector_store",
     "vllm_endpoints",
 }
 

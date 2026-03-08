@@ -68,6 +68,7 @@ _SIGNAL_TRANSLATIONS = (
     ("pii", "pii", translate_pii_signals, "PII signals"),
 )
 _NAMED_TYPED_COMPAT_MERGES = (
+    ("api", "api", "  Added api configuration"),
     ("authz", "authz", "  Added authz configuration"),
     ("bert_model", "bert_model", "  Added bert_model configuration"),
     ("classifier", "classifier", "  Added classifier configuration"),
@@ -104,6 +105,7 @@ _NAMED_TYPED_COMPAT_MERGES = (
     ("response_api", "response_api", "  Added response_api configuration"),
     ("router_replay", "router_replay", "  Added router_replay configuration"),
     ("tools", "tools", "  Added tools configuration"),
+    ("vector_store", "vector_store", "  Added vector_store configuration"),
 )
 
 
@@ -222,6 +224,14 @@ def _merge_typed_compat_blocks(merged: dict[str, Any], user_config: UserConfig) 
     if compat_blocks.router_options is not None:
         merged.update(dump_typed_compat_block(compat_blocks.router_options))
         log.info("  Added router option compatibility keys")
+
+    if compat_blocks.runtime_top_level is not None:
+        merged.update(dump_typed_compat_block(compat_blocks.runtime_top_level))
+        log.info("  Added runtime top-level compatibility keys")
+
+    if compat_blocks.provider_defaults is not None:
+        merged.update(dump_typed_compat_block(compat_blocks.provider_defaults))
+        log.info("  Added root provider default compatibility keys")
 
 
 def _merge_named_typed_compat_block(

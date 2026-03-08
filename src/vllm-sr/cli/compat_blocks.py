@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from cli.compat_blocks_api import APICompatConfig
 from cli.compat_blocks_backend_models import (
     ImageGenBackendsCompatConfig,
     ProviderProfilesCompatConfig,
@@ -15,10 +16,16 @@ from cli.compat_blocks_inline_models import (
     HallucinationMitigationCompatConfig,
     ModalityDetectorCompatConfig,
 )
+from cli.compat_blocks_runtime_misc import (
+    ProviderDefaultsCompatConfig,
+    RuntimeTopLevelCompatConfig,
+    VectorStoreCompatConfig,
+)
 from cli.compat_blocks_semantic_cache import SemanticCacheCompatConfig
 
 _TYPED_COMPAT_BLOCKS_ATTR = "_td001_typed_compat_blocks"
 _NAMED_TYPED_COMPAT_KEYS = (
+    "api",
     "authz",
     "bert_model",
     "classifier",
@@ -35,6 +42,7 @@ _NAMED_TYPED_COMPAT_KEYS = (
     "response_api",
     "router_replay",
     "tools",
+    "vector_store",
 )
 _ROUTER_OPTION_KEYS = (
     "auto_model_name",
@@ -43,6 +51,16 @@ _ROUTER_OPTION_KEYS = (
     "streamed_body_mode",
     "max_streamed_body_bytes",
     "streamed_body_timeout_sec",
+)
+_RUNTIME_TOP_LEVEL_KEYS = (
+    "config_source",
+    "mom_registry",
+    "strategy",
+)
+_PROVIDER_DEFAULT_KEYS = (
+    "default_model",
+    "default_reasoning_effort",
+    "reasoning_families",
 )
 
 
@@ -381,6 +399,7 @@ class TypedCompatBlocks(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    api: APICompatConfig | None = None
     authz: AuthzCompatConfig | None = None
     bert_model: BertModelCompatConfig | None = None
     classifier: ClassifierCompatConfig | None = None
@@ -391,13 +410,16 @@ class TypedCompatBlocks(BaseModel):
     modality_detector: ModalityDetectorCompatConfig | None = None
     observability: ObservabilityCompatConfig | None = None
     prompt_guard: PromptGuardCompatConfig | None = None
+    provider_defaults: ProviderDefaultsCompatConfig | None = None
     provider_profiles: ProviderProfilesCompatConfig | None = None
     ratelimit: RateLimitCompatConfig | None = None
     router_options: RouterOptionsCompatConfig | None = None
+    runtime_top_level: RuntimeTopLevelCompatConfig | None = None
     semantic_cache: SemanticCacheCompatConfig | None = None
     response_api: ResponseAPICompatConfig | None = None
     router_replay: RouterReplayCompatConfig | None = None
     tools: ToolsCompatConfig | None = None
+    vector_store: VectorStoreCompatConfig | None = None
 
 
 def _pop_present_keys(source: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
@@ -418,8 +440,14 @@ def extract_typed_compat_blocks(
     sanitized_data = dict(data)
     typed_input = _pop_present_keys(sanitized_data, _NAMED_TYPED_COMPAT_KEYS)
     router_options_input = _pop_present_keys(sanitized_data, _ROUTER_OPTION_KEYS)
+    runtime_top_level_input = _pop_present_keys(sanitized_data, _RUNTIME_TOP_LEVEL_KEYS)
+    provider_defaults_input = _pop_present_keys(sanitized_data, _PROVIDER_DEFAULT_KEYS)
     if router_options_input:
         typed_input["router_options"] = router_options_input
+    if runtime_top_level_input:
+        typed_input["runtime_top_level"] = runtime_top_level_input
+    if provider_defaults_input:
+        typed_input["provider_defaults"] = provider_defaults_input
 
     compat_blocks = TypedCompatBlocks(**typed_input)
     return sanitized_data, compat_blocks

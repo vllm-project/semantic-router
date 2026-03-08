@@ -1,9 +1,14 @@
 package config
 
 type APIConfig struct {
-	BatchClassification struct {
-		Metrics BatchClassificationMetricsConfig `yaml:"metrics,omitempty"`
-	} `yaml:"batch_classification"`
+	BatchClassification BatchClassificationConfig `yaml:"batch_classification"`
+}
+
+type BatchClassificationConfig struct {
+	MaxBatchSize         int                              `yaml:"max_batch_size,omitempty"`
+	ConcurrencyThreshold int                              `yaml:"concurrency_threshold,omitempty"`
+	MaxConcurrency       int                              `yaml:"max_concurrency,omitempty"`
+	Metrics              BatchClassificationMetricsConfig `yaml:"metrics,omitempty"`
 }
 
 type ObservabilityConfig struct {
