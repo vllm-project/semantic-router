@@ -147,6 +147,76 @@ This document tracks durable gaps between the repository's desired architecture 
 - Exit criteria:
   - The highest-risk files no longer need special ratchet treatment to stay within the intended modularity envelope.
 
+### TD007 End-to-End and Integration Test Surfaces Are Split Across Parallel Frameworks
+
+- Status: open
+- Scope: test architecture and harness coverage
+- Evidence:
+  - [docs/agent/testing-strategy.md](testing-strategy.md)
+  - [docs/agent/playbooks/e2e-selection.md](playbooks/e2e-selection.md)
+  - [tools/agent/task-matrix.yaml](../../tools/agent/task-matrix.yaml)
+  - [tools/agent/e2e-profile-map.yaml](../../tools/agent/e2e-profile-map.yaml)
+  - [e2e/cmd/e2e/main.go](../../e2e/cmd/e2e/main.go)
+  - [e2e/testing/run_all_tests.py](../../e2e/testing/run_all_tests.py)
+  - [.github/workflows/integration-test-memory.yml](../../.github/workflows/integration-test-memory.yml)
+  - [.github/workflows/integration-test-vllm-sr-cli.yml](../../.github/workflows/integration-test-vllm-sr-cli.yml)
+- Why it matters:
+  - The repository currently maintains multiple durable integration and E2E entrypoints: the Go profile-based harness under `e2e/`, standalone Python suites under `e2e/testing/`, and workflow-driven integration coverage outside the harness selection path.
+  - The testing docs tell contributors to use `task-matrix.yaml` and `e2e-profile-map.yaml` as the selection contract, but those files do not model the full set of workflow-driven integration suites.
+  - This makes it unclear which suite is canonical for a given behavior change, weakens affected-test selection, and allows some integration or E2E changes to sit outside the normal harness validation story.
+- Desired end state:
+  - One explicit repository-wide taxonomy for unit, integration, local E2E, and CI-only system tests.
+  - Every durable integration or E2E suite is either represented in the harness selection rules or intentionally declared as an exception with documented ownership and invocation.
+- Exit criteria:
+  - A contributor can change any integration or E2E file and get a deterministic `agent-report` result with named validation commands and affected suites.
+  - Workflow-only suites are either absorbed into the canonical harness or documented as bounded exceptions instead of parallel hidden paths.
+
+### TD008 E2E Profile Matrix Repeats Shared Router Testcases Without Clear Coverage Ownership
+
+- Status: open
+- Scope: test matrix efficiency and coverage design
+- Evidence:
+  - [e2e/README.md](../../e2e/README.md)
+  - [e2e/profiles/ai-gateway/profile.go](../../e2e/profiles/ai-gateway/profile.go)
+  - [e2e/profiles/dynamic-config/profile.go](../../e2e/profiles/dynamic-config/profile.go)
+  - [e2e/profiles/istio/profile.go](../../e2e/profiles/istio/profile.go)
+  - [e2e/profiles/llm-d/profile.go](../../e2e/profiles/llm-d/profile.go)
+  - [e2e/profiles/production-stack/profile.go](../../e2e/profiles/production-stack/profile.go)
+  - [e2e/testing/vllm-sr-cli/test_integration.py](../../e2e/testing/vllm-sr-cli/test_integration.py)
+- Why it matters:
+  - Many heavy profiles rerun the same shared router assertions. Today `chat-completions-request` is wired into nine profiles, the two chat stress cases into six profiles, and `domain-classify` into six profiles.
+  - Some profiles explicitly reuse shared router cases rather than asserting profile-specific semantics. `llm-d`, for example, currently reuses shared router testcases and expects llm-d-specific HA or traffic behavior to be covered elsewhere.
+  - The CLI integration suite shows the same pattern at a smaller scale: several methods each repeat the full `vllm-sr serve` startup path instead of separating common setup cost from distinct contract checks.
+  - Without a durable coverage ownership map, expensive environments spend time re-verifying baseline behavior while unique environment contracts remain under-specified.
+- Desired end state:
+  - A coverage matrix that distinguishes baseline router smoke, cross-profile contract tests, and environment-specific assertions.
+  - Shared behaviors run in one small baseline path or a parameterized matrix, while expensive profiles focus on the semantics that only they can validate.
+- Exit criteria:
+  - Each profile's `GetTestCases()` list is explainable in terms of unique contract coverage rather than inherited habit.
+  - Repeated shared testcases are reduced to a deliberate smoke subset or a single parameterized multi-profile matrix with clear purpose.
+  - Environment-specific profiles add assertions for their own semantics instead of mostly replaying generic router cases.
+
+### TD009 E2E Profile Inventory, Naming, and Documentation Have Drifted Out of Sync
+
+- Status: open
+- Scope: test discoverability and profile inventory
+- Evidence:
+  - [e2e/README.md](../../e2e/README.md)
+  - [e2e/cmd/e2e/main.go](../../e2e/cmd/e2e/main.go)
+  - [tools/agent/e2e-profile-map.yaml](../../tools/agent/e2e-profile-map.yaml)
+  - [e2e/profiles/response-api/profile.go](../../e2e/profiles/response-api/profile.go)
+  - [e2e/profiles/responseapi/redis_profile.go](../../e2e/profiles/responseapi/redis_profile.go)
+- Why it matters:
+  - The documented supported profile list in `e2e/README.md` does not match the actual runner inventory in `e2e/cmd/e2e/main.go`, and the harness profile map has a different set again.
+  - The same surface uses mixed naming conventions such as `response-api` for a public profile directory and `responseapi` for shared helper code, while some profiles are present in the runner but absent from the harness map.
+  - Inventory drift makes it harder to discover supported profiles, reason about affected coverage, and reliably wire new profiles into docs, CI, and agent selection.
+- Desired end state:
+  - One authoritative inventory of supported profiles, their ownership, and their classification in local versus CI coverage.
+  - Naming between profile directories, helper packages, docs, and harness manifests follows a consistent convention.
+- Exit criteria:
+  - `e2e/README.md`, `e2e/cmd/e2e/main.go`, and `tools/agent/e2e-profile-map.yaml` stay synchronized for the active profile set.
+  - Profile additions or removals can be mechanically validated against the canonical inventory.
+
 ## How to Retire Debt
 
 - Close an item only when the underlying architectural gap is materially reduced, not just renamed.
