@@ -6,6 +6,11 @@ from cli.commands import runtime as runtime_commands
 from cli.main import main
 from click.testing import CliRunner
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+AUTHORING_FIXTURE = (
+    REPO_ROOT / "config" / "testing" / "td001-first-slice-authoring.yaml"
+)
+
 
 def test_cli_help_lists_registered_commands():
     runner = CliRunner()
@@ -102,3 +107,17 @@ def test_serve_uses_algorithm_translated_config(monkeypatch, tmp_path: Path):
         translated = yaml.safe_load(handle)
     assert translated["decisions"][0]["algorithm"]["type"] == "elo"
     assert captured["pull_policy"] == "never"
+
+
+def test_config_authoring_outputs_shared_first_slice_fixture():
+    runner = CliRunner()
+
+    result = runner.invoke(
+        main,
+        ["config", "authoring", "--config", str(AUTHORING_FIXTURE)],
+    )
+
+    assert result.exit_code == 0
+    assert yaml.safe_load(result.output) == yaml.safe_load(
+        AUTHORING_FIXTURE.read_text()
+    )

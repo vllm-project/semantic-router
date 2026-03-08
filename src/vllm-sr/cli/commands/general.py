@@ -35,7 +35,7 @@ def init(force: bool) -> None:
 
 
 @click.command()
-@click.argument("config_type", type=click.Choice(["envoy", "router"]))
+@click.argument("config_type", type=click.Choice(["envoy", "router", "authoring"]))
 @click.option(
     "--config",
     default="config.yaml",
@@ -49,6 +49,7 @@ def config(config_type: str, config: str) -> None:
     Examples:
         vllm-sr config envoy
         vllm-sr config router
+        vllm-sr config authoring
         vllm-sr config envoy --config my-config.yaml
     """
     config_command(config_type, config)

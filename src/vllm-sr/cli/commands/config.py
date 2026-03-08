@@ -1,19 +1,22 @@
 """Config command implementation."""
 
 import sys
-import yaml
+import tempfile
 from pathlib import Path
 
-from cli.parser import parse_user_config, ConfigParseError
-from cli.defaults import load_embedded_defaults, load_defaults
-from cli.merger import merge_configs
-from cli.validator import (
-    validate_user_config,
-    validate_merged_config,
-    print_validation_errors,
-)
+import yaml
+
+from cli.authoring_projection import build_first_slice_authoring_config
 from cli.config_generator import generate_envoy_config_from_user_config
+from cli.defaults import load_defaults
+from cli.merger import merge_configs
+from cli.parser import ConfigParseError, parse_user_config
 from cli.utils import getLogger
+from cli.validator import (
+    print_validation_errors,
+    validate_merged_config,
+    validate_user_config,
+)
 
 log = getLogger(__name__)
 
@@ -23,12 +26,12 @@ def config_command(config_type: str, config_path: str = "config.yaml"):
     Print generated configuration.
 
     Args:
-        config_type: Type of config to print ('envoy' or 'router')
+        config_type: Type of config to print ('envoy', 'router', or 'authoring')
         config_path: Path to user config.yaml (default: config.yaml)
     """
-    if config_type not in ["envoy", "router"]:
+    if config_type not in ["envoy", "router", "authoring"]:
         log.error(f"Invalid config type: {config_type}")
-        log.error("Must be 'envoy' or 'router'")
+        log.error("Must be 'envoy', 'router', or 'authoring'")
         sys.exit(1)
 
     # Check if config file exists
@@ -56,7 +59,11 @@ def config_command(config_type: str, config_path: str = "config.yaml"):
         print_validation_errors(errors)
         sys.exit(1)
 
-    if config_type == "router":
+    if config_type == "authoring":
+        authoring_config = build_first_slice_authoring_config(user_config)
+        print(yaml.dump(authoring_config, default_flow_style=False, sort_keys=False))
+
+    elif config_type == "router":
         # Generate router config (use local defaults if available)
         defaults = load_defaults(".vllm-sr")
         merged = merge_configs(user_config, defaults)
@@ -74,9 +81,6 @@ def config_command(config_type: str, config_path: str = "config.yaml"):
     elif config_type == "envoy":
         # Generate envoy config
         try:
-            # Generate to a temporary string
-            import tempfile
-
             with tempfile.NamedTemporaryFile(
                 mode="w", suffix=".yaml", delete=False
             ) as f:
@@ -85,7 +89,7 @@ def config_command(config_type: str, config_path: str = "config.yaml"):
             generate_envoy_config_from_user_config(user_config, temp_path)
 
             # Read and print
-            with open(temp_path, "r") as f:
+            with open(temp_path) as f:
                 print(f.read())
 
             # Clean up

@@ -12,6 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(CLI_ROOT) not in sys.path:
     sys.path.insert(0, str(CLI_ROOT))
 
+from cli.authoring_projection import build_first_slice_authoring_config
 from cli.defaults import load_embedded_defaults
 from cli.merger import merge_configs
 from cli.parser import parse_user_config
@@ -104,6 +105,15 @@ def _extract_runtime_slice(merged):
 
 class TestTD001ContractMatrix(unittest.TestCase):
     maxDiff = None
+
+    def test_cli_projects_shared_first_slice_authoring_fixture(self):
+        user_config = parse_user_config(str(AUTHORING_FIXTURE))
+
+        self.assertEqual([], validate_user_config(user_config))
+        self.assertEqual(
+            _load_yaml(AUTHORING_FIXTURE),
+            build_first_slice_authoring_config(user_config),
+        )
 
     def test_cli_merge_matches_shared_first_slice_runtime_fixture(self):
         user_config = parse_user_config(str(AUTHORING_FIXTURE))
