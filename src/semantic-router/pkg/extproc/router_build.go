@@ -35,6 +35,7 @@ type routerComponents struct {
 	memoryExtractor      *memory.MemoryExtractor
 	credentialResolver   *authz.CredentialResolver
 	rateLimiter          *ratelimit.RateLimitResolver
+	stopPruneSweep       func()
 }
 
 // NewOpenAIRouter creates a new OpenAI API router instance.
@@ -104,6 +105,13 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 	credentialResolver := buildCredentialResolver(cfg)
 	rateLimiter := buildRateLimitResolver(cfg)
 
+	// Start background prune sweep if memory store is available and configured
+	var stopPruneSweep func()
+	if memoryStore != nil && cfg.Memory.QualityScoring.PruneSweepEnabled && cfg.Memory.QualityScoring.PruneInterval != "" {
+		stopPruneSweep = memory.StartPruneSweep(cfg.Memory.QualityScoring, memoryStore)
+		logging.Infof("Memory prune sweep enabled (interval=%s)", cfg.Memory.QualityScoring.PruneInterval)
+	}
+
 	if credentialResolver != nil {
 		logging.Infof("Credential resolver initialized with providers: %v", credentialResolver.ProviderNames())
 	}
@@ -125,6 +133,7 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		memoryExtractor:      memoryExtractor,
 		credentialResolver:   credentialResolver,
 		rateLimiter:          rateLimiter,
+		stopPruneSweep:       stopPruneSweep,
 	}, nil
 }
 
@@ -143,5 +152,6 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		MemoryExtractor:      components.memoryExtractor,
 		CredentialResolver:   components.credentialResolver,
 		RateLimiter:          components.rateLimiter,
+		StopPruneSweep:       components.stopPruneSweep,
 	}
 }
