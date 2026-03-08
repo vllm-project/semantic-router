@@ -1,30 +1,15 @@
 ---
 name: dashboard-surface-change
 category: primary
-description: Use when changing dashboard config, topology, or playground surfaces that reflect router behavior.
+description: Use when changing frontend dashboard config, topology, or playground surfaces that reflect router behavior.
 ---
 
 # Dashboard Surface Change
 
 ## Trigger
 
-- Change config editing UI, topology visualization, or playground reveal/display
+- Change config editing UI, topology visualization, or playground reveal or display
 - Change frontend handling of routing metadata or router-backed config
-
-## Required Surfaces
-
-- `dashboard_config_ui`
-
-## Conditional Surfaces
-
-- `topology_visualization`
-- `playground_reveal`
-- `response_headers`
-- `docs_examples`
-
-## Stop Conditions
-
-- The dashboard change depends on a backend/router contract that is not yet defined
 
 ## Must Read
 
@@ -38,5 +23,5 @@ description: Use when changing dashboard config, topology, or playground surface
 
 ## Acceptance
 
-- Dashboard surfaces remain aligned with router/CLI contracts
+- Frontend dashboard surfaces remain aligned with router and CLI contracts
 - User-visible routing metadata stays consistent across config, topology, and playground

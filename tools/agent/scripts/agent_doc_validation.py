@@ -45,7 +45,6 @@ REQUIRED_DOC_SECTIONS = {
         "## Primary Skills",
         "## Fragment Skills",
         "## Support Skills",
-        "## Legacy Reference Skills",
         "## Source of Truth",
     ],
     "docs/agent/adr/README.md": [

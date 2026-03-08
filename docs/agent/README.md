@@ -43,7 +43,7 @@ This directory is the human-readable system of record for the repository's agent
 ## Task-Specific Guidance
 
 - [skill-catalog.md](skill-catalog.md)
-  - human-readable index of primary, fragment, support, and legacy-reference skills
+  - human-readable index of primary, fragment, and support skills
 - [playbooks/go-router.md](playbooks/go-router.md)
 - [playbooks/rust-bindings.md](playbooks/rust-bindings.md)
 - [playbooks/vllm-sr-cli-docker.md](playbooks/vllm-sr-cli-docker.md)

@@ -1,7 +1,7 @@
 ---
 name: header-contract-change
 category: primary
-description: Use when adding or changing x-vsr request/response headers and the downstream UI/display contract.
+description: Use when adding or changing request or response header contracts and the downstream user-visible reveal or display path.
 ---
 
 # Header Contract Change
@@ -10,23 +10,7 @@ description: Use when adding or changing x-vsr request/response headers and the 
 
 - Add a new `x-vsr-*` header
 - Rename, remove, or change the meaning of an existing router header
-- Change how dashboard/playground reveals routing metadata
-
-## Required Surfaces
-
-- `response_headers`
-
-## Conditional Surfaces
-
-- `dashboard_config_ui`
-- `playground_reveal`
-- `topology_visualization`
-- `local_e2e`
-- `ci_e2e`
-
-## Stop Conditions
-
-- The header semantics are not stable enough to expose to users
+- Change how dashboard or playground surfaces reveal routing metadata
 
 ## Must Read
 

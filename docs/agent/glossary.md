@@ -20,13 +20,9 @@ A narrower skill that supports a primary skill with subsystem-specific implement
 
 A skill that does not drive task selection but provides close-out or cross-cutting guidance.
 
-## Legacy Reference Skill
-
-A compatibility bridge retained to help contributors migrate from older task-entry habits to the project-level skill model.
-
 ## Change Surface
 
-A stable project-level contract area such as `router_runtime`, `python_cli_schema`, or `harness_exec`. Surfaces connect changed paths, skills, and validation expectations.
+A stable project-level contract area such as `signal_runtime`, `python_cli_runtime`, or `harness_exec`. Surfaces connect changed paths, skills, and validation expectations.
 
 ## Local Rules
 

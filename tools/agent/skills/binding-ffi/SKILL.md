@@ -16,7 +16,7 @@ description: Native bindings and FFI layers used by router-side classifiers or s
 
 ## Conditional Surfaces
 
-- `router_runtime`
+- `signal_runtime`
 - `local_e2e`
 
 ## Stop Conditions

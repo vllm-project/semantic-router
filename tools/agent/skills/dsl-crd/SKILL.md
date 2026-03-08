@@ -1,27 +1,14 @@
 ---
 name: dsl-crd
 category: fragment
-description: DSL, CRD, and Kubernetes translation details for router config changes.
+description: DSL and Kubernetes translation details between router config and platform-facing forms.
 ---
 
 # DSL CRD
 
 ## Trigger
 
-- The primary skill touches DSL emission/parsing or Kubernetes route conversion
-
-## Required Surfaces
-
-- `dsl_crd`
-
-## Conditional Surfaces
-
-- `router_config_contract`
-- `docs_examples`
-
-## Stop Conditions
-
-- DSL/CRD compatibility policy for the new behavior is unclear
+- The primary skill touches DSL emission/parsing or router-to-Kubernetes translation
 
 ## Must Read
 
@@ -34,4 +21,4 @@ description: DSL, CRD, and Kubernetes translation details for router config chan
 
 ## Acceptance
 
-- DSL/CRD translations remain aligned with the router config contract
+- DSL and Kubernetes translation layers remain aligned with the router config contract

@@ -231,23 +231,32 @@ skills:
   - tools/agent/skills/signal-end-to-end/SKILL.md
   - tools/agent/skills/plugin-end-to-end/SKILL.md
   - tools/agent/skills/header-contract-change/SKILL.md
-  - tools/agent/skills/config-schema-evolution/SKILL.md
-  - tools/agent/skills/routing-decision-change/SKILL.md
+  - tools/agent/skills/config-platform-change/SKILL.md
+  - tools/agent/skills/decision-logic-change/SKILL.md
+  - tools/agent/skills/algorithm-selection-change/SKILL.md
   - tools/agent/skills/startup-chain-change/SKILL.md
   - tools/agent/skills/dashboard-surface-change/SKILL.md
+  - tools/agent/skills/dashboard-console-platform-change/SKILL.md
+  - tools/agent/skills/k8s-operator-change/SKILL.md
+  - tools/agent/skills/classifier-post-training/SKILL.md
   - tools/agent/skills/cross-stack-bugfix/SKILL.md
-  - tools/agent/skills/router-runtime/SKILL.md
-  - tools/agent/skills/python-cli-schema/SKILL.md
-  - tools/agent/skills/binding-ffi/SKILL.md
-  - tools/agent/skills/dashboard-config-ui/SKILL.md
-  - tools/agent/skills/topology-playground/SKILL.md
-  - tools/agent/skills/dsl-crd/SKILL.md
-  - tools/agent/skills/e2e-selection/SKILL.md
   - tools/agent/skills/harness-governance/SKILL.md
+  - tools/agent/skills/signal-runtime/SKILL.md
+  - tools/agent/skills/decision-logic/SKILL.md
+  - tools/agent/skills/algorithm-selection/SKILL.md
+  - tools/agent/skills/plugin-runtime/SKILL.md
+  - tools/agent/skills/binding-ffi/SKILL.md
+  - tools/agent/skills/python-cli-schema/SKILL.md
+  - tools/agent/skills/python-cli-runtime/SKILL.md
+  - tools/agent/skills/dashboard-config-ui/SKILL.md
+  - tools/agent/skills/dashboard-console-backend/SKILL.md
+  - tools/agent/skills/topology-visualization/SKILL.md
+  - tools/agent/skills/playground-reveal/SKILL.md
+  - tools/agent/skills/dsl-crd/SKILL.md
+  - tools/agent/skills/k8s-operator/SKILL.md
+  - tools/agent/skills/training-model-classifier/SKILL.md
+  - tools/agent/skills/e2e-selection/SKILL.md
   - tools/agent/skills/local-dev-cpu/SKILL.md
   - tools/agent/skills/local-dev-amd/SKILL.md
   - tools/agent/skills/feature-complete-checklist/SKILL.md
-  - tools/agent/skills/go-router-change/SKILL.md
-  - tools/agent/skills/vllm-sr-cli-docker-change/SKILL.md
-  - tools/agent/skills/e2e-profile-selection/SKILL.md
   - tools/agent/skills/architecture-guardrails/SKILL.md

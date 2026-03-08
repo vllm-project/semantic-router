@@ -94,6 +94,26 @@ rules:
       - make build-e2e
     feature_tests: []
     requires_local_smoke: false
+  - name: operator-stack
+    doc_only: false
+    paths:
+      - deploy/operator/**
+      - deploy/kubernetes/crds/**
+      - src/semantic-router/pkg/apis/**
+    fast_tests:
+      - make generate-crd
+    feature_tests: []
+    requires_local_smoke: false
+  - name: training-stack
+    doc_only: false
+    paths:
+      - src/training/**
+      - tools/make/models.mk
+      - scripts/train-mmbert32k-gpu.sh
+      - website/docs/training/**
+    fast_tests: []
+    feature_tests: []
+    requires_local_smoke: false
   - name: make-and-ci
     doc_only: false
     paths:

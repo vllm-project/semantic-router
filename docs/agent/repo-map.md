@@ -10,6 +10,10 @@
   - Rust-backed inference and ML bindings used by the router
 - `dashboard/`
   - Dashboard frontend and backend
+- `deploy/operator/`
+  - Kubernetes operator, CRD schema, and controller-facing deployment contract
+- `src/training/`
+  - classifier/post-training scripts, training utilities, and evaluation-oriented model workflows
 - `e2e/`
   - kind/Kubernetes E2E framework and profile matrix
 - `tools/make/`

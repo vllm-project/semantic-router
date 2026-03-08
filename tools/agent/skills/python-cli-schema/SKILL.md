@@ -10,19 +10,6 @@ description: Python CLI schema, parser, validator, merger, and config-translatio
 
 - The primary skill touches `src/vllm-sr/cli` schema or translation code
 
-## Required Surfaces
-
-- `python_cli_schema`
-
-## Conditional Surfaces
-
-- `router_config_contract`
-- `local_smoke`
-
-## Stop Conditions
-
-- CLI semantics diverge from router config semantics and compatibility is unclear
-
 ## Must Read
 
 - [docs/agent/playbooks/vllm-sr-cli-docker.md](../../../../docs/agent/playbooks/vllm-sr-cli-docker.md)
@@ -34,4 +21,4 @@ description: Python CLI schema, parser, validator, merger, and config-translatio
 
 ## Acceptance
 
-- CLI schema, parser, validator, and merger express the same contract
+- CLI schema, parser, validator, and merger express the same contract as the router config they translate
