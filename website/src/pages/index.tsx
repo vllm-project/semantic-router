@@ -22,6 +22,78 @@ const ROTATING_WORDS = [
   translate({ id: 'homepage.hero.rotating.skills', message: 'Skills' }),
 ]
 
+const DOC_PATHS = [
+  {
+    eyebrow: translate({ id: 'homepage.docsPaths.local.eyebrow', message: 'Local CLI' }),
+    title: translate({ id: 'homepage.docsPaths.local.title', message: 'Start locally' }),
+    description: translate({
+      id: 'homepage.docsPaths.local.description',
+      message: 'Bootstrap the dashboard-first local flow, then configure routing with the CLI contract.',
+    }),
+    to: '/docs/installation',
+  },
+  {
+    eyebrow: translate({
+      id: 'homepage.docsPaths.deploy.eyebrow',
+      message: 'Platform deployment',
+    }),
+    title: translate({
+      id: 'homepage.docsPaths.deploy.title',
+      message: 'Deploy and integrate',
+    }),
+    description: translate({
+      id: 'homepage.docsPaths.deploy.description',
+      message: 'Use operator, gateway, and framework guides when you need a cluster-facing setup.',
+    }),
+    to: '/docs/installation/k8s/operator',
+  },
+  {
+    eyebrow: translate({
+      id: 'homepage.docsPaths.capabilities.eyebrow',
+      message: 'Capabilities',
+    }),
+    title: translate({
+      id: 'homepage.docsPaths.capabilities.title',
+      message: 'Implement features',
+    }),
+    description: translate({
+      id: 'homepage.docsPaths.capabilities.description',
+      message: 'Build routing, cache, safety, response-api, and model-selection behavior from task-oriented tutorials.',
+    }),
+    to: '/docs/tutorials/intelligent-route/keyword-routing',
+  },
+  {
+    eyebrow: translate({
+      id: 'homepage.docsPaths.operations.eyebrow',
+      message: 'Operations',
+    }),
+    title: translate({
+      id: 'homepage.docsPaths.operations.title',
+      message: 'Operate and troubleshoot',
+    }),
+    description: translate({
+      id: 'homepage.docsPaths.operations.description',
+      message: 'Monitor, tune, and debug the router with observability, performance, and troubleshooting docs.',
+    }),
+    to: '/docs/tutorials/observability/metrics',
+  },
+  {
+    eyebrow: translate({
+      id: 'homepage.docsPaths.reference.eyebrow',
+      message: 'Reference and contribution',
+    }),
+    title: translate({
+      id: 'homepage.docsPaths.reference.title',
+      message: 'Read contracts or contribute',
+    }),
+    description: translate({
+      id: 'homepage.docsPaths.reference.description',
+      message: 'Jump to API and CRD references, or use the contributor docs for development and translation workflow.',
+    }),
+    to: '/docs/intro',
+  },
+]
+
 const HomepageHeader: React.FC = () => {
   const [wordIndex, setWordIndex] = useState(0)
   const [isAnimating, setIsAnimating] = useState(false)
@@ -120,7 +192,7 @@ const HomepageHeader: React.FC = () => {
             <div className={styles.ctaButtons}>
               <Link
                 className={styles.primaryButton}
-                to="/docs/installation/"
+                to="/docs/intro"
               >
                 <span className={styles.buttonText}>
                   <Translate id="homepage.hero.getStarted">Get Started</Translate>
@@ -147,6 +219,40 @@ const HomepageHeader: React.FC = () => {
         </div>
       </div>
     </header>
+  )
+}
+
+const DocumentationPathsSection: React.FC = () => {
+  return (
+    <section className={styles.docsPathsSection}>
+      <div className="container">
+        <div className={styles.docsPathsHeader}>
+          <p className={styles.docsPathsLabel}>
+            <Translate id="homepage.docsPaths.label">Documentation map</Translate>
+          </p>
+          <h2 className={styles.docsPathsTitle}>
+            <Translate id="homepage.docsPaths.title">Pick the path that matches your job</Translate>
+          </h2>
+          <p className={styles.docsPathsDescription}>
+            <Translate id="homepage.docsPaths.description">
+              The docs are grouped by user journey: local setup, platform deployment,
+              feature implementation, operations, reference material, and contributor workflow.
+            </Translate>
+          </p>
+        </div>
+
+        <div className={styles.docsPathsGrid}>
+          {DOC_PATHS.map(path => (
+            <Link key={path.to} className={styles.docsPathCard} to={path.to}>
+              <p className={styles.docsPathEyebrow}>{path.eyebrow}</p>
+              <h3 className={styles.docsPathTitle}>{path.title}</h3>
+              <p className={styles.docsPathBody}>{path.description}</p>
+              <span className={styles.docsPathArrow}>→</span>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </section>
   )
 }
 
@@ -288,6 +394,7 @@ const Home: React.FC = () => {
     >
       <HomepageHeader />
       <main>
+        <DocumentationPathsSection />
         <PaperFigureShowcase />
         <AITechShowcase />
         <TeamCarousel />

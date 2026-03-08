@@ -10,20 +10,31 @@ The documentation is built using Docusaurus.
 - `website/i18n/`: Localized documentation (e.g., `zh-Hans` for Chinese).
 - `website/docusaurus.config.ts`: Site configuration.
 - `website/sidebars.ts`: Sidebar navigation.
+- `website/scripts/check-doc-structure.py`: Reachability and locale-structure checks for public docs.
 
 ## Editing Documentation
 
 1. **Locate the file:** Find the Markdown file in `website/docs/`.
 2. **Make changes:** Edit the content using Markdown syntax.
-3. **Preview locally:**
+3. **Keep navigation aligned:** Every public English page in `website/docs/` must be reachable from `website/sidebars.ts` unless it is intentionally excluded by policy and validation.
+4. **Preview locally:**
 
    ```bash
-   cd website
-   npm run start
+   make docs-dev
    ```
 
-4. **Verify links:** Ensure all relative links work correctly.
-5. **Lint check:** Run `make markdown-lint` to check for syntax issues.
+5. **Run structure and build checks:**
+
+   ```bash
+   make docs-check-structure
+   make docs-build
+   ```
+
+6. **Lint website code when needed:**
+
+   ```bash
+   make docs-lint
+   ```
 
 ## Internationalization (i18n)
 
@@ -34,7 +45,7 @@ We support multiple languages (e.g., English, Chinese). The default language is 
 1. **Create the English file** in `website/docs/`.
 2. **Create the corresponding translated file** in `website/i18n/{locale}/docusaurus-plugin-content-docs/current/`.
    - Example for Chinese: `website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/`.
-3. **Ensure the filename and directory structure match exactly.**
+3. **Ensure the filename and directory structure match exactly**, unless the locale uses a documented exception that is explicitly allowlisted by `check-doc-structure.py`.
 
 ### Adding a New Language
 
@@ -45,6 +56,12 @@ We support multiple languages (e.g., English, Chinese). The default language is 
 ### Updating Translations
 
 When you update an English document, please also update the Chinese translation if possible. If you cannot translate it, please open an issue to request help.
+
+Use the translation sync helper to inspect staleness:
+
+```bash
+./website/scripts/check-translation-sync.sh --locale zh-Hans
+```
 
 ## Style Guide
 

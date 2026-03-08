@@ -12,12 +12,11 @@
 import type { SidebarsConfig } from '@docusaurus/plugin-content-docs'
 
 const sidebars: SidebarsConfig = {
-  // By default, Docusaurus generates a sidebar from the docs folder structure
   tutorialSidebar: [
     'intro',
     {
       type: 'category',
-      label: 'Overview',
+      label: 'Concepts',
       items: [
         'overview/goals',
         'overview/semantic-router-overview',
@@ -28,13 +27,22 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Installation',
+      label: 'Get Started',
       items: [
         'installation/installation',
         'installation/configuration',
+        'installation/docker-compose',
+        'installation/milvus',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Deploy & Integrate',
+      items: [
+        'installation/k8s/operator',
         {
           type: 'category',
-          label: 'Install with Gateways',
+          label: 'Gateways',
           items: [
             'installation/k8s/ai-gateway',
             'installation/k8s/istio',
@@ -43,7 +51,7 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'category',
-          label: 'Install with Frameworks',
+          label: 'Frameworks',
           items: [
             'installation/k8s/production-stack',
             'installation/k8s/aibrix',
@@ -55,7 +63,7 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Capacities',
+      label: 'Capabilities',
       items: [
         {
           type: 'category',
@@ -64,6 +72,8 @@ const sidebars: SidebarsConfig = {
             'tutorials/intelligent-route/keyword-routing',
             'tutorials/intelligent-route/embedding-routing',
             'tutorials/intelligent-route/domain-routing',
+            'tutorials/intelligent-route/context-routing',
+            'tutorials/intelligent-route/complexity-routing',
             'tutorials/intelligent-route/fact-check-routing',
             'tutorials/intelligent-route/user-feedback-routing',
             'tutorials/intelligent-route/preference-routing',
@@ -91,6 +101,14 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'category',
+          label: 'Response API',
+          items: [
+            'tutorials/response-api/redis-storage',
+            'tutorials/response-api/redis-cluster-storage',
+          ],
+        },
+        {
+          type: 'category',
           label: 'Semantic Cache',
           items: [
             'tutorials/semantic-cache/in-memory-cache',
@@ -110,6 +128,7 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'category',
+          key: 'capabilities-observability',
           label: 'Observability',
           items: [
             'tutorials/observability/metrics',
@@ -121,29 +140,50 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Proposals',
+      label: 'Operations',
       items: [
-        'proposals/hallucination-mitigation-milestone',
-        'proposals/prompt-classification-routing',
-        'proposals/nvidia-dynamo-integration',
-        'proposals/production-stack-integration',
-        'proposals/multi-protocol-adaptor',
-        'proposals/agentic-rag',
-        'proposals/agentic-memory',
+        {
+          type: 'category',
+          key: 'operations-observability',
+          label: 'Observability',
+          items: [
+            'tutorials/observability/metrics',
+            'tutorials/observability/dashboard',
+            'tutorials/observability/distributed-tracing',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Performance Tuning',
+          items: [
+            'tutorials/performance-tuning/modernbert-32k-performance',
+            {
+              type: 'category',
+              label: 'ModernBERT 32K Reference Notes',
+              items: [
+                'tutorials/performance-tuning/modernbert-32k-docs/modernbert-32k-deployment-guide',
+                'tutorials/performance-tuning/modernbert-32k-docs/modernbert-32k-performance-validation',
+                'tutorials/performance-tuning/modernbert-32k-docs/modernbert-32k-big-batch-test-plan',
+                'tutorials/performance-tuning/modernbert-32k-docs/modernbert-32k-long-context-test-plan',
+              ],
+            },
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Troubleshooting',
+          items: [
+            'troubleshooting/network-tips',
+            'troubleshooting/container-connectivity',
+            'troubleshooting/vsr-headers',
+            'troubleshooting/common-errors',
+          ],
+        },
       ],
     },
     {
       type: 'category',
-      label: 'Model Training',
-      items: [
-        'training/training-overview',
-        'training/model-performance-eval',
-        'training/ml-model-selection',
-      ],
-    },
-    {
-      type: 'category',
-      label: 'API Reference',
+      label: 'Reference',
       items: [
         'api/router',
         'api/classification',
@@ -152,21 +192,41 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Troubleshooting',
+      label: 'Research & Roadmap',
       items: [
-        'troubleshooting/network-tips',
-        'troubleshooting/container-connectivity',
-        'troubleshooting/vsr-headers',
-        'troubleshooting/common-errors',
+        {
+          type: 'category',
+          label: 'Training',
+          items: [
+            'training/training-overview',
+            'training/model-performance-eval',
+            'training/ml-model-selection',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Proposals',
+          items: [
+            'proposals/advanced-tool-filtering',
+            'proposals/hallucination-mitigation-milestone',
+            'proposals/prompt-classification-routing',
+            'proposals/nvidia-dynamo-integration',
+            'proposals/production-stack-integration',
+            'proposals/multi-protocol-adaptor',
+            'proposals/agentic-rag',
+            'proposals/agentic-memory',
+          ],
+        },
       ],
     },
     {
       type: 'category',
-      label: 'Contributing',
+      label: 'Contribute',
       items: [
         'community/overview',
         'community/development',
         'community/documentation',
+        'community/translation-guide',
         'community/code-style',
       ],
     },

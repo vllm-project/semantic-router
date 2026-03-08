@@ -35,6 +35,8 @@ make docs-build
 cd website && npm run build
 ```
 
+The build runs a lightweight public-docs structure check before invoking Docusaurus.
+
 ### Preview Production Build
 
 Serve the production build locally:
@@ -72,17 +74,19 @@ cd website && npm run serve
 
 ## 📁 Project Structure
 
-```
+```text
 website/
-├── docs/                   # Documentation content (Markdown files)
+├── docs/                     # English public documentation
+├── i18n/                     # Localized docs and UI strings
+├── scripts/                  # Website-specific validation helpers
 ├── src/
-│   ├── components/        # Custom React components
-│   ├── css/              # Global styles and theme
-│   └── pages/            # Custom pages (homepage, etc.)
-├── static/               # Static assets (images, icons, etc.)
-├── docusaurus.config.js  # Main configuration
-├── sidebars.js          # Navigation structure
-└── package.json         # Dependencies and scripts
+│   ├── components/           # Custom React components
+│   ├── css/                  # Global styles and theme
+│   └── pages/                # Homepage and custom pages
+├── static/                   # Static assets
+├── docusaurus.config.ts      # Site configuration
+├── sidebars.ts               # Canonical public docs navigation
+└── package.json              # Website scripts and dependencies
 ```
 
 ## 🛠️ Customization
@@ -98,26 +102,47 @@ Edit `src/css/custom.css` to modify:
 
 ### Navigation
 
-Update `sidebars.js` to modify:
+Update `sidebars.ts` to modify:
 
 - Documentation structure
 - Category organization
 - Page ordering
+- Public doc reachability
 
 ### Site Configuration
 
-Modify `docusaurus.config.js` for:
+Modify `docusaurus.config.ts` for:
 
 - Site metadata
 - Plugin configuration
 - Theme settings
 - Build options
 
+### Documentation Governance
+
+Use the structure check before landing navigation changes:
+
+```bash
+# From project root
+make docs-check-structure
+
+# Or manually
+cd website && npm run check:structure
+```
+
+The structure check verifies that:
+
+- every public English markdown page is reachable from `sidebars.ts`
+- locale-only top-level sections are explicitly allowlisted
+- the public docs tree does not drift silently away from the canonical navigation
+
 ## 📚 Available Commands
 
 | Command | Description |
 |---------|-------------|
 | `make docs-dev` | Start development server |
+| `make docs-check-structure` | Validate public docs reachability and locale structure |
+| `make docs-lint` | Lint website source files |
 | `make docs-build` | Build for production |
 | `make docs-serve` | Preview production build |
 | `make docs-clean` | Clear build cache |

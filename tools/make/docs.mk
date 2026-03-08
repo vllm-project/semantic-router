@@ -16,7 +16,11 @@ docs-dev-zh: docs-install ## Start documentation website in dev mode
 	@$(LOG_TARGET)
 	cd website && npm run start:zh
 
-docs-build: docs-install ## Build static documentation website
+docs-check-structure: ## Validate public docs reachability and locale structure
+	@$(LOG_TARGET)
+	cd website && npm run check:structure
+
+docs-build: docs-install docs-check-structure ## Build static documentation website
 	@$(LOG_TARGET)
 	cd website && npm run build
 
@@ -98,4 +102,3 @@ docs-crd-watch: ## Watch for CRD changes and regenerate documentation
 docs-all: docs-crd docs-build ## Generate all documentation (CRD + website)
 	@$(LOG_TARGET)
 	@echo "All documentation generated successfully"
-

@@ -66,6 +66,18 @@ translation:
 
 > **Note**: Do NOT manually change `outdated` field. CI will automatically set it to `false` after your PR is merged.
 
+## Structural Parity
+
+The English docs tree under `website/docs/` is the default public structure for the site.
+
+- Translations should mirror the English directory structure by default.
+- Locale-only sections are exceptions, not the norm.
+- If a locale needs a structural exception, document it and add it to the allowlist in `website/scripts/check-doc-structure.py`.
+
+Current documented exception:
+
+- `zh-Hans/cookbook/`
+
 ## CI Automation
 
 A daily GitHub Action ([check-translation-staleness.yml](../.github/workflows/check-translation-staleness.yml)) automatically manages the `outdated` status:

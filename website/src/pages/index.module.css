@@ -325,6 +325,133 @@
   color: #FFFFFF !important;
 }
 
+.docsPathsSection {
+  padding: 4.5rem 0;
+  background:
+    linear-gradient(180deg, rgba(99, 102, 241, 0.04) 0%, rgba(99, 102, 241, 0.01) 100%),
+    #FFFFFF;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+[data-theme='dark'] .docsPathsSection {
+  background:
+    linear-gradient(180deg, rgba(99, 102, 241, 0.08) 0%, rgba(17, 17, 17, 0.98) 100%),
+    #0A0A0A;
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.docsPathsHeader {
+  max-width: 760px;
+  margin: 0 auto 2.5rem;
+  text-align: center;
+}
+
+.docsPathsLabel {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #4F46E5;
+}
+
+[data-theme='dark'] .docsPathsLabel {
+  color: #A5B4FC;
+}
+
+.docsPathsTitle {
+  margin: 0 0 1rem;
+  font-size: 2.5rem;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: #0A0A0A;
+}
+
+[data-theme='dark'] .docsPathsTitle {
+  color: #FFFFFF;
+}
+
+.docsPathsDescription {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.8;
+  color: #525252;
+}
+
+[data-theme='dark'] .docsPathsDescription {
+  color: #B3B3B3;
+}
+
+.docsPathsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.docsPathCard {
+  display: flex;
+  flex-direction: column;
+  min-height: 220px;
+  padding: 1.5rem;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
+  text-decoration: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+[data-theme='dark'] .docsPathCard {
+  background: rgba(22, 22, 22, 0.92);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+}
+
+.docsPathCard:hover {
+  transform: translateY(-4px);
+  border-color: rgba(79, 70, 229, 0.28);
+  box-shadow: 0 24px 50px rgba(79, 70, 229, 0.14);
+  text-decoration: none;
+}
+
+.docsPathEyebrow {
+  margin: 0 0 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6366F1;
+}
+
+.docsPathTitle {
+  margin: 0 0 0.75rem;
+  font-size: 1.2rem;
+  line-height: 1.3;
+  color: #0A0A0A;
+}
+
+[data-theme='dark'] .docsPathTitle {
+  color: #FFFFFF;
+}
+
+.docsPathBody {
+  margin: 0;
+  flex: 1;
+  color: #525252;
+  line-height: 1.7;
+}
+
+[data-theme='dark'] .docsPathBody {
+  color: #B3B3B3;
+}
+
+.docsPathArrow {
+  margin-top: 1.25rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #4F46E5;
+}
+
 .buttonText {
   font-size: 1rem;
   font-weight: 600;
@@ -641,6 +768,10 @@
     padding: 4rem 0;
   }
 
+  .docsPathsTitle {
+    font-size: 2.1rem;
+  }
+
   .aiTechTitle {
     font-size: 2.25rem;
   }
@@ -732,6 +863,22 @@
 
   .aiTechSection {
     padding: 3rem 0;
+  }
+
+  .docsPathsSection {
+    padding: 3.25rem 0;
+  }
+
+  .docsPathsTitle {
+    font-size: 1.8rem;
+  }
+
+  .docsPathsDescription {
+    font-size: 1rem;
+  }
+
+  .docsPathCard {
+    min-height: unset;
   }
 
   .aiTechHeader {
