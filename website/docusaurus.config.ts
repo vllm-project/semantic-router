@@ -159,10 +159,47 @@ const config: Config = {
           dropdownActiveClassDisabled: true,
         },
         {
-          type: 'docSidebar',
-          sidebarId: 'tutorialSidebar',
-          position: 'left',
+          type: 'dropdown',
           label: 'Docs',
+          position: 'left',
+          items: [
+            {
+              label: 'Docs Home',
+              to: '/docs/intro',
+            },
+            {
+              label: 'Concepts',
+              to: '/docs/overview/goals',
+            },
+            {
+              label: 'Get Started',
+              to: '/docs/installation',
+            },
+            {
+              label: 'Deploy & Integrate',
+              to: '/docs/installation/k8s/operator',
+            },
+            {
+              label: 'Capabilities',
+              to: '/docs/tutorials/intelligent-route/keyword-routing',
+            },
+            {
+              label: 'Operations',
+              to: '/docs/tutorials/observability/metrics',
+            },
+            {
+              label: 'Reference',
+              to: '/docs/api/router',
+            },
+            {
+              label: 'Research & Roadmap',
+              to: '/docs/training/training-overview',
+            },
+            {
+              label: 'Contribute',
+              to: '/docs/community/overview',
+            },
+          ],
         },
         {
           to: '/white-paper',
