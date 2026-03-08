@@ -69,6 +69,9 @@ Tasks should use stable IDs and explicit status markers such as:
 
 Prefer one active execution plan per workstream.
 
+Use file names such as `pl-0001-example.md`.
+Keep the numeric index unique within `docs/agent/plans/`.
+
 ## Current Execution Plans
 
-- [harness-roadmap.md](harness-roadmap.md)
+- [pl-0001-harness-roadmap.md](pl-0001-harness-roadmap.md)

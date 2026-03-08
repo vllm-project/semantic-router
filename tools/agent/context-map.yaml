@@ -132,7 +132,7 @@ envs:
 skills:
   harness-contract-change:
     resume_refs:
-      - path: docs/agent/plans/harness-roadmap.md
+      - path: docs/agent/plans/pl-0001-harness-roadmap.md
         reason: Canonical execution plan for multi-loop harness refactors.
   cross-stack-bugfix:
     resume_refs:

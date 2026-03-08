@@ -16,7 +16,7 @@ Use a split debt model with one metadata source:
 
 - `docs/agent/tech-debt-register.md` is a lightweight landing page for debt policy and navigation.
 - `docs/agent/tech-debt/README.md` defines the template and current entry inventory.
-- each debt item lives in its own `docs/agent/tech-debt/TDxxx-*.md` file.
+- each debt item lives in its own `docs/agent/tech-debt/td-001-*.md` file.
 - per-item debt metadata lives only in the entry files, not in the landing page.
 - `make agent-validate` and `make agent-scorecard` enforce and consume this entry-centric model.
 
