@@ -67,3 +67,5 @@ Use file names such as `TD001-example.md`.
 - [TD007 End-to-End and Integration Test Surfaces Are Split Across Parallel Frameworks](TD007-e2e-integration-surfaces-split-across-frameworks.md)
 - [TD008 E2E Profile Matrix Repeats Shared Router Testcases Without Clear Coverage Ownership](TD008-e2e-profile-matrix-shared-router-coverage-ownership.md)
 - [TD009 E2E Profile Inventory, Naming, and Documentation Have Drifted Out of Sync](TD009-e2e-profile-inventory-and-documentation-drift.md)
+- [TD010 Public Website Capability Contract Has Drifted from the Current Repo Surfaces](TD010-public-website-capability-contract-drift.md)
+- [TD011 Website Information Architecture and Documentation Governance Have Drifted Apart](TD011-website-information-architecture-and-doc-governance-drift.md)

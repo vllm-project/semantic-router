@@ -127,6 +127,8 @@ docs:
   - docs/agent/tech-debt/TD007-e2e-integration-surfaces-split-across-frameworks.md
   - docs/agent/tech-debt/TD008-e2e-profile-matrix-shared-router-coverage-ownership.md
   - docs/agent/tech-debt/TD009-e2e-profile-inventory-and-documentation-drift.md
+  - docs/agent/tech-debt/TD010-public-website-capability-contract-drift.md
+  - docs/agent/tech-debt/TD011-website-information-architecture-and-doc-governance-drift.md
   - docs/agent/glossary.md
   - docs/agent/adr/README.md
   - docs/agent/adr/0001-harness-layering.md
@@ -220,6 +222,12 @@ doc_governance:
     - path: docs/agent/tech-debt/TD009-e2e-profile-inventory-and-documentation-drift.md
       steward: agent-contract
       freshness: update when the TD009 debt record changes materially
+    - path: docs/agent/tech-debt/TD010-public-website-capability-contract-drift.md
+      steward: agent-contract
+      freshness: update when the TD010 debt record changes materially
+    - path: docs/agent/tech-debt/TD011-website-information-architecture-and-doc-governance-drift.md
+      steward: agent-contract
+      freshness: update when the TD011 debt record changes materially
     - path: docs/agent/glossary.md
       steward: agent-contract
       freshness: update when harness terms or categories change
