@@ -78,6 +78,7 @@ subsystems:
       - tools/agent/skills/**
       - tools/agent/*.yaml
       - tools/agent/scripts/**
+      - .github/copilot-instructions.md
       - .github/PULL_REQUEST_TEMPLATE.md
     entrypoints:
       - AGENTS.md
