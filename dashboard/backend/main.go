@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 
+	backendapp "github.com/vllm-project/semantic-router/dashboard/backend/app"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/router"
 )
@@ -17,8 +18,13 @@ func main() {
 
 	log.Printf("Config file path: %s", cfg.AbsConfigPath)
 
+	application, err := backendapp.New(cfg)
+	if err != nil {
+		log.Fatalf("Failed to initialize backend application: %v", err)
+	}
+
 	// Setup routes
-	mux := router.Setup(cfg)
+	mux := router.Setup(application)
 
 	// Log configuration
 	addr := ":" + cfg.Port
@@ -38,12 +44,17 @@ func main() {
 	}
 	log.Printf("Router API: %s → /api/router/*", cfg.RouterAPIURL)
 	log.Printf("Router Metrics: %s → /metrics/router", cfg.RouterMetrics)
+	log.Printf("Console Store: %s (%s)", cfg.ConsoleStoreBackend, cfg.ConsoleDBPath)
 	if cfg.ReadonlyMode {
 		log.Printf("Read-only mode: ENABLED (config editing disabled)")
 	}
 
 	// Start server
-	if err := http.ListenAndServe(addr, mux); err != nil {
-		log.Fatalf("server error: %v", err)
+	serverErr := http.ListenAndServe(addr, mux)
+	if closeErr := application.Close(); closeErr != nil {
+		log.Printf("Warning: failed to close backend application: %v", closeErr)
+	}
+	if serverErr != nil {
+		log.Fatalf("server error: %v", serverErr)
 	}
 }

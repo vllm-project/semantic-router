@@ -76,3 +76,7 @@ Keep the numeric index unique within `docs/agent/plans/`.
 
 - [pl-0001-harness-roadmap.md](pl-0001-harness-roadmap.md)
 - [pl-0002-e2e-rationalization-roadmap.md](pl-0002-e2e-rationalization-roadmap.md)
+
+## Completed Execution Plans
+
+- [td005-dashboard-enterprise-console-foundations.md](td005-dashboard-enterprise-console-foundations.md)
